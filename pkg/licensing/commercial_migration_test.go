@@ -3,6 +3,7 @@ package licensing
 import (
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestClassifyLegacyExchangeError(t *testing.T) {
@@ -30,6 +31,13 @@ func TestClassifyLegacyExchangeError(t *testing.T) {
 			err:        fmt.Errorf("activation failed: %w", &LicenseServerError{StatusCode: 401, Code: "invalid_legacy_token"}),
 			wantState:  CommercialMigrationStateFailed,
 			wantReason: CommercialMigrationReasonExchangeInvalid,
+		},
+		{
+			name:       "renewed key is terminal with retrieve guidance",
+			err:        fmt.Errorf("activation failed: %w", &LicenseServerError{StatusCode: 401, Code: "RENEWED_KEY_AVAILABLE"}),
+			wantState:  CommercialMigrationStateFailed,
+			wantReason: CommercialMigrationReasonExchangeStaleKey,
+			wantAction: CommercialMigrationActionRetrieveCurrentKey,
 		},
 		{
 			name:       "unsupported key format is terminal",
@@ -68,5 +76,56 @@ func TestClassifyLegacyExchangeError(t *testing.T) {
 				t.Fatalf("action=%q, want %q", got.RecommendedAction, tt.wantAction)
 			}
 		})
+	}
+}
+
+func TestApplyCommercialMigrationFailureTimingEscalatesSustainedTransportFailure(t *testing.T) {
+	start := time.Unix(1_700_000_000, 0)
+	initial := ApplyCommercialMigrationFailureTiming(&CommercialMigrationStatus{
+		Source:            CommercialMigrationSourceV5License,
+		State:             CommercialMigrationStatePending,
+		Reason:            CommercialMigrationReasonExchangeUnavailable,
+		RecommendedAction: CommercialMigrationActionRetryActivation,
+	}, nil, start)
+	if initial == nil {
+		t.Fatal("expected initial migration status")
+	}
+	if initial.FirstFailedAt != start.Unix() {
+		t.Fatalf("first_failed_at=%d want %d", initial.FirstFailedAt, start.Unix())
+	}
+	if initial.Reason != CommercialMigrationReasonExchangeUnavailable {
+		t.Fatalf("initial reason=%q want %q", initial.Reason, CommercialMigrationReasonExchangeUnavailable)
+	}
+
+	escalated := ApplyCommercialMigrationFailureTiming(&CommercialMigrationStatus{
+		Source:            CommercialMigrationSourceV5License,
+		State:             CommercialMigrationStatePending,
+		Reason:            CommercialMigrationReasonExchangeUnavailable,
+		RecommendedAction: CommercialMigrationActionRetryActivation,
+	}, initial, start.Add(time.Duration(CommercialMigrationSustainedExchangeUnavailableSeconds+1)*time.Second))
+	if escalated == nil {
+		t.Fatal("expected escalated migration status")
+	}
+	if escalated.FirstFailedAt != start.Unix() {
+		t.Fatalf("escalated first_failed_at=%d want %d", escalated.FirstFailedAt, start.Unix())
+	}
+	if escalated.Reason != CommercialMigrationReasonExchangeConnectivity {
+		t.Fatalf("escalated reason=%q want %q", escalated.Reason, CommercialMigrationReasonExchangeConnectivity)
+	}
+	if escalated.RecommendedAction != CommercialMigrationActionAllowLicenseEgress {
+		t.Fatalf("escalated action=%q want %q", escalated.RecommendedAction, CommercialMigrationActionAllowLicenseEgress)
+	}
+
+	terminal := ApplyCommercialMigrationFailureTiming(&CommercialMigrationStatus{
+		Source:            CommercialMigrationSourceV5License,
+		State:             CommercialMigrationStateFailed,
+		Reason:            CommercialMigrationReasonExchangeInvalid,
+		RecommendedAction: CommercialMigrationActionEnterSupportedV5,
+	}, escalated, start.Add(48*time.Hour))
+	if terminal == nil {
+		t.Fatal("expected terminal migration status")
+	}
+	if terminal.FirstFailedAt != 0 {
+		t.Fatalf("terminal first_failed_at=%d want 0", terminal.FirstFailedAt)
 	}
 }

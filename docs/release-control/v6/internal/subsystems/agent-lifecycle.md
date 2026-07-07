@@ -97,6 +97,13 @@ that binary, not separate customer-facing agent products.
 
 ## Shared Boundaries
 
+Commercial v5-to-v6 migration retry state may pass through `internal/api/`
+handlers that agent-lifecycle also references, but the ownership remains
+API/cloud-paid. Agent lifecycle surfaces may observe paid-migration posture for
+upgrade continuity, but they must not reinterpret `commercial_migration`
+reasons, reset `first_failed_at`, change the license-server retry cadence, or
+turn blocked license egress into an agent update or enrollment state.
+
 `/api/connections` command-policy comparison is lifecycle-adjacent fleet
 truth. The desired side is the effective runtime config served to the agent
 after token scope and binding checks, not the unsanitized profile desire. If a

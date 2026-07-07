@@ -139,6 +139,16 @@ product API routes free of maintainer commercial analytics.
 
 ## Shared Boundaries
 
+Commercial migration payloads are a shared API/cloud-paid contract. The
+license-server client must preserve canonical v6 nested error-envelope codes
+such as `RENEWED_KEY_AVAILABLE`, and commercial posture payloads may carry
+`commercial_migration.first_failed_at` so the backend can distinguish a short
+transport outage from sustained blocked egress without changing retry cadence.
+Browser API types and presentation helpers must treat `exchange_stale_key` plus
+`retrieve_current_key` and `exchange_connectivity_required` plus
+`allow_license_egress` as explicit migration states rather than inferring them
+from HTTP status alone.
+
 `GET /api/connections` consumes the agent desired-config contract for fleet
 governance. When it derives `fleet.commandPolicy`, `fleet.configDrift`, and
 rollout state, it must compare the agent-applied report with the effective

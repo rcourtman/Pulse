@@ -15,12 +15,20 @@ type EntitlementPayload = {
     state?: string;
     reason?: string;
     recommended_action?: string;
+    first_failed_at?: number;
   };
 };
 
 type ExpectedCopy = {
   title: RegExp;
   bodyFragments: RegExp[];
+};
+
+type MigrationFixture = {
+  state: string;
+  reason: string;
+  recommended_action: string;
+  first_failed_at?: number;
 };
 
 const expectedState = process.env.PULSE_E2E_EXPECT_COMMERCIAL_MIGRATION_STATE || '';
@@ -80,20 +88,28 @@ function expectFieldLocator(page: Page, label: string) {
 function expectedCopyFor(state: string, reason: string, action: string): ExpectedCopy {
   const actionFragment =
     action === 'retry_activation'
-      ? /retry activation from this instance/i
+      ? /retry from this instance/i
       : action === 'use_v6_activation_key'
-        ? /use the current v6 activation key for this purchase/i
+        ? /use the current v6 key for this purchase/i
         : action === 'enter_supported_v5_key'
           ? /retry with the original v5 pro\/lifetime key from this instance/i
-          : /review the activation state from this instance/i;
+          : action === 'free_installation_slot'
+            ? /support@pulserelay\.pro/i
+            : action === 'retrieve_current_key'
+              ? /pulserelay\.pro\/retrieve-license/i
+              : action === 'allow_license_egress'
+                ? /allow outbound HTTPS to license\.pulserelay\.pro/i
+                : /review the plan state from this instance/i;
 
   if (state === 'pending') {
     const reasonFragment =
       reason === 'exchange_rate_limited'
         ? /rate-limited right now/i
         : reason === 'exchange_conflict'
-          ? /another v6 activation handoff is still settling/i
-          : /automatic v6 exchange did not complete yet/i;
+          ? /another v6 license handoff is still settling/i
+          : reason === 'exchange_connectivity_required'
+            ? /paid v6 features require periodic outbound HTTPS/i
+            : /automatic v6 exchange did not complete yet/i;
 
     return {
       title: /v5 license migration pending/i,
@@ -102,22 +118,98 @@ function expectedCopyFor(state: string, reason: string, action: string): Expecte
   }
 
   const reasonFragment =
-    reason === 'exchange_invalid'
-      ? /key was rejected during v6 migration/i
-      : reason === 'exchange_malformed'
-        ? /malformed and cannot be migrated/i
-        : reason === 'exchange_revoked'
-          ? /no longer eligible for automatic migration/i
-          : reason === 'exchange_non_migratable'
-            ? /not eligible for automatic v6 migration/i
-            : reason === 'exchange_unsupported'
-              ? /not a supported v5 pro\/lifetime migration input/i
-              : /could not be migrated automatically/i;
+    reason === 'exchange_installation_limit'
+      ? /maximum number of v6 installations/i
+      : reason === 'exchange_invalid'
+        ? /key was rejected during v6 migration/i
+        : reason === 'exchange_stale_key'
+          ? /superseded by a renewal/i
+          : reason === 'exchange_malformed'
+            ? /malformed and cannot be migrated/i
+            : reason === 'exchange_revoked'
+              ? /no longer eligible for automatic migration/i
+              : reason === 'exchange_non_migratable'
+                ? /not eligible for automatic v6 migration/i
+                : reason === 'exchange_unsupported'
+                  ? /not a supported v5 pro\/lifetime migration input/i
+                  : /could not be migrated automatically/i;
 
   return {
     title: /v5 license migration needs attention/i,
     bodyFragments: [reasonFragment, actionFragment],
   };
+}
+
+function freeEntitlementsWithMigration(migration: MigrationFixture): EntitlementPayload {
+  return {
+    valid: false,
+    tier: 'free',
+    plan_version: 'community',
+    subscription_state: 'expired',
+    trial_eligible: false,
+    trial_eligibility_reason: '',
+    limits: [],
+    commercial_migration: migration,
+  };
+}
+
+async function stubCommercialMigrationFixture(page: Page, migration: MigrationFixture) {
+  const entitlements = freeEntitlementsWithMigration(migration);
+  const commercialPosture = {
+    ...entitlements,
+    upgrade_reasons: [],
+    has_migration_gap: true,
+  };
+
+  await page.route('**/api/license/runtime-capabilities', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        capabilities: [],
+        limits: [],
+        hosted_mode: false,
+        max_history_days: 7,
+        runtime: {
+          build: 'community',
+          label: 'Pulse Community runtime',
+        },
+      }),
+    });
+  });
+
+  await page.route('**/api/license/entitlements', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(entitlements),
+    });
+  });
+
+  await page.route('**/api/license/commercial-posture', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(commercialPosture),
+    });
+  });
+}
+
+async function expectMigrationNotice(page: Page, migration: MigrationFixture) {
+  await page.goto('/settings/pulse-intelligence/billing/plan', { waitUntil: 'domcontentloaded' });
+  await page.waitForURL(/\/settings/, { timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: /plans & billing/i }).first()).toBeVisible();
+
+  const expectedCopy = expectedCopyFor(
+    migration.state,
+    migration.reason,
+    migration.recommended_action,
+  );
+  await expect(page.getByText(expectedCopy.title)).toBeVisible();
+  for (const fragment of expectedCopy.bodyFragments) {
+    await expect(page.getByText(fragment)).toBeVisible();
+  }
+  await expect(page.getByRole('button', { name: /start 14-day pro trial/i })).toHaveCount(0);
 }
 
 test.describe.serial('v5 commercial migration notice', () => {
@@ -175,11 +267,10 @@ test.describe.serial('v5 commercial migration notice', () => {
 
   test('Pro settings renders the expected migration state', async ({ page }) => {
     await ensureAuthenticated(page);
-    await page.goto('/settings/system-pro', { waitUntil: 'domcontentloaded' });
+    await page.goto('/settings/pulse-intelligence/billing/plan', { waitUntil: 'domcontentloaded' });
     await page.waitForURL(/\/settings/, { timeout: 10_000 });
 
-    await expect(page.getByRole('heading', { name: /pro license/i })).toBeVisible();
-    await expect(page.getByRole('heading', { name: /current license/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /plans & billing/i }).first()).toBeVisible();
 
     if (successMode) {
       await expect(page.getByText(/v5 license migration pending/i)).toHaveCount(0);
@@ -209,5 +300,40 @@ test.describe.serial('v5 commercial migration notice', () => {
       await expect(page.getByText(fragment)).toBeVisible();
     }
     await expect(page.getByRole('button', { name: /start 14-day pro trial/i })).toHaveCount(0);
+  });
+});
+
+test.describe('v5 commercial migration notice fixtures', () => {
+  test('renders a stale renewed-key failure with retrieve-license guidance', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only migration UI coverage');
+
+    const migration = {
+      state: 'failed',
+      reason: 'exchange_stale_key',
+      recommended_action: 'retrieve_current_key',
+    };
+    await stubCommercialMigrationFixture(page, migration);
+    await ensureAuthenticated(page);
+
+    await expectMigrationNotice(page, migration);
+  });
+
+  test('renders a sustained license-server egress requirement without offering a trial', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only migration UI coverage');
+
+    const migration = {
+      state: 'pending',
+      reason: 'exchange_connectivity_required',
+      recommended_action: 'allow_license_egress',
+      first_failed_at: Math.floor(Date.now() / 1000) - 90_000,
+    };
+    await stubCommercialMigrationFixture(page, migration);
+    await ensureAuthenticated(page);
+
+    await expectMigrationNotice(page, migration);
   });
 });

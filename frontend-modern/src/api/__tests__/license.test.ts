@@ -70,6 +70,31 @@ describe('LicenseAPI', () => {
     });
   });
 
+  it('preserves commercial migration timing fields from entitlements', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      tier: 'free',
+      subscription_state: 'expired',
+      capabilities: [],
+      limits: [],
+      upgrade_reasons: [],
+      commercial_migration: {
+        state: 'pending',
+        reason: 'exchange_connectivity_required',
+        recommended_action: 'allow_license_egress',
+        first_failed_at: 1_700_000_000,
+      },
+    });
+
+    const result = await LicenseAPI.getCommercialEntitlements();
+
+    expect(result.commercial_migration).toMatchObject({
+      state: 'pending',
+      reason: 'exchange_connectivity_required',
+      recommended_action: 'allow_license_egress',
+      first_failed_at: 1_700_000_000,
+    });
+  });
+
   it('reads commercial posture from the public-safe commercial endpoint', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       tier: 'pro',

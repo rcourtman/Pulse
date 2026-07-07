@@ -257,6 +257,17 @@ avoids a cloud-control-plane report data path across clients.
    pending must self-retry in the background with backoff for the life of
    the process so a transient license-server or DNS failure at first boot
    never strands a paying upgrader on Community until a manual restart.
+   Signature-valid v5 JWTs that are expired beyond the v5 grace window but
+   correspond to a newer retrievable server-side key or live entitlement must
+   classify as terminal stale-key recovery (`exchange_stale_key` with
+   `retrieve_current_key`) rather than generic invalid-key failure; malformed,
+   signature-invalid, and truly lapsed keys must keep the generic terminal
+   rejection path. Transport-level legacy-exchange failures must preserve the
+   first continuous failure timestamp on `commercial_migration.first_failed_at`
+   and, after 24 hours, keep retrying while surfacing
+   `exchange_connectivity_required` with the outbound
+   `license.pulserelay.pro` connectivity policy instead of rendering ordinary
+   pending copy forever.
 6. `internal/api/licensing_legacy_retry.go` shared with `api-contracts`: the background legacy-exchange retry loop carries both API payload contract and cloud-paid entitlement boundary ownership.
 7. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
 8. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.

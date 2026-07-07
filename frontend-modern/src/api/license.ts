@@ -52,6 +52,7 @@ export interface CommercialMigrationStatus {
   state?: string;
   reason?: string;
   recommended_action?: string;
+  first_failed_at?: number;
 }
 
 // Mirrors internal/api/subscription_entitlements.go:RuntimeCapabilitiesPayload

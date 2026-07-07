@@ -160,6 +160,45 @@ func TestClientActivate(t *testing.T) {
 		}
 	})
 
+	t.Run("server returns nested v6 error envelope", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]any{
+					"code":      "RENEWED_KEY_AVAILABLE",
+					"message":   "Legacy license key has been superseded by a renewal",
+					"retryable": false,
+				},
+			})
+		}))
+		defer server.Close()
+
+		client := NewLicenseServerClient(server.URL)
+		_, err := client.ExchangeLegacyLicense(context.Background(), ExchangeLegacyLicenseRequest{
+			LegacyLicenseKey: "header.payload.signature",
+		})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+
+		apiErr, ok := err.(*LicenseServerError)
+		if !ok {
+			t.Fatalf("expected *LicenseServerError, got %T", err)
+		}
+		if apiErr.StatusCode != http.StatusUnauthorized {
+			t.Errorf("StatusCode = %d, want 401", apiErr.StatusCode)
+		}
+		if apiErr.Code != "RENEWED_KEY_AVAILABLE" {
+			t.Errorf("Code = %q, want RENEWED_KEY_AVAILABLE", apiErr.Code)
+		}
+		if apiErr.Message != "Legacy license key has been superseded by a renewal" {
+			t.Errorf("Message = %q, want nested message", apiErr.Message)
+		}
+		if apiErr.Retryable {
+			t.Error("expected Retryable=false for renewed key")
+		}
+	})
+
 	t.Run("server returns legacy error field", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)

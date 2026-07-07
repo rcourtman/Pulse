@@ -70,6 +70,8 @@ type LicenseHandlers struct {
 	legacyExchangeRetries sync.Map // map[string]struct{}
 	// legacyExchangeRetrySchedule overrides the retry backoff in tests.
 	legacyExchangeRetrySchedule []time.Duration
+	// commercialMigrationNow overrides migration timing in tests.
+	commercialMigrationNow func() time.Time
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
@@ -799,7 +801,15 @@ func (h *LicenseHandlers) setCommercialMigrationState(orgID string, status *comm
 		}
 	}
 
-	existing.CommercialMigration = cloneCommercialMigrationStatusFromLicensing(status)
+	now := time.Now
+	if h.commercialMigrationNow != nil {
+		now = h.commercialMigrationNow
+	}
+	existing.CommercialMigration = applyCommercialMigrationFailureTimingFromLicensing(
+		status,
+		existing.CommercialMigration,
+		now(),
+	)
 	return billingStore.SaveBillingState(orgID, existing)
 }
 

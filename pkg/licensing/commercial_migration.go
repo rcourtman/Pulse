@@ -3,6 +3,7 @@ package licensing
 import (
 	"errors"
 	"strings"
+	"time"
 )
 
 type CommercialMigrationSource string
@@ -25,12 +26,18 @@ const (
 	CommercialMigrationReasonExchangeRevoked           CommercialMigrationReason = "exchange_revoked"
 	CommercialMigrationReasonExchangeNonMigratable     CommercialMigrationReason = "exchange_non_migratable"
 	CommercialMigrationReasonExchangeUnsupportedKey    CommercialMigrationReason = "exchange_unsupported"
+	CommercialMigrationReasonExchangeStaleKey          CommercialMigrationReason = "exchange_stale_key"
+	CommercialMigrationReasonExchangeConnectivity      CommercialMigrationReason = "exchange_connectivity_required"
 
 	CommercialMigrationActionRetryActivation      CommercialMigrationAction = "retry_activation"
 	CommercialMigrationActionUseV6Activation      CommercialMigrationAction = "use_v6_activation_key"
 	CommercialMigrationActionEnterSupportedV5     CommercialMigrationAction = "enter_supported_v5_key"
 	CommercialMigrationActionFreeInstallationSlot CommercialMigrationAction = "free_installation_slot"
+	CommercialMigrationActionRetrieveCurrentKey   CommercialMigrationAction = "retrieve_current_key"
+	CommercialMigrationActionAllowLicenseEgress   CommercialMigrationAction = "allow_license_egress"
 )
+
+const CommercialMigrationSustainedExchangeUnavailableSeconds int64 = 24 * 60 * 60
 
 // CommercialMigrationStatus is the explicit v6-owned contract for unresolved
 // paid-license migrations entering from pre-v6 commercial state.
@@ -39,6 +46,7 @@ type CommercialMigrationStatus struct {
 	State             CommercialMigrationState  `json:"state,omitempty"`
 	Reason            CommercialMigrationReason `json:"reason,omitempty"`
 	RecommendedAction CommercialMigrationAction `json:"recommended_action,omitempty"`
+	FirstFailedAt     int64                     `json:"first_failed_at,omitempty"`
 }
 
 func (s *CommercialMigrationStatus) Active() bool {
@@ -55,6 +63,9 @@ func NormalizeCommercialMigrationStatus(status *CommercialMigrationStatus) *Comm
 	normalized.State = CommercialMigrationState(strings.TrimSpace(string(normalized.State)))
 	normalized.Reason = CommercialMigrationReason(strings.TrimSpace(string(normalized.Reason)))
 	normalized.RecommendedAction = CommercialMigrationAction(strings.TrimSpace(string(normalized.RecommendedAction)))
+	if normalized.FirstFailedAt < 0 {
+		normalized.FirstFailedAt = 0
+	}
 
 	switch normalized.State {
 	case CommercialMigrationStatePending, CommercialMigrationStateFailed:
@@ -85,6 +96,47 @@ func CloneCommercialMigrationStatus(status *CommercialMigrationStatus) *Commerci
 	return &cloned
 }
 
+func ApplyCommercialMigrationFailureTiming(status, previous *CommercialMigrationStatus, now time.Time) *CommercialMigrationStatus {
+	normalized := NormalizeCommercialMigrationStatus(status)
+	if normalized == nil {
+		return nil
+	}
+	if !commercialMigrationTransportUnavailableReason(normalized.Reason) || normalized.State != CommercialMigrationStatePending {
+		normalized.FirstFailedAt = 0
+		return normalized
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+
+	firstFailedAt := normalized.FirstFailedAt
+	if prev := NormalizeCommercialMigrationStatus(previous); prev != nil &&
+		prev.State == CommercialMigrationStatePending &&
+		commercialMigrationTransportUnavailableReason(prev.Reason) &&
+		prev.FirstFailedAt > 0 {
+		firstFailedAt = prev.FirstFailedAt
+	}
+	if firstFailedAt <= 0 {
+		firstFailedAt = now.Unix()
+	}
+
+	normalized.FirstFailedAt = firstFailedAt
+	if now.Unix()-firstFailedAt >= CommercialMigrationSustainedExchangeUnavailableSeconds {
+		normalized.Reason = CommercialMigrationReasonExchangeConnectivity
+		normalized.RecommendedAction = CommercialMigrationActionAllowLicenseEgress
+	}
+	return normalized
+}
+
+func commercialMigrationTransportUnavailableReason(reason CommercialMigrationReason) bool {
+	switch reason {
+	case CommercialMigrationReasonExchangeUnavailable, CommercialMigrationReasonExchangeConnectivity:
+		return true
+	default:
+		return false
+	}
+}
+
 // ClassifyLegacyExchangeError converts startup/manual exchange errors into a
 // retryable or terminal v6 migration contract.
 func ClassifyLegacyExchangeError(err error) *CommercialMigrationStatus {
@@ -101,15 +153,22 @@ func ClassifyLegacyExchangeError(err error) *CommercialMigrationStatus {
 
 	var serverErr *LicenseServerError
 	if errors.As(err, &serverErr) {
+		serverCode := strings.ToUpper(strings.TrimSpace(serverErr.Code))
 		switch serverErr.StatusCode {
 		case 400:
 			status.State = CommercialMigrationStateFailed
 			status.Reason = CommercialMigrationReasonExchangeMalformed
 			status.RecommendedAction = CommercialMigrationActionEnterSupportedV5
 		case 401:
-			status.State = CommercialMigrationStateFailed
-			status.Reason = CommercialMigrationReasonExchangeInvalid
-			status.RecommendedAction = CommercialMigrationActionEnterSupportedV5
+			if serverCode == "RENEWED_KEY_AVAILABLE" {
+				status.State = CommercialMigrationStateFailed
+				status.Reason = CommercialMigrationReasonExchangeStaleKey
+				status.RecommendedAction = CommercialMigrationActionRetrieveCurrentKey
+			} else {
+				status.State = CommercialMigrationStateFailed
+				status.Reason = CommercialMigrationReasonExchangeInvalid
+				status.RecommendedAction = CommercialMigrationActionEnterSupportedV5
+			}
 		case 403:
 			status.State = CommercialMigrationStateFailed
 			status.Reason = CommercialMigrationReasonExchangeRevoked

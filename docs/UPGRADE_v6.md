@@ -157,6 +157,13 @@ canonical, but the retired rc.1 through rc.5 `/infrastructure`, `/workloads`,
 - If you are upgrading directly from v5, start from the familiar platform pages
   rather than looking for the temporary unified pages from early v6 RCs.
 
+### Configuration Compatibility
+
+Pulse v6 honors the legacy `PORT` environment variable as a deprecated fallback
+only when `FRONTEND_PORT` is unset, so existing installs keep their listener
+port after upgrade. Move deployments to `FRONTEND_PORT`; when both variables
+are set, `FRONTEND_PORT` wins.
+
 ### API Changes
 
 Unified Resources is now the canonical model and endpoint family:

@@ -205,6 +205,53 @@ describe('licensePresentation', () => {
     expect(notice?.body).not.toContain('still settling');
   });
 
+  it('points superseded v5 keys at current-key retrieval instead of retrying', () => {
+    const notice = getCommercialMigrationNotice({
+      state: 'failed',
+      reason: 'exchange_stale_key',
+      recommended_action: 'retrieve_current_key',
+    } as never);
+    expect(notice).toMatchObject({
+      title: 'v5 license migration needs attention',
+      tone: expect.stringContaining('red'),
+    });
+    expect(notice?.body).toContain('superseded by a renewal');
+    expect(notice?.body).toContain('pulserelay.pro/retrieve-license');
+    expect(notice?.body).not.toContain('Retry with the original v5 Pro/Lifetime key');
+  });
+
+  it('keeps generic rejected-key copy distinct while offering safe license retrieval', () => {
+    const notice = getCommercialMigrationNotice({
+      state: 'failed',
+      reason: 'exchange_invalid',
+      recommended_action: 'enter_supported_v5_key',
+    } as never);
+    expect(notice).toMatchObject({
+      title: 'v5 license migration needs attention',
+      tone: expect.stringContaining('red'),
+    });
+    expect(notice?.body).toContain('rejected during v6 migration');
+    expect(notice?.body).toContain('pulserelay.pro/retrieve-license');
+    expect(notice?.body).toContain('Retry with the original v5 Pro/Lifetime key');
+  });
+
+  it('renders sustained transport failure as blocked-egress policy, not ordinary pending', () => {
+    const notice = getCommercialMigrationNotice({
+      state: 'pending',
+      reason: 'exchange_connectivity_required',
+      recommended_action: 'allow_license_egress',
+    } as never);
+    expect(notice).toMatchObject({
+      title: 'v5 license migration pending',
+      tone: expect.stringContaining('amber'),
+    });
+    expect(notice?.body).toContain('over a day');
+    expect(notice?.body).toContain('Paid v6 features require periodic outbound HTTPS');
+    expect(notice?.body).toContain('Core monitoring keeps running');
+    expect(notice?.body).toContain('license.pulserelay.pro');
+    expect(notice?.body).toContain('docs/UPGRADE_v6.md');
+  });
+
   it('renders an unreadable persisted v5 license as terminal with re-enter-key guidance', () => {
     const notice = getCommercialMigrationNotice({
       state: 'failed',

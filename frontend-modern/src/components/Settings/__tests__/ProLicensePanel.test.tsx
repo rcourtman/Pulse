@@ -1527,6 +1527,67 @@ describe('ProLicensePanel', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('shows retrieve-license guidance when a v5 key has been superseded', async () => {
+    mockEntitlements = {
+      capabilities: [],
+      limits: [],
+      subscription_state: 'expired',
+      upgrade_reasons: [],
+      tier: 'free',
+      trial_eligible: false,
+      commercial_migration: {
+        source: 'v5_license',
+        state: 'failed',
+        reason: 'exchange_stale_key',
+        recommended_action: 'retrieve_current_key',
+      },
+    };
+
+    renderPanel();
+
+    const title = screen.getByText('v5 license migration needs attention');
+    expect(title).toBeInTheDocument();
+    expect(title.closest('.border-red-300')).not.toBeNull();
+    expect(screen.getByText(/superseded by a renewal/i)).toBeInTheDocument();
+    expect(screen.getByText(/pulserelay\.pro\/retrieve-license/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /start 14-day pro trial/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows blocked-egress guidance after sustained exchange transport failure', async () => {
+    mockEntitlements = {
+      capabilities: [],
+      limits: [],
+      subscription_state: 'expired',
+      upgrade_reasons: [],
+      tier: 'free',
+      trial_eligible: false,
+      commercial_migration: {
+        source: 'v5_license',
+        state: 'pending',
+        reason: 'exchange_connectivity_required',
+        recommended_action: 'allow_license_egress',
+        first_failed_at: 1_700_000_000,
+      },
+    };
+
+    renderPanel();
+
+    const title = screen.getByText('v5 license migration pending');
+    expect(title).toBeInTheDocument();
+    expect(title.closest('.border-amber-300')).not.toBeNull();
+    expect(
+      screen.getByText(/paid v6 features require periodic outbound HTTPS/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/allow outbound HTTPS to license\.pulserelay\.pro/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /start 14-day pro trial/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it('keeps Pro license split into shell, runtime, and plan owners', () => {
     expect(proLicensePanelSource).toContain('./useProLicensePanelState');
     expect(proLicensePanelSource).toContain('sessionPresentationPolicyResolved');

@@ -133,6 +133,32 @@ func TestContract_AlertDeliveryDiagnosisPayloadShape(t *testing.T) {
 	}
 }
 
+func TestContract_CommercialMigrationPayloadCarriesFailureTiming(t *testing.T) {
+	status := pkglicensing.CommercialMigrationStatus{
+		Source:            pkglicensing.CommercialMigrationSourceV5License,
+		State:             pkglicensing.CommercialMigrationStatePending,
+		Reason:            pkglicensing.CommercialMigrationReasonExchangeConnectivity,
+		RecommendedAction: pkglicensing.CommercialMigrationActionAllowLicenseEgress,
+		FirstFailedAt:     1_700_000_000,
+	}
+
+	payload, err := json.Marshal(status)
+	if err != nil {
+		t.Fatalf("marshal commercial migration status: %v", err)
+	}
+	body := string(payload)
+	for _, field := range []string{
+		`"state":"pending"`,
+		`"reason":"exchange_connectivity_required"`,
+		`"recommended_action":"allow_license_egress"`,
+		`"first_failed_at":1700000000`,
+	} {
+		if !strings.Contains(body, field) {
+			t.Fatalf("commercial migration payload missing %s in %s", field, body)
+		}
+	}
+}
+
 func TestContract_ReportSchedulePayloadShape(t *testing.T) {
 	nextRun := time.Date(2026, 7, 8, 6, 0, 0, 0, time.UTC)
 	schedule := config.ReportSchedule{

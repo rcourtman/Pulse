@@ -63,6 +63,13 @@ state.
 
 ## Extension Points
 
+Commercial v5-to-v6 migration posture may be carried by `internal/api/`
+handlers that storage/recovery references for setup or support-adjacent flows,
+but it remains API/cloud-paid state. Storage and recovery surfaces may point
+operators at the v6 upgrade guide when license egress is blocked, but they must
+not reinterpret `commercial_migration` as backup coverage, restore readiness,
+or storage-health evidence, and must not mutate `first_failed_at`.
+
 Mobile onboarding reads exposed through `internal/api/onboarding_handlers.go`
 are storage/recovery-adjacent only as hosted recovery/support handoff
 surfaces. Recovery code may consume the API-owned

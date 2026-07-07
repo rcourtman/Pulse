@@ -1037,6 +1037,10 @@ export const getCommercialMigrationActionText = (action?: string): string => {
       return 'Retry with the original v5 Pro/Lifetime key from this instance.';
     case 'free_installation_slot':
       return 'Contact support@pulserelay.pro to release an installation you no longer use or to raise the limit.';
+    case 'retrieve_current_key':
+      return 'Retrieve your current key at pulserelay.pro/retrieve-license and paste it here.';
+    case 'allow_license_egress':
+      return 'Allow outbound HTTPS to license.pulserelay.pro, then Pulse will keep retrying automatically.';
     default:
       return 'Review the plan state from this instance before trying again.';
   }
@@ -1060,6 +1064,10 @@ export const getCommercialMigrationNotice = (
         body =
           'Pulse detected a paid v5 license, but another v6 license handoff is still settling.';
         break;
+      case 'exchange_connectivity_required':
+        body =
+          'Pulse has not been able to reach license.pulserelay.pro for over a day. Paid v6 features require periodic outbound HTTPS to that host. Core monitoring keeps running; paid features stay on Community until connectivity is allowed. See docs/UPGRADE_v6.md for the connectivity policy.';
+        break;
       case 'exchange_unavailable':
       default:
         break;
@@ -1079,7 +1087,12 @@ export const getCommercialMigrationNotice = (
         'Pulse detected a paid v5 license, but that key is already active on its maximum number of v6 installations, so this instance cannot activate until a slot is freed.';
       break;
     case 'exchange_invalid':
-      body = 'Pulse detected a paid v5 license, but that key was rejected during v6 migration.';
+      body =
+        'Pulse detected a paid v5 license, but that key was rejected during v6 migration. Retrieve your current key at pulserelay.pro/retrieve-license if this purchase is still active.';
+      break;
+    case 'exchange_stale_key':
+      body =
+        'Pulse detected a paid v5 license, but this key has been superseded by a renewal.';
       break;
     case 'exchange_malformed':
       body = 'Pulse detected a v5-looking key, but it is malformed and cannot be migrated.';

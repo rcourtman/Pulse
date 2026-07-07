@@ -335,22 +335,40 @@ func (c *LicenseServerClient) parseError(resp *http.Response) error {
 	// Try to parse structured error response from the license server.
 	if len(body) > 0 {
 		var parsed struct {
-			Code       string `json:"code"`
-			LegacyCode string `json:"error"`
-			Message    string `json:"message"`
-			Retryable  bool   `json:"retryable"`
+			Code      string          `json:"code"`
+			Error     json.RawMessage `json:"error"`
+			Message   string          `json:"message"`
+			Retryable bool            `json:"retryable"`
 		}
 		if json.Unmarshal(body, &parsed) == nil {
 			code := strings.TrimSpace(parsed.Code)
-			if code == "" {
-				code = strings.TrimSpace(parsed.LegacyCode)
+			message := strings.TrimSpace(parsed.Message)
+			retryable := parsed.Retryable
+			if code == "" && len(parsed.Error) > 0 {
+				var legacyCode string
+				if json.Unmarshal(parsed.Error, &legacyCode) == nil {
+					code = strings.TrimSpace(legacyCode)
+				} else {
+					var nested struct {
+						Code      string `json:"code"`
+						Message   string `json:"message"`
+						Retryable bool   `json:"retryable"`
+					}
+					if json.Unmarshal(parsed.Error, &nested) == nil {
+						code = strings.TrimSpace(nested.Code)
+						if strings.TrimSpace(nested.Message) != "" {
+							message = strings.TrimSpace(nested.Message)
+						}
+						retryable = nested.Retryable
+					}
+				}
 			}
 			if code != "" {
 				apiErr.Code = code
-				if strings.TrimSpace(parsed.Message) != "" {
-					apiErr.Message = parsed.Message
+				if message != "" {
+					apiErr.Message = message
 				}
-				apiErr.Retryable = parsed.Retryable
+				apiErr.Retryable = retryable
 			}
 		}
 	}

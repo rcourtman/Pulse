@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import { Button, ButtonLink } from '@/components/shared/Button';
+import { InlineNotice, type InlineNoticeTone } from '@/components/shared/InlineNotice';
 import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
 import { licenseEntitlementsLoadError } from '@/stores/licenseEntitlements';
 import {
@@ -103,6 +104,9 @@ const formatDate = (value?: string | null) => {
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString();
 };
+
+const commercialMigrationNoticeTone = (notice: Notice): InlineNoticeTone =>
+  notice.tone.includes('red-') ? 'danger' : 'warning';
 
 const statusStateClass = (state: 'active' | 'partial' | 'missing') => {
   switch (state) {
@@ -385,10 +389,10 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
       </Show>
       <Show when={props.commercialMigrationNotice}>
         {(notice) => (
-          <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
+          <InlineNotice tone={commercialMigrationNoticeTone(notice())} class="mb-4">
             <p class="font-medium">{notice().title}</p>
-            <p class="mt-1 text-xs opacity-90">{notice().body}</p>
-          </div>
+            <p class="mt-1 text-xs">{notice().body}</p>
+          </InlineNotice>
         )}
       </Show>
       <Show when={props.grandfatheredPriceNotice}>

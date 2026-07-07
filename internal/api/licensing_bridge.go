@@ -100,6 +100,13 @@ func cloneCommercialMigrationStatusFromLicensing(state *commercialMigrationStatu
 	return pkglicensing.CloneCommercialMigrationStatus(state)
 }
 
+func applyCommercialMigrationFailureTimingFromLicensing(
+	status, previous *commercialMigrationStatusModel,
+	now time.Time,
+) *commercialMigrationStatusModel {
+	return pkglicensing.ApplyCommercialMigrationFailureTiming(status, previous, now)
+}
+
 func classifyLegacyExchangeErrorFromLicensing(err error) *commercialMigrationStatusModel {
 	return pkglicensing.ClassifyLegacyExchangeError(err)
 }

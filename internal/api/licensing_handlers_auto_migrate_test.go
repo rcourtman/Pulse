@@ -151,6 +151,51 @@ func TestGetTenantComponents_AutoExchangesPersistedLegacyJWT(t *testing.T) {
 	handlers.StopAllBackgroundLoops()
 }
 
+func TestSetCommercialMigrationState_AutoMigrateEscalatesSustainedTransportFailure(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	handlers := NewLicenseHandlers(mtp, false)
+
+	now := time.Unix(1_700_000_000, 0)
+	handlers.commercialMigrationNow = func() time.Time { return now }
+	if err := handlers.setCommercialMigrationState("default", &pkglicensing.CommercialMigrationStatus{
+		Source:            pkglicensing.CommercialMigrationSourceV5License,
+		State:             pkglicensing.CommercialMigrationStatePending,
+		Reason:            pkglicensing.CommercialMigrationReasonExchangeUnavailable,
+		RecommendedAction: pkglicensing.CommercialMigrationActionRetryActivation,
+	}); err != nil {
+		t.Fatalf("set initial migration state: %v", err)
+	}
+
+	now = now.Add(time.Duration(pkglicensing.CommercialMigrationSustainedExchangeUnavailableSeconds+1) * time.Second)
+	if err := handlers.setCommercialMigrationState("default", &pkglicensing.CommercialMigrationStatus{
+		Source:            pkglicensing.CommercialMigrationSourceV5License,
+		State:             pkglicensing.CommercialMigrationStatePending,
+		Reason:            pkglicensing.CommercialMigrationReasonExchangeUnavailable,
+		RecommendedAction: pkglicensing.CommercialMigrationActionRetryActivation,
+	}); err != nil {
+		t.Fatalf("set sustained migration state: %v", err)
+	}
+
+	store := config.NewFileBillingStore(baseDir)
+	state, err := store.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("GetBillingState sustained: %v", err)
+	}
+	if state == nil || state.CommercialMigration == nil {
+		t.Fatal("expected sustained commercial migration state")
+	}
+	if state.CommercialMigration.FirstFailedAt != 1_700_000_000 {
+		t.Fatalf("sustained first_failed_at=%d want 1700000000", state.CommercialMigration.FirstFailedAt)
+	}
+	if state.CommercialMigration.Reason != pkglicensing.CommercialMigrationReasonExchangeConnectivity {
+		t.Fatalf("sustained reason=%q want %q", state.CommercialMigration.Reason, pkglicensing.CommercialMigrationReasonExchangeConnectivity)
+	}
+	if state.CommercialMigration.RecommendedAction != pkglicensing.CommercialMigrationActionAllowLicenseEgress {
+		t.Fatalf("sustained action=%q want %q", state.CommercialMigration.RecommendedAction, pkglicensing.CommercialMigrationActionAllowLicenseEgress)
+	}
+}
+
 func TestGetTenantComponents_SkipsExchange_WhenActivationStateExists(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
