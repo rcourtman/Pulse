@@ -884,6 +884,7 @@ func hostSensorSummaryToFrontend(src HostSensorSummary) *HostSensorSummaryFronte
 				Serial:      disk.Serial,
 				WWN:         disk.WWN,
 				Type:        disk.Type,
+				SizeBytes:   disk.SizeBytes,
 				Temperature: disk.Temperature,
 				Health:      disk.Health,
 				Standby:     disk.Standby,

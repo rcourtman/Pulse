@@ -28,6 +28,10 @@ reported as 0..100 percentages. Unified-resource host metric payloads and
 host-derived storage adapters must clamp those reported percentages directly
 rather than passing them through ratio-to-percent normalization, which is
 reserved for providers that report 0..1 usage ratios.
+Physical-disk resources own cross-source disk identity. When Proxmox inventory
+and host-agent SMART telemetry describe the same device, the merged resource
+must retain Proxmox node/instance source payloads while carrying SMART
+temperature, capacity, health, and identity enrichment.
 
 ## Canonical Files
 
@@ -2842,6 +2846,14 @@ Canonical physical-disk views now expose the full disk identity and SMART
 metadata needed by monitoring refresh paths, so physical-disk temperature and
 SMART merges can run from unified `ReadState` instead of from snapshot-owned
 disk arrays.
+When host-agent SMART and Proxmox physical-disk rows merge, the unified
+resource must preserve both the enriched `PhysicalDiskMeta` and the Proxmox
+source payload (`ProxmoxData.NodeName`, `Instance`, and source id). A
+SMART-enriched disk must not lose Proxmox node membership, or later read-state
+refreshes and Proxmox-scoped views can drop the disk even though inventory
+still exists. `HostSMARTMeta` must carry `sizeBytes` through adapter, clone,
+read-state, and API transport so disk capacity remains available after
+registry rebuilds.
 That same canonical physical-disk view must also expose source-independent host
 context. When a disk is API-backed rather than node-backed, typed views should
 fall back to canonical host identity such as `identity.hostnames` instead of

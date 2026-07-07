@@ -2206,6 +2206,9 @@ func TestResourceRegistry_IngestSnapshotMergesAgentAndProxmoxPhysicalDisksByIden
 	if disk.PhysicalDisk == nil || disk.PhysicalDisk.Temperature != 37 {
 		t.Fatalf("expected merged SMART temperature from agent disk, got %+v", disk.PhysicalDisk)
 	}
+	if disk.Proxmox == nil || disk.Proxmox.NodeName != "tower" || disk.Proxmox.Instance != "pve-tower" {
+		t.Fatalf("expected merged disk to retain Proxmox node identity, got %+v", disk.Proxmox)
+	}
 }
 
 // Regression for issue #1483: a legacy host agent reports an NVMe disk keyed by

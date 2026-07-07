@@ -211,6 +211,33 @@ func TestFindLinkedProxmoxEntityWithHints_UsesExactEndpointHostnameBeforeNameFal
 	}
 }
 
+func TestHostSensorsFromReadStateViewPreservesSMARTSizeBytes(t *testing.T) {
+	sensors := &unifiedresources.HostSensorMeta{
+		SMART: []unifiedresources.HostSMARTMeta{
+			{
+				Device:      "/dev/sda",
+				Model:       "CT240BX500SSD1",
+				Serial:      "SATA-SERIAL-1",
+				Type:        "sata",
+				SizeBytes:   240_057_409_536,
+				Temperature: 32,
+				Health:      "PASSED",
+			},
+		},
+	}
+
+	got := hostSensorsFromReadStateView(sensors)
+	if len(got.SMART) != 1 {
+		t.Fatalf("SMART row count = %d, want 1", len(got.SMART))
+	}
+	if got.SMART[0].SizeBytes != 240_057_409_536 {
+		t.Fatalf("SMART SizeBytes = %d, want 240057409536", got.SMART[0].SizeBytes)
+	}
+	if got.SMART[0].Temperature != 32 {
+		t.Fatalf("SMART temperature = %d, want 32", got.SMART[0].Temperature)
+	}
+}
+
 func TestApplyDockerReportNormalizesContainerCPUCapacityAcceptedIngestProof(t *testing.T) {
 	monitor := newTestMonitor(t)
 	token := &config.APITokenRecord{ID: "token-docker-cpu", Name: "Docker Token"}

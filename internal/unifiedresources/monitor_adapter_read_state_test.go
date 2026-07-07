@@ -99,6 +99,64 @@ func TestMonitorAdapterReadStateForwardsToRegistry(t *testing.T) {
 	}
 }
 
+func TestMonitorAdapterPhysicalDiskReadStateRetainsProxmoxIdentityAfterSMARTMerge(t *testing.T) {
+	adapter := NewMonitorAdapter(NewRegistry(nil))
+	now := time.Date(2026, 7, 7, 10, 0, 0, 0, time.UTC)
+
+	adapter.PopulateFromSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:       "host-pve",
+				Hostname: "pve",
+				Status:   "online",
+				LastSeen: now,
+				Sensors: models.HostSensorSummary{
+					SMART: []models.HostDiskSMART{
+						{
+							Device:      "/dev/nvme0n1",
+							Model:       "KINGSTON SNV3S2000G",
+							Serial:      "SERIAL-NVME-0",
+							Type:        "nvme",
+							SizeBytes:   2_000_398_934_016,
+							Temperature: 37,
+							Health:      "PASSED",
+						},
+					},
+				},
+			},
+		},
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				ID:          "homelab-pve--dev-nvme0n1",
+				Node:        "pve",
+				Instance:    "homelab",
+				DevPath:     "/dev/nvme0n1",
+				Model:       "KINGSTON SNV3S2000G",
+				Serial:      "SERIAL-NVME-0",
+				Type:        "nvme",
+				Size:        2_000_398_934_016,
+				Health:      "PASSED",
+				LastChecked: now,
+			},
+		},
+	})
+
+	disks := adapter.PhysicalDisks()
+	if len(disks) != 1 {
+		t.Fatalf("physical disk count = %d, want 1", len(disks))
+	}
+	disk := disks[0]
+	if disk.Node() != "pve" || disk.Instance() != "homelab" {
+		t.Fatalf("merged disk lost Proxmox identity: node=%q instance=%q", disk.Node(), disk.Instance())
+	}
+	if disk.Temperature() != 37 {
+		t.Fatalf("merged disk temperature = %d, want 37", disk.Temperature())
+	}
+	if disk.SizeBytes() != 2_000_398_934_016 {
+		t.Fatalf("merged disk sizeBytes = %d, want 2000398934016", disk.SizeBytes())
+	}
+}
+
 func TestMonitorAdapterReadStateReturnsClonedIncidents(t *testing.T) {
 	adapter := NewMonitorAdapter(NewRegistry(nil))
 	now := time.Date(2026, 3, 8, 12, 0, 0, 0, time.UTC)

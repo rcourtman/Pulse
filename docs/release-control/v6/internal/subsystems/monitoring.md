@@ -1113,9 +1113,12 @@ host agent reports SMART health, SMART identity, ZFS pool membership, or NVMe
 trustworthy health, wearout, model, serial, WWN, type, size, or pool data, the
 merge path in `internal/monitoring/monitor.go` must promote that missing data
 into the canonical physical-disk model without overwriting provider truth. The
-Proxmox polling runtime in `internal/monitoring/monitor_pve.go` must evaluate
-disk alerts only after that merged disk view exists, so controller-backed disks
-do not lose health and endurance coverage between collection and alerting.
+read-state sensor conversion must preserve SMART `SizeBytes` so subsequent
+refreshes keep whole-disk capacity evidence available for Proxmox disk merges.
+The Proxmox polling runtime in `internal/monitoring/monitor_pve.go` must
+evaluate disk alerts only after that merged disk view exists, so
+controller-backed disks do not lose health and endurance coverage between
+collection and alerting.
 That same host-agent temperature boundary must prefer a recent linked host-agent
 payload over legacy SSH collection once the agent provides any usable CPU, NVMe,
 GPU, or SMART temperature reading. `internal/monitoring/monitor_polling_node_helpers.go`

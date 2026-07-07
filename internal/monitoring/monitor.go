@@ -3430,6 +3430,7 @@ func hostSensorsFromReadStateView(sensors *unifiedresources.HostSensorMeta) mode
 				Serial:      smart.Serial,
 				WWN:         smart.WWN,
 				Type:        smart.Type,
+				SizeBytes:   smart.SizeBytes,
 				Temperature: smart.Temperature,
 				Health:      smart.Health,
 				Standby:     smart.Standby,

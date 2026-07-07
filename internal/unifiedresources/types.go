@@ -568,6 +568,7 @@ type HostSMARTMeta struct {
 	Serial      string                  `json:"serial,omitempty"`
 	WWN         string                  `json:"wwn,omitempty"`
 	Type        string                  `json:"type,omitempty"`
+	SizeBytes   int64                   `json:"sizeBytes,omitempty"`
 	Temperature int                     `json:"temperature"`
 	Health      string                  `json:"health"`
 	Standby     bool                    `json:"standby,omitempty"`

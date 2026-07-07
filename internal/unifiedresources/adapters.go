@@ -219,6 +219,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 					Serial:      s.Serial,
 					WWN:         s.WWN,
 					Type:        s.Type,
+					SizeBytes:   s.SizeBytes,
 					Temperature: s.Temperature,
 					Health:      s.Health,
 					Standby:     s.Standby,

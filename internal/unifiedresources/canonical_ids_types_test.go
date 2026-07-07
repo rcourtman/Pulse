@@ -22,6 +22,32 @@ func TestCanonicalResourceTypeDoesNotAliasHost(t *testing.T) {
 	}
 }
 
+func TestHostSMARTMetaCarriesSizeBytesJSONContract(t *testing.T) {
+	payload := HostSMARTMeta{
+		Device:    "/dev/sda",
+		Model:     "CT240BX500SSD1",
+		Serial:    "SATA-SERIAL-1",
+		Type:      "sata",
+		SizeBytes: 240_057_409_536,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal HostSMARTMeta: %v", err)
+	}
+	if !strings.Contains(string(data), `"sizeBytes":240057409536`) {
+		t.Fatalf("HostSMARTMeta JSON did not carry sizeBytes: %s", data)
+	}
+
+	var decoded HostSMARTMeta
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal HostSMARTMeta: %v", err)
+	}
+	if decoded.SizeBytes != payload.SizeBytes {
+		t.Fatalf("decoded sizeBytes = %d, want %d", decoded.SizeBytes, payload.SizeBytes)
+	}
+}
+
 func TestContractResourceType(t *testing.T) {
 	tests := []struct {
 		name     string

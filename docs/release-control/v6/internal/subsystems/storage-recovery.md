@@ -1592,7 +1592,11 @@ The shared PVE setup-script SMART wrapper remains a storage/recovery dependency
 only for disk-temperature evidence. Storage surfaces may depend on its explicit
 `-d sat` and `-d scsi` retries for active direct Linux SATA/SAT-style disks, but
 they must not fork a storage-local disk-temperature collector or replace the
-API-owned setup-script contract.
+API-owned setup-script contract. Storage physical-disk rows also depend on the
+unified-resource disk contract preserving Proxmox node/instance metadata and
+SMART capacity when Proxmox inventory and host-agent SMART telemetry merge;
+storage/recovery consumers must read that canonical merged physical-disk
+resource rather than rebuilding a local Proxmox/S.M.A.R.T. join.
 
 Notification webhook management changes on shared `internal/api/` handlers are
 likewise adjacent only: the webhook `signingSecret` payload field and its

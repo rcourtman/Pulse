@@ -2649,9 +2649,6 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	// Update source payload
 	switch source {
 	case SourceProxmox:
-		if mergedPhysicalDisk {
-			break
-		}
 		existing.Proxmox = mergeProxmoxData(existing.Proxmox, incoming.Proxmox)
 	case SourceAgent:
 		if mergedPhysicalDisk {
