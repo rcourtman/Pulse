@@ -25,7 +25,7 @@ type onboardingRelayDetails struct {
 
 type onboardingQRResponse struct {
 	Schema      string                 `json:"schema"`
-	InstanceURL string                 `json:"instance_url"`
+	InstanceURL string                 `json:"instance_url,omitempty"`
 	InstanceID  string                 `json:"instance_id,omitempty"`
 	Relay       onboardingRelayDetails `json:"relay"`
 	AuthToken   string                 `json:"auth_token"`
@@ -288,7 +288,8 @@ func (r *Router) buildOnboardingPayload(req *http.Request, relayCfg *relay.Confi
 
 	payload := emptyOnboardingQRResponse()
 	payload.Schema = onboardingSchemaVersion
-	payload.InstanceURL = strings.TrimSpace(r.resolvePublicURL(req))
+	instanceURL, instanceURLDiagnostic := normalizeOnboardingInstanceURL(r.resolvePublicURL(req))
+	payload.InstanceURL = instanceURL
 	payload.InstanceID = r.currentRelayInstanceID()
 	payload.Relay = onboardingRelayDetails{
 		Enabled:             relayCfg.Enabled,
@@ -299,6 +300,9 @@ func (r *Router) buildOnboardingPayload(req *http.Request, relayCfg *relay.Confi
 	payload.AuthToken = authToken
 
 	diagnostics := make([]onboardingDiagnostic, 0, 4)
+	if instanceURLDiagnostic != nil {
+		diagnostics = append(diagnostics, *instanceURLDiagnostic)
+	}
 	if !payload.Relay.Enabled {
 		diagnostics = append(diagnostics, onboardingDiagnostic{
 			Code:     "relay_disabled",
@@ -327,6 +331,27 @@ func (r *Router) buildOnboardingPayload(req *http.Request, relayCfg *relay.Confi
 		payload.DeepLink = buildOnboardingDeepLink(payload)
 	}
 	return payload, diagnostics
+}
+
+func normalizeOnboardingInstanceURL(raw string) (string, *onboardingDiagnostic) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+
+	parsed, err := url.Parse(raw)
+	if err == nil && strings.EqualFold(parsed.Scheme, "https") && strings.TrimSpace(parsed.Host) != "" {
+		return raw, nil
+	}
+
+	return "", &onboardingDiagnostic{
+		Code:     "instance_url_not_https",
+		Severity: "warning",
+		Field:    "instance_url",
+		Expected: "https://...",
+		Received: raw,
+		Message:  "Pulse web link is not included in this pairing code because the resolved Pulse URL is not HTTPS. Pairing can continue, but opening Pulse web from the phone requires an HTTPS Pulse URL.",
+	}
 }
 
 func writeOnboardingNotReady(w http.ResponseWriter, diagnostics []onboardingDiagnostic) {
@@ -456,7 +481,9 @@ func hasOnboardingError(diagnostics []onboardingDiagnostic) bool {
 func buildOnboardingDeepLink(payload onboardingQRResponse) string {
 	query := url.Values{}
 	query.Set("schema", payload.Schema)
-	query.Set("instance_url", payload.InstanceURL)
+	if payload.InstanceURL != "" {
+		query.Set("instance_url", payload.InstanceURL)
+	}
 	if payload.InstanceID != "" {
 		query.Set("instance_id", payload.InstanceID)
 	}

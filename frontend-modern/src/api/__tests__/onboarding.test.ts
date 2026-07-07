@@ -52,6 +52,29 @@ describe('OnboardingAPI', () => {
       });
     });
 
+    it('accepts pairing payloads without an optional Pulse web handoff URL', async () => {
+      const mockResponse: OnboardingQRResponse = {
+        schema: 'pulse-mobile-onboarding-v1',
+        instance_id: 'inst-123',
+        relay: { enabled: true, url: 'wss://relay.example.com/ws/app' },
+        auth_token: 'token-123',
+        deep_link: 'pulse://connect?instance_id=inst-123',
+        diagnostics: [
+          {
+            code: 'instance_url_not_https',
+            severity: 'warning',
+            message: 'Pulse web link is not included in this pairing code because the resolved Pulse URL is not HTTPS.',
+            field: 'instance_url',
+          },
+        ],
+      };
+      vi.mocked(apiFetch).mockResolvedValueOnce(
+        new Response(JSON.stringify(mockResponse), { status: 200 }),
+      );
+
+      await expect(OnboardingAPI.getQRPayload('token-123')).resolves.toEqual(mockResponse);
+    });
+
     it('throws readiness diagnostics when the backend refuses an incomplete pairing payload', async () => {
       const diagnostics = [
         {

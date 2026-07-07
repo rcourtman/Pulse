@@ -696,6 +696,11 @@ surface and no new `internal/api/` lifecycle handler.
    lifecycle surfaces may display contact email when supplied by the shared
    auth boundary, but they must not reinterpret SSO or Stripe email as the
    canonical user identifier for setup, install, or fleet-management actions.
+   Mobile onboarding payload sanitization in
+   `internal/api/onboarding_handlers.go` remains API/relay-mobile ownership:
+   omitting a non-HTTPS `instance_url` from a QR/deep-link is a Pulse web
+   handoff decision only and must not change install-command URLs,
+   auto-register behavior, agent connection URLs, or lifecycle admission.
    Approved-action tool invocation parsing in `internal/api/router_routes_ai_relay.go`
    is not an agent-lifecycle route grammar: lifecycle-adjacent setup or repair
    flows that execute governed Pulse tools must inherit

@@ -446,6 +446,11 @@ recovery scope, or a storage/recovery-owned secret source.
    resulting Assistant context if exposed by another surface, but must not
    treat resource-to-action-target coercion as recovery scope, backup
    ownership, restore authorization, or storage-provider identity.
+   Mobile onboarding QR/deep-link `instance_url` sanitization in
+   `internal/api/onboarding_handlers.go` is also adjacent API/relay-mobile
+   ownership. Storage and recovery consumers must not treat an omitted
+   non-HTTPS Pulse web handoff URL as storage source identity, recovery
+   endpoint identity, backup readiness, or restore-scope evidence.
    AI provider registry and `/api/settings/ai` credential-shape changes in
    `internal/api/ai_handlers.go` are adjacent runtime configuration only:
    provider ids, default model routes, provider endpoints, API-key fields, and

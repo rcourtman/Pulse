@@ -56,6 +56,45 @@ func TestOnboardingQRPayloadStructure(t *testing.T) {
 	}
 }
 
+func TestOnboardingQROmitsNonHTTPSInstanceURL(t *testing.T) {
+	router, rawToken, _ := newOnboardingContractRouter(t)
+	router.config.PublicURL = ""
+	router.config.AgentConnectURL = ""
+
+	req := httptest.NewRequest(http.MethodGet, "http://pulse.local.test/api/onboarding/qr", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+
+	router.handleGetOnboardingQR(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &raw); err != nil {
+		t.Fatalf("decode raw QR response: %v", err)
+	}
+	if _, ok := raw["instance_url"]; ok {
+		t.Fatalf("expected unsafe top-level instance_url to be omitted from QR response, got %s", body)
+	}
+
+	var payload onboardingQRResponse
+	if err := json.NewDecoder(strings.NewReader(body)).Decode(&payload); err != nil {
+		t.Fatalf("decode QR response: %v", err)
+	}
+	if payload.InstanceURL != "" {
+		t.Fatalf("expected empty instance_url, got %q", payload.InstanceURL)
+	}
+	if strings.Contains(payload.DeepLink, "instance_url") {
+		t.Fatalf("expected unsafe instance_url to be omitted from deep link, got %q", payload.DeepLink)
+	}
+	if !diagnosticCodePresent(payload.Diagnostics, "instance_url_not_https") {
+		t.Fatalf("expected instance_url_not_https diagnostic, got %#v", payload.Diagnostics)
+	}
+}
+
 func TestOnboardingQRRejectsIncompleteRelayRegistration(t *testing.T) {
 	router, rawToken, _ := newOnboardingContractRouter(t)
 	router.relayClient = nil

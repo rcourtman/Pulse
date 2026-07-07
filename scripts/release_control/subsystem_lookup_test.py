@@ -2915,11 +2915,11 @@ class SubsystemLookupTest(unittest.TestCase):
             api_match["matched_contract_references"],
             [
                 {
-                    "heading": "## Shared Boundaries",
-                    "path": "internal/api/access_control_handlers.go",
-                    "line": 1172,
-                    "heading_line": 137,
-                }
+					"heading": "## Shared Boundaries",
+					"path": "internal/api/access_control_handlers.go",
+					"line": 1176,
+					"heading_line": 137,
+				}
             ],
         )
 

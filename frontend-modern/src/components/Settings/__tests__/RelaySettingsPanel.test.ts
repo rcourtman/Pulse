@@ -37,7 +37,7 @@ describe('Onboarding QR payload contract', () => {
 
     expect(onboardingSource).toContain('export interface OnboardingQRResponse');
     expect(onboardingSource).toContain('schema: string;');
-    expect(onboardingSource).toContain('instance_url: string;');
+    expect(onboardingSource).toContain('instance_url?: string;');
     expect(onboardingSource).toContain('relay: OnboardingRelayDetails;');
     expect(onboardingSource).toContain('auth_token: string;');
     expect(onboardingSource).toContain('deep_link: string;');

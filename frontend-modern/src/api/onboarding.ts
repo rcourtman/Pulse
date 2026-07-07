@@ -18,7 +18,7 @@ export interface OnboardingDiagnostic {
 
 export interface OnboardingQRResponse {
   schema: string;
-  instance_url: string;
+  instance_url?: string;
   instance_id?: string;
   relay: OnboardingRelayDetails;
   auth_token: string;

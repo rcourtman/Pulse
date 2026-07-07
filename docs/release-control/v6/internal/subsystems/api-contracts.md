@@ -157,6 +157,10 @@ onboarding_not_ready` diagnostic response when Remote Access, relay
 registration, or the dedicated Pulse Mobile credential is incomplete, while
 `frontend-modern/src/api/onboarding.ts` and relay settings consumers may only
 surface those diagnostics and must not synthesize partial pairing payloads.
+The `instance_url` Pulse web handoff field is optional and may only be emitted
+when the resolved Pulse URL is an absolute `https://` URL; non-HTTPS admin
+URLs must be omitted from QR/deep-link payloads with a warning diagnostic so
+mobile pairing does not fail on a web-handoff-only field.
 
 Proxy-auth administrator evaluation is a shared auth/API contract. Once
 `PROXY_AUTH_ROLE_HEADER` and `PROXY_AUTH_ADMIN_ROLE` are configured,
@@ -6737,7 +6741,10 @@ reported a connected `instance_id`, or the request lacks the dedicated
 server-minted mobile credential. A successful QR/deep-link response therefore
 continues to mean the payload contains the exact relay registration and token
 material Pulse Mobile can validate, while settings surfaces consume the
-diagnostics for operator-visible readiness copy.
+diagnostics for operator-visible readiness copy. The optional Pulse web
+handoff URL must not weaken that contract: if the resolved public URL is not
+HTTPS, the response omits `instance_url`, keeps pairing material usable, and
+returns an `instance_url_not_https` warning for settings copy.
 The shared security token contract now also includes single-record metadata
 reads. `internal/api/security_tokens.go`,
 `internal/api/router_routes_auth_security.go`,

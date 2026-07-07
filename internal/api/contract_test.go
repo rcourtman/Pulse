@@ -8997,6 +8997,45 @@ func TestContract_OnboardingQRResponseJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_OnboardingQRResponseOmitsEmptyInstanceURLJSONSnapshot(t *testing.T) {
+	payload := onboardingQRResponse{
+		Schema:     onboardingSchemaVersion,
+		InstanceID: "relay_abc123",
+		Relay: onboardingRelayDetails{
+			Enabled: true,
+			URL:     "wss://relay.example.test/ws/app",
+		},
+		AuthToken: "token-123",
+		DeepLink:  "pulse://connect?schema=pulse-mobile-onboarding-v1&instance_id=relay_abc123&relay_url=wss%3A%2F%2Frelay.example.test%2Fws%2Fapp&auth_token=token-123",
+		Diagnostics: []onboardingDiagnostic{
+			{
+				Code:     "instance_url_not_https",
+				Severity: "warning",
+				Field:    "instance_url",
+				Expected: "https://...",
+				Received: "http://pulse.local.test",
+				Message:  "Pulse web link is not included in this pairing code because the resolved Pulse URL is not HTTPS. Pairing can continue, but opening Pulse web from the phone requires an HTTPS Pulse URL.",
+			},
+		},
+	}.normalizeCollections()
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal onboarding qr response without instance_url: %v", err)
+	}
+
+	const want = `{
+		"schema":"pulse-mobile-onboarding-v1",
+		"instance_id":"relay_abc123",
+		"relay":{"enabled":true,"url":"wss://relay.example.test/ws/app"},
+		"auth_token":"token-123",
+		"deep_link":"pulse://connect?schema=pulse-mobile-onboarding-v1\u0026instance_id=relay_abc123\u0026relay_url=wss%3A%2F%2Frelay.example.test%2Fws%2Fapp\u0026auth_token=token-123",
+		"diagnostics":[{"code":"instance_url_not_https","severity":"warning","message":"Pulse web link is not included in this pairing code because the resolved Pulse URL is not HTTPS. Pairing can continue, but opening Pulse web from the phone requires an HTTPS Pulse URL.","field":"instance_url","expected":"https://...","received":"http://pulse.local.test"}]
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_OnboardingNotReadyResponseJSONSnapshot(t *testing.T) {
 	payload := onboardingNotReadyResponse{
 		Code:    onboardingNotReadyCode,
