@@ -279,6 +279,73 @@ func TestPollPBSBackupsSummarizesLargeGroupsWithoutFetchingSnapshots(t *testing.
 	}
 }
 
+func TestPollPBSBackupsBoundsLargeTopologyAcrossPolls(t *testing.T) {
+	t.Parallel()
+
+	const firstBackupTime = int64(1700000000)
+	groupCount := pbsBackupLiveStateLimit + 2000
+	var groups strings.Builder
+	groups.WriteString(`{"data":[`)
+	for i := 0; i < groupCount; i++ {
+		if i > 0 {
+			groups.WriteByte(',')
+		}
+		_, _ = fmt.Fprintf(
+			&groups,
+			`{"backup-type":"vm","backup-id":"%d","last-backup":%d,"backup-count":%d}`,
+			i,
+			firstBackupTime+int64(i),
+			pbsBackupSnapshotsPerGroupLimit+20,
+		)
+	}
+	groups.WriteString(`]}`)
+	groupsJSON := groups.String()
+
+	var snapshotCalls int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "/admin/datastore/archive/groups"):
+			_, _ = w.Write([]byte(groupsJSON))
+		case strings.Contains(r.URL.Path, "/admin/datastore/archive/snapshots"):
+			atomic.AddInt64(&snapshotCalls, 1)
+			_, _ = w.Write([]byte(`{"data":[]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := pbs.NewClient(pbs.ClientConfig{
+		Host:       server.URL,
+		TokenName:  "root@pam!token",
+		TokenValue: "secret",
+	})
+	if err != nil {
+		t.Fatalf("failed to create PBS client: %v", err)
+	}
+
+	m := &Monitor{state: models.NewState()}
+	for cycle := 0; cycle < 3; cycle++ {
+		m.pollPBSBackups(context.Background(), "pbs1", client, []models.PBSDatastore{{Name: "archive"}})
+
+		snapshot := m.state.GetSnapshot()
+		if got := len(snapshot.PBSBackups); got != pbsBackupLiveStateLimit {
+			t.Fatalf("cycle %d PBS backup state size = %d, want %d", cycle, got, pbsBackupLiveStateLimit)
+		}
+		if got := atomic.LoadInt64(&snapshotCalls); got != 0 {
+			t.Fatalf("cycle %d large topology fetched snapshots %d times, want 0", cycle, got)
+		}
+		newest := snapshot.PBSBackups[0]
+		if newest.VMID != strconv.Itoa(groupCount-1) || newest.BackupTime.Unix() != firstBackupTime+int64(groupCount-1) {
+			t.Fatalf("cycle %d newest backup = %+v, want vmid %d at %d", cycle, newest, groupCount-1, firstBackupTime+int64(groupCount-1))
+		}
+		oldestRetained := snapshot.PBSBackups[len(snapshot.PBSBackups)-1]
+		if oldestRetained.VMID != strconv.Itoa(groupCount-pbsBackupLiveStateLimit) {
+			t.Fatalf("cycle %d oldest retained vmid = %s, want %d", cycle, oldestRetained.VMID, groupCount-pbsBackupLiveStateLimit)
+		}
+	}
+}
+
 func TestConvertPBSSnapshotsKeepsOnlyRecentBoundedSnapshots(t *testing.T) {
 	t.Parallel()
 
