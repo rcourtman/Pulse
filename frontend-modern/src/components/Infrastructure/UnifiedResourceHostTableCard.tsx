@@ -2,7 +2,7 @@ import { For, Show, createMemo } from 'solid-js';
 import type { Component } from 'solid-js';
 import type { Disk } from '@/types/api';
 import { formatBytes, formatSpeed, formatUptime, normalizeDiskArray } from '@/utils/format';
-import { formatTemperature } from '@/utils/temperature';
+import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 import {
   GROUPED_TABLE_ROW_BADGE_CLASS,
   GROUPED_TABLE_ROW_META_CLASS,
@@ -287,6 +287,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                 );
                 const diskThresholds = createMemo(() =>
                   table.getMetricThresholds('agent', 'disk', alertResourceIdCandidates()),
+                );
+                const temperatureThresholds = createMemo(() =>
+                  table.getMetricThresholds('node', 'temperature', alertResourceIdCandidates()),
                 );
                 const detailControlsId = createMemo(() =>
                   buildSummaryDisclosureControlsId(resource.id),
@@ -743,13 +746,10 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                             }
                           >
                             <span
-                              class={`text-xs whitespace-nowrap font-medium ${
-                                (resource.temperature ?? 0) >= 80
-                                  ? 'text-red-600 dark:text-red-400'
-                                  : (resource.temperature ?? 0) >= 65
-                                    ? 'text-amber-600 dark:text-amber-400'
-                                    : 'text-emerald-600 dark:text-emerald-400'
-                              }`}
+                              class={`text-xs whitespace-nowrap font-medium ${getTemperatureTextClass(
+                                resource.temperature,
+                                temperatureThresholds(),
+                              )}`}
                             >
                               {formatTemperature(resource.temperature)}
                             </span>

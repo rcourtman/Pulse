@@ -353,7 +353,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
                         >
                           <span
-                            class={`${PHYSICAL_DISK_TEMPERATURE_CLASS} ${getTemperatureTextClass(data.temperature)}`}
+                            class={`${PHYSICAL_DISK_TEMPERATURE_CLASS} ${getTemperatureTextClass(
+                              data.temperature,
+                              undefined,
+                              'diskTemperature',
+                            )}`}
                           >
                             {formatTemperature(data.temperature)}
                           </span>

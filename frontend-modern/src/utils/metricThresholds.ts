@@ -47,6 +47,15 @@ const DEFAULT_GENERIC_THRESHOLDS: MetricDisplayThresholds = {
 
 const DEFAULT_HYSTERESIS_MARGIN = 5;
 
+const DISPLAY_METRIC_DEFAULT_SCOPES: Record<DisplayMetricType, AlertThresholdScope> = {
+  cpu: 'guest',
+  memory: 'guest',
+  disk: 'guest',
+  temperature: 'node',
+  diskTemperature: 'agent',
+  usage: 'storage',
+};
+
 const SCOPE_DEFAULTS: Record<
   Exclude<AlertThresholdScope, 'storage'>,
   Partial<Record<DisplayMetricType, number>>
@@ -222,6 +231,12 @@ export const getDefaultMetricDisplayThresholds = (
   );
 };
 
+export const getDefaultDisplayMetricThresholds = (
+  metric: DisplayMetricType,
+  scope: AlertThresholdScope = DISPLAY_METRIC_DEFAULT_SCOPES[metric],
+): MetricDisplayThresholds | null =>
+  resolveThreshold(undefined, getFallbackCritical(scope, metric), DEFAULT_HYSTERESIS_MARGIN);
+
 export const resolveMetricDisplayThresholds = (
   config: AlertConfig | null,
   scope: AlertThresholdScope,
@@ -236,13 +251,20 @@ export const resolveMetricDisplayThresholds = (
   return resolveThreshold(overrideValue ?? baseValue, getFallbackCritical(scope, metric), margin);
 };
 
-/** Determine severity level from a percentage value and metric type. */
+const getFallbackSeverityThresholds = (metric: DisplayMetricType): MetricDisplayThresholds => {
+  if (metric === 'cpu' || metric === 'memory' || metric === 'disk') {
+    return METRIC_THRESHOLDS[metric];
+  }
+  return getDefaultDisplayMetricThresholds(metric) ?? DEFAULT_GENERIC_THRESHOLDS;
+};
+
+/** Determine severity level from a metric value and display thresholds. */
 export function getMetricSeverity(
   value: number,
-  metric: MetricType,
+  metric: DisplayMetricType,
   thresholds?: MetricDisplayThresholds | null,
 ): MetricSeverity {
-  const t = thresholds ?? METRIC_THRESHOLDS[metric];
+  const t = thresholds ?? getFallbackSeverityThresholds(metric);
   if (value >= t.critical) return 'critical';
   if (value >= t.warning) return 'warning';
   return 'normal';
@@ -258,7 +280,7 @@ const BG_CLASSES: Record<MetricSeverity, string> = {
 
 export function getMetricColorClass(
   value: number,
-  metric: MetricType,
+  metric: DisplayMetricType,
   thresholds?: MetricDisplayThresholds | null,
 ): string {
   return BG_CLASSES[getMetricSeverity(value, metric, thresholds)];
@@ -274,7 +296,7 @@ const RGBA_COLORS: Record<MetricSeverity, string> = {
 
 export function getMetricColorRgba(
   value: number,
-  metric: MetricType,
+  metric: DisplayMetricType,
   thresholds?: MetricDisplayThresholds | null,
 ): string {
   return RGBA_COLORS[getMetricSeverity(value, metric, thresholds)];
@@ -290,7 +312,7 @@ const HEX_COLORS: Record<MetricSeverity, string> = {
 
 export function getMetricColorHex(
   value: number,
-  metric: MetricType,
+  metric: DisplayMetricType,
   thresholds?: MetricDisplayThresholds | null,
 ): string {
   return HEX_COLORS[getMetricSeverity(value, metric, thresholds)];
@@ -306,7 +328,7 @@ const TEXT_CLASSES: Record<MetricSeverity, string> = {
 
 export function getMetricTextColorClass(
   value: number,
-  metric: MetricType,
+  metric: DisplayMetricType,
   thresholds?: MetricDisplayThresholds | null,
 ): string {
   return TEXT_CLASSES[getMetricSeverity(value, metric, thresholds)];

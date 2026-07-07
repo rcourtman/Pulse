@@ -1,11 +1,13 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import { ProxmoxNodesTable } from '../ProxmoxNodesTable';
 
 const nodeDrawerMock = vi.hoisted(() => vi.fn());
 const activeAlertsMock = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
+const getMetricThresholdsMock = vi.hoisted(() => vi.fn());
+const temperatureGaugeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/hooks/useBreakpoint', () => ({
   useBreakpoint: () => ({
@@ -18,7 +20,10 @@ vi.mock('@/contexts/appRuntime', () => ({
 }));
 
 vi.mock('@/stores/alertsActivation', () => ({
-  useAlertsActivation: () => ({ activationState: () => 'active' }),
+  useAlertsActivation: () => ({
+    activationState: () => 'active',
+    getMetricThresholds: getMetricThresholdsMock,
+  }),
 }));
 
 vi.mock('@/components/shared/responsive', () => ({
@@ -27,10 +32,7 @@ vi.mock('@/components/shared/responsive', () => ({
 
 vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
   StackedMemoryBar: (props: { cacheInclusiveLabel?: string }) => (
-    <div
-      data-testid="stacked-memory-bar"
-      data-cache-inclusive-label={props.cacheInclusiveLabel}
-    />
+    <div data-testid="stacked-memory-bar" data-cache-inclusive-label={props.cacheInclusiveLabel} />
   ),
 }));
 
@@ -43,7 +45,10 @@ vi.mock('@/components/Workloads/MetricMiniSparkline', () => ({
 }));
 
 vi.mock('@/components/shared/TemperatureGauge', () => ({
-  TemperatureGauge: () => <div data-testid="temperature-gauge" />,
+  TemperatureGauge: (props: { value: number; thresholds?: unknown }) => {
+    temperatureGaugeMock({ value: props.value, thresholds: props.thresholds });
+    return <div data-testid="temperature-gauge" />;
+  },
 }));
 
 vi.mock('@/components/Workloads/useWorkloadTableMetricHistory', () => ({
@@ -80,10 +85,14 @@ const makeNodeResource = (overrides: Partial<Resource> = {}): Resource => ({
   ...overrides,
 });
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  getMetricThresholdsMock.mockReturnValue({ warning: 80, critical: 85 });
+  activeAlertsMock.value = {};
+});
+
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
-  activeAlertsMock.value = {};
 });
 
 describe('ProxmoxNodesTable', () => {
@@ -126,9 +135,34 @@ describe('ProxmoxNodesTable', () => {
       />
     ));
 
-    expect(
-      screen.getByRole('link', { name: 'Open web interface for pve-node-1' }),
-    ).toHaveAttribute('href', 'https://pve-node-1:8006');
+    expect(screen.getByRole('link', { name: 'Open web interface for pve-node-1' })).toHaveAttribute(
+      'href',
+      'https://pve-node-1:8006',
+    );
+  });
+
+  it('passes alert-backed temperature thresholds into the node temperature gauge', () => {
+    render(() => (
+      <ProxmoxNodesTable
+        nodes={[makeNodeResource({ temperature: 76 })]}
+        guests={[]}
+        emptyIcon={<span />}
+        emptyTitle="No Proxmox VE nodes"
+        emptyDescription="No nodes"
+      />
+    ));
+
+    expect(getMetricThresholdsMock).toHaveBeenCalledWith(
+      'node',
+      'temperature',
+      expect.arrayContaining(['agent:pve-node-1']),
+    );
+    expect(temperatureGaugeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: 76,
+        thresholds: { warning: 80, critical: 85 },
+      }),
+    );
   });
 
   it('keeps the Proxmox cache-inclusive memory comparison label on node rows', () => {

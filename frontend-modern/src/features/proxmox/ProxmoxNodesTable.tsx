@@ -20,6 +20,7 @@ import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
 import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
+import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
@@ -311,6 +312,9 @@ export const ProxmoxNodesTable: Component<{
               const uptime = () => formatNodeUptime(node.uptime);
               const metricsKey = () => buildMetricKeyForUnifiedResource(node);
               const temperature = () => node.temperature;
+              const alertResourceIds = () => hostOverrideIdCandidates(node);
+              const temperatureThresholds = () =>
+                alertsActivation.getMetricThresholds('node', 'temperature', alertResourceIds());
               const cpuPercent = () => getPlatformTableFiniteMetric(node.cpu?.current) ?? 0;
               const memoryUsed = () => getPlatformTableFiniteMetric(node.memory?.used) ?? 0;
               const memoryTotal = () => getPlatformTableFiniteMetric(node.memory?.total) ?? 0;
@@ -521,7 +525,10 @@ export const ProxmoxNodesTable: Component<{
                           when={typeof temperature() === 'number' && (temperature() as number) > 0}
                           fallback={<span class="text-xs text-muted">—</span>}
                         >
-                          <TemperatureGauge value={temperature() as number} />
+                          <TemperatureGauge
+                            value={temperature() as number}
+                            thresholds={temperatureThresholds()}
+                          />
                         </Show>
                       </TableCell>
                     );

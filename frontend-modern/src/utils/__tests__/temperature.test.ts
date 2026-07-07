@@ -123,11 +123,25 @@ describe('temperature', () => {
     });
 
     it('returns amber for elevated temperatures', () => {
-      expect(getTemperatureTextClass(60)).toContain('text-amber-600');
+      expect(getTemperatureTextClass(75)).toContain('text-amber-600');
     });
 
     it('returns red for high temperatures', () => {
-      expect(getTemperatureTextClass(70)).toContain('text-red-600');
+      expect(getTemperatureTextClass(80)).toContain('text-red-600');
+    });
+
+    it('honors configured warning and critical thresholds', () => {
+      const thresholds = { warning: 80, critical: 85 };
+
+      expect(getTemperatureTextClass(76, thresholds)).toContain('text-green-600');
+      expect(getTemperatureTextClass(80, thresholds)).toContain('text-amber-600');
+      expect(getTemperatureTextClass(85, thresholds)).toContain('text-red-600');
+    });
+
+    it('uses disk temperature defaults for disk temperature displays', () => {
+      expect(getTemperatureTextClass(49, undefined, 'diskTemperature')).toContain('text-green-600');
+      expect(getTemperatureTextClass(50, undefined, 'diskTemperature')).toContain('text-amber-600');
+      expect(getTemperatureTextClass(55, undefined, 'diskTemperature')).toContain('text-red-600');
     });
   });
 

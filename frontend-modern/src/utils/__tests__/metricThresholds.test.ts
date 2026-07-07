@@ -5,6 +5,7 @@ import {
   getMetricColorRgba,
   getMetricColorHex,
   getMetricTextColorClass,
+  getDefaultDisplayMetricThresholds,
   getDefaultMetricDisplayThresholds,
   resolveMetricDisplayThresholds,
   METRIC_THRESHOLDS,
@@ -77,6 +78,16 @@ describe('metricThresholds', () => {
       it('returns critical for value at or above critical threshold', () => {
         expect(getMetricSeverity(90, metric)).toBe('critical');
         expect(getMetricSeverity(100, metric)).toBe('critical');
+      });
+    });
+
+    describe('temperature', () => {
+      it('uses configured display thresholds instead of static frontend cutoffs', () => {
+        const thresholds = { warning: 80, critical: 85 };
+
+        expect(getMetricSeverity(76, 'temperature', thresholds)).toBe('normal');
+        expect(getMetricSeverity(80, 'temperature', thresholds)).toBe('warning');
+        expect(getMetricSeverity(85, 'temperature', thresholds)).toBe('critical');
       });
     });
   });
@@ -168,6 +179,14 @@ describe('metricThresholds', () => {
       expect(getDefaultMetricDisplayThresholds('cpu')).toEqual({ warning: 75, critical: 80 });
       expect(getDefaultMetricDisplayThresholds('memory')).toEqual({ warning: 80, critical: 85 });
       expect(getDefaultMetricDisplayThresholds('disk')).toEqual({ warning: 85, critical: 90 });
+      expect(getDefaultDisplayMetricThresholds('temperature', 'node')).toEqual({
+        warning: 75,
+        critical: 80,
+      });
+      expect(getDefaultDisplayMetricThresholds('diskTemperature')).toEqual({
+        warning: 50,
+        critical: 55,
+      });
       expect(getDefaultMetricDisplayThresholds('generic')).toEqual({
         warning: 75,
         critical: 90,
@@ -241,6 +260,23 @@ describe('metricThresholds', () => {
       expect(resolveMetricDisplayThresholds(config, 'storage', 'usage')).toEqual({
         warning: 86,
         critical: 92,
+      });
+    });
+
+    it('resolves node temperature display thresholds from configured alert defaults', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {
+          temperature: { trigger: 85, clear: 80 },
+        },
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: {},
+      } as AlertConfig;
+
+      expect(resolveMetricDisplayThresholds(config, 'node', 'temperature')).toEqual({
+        warning: 80,
+        critical: 85,
       });
     });
 

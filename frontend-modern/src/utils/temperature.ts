@@ -1,5 +1,11 @@
 import type { Temperature } from '@/types/api';
 import { createSignal, createRoot } from 'solid-js';
+import {
+  getDefaultDisplayMetricThresholds,
+  getMetricSeverity,
+  type DisplayMetricType,
+  type MetricDisplayThresholds,
+} from './metricThresholds';
 import { STORAGE_KEYS } from './localStorage';
 
 export type TemperatureUnit = 'celsius' | 'fahrenheit';
@@ -92,11 +98,23 @@ export const getCpuTemperature = (temperature?: Temperature | null): number | nu
   return Math.max(...candidates);
 };
 
-export const getTemperatureTextClass = (celsius: number | null | undefined): string => {
+const TEMPERATURE_TEXT_CLASSES = {
+  critical: 'text-red-600 dark:text-red-400',
+  warning: 'text-amber-600 dark:text-amber-400',
+  normal: 'text-green-600 dark:text-green-400',
+} as const;
+
+type TemperatureDisplayMetric = Extract<DisplayMetricType, 'temperature' | 'diskTemperature'>;
+
+export const getTemperatureTextClass = (
+  celsius: number | null | undefined,
+  thresholds?: MetricDisplayThresholds | null,
+  metric: TemperatureDisplayMetric = 'temperature',
+): string => {
   if (celsius === null || celsius === undefined || !Number.isFinite(celsius)) {
     return 'text-muted';
   }
-  if (celsius >= 70) return 'text-red-600 dark:text-red-400';
-  if (celsius >= 60) return 'text-amber-600 dark:text-amber-400';
-  return 'text-green-600 dark:text-green-400';
+  return TEMPERATURE_TEXT_CLASSES[
+    getMetricSeverity(celsius, metric, thresholds ?? getDefaultDisplayMetricThresholds(metric))
+  ];
 };
