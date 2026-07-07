@@ -165,9 +165,11 @@ TLS floor in the dynamic config.
    `pulse-control-plane provider-msp proof` must exercise the first-client
    onboarding path through workspace creation, client-bound install token
    generation, tenant-local unified-agent report ingest, tenant-bound install
-   token rotation, rotated-out token rejection, handoff exchange, and
-   duplicate-hostname isolation before provider-hosted MSP installability is
-   treated as proven. The proof is license-backed by default: `license_file` must be the
+   token rotation, rotated-out token rejection, handoff exchange,
+   tenant-runtime report schedule creation, portal-visible active-alert rollup
+   facts, and duplicate-hostname isolation before provider-hosted MSP
+   installability is treated as proven. The proof is license-backed by default:
+   `license_file` must be the
    resolved provider MSP plan source unless the operator explicitly opts into
    the local-development `--allow-env-plan` escape hatch.
    The same proof surface must also keep adversarial client-boundary probes in

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/api"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/account"
@@ -55,32 +56,41 @@ type providerMSPProofRuntime struct {
 }
 
 type providerMSPProofWorkspace struct {
-	TenantID                   string
-	DisplayName                string
-	State                      string
-	PlanVersion                string
-	ContainerID                string
-	PublicURL                  string
-	InstallType                string
-	InstallToken               string
-	InstallTokenID             string
-	InstallCommandGenerated    bool
-	AgentTokenAuthVerified     bool
-	SetupFactsTokenUseVisible  bool
-	AgentReportIngestVerified  bool
-	AgentReportAgentID         string
-	AgentReportHostname        string
-	TokenRotationVerified      bool
-	RotatedInstallToken        string
-	RotatedInstallTokenID      string
-	OldInstallTokenRejected    bool
-	RotatedAgentReportVerified bool
-	HandoffExchangeVerified    bool
-	HandoffTargetPath          string
-	EntitlementLeaseChecked    bool
-	EntitlementLeaseVerified   bool
-	EntitlementWhiteLabel      bool
-	EntitlementSkippedReason   string
+	TenantID                    string
+	DisplayName                 string
+	State                       string
+	PlanVersion                 string
+	ContainerID                 string
+	PublicURL                   string
+	InstallType                 string
+	InstallToken                string
+	InstallTokenID              string
+	InstallCommandGenerated     bool
+	AgentTokenAuthVerified      bool
+	SetupFactsTokenUseVisible   bool
+	AgentReportIngestVerified   bool
+	AgentReportAgentID          string
+	AgentReportHostname         string
+	TokenRotationVerified       bool
+	RotatedInstallToken         string
+	RotatedInstallTokenID       string
+	OldInstallTokenRejected     bool
+	RotatedAgentReportVerified  bool
+	HandoffExchangeVerified     bool
+	HandoffTargetPath           string
+	EntitlementLeaseChecked     bool
+	EntitlementLeaseVerified    bool
+	EntitlementWhiteLabel       bool
+	EntitlementSkippedReason    string
+	ReportScheduleCreated       bool
+	ReportScheduleID            string
+	ReportScheduleVisible       bool
+	ReportScheduleCount         int
+	DisabledReportScheduleCount int
+	ActiveAlertPersisted        bool
+	ActiveAlertRollupVisible    bool
+	CriticalAlertCount          int
+	WarningAlertCount           int
 }
 
 type providerMSPProofReport struct {
@@ -102,6 +112,8 @@ type providerMSPProofReport struct {
 	SetupFactsTokenUseVisible bool
 	AgentReportIngestVerified bool
 	TokenRotationVerified     bool
+	ReportScheduleVisible     bool
+	ActiveAlertRollupVisible  bool
 	Cleanup                   bool
 }
 
@@ -268,6 +280,8 @@ func (rt *providerMSPProofRuntime) runProviderMSPProof(ctx context.Context, opts
 		SetupFactsTokenUseVisible: true,
 		AgentReportIngestVerified: true,
 		TokenRotationVerified:     true,
+		ReportScheduleVisible:     true,
+		ActiveAlertRollupVisible:  true,
 		Cleanup:                   opts.Cleanup,
 	}
 
@@ -298,6 +312,12 @@ func (rt *providerMSPProofRuntime) runProviderMSPProof(ctx context.Context, opts
 		}
 		if !workspace.TokenRotationVerified {
 			report.TokenRotationVerified = false
+		}
+		if !workspace.ReportScheduleVisible {
+			report.ReportScheduleVisible = false
+		}
+		if !workspace.ActiveAlertRollupVisible {
+			report.ActiveAlertRollupVisible = false
 		}
 		report.Workspaces = append(report.Workspaces, workspace)
 	}
@@ -461,34 +481,234 @@ func (rt *providerMSPProofRuntime) proveProviderMSPWorkspace(ctx context.Context
 		return providerMSPProofWorkspace{}, err
 	}
 
+	portalRollup, err := rt.verifyProviderMSPProofPortalRollup(ctx, tenant, tenantDataDir, agentReport)
+	if err != nil {
+		return providerMSPProofWorkspace{}, err
+	}
+
 	return providerMSPProofWorkspace{
-		TenantID:                   tenant.ID,
-		DisplayName:                tenant.DisplayName,
-		State:                      string(tenant.State),
-		PlanVersion:                tenant.PlanVersion,
-		ContainerID:                tenant.ContainerID,
-		PublicURL:                  publicURL,
-		InstallType:                install.InstallType,
-		InstallToken:               install.Token,
-		InstallTokenID:             install.TokenID,
-		InstallCommandGenerated:    true,
-		AgentTokenAuthVerified:     tokenAuthVerified,
-		SetupFactsTokenUseVisible:  setupFactsVisible,
-		AgentReportIngestVerified:  agentReport.Verified,
-		AgentReportAgentID:         agentReport.AgentID,
-		AgentReportHostname:        agentReport.Hostname,
-		TokenRotationVerified:      rotation.Verified,
-		RotatedInstallToken:        rotation.RotatedToken,
-		RotatedInstallTokenID:      rotation.RotatedTokenID,
-		OldInstallTokenRejected:    rotation.OldTokenRejected,
-		RotatedAgentReportVerified: rotation.RotatedAgentReportVerified,
-		HandoffExchangeVerified:    exchangedTargetPath == targetPath,
-		HandoffTargetPath:          exchangedTargetPath,
-		EntitlementLeaseChecked:    entitlement.Checked,
-		EntitlementLeaseVerified:   entitlement.Verified,
-		EntitlementWhiteLabel:      entitlement.WhiteLabel,
-		EntitlementSkippedReason:   entitlement.SkippedReason,
+		TenantID:                    tenant.ID,
+		DisplayName:                 tenant.DisplayName,
+		State:                       string(tenant.State),
+		PlanVersion:                 tenant.PlanVersion,
+		ContainerID:                 tenant.ContainerID,
+		PublicURL:                   publicURL,
+		InstallType:                 install.InstallType,
+		InstallToken:                install.Token,
+		InstallTokenID:              install.TokenID,
+		InstallCommandGenerated:     true,
+		AgentTokenAuthVerified:      tokenAuthVerified,
+		SetupFactsTokenUseVisible:   setupFactsVisible,
+		AgentReportIngestVerified:   agentReport.Verified,
+		AgentReportAgentID:          agentReport.AgentID,
+		AgentReportHostname:         agentReport.Hostname,
+		TokenRotationVerified:       rotation.Verified,
+		RotatedInstallToken:         rotation.RotatedToken,
+		RotatedInstallTokenID:       rotation.RotatedTokenID,
+		OldInstallTokenRejected:     rotation.OldTokenRejected,
+		RotatedAgentReportVerified:  rotation.RotatedAgentReportVerified,
+		HandoffExchangeVerified:     exchangedTargetPath == targetPath,
+		HandoffTargetPath:           exchangedTargetPath,
+		EntitlementLeaseChecked:     entitlement.Checked,
+		EntitlementLeaseVerified:    entitlement.Verified,
+		EntitlementWhiteLabel:       entitlement.WhiteLabel,
+		EntitlementSkippedReason:    entitlement.SkippedReason,
+		ReportScheduleCreated:       portalRollup.ReportScheduleCreated,
+		ReportScheduleID:            portalRollup.ReportScheduleID,
+		ReportScheduleVisible:       portalRollup.ReportScheduleVisible,
+		ReportScheduleCount:         portalRollup.ReportScheduleCount,
+		DisabledReportScheduleCount: portalRollup.DisabledReportScheduleCount,
+		ActiveAlertPersisted:        portalRollup.ActiveAlertPersisted,
+		ActiveAlertRollupVisible:    portalRollup.ActiveAlertRollupVisible,
+		CriticalAlertCount:          portalRollup.CriticalAlertCount,
+		WarningAlertCount:           portalRollup.WarningAlertCount,
 	}, nil
+}
+
+type providerMSPProofPortalRollup struct {
+	ReportScheduleCreated       bool
+	ReportScheduleID            string
+	ReportScheduleVisible       bool
+	ReportScheduleCount         int
+	DisabledReportScheduleCount int
+	ActiveAlertPersisted        bool
+	ActiveAlertRollupVisible    bool
+	CriticalAlertCount          int
+	WarningAlertCount           int
+}
+
+func (rt *providerMSPProofRuntime) verifyProviderMSPProofPortalRollup(ctx context.Context, tenant *registry.Tenant, tenantDataDir string, agentReport providerMSPProofAgentReportIngest) (providerMSPProofPortalRollup, error) {
+	result := providerMSPProofPortalRollup{}
+	if tenant == nil {
+		return result, fmt.Errorf("tenant is required")
+	}
+	tenantID := strings.TrimSpace(tenant.ID)
+	if tenantID == "" {
+		return result, fmt.Errorf("tenant id is required")
+	}
+	if strings.TrimSpace(agentReport.AgentID) == "" {
+		return result, fmt.Errorf("tenant %s agent report id is required before portal rollup proof", tenantID)
+	}
+
+	scheduleID, err := rt.createProviderMSPProofReportSchedule(ctx, tenant, tenantDataDir, agentReport.AgentID, agentReport.Hostname)
+	if err != nil {
+		return result, err
+	}
+	result.ReportScheduleCreated = true
+	result.ReportScheduleID = scheduleID
+
+	orgDir := filepath.Join(tenantDataDir, "orgs", tenantID)
+	if err := writeProviderMSPProofActiveAlerts(orgDir, agentReport.AgentID, agentReport.Hostname); err != nil {
+		return result, fmt.Errorf("write provider MSP proof active alerts for tenant %s: %w", tenantID, err)
+	}
+	result.ActiveAlertPersisted = true
+
+	facts := portal.NewTenantDirWorkspaceSetupFactReader(rt.cfg.TenantsDir()).FactsForWorkspace(tenantID)
+	result.ReportScheduleCount = providerMSPProofFactInt(facts.ReportScheduleCount)
+	result.DisabledReportScheduleCount = providerMSPProofFactInt(facts.DisabledReportScheduleCount)
+	result.CriticalAlertCount = providerMSPProofFactInt(facts.ActiveCriticalAlertCount)
+	result.WarningAlertCount = providerMSPProofFactInt(facts.ActiveWarningAlertCount)
+	result.ReportScheduleVisible = result.ReportScheduleCount == 1 && result.DisabledReportScheduleCount == 0
+	result.ActiveAlertRollupVisible = result.CriticalAlertCount == 1 && result.WarningAlertCount == 1 && facts.ActiveAlertsUpdatedAt != nil
+	if !result.ReportScheduleVisible {
+		return result, fmt.Errorf("portal setup facts for tenant %s report schedules = enabled:%d disabled:%d, want enabled:1 disabled:0", tenantID, result.ReportScheduleCount, result.DisabledReportScheduleCount)
+	}
+	if !result.ActiveAlertRollupVisible {
+		return result, fmt.Errorf("portal setup facts for tenant %s active alerts = critical:%d warning:%d updated:%t, want critical:1 warning:1 updated:true", tenantID, result.CriticalAlertCount, result.WarningAlertCount, facts.ActiveAlertsUpdatedAt != nil)
+	}
+	return result, nil
+}
+
+func (rt *providerMSPProofRuntime) createProviderMSPProofReportSchedule(ctx context.Context, tenant *registry.Tenant, tenantDataDir, resourceID, resourceName string) (string, error) {
+	if tenant == nil {
+		return "", fmt.Errorf("tenant is required")
+	}
+	tenantID := strings.TrimSpace(tenant.ID)
+	if tenantID == "" {
+		return "", fmt.Errorf("tenant id is required")
+	}
+	if strings.TrimSpace(resourceName) == "" {
+		resourceName = strings.TrimSpace(resourceID)
+	}
+	tenantCfg := &runtimeconfig.Config{
+		DataPath:   tenantDataDir,
+		ConfigPath: tenantDataDir,
+		PublicURL:  rt.providerMSPProofTenantPublicURL(tenantID),
+	}
+	tenantPersistence := runtimeconfig.NewMultiTenantPersistence(tenantDataDir)
+	if !tenantPersistence.OrgExists(tenantID) {
+		return "", fmt.Errorf("tenant %s organization metadata is missing before report schedule proof", tenantID)
+	}
+	tenantMonitor := monitoring.NewMultiTenantMonitor(tenantCfg, tenantPersistence, nil)
+	defer tenantMonitor.Stop()
+
+	handler := api.NewReportingHandlers(tenantMonitor, nil)
+	payload := runtimeconfig.ReportSchedule{
+		Name:    "Provider MSP proof monthly report",
+		Enabled: true,
+		Cadence: runtimeconfig.ReportScheduleCadence{
+			Type:       runtimeconfig.ReportScheduleCadenceMonthly,
+			DayOfMonth: 1,
+			Time:       "09:00",
+			Timezone:   "UTC",
+		},
+		Scope: runtimeconfig.ReportScheduleScope{
+			Resources: []runtimeconfig.ReportScheduleResource{
+				{
+					ResourceType: "agent",
+					ResourceID:   strings.TrimSpace(resourceID),
+					Name:         strings.TrimSpace(resourceName),
+				},
+			},
+		},
+		Format: runtimeconfig.ReportScheduleFormatPDF,
+		Delivery: runtimeconfig.ReportScheduleDelivery{
+			Method:     runtimeconfig.ReportScheduleDeliveryDisk,
+			Attach:     true,
+			SaveToDisk: true,
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("marshal provider MSP proof report schedule: %w", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/reports/schedules", bytes.NewReader(body))
+	req = req.WithContext(context.WithValue(ctx, api.OrgIDContextKey, tenantID))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.HandleCreateReportSchedule(rec, req)
+	if rec.Code != http.StatusCreated {
+		return "", fmt.Errorf("tenant %s report schedule create status=%d body=%s", tenantID, rec.Code, strings.TrimSpace(rec.Body.String()))
+	}
+
+	var created runtimeconfig.ReportSchedule
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		return "", fmt.Errorf("decode provider MSP proof report schedule: %w", err)
+	}
+	if strings.TrimSpace(created.ID) == "" {
+		return "", fmt.Errorf("tenant %s report schedule create response missing id", tenantID)
+	}
+	return created.ID, nil
+}
+
+func writeProviderMSPProofActiveAlerts(orgDir, resourceID, resourceName string) error {
+	if strings.TrimSpace(orgDir) == "" {
+		return fmt.Errorf("org dir is required")
+	}
+	if strings.TrimSpace(resourceName) == "" {
+		resourceName = strings.TrimSpace(resourceID)
+	}
+	now := time.Now().UTC()
+	active := []alerts.Alert{
+		{
+			ID:           "provider-msp-proof-critical",
+			Type:         "cpu",
+			Level:        alerts.AlertLevelCritical,
+			ResourceID:   strings.TrimSpace(resourceID),
+			ResourceName: strings.TrimSpace(resourceName),
+			Node:         strings.TrimSpace(resourceName),
+			Instance:     "provider-msp-proof",
+			Message:      "Provider MSP proof critical alert",
+			Value:        96,
+			Threshold:    80,
+			StartTime:    now,
+			LastSeen:     now,
+		},
+		{
+			ID:           "provider-msp-proof-warning",
+			Type:         "memory",
+			Level:        alerts.AlertLevelWarning,
+			ResourceID:   strings.TrimSpace(resourceID),
+			ResourceName: strings.TrimSpace(resourceName),
+			Node:         strings.TrimSpace(resourceName),
+			Instance:     "provider-msp-proof",
+			Message:      "Provider MSP proof warning alert",
+			Value:        88,
+			Threshold:    85,
+			StartTime:    now,
+			LastSeen:     now,
+		},
+	}
+	data, err := json.Marshal(active)
+	if err != nil {
+		return fmt.Errorf("marshal active alerts: %w", err)
+	}
+	alertsDir := filepath.Join(orgDir, "alerts")
+	if err := os.MkdirAll(alertsDir, 0o700); err != nil {
+		return fmt.Errorf("create active alerts dir: %w", err)
+	}
+	path := filepath.Join(alertsDir, "active-alerts.json")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return fmt.Errorf("write active alerts file: %w", err)
+	}
+	return nil
+}
+
+func providerMSPProofFactInt(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
 }
 
 type providerMSPProofEntitlementLease struct {
@@ -1101,9 +1321,11 @@ func printProviderMSPProofReport(report *providerMSPProofReport) {
 	fmt.Printf("setup_facts_token_use_visible=%t\n", report.SetupFactsTokenUseVisible)
 	fmt.Printf("agent_report_ingest_verified=%t\n", report.AgentReportIngestVerified)
 	fmt.Printf("token_rotation_verified=%t\n", report.TokenRotationVerified)
+	fmt.Printf("report_schedule_visible=%t\n", report.ReportScheduleVisible)
+	fmt.Printf("active_alert_rollup_visible=%t\n", report.ActiveAlertRollupVisible)
 	fmt.Printf("cleanup=%t\n", report.Cleanup)
 	for _, workspace := range report.Workspaces {
-		fmt.Printf("workspace=%s display_name=%q state=%s plan_version=%s container_id=%s public_url=%s install_type=%s install_token_id=%s install_command_generated=%t agent_token_auth_verified=%t setup_facts_token_use_visible=%t agent_report_ingest_verified=%t agent_report_agent_id=%s agent_report_hostname=%s token_rotation_verified=%t rotated_install_token_id=%s old_install_token_rejected=%t rotated_agent_report_verified=%t handoff_exchange_verified=%t handoff_target_path=%s entitlement_lease_checked=%t entitlement_lease_verified=%t entitlement_white_label=%t entitlement_skipped_reason=%s\n",
+		fmt.Printf("workspace=%s display_name=%q state=%s plan_version=%s container_id=%s public_url=%s install_type=%s install_token_id=%s install_command_generated=%t agent_token_auth_verified=%t setup_facts_token_use_visible=%t agent_report_ingest_verified=%t agent_report_agent_id=%s agent_report_hostname=%s token_rotation_verified=%t rotated_install_token_id=%s old_install_token_rejected=%t rotated_agent_report_verified=%t handoff_exchange_verified=%t handoff_target_path=%s entitlement_lease_checked=%t entitlement_lease_verified=%t entitlement_white_label=%t entitlement_skipped_reason=%s report_schedule_created=%t report_schedule_id=%s report_schedule_visible=%t report_schedule_count=%d disabled_report_schedule_count=%d active_alert_persisted=%t active_alert_rollup_visible=%t critical_alert_count=%d warning_alert_count=%d\n",
 			workspace.TenantID,
 			workspace.DisplayName,
 			workspace.State,
@@ -1128,6 +1350,15 @@ func printProviderMSPProofReport(report *providerMSPProofReport) {
 			workspace.EntitlementLeaseVerified,
 			workspace.EntitlementWhiteLabel,
 			workspace.EntitlementSkippedReason,
+			workspace.ReportScheduleCreated,
+			workspace.ReportScheduleID,
+			workspace.ReportScheduleVisible,
+			workspace.ReportScheduleCount,
+			workspace.DisabledReportScheduleCount,
+			workspace.ActiveAlertPersisted,
+			workspace.ActiveAlertRollupVisible,
+			workspace.CriticalAlertCount,
+			workspace.WarningAlertCount,
 		)
 	}
 }

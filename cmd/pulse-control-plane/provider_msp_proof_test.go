@@ -141,6 +141,12 @@ func TestProviderMSPProofExercisesWorkspaceInstallHandoffAndIsolation(t *testing
 	if !report.TokenRotationVerified {
 		t.Fatal("token rotation was not verified")
 	}
+	if !report.ReportScheduleVisible {
+		t.Fatal("report schedule portal fact was not verified")
+	}
+	if !report.ActiveAlertRollupVisible {
+		t.Fatal("active alert portal rollup was not verified")
+	}
 
 	seenTenants := map[string]struct{}{}
 	for _, workspace := range report.Workspaces {
@@ -202,6 +208,18 @@ func TestProviderMSPProofExercisesWorkspaceInstallHandoffAndIsolation(t *testing
 		if !workspace.EntitlementWhiteLabel {
 			t.Fatalf("entitlement lease for %s is missing white_label", workspace.TenantID)
 		}
+		if !workspace.ReportScheduleCreated || workspace.ReportScheduleID == "" || !workspace.ReportScheduleVisible {
+			t.Fatalf("report schedule portal proof incomplete for %s: %#v", workspace.TenantID, workspace)
+		}
+		if workspace.ReportScheduleCount != 1 || workspace.DisabledReportScheduleCount != 0 {
+			t.Fatalf("report schedule facts for %s = enabled:%d disabled:%d, want enabled:1 disabled:0", workspace.TenantID, workspace.ReportScheduleCount, workspace.DisabledReportScheduleCount)
+		}
+		if !workspace.ActiveAlertPersisted || !workspace.ActiveAlertRollupVisible {
+			t.Fatalf("active alert portal rollup proof incomplete for %s: %#v", workspace.TenantID, workspace)
+		}
+		if workspace.CriticalAlertCount != 1 || workspace.WarningAlertCount != 1 {
+			t.Fatalf("active alert facts for %s = critical:%d warning:%d, want critical:1 warning:1", workspace.TenantID, workspace.CriticalAlertCount, workspace.WarningAlertCount)
+		}
 	}
 }
 
@@ -254,7 +272,7 @@ func TestProviderMSPProofLoadsSignedLicenseFilePlan(t *testing.T) {
 	if report.LicenseEmail != "provider@example.com" {
 		t.Fatalf("LicenseEmail = %q, want provider@example.com", report.LicenseEmail)
 	}
-	if !report.AgentReportIngestVerified || !report.InstallTokenBoundaryOK || !report.TokenRotationVerified || !report.HandoffExchangeVerified {
+	if !report.AgentReportIngestVerified || !report.InstallTokenBoundaryOK || !report.TokenRotationVerified || !report.HandoffExchangeVerified || !report.ReportScheduleVisible || !report.ActiveAlertRollupVisible {
 		t.Fatalf("provider MSP proof did not complete core runtime checks: %#v", report)
 	}
 }

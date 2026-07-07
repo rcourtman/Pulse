@@ -159,7 +159,7 @@ func TestProviderMSPInstallProofRunsFreshInstallSequence(t *testing.T) {
 	if report.WorkspaceCount != 2 || len(report.Workspaces) != 2 {
 		t.Fatalf("workspace proof count = %d len=%d", report.WorkspaceCount, len(report.Workspaces))
 	}
-	if !report.TenantIsolationVerified || !report.DefaultRuntimeIsolationVerified || !report.TokenRotationVerified || !report.RotatedOutTokenRejectionVerified {
+	if !report.TenantIsolationVerified || !report.DefaultRuntimeIsolationVerified || !report.TokenRotationVerified || !report.RotatedOutTokenRejectionVerified || !report.ReportScheduleVisible || !report.ActiveAlertRollupVisible {
 		t.Fatalf("isolation/token proof missing: %#v", report)
 	}
 	if !report.NonProofTenantCountPreserved {
@@ -336,6 +336,8 @@ func healthyProviderMSPInstallProofProofReport() *providerMSPProofReport {
 		SetupFactsTokenUseVisible: true,
 		AgentReportIngestVerified: true,
 		TokenRotationVerified:     true,
+		ReportScheduleVisible:     true,
+		ActiveAlertRollupVisible:  true,
 		Workspaces: []providerMSPProofWorkspace{
 			healthyProviderMSPInstallProofWorkspace("ws-proof-01", "Provider MSP Proof 01"),
 			healthyProviderMSPInstallProofWorkspace("ws-proof-02", "Provider MSP Proof 02"),
@@ -345,26 +347,35 @@ func healthyProviderMSPInstallProofProofReport() *providerMSPProofReport {
 
 func healthyProviderMSPInstallProofWorkspace(tenantID, displayName string) providerMSPProofWorkspace {
 	return providerMSPProofWorkspace{
-		TenantID:                   tenantID,
-		DisplayName:                displayName,
-		State:                      "active",
-		PlanVersion:                "msp_growth",
-		ContainerID:                "ctr-" + tenantID,
-		PublicURL:                  "https://" + tenantID + ".msp.example.com",
-		InstallType:                "pve",
-		InstallTokenID:             "tok-" + tenantID,
-		InstallCommandGenerated:    true,
-		AgentTokenAuthVerified:     true,
-		SetupFactsTokenUseVisible:  true,
-		AgentReportIngestVerified:  true,
-		AgentReportAgentID:         "agent-" + tenantID,
-		AgentReportHostname:        "pve1",
-		TokenRotationVerified:      true,
-		RotatedInstallTokenID:      "tok-rotated-" + tenantID,
-		OldInstallTokenRejected:    true,
-		RotatedAgentReportVerified: true,
-		HandoffExchangeVerified:    true,
-		HandoffTargetPath:          "/settings/infrastructure?add=linux-host",
+		TenantID:                    tenantID,
+		DisplayName:                 displayName,
+		State:                       "active",
+		PlanVersion:                 "msp_growth",
+		ContainerID:                 "ctr-" + tenantID,
+		PublicURL:                   "https://" + tenantID + ".msp.example.com",
+		InstallType:                 "pve",
+		InstallTokenID:              "tok-" + tenantID,
+		InstallCommandGenerated:     true,
+		AgentTokenAuthVerified:      true,
+		SetupFactsTokenUseVisible:   true,
+		AgentReportIngestVerified:   true,
+		AgentReportAgentID:          "agent-" + tenantID,
+		AgentReportHostname:         "pve1",
+		TokenRotationVerified:       true,
+		RotatedInstallTokenID:       "tok-rotated-" + tenantID,
+		OldInstallTokenRejected:     true,
+		RotatedAgentReportVerified:  true,
+		HandoffExchangeVerified:     true,
+		HandoffTargetPath:           "/settings/infrastructure?add=linux-host",
+		ReportScheduleCreated:       true,
+		ReportScheduleID:            "sched-" + tenantID,
+		ReportScheduleVisible:       true,
+		ReportScheduleCount:         1,
+		DisabledReportScheduleCount: 0,
+		ActiveAlertPersisted:        true,
+		ActiveAlertRollupVisible:    true,
+		CriticalAlertCount:          1,
+		WarningAlertCount:           1,
 	}
 }
 

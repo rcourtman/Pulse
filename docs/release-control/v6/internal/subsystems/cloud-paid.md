@@ -679,6 +679,11 @@ or other self-hosted uncapped continuity plans.
    age labels from read-only setup facts so providers can prioritize the
    workspace list, but it must not become an alert console or expose alert
    bodies, remediation state, acknowledgements, or cross-client alert streams.
+   Those setup facts must read report schedule counts from the client runtime's
+   org-scoped `report_schedules.json` store and active-alert counts from the
+   org-scoped `alerts/active-alerts.json` runtime file before falling back to a
+   legacy tenant-root active-alert file, because tenant monitors own
+   org-scoped runtime persistence.
    Pulse Account also owns the provider-facing setup progression for client
    workspaces: after workspace creation the portal should select the created
    workspace, reveal the setup job, and preserve workspace/target context in

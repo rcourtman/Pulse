@@ -66,7 +66,7 @@ func readWorkspaceSetupFacts(tenantID, tenantDataDir, orgDir string) WorkspaceSe
 
 	facts.AgentCount, facts.AgentTokenCount, facts.UnusedAgentTokenCount, facts.LastAgentSeenAt = readAgentSetupFacts(tenantID, tenantDataDir, orgDir)
 	facts.AlertRouteCount, facts.DisabledAlertRouteCount = readAlertRouteFacts(orgDir)
-	facts.ActiveCriticalAlertCount, facts.ActiveWarningAlertCount, facts.ActiveAlertsUpdatedAt = readActiveAlertFacts(tenantDataDir)
+	facts.ActiveCriticalAlertCount, facts.ActiveWarningAlertCount, facts.ActiveAlertsUpdatedAt = readActiveAlertFacts(tenantDataDir, orgDir)
 	facts.ReportScheduleCount, facts.DisabledReportScheduleCount = readReportScheduleFacts(orgDir)
 	return facts
 }
@@ -219,26 +219,53 @@ func nonBlankCount(values []string) int {
 	return count
 }
 
-func readActiveAlertFacts(tenantDataDir string) (*int, *int, *time.Time) {
-	path, ok := safeConfigLeafPath(tenantDataDir, filepath.Join("alerts", "active-alerts.json"))
+func readActiveAlertFacts(tenantDataDir, orgDir string) (*int, *int, *time.Time) {
+	for _, dir := range uniqueActiveAlertFactDirs(orgDir, tenantDataDir) {
+		critical, warning, updatedAt, ok := readActiveAlertFactsFromDir(dir)
+		if ok {
+			return critical, warning, updatedAt
+		}
+	}
+	return nil, nil, nil
+}
+
+func uniqueActiveAlertFactDirs(values ...string) []string {
+	dirs := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		dirs = append(dirs, value)
+	}
+	return dirs
+}
+
+func readActiveAlertFactsFromDir(configDir string) (*int, *int, *time.Time, bool) {
+	path, ok := safeConfigLeafPath(configDir, filepath.Join("alerts", "active-alerts.json"))
 	if !ok {
-		return nil, nil, nil
+		return nil, nil, nil, false
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			log.Warn().Err(err).Str("tenant_data_dir", tenantDataDir).Msg("cloudcp.portal.setup_facts: read active alerts")
+			log.Warn().Err(err).Str("config_dir", configDir).Msg("cloudcp.portal.setup_facts: read active alerts")
 		}
-		return nil, nil, nil
+		return nil, nil, nil, false
 	}
 	if len(strings.TrimSpace(string(data))) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, true
 	}
 
 	var active []alerts.Alert
 	if err := json.Unmarshal(data, &active); err != nil {
-		log.Warn().Err(err).Str("tenant_data_dir", tenantDataDir).Msg("cloudcp.portal.setup_facts: parse active alerts")
-		return nil, nil, nil
+		log.Warn().Err(err).Str("config_dir", configDir).Msg("cloudcp.portal.setup_facts: parse active alerts")
+		return nil, nil, nil, true
 	}
 
 	criticalCount := 0
@@ -257,7 +284,7 @@ func readActiveAlertFacts(tenantDataDir string) (*int, *int, *time.Time) {
 		ts := info.ModTime().UTC()
 		updatedAt = &ts
 	}
-	return intPtr(criticalCount), intPtr(warningCount), updatedAt
+	return intPtr(criticalCount), intPtr(warningCount), updatedAt, true
 }
 
 func readReportScheduleFacts(orgDir string) (*int, *int) {

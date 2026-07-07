@@ -65,6 +65,8 @@ type providerMSPInstallProofReport struct {
 	SetupFactsTokenUseVisible           bool
 	AgentReportIngestVerified           bool
 	TokenRotationVerified               bool
+	ReportScheduleVisible               bool
+	ActiveAlertRollupVisible            bool
 	RotatedOutTokenRejectionVerified    bool
 	NonProofTenantCountPreserved        bool
 	InitialStatusTotalTenants           int
@@ -495,6 +497,8 @@ func populateProviderMSPInstallProofProof(report *providerMSPInstallProofReport,
 	report.SetupFactsTokenUseVisible = proof.SetupFactsTokenUseVisible
 	report.AgentReportIngestVerified = proof.AgentReportIngestVerified
 	report.TokenRotationVerified = proof.TokenRotationVerified
+	report.ReportScheduleVisible = proof.ReportScheduleVisible
+	report.ActiveAlertRollupVisible = proof.ActiveAlertRollupVisible
 	report.TenantIsolationVerified = proof.InstallTokenBoundaryOK
 	report.DefaultRuntimeIsolationVerified = proof.AgentReportIngestVerified
 	report.RotatedOutTokenRejectionVerified = providerMSPInstallProofAllRotatedOutTokensRejected(proof.Workspaces)
@@ -596,6 +600,8 @@ func printProviderMSPInstallProofReport(report *providerMSPInstallProofReport) {
 	fmt.Printf("setup_facts_token_use_visible=%t\n", report.SetupFactsTokenUseVisible)
 	fmt.Printf("agent_report_ingest_verified=%t\n", report.AgentReportIngestVerified)
 	fmt.Printf("token_rotation_verified=%t\n", report.TokenRotationVerified)
+	fmt.Printf("report_schedule_visible=%t\n", report.ReportScheduleVisible)
+	fmt.Printf("active_alert_rollup_visible=%t\n", report.ActiveAlertRollupVisible)
 	fmt.Printf("rotated_out_token_rejection_verified=%t\n", report.RotatedOutTokenRejectionVerified)
 	fmt.Printf("non_proof_tenant_count_preserved=%t\n", report.NonProofTenantCountPreserved)
 	fmt.Printf("initial_status_total_tenants=%d\n", report.InitialStatusTotalTenants)
@@ -605,7 +611,7 @@ func printProviderMSPInstallProofReport(report *providerMSPInstallProofReport) {
 	fmt.Printf("final_status_unhealthy_tenants=%d\n", report.FinalStatusUnhealthyTenants)
 	fmt.Printf("final_status_stuck_provisioning_tenants=%d\n", report.FinalStatusStuckProvisioningTenants)
 	for _, workspace := range report.Workspaces {
-		fmt.Printf("workspace=%s display_name=%q state=%s plan_version=%s container_id=%s public_url=%s install_type=%s install_token_id=%s install_command_generated=%t agent_token_auth_verified=%t setup_facts_token_use_visible=%t agent_report_ingest_verified=%t agent_report_agent_id=%s agent_report_hostname=%s token_rotation_verified=%t rotated_install_token_id=%s old_install_token_rejected=%t rotated_agent_report_verified=%t handoff_exchange_verified=%t handoff_target_path=%s entitlement_lease_checked=%t entitlement_lease_verified=%t entitlement_white_label=%t entitlement_skipped_reason=%s\n",
+		fmt.Printf("workspace=%s display_name=%q state=%s plan_version=%s container_id=%s public_url=%s install_type=%s install_token_id=%s install_command_generated=%t agent_token_auth_verified=%t setup_facts_token_use_visible=%t agent_report_ingest_verified=%t agent_report_agent_id=%s agent_report_hostname=%s token_rotation_verified=%t rotated_install_token_id=%s old_install_token_rejected=%t rotated_agent_report_verified=%t handoff_exchange_verified=%t handoff_target_path=%s entitlement_lease_checked=%t entitlement_lease_verified=%t entitlement_white_label=%t entitlement_skipped_reason=%s report_schedule_created=%t report_schedule_id=%s report_schedule_visible=%t report_schedule_count=%d disabled_report_schedule_count=%d active_alert_persisted=%t active_alert_rollup_visible=%t critical_alert_count=%d warning_alert_count=%d\n",
 			workspace.TenantID,
 			workspace.DisplayName,
 			workspace.State,
@@ -630,6 +636,15 @@ func printProviderMSPInstallProofReport(report *providerMSPInstallProofReport) {
 			workspace.EntitlementLeaseVerified,
 			workspace.EntitlementWhiteLabel,
 			workspace.EntitlementSkippedReason,
+			workspace.ReportScheduleCreated,
+			workspace.ReportScheduleID,
+			workspace.ReportScheduleVisible,
+			workspace.ReportScheduleCount,
+			workspace.DisabledReportScheduleCount,
+			workspace.ActiveAlertPersisted,
+			workspace.ActiveAlertRollupVisible,
+			workspace.CriticalAlertCount,
+			workspace.WarningAlertCount,
 		)
 	}
 	for _, failure := range report.Failures {

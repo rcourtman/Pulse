@@ -264,6 +264,30 @@ func TestTenantDirWorkspaceSetupFactReaderTreatsCorruptActiveAlertFileAsUnknown(
 	}
 }
 
+func TestTenantDirWorkspaceSetupFactReaderPrefersRuntimeOrgActiveAlerts(t *testing.T) {
+	tenantsDir := t.TempDir()
+	tenantDir := filepath.Join(tenantsDir, "ws_runtime_alerts")
+	orgDir := filepath.Join(tenantDir, "orgs", "ws_runtime_alerts")
+	if err := os.MkdirAll(orgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeSetupFactJSON(t, tenantDir, filepath.Join("alerts", "active-alerts.json"), []alerts.Alert{
+		{ID: "legacy-warning", Level: alerts.AlertLevelWarning},
+	})
+	writeSetupFactJSON(t, orgDir, filepath.Join("alerts", "active-alerts.json"), []alerts.Alert{
+		{ID: "runtime-critical", Level: alerts.AlertLevelCritical},
+		{ID: "runtime-warning", Level: alerts.AlertLevelWarning},
+	})
+
+	facts := NewTenantDirWorkspaceSetupFactReader(tenantsDir).FactsForWorkspace("ws_runtime_alerts")
+	if facts.ActiveCriticalAlertCount == nil || *facts.ActiveCriticalAlertCount != 1 {
+		t.Fatalf("ActiveCriticalAlertCount = %v, want 1", facts.ActiveCriticalAlertCount)
+	}
+	if facts.ActiveWarningAlertCount == nil || *facts.ActiveWarningAlertCount != 1 {
+		t.Fatalf("ActiveWarningAlertCount = %v, want 1", facts.ActiveWarningAlertCount)
+	}
+}
+
 func TestTenantDirWorkspaceSetupFactReaderCountsRuntimePersistedReportSchedules(t *testing.T) {
 	tenantsDir := t.TempDir()
 	orgDir := filepath.Join(tenantsDir, "ws_runtime", "orgs", "ws_runtime")
