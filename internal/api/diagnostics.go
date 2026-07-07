@@ -434,18 +434,20 @@ func diagnosticsScopeKey(ctx context.Context) string {
 
 // NodeDiagnostic contains diagnostic info for a Proxmox node
 type NodeDiagnostic struct {
-	ID            string             `json:"id"`
-	Name          string             `json:"name"`
-	Host          string             `json:"host"`
-	Type          string             `json:"type"`
-	AuthMethod    string             `json:"authMethod"`
-	Connected     bool               `json:"connected"`
-	Error         string             `json:"error,omitempty"`
-	Details       *NodeDetails       `json:"details,omitempty"`
-	LastPoll      string             `json:"lastPoll,omitempty"`
-	ClusterInfo   *ClusterInfo       `json:"clusterInfo,omitempty"`
-	VMDiskCheck   *VMDiskCheckResult `json:"vmDiskCheck,omitempty"`
-	PhysicalDisks *PhysicalDiskCheck `json:"physicalDisks,omitempty"`
+	ID              string             `json:"id"`
+	Name            string             `json:"name"`
+	Host            string             `json:"host"`
+	Type            string             `json:"type"`
+	AuthMethod      string             `json:"authMethod"`
+	Connected       bool               `json:"connected"`
+	Error           string             `json:"error,omitempty"`
+	ErrorKind       string             `json:"errorKind,omitempty"`
+	Troubleshooting string             `json:"troubleshooting,omitempty"`
+	Details         *NodeDetails       `json:"details,omitempty"`
+	LastPoll        string             `json:"lastPoll,omitempty"`
+	ClusterInfo     *ClusterInfo       `json:"clusterInfo,omitempty"`
+	VMDiskCheck     *VMDiskCheckResult `json:"vmDiskCheck,omitempty"`
+	PhysicalDisks   *PhysicalDiskCheck `json:"physicalDisks,omitempty"`
 }
 
 func (d NodeDiagnostic) NormalizeCollections() NodeDiagnostic {
@@ -557,12 +559,15 @@ type ClusterInfo struct {
 
 // PBSDiagnostic contains diagnostic info for a PBS instance
 type PBSDiagnostic struct {
-	ID        string      `json:"id"`
-	Name      string      `json:"name"`
-	Host      string      `json:"host"`
-	Connected bool        `json:"connected"`
-	Error     string      `json:"error,omitempty"`
-	Details   *PBSDetails `json:"details,omitempty"`
+	ID              string      `json:"id"`
+	Name            string      `json:"name"`
+	Host            string      `json:"host"`
+	AuthMethod      string      `json:"authMethod"`
+	Connected       bool        `json:"connected"`
+	Error           string      `json:"error,omitempty"`
+	ErrorKind       string      `json:"errorKind,omitempty"`
+	Troubleshooting string      `json:"troubleshooting,omitempty"`
+	Details         *PBSDetails `json:"details,omitempty"`
 }
 
 // PBSDetails contains PBS-specific details
@@ -821,6 +826,129 @@ func mergeDiagnosticsConnection(probeConnected bool, probeError string, monitorC
 	return true, "Live diagnostics probe failed, but the monitor still reports this instance connected: " + probeError
 }
 
+type diagnosticsConnectionFailure struct {
+	kind            string
+	message         string
+	troubleshooting string
+}
+
+func diagnosticsAuthMethod(user, password, tokenName, tokenValue string) string {
+	if tokenName != "" && tokenValue != "" {
+		return "api_token"
+	}
+	if user != "" && password != "" {
+		return "username_password"
+	}
+	return "none"
+}
+
+func missingStoredSecretDiagnosticsFailure() diagnosticsConnectionFailure {
+	return diagnosticsConnectionFailure{
+		kind:            "no_stored_secret",
+		message:         "Pulse has no stored credentials for this node",
+		troubleshooting: "Add or rotate this node's API token or credentials in Settings.",
+	}
+}
+
+func classifyDiagnosticsConnectionFailure(err error, fallbackMessage string) diagnosticsConnectionFailure {
+	raw := ""
+	if err != nil {
+		raw = strings.TrimSpace(err.Error())
+	}
+	lower := strings.ToLower(raw)
+
+	if strings.Contains(lower, "invalid") && strings.Contains(lower, "host") {
+		return diagnosticsConnectionFailure{
+			kind:            "invalid_host_url",
+			message:         "Stored node URL is invalid",
+			troubleshooting: "Check the node host URL in Settings, including the scheme and port.",
+		}
+	}
+	if strings.Contains(lower, "connection refused") {
+		return diagnosticsConnectionFailure{
+			kind:            "connection_refused",
+			message:         "TCP connection refused by host",
+			troubleshooting: "Check the node host URL and port, then confirm the Proxmox API service is listening and reachable from Pulse.",
+		}
+	}
+	if strings.Contains(lower, "no route to host") ||
+		strings.Contains(lower, "network is unreachable") ||
+		strings.Contains(lower, "host is down") {
+		return diagnosticsConnectionFailure{
+			kind:            "network_unreachable",
+			message:         "Network route to host is unavailable",
+			troubleshooting: "Check DNS, routing, firewall rules, and the host URL from the Pulse server.",
+		}
+	}
+	if strings.Contains(lower, "no such host") ||
+		strings.Contains(lower, "temporary failure in name resolution") ||
+		strings.Contains(lower, "name or service not known") {
+		return diagnosticsConnectionFailure{
+			kind:            "dns_resolution_failed",
+			message:         "Node hostname could not be resolved",
+			troubleshooting: "Check the node hostname in Settings and verify DNS resolution from the Pulse server.",
+		}
+	}
+	if strings.Contains(lower, "certificate") ||
+		strings.Contains(lower, "x509") ||
+		strings.Contains(lower, "tls:") ||
+		strings.Contains(lower, "fingerprint") {
+		return diagnosticsConnectionFailure{
+			kind:            "tls_certificate_mismatch",
+			message:         "TLS certificate mismatch or untrusted certificate",
+			troubleshooting: "Update the stored certificate fingerprint, fix the node certificate, or disable verification only on a trusted network.",
+		}
+	}
+	if strings.Contains(lower, "authentication") ||
+		strings.Contains(lower, "unauthorized") ||
+		strings.Contains(lower, "forbidden") ||
+		strings.Contains(lower, "invalid credentials") ||
+		strings.Contains(lower, "invalid token") ||
+		strings.Contains(lower, "permission denied") ||
+		strings.Contains(lower, "401") ||
+		strings.Contains(lower, "403") {
+		return diagnosticsConnectionFailure{
+			kind:            "proxmox_auth_rejected",
+			message:         "Proxmox rejected the stored API token or credentials",
+			troubleshooting: "Rotate the node credentials in Settings, then verify the user or token has the required Proxmox permissions.",
+		}
+	}
+	if strings.Contains(lower, "context deadline exceeded") ||
+		strings.Contains(lower, "client.timeout exceeded") ||
+		strings.Contains(lower, "i/o timeout") ||
+		strings.Contains(lower, "tls handshake timeout") ||
+		strings.Contains(lower, "timeout awaiting response headers") {
+		return diagnosticsConnectionFailure{
+			kind:            "connection_timeout",
+			message:         "Connection timed out",
+			troubleshooting: "Check network latency, API responsiveness, and slow or unreachable backend storage from the Pulse server.",
+		}
+	}
+
+	if fallbackMessage == "" {
+		fallbackMessage = "Connection check failed"
+	}
+	return diagnosticsConnectionFailure{
+		kind:            "connection_failed",
+		message:         fallbackMessage,
+		troubleshooting: "Review Pulse logs for the full transport error, then verify the endpoint from the Pulse server.",
+	}
+}
+
+func applyNodeDiagnosticFailure(diag *NodeDiagnostic, failure diagnosticsConnectionFailure) {
+	diag.Connected = false
+	diag.Error = failure.message
+	diag.ErrorKind = failure.kind
+	diag.Troubleshooting = failure.troubleshooting
+}
+
+func applyPBSDiagnosticFailure(diag *PBSDiagnostic, failure diagnosticsConnectionFailure) {
+	diag.Connected = false
+	diag.Error = failure.message
+	diag.ErrorKind = failure.kind
+	diag.Troubleshooting = failure.troubleshooting
+}
+
 func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 	diag := EmptyDiagnosticsInfo()
 
@@ -869,13 +997,11 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 		monitorConnected, hasMonitorStatus := diagnosticsMonitorConnectionStatus(r.monitor, "pve-"+pveKeyName)
 
 		// Determine auth method (sanitized - don't expose actual values)
-		if node.TokenName != "" && node.TokenValue != "" {
-			nodeDiag.AuthMethod = "api_token"
-		} else if node.User != "" && node.Password != "" {
-			nodeDiag.AuthMethod = "username_password"
-		} else {
-			nodeDiag.AuthMethod = "none"
-			nodeDiag.Error = "No authentication configured"
+		nodeDiag.AuthMethod = diagnosticsAuthMethod(node.User, node.Password, node.TokenName, node.TokenValue)
+		if nodeDiag.AuthMethod == "none" {
+			applyNodeDiagnosticFailure(&nodeDiag, missingStoredSecretDiagnosticsFailure())
+			diag.Nodes = append(diag.Nodes, nodeDiag)
+			continue
 		}
 
 		// Test connection
@@ -891,15 +1017,15 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 
 		client, err := proxmox.NewClient(testCfg)
 		if err != nil {
-			nodeDiag.Connected = false
-			nodeDiag.Error = "Failed to initialize connection"
+			failure := classifyDiagnosticsConnectionFailure(err, "Failed to initialize connection")
+			applyNodeDiagnosticFailure(&nodeDiag, failure)
 			log.Error().Err(err).Str("node", node.Name).Msg("Diagnostics: Proxmox client init failed")
 			nodeDiag.Connected, nodeDiag.Error = mergeDiagnosticsConnection(nodeDiag.Connected, nodeDiag.Error, monitorConnected, hasMonitorStatus)
 		} else {
 			nodes, err := client.GetNodes(ctx)
 			if err != nil {
-				nodeDiag.Connected = false
-				nodeDiag.Error = "Failed to connect to Proxmox API"
+				failure := classifyDiagnosticsConnectionFailure(err, "Failed to connect to Proxmox API")
+				applyNodeDiagnosticFailure(&nodeDiag, failure)
 				log.Error().Err(err).Str("node", node.Name).Msg("Diagnostics: Proxmox API connection failed")
 				nodeDiag.Connected, nodeDiag.Error = mergeDiagnosticsConnection(nodeDiag.Connected, nodeDiag.Error, monitorConnected, hasMonitorStatus)
 			} else {
@@ -935,15 +1061,21 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 	// Test PBS instances
 	for _, pbsNode := range r.config.PBSInstances {
 		pbsDiag := PBSDiagnostic{
-			ID:   pbsNode.Name,
-			Name: pbsNode.Name,
-			Host: pbsNode.Host,
+			ID:         pbsNode.Name,
+			Name:       pbsNode.Name,
+			Host:       pbsNode.Host,
+			AuthMethod: diagnosticsAuthMethod(pbsNode.User, pbsNode.Password, pbsNode.TokenName, pbsNode.TokenValue),
 		}
 		pbsKeyName := pbsNode.Name
 		if strings.TrimSpace(pbsKeyName) == "" {
 			pbsKeyName = pbsNode.Host
 		}
 		monitorConnected, hasMonitorStatus := diagnosticsMonitorConnectionStatus(r.monitor, "pbs-"+pbsKeyName)
+		if pbsDiag.AuthMethod == "none" {
+			applyPBSDiagnosticFailure(&pbsDiag, missingStoredSecretDiagnosticsFailure())
+			diag.PBS = append(diag.PBS, pbsDiag)
+			continue
+		}
 
 		testCfg := pbs.ClientConfig{
 			Host:        pbsNode.Host,
@@ -957,14 +1089,14 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 
 		client, err := pbs.NewClient(testCfg)
 		if err != nil {
-			pbsDiag.Connected = false
-			pbsDiag.Error = "Failed to initialize connection"
+			failure := classifyDiagnosticsConnectionFailure(err, "Failed to initialize connection")
+			applyPBSDiagnosticFailure(&pbsDiag, failure)
 			log.Error().Err(err).Str("pbs", pbsNode.Name).Msg("Diagnostics: PBS client init failed")
 			pbsDiag.Connected, pbsDiag.Error = mergeDiagnosticsConnection(pbsDiag.Connected, pbsDiag.Error, monitorConnected, hasMonitorStatus)
 		} else {
 			if version, err := client.GetVersion(ctx); err != nil {
-				pbsDiag.Connected = false
-				pbsDiag.Error = "Connection established but version check failed"
+				failure := classifyDiagnosticsConnectionFailure(err, "Connection established but version check failed")
+				applyPBSDiagnosticFailure(&pbsDiag, failure)
 				log.Error().Err(err).Str("pbs", pbsNode.Name).Msg("Diagnostics: PBS version check failed")
 				pbsDiag.Connected, pbsDiag.Error = mergeDiagnosticsConnection(pbsDiag.Connected, pbsDiag.Error, monitorConnected, hasMonitorStatus)
 			} else {

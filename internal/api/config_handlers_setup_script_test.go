@@ -901,15 +901,66 @@ func TestPVESetupScript_FailsClosedOnAutoRegisterSuccessDetection(t *testing.T) 
 		t.Fatalf("expected PVE manual footer to be gated on usable token extraction, got: %s", truncate(script, 1100))
 	}
 	if !containsString(script, `if [ "$TOKEN_READY" = true ]; then
-    attempt_auto_registration
+    if smoke_test_pve_token; then
+        attempt_auto_registration
+    else
+        AUTO_REG_SUCCESS=false
+    fi
 else
     AUTO_REG_SUCCESS=false
 fi`) {
-		t.Fatalf("expected PVE auto-registration to be skipped when no usable token is ready, got: %s", truncate(script, 1400))
+		t.Fatalf("expected PVE auto-registration to be skipped when no usable token or smoke-tested token is ready, got: %s", truncate(script, 1400))
 	}
 	if containsString(script, `elif [ "$TOKEN_READY" != true ]; then
     echo "Pulse monitoring token setup completed."`) {
 		t.Fatalf("expected PVE token-extract failure to avoid completed token-setup messaging, got: %s", truncate(script, 1400))
+	}
+}
+
+func TestPVESetupScriptSmokeTestsCreatedTokenBeforeAutoRegistration(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/setup-script?type=pve&host=http://sentinel-host:8006&pulse_url=http://sentinel-url:7656&setup_token=deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", nil)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	script := rr.Body.String()
+	for _, needle := range []string{
+		`smoke_test_pve_token() {`,
+		`curl -kfsS --retry 2 --retry-delay 1`,
+		`Authorization: PVEAPIToken=$PULSE_TOKEN_ID=$TOKEN_VALUE`,
+		`${HOST_URL%/}/api2/json/nodes`,
+		`TOKEN_READY=false`,
+		`if smoke_test_pve_token; then`,
+	} {
+		if !containsString(script, needle) {
+			t.Fatalf("expected PVE setup script token smoke-check contract %q, got: %s", needle, truncate(script, 1200))
+		}
+	}
+
+	permissionsIdx := strings.Index(script, `configure_pve_pulse_monitor_role "$TOKEN_CREATED"`)
+	smokeCallIdx := strings.Index(script, `if smoke_test_pve_token; then`)
+	registerCallIdx := -1
+	if smokeCallIdx >= 0 {
+		registerCallIdx = strings.Index(script[smokeCallIdx:], `attempt_auto_registration`)
+		if registerCallIdx >= 0 {
+			registerCallIdx += smokeCallIdx
+		}
+	}
+	if permissionsIdx < 0 || smokeCallIdx < 0 || registerCallIdx < 0 || !(permissionsIdx < smokeCallIdx && smokeCallIdx < registerCallIdx) {
+		t.Fatalf("expected PVE setup script to smoke-test token after permissions and before auto-registration (perms=%d smoke=%d register=%d)", permissionsIdx, smokeCallIdx, registerCallIdx)
 	}
 }
 

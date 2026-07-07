@@ -221,6 +221,12 @@ state instead of inferring it from outbound usage telemetry.
     Pulse base URL plus `/api/auto-register`, not to the script download
     artifact URL, so install-time registration keeps one API root regardless of
     whether the script came from `/api/setup-script` or `/api/setup-script-url`.
+    Generated PVE setup scripts must prove a freshly created monitoring token
+    after ACL application and before `/api/auto-register` by calling the local
+    Proxmox `/api2/json/nodes` endpoint with the exact `PVEAPIToken` header
+    that would be sent to Pulse. A failed smoke check may leave manual token
+    details for the operator, but it must not POST an unproven token as a
+    completed lifecycle registration.
 22. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 23. `internal/kubernetesagent/agent.go` shared with `monitoring`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
 24. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.

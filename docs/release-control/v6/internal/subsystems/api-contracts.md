@@ -1531,6 +1531,12 @@ payload shape change when the portal presents compact client rows.
     receive the standard license-required response, but direct API calls must
     not bypass Relay entitlement by creating mobile runtime tokens.
 80. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `storage-recovery`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
+    PVE setup-script auto-registration is part of the rendered API contract:
+    after creating the privilege-separated token and applying ACLs, the script
+    must smoke-test the exact token id/value against
+    `${HOST_URL%/}/api2/json/nodes` with `PVEAPIToken` authentication before
+    it posts the canonical `/api/auto-register` payload. Smoke-check failure is
+    a manual-completion state, not a successful auto-registration response.
 81. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 82. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
 83. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
@@ -5204,6 +5210,12 @@ That same diagnostics boundary must also backfill canonical fallback reasons
 when a raw snapshot reaches the API layer without one, so
 `buildMemorySourceDiagnostics` stays self-consistent even if a caller bypasses
 `GetDiagnosticSnapshots()` and hands diagnostics a legacy alias directly.
+PVE and PBS node diagnostics must also classify connection failures into
+machine-readable `errorKind` values with operator guidance in
+`troubleshooting`. Missing stored credentials, Proxmox auth rejection, TLS
+certificate mismatch, refused connections, unreachable networks, DNS failures,
+timeouts, and unknown connection failures must remain distinguishable in
+support bundles instead of collapsing into a generic connection failure string.
 That same diagnostics boundary now explicitly excludes maintainer analytics.
 `internal/api/diagnostics.go` must not serialize commercial funnel, sales
 funnel, pricing/checkout conversion, or infrastructure onboarding telemetry in

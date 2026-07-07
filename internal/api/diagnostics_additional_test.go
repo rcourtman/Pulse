@@ -94,6 +94,57 @@ func newMonitorForDiagnostics(t *testing.T, cfg *config.Config) *monitoring.Moni
 	return monitor
 }
 
+func TestComputeDiagnosticsClassifiesMissingNodeSecrets(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{{
+			Name: "pve-no-secret",
+			Host: "https://pve-no-secret.example:8006",
+		}},
+		PBSInstances: []config.PBSInstance{{
+			Name: "pbs-no-secret",
+			Host: "https://pbs-no-secret.example:8007",
+		}},
+	}
+	monitor := newMonitorForDiagnostics(t, cfg)
+	router := &Router{config: cfg, monitor: monitor}
+
+	diag := router.computeDiagnostics(context.Background())
+	if len(diag.Nodes) != 1 {
+		t.Fatalf("expected one PVE diagnostic, got %d", len(diag.Nodes))
+	}
+	if got := diag.Nodes[0].AuthMethod; got != "none" {
+		t.Fatalf("PVE auth method = %q, want none", got)
+	}
+	if got := diag.Nodes[0].ErrorKind; got != "no_stored_secret" {
+		t.Fatalf("PVE error kind = %q, want no_stored_secret", got)
+	}
+	if !strings.Contains(diag.Nodes[0].Error, "no stored credentials") {
+		t.Fatalf("PVE error should describe missing credentials, got %q", diag.Nodes[0].Error)
+	}
+	if strings.TrimSpace(diag.Nodes[0].Troubleshooting) == "" {
+		t.Fatal("expected PVE troubleshooting guidance")
+	}
+
+	if len(diag.PBS) != 1 {
+		t.Fatalf("expected one PBS diagnostic, got %d", len(diag.PBS))
+	}
+	if got := diag.PBS[0].AuthMethod; got != "none" {
+		t.Fatalf("PBS auth method = %q, want none", got)
+	}
+	if got := diag.PBS[0].ErrorKind; got != "no_stored_secret" {
+		t.Fatalf("PBS error kind = %q, want no_stored_secret", got)
+	}
+	if !strings.Contains(diag.PBS[0].Error, "no stored credentials") {
+		t.Fatalf("PBS error should describe missing credentials, got %q", diag.PBS[0].Error)
+	}
+	if strings.TrimSpace(diag.PBS[0].Troubleshooting) == "" {
+		t.Fatal("expected PBS troubleshooting guidance")
+	}
+}
+
 func TestHandleDiagnostics_CacheHit(t *testing.T) {
 	cached := DiagnosticsInfo{Version: "cached"}
 	cachedAt := time.Now()

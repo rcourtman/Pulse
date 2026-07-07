@@ -166,6 +166,11 @@ auto-registration changes that affect backup visibility permissions are
 storage/recovery-adjacent: optional PVE `/storage` grants must remain effective
 for privilege-separated tokens by assigning the same `PVEDatastoreAdmin` role to
 both the service user and the concrete token id.
+Generated PVE setup-script smoke checks must run after those concrete token
+grants have been applied and must not skip or reorder the optional `/storage`
+backup-visibility grant path. If the smoke check fails, the script may fall
+back to manual completion, but the displayed token details must still describe
+the same ACL state that would have been submitted to Pulse.
 The generated Proxmox Audit/Repair path is storage/recovery-adjacent for the
 same reason: when backup visibility was requested, repair must reapply the
 optional `/storage` grant to the service user and to the current concrete token

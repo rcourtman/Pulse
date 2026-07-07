@@ -956,6 +956,31 @@ func TestRootInstallAutoRegisterRotatesExistingDeterministicToken(t *testing.T) 
 	}
 }
 
+func TestRootInstallAutoRegisterSmokeTestsCreatedTokenBeforeRegistration(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+	script := string(content)
+
+	for _, needle := range []string{
+		`smoke_test_pve_auto_register_token() {`,
+		`curl --retry 2 --retry-delay 1 -kfsS -H "Authorization: PVEAPIToken=${token_id}=${token_value}" "${host_url%/}/api2/json/nodes"`,
+		`AUTO_NODE_REGISTER_ERROR="token smoke check failed"`,
+		`smoke_test_pve_auto_register_token "$normalized_host_url" "$token_id" "$token_value"`,
+	} {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing Proxmox token smoke-check contract: %s", needle)
+		}
+	}
+
+	smokeCallIdx := strings.Index(script, `smoke_test_pve_auto_register_token "$normalized_host_url" "$token_id" "$token_value"`)
+	registerIdx := strings.Index(script, `curl --retry 3 --retry-delay 2 -fsS -X POST "$pulse_url/api/auto-register" -H "Content-Type: application/json" -d "$register_payload"`)
+	if smokeCallIdx < 0 || registerIdx < 0 || smokeCallIdx > registerIdx {
+		t.Fatalf("expected token smoke check to run before /api/auto-register (smoke=%d register=%d)", smokeCallIdx, registerIdx)
+	}
+}
+
 func TestRootInstallDeployAgentScriptsDeploysSignatureSidecars(t *testing.T) {
 	extractDir := t.TempDir()
 	installDir := t.TempDir()

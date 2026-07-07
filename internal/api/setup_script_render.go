@@ -683,6 +683,28 @@ create_pve_token() {
     return "$TOKEN_CREATE_RC"
 }
 
+smoke_test_pve_token() {
+    if SMOKE_OUTPUT=$(curl -kfsS --retry 2 --retry-delay 1 \
+        -H "Authorization: PVEAPIToken=$PULSE_TOKEN_ID=$TOKEN_VALUE" \
+        "${HOST_URL%%/}/api2/json/nodes" 2>&1); then
+        SMOKE_RC=0
+    else
+        SMOKE_RC=$?
+    fi
+
+    if [ "$SMOKE_RC" -ne 0 ]; then
+        echo "⚠️  Created API token, but the local Proxmox API smoke check failed."
+        echo "   Response: $SMOKE_OUTPUT"
+        echo ""
+        echo "📝 Use the token details below in Pulse Settings → Nodes after resolving the API connectivity issue."
+        TOKEN_READY=false
+        AUTO_REG_SUCCESS=false
+        return 1
+    fi
+
+    return 0
+}
+
 attempt_auto_registration() {
     if [ -z "$PULSE_SETUP_TOKEN" ]; then
         if [ -t 0 ]; then
@@ -811,7 +833,11 @@ fi%s
 configure_pve_pulse_monitor_role "$TOKEN_CREATED"
 
 if [ "$TOKEN_READY" = true ]; then
-    attempt_auto_registration
+    if smoke_test_pve_token; then
+        attempt_auto_registration
+    else
+        AUTO_REG_SUCCESS=false
+    fi
 else
     AUTO_REG_SUCCESS=false
 fi

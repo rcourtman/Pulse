@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -794,6 +795,73 @@ func TestMergeDiagnosticsConnection(t *testing.T) {
 				}
 			} else if !strings.Contains(gotErr, tc.wantErrContains) {
 				t.Fatalf("error %q does not contain %q", gotErr, tc.wantErrContains)
+			}
+		})
+	}
+}
+
+func TestClassifyDiagnosticsConnectionFailure(t *testing.T) {
+	cases := []struct {
+		name        string
+		err         error
+		fallback    string
+		wantKind    string
+		wantMessage string
+	}{
+		{
+			name:        "auth rejected",
+			err:         errors.New("API error 401 (Unauthorized): Invalid credentials or token"),
+			fallback:    "Failed to connect to Proxmox API",
+			wantKind:    "proxmox_auth_rejected",
+			wantMessage: "Proxmox rejected the stored API token or credentials",
+		},
+		{
+			name:        "tls certificate mismatch",
+			err:         errors.New("x509: certificate is valid for pve.local, not 192.0.2.10"),
+			fallback:    "Failed to connect to Proxmox API",
+			wantKind:    "tls_certificate_mismatch",
+			wantMessage: "TLS certificate mismatch or untrusted certificate",
+		},
+		{
+			name:        "connection refused",
+			err:         errors.New("dial tcp 192.0.2.10:8006: connect: connection refused"),
+			fallback:    "Failed to connect to Proxmox API",
+			wantKind:    "connection_refused",
+			wantMessage: "TCP connection refused by host",
+		},
+		{
+			name:        "network unreachable",
+			err:         errors.New("dial tcp 192.0.2.10:8006: connect: no route to host"),
+			fallback:    "Failed to connect to Proxmox API",
+			wantKind:    "network_unreachable",
+			wantMessage: "Network route to host is unavailable",
+		},
+		{
+			name:        "timeout",
+			err:         errors.New("context deadline exceeded"),
+			fallback:    "Failed to connect to Proxmox API",
+			wantKind:    "connection_timeout",
+			wantMessage: "Connection timed out",
+		},
+		{
+			name:        "fallback",
+			err:         errors.New("unexpected EOF"),
+			fallback:    "Failed to connect to Proxmox API",
+			wantKind:    "connection_failed",
+			wantMessage: "Failed to connect to Proxmox API",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := classifyDiagnosticsConnectionFailure(tc.err, tc.fallback)
+			if got.kind != tc.wantKind {
+				t.Fatalf("kind = %q, want %q", got.kind, tc.wantKind)
+			}
+			if got.message != tc.wantMessage {
+				t.Fatalf("message = %q, want %q", got.message, tc.wantMessage)
+			}
+			if strings.TrimSpace(got.troubleshooting) == "" {
+				t.Fatal("expected troubleshooting guidance")
 			}
 		})
 	}

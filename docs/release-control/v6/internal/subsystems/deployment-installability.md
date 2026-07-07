@@ -390,6 +390,12 @@ TLS floor in the dynamic config.
    `--token-file` runtime path, and explicit update URL arguments must not
    suppress legacy recovery of the remaining connection, identity, feature, or
    trust fields.
+   Root `install.sh` Proxmox server auto-registration must not persist a newly
+   created monitoring token into Pulse until the installer has applied the
+   token ACLs and smoke-tested that exact `PVEAPIToken` against the local
+   Proxmox `/api2/json/nodes` endpoint. A failed token smoke check must leave
+   the installer in a manual-completion state instead of POSTing
+   `/api/auto-register`.
    Deployment bootstrap token behavior remains a deployment-installability
    trust boundary even when the handler is API-owned. `internal/api/deploy_handlers.go`
    must preserve server-derived `owner_user_id` lineage on bootstrap tokens and

@@ -752,6 +752,10 @@ fi`
 		`pveum aclmod / -token "$PULSE_TOKEN_ID" -role PulseMonitor`,
 		`pveum aclmod /storage -user pulse-monitor@pve -role PVEDatastoreAdmin`,
 		`pveum aclmod /storage -token "$PULSE_TOKEN_ID" -role PVEDatastoreAdmin`,
+		`smoke_test_pve_token() {`,
+		`Authorization: PVEAPIToken=$PULSE_TOKEN_ID=$TOKEN_VALUE`,
+		`${HOST_URL%/}/api2/json/nodes`,
+		`if smoke_test_pve_token; then`,
 	} {
 		if !strings.Contains(pveScript, required) {
 			t.Fatalf("PVE setup script must contain %q", required)
@@ -6296,11 +6300,15 @@ func TestContract_SetupScriptEmbedsFailFastGuidance(t *testing.T) {
 		t.Fatalf("setup script missing token-extract completion rerun guidance: %s", script)
 	}
 	if !strings.Contains(script, `if [ "$TOKEN_READY" = true ]; then
-    attempt_auto_registration
+    if smoke_test_pve_token; then
+        attempt_auto_registration
+    else
+        AUTO_REG_SUCCESS=false
+    fi
 else
     AUTO_REG_SUCCESS=false
 fi`) {
-		t.Fatalf("setup script does not skip PVE auto-registration when no usable token is ready: %s", script)
+		t.Fatalf("setup script does not skip PVE auto-registration when no usable or smoke-tested token is ready: %s", script)
 	}
 	if !strings.Contains(script, `if [ "$TOKEN_READY" = true ]; then
         echo "Add this server to Pulse with:"`) {

@@ -2138,6 +2138,28 @@ create_pve_auto_register_token() {
     printf -v "$token_status_var" '%s' "$token_status"
 }
 
+smoke_test_pve_auto_register_token() {
+    local host_url="$1"
+    local token_id="$2"
+    local token_value="$3"
+    local smoke_output=""
+    local smoke_status=0
+
+    set +e
+    smoke_output=$(curl --retry 2 --retry-delay 1 -kfsS -H "Authorization: PVEAPIToken=${token_id}=${token_value}" "${host_url%/}/api2/json/nodes" 2>&1)
+    smoke_status=$?
+    set -e
+
+    if [[ $smoke_status -ne 0 ]]; then
+        AUTO_NODE_REGISTER_ERROR="token smoke check failed"
+        print_warn "Created Proxmox monitoring token, but a local API smoke check failed; skipping automatic node registration"
+        print_warn "Smoke check error: ${smoke_output}"
+        return 1
+    fi
+
+    return 0
+}
+
 auto_register_pve_node() {
     local ctid="$1"
     local pulse_ip="$2"
@@ -2479,6 +2501,10 @@ PY
     fi
     if [[ "$pulse_monitor_role_ready" == "true" ]]; then
         pveum aclmod / -token "$token_id" -role PulseMonitor >/dev/null 2>&1 || true
+    fi
+
+    if ! smoke_test_pve_auto_register_token "$normalized_host_url" "$token_id" "$token_value"; then
+        return
     fi
 
     local register_payload
