@@ -16,6 +16,8 @@ export interface SSOProvider {
   allowedGroups?: string[];
   allowedDomains?: string[];
   allowedEmails?: string[];
+  groupsClaim?: string;
+  groupRoleMappings?: Record<string, string>;
 }
 
 export interface SSOProvidersResponse {

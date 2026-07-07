@@ -94,25 +94,27 @@ type SSOConfigSnapshot struct {
 
 // SSOProviderResponse is the API response shape for SSO providers.
 type SSOProviderResponse struct {
-	ID                  string   `json:"id"`
-	Name                string   `json:"name"`
-	Type                string   `json:"type"`
-	Enabled             bool     `json:"enabled"`
-	DisplayName         string   `json:"displayName,omitempty"`
-	IconURL             string   `json:"iconUrl,omitempty"`
-	Priority            int      `json:"priority"`
-	OIDCIssuerURL       string   `json:"oidcIssuerUrl,omitempty"`
-	OIDCClientID        string   `json:"oidcClientId,omitempty"`
-	OIDCClientSecretSet bool     `json:"oidcClientSecretSet,omitempty"`
-	OIDCLoginURL        string   `json:"oidcLoginUrl,omitempty"`
-	OIDCCallbackURL     string   `json:"oidcCallbackUrl,omitempty"`
-	SAMLIDPEntityID     string   `json:"samlIdpEntityId,omitempty"`
-	SAMLSPEntityID      string   `json:"samlSpEntityId,omitempty"`
-	SAMLMetadataURL     string   `json:"samlMetadataUrl,omitempty"`
-	SAMLACSURL          string   `json:"samlAcsUrl,omitempty"`
-	AllowedGroups       []string `json:"allowedGroups,omitempty"`
-	AllowedDomains      []string `json:"allowedDomains,omitempty"`
-	AllowedEmails       []string `json:"allowedEmails,omitempty"`
+	ID                  string            `json:"id"`
+	Name                string            `json:"name"`
+	Type                string            `json:"type"`
+	Enabled             bool              `json:"enabled"`
+	DisplayName         string            `json:"displayName,omitempty"`
+	IconURL             string            `json:"iconUrl,omitempty"`
+	Priority            int               `json:"priority"`
+	OIDCIssuerURL       string            `json:"oidcIssuerUrl,omitempty"`
+	OIDCClientID        string            `json:"oidcClientId,omitempty"`
+	OIDCClientSecretSet bool              `json:"oidcClientSecretSet,omitempty"`
+	OIDCLoginURL        string            `json:"oidcLoginUrl,omitempty"`
+	OIDCCallbackURL     string            `json:"oidcCallbackUrl,omitempty"`
+	SAMLIDPEntityID     string            `json:"samlIdpEntityId,omitempty"`
+	SAMLSPEntityID      string            `json:"samlSpEntityId,omitempty"`
+	SAMLMetadataURL     string            `json:"samlMetadataUrl,omitempty"`
+	SAMLACSURL          string            `json:"samlAcsUrl,omitempty"`
+	AllowedGroups       []string          `json:"allowedGroups,omitempty"`
+	AllowedDomains      []string          `json:"allowedDomains,omitempty"`
+	AllowedEmails       []string          `json:"allowedEmails,omitempty"`
+	GroupsClaim         string            `json:"groupsClaim,omitempty"`
+	GroupRoleMappings   map[string]string `json:"groupRoleMappings,omitempty"`
 }
 
 // SSOProvidersListResponse is the API response shape for list requests.

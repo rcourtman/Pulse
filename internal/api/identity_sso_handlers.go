@@ -500,21 +500,10 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 	if updated.Type == config.SSOProviderTypeSAML && updated.SAML == nil && existing.SAML != nil {
 		updated.SAML = existing.SAML
 	}
-	if updated.GroupsClaim == "" && existing.GroupsClaim != "" {
-		updated.GroupsClaim = existing.GroupsClaim
-	}
-	if len(updated.GroupRoleMappings) == 0 && len(existing.GroupRoleMappings) > 0 {
-		updated.GroupRoleMappings = existing.GroupRoleMappings
-	}
-	if len(updated.AllowedGroups) == 0 && len(existing.AllowedGroups) > 0 {
-		updated.AllowedGroups = existing.AllowedGroups
-	}
-	if len(updated.AllowedDomains) == 0 && len(existing.AllowedDomains) > 0 {
-		updated.AllowedDomains = existing.AllowedDomains
-	}
-	if len(updated.AllowedEmails) == 0 && len(existing.AllowedEmails) > 0 {
-		updated.AllowedEmails = existing.AllowedEmails
-	}
+	// groupsClaim, groupRoleMappings, allowedGroups, allowedDomains and
+	// allowedEmails are NOT preserved on empty: both the detail GET and the
+	// flat list response round-trip them, so an empty value in a PUT is an
+	// intentional clear.
 
 	// Preserve secrets if not provided in update
 	if updated.Type == config.SSOProviderTypeOIDC && updated.OIDC != nil && existing.OIDC != nil {

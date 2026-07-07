@@ -13,8 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ... (skipping unchanged parts until test)
-
 func TestSanitizeProviderName(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -241,6 +239,53 @@ func TestSSOProviderDetailRoundTripPreservesOIDCEditableSettings(t *testing.T) {
 	assert.Equal(t, []string{"owner@example.com"}, stored.AllowedEmails)
 	assert.Equal(t, "groups", stored.GroupsClaim)
 	assert.Equal(t, map[string]string{"admins": "admin"}, stored.GroupRoleMappings)
+}
+
+func TestUpdateSSOProvider_EmptyValuesClearRestrictionFields(t *testing.T) {
+	router, _ := setupTestRouter(t)
+
+	provider := config.SSOProvider{
+		ID:             "corp-oidc",
+		Name:           "Corporate OIDC",
+		Type:           config.SSOProviderTypeOIDC,
+		Enabled:        true,
+		AllowedGroups:  []string{"admins"},
+		AllowedDomains: []string{"example.com"},
+		AllowedEmails:  []string{"owner@example.com"},
+		GroupsClaim:    "groups",
+		GroupRoleMappings: map[string]string{
+			"admins": "admin",
+		},
+		OIDC: &config.OIDCProviderConfig{
+			IssuerURL:    "https://idp.example.com/realms/pulse",
+			ClientID:     "pulse-client",
+			ClientSecret: "super-secret",
+		},
+	}
+	require.NoError(t, router.ssoConfig.AddProvider(provider))
+	require.NoError(t, router.saveSSOConfig())
+
+	// An intentionally emptied field in a PUT clears it; only the nested
+	// config (absent from toggle payloads) and the client secret (never
+	// echoed in reads) are preserved.
+	body := `{"name":"Corporate OIDC","type":"oidc","enabled":true,"allowedGroups":[],"allowedDomains":[],"allowedEmails":[],"groupsClaim":"","groupRoleMappings":{}}`
+	req := httptest.NewRequest(http.MethodPut, "/api/security/sso/providers/corp-oidc", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	router.handleSSOProvider(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	loadedConfig, err := router.persistence.LoadSSOConfig()
+	require.NoError(t, err)
+	stored := loadedConfig.GetProvider("corp-oidc")
+	require.NotNil(t, stored)
+	assert.Empty(t, stored.AllowedGroups)
+	assert.Empty(t, stored.AllowedDomains)
+	assert.Empty(t, stored.AllowedEmails)
+	assert.Empty(t, stored.GroupsClaim)
+	assert.Empty(t, stored.GroupRoleMappings)
+	require.NotNil(t, stored.OIDC)
+	assert.Equal(t, "https://idp.example.com/realms/pulse", stored.OIDC.IssuerURL)
+	assert.Equal(t, "super-secret", stored.OIDC.ClientSecret)
 }
 
 func TestCreateSSOProvider_Validation(t *testing.T) {

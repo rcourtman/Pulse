@@ -185,10 +185,27 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     }
     try {
       const { apiFetch } = await import('@/utils/apiClient');
+      // Send only writable provider fields: the list item also carries
+      // computed response fields (oidcLoginUrl, samlAcsUrl, ...) that the
+      // strict PUT decoder rejects. Nested oidc/saml config and the client
+      // secret are intentionally absent; the backend preserves them.
       const response = await apiFetch(`/api/security/sso/providers/${provider.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...provider, enabled: !provider.enabled }),
+        body: JSON.stringify({
+          id: provider.id,
+          name: provider.name,
+          type: provider.type,
+          enabled: !provider.enabled,
+          displayName: provider.displayName,
+          iconUrl: provider.iconUrl,
+          priority: provider.priority,
+          allowedGroups: provider.allowedGroups ?? [],
+          allowedDomains: provider.allowedDomains ?? [],
+          allowedEmails: provider.allowedEmails ?? [],
+          groupsClaim: provider.groupsClaim,
+          groupRoleMappings: provider.groupRoleMappings,
+        }),
       });
 
       if (!response.ok) {
