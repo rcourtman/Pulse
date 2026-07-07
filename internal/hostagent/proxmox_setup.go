@@ -924,24 +924,25 @@ func (p *ProxmoxSetup) candidateHostURLs(ctx context.Context, ptype proxmoxProdu
 		return append(candidates, buildURL(hostname))
 	}
 
-	// Priority 2: Prefer the system hostname when it resolves to a non-loopback,
-	// non-link-local address. This preserves admin-managed DNS names and matching
-	// TLS certificates instead of silently downgrading to an inferred IP address.
+	// Priority 2: Prefer the route-aware local IP used to reach Pulse. This keeps
+	// generated Proxmox config aligned with the reachable endpoint shown to users,
+	// while preserving hostname as a fallback candidate below.
+	if reachableIP := p.getIPThatReachesPulse(); reachableIP != "" {
+		p.logger.Debug().Str("ip", reachableIP).Msg("Using IP that can reach Pulse server")
+		candidates = appendUniqueHostCandidate(candidates, seen, buildURL(reachableIP))
+	}
+
+	// Priority 3: Keep the system hostname as a fallback when it resolves to a
+	// non-loopback, non-link-local address. The server receives candidateHosts
+	// and may still choose it if it is the correct stable endpoint.
 	if hostname := strings.TrimSpace(p.hostname); hostname != "" {
 		if hostnameIP := p.getIPForHostname(); hostnameIP != "" && !isLoopbackOrLinkLocalIP(hostnameIP) {
 			p.logger.Debug().
 				Str("hostname", hostname).
 				Str("ip", hostnameIP).
-				Msg("Using resolvable hostname for Proxmox registration")
+				Msg("Adding resolvable hostname fallback for Proxmox registration")
 			candidates = appendUniqueHostCandidate(candidates, seen, buildURL(hostname))
 		}
-	}
-
-	// Priority 3: Try to determine which local IP is used to connect to Pulse.
-	// This remains the best fallback when the hostname is not usable.
-	if reachableIP := p.getIPThatReachesPulse(); reachableIP != "" {
-		p.logger.Debug().Str("ip", reachableIP).Msg("Using IP that can reach Pulse server")
-		candidates = appendUniqueHostCandidate(candidates, seen, buildURL(reachableIP))
 	}
 
 	// Priority 4: Get all IPs and select the best one based on heuristics.
@@ -974,8 +975,8 @@ func (p *ProxmoxSetup) candidateHostURLs(ctx context.Context, ptype proxmoxProdu
 }
 
 // getHostURL constructs the host URL for this Proxmox node.
-// Prefers canonical hostname continuity when it resolves to a real local address,
-// then falls back to route-aware IP detection and heuristic local IP selection.
+// Prefers explicit reportIP, then route-aware IP detection, then hostname and
+// heuristic local IP fallbacks.
 func (p *ProxmoxSetup) getHostURL(ctx context.Context, ptype proxmoxProductType) string {
 	candidates := p.candidateHostURLs(ctx, ptype)
 	if len(candidates) == 0 {

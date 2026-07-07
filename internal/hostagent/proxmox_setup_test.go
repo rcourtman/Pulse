@@ -441,7 +441,7 @@ func TestGetHostURL(t *testing.T) {
 		}
 	})
 
-	t.Run("prefers resolvable hostname before inferred route IP", func(t *testing.T) {
+	t.Run("prefers route-aware IP before resolvable hostname fallback", func(t *testing.T) {
 		p.reportIP = ""
 		p.pulseURL = "https://pulse:7655"
 		mc.lookupIPFn = func(h string) ([]net.IP, error) {
@@ -453,8 +453,18 @@ func TestGetHostURL(t *testing.T) {
 		mc.dialTimeoutFn = func(network, address string, timeout time.Duration) (net.Conn, error) {
 			return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.1.1.1")}}, nil
 		}
-		if got := p.getHostURL(context.Background(), "pve"); got != "https://test-host:8006" {
+		if got := p.getHostURL(context.Background(), "pve"); got != "https://10.1.1.1:8006" {
 			t.Errorf("got %s", got)
+		}
+		candidates := p.candidateHostURLs(context.Background(), "pve")
+		if len(candidates) < 2 {
+			t.Fatalf("candidateHostURLs() = %#v, want route IP then hostname fallback", candidates)
+		}
+		if candidates[0] != "https://10.1.1.1:8006" {
+			t.Fatalf("candidateHostURLs()[0] = %q, want route-aware IP", candidates[0])
+		}
+		if candidates[1] != "https://test-host:8006" {
+			t.Fatalf("candidateHostURLs()[1] = %q, want hostname fallback", candidates[1])
 		}
 	})
 

@@ -1376,7 +1376,7 @@ surface and no new `internal/api/` lifecycle handler.
    instance-scoped under `internal/hostagent/agent.go`; lifecycle-owned
    registration and update paths must not depend on package-global mutable test
    seams that can leak between concurrent agent sessions or tests.
-5. Preserve canonical /api/auto-register node identity continuity when canonical hosts shift between hostname and IP forms for the same node.
+5. Preserve canonical /api/auto-register node identity continuity when canonical hosts shift between hostname and IP forms for the same node, and keep runtime-side Proxmox setup host ordering aligned with the contract: explicit report-IP override, route-aware local IP, resolvable hostname fallback, then heuristic local IP fallback.
    That same lifecycle-adjacent shared-API boundary now covers relay and
    command-target hostname resolution too. When lifecycle flows reuse
    `internal/api/router_routes_ai_relay.go`, `internal/agentexec/server.go`,
@@ -2614,13 +2614,17 @@ That canonical /api/auto-register behavior now also includes hostname/IP continu
 reruns that arrive through a different canonical host form must reuse the same
 Pulse-managed node record and token instead of forking duplicate fleet entries.
 That same lifecycle contract also governs the runtime-side Proxmox setup host
-selection in `internal/hostagent/proxmox_setup.go`: when the system hostname
-resolves to a non-loopback, non-link-local address, the generated Proxmox
-registration host must stay on that canonical hostname instead of downgrading
-to a route-inferred interface IP. Route-aware IP detection remains the fallback
-only when hostname resolution is unusable, so multi-NIC and internal-CA
-deployments preserve canonical hostname continuity without losing an IP escape
-hatch for non-DNS installs.
+selection in `internal/hostagent/proxmox_setup.go`: an explicit report-IP
+override remains the highest-priority operator-provided endpoint, and otherwise
+the route-aware local IP used to reach Pulse is the preferred registration
+`host`. A resolvable system hostname remains an ordered fallback candidate, not
+the primary generated host, so Pulse can still select it when the server-side
+fingerprint probe proves that hostname is the correct reachable endpoint. The
+candidate list plus hostname/IP continuity is the canonical place for DNS
+continuity; runtime setup must not prefer a short hostname over the
+route-aware interface merely because local resolution succeeds. Heuristic local
+IP selection is only a fallback after the explicit override, route-aware IP,
+and resolvable-hostname candidate paths.
 That same Proxmox registration boundary must now also let Pulse choose from the
 agent's ordered candidate host list instead of blindly persisting the agent's
 first preference. Unified Agent setup must send canonical `candidateHosts`
