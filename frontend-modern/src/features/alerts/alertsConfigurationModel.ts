@@ -2,11 +2,13 @@ import type {
   AlertConfig,
   ActivationState,
   BackupAlertConfig,
+  HysteresisThreshold,
   SnapshotAlertConfig,
 } from '@/types/alerts';
 import {
   FACTORY_AGENT_DEFAULTS,
   FACTORY_BACKUP_DEFAULTS,
+  FACTORY_DISK_TEMP_BY_TYPE,
   FACTORY_DOCKER_DEFAULTS,
   FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
   FACTORY_DOCKER_STATE_SEVERITY,
@@ -45,6 +47,7 @@ import { GROUPING_WINDOW_DEFAULT_SECONDS, clampCooldownMinutes } from './types';
 export {
   FACTORY_AGENT_DEFAULTS,
   FACTORY_BACKUP_DEFAULTS,
+  FACTORY_DISK_TEMP_BY_TYPE,
   FACTORY_DOCKER_DEFAULTS,
   FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
   FACTORY_DOCKER_STATE_SEVERITY,
@@ -75,6 +78,8 @@ export interface AlertsConfigurationSnapshot {
   trueNASDiskDefaults: Record<string, number | undefined>;
   vmwareDefaults: Record<string, number | undefined>;
   agentDefaults: Record<string, number | undefined>;
+  diskTempByType: Record<string, number>;
+  diskFillByType: Record<string, HysteresisThreshold>;
   dockerDefaults: typeof FACTORY_DOCKER_DEFAULTS;
   dockerDisableConnectivity: boolean;
   dockerPoweredOffSeverity: 'warning' | 'critical';
@@ -216,6 +221,8 @@ export function createDefaultAlertsConfigurationSnapshot(): AlertsConfigurationS
     trueNASDiskDefaults: { ...FACTORY_TRUENAS_DISK_DEFAULTS },
     vmwareDefaults: { ...FACTORY_VMWARE_DEFAULTS },
     agentDefaults: { ...FACTORY_AGENT_DEFAULTS },
+    diskTempByType: { ...FACTORY_DISK_TEMP_BY_TYPE },
+    diskFillByType: {},
     dockerDefaults: { ...FACTORY_DOCKER_DEFAULTS },
     dockerDisableConnectivity: FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
     dockerPoweredOffSeverity: FACTORY_DOCKER_STATE_SEVERITY,
@@ -396,6 +403,22 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
         getTriggerValue(config.agentDefaults.diskTemperature) ??
         FACTORY_AGENT_DEFAULTS.diskTemperature,
     };
+  }
+
+  if (config.diskTempByType) {
+    const diskTempByType: Record<string, number> = { ...FACTORY_DISK_TEMP_BY_TYPE };
+    Object.entries(config.diskTempByType).forEach(([key, value]) => {
+      const normalizedKey = key.trim().toLowerCase();
+      const trigger = getTriggerValue(value);
+      if (normalizedKey && trigger > 0) {
+        diskTempByType[normalizedKey] = trigger;
+      }
+    });
+    snapshot.diskTempByType = diskTempByType;
+  }
+
+  if (config.diskFillByType) {
+    snapshot.diskFillByType = { ...config.diskFillByType };
   }
 
   if (config.dockerDefaults) {
@@ -695,6 +718,13 @@ export function buildAlertsConfigurationPayload({
         disk: createHysteresisThreshold(snapshot.agentDefaults.disk),
         diskTemperature: createHysteresisThreshold(snapshot.agentDefaults.diskTemperature),
       },
+      diskTempByType: Object.fromEntries(
+        Object.entries(snapshot.diskTempByType).map(([key, trigger]) => [
+          key,
+          createHysteresisThreshold(trigger),
+        ]),
+      ),
+      diskFillByType: { ...snapshot.diskFillByType },
       pbsDefaults: {
         cpu: createHysteresisThreshold(snapshot.pbsDefaults.cpu),
         memory: createHysteresisThreshold(snapshot.pbsDefaults.memory),

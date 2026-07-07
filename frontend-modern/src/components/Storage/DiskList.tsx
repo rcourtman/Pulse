@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import { formatBytes } from '@/utils/format';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 import {
@@ -102,6 +103,7 @@ interface DiskListProps {
 }
 
 export const DiskList: Component<DiskListProps> = (props) => {
+  const { getDiskTemperatureThresholds } = useAlertsActivation();
   const model = useDiskListModel({
     disks: () => props.disks,
     nodes: () => props.nodes,
@@ -355,7 +357,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           <span
                             class={`${PHYSICAL_DISK_TEMPERATURE_CLASS} ${getTemperatureTextClass(
                               data.temperature,
-                              undefined,
+                              getDiskTemperatureThresholds(data.type),
                               'diskTemperature',
                             )}`}
                           >

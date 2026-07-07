@@ -105,6 +105,8 @@ export function AlertsConfigurationSurface(props: AlertsConfigurationSurfaceProp
           setNodeDefaults={state.setNodeDefaults}
           agentDefaults={state.agentDefaults}
           setAgentDefaults={state.setAgentDefaults}
+          diskTempByType={state.diskTempByType}
+          setDiskTempByType={state.setDiskTempByType}
           pbsDefaults={state.pbsDefaults}
           setPBSDefaults={state.setPBSDefaults}
           kubernetesDefaults={state.kubernetesDefaults}

@@ -12,6 +12,7 @@ export interface ThresholdsTabProps extends Omit<
   | 'trueNASDiskDefaults'
   | 'vmwareDefaults'
   | 'agentDefaults'
+  | 'diskTempByType'
   | 'dockerDefaults'
 > {
   guestDefaults: Accessor<ThresholdsTableProps['guestDefaults']>;
@@ -22,5 +23,6 @@ export interface ThresholdsTabProps extends Omit<
   trueNASDiskDefaults: Accessor<NonNullable<ThresholdsTableProps['trueNASDiskDefaults']>>;
   vmwareDefaults: Accessor<NonNullable<ThresholdsTableProps['vmwareDefaults']>>;
   agentDefaults: Accessor<ThresholdsTableProps['agentDefaults']>;
+  diskTempByType: Accessor<ThresholdsTableProps['diskTempByType']>;
   dockerDefaults: Accessor<ThresholdsTableProps['dockerDefaults']>;
 }

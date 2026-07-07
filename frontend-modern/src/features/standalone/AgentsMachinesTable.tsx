@@ -89,6 +89,7 @@ import {
   getAgentMachineRaidSummary,
   getAgentMachineTemperatureCelsius,
   getAgentMachineTemperatureDetailSections,
+  getAgentMachineHottestSmartDiskType,
   getAgentMachineTemperatureMetric,
   getAgentMachineTemperatureTitle,
   getAgentMachineThermalPressurePresentation,
@@ -1488,11 +1489,16 @@ export const AgentsMachinesTable: Component<{
                     const temperature = () => getAgentMachineTemperatureCelsius(machine);
                     const temperatureMetric = () => getAgentMachineTemperatureMetric(machine);
                     const temperatureThresholds = () =>
-                      alertsActivation.getMetricThresholds(
-                        temperatureMetric() === 'diskTemperature' ? 'agent' : 'node',
-                        temperatureMetric(),
-                        alertResourceIds(),
-                      );
+                      temperatureMetric() === 'diskTemperature'
+                        ? alertsActivation.getDiskTemperatureThresholds(
+                            getAgentMachineHottestSmartDiskType(machine),
+                            alertResourceIds(),
+                          )
+                        : alertsActivation.getMetricThresholds(
+                            'node',
+                            temperatureMetric(),
+                            alertResourceIds(),
+                          );
                     const temperatureSections = () =>
                       getAgentMachineTemperatureDetailSections(machine);
                     const temperatureTitle = () => getAgentMachineTemperatureTitle(machine);

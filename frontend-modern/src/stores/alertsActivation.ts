@@ -8,6 +8,7 @@ import { logger } from '@/utils/logger';
 import {
   type AlertThresholdScope,
   type DisplayMetricType,
+  resolveDiskTemperatureDisplayThresholds,
   resolveMetricDisplayThresholds,
 } from '@/utils/metricThresholds';
 import { eventBus } from './events';
@@ -147,6 +148,14 @@ const getMetricThresholds = (
   return resolveMetricDisplayThresholds(config(), scope, metric, resourceIds);
 };
 
+// Per-type disk SMART temperature thresholds (for display coloring).
+const getDiskTemperatureThresholds = (
+  diskType: string | null | undefined,
+  resourceIds?: string | string[],
+) => {
+  return resolveDiskTemperatureDisplayThresholds(config(), diskType, resourceIds);
+};
+
 eventBus.on('org_switched', () => {
   setConfig(null);
   applyActivationState(null);
@@ -169,6 +178,7 @@ export const useAlertsActivation = () => ({
   getBackupThresholds,
   getTemperatureThreshold,
   getMetricThresholds,
+  getDiskTemperatureThresholds,
 
   // Actions
   refreshConfig,

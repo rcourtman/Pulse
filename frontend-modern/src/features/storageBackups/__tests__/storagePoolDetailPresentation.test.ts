@@ -143,6 +143,7 @@ describe('storagePoolDetailPresentation', () => {
         role: 'data',
         state: 'online',
         sizeLabel: '1000 B',
+        diskType: '',
         temperature: 44,
         hasIssue: true,
         spunDown: false,

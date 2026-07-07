@@ -66,6 +66,13 @@ export const FACTORY_AGENT_DEFAULTS = {
   diskTemperature: 55,
 };
 
+// Mirrors the backend's seeded DiskTempByType defaults (trigger °C).
+export const FACTORY_DISK_TEMP_BY_TYPE: Record<string, number> = {
+  nvme: 70,
+  sas: 65,
+  sata: 55,
+};
+
 export const FACTORY_DOCKER_DEFAULTS = {
   cpu: 80,
   memory: 85,

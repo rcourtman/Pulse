@@ -7,6 +7,7 @@ import {
   getMetricTextColorClass,
   getDefaultDisplayMetricThresholds,
   getDefaultMetricDisplayThresholds,
+  resolveDiskTemperatureDisplayThresholds,
   resolveMetricDisplayThresholds,
   METRIC_THRESHOLDS,
   type MetricType,
@@ -260,6 +261,71 @@ describe('metricThresholds', () => {
       expect(resolveMetricDisplayThresholds(config, 'storage', 'usage')).toEqual({
         warning: 86,
         critical: 92,
+      });
+    });
+
+    it('resolves disk temperature display thresholds per disk type', () => {
+      const config = {
+        enabled: true,
+        guestDefaults: {},
+        nodeDefaults: {},
+        agentDefaults: {
+          diskTemperature: { trigger: 55, clear: 50 },
+        },
+        diskTempByType: {
+          nvme: { trigger: 72, clear: 66 },
+          sas: { trigger: 65, clear: 60 },
+          sata: { trigger: 55, clear: 50 },
+        },
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: {
+          'host-1': {
+            diskTemperature: { trigger: 80, clear: 75 },
+          },
+        },
+      } as AlertConfig;
+
+      // Per-type map wins over the global agent default.
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme')).toEqual({
+        warning: 66,
+        critical: 72,
+      });
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'NVMe')).toEqual({
+        warning: 66,
+        critical: 72,
+      });
+      // Unknown types fall back to the global agent default.
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'scsi')).toEqual({
+        warning: 50,
+        critical: 55,
+      });
+      expect(resolveDiskTemperatureDisplayThresholds(config, undefined)).toEqual({
+        warning: 50,
+        critical: 55,
+      });
+      // An explicit host override beats the per-type map, mirroring the backend.
+      expect(resolveDiskTemperatureDisplayThresholds(config, 'nvme', 'host-1')).toEqual({
+        warning: 75,
+        critical: 80,
+      });
+    });
+
+    it('falls back to seeded per-type disk temperature defaults without config', () => {
+      expect(resolveDiskTemperatureDisplayThresholds(null, 'nvme')).toEqual({
+        warning: 65,
+        critical: 70,
+      });
+      expect(resolveDiskTemperatureDisplayThresholds(null, 'sas')).toEqual({
+        warning: 60,
+        critical: 65,
+      });
+      expect(resolveDiskTemperatureDisplayThresholds(null, 'sata')).toEqual({
+        warning: 50,
+        critical: 55,
+      });
+      expect(resolveDiskTemperatureDisplayThresholds(null, '')).toEqual({
+        warning: 50,
+        critical: 55,
       });
     });
 

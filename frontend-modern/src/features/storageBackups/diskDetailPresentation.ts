@@ -1,6 +1,7 @@
 import type { PhysicalDiskPresentationData } from '@/features/storageBackups/diskPresentation';
 import type { HistoryTimeRange } from '@/api/charts';
 import { formatPowerOnHours } from '@/utils/format';
+import { getMetricSeverity, type MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { formatTemperature } from '@/utils/temperature';
 import type { StatusIndicatorVariant } from '@/utils/status';
 
@@ -12,14 +13,18 @@ export function getLinkedDiskHealthDotVariant(hasIssue: boolean): StatusIndicato
   return hasIssue ? 'warning' : 'success';
 }
 
-export function getLinkedDiskTemperatureTextClass(tempCelsius: number): string {
+export function getLinkedDiskTemperatureTextClass(
+  tempCelsius: number,
+  thresholds?: MetricDisplayThresholds | null,
+): string {
   if (!Number.isFinite(tempCelsius) || tempCelsius <= 0) {
     return 'text-muted';
   }
-  if (tempCelsius > 60) {
+  const severity = getMetricSeverity(tempCelsius, 'diskTemperature', thresholds);
+  if (severity === 'critical') {
     return 'text-red-500';
   }
-  if (tempCelsius > 50) {
+  if (severity === 'warning') {
     return 'text-yellow-500';
   }
   return 'text-muted';
@@ -74,6 +79,7 @@ export const getDiskDetailHistoryFallbackMessage = (): string =>
 
 export function getDiskDetailAttributeCards(
   disk: PhysicalDiskPresentationData,
+  diskTempThresholds?: MetricDisplayThresholds | null,
 ): DiskDetailAttributeCard[] {
   const attrs = disk.smartAttributes;
   if (!attrs) return [];
@@ -93,7 +99,7 @@ export function getDiskDetailAttributeCards(
     cards.push({
       label: 'Temperature',
       value: formatTemperature(disk.temperature),
-      ok: disk.temperature <= 60,
+      ok: getMetricSeverity(disk.temperature, 'diskTemperature', diskTempThresholds) !== 'critical',
     });
   }
 

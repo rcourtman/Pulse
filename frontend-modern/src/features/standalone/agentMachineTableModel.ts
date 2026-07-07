@@ -122,6 +122,7 @@ type TemperatureReading = {
 
 type SmartTemperatureReading = TemperatureReading & {
   standby?: boolean;
+  diskType?: string;
 };
 
 export type AgentMachineTemperatureDetailRow = {
@@ -220,6 +221,7 @@ const getSmartTemperatureReadings = (machine: Resource): SmartTemperatureReading
       label: model ? `${device} ${model}` : device,
       value: temperature ?? 0,
       standby: disk.standby,
+      diskType: asTrimmedString(disk.type),
     });
     return readings;
   }, []);
@@ -458,6 +460,17 @@ export const getAgentMachineTemperatureCelsius = (machine: Resource): number | u
     maxTemperatureReading(getSensorTemperatureReadings(machine)) ??
     maxTemperatureReading(getActiveSmartTemperatureReadings(machine))
   );
+};
+
+// Disk type of the hottest active SMART reading — the disk whose temperature
+// the cell displays when it falls back to the diskTemperature metric.
+export const getAgentMachineHottestSmartDiskType = (machine: Resource): string | undefined => {
+  const readings = getSmartTemperatureReadings(machine).filter(
+    (reading) => !reading.standby && reading.value > 0,
+  );
+  if (readings.length === 0) return undefined;
+  return readings.reduce((worst, reading) => (reading.value > worst.value ? reading : worst))
+    .diskType;
 };
 
 export const getAgentMachineTemperatureMetric = (

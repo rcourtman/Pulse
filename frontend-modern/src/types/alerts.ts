@@ -138,6 +138,8 @@ export interface AlertConfig {
   vmwareDefaults?: AlertThresholds;
   snapshotDefaults?: SnapshotAlertConfig;
   backupDefaults?: BackupAlertConfig;
+  diskFillByType?: Record<string, HysteresisThreshold>;
+  diskTempByType?: Record<string, HysteresisThreshold>;
   customRules?: CustomAlertRule[];
   overrides: Record<string, RawOverrideConfig>; // key: resource ID
   minimumDelta?: number;

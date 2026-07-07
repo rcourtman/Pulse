@@ -191,6 +191,8 @@ const baseProps = () => ({
   setVMwareDefaults: vi.fn(),
   agentDefaults: { cpu: 80, memory: 85, disk: 90 },
   setAgentDefaults: vi.fn(),
+  diskTempByType: { nvme: 70, sas: 65, sata: 55 },
+  setDiskTempByType: vi.fn(),
   dockerDefaults: DEFAULT_DOCKER_DEFAULTS,
   dockerDisableConnectivity: () => false,
   setDockerDisableConnectivity: vi.fn(),

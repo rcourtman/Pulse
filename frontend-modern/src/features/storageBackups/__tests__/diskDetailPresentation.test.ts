@@ -20,8 +20,18 @@ describe('diskDetailPresentation', () => {
   it('returns canonical linked-disk state presentation', () => {
     expect(getLinkedDiskHealthDotVariant(true)).toBe('warning');
     expect(getLinkedDiskHealthDotVariant(false)).toBe('success');
+    // Default agent thresholds (warning 50, critical 55).
     expect(getLinkedDiskTemperatureTextClass(65)).toBe('text-red-500');
-    expect(getLinkedDiskTemperatureTextClass(55)).toBe('text-yellow-500');
+    expect(getLinkedDiskTemperatureTextClass(52)).toBe('text-yellow-500');
+    expect(getLinkedDiskTemperatureTextClass(45)).toBe('text-muted');
+    // Explicit thresholds (e.g. resolved for an NVMe disk) shift the colors.
+    expect(getLinkedDiskTemperatureTextClass(55, { warning: 65, critical: 70 })).toBe('text-muted');
+    expect(getLinkedDiskTemperatureTextClass(67, { warning: 65, critical: 70 })).toBe(
+      'text-yellow-500',
+    );
+    expect(getLinkedDiskTemperatureTextClass(71, { warning: 65, critical: 70 })).toBe(
+      'text-red-500',
+    );
   });
 
   it('builds canonical SATA and NVMe attribute cards', () => {
@@ -80,7 +90,7 @@ describe('diskDetailPresentation', () => {
           mediaErrors: 0,
           unsafeShutdowns: 4,
         },
-      }),
+      }, { warning: 65, critical: 70 }),
     ).toEqual(
       expect.arrayContaining([
         { label: 'Temperature', value: '55°C', ok: true },

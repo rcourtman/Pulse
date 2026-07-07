@@ -142,6 +142,10 @@ export interface ThresholdsTableProps {
       | Record<string, number | undefined>
       | ((prev: Record<string, number | undefined>) => Record<string, number | undefined>),
   ) => void;
+  diskTempByType: Record<string, number>;
+  setDiskTempByType: (
+    value: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>),
+  ) => void;
   dockerDefaults: {
     cpu: number;
     memory: number;

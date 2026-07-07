@@ -8,6 +8,7 @@ import {
   getDiskDetailAttributeCards,
   getDiskDetailHistoryCharts,
 } from '@/features/storageBackups/diskDetailPresentation';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
 import {
   resolvePhysicalDiskHistoryResourceId,
@@ -19,12 +20,15 @@ type UseDiskDetailModelOptions = {
 
 export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
   const [chartRange, setChartRange] = createSignal<HistoryTimeRange>('24h');
+  const { getDiskTemperatureThresholds } = useAlertsActivation();
 
   const diskData = createMemo<PhysicalDiskPresentationData>(() =>
     extractPhysicalDiskPresentationData(options.disk()),
   );
   const historyResourceId = createMemo(() => resolvePhysicalDiskHistoryResourceId(options.disk()));
-  const attributeCards = createMemo(() => getDiskDetailAttributeCards(diskData()));
+  const attributeCards = createMemo(() =>
+    getDiskDetailAttributeCards(diskData(), getDiskTemperatureThresholds(diskData().type)),
+  );
   const historyCharts = createMemo(() => getDiskDetailHistoryCharts(diskData()));
   const metricResourceId = createMemo(() => historyResourceId());
 

@@ -33,6 +33,8 @@ export function ThresholdsTab(props: ThresholdsTabProps) {
       trueNASDiskDefaults={props.trueNASDiskDefaults()}
       vmwareDefaults={props.vmwareDefaults()}
       agentDefaults={props.agentDefaults()}
+      diskTempByType={props.diskTempByType()}
+      setDiskTempByType={props.setDiskTempByType}
       setNodeDefaults={props.setNodeDefaults}
       setPBSDefaults={props.setPBSDefaults}
       setKubernetesDefaults={props.setKubernetesDefaults}

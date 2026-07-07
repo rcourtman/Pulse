@@ -15,6 +15,7 @@ import type {
 } from '@/types/alerts';
 import {
   FACTORY_AGENT_DEFAULTS,
+  FACTORY_DISK_TEMP_BY_TYPE,
   FACTORY_DOCKER_DEFAULTS,
   FACTORY_GUEST_DEFAULTS,
   FACTORY_NODE_DEFAULTS,
@@ -249,6 +250,42 @@ export const resolveMetricDisplayThresholds = (
   const overrideValue = getOverrideValue(override, metric);
   const baseValue = getBaseThresholdValue(scopeThresholds, metric);
   return resolveThreshold(overrideValue ?? baseValue, getFallbackCritical(scope, metric), margin);
+};
+
+/**
+ * Resolve display thresholds for a physical disk's SMART temperature.
+ * Mirrors the backend precedence: an explicit diskTemperature override on the
+ * host (or inherited linked resource) wins, then the per-type map
+ * (diskTempByType: nvme/sas/sata), then the global agent default.
+ */
+export const resolveDiskTemperatureDisplayThresholds = (
+  config: AlertConfig | null,
+  diskType: string | null | undefined,
+  resourceIds?: string | string[],
+): MetricDisplayThresholds | null => {
+  const margin = normalizeMargin(config?.hysteresisMargin);
+  const normalizedType = (diskType ?? '').trim().toLowerCase();
+
+  const override = findOverride(config?.overrides, resourceIds);
+  const overrideValue = getOverrideValue(override, 'diskTemperature');
+  if (overrideValue !== undefined) {
+    return resolveThreshold(overrideValue, FACTORY_AGENT_DEFAULTS.diskTemperature, margin);
+  }
+
+  const byTypeFallback = normalizedType ? FACTORY_DISK_TEMP_BY_TYPE[normalizedType] : undefined;
+  if (normalizedType) {
+    const byType = config?.diskTempByType?.[normalizedType];
+    if (isHysteresisThreshold(byType)) {
+      return resolveThreshold(byType, byTypeFallback, margin);
+    }
+  }
+
+  const baseValue = getBaseThresholdValue(config?.agentDefaults, 'diskTemperature');
+  return resolveThreshold(
+    baseValue,
+    byTypeFallback ?? FACTORY_AGENT_DEFAULTS.diskTemperature,
+    margin,
+  );
 };
 
 const getFallbackSeverityThresholds = (metric: DisplayMetricType): MetricDisplayThresholds => {

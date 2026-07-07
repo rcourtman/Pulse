@@ -1,11 +1,12 @@
 import { createSignal } from 'solid-js';
 
-import type { BackupAlertConfig, SnapshotAlertConfig } from '@/types/alerts';
+import type { BackupAlertConfig, HysteresisThreshold, SnapshotAlertConfig } from '@/types/alerts';
 
 import {
   createDefaultAlertsConfigurationSnapshot,
   FACTORY_AGENT_DEFAULTS,
   FACTORY_BACKUP_DEFAULTS,
+  FACTORY_DISK_TEMP_BY_TYPE,
   FACTORY_DOCKER_DEFAULTS,
   FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY,
   FACTORY_DOCKER_STATE_SEVERITY,
@@ -74,6 +75,13 @@ export function useAlertsConfigurationSnapshotState(
   );
   const [agentDefaults, setAgentDefaults] = createSignal<Record<string, number | undefined>>(
     defaultSnapshot.agentDefaults,
+  );
+  const [diskTempByType, setDiskTempByType] = createSignal<Record<string, number>>(
+    defaultSnapshot.diskTempByType,
+  );
+  // Pass-through only: preserved on save so the backend doesn't reset it.
+  const [diskFillByType, setDiskFillByType] = createSignal<Record<string, HysteresisThreshold>>(
+    defaultSnapshot.diskFillByType,
   );
   const [dockerDefaults, setDockerDefaults] = createSignal(defaultSnapshot.dockerDefaults);
   const [dockerDisableConnectivity, setDockerDisableConnectivity] = createSignal(
@@ -168,6 +176,8 @@ export function useAlertsConfigurationSnapshotState(
     setTrueNASDiskDefaults({ ...snapshot.trueNASDiskDefaults });
     setVMwareDefaults({ ...snapshot.vmwareDefaults });
     setAgentDefaults({ ...snapshot.agentDefaults });
+    setDiskTempByType({ ...snapshot.diskTempByType });
+    setDiskFillByType({ ...snapshot.diskFillByType });
     setDockerDefaults({ ...snapshot.dockerDefaults });
     setDockerDisableConnectivity(snapshot.dockerDisableConnectivity);
     setDockerPoweredOffSeverity(snapshot.dockerPoweredOffSeverity);
@@ -227,6 +237,8 @@ export function useAlertsConfigurationSnapshotState(
     trueNASDiskDefaults: { ...trueNASDiskDefaults() },
     vmwareDefaults: { ...vmwareDefaults() },
     agentDefaults: { ...agentDefaults() },
+    diskTempByType: { ...diskTempByType() },
+    diskFillByType: { ...diskFillByType() },
     dockerDefaults: { ...dockerDefaults() },
     dockerDisableConnectivity: dockerDisableConnectivity(),
     dockerPoweredOffSeverity: dockerPoweredOffSeverity(),
@@ -297,6 +309,7 @@ export function useAlertsConfigurationSnapshotState(
   };
   const resetAgentDefaults = () => {
     setAgentDefaults({ ...FACTORY_AGENT_DEFAULTS });
+    setDiskTempByType({ ...FACTORY_DISK_TEMP_BY_TYPE });
     markUnsaved();
   };
   const resetDockerDefaults = () => {
@@ -353,6 +366,10 @@ export function useAlertsConfigurationSnapshotState(
     setVMwareDefaults,
     agentDefaults,
     setAgentDefaults,
+    diskTempByType,
+    setDiskTempByType,
+    diskFillByType,
+    setDiskFillByType,
     dockerDefaults,
     setDockerDefaults,
     dockerDisableConnectivity,
@@ -438,6 +455,7 @@ export function useAlertsConfigurationSnapshotState(
     factoryTrueNASDiskDefaults: FACTORY_TRUENAS_DISK_DEFAULTS,
     factoryVMwareDefaults: FACTORY_VMWARE_DEFAULTS,
     factoryAgentDefaults: FACTORY_AGENT_DEFAULTS,
+    factoryDiskTempByType: FACTORY_DISK_TEMP_BY_TYPE,
     factoryDockerDefaults: FACTORY_DOCKER_DEFAULTS,
     factoryStorageDefault: FACTORY_STORAGE_DEFAULT,
     snapshotFactoryDefaults: FACTORY_SNAPSHOT_DEFAULTS,

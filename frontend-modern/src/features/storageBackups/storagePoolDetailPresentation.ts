@@ -26,6 +26,7 @@ export type StoragePoolDetailLinkedDisk = {
   role: string;
   state: string;
   sizeLabel: string;
+  diskType: string;
   temperature: number;
   hasIssue: boolean;
   spunDown: boolean;
@@ -279,6 +280,11 @@ const readDiskTemperature = (disk: Resource): number => {
   return typeof physicalDisk.temperature === 'number' ? physicalDisk.temperature : 0;
 };
 
+const readDiskType = (disk: Resource): string => {
+  const physicalDisk = readPhysicalDisk(disk);
+  return typeof physicalDisk.diskType === 'string' ? physicalDisk.diskType.trim() : '';
+};
+
 const readDiskHasIssue = (disk: Resource): boolean => {
   const physicalDisk = readPhysicalDisk(disk);
   const smart = physicalDisk.smart as Record<string, unknown> | undefined;
@@ -364,6 +370,7 @@ export function getStoragePoolLinkedDisks(
       role: readDiskRole(disk),
       state: readDiskState(disk),
       sizeLabel: readDiskSizeLabel(disk),
+      diskType: readDiskType(disk),
       temperature: readDiskTemperature(disk),
       hasIssue: readDiskHasIssue(disk),
       spunDown: readDiskSpunDown(disk),

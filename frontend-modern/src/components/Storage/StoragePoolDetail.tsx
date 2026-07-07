@@ -12,6 +12,7 @@ import {
   getLinkedDiskHealthDotVariant,
   getLinkedDiskTemperatureTextClass,
 } from '@/features/storageBackups/diskDetailPresentation';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import {
   STORAGE_POOL_DETAIL_HISTORY_RANGE_OPTIONS,
   getZfsDeviceStateTextClass,
@@ -50,6 +51,7 @@ interface StoragePoolDetailProps {
 }
 
 export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
+  const { getDiskTemperatureThresholds } = useAlertsActivation();
   const {
     chartRange,
     setChartRange,
@@ -232,6 +234,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                           <span
                             class={`font-medium ${getLinkedDiskTemperatureTextClass(
                               disk.temperature,
+                              getDiskTemperatureThresholds(disk.diskType),
                             )}`}
                           >
                             {disk.temperature}°C
