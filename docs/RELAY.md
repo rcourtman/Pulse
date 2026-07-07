@@ -82,7 +82,7 @@ Relay configuration is stored encrypted in `relay.enc` in the Pulse data directo
 
 ### iOS / Android
 
-1. Join mobile early access when available.
+1. Pulse Mobile is in early access. Relay and Pro customers get install links from the authenticated [download page](https://pulserelay.pro/download.html).
 2. Open Pulse Mobile and tap **Connect to Server**.
 3. Scan the QR code from **Settings → Relay** in your Pulse web UI.
 4. The app connects via the relay for push notifications and secure Open Pulse handoff.

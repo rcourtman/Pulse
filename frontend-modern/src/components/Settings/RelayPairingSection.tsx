@@ -2,11 +2,15 @@ import { Component, For, Show } from 'solid-js';
 import type { OnboardingQRResponse } from '@/api/onboarding';
 import { Card } from '@/components/shared/Card';
 import { formField, formHelpText, labelClass } from '@/components/shared/Form';
+import { PULSE_PRO_DOWNLOAD_URL } from '@/utils/licensePresentation';
 import {
   getRelayDiagnosticClass,
   RELAY_CODE_BLOCK_CLASS,
   RELAY_DIAGNOSTICS_TITLE_CLASS,
   RELAY_DIAGNOSTICS_WRAP_CLASS,
+  RELAY_PAIRING_APP_AVAILABILITY_TEXT,
+  RELAY_PAIRING_APP_DOWNLOAD_LINK_CLASS,
+  RELAY_PAIRING_APP_DOWNLOAD_LINK_LABEL,
   RELAY_PRIMARY_BUTTON_CLASS,
   RELAY_QR_IMAGE_CLASS,
   RELAY_SECONDARY_BUTTON_CLASS,
@@ -62,7 +66,17 @@ export const RelayPairingSection: Component<RelayPairingSectionProps> = (props) 
         </div>
 
         <p class={formHelpText}>
-          Generate a QR code that provisions a dedicated Pulse Mobile relay access credential.
+          Generate a QR code that provisions a dedicated Pulse Mobile relay access credential.{' '}
+          {RELAY_PAIRING_APP_AVAILABILITY_TEXT}{' '}
+          <a
+            href={PULSE_PRO_DOWNLOAD_URL}
+            target="_blank"
+            rel="noreferrer"
+            class={RELAY_PAIRING_APP_DOWNLOAD_LINK_CLASS}
+          >
+            {RELAY_PAIRING_APP_DOWNLOAD_LINK_LABEL}
+          </a>
+          .
         </p>
 
         <Show when={props.showPairing}>

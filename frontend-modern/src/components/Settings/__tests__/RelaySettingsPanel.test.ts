@@ -55,4 +55,9 @@ describe('Onboarding QR payload contract', () => {
     expect(relaySettingsPanelStateSource).toContain('setInterval(() => void loadStatus(), 5000)');
     expect(relayPairingSectionSource).toContain('getRelayDiagnosticClass');
   });
+
+  it('points pairing users at the download page for the Pulse Mobile app', () => {
+    expect(relayPairingSectionSource).toContain('PULSE_PRO_DOWNLOAD_URL');
+    expect(relayPairingSectionSource).toContain('RELAY_PAIRING_APP_AVAILABILITY_TEXT');
+  });
 });

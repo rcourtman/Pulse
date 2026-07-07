@@ -40,6 +40,11 @@ export const RELAY_ENABLE_HELP_TEXT =
 export const RELAY_ACTIVATION_REQUIRED_LABEL = 'Activation required';
 export const RELAY_ACTIVATION_REQUIRED_MESSAGE =
   'Remote Access is enabled, but this instance does not have an active Relay token. Activate a Relay-capable plan or turn Remote Access off before pairing mobile clients.';
+export const RELAY_PAIRING_APP_AVAILABILITY_TEXT =
+  'Pulse Mobile is in early access; install links for Relay and Pro plans are on';
+export const RELAY_PAIRING_APP_DOWNLOAD_LINK_LABEL = 'your download page';
+export const RELAY_PAIRING_APP_DOWNLOAD_LINK_CLASS =
+  'font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400';
 
 export function getRelayDiagnosticClass(severity: 'warning' | 'error'): string {
   return severity === 'error'
