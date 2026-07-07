@@ -821,16 +821,19 @@ TLS floor in the dynamic config.
 
 ## Current State
 
-The active support prerelease `v6.0.5-rc.1` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.0.5-rc.2` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.0.5-rc.1` release
+fallback, and Helm chart release metadata to the same `6.0.5-rc.2` release
 version. This support prerelease keeps `rollback_version=v6.0.4`, publishes a
 versioned public GitHub prerelease plus versioned Docker and Helm artifacts,
 and does not move stable/latest install pointers or stable semver aliases. It
 queues the v6.0.4 stable line's customer-support fixes for Gemini Patrol
-tool-call readiness, remembered-login submit persistence, and Proxmox
-SATA/SAT SMART temperature fallback behind RC validation instead of publishing
-another same-day stable patch.
+tool-call readiness, remembered-login submit persistence, Proxmox SATA/SAT
+SMART temperature fallback, legacy agent update token recovery, threshold-aware
+temperature display severity, PBS backup polling memory bounds, physical disk
+SMART/Proxmox merge identity, Proxmox token preservation diagnostics, legacy
+OIDC SSO discovery with CSP nonce handling, and route-aware Proxmox host URLs
+behind RC validation instead of publishing another same-day stable patch.
 The initial GA promotion
 metadata remains
 `promoted_from_tag=v6.0.0-rc.7`, `rollback_version=v5.1.35`,
@@ -884,8 +887,8 @@ compose image default, standalone installer fallback constant, and packaged
 Helm metadata. A draft release workflow failure caused by stale image or chart
 pins is a release-packet blocker until the defaults, tests, and evidence
 record are refreshed from the new branch head.
-For the active support prerelease `v6.0.5-rc.1` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.0.5-rc.1`
+For the active support prerelease `v6.0.5-rc.2` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.0.5-rc.2`
 until the next governed stable cut moves them forward. The stable promotion
 guard remains in force by rejecting leftover `-rc.` defaults when the governed
 `VERSION` is a stable release.
