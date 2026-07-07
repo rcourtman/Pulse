@@ -7420,21 +7420,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "codex-physical-disk-lane-l15",
-      "agent_id": "codex-physical-disk",
-      "summary": "Fix physical disk inventory and SMART temperature cluster #1516/#1483/#1471",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-07T08:33:32Z",
-      "heartbeat_at": "2026-07-07T08:33:32Z",
-      "expires_at": "2026-07-07T11:33:32Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L15"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
