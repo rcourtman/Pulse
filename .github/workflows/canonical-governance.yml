@@ -25,6 +25,8 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: rcourtman/pulse-pro
+          token: ${{ secrets.WORKFLOW_PAT }}
+          persist-credentials: false
           fetch-depth: 1
           path: .governance/repos/pulse-pro
 
@@ -32,6 +34,8 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: rcourtman/pulse-enterprise
+          token: ${{ secrets.WORKFLOW_PAT }}
+          persist-credentials: false
           fetch-depth: 1
           path: .governance/repos/pulse-enterprise
 
@@ -39,6 +43,8 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: rcourtman/pulse-mobile
+          token: ${{ secrets.WORKFLOW_PAT }}
+          persist-credentials: false
           fetch-depth: 1
           path: .governance/repos/pulse-mobile
 
