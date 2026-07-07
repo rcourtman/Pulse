@@ -15,6 +15,7 @@ import { Button } from '@/components/shared/Button';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { formControl, formField, formHelpText, formLabel } from '@/components/shared/Form';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
+import { FormSelect } from '@/components/shared/FormSelect';
 import { FeatureGateSection } from '@/components/shared/FeatureGateSection';
 import { useReportingPanelState } from '@/components/Settings/useReportingPanelState';
 import type { ReportingFormat } from '@/components/Settings/reportingCatalogModel';
@@ -459,30 +460,26 @@ export function ReportingPanel() {
                   </div>
 
                   <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
-                    <FormField label="Cadence">
-                      <select
-                        class={formControl}
-                        value={scheduleForm().cadenceType}
-                        onChange={(e) => updateScheduleForm({ cadenceType: e.currentTarget.value as 'monthly' | 'weekly' })}
-                      >
-                        <option value="monthly">Monthly</option>
-                        <option value="weekly">Weekly</option>
-                      </select>
-                    </FormField>
+                    <FormSelect
+                      label="Cadence"
+                      value={scheduleForm().cadenceType}
+                      onChange={(e) => updateScheduleForm({ cadenceType: e.currentTarget.value as 'monthly' | 'weekly' })}
+                    >
+                      <option value="monthly">Monthly</option>
+                      <option value="weekly">Weekly</option>
+                    </FormSelect>
                     <Show
                       when={scheduleForm().cadenceType === 'monthly'}
                       fallback={
-                        <FormField label="Weekday">
-                          <select
-                            class={formControl}
-                            value={scheduleForm().weekday}
-                            onChange={(e) => updateScheduleForm({ weekday: e.currentTarget.value })}
-                          >
-                            <For each={WEEKDAY_OPTIONS}>
-                              {(day) => <option value={day}>{day[0].toUpperCase() + day.slice(1)}</option>}
-                            </For>
-                          </select>
-                        </FormField>
+                        <FormSelect
+                          label="Weekday"
+                          value={scheduleForm().weekday}
+                          onChange={(e) => updateScheduleForm({ weekday: e.currentTarget.value })}
+                        >
+                          <For each={WEEKDAY_OPTIONS}>
+                            {(day) => <option value={day}>{day[0].toUpperCase() + day.slice(1)}</option>}
+                          </For>
+                        </FormSelect>
                       }
                     >
                       <FormField label="Day of month">
@@ -504,16 +501,14 @@ export function ReportingPanel() {
                         onInput={(e) => updateScheduleForm({ time: e.currentTarget.value })}
                       />
                     </FormField>
-                    <FormField label="Format">
-                      <select
-                        class={formControl}
-                        value={scheduleForm().format}
-                        onChange={(e) => updateScheduleForm({ format: e.currentTarget.value as ReportingFormat })}
-                      >
-                        <option value="pdf">PDF</option>
-                        <option value="csv">CSV</option>
-                      </select>
-                    </FormField>
+                    <FormSelect
+                      label="Format"
+                      value={scheduleForm().format}
+                      onChange={(e) => updateScheduleForm({ format: e.currentTarget.value as ReportingFormat })}
+                    >
+                      <option value="pdf">PDF</option>
+                      <option value="csv">CSV</option>
+                    </FormSelect>
                   </div>
 
                   <FormField
@@ -537,16 +532,14 @@ export function ReportingPanel() {
                         placeholder="production, customer-facing"
                       />
                     </FormField>
-                    <FormField label="Delivery">
-                      <select
-                        class={formControl}
-                        value={scheduleForm().deliveryMethod}
-                        onChange={(e) => updateScheduleForm({ deliveryMethod: e.currentTarget.value as 'email' | 'disk' })}
-                      >
-                        <option value="email">Email recipients</option>
-                        <option value="disk">Save to disk</option>
-                      </select>
-                    </FormField>
+                    <FormSelect
+                      label="Delivery"
+                      value={scheduleForm().deliveryMethod}
+                      onChange={(e) => updateScheduleForm({ deliveryMethod: e.currentTarget.value as 'email' | 'disk' })}
+                    >
+                      <option value="email">Email recipients</option>
+                      <option value="disk">Save to disk</option>
+                    </FormSelect>
                     <FormField label="Retention">
                       <input
                         type="number"
