@@ -333,6 +333,8 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"PBS backup polling",
 		"Proxmox token preservation",
 		"legacy OIDC SSO discovery",
+		"Pulse Mobile pairing",
+		"SSO browser-session display labels",
 		"route-aware Proxmox host URLs",
 		"rollback target for this release candidate is `v"+previous+"`",
 	)
@@ -350,6 +352,8 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Physical disk SMART and Proxmox records now merge",
 		"Proxmox install/update flows now preserve generated token state",
 		"Legacy OIDC SSO discovery now persists",
+		"Pulse Mobile pairing now omits unsafe non-HTTPS Pulse web handoff URLs",
+		"OIDC and SAML browser sessions now expose a separate display label",
 		"Proxmox host setup now prefers route-aware host URLs",
 	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
