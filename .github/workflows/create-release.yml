@@ -47,6 +47,14 @@ on:
         required: false
         type: boolean
         default: false
+      mobile_release_decision:
+        description: 'Required mobile impact decision: no-mobile-impact, existing-mobile-build-compatible, mobile-candidate-uploaded, or mobile-candidate-required'
+        required: true
+        type: string
+      mobile_release_evidence:
+        description: 'Evidence for existing-mobile-build-compatible or mobile-candidate-uploaded decisions'
+        required: false
+        type: string
 
 concurrency:
   group: release-${{ github.event.inputs.version || github.ref || github.run_id }}
@@ -113,6 +121,7 @@ jobs:
             VERSION
             docs/release-control/control_plane.json
             scripts/release_control/control_plane.py
+            scripts/release_control/mobile_release_gate.py
             scripts/release_control/repo_file_io.py
 
       - name: Resolve required release branch
@@ -137,6 +146,19 @@ jobs:
             exit 1
           fi
           echo "[OK] VERSION file matches requested version ($REQUESTED_VERSION)"
+
+      - name: Validate mobile release decision
+        if: ${{ steps.extract.outputs.historical_asset_backfill_only != 'true' }}
+        env:
+          MOBILE_RELEASE_DECISION: ${{ github.event.inputs.mobile_release_decision }}
+          MOBILE_RELEASE_EVIDENCE: ${{ github.event.inputs.mobile_release_evidence }}
+        run: |
+          set -euo pipefail
+          python3 scripts/release_control/mobile_release_gate.py \
+            --version "${{ steps.extract.outputs.version }}" \
+            --decision "${MOBILE_RELEASE_DECISION}" \
+            --evidence "${MOBILE_RELEASE_EVIDENCE}" \
+            --github-annotations
 
       - name: Validate promotion policy
         if: ${{ steps.extract.outputs.historical_asset_backfill_only != 'true' }}

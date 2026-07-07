@@ -94,8 +94,31 @@ python3 scripts/check-workflow-dispatch-inputs.py \
   --require v5_eos_date \
   --require hotfix_exception \
   --require hotfix_reason \
-  --require draft_only
+  --require draft_only \
+  --require mobile_release_decision \
+  --require mobile_release_evidence
 echo "✓ Remote release-branch publish workflow contract matches governed inputs"
+
+MOBILE_RELEASE_DECISION=""
+MOBILE_RELEASE_EVIDENCE=""
+MOBILE_REPO="../pulse-mobile"
+
+echo ""
+python3 scripts/release_control/mobile_release_gate.py --mobile-repo "$MOBILE_REPO" --summary-only || true
+echo ""
+echo "Mobile release decision:"
+echo "  no-mobile-impact                 Server release has no mobile/relay/onboarding compatibility impact."
+echo "  existing-mobile-build-compatible Existing TestFlight/Play candidate is proven compatible."
+echo "  mobile-candidate-uploaded        A new mobile candidate has already been uploaded."
+echo "  mobile-candidate-required        A mobile candidate is required; stop this release dispatch."
+echo ""
+read -r -p "Mobile release decision: " MOBILE_RELEASE_DECISION
+read -r -p "Mobile release evidence or note: " MOBILE_RELEASE_EVIDENCE
+python3 scripts/release_control/mobile_release_gate.py \
+  --version "$VERSION" \
+  --decision "$MOBILE_RELEASE_DECISION" \
+  --evidence "$MOBILE_RELEASE_EVIDENCE"
+echo "✓ Mobile release decision recorded"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -265,7 +288,9 @@ if [ -n "$NOTES_FILE" ]; then
     -f ga_date="${GA_DATE}" \
     -f v5_eos_date="${V5_EOS_DATE}" \
     -f hotfix_exception="${HOTFIX_EXCEPTION}" \
-    -f hotfix_reason="${HOTFIX_REASON}"
+    -f hotfix_reason="${HOTFIX_REASON}" \
+    -f mobile_release_decision="${MOBILE_RELEASE_DECISION}" \
+    -f mobile_release_evidence="${MOBILE_RELEASE_EVIDENCE}"
 else
   # This should be unreachable due to check above, but kept for safety
   echo "❌ Error: Release notes are required"

@@ -44,6 +44,14 @@ on:
         description: 'Optional note/reason for the dry run'
         required: false
         type: string
+      mobile_release_decision:
+        description: 'Mobile impact decision: no-mobile-impact, existing-mobile-build-compatible, mobile-candidate-uploaded, or mobile-candidate-required'
+        required: false
+        type: string
+      mobile_release_evidence:
+        description: 'Evidence for existing-mobile-build-compatible or mobile-candidate-uploaded decisions'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -158,6 +166,26 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           echo "[OK] Rehearsal metadata validated for ${TAG}"
+
+      - name: Validate mobile release decision
+        id: mobile_release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MOBILE_RELEASE_DECISION: ${{ inputs.mobile_release_decision }}
+          MOBILE_RELEASE_EVIDENCE: ${{ inputs.mobile_release_evidence }}
+        run: |
+          set -euo pipefail
+          DECISION="${MOBILE_RELEASE_DECISION:-}"
+          EVIDENCE="${MOBILE_RELEASE_EVIDENCE:-}"
+          if [ -z "${DECISION}" ] && [ "${EVENT_NAME}" = "schedule" ]; then
+            DECISION="no-mobile-impact"
+            EVIDENCE="Scheduled release dry-run watchdog; no mobile release packet is being dispatched."
+          fi
+          python3 scripts/release_control/mobile_release_gate.py \
+            --version "${{ steps.rehearsal.outputs.version }}" \
+            --decision "${DECISION}" \
+            --evidence "${EVIDENCE}" \
+            --github-annotations
 
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0

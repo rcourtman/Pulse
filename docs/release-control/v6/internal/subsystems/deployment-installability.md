@@ -93,36 +93,38 @@ TLS floor in the dynamic config.
 57. `scripts/release_control/record_rc_to_ga_rehearsal.py`
 58. `scripts/release_control/release_promotion_policy_support.py`
 59. `scripts/release_control/resolve_release_promotion.py`
-60. `scripts/release_control/validate_artifact_release_line.py`
-61. `scripts/release_ldflags.sh`
-62. `scripts/run_cloud_public_signup_smoke.sh`
-63. `scripts/run_demo_public_browser_smoke.sh`
-64. `scripts/demo_public_browser_smoke.cjs`
-65. `scripts/run_hosted_staging_smoke.sh`
-66. `scripts/trigger-release-dry-run.sh`
-67. `scripts/trigger-release.sh`
-68. `scripts/toggle-mock.sh`
-69. `deploy/provider-msp/`
-70. `deploy/helm/pulse/`
-70. `tests/integration/playwright.config.ts`
-71. `tests/integration/QUICK_START.md`
-72. `tests/integration/README.md`
-73. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
-74. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
-75. `tests/integration/scripts/hosted-tenant-approval-store.mjs`
-76. `tests/integration/scripts/hosted-tenant-runtime.mjs`
-77. `tests/integration/scripts/hosted-tenant-runtime-restart.mjs`
-78. `tests/integration/scripts/managed-dev-runtime.mjs`
-79. `tests/integration/scripts/relay-mobile-token-helper.go`
-80. `tests/integration/tests/helpers.ts`
-81. `tests/integration/tests/runtime-defaults.ts`
-82. `docker-compose.yml`
-83. `scripts/install-docker.sh`
-84. `scripts/validate-published-release.sh`
-85. `scripts/validate-release.sh`
-86. `scripts/release_asset_common.sh`
-87. `scripts/backfill-release-assets.sh`
-88. `.github/workflows/backfill-release-assets.yml`
+60. `scripts/release_control/mobile_release_gate.py`
+61. `scripts/release_control/mobile_release_gate_test.py`
+62. `scripts/release_control/validate_artifact_release_line.py`
+63. `scripts/release_ldflags.sh`
+64. `scripts/run_cloud_public_signup_smoke.sh`
+65. `scripts/run_demo_public_browser_smoke.sh`
+66. `scripts/demo_public_browser_smoke.cjs`
+67. `scripts/run_hosted_staging_smoke.sh`
+68. `scripts/trigger-release-dry-run.sh`
+69. `scripts/trigger-release.sh`
+70. `scripts/toggle-mock.sh`
+71. `deploy/provider-msp/`
+72. `deploy/helm/pulse/`
+73. `tests/integration/playwright.config.ts`
+74. `tests/integration/QUICK_START.md`
+75. `tests/integration/README.md`
+76. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
+77. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
+78. `tests/integration/scripts/hosted-tenant-approval-store.mjs`
+79. `tests/integration/scripts/hosted-tenant-runtime.mjs`
+80. `tests/integration/scripts/hosted-tenant-runtime-restart.mjs`
+81. `tests/integration/scripts/managed-dev-runtime.mjs`
+82. `tests/integration/scripts/relay-mobile-token-helper.go`
+83. `tests/integration/tests/helpers.ts`
+84. `tests/integration/tests/runtime-defaults.ts`
+85. `docker-compose.yml`
+86. `scripts/install-docker.sh`
+87. `scripts/validate-published-release.sh`
+88. `scripts/validate-release.sh`
+89. `scripts/release_asset_common.sh`
+90. `scripts/backfill-release-assets.sh`
+91. `.github/workflows/backfill-release-assets.yml`
 
 ## Shared Boundaries
 
@@ -303,7 +305,7 @@ TLS floor in the dynamic config.
 ## Extension Points
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
-2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against the published release, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, and `.github/workflows/validate-release-assets.yml`
+2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against the published release, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, and `.github/workflows/validate-release-assets.yml`
    Release-facing agent-paradigm blurbs under `docs/releases/` must describe
    `pulse-mcp` as a generic MCP adapter for MCP-speaking clients, not a
    client-specific release artifact, and full-surface token guidance must come
@@ -470,7 +472,7 @@ TLS floor in the dynamic config.
    `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS`) so live dev verification of
    host-side LXC Docker inventory does not silently restart into default-off
    monitoring.
-6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, the canonical version file, prerelease feedback intake prompts, artifact publication lineage enforcement, release note or changelog packet composition, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
+6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, the canonical version file, prerelease feedback intake prompts, artifact publication lineage enforcement, release note or changelog packet composition, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/mobile_release_gate_test.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
    That release-promotion boundary also owns prerelease note packet lineage:
    shipped RC notes must remain historically accurate, the top-level
    `docs/RELEASE_NOTES.md` index must continue to point at the current shipped
@@ -808,12 +810,20 @@ TLS floor in the dynamic config.
    Whenever that policy changes, update the owning workflow/install proof files
    in `scripts/installtests/build_release_assets_test.go` and
    `scripts/release_control/release_promotion_policy_*` in the same slice.
-11. Keep forward release signing pinned to an explicit trust root. Governed
+11. Keep mobile impact explicit on governed server releases. Every release
+   publish and manual release dry run must record one of the canonical mobile
+   decisions (`no-mobile-impact`, `existing-mobile-build-compatible`,
+   `mobile-candidate-uploaded`, or `mobile-candidate-required`), and
+   `mobile-candidate-required` is a blocking state until the mobile candidate
+   is built/submitted and the release is rerun with `mobile-candidate-uploaded`
+   evidence. Compatibility or uploaded-candidate decisions must carry evidence
+   text rather than relying on memory.
+12. Keep forward release signing pinned to an explicit trust root. Governed
    release scripts, Docker release builds, and historical backfill paths must
    accept the active private signing key only alongside a non-secret expected
    public key or equivalent pinned identity, and they must fail closed before
    publication if the signer drifts from that expected trust root.
-12. When the governed update signer changes, the canonical operator-facing
+13. When the governed update signer changes, the canonical operator-facing
    release docs under `docs/releases/` and the governed upgrade guide
    `docs/UPGRADE_v6.md` must state the continuity impact explicitly. Those docs
    must not imply automatic updater continuity from a historical signer unless
@@ -1058,6 +1068,18 @@ unpublished tag must locate the existing draft release, retarget its git tag
 and release `target_commitish` to the current governed release-line head, and
 continue publication without requiring an operator to delete the tag manually;
 published tags remain immutable and must still fail closed.
+That same release-dispatch boundary now also owns mobile impact gating for
+server releases. `.github/workflows/create-release.yml`,
+`.github/workflows/release-dry-run.yml`, `scripts/trigger-release.sh`, and
+`scripts/trigger-release-dry-run.sh` must require an explicit mobile release
+decision before a governed release packet can proceed. A server-only release may
+record `no-mobile-impact`; a mobile/relay/onboarding/API-compatible release may
+record `existing-mobile-build-compatible` with proof; a release that already
+has a matching TestFlight/Play candidate may record `mobile-candidate-uploaded`
+with build evidence; and `mobile-candidate-required` must fail closed until the
+mobile candidate exists. This gate does not auto-submit App Store/TestFlight or
+Play builds, but it prevents release packets from silently ignoring the mobile
+track.
 That same upload boundary must tolerate transient GitHub release-asset API
 failures. `.github/workflows/create-release.yml` must retry every
 `gh release upload` operation with bounded backoff before failing the release
