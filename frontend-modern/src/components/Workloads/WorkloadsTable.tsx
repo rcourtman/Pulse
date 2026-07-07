@@ -16,6 +16,7 @@ type WorkloadsTableProps = Pick<
   | 'bottomSpacerHeight'
   | 'compactGroupHeaders'
   | 'getGroupLabel'
+  | 'getNodeTemperatureThresholds'
   | 'groupedGuests'
   | 'groupedWindowing'
   | 'groupLabelBadges'
@@ -102,6 +103,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
             bottomSpacerHeight={props.bottomSpacerHeight}
             compactGroupHeaders={props.compactGroupHeaders}
             getGroupLabel={props.getGroupLabel}
+            getNodeTemperatureThresholds={props.getNodeTemperatureThresholds}
             groupedGuests={props.groupedGuests}
             groupedWindowing={props.groupedWindowing}
             groupLabelBadges={props.groupLabelBadges}

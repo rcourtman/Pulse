@@ -1,5 +1,9 @@
 import { Component, createMemo } from 'solid-js';
-import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
+import {
+  formatTemperature,
+  getTemperatureTextClass,
+  type TemperatureDisplayMetric,
+} from '@/utils/temperature';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 
 interface TemperatureGaugeProps {
@@ -9,6 +13,7 @@ interface TemperatureGaugeProps {
   critical?: number;
   warning?: number;
   thresholds?: MetricDisplayThresholds | null;
+  metric?: TemperatureDisplayMetric;
   class?: string;
 }
 
@@ -25,7 +30,7 @@ export const TemperatureGauge: Component<TemperatureGaugeProps> = (props) => {
   });
 
   const textColorClass = createMemo(() =>
-    getTemperatureTextClass(props.value, explicitThresholds()),
+    getTemperatureTextClass(props.value, explicitThresholds(), props.metric),
   );
 
   return (

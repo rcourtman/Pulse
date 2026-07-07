@@ -588,6 +588,7 @@ export const ProxmoxNodesTable: Component<{
                         <NodeDrawer
                           node={selectedNode()}
                           disks={normalizeDiskArray(node.agent?.disks)}
+                          temperatureThresholds={temperatureThresholds()}
                           discoveryTarget={(() => {
                             const config = toDiscoveryConfig(node);
                             return config

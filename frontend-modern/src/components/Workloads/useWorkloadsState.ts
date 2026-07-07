@@ -1,6 +1,7 @@
 import { createEffect, createMemo, onCleanup, type Accessor } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { ConnectionsAPI, type ConnectionsListResponse } from '@/api/connections';
+import { nodeOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import type { VM, Container, Node } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import type { ViewMode, WorkloadGuest, WorkloadType } from '@/types/workloads';
@@ -350,6 +351,9 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     reconnect();
   };
 
+  const getNodeTemperatureThresholds = (node: Node) =>
+    alertsActivation.getMetricThresholds('node', 'temperature', nodeOverrideIdCandidates(node));
+
   createEffect(() => {
     if (!workloadsEnabled()) return;
     const handle = window.setInterval(() => {
@@ -481,6 +485,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
     focusedSummaryWorkloadGroupScope,
     focusedSummaryWorkloadGroupId,
     getGroupLabel,
+    getNodeTemperatureThresholds,
     groupedGuests,
     groupedWindowing,
     guestMetadata,

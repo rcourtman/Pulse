@@ -1,4 +1,4 @@
-import type { PBSInstance } from '@/types/api';
+import type { Node, PBSInstance } from '@/types/api';
 import type { RawOverrideConfig } from '@/types/alerts';
 import type { Resource } from '@/types/resource';
 import { getActionableAgentIdFromResource, isTrueNASSystemResource } from '@/utils/agentResources';
@@ -153,6 +153,18 @@ export const hostOverrideIdCandidates = (resource: Resource): string[] => {
     resource.id,
   );
 };
+
+export const nodeOverrideIdCandidates = (
+  node: Pick<Node, 'id' | 'name' | 'instance' | 'host' | 'linkedAgentId'>,
+): string[] =>
+  uniqueIds(
+    node.linkedAgentId,
+    node.id,
+    node.instance && node.name ? `${node.instance}-${node.name}` : undefined,
+    node.instance && node.name ? `${node.instance}:${node.name}` : undefined,
+    node.name,
+    node.host,
+  );
 
 export const dockerHostOverrideIdCandidates = (resource: Resource): string[] => {
   const data = platformData(resource);

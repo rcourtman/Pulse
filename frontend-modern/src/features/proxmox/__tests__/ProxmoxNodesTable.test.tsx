@@ -58,8 +58,8 @@ vi.mock('@/components/Workloads/useWorkloadTableMetricHistory', () => ({
 }));
 
 vi.mock('@/components/Workloads/NodeDrawer', () => ({
-  NodeDrawer: (props: { node: { name: string } }) => {
-    nodeDrawerMock(props.node);
+  NodeDrawer: (props: { node: { name: string }; temperatureThresholds?: unknown }) => {
+    nodeDrawerMock(props);
     return <div data-testid="node-drawer">{props.node.name}</div>;
   },
 }));
@@ -304,7 +304,12 @@ describe('ProxmoxNodesTable', () => {
 
     expect(row).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByTestId('node-drawer')).toHaveTextContent('pve-node-1');
-    expect(nodeDrawerMock).toHaveBeenCalledWith(expect.objectContaining({ name: 'pve-node-1' }));
+    expect(nodeDrawerMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        node: expect.objectContaining({ name: 'pve-node-1' }),
+        temperatureThresholds: { warning: 80, critical: 85 },
+      }),
+    );
 
     await fireEvent.click(row!);
 

@@ -91,12 +91,14 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
     }
 
     if (visibleInventoryIssues().length > 0) {
-      return state.workloadsNoInventoryState?.() ?? {
-        title: 'No workload inventory available',
-        description:
-          'Pulse has infrastructure sources, but no VM, container, or pod inventory is available right now.',
-        actionLabel: 'Review infrastructure sources',
-      };
+      return (
+        state.workloadsNoInventoryState?.() ?? {
+          title: 'No workload inventory available',
+          description:
+            'Pulse has infrastructure sources, but no VM, container, or pod inventory is available right now.',
+          actionLabel: 'Review infrastructure sources',
+        }
+      );
     }
 
     return {
@@ -169,6 +171,7 @@ export function WorkloadsSurface(props: WorkloadsSurfaceComponentProps) {
             bottomSpacerHeight={state.bottomSpacerHeight}
             compactGroupHeaders={state.compactGroupHeaders}
             getGroupLabel={state.getGroupLabel}
+            getNodeTemperatureThresholds={state.getNodeTemperatureThresholds}
             groupedGuests={state.groupedGuests}
             groupedWindowing={state.groupedWindowing}
             groupLabelBadges={state.groupLabelBadges}

@@ -5,7 +5,10 @@ import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
 import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFallback';
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
+import { nodeOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Disk, Node } from '@/types/api';
+import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { getSimpleStatusIndicator } from '@/utils/status';
 
@@ -27,6 +30,7 @@ interface NodeDrawerProps {
   node: Node;
   disks?: Disk[];
   discoveryTarget?: NodeDrawerDiscoveryTarget;
+  temperatureThresholds?: MetricDisplayThresholds | null;
 }
 
 type NodeDrawerTab = 'overview' | 'history' | 'discovery';
@@ -36,12 +40,22 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
   const [historyRange, setHistoryRange] = createSignal<HistoryTimeRange>(
     GUEST_DRAWER_HISTORY_DEFAULT_RANGE,
   );
+  const alertsActivation = useAlertsActivation();
 
   const headingId = () => `node-drawer-heading-${props.node.id}`;
   const displayName = createMemo(() => getNodeDisplayName(props.node));
   const historyTarget = createMemo(() => getNodeDrawerHistoryTarget(props.node));
   const fallbackMetrics = createMemo(() => getNodeDrawerHistoryFallbackMetrics(props.node));
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.node.status));
+  const temperatureThresholds = createMemo(() =>
+    props.temperatureThresholds !== undefined
+      ? props.temperatureThresholds
+      : alertsActivation.getMetricThresholds(
+          'node',
+          'temperature',
+          nodeOverrideIdCandidates(props.node),
+        ),
+  );
 
   return (
     <section class="space-y-3" aria-labelledby={headingId()} data-testid="node-drawer">
@@ -74,7 +88,11 @@ export const NodeDrawer: Component<NodeDrawerProps> = (props) => {
       {/* Use CSS hidden instead of Show to avoid mount/unmount which causes scroll jumps.
           overflow-anchor: none prevents browser scroll anchoring from jumping when display toggles. */}
       <div class={activeTab() === 'overview' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>
-        <NodeDrawerOverview node={props.node} disks={props.disks} />
+        <NodeDrawerOverview
+          node={props.node}
+          disks={props.disks}
+          temperatureThresholds={temperatureThresholds()}
+        />
       </div>
 
       <div class={activeTab() === 'history' ? '' : 'hidden'} style={{ 'overflow-anchor': 'none' }}>

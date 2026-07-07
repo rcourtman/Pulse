@@ -9,6 +9,7 @@ import {
   formatUptime,
   normalizeDiskArray,
 } from '@/utils/format';
+import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { formatTemperature, getCpuTemperature, getTemperatureTextClass } from '@/utils/temperature';
 
@@ -17,6 +18,7 @@ import { DrawerDiskListCard, buildDrawerDiskListItems } from './DrawerDiskListCa
 interface NodeDrawerOverviewProps {
   node: Node;
   disks?: Disk[];
+  temperatureThresholds?: MetricDisplayThresholds | null;
 }
 
 interface NodeOverviewRow {
@@ -89,25 +91,29 @@ const pushTemperature = (
   rows: NodeOverviewRow[],
   label: string,
   value: number | null | undefined,
+  thresholds: MetricDisplayThresholds | null | undefined,
 ): void => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return;
   rows.push({
     label,
     value: formatTemperature(value),
-    valueClass: getTemperatureTextClass(value),
+    valueClass: getTemperatureTextClass(value, thresholds),
   });
 };
 
-const getThermalRows = (temperature: Temperature | undefined): NodeOverviewRow[] => {
+const getThermalRows = (
+  temperature: Temperature | undefined,
+  thresholds: MetricDisplayThresholds | null | undefined,
+): NodeOverviewRow[] => {
   if (!temperature?.available) return [];
 
   const rows: NodeOverviewRow[] = [];
   const primary = getCpuTemperature(temperature);
 
-  pushTemperature(rows, 'CPU current', primary);
-  pushTemperature(rows, 'CPU package', temperature.cpuPackage);
-  pushTemperature(rows, 'CPU low', temperature.cpuMin);
-  pushTemperature(rows, 'CPU record', temperature.cpuMaxRecord);
+  pushTemperature(rows, 'CPU current', primary, thresholds);
+  pushTemperature(rows, 'CPU package', temperature.cpuPackage, thresholds);
+  pushTemperature(rows, 'CPU low', temperature.cpuMin, thresholds);
+  pushTemperature(rows, 'CPU record', temperature.cpuMaxRecord, thresholds);
 
   if (temperature.nvme?.length) {
     rows.push({
@@ -325,7 +331,10 @@ export function NodeDrawerOverview(props: NodeDrawerOverviewProps) {
         <DrawerDiskListCard disks={perDiskItems()} testId="node-drawer-disks" />
       </Show>
       <DetailCard title="Telemetry" rows={telemetryRows()} />
-      <DetailCard title="Thermals" rows={getThermalRows(props.node.temperature)} />
+      <DetailCard
+        title="Thermals"
+        rows={getThermalRows(props.node.temperature, props.temperatureThresholds)}
+      />
     </div>
   );
 }

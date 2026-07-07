@@ -141,6 +141,8 @@ export type AgentMachineThermalPressurePresentation = {
   className: string;
 };
 
+export type AgentMachineTemperatureMetric = 'temperature' | 'diskTemperature';
+
 export type AgentMachineNetworkInterfaceDetail = {
   name: string;
   mac?: string;
@@ -456,6 +458,19 @@ export const getAgentMachineTemperatureCelsius = (machine: Resource): number | u
     maxTemperatureReading(getSensorTemperatureReadings(machine)) ??
     maxTemperatureReading(getActiveSmartTemperatureReadings(machine))
   );
+};
+
+export const getAgentMachineTemperatureMetric = (
+  machine: Resource,
+): AgentMachineTemperatureMetric => {
+  if (positiveTemperature(machine.temperature) !== undefined) return 'temperature';
+  if (maxTemperatureReading(getSensorTemperatureReadings(machine)) !== undefined) {
+    return 'temperature';
+  }
+  if (maxTemperatureReading(getActiveSmartTemperatureReadings(machine)) !== undefined) {
+    return 'diskTemperature';
+  }
+  return 'temperature';
 };
 
 export const getAgentMachineTemperatureDetailSections = (

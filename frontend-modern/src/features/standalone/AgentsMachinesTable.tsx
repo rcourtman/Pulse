@@ -56,6 +56,7 @@ import {
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { Disk } from '@/types/api';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
+import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
 import { formatBytes, formatSpeed, normalizeDiskArray } from '@/utils/format';
 import { STORAGE_KEYS } from '@/utils/localStorage';
@@ -88,6 +89,7 @@ import {
   getAgentMachineRaidSummary,
   getAgentMachineTemperatureCelsius,
   getAgentMachineTemperatureDetailSections,
+  getAgentMachineTemperatureMetric,
   getAgentMachineTemperatureTitle,
   getAgentMachineThermalPressurePresentation,
   getNextAgentMachineSortState,
@@ -99,6 +101,7 @@ import {
   type AgentMachineRaidArrayDetail,
   type AgentMachineSortKey,
   type AgentMachineTemperatureDetailSection,
+  type AgentMachineTemperatureMetric,
 } from './agentMachineTableModel';
 
 type MetricFallbackReason = {
@@ -171,7 +174,9 @@ const AgentMachineMetricTooltip: Component<{
 
 const AgentMachineTemperatureCell: Component<{
   celsius: number | undefined;
+  metric: AgentMachineTemperatureMetric;
   sections: AgentMachineTemperatureDetailSection[];
+  thresholds?: MetricDisplayThresholds | null;
   title: string;
   thermalPressure?: {
     label: string;
@@ -207,7 +212,9 @@ const AgentMachineTemperatureCell: Component<{
             </Show>
           }
         >
-          {(value) => <TemperatureGauge value={value()} />}
+          {(value) => (
+            <TemperatureGauge value={value()} metric={props.metric} thresholds={props.thresholds} />
+          )}
         </Show>
       }
     >
@@ -1479,6 +1486,13 @@ export const AgentsMachinesTable: Component<{
                     const raidArrays = () => getAgentMachineRaidArrayDetails(machine);
                     const raidSummary = () => getAgentMachineRaidSummary(machine);
                     const temperature = () => getAgentMachineTemperatureCelsius(machine);
+                    const temperatureMetric = () => getAgentMachineTemperatureMetric(machine);
+                    const temperatureThresholds = () =>
+                      alertsActivation.getMetricThresholds(
+                        temperatureMetric() === 'diskTemperature' ? 'agent' : 'node',
+                        temperatureMetric(),
+                        alertResourceIds(),
+                      );
                     const temperatureSections = () =>
                       getAgentMachineTemperatureDetailSections(machine);
                     const temperatureTitle = () => getAgentMachineTemperatureTitle(machine);
@@ -1672,7 +1686,9 @@ export const AgentsMachinesTable: Component<{
                             >
                               <AgentMachineTemperatureCell
                                 celsius={temperature()}
+                                metric={temperatureMetric()}
                                 sections={temperatureSections()}
+                                thresholds={temperatureThresholds()}
                                 title={temperatureTitle()}
                                 thermalPressure={thermalPressure()}
                               />

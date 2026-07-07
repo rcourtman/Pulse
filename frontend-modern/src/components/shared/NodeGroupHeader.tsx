@@ -1,5 +1,6 @@
 import { Component, For, Show, type JSX } from 'solid-js';
 import type { Node } from '@/types/api';
+import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 import { getNodeDisplayName, getNodeExternalUrl, hasAlternateDisplayName } from '@/utils/nodes';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { getNodeStatusIndicator } from '@/utils/status';
@@ -22,6 +23,7 @@ interface NodeGroupHeaderProps {
   renderColumnCell?: (columnId: string, node: Node) => JSX.Element;
   renderAs?: 'tr' | 'div';
   showFactsInName?: boolean;
+  temperatureThresholds?: MetricDisplayThresholds | null;
   trClass?: string;
   trProps?: JSX.HTMLAttributes<HTMLTableRowElement> &
     Partial<Record<`data-${string}`, string | undefined>>;
@@ -89,7 +91,10 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
             <span title="Proxmox VE version">PVE {pveVersion()}</span>
           </Show>
           <Show when={cpuTemperature() !== null}>
-            <span class={getTemperatureTextClass(cpuTemperature())} title="CPU temperature">
+            <span
+              class={getTemperatureTextClass(cpuTemperature(), props.temperatureThresholds)}
+              title="CPU temperature"
+            >
               {formatTemperature(cpuTemperature())}
             </span>
           </Show>

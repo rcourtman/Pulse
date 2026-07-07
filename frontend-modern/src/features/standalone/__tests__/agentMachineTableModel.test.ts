@@ -6,6 +6,7 @@ import {
   getAgentMachineNetworkInterfaceDetails,
   getAgentMachineRaidArrayDetails,
   getAgentMachineTemperatureCelsius,
+  getAgentMachineTemperatureMetric,
   getAgentMachineTemperatureTitle,
   matchesAgentMachineSearch,
   sortAgentMachines,
@@ -182,35 +183,32 @@ describe('agentMachineTableModel', () => {
     });
 
     expect(getAgentMachineTemperatureCelsius(machine)).toBe(44);
+    expect(getAgentMachineTemperatureMetric(machine)).toBe('diskTemperature');
   });
 
   it('prefers direct and sensor temperatures over SMART fallback temperatures', () => {
-    expect(
-      getAgentMachineTemperatureCelsius(
-        resource({
-          temperature: 55,
-          agent: {
-            sensors: {
-              temperatureCelsius: { 'cpu.package': 61 },
-              smart: [{ device: '/dev/nvme0', temperature: 72 }],
-            },
-          },
-        }),
-      ),
-    ).toBe(55);
+    const direct = resource({
+      temperature: 55,
+      agent: {
+        sensors: {
+          temperatureCelsius: { 'cpu.package': 61 },
+          smart: [{ device: '/dev/nvme0', temperature: 72 }],
+        },
+      },
+    });
+    expect(getAgentMachineTemperatureCelsius(direct)).toBe(55);
+    expect(getAgentMachineTemperatureMetric(direct)).toBe('temperature');
 
-    expect(
-      getAgentMachineTemperatureCelsius(
-        resource({
-          agent: {
-            sensors: {
-              temperatureCelsius: { 'cpu.package': 61, 'cpu.core0': 64 },
-              smart: [{ device: '/dev/nvme0', temperature: 72 }],
-            },
-          },
-        }),
-      ),
-    ).toBe(64);
+    const sensor = resource({
+      agent: {
+        sensors: {
+          temperatureCelsius: { 'cpu.package': 61, 'cpu.core0': 64 },
+          smart: [{ device: '/dev/nvme0', temperature: 72 }],
+        },
+      },
+    });
+    expect(getAgentMachineTemperatureCelsius(sensor)).toBe(64);
+    expect(getAgentMachineTemperatureMetric(sensor)).toBe('temperature');
   });
 
   it('includes agent sensor, SMART, fan, and additional readings in the temperature title', () => {

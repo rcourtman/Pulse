@@ -5,6 +5,7 @@ import type { Resource } from '@/types/resource';
 import {
   buildContainerRuntimeResources,
   buildProjectedOverrides,
+  nodeOverrideIdCandidates,
   normalizeRawOverridesConfig,
 } from '../alertOverridesModel';
 
@@ -17,6 +18,25 @@ const makeResource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('alertOverridesModel', () => {
+  it('builds node temperature override candidates from stable node and agent identities', () => {
+    expect(
+      nodeOverrideIdCandidates({
+        id: 'agent:pve-node-1',
+        name: 'pve-node-1',
+        instance: 'homelab',
+        host: 'https://pve-node-1:8006',
+        linkedAgentId: 'agent-linked',
+      }),
+    ).toEqual([
+      'agent-linked',
+      'agent:pve-node-1',
+      'homelab-pve-node-1',
+      'homelab:pve-node-1',
+      'pve-node-1',
+      'https://pve-node-1:8006',
+    ]);
+  });
+
   it('normalizes disk override ids into canonical agent disk keys', () => {
     expect(
       normalizeRawOverridesConfig({

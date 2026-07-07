@@ -41,6 +41,7 @@ type WorkloadPanelProps = Pick<
   | 'bottomSpacerHeight'
   | 'compactGroupHeaders'
   | 'getGroupLabel'
+  | 'getNodeTemperatureThresholds'
   | 'groupedGuests'
   | 'groupedWindowing'
   | 'groupLabelBadges'
@@ -181,7 +182,10 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
           <span title="Proxmox VE version">PVE {version}</span>
         </Show>
         <Show when={temperature !== null}>
-          <span class={getTemperatureTextClass(temperature)} title="CPU temperature">
+          <span
+            class={getTemperatureTextClass(temperature, props.getNodeTemperatureThresholds(node))}
+            title="CPU temperature"
+          >
             {formatTemperature(temperature)}
           </span>
         </Show>
@@ -461,6 +465,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                 >
                   <NodeGroupHeader
                     node={node()!}
+                    temperatureThresholds={props.getNodeTemperatureThresholds(node()!)}
                     renderAs="tr"
                     colspan={props.totalColumns()}
                     columns={
@@ -502,7 +507,10 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     colspan={props.totalColumns()}
                     data-inline-node-detail-for={groupKey()}
                   >
-                    <NodeDrawer node={node()!} />
+                    <NodeDrawer
+                      node={node()!}
+                      temperatureThresholds={props.getNodeTemperatureThresholds(node()!)}
+                    />
                   </InlineDetailTableRow>
                 </Show>
               </Show>

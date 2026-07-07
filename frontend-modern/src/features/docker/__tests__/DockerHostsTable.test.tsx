@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Disk } from '@/types/api';
@@ -19,7 +19,10 @@ vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({ activeAlerts: {} as Record<string, never> }),
 }));
 vi.mock('@/stores/alertsActivation', () => ({
-  useAlertsActivation: () => ({ activationState: () => 'active' }),
+  useAlertsActivation: () => ({
+    activationState: () => 'active',
+    getMetricThresholds: () => ({ warning: 80, critical: 85 }),
+  }),
 }));
 
 vi.mock('@/components/Workloads/StackedMemoryBar', () => ({
@@ -130,6 +133,23 @@ describe('DockerHostsTable', () => {
     expect(window.location.search).toBe('');
     expect(screen.getByRole('tab', { name: 'Overview' })).toHaveAttribute('type', 'button');
     expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('type', 'button');
+  });
+
+  it('colors drawer host temperatures from configured thresholds', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[makeDockerHost({ temperature: 76 })]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    fireEvent.click(screen.getByText('docker-01').closest('tr')!);
+
+    const drawer = screen.getByTestId('docker-host-drawer');
+    expect(within(drawer).getByText('76°C')).toHaveClass('text-green-600');
   });
 
   it('surfaces container update actions in the host drawer', () => {

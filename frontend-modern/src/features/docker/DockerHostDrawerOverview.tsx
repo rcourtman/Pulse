@@ -7,7 +7,9 @@ import {
 } from '@/components/Workloads/DrawerDiskListCard';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { useResourceDetailDrawerDockerActionsState } from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState';
+import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
+import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
 import {
   formatBytes,
@@ -103,9 +105,17 @@ const DetailCard = (props: { title: string; rows: DockerOverviewRow[] }) => (
 );
 
 export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
+  const alertsActivation = useAlertsActivation();
   const docker = () => props.host.docker;
   const agent = () => props.host.agent;
   const linkedAgentId = () => cleanText(agent()?.agentId);
+  const temperatureThresholds = createMemo(() =>
+    alertsActivation.getMetricThresholds(
+      'node',
+      'temperature',
+      hostOverrideIdCandidates(props.host),
+    ),
+  );
 
   const runtimeLabel = (): string => {
     const runtime = cleanText(docker()?.runtime) || 'Docker';
@@ -302,7 +312,7 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
       rows.push({
         label: 'CPU temp',
         value: formatTemperature(temperature),
-        valueClass: getTemperatureTextClass(temperature),
+        valueClass: getTemperatureTextClass(temperature, temperatureThresholds()),
       });
     }
     if (

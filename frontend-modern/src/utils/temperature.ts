@@ -104,7 +104,10 @@ const TEMPERATURE_TEXT_CLASSES = {
   normal: 'text-green-600 dark:text-green-400',
 } as const;
 
-type TemperatureDisplayMetric = Extract<DisplayMetricType, 'temperature' | 'diskTemperature'>;
+export type TemperatureDisplayMetric = Extract<
+  DisplayMetricType,
+  'temperature' | 'diskTemperature'
+>;
 
 export const getTemperatureTextClass = (
   celsius: number | null | undefined,

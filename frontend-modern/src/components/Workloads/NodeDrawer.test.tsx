@@ -113,6 +113,27 @@ describe('NodeDrawer', () => {
     expect(screen.getByText('Temp monitor')).toBeInTheDocument();
   });
 
+  it('colors overview thermal rows from configured thresholds', () => {
+    render(() => (
+      <NodeDrawer
+        node={makeNode({
+          temperature: {
+            cpuPackage: 76,
+            cpuMax: 76,
+            cpuMin: 50,
+            cpuMaxRecord: 76,
+            available: true,
+            hasCPU: true,
+            lastUpdate: new Date().toISOString(),
+          },
+        })}
+        temperatureThresholds={{ warning: 80, critical: 85 }}
+      />
+    ));
+
+    expect(screen.getAllByText('76°C')[0]).toHaveClass('text-green-600');
+  });
+
   it('renders node-only thermal history without requiring a table temperature column', async () => {
     render(() => <NodeDrawer node={makeNode()} />);
 

@@ -52,4 +52,21 @@ describe('NodeGroupHeader', () => {
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
+
+  it('colors grouped header temperatures from configured thresholds', () => {
+    render(() => (
+      <NodeGroupHeader
+        node={makeNode({
+          temperature: {
+            available: true,
+            cpuPackage: 76,
+            lastUpdate: '2026-01-01T00:00:00Z',
+          },
+        })}
+        temperatureThresholds={{ warning: 80, critical: 85 }}
+      />
+    ));
+
+    expect(screen.getByText('76°C')).toHaveClass('text-green-600');
+  });
 });
