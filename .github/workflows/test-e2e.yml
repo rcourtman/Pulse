@@ -22,7 +22,11 @@ on:
       - '.github/workflows/test-e2e.yml'
   workflow_dispatch:
 
-
+# Keep only the newest commit's verdict in flight per ref; superseded runs
+# are cancelled rather than burning four shard jobs each.
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -52,7 +56,7 @@ jobs:
         working-directory: tests/integration
         run: |
           npm ci
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium webkit
 
       - name: Build Docker images for test environment
         # GO_BUILD_TAGS="" drops the release build tag so the suite can enable
