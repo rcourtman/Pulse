@@ -2,12 +2,10 @@ import type { SecurityStatus } from '@/types/config';
 
 export const V5_MAINTENANCE_BRANCH = 'release/5.1';
 
-export const V6_RC_ANNOUNCEMENT = {
-  id: 'v6-rc-testing-v6.0.0-rc.1',
-  tag: 'v6.0.0-rc.1',
-  releaseUrl: 'https://github.com/rcourtman/Pulse/releases/tag/v6.0.0-rc.1',
-  changelogUrl: 'https://github.com/rcourtman/Pulse/blob/pulse/v6-release/docs/releases/V6_CHANGELOG.md',
-  demoUrl: 'https://v6-demo.pulserelay.pro',
+export const V6_GA_ANNOUNCEMENT = {
+  id: 'v6-ga-available',
+  upgradeGuideUrl: 'https://github.com/rcourtman/Pulse/blob/main/docs/UPGRADE_v6.md',
+  changelogUrl: 'https://github.com/rcourtman/Pulse/blob/main/docs/releases/V6_CHANGELOG.md',
 } as const;
 
 function parseMajorVersion(version?: string | null): number | null {
@@ -38,7 +36,7 @@ export function canSeeAdminReleaseAnnouncement(
   return securityStatus.proxyAuthIsAdmin === true;
 }
 
-export function shouldShowV6RcAnnouncement(opts: {
+export function shouldShowV6Announcement(opts: {
   version?: string | null;
   pathname?: string | null;
   securityStatus?: SecurityStatus | null;

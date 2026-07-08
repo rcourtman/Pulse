@@ -8,7 +8,7 @@ import Package from 'lucide-solid/icons/package';
 import Download from 'lucide-solid/icons/download';
 import type { UpdateInfo, VersionInfo, UpdatePlan } from '@/api/updates';
 import {
-  V6_RC_ANNOUNCEMENT,
+  V6_GA_ANNOUNCEMENT,
   V5_MAINTENANCE_BRANCH,
   isV5ReleaseLine,
 } from '@/constants/releaseAnnouncements';
@@ -50,47 +50,36 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
                   <div class="space-y-1">
                     <div class="flex flex-wrap items-center gap-2">
                       <span class="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
-                        Pulse v6 RC testing
-                      </span>
-                      <span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:bg-emerald-900/70 dark:text-emerald-200">
-                        {V6_RC_ANNOUNCEMENT.tag}
+                        Pulse v6 is available
                       </span>
                     </div>
                     <p class="text-sm text-emerald-900/85 dark:text-emerald-100/85">
+                      Pulse v6 is a new major version with a rebuilt interface and support
+                      for more platforms. Installs on the{' '}
                       <code class="rounded bg-emerald-100 px-1 py-0.5 text-[12px] dark:bg-emerald-900/70">
                         5.1.x
                       </code>{' '}
-                      remains the stable line. If you can, test v6 in a staging or
-                      non-production environment and use the changelog before upgrading so the
-                      move from v5 is deliberate rather than guesswork.
+                      line do not update to v6 automatically; upgrading is a manual step
+                      covered in the upgrade guide.
                     </p>
                   </div>
                   <div class="flex flex-wrap items-center gap-2">
                     <a
-                      href={V6_RC_ANNOUNCEMENT.changelogUrl}
+                      href={V6_GA_ANNOUNCEMENT.upgradeGuideUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       class="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-800 dark:bg-emerald-600 dark:hover:bg-emerald-500"
                     >
-                      Read v6 changelog
-                      <Download class="w-4 h-4" />
+                      Upgrade guide
+                      <ArrowRight class="w-4 h-4" />
                     </a>
                     <a
-                      href={V6_RC_ANNOUNCEMENT.releaseUrl}
+                      href={V6_GA_ANNOUNCEMENT.changelogUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       class="inline-flex items-center gap-1 rounded-lg border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:text-emerald-100 dark:hover:bg-emerald-900/40"
                     >
-                      View v6 RC
-                      <ArrowRight class="w-4 h-4" />
-                    </a>
-                    <a
-                      href={V6_RC_ANNOUNCEMENT.demoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="inline-flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-emerald-800 transition-colors hover:bg-emerald-100 dark:text-emerald-200 dark:hover:bg-emerald-900/30"
-                    >
-                      Open demo
+                      v6 changelog
                       <ArrowRight class="w-4 h-4" />
                     </a>
                   </div>

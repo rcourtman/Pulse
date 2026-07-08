@@ -3,7 +3,7 @@ import type { SecurityStatus } from '@/types/config';
 import {
   canSeeAdminReleaseAnnouncement,
   isV5ReleaseLine,
-  shouldShowV6RcAnnouncement,
+  shouldShowV6Announcement,
 } from '@/constants/releaseAnnouncements';
 
 describe('releaseAnnouncements', () => {
@@ -34,28 +34,28 @@ describe('releaseAnnouncements', () => {
 
   it('shows the announcement only on the supported v5 surfaces', () => {
     expect(
-      shouldShowV6RcAnnouncement({
+      shouldShowV6Announcement({
         version: 'v5.1.27',
         pathname: '/proxmox/overview',
       }),
     ).toBe(true);
 
     expect(
-      shouldShowV6RcAnnouncement({
+      shouldShowV6Announcement({
         version: 'v5.1.27',
         pathname: '/settings/updates',
       }),
     ).toBe(true);
 
     expect(
-      shouldShowV6RcAnnouncement({
+      shouldShowV6Announcement({
         version: 'v5.1.27',
         pathname: '/alerts/overview',
       }),
     ).toBe(false);
 
     expect(
-      shouldShowV6RcAnnouncement({
+      shouldShowV6Announcement({
         version: 'v6.0.0-rc.1',
         pathname: '/settings/updates',
       }),
