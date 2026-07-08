@@ -35,10 +35,13 @@ const test = base.extend<{}, WorkerFixtures>({
   }, { scope: 'worker' }],
 });
 
+const ALERT_START = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+const ALERT_LAST_SEEN = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+
 test.describe('TrueNAS alert resource links', () => {
   test.setTimeout(180_000);
 
-  test('keeps TrueNAS alert investigation on canonical resource handoff routes', async ({
+  test('keeps TrueNAS alert investigation on the scoped resource incidents panel', async ({
     page,
   }) => {
     await page.route('**/api/resources**', async (route) => {
@@ -63,7 +66,7 @@ test.describe('TrueNAS alert resource links', () => {
               sourceType: 'hybrid',
               sources: ['agent', 'truenas'],
               status: 'online',
-              lastSeen: '2026-03-30T10:00:00Z',
+              lastSeen: ALERT_LAST_SEEN,
               canonicalIdentity: {
                 displayName: 'TrueNAS Main',
                 hostname: 'truenas-main',
@@ -113,8 +116,8 @@ test.describe('TrueNAS alert resource links', () => {
             id: 'truenas-alert-1',
             type: 'host-offline',
             level: 'critical',
-            startTime: '2026-03-30T09:00:00Z',
-            lastSeen: '2026-03-30T09:15:00Z',
+            startTime: ALERT_START,
+            lastSeen: ALERT_LAST_SEEN,
             resourceId: 'truenas-main',
             resourceName: 'TrueNAS Main',
             message: 'TrueNAS Main is offline',
@@ -150,13 +153,13 @@ test.describe('TrueNAS alert resource links', () => {
             level: 'critical',
             status: 'open',
             acknowledged: false,
-            openedAt: '2026-03-30T09:00:00Z',
+            openedAt: ALERT_START,
             message: 'TrueNAS Main is offline',
             events: [
               {
                 id: 'incident-event-1',
                 type: 'opened',
-                timestamp: '2026-03-30T09:00:00Z',
+                timestamp: ALERT_START,
                 summary: 'Alert opened',
               },
             ],
@@ -199,26 +202,24 @@ test.describe('TrueNAS alert resource links', () => {
     });
 
     await expect(page.getByRole('heading', { name: 'Alert History' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Resource' })).toBeVisible();
+    const alertRow = page
+      .locator('tr')
+      .filter({ hasText: 'TrueNAS Main' })
+      .filter({ has: page.getByRole('button', { name: 'Resource' }) })
+      .first();
+    await expect(alertRow).toBeVisible();
+    await alertRow.getByRole('button', { name: 'Resource' }).click();
 
-    await page.getByRole('button', { name: 'Resource' }).click();
-
+    // Cross-link affordances into the retired standalone routes were removed
+    // with platform-first navigation; the canonical handoff is the resource
+    // incidents panel scoped to the alerting resource.
     await expect(page.getByRole('heading', { name: 'Resource incidents' })).toBeVisible();
-    await expect(
-      page.getByRole('link', { name: 'Open related infrastructure for TrueNAS Main' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=truenas-main');
-    await expect(
-      page.getByRole('link', { name: 'Open related workloads for TrueNAS Main' }),
-    ).toHaveAttribute(
-      'href',
-      '/workloads?type=app-container&platform=truenas&agent=truenas-main',
-    );
-    await expect(
-      page.getByRole('link', { name: 'Open related storage for TrueNAS Main' }),
-    ).toHaveAttribute('href', '/storage?source=truenas&node=truenas-main');
-    await expect(
-      page.getByRole('link', { name: 'Open related recovery for TrueNAS Main' }),
-    ).toHaveAttribute('href', '/recovery?platform=truenas&node=truenas-main');
+    const incidentsPanel = page
+      .locator('div')
+      .filter({ has: page.getByRole('heading', { name: 'Resource incidents' }) })
+      .last();
+    await expect(page.getByText('TrueNAS Main').first()).toBeVisible();
+    await expect(page.getByText('· 1 incident')).toBeVisible();
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });
