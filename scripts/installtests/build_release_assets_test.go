@@ -336,6 +336,10 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Pulse Mobile pairing",
 		"SSO browser-session display labels",
 		"route-aware Proxmox host URLs",
+		"MSP report scheduling",
+		"portal alert rollup",
+		"per-disk-type temperature thresholds",
+		"PBS backup discovery recovery",
 		"rollback target for this release candidate is `v"+previous+"`",
 	)
 	assertFileContainsAll(t, changelogPath,
@@ -355,6 +359,10 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Pulse Mobile pairing now omits unsafe non-HTTPS Pulse web handoff URLs",
 		"OIDC and SAML browser sessions now expose a separate display label",
 		"Proxmox host setup now prefers route-aware host URLs",
+		"MSP reports now support scheduled delivery",
+		"per-workspace alert rollup",
+		"Physical disk temperature thresholds are now configurable per disk type",
+		"PBS backup discovery now derives its memory bounds from real snapshot data",
 	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
