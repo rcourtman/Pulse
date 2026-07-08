@@ -43,10 +43,11 @@ Required environment secrets:
 
 Required shared secret:
 
-1. **TS_AUTHKEY**
-   - Tailscale auth key used by the governed demo deploy/update workflows before SSH
+1. **TS_OAUTH_CLIENT_ID** and **TS_OAUTH_SECRET**
+   - Tailscale OAuth client (business tailnet `tawny-powan.ts.net`, scope Auth Keys write, tag `tag:infra`) used by the governed demo deploy/update workflows before SSH
+   - The action mints an ephemeral, pre-authorized, tagged node key per run, so runners join and garbage-collect themselves; unlike the retired static `TS_AUTHKEY`, the OAuth secret does not expire every 90 days
    - Allows GitHub-hosted runners to reach private demo targets such as the stable `pulse-relay` Tailscale host
-   - May be stored as a repository secret or repeated in the selected environment if desired
+   - May be stored as repository secrets or repeated in the selected environment if desired
 
 Required environment variables:
 
