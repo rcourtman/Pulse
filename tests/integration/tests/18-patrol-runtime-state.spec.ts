@@ -1,11 +1,9 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-import { ensureAuthenticated, trackBrowserRequests } from "./helpers";
+import { apiRequest, ensureAuthenticated, trackBrowserRequests } from "./helpers";
 
 const PATROL_BLOCK_REASON =
   "Connect a provider to power Pulse Assistant and Patrol.";
-const PATROL_AUTONOMY_PRO_REQUIRED =
-  "Investigation and auto-fix require Pulse Pro. Community tier is limited to Monitor (findings-only) autonomy.";
 const PATROL_REASONING_ONLY_REJECTION =
   "The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls. Patrol needs tool calling to inspect resources and create governed findings.";
 const PATROL_EVENT_TRIGGERS_BLOCKED =
@@ -577,342 +575,6 @@ test.describe("Patrol runtime-state browser contract", () => {
     entitlementsRequests.stop();
   });
 
-  test("shows the server reason when Patrol configuration save is rejected", async ({
-    page,
-  }, testInfo) => {
-    test.skip(
-      testInfo.project.name.startsWith("mobile-"),
-      "Desktop-only Patrol configuration coverage",
-    );
-
-    let autonomyUpdateCount = 0;
-
-    await mockRuntimeCapabilities(page, [
-      "ai_patrol",
-      "ai_autofix",
-      "ai_alerts",
-    ]);
-    await ensureAuthenticated(page);
-    await mockBlockedPatrolRuntimeState(page, {
-      status: {
-        ...blockedPatrolStatus,
-        readiness: {
-          status: "not_ready",
-          ready: false,
-          cause: "model_unsupported_tools",
-          summary: PATROL_REASONING_ONLY_REJECTION,
-          provider: "openrouter",
-          model: "openrouter:deepseek/deepseek-r1",
-          checks: [],
-        },
-      },
-      autonomyRoute: async (route) => {
-        if (route.request().method() !== "PUT") {
-          await route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({
-              autonomy_level: "monitor",
-              full_mode_unlocked: false,
-              investigation_budget: 15,
-              investigation_timeout_sec: 300,
-            }),
-          });
-          return;
-        }
-
-        autonomyUpdateCount += 1;
-        if (autonomyUpdateCount === 1) {
-          const payload = route.request().postDataJSON() as Record<
-            string,
-            unknown
-          >;
-          await route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({
-              success: true,
-              settings: {
-                autonomy_level: payload.autonomy_level ?? "assisted",
-                full_mode_unlocked: payload.full_mode_unlocked ?? false,
-                investigation_budget: payload.investigation_budget ?? 15,
-                investigation_timeout_sec:
-                  payload.investigation_timeout_sec ?? 300,
-              },
-            }),
-          });
-          return;
-        }
-
-        await route.fulfill({
-          status: 402,
-          contentType: "application/json",
-          body: JSON.stringify({
-            error: "license_required",
-            code: "patrol_autonomy_pro_required",
-            message: PATROL_AUTONOMY_PRO_REQUIRED,
-            feature: "ai_autofix",
-            upgrade_url: "https://www.pulseproxmox.com/pricing",
-            details: {
-              cause: "license_required",
-              command: "systemctl restart pulse.service",
-            },
-          }),
-        });
-      },
-    });
-
-    await page.goto("/patrol", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Configure Patrol" }).click();
-    const configPanel = page.getByRole("dialog", {
-      name: "Patrol Configuration",
-    });
-
-    const remediateButton = configPanel.getByRole("button", {
-      name: "Remediate",
-    });
-    await expect(remediateButton).toBeEnabled();
-    await remediateButton.click();
-    await expect.poll(() => autonomyUpdateCount).toBe(1);
-
-    await configPanel.evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
-    });
-    const applyButton = configPanel.getByRole("button", {
-      name: "Apply Configuration",
-    });
-    await applyButton.click();
-
-    await expect(page.getByText(PATROL_AUTONOMY_PRO_REQUIRED)).toBeVisible();
-    await expect(configPanel).toBeVisible();
-    const inlineError = configPanel.getByTestId("patrol-configuration-error");
-    await expect(inlineError).toBeVisible();
-    await expect(inlineError).toContainText(PATROL_AUTONOMY_PRO_REQUIRED);
-    await expect(inlineError).toContainText("patrol_autonomy_pro_required");
-    await expect(inlineError).toContainText(PATROL_REASONING_ONLY_REJECTION);
-    await expect(inlineError).toContainText("Provider: openrouter");
-    await expect(inlineError).toContainText(
-      "Model: openrouter:deepseek/deepseek-r1",
-    );
-    await expect(
-      inlineError.getByRole("link", { name: "Open Patrol provider settings" }),
-    ).toHaveAttribute("href", "/settings/system-ai");
-    await inlineError
-      .getByTestId("patrol-configuration-error-assistant-button")
-      .click();
-    await expect(configPanel).toBeHidden();
-    const assistantContext = page.getByLabel("Assistant context");
-    await expect(assistantContext).toBeVisible();
-    await expect(assistantContext).toContainText(
-      "Patrol configuration failure attached",
-    );
-    await expect(assistantContext).toContainText(
-      "patrol_autonomy_pro_required",
-    );
-    await expect(assistantContext).toContainText(
-      "Command: sensitive or command detail withheld",
-    );
-    await expect(
-      assistantContext.getByText("systemctl restart pulse.service"),
-    ).toHaveCount(0);
-    await expect(
-      page.getByText("Failed to save advanced settings"),
-    ).toHaveCount(0);
-  });
-
-  test("surfaces model readiness blocker after Patrol provider-model save", async ({
-    page,
-  }, testInfo) => {
-    test.skip(
-      testInfo.project.name.startsWith("mobile-"),
-      "Desktop-only Patrol configuration coverage",
-    );
-
-    let settingsUpdatePayload: Record<string, unknown> | null = null;
-    const unsupportedModel = "ollama:deepseek-r1:7b";
-
-    await mockRuntimeCapabilities(page, ["ai_patrol", "ai_alerts"]);
-    await ensureAuthenticated(page);
-    await page.route("**/api/settings/ai/update", async (route) => {
-      settingsUpdatePayload = route.request().postDataJSON() as Record<
-        string,
-        unknown
-      >;
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          enabled: true,
-          configured: true,
-          model: "ollama:llama3",
-          chat_model: "ollama:llama3",
-          patrol_model: unsupportedModel,
-          patrol_interval_minutes: 360,
-          patrol_enabled: true,
-          alert_triggered_analysis: false,
-          patrol_alert_triggers_enabled: true,
-          patrol_anomaly_triggers_enabled: true,
-          patrol_event_triggers_enabled: true,
-          patrol_auto_fix: false,
-          anthropic_configured: false,
-          openai_configured: false,
-          openrouter_configured: false,
-          deepseek_configured: false,
-          gemini_configured: false,
-          ollama_configured: true,
-          ollama_base_url: "http://127.0.0.1:11434",
-          configured_providers: ["ollama"],
-          custom_context: "",
-          auth_method: "api_key",
-          oauth_connected: false,
-          request_timeout_seconds: 300,
-          control_level: "read_only",
-          protected_guests: [],
-          discovery_enabled: false,
-          discovery_interval_hours: 0,
-          patrol_readiness: {
-            status: "not_ready",
-            ready: false,
-            cause: "model_unsupported_tools",
-            summary: PATROL_REASONING_ONLY_REJECTION,
-            provider: "ollama",
-            model: unsupportedModel,
-            checks: [
-              {
-                id: "tools",
-                status: "not_ready",
-                cause: "model_unsupported_tools",
-                label: "Patrol tools",
-                message: PATROL_REASONING_ONLY_REJECTION,
-                action: "open_provider_settings",
-              },
-            ],
-          },
-        }),
-      });
-    });
-    await mockBlockedPatrolRuntimeState(page, {
-      models: [{ id: unsupportedModel, name: "DeepSeek R1" }],
-    });
-
-    await page.goto("/patrol", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Configure Patrol" }).click();
-    const configPanel = page.getByRole("dialog", {
-      name: "Patrol Configuration",
-    });
-
-    await configPanel
-      .getByLabel("Provider model")
-      .selectOption(unsupportedModel);
-    await expect
-      .poll(() => settingsUpdatePayload)
-      .toMatchObject({ patrol_model: unsupportedModel });
-
-    const inlineError = configPanel.getByTestId("patrol-configuration-error");
-    await expect(inlineError).toBeVisible();
-    await expect(inlineError).toContainText(
-      "Patrol configuration needs attention",
-    );
-    await expect(inlineError).toContainText(
-      "Patrol model was saved, but Patrol is not ready to run.",
-    );
-    await expect(inlineError).toContainText(PATROL_REASONING_ONLY_REJECTION);
-    await expect(inlineError).toContainText(
-      "patrol_readiness_not_ready · model_unsupported_tools",
-    );
-    await expect(inlineError).toContainText("Provider: ollama");
-    await expect(inlineError).toContainText(`Model: ${unsupportedModel}`);
-    await expect(page.getByText("Failed to update patrol model")).toHaveCount(
-      0,
-    );
-
-    await inlineError
-      .getByTestId("patrol-configuration-error-assistant-button")
-      .click();
-    await expect(configPanel).toBeHidden();
-    await expect(page.getByLabel("Assistant context")).toContainText(
-      "Patrol configuration issue attached",
-    );
-  });
-
-  test("clamps stale full-mode state before monitor-only Patrol configuration save", async ({
-    page,
-  }, testInfo) => {
-    test.skip(
-      testInfo.project.name.startsWith("mobile-"),
-      "Desktop-only Patrol configuration coverage",
-    );
-
-    let updatePayload: Record<string, unknown> | null = null;
-
-    await mockRuntimeCapabilities(page, ["ai_patrol", "ai_alerts"]);
-    await ensureAuthenticated(page);
-    await mockBlockedPatrolRuntimeState(page, {
-      autonomyRoute: async (route) => {
-        if (route.request().method() !== "PUT") {
-          await route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({
-              autonomy_level: "full",
-              full_mode_unlocked: true,
-              investigation_budget: 15,
-              investigation_timeout_sec: 300,
-            }),
-          });
-          return;
-        }
-
-        updatePayload = route.request().postDataJSON() as Record<
-          string,
-          unknown
-        >;
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({
-            success: true,
-            settings: {
-              autonomy_level: "monitor",
-              full_mode_unlocked: false,
-              investigation_budget: updatePayload.investigation_budget ?? 15,
-              investigation_timeout_sec:
-                updatePayload.investigation_timeout_sec ?? 300,
-            },
-          }),
-        });
-      },
-    });
-
-    await page.goto("/patrol", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Configure Patrol" }).click();
-    const configPanel = page.getByRole("dialog", {
-      name: "Patrol Configuration",
-    });
-
-    await expect(
-      configPanel.getByRole("button", { name: "Remediate" }),
-    ).toBeDisabled();
-    await configPanel.evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
-    });
-    await configPanel
-      .getByRole("button", { name: "Apply Configuration" })
-      .click();
-
-    await expect
-      .poll(() => updatePayload)
-      .toMatchObject({
-        autonomy_level: "monitor",
-        full_mode_unlocked: false,
-      });
-    await expect(configPanel).toBeHidden();
-    await expect(
-      page.getByText("Failed to save advanced settings"),
-    ).toHaveCount(0);
-    await expect(page.getByTestId("patrol-configuration-error")).toHaveCount(0);
-  });
-
   test("shows the server reason when a stale manual Patrol run is rejected", async ({
     page,
   }, testInfo) => {
@@ -956,78 +618,101 @@ test.describe("Patrol runtime-state browser contract", () => {
     await expect(page.getByText("Failed to start patrol run")).toHaveCount(0);
   });
 
-  test("keeps scoped trigger context out of the default Patrol status strip", async ({
+  test("surfaces the server reason when a Patrol settings save is rejected", async ({
     page,
   }, testInfo) => {
     test.skip(
       testInfo.project.name.startsWith("mobile-"),
-      "Desktop-only Patrol runtime coverage",
+      "Desktop-only Patrol settings coverage",
     );
 
     await ensureAuthenticated(page);
-    await mockScopedTriggerPatrolRuntimeState(page);
 
-    await page.goto("/patrol", { waitUntil: "domcontentloaded" });
+    const serverReason =
+      "Patrol schedule rejected: interval conflicts with the maintenance window";
+    await page.route("**/api/settings/ai/update", async (route) => {
+      if (route.request().method() !== "PUT") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ error: serverReason }),
+      });
+    });
 
+    await page.goto("/settings/pulse-intelligence/patrol", {
+      waitUntil: "domcontentloaded",
+    });
     await expect(
-      page.getByText(
-        "Breakdown: 1 full, 1 alert-triggered, 1 anomaly-triggered",
-      ),
-    ).toHaveCount(0);
-    await expect(
-      page.getByText(
-        "Recent activity mix: 1 full, 1 alert-triggered, 1 anomaly-triggered",
-      ),
-    ).toHaveCount(0);
-    await expect(
-      page.getByText("Trigger mode: 4 queued · busy mode · anomalies off"),
-    ).toHaveCount(0);
-    await expect(
-      page.getByText("Automation: 4 queued · busy mode · anomalies off"),
+      page.getByRole("heading", { level: 1, name: "Patrol" }),
     ).toBeVisible();
 
-    await expect(
-      page.getByRole("link", { name: "Open Patrol settings" }),
-    ).toHaveAttribute("href", "/settings/pulse-intelligence/patrol");
-    await page.getByRole("link", { name: "Open Patrol settings" }).click();
+    await page.getByRole("combobox", { name: "Schedule" }).selectOption("Every hour");
+    await page.getByRole("button", { name: "Save Patrol settings" }).click();
 
-    await expect(page.getByText("Alert-Triggered Patrols")).toBeVisible();
-    await expect(page.getByText("Anomaly-Triggered Patrols")).toBeVisible();
-    await expect(
-      page.getByText(
-        "Alert and anomaly triggers run targeted scoped checks that update",
-      ),
-    ).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: serverReason })).toBeVisible();
+  });
 
-    await page.goto("/patrol", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "History" }).click();
-    await page.getByRole("button", { name: /Alert fired/i }).click();
-    await expect(
-      page.getByText("Selected model does not support Patrol tools"),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Provider rejected Patrol tool calls"),
-    ).toBeVisible();
-    await expect(page.getByText(/tool_choice/)).toHaveCount(0);
-    await expect(page.getByText(/No endpoints found/)).toHaveCount(0);
-    await expect(
-      page.getByRole("link", { name: "Open Patrol provider settings" }),
-    ).toHaveAttribute("href", "/settings/pulse-intelligence/provider");
-
-    await page.getByTestId("patrol-run-assistant-button").click();
-    const assistantContext = page.getByLabel("Assistant context");
-    await expect(assistantContext).toBeVisible();
-    await expect(assistantContext).toContainText("Patrol run attached");
-    await expect(assistantContext).toContainText("Scoped run run-alert-scoped");
-    await expect(assistantContext).toContainText(
-      "Review Patrol runtime failure",
+  test("surfaces the Patrol readiness blocker when a settings save returns not-ready", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only Patrol settings coverage",
     );
-    await expect(assistantContext).toContainText(
-      "Selected model does not support Patrol tools",
+
+    await ensureAuthenticated(page);
+
+    const settingsRes = await apiRequest(page, "/api/settings/ai");
+    const currentSettings = (await settingsRes.json()) as Record<string, unknown>;
+
+    await page.route("**/api/settings/ai/update", async (route) => {
+      if (route.request().method() !== "PUT") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ...currentSettings,
+          patrol_readiness: {
+            status: "not_ready",
+            ready: false,
+            cause: "model_unsupported_tools",
+            summary: PATROL_REASONING_ONLY_REJECTION,
+            provider: "openrouter",
+            model: "openrouter:deepseek/deepseek-r1",
+            checks: [],
+          },
+        }),
+      });
+    });
+
+    await page.goto("/settings/pulse-intelligence/patrol", {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Patrol" }),
+    ).toBeVisible();
+
+    await page.getByRole("combobox", { name: "Schedule" }).selectOption("Every hour");
+    await page.getByRole("button", { name: "Save Patrol settings" }).click();
+
+    const readinessAlert = page
+      .getByRole("alert")
+      .filter({ hasText: "but Patrol is not ready" });
+    await expect(readinessAlert).toBeVisible();
+    await expect(readinessAlert).toContainText(PATROL_REASONING_ONLY_REJECTION);
+    await expect(readinessAlert).toContainText("Provider: OpenRouter");
+    await expect(readinessAlert).toContainText(
+      "Model: openrouter:deepseek/deepseek-r1",
     );
   });
 
-  test("explains runtime-blocked event triggers without hiding enabled trigger preferences", async ({
+  test("keeps the Patrol mode clamped to Watch only when the runtime lacks autonomy", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -1036,32 +721,69 @@ test.describe("Patrol runtime-state browser contract", () => {
     );
 
     await ensureAuthenticated(page);
-    await mockScopedTriggerPatrolRuntimeState(
-      page,
-      blockedEventTriggerPatrolStatus,
-      {
-        patrol_anomaly_triggers_enabled: true,
-      },
-    );
+
+    // Community runtime: autonomy capability blocked at the runtime layer.
+    await page.route("**/api/license/runtime-capabilities", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          capabilities: ["ai_patrol", "ai_alerts"],
+          limits: [],
+          hosted_mode: false,
+          max_history_days: 7,
+          runtime: {
+            build: "community",
+            label: "Pulse Community runtime",
+          },
+          blocked_capabilities: [
+            {
+              key: "ai_autofix",
+              reason: "paid_runtime_required",
+              action_url: "https://pulserelay.pro/download",
+            },
+          ],
+        }),
+      });
+    });
+
+    // A stale server-side autonomy level above what the runtime allows must
+    // not surface as the active mode.
+    await page.route("**/api/ai/patrol/autonomy", async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          autonomy_level: "full",
+          full_mode_unlocked: true,
+          investigation_budget: 15,
+          investigation_timeout_sec: 300,
+        }),
+      });
+    });
 
     await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
+    const modeGroup = page.getByRole("group", { name: "Patrol mode" });
+    await expect(modeGroup).toBeVisible();
     await expect(
-      page.getByText(`Automation: ${PATROL_EVENT_TRIGGERS_BLOCKED}`),
+      modeGroup.getByRole("button", { name: "Watch only" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      modeGroup.getByRole("button", { name: /Autopilot/ }),
+    ).toBeDisabled();
+    await expect(
+      modeGroup.getByRole("button", { name: /Safe auto-fix/ }),
+    ).toBeDisabled();
+    await expect(
+      page.getByText(
+        "Install the Pulse Pro runtime to use Patrol modes.",
+        { exact: false },
+      ),
     ).toBeVisible();
-    await expect(
-      page.getByText(`Trigger mode: ${PATROL_EVENT_TRIGGERS_BLOCKED}`),
-    ).toHaveCount(0);
-    await expect(page.getByText("alerts off")).toHaveCount(0);
-    await expect(page.getByText("anomalies off")).toHaveCount(0);
-
-    await page.getByRole("link", { name: "Open Patrol settings" }).click();
-    const configPanel = page.getByRole("main");
-    await expect(
-      configPanel.getByRole("button", { name: "Alert-Triggered Patrols" }),
-    ).toHaveAttribute("aria-pressed", "true");
-    await expect(
-      configPanel.getByRole("button", { name: "Anomaly-Triggered Patrols" }),
-    ).toHaveAttribute("aria-pressed", "true");
   });
 });
