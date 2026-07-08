@@ -55,6 +55,7 @@ const (
 	TierProPlus    Tier = "pro_plus"
 	TierProAnnual  Tier = "pro_annual" // Legacy: same features as TierPro
 	TierLifetime   Tier = "lifetime"   // Legacy: same features as TierPro
+	TierBusiness   Tier = "business"   // Pro features; differentiated by user limit, retention, and support
 	TierCloud      Tier = "cloud"
 	TierMSP        Tier = "msp"
 	TierEnterprise Tier = "enterprise"
@@ -134,7 +135,7 @@ func IsSelfHostedCommunityPlanVersion(planVersion string) bool {
 // self-hosted v6 contract where core monitoring volume is not monetized.
 func IsSelfHostedCoreMonitoringUncappedTier(tier Tier) bool {
 	switch Tier(strings.ToLower(strings.TrimSpace(string(tier)))) {
-	case TierFree, TierRelay, TierPro, TierProPlus, TierProAnnual, TierLifetime:
+	case TierFree, TierRelay, TierPro, TierProPlus, TierProAnnual, TierLifetime, TierBusiness:
 		return true
 	default:
 		return false
@@ -151,6 +152,8 @@ func IsSelfHostedCoreMonitoringUncappedPlanVersion(planVersion string) bool {
 		string(TierProPlus),
 		string(TierProAnnual),
 		string(TierLifetime),
+		string(TierBusiness),
+		"business_annual",
 		"v5_lifetime_grandfathered":
 		return true
 	default:
@@ -215,6 +218,7 @@ var TierHistoryDays = map[Tier]int{
 	TierProPlus:    90,
 	TierProAnnual:  90,
 	TierLifetime:   90,
+	TierBusiness:   365,
 	TierCloud:      90,
 	TierMSP:        90,
 	TierEnterprise: 90,
@@ -274,6 +278,7 @@ var TierFeatures = map[Tier][]string{
 	TierProPlus:    proFeatures, // Legacy compatibility tier; same runtime features as Pro
 	TierProAnnual:  proFeatures, // Legacy: same features as Pro
 	TierLifetime:   proFeatures, // Legacy: same features as Pro
+	TierBusiness:   proFeatures, // Same features as Pro; differentiated by max_users limit, 365-day history, and support
 	TierCloud:      proFeatures, // Cloud includes all Pro features + managed hosting
 	TierMSP:        mspFeatures,
 	TierEnterprise: enterpriseFeatures,
@@ -406,6 +411,8 @@ func GetTierDisplayName(tier Tier) string {
 		return "Pro (Annual)"
 	case TierLifetime:
 		return "Pro (Lifetime)"
+	case TierBusiness:
+		return "Business"
 	case TierCloud:
 		return "Cloud"
 	case TierMSP:
@@ -421,7 +428,7 @@ func GetTierDisplayName(tier Tier) string {
 // This is used for user-facing messages like "requires Pulse Relay or above".
 // The tier ordering is: Free < Relay < Pro < MSP < Enterprise.
 func GetFeatureMinTierName(feature string) string {
-	orderedTiers := []Tier{TierFree, TierRelay, TierPro, TierMSP, TierEnterprise}
+	orderedTiers := []Tier{TierFree, TierRelay, TierPro, TierBusiness, TierMSP, TierEnterprise}
 	for _, tier := range orderedTiers {
 		if TierHasFeature(tier, feature) {
 			return GetTierDisplayName(tier)

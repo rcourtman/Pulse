@@ -1034,6 +1034,22 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     Landing behavior for paid and hosted shells must also defer to the
     frontend-primitives-owned provider-first landing contract instead of
     defining a cloud-paid-specific order.
+26. Introduce the self-hosted `business` tier only through this shape:
+    `TierBusiness` in `pkg/licensing/features.go` carries exactly the Pro
+    feature set (no feature-level differentiation), 365-day history
+    retention in `TierHistoryDays`, membership in the self-hosted
+    core-monitoring-uncapped tier and plan-version sets (`business`,
+    `business_annual`), the `Business` display name, and a slot between Pro
+    and MSP in the min-tier ordering. Business differentiates commercially
+    by the `max_users` license limit (unlimited for Business; newly issued
+    Pro licenses may carry a finite `max_users` while previously issued
+    licenses keep their unlimited posture), retention, and support, never
+    by gating features away from Pro. The tier stays dormant until the
+    license server issues business plan versions through a governed
+    rollout; no checkout, pricing-model payload, public pricing page, or
+    in-product plan surface may reference Business before that rollout, and
+    monitored-system volume stays out of the Business plan model per the
+    self-hosted commercial boundary above.
 
 ## Forbidden Paths
 

@@ -38,6 +38,7 @@ const (
 	TierProPlus    = licensing.TierProPlus
 	TierProAnnual  = licensing.TierProAnnual
 	TierLifetime   = licensing.TierLifetime
+	TierBusiness   = licensing.TierBusiness
 	TierCloud      = licensing.TierCloud
 	TierMSP        = licensing.TierMSP
 	TierEnterprise = licensing.TierEnterprise

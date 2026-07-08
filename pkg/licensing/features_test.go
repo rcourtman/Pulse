@@ -846,3 +846,38 @@ func TestPriceIDToPlanVersion_AllMapToKnownPlans(t *testing.T) {
 		})
 	}
 }
+
+// TestBusinessTierContractShape pins the dormant Business tier's contract:
+// Pro's exact feature set (differentiation is by max_users limit, retention,
+// and support, never by features), 365-day history, uncapped self-hosted core
+// monitoring, recognized plan versions, and the Business display name. See
+// cloud-paid Extension Point 26.
+func TestBusinessTierContractShape(t *testing.T) {
+	proSet := TierFeatures[TierPro]
+	businessSet := TierFeatures[TierBusiness]
+	if len(proSet) != len(businessSet) {
+		t.Fatalf("Business features (%d) must equal Pro features (%d)", len(businessSet), len(proSet))
+	}
+	for i, feature := range proSet {
+		if businessSet[i] != feature {
+			t.Fatalf("Business feature[%d] = %q, want Pro's %q", i, businessSet[i], feature)
+		}
+	}
+
+	if got := TierHistoryDays[TierBusiness]; got != 365 {
+		t.Fatalf("TierHistoryDays[TierBusiness] = %d, want 365", got)
+	}
+
+	if !IsSelfHostedCoreMonitoringUncappedTier(TierBusiness) {
+		t.Fatal("TierBusiness must be self-hosted core-monitoring uncapped")
+	}
+	for _, plan := range []string{"business", "business_annual"} {
+		if !IsSelfHostedCoreMonitoringUncappedPlanVersion(plan) {
+			t.Fatalf("plan version %q must be self-hosted core-monitoring uncapped", plan)
+		}
+	}
+
+	if got := GetTierDisplayName(TierBusiness); got != "Business" {
+		t.Fatalf("GetTierDisplayName(TierBusiness) = %q, want Business", got)
+	}
+}
