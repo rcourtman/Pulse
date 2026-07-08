@@ -161,15 +161,13 @@ docker system prune -f
 
 ## CI Integration
 
-Tests run automatically on every PR that touches:
-- `internal/updates/**`
-- `internal/api/updates.go`
-- `frontend-modern/src/components/Update*.tsx`
-- `frontend-modern/src/api/updates.ts`
-- `frontend-modern/src/stores/updates.ts`
+The full Playwright suite, including the update-flow spec
+(`tests/79-update-flow.spec.ts`), runs via `.github/workflows/test-e2e.yml`
+on every push and PR that touches:
+- `internal/**`
+- `frontend-modern/**`
 - `tests/integration/**`
-
-See `.github/workflows/test-updates.yml` for CI configuration.
+- `Dockerfile`
 
 ## Success Criteria
 

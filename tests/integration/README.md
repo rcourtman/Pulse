@@ -242,7 +242,8 @@ PULSE_E2E_INSECURE_TLS=1 PULSE_E2E_SKIP_DOCKER=1 PULSE_BASE_URL='https://...' np
 
 ### CI Pipeline
 - Core E2E flows run via `.github/workflows/test-e2e.yml`
-- Update flow coverage remains in `.github/workflows/test-updates.yml`
+- Update flow coverage runs as part of the same suite
+  (`tests/79-update-flow.spec.ts`, backed by `mock-github-server/`)
 
 ## Test Data (Update Flow Only)
 
