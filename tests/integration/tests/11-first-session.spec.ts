@@ -91,9 +91,12 @@ test.describe.serial("First-session experience", () => {
     await expect(
       agentDialog.getByRole("heading", { name: "Install on a host" }),
     ).toBeVisible();
+    // The first-run handoff pre-provisions the scoped install token, so no
+    // "Generate token" step exists in this variant of the dialog.
     await expect(
-      agentDialog.getByRole("button", { name: "Generate token" }),
+      agentDialog.getByText(/already prepared the first scoped install token/i),
     ).toBeVisible();
+    await expect(agentDialog.getByText("Admin API Token")).toBeVisible();
   });
 
   test("shell shows key navigation elements", async ({ page }, testInfo) => {
@@ -167,6 +170,11 @@ test.describe.serial("First-session experience", () => {
     ] as const;
 
     const consoleErrors: string[] = [];
+    // The app shell polls Patrol open work (stored findings + pending
+    // approvals) on every authenticated route to drive the Patrol nav badge.
+    // Those are cheap reads, not AI invocations, so they are exempt here.
+    const appShellPatrolPolling =
+      /\/api\/ai\/(?:patrol\/findings|approvals)(?:\?|$)/;
     const aiRequests = trackBrowserRequests(page, /\/api\/ai(\/|$)/);
     page.on("console", (msg) => {
       if (msg.type() === "error") {
@@ -199,19 +207,25 @@ test.describe.serial("First-session experience", () => {
 
         await page.waitForTimeout(500);
 
+        const unexpectedAIRequests = aiRequests
+          .urls()
+          .filter((url) => !appShellPatrolPolling.test(url));
         expect(
-          aiRequests.count(),
-          `Non-AI settings route ${route} should not bootstrap AI endpoints: ${aiRequests.urls().join(", ")}`,
+          unexpectedAIRequests.length,
+          `Non-AI settings route ${route} should not bootstrap AI endpoints: ${unexpectedAIRequests.join(", ")}`,
         ).toBe(0);
 
-        // Filter out benign console noise.
+        // Filter out benign console noise. "Auth check error ... Failed to
+        // fetch" is the previous route's in-flight auth probe aborted by
+        // page.goto, not a product error.
         const realErrors = consoleErrors.filter(
           (e) =>
             !e.includes("Download the React DevTools") &&
             !e.includes("Warning:") &&
             !e.includes("favicon") &&
             !e.includes("ERR_CONNECTION_REFUSED") &&
-            !e.includes("net::"),
+            !e.includes("net::") &&
+            !(e.includes("Auth check error") && e.includes("Failed to fetch")),
         );
 
         expect(
@@ -254,7 +268,7 @@ test.describe.serial("First-session experience", () => {
     // advanced_reporting or audit_logging.
     const gatedRoutes = [
       {
-        route: "/operations/reporting",
+        route: "/settings/support/reporting",
         expectedURL: /\/settings\/support\/reporting/,
         feature: "advanced_reporting",
       },

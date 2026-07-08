@@ -205,9 +205,12 @@ async function expectMigrationNotice(page: Page, migration: MigrationFixture) {
     migration.reason,
     migration.recommended_action,
   );
-  await expect(page.getByText(expectedCopy.title)).toBeVisible();
+  // Scope to the settings content: the global CommercialMigrationBanner
+  // renders the same title outside <main>, which trips strict mode.
+  const settingsContent = page.getByRole('main');
+  await expect(settingsContent.getByText(expectedCopy.title)).toBeVisible();
   for (const fragment of expectedCopy.bodyFragments) {
-    await expect(page.getByText(fragment)).toBeVisible();
+    await expect(settingsContent.getByText(fragment)).toBeVisible();
   }
   await expect(page.getByRole('button', { name: /start 14-day pro trial/i })).toHaveCount(0);
 }

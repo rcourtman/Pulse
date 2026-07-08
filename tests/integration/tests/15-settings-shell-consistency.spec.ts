@@ -10,11 +10,13 @@ type WorkerFixtures = {
   authStorageStatePath: string;
 };
 
+// Titles and descriptions mirror the canonical copy in
+// frontend-modern/src/components/Settings/settingsHeaderMeta.ts.
 const SETTINGS_SHELL_ROUTES = [
   {
     route: '/settings/system-general',
-    title: 'General Settings',
-    description: 'Configure appearance, layout, and default monitoring cadence.',
+    title: 'General',
+    description: 'Manage appearance, layout, and default monitoring cadence.',
   },
   {
     route: '/settings/organization',
@@ -28,8 +30,9 @@ const SETTINGS_SHELL_ROUTES = [
   },
   {
     route: '/settings/organization/billing',
-    title: 'Organization Billing',
-    description: 'Track plan tier, usage, and upgrade options for multi-tenant deployments.',
+    title: 'Billing & Usage',
+    description:
+      'Review your organization plan, applicable usage policies, and subscription status for paid access.',
   },
   {
     route: '/settings/system-relay',
@@ -43,8 +46,9 @@ const SETTINGS_SHELL_ROUTES = [
   },
   {
     route: '/settings/system-ai',
-    title: 'Assistant & Patrol',
-    description: 'Configure providers and models for Pulse Assistant and Patrol.',
+    title: 'Provider & Models',
+    description:
+      'Configure providers, default models, provider health, budget, and usage for Pulse Intelligence.',
   },
   {
     route: '/settings/system-updates',
