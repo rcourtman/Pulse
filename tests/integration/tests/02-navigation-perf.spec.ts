@@ -51,28 +51,43 @@ const gotoWithBackendRetry = async (page: Page, url: string, attempts = 3): Prom
   throw lastError ?? new Error(`Failed to navigate to ${url}`);
 };
 
-const waitForInfrastructureReady = async (page: Page) => {
-  await expect(page).toHaveURL(/\/infrastructure(?:\?.*)?$/);
-  await expect(page.getByTestId('infrastructure-page')).toBeVisible();
+// Platform-first navigation: the perf budget covers switching between two
+// primary platform tabs, matching how users move between platform pages.
+const waitForProxmoxReady = async (page: Page) => {
+  await expect(page).toHaveURL(/\/proxmox(?:\/|\?|$)/);
+  await expect(page.getByTestId('proxmox-page')).toBeVisible();
   await page.waitForFunction(
     () => {
-      if (document.querySelector('[data-testid="infrastructure-summary"]')) return true;
-      const text = document.body?.textContent || '';
-      return text.includes('No infrastructure resources yet');
+      const root = document.querySelector('[data-testid="proxmox-page"]');
+      if (!root) return false;
+      if (root.querySelector('table')) return true;
+      const text = root.textContent || '';
+      return /No Proxmox|Add infrastructure/i.test(text);
     },
     undefined,
     { timeout: 30_000 },
   );
 };
 
-const waitForWorkloadsReady = async (page: Page) => {
-  await expect(page).toHaveURL(/\/workloads(?:\?.*)?$/);
-  await expect(page.getByTestId('workloads-summary')).toBeVisible();
+const waitForDockerReady = async (page: Page) => {
+  await expect(page).toHaveURL(/\/docker(?:\/|\?|$)/);
+  await expect(page.getByTestId('docker-page')).toBeVisible();
+  await page.waitForFunction(
+    () => {
+      const root = document.querySelector('[data-testid="docker-page"]');
+      if (!root) return false;
+      if (root.querySelector('table')) return true;
+      const text = root.textContent || '';
+      return /No Docker|Add infrastructure/i.test(text);
+    },
+    undefined,
+    { timeout: 30_000 },
+  );
 };
 
 const measureTabTransition = async (
   page: Page,
-  tabName: 'Infrastructure' | 'Workloads',
+  tabName: 'Proxmox' | 'Docker',
   waitForReady: (page: Page) => Promise<void>,
 ): Promise<number> => {
   const start = Date.now();
@@ -84,13 +99,13 @@ const measureTabTransition = async (
 test.describe.serial('Navigation performance budgets', () => {
   test.skip(!truthy(process.env.PULSE_E2E_PERF), 'Set PULSE_E2E_PERF=1 to enable navigation perf checks');
 
-  test('infrastructure and workloads tab switches stay within budget', async ({ page, browserName, isMobile }) => {
+  test('platform tab switches stay within budget', async ({ page, browserName, isMobile }) => {
     test.skip(browserName !== 'chromium' || Boolean(isMobile), 'Perf budgets are pinned to desktop Chromium');
     test.slow();
 
     const iterations = toPositiveInt(process.env.PULSE_E2E_PERF_ITERATIONS, 3);
-    const infraToWorkloadsBudgetMs = toPositiveInt(process.env.PULSE_E2E_PERF_INFRA_TO_WORKLOADS_BUDGET_MS, 2200);
-    const workloadsToInfraBudgetMs = toPositiveInt(process.env.PULSE_E2E_PERF_WORKLOADS_TO_INFRA_BUDGET_MS, 2200);
+    const proxmoxToDockerBudgetMs = toPositiveInt(process.env.PULSE_E2E_PERF_PROXMOX_TO_DOCKER_BUDGET_MS, 2200);
+    const dockerToProxmoxBudgetMs = toPositiveInt(process.env.PULSE_E2E_PERF_DOCKER_TO_PROXMOX_BUDGET_MS, 2200);
 
     await ensureAuthenticated(page);
 
@@ -108,35 +123,35 @@ test.describe.serial('Navigation performance budgets', () => {
 
     try {
       // Warm both routes first so budgets represent interactive tab switching.
-      await gotoWithBackendRetry(page, '/infrastructure');
-      await waitForInfrastructureReady(page);
-      await measureTabTransition(page, 'Workloads', waitForWorkloadsReady);
-      await measureTabTransition(page, 'Infrastructure', waitForInfrastructureReady);
+      await gotoWithBackendRetry(page, '/proxmox');
+      await waitForProxmoxReady(page);
+      await measureTabTransition(page, 'Docker', waitForDockerReady);
+      await measureTabTransition(page, 'Proxmox', waitForProxmoxReady);
 
-      const infraToWorkloadsSamples: number[] = [];
-      const workloadsToInfraSamples: number[] = [];
+      const proxmoxToDockerSamples: number[] = [];
+      const dockerToProxmoxSamples: number[] = [];
 
       for (let i = 0; i < iterations; i++) {
-        infraToWorkloadsSamples.push(
-          await measureTabTransition(page, 'Workloads', waitForWorkloadsReady),
+        proxmoxToDockerSamples.push(
+          await measureTabTransition(page, 'Docker', waitForDockerReady),
         );
-        workloadsToInfraSamples.push(
-          await measureTabTransition(page, 'Infrastructure', waitForInfrastructureReady),
+        dockerToProxmoxSamples.push(
+          await measureTabTransition(page, 'Proxmox', waitForProxmoxReady),
         );
       }
 
-      const infraToWorkloadsMedianMs = median(infraToWorkloadsSamples);
-      const workloadsToInfraMedianMs = median(workloadsToInfraSamples);
+      const proxmoxToDockerMedianMs = median(proxmoxToDockerSamples);
+      const dockerToProxmoxMedianMs = median(dockerToProxmoxSamples);
 
       console.log(
-        `[perf] infra->workloads samples=${infraToWorkloadsSamples.join(',')} median=${infraToWorkloadsMedianMs}ms budget=${infraToWorkloadsBudgetMs}ms`,
+        `[perf] proxmox->docker samples=${proxmoxToDockerSamples.join(',')} median=${proxmoxToDockerMedianMs}ms budget=${proxmoxToDockerBudgetMs}ms`,
       );
       console.log(
-        `[perf] workloads->infra samples=${workloadsToInfraSamples.join(',')} median=${workloadsToInfraMedianMs}ms budget=${workloadsToInfraBudgetMs}ms`,
+        `[perf] docker->proxmox samples=${dockerToProxmoxSamples.join(',')} median=${dockerToProxmoxMedianMs}ms budget=${dockerToProxmoxBudgetMs}ms`,
       );
 
-      expect(infraToWorkloadsMedianMs).toBeLessThanOrEqual(infraToWorkloadsBudgetMs);
-      expect(workloadsToInfraMedianMs).toBeLessThanOrEqual(workloadsToInfraBudgetMs);
+      expect(proxmoxToDockerMedianMs).toBeLessThanOrEqual(proxmoxToDockerBudgetMs);
+      expect(dockerToProxmoxMedianMs).toBeLessThanOrEqual(dockerToProxmoxBudgetMs);
     } finally {
       if (initialMockMode && !initialMockMode.enabled) {
         try {
