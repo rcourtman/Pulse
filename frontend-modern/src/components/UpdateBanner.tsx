@@ -7,9 +7,10 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import { buildReleaseNotesUrl } from '@/components/updateVersion';
 
-// Self-hosted Pulse Pro updates come from the Private Release Access portal, not
-// the in-app updater (which tracks the public community build and would strip
-// Pro features). See the ApplyUpdate edition gate in internal/updates/manager.go.
+// The Pro binary self-updates from the license server download broker (see
+// internal/updates/pro_update.go), so in-app apply keeps the Pro runtime.
+// The portal is the manual path for deployments the updater cannot drive
+// (e.g. Docker), where the community pull/instructions would strip Pro.
 const PRO_RELEASE_ACCESS_URL = 'https://pulserelay.pro/download.html';
 
 export function UpdateBanner() {
@@ -54,12 +55,12 @@ export function UpdateBanner() {
     buildReleaseNotesUrl(updateStore.updateInfo()?.latestVersion),
   );
 
-  // The compiled Pro binary must never self-update off the community build, so
-  // suppress in-app apply and point the customer at the portal instead. This
-  // keys off the binary's runtime identity (business hooks presence), NOT the
-  // license tier: a community binary with an active Pro license still
-  // self-updates normally. The backend ApplyUpdate gate is the hard guarantee;
-  // this is the UX layer.
+  // The compiled Pro binary self-updates from the license server download
+  // broker, so in-app apply is safe and keeps the Pro runtime; only the
+  // manual instructions differ (community pull/console steps would install
+  // the community build). This keys off the binary's runtime identity
+  // (business hooks presence), NOT the license tier: a community binary with
+  // an active Pro license follows the normal community paths.
   const isProEdition = () => runtimeCapabilities()?.runtime?.build === 'pro';
 
   const handleApplyUpdate = () => {
@@ -161,8 +162,9 @@ export function UpdateBanner() {
                   </span>
                 </Show>
 
-                {/* Apply Update Button (automated community deployments) */}
-                <Show when={updatePlan()?.canAutoUpdate && !isExpanded() && !isProEdition()}>
+                {/* Apply Update Button (automated deployments; Pro applies
+                    the private build from the license server broker) */}
+                <Show when={updatePlan()?.canAutoUpdate && !isExpanded()}>
                   <button
                     onClick={handleApplyUpdate}
                     class="px-3 py-1 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
@@ -182,8 +184,13 @@ export function UpdateBanner() {
                   </span>
                 </Show>
 
-                {/* Pro edition: in-app apply would downgrade to community, so route to the portal */}
-                <Show when={isProEdition() && !isExpanded()}>
+                {/* Pro edition without auto-update (e.g. Docker): the community
+                    pull instructions would strip Pro, so route to the portal */}
+                <Show
+                  when={
+                    isProEdition() && updatePlan() && !updatePlan()?.canAutoUpdate && !isExpanded()
+                  }
+                >
                   <a
                     href={PRO_RELEASE_ACCESS_URL}
                     target="_blank"
@@ -264,14 +271,24 @@ export function UpdateBanner() {
                   {updateStore.updateInfo()?.latestVersion}
                 </p>
 
-                {/* Pro edition: portal update path (in-app apply would strip Pro features) */}
-                <Show when={isProEdition()}>
+                {/* Pro edition with in-app apply: updates install the private
+                    Pulse Pro build from the license server */}
+                <Show when={isProEdition() && updatePlan()?.canAutoUpdate}>
+                  <p class="text-xs">
+                    Updates install the private Pulse Pro build from the license server, so
+                    applying keeps Pro features (Audit, RBAC, Reporting, SSO).
+                  </p>
+                </Show>
+
+                {/* Pro edition without auto-update: portal update path (the
+                    community instructions below would strip Pro features) */}
+                <Show when={isProEdition() && updatePlan() && !updatePlan()?.canAutoUpdate}>
                   <div class="mt-2 p-3 rounded-md border bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200">
                     <div class="font-medium mb-1">Pulse Pro update</div>
                     <p>
-                      The in-app updater tracks the public community build and would remove Pro
-                      features (Audit, RBAC, Reporting, SSO). Update from Private Release Access
-                      instead:
+                      This deployment updates manually, and the public community build would remove
+                      Pro features (Audit, RBAC, Reporting, SSO). Update from Private Release
+                      Access instead:
                     </p>
                     <ol class="list-decimal ml-5 mt-1 space-y-0.5">
                       <li>
@@ -396,8 +413,8 @@ export function UpdateBanner() {
                   </div>
                 </Show>
 
-                {/* Apply Update Button (expanded view for automated community deployments) */}
-                <Show when={updatePlan()?.canAutoUpdate && !isProEdition()}>
+                {/* Apply Update Button (expanded view for automated deployments) */}
+                <Show when={updatePlan()?.canAutoUpdate}>
                   <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
                     <button
                       onClick={handleApplyUpdate}

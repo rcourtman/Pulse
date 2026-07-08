@@ -540,6 +540,12 @@ recovery scope, or a storage/recovery-owned secret source.
    transport with storage/recovery. Storage and recovery consumers must
    preserve the API-owned Docker / Podman module or host wording for management
    responses and must not introduce recovery-local container-runtime labels.
+   Pro update credential wiring and update-broker transport in
+   `internal/api/router.go` and the update handlers are server self-update
+   plumbing, not storage or recovery surface: storage and recovery must not
+   consume them, and the pre-update backup and rollback machinery in
+   `internal/updates` stays identical for community and private Pro archives
+   so recovery semantics never fork by edition.
    Proxmox-side LXC Docker inventory wiring may also pass through
    `internal/api/router.go` and Proxmox agent install-command generation, but
    storage and recovery may consume the resulting app-container/resource

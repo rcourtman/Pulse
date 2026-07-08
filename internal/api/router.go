@@ -561,6 +561,31 @@ func (r *Router) setupRoutes() {
 	r.licenseHandlers = NewLicenseHandlers(r.multiTenant, r.hostedMode, r.config)
 	r.licenseHandlers.SetRuntimeVersion(r.serverVersion)
 	r.licenseHandlers.SetMonitors(r.monitor, r.mtMonitor)
+	// The compiled Pro binary self-updates from the license server download
+	// broker (never the public community releases), so give the updater lazy
+	// access to this installation's activation credentials. The source is
+	// consulted per check/apply, picking up activation done after startup; the
+	// community binary carries the source too but never consults it (the
+	// updater keys off pkg/edition).
+	r.updateManager.SetProUpdateCredentialSource(func() (updates.ProUpdateCredentials, bool) {
+		svc := r.licenseHandlers.Service(context.Background())
+		if svc == nil {
+			return updates.ProUpdateCredentials{}, false
+		}
+		state := svc.GetActivationState()
+		if state == nil || strings.TrimSpace(state.InstallationToken) == "" {
+			return updates.ProUpdateCredentials{}, false
+		}
+		serverURL := strings.TrimSpace(state.LicenseServerURL)
+		if serverURL == "" {
+			serverURL = defaultLicenseServerURLValue
+		}
+		return updates.ProUpdateCredentials{
+			LicenseServerURL:    serverURL,
+			InstallationToken:   state.InstallationToken,
+			InstanceFingerprint: state.InstanceFingerprint,
+		}, true
+	})
 	rbacProvider := NewTenantRBACProvider(r.config.DataPath)
 	r.rbacProvider = rbacProvider
 	orgHandlers := NewOrgHandlers(r.multiTenant, r.mtMonitor, rbacProvider)

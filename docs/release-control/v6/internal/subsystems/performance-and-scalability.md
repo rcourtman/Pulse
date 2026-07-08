@@ -279,6 +279,12 @@ regression protection.
    monitor config into the unified-resource adapter, but it must not add
    per-request polling, registry rescans, persistence walks, or tenant-wide
    refreshes to decide whether Proxmox/PBS/PMG resources are stale.
+   Pro update credential wiring in `internal/api/router.go` follows the same
+   bounded rule: the credential-source closure reads the already-held
+   activation snapshot only when the updater checks or applies, and the
+   download-broker fetch stays on the existing update-check cadence (the
+   check cache plus one fresh resolve per apply). It must not add polling
+   loops, background license-server traffic, or per-request broker calls.
    Global resource timeline routing follows the same protected-request hot-path
    rule: `/api/resources/timeline` registration may wire the authenticated
    handler, but router setup and auth gating must not execute resource-change

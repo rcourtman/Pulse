@@ -189,6 +189,10 @@ type Manager struct {
 	closeOnce      sync.Once
 	heartbeatWg    sync.WaitGroup
 	closed         bool
+	// proCredentialSource lazily supplies download-broker credentials for the
+	// compiled Pro binary (SetProUpdateCredentialSource, wired at startup).
+	// Nil on the community binary.
+	proCredentialSource func() (ProUpdateCredentials, bool)
 }
 
 // ApplyUpdateRequest describes an update request initiated via the API/UI.
@@ -351,6 +355,31 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		return nil, fmt.Errorf("failed to parse current version: %w", err)
 	}
 
+	// The compiled Pro binary checks the license server download broker, never
+	// GitHub: the public release assets are community builds, and offering one
+	// here would set up the silent Pro→community downgrade.
+	if edition.IsPro() {
+		info, proErr := m.checkProUpdates(ctx, channel, currentInfo, currentVer)
+		if proErr != nil {
+			m.updateStatus("error", 0, "Failed to check for Pulse Pro updates", proErr)
+			return nil, proErr
+		}
+		if useCache {
+			m.statusMu.Lock()
+			m.checkCache[channel] = info
+			m.cacheTime[channel] = time.Now()
+			m.statusMu.Unlock()
+		}
+		status := "idle"
+		message := "No updates available"
+		if info.Available {
+			status = "available"
+			message = fmt.Sprintf("Update available: %s", info.LatestVersion)
+		}
+		m.updateStatus(status, 100, message)
+		return info, nil
+	}
+
 	// Get latest release from GitHub with specified channel and current version
 	release, err := m.getLatestReleaseForChannel(ctx, channel, currentVer)
 	if err != nil {
@@ -461,22 +490,7 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 		IsMajorUpgrade: isMajorUpgrade,
 	}
 
-	// Add warning for major version pre-release upgrades
-	if info.Available && isMajorUpgrade && isPrerelease {
-		info.Warning = fmt.Sprintf(
-			"This is a major version upgrade (v%d → v%d) and a pre-release build. "+
-				"We strongly recommend installing this as a separate instance rather than upgrading your production installation. "+
-				"Pre-release builds may contain bugs and are intended for testing.",
-			currentVer.Major, latestVer.Major,
-		)
-	} else if info.Available && isMajorUpgrade {
-		info.Warning = fmt.Sprintf(
-			"This is a major version upgrade (v%d → v%d). Please review the release notes carefully before updating.",
-			currentVer.Major, latestVer.Major,
-		)
-	} else if info.Available && isPrerelease {
-		info.Warning = "This is a pre-release build. Pre-release builds are tested but may have rough edges."
-	}
+	info.Warning = updateWarning(info.Available, isMajorUpgrade, isPrerelease, currentVer.Major, latestVer.Major)
 
 	// Cache the result (only if using saved channel)
 	if useCache {
@@ -497,31 +511,63 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 	return info, nil
 }
 
+// updateWarning derives the user-facing caution attached to an available
+// update. Shared by the community (GitHub) and Pro (download broker) checks.
+func updateWarning(available, isMajorUpgrade, isPrerelease bool, currentMajor, latestMajor int) string {
+	switch {
+	case available && isMajorUpgrade && isPrerelease:
+		return fmt.Sprintf(
+			"This is a major version upgrade (v%d → v%d) and a pre-release build. "+
+				"We strongly recommend installing this as a separate instance rather than upgrading your production installation. "+
+				"Pre-release builds may contain bugs and are intended for testing.",
+			currentMajor, latestMajor,
+		)
+	case available && isMajorUpgrade:
+		return fmt.Sprintf(
+			"This is a major version upgrade (v%d → v%d). Please review the release notes carefully before updating.",
+			currentMajor, latestMajor,
+		)
+	case available && isPrerelease:
+		return "This is a pre-release build. Pre-release builds are tested but may have rough edges."
+	default:
+		return ""
+	}
+}
+
 // ApplyUpdate downloads and applies an update
 func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error {
 	if req.DownloadURL == "" {
 		return fmt.Errorf("download URL is required")
 	}
-	validatedDownloadURL, validationErr := validateApplyDownloadURL(req.DownloadURL)
-	if validationErr != nil {
-		return validationErr
+
+	// The separately compiled Pulse Pro binary must never install the public
+	// community build (it would silently strip Audit, RBAC, Reporting, and
+	// SSO), so it updates through the license server download broker instead.
+	// This keys off the compiled edition, not license state: a community
+	// binary with an active license is still community and updates normally.
+	isPro := edition.IsPro()
+	var validatedDownloadURL *url.URL
+	if isPro {
+		creds, ok := m.proUpdateCredentials()
+		if !ok {
+			return errProUpdateNotActivated()
+		}
+		if err := validateProApplyRequestURL(req.DownloadURL, creds.LicenseServerURL); err != nil {
+			return err
+		}
+	} else {
+		var validationErr error
+		validatedDownloadURL, validationErr = validateApplyDownloadURL(req.DownloadURL)
+		if validationErr != nil {
+			return validationErr
+		}
+		req.DownloadURL = validatedDownloadURL.String()
 	}
-	req.DownloadURL = validatedDownloadURL.String()
 
 	// Check if Docker
 	currentInfo, _ := GetCurrentVersion()
 	if currentInfo.IsDocker {
 		return fmt.Errorf("updates cannot be applied in Docker environment")
-	}
-
-	// Refuse to self-update the separately compiled Pulse Pro binary. The
-	// in-app updater and install.sh both target the public community build, so
-	// applying an update here would replace the Pro binary with community and
-	// silently strip Audit, RBAC, Reporting, and SSO. This keys off the
-	// compiled edition, not license state: a community binary with an active
-	// license is still community and updates normally.
-	if edition.IsPro() {
-		return fmt.Errorf("self-hosted Pulse Pro updates come from the Private Release Access page (https://pulserelay.pro/download.html): download the new archive and its .sshsig sidecar, then run install.sh --archive. The in-app updater tracks the public community build and would remove Pro features")
 	}
 
 	// Check for pre-v4 installation
@@ -546,9 +592,23 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	m.updateStatus("downloading", 10, "Downloading update...")
 
 	channel := m.resolveChannel(req.Channel, currentInfo)
-	targetVersion, validationErr := ValidateApplyTargetVersion(channel, req.DownloadURL)
-	if validationErr != nil {
-		return validationErr
+	var artifact resolvedUpdateArtifact
+	if isPro {
+		// Resolve fresh signed URLs from the broker at apply time: the URLs it
+		// hands out expire in minutes, so the check-time response is never
+		// reused here.
+		var resolveErr error
+		artifact, resolveErr = m.resolveProUpdateArtifact(ctx, channel)
+		if resolveErr != nil {
+			m.updateStatus("error", 10, "Failed to resolve Pulse Pro update", resolveErr)
+			return resolveErr
+		}
+	} else {
+		targetVersion, validationErr := ValidateApplyTargetVersion(channel, req.DownloadURL)
+		if validationErr != nil {
+			return validationErr
+		}
+		artifact = resolvedUpdateArtifact{downloadURL: req.DownloadURL, version: targetVersion}
 	}
 	initiatedBy := req.InitiatedBy
 	if initiatedBy == "" {
@@ -564,7 +624,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 		Action:         "update",
 		Channel:        channel,
 		VersionFrom:    currentInfo.Version,
-		VersionTo:      targetVersion,
+		VersionTo:      artifact.version,
 		DeploymentType: currentInfo.DeploymentType,
 		InitiatedBy:    initiatedBy,
 		InitiatedVia:   initiatedVia,
@@ -595,7 +655,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 
 	// Download update
 	tarballPath := filepath.Join(tempDir, "update.tar.gz")
-	downloadBytes, err := m.downloadFile(ctx, req.DownloadURL, tarballPath)
+	downloadBytes, err := m.downloadFile(ctx, artifact.downloadURL, tarballPath)
 	if err != nil {
 		downloadErr := fmt.Errorf("failed to download update: %w", err)
 		m.updateStatus("error", 20, "Failed to download update", downloadErr)
@@ -610,9 +670,16 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 
 	// Verify SSHSIG signature against the pinned pulse-installer key. This is
 	// the same trust root scripts/pulse-auto-update.sh and scripts/install.sh
-	// already enforce; the in-app updater must not run at a lower bar.
+	// already enforce; the in-app updater must not run at a lower bar. The Pro
+	// broker hands out an explicit signed sidecar URL; the community path
+	// derives it from the asset URL.
 	m.updateStatus("verifying", 25, "Verifying signature...")
-	if err := m.downloadAndVerifyReleaseSignature(ctx, validatedDownloadURL, tarballPath); err != nil {
+	if artifact.sshsigURL != "" {
+		err = m.downloadAndVerifySignatureFromURL(ctx, artifact.sshsigURL, tarballPath)
+	} else {
+		err = m.downloadAndVerifyReleaseSignature(ctx, validatedDownloadURL, tarballPath)
+	}
+	if err != nil {
 		sigErr := fmt.Errorf("signature verification failed: %w", err)
 		m.updateStatus("error", 25, "Failed to verify update signature", sigErr)
 		runErr = sigErr
@@ -620,9 +687,16 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	}
 	log.Info().Msg("Signature verification passed")
 
-	// Verify checksum if available
+	// Verify checksum: the Pro broker manifest carries the expected sha256
+	// inline; the community path discovers a SHA256SUMS manifest next to the
+	// release asset.
 	m.updateStatus("verifying", 30, "Verifying download...")
-	if err := m.verifyChecksum(ctx, req.DownloadURL, tarballPath); err != nil {
+	if artifact.sha256 != "" {
+		err = verifyFileSHA256(tarballPath, artifact.sha256)
+	} else {
+		err = m.verifyChecksum(ctx, artifact.downloadURL, tarballPath)
+	}
+	if err != nil {
 		checksumErr := fmt.Errorf("checksum verification failed: %w", err)
 		m.updateStatus("error", 30, "Failed to verify update checksum", checksumErr)
 		runErr = checksumErr

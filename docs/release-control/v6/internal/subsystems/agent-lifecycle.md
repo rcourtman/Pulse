@@ -151,7 +151,12 @@ Agent-facing operations-loop status wiring in `internal/api/router.go` and
 shares agent route infrastructure. Other handlers in `internal/api/` such as
 the AI settings handler (`ai_handlers.go`) carry AI provider configuration
 (for example per-provider base URL overrides) that is ai-runtime config-surface
-and is not agent enrollment, liveness, or lifecycle state. Workflow starter counts on that endpoint,
+and is not agent enrollment, liveness, or lifecycle state. The Pro update
+credential wiring in `internal/api/router.go` (feeding the activation's
+installation token and instance fingerprint to the server updater's
+download-broker path) is likewise server self-update plumbing: agent
+enrollment, agent update liveness, and fleet-control semantics must not key
+off it. Workflow starter counts on that endpoint,
 contextual Assistant/external-agent collaboration counts inside the Assistant
 step, the content-free Patrol control starter split, and Patrol control
 completed-loop, resolved-loop, or `patrolControlValueState` proof mirrored to

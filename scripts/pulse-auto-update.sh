@@ -110,6 +110,23 @@ get_current_version() {
     echo "${version:-unknown}"
 }
 
+# The unattended updater installs public community builds. The separately
+# compiled Pulse Pro binary (--version reports "Pulse Pro vX.Y.Z") must never
+# be replaced by one: that silently strips Audit, RBAC, Reporting, and SSO.
+# Pro installs update in-app through the license server download broker, or
+# manually via https://pulserelay.pro/download.html + install.sh --archive.
+installed_binary_is_pulse_pro() {
+    local binary=""
+    if [[ -f "$INSTALL_DIR/bin/pulse" ]]; then
+        binary="$INSTALL_DIR/bin/pulse"
+    elif [[ -f "$INSTALL_DIR/pulse" ]]; then
+        binary="$INSTALL_DIR/pulse"
+    else
+        return 1
+    fi
+    "$binary" --version 2>/dev/null | head -1 | grep -q '^Pulse Pro '
+}
+
 # Determine whether a tag is a semver pre-release.
 #
 # Per semver 2.0.0, any identifier after the patch version introduced by a
@@ -459,7 +476,13 @@ main() {
         log info "Docker environment detected, skipping auto-update"
         exit 0
     fi
-    
+
+    # Never replace the Pulse Pro binary with a public community build
+    if installed_binary_is_pulse_pro; then
+        log info "Pulse Pro binary detected; unattended community updates are disabled. Pro installs update in-app (license server download broker) or via https://pulserelay.pro/download.html"
+        exit 0
+    fi
+
     # Get current version
     local current_version=$(get_current_version)
     log info "Current version: $current_version"

@@ -258,7 +258,8 @@ func classifyApplyUpdateStartError(err error) (int, string) {
 	case strings.Contains(errMsg, "stable channel cannot install prerelease builds"):
 		return http.StatusConflict, err.Error()
 	case strings.Contains(errMsg, "cannot be applied in docker environment"),
-		strings.Contains(errMsg, "manual migration required"):
+		strings.Contains(errMsg, "manual migration required"),
+		strings.Contains(errMsg, "pulse pro updates need an activated license"):
 		return http.StatusConflict, err.Error()
 	default:
 		return http.StatusInternalServerError, "Failed to start update"

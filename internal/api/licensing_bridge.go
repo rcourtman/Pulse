@@ -66,6 +66,7 @@ const (
 	subscriptionStateCanceledValue = pkglicensing.SubStateCanceled
 	subscriptionStateTrialValue    = pkglicensing.SubStateTrial
 	activationKeyPrefixValue       = pkglicensing.ActivationKeyPrefix
+	defaultLicenseServerURLValue   = pkglicensing.DefaultLicenseServerURL
 )
 
 func newLicenseService() *licenseService {

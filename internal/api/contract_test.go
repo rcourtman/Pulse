@@ -20360,3 +20360,56 @@ func TestContract_StateBroadcastsUseLazyCurrentStateInvalidation(t *testing.T) {
 		}
 	}
 }
+
+// TestProUpdateBrokerWiringContract pins the Pro self-update boundary: the
+// router hands the activation credentials (installation token, instance
+// fingerprint, license server URL) to the update manager, and the updater's
+// Pro path checks and applies exclusively through the license server download
+// broker. Without this wiring the compiled Pro binary has no in-app update
+// path, and with community wiring it would silently downgrade a paying
+// customer to the community build (Guard 2 of the Pro download/update spec).
+func TestProUpdateBrokerWiringContract(t *testing.T) {
+	routerSource, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatalf("read internal/api/router.go: %v", err)
+	}
+	router := string(routerSource)
+	for _, fragment := range []string{
+		`r.updateManager.SetProUpdateCredentialSource(func() (updates.ProUpdateCredentials, bool) {`,
+		`state := svc.GetActivationState()`,
+		`InstallationToken:   state.InstallationToken,`,
+		`InstanceFingerprint: state.InstanceFingerprint,`,
+	} {
+		if !strings.Contains(router, fragment) {
+			t.Errorf("router must wire the Pro update credential source from the activation state; missing %q", fragment)
+		}
+	}
+
+	proUpdateSource, err := os.ReadFile("../updates/pro_update.go")
+	if err != nil {
+		t.Fatalf("read internal/updates/pro_update.go: %v", err)
+	}
+	proUpdate := string(proUpdateSource)
+	for _, fragment := range []string{
+		`proDownloadBrokerPath = "/v1/downloads/pulse-pro"`,
+		`"X-Pulse-Instance-Fingerprint"`,
+	} {
+		if !strings.Contains(proUpdate, fragment) {
+			t.Errorf("Pro update path must target the license server download broker; missing %q", fragment)
+		}
+	}
+
+	managerSource, err := os.ReadFile("../updates/manager.go")
+	if err != nil {
+		t.Fatalf("read internal/updates/manager.go: %v", err)
+	}
+	manager := string(managerSource)
+	for _, fragment := range []string{
+		`if edition.IsPro() {`,
+		`m.resolveProUpdateArtifact(ctx, channel)`,
+	} {
+		if !strings.Contains(manager, fragment) {
+			t.Errorf("update manager must branch the Pro edition onto the broker path; missing %q", fragment)
+		}
+	}
+}

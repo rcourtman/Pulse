@@ -249,6 +249,14 @@ avoids a cloud-control-plane report data path across clients.
    preserve the raw runtime build and expose a normalized `pro`, `community`,
    or `unknown` status so paid-runtime support triage does not depend on
    interpreting Docker tags, public release names, or customer screenshots.
+   The same activation state is also the credential source for the compiled
+   Pro binary's in-app self-update through the license-gated download broker:
+   that consumer is read-only over the activation snapshot (installation
+   token, instance fingerprint, license server URL) and must not mutate
+   licensing state, extend entitlements, or act as an alternate activation
+   path. Keeping the Pro runtime updatable in place is part of the
+   paid-runtime posture; the community self-update flow must never be the
+   default answer for an installed Pro runtime.
    That same shared licensing boundary also owns paid-migration degradation
    visibility and recovery. A persisted v5 license that exists but cannot be
    read or decrypted must publish a terminal `commercial_migration` state

@@ -15,7 +15,7 @@ const { mock } = vi.hoisted(() => ({
 }));
 
 // runtime.build is the binary-edition signal (business-hooks presence), which
-// is what UpdateBanner keys the Pro path off of.
+// is what UpdateBanner keys the Pro paths off of.
 vi.mock('@/stores/license', () => ({
   runtimeCapabilities: () => ({ runtime: { build: mock.runtimeBuild } }),
 }));
@@ -60,24 +60,49 @@ afterEach(() => {
   mock.plan = { canAutoUpdate: true, requiresRoot: false, rollbackSupport: false, instructions: [] };
 });
 
-describe('UpdateBanner Pro edition guard', () => {
-  it('suppresses in-app apply and routes the Pro binary to the portal', () => {
+describe('UpdateBanner Pro edition update paths', () => {
+  it('keeps in-app apply for the Pro binary on auto-updatable deployments', async () => {
     mock.runtimeBuild = 'pro';
 
     render(() => <UpdateBanner />);
 
-    // The in-app apply affordance must never render for the Pro binary, even
-    // though the plan reports canAutoUpdate=true (systemd).
-    expect(screen.queryByRole('button', { name: /Apply Update/ })).not.toBeInTheDocument();
-
-    const portalLink = screen.getByRole('link', { name: /Private Release Access/ });
-    expect(portalLink).toHaveAttribute('href', PORTAL_URL);
+    // The Pro binary updates from the license server download broker, so the
+    // in-app apply affordance must render once the plan resolves.
+    expect(await screen.findByRole('button', { name: 'Apply Update' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Private Release Access/ })).not.toBeInTheDocument();
   });
 
-  it('shows the portal steps (archive + .sshsig) when the Pro banner is expanded', () => {
+  it('explains the private release source when the Pro banner is expanded', async () => {
     mock.runtimeBuild = 'pro';
 
     render(() => <UpdateBanner />);
+    await screen.findByRole('button', { name: 'Apply Update' });
+    fireEvent.click(screen.getByTitle('Show more'));
+
+    expect(screen.getByText(/private Pulse Pro build from the license server/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Apply Update Automatically' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Private Release Access/ })).not.toBeInTheDocument();
+  });
+
+  it('routes non-auto-updatable Pro deployments to the portal', async () => {
+    mock.runtimeBuild = 'pro';
+    mock.plan = { canAutoUpdate: false, requiresRoot: false, rollbackSupport: false, instructions: [] };
+
+    render(() => <UpdateBanner />);
+
+    const portalLink = await screen.findByRole('link', { name: /Private Release Access/ });
+    expect(portalLink).toHaveAttribute('href', PORTAL_URL);
+    expect(screen.queryByRole('button', { name: /Apply Update/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the portal steps (archive + .sshsig) for manual Pro deployments when expanded', async () => {
+    mock.runtimeBuild = 'pro';
+    mock.plan = { canAutoUpdate: false, requiresRoot: false, rollbackSupport: false, instructions: [] };
+
+    render(() => <UpdateBanner />);
+    await screen.findByRole('link', { name: /Private Release Access/ });
     fireEvent.click(screen.getByTitle('Show more'));
 
     expect(screen.getByText('Pulse Pro update')).toBeInTheDocument();

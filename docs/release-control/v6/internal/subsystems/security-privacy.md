@@ -321,6 +321,13 @@ the `white_label` branding entitlement.
     metadata only. They must not disclose credentials, command output, raw
     provider payloads, tenant-crossing config, or any new resource-policy bypass
     through monitoring-readable API responses.
+    The Pro update credential source in router glue hands the activation's
+    installation token, instance fingerprint, and license server URL to the
+    server updater only. The token travels solely as an Authorization header
+    to the activation's normalized license-server base URL; it must never be
+    logged, echoed through update payloads, status, or history surfaces, or
+    sent to any other host, and the broker's short-lived signed artifact URLs
+    are transport only and must not be persisted or exposed.
 	    Assistant session rename routing through `PATCH /api/ai/sessions/{id}`
 	    stays on that same auth/scope boundary: the route may accept only a
 	    user-visible title mutation, must not expose transcript contents,

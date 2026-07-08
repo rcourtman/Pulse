@@ -593,20 +593,29 @@ TLS floor in the dynamic config.
    archive filenames through `--archive` so direct Linux and Proxmox LXC users
    can keep the normal service setup while installing the private Pulse Pro
    runtime.
-   The in-app updater must refuse to apply on the compiled Pulse Pro binary:
-   `internal/updates` `ApplyUpdate` blocks when the running edition is Pro
-   (recorded by `pkg/edition`, flipped to `pro` in `enterpriseruntime.Initialize`
-   alongside `coreaudit.SetLogger`/`server.SetBusinessHooks`, and keyed off the
-   compiled binary — never license-active state) and directs the operator to
+   The in-app updater must never install a public community build on the
+   compiled Pulse Pro binary: when the running edition is Pro (recorded by
+   `pkg/edition`, flipped to `pro` in `enterpriseruntime.Initialize` alongside
+   `coreaudit.SetLogger`/`server.SetBusinessHooks`, and keyed off the compiled
+   binary — never license-active state), `internal/updates` checks and applies
+   updates exclusively through the license server download broker
+   (`GET /v1/downloads/pulse-pro` with the installation token and instance
+   fingerprint, per `internal/updates/pro_update.go`), verifying the private
+   archive against the same pinned `pulse-installer` SSHSIG key plus the
+   broker manifest sha256, and refusing GitHub-shaped download URLs outright.
+   An unactivated Pro binary refuses to apply and directs the operator to
    `https://pulserelay.pro/download.html` and the `install.sh --archive` path.
-   This is required because the community self-update flow (both the in-app
-   updater and `install.sh` default to the public `rcourtman/Pulse` community
-   assets) would replace the Pro binary and silently strip Audit, RBAC,
-   Reporting, and SSO from a paying customer. A community binary with an active
-   paid license is still community and must keep its normal self-update; the
-   `frontend-modern` update banner mirrors the same distinction by hiding the
-   in-app apply affordance for the Pro runtime identity and surfacing the portal
-   path instead.
+   This is required because the community self-update flow (the in-app GitHub
+   path, `install.sh` defaults, and the unattended
+   `scripts/pulse-auto-update.sh` timer — which must skip when the installed
+   binary reports `Pulse Pro`) targets the public `rcourtman/Pulse` community
+   assets and would replace the Pro binary and silently strip Audit, RBAC,
+   Reporting, and SSO from a paying customer. A community binary with an
+   active paid license is still community and must keep its normal
+   self-update; the `frontend-modern` update banner keeps the in-app apply
+   affordance for auto-updatable Pro deployments (the broker path preserves
+   the Pro runtime) and surfaces the portal path for deployments the updater
+   cannot drive, such as Docker.
    Customer-facing private Pro RC/GA promotion is part of that same boundary:
    for every non-draft v6 public release, `create-release.yml` must call the
    private `rcourtman/pulse-enterprise` `Build Pro Release` workflow after

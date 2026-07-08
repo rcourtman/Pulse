@@ -1585,6 +1585,15 @@ payload shape change when the portal presents compact client rows.
     the requested target version through the shared update-target validation
     path, recompute readiness from live backend state, and reject `blocked`
     verdicts before update execution starts.
+    On the compiled Pro edition the same check and apply endpoints are served
+    by the license server download broker instead of the public GitHub
+    releases: response shapes are unchanged, but `downloadUrl` is a broker
+    intent URL for the activation's license server (target version carried in
+    the query so the shared update-target validation still applies), and apply
+    re-resolves fresh signed artifact URLs server-side. Update payloads must
+    never expose broker credentials (installation token, fingerprint) or the
+    short-lived signed URLs, and handlers must not fork payload shape by
+    edition.
     The platform-connections API contract also owns inactive monitored-system
     candidate semantics end to end. `enabled=false` on TrueNAS or VMware preview,
     test, add, and update payloads must serialize through the shared ledger client

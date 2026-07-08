@@ -772,3 +772,20 @@ func TestHandleGetUpdatePlan_ManualFallback(t *testing.T) {
 		t.Fatalf("Expected manual fallback plan to include prerequisites")
 	}
 }
+
+// TestClassifyApplyUpdateStartError_ProActivation guards the update transport
+// contract for the Pro broker path: an unactivated Pro binary's refusal is a
+// client-resolvable conflict whose actionable message (activate, or use the
+// portal archive path) must reach the UI verbatim, not collapse into the
+// generic 500 "Failed to start update".
+func TestClassifyApplyUpdateStartError_ProActivation(t *testing.T) {
+	err := errors.New("Pulse Pro updates need an activated license: activate in Settings → License, or download the archive from https://pulserelay.pro/download.html and run install.sh --archive")
+
+	status, msg := classifyApplyUpdateStartError(err)
+	if status != http.StatusConflict {
+		t.Fatalf("expected 409 for the unactivated Pro refusal, got %d", status)
+	}
+	if !strings.Contains(msg, "activated license") {
+		t.Fatalf("expected the actionable refusal message to pass through, got %q", msg)
+	}
+}
