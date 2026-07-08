@@ -78,6 +78,9 @@ services:
       - PULSE_LOG_LEVEL=debug
       # Mock mode for faster testing
       - PULSE_MOCK_MODE=true
+      # Dev-only endpoints the suite depends on (first-run reset in the
+      # first-session specs) are gated on development mode.
+      - PULSE_DEV=true
       - PULSE_MULTI_TENANT_ENABLED=${PULSE_MULTI_TENANT_ENABLED:-false}
       - PULSE_ALLOW_DOCKER_UPDATES=true
       - PULSE_UPDATE_STAGE_DELAY_MS=250
