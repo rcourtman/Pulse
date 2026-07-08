@@ -622,7 +622,7 @@ func (a *Agent) logAuthFailure(statusErr *reportHTTPStatusError) {
 		Str("endpoint", endpoint).
 		Int("status_code", statusCode).
 		Str("pulse_url", a.trimmedPulseURL).
-		Msg("Pulse rejected this agent's API token (401 Unauthorized). The token is no longer valid on the server, which usually means Pulse was restored/reinstalled or upgraded (for example v5 -> v6) without carrying the token across. Re-run the agent install command from the Pulse UI (Settings > Agents) to mint a fresh token. Reports are dropped until the token is replaced.")
+		Msg("Pulse rejected this agent's API token (401 Unauthorized). The token is no longer valid on the server, which usually means Pulse was restored/reinstalled or upgraded (for example v5 -> v6) without carrying the token across. Re-run the agent install command from the Pulse UI to mint a fresh token. Reports are dropped until the token is replaced.")
 }
 
 func (a *Agent) flushBuffer(ctx context.Context) {

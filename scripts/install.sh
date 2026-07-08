@@ -352,7 +352,7 @@ restore_selinux_contexts() {
 # health-check paths report it identically.
 warn_agent_token_rejected() {
     log_warn "Pulse rejected this agent's API token (HTTP 401/403). The saved token is no longer valid on the server, which usually means Pulse was restored/reinstalled or upgraded (for example v5 -> v6) without carrying the token across."
-    log_warn "Re-run the full agent install command from the Pulse UI (Settings > Agents) to mint a fresh token. The agent will keep reporting 401 until the token is replaced."
+    log_warn "Re-run the full agent install command from the Pulse UI to mint a fresh token. The agent will keep reporting 401 until the token is replaced."
 }
 
 # verify_agent_server_registration returns:

@@ -1434,7 +1434,7 @@ export const AgentsMachinesTable: Component<{
                       const when = last
                         ? ` Last report ${formatPlatformTableRelativeTimeValue(last)}.`
                         : '';
-                      return `Agent has stopped reporting.${when} Re-run the install command from Settings > Agents to refresh its token.`;
+                      return `Agent has stopped reporting.${when} Re-run the install command from the Pulse UI to refresh its token.`;
                     };
                     const indicator = () => getSimpleStatusIndicator(machine.status);
                     const canRenderMetrics = () => indicator().variant !== 'danger';
