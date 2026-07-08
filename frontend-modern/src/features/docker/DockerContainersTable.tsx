@@ -264,10 +264,19 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     return host ? base.filter((resource) => dockerHostName(resource) === host) : base;
   });
   const hasActiveFilters = () => tableState.hasActiveFilters() || hostFilter() !== '';
-  const resetFilters = () => {
-    tableState.resetFilters();
-    setHostFilter('');
-  };
+  // Reset must clear every URL param in ONE navigation. Consecutive
+  // setSearchParams calls each merge against the pre-navigation URL (the
+  // router commits inside an async transition), so clearing search, status,
+  // and host as three writes would leave the first two params resurrected.
+  const resetFilters = () =>
+    setSearchParams(
+      {
+        [DOCKER_QUERY_PARAMS.query]: null,
+        [DOCKER_QUERY_PARAMS.status]: null,
+        [DOCKER_QUERY_PARAMS.host]: null,
+      },
+      { replace: true },
+    );
   const sortedRows = createMemo(() => [...scopedRows()].sort(compareDockerContainers));
   // Runtime is host-level data repeated on every container row; it only
   // informs when the fleet actually mixes runtimes (docker vs podman).

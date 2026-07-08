@@ -62,6 +62,12 @@ export const DOCKER_QUERY_PARAMS = {
   status: 'status',
 } as const;
 
+export const KUBERNETES_QUERY_PARAMS = {
+  namespace: 'namespace',
+  query: 'q',
+  status: 'status',
+} as const;
+
 export const STORAGE_QUERY_PARAMS = {
   tab: 'tab',
   group: 'group',

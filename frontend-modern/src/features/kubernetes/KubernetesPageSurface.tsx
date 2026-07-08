@@ -1,5 +1,5 @@
 import { useLocation, useSearchParams } from '@solidjs/router';
-import { Show, createMemo, createSignal, type Accessor } from 'solid-js';
+import { Show, createMemo, type Accessor } from 'solid-js';
 import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import type { FilterDef } from '@/components/shared/FilterBar';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
@@ -9,6 +9,7 @@ import {
   formatAgentVersionDisplay,
 } from '@/features/platformPage/agentVersion';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
+import { KUBERNETES_QUERY_PARAMS } from '@/routing/resourceLinks';
 import { updateStore } from '@/stores/updates';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -185,17 +186,46 @@ type SharedToolbarState = {
   status: Accessor<KubernetesResourceStatusFilter>;
   setStatus: (value: KubernetesResourceStatusFilter) => void;
   hasActiveFilters: Accessor<boolean>;
-  resetFilters: () => void;
+  resetFilters: (extraParams?: Record<string, string | null>) => void;
 };
 
+// Search and status live in the URL, like the namespace scope below, so the
+// whole filter state is shareable and captured by saved views. That is what
+// makes -term exclusions persistent: search `-name`, save it as the default
+// view, and the noisy rows stay hidden on every visit. URL writes replace the
+// history entry so typing does not pile up back-button states.
 function createKubernetesSharedToolbar(): SharedToolbarState {
-  const [search, setSearch] = createSignal('');
-  const [status, setStatus] = createSignal<KubernetesResourceStatusFilter>('all');
-  const hasActiveFilters = createMemo(() => search().trim().length > 0 || status() !== 'all');
-  const resetFilters = () => {
-    setSearch('');
-    setStatus('all');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const search = () => {
+    const value = searchParams[KUBERNETES_QUERY_PARAMS.query];
+    return typeof value === 'string' ? value : '';
   };
+  const setSearch = (value: string) =>
+    setSearchParams({ [KUBERNETES_QUERY_PARAMS.query]: value || null }, { replace: true });
+  const status = (): KubernetesResourceStatusFilter => {
+    const value = searchParams[KUBERNETES_QUERY_PARAMS.status];
+    return value === 'online' || value === 'degraded' || value === 'offline' ? value : 'all';
+  };
+  const setStatus = (value: KubernetesResourceStatusFilter) =>
+    setSearchParams(
+      { [KUBERNETES_QUERY_PARAMS.status]: value === 'all' ? null : value },
+      { replace: true },
+    );
+  const hasActiveFilters = createMemo(() => search().trim().length > 0 || status() !== 'all');
+  // Reset must clear every URL param in ONE navigation. Consecutive
+  // setSearchParams calls each merge against the pre-navigation URL (the
+  // router commits inside an async transition), so a second call would
+  // resurrect the params the first one just cleared. Callers pass the params
+  // they own (e.g. namespace) instead of issuing their own follow-up write.
+  const resetFilters = (extraParams?: Record<string, string | null>) =>
+    setSearchParams(
+      {
+        [KUBERNETES_QUERY_PARAMS.query]: null,
+        [KUBERNETES_QUERY_PARAMS.status]: null,
+        ...extraParams,
+      },
+      { replace: true },
+    );
   return { search, setSearch, status, setStatus, hasActiveFilters, resetFilters };
 }
 
@@ -215,7 +245,6 @@ type KubernetesNamespaceScope = {
   scopedSections: Accessor<Resource[][]>;
   scopeFilters: Accessor<FilterDef[]>;
   hasActiveNamespace: Accessor<boolean>;
-  clearNamespace: () => void;
 };
 
 // Namespace scope for a shared-toolbar Kubernetes tab. Namespace is the primary
@@ -227,8 +256,10 @@ function createKubernetesNamespaceScope(
   sections: Accessor<Resource[][]>,
 ): KubernetesNamespaceScope {
   const [searchParams, setSearchParams] = useSearchParams();
-  const namespaceFilter = () =>
-    typeof searchParams.namespace === 'string' ? searchParams.namespace : '';
+  const namespaceFilter = () => {
+    const value = searchParams[KUBERNETES_QUERY_PARAMS.namespace];
+    return typeof value === 'string' ? value : '';
+  };
   const namespaceOf = (resource: Resource) => (resource.kubernetes?.namespace ?? '').trim();
   const matchesNamespace = (resource: Resource) => {
     const namespace = namespaceFilter();
@@ -259,7 +290,8 @@ function createKubernetesNamespaceScope(
           ...namespaceOptions().map((namespace) => ({ value: namespace, label: namespace })),
         ],
         value: namespaceFilter,
-        setValue: (value: string) => setSearchParams({ namespace: value || null }),
+        setValue: (value: string) =>
+          setSearchParams({ [KUBERNETES_QUERY_PARAMS.namespace]: value || null }),
         defaultValue: '',
       },
     ];
@@ -268,7 +300,6 @@ function createKubernetesNamespaceScope(
     scopedSections,
     scopeFilters,
     hasActiveNamespace: () => namespaceFilter() !== '',
-    clearNamespace: () => setSearchParams({ namespace: null }),
   };
 }
 
@@ -297,10 +328,8 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
     countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
   );
   const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveNamespace();
-  const resetFilters = () => {
-    toolbar.resetFilters();
-    scope.clearNamespace();
-  };
+  const resetFilters = () =>
+    toolbar.resetFilters({ [KUBERNETES_QUERY_PARAMS.namespace]: null });
 
   return (
     <Show
@@ -395,10 +424,8 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
     countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
   );
   const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveNamespace();
-  const resetFilters = () => {
-    toolbar.resetFilters();
-    scope.clearNamespace();
-  };
+  const resetFilters = () =>
+    toolbar.resetFilters({ [KUBERNETES_QUERY_PARAMS.namespace]: null });
 
   return (
     <Show
@@ -468,10 +495,8 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
     countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
   );
   const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveNamespace();
-  const resetFilters = () => {
-    toolbar.resetFilters();
-    scope.clearNamespace();
-  };
+  const resetFilters = () =>
+    toolbar.resetFilters({ [KUBERNETES_QUERY_PARAMS.namespace]: null });
 
   return (
     <Show

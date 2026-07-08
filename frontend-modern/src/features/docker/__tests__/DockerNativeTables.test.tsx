@@ -412,6 +412,54 @@ describe('Docker native tables', () => {
     expect(screen.queryByText('edge-web')).not.toBeInTheDocument();
   });
 
+  it('clears search, status, and host in one navigation when resetting filters', async () => {
+    window.history.pushState({}, '', '/?q=-redis&status=offline&host=edge-01');
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: {
+              hostname: 'edge-01',
+              runtime: 'docker',
+              image: 'nginx:latest',
+              containerState: 'running',
+            },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-cache',
+            status: 'offline',
+            docker: {
+              hostname: 'edge-02',
+              runtime: 'docker',
+              image: 'redis:7.4',
+              containerState: 'exited',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+      />
+    ));
+
+    fireEvent.click(screen.getByLabelText('Clear all'));
+
+    // Reset must be a single setSearchParams write: consecutive writes each
+    // merge against the pre-navigation URL (the router commits inside an
+    // async transition), so a per-param reset resurrects the params cleared
+    // by the earlier writes.
+    await waitFor(() => expect(window.location.search).toBe(''));
+    expect(screen.getByText('edge-web')).toBeInTheDocument();
+    expect(screen.getByText('edge-cache')).toBeInTheDocument();
+  });
+
   it('hides the Restarts column when the current containers have no restart signal', () => {
     setViewportWidth(1500);
 

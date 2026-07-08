@@ -93,6 +93,33 @@ describe('useWorkloadsControlsState', () => {
     });
   });
 
+  it('URL-backs free-text search via q so saved views capture -term exclusions', () => {
+    createRoot((dispose) => {
+      try {
+        const [showFilters, setShowFilters] = createSignal(false);
+        const state = useWorkloadsControlsState({
+          viewMode: () => 'all' as ViewMode,
+          showFilters,
+          setShowFilters,
+        });
+
+        expect(state.search()).toBe('');
+
+        state.setSearch('-noisy');
+
+        expect(navigateSpy).toHaveBeenCalledWith('/workloads?q=-noisy', { replace: true });
+        expect(state.search()).toBe('-noisy');
+
+        state.setSearch('');
+
+        expect(mockRouterSearch()).toBe('');
+        expect(state.search()).toBe('');
+      } finally {
+        dispose();
+      }
+    });
+  });
+
   it('persists scoped workload status so platform pages restore it when revisited', async () => {
     createRoot((dispose) => {
       try {
