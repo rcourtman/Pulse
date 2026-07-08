@@ -3,6 +3,11 @@ node_modules
 .pnp
 .pnp.js
 
+# pnpm is not used here — npm is canonical (see package-lock.json). Keep stray
+# pnpm artifacts out of the tree so they don't drift or spawn Dependabot noise.
+pnpm-lock.yaml
+pnpm-workspace.yaml
+
 # Testing
 coverage
 
