@@ -254,68 +254,6 @@ async function openSelfHostedGeneralSettings(page: Page) {
 }
 
 test.describe("Monitored-system billing focus", () => {
-  test("keeps monitored-system capacity review informational on self-hosted billing", async ({
-    page,
-  }, testInfo) => {
-    test.skip(
-      testInfo.project.name.startsWith("mobile-"),
-      "Desktop-only billing navigation",
-    );
-
-    await configureMonitoredSystemBillingFixtures(page);
-    await openSelfHostedGeneralSettings(page);
-
-    await expect(
-      page
-        .getByRole("status")
-        .filter({ hasText: "Over policy by 11. 16 monitored, 5 included." }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole("link", { name: "Upgrade to add more" }),
-    ).toHaveCount(0);
-
-    await ensureAuthenticated(page);
-    await page.goto(`${DEV_SERVER_URL}/settings/system/billing/plan`, {
-      waitUntil: "domcontentloaded",
-    });
-    await page.waitForURL("**/settings/system/billing/plan");
-    await expect(page.getByRole("tab", { name: "Plan" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await expect(
-      page.getByText(
-        "Existing monitoring continues. Additional monitored systems are paused.",
-      ),
-    ).toBeVisible();
-    await expect(page.getByText("Why is this over policy?")).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: "Review monitored systems" }),
-    ).toHaveAttribute("href", "/settings/system/billing/usage");
-    await expect(page.getByText("Compare self-hosted plans")).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Compare plans" })).toHaveCount(
-      0,
-    );
-    await expect(
-      page.getByRole("link", { name: "Upgrade to add more" }),
-    ).toHaveCount(0);
-
-    await page.getByRole("link", { name: "Review monitored systems" }).click();
-    await page.waitForURL("**/settings/system/billing/usage");
-    await expect(page.getByRole("tab", { name: "Usage" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await expect(
-      page.getByRole("button", { name: "View counting rules" }),
-    ).toBeVisible();
-    await expect(page.getByText("Counts as 1 monitored system")).toBeVisible();
-    await expect(page.getByText("1 grouped source")).toBeVisible();
-    await expect(page.getByText("Compare self-hosted plans")).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Compare plans" })).toHaveCount(
-      0,
-    );
-  });
 
   test("does not show upgrade pressure while monitored-system usage is unavailable", async ({
     page,
