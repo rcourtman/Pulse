@@ -248,11 +248,15 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       beginMutationState(nextBillingState.upgradeCheckout);
     });
     try {
+      var trialRequested = billingState.upgradeTrialRequested === true &&
+        tier === 'pro' &&
+        billingCycle === 'monthly';
       var data = await api.postCommercialJSON<PortalCheckoutSessionCreateResponse>('/v1/checkout/session', {
         plan_key: planKey,
         tier: tier,
         billing_cycle: billingCycle,
         portal_handoff_id: portalHandoffID,
+        ...(trialRequested ? { trial: true } : {}),
       });
       if (!data || !data.url) {
         throw new Error('Checkout URL was not returned.');

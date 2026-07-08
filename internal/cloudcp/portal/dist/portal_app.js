@@ -1185,6 +1185,7 @@
     return {
       openBillingPanelID: "",
       upgradeFeatureKey: "",
+      upgradeTrialRequested: false,
       upgradePortalHandoffID: "",
       upgradePortalHandoff: createQueryState(null),
       upgradePricing: createQueryState(null),
@@ -1812,8 +1813,11 @@
       return '<article class="billing-upgrade-plan-card' + (plan.highlight ? " highlight" : "") + '">' + (plan.badge ? '<div class="billing-upgrade-plan-badge">' + escapeText(plan.badge) + "</div>" : "") + '<div class="billing-upgrade-plan-header"><div class="billing-upgrade-plan-kicker">' + escapeText(plan.tierKicker) + "</div><h4>" + escapeText(plan.title) + '</h4><div class="billing-upgrade-plan-price">' + escapeText(plan.price) + '</div><div class="billing-upgrade-plan-period">' + escapeText(plan.period) + '</div></div><p class="billing-upgrade-plan-blurb">' + escapeText(plan.blurb) + '</p><ul class="billing-upgrade-plan-features">' + plan.features.map(function(feature) {
         return '<li class="billing-upgrade-plan-feature tone-' + escapeAttribute(feature.tone) + '"><span class="billing-upgrade-plan-feature-copy">' + String(feature.html || "") + "</span></li>";
       }).join("") + "</ul>" + (plan.note ? '<div class="helper-text">' + escapeText(plan.note) + "</div>" : "") + '<div class="form-actions">' + checkoutButtons.map(function(button) {
-        return '<button type="button" class="' + escapeAttribute(button.className || "btn-primary") + '" data-account-billing-action="upgrade-start-checkout" data-upgrade-plan-key="' + escapeAttribute(button.planKey || "") + '" data-upgrade-tier="' + escapeAttribute(button.tier || "") + '" data-upgrade-billing-cycle="' + escapeAttribute(button.billingCycle || "") + '"' + (checkoutDisabled ? " disabled" : "") + ">" + escapeText(button.label) + "</button>";
-      }).join("") + "</div></article>";
+        var isTrialButton = billingState.upgradeTrialRequested === true && button.tier === "pro" && button.billingCycle === "monthly";
+        return '<button type="button" class="' + escapeAttribute(button.className || "btn-primary") + '" data-account-billing-action="upgrade-start-checkout" data-upgrade-plan-key="' + escapeAttribute(button.planKey || "") + '" data-upgrade-tier="' + escapeAttribute(button.tier || "") + '" data-upgrade-billing-cycle="' + escapeAttribute(button.billingCycle || "") + '"' + (checkoutDisabled ? " disabled" : "") + ">" + escapeText(isTrialButton ? "Start 14-day free trial" : button.label) + "</button>";
+      }).join("") + "</div>" + (billingState.upgradeTrialRequested === true && checkoutButtons.some(function(button) {
+        return button.tier === "pro" && button.billingCycle === "monthly";
+      }) ? '<div class="helper-text">Card required. You will not be charged if you cancel during the 14-day trial.</div>' : "") + "</article>";
     }).join("") + "</div>";
   }
   function renderUpgradePanel(billingState, _bootstrap) {
@@ -2227,11 +2231,13 @@
         beginMutationState(nextBillingState.upgradeCheckout);
       });
       try {
+        var trialRequested = billingState.upgradeTrialRequested === true && tier === "pro" && billingCycle === "monthly";
         var data = await api.postCommercialJSON("/v1/checkout/session", {
           plan_key: planKey,
           tier,
           billing_cycle: billingCycle,
-          portal_handoff_id: portalHandoffID
+          portal_handoff_id: portalHandoffID,
+          ...trialRequested ? { trial: true } : {}
         });
         if (!data || !data.url) {
           throw new Error("Checkout URL was not returned.");
@@ -3590,6 +3596,10 @@
   function normalizeUpgradeFeatureKey2(value) {
     return String(value || "").trim();
   }
+  function normalizeUpgradeTrialRequested(value) {
+    var trimmed = String(value || "").trim().toLowerCase();
+    return trimmed === "1" || trimmed === "true";
+  }
   function readPortalRuntimeHandoff(locationHref = window.location.href) {
     try {
       var params = new URL(locationHref).searchParams;
@@ -3602,14 +3612,16 @@
         email: normalizeHandoffEmail(params.get("email")),
         openBillingPanelID,
         upgradePortalHandoffID,
-        upgradeFeatureKey: normalizeUpgradeFeatureKey2(params.get("feature"))
+        upgradeFeatureKey: normalizeUpgradeFeatureKey2(params.get("feature")),
+        upgradeTrialRequested: normalizeUpgradeTrialRequested(params.get("trial"))
       };
     } catch {
       return {
         email: "",
         openBillingPanelID: "",
         upgradePortalHandoffID: "",
-        upgradeFeatureKey: ""
+        upgradeFeatureKey: "",
+        upgradeTrialRequested: false
       };
     }
   }
@@ -3650,12 +3662,14 @@
         billingState.openBillingPanelID = handoff.openBillingPanelID;
         billingState.upgradePortalHandoffID = handoff.upgradePortalHandoffID;
         billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
+        billingState.upgradeTrialRequested = handoff.upgradeTrialRequested;
       }, { notify: false });
     } else if (handoff.upgradeFeatureKey || handoff.upgradePortalHandoffID) {
       store.setActiveShellSection("billing");
       store.updateBillingState(function(billingState) {
         billingState.upgradePortalHandoffID = handoff.upgradePortalHandoffID;
         billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
+        billingState.upgradeTrialRequested = handoff.upgradeTrialRequested;
       }, { notify: false });
     }
     return {

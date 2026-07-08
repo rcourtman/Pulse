@@ -71,6 +71,20 @@ describe('portal runtime', function() {
     expect(handoff.openBillingPanelID).toBe('upgrade-billing-panel');
     expect(handoff.upgradePortalHandoffID).toBe('cph_signed');
     expect(handoff.upgradeFeatureKey).toBe('');
+    expect(handoff.upgradeTrialRequested).toBe(false);
+  });
+
+  it('reads a trial request from the handoff arrival query', function() {
+    var handoff = readPortalRuntimeHandoff(
+      'https://cloud.pulserelay.pro/portal?portal_handoff_id=cph_signed&feature=self_hosted_plan&trial=1',
+    );
+
+    expect(handoff.upgradeTrialRequested).toBe(true);
+
+    var noTrial = readPortalRuntimeHandoff(
+      'https://cloud.pulserelay.pro/portal?portal_handoff_id=cph_signed&trial=definitely',
+    );
+    expect(noTrial.upgradeTrialRequested).toBe(false);
   });
 
   it('blocks legacy checkout intent arrivals from acting as a trusted upgrade bootstrap', function() {
@@ -96,6 +110,7 @@ describe('portal runtime', function() {
         openBillingPanelID: 'refund-billing-panel',
         upgradePortalHandoffID: '',
         upgradeFeatureKey: '',
+        upgradeTrialRequested: false,
       }
     );
 
@@ -118,12 +133,14 @@ describe('portal runtime', function() {
         openBillingPanelID: 'upgrade-billing-panel',
         upgradePortalHandoffID: 'cph_signed',
         upgradeFeatureKey: '',
+        upgradeTrialRequested: true,
       }
     );
 
     expect(runtime.store.getShellState().activeSection).toBe('billing');
     expect(runtime.store.getBillingState().openBillingPanelID).toBe('upgrade-billing-panel');
     expect(runtime.store.getBillingState().upgradePortalHandoffID).toBe('cph_signed');
+    expect(runtime.store.getBillingState().upgradeTrialRequested).toBe(true);
     expect(runtime.store.getBillingState().upgradeFeatureKey).toBe('');
   });
 });

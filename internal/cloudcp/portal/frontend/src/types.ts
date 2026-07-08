@@ -190,6 +190,7 @@ export interface RefundState {
 export interface PortalBillingState {
   openBillingPanelID: string;
   upgradeFeatureKey: string;
+  upgradeTrialRequested: boolean;
   upgradePortalHandoffID: string;
   upgradePortalHandoff: PortalQueryState<PortalUpgradePortalHandoffModel | null>;
   upgradePricing: PortalQueryState<PortalUpgradePricingModel | null>;

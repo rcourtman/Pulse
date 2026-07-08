@@ -7,6 +7,7 @@ export interface PortalRuntimeHandoff {
   openBillingPanelID: string;
   upgradePortalHandoffID: string;
   upgradeFeatureKey: string;
+  upgradeTrialRequested: boolean;
 }
 
 export interface PortalRuntime {
@@ -61,6 +62,11 @@ function normalizeUpgradeFeatureKey(value: string | null): string {
   return String(value || '').trim();
 }
 
+function normalizeUpgradeTrialRequested(value: string | null): boolean {
+  var trimmed = String(value || '').trim().toLowerCase();
+  return trimmed === '1' || trimmed === 'true';
+}
+
 export function readPortalRuntimeHandoff(
   locationHref: string | undefined = window.location.href,
 ): PortalRuntimeHandoff {
@@ -76,6 +82,7 @@ export function readPortalRuntimeHandoff(
       openBillingPanelID: openBillingPanelID,
       upgradePortalHandoffID: upgradePortalHandoffID,
       upgradeFeatureKey: normalizeUpgradeFeatureKey(params.get('feature')),
+      upgradeTrialRequested: normalizeUpgradeTrialRequested(params.get('trial')),
     };
   } catch {
     return {
@@ -83,6 +90,7 @@ export function readPortalRuntimeHandoff(
       openBillingPanelID: '',
       upgradePortalHandoffID: '',
       upgradeFeatureKey: '',
+      upgradeTrialRequested: false,
     };
   }
 }
@@ -132,12 +140,14 @@ export function createPortalRuntime(
       billingState.openBillingPanelID = handoff.openBillingPanelID;
       billingState.upgradePortalHandoffID = handoff.upgradePortalHandoffID;
       billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
+      billingState.upgradeTrialRequested = handoff.upgradeTrialRequested;
     }, { notify: false });
   } else if (handoff.upgradeFeatureKey || handoff.upgradePortalHandoffID) {
     store.setActiveShellSection('billing');
     store.updateBillingState(function(billingState) {
       billingState.upgradePortalHandoffID = handoff.upgradePortalHandoffID;
       billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
+      billingState.upgradeTrialRequested = handoff.upgradeTrialRequested;
     }, { notify: false });
   }
   return {

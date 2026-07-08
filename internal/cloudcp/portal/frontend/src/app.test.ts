@@ -152,6 +152,7 @@ describe('portal app', function() {
         openBillingPanelID: 'retrieve-billing-panel',
         upgradePortalHandoffID: '',
         upgradeFeatureKey: '',
+        upgradeTrialRequested: false,
       }
     );
 

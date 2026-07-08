@@ -122,6 +122,9 @@ function renderUpgradePlansHTML(billingState: PortalBillingState): string {
         }).join('') + '</ul>' +
         (plan.note ? '<div class="helper-text">' + escapeText(plan.note) + '</div>' : '') +
         '<div class="form-actions">' + checkoutButtons.map(function(button) {
+          var isTrialButton = billingState.upgradeTrialRequested === true &&
+            button.tier === 'pro' &&
+            button.billingCycle === 'monthly';
           return (
             '<button type="button" class="' + escapeAttribute(button.className || 'btn-primary') + '"' +
               ' data-account-billing-action="upgrade-start-checkout"' +
@@ -130,10 +133,15 @@ function renderUpgradePlansHTML(billingState: PortalBillingState): string {
               ' data-upgrade-billing-cycle="' + escapeAttribute(button.billingCycle || '') + '"' +
               (checkoutDisabled ? ' disabled' : '') +
               '>' +
-              escapeText(button.label) +
+              escapeText(isTrialButton ? 'Start 14-day free trial' : button.label) +
             '</button>'
           );
         }).join('') + '</div>' +
+        (billingState.upgradeTrialRequested === true && checkoutButtons.some(function(button) {
+          return button.tier === 'pro' && button.billingCycle === 'monthly';
+        })
+          ? '<div class="helper-text">Card required. You will not be charged if you cancel during the 14-day trial.</div>'
+          : '') +
       '</article>'
     );
   }).join('') + '</div>';

@@ -12,6 +12,8 @@ export interface SelfHostedProBillingPresentation {
   planSectionDescription: string;
   planComparisonSectionTitle: string;
   planComparisonActionLabel: string;
+  planComparisonTrialActionLabel: string;
+  planComparisonTrialActionNote: string;
   usageSectionTitle: string;
   hiddenShellTitle: string;
   hiddenShellDescription: string;
@@ -46,6 +48,9 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   planSectionDescription: 'Current tier and enabled capabilities.',
   planComparisonSectionTitle: 'Available plans',
   planComparisonActionLabel: 'View plans',
+  planComparisonTrialActionLabel: 'Start 14-day free Pro trial',
+  planComparisonTrialActionNote:
+    'Card required. You will not be charged if you cancel during the trial.',
   usageSectionTitle: 'Usage',
   hiddenShellTitle: 'Demo mode',
   hiddenShellDescription: 'Commercial settings are hidden for this session.',
