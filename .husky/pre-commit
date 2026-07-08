@@ -144,9 +144,27 @@ python3 scripts/release_control/format_staged_go.py
 if command -v golangci-lint >/dev/null 2>&1; then
     if staged_files_match '(^|/).*\.go$|(^|/)go\.(mod|sum|work|work\.sum)$|^\.golangci\.ya?ml$'; then
         echo "Running golangci-lint..."
-        # Lint only packages containing staged Go files, not the entire repo
-        STAGED_GO_PKGS=$(git diff --cached --name-only | grep '\.go$' | xargs -I{} dirname {} 2>/dev/null | sort -u | sed 's|^|./|' | tr '\n' ' ')
-        if [ -z "$STAGED_GO_PKGS" ]; then
+        # Lint only packages containing staged Go files, not the entire repo.
+        # Packages in nested Go modules (own go.mod, e.g.
+        # tests/integration/mock-github-server) must lint from their module
+        # root or the typecheck fails with "main module does not contain
+        # package"; group staged dirs by nearest enclosing go.mod.
+        STAGED_GO_DIRS=$(git diff --cached --name-only | grep '\.go$' | xargs -I{} dirname {} 2>/dev/null | sort -u)
+        STAGED_GO_PKGS=""
+        NESTED_GO_MODULES=""
+        for staged_dir in $STAGED_GO_DIRS; do
+            module_root="$staged_dir"
+            while [ "$module_root" != "." ] && [ ! -f "$module_root/go.mod" ]; do
+                module_root=$(dirname "$module_root")
+            done
+            if [ "$module_root" = "." ]; then
+                STAGED_GO_PKGS="$STAGED_GO_PKGS ./$staged_dir"
+            else
+                NESTED_GO_MODULES=$(printf '%s\n%s' "$NESTED_GO_MODULES" "$module_root")
+            fi
+        done
+        NESTED_GO_MODULES=$(printf '%s\n' "$NESTED_GO_MODULES" | sed '/^$/d' | sort -u)
+        if [ -z "$STAGED_GO_PKGS" ] && [ -z "$NESTED_GO_MODULES" ]; then
             STAGED_GO_PKGS="./..."
         fi
         # Report only issues introduced by the staged diff. Pre-existing
@@ -158,7 +176,13 @@ if command -v golangci-lint >/dev/null 2>&1; then
         if [ -n "$NEW_FROM_REV" ]; then
             NEW_FROM_FLAG="--new-from-rev=$NEW_FROM_REV"
         fi
-        GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-5m}" $NEW_FROM_FLAG $STAGED_GO_PKGS
+        if [ -n "$STAGED_GO_PKGS" ]; then
+            GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-5m}" $NEW_FROM_FLAG $STAGED_GO_PKGS
+        fi
+        for nested_module in $NESTED_GO_MODULES; do
+            echo "Running golangci-lint in nested module $nested_module..."
+            (cd "$nested_module" && GOMAXPROCS="${GOMAXPROCS:-2}" golangci-lint run --concurrency "${GOLANGCI_LINT_CONCURRENCY:-2}" --timeout "${GOLANGCI_LINT_TIMEOUT:-5m}" $NEW_FROM_FLAG ./...)
+        done
     else
         echo "Skipping golangci-lint (no staged Go/module/linter changes)."
     fi
