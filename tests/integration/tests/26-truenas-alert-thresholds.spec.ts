@@ -38,7 +38,7 @@ const test = base.extend<{}, WorkerFixtures>({
 test.describe('TrueNAS alert thresholds', () => {
   test.setTimeout(180_000);
 
-  test('routes TrueNAS through the neutral infrastructure, systems, and containers thresholds surfaces', async ({
+  test('surfaces TrueNAS systems, disks, and apps under the TrueNAS thresholds scope', async ({
     page,
   }) => {
     await page.route('**/api/resources**', async (route) => {
@@ -214,33 +214,18 @@ test.describe('TrueNAS alert thresholds', () => {
       waitUntil: 'domcontentloaded',
     });
 
-    await expect(page).toHaveURL(/\/alerts\/thresholds\/infrastructure/);
+    await expect(page).toHaveURL(/\/alerts\/thresholds/);
     await expect(page.getByRole('heading', { name: 'Alert Thresholds' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Infrastructure' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Storage Devices' })).toBeVisible();
-    await expect(page.getByText('tank', { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Systems' }).click();
-
-    await expect(page).toHaveURL(/\/alerts\/thresholds\/systems/);
-    const systemsTable = page.locator('table').first();
-    const systemDisksSection = page.getByTestId('section-agentDisks');
-    await expect(page.getByRole('heading', { name: 'Systems' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'System Disks' })).toBeVisible();
-    await expect(systemsTable.getByText('TrueNAS Main', { exact: true })).toBeVisible();
-    await expect(systemDisksSection.getByText('TrueNAS Main', { exact: true })).toBeVisible();
-    await expect(systemDisksSection.getByText('/mnt/tank', { exact: true })).toBeVisible();
-
-    await page.getByRole('button', { name: 'Containers' }).click();
-
-    await expect(page).toHaveURL(/\/alerts\/thresholds\/containers/);
-    const runtimeTable = page.locator('table').nth(0);
-    const containersTable = page.locator('table').nth(1);
-    await expect(page.getByText('Container Runtimes')).toBeVisible();
-    await expect(runtimeTable.getByText('TrueNAS', { exact: true })).toBeVisible();
-    await expect(containersTable.getByText('Nextcloud', { exact: true })).toBeVisible();
-    await expect(page.getByText('Ignored container prefixes')).toHaveCount(0);
-    await expect(page.getByText('Swarm service alerts')).toHaveCount(0);
+    // Threshold scopes are platform-first now; TrueNAS entities live under
+    // their own scope instead of the retired neutral groupings.
+    await page.getByRole('button', { name: 'TrueNAS', exact: true }).click();
+    await expect(page).toHaveURL(/\/alerts\/thresholds\/truenas/);
+    await expect(page.getByText('tank', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('TrueNAS Main', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Disks' })).toBeVisible();
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });
