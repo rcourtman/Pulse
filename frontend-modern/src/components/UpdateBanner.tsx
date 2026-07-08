@@ -1,10 +1,16 @@
 import { Show, createSignal, createEffect, createMemo, For, onCleanup } from 'solid-js';
 import { updateStore } from '@/stores/updates';
+import { runtimeCapabilities } from '@/stores/license';
 import { UpdatesAPI, type UpdatePlan } from '@/api/updates';
 import { UpdateConfirmationModal } from './UpdateConfirmationModal';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import { buildReleaseNotesUrl } from '@/components/updateVersion';
+
+// Self-hosted Pulse Pro updates come from the Private Release Access portal, not
+// the in-app updater (which tracks the public community build and would strip
+// Pro features). See the ApplyUpdate edition gate in internal/updates/manager.go.
+const PRO_RELEASE_ACCESS_URL = 'https://pulserelay.pro/download.html';
 
 export function UpdateBanner() {
   const [isExpanded, setIsExpanded] = createSignal(false);
@@ -47,6 +53,14 @@ export function UpdateBanner() {
   const releaseNotesUrl = createMemo(() =>
     buildReleaseNotesUrl(updateStore.updateInfo()?.latestVersion),
   );
+
+  // The compiled Pro binary must never self-update off the community build, so
+  // suppress in-app apply and point the customer at the portal instead. This
+  // keys off the binary's runtime identity (business hooks presence), NOT the
+  // license tier: a community binary with an active Pro license still
+  // self-updates normally. The backend ApplyUpdate gate is the hard guarantee;
+  // this is the UX layer.
+  const isProEdition = () => runtimeCapabilities()?.runtime?.build === 'pro';
 
   const handleApplyUpdate = () => {
     setShowConfirmModal(true);
@@ -147,8 +161,8 @@ export function UpdateBanner() {
                   </span>
                 </Show>
 
-                {/* Apply Update Button (automated deployments) */}
-                <Show when={updatePlan()?.canAutoUpdate && !isExpanded()}>
+                {/* Apply Update Button (automated community deployments) */}
+                <Show when={updatePlan()?.canAutoUpdate && !isExpanded() && !isProEdition()}>
                   <button
                     onClick={handleApplyUpdate}
                     class="px-3 py-1 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
@@ -157,14 +171,30 @@ export function UpdateBanner() {
                   </button>
                 </Show>
 
-                {/* Manual Steps Badge (non-automated deployments) */}
-                <Show when={updatePlan() && !updatePlan()?.canAutoUpdate && !isExpanded()}>
+                {/* Manual Steps Badge (non-automated community deployments) */}
+                <Show
+                  when={
+                    updatePlan() && !updatePlan()?.canAutoUpdate && !isExpanded() && !isProEdition()
+                  }
+                >
                   <span class="px-2 py-0.5 text-xs font-medium bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 rounded">
                     Manual steps required
                   </span>
                 </Show>
 
-                {!isExpanded() && getUpdateInstructions() && (
+                {/* Pro edition: in-app apply would downgrade to community, so route to the portal */}
+                <Show when={isProEdition() && !isExpanded()}>
+                  <a
+                    href={PRO_RELEASE_ACCESS_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="px-3 py-1 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                  >
+                    Update via Private Release Access →
+                  </a>
+                </Show>
+
+                {!isExpanded() && !isProEdition() && getUpdateInstructions() && (
                   <>
                     <span class="text-blue-600 dark:text-blue-400 text-sm hidden sm:inline">•</span>
                     <span class="text-blue-600 dark:text-blue-400 text-sm hidden sm:inline">
@@ -233,7 +263,41 @@ export function UpdateBanner() {
                   <span class="font-medium ml-1">Latest:</span>{' '}
                   {updateStore.updateInfo()?.latestVersion}
                 </p>
-                {getUpdateInstructions() && (
+
+                {/* Pro edition: portal update path (in-app apply would strip Pro features) */}
+                <Show when={isProEdition()}>
+                  <div class="mt-2 p-3 rounded-md border bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200">
+                    <div class="font-medium mb-1">Pulse Pro update</div>
+                    <p>
+                      The in-app updater tracks the public community build and would remove Pro
+                      features (Audit, RBAC, Reporting, SSO). Update from Private Release Access
+                      instead:
+                    </p>
+                    <ol class="list-decimal ml-5 mt-1 space-y-0.5">
+                      <li>
+                        Download the new Pro archive and its{' '}
+                        <code class="font-mono text-xs">.sshsig</code> sidecar from the portal.
+                      </li>
+                      <li>
+                        Run{' '}
+                        <code class="font-mono text-xs">
+                          sudo bash install.sh --archive ./pulse-pro-…tar.gz
+                        </code>
+                        .
+                      </li>
+                    </ol>
+                    <a
+                      href={PRO_RELEASE_ACCESS_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-block mt-2 underline hover:text-blue-900 dark:hover:text-blue-100"
+                    >
+                      Open Private Release Access →
+                    </a>
+                  </div>
+                </Show>
+
+                {!isProEdition() && getUpdateInstructions() && (
                   <p>
                     <span class="font-medium">Quick upgrade:</span> {getUpdateInstructions()}
                   </p>
@@ -268,9 +332,13 @@ export function UpdateBanner() {
                   </div>
                 </Show>
 
-                {/* Manual Update Instructions */}
+                {/* Manual Update Instructions (community deployments; Pro uses the portal block above) */}
                 <Show
-                  when={updatePlan()?.instructions && (updatePlan()?.instructions?.length ?? 0) > 0}
+                  when={
+                    !isProEdition() &&
+                    updatePlan()?.instructions &&
+                    (updatePlan()?.instructions?.length ?? 0) > 0
+                  }
                 >
                   <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
                     <div class="font-medium mb-2">Update Instructions:</div>
@@ -328,8 +396,8 @@ export function UpdateBanner() {
                   </div>
                 </Show>
 
-                {/* Apply Update Button (expanded view for automated deployments) */}
-                <Show when={updatePlan()?.canAutoUpdate}>
+                {/* Apply Update Button (expanded view for automated community deployments) */}
+                <Show when={updatePlan()?.canAutoUpdate && !isProEdition()}>
                   <div class="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
                     <button
                       onClick={handleApplyUpdate}

@@ -593,6 +593,20 @@ TLS floor in the dynamic config.
    archive filenames through `--archive` so direct Linux and Proxmox LXC users
    can keep the normal service setup while installing the private Pulse Pro
    runtime.
+   The in-app updater must refuse to apply on the compiled Pulse Pro binary:
+   `internal/updates` `ApplyUpdate` blocks when the running edition is Pro
+   (recorded by `pkg/edition`, flipped to `pro` in `enterpriseruntime.Initialize`
+   alongside `coreaudit.SetLogger`/`server.SetBusinessHooks`, and keyed off the
+   compiled binary — never license-active state) and directs the operator to
+   `https://pulserelay.pro/download.html` and the `install.sh --archive` path.
+   This is required because the community self-update flow (both the in-app
+   updater and `install.sh` default to the public `rcourtman/Pulse` community
+   assets) would replace the Pro binary and silently strip Audit, RBAC,
+   Reporting, and SSO from a paying customer. A community binary with an active
+   paid license is still community and must keep its normal self-update; the
+   `frontend-modern` update banner mirrors the same distinction by hiding the
+   in-app apply affordance for the Pro runtime identity and surfacing the portal
+   path instead.
    Customer-facing private Pro RC/GA promotion is part of that same boundary:
    for every non-draft v6 public release, `create-release.yml` must call the
    private `rcourtman/pulse-enterprise` `Build Pro Release` workflow after

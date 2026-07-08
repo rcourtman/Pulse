@@ -26,6 +26,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/edition"
 	"github.com/rs/zerolog/log"
 	godisk "github.com/shirou/gopsutil/v4/disk"
 )
@@ -511,6 +512,16 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	currentInfo, _ := GetCurrentVersion()
 	if currentInfo.IsDocker {
 		return fmt.Errorf("updates cannot be applied in Docker environment")
+	}
+
+	// Refuse to self-update the separately compiled Pulse Pro binary. The
+	// in-app updater and install.sh both target the public community build, so
+	// applying an update here would replace the Pro binary with community and
+	// silently strip Audit, RBAC, Reporting, and SSO. This keys off the
+	// compiled edition, not license state: a community binary with an active
+	// license is still community and updates normally.
+	if edition.IsPro() {
+		return fmt.Errorf("self-hosted Pulse Pro updates come from the Private Release Access page (https://pulserelay.pro/download.html): download the new archive and its .sshsig sidecar, then run install.sh --archive. The in-app updater tracks the public community build and would remove Pro features")
 	}
 
 	// Check for pre-v4 installation
