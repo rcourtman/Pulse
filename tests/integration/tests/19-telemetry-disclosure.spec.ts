@@ -69,12 +69,12 @@ test.describe('Telemetry disclosure', () => {
     await page.waitForURL(/\/settings/, { timeout: 15_000 });
 
     const telemetrySummary = page.getByText(
-      /rotating install ID, normalized release identity, platform, resource counts, and feature flags/i,
+      /rotating pseudonymous install ID, normalized release identity, runtime platform/i,
     );
     await expect(telemetrySummary).toBeVisible();
     await expect(telemetrySummary).toContainText('Telemetry rows are retained for up to 90 days');
     await expect(telemetrySummary).toContainText(
-      'IP addresses are not stored in telemetry rows',
+      'are not stored in telemetry rows',
     );
 
     const disclosureLink = page.getByRole('link', { name: 'Full details' }).first();
@@ -83,7 +83,7 @@ test.describe('Telemetry disclosure', () => {
       page,
       disclosureLink,
       '/docs/PRIVACY.md',
-      'Pulse currently has two usage-data scopes',
+      'Pulse has one outbound usage-data scope',
     );
   });
 

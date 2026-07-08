@@ -136,7 +136,27 @@ test.describe('Local docs links', () => {
   test('ai runtime controls open the shipped terms doc', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only local docs coverage');
 
-    await page.goto('/settings/system-ai', { waitUntil: 'domcontentloaded' });
+    // The autonomous chat-action option is gated on runtime autonomy, which
+    // the community e2e runtime blocks; unblock it at the capability layer so
+    // the terms disclosure it carries can be exercised.
+    await page.route('**/api/license/runtime-capabilities', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          capabilities: ['ai_patrol', 'ai_alerts', 'ai_autofix'],
+          limits: [],
+          hosted_mode: false,
+          max_history_days: 7,
+          runtime: { build: 'pro', label: 'Pulse Pro runtime' },
+          blocked_capabilities: [],
+        }),
+      });
+    });
+
+    // Chat action controls live on the Assistant panel; /settings/system-ai
+    // canonicalizes to the Provider & Models panel.
+    await page.goto('/settings/pulse-intelligence/assistant', { waitUntil: 'domcontentloaded' });
     await page.waitForURL(/\/settings/, { timeout: 15_000 });
 
     const permissionSelect = page
@@ -158,8 +178,12 @@ test.describe('Local docs links', () => {
   test('self-hosted commercial activation opens the shipped terms doc', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only local docs coverage');
 
-    await page.goto('/settings/system-pro', { waitUntil: 'domcontentloaded' });
+    await page.goto('/settings/pulse-intelligence/billing/plan', { waitUntil: 'domcontentloaded' });
     await page.waitForURL(/\/settings/, { timeout: 15_000 });
+
+    // The terms disclosure sits inside the collapsed manual key recovery
+    // section unless the panel is already in a recovery posture.
+    await page.getByText('Manual key recovery', { exact: true }).click();
 
     const termsLink = page.getByRole('link', { name: /terms of service/i }).first();
     await expect(termsLink).toHaveAttribute('href', '/docs/TERMS.md');
