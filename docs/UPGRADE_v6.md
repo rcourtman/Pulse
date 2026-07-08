@@ -132,11 +132,24 @@ servers.
 
 ### Can I keep Pulse v5 stable while I test Pulse v6?
 
-Yes. Keep a rollback path available while you evaluate v6. For the v6.0.0 GA
-cutover, the stable rollback command is:
+Yes. Keep a rollback path available while you evaluate v6. The final release
+on the v5 line is 5.1.36, so the stable rollback command is:
 
 ```bash
-./scripts/install.sh --version v5.1.35
+./scripts/install.sh --version v5.1.36
+```
+
+### Why did my v5 install upgrade itself to v6?
+
+Pulse 5.1.29 and later pin the built-in updater to the 5.1.x line and never
+offer v6, so upgrading from those versions is always a manual step. Pulse
+5.1.28 and older have no such pin: installs with auto-update enabled follow
+the newest stable GitHub release, which is now v6. If that happened to you,
+your data and configuration carry over; run through the Post-Upgrade
+Checklist above to confirm everything still works. To return to v5, run:
+
+```bash
+./scripts/install.sh --version v5.1.36
 ```
 
 ## Migration Notes (v6)
