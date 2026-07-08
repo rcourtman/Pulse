@@ -31,6 +31,11 @@ ARG BUILD_AGENT
 ARG VERSION
 ARG PULSE_LICENSE_PUBLIC_KEY_SHA256
 ARG PULSE_UPDATE_SIGNING_PUBLIC_KEY
+# Go build tags for the server binary. Shipped images use "release", which
+# fail-closes mock fixtures, admin bypass, and licensing env overrides. The
+# E2E test image builds with GO_BUILD_TAGS="" so the suite can drive mock
+# fixtures the same way the local dev harness does.
+ARG GO_BUILD_TAGS=release
 WORKDIR /app
 
 # Install build dependencies
@@ -84,13 +89,13 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     if [ -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" ] && [ "${UPDATE_PUBLIC_KEYS}" != "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" ]; then echo "Error: mounted update signing key does not match PULSE_UPDATE_SIGNING_PUBLIC_KEY." >&2; echo "Expected public key: ${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" >&2; echo "Actual public key:   ${UPDATE_PUBLIC_KEYS}" >&2; exit 1; fi && \
     SERVER_LDFLAGS="$(./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}" $(if [ -n "${LICENSE_PUBLIC_KEY}" ]; then printf '%s %s' --license-public-key "${LICENSE_PUBLIC_KEY}"; fi) $(if [ -n "${UPDATE_PUBLIC_KEYS}" ]; then printf '%s %s' --update-public-keys "${UPDATE_PUBLIC_KEYS}"; fi))" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-      -tags release \
+      -tags "${GO_BUILD_TAGS}" \
       -ldflags="${SERVER_LDFLAGS}" \
       -buildvcs=false \
       -trimpath \
       -o pulse-linux-amd64 ./cmd/pulse && \
     CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
-      -tags release \
+      -tags "${GO_BUILD_TAGS}" \
       -ldflags="${SERVER_LDFLAGS}" \
       -buildvcs=false \
       -trimpath \

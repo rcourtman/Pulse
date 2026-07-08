@@ -44,7 +44,9 @@ ensure_test_images() {
 
     if ! docker image inspect pulse:test >/dev/null 2>&1; then
         echo "Building missing image: pulse:test"
-        docker build -t pulse:test -f "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
+        # Test image drops the release build tag so the suite can enable mock
+        # fixtures without a demo entitlement.
+        docker build -t pulse:test --build-arg GO_BUILD_TAGS="" -f "$REPO_ROOT/Dockerfile" "$REPO_ROOT"
     fi
 }
 

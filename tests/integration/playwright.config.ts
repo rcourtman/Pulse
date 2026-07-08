@@ -17,6 +17,11 @@ export default defineConfig({
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
 
+  /* On CI, a broken test environment fails most of the suite; abort early so
+     the run produces a red completed verdict with a report instead of
+     grinding until the job timeout cancels it with no verdict at all. */
+  maxFailures: process.env.CI ? 20 : 0,
+
   /* Opt out of parallel tests on CI */
   workers: 1, // Update tests modify global state
 

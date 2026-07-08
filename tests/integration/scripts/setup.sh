@@ -86,7 +86,9 @@ echo "✅ Mock GitHub server image built"
 # Build Pulse test image (from root of repo)
 cd "$TEST_ROOT/../.."
 if [ -f "Dockerfile" ]; then
-    docker build -t pulse:test -f Dockerfile .
+    # Test image drops the release build tag so the suite can enable mock
+    # fixtures without a demo entitlement.
+    docker build -t pulse:test --build-arg GO_BUILD_TAGS="" -f Dockerfile .
     echo "✅ Pulse test image built"
 else
     echo "⚠️  Pulse Dockerfile not found. Using published image instead."

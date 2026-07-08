@@ -29,9 +29,13 @@ permissions:
 
 jobs:
   e2e:
-    name: Playwright Core E2E
+    name: Playwright Core E2E (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     steps:
       - name: Checkout code
@@ -51,8 +55,10 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Build Docker images for test environment
+        # GO_BUILD_TAGS="" drops the release build tag so the suite can enable
+        # mock fixtures; release-tag gating has its own -tags release Go tests.
         run: |
-          docker build -t pulse:test --target runtime .
+          docker build -t pulse:test --target runtime --build-arg GO_BUILD_TAGS="" .
           docker build -t pulse-mock-github:test ./tests/integration/mock-github-server
         env:
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
@@ -72,7 +78,7 @@ jobs:
           PULSE_E2E_SKIP_DOCKER: "true"
           PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL: "true"
           PULSE_E2E_PERF: "1"
-        run: npm test
+        run: npm test -- --shard=${{ matrix.shard }}/4
 
       - name: Collect container logs
         if: always()
@@ -89,7 +95,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-report
+          name: playwright-report-shard-${{ matrix.shard }}
           path: tests/integration/playwright-report/
           retention-days: 30
 
@@ -97,6 +103,20 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: test-failures
+          name: test-failures-shard-${{ matrix.shard }}
           path: tests/integration/test-results/
           retention-days: 7
+
+  e2e-verdict:
+    name: E2E verdict
+    runs-on: ubuntu-24.04
+    needs: e2e
+    if: always()
+    steps:
+      - name: Check shard results
+        run: |
+          if [ "${{ needs.e2e.result }}" != "success" ]; then
+            echo "E2E shards did not all pass (result: ${{ needs.e2e.result }})"
+            exit 1
+          fi
+          echo "All E2E shards passed"
