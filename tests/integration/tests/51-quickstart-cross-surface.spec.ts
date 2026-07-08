@@ -329,17 +329,13 @@ test.describe("Retired quickstart browser contract", () => {
 
     await page.goto("/settings/system-ai", { waitUntil: "domcontentloaded" });
     await expect(
-      page.getByRole("heading", { name: "Assistant & Patrol", level: 1 }),
+      page.getByRole("heading", { name: "Provider & Models", level: 1 }),
     ).toBeVisible();
 
     await page
-      .getByRole("button", { name: "Enable Assistant and Patrol" })
+      .getByRole("button", { name: "Enable Pulse Intelligence" })
       .click();
     await expect.poll(() => surface.updateRequests.length).toBe(0);
-    await expect(page.getByText("Set Up Assistant & Patrol")).toBeVisible();
-    await expect(
-      page.getByText("Connect a provider to power Pulse Assistant and Patrol."),
-    ).toBeVisible();
     await expect(page.getByText(/quickstart/i)).toHaveCount(0);
 
     const response = await browserApiRequest(
