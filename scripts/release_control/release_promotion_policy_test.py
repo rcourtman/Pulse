@@ -689,6 +689,16 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Required rollback stable version to rehearse", dry_run_workflow)
         self.assertIn("rollback_version:\n        description: 'Required rollback stable version to rehearse", dry_run_workflow)
         self.assertIn("required: true", dry_run_workflow)
+        # Scheduled watchdog runs carry no dispatch inputs, so the rehearsal
+        # step must derive the rollback target; the derive flag stays gated on
+        # the schedule event so manual dispatches keep explicit rollback.
+        self.assertIn(
+            'if [ "${EVENT_NAME}" = "schedule" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then',
+            dry_run_workflow,
+        )
+        self.assertIn("--derive-rollback-latest-stable", dry_run_workflow)
+        self.assertIn("--derive-rollback-latest-stable", resolver)
+        self.assertIn("derive_latest_stable_rollback_tag", resolver)
         self.assertIn("Required: prior stable version to pin for rollback", content)
         self.assertIn("rollback_version:\n        description: 'Required: prior stable version to pin for rollback", content)
         self.assertIn("check-workflow-dispatch-inputs.py", helper)

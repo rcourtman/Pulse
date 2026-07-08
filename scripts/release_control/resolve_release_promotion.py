@@ -14,6 +14,7 @@ from repo_file_io import REPO_ROOT, git_env
 
 
 SEMVER_STABLE_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
+SEMVER_STABLE_TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 SEMVER_PRERELEASE_RE = re.compile(r"-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)(?:\+[0-9A-Za-z.-]+)?$")
 
 
@@ -86,6 +87,38 @@ def normalize_whitespace(value: str) -> str:
     return " ".join((value or "").split())
 
 
+def list_stable_tags() -> list[str]:
+    result = subprocess.run(
+        ["git", "tag", "--list", "v*"],
+        cwd=REPO_ROOT,
+        env=git_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return [tag for tag in result.stdout.split() if SEMVER_STABLE_TAG_RE.match(tag)]
+
+
+def derive_latest_stable_rollback_tag(version: str, stable_tags: list[str]) -> str:
+    base_match = re.match(r"^(\d+)\.(\d+)\.(\d+)", (version or "").strip())
+    if not base_match:
+        raise ValueError(f"Cannot derive a rollback target from unparseable version {version!r}.")
+    base = tuple(int(part) for part in base_match.groups())
+    candidates: list[tuple[tuple[int, int, int], str]] = []
+    for tag in stable_tags:
+        match = SEMVER_STABLE_TAG_RE.match(tag)
+        if not match:
+            continue
+        numbers = tuple(int(part) for part in match.groups())
+        if numbers < base:
+            candidates.append((numbers, tag))
+    if not candidates:
+        raise ValueError(
+            f"Cannot derive a rollback target for {version}: no stable release tag precedes it."
+        )
+    return max(candidates)[1]
+
+
 def resolve_metadata(
     *,
     version: str,
@@ -96,6 +129,8 @@ def resolve_metadata(
     hotfix_exception: bool,
     hotfix_reason_input: str,
     release_notes_input: str,
+    derive_rollback_when_missing: bool = False,
+    list_stable_tags_fn: Callable[[], list[str]] = list_stable_tags,
     tag_exists_fn: Callable[[str], bool] = tag_exists,
     tag_commit_fn: Callable[[str], str] = tag_commit,
     head_descends_from_fn: Callable[[str], bool] = head_descends_from,
@@ -110,6 +145,8 @@ def resolve_metadata(
     release_notes = release_notes_input or ""
     is_prerelease = is_prerelease_version(version)
 
+    if not rollback_tag and derive_rollback_when_missing:
+        rollback_tag = derive_latest_stable_rollback_tag(version, list_stable_tags_fn())
     if not rollback_tag:
         raise ValueError(
             "rollback_version is required for every release rehearsal and promotion so rollback can be executed explicitly."
@@ -206,6 +243,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--version", required=True)
     parser.add_argument("--promoted-from-tag", default="")
     parser.add_argument("--rollback-version", default="")
+    parser.add_argument(
+        "--derive-rollback-latest-stable",
+        action="store_true",
+        help=(
+            "Scheduled rehearsals only: when --rollback-version is empty, derive the rollback "
+            "target as the latest stable tag preceding the rehearsal version instead of failing."
+        ),
+    )
     parser.add_argument("--ga-date", default="")
     parser.add_argument("--v5-eos-date", default="")
     parser.add_argument("--hotfix-exception", action="store_true")
@@ -224,6 +269,7 @@ def main() -> int:
         version=args.version,
         promoted_from_tag_input=args.promoted_from_tag,
         rollback_version_input=args.rollback_version,
+        derive_rollback_when_missing=args.derive_rollback_latest_stable,
         ga_date_input=args.ga_date,
         v5_eos_date_input=args.v5_eos_date,
         hotfix_exception=args.hotfix_exception,

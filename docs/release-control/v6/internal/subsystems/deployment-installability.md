@@ -1057,6 +1057,15 @@ for stable-versus-prerelease metadata validation shared by `.github/workflows/re
 and `.github/workflows/create-release.yml`. Promotion rollback targets, promoted
 prerelease lineage, soak checks, and GA/v5 notice metadata may not drift between those
 two workflows through duplicated inline shell validation.
+One scoped exception keeps the weekly drift watchdog viable: scheduled
+`release-dry-run.yml` runs carry no `workflow_dispatch` inputs (GitHub does
+not apply input defaults to `schedule` events), so the rehearsal step passes
+`--derive-rollback-latest-stable` and the resolver fills the empty
+`rollback_version` with the latest stable repository tag preceding the
+rehearsal version. The derivation flag is gated on the `schedule` event in
+the workflow; manual rehearsal dispatches and real promotions must still
+supply an explicit stable `rollback_version`, and the resolver still fails
+closed when the input is empty and the flag is absent.
 `scripts/release_control/validate_artifact_release_line.py` is the canonical
 owner for follow-on artifact workflow release-line validation shared by Docker
 publication, floating-tag promotion, Helm chart publication, and Helm Pages

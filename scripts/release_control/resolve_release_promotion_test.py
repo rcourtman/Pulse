@@ -45,6 +45,81 @@ class ResolveReleasePromotionTest(unittest.TestCase):
         self.assertEqual(metadata["promoted_from_tag"], "")
         self.assertEqual(metadata["soak_hours"], "")
 
+    def test_missing_rollback_is_rejected_without_derivation(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "rollback_version is required for every release rehearsal and promotion",
+        ):
+            resolver.resolve_metadata(
+                version="6.0.5-rc.3",
+                promoted_from_tag_input="",
+                rollback_version_input="",
+                ga_date_input="",
+                v5_eos_date_input="",
+                hotfix_exception=False,
+                hotfix_reason_input="",
+                release_notes_input="",
+                tag_exists_fn=lambda tag: True,
+            )
+
+    def test_scheduled_rehearsal_derives_latest_preceding_stable_rollback(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.0.5-rc.3",
+            promoted_from_tag_input="",
+            rollback_version_input="",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=False,
+            hotfix_reason_input="",
+            release_notes_input="",
+            derive_rollback_when_missing=True,
+            list_stable_tags_fn=lambda: ["v5.1.35", "v6.0.1", "v6.0.4", "v6.0.2"],
+            tag_exists_fn=lambda tag: True,
+        )
+        self.assertEqual(metadata["rollback_tag"], "v6.0.4")
+        self.assertEqual(metadata["rollback_command"], "./scripts/install.sh --version v6.0.4")
+
+    def test_explicit_rollback_input_wins_over_derivation(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.0.5-rc.3",
+            promoted_from_tag_input="",
+            rollback_version_input="6.0.3",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=False,
+            hotfix_reason_input="",
+            release_notes_input="",
+            derive_rollback_when_missing=True,
+            list_stable_tags_fn=lambda: ["v6.0.4"],
+            tag_exists_fn=lambda tag: tag == "v6.0.3",
+        )
+        self.assertEqual(metadata["rollback_tag"], "v6.0.3")
+
+    def test_derivation_never_selects_the_rehearsal_version_or_prereleases(self) -> None:
+        self.assertEqual(
+            resolver.derive_latest_stable_rollback_tag(
+                "6.0.5",
+                ["v6.0.5", "v6.0.5-rc.3", "v6.0.4", "v5.1.35"],
+            ),
+            "v6.0.4",
+        )
+
+    def test_derivation_requires_a_preceding_stable_tag(self) -> None:
+        with self.assertRaisesRegex(ValueError, "no stable release tag precedes"):
+            resolver.resolve_metadata(
+                version="6.0.5-rc.3",
+                promoted_from_tag_input="",
+                rollback_version_input="",
+                ga_date_input="",
+                v5_eos_date_input="",
+                hotfix_exception=False,
+                hotfix_reason_input="",
+                release_notes_input="",
+                derive_rollback_when_missing=True,
+                list_stable_tags_fn=lambda: [],
+                tag_exists_fn=lambda tag: True,
+            )
+
     def test_stable_requires_matching_promoted_rc_and_soak(self) -> None:
         metadata = resolver.resolve_metadata(
             version="6.0.0",

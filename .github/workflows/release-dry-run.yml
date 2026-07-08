@@ -1,11 +1,13 @@
 name: Release Dry Run
 
 on:
-  # Weekly drift watchdog: fires every Tuesday 07:00 UTC against pulse/v6-release
-  # so fixture, manifest, and load-calibration drift surfaces a week at a time
-  # instead of piling up until an RC publish. Scheduled runs use the input
-  # defaults below. Update rollback_version once v6 GA ships and a different
-  # stable line becomes the rollback target.
+  # Weekly drift watchdog: fires every Tuesday 07:00 UTC against the governed
+  # release branch so fixture, manifest, and load-calibration drift surfaces a
+  # week at a time instead of piling up until an RC publish. Scheduled runs
+  # carry no workflow_dispatch inputs (GitHub does not apply input defaults to
+  # schedule events), so the rehearsal step derives the rollback target as the
+  # latest stable tag preceding VERSION. Manual dispatches must still supply
+  # rollback_version explicitly.
   schedule:
     - cron: '0 7 * * 2'
   workflow_dispatch:
@@ -19,10 +21,9 @@ on:
         required: false
         type: string
       rollback_version:
-        description: 'Required rollback stable version to rehearse (for example 5.1.14 or v5.1.14)'
+        description: 'Required rollback stable version to rehearse (for example 6.0.4 or v6.0.4)'
         required: true
         type: string
-        default: '5.1.29'
       ga_date:
         description: 'Stable v6.0.0 rehearsal only: planned GA publish date (YYYY-MM-DD)'
         required: false
@@ -107,6 +108,7 @@ jobs:
       - name: Resolve rehearsal metadata
         id: rehearsal
         env:
+          EVENT_NAME: ${{ github.event_name }}
           VERSION_INPUT: ${{ inputs.version }}
           PROMOTED_FROM_TAG_INPUT: ${{ inputs.promoted_from_tag }}
           ROLLBACK_VERSION_INPUT: ${{ inputs.rollback_version }}
@@ -153,6 +155,13 @@ jobs:
           )
           if [ "${HOTFIX_EXCEPTION_INPUT:-false}" = "true" ]; then
             HELPER_ARGS+=(--hotfix-exception)
+          fi
+          if [ "${EVENT_NAME}" = "schedule" ] && [ -z "${ROLLBACK_VERSION_INPUT:-}" ]; then
+            # Scheduled watchdog runs carry no dispatch inputs; derive the
+            # rollback target instead of failing. Manual dispatches never get
+            # this flag, so their explicit-rollback requirement stands.
+            HELPER_ARGS+=(--derive-rollback-latest-stable)
+            echo "[OK] Scheduled rehearsal: deriving rollback target from the latest preceding stable tag"
           fi
 
           python3 scripts/release_control/resolve_release_promotion.py \
