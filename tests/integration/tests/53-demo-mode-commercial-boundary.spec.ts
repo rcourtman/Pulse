@@ -318,7 +318,7 @@ base.describe('Demo mode commercial boundary', () => {
     await expect(
       page.getByText('Demo instance with mock data (read-only)', { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1, name: 'Infrastructure Operations' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Infrastructure' })).toBeVisible();
     const settingsNavigation = page.locator('[aria-label="Settings navigation"]');
     await expect(settingsNavigation).toBeVisible();
     await expect(page.getByText('Default Organization', { exact: true })).toHaveCount(0);
@@ -435,7 +435,7 @@ base.describe('Managed demo runtime commercial boundary', () => {
         await expect(
           page.getByText('Demo instance with mock data (read-only)', { exact: true }),
         ).toBeVisible();
-        await expect(page.getByRole('heading', { level: 1, name: 'Infrastructure Operations' })).toBeVisible();
+        await expect(page.getByRole('heading', { level: 1, name: 'Infrastructure' })).toBeVisible();
         const settingsNavigation = page.locator('[aria-label="Settings navigation"]');
         await expect(settingsNavigation).toBeVisible();
         await expect(page.getByText('Default Organization', { exact: true })).toHaveCount(0);
