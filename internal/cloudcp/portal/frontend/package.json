@@ -9,9 +9,16 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
-    "esbuild": "^0.25.12",
+    "esbuild": "^0.28.1",
     "jsdom": "^24.1.0",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.6"
+  },
+  "overrides": {
+    "esbuild": "$esbuild",
+    "vite": "^7.3.5",
+    "form-data": "^4.0.6",
+    "postcss": "^8.5.10",
+    "ws": "^8.21.0"
   }
 }
