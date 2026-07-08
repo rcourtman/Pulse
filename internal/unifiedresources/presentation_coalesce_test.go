@@ -58,6 +58,55 @@ func TestCoalescePresentationHostResourcesMergesSplitRuntimeAndPlatformHost(t *t
 	}
 }
 
+func TestCoalescePresentationHostResourcesSurfacesStaleAgentOnLiveNode(t *testing.T) {
+	// A Proxmox node whose Pulse Agent has stopped reporting (401) stays online
+	// via the PVE API poll, but the dead agent must remain flagged stale so the
+	// UI does not present its last version as if it were current (issue #1515).
+	now := time.Date(2026, 7, 8, 10, 30, 0, 0, time.UTC)
+	resources := []Resource{
+		{
+			ID:       "agent-runtime-pve1",
+			Type:     ResourceTypeAgent,
+			Name:     "pve1",
+			Status:   StatusOffline,
+			LastSeen: now.Add(-30 * time.Minute),
+			Sources:  []DataSource{SourceAgent},
+			Identity: ResourceIdentity{Hostnames: []string{"pve1"}},
+			Agent: &AgentData{
+				AgentID:      "agent-machine-pve1",
+				Hostname:     "pve1",
+				AgentVersion: "6.0.2",
+				Stale:        true,
+			},
+		},
+		{
+			ID:       "proxmox-node-pve1",
+			Type:     ResourceTypeAgent,
+			Name:     "pve1",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceProxmox},
+			Identity: ResourceIdentity{Hostnames: []string{"pve1"}},
+			Proxmox:  &ProxmoxData{NodeName: "pve1", ClusterName: "homelab"},
+		},
+	}
+
+	coalesced := CoalescePresentationHostResources(resources)
+	if len(coalesced) != 1 {
+		t.Fatalf("expected split host resources to coalesce into 1 resource, got %d", len(coalesced))
+	}
+	resource := coalesced[0]
+	if resource.Status != StatusOnline {
+		t.Fatalf("node should stay online via the PVE source, got %q", resource.Status)
+	}
+	if resource.Agent == nil || !resource.Agent.Stale {
+		t.Fatalf("expected the dead agent to remain flagged stale after merge, got %+v", resource.Agent)
+	}
+	if resource.Agent.AgentVersion != "6.0.2" {
+		t.Fatalf("expected stale agent version retained, got %q", resource.Agent.AgentVersion)
+	}
+}
+
 func TestCoalescePresentationHostResourcesRedirectsProxmoxChildrenToAgentBackedParent(t *testing.T) {
 	now := time.Date(2026, 5, 22, 10, 30, 0, 0, time.UTC)
 	proxmoxParentID := "agent-proxmox-delly"

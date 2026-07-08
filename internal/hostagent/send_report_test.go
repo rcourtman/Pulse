@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -236,6 +237,107 @@ func TestAgentProcess_ForbiddenResponseDoesNotBuffer(t *testing.T) {
 	}
 	if !strings.Contains(logBuf.String(), "Unified Agent reporting") {
 		t.Fatalf("expected forbidden log to mention Unified Agent reporting scope, got %q", logBuf.String())
+	}
+}
+
+func TestAgentProcess_UnauthorizedResponseDoesNotBuffer(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	var logBuf bytes.Buffer
+	agent := &Agent{
+		cfg:             Config{APIToken: "stale-token"},
+		logger:          zerolog.New(&logBuf),
+		httpClient:      server.Client(),
+		trimmedPulseURL: server.URL,
+		reportBuffer:    utils.New[agentshost.Report](8),
+		collector:       &mockCollector{},
+	}
+
+	if err := agent.process(context.Background()); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	// A rejected token loops forever; the report must be dropped, not buffered.
+	if !agent.reportBuffer.IsEmpty() {
+		t.Fatalf("buffer should stay empty for unauthorized response, len=%d", agent.reportBuffer.Len())
+	}
+	if !strings.Contains(logBuf.String(), "rejected this agent's API token") {
+		t.Fatalf("expected 401 log to be actionable, got %q", logBuf.String())
+	}
+}
+
+func TestAgentProcess_UnauthorizedLogThrottled(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	var logBuf bytes.Buffer
+	agent := &Agent{
+		cfg:             Config{APIToken: "stale-token"},
+		logger:          zerolog.New(&logBuf),
+		httpClient:      server.Client(),
+		trimmedPulseURL: server.URL,
+		reportBuffer:    utils.New[agentshost.Report](8),
+		collector:       &mockCollector{},
+	}
+
+	for i := 0; i < 3; i++ {
+		if err := agent.process(context.Background()); err != nil {
+			t.Fatalf("process %d: %v", i, err)
+		}
+	}
+	if got := strings.Count(logBuf.String(), "rejected this agent's API token"); got != 1 {
+		t.Fatalf("expected actionable 401 log exactly once (throttled), got %d in %q", got, logBuf.String())
+	}
+
+	// Resetting the throttle (which a successful report does) re-emits the error.
+	agent.lastAuthFailureLog = time.Time{}
+	if err := agent.process(context.Background()); err != nil {
+		t.Fatalf("process after reset: %v", err)
+	}
+	if got := strings.Count(logBuf.String(), "rejected this agent's API token"); got != 2 {
+		t.Fatalf("expected actionable 401 log to re-emit after throttle reset, got %d", got)
+	}
+}
+
+func TestAgentFlushBuffer_UnauthorizedDropsBuffer(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	var logBuf bytes.Buffer
+	buffer := utils.New[agentshost.Report](8)
+	buffer.Push(agentshost.Report{Agent: agentshost.AgentInfo{ID: "a1"}})
+	buffer.Push(agentshost.Report{Agent: agentshost.AgentInfo{ID: "a2"}})
+
+	agent := &Agent{
+		cfg:             Config{APIToken: "stale-token"},
+		logger:          zerolog.New(&logBuf),
+		httpClient:      server.Client(),
+		trimmedPulseURL: server.URL,
+		reportBuffer:    buffer,
+		collector:       &mockCollector{},
+	}
+
+	agent.flushBuffer(context.Background())
+
+	// Buffered reports will never be accepted with a rejected token; drop them
+	// so the buffer cannot grow unbounded across restarts.
+	if !agent.reportBuffer.IsEmpty() {
+		t.Fatalf("buffer should be drained after unauthorized flush, len=%d", agent.reportBuffer.Len())
+	}
+	if !strings.Contains(logBuf.String(), "rejected this agent's API token") {
+		t.Fatalf("expected flush 401 log to be actionable, got %q", logBuf.String())
 	}
 }
 

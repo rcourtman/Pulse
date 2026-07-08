@@ -109,11 +109,20 @@ type Agent struct {
 	collector              SystemCollector
 	newCommandClient       func(Config, string, string, string, string) *CommandClient
 	runCommandClient       func(*CommandClient, context.Context) error
+
+	// lastAuthFailureLog throttles the actionable 401 error so a permanently
+	// rejected token does not spam the log every report interval. Only touched
+	// from the single-threaded report loop (process/flushBuffer).
+	lastAuthFailureLog time.Time
 }
 
 const defaultInterval = 30 * time.Second
 const defaultStateDir = "/var/lib/pulse-agent"
 const agentReportEndpoint = "/api/agents/agent/report"
+
+// authFailureLogInterval bounds how often the agent re-emits the actionable
+// "token rejected" error while the server keeps returning 401.
+const authFailureLogInterval = 5 * time.Minute
 
 type reportHTTPStatusError struct {
 	Endpoint   string
@@ -553,6 +562,16 @@ func (a *Agent) process(ctx context.Context) error {
 				Msg("Failed to send Unified Agent report (403 Forbidden). API token may lack 'Unified Agent reporting' scope. Set PULSE_ENABLE_HOST=false if host monitoring is not needed.")
 			return nil
 		}
+		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusUnauthorized {
+			// 401 means the server does not recognise this agent's API token
+			// (for example after a Pulse restore or a v5 -> v6 upgrade that did
+			// not carry the token across). Retrying with the same token loops
+			// forever, so drop the report instead of buffering it and surface an
+			// actionable error the operator can act on. Throttle it so a
+			// permanently rejected token does not flood the log.
+			a.logAuthFailure(statusErr)
+			return nil
+		}
 
 		a.reportBuffer.Push(report)
 		event := a.logger.Warn().
@@ -567,6 +586,10 @@ func (a *Agent) process(ctx context.Context) error {
 		return nil
 	}
 
+	// A successful report means the token is accepted again; reset the auth
+	// failure throttle so a later rejection is reported promptly.
+	a.lastAuthFailureLog = time.Time{}
+
 	// If successful, try to flush buffer
 	a.flushBuffer(ctx)
 
@@ -575,6 +598,31 @@ func (a *Agent) process(ctx context.Context) error {
 		Str("platform", report.Host.Platform).
 		Msg("Unified Agent report sent")
 	return nil
+}
+
+// logAuthFailure emits an actionable, throttled error when the server rejects
+// the agent's API token with 401. It is only called from the single-threaded
+// report loop, so lastAuthFailureLog needs no additional synchronisation.
+func (a *Agent) logAuthFailure(statusErr *reportHTTPStatusError) {
+	if time.Since(a.lastAuthFailureLog) < authFailureLogInterval {
+		return
+	}
+	a.lastAuthFailureLog = time.Now()
+
+	endpoint := agentReportEndpoint
+	statusCode := http.StatusUnauthorized
+	if statusErr != nil {
+		if statusErr.Endpoint != "" {
+			endpoint = statusErr.Endpoint
+		}
+		statusCode = statusErr.StatusCode
+	}
+
+	a.logger.Error().
+		Str("endpoint", endpoint).
+		Int("status_code", statusCode).
+		Str("pulse_url", a.trimmedPulseURL).
+		Msg("Pulse rejected this agent's API token (401 Unauthorized). The token is no longer valid on the server, which usually means Pulse was restored/reinstalled or upgraded (for example v5 -> v6) without carrying the token across. Re-run the agent install command from the Pulse UI (Settings > Agents) to mint a fresh token. Reports are dropped until the token is replaced.")
 }
 
 func (a *Agent) flushBuffer(ctx context.Context) {
@@ -593,6 +641,18 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 
 		if err := a.sendReport(ctx, report); err != nil {
 			var statusErr *reportHTTPStatusError
+			if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusUnauthorized {
+				// The token is rejected; buffered reports will never be
+				// accepted with it. Drop them so the buffer cannot grow
+				// unbounded across restarts, and surface the actionable error.
+				a.logAuthFailure(statusErr)
+				for {
+					if _, ok := a.reportBuffer.Pop(); !ok {
+						break
+					}
+				}
+				return
+			}
 			event := a.logger.Warn().
 				Err(err).
 				Str("endpoint", agentReportEndpoint).

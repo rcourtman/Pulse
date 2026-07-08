@@ -165,6 +165,20 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		LinkedVMID:        host.LinkedVMID,
 		LinkedContainerID: host.LinkedContainerID,
 	}
+
+	// Surface agent staleness so a row that stays online via another source
+	// (e.g. a Proxmox node still reachable over the PVE API) does not present a
+	// dead agent's version as if it were current. The staleness evaluator marks
+	// a host "offline" once it stops reporting; carry that onto the agent
+	// payload along with the agent's own last report time.
+	if !host.LastSeen.IsZero() {
+		lastReport := host.LastSeen
+		agent.LastReportAt = &lastReport
+	}
+	if strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
+		agent.Stale = true
+	}
+
 	storageAssessments := make([]storagehealth.Assessment, 0, len(host.RAID)+1)
 
 	// Populate sensors

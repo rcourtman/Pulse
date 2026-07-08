@@ -3517,3 +3517,86 @@ func TestSetupAutoUpdatesPreservesRCChannelWhenUpdatingExistingConfig(t *testing
 		t.Fatalf("system.json lost rc channel:\n%s", content)
 	}
 }
+
+// TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken verifies that
+// the post-install health check tells a rejected token (401/403) apart from a
+// transient "agent has not reported yet" state, so the installer can surface an
+// actionable error instead of leaving a silent 401 loop behind (issue #1515).
+func TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken(t *testing.T) {
+	urlEncode := extractInstallShellFunction(t, "url_encode")
+	verifyFn := extractInstallShellFunction(t, "verify_agent_server_registration")
+
+	cases := []struct {
+		name   string
+		status int
+		body   string
+		wantRC string
+	}{
+		{"rejected token 401", http.StatusUnauthorized, `{"error":"Authentication required"}`, "rc=2"},
+		{"rejected token 403", http.StatusForbidden, `{"error":"missing_scope"}`, "rc=2"},
+		{"registered", http.StatusOK, `{"success":true,"agent":{"id":"agent-omv"}}`, "rc=0"},
+		{"not reported yet", http.StatusNotFound, `{"error":"agent_not_found"}`, "rc=1"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if !strings.HasPrefix(r.URL.Path, "/api/agents/agent/lookup") {
+					http.Error(w, "not found", http.StatusNotFound)
+					return
+				}
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer server.Close()
+
+			script := `
+				PULSE_URL="` + server.URL + `"
+				PULSE_TOKEN="stale-token"
+				HOSTNAME_OVERRIDE="omv"
+				INSECURE="false"
+				CURL_CA_BUNDLE=""
+` + urlEncode + `
+` + verifyFn + `
+				verify_agent_server_registration
+				echo "rc=$?"
+			`
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("bash: %v\n%s", err, out)
+			}
+			if !strings.Contains(string(out), tc.wantRC) {
+				t.Fatalf("case %q: want %s, got:\n%s", tc.name, tc.wantRC, out)
+			}
+		})
+	}
+}
+
+// TestInstallSHWarnAgentTokenRejectedIsActionable pins the actionable recovery
+// copy the installer prints when the server rejects the agent's token.
+func TestInstallSHWarnAgentTokenRejectedIsActionable(t *testing.T) {
+	logWarn := extractInstallShellFunction(t, "log_warn")
+	warnFn := extractInstallShellFunction(t, "warn_agent_token_rejected")
+
+	script := `
+		NON_INTERACTIVE="false"
+		redact_token() { printf '%s' "$1"; }
+` + logWarn + `
+` + warnFn + `
+		warn_agent_token_rejected
+	`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	for _, needle := range []string{
+		"rejected this agent's API token",
+		"Re-run the full agent install command",
+		"mint a fresh token",
+	} {
+		if !strings.Contains(string(out), needle) {
+			t.Fatalf("warn_agent_token_rejected missing %q:\n%s", needle, out)
+		}
+	}
+}

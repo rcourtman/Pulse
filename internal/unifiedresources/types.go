@@ -774,8 +774,19 @@ type AgentMemoryMeta struct {
 
 // AgentData contains host agent-specific data.
 type AgentData struct {
-	AgentID               string             `json:"agentId,omitempty"`
-	AgentVersion          string             `json:"agentVersion,omitempty"`
+	AgentID      string `json:"agentId,omitempty"`
+	AgentVersion string `json:"agentVersion,omitempty"`
+	// Stale is set when the agent has stopped reporting (its host was marked
+	// offline by the staleness evaluator) even though the row itself may stay
+	// online via another source such as the Proxmox API poll. It lets the UI
+	// present the agent and its version as not-reporting instead of a
+	// healthy-looking stale value.
+	Stale bool `json:"stale,omitempty"`
+	// LastReportAt is the agent's own last successful report time. On a
+	// multi-source row (for example a Proxmox node also polled over the PVE
+	// API) this differs from the row's LastSeen, which reflects the freshest
+	// source rather than the agent.
+	LastReportAt          *time.Time         `json:"lastReportAt,omitempty"`
 	Hostname              string             `json:"hostname,omitempty"`
 	MachineID             string             `json:"machineId,omitempty"`
 	TokenID               string             `json:"tokenId,omitempty"`

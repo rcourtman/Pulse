@@ -299,6 +299,31 @@ describe('AgentsMachinesTable', () => {
     ).toBeGreaterThanOrEqual(2);
   });
 
+  it('flags a non-reporting agent version as stale even when the row stays online', () => {
+    render(() => (
+      <AgentsMachinesTable
+        resources={[
+          resource({
+            id: 'omv',
+            name: 'omv',
+            status: 'online',
+            agent: {
+              agentVersion: '6.0.2',
+              stale: true,
+              lastReportAt: '2026-07-08T09:00:00Z',
+            },
+          }),
+        ]}
+        emptyIcon={emptyIcon}
+        emptyTitle="No machines"
+        emptyDescription="Install Pulse Agent."
+      />
+    ));
+
+    expect(screen.getByText('(stale)')).toBeInTheDocument();
+    expect(screen.getByTitle(/Agent has stopped reporting/)).toBeInTheDocument();
+  });
+
   it('renders multi-disk machine usage as vertical mini-bars', () => {
     const { container } = render(() => (
       <AgentsMachinesTable

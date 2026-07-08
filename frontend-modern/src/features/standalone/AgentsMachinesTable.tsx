@@ -1427,6 +1427,15 @@ export const AgentsMachinesTable: Component<{
                           asTrimmedString(machine.identity?.hostname);
                     const systemLabel = () => systemLabelFor(machine);
                     const agentVersion = () => agentVersionFor(machine);
+                    const agentStale = () =>
+                      !isAgentlessMachine(machine) && Boolean(machine.agent?.stale);
+                    const agentStaleTitle = () => {
+                      const last = asTrimmedString(machine.agent?.lastReportAt);
+                      const when = last
+                        ? ` Last report ${formatPlatformTableRelativeTimeValue(last)}.`
+                        : '';
+                      return `Agent has stopped reporting.${when} Re-run the install command from Settings > Agents to refresh its token.`;
+                    };
                     const indicator = () => getSimpleStatusIndicator(machine.status);
                     const canRenderMetrics = () => indicator().variant !== 'danger';
                     const telemetryFallback = () =>
@@ -1589,8 +1598,17 @@ export const AgentsMachinesTable: Component<{
                             <TableCell
                               class={`${getPlatformTableCellClassForKind('text')} ${machineColumnWidthClass('agent')} font-mono text-[11px] text-base-content`}
                             >
-                              <span class="truncate" title={agentVersion()}>
+                              <span
+                                class="truncate"
+                                classList={{
+                                  'text-amber-600 dark:text-amber-400': agentStale(),
+                                }}
+                                title={agentStale() ? agentStaleTitle() : agentVersion()}
+                              >
                                 {agentVersion()}
+                                <Show when={agentStale()}>
+                                  <span class="ml-1">(stale)</span>
+                                </Show>
                               </span>
                             </TableCell>
                           </Show>

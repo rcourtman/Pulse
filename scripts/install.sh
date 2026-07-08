@@ -347,10 +347,27 @@ restore_selinux_contexts() {
 # After starting the agent service, poll its readiness endpoint to verify it
 # actually started. The agent exposes /readyz on the configured health address
 # once modules are initialized. The default is 127.0.0.1:9191.
+# warn_agent_token_rejected surfaces the actionable recovery path when the
+# server rejects the agent's token. Keeps the message in one place so both
+# health-check paths report it identically.
+warn_agent_token_rejected() {
+    log_warn "Pulse rejected this agent's API token (HTTP 401/403). The saved token is no longer valid on the server, which usually means Pulse was restored/reinstalled or upgraded (for example v5 -> v6) without carrying the token across."
+    log_warn "Re-run the full agent install command from the Pulse UI (Settings > Agents) to mint a fresh token. The agent will keep reporting 401 until the token is replaced."
+}
+
+# verify_agent_server_registration returns:
+#   0 - the server confirmed this agent's registration
+#   1 - registration not confirmed yet (transient: agent not reported, network)
+#   2 - the server rejected the token (HTTP 401/403 - actionable, permanent)
 verify_agent_server_registration() {
     local lookup_hostname="${HOSTNAME_OVERRIDE}"
-    local lookup_resp=""
-    local lookup_args=(-fsSL --connect-timeout 5 --max-time 10)
+    local lookup_out=""
+    local lookup_status=""
+    local lookup_body=""
+    # No -f: we need the response body AND the HTTP status even on 4xx so a
+    # rejected token (401/403) can be told apart from "not reported yet". The
+    # -w format appends "\n<http_code>" after the body.
+    local lookup_args=(-sSL --connect-timeout 5 --max-time 10 -w $'\n%{http_code}')
 
     if [[ -z "$PULSE_URL" ]]; then
         return 1
@@ -366,8 +383,18 @@ verify_agent_server_registration() {
     if [[ "$INSECURE" == "true" ]]; then lookup_args+=(-k); fi
     if [[ -n "$CURL_CA_BUNDLE" ]]; then lookup_args+=(--cacert "$CURL_CA_BUNDLE"); fi
 
-    lookup_resp=$(curl "${lookup_args[@]}" "${PULSE_URL}/api/agents/agent/lookup?hostname=$(url_encode "$lookup_hostname")" 2>/dev/null || true)
-    if echo "$lookup_resp" | grep -q '"agent"[[:space:]]*:' && echo "$lookup_resp" | grep -q '"id"[[:space:]]*:'; then
+    lookup_out=$(curl "${lookup_args[@]}" "${PULSE_URL}/api/agents/agent/lookup?hostname=$(url_encode "$lookup_hostname")" 2>/dev/null || true)
+    lookup_status="${lookup_out##*$'\n'}"
+    lookup_body="${lookup_out%$'\n'*}"
+
+    # A rejected token is a definitive, actionable failure distinct from "the
+    # agent has not reported yet"; signal it so the caller can tell the operator
+    # the token needs replacing instead of leaving a silent 401 loop behind.
+    case "$lookup_status" in
+        401|403) return 2 ;;
+    esac
+
+    if echo "$lookup_body" | grep -q '"agent"[[:space:]]*:' && echo "$lookup_body" | grep -q '"id"[[:space:]]*:'; then
         return 0
     fi
     return 1
@@ -429,8 +456,12 @@ verify_agent_started() {
     if [[ -z "$health_url" ]]; then
         while [ $iteration -lt $max_iterations ]; do
             if agent_process_running; then
-                if verify_agent_server_registration; then
+                verify_agent_server_registration
+                local reg_rc=$?
+                if [[ $reg_rc -eq 0 ]]; then
                     log_info "Agent process is running and registered with Pulse."
+                elif [[ $reg_rc -eq 2 ]]; then
+                    warn_agent_token_rejected
                 else
                     log_warn "Agent process is running, but server registration was not confirmed yet."
                 fi
@@ -451,8 +482,12 @@ verify_agent_started() {
     while [ $iteration -lt $max_iterations ]; do
         # Check the readiness endpoint first — this is the definitive signal
         if curl -sf --max-time 2 "$health_url" >/dev/null 2>&1; then
-            if verify_agent_server_registration; then
+            verify_agent_server_registration
+            local reg_rc=$?
+            if [[ $reg_rc -eq 0 ]]; then
                 log_info "Agent is running, healthy, and registered with Pulse."
+            elif [[ $reg_rc -eq 2 ]]; then
+                warn_agent_token_rejected
             else
                 log_warn "Agent local health is ready, but server registration was not confirmed yet."
             fi

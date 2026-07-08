@@ -579,6 +579,54 @@ func TestResourceFromHostProjectsAgentHostProfile(t *testing.T) {
 	}
 }
 
+func TestResourceFromHostMarksOfflineAgentStale(t *testing.T) {
+	lastReport := time.Now().Add(-30 * time.Minute).UTC()
+	host := models.Host{
+		ID:           "omv-host",
+		Hostname:     "omv",
+		Platform:     "linux",
+		Status:       "offline", // set by the staleness evaluator when reports stop
+		AgentVersion: "6.0.2",
+		LastSeen:     lastReport,
+	}
+
+	resource, _ := resourceFromHost(host)
+	if resource.Agent == nil {
+		t.Fatal("expected agent payload")
+	}
+	if !resource.Agent.Stale {
+		t.Fatalf("expected offline agent to be marked stale, got %+v", resource.Agent)
+	}
+	if resource.Agent.AgentVersion != "6.0.2" {
+		t.Fatalf("agent version = %q, want the last reported 6.0.2 retained", resource.Agent.AgentVersion)
+	}
+	if resource.Agent.LastReportAt == nil || !resource.Agent.LastReportAt.Equal(lastReport) {
+		t.Fatalf("expected agent LastReportAt = %v, got %v", lastReport, resource.Agent.LastReportAt)
+	}
+}
+
+func TestResourceFromHostOnlineAgentNotStale(t *testing.T) {
+	host := models.Host{
+		ID:           "live-host",
+		Hostname:     "live",
+		Platform:     "linux",
+		Status:       "online",
+		AgentVersion: "6.0.5",
+		LastSeen:     time.Now().UTC(),
+	}
+
+	resource, _ := resourceFromHost(host)
+	if resource.Agent == nil {
+		t.Fatal("expected agent payload")
+	}
+	if resource.Agent.Stale {
+		t.Fatalf("online agent should not be marked stale, got %+v", resource.Agent)
+	}
+	if resource.Agent.LastReportAt == nil {
+		t.Fatalf("expected LastReportAt to be populated for a reporting agent")
+	}
+}
+
 func TestResourceFromHostProjectsPressureOnlyThermalState(t *testing.T) {
 	warningLevel := 1
 	host := models.Host{

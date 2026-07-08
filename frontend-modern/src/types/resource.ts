@@ -582,6 +582,15 @@ export interface ResourceAgentUnraidMeta {
 export interface ResourceAgentMeta {
   agentId?: string;
   agentVersion?: string;
+  /**
+   * Set when the agent has stopped reporting even though the row may stay
+   * online via another source (e.g. a Proxmox node still polled over the PVE
+   * API). Lets the UI show the agent/version as not-reporting rather than a
+   * healthy-looking stale value.
+   */
+  stale?: boolean;
+  /** The agent's own last successful report time (RFC3339). */
+  lastReportAt?: string;
   hostname?: string;
   platform?: string;
   hostProfile?: string;
