@@ -6,6 +6,7 @@ import type {
 } from '@/types/resource';
 import type { StatusIndicator, StatusIndicatorVariant } from '@/utils/status';
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
+import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 
 export type KubernetesPageTabId =
   | 'overview'
@@ -557,18 +558,19 @@ export function filterKubernetesResources(
   search: string,
   status: KubernetesResourceStatusFilter,
 ): Resource[] {
-  const needle = search.trim().toLowerCase();
+  const split = splitSearchExclusions(search);
+  const hasSearch = split.needle.length > 0 || split.excludes.length > 0;
   const result: Resource[] = [];
   for (const resource of resources) {
     if (status !== 'all') {
       const triad = mapResourceStatusToTriad(resource.status);
       if (triad !== status) continue;
     }
-    if (!needle) {
+    if (!hasSearch) {
       result.push(resource);
       continue;
     }
-    if (kubernetesResourceSearchHaystack(resource).includes(needle)) {
+    if (matchesSearchTermSplit(kubernetesResourceSearchHaystack(resource), split)) {
       result.push(resource);
     }
   }

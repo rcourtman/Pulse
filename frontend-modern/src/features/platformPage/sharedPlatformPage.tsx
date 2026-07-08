@@ -13,6 +13,11 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource } from '@/types/resource';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
+import {
+  matchesSearchTermSplit,
+  splitSearchExclusions,
+  type SearchTermSplit,
+} from '@/utils/searchQuery';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { formatVmwareClusterServices } from '@/utils/vmwareDisplay';
 import { getPlatformColumnAlign, type PlatformTableColumnKind } from './columnAlignment';
@@ -620,10 +625,8 @@ const mapResourceStatusToTriad = (
 // platform-agnostic and only knows about the generic Resource surface plus
 // the small number of provider blocks that still consume it directly
 // (Proxmox Mail Gateway, vSphere hosts table).
-const matchesPlatformSearch = (resource: Resource, search: string): boolean => {
-  if (!search) return true;
-  const needle = search.trim().toLowerCase();
-  if (!needle) return true;
+const matchesPlatformSearch = (resource: Resource, split: SearchTermSplit): boolean => {
+  if (!split.needle && split.excludes.length === 0) return true;
   const haystack = [
     resource.name,
     resource.displayName,
@@ -653,7 +656,7 @@ const matchesPlatformSearch = (resource: Resource, search: string): boolean => {
     .filter((value): value is string => typeof value === 'string')
     .join(' ')
     .toLowerCase();
-  return haystack.includes(needle);
+  return matchesSearchTermSplit(haystack, split);
 };
 
 export const filterPlatformResources = (
@@ -662,9 +665,10 @@ export const filterPlatformResources = (
   status: PlatformResourceStatusFilter,
   resolveStatus: (resource: Resource) => string | undefined = (resource) => resource.status,
 ): Resource[] => {
+  const split = splitSearchExclusions(search);
   const result: Resource[] = [];
   for (const resource of resources) {
-    if (!matchesPlatformSearch(resource, search)) continue;
+    if (!matchesPlatformSearch(resource, split)) continue;
     if (status !== 'all') {
       const mapped = mapResourceStatusToTriad(resolveStatus(resource));
       if (mapped !== status) continue;

@@ -791,6 +791,24 @@ describe('dockerPageModel', () => {
       ]);
     });
 
+    it('hides rows matching -term exclusions', () => {
+      expect(filterDockerResources(rows, '-worker', 'all').map((r) => r.id)).toEqual([
+        'web',
+        'edge-proxy',
+        'redis-vol',
+      ]);
+      // Exclusions search the same haystack as positive terms (image, swarm
+      // cluster, volume name), and combine with a positive needle.
+      expect(filterDockerResources(rows, '-traefik -redis', 'all').map((r) => r.id)).toEqual([
+        'web',
+        'svc-payments',
+        'svc-search',
+      ]);
+      expect(filterDockerResources(rows, 'worker -payments', 'all').map((r) => r.id)).toEqual([
+        'svc-search',
+      ]);
+    });
+
     it('matches container labels and Swarm stack names', () => {
       const labelled: Resource[] = [
         ...rows,

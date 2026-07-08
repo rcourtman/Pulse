@@ -58,6 +58,8 @@ export const isExternalAgentSetupHash = (hash: string | null | undefined): boole
 
 export const DOCKER_QUERY_PARAMS = {
   host: 'host',
+  query: 'q',
+  status: 'status',
 } as const;
 
 export const STORAGE_QUERY_PARAMS = {

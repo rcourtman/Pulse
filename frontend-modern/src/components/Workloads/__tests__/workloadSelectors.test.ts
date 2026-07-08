@@ -146,6 +146,37 @@ describe('workloadSelectors', () => {
       expect(combined.map((g) => g.name)).toEqual(['alpha-api']);
     });
 
+    it('hides workloads matching -term exclusions while keeping comma OR semantics', () => {
+      const guests = [
+        makeGuest(1, { name: 'alpha-api', vmid: 201, node: 'node-a', status: 'running' }),
+        makeGuest(2, { name: 'beta-worker', vmid: 202, node: 'node-b', status: 'running' }),
+        makeGuest(3, { name: 'gamma-db', vmid: 303, node: 'node-c', status: 'stopped' }),
+      ];
+
+      const excluded = filterWorkloads({
+        guests,
+        viewMode: 'all',
+        statusMode: 'all',
+        searchTerm: '-worker',
+        selectedNode: null,
+        selectedHostHint: null,
+        selectedKubernetesContext: null,
+      });
+      expect(excluded.map((g) => g.name)).toEqual(['alpha-api', 'gamma-db']);
+
+      const mixed = filterWorkloads({
+        guests,
+        viewMode: 'all',
+        statusMode: 'all',
+        searchTerm: 'alpha, beta -worker',
+        selectedNode: null,
+        selectedHostHint: null,
+        selectedKubernetesContext: null,
+      });
+      // Exclusions apply globally; the remaining text parts still OR together.
+      expect(mixed.map((g) => g.name)).toEqual(['alpha-api']);
+    });
+
     it('searches workload-native fields shown by platform pages', () => {
       const guests = [
         makeGuest(1, {

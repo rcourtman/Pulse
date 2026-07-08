@@ -1,5 +1,39 @@
 import type { VM, Container } from '@/types/api';
 
+// Exclusion-aware split of a free-text search. Terms prefixed with `-` hide
+// matching rows ("-watchtower" hides anything whose haystack contains
+// "watchtower"); everything else is kept intact, joined back together, and
+// matched as a single case-insensitive substring so existing multi-word
+// searches keep their meaning. Shared by every platform table search
+// predicate so `-term` behaves identically on Docker, Kubernetes, workloads,
+// and the generic platform tables.
+export interface SearchTermSplit {
+  needle: string;
+  excludes: string[];
+}
+
+export function splitSearchExclusions(search: string): SearchTermSplit {
+  const excludes: string[] = [];
+  const kept: string[] = [];
+  for (const token of search.trim().split(/\s+/)) {
+    if (!token) continue;
+    if (token.length > 1 && token.startsWith('-')) {
+      excludes.push(token.slice(1).toLowerCase());
+    } else {
+      kept.push(token);
+    }
+  }
+  return { needle: kept.join(' ').toLowerCase(), excludes };
+}
+
+export function matchesSearchTermSplit(haystack: string, split: SearchTermSplit): boolean {
+  for (const exclude of split.excludes) {
+    if (haystack.includes(exclude)) return false;
+  }
+  if (!split.needle) return true;
+  return haystack.includes(split.needle);
+}
+
 export type ComparisonOperator = '>' | '<' | '>=' | '<=' | '=' | '==';
 export type LogicalOperator = 'AND' | 'OR';
 

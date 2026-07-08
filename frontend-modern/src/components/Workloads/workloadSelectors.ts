@@ -3,7 +3,11 @@ import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import type { WorkloadIOEmphasis } from './guestRowModel';
 import { computeIOScale } from '@/components/Infrastructure/infrastructureSelectors';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
-import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
+import {
+  parseFilterStack,
+  evaluateFilterStack,
+  splitSearchExclusions,
+} from '@/utils/searchQuery';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
@@ -173,12 +177,17 @@ export const filterWorkloads = ({
 
     const filters: string[] = [];
     const textSearches: string[] = [];
+    // `-term` exclusions apply across the whole result set (AND NOT), while
+    // the remaining comma-separated text parts keep their OR semantics.
+    const exclusions: string[] = [];
 
     searchParts.forEach((part) => {
       if (part.includes('>') || part.includes('<') || part.includes(':')) {
         filters.push(part);
       } else {
-        textSearches.push(part.toLowerCase());
+        const split = splitSearchExclusions(part);
+        exclusions.push(...split.excludes);
+        if (split.needle) textSearches.push(split.needle);
       }
     });
 
@@ -188,6 +197,12 @@ export const filterWorkloads = ({
       if (stack.filters.length > 0) {
         guests = guests.filter((g) => evaluateFilterStack(g, stack));
       }
+    }
+
+    if (exclusions.length > 0) {
+      guests = guests.filter(
+        (g) => !exclusions.some((term) => matchesWorkloadTextSearch(g, term)),
+      );
     }
 
     if (textSearches.length > 0) {

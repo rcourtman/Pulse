@@ -177,20 +177,56 @@ const containerUpdateAction = (
   };
 };
 
+const DOCKER_CONTAINER_SEARCH_TIPS = {
+  popoverId: 'docker-containers-search-help',
+  intro: 'Filter containers by name, image, compose stack, or label.',
+  tips: [
+    { code: 'nginx', description: 'Match container names, images, and labels' },
+    { code: '-watchtower', description: 'Hide containers matching a term' },
+  ],
+  footerHighlight: 'Tip',
+  footerText:
+    'Combine exclusions and save them as a default view to keep noisy containers hidden.',
+};
+
 export const DockerContainersTable: Component<DockerContainersTableProps> = (props) => {
   const breakpoint = useBreakpoint();
   const layoutMode = createMemo(() => getWorkloadTableLayoutMode(breakpoint.width()));
+  // Search and status live in the URL, like the host scope below, so the
+  // whole filter state is shareable and captured by saved views. That is what
+  // makes exclusions persistent: search `-name`, save it as the default view,
+  // and the containers stay hidden on every visit. URL writes replace the
+  // history entry so typing does not pile up back-button states.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchFilter = () => {
+    const value = searchParams[DOCKER_QUERY_PARAMS.query];
+    return typeof value === 'string' ? value : '';
+  };
+  const setSearchFilter = (value: string) =>
+    setSearchParams({ [DOCKER_QUERY_PARAMS.query]: value || null }, { replace: true });
+  const statusFilter = (): DockerResourceStatusFilter => {
+    const value = searchParams[DOCKER_QUERY_PARAMS.status];
+    return value === 'online' || value === 'degraded' || value === 'offline' ? value : 'all';
+  };
+  const setStatusFilter = (value: DockerResourceStatusFilter) =>
+    setSearchParams(
+      { [DOCKER_QUERY_PARAMS.status]: value === 'all' ? null : value },
+      { replace: true },
+    );
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as DockerResourceStatusFilter,
     filter: filterDockerResources,
+    externalSearch: searchFilter,
+    onExternalSearchChange: setSearchFilter,
+    externalStatus: statusFilter,
+    onExternalStatusChange: setStatusFilter,
   });
 
   // Host scope filter, URL-backed so it is shareable and captured by saved
   // views. Distinct hosts are derived from the current resource set; the facet
   // only appears once more than one host is present (a single-host fleet has
   // nothing to scope by).
-  const [searchParams, setSearchParams] = useSearchParams();
   const hostFilter = () => {
     const host = searchParams[DOCKER_QUERY_PARAMS.host];
     return typeof host === 'string' ? host : '';
@@ -285,6 +321,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             search={tableState.search}
             onSearchChange={tableState.setSearch}
             searchPlaceholder="Search containers"
+            searchTips={DOCKER_CONTAINER_SEARCH_TIPS}
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}

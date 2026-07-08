@@ -328,6 +328,90 @@ describe('Docker native tables', () => {
     expect(screen.queryByText('edge-01')).not.toBeInTheDocument();
   });
 
+  it('applies the URL search filter, including -term exclusions, to container rows', () => {
+    window.history.pushState({}, '', '/?q=-redis');
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: {
+              hostname: 'edge-01',
+              runtime: 'docker',
+              image: 'nginx:latest',
+              containerState: 'running',
+            },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-cache',
+            status: 'running',
+            docker: {
+              hostname: 'edge-02',
+              runtime: 'docker',
+              image: 'redis:7.4',
+              containerState: 'running',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('edge-web')).toBeInTheDocument();
+    expect(screen.queryByText('edge-cache')).not.toBeInTheDocument();
+  });
+
+  it('applies the URL status filter to container rows', () => {
+    window.history.pushState({}, '', '/?status=offline');
+
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: {
+              hostname: 'edge-01',
+              runtime: 'docker',
+              image: 'nginx:latest',
+              containerState: 'running',
+            },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-cache',
+            status: 'offline',
+            docker: {
+              hostname: 'edge-02',
+              runtime: 'docker',
+              image: 'redis:7.4',
+              containerState: 'exited',
+            },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(screen.getByText('edge-cache')).toBeInTheDocument();
+    expect(screen.queryByText('edge-web')).not.toBeInTheDocument();
+  });
+
   it('hides the Restarts column when the current containers have no restart signal', () => {
     setViewportWidth(1500);
 

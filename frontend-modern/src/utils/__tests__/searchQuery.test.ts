@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { parseFilter, parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
+import {
+  parseFilter,
+  parseFilterStack,
+  evaluateFilterStack,
+  splitSearchExclusions,
+  matchesSearchTermSplit,
+} from '@/utils/searchQuery';
 import type { VM } from '@/types/api';
 
 describe('parseFilter', () => {
@@ -360,6 +366,57 @@ describe('evaluateFilterStack', () => {
       const stack = parseFilterStack('cpu>50 OR name:prod');
       const result = evaluateFilterStack(vm, stack);
       expect(result).toBe(false);
+    });
+  });
+
+  describe('splitSearchExclusions', () => {
+    it('splits -terms out of the positive needle', () => {
+      expect(splitSearchExclusions('nginx -watchtower -Certbot')).toEqual({
+        needle: 'nginx',
+        excludes: ['watchtower', 'certbot'],
+      });
+    });
+
+    it('keeps multi-word positive searches as one substring needle', () => {
+      expect(splitSearchExclusions('  Web  Server ')).toEqual({
+        needle: 'web server',
+        excludes: [],
+      });
+    });
+
+    it('supports exclusion-only searches', () => {
+      expect(splitSearchExclusions('-backup')).toEqual({ needle: '', excludes: ['backup'] });
+    });
+
+    it('does not treat interior hyphens or a lone dash as exclusions', () => {
+      expect(splitSearchExclusions('my-app -')).toEqual({
+        needle: 'my-app -',
+        excludes: [],
+      });
+    });
+
+    it('returns empty state for blank input', () => {
+      expect(splitSearchExclusions('   ')).toEqual({ needle: '', excludes: [] });
+    });
+  });
+
+  describe('matchesSearchTermSplit', () => {
+    it('hides haystacks containing any excluded term', () => {
+      const split = splitSearchExclusions('-watchtower');
+      expect(matchesSearchTermSplit('watchtower latest', split)).toBe(false);
+      expect(matchesSearchTermSplit('nginx stable', split)).toBe(true);
+    });
+
+    it('requires the positive needle when present', () => {
+      const split = splitSearchExclusions('nginx -prod');
+      expect(matchesSearchTermSplit('nginx staging', split)).toBe(true);
+      expect(matchesSearchTermSplit('nginx prod-eu', split)).toBe(false);
+      expect(matchesSearchTermSplit('redis staging', split)).toBe(false);
+    });
+
+    it('matches everything when the split is empty', () => {
+      const split = splitSearchExclusions('');
+      expect(matchesSearchTermSplit('anything', split)).toBe(true);
     });
   });
 });

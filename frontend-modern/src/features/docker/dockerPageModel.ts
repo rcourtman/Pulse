@@ -1,4 +1,5 @@
 import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
+import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 import type {
   DockerStorageUsageMeta,
   Resource,
@@ -498,18 +499,19 @@ export function filterDockerResources(
   search: string,
   status: DockerResourceStatusFilter,
 ): Resource[] {
-  const needle = search.trim().toLowerCase();
+  const split = splitSearchExclusions(search);
+  const hasSearch = split.needle.length > 0 || split.excludes.length > 0;
   const result: Resource[] = [];
   for (const resource of resources) {
     if (status !== 'all') {
       const triad = mapResourceStatusToTriad(resource.status);
       if (triad !== status) continue;
     }
-    if (!needle) {
+    if (!hasSearch) {
       result.push(resource);
       continue;
     }
-    if (dockerResourceSearchHaystack(resource).includes(needle)) {
+    if (matchesSearchTermSplit(dockerResourceSearchHaystack(resource), split)) {
       result.push(resource);
     }
   }
