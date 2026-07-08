@@ -262,6 +262,11 @@ func serveFrontendHandler() http.HandlerFunc {
 						contentType = "application/json"
 					} else if strings.HasSuffix(lookupPath, ".svg") {
 						contentType = "image/svg+xml"
+					} else if strings.HasSuffix(lookupPath, ".md") {
+						// Shipped docs (/docs/*.md) open in a browser tab from
+						// in-app links; text/plain renders them readable instead
+						// of forcing a download.
+						contentType = "text/plain; charset=utf-8"
 					}
 
 					w.Header().Set("Content-Type", contentType)
