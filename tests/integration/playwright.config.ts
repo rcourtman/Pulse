@@ -14,8 +14,10 @@ export default defineConfig({
   /* Fail the build on CI if you accidentally left test.only in the source code */
   forbidOnly: !!process.env.CI,
 
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  /* Retry once on CI to absorb flake; a second retry only multiplies the
+     cost of real failures (each settings-shell failure costs ~14s/attempt,
+     a failing visual crawl over 5 minutes). */
+  retries: process.env.CI ? 1 : 0,
 
   /* On CI, a broken test environment fails most of the suite; abort early so
      the run produces a red completed verdict with a report instead of
@@ -81,15 +83,17 @@ export default defineConfig({
         ...devices['Pixel 5'],
       },
       // Journey tests skip on mobile projects (all use test.skip for mobile-*),
-      // so exclude them to avoid unnecessary browser launches.
-      testIgnore: ['**/journeys/**'],
+      // so exclude them to avoid unnecessary browser launches. The visual
+      // crawl takes 5+ minutes per project; one desktop pass is the budgeted
+      // coverage, and dedicated mobile specs cover mobile layout.
+      testIgnore: ['**/journeys/**', '**/99-visual-crawl.spec.ts'],
     },
     {
       name: 'mobile-safari',
       use: {
         ...devices['iPhone 12'],
       },
-      testIgnore: ['**/journeys/**'],
+      testIgnore: ['**/journeys/**', '**/99-visual-crawl.spec.ts'],
     },
 
     // Uncomment to test on Firefox and WebKit
