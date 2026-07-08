@@ -1389,8 +1389,8 @@
               "frontend-modern/src/components/Settings/__tests__/useVMwareSettingsPanelState.test.tsx",
               "frontend-modern/src/components/Settings/ConnectionEditor/__tests__/ConnectionEditor.test.tsx",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-              "tests/integration/tests/21-truenas-settings-platform-connections.spec.ts",
-              "tests/integration/tests/22-vmware-settings-platform-connections.spec.ts"
+              "tests/integration/tests/21-truenas-connections-workspace.spec.ts",
+              "tests/integration/tests/22-vmware-connections-workspace.spec.ts"
             ]
           },
           {
@@ -3149,8 +3149,8 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/monitoredSystemPresentation.test.ts",
-              "tests/integration/tests/21-truenas-settings-platform-connections.spec.ts",
-              "tests/integration/tests/22-vmware-settings-platform-connections.spec.ts"
+              "tests/integration/tests/21-truenas-connections-workspace.spec.ts",
+              "tests/integration/tests/22-vmware-connections-workspace.spec.ts"
             ]
           },
           {

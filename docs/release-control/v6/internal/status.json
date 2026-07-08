@@ -1951,7 +1951,7 @@
         },
         {
           "repo": "pulse",
-          "path": "tests/integration/tests/21-truenas-settings-platform-connections.spec.ts",
+          "path": "tests/integration/tests/21-truenas-connections-workspace.spec.ts",
           "kind": "file"
         },
         {
