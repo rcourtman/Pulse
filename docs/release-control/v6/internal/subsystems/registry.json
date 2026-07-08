@@ -5755,7 +5755,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-              "tests/integration/tests/17-recovery-layout.spec.ts"
+              "tests/integration/tests/17-proxmox-backups-layout.spec.ts"
             ]
           },
           {
