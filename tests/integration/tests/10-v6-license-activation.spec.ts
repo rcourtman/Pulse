@@ -272,7 +272,7 @@ test.describe.serial("V6 license activation flow", () => {
 
     await page.goto("/settings/system-ai");
     await expect(
-      page.getByRole("heading", { name: "Assistant & Patrol" }).first(),
+      page.getByRole("heading", { name: "Provider & Models" }).first(),
     ).toBeVisible();
 
     const preSettingsRes = await apiRequest(page, "/api/settings/ai");
