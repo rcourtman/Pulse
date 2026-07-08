@@ -91,7 +91,7 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
       <Show when={open()}>
         <div
           role="menu"
-          class="absolute right-0 top-[calc(100%+0.25rem)] z-50 w-64 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-surface shadow-lg"
+          class="absolute left-0 top-[calc(100%+0.25rem)] z-50 w-64 max-w-[calc(100vw-2rem)] rounded-md border border-border bg-surface shadow-lg sm:left-auto sm:right-0"
         >
           <Show
             when={savePromptOpen()}

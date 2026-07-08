@@ -88,7 +88,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
   const showMobileBody = () => props.isMobile() && mobileExpanded();
   const showChipRow = () =>
     showDesktopChipRow() ||
-    (showMobileBody() && (activeMenuFilters().length > 0 || hasMenuFilters()));
+    (showMobileBody() && (activeMenuFilters().length > 0 || hasMenuFilters() || hasSavedViews()));
 
   const searchHistory = () => {
     const key = props.search.historyKey;
@@ -169,7 +169,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
         <Show when={showInlineRow()}>
           <div class="flex flex-wrap items-center gap-2">
             <For each={inlineFilters()}>{(filter) => <InlineFilterControl filter={filter} />}</For>
-            <Show when={hasClearableState() && activeMenuFilters().length === 0}>
+            <Show when={hasClearableState() && !showChipRow()}>
               <FilterBarClearAllButton onClick={clearAll} />
             </Show>
           </div>
@@ -181,6 +181,9 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
             <Show when={showMobileBody()}>
               <Show when={hasMenuFilters()}>
                 <AddFilterMenu filters={menuFilters()} />
+              </Show>
+              <Show when={props.savedViewsKey}>
+                {(key) => <SavedViewsMenu storageKey={key()} />}
               </Show>
             </Show>
             <Show when={hasClearableState() && showMobileBody()}>

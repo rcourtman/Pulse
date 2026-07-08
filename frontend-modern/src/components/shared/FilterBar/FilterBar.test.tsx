@@ -1,7 +1,18 @@
+import { Route, Router } from '@solidjs/router';
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FilterBar } from './FilterBar';
 import type { FilterDef } from './filterCatalog';
+
+// SavedViewsMenu URL-backs view application (useNavigate/useLocation), so
+// savedViewsKey renders must sit inside a Router context.
+const renderInRouter = (component: () => JSX.Element) =>
+  render(() => (
+    <Router>
+      <Route path="/" component={component} />
+    </Router>
+  ));
 
 const search = {
   value: () => '',
@@ -92,5 +103,50 @@ describe('FilterBar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Clear all' }));
     expect(onClearAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows saved views in the expanded mobile body when savedViewsKey is set', () => {
+    renderInRouter(() => (
+      <FilterBar
+        search={search}
+        filters={[inlineTypeFilter(), menuNodeFilter()]}
+        isMobile={() => true}
+        savedViewsKey="test-surface"
+      />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'Saved views' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    expect(screen.getByRole('button', { name: 'Saved views' })).toBeInTheDocument();
+  });
+
+  it('shows saved views on mobile even when every filter is inline', () => {
+    renderInRouter(() => (
+      <FilterBar
+        search={search}
+        filters={[inlineTypeFilter()]}
+        isMobile={() => true}
+        savedViewsKey="test-surface"
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    expect(screen.getByRole('button', { name: 'Saved views' })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Filter' })).not.toBeInTheDocument();
+  });
+
+  it('renders a single clear-all on mobile when the saved-views row is shown', () => {
+    renderInRouter(() => (
+      <FilterBar
+        search={search}
+        filters={[inlineTypeFilter(vi.fn(), 'vm')]}
+        isMobile={() => true}
+        savedViewsKey="test-surface"
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+    expect(screen.getAllByRole('button', { name: 'Clear all' })).toHaveLength(1);
   });
 });
