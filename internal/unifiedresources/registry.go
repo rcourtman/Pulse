@@ -238,6 +238,13 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 		rr.refreshDockerNetworkAttachmentRelationships(dh)
 	}
 
+	// Cluster-scoped swarm objects are reported by every manager; the winner
+	// must be picked deterministically or the resource re-parents (and can
+	// swap name/status) whenever LastSeen ordering flips between polls,
+	// spamming phantom resource_changes rows. Freshness only breaks ties with
+	// a full stale threshold of hysteresis; see preferDockerSwarmHost.
+	dockerStaleThreshold := effectiveStaleThresholds(thresholds)[SourceDocker]
+
 	type dockerSecretCandidate struct {
 		host   models.DockerHost
 		secret models.DockerSecret
@@ -258,11 +265,10 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 				continue
 			}
 			replace := false
-			if existing.secret.DriverName == "" && secret.DriverName != "" {
-				replace = true
-			}
-			if !replace && dh.LastSeen.After(existing.host.LastSeen) {
-				replace = true
+			if next, cur := dockerSecretRichness(secret), dockerSecretRichness(existing.secret); next != cur {
+				replace = next > cur
+			} else {
+				replace = preferDockerSwarmHost(dh, existing.host, dockerStaleThreshold)
 			}
 			if replace {
 				secretByID[sourceID] = dockerSecretCandidate{host: dh, secret: secret}
@@ -293,11 +299,10 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 				continue
 			}
 			replace := false
-			if existing.config.TemplatingDriver == "" && config.TemplatingDriver != "" {
-				replace = true
-			}
-			if !replace && dh.LastSeen.After(existing.host.LastSeen) {
-				replace = true
+			if next, cur := dockerConfigRichness(config), dockerConfigRichness(existing.config); next != cur {
+				replace = next > cur
+			} else {
+				replace = preferDockerSwarmHost(dh, existing.host, dockerStaleThreshold)
 			}
 			if replace {
 				configByID[sourceID] = dockerConfigCandidate{host: dh, config: config}
@@ -329,16 +334,12 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 				serviceByID[sourceID] = dockerServiceCandidate{host: dh, service: svc}
 				continue
 			}
-			// Prefer candidates with richer fields and fresher host timestamps.
+			// Prefer candidates with richer fields, then a deterministic host.
 			replace := false
-			if existing.service.Image == "" && svc.Image != "" {
-				replace = true
-			}
-			if existing.service.UpdateStatus == nil && svc.UpdateStatus != nil {
-				replace = true
-			}
-			if !replace && dh.LastSeen.After(existing.host.LastSeen) {
-				replace = true
+			if next, cur := dockerServiceRichness(svc), dockerServiceRichness(existing.service); next != cur {
+				replace = next > cur
+			} else {
+				replace = preferDockerSwarmHost(dh, existing.host, dockerStaleThreshold)
 			}
 			if replace {
 				serviceByID[sourceID] = dockerServiceCandidate{host: dh, service: svc}
@@ -369,14 +370,10 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 				continue
 			}
 			replace := false
-			if existing.node.EngineVersion == "" && node.EngineVersion != "" {
-				replace = true
-			}
-			if existing.node.ManagerReachability == "" && node.ManagerReachability != "" {
-				replace = true
-			}
-			if !replace && dh.LastSeen.After(existing.host.LastSeen) {
-				replace = true
+			if next, cur := dockerSwarmNodeRichness(node), dockerSwarmNodeRichness(existing.node); next != cur {
+				replace = next > cur
+			} else {
+				replace = preferDockerSwarmHost(dh, existing.host, dockerStaleThreshold)
 			}
 			if replace {
 				nodeByID[sourceID] = dockerNodeCandidate{host: dh, node: node}
@@ -3985,6 +3982,69 @@ func dockerSwarmClusterKey(host models.DockerHost) string {
 		return v
 	}
 	return ""
+}
+
+// preferDockerSwarmHost reports whether next should replace current as the
+// reporting host for a cluster-scoped swarm object (service, node, secret,
+// config). Selection must be deterministic across polls: in a multi-manager
+// swarm every manager reports the same objects, and if the winner tracked raw
+// LastSeen ordering it would alternate between polls, re-parenting the
+// resource each rebuild and writing phantom resource_changes rows. Managers
+// with an available control plane win first; freshness only counts when the
+// gap exceeds the source stale threshold (i.e. the loser has genuinely gone
+// quiet); otherwise the lowest host ID wins as a stable tiebreak.
+func preferDockerSwarmHost(next, current models.DockerHost, staleThreshold time.Duration) bool {
+	nextManager := next.Swarm != nil && next.Swarm.ControlAvailable
+	currentManager := current.Swarm != nil && current.Swarm.ControlAvailable
+	if nextManager != currentManager {
+		return nextManager
+	}
+	if staleThreshold > 0 {
+		gap := next.LastSeen.Sub(current.LastSeen)
+		if gap > staleThreshold {
+			return true
+		}
+		if gap < -staleThreshold {
+			return false
+		}
+	}
+	return strings.TrimSpace(next.ID) < strings.TrimSpace(current.ID)
+}
+
+func dockerServiceRichness(service models.DockerService) int {
+	score := 0
+	if service.Image != "" {
+		score++
+	}
+	if service.UpdateStatus != nil {
+		score++
+	}
+	return score
+}
+
+func dockerSwarmNodeRichness(node models.DockerNode) int {
+	score := 0
+	if node.EngineVersion != "" {
+		score++
+	}
+	if node.ManagerReachability != "" {
+		score++
+	}
+	return score
+}
+
+func dockerSecretRichness(secret models.DockerSecret) int {
+	if secret.DriverName != "" {
+		return 1
+	}
+	return 0
+}
+
+func dockerConfigRichness(config models.DockerConfig) int {
+	if config.TemplatingDriver != "" {
+		return 1
+	}
+	return 0
 }
 
 func dockerServiceSourceID(host models.DockerHost, service models.DockerService) string {
