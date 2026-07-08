@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
+import { preferredPlaywrightRouteBaseURL } from "./runtime-defaults";
 
-const DEV_SERVER_URL = "http://127.0.0.1:5173";
+const DEV_SERVER_URL = preferredPlaywrightRouteBaseURL();
 
 const MONITORED_SYSTEM_ENTITLEMENTS = {
   capabilities: [],

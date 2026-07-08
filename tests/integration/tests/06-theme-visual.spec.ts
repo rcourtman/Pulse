@@ -3,6 +3,11 @@ import { ensureAuthenticated, maybeCompleteSetupWizard, waitForPulseReady } from
 
 type ThemePreference = 'light' | 'dark';
 
+// stabilizeVisualState injects an inline stylesheet, which the backend's
+// nonce-based CSP (active whenever FRONTEND_DEV_SERVER is unset, i.e. in the
+// dockerized test stack and CI) would otherwise block.
+test.use({ bypassCSP: true });
+
 const VISUAL_VIEWPORT = { width: 1366, height: 900 };
 const STABLE_VERSION_INFO = {
   version: '99.1.0-rc.1',

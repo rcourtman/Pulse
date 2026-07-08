@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { ensureAuthenticated } from "./helpers";
 const SCREENSHOT_PATH = "/tmp/vmware-alert-history-resource-incidents.png";
 
 test.describe("VMware alert history resource incidents", () => {
@@ -7,6 +8,10 @@ test.describe("VMware alert history resource incidents", () => {
   test("opens VMware resource incidents through the shared alert history surface", async ({
     page,
   }) => {
+    // Recent timestamps keep the fixture inside the history view's default
+    // period window; fixed dates silently age out of it.
+    const INCIDENT_START = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const INCIDENT_LAST_SEEN = new Date(Date.now() - 28 * 60 * 1000).toISOString();
     await page.route("**/api/alerts/config", async (route) => {
       await route.fulfill({
         status: 200,
@@ -43,8 +48,8 @@ test.describe("VMware alert history resource incidents", () => {
             message: "VM vm-201 has VMware alarm VM replication fault (red)",
             value: 0,
             threshold: 0,
-            startTime: "2026-03-30T18:13:00Z",
-            lastSeen: "2026-03-30T18:15:00Z",
+            startTime: INCIDENT_START,
+            lastSeen: INCIDENT_LAST_SEEN,
             acknowledged: false,
             metadata: {
               incidentCategory: "health",
@@ -84,13 +89,13 @@ test.describe("VMware alert history resource incidents", () => {
             instance: "VMware",
             message: "VM vm-201 has VMware alarm VM replication fault (red)",
             status: "open",
-            openedAt: "2026-03-30T18:13:00Z",
+            openedAt: INCIDENT_START,
             acknowledged: false,
             events: [
               {
                 id: "event-1",
                 type: "alert_fired",
-                timestamp: "2026-03-30T18:13:00Z",
+                timestamp: INCIDENT_START,
                 summary: "Alert fired",
                 details: {
                   vmwareConnectionId: "vc-1",
@@ -124,7 +129,7 @@ test.describe("VMware alert history resource incidents", () => {
               sourceType: "api",
               sources: ["vmware"],
               status: "warning",
-              lastSeen: "2026-03-30T18:15:00Z",
+              lastSeen: INCIDENT_LAST_SEEN,
               vmware: {
                 connectionId: "vc-1",
                 connectionName: "Lab VC",
@@ -147,7 +152,7 @@ test.describe("VMware alert history resource incidents", () => {
                   source: "vmware",
                   summary:
                     "VM vm-201 has VMware alarm VM replication fault (red)",
-                  startedAt: "2026-03-30T18:13:00Z",
+                  startedAt: INCIDENT_START,
                 },
               ],
             },
@@ -162,7 +167,9 @@ test.describe("VMware alert history resource incidents", () => {
       });
     });
 
-    await page.goto("http://127.0.0.1:5173/alerts/history", {
+    await ensureAuthenticated(page);
+
+    await page.goto("/alerts/history", {
       waitUntil: "domcontentloaded",
     });
 
@@ -186,11 +193,17 @@ test.describe("VMware alert history resource incidents", () => {
     );
     await historyRow.getByRole("button", { name: "Resource" }).click();
 
+    // The message renders in both the history table cell and the opened
+    // resource drawer; assert the drawer copy specifically.
     await expect(
-      page.getByText("VM vm-201 has VMware alarm VM replication fault (red)"),
+      page
+        .getByRole("paragraph")
+        .filter({ hasText: "VM vm-201 has VMware alarm VM replication fault (red)" }),
     ).toBeVisible();
     await expect(page.getByText("Resource incidents")).toBeVisible();
-    await expect(page.getByText("Resource Health")).toBeVisible();
+    // "Resource Health" renders as both the incident label and a type badge
+    // inside the drawer.
+    await expect(page.getByText("Resource Health").first()).toBeVisible();
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });

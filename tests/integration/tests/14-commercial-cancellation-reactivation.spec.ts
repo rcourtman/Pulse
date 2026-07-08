@@ -502,6 +502,23 @@ test.describe.serial('Commercial cancellation/reactivation', () => {
   test('monthly grandfathered continuity, cancel/resume, cancellation, and v6 re-entry', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only commercial coverage');
 
+    const monthlyFixtureVars = [
+      'PULSE_E2E_STRIPE_API_KEY',
+      'PULSE_E2E_STRIPE_WEBHOOK_SECRET',
+      'PULSE_CCR_MONTHLY_CUSTOMER_ID',
+      'PULSE_CCR_MONTHLY_SUBSCRIPTION_ID',
+      'PULSE_CCR_MONTHLY_LEGACY_PRICE_ID',
+      'PULSE_CCR_MONTHLY_TEST_CLOCK_ID',
+      'PULSE_CCR_RETURNER_EMAIL',
+    ] as const;
+    const missingMonthlyVars = monthlyFixtureVars.filter(
+      (name) => (process.env[name] || '').trim() === '',
+    );
+    test.skip(
+      missingMonthlyVars.length > 0,
+      `Live-Stripe fixture env missing (create-commercial-cancellation-fixtures.mjs): ${missingMonthlyVars.join(', ')}`,
+    );
+
     const stripeSecretKey = requiredEnv('PULSE_E2E_STRIPE_API_KEY');
     const webhookSecret = requiredEnv('PULSE_E2E_STRIPE_WEBHOOK_SECRET');
     const customerID = requiredEnv('PULSE_CCR_MONTHLY_CUSTOMER_ID');
@@ -636,6 +653,23 @@ test.describe.serial('Commercial cancellation/reactivation', () => {
 
   test('annual grandfathered path matches monthly continuity boundary', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only commercial coverage');
+
+    const annualFixtureVars = [
+      'PULSE_E2E_STRIPE_API_KEY',
+      'PULSE_E2E_STRIPE_WEBHOOK_SECRET',
+      'PULSE_CCR_ANNUAL_CUSTOMER_ID',
+      'PULSE_CCR_ANNUAL_SUBSCRIPTION_ID',
+      'PULSE_CCR_ANNUAL_LEGACY_PRICE_ID',
+      'PULSE_CCR_ANNUAL_TEST_CLOCK_ID',
+      'PULSE_CCR_RETURNER_EMAIL',
+    ] as const;
+    const missingAnnualVars = annualFixtureVars.filter(
+      (name) => (process.env[name] || '').trim() === '',
+    );
+    test.skip(
+      missingAnnualVars.length > 0,
+      `Live-Stripe fixture env missing (create-commercial-cancellation-fixtures.mjs): ${missingAnnualVars.join(', ')}`,
+    );
 
     const stripeSecretKey = requiredEnv('PULSE_E2E_STRIPE_API_KEY');
     const webhookSecret = requiredEnv('PULSE_E2E_STRIPE_WEBHOOK_SECRET');
