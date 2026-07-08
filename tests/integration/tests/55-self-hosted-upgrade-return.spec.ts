@@ -6,6 +6,7 @@ import {
   type Route,
 } from "@playwright/test";
 import { preferredPlaywrightRouteBaseURL } from "./runtime-defaults";
+import { ensureAuthenticated } from "./helpers";
 
 const DEV_SERVER_URL = preferredPlaywrightRouteBaseURL();
 const PURCHASE_START_PATH = "/auth/license-purchase-start";
@@ -451,6 +452,7 @@ async function configureBillingFixtures(
 }
 
 async function openMonitoredSystemUpgradeArrival(page: Page) {
+  await ensureAuthenticated(page);
   await page.goto(`${DEV_SERVER_URL}/settings/system/billing/plan?intent=self_hosted_plan`, {
     waitUntil: "domcontentloaded",
   });
@@ -511,6 +513,7 @@ test.describe("Self-hosted upgrade return flow", () => {
       .poll(() => purchaseStartURL)
       .toBe(`${PURCHASE_START_URL}?feature=self_hosted_plan`);
 
+    await ensureAuthenticated(page);
     await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
     await expect(
       page.getByRole("heading", { name: "Pulse Account" }),
@@ -565,6 +568,7 @@ test.describe("Self-hosted upgrade return flow", () => {
 
     await openMonitoredSystemUpgradeArrival(page);
     await page.getByRole("link", { name: "Compare plans" }).click();
+    await ensureAuthenticated(page);
     await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(FINAL_BILLING_URL);
@@ -601,6 +605,7 @@ test.describe("Self-hosted upgrade return flow", () => {
     const comparePlansLink = page.getByRole("link", { name: "Compare plans" });
     await comparePlansLink.click();
 
+    await ensureAuthenticated(page);
     await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(FINAL_RESTARTABLE_BILLING_URL);
@@ -639,6 +644,7 @@ test.describe("Self-hosted upgrade return flow", () => {
 
     await openMonitoredSystemUpgradeArrival(page);
     await page.getByRole("link", { name: "Compare plans" }).click();
+    await ensureAuthenticated(page);
     await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(FINAL_BILLING_URL);
@@ -685,6 +691,7 @@ test.describe("Self-hosted upgrade return flow", () => {
 
     await openMonitoredSystemUpgradeArrival(page);
     await page.getByRole("link", { name: "Compare plans" }).click();
+    await ensureAuthenticated(page);
     await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(EXPIRED_BILLING_URL);
@@ -723,6 +730,7 @@ test.describe("Self-hosted upgrade return flow", () => {
 
     await openMonitoredSystemUpgradeArrival(page);
     await page.getByRole("link", { name: "Compare plans" }).click();
+    await ensureAuthenticated(page);
     await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(FAILED_BILLING_URL);

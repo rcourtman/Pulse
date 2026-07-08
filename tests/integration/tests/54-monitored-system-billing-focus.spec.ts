@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { preferredPlaywrightRouteBaseURL } from "./runtime-defaults";
+import { ensureAuthenticated } from "./helpers";
 
 const DEV_SERVER_URL = preferredPlaywrightRouteBaseURL();
 
@@ -246,6 +247,7 @@ async function configureMonitoredSystemBillingFixtures(
 }
 
 async function openSelfHostedGeneralSettings(page: Page) {
+  await ensureAuthenticated(page);
   await page.goto(`${DEV_SERVER_URL}/settings/system-general`, {
     waitUntil: "domcontentloaded",
   });
@@ -272,6 +274,7 @@ test.describe("Monitored-system billing focus", () => {
       page.getByRole("link", { name: "Upgrade to add more" }),
     ).toHaveCount(0);
 
+    await ensureAuthenticated(page);
     await page.goto(`${DEV_SERVER_URL}/settings/system/billing/plan`, {
       waitUntil: "domcontentloaded",
     });
