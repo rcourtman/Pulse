@@ -784,7 +784,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn('SERVICE_NAME="pulse-v6-preview"', demo)
         self.assertNotIn("Preview demo updates must not target the stable pulse service.", demo)
         self.assertIn("tailscale/github-action@4e4c49acaa9818630ce0bd7a564372c17e33fb4d # v2", demo)
-        self.assertIn("TS_AUTHKEY", demo)
+        self.assertIn("oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}", demo)
+        self.assertIn("oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}", demo)
+        # The static 90-day TS_AUTHKEY was retired for the OAuth client
+        # (0a9a29d63); the runner mints an ephemeral tagged node key per run.
+        self.assertNotIn("TS_AUTHKEY", demo)
         self.assertIn("DEMO_EXPECTED_HOSTNAME", demo)
         self.assertIn("Verify target host identity", demo)
         self.assertIn("Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.", demo)
