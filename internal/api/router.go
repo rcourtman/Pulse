@@ -4031,10 +4031,16 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 
-			// Per-provider SSO OIDC routes are public (login initiation + callback)
+			// Per-provider SSO OIDC routes are public (login initiation + callback).
+			// The legacy v5 single-provider paths /api/oidc/login and
+			// /api/oidc/callback stay public too: an upgraded provider keeps its v5
+			// redirect URL, so the IdP redirects the browser back to the 3-part path
+			// carrying only the code/state, with no session cookie or API token yet.
 			if strings.HasPrefix(normalizedPath, "/api/oidc/") {
 				oidcParts := strings.Split(strings.TrimPrefix(normalizedPath, "/"), "/")
 				if len(oidcParts) >= 4 && (oidcParts[3] == "login" || oidcParts[3] == "callback") {
+					isPublic = true
+				} else if len(oidcParts) == 3 && (oidcParts[2] == "login" || oidcParts[2] == "callback") {
 					isPublic = true
 				}
 			}

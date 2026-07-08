@@ -4478,6 +4478,60 @@ func TestSSOOIDCCallbackBypassesAuth(t *testing.T) {
 	}
 }
 
+// TestSSOOIDCLegacyCallbackBypassesAuthTokenOnly reproduces the v5->v6 upgrade
+// bug from issue #1533. An upgraded OIDC provider keeps its v5 redirect URL
+// (/api/oidc/callback, the 3-segment DefaultOIDCCallbackPath), so the IdP
+// redirects the browser back to the legacy path with only code/state, no
+// session cookie and no API token. In API-token-only mode
+// (AuthUser=="" && AuthPass=="" && HasAPITokens()) the global auth middleware
+// used to reject that inbound redirect with
+// "API token required via Authorization header or X-API-Token header"
+// because the public-path allowlist only recognised the 4-segment
+// per-provider path. The legacy login and callback paths must bypass auth and
+// reach handleSSOOIDC*, which map them to the migrated legacy provider.
+func TestSSOOIDCLegacyCallbackBypassesAuthTokenOnly(t *testing.T) {
+	// Token-only mode: this is the exact config that emits the reported error.
+	record := newTokenRecord(t, "legacy-oidc-token-123.12345678", []string{config.ScopeMonitoringRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	if cfg.AuthUser != "" || cfg.AuthPass != "" || !cfg.HasAPITokens() {
+		t.Fatalf("test setup must reproduce token-only mode: authUser=%q authPass set=%v hasTokens=%v", cfg.AuthUser, cfg.AuthPass != "", cfg.HasAPITokens())
+	}
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	// No legacy provider is configured, so the callback handler redirects with a
+	// provider_not_found error (302) and the login handler returns 404. Either
+	// way the request reached the handler, proving auth was bypassed. Before the
+	// fix both returned 401 with the API-token error.
+	cases := []struct {
+		name     string
+		path     string
+		clientIP string
+		wantCode int
+	}{
+		{"legacy callback", "/api/oidc/callback?code=abc&state=xyz", "203.0.113.61", http.StatusFound},
+		{"legacy login", "/api/oidc/login", "203.0.113.62", http.StatusNotFound},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ResetRateLimitForIP(tc.clientIP)
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req.RemoteAddr = tc.clientIP + ":1234"
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+
+			if rec.Code == http.StatusUnauthorized {
+				t.Fatalf("legacy OIDC path %q was rejected by API-token auth (401): %s", tc.path, strings.TrimSpace(rec.Body.String()))
+			}
+			if strings.Contains(rec.Body.String(), "API token required") {
+				t.Fatalf("legacy OIDC path %q returned the API-token error body: %s", tc.path, strings.TrimSpace(rec.Body.String()))
+			}
+			if rec.Code != tc.wantCode {
+				t.Fatalf("legacy OIDC path %q: expected status %d (auth bypassed, reached handler), got %d", tc.path, tc.wantCode, rec.Code)
+			}
+		})
+	}
+}
+
 func TestAIOAuthCallbackBypassesAuth(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.AuthUser = "admin"

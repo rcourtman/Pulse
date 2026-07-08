@@ -38,14 +38,23 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	// Use a prefix handler since Go 1.x ServeMux doesn't support path params.
 	// Requests matching /api/oidc/{something}/ are dispatched here.
 	r.mux.HandleFunc("/api/oidc/", func(w http.ResponseWriter, req *http.Request) {
-		// Determine which sub-endpoint was requested
+		// Determine which sub-endpoint was requested.
 		parts := strings.Split(strings.TrimPrefix(req.URL.Path, "/"), "/")
-		// Expected: ["api", "oidc", "{providerID}", "{endpoint}"]
-		if len(parts) < 4 {
+		// Per-provider: ["api", "oidc", "{providerID}", "{endpoint}"]
+		// Legacy v5:    ["api", "oidc", "{endpoint}"] -> mapped to the migrated
+		//               legacy provider by handleSSOOIDC*. An upgraded provider
+		//               keeps its v5 redirect URL (/api/oidc/callback), so the IdP
+		//               still redirects the browser to the 3-part path.
+		endpoint := ""
+		switch {
+		case len(parts) >= 4:
+			endpoint = parts[3]
+		case len(parts) == 3:
+			endpoint = parts[2]
+		default:
 			http.NotFound(w, req)
 			return
 		}
-		endpoint := parts[3]
 		switch endpoint {
 		case "login":
 			r.handleSSOOIDCLogin(w, req)
