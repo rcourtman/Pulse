@@ -89,6 +89,39 @@ func TestClaims_EffectiveLimits(t *testing.T) {
 			expected: map[string]int64{},
 		},
 		{
+			name: "nil_limits_derives_from_max_users_field",
+			claims: Claims{
+				Limits:   nil,
+				MaxUsers: 3,
+			},
+			expected: map[string]int64{"max_users": 3},
+		},
+		{
+			name: "zero_max_users_ignored",
+			claims: Claims{
+				Limits:   nil,
+				MaxUsers: 0,
+			},
+			expected: map[string]int64{},
+		},
+		{
+			name: "max_users_survives_self_hosted_volume_cap_scrub_from_field",
+			claims: Claims{
+				Tier:      TierPro,
+				MaxGuests: 100,
+				MaxUsers:  3,
+			},
+			expected: map[string]int64{"max_users": 3},
+		},
+		{
+			name: "max_users_survives_self_hosted_volume_cap_scrub_from_explicit_limits",
+			claims: Claims{
+				Tier:   TierBusiness,
+				Limits: map[string]int64{"max_monitored_systems": 15, "max_guests": 100, "max_users": 3},
+			},
+			expected: map[string]int64{"max_users": 3},
+		},
+		{
 			name:     "no_limits_returns_empty",
 			claims:   Claims{},
 			expected: map[string]int64{},

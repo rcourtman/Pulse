@@ -173,6 +173,7 @@ var grantContractJSONTags = []string{
 	"plan",
 	"feat",
 	"max_guests",
+	"max_users",
 	"grace_until",
 	"email",
 	"jti",

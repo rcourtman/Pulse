@@ -64,6 +64,7 @@ type GrantClaims struct {
 	PlanKey        string   `json:"plan"`
 	Features       []string `json:"feat"`
 	MaxGuests      int      `json:"max_guests"`
+	MaxUsers       int      `json:"max_users"`
 	IssuedAt       int64    `json:"iat"`
 	ExpiresAt      int64    `json:"exp"`
 	GraceUntil     int64    `json:"grace_until"`
@@ -95,6 +96,7 @@ func grantClaimsToClaimsWithContinuity(gc *GrantClaims, _ ActivationContinuity) 
 		ExpiresAt:              gc.ExpiresAt,
 		Features:               gc.Features,
 		MaxGuests:              gc.MaxGuests,
+		MaxUsers:               gc.MaxUsers,
 		PlanVersion:            gc.PlanKey,
 		CoreMonitoringUncapped: grantClaimsUseUncappedCoreMonitoring(gc),
 	}

@@ -1050,6 +1050,19 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     in-product plan surface may reference Business before that rollout, and
     monitored-system volume stays out of the Business plan model per the
     self-hosted commercial boundary above.
+    The `max_users` seat limit travels the licensing chain as one named
+    shape mirroring `MaxGuests`: `Plan.MaxUsers` on the license server,
+    `max_users` on the stored v6 license and in relay grant claims (all
+    three copies of the grant wire struct), `GrantClaims.MaxUsers` copied
+    into `Claims.MaxUsers` in `pkg/licensing`, and surfaced through
+    `EffectiveLimits()["max_users"]` into the shipped user-limit
+    enforcement (`MaxUsersLimitFromLicense`). It mirrors `MaxGuests` in
+    shape only, not in scrub behavior: `max_users` is a seat limit, not a
+    monitored-volume cap, so `stripSelfHostedCommercialVolumeCaps` and the
+    license-server entitlement normalization must never strip or zero it.
+    Absent claim = 0 = unlimited at every hop, which keeps all existing
+    licenses, grants, and plans inert until the governed rollout sets
+    `max_users` on a plan.
 
 ## Forbidden Paths
 

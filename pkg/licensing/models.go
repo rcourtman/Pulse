@@ -28,6 +28,10 @@ type Claims struct {
 	// Max guests (0 = unlimited)
 	MaxGuests int `json:"max_guests,omitempty"`
 
+	// Max users (0 = unlimited). A seat limit, not a legacy volume cap:
+	// the self-hosted commercial volume scrub never strips it.
+	MaxUsers int `json:"max_users,omitempty"`
+
 	// Entitlement primitives (B1) - when present, these override tier-based derivation.
 	// When absent (nil/empty), entitlements are derived from Tier + existing fields.
 	Capabilities  []string          `json:"capabilities,omitempty"`
@@ -67,6 +71,9 @@ func (c Claims) EffectiveLimits() map[string]int64 {
 		limits = make(map[string]int64)
 		if c.MaxGuests > 0 {
 			limits["max_guests"] = int64(c.MaxGuests)
+		}
+		if c.MaxUsers > 0 {
+			limits[MaxUsersLicenseGateKey] = int64(c.MaxUsers)
 		}
 		stripSelfHostedCommercialVolumeCaps(limits, c.EntitlementPlanVersion(), c.Tier, c.CoreMonitoringUncapped)
 	}

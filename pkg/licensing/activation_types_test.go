@@ -16,6 +16,7 @@ func TestGrantClaimsToClaims(t *testing.T) {
 		wantEmail     string
 		wantFeatures  []string
 		wantMaxGuests int
+		wantMaxUsers  int
 	}{
 		{
 			name: "active state with email",
@@ -27,6 +28,7 @@ func TestGrantClaimsToClaims(t *testing.T) {
 				Email:          "user@example.com",
 				Features:       []string{"ai_patrol", "relay"},
 				MaxGuests:      5,
+				MaxUsers:       3,
 				IssuedAt:       time.Now().Unix(),
 				ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
 			},
@@ -36,6 +38,7 @@ func TestGrantClaimsToClaims(t *testing.T) {
 			wantEmail:     "user@example.com",
 			wantFeatures:  []string{"ai_patrol", "relay"},
 			wantMaxGuests: 5,
+			wantMaxUsers:  3,
 		},
 		{
 			name: "past_due maps to grace",
@@ -118,8 +121,53 @@ func TestGrantClaimsToClaims(t *testing.T) {
 			if c.MaxGuests != tt.wantMaxGuests {
 				t.Errorf("MaxGuests = %d, want %d", c.MaxGuests, tt.wantMaxGuests)
 			}
+			if c.MaxUsers != tt.wantMaxUsers {
+				t.Errorf("MaxUsers = %d, want %d", c.MaxUsers, tt.wantMaxUsers)
+			}
 		})
 	}
+}
+
+// TestGrantMaxUsersFlowsToUserLimitEnforcement is the end-to-end instance
+// proof for the max_users seat-limit chain: a grant JWT whose payload carries
+// max_users=3 (raw server-shaped JSON, not this repo's struct tags) yields
+// MaxUsersLimitFromLicense()==3, and a grant without the claim stays 0
+// (unlimited), keeping the change inert for every existing license.
+func TestGrantMaxUsersFlowsToUserLimitEnforcement(t *testing.T) {
+	t.Run("grant with max_users enforces the seat limit", func(t *testing.T) {
+		jwt := makeUnsignedTestJWT(t, `{
+			"lid": "lic_business_seats",
+			"st": "active",
+			"tier": "business",
+			"plan": "price_business_annual",
+			"max_users": 3
+		}`)
+		gc, err := parseGrantJWTUnsafe(jwt)
+		if err != nil {
+			t.Fatalf("parseGrantJWTUnsafe: %v", err)
+		}
+		lic := grantClaimsToLicense(gc, jwt)
+		if got := MaxUsersLimitFromLicense(lic); got != 3 {
+			t.Fatalf("MaxUsersLimitFromLicense = %d, want 3", got)
+		}
+	})
+
+	t.Run("grant without max_users stays unlimited", func(t *testing.T) {
+		jwt := makeUnsignedTestJWT(t, `{
+			"lid": "lic_pro_unlimited",
+			"st": "active",
+			"tier": "pro",
+			"plan": "price_pro_annual"
+		}`)
+		gc, err := parseGrantJWTUnsafe(jwt)
+		if err != nil {
+			t.Fatalf("parseGrantJWTUnsafe: %v", err)
+		}
+		lic := grantClaimsToLicense(gc, jwt)
+		if got := MaxUsersLimitFromLicense(lic); got != 0 {
+			t.Fatalf("MaxUsersLimitFromLicense = %d, want 0 (unlimited)", got)
+		}
+	})
 }
 
 func TestGrantClaimsToLicense(t *testing.T) {
