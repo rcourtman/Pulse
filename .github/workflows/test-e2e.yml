@@ -22,11 +22,12 @@ on:
       - '.github/workflows/test-e2e.yml'
   workflow_dispatch:
 
-# Keep only the newest commit's verdict in flight per ref; superseded runs
-# are cancelled rather than burning four shard jobs each.
+# Let the in-progress run finish (pushes land here every few minutes, and
+# cancelling would mean a busy main never completes a verdict); queued runs
+# collapse to the newest pending one, so intermediate pushes skip.
 concurrency:
   group: e2e-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
