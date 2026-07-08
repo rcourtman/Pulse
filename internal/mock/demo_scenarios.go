@@ -136,6 +136,28 @@ var demoDockerHostProfiles = []demoDockerHostProfile{
 			{Name: "grafana-agent", Image: "grafana/agent:v0.42.0", Tags: []string{"monitoring", "agent", "platform"}, Health: "healthy"},
 		},
 	},
+	{
+		Hostname:    "app-platform-01",
+		DisplayName: "App Platform 01",
+		Containers: []demoDockerContainerProfile{
+			{Name: "orders-api", Image: "ghcr.io/pulse-demo/orders-api:2026.04", Tags: []string{"api", "production", "customer-facing"}, Health: "healthy"},
+			{Name: "notifications-worker", Image: "ghcr.io/pulse-demo/notifications-worker:2026.04", Tags: []string{"queue", "worker", "production"}, Health: "healthy"},
+			{Name: "redis-cache", Image: "redis:7.4.1", Tags: []string{"cache", "production", "latency-sensitive"}, Health: "healthy"},
+			{Name: "nginx-edge", Image: "nginx:1.27.2", Tags: []string{"web", "ingress", "production"}, Health: "healthy"},
+			{Name: "loki", Image: "grafana/loki:3.2.0", Tags: []string{"logging", "platform"}, Health: "healthy"},
+		},
+	},
+	{
+		Hostname:    "data-services-01",
+		DisplayName: "Data Services 01",
+		Containers: []demoDockerContainerProfile{
+			{Name: "kafka-broker", Image: "confluentinc/cp-kafka:7.7.1", Tags: []string{"streaming", "platform", "internal"}, Health: "healthy"},
+			{Name: "clickhouse", Image: "clickhouse/clickhouse-server:24.8", Tags: []string{"database", "analytics", "internal"}, Health: "healthy"},
+			{Name: "etl-runner", Image: "ghcr.io/pulse-demo/etl-runner:2026.04", Tags: []string{"batch", "analytics", "worker"}, Health: "healthy"},
+			{Name: "minio", Image: "minio/minio:RELEASE.2026-01-20T00-00-00Z", Tags: []string{"storage", "gateway", "internal"}, Health: "healthy"},
+			{Name: "schema-registry", Image: "confluentinc/cp-schema-registry:7.7.1", Tags: []string{"streaming", "platform", "internal"}, Health: "healthy"},
+		},
+	},
 }
 
 // Per-cluster demo identities. Each cluster carries its own node naming
@@ -508,6 +530,7 @@ func applyDemoDockerScenario(state *models.StateSnapshot, now time.Time) {
 	// One docker host index is forced offline so the demo Docker page exposes a
 	// disconnected host with its containers shown as exited rather than running.
 	const offlineDockerIndex = 2
+	onlineOrdinal := 0
 	for i := range state.DockerHosts {
 		host := &state.DockerHosts[i]
 		if i == offlineDockerIndex {
@@ -518,9 +541,20 @@ func applyDemoDockerScenario(state *models.StateSnapshot, now time.Time) {
 			ensureMockDockerNativeInventory(host, i, now)
 			continue
 		}
-		hostProfile := demoDockerHostProfiles[i%len(demoDockerHostProfiles)]
+		hostProfile := demoDockerHostProfiles[onlineOrdinal%len(demoDockerHostProfiles)]
+		// Hostnames must stay unique across the fleet: unified resources
+		// treats hostname as identity, so two hosts sharing a profile name
+		// collapse into one canonical resource whose status, parent, and
+		// swarm services then flap on every poll as the two real hosts
+		// alternate underneath it.
+		round := onlineOrdinal / len(demoDockerHostProfiles)
+		onlineOrdinal++
 		host.Hostname = hostProfile.Hostname
 		host.DisplayName = hostProfile.DisplayName
+		if round > 0 {
+			host.Hostname = fmt.Sprintf("%s-%d", hostProfile.Hostname, round+1)
+			host.DisplayName = fmt.Sprintf("%s (%d)", hostProfile.DisplayName, round+1)
+		}
 		host.Status = "online"
 		host.Containers = applyDemoDockerContainerProfiles(host.Containers, hostProfile.Containers, now)
 		ensureMockDockerNativeInventory(host, i, now)
@@ -918,6 +952,15 @@ func applyDemoHostScenario(state *models.StateSnapshot, now time.Time) {
 				host.Disks[j].Free = host.Disks[j].Total
 				host.Disks[j].Usage = -1
 			}
+			// An offline host stopped reporting, so its sighting must stay
+			// stale. Refreshing it like the online hosts below made the
+			// agent's LastSeen race the 2-minute source staleness threshold
+			// and sawtooth the resource between online and offline every
+			// couple of minutes.
+			if !now.IsZero() {
+				host.LastSeen = now.Add(-10 * time.Minute)
+			}
+			continue
 		}
 		if now.IsZero() {
 			continue

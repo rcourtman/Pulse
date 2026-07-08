@@ -61,6 +61,61 @@ const (
 	hostConnectionPrefix       = "host-"
 )
 
+// Churn pacing for the mock estate. Restart and state-change events are
+// expressed as expected events per day per entity and converted to a
+// per-update probability against the configured update interval, so the
+// pacing does not depend on how often the mock loop ticks. The default
+// 2-second tick runs 43,200 times a day: a raw per-tick probability like
+// 0.03 means thousands of events per container per day, which floods
+// resource_changes and makes the demo Changes timeline unreadable. These
+// rates target what a real homelab produces: a few restarts and a few
+// state changes per day across the whole fleet, while per-tick metric
+// wiggle keeps the demo feeling alive.
+const (
+	// One container restart every ~12 days per container; across the
+	// ~56 running demo containers that is 4-5 restarts a day fleet-wide.
+	mockDockerRestartsPerDay = 0.08
+	// Health-check blips (healthy -> unhealthy / starting).
+	mockDockerUnhealthyPerDay = 0.05
+	mockDockerStartingPerDay  = 0.05
+	// A stopped container being started again.
+	mockDockerStoppedStartsPerDay = 0.25
+	// An offline docker host coming back.
+	mockDockerHostRecoveriesPerDay = 0.25
+	// Kubernetes background churn per cluster.
+	mockK8sClusterRecoveriesPerDay = 0.5
+	mockK8sNodeReadyFlipsPerDay    = 0.3
+	mockK8sPodCrashFlipsPerDay     = 0.5
+	// Standalone host status churn per host.
+	mockHostDegradedPerDay     = 0.1
+	mockHostRecoveriesPerDay   = 0.25
+	mockDiskWearoutStepsPerDay = 0.1
+)
+
+// Mean dwell times for transient states, converted to a per-update recovery
+// probability. Long enough to be seen on the dashboard, short enough that
+// the estate does not look permanently broken.
+const (
+	mockDockerUnhealthyMeanRecovery = 12 * time.Minute
+	mockDockerStartingMeanRecovery  = 90 * time.Second
+	mockHostDegradedMeanRecovery    = 15 * time.Minute
+)
+
+// mockEventsPerDayChance converts an expected events-per-day rate for a
+// single entity into a probability for one mock update tick.
+func mockEventsPerDayChance(eventsPerDay float64) float64 {
+	return eventsPerDay * currentMockUpdateStepSeconds() / (24 * 60 * 60)
+}
+
+// mockRecoveryChance converts a mean time-to-recovery into a probability
+// for one mock update tick.
+func mockRecoveryChance(meanRecovery time.Duration) float64 {
+	if meanRecovery <= 0 {
+		return 1
+	}
+	return currentMockUpdateStepSeconds() / meanRecovery.Seconds()
+}
+
 // Default fixture sizes target a mature small-to-mid homelab / SMB
 // environment so platform pages exercise table density, sorting,
 // grouping, drawer behavior, and responsive layout out of the box:
@@ -1507,7 +1562,7 @@ func initializeMockKubernetesClusterUsage(cluster *models.KubernetesCluster, now
 		return
 	}
 
-	reconcileMockKubernetesPodScheduling(cluster, randomize)
+	reconcileMockKubernetesPodScheduling(cluster, now, randomize)
 
 	nodeByName := make(map[string]*models.KubernetesNode, len(cluster.Nodes))
 	for i := range cluster.Nodes {
@@ -1529,9 +1584,21 @@ func initializeMockKubernetesClusterUsage(cluster *models.KubernetesCluster, now
 	recomputeMockKubernetesNodeUsage(cluster, now)
 }
 
-func reconcileMockKubernetesPodScheduling(cluster *models.KubernetesCluster, randomize bool) {
+// reconcileMockKubernetesPodScheduling keeps pod placement coherent with
+// node readiness. It runs on every mock update tick, both mid-tick (with
+// randomize) and again after the demo scenario re-pins pod profiles, so it
+// must be idempotent: the same inputs must produce the same pod state, and
+// it must never fabricate a fresh StartTime for a pod that already has one.
+// A regenerated StartTime moves the pod's derived uptime backwards, which
+// unified resources records as a restart — an earlier version of this
+// function re-anchored StartTime with rand on every recovery and flooded
+// resource_changes with tens of thousands of phantom pod restarts per day.
+func reconcileMockKubernetesPodScheduling(cluster *models.KubernetesCluster, now time.Time, randomize bool) {
 	if cluster == nil {
 		return
+	}
+	if now.IsZero() {
+		now = time.Now()
 	}
 	clusterOffline := strings.EqualFold(strings.TrimSpace(cluster.Status), "offline")
 
@@ -1590,11 +1657,14 @@ func reconcileMockKubernetesPodScheduling(cluster *models.KubernetesCluster, ran
 				pod.StartTime = nil
 				continue
 			}
-			if randomize && rand.Float64() < 0.25 {
+			// A stable per-pod choice, not a fresh roll per tick: the same
+			// pods on a dead node always park as Pending and the rest always
+			// reschedule, so repeated reconciles cannot flap a pod between
+			// the two outcomes.
+			if randomize && mockStableHash64(strings.TrimSpace(pod.UID), pod.Name, "notready-park")%4 == 0 {
 				pod.Phase = "Pending"
 				pod.Reason = "NodeNotReady"
 				pod.Message = "Waiting for node recovery"
-				pod.StartTime = nil
 				continue
 			}
 			assignIndex := int(mockStableHash64(strings.TrimSpace(pod.UID), pod.Name, "ready-node") % uint64(len(readyNodes)))
@@ -1602,14 +1672,19 @@ func reconcileMockKubernetesPodScheduling(cluster *models.KubernetesCluster, ran
 			pod.Reason = ""
 			pod.Message = ""
 			if pod.StartTime == nil {
-				start := time.Now().Add(-time.Duration(30+rand.Intn(240)) * time.Second)
+				start := now
 				pod.StartTime = &start
 			}
 		case "pending", "unknown":
 			if len(readyNodes) == 0 {
 				continue
 			}
-			if randomize && rand.Float64() >= 0.22 {
+			// Only un-park pods this reconciler parked itself. Curated
+			// fixture stories (Unschedulable capacity pressure,
+			// ImagePullBackOff, CrashLoopBackOff) must stay put, or the
+			// scenario re-pins them every tick and the recover/re-pin cycle
+			// churns phantom state transitions and restarts.
+			if !mockReconcilerParkedPod(*pod) {
 				continue
 			}
 			assignIndex := int(mockStableHash64(strings.TrimSpace(pod.UID), pod.Name, "recover-node") % uint64(len(readyNodes)))
@@ -1617,8 +1692,10 @@ func reconcileMockKubernetesPodScheduling(cluster *models.KubernetesCluster, ran
 			pod.Phase = "Running"
 			pod.Reason = ""
 			pod.Message = ""
-			start := time.Now().Add(-time.Duration(20+rand.Intn(180)) * time.Second)
-			pod.StartTime = &start
+			if pod.StartTime == nil {
+				start := now
+				pod.StartTime = &start
+			}
 			for j := range pod.Containers {
 				if strings.EqualFold(pod.Containers[j].State, "terminated") {
 					continue
@@ -1629,6 +1706,22 @@ func reconcileMockKubernetesPodScheduling(cluster *models.KubernetesCluster, ran
 				pod.Containers[j].Ready = true
 			}
 		}
+	}
+}
+
+// mockReconcilerParkedPod reports whether a pending/unknown pod is in a
+// transient state that the scheduling reconciler (or a node/cluster outage)
+// produced, as opposed to a curated fixture story that must persist.
+func mockReconcilerParkedPod(pod models.KubernetesPod) bool {
+	switch strings.TrimSpace(pod.Reason) {
+	case "NodeNotReady", "ClusterOffline", "NodeLost":
+		return true
+	case "Unschedulable":
+		// The reconciler's own capacity parking; the curated Unschedulable
+		// story uses "0/3 nodes available".
+		return strings.TrimSpace(pod.Message) == "No ready nodes available"
+	default:
+		return false
 	}
 }
 
@@ -2248,6 +2341,7 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 
 	now := time.Now()
 	hosts := make([]models.DockerHost, 0, hostCount)
+	swarmLeaderAssigned := false
 
 	for i := 0; i < hostCount; i++ {
 		agentVersion := dockerAgentVersions[rand.Intn(len(dockerAgentVersions))]
@@ -2310,8 +2404,7 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 			// adapter to project Swarm services as docker-service rows
 			// (`dockerSwarmClusterKey` returns empty without them). Anchor
 			// the mock estate to a single named cluster so all manager and
-			// worker hosts share Swarm identity and their services
-			// deduplicate correctly across managers.
+			// worker hosts share Swarm identity.
 			swarmInfo = &models.DockerSwarmInfo{
 				NodeID:           fmt.Sprintf("%s-node", hostID),
 				NodeRole:         "worker",
@@ -2324,6 +2417,17 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 
 			if i%2 == 0 {
 				swarmInfo.NodeRole = "manager"
+			}
+			// Cluster-scoped Swarm objects (services, tasks, secrets,
+			// configs) come from exactly one control plane, mirroring how a
+			// real deployment queries them through a single manager. When
+			// several mock hosts each fabricated their own service list from
+			// their own containers under the shared cluster key, the
+			// registry's cross-host dedupe alternated between the divergent
+			// candidates on every poll and flooded resource_changes with
+			// phantom service renames and status flips.
+			if !swarmLeaderAssigned && strings.EqualFold(swarmInfo.NodeRole, "manager") {
+				swarmLeaderAssigned = true
 				swarmInfo.ControlAvailable = true
 				swarmInfo.Scope = "cluster"
 				services, tasks = generateDockerServicesAndTasks(hostname, containers, now)
@@ -2331,8 +2435,6 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 				if len(services) == 0 {
 					swarmInfo.Scope = "node"
 				}
-			} else if i%3 == 0 {
-				services, tasks = generateDockerServicesAndTasks(hostname, containers, now)
 			}
 		}
 
@@ -2771,7 +2873,6 @@ func populateMockDockerSwarmNodeInventories(hosts []models.DockerHost, now time.
 	}
 
 	nodes := make([]models.DockerNode, 0, len(hosts))
-	nodeByID := make(map[string]models.DockerNode, len(hosts))
 	for _, host := range hosts {
 		if host.Swarm == nil || strings.EqualFold(host.Runtime, "podman") {
 			continue
@@ -2827,7 +2928,6 @@ func populateMockDockerSwarmNodeInventories(hosts []models.DockerHost, now time.
 			CreatedAt: now.Add(-168 * time.Hour),
 		}
 		nodes = append(nodes, node)
-		nodeByID[nodeID] = node
 	}
 
 	for i := range hosts {
@@ -2836,15 +2936,16 @@ func populateMockDockerSwarmNodeInventories(hosts []models.DockerHost, now time.
 			host.Nodes = []models.DockerNode{}
 			continue
 		}
+		// Only the control-plane manager carries the node inventory, the
+		// same way `docker node ls` only answers on a manager. When every
+		// host repeated its own node entry, the registry saw one node from
+		// several reporting hosts and re-parented it to whichever host was
+		// polled last, spamming relationship_change rows.
 		if strings.EqualFold(host.Swarm.NodeRole, "manager") && host.Swarm.ControlAvailable {
 			host.Nodes = cloneMockDockerNodes(nodes)
 			continue
 		}
-		if node, ok := nodeByID[host.Swarm.NodeID]; ok {
-			host.Nodes = []models.DockerNode{node}
-		} else {
-			host.Nodes = []models.DockerNode{}
-		}
+		host.Nodes = []models.DockerNode{}
 	}
 }
 
@@ -5642,7 +5743,7 @@ func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, 
 		disk.Temperature = int(math.Round(SampleMetric("disk", resourceID, "smart_temp", refreshNow)))
 
 		// Occasionally degrade SSD life
-		if disk.Wearout > 0 && rand.Float64() < 0.01 {
+		if disk.Wearout > 0 && rand.Float64() < mockEventsPerDayChance(mockDiskWearoutStepsPerDay) {
 			disk.Wearout = disk.Wearout - 1
 			if disk.Wearout < 0 {
 				disk.Wearout = 0
@@ -5735,7 +5836,7 @@ func updateKubernetesClusters(data *models.StateSnapshot, config MockConfig, now
 
 		if cluster.Status != "offline" {
 			cluster.LastSeen = now.Add(-time.Duration(rand.Intn(12)) * time.Second)
-		} else if config.RandomMetrics && rand.Float64() < 0.01 {
+		} else if config.RandomMetrics && rand.Float64() < mockEventsPerDayChance(mockK8sClusterRecoveriesPerDay) {
 			cluster.Status = "online"
 			cluster.LastSeen = now
 			for nodeIdx := range cluster.Nodes {
@@ -5745,13 +5846,13 @@ func updateKubernetesClusters(data *models.StateSnapshot, config MockConfig, now
 
 		if config.RandomMetrics {
 			// Small chance to flip a node Ready state.
-			if len(cluster.Nodes) > 0 && rand.Float64() < 0.05 {
+			if len(cluster.Nodes) > 0 && rand.Float64() < mockEventsPerDayChance(mockK8sNodeReadyFlipsPerDay) {
 				idx := rand.Intn(len(cluster.Nodes))
 				cluster.Nodes[idx].Ready = !cluster.Nodes[idx].Ready
 			}
 
 			// Small chance to flip a pod into/out of CrashLoopBackOff.
-			if len(cluster.Pods) > 0 && rand.Float64() < 0.07 {
+			if len(cluster.Pods) > 0 && rand.Float64() < mockEventsPerDayChance(mockK8sPodCrashFlipsPerDay) {
 				idx := rand.Intn(len(cluster.Pods))
 				pod := &cluster.Pods[idx]
 				if kubernetesPodHealthy(*pod) {
@@ -5821,7 +5922,7 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig, now time.T
 			}
 			temperature := SampleMetric("dockerHost", host.ID, "temperature", now)
 			host.Temperature = &temperature
-		} else if config.RandomMetrics && rand.Float64() < 0.01 {
+		} else if config.RandomMetrics && rand.Float64() < mockEventsPerDayChance(mockDockerHostRecoveriesPerDay) {
 			// Occasionally bring an offline host back online
 			host.Status = "online"
 			host.LastSeen = now
@@ -5861,7 +5962,7 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig, now time.T
 					flagged++
 				}
 
-				if config.RandomMetrics && (state == "exited" || state == "paused") && rand.Float64() < 0.02 {
+				if config.RandomMetrics && (state == "exited" || state == "paused") && rand.Float64() < mockEventsPerDayChance(mockDockerStoppedStartsPerDay) {
 					container.State = "running"
 					container.Status = "Up a few seconds"
 					container.Health = "starting"
@@ -5906,26 +6007,26 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig, now time.T
 
 					switch health {
 					case "unhealthy":
-						if rand.Float64() < 0.3 {
+						if rand.Float64() < mockRecoveryChance(mockDockerUnhealthyMeanRecovery) {
 							container.Health = "healthy"
 							health = "healthy"
 						}
 					case "starting":
-						if rand.Float64() < 0.5 {
+						if rand.Float64() < mockRecoveryChance(mockDockerStartingMeanRecovery) {
 							container.Health = "healthy"
 							health = "healthy"
 						}
 					default:
-						if rand.Float64() < 0.03 {
+						if rand.Float64() < mockEventsPerDayChance(mockDockerUnhealthyPerDay) {
 							container.Health = "unhealthy"
 							health = "unhealthy"
-						} else if rand.Float64() < 0.04 {
+						} else if rand.Float64() < mockEventsPerDayChance(mockDockerStartingPerDay) {
 							container.Health = "starting"
 							health = "starting"
 						}
 					}
 
-					if rand.Float64() < 0.01 {
+					if rand.Float64() < mockEventsPerDayChance(mockDockerRestartsPerDay) {
 						container.RestartCount++
 					}
 				}
@@ -6148,7 +6249,7 @@ func updateHosts(data *models.StateSnapshot, config MockConfig, now time.Time) {
 			host.NetOutRate = 0
 			host.DiskReadRate = 0
 			host.DiskWriteRate = 0
-			if config.RandomMetrics && rand.Float64() < 0.02 {
+			if config.RandomMetrics && rand.Float64() < mockEventsPerDayChance(mockHostRecoveriesPerDay) {
 				host.Status = "online"
 				host.LastSeen = now
 				host.UptimeSeconds = int64(120 + rand.Intn(3600))
@@ -6191,10 +6292,10 @@ func updateHosts(data *models.StateSnapshot, config MockConfig, now time.Time) {
 		}
 
 		if host.Status == "degraded" {
-			if rand.Float64() < 0.25 {
+			if rand.Float64() < mockRecoveryChance(mockHostDegradedMeanRecovery) {
 				host.Status = "online"
 			}
-		} else if rand.Float64() < 0.05 {
+		} else if rand.Float64() < mockEventsPerDayChance(mockHostDegradedPerDay) {
 			host.Status = "degraded"
 		}
 	}
