@@ -9,6 +9,7 @@ staged in the same commit.
 from __future__ import annotations
 
 import argparse
+import difflib
 import fnmatch
 import json
 import os
@@ -416,45 +417,69 @@ def staged_verification_files_for_requirement(rule: dict, requirement: dict, sta
     return sorted(set(matches))
 
 
-def staged_contract_patch(path: str) -> str:
+def git_blob_text(spec: str) -> str:
     result = subprocess.run(
-        ["git", "diff", "--cached", "--unified=1000", "--no-color", "--", path],
+        ["git", "show", spec],
         cwd=REPO_ROOT,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
+    if result.returncode != 0:
+        return ""
     return result.stdout
 
 
-def contract_patch_has_substantive_change(patch_text: str) -> bool:
-    current_section = ""
-    for line in patch_text.splitlines():
-        if line.startswith(("diff --git ", "index ", "--- ", "+++ ", "@@ ")):
-            continue
-        if not line:
-            continue
-        prefix = line[0]
-        if prefix not in {" ", "+", "-"}:
-            continue
-        stripped = line[1:].strip()
+def contract_section_map(lines: Sequence[str]) -> List[str]:
+    """Map each line to the `## ` section it belongs to, from the full file."""
+    sections: List[str] = []
+    current = ""
+    for line in lines:
+        stripped = line.strip()
         if stripped.startswith("## "):
-            current_section = stripped
+            current = stripped
+        sections.append(current)
+    return sections
+
+
+def _is_substantive_contract_line(stripped: str, section: str) -> bool:
+    if section not in SUBSTANTIVE_CONTRACT_SECTIONS:
+        return False
+    if not stripped:
+        return False
+    if stripped.startswith("## "):
+        return False
+    if stripped in {"```", "```json"}:
+        return False
+    return True
+
+
+def contract_texts_have_substantive_change(base_text: str, staged_text: str) -> bool:
+    """Compare full contract texts so section membership never depends on how
+    close a change sits to its `## ` header (diff-context attribution broke on
+    sections longer than the context window)."""
+    base_lines = base_text.splitlines()
+    staged_lines = staged_text.splitlines()
+    base_sections = contract_section_map(base_lines)
+    staged_sections = contract_section_map(staged_lines)
+    matcher = difflib.SequenceMatcher(a=base_lines, b=staged_lines, autojunk=False)
+    for tag, base_start, base_end, staged_start, staged_end in matcher.get_opcodes():
+        if tag == "equal":
             continue
-        if prefix == " ":
-            continue
-        if current_section not in SUBSTANTIVE_CONTRACT_SECTIONS:
-            continue
-        if not stripped:
-            continue
-        if stripped in {"```", "```json"}:
-            continue
-        return True
+        for idx in range(base_start, base_end):
+            if _is_substantive_contract_line(base_lines[idx].strip(), base_sections[idx]):
+                return True
+        for idx in range(staged_start, staged_end):
+            if _is_substantive_contract_line(staged_lines[idx].strip(), staged_sections[idx]):
+                return True
     return False
 
 
 def staged_contract_has_substantive_change(path: str) -> bool:
-    return contract_patch_has_substantive_change(staged_contract_patch(path))
+    return contract_texts_have_substantive_change(
+        git_blob_text(f"HEAD:{path}"),
+        git_blob_text(f":0:{path}"),
+    )
 
 
 def format_missing_requirements(

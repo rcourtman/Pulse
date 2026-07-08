@@ -11,7 +11,7 @@ from canonical_completion_guard import (
     SUBSYSTEM_REGISTRY,
     build_verification_requirements,
     check_staged_contracts,
-    contract_patch_has_substantive_change,
+    contract_texts_have_substantive_change,
     infer_impacted_subsystems,
     is_ignored_runtime_file,
     is_test_or_fixture,
@@ -1953,52 +1953,111 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             },
         )
 
-    def test_contract_patch_metadata_only_is_not_substantive(self):
-        patch = """diff --git a/docs/release-control/v6/internal/subsystems/monitoring.md b/docs/release-control/v6/internal/subsystems/monitoring.md
-index 1111111..2222222 100644
---- a/docs/release-control/v6/internal/subsystems/monitoring.md
-+++ b/docs/release-control/v6/internal/subsystems/monitoring.md
-@@ -1,12 +1,12 @@
- # Monitoring Contract
+    def test_contract_metadata_only_change_is_not_substantive(self):
+        base = """# Monitoring Contract
 
- ## Contract Metadata
+## Contract Metadata
 
- ```json
- {
--  "dependency_subsystem_ids": []
-+  "dependency_subsystem_ids": ["unified-resources"]
- }
- ```
+```json
+{
+  "dependency_subsystem_ids": []
+}
+```
 
- ## Purpose
+## Purpose
+
+Watch things.
 """
-        self.assertFalse(contract_patch_has_substantive_change(patch))
+        staged = base.replace(
+            '"dependency_subsystem_ids": []',
+            '"dependency_subsystem_ids": ["unified-resources"]',
+        )
+        self.assertFalse(contract_texts_have_substantive_change(base, staged))
 
-    def test_contract_patch_current_state_change_is_substantive(self):
-        patch = """diff --git a/docs/release-control/v6/internal/subsystems/monitoring.md b/docs/release-control/v6/internal/subsystems/monitoring.md
-index 1111111..2222222 100644
---- a/docs/release-control/v6/internal/subsystems/monitoring.md
-+++ b/docs/release-control/v6/internal/subsystems/monitoring.md
-@@ -20,8 +20,8 @@
- ## Current State
+    def test_contract_current_state_change_is_substantive(self):
+        base = """# Monitoring Contract
 
--Read-state migration remains partial.
-+Read-state migration is now complete for storage-backed workload assembly.
+## Purpose
+
+Watch things.
+
+## Current State
+
+Read-state migration remains partial.
 """
-        self.assertTrue(contract_patch_has_substantive_change(patch))
+        staged = base.replace(
+            "Read-state migration remains partial.",
+            "Read-state migration is now complete for storage-backed workload assembly.",
+        )
+        self.assertTrue(contract_texts_have_substantive_change(base, staged))
 
-    def test_contract_patch_shared_boundaries_change_is_substantive(self):
-        patch = """diff --git a/docs/release-control/v6/internal/subsystems/api-contracts.md b/docs/release-control/v6/internal/subsystems/api-contracts.md
-index 1111111..2222222 100644
---- a/docs/release-control/v6/internal/subsystems/api-contracts.md
-+++ b/docs/release-control/v6/internal/subsystems/api-contracts.md
-@@ -18,7 +18,7 @@
- ## Shared Boundaries
+    def test_contract_shared_boundaries_change_is_substantive(self):
+        base = """# API Contracts Contract
 
--1. `internal/api/resources.go` shared with `unified-resources`: old shared rationale.
-+1. `internal/api/resources.go` shared with `unified-resources`: new shared rationale.
+## Shared Boundaries
+
+1. `internal/api/resources.go` shared with `unified-resources`: old shared rationale.
 """
-        self.assertTrue(contract_patch_has_substantive_change(patch))
+        staged = base.replace("old shared rationale.", "new shared rationale.")
+        self.assertTrue(contract_texts_have_substantive_change(base, staged))
+
+    def test_contract_current_state_edit_far_below_section_header_is_substantive(self):
+        # Regression: the old implementation attributed sections from
+        # `git diff --unified=1000` context, so an edit more than 1000 lines
+        # below its `## ` header lost its section and was wrongly reported
+        # as not substantive (unified-resources.md's Current State spans
+        # thousands of lines).
+        filler = "\n".join(f"- historical note {i} about the registry." for i in range(1500))
+        base = f"""# Unified Resources Contract
+
+## Contract Metadata
+
+```json
+{{
+  "dependency_subsystem_ids": []
+}}
+```
+
+## Current State
+
+{filler}
+
+Registry rebuilds still emit no-op relationship_change events.
+
+## Extension Points
+
+None yet.
+"""
+        staged = base.replace(
+            "Registry rebuilds still emit no-op relationship_change events.",
+            "Registry rebuilds now skip no-op relationship_change events.",
+        )
+        self.assertTrue(contract_texts_have_substantive_change(base, staged))
+
+    def test_contract_metadata_edit_in_file_with_long_current_state_stays_non_substantive(self):
+        # Counterpart to the deep-edit regression test: full-file attribution
+        # must not over-report either — a metadata-only tweak in a file whose
+        # Current State is huge is still not substantive.
+        filler = "\n".join(f"- historical note {i} about the registry." for i in range(1500))
+        base = f"""# Unified Resources Contract
+
+## Contract Metadata
+
+```json
+{{
+  "dependency_subsystem_ids": []
+}}
+```
+
+## Current State
+
+{filler}
+"""
+        staged = base.replace(
+            '"dependency_subsystem_ids": []',
+            '"dependency_subsystem_ids": ["monitoring"]',
+        )
+        self.assertFalse(contract_texts_have_substantive_change(base, staged))
 
     def test_alerts_owned_runtime_has_no_default_fallback(self):
         alerts_rule = next(rule for rule in load_subsystem_rules() if rule["id"] == "alerts")
