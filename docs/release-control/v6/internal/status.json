@@ -1961,7 +1961,7 @@
         },
         {
           "repo": "pulse",
-          "path": "tests/integration/tests/32-truenas-workloads-resource-deeplink.spec.ts",
+          "path": "tests/integration/tests/68-platform-pages-shell.spec.ts",
           "kind": "file"
         }
       ]
@@ -4437,7 +4437,7 @@
         },
         {
           "repo": "pulse",
-          "path": "tests/integration/tests/74-infrastructure-workloads-resource-coherence.spec.ts",
+          "path": "tests/integration/tests/64-workloads-proxmox-refresh-stability.spec.ts",
           "kind": "file"
         }
       ]
