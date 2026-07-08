@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="docs/images/pulse-logo.svg" alt="Pulse Logo" width="120" />
-  <p><strong>Real-time monitoring for Proxmox, Docker, Kubernetes, and TrueNAS infrastructure.</strong></p>
+  <p><strong>Real-time monitoring for Proxmox, Docker, Kubernetes, TrueNAS, and vSphere infrastructure.</strong></p>
 
   [![GitHub Stars](https://img.shields.io/github/stars/rcourtman/Pulse?style=flat&logo=github)](https://github.com/rcourtman/Pulse)
   [![GitHub release](https://img.shields.io/github/v/release/rcourtman/Pulse)](https://github.com/rcourtman/Pulse/releases/latest)
@@ -16,13 +16,19 @@
 
 ---
 
+> **Pulse v6 is out.** A rebuilt unified workspace with TrueNAS and vSphere
+> support and a dedicated page for every platform. Upgrading from v5? See the
+> [v6 upgrade guide](docs/UPGRADE_v6.md).
+
+---
+
 Issue-first contribution policy: please open an issue or discussion before
 investing time in a code change. External pull requests are not part of the
 normal contribution flow for this repository. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## 🚀 Overview
 
-Pulse is a modern, unified monitoring workspace for your **infrastructure** across Proxmox, Docker, Kubernetes, and TrueNAS. It consolidates metrics, alerts, and AI-powered insights from all your systems into a single, beautiful interface.
+Pulse is a modern, unified monitoring workspace for your **infrastructure** across Proxmox, Docker, Kubernetes, TrueNAS, and vSphere. It consolidates metrics, alerts, and AI-powered insights from all your systems into a single, beautiful interface.
 
 Designed for homelabs, sysadmins, internal IT teams, and providers who need a clear monitoring view without the complexity of enterprise monitoring stacks. MSP access is a separate, request-assisted provider path and is not part of ordinary self-hosted setup.
 
