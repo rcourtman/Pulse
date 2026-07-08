@@ -13,34 +13,6 @@ type WorkerFixtures = {
 
 const PAGE_HEADER_ROUTES = [
   {
-    slug: "workloads",
-    route: "/workloads",
-    title: "Workloads",
-    description:
-      "Inspect live workloads, filter by platform and status, and drill into compute, memory, and I/O posture.",
-  },
-  {
-    slug: "infrastructure",
-    route: "/infrastructure",
-    title: "Infrastructure",
-    description:
-      "Inspect connected resources, filter by source and status, and drill into live health and capacity.",
-  },
-  {
-    slug: "storage",
-    route: "/storage",
-    title: "Storage",
-    description:
-      "Review capacity, node health, pools, and storage pressure across connected clusters and devices.",
-  },
-  {
-    slug: "recovery",
-    route: "/recovery",
-    title: "Recovery",
-    description:
-      "Review protected inventory, recent recovery activity, and restore posture across platforms.",
-  },
-  {
     slug: "alerts",
     route: "/alerts/overview",
     title: "Alerts Overview",
@@ -57,16 +29,16 @@ const PAGE_HEADER_ROUTES = [
     slug: "patrol",
     route: "/patrol",
     title: "Patrol",
-    description:
-      "Continuously verify infrastructure health, review findings, and control Patrol runtime behavior.",
+    description: "Patrol checks your infrastructure and shows current issues.",
   },
 ] as const;
 
+// The platform pages intentionally carry no page header (the platform tabs
+// and section nav frame them), so header alignment is pinned across the
+// utility surfaces that still render the shared PageHeader.
 const ALIGNED_PAGE_HEADER_ROUTES = [
   PAGE_HEADER_ROUTES[0],
-  PAGE_HEADER_ROUTES[1],
   PAGE_HEADER_ROUTES[2],
-  PAGE_HEADER_ROUTES[3],
 ] as const;
 
 const test = base.extend<{}, WorkerFixtures>({
