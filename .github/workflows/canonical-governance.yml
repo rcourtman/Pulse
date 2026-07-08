@@ -83,9 +83,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -n "${{ steps.diff.outputs.range }}" ]; then
-            git diff --name-only "${{ steps.diff.outputs.range }}" \
-              | python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin
+          range="${{ steps.diff.outputs.range }}"
+          if [ -n "${range}" ]; then
+            # Pass the range base so the guard compares contract texts
+            # base-vs-HEAD; the CI index equals HEAD, so the default
+            # index comparison would misreport every contract update
+            # in the range as insubstantial.
+            git diff --name-only "${range}" \
+              | python3 scripts/release_control/canonical_completion_guard.py \
+                  --files-from-stdin --diff-base "${range%%...*}"
           else
             printf '' | python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin
           fi

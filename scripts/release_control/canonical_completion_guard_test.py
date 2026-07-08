@@ -1,5 +1,6 @@
 import io
 import os
+import subprocess
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
@@ -19,6 +20,8 @@ from canonical_completion_guard import (
     path_policy_matches,
     parse_args,
     required_contract_updates,
+    resolve_diff_base,
+    staged_contract_has_substantive_change,
     staged_verification_files_for_requirement,
     stdin_files,
     subsystem_matches_path,
@@ -3069,6 +3072,18 @@ None yet.
     def test_parse_args_supports_files_from_stdin(self):
         args = parse_args(["--files-from-stdin"])
         self.assertTrue(args.files_from_stdin)
+        self.assertIsNone(args.diff_base)
+
+    def test_parse_args_supports_diff_base_with_files_from_stdin(self):
+        args = parse_args(["--files-from-stdin", "--diff-base", "0d787a4b1"])
+        self.assertTrue(args.files_from_stdin)
+        self.assertEqual(args.diff_base, "0d787a4b1")
+
+    def test_parse_args_rejects_diff_base_without_files_from_stdin(self):
+        stderr = io.StringIO()
+        with redirect_stderr(stderr), self.assertRaises(SystemExit):
+            parse_args(["--diff-base", "0d787a4b1"])
+        self.assertIn("--diff-base requires --files-from-stdin", stderr.getvalue())
 
     def test_explicit_coverage_subsystems_have_no_unmatched_runtime_files(self):
         explicit_rules = {
@@ -3199,6 +3214,98 @@ class ContractNeutralOverrideTest(unittest.TestCase):
         self.assertIn("BLOCKED: missing contract", stderr_value)
         self.assertIn(CONTRACT_NEUTRAL_OVERRIDE_ENV, stderr_value)
         self.assertIn("contract-neutral", stderr_value)
+
+
+class DiffBaseContractComparisonTest(unittest.TestCase):
+    """The guard runs in two modes. Pre-commit compares HEAD against the
+    index, where the pending contract update is staged. CI has nothing
+    staged (index == HEAD), so it must compare the push-range base against
+    HEAD instead; before --diff-base existed, CI misreported every staged
+    contract as having no substantive change."""
+
+    CONTRACT_PATH = "docs/release-control/v6/internal/subsystems/deployment-installability.md"
+    BASE_TEXT = "## Current State\n\nExisting obligation.\n"
+    HEAD_TEXT = "## Current State\n\nExisting obligation.\nNew scoped exception recorded.\n"
+
+    def test_index_mode_compares_head_against_index(self):
+        blobs = {
+            f"HEAD:{self.CONTRACT_PATH}": self.BASE_TEXT,
+            f":0:{self.CONTRACT_PATH}": self.HEAD_TEXT,
+        }
+        with patch("canonical_completion_guard.git_blob_text", side_effect=blobs.get):
+            self.assertTrue(staged_contract_has_substantive_change(self.CONTRACT_PATH))
+
+    def test_index_mode_reports_no_change_when_index_equals_head(self):
+        # The CI failure mode: index == HEAD, so the index comparison is
+        # empty even though the push range contains a substantive update.
+        blobs = {
+            f"HEAD:{self.CONTRACT_PATH}": self.HEAD_TEXT,
+            f":0:{self.CONTRACT_PATH}": self.HEAD_TEXT,
+        }
+        with patch("canonical_completion_guard.git_blob_text", side_effect=blobs.get):
+            self.assertFalse(staged_contract_has_substantive_change(self.CONTRACT_PATH))
+
+    def test_diff_base_mode_compares_base_against_head(self):
+        blobs = {
+            f"0d787a4b1:{self.CONTRACT_PATH}": self.BASE_TEXT,
+            f"HEAD:{self.CONTRACT_PATH}": self.HEAD_TEXT,
+            f":0:{self.CONTRACT_PATH}": self.HEAD_TEXT,
+        }
+        with patch("canonical_completion_guard.git_blob_text", side_effect=blobs.get):
+            self.assertTrue(
+                staged_contract_has_substantive_change(self.CONTRACT_PATH, "0d787a4b1")
+            )
+
+    def test_diff_base_mode_reports_no_change_for_identical_texts(self):
+        blobs = {
+            f"0d787a4b1:{self.CONTRACT_PATH}": self.HEAD_TEXT,
+            f"HEAD:{self.CONTRACT_PATH}": self.HEAD_TEXT,
+        }
+        with patch("canonical_completion_guard.git_blob_text", side_effect=blobs.get):
+            self.assertFalse(
+                staged_contract_has_substantive_change(self.CONTRACT_PATH, "0d787a4b1")
+            )
+
+    def test_check_staged_contracts_threads_diff_base_into_comparison(self):
+        seen: list[tuple[str, str | None]] = []
+
+        def record(path, diff_base=None):
+            seen.append((path, diff_base))
+            return True
+
+        with (
+            patch(
+                "canonical_completion_guard.infer_impacted_subsystems",
+                return_value={},
+            ),
+            patch(
+                "canonical_completion_guard.required_contract_updates",
+                return_value={self.CONTRACT_PATH: {"subsystem": "deployment-installability"}},
+            ),
+            patch(
+                "canonical_completion_guard.staged_contract_has_substantive_change",
+                side_effect=record,
+            ),
+        ):
+            self.assertEqual(
+                check_staged_contracts([self.CONTRACT_PATH], diff_base="0d787a4b1"),
+                0,
+            )
+        self.assertEqual(seen, [(self.CONTRACT_PATH, "0d787a4b1")])
+
+    def test_resolve_diff_base_returns_merge_base_sha(self):
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        self.assertEqual(resolve_diff_base("HEAD"), head)
+
+    def test_resolve_diff_base_falls_back_to_raw_ref(self):
+        zero_sha = "0" * 40
+        self.assertEqual(resolve_diff_base(zero_sha), zero_sha)
 
 
 class ReleaseCycleArtifactGuardTest(unittest.TestCase):

@@ -475,10 +475,43 @@ def contract_texts_have_substantive_change(base_text: str, staged_text: str) -> 
     return False
 
 
-def staged_contract_has_substantive_change(path: str) -> bool:
+def resolve_diff_base(ref: str) -> str:
+    """Resolve a diff-base ref to its merge base with HEAD.
+
+    CI passes the push/PR range base, and the changed-file list is computed
+    with a three-dot diff (`base...head`), which diffs from the merge base.
+    Using the same anchor here keeps the contract-text comparison consistent
+    with the file list. Falls back to the raw ref when the merge base cannot
+    be resolved (e.g. a zero SHA on branch creation).
+    """
+    result = subprocess.run(
+        ["git", "merge-base", ref, "HEAD"],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    merge_base = result.stdout.strip()
+    return merge_base if result.returncode == 0 and merge_base else ref
+
+
+def staged_contract_has_substantive_change(path: str, diff_base: str | None = None) -> bool:
+    """Return True if the contract's change includes a substantive section edit.
+
+    Without a diff base this compares HEAD against the index — the pre-commit
+    mode, where the pending change is staged. With a diff base (CI mode) it
+    compares the base commit against HEAD: in a CI checkout the index equals
+    HEAD, so the index comparison is always empty there and would misreport
+    every contract update as insubstantial.
+    """
+    if diff_base is None:
+        return contract_texts_have_substantive_change(
+            git_blob_text(f"HEAD:{path}"),
+            git_blob_text(f":0:{path}"),
+        )
     return contract_texts_have_substantive_change(
+        git_blob_text(f"{diff_base}:{path}"),
         git_blob_text(f"HEAD:{path}"),
-        git_blob_text(f":0:{path}"),
     )
 
 
@@ -574,7 +607,7 @@ def format_missing_requirements(
     return "\n".join(lines)
 
 
-def check_staged_contracts(staged_files: Sequence[str]) -> int:
+def check_staged_contracts(staged_files: Sequence[str], *, diff_base: str | None = None) -> int:
     staged_set: Set[str] = set(staged_files)
     impacted = infer_impacted_subsystems(staged_files, use_staged_registry=True)
     required_contracts = required_contract_updates(
@@ -591,7 +624,7 @@ def check_staged_contracts(staged_files: Sequence[str]) -> int:
         contract_path: data
         for contract_path, data in required_contracts.items()
         if contract_path in staged_set
-        if not staged_contract_has_substantive_change(contract_path)
+        if not staged_contract_has_substantive_change(contract_path, diff_base)
     }
     missing_verification: Dict[str, dict] = {}
     for subsystem_id, data in impacted.items():
@@ -653,13 +686,26 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         action="store_true",
         help="Read newline-delimited changed files from standard input instead of git staged files.",
     )
-    return parser.parse_args(list(argv))
+    parser.add_argument(
+        "--diff-base",
+        default=None,
+        help=(
+            "Commit-ish to compare contract texts against instead of the index. "
+            "Use in CI, where nothing is staged and the changed-file list comes "
+            "from a commit range; requires --files-from-stdin."
+        ),
+    )
+    args = parser.parse_args(list(argv))
+    if args.diff_base and not args.files_from_stdin:
+        parser.error("--diff-base requires --files-from-stdin")
+    return args
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(list(argv or ()))
+    diff_base = resolve_diff_base(args.diff_base) if args.diff_base else None
     if args.files_from_stdin:
-        return check_staged_contracts(stdin_files(sys.stdin))
+        return check_staged_contracts(stdin_files(sys.stdin), diff_base=diff_base)
     return check_staged_contracts(git_staged_files())
 
 
