@@ -4,7 +4,7 @@ import {
   apiRequest,
   createOrg,
   deleteOrg,
-  ensureAuthenticated,
+  ensureSessionAuthenticated,
   E2E_CREDENTIALS,
   isMultiTenantEnabled,
 } from './helpers';
@@ -27,7 +27,7 @@ const bearerHeaders = (token: string, extraHeaders: Record<string, string> = {})
 
 test.describe.serial('API token scope and assignment gate', () => {
   test('owner-bound token enforces scope boundaries and revokes immediately', async ({ page }) => {
-    await ensureAuthenticated(page);
+    await ensureSessionAuthenticated(page);
 
     const createRes = await apiRequest(page, '/api/security/tokens', {
       method: 'POST',
@@ -92,7 +92,7 @@ test.describe.serial('API token scope and assignment gate', () => {
   });
 
   test('org-bound token stays inside the issuing org', async ({ page }) => {
-    await ensureAuthenticated(page);
+    await ensureSessionAuthenticated(page);
 
     const mtEnabled = await isMultiTenantEnabled(page);
     test.skip(!mtEnabled, 'Multi-tenant feature not enabled in this environment');

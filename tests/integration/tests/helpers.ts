@@ -1,12 +1,25 @@
+import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
-import { Browser, Page, Request, expect } from "@playwright/test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
+  Browser,
+  Page,
+  Request,
+  expect,
+  request as playwrightRequest,
+  type APIRequestContext,
+} from "@playwright/test";
+import {
+  browserBaseURLIsImplicitDevRuntime,
   preferredBrowserBaseURL,
   preferredPlaywrightRouteBaseURL,
   readRuntimeState,
   runtimeStatePath,
 } from "./runtime-defaults";
+
+const helpersDir = path.dirname(fileURLToPath(import.meta.url));
 
 const runtimePrimaryAPIToken = (): string => {
   const parsed = readRuntimeState();
@@ -601,10 +614,38 @@ export async function maybeCompleteSetupWizard(page: Page) {
   rememberSetupCredentials(setup);
 }
 
+// Last-resort read of the rotated bootstrap token straight from the test
+// container, mirroring the docker-exec channel the entitlement bootstrap
+// uses. The on-disk file is encrypted, so this goes through the CLI, which
+// prints the decrypted token in a banner. Returns "" when docker (or the
+// container) is unavailable.
+function readContainerBootstrapToken(): string {
+  const container =
+    String(process.env.PULSE_E2E_PULSE_CONTAINER || "").trim() ||
+    "pulse-test-server";
+  try {
+    const banner = execFileSync(
+      "docker",
+      ["exec", container, "/app/pulse", "bootstrap-token"],
+      { encoding: "utf8", timeout: 15_000 },
+    );
+    return banner.match(/[0-9a-f]{48}/)?.[0] ?? "";
+  } catch {
+    return "";
+  }
+}
+
 async function resetFirstRunState(
   page: Page,
   security: SecurityStatus,
 ): Promise<ResetFirstRunResponse> {
+  if (browserBaseURLIsImplicitDevRuntime()) {
+    throw new Error(
+      `Refusing to reset first-run state against the implicitly resolved dev runtime at ${preferredBrowserBaseURL()}. ` +
+        "This is almost certainly a developer's live Pulse, not the e2e stack. " +
+        "Set PULSE_BASE_URL (or run through pretest/run-tests.sh) to target the intended instance.",
+    );
+  }
   const resetPath = "/api/security/dev/reset-first-run";
   const reset = (headers?: Record<string, string>) =>
     apiRequest(page, resetPath, {
@@ -638,8 +679,33 @@ async function resetFirstRunState(
     );
   }
 
+  // No authentication is configured: the instance already sits in the
+  // post-reset state, but the on-disk bootstrap token may have been rotated
+  // by an earlier interrupted reset, so the seeded value cannot be assumed.
+  // Recover by completing setup with a valid bootstrap token (seeded value
+  // first, container file as fallback), then mint a fresh bootstrap token
+  // through an authenticated reset.
+  let recovered: CompleteSetupWizardResult | null = null;
+  try {
+    recovered = await completeFirstRunViaAPI(page, E2E_CREDENTIALS.bootstrapToken);
+  } catch {
+    const containerToken = readContainerBootstrapToken();
+    if (!containerToken) {
+      throw new Error(
+        "Failed to reset first-run state: no authentication is configured, the seeded bootstrap token was rejected, " +
+          "and the container bootstrap token could not be read via docker exec.",
+      );
+    }
+    recovered = await completeFirstRunViaAPI(page, containerToken);
+  }
+  rememberSetupCredentials(recovered);
+  await login(page);
+  const recoveredRes = await reset();
+  if (recoveredRes.ok()) {
+    return (await recoveredRes.json()) as ResetFirstRunResponse;
+  }
   throw new Error(
-    "Failed to reset first-run state: all configured API tokens were rejected and no authenticated session fallback is available",
+    `Failed to reset first-run state after recovering an unauthenticated instance: ${recoveredRes.status()} ${await recoveredRes.text()}`,
   );
 }
 
@@ -858,44 +924,63 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
     )
     .first();
 
-  await page.fill('input[name="username"]', credentials.username);
-  await page.fill('input[name="password"]', credentials.password);
-  await page.click('button[type="submit"]');
+  const submitAndAwaitOutcome = async (): Promise<string> => {
+    await page.fill('input[name="username"]', credentials.username);
+    await page.fill('input[name="password"]', credentials.password);
+    await page.click('button[type="submit"]');
 
-  await expect
-    .poll(
-      async () => {
-        const url = page.url();
-        if (AUTHENTICATED_URL.test(url)) {
-          return "authenticated";
-        }
+    const deadline = Date.now() + 30_000;
+    while (Date.now() < deadline) {
+      if (AUTHENTICATED_URL.test(page.url())) {
+        return "authenticated";
+      }
+      const loginErrorVisible = await loginErrorText
+        .isVisible()
+        .catch(() => false);
+      if (loginErrorVisible) {
+        const message = (
+          (await loginErrorText.textContent()) || "login_error"
+        ).trim();
+        return `error:${message}`;
+      }
+      await page.waitForTimeout(250);
+    }
+    return "timeout waiting for authenticated app state after login submission";
+  };
 
-        const loginErrorVisible = await loginErrorText
-          .isVisible()
-          .catch(() => false);
-        if (loginErrorVisible) {
-          const message = (
-            (await loginErrorText.textContent()) || "login_error"
-          ).trim();
-          return `error:${message}`;
-        }
-
-        const stillShowingLogin = await usernameInput
-          .isVisible()
-          .catch(() => false);
-        if (stillShowingLogin) {
-          return "login";
-        }
-
-        return "pending";
-      },
-      {
-        timeout: 30_000,
-        message:
-          "Timed out waiting for authenticated app state after login submission",
-      },
-    )
-    .toBe("authenticated");
+  // The backend allows 10 login attempts per minute per IP and counts
+  // successful ones, so bursts of session logins (worker fixtures plus
+  // per-test session auth) can transiently trip the limiter. Back off and
+  // retry through a fresh login form.
+  const MAX_LOGIN_ATTEMPTS = 3;
+  let lastOutcome = "pending";
+  for (let attempt = 1; attempt <= MAX_LOGIN_ATTEMPTS; attempt++) {
+    lastOutcome = await submitAndAwaitOutcome();
+    if (lastOutcome === "authenticated") {
+      return;
+    }
+    if (/too many/i.test(lastOutcome) && attempt < MAX_LOGIN_ATTEMPTS) {
+      await page.waitForTimeout(15_000);
+      await page.goto("/");
+      await waitForAppShell(page);
+      const retryState = await Promise.race([
+        usernameInput
+          .waitFor({ state: "visible", timeout: 15_000 })
+          .then(() => "login")
+          .catch(() => undefined),
+        page
+          .waitForURL(AUTHENTICATED_URL, { timeout: 15_000 })
+          .then(() => "authenticated")
+          .catch(() => undefined),
+      ]);
+      if (retryState === "authenticated") {
+        return;
+      }
+      continue;
+    }
+    break;
+  }
+  throw new Error(`Login failed: ${lastOutcome}`);
 }
 
 async function authenticateWithPrimaryAPIToken(page: Page): Promise<boolean> {
@@ -941,20 +1026,80 @@ export async function ensureAuthenticated(page: Page) {
   await expect(page).toHaveURL(AUTHENTICATED_URL);
 }
 
+// Deterministic cookie-session auth. Use instead of ensureAuthenticated when
+// the test exercises session semantics (page.request cookies, CSRF, session
+// revocation): ensureAuthenticated may satisfy itself via the
+// sessionStorage-only token path, which leaves page.request unauthenticated.
+export async function ensureSessionAuthenticated(page: Page) {
+  await waitForPulseReady(page);
+  await maybeCompleteSetupWizard(page);
+  await login(page);
+  await expect(page).toHaveURL(AUTHENTICATED_URL);
+}
+
+// Playwright storage states persist cookies and localStorage only. The
+// primary-API-token flow authenticates through sessionStorage, so a storage
+// state captured after token auth is silently unauthenticated and every test
+// that loads it lands on the login screen. Storage states must therefore
+// always come from the cookie-backed password login.
+const sharedCookieStatePath = (): string =>
+  path.resolve(
+    helpersDir,
+    "..",
+    "tmp",
+    "playwright-auth",
+    "shared-cookie-session.json",
+  );
+
+async function storageStateHasLiveSession(
+  browser: Browser,
+  statePath: string,
+): Promise<boolean> {
+  const context = await browser.newContext({
+    baseURL: preferredBrowserBaseURL(),
+    storageState: statePath,
+  });
+  try {
+    const res = await context.request.get("/api/state");
+    return res.status() === 200;
+  } catch {
+    return false;
+  } finally {
+    await context.close();
+  }
+}
+
 export async function createAuthenticatedStorageState(
   browser: Browser,
   storageStatePath: string,
 ): Promise<void> {
+  // Reuse one cookie session per run so repeated fixture setups stay far
+  // below the backend's per-user session cap and login rate limit.
+  const sharedPath = sharedCookieStatePath();
+  fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
+  if (
+    fs.existsSync(sharedPath) &&
+    (await storageStateHasLiveSession(browser, sharedPath))
+  ) {
+    fs.copyFileSync(sharedPath, storageStatePath);
+    return;
+  }
+
   const context = await browser.newContext({
     baseURL: preferredBrowserBaseURL(),
   });
   const page = await context.newPage();
   try {
-    await ensureAuthenticated(page);
+    await ensureSessionAuthenticated(page);
     await context.storageState({ path: storageStatePath });
   } finally {
     await context.close();
   }
+
+  fs.mkdirSync(path.dirname(sharedPath), { recursive: true });
+  const tempSharedPath = `${sharedPath}.${process.pid}.tmp`;
+  fs.copyFileSync(storageStatePath, tempSharedPath);
+  fs.renameSync(tempSharedPath, sharedPath);
 }
 
 export async function logout(page: Page) {
@@ -1217,6 +1362,18 @@ export async function resetTestEnvironment() {
   // Restart services
 }
 
+// Shared cookie-less request context for explicit token-auth calls. Kept for
+// the worker lifetime because disposing it would invalidate in-flight
+// response bodies.
+let tokenAuthRequestContext: APIRequestContext | null = null;
+
+async function getTokenAuthRequestContext(): Promise<APIRequestContext> {
+  if (!tokenAuthRequestContext) {
+    tokenAuthRequestContext = await playwrightRequest.newContext();
+  }
+  return tokenAuthRequestContext;
+}
+
 /**
  * Make API request to Pulse backend
  */
@@ -1234,7 +1391,19 @@ export async function apiRequest(
       /^(basic|bearer)\s+/i.test(headers.Authorization)) ||
     typeof headers["X-API-Token"] === "string";
 
-  if (!hasNonSessionAuth && !["GET", "HEAD", "OPTIONS"].includes(method)) {
+  if (hasNonSessionAuth) {
+    // Explicit token credentials must be exercised without the page's
+    // ambient session cookie: the backend intentionally CSRF-rejects any
+    // mutation that arrives with a session cookie and no CSRF token, even
+    // when a valid Authorization header is present.
+    const context = await getTokenAuthRequestContext();
+    return context.fetch(`${baseURL}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  }
+
+  if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
     const hasCSRFHeader = Object.keys(headers).some(
       (name) => name.toLowerCase() === "x-csrf-token",
     );

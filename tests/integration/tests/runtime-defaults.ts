@@ -86,6 +86,17 @@ export const preferredBrowserBaseURL = (
     'http://localhost:7655',
   );
 
+// True when the base URL would resolve through the hot-dev pid fallback with
+// no explicit env override and no harness-written runtime state — i.e. the
+// suite is about to target a developer's live Pulse rather than an e2e stack.
+export const browserBaseURLIsImplicitDevRuntime = (
+  env: NodeJS.ProcessEnv = process.env,
+): boolean =>
+  trim(env.PLAYWRIGHT_BASE_URL) === '' &&
+  trim(env.PULSE_BASE_URL) === '' &&
+  loadRuntimeBaseURL(env) === null &&
+  managedDevBrowserBaseURL(env) !== null;
+
 export const preferredPlaywrightRouteBaseURL = (
   env: NodeJS.ProcessEnv = process.env,
   overrides: readonly unknown[] = [],
