@@ -969,7 +969,9 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 	required := []string{
 		`- name: Tailscale`,
 		`uses: tailscale/github-action@4e4c49acaa9818630ce0bd7a564372c17e33fb4d # v2`,
-		`authkey: ${{ secrets.TS_AUTHKEY }}`,
+		`oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}`,
+		`oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}`,
+		`tags: tag:infra`,
 		`uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0`,
 		`go run ./scripts/release_update_key.go public-key-ssh`,
 		`sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"|" /tmp/pulse-install.sh`,
