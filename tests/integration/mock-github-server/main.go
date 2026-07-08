@@ -159,11 +159,14 @@ func main() {
 		},
 	}
 
-	// Generate tarballs and checksums for each release
+	// Generate tarballs and checksums for each release. Asset names and
+	// download paths mirror real Pulse releases, which keep the leading "v"
+	// (e.g. pulse-v6.0.4-linux-amd64.tar.gz) — the in-app updater infers the
+	// target version from the URL and only recognizes v-prefixed versions.
 	for i := range releases {
 		rel := &releases[i]
 		version := strings.TrimPrefix(rel.TagName, "v")
-		filename := fmt.Sprintf("pulse-%s-linux-amd64.tar.gz", version)
+		filename := fmt.Sprintf("pulse-%s-linux-amd64.tar.gz", rel.TagName)
 
 		// Create dummy tarball
 		tarball := createDummyTarball(version)
@@ -190,11 +193,11 @@ func main() {
 		}{
 			{
 				Name:               filename,
-				BrowserDownloadURL: fmt.Sprintf("%s/download/%s/%s", baseURL, version, filename),
+				BrowserDownloadURL: fmt.Sprintf("%s/download/%s/%s", baseURL, rel.TagName, filename),
 			},
 			{
 				Name:               "checksums.txt",
-				BrowserDownloadURL: fmt.Sprintf("%s/download/%s/checksums.txt", baseURL, version),
+				BrowserDownloadURL: fmt.Sprintf("%s/download/%s/checksums.txt", baseURL, rel.TagName),
 			},
 		}
 	}
@@ -283,9 +286,16 @@ func main() {
 		// Serve tarball (strictly match requested filename first)
 		tarball, ok := tarballs[file]
 		if !ok {
-			// Fallback to canonical filename derived from version (without leading v)
-			trimmedVersion := strings.TrimPrefix(version, "v")
-			canonical := fmt.Sprintf("pulse-%s-linux-amd64.tar.gz", trimmedVersion)
+			// Only fall back for tarball requests; sidecar files like
+			// .sshsig must 404 like real GitHub when they were never
+			// published, so signature verification stays fail-closed.
+			if !strings.HasSuffix(file, ".tar.gz") {
+				w.WriteHeader(http.StatusNotFound)
+				log.Printf("Asset not found: %s", file)
+				return
+			}
+			// Fallback to canonical filename derived from the version tag
+			canonical := fmt.Sprintf("pulse-v%s-linux-amd64.tar.gz", strings.TrimPrefix(version, "v"))
 			tarball, ok = tarballs[canonical]
 			if !ok {
 				w.WriteHeader(http.StatusNotFound)
