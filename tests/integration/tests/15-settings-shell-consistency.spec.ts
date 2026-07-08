@@ -89,9 +89,19 @@ test.describe('Settings shell consistency', () => {
   test.setTimeout(180_000);
 
   for (const panel of SETTINGS_SHELL_ROUTES) {
-    test(`uses the canonical shell on ${panel.route}`, async ({ page }) => {
+    test(`uses the canonical shell on ${panel.route}`, async ({ page, isMobile }) => {
       await page.goto(panel.route, { waitUntil: 'domcontentloaded' });
       await page.waitForURL(/\/settings/, { timeout: 15_000 });
+
+      if (isMobile) {
+        // Mobile keeps the settings navigation behind the Settings drawer
+        // trigger instead of a persistent sidebar.
+        await page
+          .getByRole('main')
+          .getByRole('button', { name: 'Settings', exact: true })
+          .first()
+          .click();
+      }
 
       const navigation = page.locator('[aria-label="Settings navigation"]');
       await expect(navigation, `${panel.route} should keep the shared settings navigation`).toBeVisible();
@@ -99,12 +109,16 @@ test.describe('Settings shell consistency', () => {
       const searchInput = page.getByPlaceholder('Search settings...');
       await expect(searchInput, `${panel.route} should keep the shared settings search`).toBeVisible();
 
+
       const pageHeading = page.getByRole('heading', { level: 1, name: panel.title });
       await expect(pageHeading, `${panel.route} should render the canonical page-shell heading`).toBeVisible();
-      await expect(
-        page.getByText(panel.description, { exact: true }).first(),
-        `${panel.route} should render the canonical page-shell description`,
-      ).toBeVisible();
+      if (!isMobile) {
+        // Panel descriptions are desktop-only copy (hidden sm:block).
+        await expect(
+          page.getByText(panel.description, { exact: true }).first(),
+          `${panel.route} should render the canonical page-shell description`,
+        ).toBeVisible();
+      }
 
       await expect(
         page.locator('h1'),
