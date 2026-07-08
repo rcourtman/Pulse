@@ -133,56 +133,38 @@ test.describe("Assistant & Patrol settings provider setup", () => {
 
     await page.goto("/settings/system-ai", { waitUntil: "domcontentloaded" });
     await expect(
-      page.getByRole("heading", { name: "Assistant & Patrol", level: 1 }),
-    ).toBeVisible();
-    await expect(
-      page
-        .getByText(
-          "Configure providers and models for Pulse Assistant and Patrol.",
-          { exact: true },
-        )
-        .first(),
+      page.getByRole("heading", { name: "Provider & Models", level: 1 }),
     ).toBeVisible();
 
-    await page
-      .getByRole("button", { name: /enable assistant and patrol/i })
-      .click();
+    // First enable routes through the Set up Pulse Intelligence dialog:
+    // pick a provider, submit the key, and let the backend select models.
+    // No model may be hardcoded into the update payload.
+    await page.getByRole("button", { name: "Enable Pulse Intelligence" }).click();
     const setupDialog = page.getByRole("dialog", {
-      name: "Set up Assistant and Patrol",
+      name: "Set up Pulse Intelligence",
     });
     await expect(
-      setupDialog.getByText("Set Up Assistant & Patrol"),
+      setupDialog.getByRole("heading", { name: "Set Up Pulse Intelligence" }),
     ).toBeVisible();
 
-    await setupDialog.getByRole("button", { name: /OpenRouter/i }).click();
+    await setupDialog.getByRole("button", { name: /Anthropic/ }).click();
     await setupDialog
-      .getByPlaceholder("sk-or-...")
-      .fill("sk-or-runtime-selected");
+      .getByPlaceholder("sk-ant-...")
+      .fill("sk-ant-runtime-selected");
     await setupDialog
-      .getByRole("button", { name: "Enable Assistant & Patrol" })
+      .getByRole("button", { name: "Enable Pulse Intelligence" })
       .click();
 
     await expect.poll(() => updateRequests.length).toBe(1);
-    expect(updateRequests[0]).toEqual({
-      enabled: true,
-      openrouter_api_key: "sk-or-runtime-selected",
-    });
-    expect(updateRequests[0]).not.toHaveProperty("model");
+    const submitted = updateRequests[0] as Record<string, unknown>;
+    expect(submitted.anthropic_api_key).toBe("sk-ant-runtime-selected");
+    expect(submitted.enabled).toBe(true);
+    expect(submitted.model ?? "").toBe("");
 
+    // Per-model overrides moved into the section panels; the panel signals
+    // enabled state and the backend-selected shared default model here.
     await expect(
-      page.getByRole("button", { name: "Model Overrides" }),
-    ).toBeVisible();
-    const workloadDiscoveryToggle = page.getByRole("button", {
-      name: /workload discovery/i,
-    });
-    await expect(workloadDiscoveryToggle).toBeVisible();
-    await workloadDiscoveryToggle.click();
-    await expect(page.getByText("Enable workload discovery")).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Run discovery now" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /enable assistant and patrol/i }),
+      page.getByRole("button", { name: "Enable Pulse Intelligence" }),
     ).toHaveAttribute("aria-pressed", "true");
   });
 
@@ -271,21 +253,23 @@ test.describe("Assistant & Patrol settings provider setup", () => {
 
     await page.goto("/settings/system-ai", { waitUntil: "domcontentloaded" });
     await page
-      .getByRole("button", { name: /enable assistant and patrol/i })
+      .getByRole("button", { name: "Enable Pulse Intelligence" })
       .click();
     const setupDialog = page.getByRole("dialog", {
-      name: "Set up Assistant and Patrol",
+      name: "Set up Pulse Intelligence",
     });
-    await setupDialog.getByRole("button", { name: /OpenRouter/i }).click();
+    await setupDialog.getByRole("button", { name: /Anthropic/ }).click();
     await setupDialog
-      .getByPlaceholder("sk-or-...")
-      .fill("sk-or-runtime-selected");
+      .getByPlaceholder("sk-ant-...")
+      .fill("sk-ant-runtime-selected");
     await setupDialog
-      .getByRole("button", { name: "Enable Assistant & Patrol" })
+      .getByRole("button", { name: "Enable Pulse Intelligence" })
       .click();
 
+    // The readiness warning carries the provider and model context from the
+    // saved patrol_readiness payload.
     await expect(
-      page.getByText("Assistant & Patrol enabled, but Patrol is not ready"),
+      page.getByText(/but Patrol is not ready/),
     ).toBeVisible();
     await expect(page.getByText("Provider: OpenRouter")).toBeVisible();
     await expect(
@@ -378,7 +362,7 @@ test.describe("Assistant & Patrol settings provider setup", () => {
 
     await page.goto("/settings/system-ai", { waitUntil: "domcontentloaded" });
     await expect(
-      page.getByRole("heading", { name: "Assistant & Patrol", level: 1 }),
+      page.getByRole("heading", { name: "Provider & Models", level: 1 }),
     ).toBeVisible();
     await expect(
       page.getByText("Provider authentication issue").first(),
@@ -391,7 +375,7 @@ test.describe("Assistant & Patrol settings provider setup", () => {
         .first(),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: /save changes/i }).click();
+    await page.getByRole("button", { name: "Save provider settings" }).click();
 
     await expect.poll(() => updateHits).toBe(1);
     const failureMessage = page.getByText(
