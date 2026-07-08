@@ -955,6 +955,12 @@ const (
 	retentionInterval        = 1 * time.Hour
 	initialRetentionDelay    = 30 * time.Second
 	maxUnifiedReclaimPages   = 50000
+	// maxResourceChangesRows bounds resource_changes even inside the
+	// retention window: time-based pruning alone cannot contain a
+	// pathological writer (the demo hit 1.6M rows in three days), and an
+	// unbounded table starves the store's single connection until prunes
+	// themselves fail with SQLITE_BUSY.
+	maxResourceChangesRows = 200000
 )
 
 // migrateAutoVacuum ensures the database uses incremental auto-vacuum so that
@@ -1038,6 +1044,24 @@ func (s *SQLiteResourceStore) startRetentionLoop() chan struct{} {
 	return stop
 }
 
+// capResourceChanges deletes the oldest resource_changes rows beyond limit,
+// keeping the newest rows by observed_at.
+func (s *SQLiteResourceStore) capResourceChanges(limit int) (int64, error) {
+	res, err := s.db.Exec(
+		`DELETE FROM resource_changes WHERE rowid IN (
+			SELECT rowid FROM resource_changes
+			ORDER BY observed_at DESC
+			LIMIT -1 OFFSET ?
+		)`,
+		limit,
+	)
+	if err != nil {
+		return 0, err
+	}
+	affected, _ := res.RowsAffected()
+	return affected, nil
+}
+
 func (s *SQLiteResourceStore) pruneOldRecords() {
 	now := time.Now()
 	changesCutoff := now.Add(-resourceChangesRetention)
@@ -1056,6 +1080,12 @@ func (s *SQLiteResourceStore) pruneOldRecords() {
 	if err != nil {
 		log.Printf("unifiedresources: failed to prune resource_changes: %v", err)
 	} else if affected, _ := res.RowsAffected(); affected > 0 {
+		totalDeleted += affected
+	}
+
+	if affected, err := s.capResourceChanges(maxResourceChangesRows); err != nil {
+		log.Printf("unifiedresources: failed to cap resource_changes: %v", err)
+	} else if affected > 0 {
 		totalDeleted += affected
 	}
 

@@ -2498,3 +2498,45 @@ func TestPruneOldRecords_DeletesExpiredChangesAndAudits(t *testing.T) {
 		t.Fatalf("expected only audit-recent to survive, got %d: %+v", len(auditResults), auditResults)
 	}
 }
+
+func TestCapResourceChanges_KeepsNewestRows(t *testing.T) {
+	store := newTestStore(t)
+
+	base := time.Now().Add(-10 * time.Hour)
+	for i := 0; i < 10; i++ {
+		change := ResourceChange{
+			ID:         fmt.Sprintf("change-%d", i),
+			ObservedAt: base.Add(time.Duration(i) * time.Hour),
+			ResourceID: "vm:100",
+			Kind:       ChangeStateTransition,
+			SourceType: SourcePulseDiff,
+			Confidence: ConfidenceHigh,
+		}
+		if err := store.RecordChange(change); err != nil {
+			t.Fatalf("RecordChange(%s): %v", change.ID, err)
+		}
+	}
+
+	deleted, err := store.capResourceChanges(3)
+	if err != nil {
+		t.Fatalf("capResourceChanges: %v", err)
+	}
+	if deleted != 7 {
+		t.Fatalf("deleted = %d, want 7", deleted)
+	}
+
+	remaining, err := store.GetRecentChanges("vm:100", time.Time{}, 0)
+	if err != nil {
+		t.Fatalf("GetRecentChanges after cap: %v", err)
+	}
+	if len(remaining) != 3 {
+		t.Fatalf("expected 3 surviving rows, got %d", len(remaining))
+	}
+	for _, change := range remaining {
+		switch change.ID {
+		case "change-7", "change-8", "change-9":
+		default:
+			t.Fatalf("unexpected survivor %s; want the newest three", change.ID)
+		}
+	}
+}

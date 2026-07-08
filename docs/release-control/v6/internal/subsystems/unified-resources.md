@@ -3335,6 +3335,18 @@ for provider-read breadcrumbs such as VMware tasks and events, plus the
 change model instead of introducing a second event shape, and `RecordChange`
 must stay idempotent by canonical change ID so poller refreshes and replayed
 supplemental snapshots do not duplicate resource history.
+Change emission over registry rebuilds must diff relationships by edge
+identity only: canonical source, canonical target, type, and active state,
+order-insensitive (`relationshipsEquivalent` in `change_emission.go`).
+Volatile provenance fields (`ObservedAt`, `LastSeenAt`, `Confidence`,
+`Metadata`, `Discoverer`) refresh on every rebuild cycle and must never
+count as a relationship change; comparing rebuilt slices structurally
+emitted a no-op `relationship_change` row per relationship-bearing resource
+per cycle and grew `resource_changes` without bound (issue #1496, demo
+outage 2026-07-08). Retention pruning must also enforce a hard row cap on
+`resource_changes` (`maxResourceChangesRows` in `store.go`) so a
+pathological writer cannot grow the table unbounded inside the time-based
+retention window.
 Action plans in `actions.go` still keep stale-plan protection to the canonical
 `resourceVersion`, `policyVersion`, and `planHash` fields, so stale execution
 checks stay in the shared resource action model rather than provider-local

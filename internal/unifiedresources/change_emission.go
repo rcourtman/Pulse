@@ -125,7 +125,7 @@ func buildResourceChange(before Resource, beforeOK bool, after Resource, afterOK
 		change.From = resourceStateSummary(before)
 		change.To = resourceStateSummary(after)
 		change.Reason = "resource state changed"
-	case !equalStringPtr(before.ParentID, after.ParentID) || !reflect.DeepEqual(before.Relationships, after.Relationships):
+	case !equalStringPtr(before.ParentID, after.ParentID) || !relationshipsEquivalent(before.Relationships, after.Relationships):
 		change.Kind = ChangeRelationship
 		change.From = resourceRelationSummary(before)
 		change.To = resourceRelationSummary(after)
@@ -168,7 +168,7 @@ func resourceChangedFields(before, after Resource) []string {
 	if !equalStringPtr(before.ParentID, after.ParentID) {
 		changed = append(changed, "parentId")
 	}
-	if !reflect.DeepEqual(before.Relationships, after.Relationships) {
+	if !relationshipsEquivalent(before.Relationships, after.Relationships) {
 		changed = append(changed, "relationships")
 	}
 	if !reflect.DeepEqual(before.Capabilities, after.Capabilities) {
@@ -203,6 +203,44 @@ func resourceChangedFields(before, after Resource) []string {
 	}
 
 	return changed
+}
+
+// relationshipsEquivalent reports whether two relationship sets describe the
+// same edges. Registry rebuilds reconstruct every relationship with fresh
+// ObservedAt/LastSeenAt stamps and metadata maps, so comparing with
+// reflect.DeepEqual emitted a no-op relationship_change row for every
+// relationship-bearing resource on every rebuild cycle (the unbounded
+// unified_resources.db growth behind issue #1496). Only edge identity —
+// canonical source, canonical target, type, and active state — counts as
+// change.
+func relationshipsEquivalent(a, b []ResourceRelationship) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	if len(a) == 0 {
+		return true
+	}
+	edgeKeys := func(relationships []ResourceRelationship) []string {
+		keys := make([]string, 0, len(relationships))
+		for _, relationship := range relationships {
+			keys = append(keys, strings.Join([]string{
+				CanonicalResourceID(relationship.SourceID),
+				CanonicalResourceID(relationship.TargetID),
+				string(relationship.Type),
+				fmt.Sprintf("%t", relationship.Active),
+			}, "\x1f"))
+		}
+		sort.Strings(keys)
+		return keys
+	}
+	aKeys := edgeKeys(a)
+	bKeys := edgeKeys(b)
+	for i := range aKeys {
+		if aKeys[i] != bKeys[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func dockerCommandChanged(before, after Resource) bool {

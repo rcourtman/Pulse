@@ -18,6 +18,90 @@ func TestBuildResourceChange_ReturnsNilWhenUnchanged(t *testing.T) {
 	}
 }
 
+func TestBuildResourceChange_IgnoresVolatileRelationshipFields(t *testing.T) {
+	baseTime := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	before := Resource{
+		ID:     "app-container:1",
+		Type:   ResourceTypeAppContainer,
+		Name:   "web",
+		Status: StatusOnline,
+		Relationships: []ResourceRelationship{
+			{
+				SourceID: "app-container:1", TargetID: "docker-network:1", Type: RelAttachedTo,
+				Confidence: 1, Active: true, Discoverer: "docker_adapter",
+				ObservedAt: baseTime, LastSeenAt: baseTime,
+				Metadata: map[string]any{"network": "bridge"},
+			},
+			{
+				SourceID: "app-container:1", TargetID: "agent:1", Type: RelRunsOn,
+				Confidence: 1, Active: true, Discoverer: "docker_adapter",
+				ObservedAt: baseTime, LastSeenAt: baseTime,
+			},
+		},
+	}
+	// Registry rebuilds reconstruct the same edges with fresh timestamps,
+	// fresh metadata maps, and possibly different ordering.
+	after := before
+	rebuiltTime := baseTime.Add(time.Hour)
+	after.Relationships = []ResourceRelationship{
+		{
+			SourceID: "app-container:1", TargetID: "agent:1", Type: RelRunsOn,
+			Confidence: 1, Active: true, Discoverer: "docker_adapter",
+			ObservedAt: rebuiltTime, LastSeenAt: rebuiltTime,
+		},
+		{
+			SourceID: "app-container:1", TargetID: "docker-network:1", Type: RelAttachedTo,
+			Confidence: 1, Active: true, Discoverer: "docker_adapter",
+			ObservedAt: rebuiltTime, LastSeenAt: rebuiltTime,
+			Metadata: map[string]any{"network": "bridge"},
+		},
+	}
+
+	if change := buildResourceChange(before, true, after, true, rebuiltTime, nil, SourcePulseDiff, ""); change != nil {
+		t.Fatalf("expected nil change for rebuilt-but-identical relationships, got %+v", change)
+	}
+}
+
+func TestBuildResourceChange_DetectsRealRelationshipChanges(t *testing.T) {
+	edge := ResourceRelationship{
+		SourceID: "app-container:1", TargetID: "docker-network:1", Type: RelAttachedTo,
+		Confidence: 1, Active: true, Discoverer: "docker_adapter",
+	}
+	before := Resource{
+		ID:            "app-container:1",
+		Type:          ResourceTypeAppContainer,
+		Name:          "web",
+		Status:        StatusOnline,
+		Relationships: []ResourceRelationship{edge},
+	}
+
+	retargeted := edge
+	retargeted.TargetID = "docker-network:2"
+	deactivated := edge
+	deactivated.Active = false
+
+	cases := []struct {
+		name  string
+		after []ResourceRelationship
+	}{
+		{"edge added", []ResourceRelationship{edge, {SourceID: "app-container:1", TargetID: "agent:1", Type: RelRunsOn, Confidence: 1, Active: true}}},
+		{"edge removed", nil},
+		{"edge retargeted", []ResourceRelationship{retargeted}},
+		{"edge deactivated", []ResourceRelationship{deactivated}},
+	}
+	for _, tc := range cases {
+		after := before
+		after.Relationships = tc.after
+		change := buildResourceChange(before, true, after, true, time.Now().UTC(), nil, SourcePulseDiff, "")
+		if change == nil {
+			t.Fatalf("%s: expected relationship change, got nil", tc.name)
+		}
+		if change.Kind != ChangeRelationship {
+			t.Fatalf("%s: Kind = %q, want %q", tc.name, change.Kind, ChangeRelationship)
+		}
+	}
+}
+
 func TestBuildResourceChange_ClassifiesStateTransition(t *testing.T) {
 	before := Resource{
 		ID:     "vm:1",
