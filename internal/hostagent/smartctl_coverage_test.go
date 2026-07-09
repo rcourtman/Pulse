@@ -1,3 +1,5 @@
+//go:build !windows
+
 package hostagent
 
 import (
@@ -20,15 +22,6 @@ func mockLsblkJSON(devices ...lsblkDevice) []byte {
 	out, _ := json.Marshal(data)
 	return out
 }
-
-type fakeDirEntry struct {
-	name string
-}
-
-func (e fakeDirEntry) Name() string               { return e.name }
-func (e fakeDirEntry) IsDir() bool                { return false }
-func (e fakeDirEntry) Type() fs.FileMode          { return 0 }
-func (e fakeDirEntry) Info() (fs.FileInfo, error) { return nil, nil }
 
 func forceLinuxLSBLKFallback(t *testing.T) {
 	t.Helper()

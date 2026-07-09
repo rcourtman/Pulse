@@ -80,7 +80,7 @@ func TestAgent_RunOnce_Coverage(t *testing.T) {
 		Logger:    &logger,
 	})
 	if a != nil {
-		a.httpClient = &http.Client{Transport: &mockTransport{statusCode: 200}}
+		a.httpClient = &http.Client{Transport: &coverageMockTransport{statusCode: 200}}
 		_ = a.Run(context.Background())
 	}
 }
@@ -104,9 +104,21 @@ func TestAgent_RunProxmoxSetup(t *testing.T) {
 		Logger:    &logger,
 	})
 	if a != nil {
-		a.httpClient = &http.Client{Transport: &mockTransport{statusCode: 200}}
+		a.httpClient = &http.Client{Transport: &coverageMockTransport{statusCode: 200}}
 		a.runProxmoxSetup(context.Background())
 	}
+}
+
+type coverageMockTransport struct {
+	statusCode int
+}
+
+func (m *coverageMockTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: m.statusCode,
+		Body:       http.NoBody,
+		Header:     make(http.Header),
+	}, nil
 }
 
 func TestAgent_ApplyRemoteConfig_DefersCommandStartWithoutRunContext(t *testing.T) {

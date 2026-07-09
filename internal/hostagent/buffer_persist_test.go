@@ -3,6 +3,7 @@ package hostagent
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -167,7 +168,7 @@ func TestPersistBuffer_AtomicWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if perm := info.Mode().Perm(); perm != 0600 {
+	if perm := info.Mode().Perm(); runtime.GOOS != "windows" && perm != 0600 {
 		t.Fatalf("expected 0600 permissions, got %o", perm)
 	}
 }
