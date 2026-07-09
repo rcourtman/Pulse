@@ -25,6 +25,24 @@ deployment, and one definitive release verdict.
   sources to reach `tag:infra` destinations on TCP 22 and 443. The demo host
   is online at its governed Tailscale address and local TCP/22 succeeds. The
   external OAuth/tag/ACL configuration is therefore not the failing boundary.
+- Post-correction verification run `29043832292` joined the tailnet on commit
+  `910418c3b2a165ef5cfb136b144e8ccd95b5d264`, but the configured demo target
+  was absent from the runner peer map for the full bounded wait. The
+  `demo-stable` environment's `DEMO_SERVER_HOST` secret was refreshed at
+  `2026-07-09T19:28:27Z`, between that failure and the next run. Repository
+  commit `f8bbae2f34d087887336c0c4c065d071d016821f` added only identity
+  diagnostics to the reachability helper; it did not change connection or
+  authorization behavior. Repository-scoped Tailscale OAuth secrets were
+  unchanged during this A/B interval.
+- Verification-only run `29044914999` then succeeded. Its GitHub-hosted runner
+  joined the expected tailnet with `tag:infra`, saw the demo peer online and
+  active, established a direct Tailscale ping and TCP/22 connection, verified
+  the SSH host identity, and completed runtime, frontend, public-health, and
+  browser checks. This isolates the external correction to the environment's
+  demo-target configuration, not OAuth scopes, tags, ACLs, DNS, or `sshd`.
+  GitHub does not expose the superseded secret value, so the evidence proves
+  the configuration boundary and change event without claiming a redacted
+  historical value.
 - The workflow exposed no peer-map, Tailscale ping, or TCP/22 evidence. The
   operator had to infer a network failure from blind host-key retries, inspect
   Tailscale policy separately, and deploy a signed installer over local SSH.
@@ -64,9 +82,36 @@ deployment, and one definitive release verdict.
   same-version RC, stale rollback lineage, or a missing exact-SHA dry run.
 - `scripts/trigger-stable-patch.sh` is the noninteractive operator entrypoint.
 
+## End-to-End Rehearsal
+
+- Exact-SHA `Release Dry Run` `29046383139` succeeded for
+  `0d89be1c915af7bf5980637d9a050e847e74d663`. The 35-minute preflight passed
+  frontend, backend, release-policy, binary-build, container-build, and
+  integration checks, then awaited the reusable no-mutation demo workflow.
+- The chained demo verification succeeded in 66 seconds. The runner joined
+  `tawny-powan.ts.net` with `tag:infra`, observed the demo peer online and
+  active, reached it directly over Tailscale and TCP/22, verified SSH identity,
+  confirmed runtime version `6.0.5`, checked frontend parity and public health,
+  and passed the public browser smoke test.
+- Mutation-only steps were skipped. Release `v6.0.5` remained published at
+  `2026-07-09T14:36:38Z` with 213 assets and no asset newer than
+  `2026-07-09T14:36:37Z`; no new public Pulse release was created.
+- Independent post-run checks confirmed
+  `https://demo.pulserelay.pro/api/version` still reports stable `6.0.5` and
+  `https://demo.pulserelay.pro/api/health` reports `healthy` with all declared
+  dependencies healthy.
+
+## Required External Configuration
+
+Keep the `demo-stable` environment's `DEMO_SERVER_HOST` secret set to the
+current Tailscale IPv4 assigned to `pulse-relay` in the business-tailnet admin
+console. The repository now proves this mapping before SSH and fails with
+peer-map, ping, and TCP/22 diagnostics if it drifts. No OAuth, tag-owner, or ACL
+change is required for the currently verified `tag:infra` path.
+
 ## Current Verdict
 
-Blocked pending one pushed exact-SHA `Release Dry Run` that exercises the new
-no-mutation demo path on GitHub-hosted infrastructure. This record must be
-updated with that run URL and the gate promoted to `passed` only after the run
-and local public-demo checks both succeed.
+Passed. A routine stable patch now requires one recent exact-SHA preflight and
+one noninteractive publish dispatch. The publish DAG awaits release promotion,
+Docker publication, stable demo deployment, definitive public verification,
+and its terminal verdict; manual SSH is not part of the standard path.

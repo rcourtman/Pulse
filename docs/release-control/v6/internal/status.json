@@ -6770,7 +6770,7 @@
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "blocked",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L1"
@@ -6780,7 +6780,7 @@
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/stable-patch-unattended-release-path-2026-07-09.md",
           "kind": "file",
-          "evidence_tier": "local-rehearsal"
+          "evidence_tier": "real-external-e2e"
         }
       ]
     },
