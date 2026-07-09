@@ -17,20 +17,14 @@ import { buildResourceAssistantContext } from '@/utils/resourceAssistantContextM
 import type { ResourceDetailDrawerPresentation } from './resourceDetailDrawerPresentation';
 
 type DrawerTab =
-  | 'overview'
-  | 'history'
-  | 'discovery'
-  | 'mail'
-  | 'namespaces'
-  | 'deployments'
-  | 'swarm'
-  | 'debug';
+  'overview' | 'history' | 'discovery' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
 export interface UseResourceDetailDrawerStateOptions {
   resource: Resource;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   presentation?: ResourceDetailDrawerPresentation;
   initialShowAccessContext?: boolean;
+  initialShowHostDetails?: boolean;
   initialShowTrueNASDetails?: boolean;
 }
 
@@ -52,7 +46,8 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
   const [showDiscoveryContext, setShowDiscoveryContext] = createSignal(false);
   const [showHostDetails, setShowHostDetails] = createSignal(
-    options.presentation === 'table-row' && isPulseAgentPlatformResource(resource),
+    options.initialShowHostDetails ??
+      (options.presentation === 'table-row' && isPulseAgentPlatformResource(resource)),
   );
   const [showServiceDetails, setShowServiceDetails] = createSignal(false);
   const [showVMwareDetails, setShowVMwareDetails] = createSignal(false);

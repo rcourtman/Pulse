@@ -81,12 +81,6 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Terminal,
         iconProps: { strokeWidth: 2 },
       },
-      {
-        id: 'system-ai-discovery',
-        label: 'Service Context',
-        icon: Network,
-        iconProps: { strokeWidth: 2 },
-      },
     ],
   },
   {

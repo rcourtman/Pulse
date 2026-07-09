@@ -34,7 +34,8 @@ describe('settings localization catalog', () => {
     expect(groups[0]?.label).toBe('Infrastruktur');
     expect(groups[0]?.items[0]?.label).toBe('Infrastruktur');
     expect(getSettingsNavItem('system-updates', 'de')?.label).toBe('Updates');
-    expect(getSettingsNavItem('system-ai-discovery', 'de')?.label).toBe('Service-Kontext');
+    expect(getSettingsNavItem('system-ai-assistant', 'de')?.label).toBe('Assistant');
+    expect(getSettingsNavItem('system-ai-discovery', 'de')).toBeUndefined();
     expect(getSettingsNavItem('security-data-handling', 'de')?.label).toBe('Ressourcenschutz');
   });
 
@@ -44,7 +45,7 @@ describe('settings localization catalog', () => {
     expect(getSettingsNavItem('system-ai', 'es')?.label).toBe('Proveedores y modelos');
     expect(getSettingsNavItem('system-ai-patrol', 'es')?.label).toBe('Patrol');
     expect(getSettingsNavItem('system-ai-assistant', 'es')?.label).toBe('Assistant');
-    expect(getSettingsNavItem('system-ai-discovery', 'es')?.label).toBe('Contexto de servicio');
+    expect(getSettingsNavItem('system-ai-discovery', 'es')).toBeUndefined();
     expect(getSettingsNavItem('support-diagnostics', 'es')?.label).toBe('Diagnóstico y salud');
   });
 

@@ -148,7 +148,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
           <div class="flex items-start gap-2.5">
             <TriangleAlertIcon class="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
             <div class="text-xs text-amber-800 dark:text-amber-200">
-              <p class="mb-1 font-medium">Service Context Disabled</p>
+              <p class="mb-1 font-medium">Service identification is off</p>
               <p class="text-amber-700 dark:text-amber-300">
                 Enable service context to inspect what is running on this resource.
               </p>

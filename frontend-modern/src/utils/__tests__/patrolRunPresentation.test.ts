@@ -88,8 +88,8 @@ describe('patrolRunPresentation', () => {
         error_detail: 'Provider rejected tool_choice',
       }),
     ).toEqual({
-      label: 'Open Provider & Models',
-      href: '/settings/pulse-intelligence/provider',
+      label: 'Check Patrol model',
+      href: '/settings/pulse-intelligence/patrol',
     });
     expect(
       getPatrolRunPrimaryActionPresentation({
@@ -126,8 +126,8 @@ describe('patrolRunPresentation', () => {
       }),
     ).toEqual({
       action: {
-        label: 'Open Provider & Models',
-        href: '/settings/pulse-intelligence/provider',
+        label: 'Check Patrol model',
+        href: '/settings/pulse-intelligence/patrol',
       },
       summary: 'Checked 72 resources in 58m.',
       outcome:

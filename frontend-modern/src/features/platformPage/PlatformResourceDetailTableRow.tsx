@@ -94,6 +94,7 @@ export const PlatformResourceDetailTableRow: Component<{
   colSpan: number;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   initialShowAccessContext?: boolean;
+  initialShowHostDetails?: boolean;
   initialShowTrueNASDetails?: boolean;
   onResourceActionSettled?: () => void | Promise<void>;
   onClose?: () => void;
@@ -114,6 +115,7 @@ export const PlatformResourceDetailTableRow: Component<{
           presentation="table-row"
           resolveResourceLabel={props.resolveResourceLabel}
           initialShowAccessContext={props.initialShowAccessContext}
+          initialShowHostDetails={props.initialShowHostDetails}
           initialShowTrueNASDetails={initialShowTrueNASDetails()}
           onResourceActionSettled={props.onResourceActionSettled}
           onClose={props.onClose}

@@ -839,8 +839,7 @@ const availabilityAddressFor = (machine: Resource): string => {
   const address = asTrimmedString(availability?.address);
   if (address) return address;
   const identityWithIPAddresses = machine.identity as
-    | (Resource['identity'] & { ipAddresses?: string[] })
-    | undefined;
+    (Resource['identity'] & { ipAddresses?: string[] }) | undefined;
   const firstIP = asTrimmedString(
     identityWithIPAddresses?.ipAddresses?.[0] ?? machine.identity?.ips?.[0],
   );
@@ -1179,6 +1178,10 @@ export const AgentsMachinesTable: Component<{
   const columnVisibility = useColumnVisibility(
     'pulse:standalone:machines:columns:v3',
     AGENT_MACHINE_COLUMNS,
+    [],
+    undefined,
+    {},
+    ['network', 'diskio', 'uptime', 'temp'],
   );
   const drawer = createPlatformResourceDetailState({ idPrefix: 'agents-machine-drawer' });
   const [agentMetadataById, setAgentMetadataById] = createSignal<Record<string, AgentMetadata>>({});
@@ -1405,7 +1408,7 @@ export const AgentsMachinesTable: Component<{
         >
           <PlatformTableShell
             title="Machines"
-            tableClass="min-w-full table-fixed text-xs md:min-w-[1210px]"
+            tableClass="min-w-full table-fixed text-xs md:min-w-[840px]"
             header={
               <>
                 <For each={visibleColumns()}>
@@ -1794,6 +1797,7 @@ export const AgentsMachinesTable: Component<{
                           open={isExpanded()}
                           detailRowId={detailRowId()}
                           colSpan={detailColspan()}
+                          initialShowHostDetails={false}
                           onClose={() => {
                             drawer.close(machine);
                           }}

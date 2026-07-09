@@ -88,7 +88,7 @@ describe('DiscoveryTab', () => {
       <DiscoveryTab resourceType="agent" agentId="agent-1" resourceId="agent-1" hostname="pve1" />
     ));
 
-    expect(await screen.findByText('Service Context Disabled')).toBeInTheDocument();
+    expect(await screen.findByText('Service identification is off')).toBeInTheDocument();
     expect(discoveryApi.getDiscovery).not.toHaveBeenCalled();
     expect(discoveryApi.getDiscoveryInfo).not.toHaveBeenCalled();
     expect(discoveryApi.getConnectedAgents).not.toHaveBeenCalled();

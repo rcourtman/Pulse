@@ -101,11 +101,11 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
         <A
           href={providerSetupAction.href}
           aria-label={`Check Patrol model: ${state.triggerPatrolDisabledReason() || 'Patrol model needs attention'}`}
-          title={state.triggerPatrolDisabledReason() || 'Open Provider & Models'}
+          title={state.triggerPatrolDisabledReason() || 'Open Patrol settings'}
           class={className}
         >
           <SettingsIcon class="w-4 h-4" />
-          Check model
+          Fix setup
         </A>
       }
     >
@@ -347,15 +347,17 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
               'sm:hidden flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-surface-alt disabled:text-muted rounded-md transition-colors',
             )}
 
-            <A
-              href={settingsTabPath('system-ai-patrol')}
-              aria-label="Open Patrol settings"
-              title="Open Patrol settings"
-              class="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content shadow-sm transition-colors hover:bg-surface-alt"
-            >
-              <SettingsIcon class="w-4 h-4" />
-              <span class="sr-only sm:not-sr-only">Settings</span>
-            </A>
+            <Show when={!runBlockedByProviderSetup()}>
+              <A
+                href={settingsTabPath('system-ai-patrol')}
+                aria-label="Open Patrol settings"
+                title="Open Patrol settings"
+                class="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content shadow-sm transition-colors hover:bg-surface-alt"
+              >
+                <SettingsIcon class="w-4 h-4" />
+                <span class="sr-only sm:not-sr-only">Settings</span>
+              </A>
+            </Show>
           </div>
         </Show>
       </div>

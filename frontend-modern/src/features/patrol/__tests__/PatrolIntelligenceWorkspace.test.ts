@@ -65,14 +65,14 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
       'Open work Patrol can ' +
       'watch, investigate, ask you to approve, or record under your Patrol mode.';
     expect(workspaceSource).not.toContain(removedAllModeCopy);
-    expect(workspaceSource).toContain('Patrol model needs attention');
-    expect(workspaceSource).toContain('Patrol check:');
+    expect(workspaceSource).toContain('Patrol cannot run yet');
+    expect(workspaceSource).toContain('Once ready');
     expect(workspaceSource).toContain('getPatrolProviderSettingsAction');
-    expect(workspaceSource).toContain('<Show when={!isSetupOnly()}>');
+    expect(workspaceSource).toContain('state.patrolRunHistory.value()?.length');
     expect(workspaceSource).not.toContain('showControls={!state.selectedRun() && !isSetupOnly()}');
-    expect(PATROL_WORKSPACE_SETUP_TITLE).toBe('Check Patrol model');
+    expect(PATROL_WORKSPACE_SETUP_TITLE).toBe('Patrol needs setup');
     expect(PATROL_WORKSPACE_SETUP_DESCRIPTION).toBe(
-      'Provider checks can pass while Patrol still needs a tool-call check. Open Provider & Models, then click Check Patrol model.',
+      'Patrol cannot check infrastructure until its selected model passes the Patrol tool check.',
     );
     expect(PATROL_WORKSPACE_QUEUE_TITLE).toBe('Open work');
     expect(workspaceSource).not.toContain('Current Patrol findings');

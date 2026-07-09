@@ -753,16 +753,14 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Check Patrol model' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol needs setup' })).toBeInTheDocument();
     });
     expect(
       screen.getByText(
-        'Provider checks can pass while Patrol still needs a tool-call check. Open Provider & Models, then click Check Patrol model.',
+        'Patrol cannot check infrastructure until its selected model passes the Patrol tool check.',
       ),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Patrol check:\s*Selected model cannot run Patrol tools\./),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Selected model cannot run Patrol tools.')).toBeInTheDocument();
     expect(
       screen.queryByText(
         'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
@@ -780,13 +778,10 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText(/Trigger status:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/local development safety guard/)).not.toBeInTheDocument();
     const providerSettingsLinks = screen.getAllByRole('link', {
-      name: 'Open Provider & Models',
+      name: 'Check Patrol model',
     });
     expect(providerSettingsLinks.length).toBeGreaterThan(0);
-    expect(providerSettingsLinks[0]).toHaveAttribute(
-      'href',
-      '/settings/pulse-intelligence/provider',
-    );
+    expect(providerSettingsLinks[0]).toHaveAttribute('href', '/settings/pulse-intelligence/patrol');
     expect(screen.queryByRole('button', { name: /Run Patrol/i })).not.toBeInTheDocument();
     expect(triggerPatrolRunMock).not.toHaveBeenCalled();
   });
@@ -1849,7 +1844,7 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Check Patrol model' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Patrol needs setup' })).toBeInTheDocument();
     });
 
     expect(
@@ -1857,21 +1852,19 @@ describe('AIIntelligence entitlement gating', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        'Provider checks can pass while Patrol still needs a tool-call check. Open Provider & Models, then click Check Patrol model.',
+        'Patrol cannot check infrastructure until its selected model passes the Patrol tool check.',
       ),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { name: 'Patrol model needs attention' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Patrol cannot run yet' })).toBeInTheDocument();
     expect(
       screen.queryByText('Fix the provider connection, then Patrol can check infrastructure.'),
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Patrol check: Provider billing or quota issue')).toBeInTheDocument();
+    expect(screen.getByText('Provider billing or quota issue')).toBeInTheDocument();
     expect(screen.queryByText('Patrol setup issue')).not.toBeInTheDocument();
     expect(screen.queryByText('Patrol readiness issue')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open Provider & Models' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Check Patrol model' })).toHaveAttribute(
       'href',
-      '/settings/pulse-intelligence/provider',
+      '/settings/pulse-intelligence/patrol',
     );
     expect(screen.queryByText('Runtime issue')).not.toBeInTheDocument();
     expect(screen.queryByText(/regressed \d+×/)).not.toBeInTheDocument();
@@ -1957,8 +1950,8 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByRole('heading', { name: 'Open work' })).toBeInTheDocument();
     const providerActions = screen.getAllByRole('link', { name: /Check Patrol model/i });
     expect(providerActions.length).toBeGreaterThan(0);
-    expect(providerActions[0]).toHaveAttribute('href', '/settings/pulse-intelligence/provider');
-    expect(screen.queryByRole('link', { name: 'Open Provider & Models' })).not.toBeInTheDocument();
+    expect(providerActions[0]).toHaveAttribute('href', '/settings/pulse-intelligence/patrol');
+    expect(screen.queryByRole('link', { name: 'Open Patrol settings' })).not.toBeInTheDocument();
   });
 
   it('does not repeat stale coverage caveats after a successful full patrol verified resources', async () => {
@@ -2357,9 +2350,9 @@ describe('AIIntelligence entitlement gating', () => {
         /Checked 72 resources in 58m\. Patrol ended with a runtime issue: Selected model does not support Patrol tools/i,
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open Provider & Models' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Check Patrol model' })).toHaveAttribute(
       'href',
-      '/settings/pulse-intelligence/provider',
+      '/settings/pulse-intelligence/patrol',
     );
     expect(findingsPanelState.latestProps).toMatchObject({
       filterOverride: 'all',

@@ -1,6 +1,8 @@
 import { createMemo, For, Show } from 'solid-js';
 import HistoryIcon from 'lucide-solid/icons/history';
 import SettingsIcon from 'lucide-solid/icons/settings';
+import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
+import ListChecksIcon from 'lucide-solid/icons/list-checks';
 import { FindingsPanel } from '@/components/AI/FindingsPanel';
 import { ApprovalBanner, RunHistoryPanel } from '@/components/patrol';
 import {
@@ -136,8 +138,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
     }),
   );
   const hasVisibleWorkGroups = () =>
-    queueIssueCount() > 0 ||
-    workGroupSummaries().some((group) => group.id !== 'stale-protection');
+    queueIssueCount() > 0 || workGroupSummaries().some((group) => group.id !== 'stale-protection');
   const shouldShowWorkGroups = () =>
     !isHistoryOpen() && !isSetupOnly() && !state.selectedRun() && hasVisibleWorkGroups();
 
@@ -178,7 +179,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
           </div>
           <p class="mt-1 text-xs text-muted">{workspaceDescription()}</p>
         </div>
-        <Show when={!isSetupOnly()}>
+        <Show when={!isSetupOnly() || (state.patrolRunHistory.value()?.length ?? 0) > 0}>
           <div class="flex flex-wrap items-center gap-2">
             <Button
               type="button"
@@ -309,18 +310,41 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
             />
           }
         >
-          <div class="rounded-md border border-border bg-surface-alt p-4">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div class="min-w-0 max-w-2xl">
-                <h3 class="text-sm font-semibold text-base-content">
-                  Patrol model needs attention
-                </h3>
-                <p class="mt-2 text-xs text-muted">Patrol check: {setupReason()}</p>
+          <div class="overflow-hidden rounded-md border border-amber-300 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/20">
+            <div class="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(16rem,0.7fr)] lg:p-5">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                  <ShieldAlertIcon class="h-5 w-5 shrink-0" aria-hidden="true" />
+                  <h3 class="text-sm font-semibold">Patrol cannot run yet</h3>
+                </div>
+                <p class="mt-2 text-sm leading-6 text-base-content">{setupReason()}</p>
+                <p class="mt-1 text-xs leading-5 text-muted">
+                  Open Patrol settings and run the model check. Provider connectivity can be healthy
+                  even when the selected model cannot use Patrol tools.
+                </p>
+                <ButtonLink
+                  href={setupAction.href}
+                  variant="primary"
+                  size="sm"
+                  class="mt-4 gap-1.5"
+                >
+                  <SettingsIcon class="h-4 w-4" aria-hidden="true" />
+                  {setupAction.label}
+                </ButtonLink>
               </div>
-              <ButtonLink href={setupAction.href} variant="primary" size="sm" class="gap-1.5">
-                <SettingsIcon class="h-4 w-4" aria-hidden="true" />
-                {setupAction.label}
-              </ButtonLink>
+              <div class="rounded-md border border-amber-200 bg-surface/80 p-3 dark:border-amber-900">
+                <div class="flex items-center gap-2">
+                  <ListChecksIcon class="h-4 w-4 text-muted" aria-hidden="true" />
+                  <p class="text-xs font-semibold uppercase tracking-wider text-muted">
+                    Once ready
+                  </p>
+                </div>
+                <ul class="mt-2 space-y-2 text-xs leading-5 text-muted">
+                  <li>Patrol checks monitored infrastructure for current issues.</li>
+                  <li>Findings, approvals, and verification stay together in Open work.</li>
+                  <li>Past checks remain available from History.</li>
+                </ul>
+              </div>
             </div>
           </div>
         </Show>

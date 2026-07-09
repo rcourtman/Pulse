@@ -38,6 +38,7 @@ interface ResourceDetailDrawerProps {
   presentation?: ResourceDetailDrawerPresentation;
   resolveResourceLabel?: (resourceId: string) => string | null | undefined;
   initialShowAccessContext?: boolean;
+  initialShowHostDetails?: boolean;
   initialShowTrueNASDetails?: boolean;
   onResourceActionSettled?: () => void | Promise<void>;
 }
@@ -69,6 +70,7 @@ const DrawerContent: Component<ResourceDetailDrawerProps> = (props) => {
     presentation: presentation(),
     resolveResourceLabel: props.resolveResourceLabel,
     initialShowAccessContext: props.initialShowAccessContext,
+    initialShowHostDetails: props.initialShowHostDetails,
     initialShowTrueNASDetails: props.initialShowTrueNASDetails,
   });
   const headingId = () => `resource-detail-drawer-heading-${props.resource.id}`;
@@ -354,6 +356,7 @@ export const ResourceDetailDrawer: Component<ResourceDetailDrawerProps> = (props
       presentation={props.presentation}
       resolveResourceLabel={props.resolveResourceLabel}
       initialShowAccessContext={props.initialShowAccessContext}
+      initialShowHostDetails={props.initialShowHostDetails}
       initialShowTrueNASDetails={props.initialShowTrueNASDetails}
       onResourceActionSettled={props.onResourceActionSettled}
     />

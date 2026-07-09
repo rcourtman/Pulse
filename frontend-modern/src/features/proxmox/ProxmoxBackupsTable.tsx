@@ -104,7 +104,7 @@ export const ProxmoxBackupsTable: Component<{
   // Search, the view toggle, and status facets stay ephemeral signals.
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = createSignal('');
-  const [view, setView] = createSignal<BackupView>('date');
+  const [selectedView, setSelectedView] = createSignal<BackupView | null>(null);
   const [coverageFilter, setCoverageFilter] = createSignal<CoverageFilterValue>('all');
   const [recoverableFilter, setRecoverableFilter] = createSignal<RecoverableFilterValue>('all');
 
@@ -300,6 +300,11 @@ export const ProxmoxBackupsTable: Component<{
       uncovered: live.filter((row) => row.posture === 'uncovered').length,
     };
   });
+  const view = (): BackupView =>
+    selectedView() ?? (liveHealthSummary().attention > 0 ? 'coverage' : 'date');
+  const setView = (next: BackupView): void => {
+    setSelectedView(next);
+  };
 
   // Recoverable artifact feed: PBS snapshots, PVE backup files, and guest snapshot rows.
   const RECOVERABLE_SEGMENT_KINDS: readonly BackupActivitySegmentKind[] = [
@@ -326,6 +331,9 @@ export const ProxmoxBackupsTable: Component<{
             : undefined,
       },
     ),
+  );
+  const hasRecoverableActivityInRange = createMemo(() =>
+    recoverableTimeline().points.some((point) => point.total > 0),
   );
 
   const filteredRecoverableArtifacts = createMemo(() => {
@@ -551,19 +559,45 @@ export const ProxmoxBackupsTable: Component<{
           />
 
           <Show when={view() === 'date' && recoveryModel().recoverableArtifacts.length > 0}>
-            <BackupActivityChart
-              title={
-                recoverableMetricMode() === 'volume' ? 'Backup volume per day' : 'Backups per day'
+            <Show
+              when={hasRecoverableActivityInRange()}
+              fallback={
+                <div class="flex flex-col gap-2 rounded-md border border-border-subtle bg-surface-alt/25 px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+                  <span>No backup activity in the selected {chartRange()}-day window.</span>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="font-medium text-blue-600 hover:underline dark:text-blue-300"
+                      onClick={() => setChartRange(90)}
+                    >
+                      Show 90 days
+                    </button>
+                    <span aria-hidden="true">·</span>
+                    <button
+                      type="button"
+                      class="font-medium text-blue-600 hover:underline dark:text-blue-300"
+                      onClick={() => setChartRange(365)}
+                    >
+                      Show 1 year
+                    </button>
+                  </div>
+                </div>
               }
-              noun="backup"
-              segmentKinds={RECOVERABLE_SEGMENT_KINDS}
-              range={chartRange}
-              onRangeChange={setChartRange}
-              timeline={recoverableTimeline}
-              selectedDateKey={selectedDateKey}
-              onToggleDay={toggleDay}
-              metricToggle={{ mode: recoverableMetricMode, onChange: setRecoverableMetricMode }}
-            />
+            >
+              <BackupActivityChart
+                title={
+                  recoverableMetricMode() === 'volume' ? 'Backup volume per day' : 'Backups per day'
+                }
+                noun="backup"
+                segmentKinds={RECOVERABLE_SEGMENT_KINDS}
+                range={chartRange}
+                onRangeChange={setChartRange}
+                timeline={recoverableTimeline}
+                selectedDateKey={selectedDateKey}
+                onToggleDay={toggleDay}
+                metricToggle={{ mode: recoverableMetricMode, onChange: setRecoverableMetricMode }}
+              />
+            </Show>
           </Show>
 
           <FilterBar

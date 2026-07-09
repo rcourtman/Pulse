@@ -196,6 +196,9 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   ) {
     return settingsTabPath('system-ai');
   }
+  if (normalizedPath === PULSE_INTELLIGENCE_DISCOVERY_PREFIX) {
+    return settingsTabPath('system-ai-assistant');
+  }
   if (normalizedPath === SUPPORT_PREFIX) {
     return SUPPORT_DIAGNOSTICS_PREFIX;
   }
@@ -327,7 +330,7 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
       return 'system-ai-assistant';
     case 'system-ai-discovery':
     case 'discovery':
-      return 'system-ai-discovery';
+      return 'system-ai-assistant';
     case 'system-relay':
       return 'system-relay';
     case 'system-billing':

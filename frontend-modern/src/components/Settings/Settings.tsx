@@ -1,4 +1,12 @@
-import { Component, createSignal, onMount, Show, Suspense, createMemo } from 'solid-js';
+import {
+  Component,
+  createEffect,
+  createSignal,
+  onMount,
+  Show,
+  Suspense,
+  createMemo,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -145,6 +153,11 @@ const SettingsWorkspace: Component<SettingsProps> = (props) => {
       return null;
     }
     return settingsPanelRegistry()[currentTab];
+  });
+
+  createEffect(() => {
+    activeTab();
+    queueMicrotask(() => window.scrollTo({ top: 0, behavior: 'auto' }));
   });
 
   onMount(() => {

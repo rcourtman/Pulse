@@ -8,10 +8,14 @@ import { RESOURCE_METADATA_CHANGED_EVENT } from '@/utils/resourceMetadataEvents'
 import { AgentsMachinesTable } from '../AgentsMachinesTable';
 
 vi.mock('@/components/Infrastructure/ResourceDetailDrawer', () => ({
-  ResourceDetailDrawer: (props: { initialShowAccessContext?: boolean }) => (
+  ResourceDetailDrawer: (props: {
+    initialShowAccessContext?: boolean;
+    initialShowHostDetails?: boolean;
+  }) => (
     <div
       data-testid="resource-detail-drawer"
       data-initial-show-access-context={String(props.initialShowAccessContext ?? false)}
+      data-initial-show-host-details={String(props.initialShowHostDetails ?? true)}
     />
   ),
 }));
@@ -200,6 +204,12 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
+    expect(screen.queryByRole('button', { name: 'Sort by Net I/O' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sort by Disk I/O' })).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await fireEvent.click(screen.getByLabelText('Net I/O'));
+    await fireEvent.click(screen.getByLabelText('Disk I/O'));
+
     expect(screen.getByRole('button', { name: 'Sort by Net I/O' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sort by Disk I/O' })).toBeInTheDocument();
     expect(screen.getByText('1.00 KB/s')).toBeInTheDocument();
@@ -207,7 +217,6 @@ describe('AgentsMachinesTable', () => {
 
     expect(screen.queryByRole('button', { name: 'Sort by IP' })).not.toBeInTheDocument();
     expect(screen.getByText('192.168.0.10')).toBeInTheDocument();
-    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
     await fireEvent.click(screen.getByLabelText('IP'));
     await fireEvent.click(screen.getByLabelText('RAID'));
 
@@ -512,7 +521,10 @@ describe('AgentsMachinesTable', () => {
     expect(
       screen.getByRole('button', { name: 'Collapse details for Expandable Machine' }),
     ).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByTestId('resource-detail-drawer')).toBeInTheDocument();
+    expect(screen.getByTestId('resource-detail-drawer')).toHaveAttribute(
+      'data-initial-show-host-details',
+      'false',
+    );
   });
 
   it('removes agent machines through row actions with confirmation', async () => {
@@ -644,6 +656,8 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
+    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await fireEvent.click(screen.getByLabelText('Net I/O'));
     const trigger = container.querySelector('[data-agent-machine-network-trigger="true"]');
     expect(trigger).not.toBeNull();
     if (!trigger) return;
@@ -736,6 +750,8 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
+    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await fireEvent.click(screen.getByLabelText('Disk I/O'));
     const trigger = container.querySelector('[data-agent-machine-diskio-trigger="true"]');
     expect(trigger).not.toBeNull();
     if (!trigger) return;
@@ -938,6 +954,8 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
+    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await fireEvent.click(screen.getByLabelText('Temp'));
     const trigger = container.querySelector('[data-agent-machine-temperature-trigger="true"]');
     expect(trigger).not.toBeNull();
     if (!trigger) return;
@@ -979,6 +997,8 @@ describe('AgentsMachinesTable', () => {
       />
     ));
 
+    await fireEvent.click(screen.getByTitle('Choose which columns to display'));
+    await fireEvent.click(screen.getByLabelText('Temp'));
     const pressure = await screen.findByText('Nominal');
 
     expect(pressure).toBeInTheDocument();

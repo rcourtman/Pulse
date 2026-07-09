@@ -372,8 +372,8 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toEqual({
-      label: 'Open Provider & Models',
-      href: '/settings/pulse-intelligence/provider',
+      label: 'Check Patrol model',
+      href: '/settings/pulse-intelligence/patrol',
     });
   });
 
@@ -745,8 +745,7 @@ describe('getPatrolSummaryPresentation', () => {
       }),
     ).toEqual({
       title: 'Needs full check',
-      description:
-        'Recent targeted checks covered 1 resource. Run Patrol to check everything.',
+      description: 'Recent targeted checks covered 1 resource. Run Patrol to check everything.',
       compactLabel: 'Partial check',
       tone: 'warning',
     });
@@ -789,8 +788,7 @@ describe('getPatrolSummaryPresentation', () => {
       }),
     ).toEqual({
       title: 'Needs full check',
-      description:
-        'Recent follow-up checks covered 1 resource. Run Patrol to check everything.',
+      description: 'Recent follow-up checks covered 1 resource. Run Patrol to check everything.',
       compactLabel: 'Partial check',
       tone: 'warning',
     });

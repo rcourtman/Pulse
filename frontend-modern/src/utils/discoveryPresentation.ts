@@ -7,7 +7,7 @@ import {
   getInfrastructureSettingsLocationLabel,
   getInfrastructureSettingsTarget,
 } from '@/utils/infrastructureSettingsPresentation';
-import { SETTINGS_PULSE_INTELLIGENCE_DISCOVERY_PATH } from '@/routing/resourceLinks';
+import { SETTINGS_PULSE_INTELLIGENCE_ASSISTANT_PATH } from '@/routing/resourceLinks';
 
 export interface DiscoveryIdentifiedSummary {
   serviceName: string;
@@ -322,8 +322,8 @@ export function getDiscoveryApiAccessSettingsTarget() {
 
 export function getDiscoveryServiceContextSettingsTarget() {
   return {
-    href: SETTINGS_PULSE_INTELLIGENCE_DISCOVERY_PATH,
-    label: 'Open Service Context settings',
+    href: SETTINGS_PULSE_INTELLIGENCE_ASSISTANT_PATH,
+    label: 'Open Assistant settings',
   } as const;
 }
 

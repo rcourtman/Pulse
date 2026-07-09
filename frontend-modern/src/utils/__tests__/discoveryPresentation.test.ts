@@ -106,8 +106,8 @@ describe('discoveryPresentation', () => {
       label: 'Settings → API Access',
     });
     expect(getDiscoveryServiceContextSettingsTarget()).toEqual({
-      href: '/settings/pulse-intelligence/discovery',
-      label: 'Open Service Context settings',
+      href: '/settings/pulse-intelligence/assistant',
+      label: 'Open Assistant settings',
     });
     expect(getDiscoveryNoConnectedAgentMessage(false)).toBe(
       'Commands not enabled. Enable Pulse commands from Settings → Infrastructure for this agent.',

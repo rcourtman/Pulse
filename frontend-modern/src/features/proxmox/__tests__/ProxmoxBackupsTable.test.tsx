@@ -170,7 +170,7 @@ afterEach(() => {
 });
 
 describe('ProxmoxBackupsTable', () => {
-  it('defaults to the By date chronological feed with source/location/state columns', async () => {
+  it('defaults to coverage when protection needs attention and keeps the dated feed one click away', async () => {
     mockBackupAPIs();
 
     renderInRouter(() => (
@@ -181,10 +181,17 @@ describe('ProxmoxBackupsTable', () => {
       />
     ));
 
-    // Default view is the v5-parity backup feed: one row PER backup, so the
-    // guest with PBS + archive + snapshot artifacts appears on multiple rows,
-    // sourced and located, not collapsed to a single coverage-posture summary.
-    expect((await screen.findAllByText('pbs-docker')).length).toBeGreaterThan(1);
+    await screen.findAllByText('pbs-docker');
+    expect(screen.getByRole('button', { name: /coverage/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+
+    await fireEvent.click(screen.getByRole('button', { name: /by date/i }));
+
+    // The chronological feed remains available for forensic review: one row
+    // per restore point, sourced and located.
+    expect(screen.getAllByText('pbs-docker').length).toBeGreaterThan(1);
     expect(screen.getByRole('columnheader', { name: /location/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /source/i })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: /type/i })).toBeInTheDocument();
@@ -273,6 +280,7 @@ describe('ProxmoxBackupsTable', () => {
     ));
 
     await screen.findAllByText('pbs-docker');
+    await fireEvent.click(screen.getByRole('button', { name: /by date/i }));
 
     const searchInput = screen.getByPlaceholderText(/search backups by workload/i);
     await fireEvent.input(searchInput, { target: { value: 'no-such-guest' } });

@@ -267,6 +267,22 @@ const AssistantSettingsContent: Component<{ state: ReturnType<typeof useAISettin
     <AIModelOverrideField state={props.state} kind="assistant" />
     <AIAssistantCommandAccessSection state={props.state} />
     <AIChatMaintenanceSection state={props.state} />
+    <details class="overflow-hidden rounded-md border border-border bg-surface-alt/40">
+      <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-base-content hover:bg-surface-hover">
+        Service identification
+        <span class="ml-2 font-normal text-muted">
+          Model-backed context used by Assistant and Patrol
+        </span>
+      </summary>
+      <div class="space-y-4 border-t border-border bg-surface p-4">
+        <p class="text-xs leading-5 text-muted">
+          Identify service facts that help Assistant and Patrol explain monitored resources.
+          Infrastructure discovery and onboarding remain under Infrastructure.
+        </p>
+        <AIModelOverrideField state={props.state} kind="discovery" />
+        <AIDiscoveryControlsSection state={props.state} />
+      </div>
+    </details>
   </div>
 );
 

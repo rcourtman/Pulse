@@ -39,10 +39,10 @@ export const PATROL_WORKSPACE_HISTORY_DESCRIPTION = 'Past checks and what Patrol
 
 export const PATROL_WORKSPACE_RUN_RECORD_DESCRIPTION = 'What Patrol found during this run.';
 
-export const PATROL_WORKSPACE_SETUP_TITLE = 'Check Patrol model';
+export const PATROL_WORKSPACE_SETUP_TITLE = 'Patrol needs setup';
 
 export const PATROL_WORKSPACE_SETUP_DESCRIPTION =
-  'Provider checks can pass while Patrol still needs a tool-call check. Open Provider & Models, then click Check Patrol model.';
+  'Patrol cannot check infrastructure until its selected model passes the Patrol tool check.';
 
 export const PATROL_WORKSPACE_QUEUE_TITLE = 'Open work';
 

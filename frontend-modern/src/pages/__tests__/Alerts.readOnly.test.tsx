@@ -169,4 +169,20 @@ describe('Alerts read-only presentation', () => {
     expect(screen.getAllByText('Thresholds').length).toBeGreaterThan(0);
     expect(navigateSpy).not.toHaveBeenCalledWith('/alerts/overview', { replace: true });
   });
+
+  it('replaces the disabled navigation shell with one clear activation task', async () => {
+    presentationPolicyIsReadOnlyMock.mockReturnValue(false);
+    activationStateMock.mockReturnValue('pending_review');
+
+    render(() => <Alerts />);
+
+    expect(await screen.findByRole('heading', { name: 'Alerts are paused' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Enable alerts' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/not evaluating thresholds or sending new alert notifications/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('overview-tab')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('alerts-config-surface')).not.toBeInTheDocument();
+    expect(screen.queryByText('Thresholds')).not.toBeInTheDocument();
+  });
 });

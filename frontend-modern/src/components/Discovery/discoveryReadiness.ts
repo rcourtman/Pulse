@@ -15,7 +15,7 @@ export type DiscoveryReadinessStatus =
   | 'ready';
 
 export interface DiscoveryReadinessInputs {
-  /** The service context toggle (Settings -> Pulse Intelligence -> Service Context). */
+  /** The service context toggle (Settings -> Pulse Intelligence -> Assistant). */
   discoveryEnabled: boolean;
   /** Whether at least one AI provider has credentials configured. */
   aiProviderConfigured: boolean;

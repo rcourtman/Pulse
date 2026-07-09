@@ -394,13 +394,17 @@ describe('settingsNavigation integration scaffold', () => {
     for (const [tab, path] of Object.entries(dispatchableCanonicalTabPaths) as Array<
       [SettingsTab, string]
     >) {
-      expect(deriveTabFromPath(path)).toBe(tab);
+      expect(deriveTabFromPath(path)).toBe(
+        tab === 'system-ai-discovery' ? 'system-ai-assistant' : tab,
+      );
     }
   });
 
   it('round-trips settingsTabPath through deriveTabFromPath', () => {
     for (const tab of Object.keys(dispatchableCanonicalTabPaths) as SettingsTab[]) {
-      expect(deriveTabFromPath(settingsTabPath(tab))).toBe(tab);
+      expect(deriveTabFromPath(settingsTabPath(tab))).toBe(
+        tab === 'system-ai-discovery' ? 'system-ai-assistant' : tab,
+      );
     }
   });
 
@@ -414,7 +418,7 @@ describe('settingsNavigation integration scaffold', () => {
     for (const tab of Object.keys(dispatchableCanonicalTabPaths) as SettingsTab[]) {
       const path = settingsTabPath(tab);
       const derived = deriveTabFromPath(path);
-      expect(derived).toBe(tab);
+      expect(derived).toBe(tab === 'system-ai-discovery' ? 'system-ai-assistant' : tab);
     }
   });
 

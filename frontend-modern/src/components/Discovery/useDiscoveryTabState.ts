@@ -198,9 +198,7 @@ export function useDiscoveryTabState(props: DiscoveryTabStateProps) {
 
   const handleTriggerDiscovery = async (force = false) => {
     if (!discoveryFeatureEnabled()) {
-      setScanError(
-        'Service context is disabled in Settings -> Pulse Intelligence -> Service Context.',
-      );
+      setScanError('Service context is disabled in Settings -> Pulse Intelligence -> Assistant.');
       return;
     }
 
