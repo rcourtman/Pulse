@@ -1195,10 +1195,6 @@ func TestService_ExecuteTool(t *testing.T) {
 }
 
 // Helper functions (restored)
-func hasPrefix(s, prefix string) bool {
-	return strings.HasPrefix(s, prefix)
-}
-
 func containsString(s, substr string) bool {
 	return strings.Contains(s, substr)
 }

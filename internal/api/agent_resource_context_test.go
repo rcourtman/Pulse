@@ -68,15 +68,6 @@ func (s staticAIUsageProvider) AIUsageHistory(_ context.Context) (*config.AIUsag
 	return s.history, s.err
 }
 
-type staticExternalAgentActivityProvider struct {
-	history *config.ExternalAgentActivityHistoryData
-	err     error
-}
-
-func (s staticExternalAgentActivityProvider) ExternalAgentActivityHistory(_ context.Context) (*config.ExternalAgentActivityHistoryData, error) {
-	return s.history, s.err
-}
-
 func (s staticApprovalsProvider) PendingApprovalsForResource(resourceID, _ string) []AgentResourceApprovalSummary {
 	if s.byResource == nil {
 		return nil
