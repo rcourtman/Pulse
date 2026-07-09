@@ -20,6 +20,18 @@ vi.mock('@/utils/clipboard', () => ({
   copyToClipboard: vi.fn(async () => true),
 }));
 
+vi.mock('@/components/shared/Button', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/components/shared/Button')>();
+  return {
+    ...actual,
+    ButtonLink: (props: { href: string; children: unknown; class?: string }) => (
+      <a href={props.href} class={props.class}>
+        {props.children as never}
+      </a>
+    ),
+  };
+});
+
 vi.mock('@/api/ai', () => ({
   AIAPI: {
     getSettings: vi.fn(async () => ({ discovery_enabled: true })),

@@ -6,12 +6,18 @@ import { StandalonePageSurface } from '../StandalonePageSurface';
 
 const mocks = vi.hoisted(() => ({
   pathname: '/standalone/machines',
+  searchParams: {} as Record<string, string>,
+  setSearchParams: vi.fn(),
   navigate: vi.fn(),
   useUnifiedResources: vi.fn(),
   versionInfo: vi.fn(),
-  AgentsMachinesTable: vi.fn((props: { resources: Resource[] }) => (
-    <div data-testid="agents-machines-table" data-resource-count={props.resources.length} />
-  )),
+  AgentsMachinesTable: vi.fn(
+    (props: {
+      resources: Resource[];
+      externalStatus?: () => string;
+      onExternalStatusChange?: (value: string) => void;
+    }) => <div data-testid="agents-machines-table" data-resource-count={props.resources.length} />,
+  ),
   AvailabilityChecksTable: vi.fn((props: { resources: Resource[] }) => (
     <div data-testid="availability-checks-table" data-resource-count={props.resources.length} />
   )),
@@ -37,6 +43,7 @@ vi.mock('@solidjs/router', async () => {
       },
     }),
     useNavigate: () => mocks.navigate,
+    useSearchParams: () => [mocks.searchParams, mocks.setSearchParams],
     A: (props: { href: string; children: JSX.Element }) => (
       <a href={props.href}>{props.children}</a>
     ),
@@ -51,26 +58,32 @@ vi.mock('../AvailabilityChecksTable', () => ({
   AvailabilityChecksTable: mocks.AvailabilityChecksTable,
 }));
 
-vi.mock('@/features/platformPage/sharedPlatformPage', () => ({
-  PlatformErrorState: () => <div data-testid="platform-error-state" />,
-  PlatformSectionTabs: (props: {
-    active: string;
-    tabs: Array<{ id: string; label: string; path: string }>;
-  }) => (
-    <div
-      data-testid="standalone-section-tabs"
-      data-active={props.active}
-      data-tabs={props.tabs.map((tab) => tab.id).join(',')}
-    />
-  ),
-  PlatformTableEmptyState: (props: { title: string; actions?: JSX.Element }) => (
-    <div data-testid="platform-table-empty-state">
-      <span>{props.title}</span>
-      {props.actions}
-    </div>
-  ),
-  PlatformTableLoadingState: () => <div data-testid="platform-table-loading-state" />,
-}));
+vi.mock('@/features/platformPage/sharedPlatformPage', async () => {
+  const actual = await vi.importActual<typeof import('@/features/platformPage/sharedPlatformPage')>(
+    '@/features/platformPage/sharedPlatformPage',
+  );
+  return {
+    ...actual,
+    PlatformErrorState: () => <div data-testid="platform-error-state" />,
+    PlatformSectionTabs: (props: {
+      active: string;
+      tabs: Array<{ id: string; label: string; path: string }>;
+    }) => (
+      <div
+        data-testid="standalone-section-tabs"
+        data-active={props.active}
+        data-tabs={props.tabs.map((tab) => tab.id).join(',')}
+      />
+    ),
+    PlatformTableEmptyState: (props: { title: string; actions?: JSX.Element }) => (
+      <div data-testid="platform-table-empty-state">
+        <span>{props.title}</span>
+        {props.actions}
+      </div>
+    ),
+    PlatformTableLoadingState: () => <div data-testid="platform-table-loading-state" />,
+  };
+});
 
 const resource = (overrides: Partial<Resource>): Resource =>
   ({
@@ -88,6 +101,8 @@ const resource = (overrides: Partial<Resource>): Resource =>
 
 beforeEach(() => {
   mocks.pathname = '/standalone/machines';
+  mocks.searchParams = {};
+  mocks.setSearchParams.mockClear();
   mocks.navigate.mockClear();
   mocks.versionInfo.mockReturnValue(null);
   mocks.useUnifiedResources.mockReturnValue({
@@ -120,6 +135,16 @@ afterEach(() => {
 });
 
 describe('StandalonePageSurface', () => {
+  it('normalizes legacy machine status links into route-owned filter state', () => {
+    mocks.searchParams = { status: 'running' };
+    render(() => <StandalonePageSurface />);
+
+    const props = mocks.AgentsMachinesTable.mock.calls.at(-1)?.[0];
+    expect(props?.externalStatus?.()).toBe('online');
+    props?.onExternalStatusChange?.('offline');
+    expect(mocks.setSearchParams).toHaveBeenCalledWith({ status: 'offline' }, { replace: true });
+  });
+
   it('keeps overview focused on Pulse Agent machines only', () => {
     render(() => <StandalonePageSurface />);
 

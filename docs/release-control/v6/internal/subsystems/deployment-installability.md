@@ -46,8 +46,7 @@ TLS floor in the dynamic config.
 15. `internal/cloudcp/docker/manager.go`
 16. `internal/cloudcp/docker/labels.go`
 17. `internal/cloudcp/tenant_runtime_rollout.go`
-13. `.github/workflows/build-release-candidate.yml`
-14. `.github/workflows/create-release.yml`
+13. `.github/workflows/create-release.yml`
 14. `.github/workflows/deploy-demo-server.yml`
 15. `.github/workflows/helm-pages.yml`
 16. `.github/workflows/promote-floating-tags.yml`
@@ -96,8 +95,7 @@ TLS floor in the dynamic config.
 59. `scripts/release_control/resolve_release_promotion.py`
 60. `scripts/release_control/mobile_release_gate.py`
 61. `scripts/release_control/mobile_release_gate_test.py`
-62. `scripts/release_candidate_manifest.py`
-63. `scripts/release_control/validate_artifact_release_line.py`
+62. `scripts/release_control/validate_artifact_release_line.py`
 63. `scripts/release_ldflags.sh`
 64. `scripts/run_cloud_public_signup_smoke.sh`
 65. `scripts/run_demo_public_browser_smoke.sh`
@@ -320,16 +318,6 @@ TLS floor in the dynamic config.
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
 2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, artifact release-line validation, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, historical published-release integrity backfill, release asset validation status publication, download endpoint checksum/signature header proof, end-to-end install.sh smoke against the published release, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/release_asset_common.sh`, `scripts/backfill-release-assets.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/backfill-release-assets.yml`, `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/install-sh-smoke.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, and `.github/workflows/validate-release-assets.yml`
-   Normal releases are single-build promotions. The exact pushed SHA must
-   produce one signed candidate through
-   `.github/workflows/build-release-candidate.yml` while independent release
-   checks run in parallel. `create-release.yml` may publish only that candidate
-   after `scripts/release_candidate_manifest.py` verifies its version, source
-   SHA, filenames, sizes, and SHA-256 values. Standard post-upload validation
-   must compare that manifest with GitHub's server-side asset digests instead
-   of downloading the complete release packet again. Historical repair and
-   release-edit validation may use the full-download fallback because those
-   paths do not have a same-run candidate manifest.
    Release-facing agent-paradigm blurbs under `docs/releases/` must describe
    `pulse-mcp` as a generic MCP adapter for MCP-speaking clients, not a
    client-specific release artifact, and full-surface token guidance must come

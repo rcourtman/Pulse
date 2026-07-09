@@ -188,9 +188,9 @@ describe('ResourceDetailDrawer machine metrics history', () => {
     const machineSection = screen.getByTestId('resource-host-details-section');
     expect(within(machineSection).getByText('Machine')).toBeInTheDocument();
     expect(
-      within(machineSection).getByRole('button', { name: 'Hide machine' }),
+      within(machineSection).getByRole('button', { name: 'Hide details' }),
     ).toBeInTheDocument();
-    expect(within(machineSection).queryByRole('button', { name: 'Show machine' })).toBeNull();
+    expect(within(machineSection).queryByRole('button', { name: 'Show details' })).toBeNull();
     expect(within(machineSection).getByText('richard-mac-mini.local')).toBeInTheDocument();
     expect(within(machineSection).getByText('Network')).toBeInTheDocument();
     expect(within(machineSection).getByText('192.168.0.42')).toBeInTheDocument();

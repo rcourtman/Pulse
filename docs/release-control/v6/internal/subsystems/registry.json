@@ -3302,7 +3302,6 @@
         ".github/scripts/check-demo-reachability.sh",
         ".github/scripts/setup-demo-ssh.sh",
         ".github/workflows/backfill-release-assets.yml",
-        ".github/workflows/build-release-candidate.yml",
         ".github/workflows/create-release.yml",
         ".github/workflows/deploy-demo-server.yml",
         ".github/workflows/helm-pages.yml",
@@ -3365,7 +3364,6 @@
         "scripts/lib/hot-dev-runtime.sh",
         "scripts/pulse-auto-update.sh",
         "scripts/release_asset_common.sh",
-        "scripts/release_candidate_manifest.py",
         "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
         "scripts/release_control/record_rc_to_ga_rehearsal.py",
         "scripts/release_control/release_promotion_policy_support.py",
@@ -3461,7 +3459,6 @@
               ".github/scripts/check-demo-reachability.sh",
               ".github/scripts/setup-demo-ssh.sh",
               ".github/workflows/backfill-release-assets.yml",
-              ".github/workflows/build-release-candidate.yml",
               ".github/workflows/create-release.yml",
               ".github/workflows/helm-pages.yml",
               ".github/workflows/install-sh-smoke.yml",
@@ -3500,20 +3497,6 @@
               "scripts/release_control/render_release_body_test.py",
               "scripts/release_control/resolve_release_promotion_test.py",
               "scripts/release_control/validate_artifact_release_line_test.py"
-            ]
-          },
-          {
-            "id": "release-candidate-manifest-runtime",
-            "label": "immutable release candidate manifest proof",
-            "match_prefixes": [],
-            "match_files": [
-              "scripts/release_candidate_manifest.py"
-            ],
-            "allow_same_subsystem_tests": false,
-            "test_prefixes": [],
-            "exact_files": [
-              "scripts/installtests/build_release_assets_test.go",
-              "scripts/release_control/release_candidate_manifest_test.py"
             ]
           },
           {

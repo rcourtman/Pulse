@@ -529,7 +529,6 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         demo_ssh_helper = read(".github/scripts/setup-demo-ssh.sh")
         demo_reachability_helper = read(".github/scripts/check-demo-reachability.sh")
         validation_workflow = read(".github/workflows/validate-release-assets.yml")
-        candidate_workflow = read(".github/workflows/build-release-candidate.yml")
         helper = read("scripts/trigger-release.sh")
         renderer = read("scripts/release_control/render_release_body.py")
         policy = read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
@@ -587,11 +586,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('-F target_commitish="${HEAD_SHA}"', content)
         self.assertIn('historical_asset_backfill_only=${HISTORICAL_ASSET_BACKFILL_ONLY}', content)
         self.assertIn(
-            "if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}",
+            "if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && (github.event.inputs.draft_only == 'true' || needs.publish_docker.result == 'success') }}",
             content,
         )
-        self.assertIn("candidate_manifest_artifact:", validation_workflow)
-        self.assertIn("release_candidate_manifest.py verify-release", validation_workflow)
         self.assertIn("if: ${{ needs.prepare.outputs.historical_asset_backfill_only == 'true' }}", content)
         self.assertIn("issues: write", content)
         self.assertIn("statuses: write", content)
@@ -614,9 +611,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}", content)
         self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", content)
         self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", content)
-        self.assertIn("Validate installer signing key pins", candidate_workflow)
-        self.assertIn("go run ./scripts/release_update_key.go public-key-ssh", candidate_workflow)
-        self.assertIn("does not trust the configured release signing key", candidate_workflow)
+        self.assertIn("Validate installer signing key pins", content)
+        self.assertIn("go run ./scripts/release_update_key.go public-key-ssh", content)
+        self.assertIn("does not trust the configured release signing key", content)
         self.assertIn("TRUSTED_SSH_PUBLIC_KEY", update_demo_workflow)
         self.assertIn('sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\\"${TRUSTED_SSH_PUBLIC_KEY}\\"|" /tmp/pulse-install.sh', update_demo_workflow)
         for demo_workflow in (update_demo_workflow, deploy_demo_workflow):
@@ -863,10 +860,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Public demo is serving $PUBLIC_ASSET but the target service is serving $REMOTE_ASSET.", demo)
         self.assertIn("uses: ./.github/workflows/publish-docker.yml", release_workflow)
         self.assertIn("uses: ./.github/workflows/update-demo-server.yml", release_workflow)
-        self.assertIn("uses: ./.github/workflows/build-release-candidate.yml", release_workflow)
-        self.assertIn("Build Immutable Release Candidate", release_workflow)
         self.assertIn("Definitive Release Verdict", release_workflow)
-        self.assertNotIn("Require recent exact-SHA stable patch preflight", release_workflow)
+        self.assertIn("Require recent exact-SHA stable patch preflight", release_workflow)
+        self.assertIn("Release Dry Run v${VERSION}", release_workflow)
         self.assertNotIn("gh workflow run update-demo-server.yml", release_workflow)
         self.assertNotIn("gh workflow run publish-docker.yml", release_workflow)
         self.assertNotIn("preview-v6", preview_deploy)
@@ -1016,7 +1012,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 "  BLESS_GOVERNANCE_FIXTURES=1 python3 -m unittest release_promotion_policy_test"
             )
 
-    def test_routine_stable_patch_entrypoint_is_noninteractive_and_integrated(self) -> None:
+    def test_routine_stable_patch_entrypoint_is_noninteractive_and_preflight_gated(self) -> None:
         helper = read("scripts/trigger-stable-patch.sh")
         policy = read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
         contract = read("docs/release-control/v6/internal/subsystems/deployment-installability.md")
@@ -1026,14 +1022,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("--dry-run", helper)
         self.assertIn("--derive-rollback-latest-stable", helper)
         self.assertIn("docs/releases/RELEASE_NOTES_v${VERSION}.md", helper)
-        self.assertIn("Use --dry-run only", helper)
-        self.assertNotIn("timedelta(hours=24)", helper)
-        self.assertNotIn(".createdAt >= $cutoff", helper)
+        self.assertIn("Release Dry Run v${VERSION}", helper)
+        self.assertIn("timedelta(hours=24)", helper)
+        self.assertIn(".createdAt >= $cutoff", helper)
         self.assertIn("gh workflow run create-release.yml", helper)
         self.assertIn("gh workflow run \"$WORKFLOW\"", helper)
-        self.assertIn("Single-Build Release Path", policy)
         self.assertIn("Routine Stable Patch Path", policy)
-        self.assertIn("single publish workflow performs the exact-SHA preflight", normalize_ws(policy))
+        self.assertIn("exact candidate SHA within the previous 24 hours", normalize_ws(policy))
         self.assertIn("An asynchronous dispatch or manual SSH deployment is not release completion.", normalize_ws(contract))
 
 

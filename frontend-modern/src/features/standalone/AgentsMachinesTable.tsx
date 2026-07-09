@@ -69,6 +69,7 @@ import {
   getRaidStateVariant,
 } from '@/utils/raidPresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
+import { getPreferredResourceIP } from '@/utils/resourceIdentity';
 import {
   RESOURCE_METADATA_CHANGED_EVENT,
   type ResourceMetadataChangedDetail,
@@ -1156,6 +1157,8 @@ export const AgentsMachinesTable: Component<{
   emptyTitle: string;
   emptyDescription: string;
   targetAgentVersion?: string | null;
+  externalStatus?: () => PlatformResourceStatusFilter;
+  onExternalStatusChange?: (value: PlatformResourceStatusFilter) => void;
 }> = (props) => {
   const [locallyRemovedResourceIds, setLocallyRemovedResourceIds] = createSignal<
     Record<string, boolean>
@@ -1167,6 +1170,8 @@ export const AgentsMachinesTable: Component<{
     resources: visibleMachineResources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterAgentMachineResources,
+    externalStatus: props.externalStatus,
+    onExternalStatusChange: props.onExternalStatusChange,
   });
   const alertsActivation = useAlertsActivation();
   const [sortKey, setSortKey] = createSignal<AgentMachineSortKey>('name');
@@ -1476,7 +1481,8 @@ export const AgentsMachinesTable: Component<{
                     const networkInterfaces = () => getAgentMachineNetworkInterfaceDetails(machine);
                     const diskIOTotal = () => getAgentMachineDiskIOTotal(machine);
                     const diskIODetails = () => getAgentMachineDiskIODetails(machine);
-                    const primaryIp = () => getAgentMachinePrimaryIp(machine);
+                    const primaryIp = () =>
+                      getPreferredResourceIP(machine) ?? getAgentMachinePrimaryIp(machine);
                     const lastSeenValue = () =>
                       isAgentlessMachine(machine)
                         ? availabilityFor(machine)?.lastChecked
@@ -1492,7 +1498,13 @@ export const AgentsMachinesTable: Component<{
                         !columnVisibility.isColumnVisible('ip'),
                         !columnVisibility.isColumnVisible('lastSeen'),
                       );
-                    const ipValues = () => getAgentMachineIpValues(machine);
+                    const ipValues = () => {
+                      const preferred = getPreferredResourceIP(machine);
+                      const values = getAgentMachineIpValues(machine);
+                      return preferred
+                        ? [preferred, ...values.filter((value) => value !== preferred)]
+                        : values;
+                    };
                     const raidArrays = () => getAgentMachineRaidArrayDetails(machine);
                     const raidSummary = () => getAgentMachineRaidSummary(machine);
                     const temperature = () => getAgentMachineTemperatureCelsius(machine);

@@ -1,5 +1,7 @@
 import { useLocation, useSearchParams } from '@solidjs/router';
 import { Show, createMemo, createSignal } from 'solid-js';
+import BoxIcon from 'lucide-solid/icons/box';
+import { ButtonLink } from '@/components/shared/Button';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
@@ -40,7 +42,10 @@ import {
 } from '@/features/platformPage/agentVersion';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import { updateStore } from '@/stores/updates';
-import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
+import {
+  buildInfrastructureAgentUpdatesPath,
+  buildInfrastructureOnboardingPath,
+} from '@/components/Settings/infrastructureWorkspaceModel';
 import { DOCKER_QUERY_PARAMS } from '@/routing/resourceLinks';
 import { asTrimmedString } from '@/utils/stringUtils';
 import type { Resource } from '@/types/resource';
@@ -121,7 +126,18 @@ export function DockerPageSurface() {
               <PlatformTableEmptyState
                 icon={dockerIcon()}
                 title="No Docker or Podman hosts"
-                description="Install the Pulse agent on a Docker or Podman host. For Docker inside Proxmox LXCs, install the agent on the Proxmox node with command execution enabled, then enable Proxmox guest Docker inventory on the Pulse server."
+                description="Connect a runtime host with the Pulse agent, or enable guest Docker inventory for a Proxmox LXC."
+                actions={
+                  <ButtonLink
+                    href={buildInfrastructureOnboardingPath('docker')}
+                    variant="primary"
+                    size="sm"
+                    class="gap-2"
+                  >
+                    <BoxIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                    Set up Docker or Podman
+                  </ButtonLink>
+                }
               />
             }
           >

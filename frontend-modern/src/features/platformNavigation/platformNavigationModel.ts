@@ -1,6 +1,6 @@
 import type { Accessor } from 'solid-js';
 import type { Resource, ResourceType } from '@/types/resource';
-import { hasDockerFacetEvidence, isPulseAgentPlatformResource } from '@/utils/agentResources';
+import { hasDockerRuntimeHostEvidence, isPulseAgentPlatformResource } from '@/utils/agentResources';
 import {
   ADMITTED_PLATFORM_IDS,
   SUPPORTED_PLATFORM_IDS,
@@ -91,14 +91,8 @@ const collectExplicitPlatformScopeEvidence = (
   return [...ids];
 };
 
-const addDirectDockerRuntimeEvidence = (
-  ids: Set<string>,
-  resource: Resource,
-  platformData: Record<string, unknown> | null,
-): void => {
+const addDirectDockerRuntimeEvidence = (ids: Set<string>, resource: Resource): void => {
   const resolvedPlatformType = resolveResourcePlatformType(resource);
-  const hasDockerMetadata =
-    hasDockerFacetEvidence(resource.docker) || hasDockerFacetEvidence(platformData?.docker);
   if (normalizeSourcePlatformKey(resource.platformType) === 'docker') {
     ids.add('docker');
     return;
@@ -111,7 +105,7 @@ const addDirectDockerRuntimeEvidence = (
     ids.add('docker');
     return;
   }
-  if (ids.has('agent') && hasDockerMetadata) {
+  if (ids.has('agent') && hasDockerRuntimeHostEvidence(resource)) {
     ids.add('docker');
   }
 };
@@ -120,7 +114,7 @@ export function collectResourcePlatformEvidence(resource: Resource): string[] {
   const platformData = asRecord(resource.platformData);
   const ids = new Set<string>(collectExplicitPlatformScopeEvidence(resource, platformData));
   if (ids.size > 0) {
-    addDirectDockerRuntimeEvidence(ids, resource, platformData);
+    addDirectDockerRuntimeEvidence(ids, resource);
     return [...ids];
   }
 
@@ -148,11 +142,7 @@ export function collectResourcePlatformEvidence(resource: Resource): string[] {
   if (resource.kubernetes || asRecord(platformData?.kubernetes)) {
     ids.add('kubernetes');
   }
-  if (
-    hasDockerFacetEvidence(resource.docker) ||
-    hasDockerFacetEvidence(platformData?.docker) ||
-    DOCKER_RESOURCE_TYPES.has(resource.type)
-  ) {
+  if (hasDockerRuntimeHostEvidence(resource) || DOCKER_RESOURCE_TYPES.has(resource.type)) {
     ids.add('docker');
   }
   if (KUBERNETES_RESOURCE_TYPES.has(resource.type)) {

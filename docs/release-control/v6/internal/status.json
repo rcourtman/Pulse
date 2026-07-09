@@ -6765,28 +6765,8 @@
       ]
     },
     {
-      "id": "single-build-release-promotion-path",
-      "summary": "Confirm normal RC, stable, and patch releases build one exact-SHA signed candidate in parallel with checks, promote that candidate without rebuilding, validate GitHub asset digests without full packet downloads, and run independent post-publication lanes concurrently.",
-      "owner": "project-owner",
-      "blocking_level": "release-ready",
-      "minimum_evidence_tier": "real-external-e2e",
-      "status": "blocked",
-      "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
-      "lane_ids": [
-        "L1"
-      ],
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/records/single-build-release-promotion-path-2026-07-09.md",
-          "kind": "file",
-          "evidence_tier": "local-rehearsal"
-        }
-      ]
-    },
-    {
       "id": "stable-patch-unattended-release-path",
-      "summary": "Confirm routine stable patches use one noninteractive publish dispatch with integrated exact-SHA candidate checks, awaited Docker and demo deployment, and a definitive release verdict without manual SSH recovery.",
+      "summary": "Confirm routine stable patches require one recent exact-SHA dry run, one noninteractive publish dispatch, awaited Docker and demo deployment, and a definitive release verdict without manual SSH recovery.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "real-external-e2e",

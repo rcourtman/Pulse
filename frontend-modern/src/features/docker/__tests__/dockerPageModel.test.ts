@@ -87,6 +87,21 @@ describe('dockerPageModel', () => {
     );
   });
 
+  it('admits an agent-scoped runtime host when its Docker facet has runtime evidence', () => {
+    const model = buildDockerPageModel([
+      makeResource({
+        id: 'tower',
+        type: 'agent',
+        platformType: 'agent',
+        platformScopes: ['agent'],
+        platformData: { docker: { runtime: 'docker' } },
+      }),
+    ]);
+
+    expect(model.hosts.map((resource) => resource.id)).toEqual(['tower']);
+    expect(model.resources.map((resource) => resource.id)).toEqual(['tower']);
+  });
+
   it('declares operator workflow tabs for Docker runtime inventory', () => {
     expect(DOCKER_TAB_SPECS.map((tab) => tab.id)).toEqual([
       'overview',

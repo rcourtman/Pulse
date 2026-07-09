@@ -163,33 +163,6 @@ Cloud, and self-hosted production users.
      and retain the prior governed release-pipeline rehearsal evidence as
      automation lineage rather than claiming the post-RC7 changes were RC-tested.
 
-## Single-Build Release Path
-
-1. Every normal RC, stable, and patch release is initiated once through
-   `create-release.yml`. The workflow builds one signed candidate for the exact
-   pushed SHA while frontend, backend, Docker, Helm, and integration checks run
-   in parallel. No tag, draft, or public release mutation occurs until those
-   checks and the candidate build pass.
-2. The signed candidate is uploaded as a one-day Actions artifact with a
-   machine-readable manifest that pins source SHA, version, filename, size, and
-   SHA-256 for every release asset. Publication downloads and verifies that
-   exact candidate; it must not rebuild release binaries or installers.
-3. Standard post-publication asset verification compares the candidate
-   manifest with GitHub's server-side release-asset SHA-256 digests. It must
-   not re-download the multi-gigabyte release packet merely to recompute hashes
-   already proven before upload. Manual and release-edit repair validation may
-   retain the full-download fallback when no same-run candidate manifest exists.
-4. Docker publication, release-asset verification, and the private Pro build
-   begin independently as soon as the release exists. Helm, floating tags,
-   install smoke, stable demo deployment, and private paid-runtime promotion
-   retain their required dependencies, and `Definitive Release Verdict` still
-   fails unless every applicable terminal result passes.
-5. `Release Dry Run` remains the no-public-release rehearsal surface. It calls
-   the same candidate builder and no-mutation demo verification, but a separate
-   dry run is not required before a normal release because the single publish
-   workflow performs the exact-SHA preflight before crossing the publication
-   boundary.
-
 ## Routine Stable Patch Path
 
 1. A normal stable patch may omit a same-version RC only when all of these are
@@ -203,13 +176,12 @@ Cloud, and self-hosted production users.
    - the canonical stable release-notes packet exists;
    - the mobile-impact gate either proves no mobile-facing change or records
      current candidate evidence; and
-   - the integrated exact-SHA candidate build and release checks pass before
-     the workflow creates or publishes the release.
+   - `Release Dry Run` passed for the exact candidate SHA within the previous
+     24 hours. That run must include the no-mutation stable-demo path check.
 2. `scripts/trigger-stable-patch.sh` is the standard operator entrypoint. Run
-   it once without `--dry-run`; it derives rollback and release notes, refuses
-   local-only or dirty state, and supplies workflow metadata without
-   interactive prompts. `--dry-run` is optional and exists only for an explicit
-   no-public-release rehearsal.
+   it once with `--dry-run`, monitor asynchronously, then run it once without
+   `--dry-run`. It derives rollback and release notes, refuses local-only or
+   dirty state, and supplies the workflow metadata without interactive prompts.
 3. Creating a same-version RC or touching an RC-required path moves the patch
    onto the RC promotion path. The resolver enforces that boundary. Do not use
    the routine helper to relabel a risky patch as routine.

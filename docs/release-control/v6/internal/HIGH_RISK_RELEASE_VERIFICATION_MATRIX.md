@@ -894,58 +894,22 @@ Companion drill:
   `go test ./scripts/installtests -run 'Test(Demo|DeployDemo|UpdateDemo|Release)' -count=1`
 - Manual scenario:
   1. Push the exact candidate commit to the governed stable branch.
-  2. For a no-public-release rehearsal, dispatch
-     `./scripts/trigger-stable-patch.sh --dry-run <version>`.
+  2. Dispatch `./scripts/trigger-stable-patch.sh --dry-run <version>` and do not
+     publish another release.
   3. Confirm the run passes `Verify Current Stable Demo Path (No Mutation)` on
      a GitHub-hosted runner, including Tailscale ping, TCP/22, SSH host identity,
      current stable version, frontend parity, public health, and browser smoke.
   4. Confirm the public demo version and health remain unchanged after the run.
 - Pass when:
-  The no-public-release rehearsal succeeds without host mutation, routine
-  patch metadata rejects the documented RC-required risk paths, and the single
-  publish DAG performs exact-SHA candidate checks before awaiting Docker, demo,
-  public verification, and the definitive terminal verdict.
+  The exact-SHA dry run succeeds without host mutation, routine patch metadata
+  rejects the documented RC-required risk paths, and the publish DAG awaits
+  Docker, demo, public verification, and the definitive terminal verdict.
 - Latest exercised record:
   `docs/release-control/v6/internal/records/stable-patch-unattended-release-path-2026-07-09.md`
 - Block release if:
-  The integrated candidate checks can be bypassed, the no-mutation demo path
-  fails when rehearsed, demo deployment is detached from the release DAG, or
-  routine mode can bypass a same-version RC or an RC-required runtime change.
-
-## Gate: `single-build-release-promotion-path`
-
-- Owner lanes: `L1`
-- Risk covered:
-  A normal release can repeat expensive compilation after successful checks,
-  serialize integration behind backend tests, download the complete release
-  packet after upload, or delay independent Docker, asset, and private-runtime
-  work. The release may be unattended but still consume most of a working day.
-- Minimum evidence tier: `real-external-e2e`
-- Canonical proof commands:
-  1. Push the exact implementation commit to the governed release branch.
-  2. Dispatch `Release Dry Run` for the current version and exact SHA. Do not
-     create or modify a public release.
-  3. Confirm `Build Immutable Release Candidate` builds, locally validates, and
-     uploads both the candidate and manifest artifacts.
-  4. Confirm the release checks and candidate build overlap, and confirm the
-     no-mutation demo path passes on GitHub-hosted infrastructure.
-  5. Run the candidate-manifest unit tests, release-promotion policy tests, and
-     installer/release workflow contract tests.
-  6. Confirm `v6.0.5` release timestamps and asset count remain unchanged and
-     the public demo remains healthy on stable `6.0.5`.
-- Pass when:
-  The external rehearsal proves the canonical candidate builder, local tests
-  pin candidate-only publication and GitHub digest validation, and the static
-  release DAG contains no duplicate release build, backend-to-integration
-  serialization, full-download standard validator, or avoidable post-release
-  serialization.
-- Latest exercised record:
-  `docs/release-control/v6/internal/records/single-build-release-promotion-path-2026-07-09.md`
-- Block release if:
-  Publication rebuilds release assets, the candidate manifest does not pin the
-  exact SHA and complete asset set, standard validation downloads the full
-  release packet, independent post-release jobs are serialized, or the
-  definitive verdict can pass without all applicable downstream results.
+  The exact-SHA dry run is missing or older than 24 hours, the no-mutation demo
+  path fails, demo deployment is detached from the release DAG, or routine mode
+  can bypass a same-version RC or an RC-required runtime change.
 
 ## Gate Ownership Rule
 

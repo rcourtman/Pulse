@@ -10,6 +10,7 @@ import {
   getDiscoveryProvenanceIconClass,
   getDiscoveryProvenanceLabel,
   getDiscoveryProvenanceTitle,
+  getDiscoveryServiceContextSettingsTarget,
   getNetworkDiscoveryModePresentation,
   getDiscoveryNotesEmptyState,
   getDiscoveryObservedSourceLabel,
@@ -103,6 +104,10 @@ describe('discoveryPresentation', () => {
     expect(getDiscoveryApiAccessSettingsTarget()).toEqual({
       href: '/settings/security/api',
       label: 'Settings → API Access',
+    });
+    expect(getDiscoveryServiceContextSettingsTarget()).toEqual({
+      href: '/settings/pulse-intelligence/discovery',
+      label: 'Open Service Context settings',
     });
     expect(getDiscoveryNoConnectedAgentMessage(false)).toBe(
       'Commands not enabled. Enable Pulse commands from Settings → Infrastructure for this agent.',
@@ -236,7 +241,16 @@ describe('discoveryPresentation', () => {
       service_type: 'grafana',
       confidence: 0.9,
       ports: [{ port: 3000, protocol: 'tcp', process: 'grafana', address: '0.0.0.0' }],
-      facts: [{ category: 'service', key: 'status', value: 'running', source: 'systemd', confidence: 1, discovered_at: '2026-06-01T00:00:00Z' }],
+      facts: [
+        {
+          category: 'service',
+          key: 'status',
+          value: 'running',
+          source: 'systemd',
+          confidence: 1,
+          discovered_at: '2026-06-01T00:00:00Z',
+        },
+      ],
       config_paths: [],
       data_paths: [],
       log_paths: [],

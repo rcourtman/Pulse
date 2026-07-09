@@ -43,6 +43,32 @@ export const hasDockerFacetEvidence = (value: unknown): boolean => {
   return Boolean(docker && hasMeaningfulFacetValue(docker));
 };
 
+const DOCKER_RUNTIME_IDENTITY_FIELDS = ['runtime', 'runtimeVersion', 'dockerVersion'] as const;
+const DOCKER_RUNTIME_INVENTORY_COUNT_FIELDS = [
+  'containerCount',
+  'imageCount',
+  'volumeCount',
+  'networkCount',
+  'nodeCount',
+  'secretCount',
+  'configCount',
+] as const;
+
+export const hasDockerRuntimeHostEvidence = (resource: Resource): boolean => {
+  if (resource.type === 'docker-host') return true;
+  if (resource.type !== 'agent') return false;
+  const platformData = getPlatformDataRecord(resource);
+  const docker = asRecord(resource.docker) ?? asRecord(platformData?.docker);
+  if (!docker) return false;
+  if (DOCKER_RUNTIME_IDENTITY_FIELDS.some((field) => Boolean(asTrimmedString(docker[field])))) {
+    return true;
+  }
+  return DOCKER_RUNTIME_INVENTORY_COUNT_FIELDS.some((field) => {
+    const value = docker[field];
+    return typeof value === 'number' && Number.isFinite(value) && value > 0;
+  });
+};
+
 type KubernetesContextLike = {
   clusterId?: string | null;
   name?: string | null;
@@ -102,8 +128,8 @@ const hasExplicitSourceEvidence = (resource: Resource): boolean => {
   const platformData = getPlatformDataRecord(resource);
   return Boolean(
     resource.sources?.length ||
-      (Array.isArray(platformData?.sources) && platformData.sources.length > 0) ||
-      Object.keys(getSourceStatusRecord(resource) || {}).length > 0,
+    (Array.isArray(platformData?.sources) && platformData.sources.length > 0) ||
+    Object.keys(getSourceStatusRecord(resource) || {}).length > 0,
   );
 };
 
@@ -272,9 +298,9 @@ export const hasAgentFacet = (resource: Resource): boolean => {
   const discoveryTarget = resource.discoveryTarget;
   return Boolean(
     resource.agent ||
-      getPlatformAgentRecord(resource) ||
-      getExplicitAgentIdFromResource(resource) ||
-      (isAgentDiscoveryResourceType(discoveryTarget?.resourceType) && discoveryTarget?.agentId),
+    getPlatformAgentRecord(resource) ||
+    getExplicitAgentIdFromResource(resource) ||
+    (isAgentDiscoveryResourceType(discoveryTarget?.resourceType) && discoveryTarget?.agentId),
   );
 };
 

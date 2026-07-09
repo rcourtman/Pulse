@@ -11,9 +11,9 @@ usage() {
   cat <<'EOF'
 Usage: scripts/trigger-stable-patch.sh [--dry-run] [options] [version]
 
-Dispatches exactly one governed workflow. The default release workflow builds
-and validates an immutable candidate before publication. Use --dry-run only
-when a no-public-release rehearsal is required.
+Runs the noninteractive stable patch preflight and dispatches exactly one
+governed workflow. Run once with --dry-run, wait for that workflow to pass,
+then run again without --dry-run to publish.
 
 Options:
   --dry-run                         Dispatch Release Dry Run only.
@@ -167,6 +167,27 @@ if [ "$MODE" = "dry-run" ]; then
     -f mobile_release_decision="$MOBILE_RELEASE_DECISION" \
     -f mobile_release_evidence="$MOBILE_RELEASE_EVIDENCE"
 else
+  PREFLIGHT_CUTOFF="$(python3 - <<'PY'
+from datetime import datetime, timedelta, timezone
+
+cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+print(cutoff.strftime("%Y-%m-%dT%H:%M:%SZ"))
+PY
+)"
+  PREFLIGHT_RUN="$(gh run list \
+    --workflow=release-dry-run.yml \
+    --branch "$CURRENT_BRANCH" \
+    --event workflow_dispatch \
+    --limit 30 \
+    --json displayTitle,headSha,conclusion,url,createdAt \
+    | jq -c --arg sha "$LOCAL_SHA" --arg title "Release Dry Run v${VERSION}" --arg cutoff "$PREFLIGHT_CUTOFF" \
+      '[.[] | select(.headSha == $sha and .displayTitle == $title and .conclusion == "success" and .createdAt >= $cutoff)] | sort_by(.createdAt) | last // empty')"
+  if [ -z "$PREFLIGHT_RUN" ]; then
+    echo "No successful exact-SHA Release Dry Run from the last 24 hours exists for v${VERSION}." >&2
+    echo "Run $0 --dry-run ${VERSION}, wait for success, then rerun this command." >&2
+    exit 1
+  fi
+
   python3 scripts/check-workflow-dispatch-inputs.py \
     --workflow-path .github/workflows/create-release.yml \
     --branch "$CURRENT_BRANCH" \
@@ -196,6 +217,7 @@ else
     -f mobile_release_decision="$MOBILE_RELEASE_DECISION" \
     -f mobile_release_evidence="$MOBILE_RELEASE_EVIDENCE"
 
+  echo "Accepted preflight: $(jq -r '.url' <<<"$PREFLIGHT_RUN")"
 fi
 
 echo "Dispatched ${WORKFLOW:-create-release.yml} for v${VERSION} at ${LOCAL_SHA}."

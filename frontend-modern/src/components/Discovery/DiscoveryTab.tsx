@@ -23,13 +23,14 @@ import {
   getDiscoverySuggestedURLCodeClass,
   getDiscoverySuggestedURLHeadingClass,
   getDiscoverySuggestedURLTextClass,
+  getDiscoveryServiceContextSettingsTarget,
 } from '@/utils/discoveryPresentation';
 import { DiscoveryProvenanceMarker } from '@/components/shared/DiscoveryProvenanceMarker';
 import {
   DISCOVERY_ANALYSIS_EXPLANATION,
   DISCOVERY_ANALYSIS_REASONING_LABEL,
 } from '@/utils/resourceAnalysisPresentation';
-import { CopyValueButton } from '@/components/shared/Button';
+import { ButtonLink, CopyValueButton } from '@/components/shared/Button';
 import { CopyableCodeRow } from '@/components/shared/CopyableCodeRow';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { useDiscoveryTabState } from './useDiscoveryTabState';
@@ -128,6 +129,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
   });
   const commandSettingsTarget = getDiscoveryCommandSettingsTarget();
   const apiAccessSettingsTarget = getDiscoveryApiAccessSettingsTarget();
+  const serviceContextSettingsTarget = getDiscoveryServiceContextSettingsTarget();
   const showManualRunAction = () => props.showManualRunAction === true;
   const manualRunSummary = createMemo(() => {
     if (discovery.loading) return 'Checking saved discovery state';
@@ -148,9 +150,16 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
             <div class="text-xs text-amber-800 dark:text-amber-200">
               <p class="mb-1 font-medium">Service Context Disabled</p>
               <p class="text-amber-700 dark:text-amber-300">
-                Enable service context in Settings -&gt; Pulse Intelligence -&gt; Service Context
-                before using this tab.
+                Enable service context to inspect what is running on this resource.
               </p>
+              <ButtonLink
+                href={serviceContextSettingsTarget.href}
+                variant="secondary"
+                size="sm"
+                class="mt-2"
+              >
+                {serviceContextSettingsTarget.label}
+              </ButtonLink>
             </div>
           </div>
         </div>

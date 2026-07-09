@@ -365,23 +365,94 @@ export const getPreferredInfrastructureDisplayName = (resource: Resource): strin
 
 const IPV4_PATTERN = /^\d{1,3}(\.\d{1,3}){3}$/;
 
-const isRfc1918Private = (ip: string): boolean => {
+const normalizeIPAddress = (value: string): string => {
+  const trimmed = value.trim().replace(/^\[|\]$/g, '');
+  if (!trimmed) return '';
+  const withoutPrefix = trimmed.split('/', 1)[0] ?? '';
+  return withoutPrefix.split('%', 1)[0] ?? '';
+};
+
+const isValidIPv4 = (ip: string): boolean => {
   if (!IPV4_PATTERN.test(ip)) return false;
+  return ip.split('.').every((part) => {
+    const value = Number(part);
+    return Number.isInteger(value) && value >= 0 && value <= 255;
+  });
+};
+
+const isRfc1918Private = (ip: string): boolean => {
+  if (!isValidIPv4(ip)) return false;
   const [a, b] = ip.split('.').map(Number);
   return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
 };
 
+const isCarrierGradeNat = (ip: string): boolean => {
+  if (!isValidIPv4(ip)) return false;
+  const [a, b] = ip.split('.').map(Number);
+  return a === 100 && b >= 64 && b <= 127;
+};
+
+const isUnusableIPAddress = (ip: string): boolean => {
+  const normalized = ip.toLowerCase();
+  if (isValidIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    return a === 0 || a === 127 || a >= 224 || (a === 169 && b === 254);
+  }
+  return (
+    normalized === '::' ||
+    normalized === '::1' ||
+    normalized.startsWith('fe80:') ||
+    normalized.startsWith('ff')
+  );
+};
+
+const isVirtualNetworkInterface = (name: string): boolean =>
+  /^(?:lo|docker\d*|br-[0-9a-f]+|virbr\d*|veth|cni|flannel|cali|podman|tailscale|zt|wg|tun|tap|utun)/i.test(
+    name.trim(),
+  );
+
+const addressPreference = (ip: string): number => {
+  if (isUnusableIPAddress(ip)) return 100;
+  if (isRfc1918Private(ip)) return 0;
+  if (isValidIPv4(ip)) return isCarrierGradeNat(ip) ? 30 : 10;
+  return ip.includes(':') ? 20 : 90;
+};
+
+type AddressCandidate = {
+  ip: string;
+  score: number;
+  order: number;
+};
+
 /**
- * Pick the best LAN IPv4 from a resource's identity, preferring RFC 1918
- * private addresses over Tailscale (100.64/10) or IPv6.
+ * Pick the address that most likely represents the machine on its operator-facing
+ * network. Physical-interface addresses outrank container bridges and tunnels;
+ * routable IPv4 outranks link-local and IPv6 fallback addresses.
  */
 export const getPreferredResourceIP = (resource: Resource): string | undefined => {
-  const ips = resource.identity?.ips ?? [];
-  if (ips.length === 0) return undefined;
-  const lanIp = ips.find((ip) => isRfc1918Private(ip));
-  if (lanIp) return lanIp;
-  const ipv4 = ips.find((ip) => IPV4_PATTERN.test(ip));
-  return ipv4;
+  const candidates: AddressCandidate[] = [];
+  let order = 0;
+  for (const networkInterface of resource.agent?.networkInterfaces ?? []) {
+    const interfacePenalty = isVirtualNetworkInterface(networkInterface.name) ? 50 : 0;
+    for (const value of networkInterface.addresses ?? []) {
+      const ip = normalizeIPAddress(value);
+      if (!ip) continue;
+      candidates.push({ ip, score: addressPreference(ip) + interfacePenalty, order: order++ });
+    }
+  }
+  for (const value of resource.identity?.ips ?? []) {
+    const ip = normalizeIPAddress(value);
+    if (!ip) continue;
+    candidates.push({ ip, score: addressPreference(ip) + 25, order: order++ });
+  }
+
+  return candidates
+    .filter(
+      (candidate, index) =>
+        candidates.findIndex((other) => other.ip.toLowerCase() === candidate.ip.toLowerCase()) ===
+        index,
+    )
+    .sort((left, right) => left.score - right.score || left.order - right.order)[0]?.ip;
 };
 
 /**

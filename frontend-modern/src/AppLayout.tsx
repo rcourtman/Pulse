@@ -16,6 +16,7 @@ import {
   buildPrimaryPlatformNavigationVisibility,
   primaryPlatformNavigationIsVisible,
   selectFirstVisiblePrimaryPlatformNavigationId,
+  type PlatformNavigationVisibility,
   type PrimaryPlatformNavId,
 } from '@/features/platformNavigation/platformNavigationModel';
 import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
@@ -93,10 +94,7 @@ function currentPrimaryRoute(pathname: string, search: string, hash: string): st
   return `${pathname}${search}${hash}`;
 }
 
-function resolvePrimaryNavigationRoute(
-  tab: PrimaryTab,
-  routeMemory: PrimaryRouteMemory,
-): string {
+function resolvePrimaryNavigationRoute(tab: PrimaryTab, routeMemory: PrimaryRouteMemory): string {
   if (!tab.enabled) {
     return tab.settingsRoute;
   }
@@ -134,6 +132,7 @@ export interface AppLayoutProps {
   proxyAuthInfo: () => { username?: string; logoutURL?: string } | null;
   handleLogout: () => void;
   state: () => State;
+  platformVisibility?: () => PlatformNavigationVisibility;
   tokenScopes: () => string[] | undefined;
   organizations: () => Organization[];
   activeOrgID: () => string;
@@ -290,8 +289,10 @@ export function AppLayout(props: AppLayoutProps) {
     setKioskMode(!kioskMode());
   };
 
-  const platformNavigationVisibility = createMemo(() =>
-    buildPrimaryPlatformNavigationVisibility(props.state().resources || []),
+  const platformNavigationVisibility = createMemo(
+    () =>
+      props.platformVisibility?.() ??
+      buildPrimaryPlatformNavigationVisibility(props.state().resources || []),
   );
   const primaryInfrastructureRouteById: Record<PrimaryPlatformNavId, string> = {
     proxmox: ROOT_PROXMOX_PATH,

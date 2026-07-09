@@ -361,7 +361,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(queryByText('Hardware')).toBeNull();
     expect(queryByText('Network')).toBeNull();
 
-    fireEvent.click(getByRole('button', { name: 'Show machine' }));
+    fireEvent.click(getByRole('button', { name: 'Show details' }));
 
     await waitFor(() => {
       expect(getByText('Hardware')).toBeInTheDocument();
@@ -854,8 +854,10 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     });
 
     const inlineRender = render(() => <ResourceDetailDrawer resource={inlineResource} />);
-    expect(inlineRender.getByText('Aliases')).toBeInTheDocument();
-    expect(inlineRender.container.querySelector('details')).toBeNull();
+    const inlineAliases = inlineRender.getByText('Aliases');
+    expect(inlineAliases).toBeInTheDocument();
+    expect(inlineAliases.closest('summary')).toBeNull();
+    expect(inlineRender.container.querySelectorAll('details')).toHaveLength(1);
     expect(inlineRender.getByText('agent-inline-1')).toBeInTheDocument();
     expect(inlineRender.getAllByText('inline-host.local').length).toBeGreaterThan(0);
 
@@ -883,8 +885,9 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     });
 
     const overflowRender = render(() => <ResourceDetailDrawer resource={overflowResource} />);
-    expect(overflowRender.getByText('Aliases')).toBeInTheDocument();
-    expect(overflowRender.container.querySelector('details')).toBeTruthy();
+    const overflowAliases = overflowRender.getByText('Aliases');
+    expect(overflowAliases).toBeInTheDocument();
+    expect(overflowAliases.closest('summary')).toBeTruthy();
   });
 
   it('surfaces policy governance details and the safe summary', () => {
