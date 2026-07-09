@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -184,6 +185,52 @@ func intersects(values []string, allowed []string) bool {
 		}
 	}
 	return false
+}
+
+// resolveGroupRoles maps a user's group memberships to Pulse role IDs using the
+// provider's group-to-role mappings. Group names are matched case-insensitively
+// with surrounding whitespace trimmed, matching how AllowedGroups are matched in
+// intersects, so an IdP group like "Admins" still resolves a mapping keyed
+// "admins". Without this an admin whose IdP casing differs from the configured
+// mapping passes the AllowedGroups gate but silently gets no role and lands as a
+// default user. Returned roles preserve first-seen group order and are
+// de-duplicated. Mapping keys are visited in sorted order so a normalized-key
+// collision resolves deterministically.
+func resolveGroupRoles(groups []string, mappings map[string]string) []string {
+	if len(groups) == 0 || len(mappings) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(mappings))
+	for group := range mappings {
+		keys = append(keys, group)
+	}
+	sort.Strings(keys)
+
+	normalized := make(map[string]string, len(mappings))
+	for _, group := range keys {
+		key := strings.ToLower(strings.TrimSpace(group))
+		if key == "" {
+			continue
+		}
+		if _, exists := normalized[key]; !exists {
+			normalized[key] = mappings[group]
+		}
+	}
+
+	var roles []string
+	seen := make(map[string]bool)
+	for _, group := range groups {
+		key := strings.ToLower(strings.TrimSpace(group))
+		if key == "" {
+			continue
+		}
+		if roleID, ok := normalized[key]; ok && !seen[roleID] {
+			roles = append(roles, roleID)
+			seen[roleID] = true
+		}
+	}
+	return roles
 }
 
 // InitializeOIDCProviders initializes all enabled SSO OIDC providers at startup.
@@ -587,16 +634,7 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 	// SSO users by the provider-scoped subject instead of mutable display claims.
 	if authManager := internalauth.GetManager(); authManager != nil {
 		groups := extractStringSliceClaim(claims, provider.GroupsClaim)
-		var rolesToAssign []string
-		seenRoles := make(map[string]bool)
-		for _, group := range groups {
-			if roleID, ok := provider.GroupRoleMappings[group]; ok {
-				if !seenRoles[roleID] {
-					rolesToAssign = append(rolesToAssign, roleID)
-					seenRoles[roleID] = true
-				}
-			}
-		}
+		rolesToAssign := resolveGroupRoles(groups, provider.GroupRoleMappings)
 		legacyCandidates := ssoLegacyPrincipalCandidates(username, email, extractStringClaim(claims, "name"))
 		if err := applySSORoleAssignments(authManager, principal, legacyCandidates, rolesToAssign, len(provider.GroupRoleMappings) > 0, true); err != nil {
 			log.Error().Err(err).Str("user", principal).Str("display_user", username).Msg("Failed to update SSO OIDC user roles")

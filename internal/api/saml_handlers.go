@@ -268,17 +268,7 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 	// principal. When mappings are configured they are authoritative, including
 	// the case where the current assertion maps to no roles.
 	if authManager := internalauth.GetManager(); authManager != nil {
-		var rolesToAssign []string
-		seenRoles := make(map[string]bool)
-
-		for _, group := range result.Groups {
-			if roleID, ok := provider.GroupRoleMappings[group]; ok {
-				if !seenRoles[roleID] {
-					rolesToAssign = append(rolesToAssign, roleID)
-					seenRoles[roleID] = true
-				}
-			}
-		}
+		rolesToAssign := resolveGroupRoles(result.Groups, provider.GroupRoleMappings)
 
 		legacyCandidates := ssoLegacyPrincipalCandidates(result.Username, result.Email, result.NameID)
 		roleErr := applySSORoleAssignments(authManager, principal, legacyCandidates, rolesToAssign, len(provider.GroupRoleMappings) > 0, false)

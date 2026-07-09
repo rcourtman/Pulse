@@ -67,6 +67,33 @@ func TestOIDCRoleMappingLogic(t *testing.T) {
 			},
 			expectedRoles: nil,
 		},
+		// Regression cases for #1535: the IdP's group casing/whitespace must
+		// not have to match the configured mapping exactly. AllowedGroups
+		// already match case-insensitively (intersects), so role mapping has to
+		// as well or a user passes the group gate but silently lands with no
+		// role.
+		{
+			name:        "case-insensitive group match",
+			groupsClaim: "groups",
+			mappings: map[string]string{
+				"admins": "admin",
+			},
+			claims: map[string]any{
+				"groups": []string{"Admins"},
+			},
+			expectedRoles: []string{"admin"},
+		},
+		{
+			name:        "whitespace-padded mapping key match",
+			groupsClaim: "groups",
+			mappings: map[string]string{
+				" admin ": "admin",
+			},
+			claims: map[string]any{
+				"groups": []string{"admin"},
+			},
+			expectedRoles: []string{"admin"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -77,17 +104,7 @@ func TestOIDCRoleMappingLogic(t *testing.T) {
 			}
 
 			groups := extractStringSliceClaim(tt.claims, cfg.GroupsClaim)
-			var rolesToAssign []string
-			seenRoles := make(map[string]bool)
-
-			for _, group := range groups {
-				if roleID, ok := cfg.GroupRoleMappings[group]; ok {
-					if !seenRoles[roleID] {
-						rolesToAssign = append(rolesToAssign, roleID)
-						seenRoles[roleID] = true
-					}
-				}
-			}
+			rolesToAssign := resolveGroupRoles(groups, cfg.GroupRoleMappings)
 
 			if len(rolesToAssign) != len(tt.expectedRoles) {
 				t.Errorf("expected %d roles, got %d", len(tt.expectedRoles), len(rolesToAssign))
