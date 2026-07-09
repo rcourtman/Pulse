@@ -32,4 +32,16 @@ describe('getPlatformAlertSeverityFilterOptions', () => {
     expect(dots[1]).toHaveClass('bg-amber-500');
     expect(dots[2]).toHaveClass('bg-emerald-500');
   });
+
+  it('adds the aggregate attention filter only when requested', () => {
+    const options = getPlatformAlertSeverityFilterOptions({ includeAttention: true });
+
+    expect(options.map((option) => option.value)).toEqual([
+      'all',
+      'attention',
+      'critical',
+      'warning',
+      'info',
+    ]);
+  });
 });

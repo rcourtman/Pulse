@@ -1,5 +1,5 @@
 import { createSignal, onMount, type Accessor, type Setter } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
+import { useLocation, useNavigate } from '@solidjs/router';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import { deserializeWorkloadViewMode } from './workloadRouteModel';
 import {
@@ -20,6 +20,7 @@ export interface WorkloadRouteStateOptions {
 }
 
 export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
+  const location = useLocation();
   const navigate = useNavigate();
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
   const [selectedPlatform, setSelectedPlatform] = createSignal<string | null>(null);
@@ -36,7 +37,7 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
 
   onMount(() => {
     if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(location.search);
     let mutated = false;
 
     if (!params.has(WORKLOADS_QUERY_PARAMS.type)) {
@@ -60,7 +61,7 @@ export function useWorkloadRouteState(options: WorkloadRouteStateOptions) {
     }
 
     if (mutated) {
-      navigate(`${window.location.pathname}?${params.toString()}`, { replace: true });
+      navigate(`${location.pathname}?${params.toString()}`, { replace: true });
     }
   });
   const filterViewMode = () => options.forcedViewMode ?? viewMode();

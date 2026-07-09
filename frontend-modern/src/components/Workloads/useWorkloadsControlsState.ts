@@ -125,12 +125,12 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
 
   onMount(() => {
     if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(location.search);
     if (params.has('status')) return;
     const saved = readSavedWorkloadsStatusMode(options.statusModeStorageScope);
     if (saved !== DEFAULT_WORKLOADS_STATUS_MODE) {
       params.set('status', saved);
-      navigate(`${window.location.pathname}?${params.toString()}`, { replace: true });
+      navigate(`${location.pathname}?${params.toString()}`, { replace: true });
     }
   });
 

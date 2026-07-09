@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
   VMWARE_TAB_SPECS,
+  buildVmwareHealthPosture,
   buildVmwarePageModel,
   filterVmwareActivity,
   filterVmwareDatastores,
@@ -47,7 +48,9 @@ describe('vmwarePageModel', () => {
   });
 
   it('shows vSphere workflow tabs only when their inventory or signal exists', () => {
-    const hostOnlyModel = buildVmwarePageModel([makeResource({ id: 'esxi-host-1', type: 'agent' })]);
+    const hostOnlyModel = buildVmwarePageModel([
+      makeResource({ id: 'esxi-host-1', type: 'agent' }),
+    ]);
     const fullModel = buildVmwarePageModel(
       [
         makeResource({ id: 'esxi-host-1', type: 'agent' }),
@@ -412,6 +415,14 @@ describe('vmwarePageModel', () => {
     expect(
       filterVmwareIncidents(rows, 'production', 'critical').map((row) => row.resourceId),
     ).toEqual(['host-alarm']);
+    expect(filterVmwareIncidents(rows, '', 'attention')).toHaveLength(2);
+    expect(buildVmwareHealthPosture(rows)).toEqual({
+      critical: 1,
+      warning: 1,
+      info: 0,
+      attention: 2,
+      affectedResources: 2,
+    });
   });
 
   it('builds and filters vSphere activity from VMware resource changes', () => {

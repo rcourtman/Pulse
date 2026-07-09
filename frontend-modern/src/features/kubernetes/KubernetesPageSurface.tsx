@@ -1,15 +1,17 @@
 import { useLocation, useSearchParams } from '@solidjs/router';
 import { Show, createMemo, type Accessor } from 'solid-js';
+import { ButtonLink } from '@/components/shared/Button';
 import { buildInfrastructureAgentUpdatesPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import type { FilterDef } from '@/components/shared/FilterBar';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
+import { PlatformAttentionSummary } from '@/features/platformPage/PlatformAttentionSummary';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
 import {
   collectOutdatedAgentHosts,
   formatAgentVersionDisplay,
 } from '@/features/platformPage/agentVersion';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
-import { KUBERNETES_QUERY_PARAMS } from '@/routing/resourceLinks';
+import { buildKubernetesPath, KUBERNETES_QUERY_PARAMS } from '@/routing/resourceLinks';
 import { updateStore } from '@/stores/updates';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
@@ -35,6 +37,7 @@ import { KubernetesServicesTable } from './KubernetesServicesTable';
 import { KubernetesStorageTable } from './KubernetesStorageTable';
 import {
   buildKubernetesPageModel,
+  buildKubernetesOverviewPosture,
   filterKubernetesResources,
   getKubernetesPageTabSpecs,
   resolveKubernetesPageTabId,
@@ -328,8 +331,7 @@ function KubernetesWorkloads(props: { model: KubernetesPageModel; controllers: R
     countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
   );
   const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveNamespace();
-  const resetFilters = () =>
-    toolbar.resetFilters({ [KUBERNETES_QUERY_PARAMS.namespace]: null });
+  const resetFilters = () => toolbar.resetFilters({ [KUBERNETES_QUERY_PARAMS.namespace]: null });
 
   return (
     <Show
@@ -424,8 +426,7 @@ function KubernetesServices(props: { model: KubernetesPageModel }) {
     countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
   );
   const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveNamespace();
-  const resetFilters = () =>
-    toolbar.resetFilters({ [KUBERNETES_QUERY_PARAMS.namespace]: null });
+  const resetFilters = () => toolbar.resetFilters({ [KUBERNETES_QUERY_PARAMS.namespace]: null });
 
   return (
     <Show
@@ -495,8 +496,7 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
     countKubernetesVisible(scope.scopedSections(), toolbar.search(), toolbar.status()),
   );
   const hasActiveFilters = () => toolbar.hasActiveFilters() || scope.hasActiveNamespace();
-  const resetFilters = () =>
-    toolbar.resetFilters({ [KUBERNETES_QUERY_PARAMS.namespace]: null });
+  const resetFilters = () => toolbar.resetFilters({ [KUBERNETES_QUERY_PARAMS.namespace]: null });
 
   return (
     <Show
@@ -553,8 +553,54 @@ function KubernetesConfiguration(props: { model: KubernetesPageModel }) {
 }
 
 function KubernetesOverview(props: KubernetesOverviewProps) {
+  const posture = createMemo(() => buildKubernetesOverviewPosture(props.model()));
+  const needsAttention = () => posture().attentionResources > 0 || posture().attentionSignals > 0;
+  const workloadAttention = () => posture().podAttention + posture().deploymentAttention;
+  const headline = () => {
+    const resources = posture().attentionResources;
+    const signals = posture().attentionSignals;
+    if (resources > 0 && signals > 0) {
+      return `${resources} resource${resources === 1 ? '' : 's'} and ${signals} signal${signals === 1 ? '' : 's'} need review`;
+    }
+    if (resources > 0) {
+      return `${resources} resource${resources === 1 ? '' : 's'} ${resources === 1 ? 'needs' : 'need'} review`;
+    }
+    return `${signals} health signal${signals === 1 ? '' : 's'} ${signals === 1 ? 'needs' : 'need'} review`;
+  };
+
   return (
     <div class="space-y-4">
+      <Show when={needsAttention()}>
+        <PlatformAttentionSummary
+          title="Kubernetes attention"
+          headline={headline()}
+          description="Start with unavailable nodes, pending pods, or deployments below their desired replica count. Inventory remains available below."
+          tone={
+            posture().criticalResources > 0 || posture().criticalIncidents > 0
+              ? 'danger'
+              : 'warning'
+          }
+          metrics={[
+            { label: 'nodes', value: posture().nodeAttention },
+            { label: 'workloads', value: workloadAttention() },
+            { label: 'signals', value: posture().attentionSignals },
+          ]}
+          actions={
+            <>
+              <Show when={posture().nodeAttention > 0}>
+                <ButtonLink href={buildKubernetesPath('nodes')} variant="secondary" size="sm">
+                  Review nodes
+                </ButtonLink>
+              </Show>
+              <Show when={workloadAttention() > 0}>
+                <ButtonLink href={buildKubernetesPath('workloads')} variant="secondary" size="sm">
+                  Review workloads
+                </ButtonLink>
+              </Show>
+            </>
+          }
+        />
+      </Show>
       <KubernetesClustersTable
         clusters={props.model().clusters}
         scope={props.model().resources}
@@ -564,12 +610,14 @@ function KubernetesOverview(props: KubernetesOverviewProps) {
         showToolbar={false}
       />
       <Show when={props.model().incidents.length > 0}>
-        <KubernetesAlertsTable
-          incidents={props.model().incidents}
-          emptyIcon={k8sIcon()}
-          emptyTitle="No active Kubernetes alerts"
-          emptyDescription="Kubernetes health alerts appear here when the Pulse alert engine reports active workload, node, or cluster incidents."
-        />
+        <div id="kubernetes-health-signals">
+          <KubernetesAlertsTable
+            incidents={props.model().incidents}
+            emptyIcon={k8sIcon()}
+            emptyTitle="No active Kubernetes alerts"
+            emptyDescription="Kubernetes health alerts appear here when the Pulse alert engine reports active workload, node, or cluster incidents."
+          />
+        </div>
       </Show>
     </div>
   );

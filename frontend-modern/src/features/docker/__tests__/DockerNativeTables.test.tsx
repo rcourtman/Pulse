@@ -752,6 +752,21 @@ describe('Docker native tables', () => {
             },
           }),
         ]}
+        relatedContainers={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            docker: {
+              image: 'nginx:latest',
+              updateStatus: {
+                updateAvailable: true,
+                currentDigest: 'sha256:current',
+                latestDigest: 'sha256:latest',
+              },
+            },
+          }),
+        ]}
         emptyIcon={<span />}
         emptyTitle="No images"
         emptyDescription="No images"
@@ -759,12 +774,12 @@ describe('Docker native tables', () => {
       />
     ));
 
-    expect(screen.getByText('Tags')).toBeInTheDocument();
-    expect(screen.getByText('Digests')).toBeInTheDocument();
+    expect(screen.getByText('Used by')).toBeInTheDocument();
+    expect(screen.getByText('Update check')).toBeInTheDocument();
     expect(screen.getByText('nginx:latest')).toBeInTheDocument();
-    expect(screen.getByText('nginx:latest, nginx:stable')).toBeInTheDocument();
-    expect(screen.getByText('nginx@sha256:manifest')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('edge-web')).toBeInTheDocument();
+    expect(screen.getByText('Update available')).toBeInTheDocument();
+    expect(screen.queryByText('nginx@sha256:manifest')).not.toBeInTheDocument();
     expect(screen.getByText('edge-01')).toBeInTheDocument();
   });
 

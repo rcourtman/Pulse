@@ -1,7 +1,9 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
+import { Button } from '@/components/shared/Button';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { PlatformAttentionSummary } from '@/features/platformPage/PlatformAttentionSummary';
 import {
   getRecoveryOutcomeBadgeClass,
   getRecoveryOutcomeLabel,
@@ -30,10 +32,12 @@ import {
 import type { RecoveryPoint } from '@/types/recovery';
 import {
   filterTrueNASProtectionPoints,
+  buildTrueNASProtectionPosture,
   mapTrueNASProtectionKind,
   mapTrueNASProtectionStatus,
   sortTrueNASProtectionPoints,
   type TrueNASProtectionKind,
+  type TrueNASProtectionStatusBucket,
   type TrueNASProtectionStatusFilter,
 } from './truenasPageModel';
 import {
@@ -48,6 +52,7 @@ import {
 const TRUENAS_PROTECTION_STATUS_OPTIONS: PlatformTableFilterOption<TrueNASProtectionStatusFilter>[] =
   [
     { value: 'all', label: 'All' },
+    { value: 'attention', label: 'Attention', compactLabel: 'Issues', tone: 'warning' },
     { value: 'success', label: 'Healthy', compactLabel: 'OK', tone: 'success' },
     { value: 'warning', label: 'Warning', compactLabel: 'Warn', tone: 'warning' },
     { value: 'failed', label: 'Failed', compactLabel: 'Fail', tone: 'danger' },
@@ -71,9 +76,7 @@ const kindLabel = (kind: TrueNASProtectionKind): string => {
   return 'Protection';
 };
 
-const protectionVariant = (
-  status: Exclude<TrueNASProtectionStatusFilter, 'all'>,
-): StatusIndicatorVariant => {
+const protectionVariant = (status: TrueNASProtectionStatusBucket): StatusIndicatorVariant => {
   switch (status) {
     case 'success':
       return 'success';
@@ -302,6 +305,7 @@ export const TrueNASProtectionTable: Component<{
   showToolbar?: boolean;
 }> = (props) => {
   const rows = createMemo(() => sortTrueNASProtectionPoints(props.points));
+  const posture = createMemo(() => buildTrueNASProtectionPosture(rows()));
   const detail = createPlatformResourceDetailState({ idPrefix: 'truenas-protection-detail' });
   const tableState = createPlatformTableFilterState({
     resources: rows,
@@ -340,6 +344,44 @@ export const TrueNASProtectionTable: Component<{
           }
         >
           <div class="space-y-3">
+            <Show when={posture().attention > 0 || posture().running > 0}>
+              <PlatformAttentionSummary
+                title="Protection posture"
+                headline={
+                  posture().attention > 0
+                    ? `${posture().attention} protection issue${posture().attention === 1 ? '' : 's'} ${posture().attention === 1 ? 'needs' : 'need'} review`
+                    : `${posture().running} replication task${posture().running === 1 ? '' : 's'} running`
+                }
+                description={
+                  posture().attention > 0
+                    ? 'Review failed or warning replication outcomes first; successful snapshots remain available in the full event history.'
+                    : 'No failed protection outcomes are reported. Monitor the active replication task until it completes.'
+                }
+                tone={
+                  posture().failed > 0 ? 'danger' : posture().attention > 0 ? 'warning' : 'info'
+                }
+                metrics={[
+                  { label: 'failed', value: posture().failed },
+                  { label: 'warning', value: posture().warning },
+                  { label: 'running', value: posture().running },
+                ]}
+                actions={
+                  <Show when={posture().attention > 0}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        tableState.setStatus(
+                          tableState.status() === 'attention' ? 'all' : 'attention',
+                        )
+                      }
+                    >
+                      {tableState.status() === 'attention' ? 'Show all events' : 'Show issues'}
+                    </Button>
+                  </Show>
+                }
+              />
+            </Show>
             <Show when={props.showToolbar !== false}>
               <PlatformTableToolbar
                 search={tableState.search}

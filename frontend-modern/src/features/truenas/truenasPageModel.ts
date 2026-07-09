@@ -10,13 +10,7 @@ import type {
 import type { RecoveryPoint } from '@/types/recovery';
 
 export type TrueNASPageTabId =
-  | 'overview'
-  | 'storage'
-  | 'services'
-  | 'apps'
-  | 'vms'
-  | 'shares'
-  | 'protection';
+  'overview' | 'storage' | 'services' | 'apps' | 'vms' | 'shares' | 'protection';
 export type TrueNASAppStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
 export type TrueNASServiceStatusFilter = 'all' | 'running' | 'attention' | 'stopped' | 'disabled';
 export type TrueNASVMStatusFilter = 'all' | 'running' | 'attention' | 'stopped';
@@ -24,12 +18,11 @@ export type TrueNASShareStatusFilter = 'all' | 'active' | 'attention' | 'disable
 export type TrueNASIncidentSeverityFilter = 'all' | 'critical' | 'warning' | 'info';
 export type TrueNASStorageStatusFilter = 'all' | 'healthy' | 'attention' | 'offline';
 export type TrueNASProtectionStatusFilter =
-  | 'all'
-  | 'success'
-  | 'warning'
-  | 'failed'
-  | 'running'
-  | 'unknown';
+  'all' | 'attention' | 'success' | 'warning' | 'failed' | 'running' | 'unknown';
+export type TrueNASProtectionStatusBucket = Exclude<
+  TrueNASProtectionStatusFilter,
+  'all' | 'attention'
+>;
 export type TrueNASProtectionKind = 'snapshot' | 'replication' | 'other';
 
 export type TrueNASTabSpec = {
@@ -592,9 +585,7 @@ const normalize = (value: unknown): string =>
 export const getTrueNASResourceDisplayStatus = (resource: Resource): string =>
   hasImpairedResourceSource(resource, 'truenas') ? 'degraded' : resource.status;
 
-const normalizeProtectionOutcome = (
-  value: unknown,
-): Exclude<TrueNASProtectionStatusFilter, 'all'> => {
+const normalizeProtectionOutcome = (value: unknown): TrueNASProtectionStatusBucket => {
   const normalized = normalize(value);
   if (normalized === 'success' || normalized === 'ok') return 'success';
   if (normalized === 'warning' || normalized === 'warn') return 'warning';
@@ -702,10 +693,37 @@ export function mapTrueNASStorageStatus(
   return 'unknown';
 }
 
-export function mapTrueNASProtectionStatus(
-  point: RecoveryPoint,
-): Exclude<TrueNASProtectionStatusFilter, 'all'> {
+export function mapTrueNASProtectionStatus(point: RecoveryPoint): TrueNASProtectionStatusBucket {
   return normalizeProtectionOutcome(point.outcome);
+}
+
+export type TrueNASProtectionPosture = {
+  healthy: number;
+  warning: number;
+  failed: number;
+  running: number;
+  unknown: number;
+  attention: number;
+};
+
+export function buildTrueNASProtectionPosture(
+  points: readonly RecoveryPoint[],
+): TrueNASProtectionPosture {
+  const posture: TrueNASProtectionPosture = {
+    healthy: 0,
+    warning: 0,
+    failed: 0,
+    running: 0,
+    unknown: 0,
+    attention: 0,
+  };
+  for (const point of points) {
+    const status = mapTrueNASProtectionStatus(point);
+    if (status === 'success') posture.healthy += 1;
+    else posture[status] += 1;
+  }
+  posture.attention = posture.warning + posture.failed;
+  return posture;
 }
 
 export function mapTrueNASProtectionKind(point: RecoveryPoint): TrueNASProtectionKind {
@@ -809,7 +827,11 @@ export function filterTrueNASProtectionPoints(
 ): RecoveryPoint[] {
   const needle = search.trim().toLowerCase();
   return points.filter((point) => {
-    if (status !== 'all' && mapTrueNASProtectionStatus(point) !== status) return false;
+    const pointStatus = mapTrueNASProtectionStatus(point);
+    if (status === 'attention' && pointStatus !== 'warning' && pointStatus !== 'failed') {
+      return false;
+    }
+    if (status !== 'all' && status !== 'attention' && pointStatus !== status) return false;
     if (!needle) return true;
     if (mapTrueNASProtectionKind(point).includes(needle)) return true;
     return trueNASProtectionSearchTokens(point).join(' ').toLowerCase().includes(needle);

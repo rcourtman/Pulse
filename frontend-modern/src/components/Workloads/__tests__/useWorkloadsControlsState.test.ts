@@ -141,7 +141,9 @@ describe('useWorkloadsControlsState', () => {
     });
 
     setMockRouterSearch('');
-    window.history.replaceState(null, '', '/workloads');
+    // During a router transition the browser URL can still reflect the route
+    // being left. Restores must target the router location that owns the hook.
+    window.history.replaceState(null, '', '/stale-workspace-entry');
     navigateSpy.mockClear();
 
     const disposeRestore = createRoot((dispose) => {

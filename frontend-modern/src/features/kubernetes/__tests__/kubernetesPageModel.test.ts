@@ -3,6 +3,7 @@ import type { Resource } from '@/types/resource';
 import {
   KUBERNETES_TAB_SPECS,
   buildKubernetesClusterChildCounts,
+  buildKubernetesOverviewPosture,
   buildKubernetesIncidentRows,
   buildKubernetesPageModel,
   compareKubernetesControllers,
@@ -91,6 +92,36 @@ describe('kubernetesPageModel', () => {
       'configuration',
       'events',
     ]);
+  });
+
+  it('summarizes actionable Kubernetes overview posture from native resource states', () => {
+    const model = buildKubernetesPageModel([
+      makeResource({ id: 'cluster-1', type: 'k8s-cluster' }),
+      makeResource({ id: 'node-ready', type: 'k8s-node', kubernetes: { ready: true } }),
+      makeResource({ id: 'node-down', type: 'k8s-node', kubernetes: { ready: false } }),
+      makeResource({
+        id: 'pod-pending',
+        type: 'pod',
+        kubernetes: { podPhase: 'Pending' },
+      }),
+      makeResource({
+        id: 'deployment-short',
+        type: 'k8s-deployment',
+        kubernetes: { desiredReplicas: 3, readyReplicas: 2 },
+        incidents: [{ code: 'k8s_under_replicated', severity: 'warning', summary: '2 / 3 ready' }],
+      }),
+    ]);
+
+    expect(buildKubernetesOverviewPosture(model)).toEqual({
+      nodeAttention: 1,
+      podAttention: 1,
+      deploymentAttention: 1,
+      criticalResources: 1,
+      criticalIncidents: 0,
+      warningIncidents: 1,
+      attentionResources: 3,
+      attentionSignals: 1,
+    });
   });
 
   it('buckets clusters, nodes, workloads, services, storage, config, policy, autoscaling, and events', () => {
@@ -395,7 +426,9 @@ describe('kubernetesPageModel', () => {
 
     it('falls back to resource.status when ready is undefined', () => {
       expect(
-        mapKubernetesNodeStatus(makeResource({ id: 'fallback-ok', type: 'k8s-node', status: 'online' })),
+        mapKubernetesNodeStatus(
+          makeResource({ id: 'fallback-ok', type: 'k8s-node', status: 'online' }),
+        ),
       ).toEqual({ variant: 'success', label: 'Ready' });
       expect(
         mapKubernetesNodeStatus(
@@ -439,8 +472,9 @@ describe('kubernetesPageModel', () => {
         kubernetes: { desiredReplicas: 5, readyReplicas: 2 },
       } as const;
       expect(
-        mapKubernetesReplicaSetStatus(makeResource({ id: 'rs', type: 'k8s-replicaset', ...partial }))
-          .variant,
+        mapKubernetesReplicaSetStatus(
+          makeResource({ id: 'rs', type: 'k8s-replicaset', ...partial }),
+        ).variant,
       ).toBe('warning');
       expect(
         mapKubernetesStatefulSetStatus(
@@ -577,9 +611,11 @@ describe('kubernetesPageModel', () => {
         type: 'k8s-deployment',
         kubernetes: { desiredReplicas: 2, readyReplicas: 0 },
       });
-      expect(
-        [happy, partial, broken].sort(compareKubernetesDeployments).map((r) => r.id),
-      ).toEqual(['dep-broken', 'dep-partial', 'dep-happy']);
+      expect([happy, partial, broken].sort(compareKubernetesDeployments).map((r) => r.id)).toEqual([
+        'dep-broken',
+        'dep-partial',
+        'dep-happy',
+      ]);
     });
 
     it('mixes controller kinds in a single attention-first order', () => {
@@ -608,9 +644,9 @@ describe('kubernetesPageModel', () => {
       // fully-healthy rows — matches the rank ordering vSphere already uses for
       // its VM status table.
       expect(
-        [cronOk, jobFailed, dsMisscheduled, rsHappy].sort(compareKubernetesControllers).map(
-          (r) => r.id,
-        ),
+        [cronOk, jobFailed, dsMisscheduled, rsHappy]
+          .sort(compareKubernetesControllers)
+          .map((r) => r.id),
       ).toEqual(['job-fail', 'ds-mis', 'cron-ok', 'rs-ok']);
     });
 
@@ -831,9 +867,11 @@ describe('kubernetesPageModel', () => {
     ];
 
     it('matches kubernetes.* fields the shared filter no longer carries', () => {
-      expect(filterKubernetesResources(rows, 'payments', 'all').map((r) => r.id).sort()).toEqual(
-        ['pod-checkout', 'svc-checkout'].sort(),
-      );
+      expect(
+        filterKubernetesResources(rows, 'payments', 'all')
+          .map((r) => r.id)
+          .sort(),
+      ).toEqual(['pod-checkout', 'svc-checkout'].sort());
       expect(filterKubernetesResources(rows, 'prod-cluster', 'all').map((r) => r.id)).toEqual([
         'pod-checkout',
       ]);
@@ -1012,12 +1050,12 @@ describe('kubernetesPageModel', () => {
     ]);
 
     it('filters by severity bucket', () => {
-      expect(
-        filterKubernetesIncidents(incidents, '', 'critical').map((r) => r.resourceId),
-      ).toEqual(['pod-payments']);
-      expect(
-        filterKubernetesIncidents(incidents, '', 'warning').map((r) => r.resourceId),
-      ).toEqual(['dep-checkout']);
+      expect(filterKubernetesIncidents(incidents, '', 'critical').map((r) => r.resourceId)).toEqual(
+        ['pod-payments'],
+      );
+      expect(filterKubernetesIncidents(incidents, '', 'warning').map((r) => r.resourceId)).toEqual([
+        'dep-checkout',
+      ]);
     });
 
     it('matches resource name, code, cluster, and namespace', () => {

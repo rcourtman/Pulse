@@ -5,21 +5,15 @@ import type { Resource, ResourceChange, ResourceIncident, ResourceType } from '@
 
 export type VmwarePageTabId = 'overview' | 'storage' | 'networks' | 'health' | 'activity';
 export type VmwareDatastoreStatusFilter =
-  | 'all'
-  | 'accessible'
-  | 'attention'
-  | 'inaccessible'
-  | 'maintenance'
-  | 'unknown';
+  'all' | 'accessible' | 'attention' | 'inaccessible' | 'maintenance' | 'unknown';
 export type VmwareVirtualMachineStatusFilter =
-  | 'all'
-  | 'powered-on'
-  | 'attention'
-  | 'powered-off'
-  | 'suspended'
-  | 'unknown';
+  'all' | 'powered-on' | 'attention' | 'powered-off' | 'suspended' | 'unknown';
 export type VmwareNetworkStatusFilter = 'all' | 'healthy' | 'attention' | 'unknown';
-export type VmwareIncidentSeverityFilter = 'all' | 'critical' | 'warning' | 'info';
+export type VmwareIncidentSeverityFilter = 'all' | 'attention' | 'critical' | 'warning' | 'info';
+export type VmwareIncidentSeverityBucket = Exclude<
+  VmwareIncidentSeverityFilter,
+  'all' | 'attention'
+>;
 export type VmwareActivityStatusFilter = 'all' | 'tasks' | 'events' | 'failed';
 export type VmwareActivityKind = 'task' | 'event' | 'activity';
 export type VmwareActivityStateBucket = 'success' | 'running' | 'failed' | 'unknown';
@@ -66,7 +60,7 @@ export type VmwareIncidentRow = {
   entityType: string;
   managedObjectId: string;
   severity: string;
-  severityBucket: Exclude<VmwareIncidentSeverityFilter, 'all'>;
+  severityBucket: VmwareIncidentSeverityBucket;
   code: string;
   source: string;
   summary: string;
@@ -296,7 +290,7 @@ const incidentSeverityRank = (severity: string): number => {
 
 export function mapVmwareIncidentSeverity(
   severity: string | undefined,
-): Exclude<VmwareIncidentSeverityFilter, 'all'> {
+): VmwareIncidentSeverityBucket {
   const normalized = normalize(severity);
   if (['critical', 'crit', 'fatal', 'error', 'failed', 'failure', 'red'].includes(normalized)) {
     return 'critical';
@@ -306,7 +300,10 @@ export function mapVmwareIncidentSeverity(
 }
 
 export function normalizeVmwarePowerStateToken(value: string | undefined): string {
-  return (value || '').trim().toLowerCase().replace(/[\s_-]/g, '');
+  return (value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]/g, '');
 }
 
 export function formatVmwarePowerState(value: string | undefined): string {
@@ -512,6 +509,36 @@ export function buildVmwareIncidentRows(resources: Resource[]): VmwareIncidentRo
     if (entityDelta !== 0) return entityDelta;
     return a.resourceName.localeCompare(b.resourceName);
   });
+}
+
+export type VmwareHealthPosture = {
+  critical: number;
+  warning: number;
+  info: number;
+  attention: number;
+  affectedResources: number;
+};
+
+export function buildVmwareHealthPosture(
+  incidents: readonly VmwareIncidentRow[],
+): VmwareHealthPosture {
+  const posture: VmwareHealthPosture = {
+    critical: 0,
+    warning: 0,
+    info: 0,
+    attention: 0,
+    affectedResources: 0,
+  };
+  const affectedResources = new Set<string>();
+  for (const incident of incidents) {
+    posture[incident.severityBucket] += 1;
+    if (incident.severityBucket === 'critical' || incident.severityBucket === 'warning') {
+      posture.attention += 1;
+      affectedResources.add(incident.resourceId);
+    }
+  }
+  posture.affectedResources = affectedResources.size;
+  return posture;
 }
 
 const isVmwareActivityChange = (change: ResourceChange): boolean => {
@@ -944,7 +971,16 @@ export function filterVmwareIncidents(
 ): VmwareIncidentRow[] {
   const needle = normalize(search);
   return incidents.filter((incident) => {
-    if (severity !== 'all' && incident.severityBucket !== severity) return false;
+    if (
+      severity === 'attention' &&
+      incident.severityBucket !== 'critical' &&
+      incident.severityBucket !== 'warning'
+    ) {
+      return false;
+    }
+    if (severity !== 'all' && severity !== 'attention' && incident.severityBucket !== severity) {
+      return false;
+    }
     if (!needle) return true;
     return incidentSearchHaystack(incident).includes(needle);
   });

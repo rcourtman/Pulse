@@ -147,6 +147,9 @@ describe('App architecture', () => {
     expect(appSource).toContain("normalizedPath === '/'");
     expect(appSource).toContain("normalizedPath === '/login'");
     expect(appSource).toContain("normalizedPath === '/infrastructure'");
+    expect(appSource).toContain('let workspaceRedirectPending = false');
+    expect(appSource).toContain('if (workspaceRedirectPending) return');
+    expect(appSource).toContain('workspaceRedirectPending = true');
     expect(appSource).toContain(
       '<Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />',
     );

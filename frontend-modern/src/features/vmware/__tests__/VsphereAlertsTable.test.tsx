@@ -69,6 +69,12 @@ describe('VsphereAlertsTable', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('lab-vcenter')).toBeInTheDocument();
     expect(screen.getByText('host-101')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'vSphere attention' })).toHaveTextContent(
+      '1 health signal needs review',
+    );
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Show attention' }));
+    expect(screen.getByRole('button', { name: 'Show all signals' })).toBeInTheDocument();
 
     const row = screen
       .getByText('Host host-101 has VMware alarm Host connection and power state (red)')

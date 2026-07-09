@@ -1045,6 +1045,10 @@ describe('Workloads performance contract', () => {
       );
       expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadUrlSync');
       expect(workloadsWorkloadRouteStateSource).toContain('useWorkloadFilterOptions');
+      expect(workloadsWorkloadRouteStateSource).not.toContain('window.location.pathname');
+      expect(workloadsWorkloadRouteStateSource).not.toContain('window.location.search');
+      expect(workloadsControlsStateSource).not.toContain('window.location.pathname');
+      expect(workloadsControlsStateSource).not.toContain('window.location.search');
       expect(workloadsWorkloadRouteStateSource).not.toContain('buildWorkloadsPath({');
       expect(workloadsWorkloadRouteStateSource).not.toContain('normalizeWorkloadViewModeParam');
       expect(workloadsWorkloadRouteStateSource).not.toContain(

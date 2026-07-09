@@ -20,14 +20,26 @@ import {
   DockerResourceNameCell,
   dockerByteValue,
   dockerHostName,
-  dockerJoinValues,
   dockerResourceName,
-  dockerNumberValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
 import { filterDockerResources, type DockerResourceStatusFilter } from './dockerPageModel';
+import {
+  getDockerImageOperationalPresentation,
+  type DockerImageUpdateTone,
+} from './dockerImagePresentation';
+import type { Resource } from '@/types/resource';
 
-export const DockerImagesTable: Component<DockerNativeTableProps> = (props) => {
+const updateToneClass: Record<DockerImageUpdateTone, string> = {
+  danger: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300',
+  warning: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+  success: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+  muted: 'bg-surface-hover text-muted',
+};
+
+export const DockerImagesTable: Component<
+  DockerNativeTableProps & { relatedContainers?: Resource[] }
+> = (props) => {
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as DockerResourceStatusFilter,
@@ -52,7 +64,7 @@ export const DockerImagesTable: Component<DockerNativeTableProps> = (props) => {
           <PlatformTableToolbar
             search={tableState.search}
             onSearchChange={tableState.setSearch}
-            searchPlaceholder="Search images"
+            searchPlaceholder="Search image, host, or update state"
             status={tableState.status()}
             onStatusChange={tableState.setStatus}
             statusOptions={PLATFORM_HEALTH_FILTER_OPTIONS}
@@ -74,32 +86,25 @@ export const DockerImagesTable: Component<DockerNativeTableProps> = (props) => {
         >
           <PlatformTableShell
             title={props.title ?? 'Images'}
-            tableClass="min-w-full table-fixed text-xs md:min-w-[1120px]"
+            tableClass="min-w-full table-fixed text-xs md:min-w-[880px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[24%]`}>
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[30%]`}>
                   Image
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[22%]`}>
-                  Tags
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[18%]`}>
+                  Host
+                </TableHead>
+                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[24%]`}>
+                  Used by
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[24%]`}
-                >
-                  Digests
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[12%]`}
                 >
                   Size
                 </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}>
-                  In Use
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
-                >
-                  Host
+                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[16%]`}>
+                  Update check
                 </TableHead>
               </>
             }
@@ -107,6 +112,11 @@ export const DockerImagesTable: Component<DockerNativeTableProps> = (props) => {
               <>
                 <For each={tableState.filtered()}>
                   {(resource) => {
+                    const operational = () =>
+                      getDockerImageOperationalPresentation(
+                        resource,
+                        props.relatedContainers ?? [],
+                      );
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
                     return (
@@ -134,21 +144,16 @@ export const DockerImagesTable: Component<DockerNativeTableProps> = (props) => {
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
-                            <span
-                              class="inline-block max-w-[18rem] truncate"
-                              title={dockerJoinValues(resource.docker?.repoTags)}
-                            >
-                              {dockerJoinValues(resource.docker?.repoTags)}
-                            </span>
+                            {dockerHostName(resource)}
                           </TableCell>
                           <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
+                            class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
                           >
                             <span
-                              class="inline-block max-w-[22rem] truncate"
-                              title={dockerJoinValues(resource.docker?.repoDigests)}
+                              class="inline-block max-w-[20rem] truncate"
+                              title={operational().consumerSummary}
                             >
-                              {dockerJoinValues(resource.docker?.repoDigests)}
+                              {operational().consumerSummary}
                             </span>
                           </TableCell>
                           <TableCell
@@ -156,22 +161,20 @@ export const DockerImagesTable: Component<DockerNativeTableProps> = (props) => {
                           >
                             {dockerByteValue(resource.docker?.sizeBytes)}
                           </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('numeric-value')} text-base-content`}
-                          >
-                            {dockerNumberValue(resource.docker?.imageContainers)}
-                          </TableCell>
-                          <TableCell
-                            class={`${getPlatformTableCellClassForKind('text')} hidden text-base-content md:table-cell`}
-                          >
-                            {dockerHostName(resource)}
+                          <TableCell class={getPlatformTableCellClassForKind('badge')}>
+                            <span
+                              class={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${updateToneClass[operational().updateTone]}`}
+                              title={operational().updateDetail}
+                            >
+                              {operational().updateLabel}
+                            </span>
                           </TableCell>
                         </TableRow>
                         <PlatformResourceDetailTableRow
                           resource={resource}
                           open={isExpanded()}
                           detailRowId={detailRowId()}
-                          colSpan={6}
+                          colSpan={5}
                           resolveResourceLabel={resolveResourceLabel}
                           onClose={() => drawer.close(resource)}
                         />

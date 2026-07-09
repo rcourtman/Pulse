@@ -9,13 +9,7 @@ import { resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 import { matchesSearchTermSplit, splitSearchExclusions } from '@/utils/searchQuery';
 
 export type KubernetesPageTabId =
-  | 'overview'
-  | 'nodes'
-  | 'workloads'
-  | 'services'
-  | 'storage'
-  | 'configuration'
-  | 'events';
+  'overview' | 'nodes' | 'workloads' | 'services' | 'storage' | 'configuration' | 'events';
 
 export type KubernetesTabSpec = {
   id: KubernetesPageTabId;
@@ -708,6 +702,63 @@ export type KubernetesPageModel = {
   autoscaling: Resource[];
   incidents: KubernetesIncidentRow[];
 };
+
+export type KubernetesOverviewPosture = {
+  nodeAttention: number;
+  podAttention: number;
+  deploymentAttention: number;
+  criticalResources: number;
+  criticalIncidents: number;
+  warningIncidents: number;
+  attentionResources: number;
+  attentionSignals: number;
+};
+
+const countKubernetesAttention = (
+  resources: readonly Resource[],
+  mapper: (resource: Resource) => StatusIndicator,
+): number =>
+  resources.filter((resource) => {
+    const variant = mapper(resource).variant;
+    return variant === 'danger' || variant === 'warning';
+  }).length;
+
+const countKubernetesDanger = (
+  resources: readonly Resource[],
+  mapper: (resource: Resource) => StatusIndicator,
+): number => resources.filter((resource) => mapper(resource).variant === 'danger').length;
+
+export function buildKubernetesOverviewPosture(
+  model: KubernetesPageModel,
+): KubernetesOverviewPosture {
+  const nodeAttention = countKubernetesAttention(model.nodes, mapKubernetesNodeStatus);
+  const podAttention = countKubernetesAttention(model.pods, mapKubernetesPodStatus);
+  const deploymentAttention = countKubernetesAttention(
+    model.deployments,
+    mapKubernetesDeploymentStatus,
+  );
+  const criticalResources =
+    countKubernetesDanger(model.nodes, mapKubernetesNodeStatus) +
+    countKubernetesDanger(model.pods, mapKubernetesPodStatus) +
+    countKubernetesDanger(model.deployments, mapKubernetesDeploymentStatus);
+  const criticalIncidents = model.incidents.filter(
+    (incident) => incident.severityBucket === 'critical',
+  ).length;
+  const warningIncidents = model.incidents.filter(
+    (incident) => incident.severityBucket === 'warning',
+  ).length;
+
+  return {
+    nodeAttention,
+    podAttention,
+    deploymentAttention,
+    criticalResources,
+    criticalIncidents,
+    warningIncidents,
+    attentionResources: nodeAttention + podAttention + deploymentAttention,
+    attentionSignals: criticalIncidents + warningIncidents,
+  };
+}
 
 export type KubernetesClusterChildCount = {
   total: number;

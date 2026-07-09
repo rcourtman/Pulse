@@ -4,6 +4,7 @@ import type { Resource } from '@/types/resource';
 import {
   TRUENAS_TAB_SPECS,
   buildTrueNASPageModel,
+  buildTrueNASProtectionPosture,
   buildTrueNASServiceRows,
   buildTrueNASStorageChildCounts,
   buildTrueNASStorageTopologyRows,
@@ -84,9 +85,7 @@ describe('truenasPageModel', () => {
 
     expect(getTrueNASPageTabSpecs(systemOnlyModel).map((tab) => tab.id)).toEqual(['overview']);
     expect(
-      getTrueNASPageTabSpecs(inventoryModel, { hasProtectionInventory: true }).map(
-        (tab) => tab.id,
-      ),
+      getTrueNASPageTabSpecs(inventoryModel, { hasProtectionInventory: true }).map((tab) => tab.id),
     ).toEqual(['overview', 'storage', 'services', 'apps', 'vms', 'shares', 'protection']);
   });
 
@@ -856,6 +855,14 @@ describe('truenasPageModel', () => {
     expect(mapTrueNASProtectionKind(legacyReplication)).toBe('replication');
     expect(mapTrueNASProtectionStatus(replication)).toBe('running');
     expect(mapTrueNASProtectionStatus(legacyReplication)).toBe('warning');
+    expect(buildTrueNASProtectionPosture([snapshot, replication, legacyReplication])).toEqual({
+      healthy: 1,
+      warning: 1,
+      failed: 0,
+      running: 1,
+      unknown: 0,
+      attention: 1,
+    });
 
     expect(
       filterTrueNASProtectionPoints(
@@ -878,6 +885,13 @@ describe('truenasPageModel', () => {
         'all',
       ).map((point) => point.id),
     ).toEqual(['replicate-tank-apps', 'legacy-task']);
+    expect(
+      filterTrueNASProtectionPoints(
+        [snapshot, replication, legacyReplication],
+        '',
+        'attention',
+      ).map((point) => point.id),
+    ).toEqual(['legacy-task']);
   });
 
   it('orders TrueNAS protection points by latest recovery timestamp', () => {

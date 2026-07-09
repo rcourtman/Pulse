@@ -161,6 +161,7 @@ export function DockerPageSurface() {
             <Show when={activeTab() === 'images'}>
               <DockerImagesTable
                 resources={model().images}
+                relatedContainers={model().containers}
                 emptyIcon={dockerIcon()}
                 emptyTitle="No images"
                 emptyDescription="Images appear here when a Docker or Podman host reports local image inventory."

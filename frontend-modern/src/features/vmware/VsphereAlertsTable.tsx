@@ -1,4 +1,6 @@
 import { For, Show, type Component, type JSX } from 'solid-js';
+import { Button } from '@/components/shared/Button';
+import { PlatformAttentionSummary } from '@/features/platformPage/PlatformAttentionSummary';
 import {
   InlineDetailPanel,
   compactDetailRows,
@@ -37,12 +39,13 @@ import {
 } from '@/utils/alertSeverityPresentation';
 import {
   filterVmwareIncidents,
+  buildVmwareHealthPosture,
   type VmwareIncidentRow,
   type VmwareIncidentSeverityFilter,
 } from './vmwarePageModel';
 
 const VSPHERE_INCIDENT_STATUS_OPTIONS =
-  getPlatformAlertSeverityFilterOptions<VmwareIncidentSeverityFilter>();
+  getPlatformAlertSeverityFilterOptions<VmwareIncidentSeverityFilter>({ includeAttention: true });
 
 type AlertDetailSection = DetailSection;
 
@@ -119,6 +122,7 @@ export const VsphereAlertsTable: Component<{
     filter: filterVmwareIncidents,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'vsphere-alert-drawer' });
+  const posture = () => buildVmwareHealthPosture(props.incidents);
   const filteredEmptyState = () => getAlertFilteredEmptyState('vSphere health signals', 'severity');
 
   return (
@@ -133,6 +137,30 @@ export const VsphereAlertsTable: Component<{
       }
     >
       <div class="space-y-3">
+        <Show when={posture().attention > 0}>
+          <PlatformAttentionSummary
+            title="vSphere attention"
+            headline={`${posture().attention} health signal${posture().attention === 1 ? '' : 's'} ${posture().attention === 1 ? 'needs' : 'need'} review`}
+            description="Review affected resources before opening lower-priority informational signals. Provider identifiers remain available in each row's detail."
+            tone={posture().critical > 0 ? 'danger' : 'warning'}
+            metrics={[
+              { label: 'critical', value: posture().critical },
+              { label: 'warning', value: posture().warning },
+              { label: 'resources', value: posture().affectedResources },
+            ]}
+            actions={
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  tableState.setStatus(tableState.status() === 'attention' ? 'all' : 'attention')
+                }
+              >
+                {tableState.status() === 'attention' ? 'Show all signals' : 'Show attention'}
+              </Button>
+            }
+          />
+        </Show>
         <Show when={props.showToolbar !== false}>
           <PlatformTableToolbar
             search={tableState.search}

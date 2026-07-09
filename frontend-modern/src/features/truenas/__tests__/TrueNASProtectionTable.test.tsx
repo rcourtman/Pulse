@@ -19,6 +19,40 @@ afterEach(() => {
 });
 
 describe('TrueNASProtectionTable', () => {
+  it('summarizes protection issues and filters directly to attention outcomes', async () => {
+    render(() => (
+      <TrueNASProtectionTable
+        points={[
+          makeRecoveryPoint({ id: 'healthy', kind: 'snapshot', mode: 'snapshot' }),
+          makeRecoveryPoint({
+            id: 'failed',
+            kind: 'backup',
+            mode: 'remote',
+            outcome: 'failed',
+          }),
+          makeRecoveryPoint({
+            id: 'running',
+            kind: 'backup',
+            mode: 'remote',
+            outcome: 'running',
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No protection"
+        emptyDescription="No protection"
+      />
+    ));
+
+    expect(screen.getByRole('region', { name: 'Protection posture' })).toHaveTextContent(
+      '1 protection issue needs review',
+    );
+    await fireEvent.click(screen.getByRole('button', { name: 'Show issues' }));
+
+    expect(document.querySelectorAll('[data-truenas-protection-row]')).toHaveLength(1);
+    expect(document.querySelector('[data-truenas-protection-row="failed"]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Show all events' })).toBeInTheDocument();
+  });
+
   it('opens inline table details for a TrueNAS replication recovery point', async () => {
     const replication = makeRecoveryPoint({
       id: 'replicate-tank-apps',

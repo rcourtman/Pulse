@@ -274,6 +274,7 @@ function App() {
     });
     let appShellRoutePreloadCleanup: (() => void) | undefined;
     let appShellRoutesPreloadScheduled = false;
+    let workspaceRedirectPending = false;
 
     createEffect(() => {
       location.pathname;
@@ -286,8 +287,13 @@ function App() {
 
     createEffect(() => {
       if (runtime.isLoading() || runtime.needsAuth() || isPublicRoute()) return;
-      if (!isWorkspaceEntryRoutePath(location.pathname)) return;
+      if (!isWorkspaceEntryRoutePath(location.pathname)) {
+        workspaceRedirectPending = false;
+        return;
+      }
       if (!platformNavigationResolved()) return;
+      if (workspaceRedirectPending) return;
+      workspaceRedirectPending = true;
       navigate(getDefaultWorkspaceRoute(platformNavigationVisibility(), hasSettingsAccess()), {
         replace: true,
       });
