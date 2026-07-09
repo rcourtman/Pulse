@@ -162,14 +162,16 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
           </p>
           <div class="space-y-2">
             <CopyCommandBlock
-              command={buildIdleDockerUpdateCommand()}
+              command={buildIdleDockerComposeCommand()}
               codeClass="block rounded-md border border-border bg-base p-2.5 font-mono text-xs text-blue-400"
             />
             <p class="text-[10px] text-blue-600 dark:text-blue-400">
-              Or with Docker Compose:{' '}
+              Not using Compose?{' '}
               <code class="rounded bg-blue-100 px-1 py-0.5 text-[10px] dark:bg-blue-800">
-                {buildIdleDockerComposeCommand()}
-              </code>
+                {buildIdleDockerUpdateCommand()}
+              </code>{' '}
+              then re-run your original docker run command. A plain docker restart keeps the old
+              image running.
             </p>
           </div>
         </div>

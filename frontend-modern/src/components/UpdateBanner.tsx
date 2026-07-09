@@ -107,7 +107,7 @@ export function UpdateBanner() {
       case 'proxmoxve':
         return "ProxmoxVE users: type 'update' in console";
       case 'docker':
-        return 'Docker: pull latest image';
+        return 'Docker: pull image and recreate container';
       case 'source':
         return 'Source: pull and rebuild';
       case 'mock':

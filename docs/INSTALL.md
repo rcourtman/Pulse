@@ -191,9 +191,11 @@ Pulse can self-update to the latest stable version.
 
 | Platform | Command |
 |----------|---------|
-| **Docker** | `docker pull rcourtman/pulse:vX.Y.Z && docker restart pulse` |
+| **Docker** | `docker compose pull && docker compose up -d` |
 | **Kubernetes** | `helm repo update && helm upgrade pulse pulse/pulse -n pulse` |
 | **Systemd / Proxmox LXC** | `sudo /bin/update` |
+
+Docker without Compose: `docker restart` keeps the old image running. Run `docker pull rcourtman/pulse:vX.Y.Z`, then `docker stop pulse && docker rm pulse` and re-run your original `docker run` command.
 
 ### Rollback
 If an update causes issues on systemd installations, backups are created automatically during the update process.

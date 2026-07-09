@@ -46,12 +46,12 @@ export function getUpdateChannelCardOptions(
   ];
 }
 
-export function buildIdleDockerUpdateCommand(): string {
-  return 'docker pull rcourtman/pulse:latest && docker restart pulse';
+export function buildIdleDockerComposeCommand(): string {
+  return 'docker compose pull && docker compose up -d';
 }
 
-export function buildIdleDockerComposeCommand(): string {
-  return 'docker-compose pull && docker-compose up -d';
+export function buildIdleDockerUpdateCommand(): string {
+  return 'docker pull rcourtman/pulse:latest && docker stop pulse && docker rm pulse';
 }
 
 export function buildUpdateInstallGuide(
@@ -96,19 +96,14 @@ export function buildUpdateInstallGuide(
       introText,
       steps: [
         {
-          id: 'docker-pull',
-          title: 'Pull the latest image',
-          command: `docker pull rcourtman/pulse:${dockerImageTag}`,
+          id: 'docker-compose-update',
+          title: 'Pull the new image and recreate the container',
+          command: 'docker compose pull && docker compose up -d',
         },
         {
-          id: 'docker-restart',
-          title: 'Restart the container',
-          command: 'docker restart pulse',
-        },
-        {
-          id: 'docker-compose-note',
+          id: 'docker-manual-note',
           title: '',
-          note: 'Or use Docker Compose: docker-compose pull && docker-compose up -d',
+          note: `Not using Compose? Run docker pull rcourtman/pulse:${dockerImageTag}, then docker stop pulse && docker rm pulse and re-run your original docker run command. A plain docker restart keeps the old image running.`,
         },
       ],
     };
