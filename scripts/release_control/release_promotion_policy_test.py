@@ -525,6 +525,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
     def test_release_workflow_enforces_rc_lineage_soak_and_v5_notice(self) -> None:
         content = read(".github/workflows/create-release.yml")
         update_demo_workflow = read(".github/workflows/update-demo-server.yml")
+        deploy_demo_workflow = read(".github/workflows/deploy-demo-server.yml")
         validation_workflow = read(".github/workflows/validate-release-assets.yml")
         helper = read("scripts/trigger-release.sh")
         renderer = read("scripts/release_control/render_release_body.py")
@@ -610,6 +611,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("does not trust the configured release signing key", content)
         self.assertIn("TRUSTED_SSH_PUBLIC_KEY", update_demo_workflow)
         self.assertIn('sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\\"${TRUSTED_SSH_PUBLIC_KEY}\\"|" /tmp/pulse-install.sh', update_demo_workflow)
+        for demo_workflow in (update_demo_workflow, deploy_demo_workflow):
+            self.assertIn("MAX_SSH_SETUP_ATTEMPTS=18", demo_workflow)
+            self.assertIn('getent hosts "$DEMO_SERVER_HOST"', demo_workflow)
+            self.assertIn('ssh-keyscan -T 10 -H "$DEMO_SERVER_HOST"', demo_workflow)
+            self.assertIn("Timed out waiting for the demo SSH host to resolve and return host keys after Tailscale setup", demo_workflow)
         self.assertIn("derive the OpenSSH installer trust key from `PULSE_UPDATE_SIGNING_PUBLIC_KEY`", normalize_ws(contract))
         self.assertIn('SYFT_VERSION="1.42.4"', content)
         self.assertIn('SYFT_ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"', content)

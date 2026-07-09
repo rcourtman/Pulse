@@ -256,8 +256,35 @@ jobs:
           chmod 700 ~/.ssh
           echo "$DEMO_SERVER_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "$DEMO_SERVER_HOST" >> ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+
+          : > ~/.ssh/known_hosts
+          keyscan_output="$(mktemp)"
+          keyscan_error="$(mktemp)"
+          MAX_SSH_SETUP_ATTEMPTS=18
+          for attempt in $(seq 1 "$MAX_SSH_SETUP_ATTEMPTS"); do
+            if getent hosts "$DEMO_SERVER_HOST" >/dev/null 2>&1; then
+              if ssh-keyscan -T 10 -H "$DEMO_SERVER_HOST" > "$keyscan_output" 2>"$keyscan_error" && [ -s "$keyscan_output" ]; then
+                cat "$keyscan_output" >> ~/.ssh/known_hosts
+                chmod 600 ~/.ssh/known_hosts
+                echo "Demo SSH host key captured."
+                exit 0
+              fi
+              echo "ssh-keyscan did not return demo host keys on attempt ${attempt}/${MAX_SSH_SETUP_ATTEMPTS}."
+            else
+              echo "Demo SSH host is not resolvable yet on attempt ${attempt}/${MAX_SSH_SETUP_ATTEMPTS}."
+            fi
+
+            if [ "$attempt" -lt "$MAX_SSH_SETUP_ATTEMPTS" ]; then
+              sleep 10
+            fi
+          done
+
+          echo "::error::Timed out waiting for the demo SSH host to resolve and return host keys after Tailscale setup."
+          tailscale status --peers=false || true
+          if [ -s "$keyscan_error" ]; then
+            sed 's/^/ssh-keyscan: /' "$keyscan_error" || true
+          fi
+          exit 1
 
       - name: Verify target host identity
         env:

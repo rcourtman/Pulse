@@ -1183,7 +1183,10 @@ Those same governed demo deploy/update workflows also own the runner-to-host
 network path. They must establish the canonical Tailscale connectivity step
 before SSH setup so stable or preview targets may stay on governed private
 hostnames or Tailscale IPs, rather than silently depending on public SSH
-reachability from GitHub-hosted runners.
+reachability from GitHub-hosted runners. After Tailscale setup, SSH setup must
+wait for the configured demo host to resolve and return host keys with bounded
+retries before any installer or binary copy runs; a one-shot `ssh-keyscan`
+against a private demo hostname is not sufficient release or deploy proof.
 Those same workflows also own customer-visible browser truth for the public
 demo shell. Health checks and entry-asset parity are necessary but not
 sufficient; after those checks pass, the governed helpers
