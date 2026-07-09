@@ -1179,7 +1179,10 @@ func TestPerformUpdateErrors(t *testing.T) {
 			closeFileFn = origClose
 			restartProcessFn = origRestart
 		})
-		closeFileFn = func(*os.File) error { return errors.New("close fail") }
+		closeFileFn = func(file *os.File) error {
+			_ = file.Close()
+			return errors.New("close fail")
+		}
 		restartProcessFn = func(string) error { return nil }
 
 		u.client = &http.Client{

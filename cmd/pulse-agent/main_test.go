@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -2083,7 +2084,7 @@ func TestAgentIDFilePersistence(t *testing.T) {
 		if err != nil {
 			t.Fatalf("stat: %v", err)
 		}
-		if mode := info.Mode().Perm(); mode != 0o600 {
+		if mode := info.Mode().Perm(); runtime.GOOS != "windows" && mode != 0o600 {
 			t.Errorf("file permissions = %v, want 0600", mode)
 		}
 	})

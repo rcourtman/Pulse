@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -710,7 +711,7 @@ func qnapPersistentPath(stateDir, agentName string) string {
 	if stateDir == "" {
 		return ""
 	}
-	return filepath.Join(stateDir, name)
+	return path.Join(stateDir, name)
 }
 
 func normalizeAgentName(agentName string) (string, error) {

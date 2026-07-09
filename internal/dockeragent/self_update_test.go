@@ -772,7 +772,8 @@ func TestSelfUpdate(t *testing.T) {
 		swap(t, &osExecutableFn, func() (string, error) {
 			return execPath, nil
 		})
-		swap(t, &closeFileFn, func(*os.File) error {
+		swap(t, &closeFileFn, func(file *os.File) error {
+			_ = file.Close()
 			return errors.New("close failed")
 		})
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -30,6 +31,9 @@ func writeSystemctl(t *testing.T, script string) string {
 }
 
 func TestDisableSystemdService(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("systemd is not available on Windows")
+	}
 	t.Run("no systemctl", func(t *testing.T) {
 		prev := os.Getenv("PATH")
 		_ = os.Setenv("PATH", "")
@@ -73,6 +77,9 @@ func TestDisableSystemdService(t *testing.T) {
 }
 
 func TestStopSystemdService(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("systemd is not available on Windows")
+	}
 	t.Run("no systemctl", func(t *testing.T) {
 		prev := os.Getenv("PATH")
 		_ = os.Setenv("PATH", "")

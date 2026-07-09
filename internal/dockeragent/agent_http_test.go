@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -630,6 +631,9 @@ func TestHandleCommand(t *testing.T) {
 }
 
 func TestHandleStopCommand(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("systemd stop-command behavior is not available on Windows")
+	}
 	t.Run("disable error sends failure ack", func(t *testing.T) {
 		writeSystemctl(t, "echo 'access denied' >&2\nexit 1")
 
