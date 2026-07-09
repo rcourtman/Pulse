@@ -265,6 +265,8 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 		"remembered-login submit persistence",
 		"Proxmox SMART temperature fallback",
 		"direct SATA/SAT disks",
+		"paid-runtime activation continuity",
+		"license-period status fixes",
 		"rollback target for this patch release is `v"+previous+"`",
 	)
 	assertFileContainsAll(t, changelogPath,
@@ -275,6 +277,9 @@ func TestCurrentStablePatchReleasePacketTracksInstallMetadata(t *testing.T) {
 		"Remembered-login state now persists",
 		"Proxmox SMART temperature collection",
 		"explicit SAT probe",
+		"Paid runtime activation now writes and reuses a durable installation fingerprint",
+		"License grants now include the billing `current_period_end`",
+		"Server installer execution now rejects unsafe piped invocation",
 	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
@@ -340,6 +345,9 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"portal alert rollup",
 		"per-disk-type temperature thresholds",
 		"PBS backup discovery recovery",
+		"paid-runtime activation continuity fixes",
+		"license-period status corrections",
+		"installer hardening",
 		"rollback target for this release candidate is `v"+previous+"`",
 	)
 	assertFileContainsAll(t, changelogPath,
@@ -363,6 +371,9 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"per-workspace alert rollup",
 		"Physical disk temperature thresholds are now configurable per disk type",
 		"PBS backup discovery now derives its memory bounds from real snapshot data",
+		"Paid runtime activation now writes and reuses a durable installation fingerprint",
+		"License grants now include the billing `current_period_end`",
+		"Server installer execution now rejects unsafe piped invocation",
 	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
 		"docs/releases/RELEASE_NOTES_v"+version+".md",
