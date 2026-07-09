@@ -822,7 +822,10 @@ func generateNodes(config MockConfig) []models.Node {
 	if config.NodeCount > maxMockNodeCount {
 		config.NodeCount = maxMockNodeCount
 	}
-	nodes := make([]models.Node, 0, config.NodeCount)
+	// Capacity is fixed at the product maximum so request-derived configuration
+	// never controls an allocation size. The normalized count still controls how
+	// many nodes are generated.
+	nodes := make([]models.Node, 0, maxMockNodeCount)
 
 	// First 5 nodes are part of the cluster
 	clusterNodeCount := 5

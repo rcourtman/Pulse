@@ -345,13 +345,27 @@ func getBrowserCookiePolicy(r *http.Request) browserCookiePolicy {
 	}
 }
 
-// set writes a browser cookie using the one request-derived policy shared by
-// every authentication flow. Plain HTTP remains limited to the supported
-// loopback/self-hosted boundary; public deployments receive Secure cookies.
-func (p browserCookiePolicy) set(w http.ResponseWriter, cookie *http.Cookie) {
+// setClientReadable writes a browser cookie that the frontend must read.
+// Plain HTTP remains limited to the supported loopback/self-hosted boundary;
+// public deployments receive Secure cookies.
+func (p browserCookiePolicy) setClientReadable(w http.ResponseWriter, cookie *http.Cookie) {
 	if w == nil || cookie == nil {
 		return
 	}
+	cookie.HttpOnly = false
+	cookie.Secure = p.secure
+	cookie.SameSite = p.sameSite
+	http.SetCookie(w, cookie)
+}
+
+// setHTTPOnly writes an authentication cookie that must never be available to
+// browser scripts. Keeping this as a distinct sink makes the security contract
+// independent of each caller's cookie literal.
+func (p browserCookiePolicy) setHTTPOnly(w http.ResponseWriter, cookie *http.Cookie) {
+	if w == nil || cookie == nil {
+		return
+	}
+	cookie.HttpOnly = true
 	cookie.Secure = p.secure
 	cookie.SameSite = p.sameSite
 	http.SetCookie(w, cookie)
@@ -914,7 +928,7 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 									Msg("Setting session cookie after successful login")
 
 									// Set session cookie
-								cookiePolicy.set(w, &http.Cookie{
+								cookiePolicy.setHTTPOnly(w, &http.Cookie{
 									Name:     sessionCookieName(cookiePolicy.secure),
 									Value:    token,
 									Path:     "/",
@@ -923,7 +937,7 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 								})
 
 								// Set CSRF cookie (not HttpOnly so JS can read it)
-								cookiePolicy.set(w, &http.Cookie{
+								cookiePolicy.setClientReadable(w, &http.Cookie{
 									Name:   CookieNameCSRF,
 									Value:  csrfToken,
 									Path:   "/",

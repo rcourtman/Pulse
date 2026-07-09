@@ -4215,7 +4215,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				if csrfErr != nil {
 					// Session exists but no CSRF cookie - issue one
 					csrfToken := generateCSRFToken(sessionCookie.Value)
-					getBrowserCookiePolicy(req).set(w, &http.Cookie{
+					getBrowserCookiePolicy(req).setClientReadable(w, &http.Cookie{
 						Name:   CookieNameCSRF,
 						Value:  csrfToken,
 						Path:   "/",
@@ -4977,7 +4977,7 @@ func (r *Router) establishSession(w http.ResponseWriter, req *http.Request, user
 	csrfToken := generateCSRFToken(token)
 	cookiePolicy := getBrowserCookiePolicy(req)
 
-	cookiePolicy.set(w, &http.Cookie{
+	cookiePolicy.setHTTPOnly(w, &http.Cookie{
 		Name:     sessionCookieName(cookiePolicy.secure),
 		Value:    token,
 		Path:     "/",
@@ -4985,7 +4985,7 @@ func (r *Router) establishSession(w http.ResponseWriter, req *http.Request, user
 		MaxAge:   86400,
 	})
 
-	cookiePolicy.set(w, &http.Cookie{
+	cookiePolicy.setClientReadable(w, &http.Cookie{
 		Name:   CookieNameCSRF,
 		Value:  csrfToken,
 		Path:   "/",
@@ -5014,7 +5014,7 @@ func (r *Router) establishRecoverySession(w http.ResponseWriter, req *http.Reque
 	csrfToken := generateCSRFToken(token)
 	cookiePolicy := getBrowserCookiePolicy(req)
 
-	cookiePolicy.set(w, &http.Cookie{
+	cookiePolicy.setHTTPOnly(w, &http.Cookie{
 		Name:     sessionCookieName(cookiePolicy.secure),
 		Value:    token,
 		Path:     "/",
@@ -5022,7 +5022,7 @@ func (r *Router) establishRecoverySession(w http.ResponseWriter, req *http.Reque
 		MaxAge:   86400,
 	})
 
-	cookiePolicy.set(w, &http.Cookie{
+	cookiePolicy.setClientReadable(w, &http.Cookie{
 		Name:   CookieNameCSRF,
 		Value:  csrfToken,
 		Path:   "/",
@@ -5055,7 +5055,7 @@ func (r *Router) establishOIDCSession(w http.ResponseWriter, req *http.Request, 
 	csrfToken := generateCSRFToken(token)
 	cookiePolicy := getBrowserCookiePolicy(req)
 
-	cookiePolicy.set(w, &http.Cookie{
+	cookiePolicy.setHTTPOnly(w, &http.Cookie{
 		Name:     sessionCookieName(cookiePolicy.secure),
 		Value:    token,
 		Path:     "/",
@@ -5063,7 +5063,7 @@ func (r *Router) establishOIDCSession(w http.ResponseWriter, req *http.Request, 
 		MaxAge:   86400,
 	})
 
-	cookiePolicy.set(w, &http.Cookie{
+	cookiePolicy.setClientReadable(w, &http.Cookie{
 		Name:   CookieNameCSRF,
 		Value:  csrfToken,
 		Path:   "/",
@@ -5184,7 +5184,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		cookieMaxAge := int(sessionDuration.Seconds())
 
 		// Set session cookie
-		cookiePolicy.set(w, &http.Cookie{
+		cookiePolicy.setHTTPOnly(w, &http.Cookie{
 			Name:     sessionCookieName(cookiePolicy.secure),
 			Value:    token,
 			Path:     "/",
@@ -5193,7 +5193,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		})
 
 		// Set CSRF cookie (not HttpOnly so JS can read it)
-		cookiePolicy.set(w, &http.Cookie{
+		cookiePolicy.setClientReadable(w, &http.Cookie{
 			Name:   CookieNameCSRF,
 			Value:  csrfToken,
 			Path:   "/",

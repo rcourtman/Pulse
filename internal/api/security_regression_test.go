@@ -33,7 +33,7 @@ type wsRawMessage struct {
 func TestBrowserCookiePolicyWritesSecureCookiesForTLS(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "https://pulse.example/api/config", nil)
 	rec := httptest.NewRecorder()
-	getBrowserCookiePolicy(req).set(rec, &http.Cookie{Name: CookieNameCSRF, Value: "token", Path: "/"})
+	getBrowserCookiePolicy(req).setClientReadable(rec, &http.Cookie{Name: CookieNameCSRF, Value: "token", Path: "/"})
 
 	cookies := rec.Result().Cookies()
 	if len(cookies) != 1 || !cookies[0].Secure {

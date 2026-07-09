@@ -335,7 +335,7 @@ func TestGetCookieSettings(t *testing.T) {
 	}
 }
 
-func TestBrowserCookiePolicyAppliesRequestSecurity(t *testing.T) {
+func TestBrowserCookiePolicyAppliesRequestSecurityAndHTTPOnlyContract(t *testing.T) {
 	tests := []struct {
 		name       string
 		secure     bool
@@ -352,11 +352,11 @@ func TestBrowserCookiePolicyAppliesRequestSecurity(t *testing.T) {
 				req.TLS = &tls.ConnectionState{}
 			}
 			rec := httptest.NewRecorder()
-			getBrowserCookiePolicy(req).set(rec, &http.Cookie{
-				Name:     CookieNameCSRF,
+			getBrowserCookiePolicy(req).setHTTPOnly(rec, &http.Cookie{
+				Name:     cookieNameSession,
 				Value:    "token",
 				Path:     "/",
-				HttpOnly: true,
+				HttpOnly: false,
 			})
 
 			cookies := rec.Result().Cookies()
@@ -371,9 +371,28 @@ func TestBrowserCookiePolicyAppliesRequestSecurity(t *testing.T) {
 				t.Fatalf("SameSite = %v, want Lax", cookie.SameSite)
 			}
 			if !cookie.HttpOnly {
-				t.Fatal("cookie-specific attributes must be preserved")
+				t.Fatal("authentication cookie must be forced HttpOnly")
 			}
 		})
+	}
+}
+
+func TestBrowserCookiePolicyKeepsClientCookieReadable(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "https://pulse.example/", nil)
+	rec := httptest.NewRecorder()
+	getBrowserCookiePolicy(req).setClientReadable(rec, &http.Cookie{
+		Name:     CookieNameCSRF,
+		Value:    "token",
+		Path:     "/",
+		HttpOnly: true,
+	})
+
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("cookies = %d, want 1", len(cookies))
+	}
+	if cookies[0].HttpOnly {
+		t.Fatal("client-readable cookie must not be HttpOnly")
 	}
 }
 

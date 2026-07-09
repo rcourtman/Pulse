@@ -627,13 +627,30 @@ func (c *CommandClient) sendDeployProgress(
 }
 
 func makeSemaphore(maxParallel int) chan struct{} {
-	if maxParallel <= 0 {
-		maxParallel = 1
+	// Use literal capacities so network-derived values never reach an allocation
+	// size, even after normalization.
+	switch agentexec.NormalizeDeployMaxParallel(maxParallel, 1) {
+	case 1:
+		return make(chan struct{}, 1)
+	case 2:
+		return make(chan struct{}, 2)
+	case 3:
+		return make(chan struct{}, 3)
+	case 4:
+		return make(chan struct{}, 4)
+	case 5:
+		return make(chan struct{}, 5)
+	case 6:
+		return make(chan struct{}, 6)
+	case 7:
+		return make(chan struct{}, 7)
+	case 8:
+		return make(chan struct{}, 8)
+	case 9:
+		return make(chan struct{}, 9)
+	default:
+		return make(chan struct{}, agentexec.MaxDeployParallel)
 	}
-	if maxParallel > agentexec.MaxDeployParallel {
-		maxParallel = agentexec.MaxDeployParallel
-	}
-	return make(chan struct{}, maxParallel)
 }
 
 func marshalPreflightResult(sshOK, pulseReachable, hasAgent bool, arch, errDetail string) string {

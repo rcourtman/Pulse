@@ -117,20 +117,20 @@ func HandleCloudHandoff(dataPath string) http.HandlerFunc {
 		cookiePolicy := getBrowserCookiePolicy(r)
 		cookieMaxAge := int(sessionDuration.Seconds())
 
-		cookiePolicy.set(w, &http.Cookie{
+		cookiePolicy.setHTTPOnly(w, &http.Cookie{
 			Name:     sessionCookieName(cookiePolicy.secure),
 			Value:    sessionToken,
 			Path:     "/",
 			HttpOnly: true,
 			MaxAge:   cookieMaxAge,
 		})
-		cookiePolicy.set(w, &http.Cookie{
+		cookiePolicy.setClientReadable(w, &http.Cookie{
 			Name:   CookieNameCSRF,
 			Value:  csrfToken,
 			Path:   "/",
 			MaxAge: cookieMaxAge,
 		})
-		cookiePolicy.set(w, &http.Cookie{
+		cookiePolicy.setClientReadable(w, &http.Cookie{
 			Name:   CookieNameOrgID,
 			Value:  tenantID,
 			Path:   "/",

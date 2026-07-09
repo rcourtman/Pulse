@@ -132,7 +132,7 @@ func clearCSRFCookie(w http.ResponseWriter, r *http.Request) {
 	if w == nil {
 		return
 	}
-	getBrowserCookiePolicy(r).set(w, &http.Cookie{
+	getBrowserCookiePolicy(r).setClientReadable(w, &http.Cookie{
 		Name:     CookieNameCSRF,
 		Value:    "",
 		Path:     "/",
@@ -150,7 +150,7 @@ func issueNewCSRFCookie(w http.ResponseWriter, r *http.Request, sessionID string
 	}
 
 	newToken := generateCSRFToken(sessionID)
-	getBrowserCookiePolicy(r).set(w, &http.Cookie{
+	getBrowserCookiePolicy(r).setClientReadable(w, &http.Cookie{
 		Name:   CookieNameCSRF,
 		Value:  newToken,
 		Path:   "/",

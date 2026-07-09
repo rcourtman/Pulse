@@ -524,7 +524,7 @@ func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, 
 	csrfToken := generateCSRFToken(token)
 	cookiePolicy := getBrowserCookiePolicy(req)
 
-	cookiePolicy.set(w, &http.Cookie{
+	cookiePolicy.setHTTPOnly(w, &http.Cookie{
 		Name:     sessionCookieName(cookiePolicy.secure),
 		Value:    token,
 		Path:     "/",
@@ -532,7 +532,7 @@ func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, 
 		MaxAge:   86400,
 	})
 
-	cookiePolicy.set(w, &http.Cookie{
+	cookiePolicy.setClientReadable(w, &http.Cookie{
 		Name:   CookieNameCSRF,
 		Value:  csrfToken,
 		Path:   "/",
@@ -584,7 +584,7 @@ func (r *Router) clearSession(w http.ResponseWriter, req *http.Request) {
 
 	// Clear both session cookie variants (prefixed and unprefixed)
 	for _, name := range []string{cookieNameSession, cookieNameSessionSecure} {
-		cookiePolicy.set(w, &http.Cookie{
+		cookiePolicy.setHTTPOnly(w, &http.Cookie{
 			Name:     name,
 			Value:    "",
 			Path:     "/",
@@ -594,7 +594,7 @@ func (r *Router) clearSession(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Clear pulse_csrf cookie
-	cookiePolicy.set(w, &http.Cookie{
+	cookiePolicy.setClientReadable(w, &http.Cookie{
 		Name:   CookieNameCSRF,
 		Value:  "",
 		Path:   "/",

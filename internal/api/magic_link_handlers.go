@@ -195,14 +195,14 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkVerify(w http.ResponseWriter, r
 	cookiePolicy := getBrowserCookiePolicy(r)
 	cookieMaxAge := int(sessionDuration.Seconds())
 
-	cookiePolicy.set(w, &http.Cookie{
+	cookiePolicy.setHTTPOnly(w, &http.Cookie{
 		Name:     sessionCookieName(cookiePolicy.secure),
 		Value:    sessionToken,
 		Path:     "/",
 		HttpOnly: true,
 		MaxAge:   cookieMaxAge,
 	})
-	cookiePolicy.set(w, &http.Cookie{
+	cookiePolicy.setClientReadable(w, &http.Cookie{
 		Name:   CookieNameCSRF,
 		Value:  csrfToken,
 		Path:   "/",
@@ -210,7 +210,7 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkVerify(w http.ResponseWriter, r
 	})
 	// Org cookie is intentionally NOT HttpOnly — the frontend reads/writes it to
 	// synchronize org context for WebSocket connections (which cannot send custom headers).
-	cookiePolicy.set(w, &http.Cookie{
+	cookiePolicy.setClientReadable(w, &http.Cookie{
 		Name:   CookieNameOrgID,
 		Value:  token.OrgID,
 		Path:   "/",
