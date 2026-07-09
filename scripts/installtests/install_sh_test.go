@@ -132,12 +132,50 @@ func TestInstallSHAgentDownloadIsServerVersionAware(t *testing.T) {
 		`SERVER_VERSION="$(printf '%s' "$server_version_json" | sed -n 's/.*"version"`,
 		`DOWNLOAD_QUERY="${DOWNLOAD_QUERY}&serverVersion=${SERVER_VERSION}"`,
 		`log_info "Pulse server version: ${SERVER_VERSION}"`,
+		`NEW_VERSION_NORMALIZED="${NEW_VERSION#v}"`,
+		`SERVER_VERSION_NORMALIZED="${SERVER_VERSION#v}"`,
+		`"$NEW_VERSION_NORMALIZED" != "$SERVER_VERSION_NORMALIZED"`,
 		`Downloaded agent version (${NEW_VERSION}) does not match Pulse server version (${SERVER_VERSION})`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("install.sh missing version-aware agent download behavior: %s", needle)
 		}
+	}
+}
+
+// Regression test for #1527: the agent binary reports its version as "v6.0.4"
+// while the server /api/version reports "6.0.4", so the mismatch check must
+// strip a leading "v" before comparing and only warn on a genuine difference.
+func TestInstallSHAgentVersionMismatchIgnoresVPrefix(t *testing.T) {
+	harness := `
+set -euo pipefail
+log_warn() { echo "WARN:$*"; }
+SERVER_VERSION="$1"
+NEW_VERSION="$2"
+NEW_VERSION_NORMALIZED="${NEW_VERSION#v}"
+SERVER_VERSION_NORMALIZED="${SERVER_VERSION#v}"
+if [[ -n "$SERVER_VERSION" && -n "$NEW_VERSION" && "$NEW_VERSION" != "unknown" && "$NEW_VERSION_NORMALIZED" != "$SERVER_VERSION_NORMALIZED" ]]; then
+    log_warn "Downloaded agent version (${NEW_VERSION}) does not match Pulse server version (${SERVER_VERSION})."
+fi
+echo DONE
+`
+	run := func(server, agent string) string {
+		out, err := exec.Command("bash", "-c", harness, "_", server, agent).CombinedOutput()
+		if err != nil {
+			t.Fatalf("bash: %v\n%s", err, out)
+		}
+		return string(out)
+	}
+
+	if got := run("6.0.4", "v6.0.4"); strings.Contains(got, "WARN:") {
+		t.Fatalf("equal versions differing only by a leading v warned:\n%s", got)
+	}
+	if got := run("6.0.4", "6.0.4"); strings.Contains(got, "WARN:") {
+		t.Fatalf("identical versions warned:\n%s", got)
+	}
+	if got := run("6.0.4", "v6.0.3"); !strings.Contains(got, "WARN:") {
+		t.Fatalf("genuine version mismatch did not warn:\n%s", got)
 	}
 }
 

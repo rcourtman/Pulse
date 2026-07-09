@@ -1242,3 +1242,40 @@ func TestRootInstallScriptUpdateFlowsRefreshExistingAutoUpdateAssets(t *testing.
 		t.Fatalf("expected at least 5 install flows to refresh existing auto-update assets, found %d", got)
 	}
 }
+
+// Regression test for #1526 (and the earlier #1396): when the installer is piped
+// to bash (curl ... | bash) there is no source file, so BASH_SOURCE is unset.
+// The "am I being sourced?" guard must default the lookup or `set -u` aborts the
+// whole run before the installer body with "BASH_SOURCE[0]: unbound variable".
+func TestRootInstallScriptSourceGuardSurvivesPipedExecution(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+	script := string(content)
+
+	if strings.Contains(script, `[[ "${BASH_SOURCE[0]}" == "$0" ]] || return 0`) {
+		t.Fatal("install.sh still uses the unguarded BASH_SOURCE source check that aborts under curl | bash")
+	}
+	guard := `if [[ -n "${BASH_SOURCE[0]:-}" && "${BASH_SOURCE[0]}" != "$0" ]]; then`
+	if !strings.Contains(script, guard) {
+		t.Fatalf("install.sh missing piped-safe source guard: %s", guard)
+	}
+
+	// Run the guard the way `curl ... | bash` does: fed through stdin with no
+	// source file, so BASH_SOURCE is empty. It must fall through to the body.
+	harness := "set -euo pipefail\n" + guard + "\n    return 0\nfi\necho INSTALLER_BODY_REACHED\n"
+	cmd := exec.Command("bash")
+	cmd.Stdin = strings.NewReader(harness)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("piped source guard failed: %v\n%s", err, out)
+	}
+	got := string(out)
+	if strings.Contains(got, "unbound variable") {
+		t.Fatalf("source guard aborted piped execution with unbound variable:\n%s", got)
+	}
+	if !strings.Contains(got, "INSTALLER_BODY_REACHED") {
+		t.Fatalf("source guard did not fall through to the installer body when piped:\n%s", got)
+	}
+}
