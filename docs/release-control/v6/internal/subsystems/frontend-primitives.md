@@ -335,8 +335,11 @@ Namespace, ConfigMap, Secret, and ServiceAccount-specific columns. Kubernetes
 Node inventory must also be reachable through a dedicated native tab, not only
 the overview stack, while retaining the shared `PlatformSectionTabs` shell.
 Primary app-shell navigation consumes unified-resources-owned resource evidence:
-empty compatibility facets such as `docker: {}` do not admit runtime-lens tabs
-on their own.
+empty or generic compatibility facets do not admit runtime-lens tabs on their
+own, and cached resource evidence must not render primary platform navigation
+before the first authoritative resource snapshot resolves. A platform that is
+not admitted stays reachable by direct setup URL, but does not occupy primary
+navigation with an empty page.
 Feature-owned Docker / Podman action controls may render backend
 `actionReadiness` disabled reasons, but the shared primitive layer owns only the
 button/table affordance shell; it must not invent action availability, command
@@ -391,7 +394,9 @@ Docker empty-state guidance on platform pages follows the same shared platform
 primitive boundary: it may use the route-specific Docker / Podman vocabulary,
 but it must distinguish standalone Docker host installation from the Proxmox
 LXC Docker host-side inventory path without adding page-local installer command
-assembly or token handling.
+assembly or token handling. The empty state must provide a direct action into
+the Docker-specific Infrastructure add flow rather than leaving the operator at
+a descriptive dead end.
 Docker / Podman inventory follows that same primitive boundary while the
 unified-resource owner supplies API-object-specific container, image, volume,
 network, Swarm node, task, secret, and config columns through dedicated native
@@ -3147,6 +3152,10 @@ status summary directly above that shared table frame. The consumer owns the
 already-loaded resource counts, freshness-aware attention ordering, and
 settings action; the shared primitive boundary still forbids a second fetch,
 detached proof strip, decorative chart, or locally recreated table frame.
+The shared platform toolbar owns count grammar and canonical status-route
+normalization: one visible row uses the singular form, and legacy provider
+status values such as `running` or `stopped` normalize into the page's shared
+health filter rather than leaking provider vocabulary between platform routes.
 Platform table empty states follow the same registry-backed ownership.
 `PlatformTableEmptyState` owns the repeated table-card empty-state shell for
 Docker, Kubernetes, Proxmox, Standalone, TrueNAS, vSphere, and future platform

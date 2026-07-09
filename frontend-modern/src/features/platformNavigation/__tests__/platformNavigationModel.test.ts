@@ -94,6 +94,17 @@ describe('platformNavigationModel', () => {
     expect(visibility.standalone).toBe(true);
   });
 
+  it('does not admit Docker from generic host metadata without runtime identity', () => {
+    const tower = resource({
+      id: 'tower',
+      platformType: 'agent',
+      type: 'agent',
+      platformData: { docker: { hostname: 'tower', os: 'linux', containerCount: 0 } },
+    });
+
+    expect(buildPrimaryPlatformNavigationVisibility([tower]).docker).toBe(false);
+  });
+
   it('does not infer Docker from TrueNAS-scoped app metadata', () => {
     const truenasApp = resource({
       id: 'truenas-app',

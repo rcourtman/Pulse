@@ -26,12 +26,41 @@ import {
   filterPlatformResources,
   formatPlatformTableTextValue,
   getPlatformTableFiniteMetric,
+  getPlatformResourceCountNoun,
   getPlatformTableWeightedColumnWidthStyle,
+  normalizePlatformResourceStatusFilter,
   summarizePlatformTableValues,
   type PlatformResourceStatusFilter,
 } from '../sharedPlatformPage';
 
 afterEach(cleanup);
+
+describe('getPlatformResourceCountNoun', () => {
+  it('uses singular platform nouns for one visible total', () => {
+    expect(getPlatformResourceCountNoun('machines', 1)).toBe('machine');
+    expect(getPlatformResourceCountNoun('config resources', 1)).toBe('config resource');
+    expect(getPlatformResourceCountNoun('VMs', 1)).toBe('VM');
+  });
+
+  it('keeps plural platform nouns for every other count', () => {
+    expect(getPlatformResourceCountNoun('machines', 0)).toBe('machines');
+    expect(getPlatformResourceCountNoun('machines', 2)).toBe('machines');
+  });
+});
+
+describe('normalizePlatformResourceStatusFilter', () => {
+  it('normalizes route-specific legacy status vocabulary', () => {
+    expect(normalizePlatformResourceStatusFilter('running')).toBe('online');
+    expect(normalizePlatformResourceStatusFilter('healthy')).toBe('online');
+    expect(normalizePlatformResourceStatusFilter('warning')).toBe('degraded');
+    expect(normalizePlatformResourceStatusFilter('stopped')).toBe('offline');
+  });
+
+  it('falls back to the unfiltered state for unknown route values', () => {
+    expect(normalizePlatformResourceStatusFilter('unknown-value')).toBe('all');
+    expect(normalizePlatformResourceStatusFilter(undefined)).toBe('all');
+  });
+});
 
 const makeResource = (
   partial: Partial<Resource> & Pick<Resource, 'id' | 'type' | 'status'>,

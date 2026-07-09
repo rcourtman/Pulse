@@ -29,6 +29,7 @@ import {
   PULSE_MCP_TOKEN_SETUP_PATH,
   PULSE_INTELLIGENCE_AGENT_TOKEN_PRESET,
   SETTINGS_PULSE_INTELLIGENCE_ASSISTANT_PATH,
+  SETTINGS_PULSE_INTELLIGENCE_DISCOVERY_PATH,
   SETTINGS_PULSE_INTELLIGENCE_PATH,
   isExternalAgentSetupHash,
   PROXMOX_DEFAULT_TAB,
@@ -131,6 +132,9 @@ describe('resource link routing contract', () => {
     expect(SETTINGS_PULSE_INTELLIGENCE_PATH).toBe('/settings/pulse-intelligence');
     expect(SETTINGS_PULSE_INTELLIGENCE_ASSISTANT_PATH).toBe(
       '/settings/pulse-intelligence/assistant',
+    );
+    expect(SETTINGS_PULSE_INTELLIGENCE_DISCOVERY_PATH).toBe(
+      '/settings/pulse-intelligence/discovery',
     );
     expect(EXTERNAL_AGENT_SETUP_ANCHOR).toBe('external-agent-setup');
     expect(EXTERNAL_AGENT_SETUP_PATH).toBe(

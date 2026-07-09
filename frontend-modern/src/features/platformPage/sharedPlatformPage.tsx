@@ -607,6 +607,17 @@ const ONLINE_STATUSES = new Set<string>(['online', 'running']);
 const OFFLINE_STATUSES = new Set<string>(['offline', 'stopped']);
 const DEGRADED_STATUSES = new Set<string>(['degraded', 'warning', 'paused']);
 
+export const normalizePlatformResourceStatusFilter = (
+  value: string | string[] | null | undefined,
+): PlatformResourceStatusFilter => {
+  const normalized = (Array.isArray(value) ? value[0] : value)?.trim().toLowerCase();
+  if (!normalized || normalized === 'all') return 'all';
+  if (ONLINE_STATUSES.has(normalized) || normalized === 'healthy') return 'online';
+  if (DEGRADED_STATUSES.has(normalized) || normalized === 'attention') return 'degraded';
+  if (OFFLINE_STATUSES.has(normalized)) return 'offline';
+  return 'all';
+};
+
 const mapResourceStatusToTriad = (
   status: string | undefined,
 ): Exclude<PlatformResourceStatusFilter, 'all'> | 'unknown' => {
@@ -752,22 +763,35 @@ export const PlatformTableResetFiltersButton: Component<{
 // Compact operator-facing counter shown at the right of the toolbar so
 // users can read total / matching at a glance, mirroring v5's dense
 // dashboard counters without spawning a card grid.
+export const getPlatformResourceCountNoun = (rowNoun: string, count: number): string => {
+  if (count !== 1) return rowNoun;
+  const words = rowNoun.split(' ');
+  const last = words.at(-1) ?? rowNoun;
+  if (last.length > 1 && last.toLowerCase().endsWith('s')) {
+    words[words.length - 1] = last.slice(0, -1);
+  }
+  return words.join(' ');
+};
+
 const PlatformResourceCounter: Component<{ visible: number; total: number; rowNoun: string }> = (
   props,
-) => (
-  <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
-    <Show
-      when={props.visible !== props.total}
-      fallback={
-        <>
-          {props.total} {props.rowNoun}
-        </>
-      }
-    >
-      {props.visible} of {props.total} {props.rowNoun}
-    </Show>
-  </span>
-);
+) => {
+  const totalNoun = () => getPlatformResourceCountNoun(props.rowNoun, props.total);
+  return (
+    <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">
+      <Show
+        when={props.visible !== props.total}
+        fallback={
+          <>
+            {props.total} {totalNoun()}
+          </>
+        }
+      >
+        {props.visible} of {props.total} {totalNoun()}
+      </Show>
+    </span>
+  );
+};
 
 export function PlatformTableToolbar<T extends string | number>(props: {
   search: () => string;

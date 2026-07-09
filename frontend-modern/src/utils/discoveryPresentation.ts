@@ -1,8 +1,13 @@
-import type { AvailabilityProbeSuggestion, DiscoveryFact, ResourceDiscovery } from '@/types/discovery';
+import type {
+  AvailabilityProbeSuggestion,
+  DiscoveryFact,
+  ResourceDiscovery,
+} from '@/types/discovery';
 import {
   getInfrastructureSettingsLocationLabel,
   getInfrastructureSettingsTarget,
 } from '@/utils/infrastructureSettingsPresentation';
+import { SETTINGS_PULSE_INTELLIGENCE_DISCOVERY_PATH } from '@/routing/resourceLinks';
 
 export interface DiscoveryIdentifiedSummary {
   serviceName: string;
@@ -113,14 +118,14 @@ export function hasMeaningfulDiscoveryContext(
 
   return Boolean(
     isMeaningfulDiscoveryText(discovery.service_name) ||
-      isMeaningfulDiscoveryText(discovery.service_type) ||
-      isMeaningfulDiscoveryText(discovery.service_version) ||
-      isMeaningfulDiscoveryText(discovery.category) ||
-      portCount > 0 ||
-      hasFacts ||
-      hasPaths ||
-      hasSuggestedUrl ||
-      hasSuggestedProbe,
+    isMeaningfulDiscoveryText(discovery.service_type) ||
+    isMeaningfulDiscoveryText(discovery.service_version) ||
+    isMeaningfulDiscoveryText(discovery.category) ||
+    portCount > 0 ||
+    hasFacts ||
+    hasPaths ||
+    hasSuggestedUrl ||
+    hasSuggestedProbe,
   );
 }
 
@@ -312,6 +317,13 @@ export function getDiscoveryApiAccessSettingsTarget() {
   return {
     href: '/settings/security/api',
     label: 'Settings → API Access',
+  } as const;
+}
+
+export function getDiscoveryServiceContextSettingsTarget() {
+  return {
+    href: SETTINGS_PULSE_INTELLIGENCE_DISCOVERY_PATH,
+    label: 'Open Service Context settings',
   } as const;
 }
 

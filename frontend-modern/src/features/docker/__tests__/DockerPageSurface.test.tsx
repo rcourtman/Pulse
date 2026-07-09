@@ -78,6 +78,11 @@ vi.mock('@/stores/updates', () => ({
 }));
 
 vi.mock('@solidjs/router', () => ({
+  A: (props: { href: string; children: unknown; class?: string }) => (
+    <a href={props.href} class={props.class}>
+      {props.children as never}
+    </a>
+  ),
   useLocation: () => ({
     get pathname() {
       return mocks.pathname;
@@ -118,9 +123,10 @@ vi.mock('@/features/platformPage/sharedPlatformPage', async () => {
         data-tabs={props.tabs.map((tab) => tab.id).join(',')}
       />
     ),
-    PlatformTableEmptyState: (props: { title: string; description: string }) => (
+    PlatformTableEmptyState: (props: { title: string; description: string; actions?: unknown }) => (
       <div data-testid="platform-table-empty-state" data-title={props.title}>
         {props.description}
+        {props.actions as never}
       </div>
     ),
   };
@@ -230,7 +236,7 @@ afterEach(() => {
 });
 
 describe('DockerPageSurface', () => {
-  it('explains the direct host and Proxmox LXC Docker install paths when empty', () => {
+  it('offers direct Docker or Podman onboarding when empty', () => {
     mocks.useUnifiedResources.mockReturnValue({
       error: () => null,
       loading: () => false,
@@ -242,10 +248,9 @@ describe('DockerPageSurface', () => {
 
     const emptyState = screen.getByTestId('platform-table-empty-state');
     expect(emptyState).toHaveAttribute('data-title', 'No Docker or Podman hosts');
-    expect(emptyState).toHaveTextContent('Install the Pulse agent on a Docker or Podman host');
-    expect(emptyState).toHaveTextContent('Docker inside Proxmox LXCs');
-    expect(emptyState).toHaveTextContent('command execution enabled');
-    expect(emptyState).toHaveTextContent('Proxmox guest Docker inventory');
+    expect(emptyState).toHaveTextContent('Connect a runtime host with the Pulse agent');
+    expect(emptyState).toHaveTextContent('enable guest Docker inventory for a Proxmox LXC');
+    expect(emptyState).toHaveTextContent('Set up Docker or Podman');
   });
 
   it('keeps overview focused on runtime hosts plus primary container workloads', () => {

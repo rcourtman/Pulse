@@ -43,6 +43,7 @@ export const PATROL_OPERATIONS_LOOP_PATH = PATROL_CONTROL_PATH;
 export const SETTINGS_API_ACCESS_PATH = '/settings/security/api';
 export const SETTINGS_PULSE_INTELLIGENCE_PATH = '/settings/pulse-intelligence';
 export const SETTINGS_PULSE_INTELLIGENCE_ASSISTANT_PATH = `${SETTINGS_PULSE_INTELLIGENCE_PATH}/assistant`;
+export const SETTINGS_PULSE_INTELLIGENCE_DISCOVERY_PATH = `${SETTINGS_PULSE_INTELLIGENCE_PATH}/discovery`;
 export const API_TOKEN_CREATE_ANCHOR = 'api-token-create';
 export const API_TOKEN_PRESET_QUERY_PARAM = 'tokenPreset';
 export const PULSE_INTELLIGENCE_AGENT_TOKEN_PRESET = 'pulse-intelligence-agent';

@@ -11,6 +11,7 @@ import {
   getInfrastructureSystemIdentityBadges,
   type ResourceBadge,
 } from '@/utils/resourceBadgePresentation';
+import { hasDockerRuntimeHostEvidence } from '@/utils/agentResources';
 
 const DOCKER_HOST_TYPES = new Set<ResourceType>(['agent', 'docker-host']);
 const DOCKER_CONTAINER_TYPES = new Set<ResourceType>(['app-container']);
@@ -64,6 +65,10 @@ export const resolveDockerPageTabId = (segment: string | undefined): DockerPageT
 
 const isDockerPlatform = (resource: Resource): boolean =>
   resolveResourcePlatformType(resource) === 'docker';
+
+const isDockerRuntimeHost = (resource: Resource): boolean =>
+  DOCKER_HOST_TYPES.has(resource.type) &&
+  (isDockerPlatform(resource) || hasDockerRuntimeHostEvidence(resource));
 
 // `containerState` reasons that mean the container will not stay up on its
 // own. Distinct from `exited` with exit code 0, which is just a stopped
@@ -799,6 +804,7 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
   const dockerResources = resources.filter(
     (resource) =>
       isDockerPlatform(resource) ||
+      isDockerRuntimeHost(resource) ||
       DOCKER_CONTAINER_TYPES.has(resource.type) ||
       DOCKER_SERVICE_TYPES.has(resource.type) ||
       DOCKER_IMAGE_TYPES.has(resource.type) ||
@@ -810,9 +816,7 @@ export function buildDockerPageModel(resources: Resource[]): DockerPageModel {
       DOCKER_TASK_TYPES.has(resource.type),
   );
 
-  const hosts = dockerResources.filter(
-    (resource) => DOCKER_HOST_TYPES.has(resource.type) && isDockerPlatform(resource),
-  );
+  const hosts = dockerResources.filter(isDockerRuntimeHost);
   const containers = dockerResources
     .filter((resource) => DOCKER_CONTAINER_TYPES.has(resource.type) && isDockerPlatform(resource))
     .sort(compareDockerContainers);

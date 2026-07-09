@@ -5203,6 +5203,13 @@ describe('shared primitive guardrails', () => {
     }
   });
 
+  it('keeps platform count grammar and route status normalization shared', () => {
+    expect(sharedPlatformPageSource).toContain('export const getPlatformResourceCountNoun');
+    expect(sharedPlatformPageSource).toContain(
+      'export const normalizePlatformResourceStatusFilter',
+    );
+  });
+
   it('keeps platform table empty states on the shared shell template', () => {
     const registry = JSON.parse(sharedTemplateRegistrySource) as {
       patternGuards: Array<{

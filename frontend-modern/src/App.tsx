@@ -65,6 +65,7 @@ import {
 import { DarkModeContext, WebSocketContext, useWebSocket } from '@/contexts/appRuntime';
 import {
   buildPrimaryPlatformNavigationVisibility,
+  createEmptyPlatformNavigationVisibility,
   selectFirstVisiblePrimaryPlatformNavigationId,
   type PlatformNavigationVisibility,
   type PrimaryPlatformNavId,
@@ -78,7 +79,9 @@ function isPublicRoutePath(pathname: string): boolean {
 
 function isWorkspaceEntryRoutePath(pathname: string): boolean {
   const normalizedPath = pathname.replace(/\/+$/, '') || '/';
-  return normalizedPath === '/' || normalizedPath === '/login' || normalizedPath === '/infrastructure';
+  return (
+    normalizedPath === '/' || normalizedPath === '/login' || normalizedPath === '/infrastructure'
+  );
 }
 
 const AlertsPage = lazy(() =>
@@ -254,13 +257,15 @@ function App() {
     const navigate = useNavigate();
     const location = useLocation();
     const isPublicRoute = createMemo(() => isPublicRoutePath(location.pathname));
-    const platformNavigationVisibility = createMemo(() =>
-      buildPrimaryPlatformNavigationVisibility(runtime.state().resources || []),
-    );
     const platformNavigationResolved = createMemo(() => {
       const store = runtime.enhancedStore();
       return Boolean(store?.initialDataReceived?.());
     });
+    const platformNavigationVisibility = createMemo(() =>
+      platformNavigationResolved()
+        ? buildPrimaryPlatformNavigationVisibility(runtime.state().resources || [])
+        : createEmptyPlatformNavigationVisibility(),
+    );
     const hasSettingsAccess = createMemo(() => {
       const scopes = runtime.securityStatus()?.tokenScopes;
       return (
@@ -283,12 +288,9 @@ function App() {
       if (runtime.isLoading() || runtime.needsAuth() || isPublicRoute()) return;
       if (!isWorkspaceEntryRoutePath(location.pathname)) return;
       if (!platformNavigationResolved()) return;
-      navigate(
-        getDefaultWorkspaceRoute(platformNavigationVisibility(), hasSettingsAccess()),
-        {
-          replace: true,
-        },
-      );
+      navigate(getDefaultWorkspaceRoute(platformNavigationVisibility(), hasSettingsAccess()), {
+        replace: true,
+      });
     });
 
     createEffect(() => {
@@ -480,6 +482,7 @@ function App() {
                             proxyAuthInfo={runtime.proxyAuthInfo}
                             handleLogout={runtime.handleLogout}
                             state={runtime.state}
+                            platformVisibility={platformNavigationVisibility}
                             tokenScopes={() => runtime.securityStatus()?.tokenScopes}
                             organizations={runtime.organizations}
                             activeOrgID={runtime.activeOrgID}
@@ -487,9 +490,7 @@ function App() {
                             showOrgSwitcher={runtime.showOrgSwitcher}
                             onSwitchOrg={runtime.handleOrgSwitch}
                           >
-                            <RouteErrorBoundary>
-                              {props.children}
-                            </RouteErrorBoundary>
+                            <RouteErrorBoundary>{props.children}</RouteErrorBoundary>
                           </AppLayout>
                         </div>
                         {/* AI Panel - slides in from right, pushes content.

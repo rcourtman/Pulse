@@ -372,7 +372,9 @@ describe('resourceIdentity', () => {
     } as unknown as Agent;
 
     expect(getInfrastructureMetadataId(node, agent)).toBe('agent-discovery');
-    expect(getInfrastructureDiscoveryHostname({ name: 'pve1' }, agent)).toBe('canonical-host.local');
+    expect(getInfrastructureDiscoveryHostname({ name: 'pve1' }, agent)).toBe(
+      'canonical-host.local',
+    );
   });
 
   it('resolves configured node labels with display-first precedence', () => {
@@ -558,12 +560,20 @@ describe('resourceIdentity', () => {
   });
 
   it('resolves canonical cluster names for Kubernetes RBAC inventory rows', () => {
-    for (const type of ['k8s-role', 'k8s-cluster-role', 'k8s-role-binding', 'k8s-cluster-role-binding'] as const) {
+    for (const type of [
+      'k8s-role',
+      'k8s-cluster-role',
+      'k8s-role-binding',
+      'k8s-cluster-role-binding',
+    ] as const) {
       expect(
         getPreferredResourceClusterName(
           makeResource({
             type,
-            name: type === 'k8s-role' || type === 'k8s-role-binding' ? 'api-runtime' : 'platform-monitoring',
+            name:
+              type === 'k8s-role' || type === 'k8s-role-binding'
+                ? 'api-runtime'
+                : 'platform-monitoring',
             kubernetes: { clusterName: 'prod-eu', context: 'prod-eu-context' },
           }),
         ),
@@ -579,7 +589,12 @@ describe('resourceIdentity', () => {
     it('prefers RFC 1918 private IPv4 over Tailscale and IPv6', () => {
       const resource = makeResource({
         identity: {
-          ips: ['100.109.215.65', 'fd7a:115c:a1e0::f35:d741', 'fe80::1bf2:7ef4:cd4b:8d71', '192.168.0.2'],
+          ips: [
+            '100.109.215.65',
+            'fd7a:115c:a1e0::f35:d741',
+            'fe80::1bf2:7ef4:cd4b:8d71',
+            '192.168.0.2',
+          ],
         },
       });
       expect(getPreferredResourceIP(resource)).toBe('192.168.0.2');
@@ -590,6 +605,21 @@ describe('resourceIdentity', () => {
         identity: { ips: ['100.64.0.1', 'fe80::1'] },
       });
       expect(getPreferredResourceIP(resource)).toBe('100.64.0.1');
+    });
+
+    it('prefers a host interface over Docker bridges, tunnels, and link-local addresses', () => {
+      const resource = makeResource({
+        identity: { ips: ['fe80::1', '172.18.0.1', '192.168.0.113'] },
+        agent: {
+          networkInterfaces: [
+            { name: 'docker0', addresses: ['172.18.0.1/16'] },
+            { name: 'tailscale0', addresses: ['100.109.215.65/32'] },
+            { name: 'eth0', addresses: ['fe80::1/64', '192.168.0.113/24'] },
+          ],
+        },
+      });
+
+      expect(getPreferredResourceIP(resource)).toBe('192.168.0.113');
     });
   });
 

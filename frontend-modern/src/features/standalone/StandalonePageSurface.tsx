@@ -1,5 +1,5 @@
 import { Show, createEffect, createMemo, createSignal, type Component, type JSX } from 'solid-js';
-import { useLocation, useNavigate } from '@solidjs/router';
+import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import ActivityIcon from 'lucide-solid/icons/activity';
 import CircleAlertIcon from 'lucide-solid/icons/circle-alert';
 import ServerIcon from 'lucide-solid/icons/server';
@@ -21,6 +21,8 @@ import {
   PlatformSectionTabs,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
+  normalizePlatformResourceStatusFilter,
+  type PlatformResourceStatusFilter,
 } from '@/features/platformPage/sharedPlatformPage';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { STANDALONE_PATH, buildStandalonePath } from '@/routing/resourceLinks';
@@ -118,6 +120,7 @@ const resolveStandaloneTab = (pathname: string): StandaloneTabId =>
 export function StandalonePageSurface() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { resources, loading, error, refetch } = useUnifiedResources({
     query: STANDALONE_RESOURCE_QUERY,
     cacheKey: 'standalone-workspace',
@@ -128,6 +131,12 @@ export function StandalonePageSurface() {
 
   const model = createMemo(() => buildStandalonePageModel(resources()));
   const activeTab = createMemo(() => resolveStandaloneTab(location.pathname));
+  const machineStatusFilter = createMemo(() =>
+    normalizePlatformResourceStatusFilter(searchParams.status),
+  );
+  const setMachineStatusFilter = (status: PlatformResourceStatusFilter) => {
+    setSearchParams({ status: status === 'all' ? null : status }, { replace: true });
+  };
   const machinePosture = createMemo(() => buildStandalonePostureSummary(model().machines));
   const availabilityPosture = createMemo(() =>
     buildStandalonePostureSummary(model().availabilityChecks),
@@ -331,6 +340,8 @@ export function StandalonePageSurface() {
                     emptyTitle="No machines"
                     emptyDescription="Install Pulse Agent on Linux, macOS, Windows, or Unraid systems for full CPU, memory, disk, and network telemetry."
                     targetAgentVersion={agentUpdateTargetVersion()}
+                    externalStatus={machineStatusFilter}
+                    onExternalStatusChange={setMachineStatusFilter}
                   />
                 </Show>
               </div>

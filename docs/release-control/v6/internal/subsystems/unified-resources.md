@@ -475,10 +475,15 @@ has no rows for the current setup. Signals outside unified-resource inventory,
 such as TrueNAS recovery protection points or vSphere activity timeline rows,
 must be treated as explicit tab evidence rather than permanent navigation.
 Primary platform navigation is also resource-evidence gated: runtime lenses such
-as Docker / Podman must be admitted from explicit source scopes, Docker host or
-service resource types, or non-empty Docker runtime metadata. Empty compatibility
-facets such as `docker: {}` on a plain machine agent are not Docker inventory and
-must not create a transient Docker tab during hydration.
+as Docker / Podman must be admitted from explicit Docker source scopes, Docker
+host or service resource types, or concrete runtime identity/inventory evidence
+such as a runtime/version or a positive object count. Generic host metadata,
+zero-count compatibility projections, and empty facets such as `docker: {}` on a
+plain machine agent are not Docker inventory and must not create a transient or
+empty Docker tab during hydration. Navigation admission and the corresponding
+platform page model must consume the same evidence contract. A direct route to
+an absent platform may show its setup action, but the primary navigation must
+stay limited to platform pages that can render admitted inventory.
 
 Kubernetes configuration and policy inventory are unified-resource consumer
 boundaries: the `/kubernetes/configuration` workflow tab must render Namespace,

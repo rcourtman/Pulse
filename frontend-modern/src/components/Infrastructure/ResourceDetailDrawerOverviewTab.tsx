@@ -136,8 +136,8 @@ const HostDetailsDisclosure: Component<{
       summary={props.drawer.hostDetailSummary()}
       expanded={props.drawer.showHostDetails()}
       onToggle={() => props.drawer.setShowHostDetails((value) => !value)}
-      showLabel={`Show ${noun()}`}
-      hideLabel={`Hide ${noun()}`}
+      showLabel={isPulseAgentPlatformResource(props.resource) ? 'Show details' : `Show ${noun()}`}
+      hideLabel={isPulseAgentPlatformResource(props.resource) ? 'Hide details' : `Hide ${noun()}`}
       class={props.class}
       contentClass={
         props.contentClass ??
@@ -358,20 +358,53 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
       </Show>
 
       <Show
-        when={compactTableRow()}
+        when={isPulseAgentPlatformResource(resource)}
         fallback={
-          <ResourceSummaryCards
-            resource={resource}
-            drawer={drawer}
-            showPlatformId={showPlatformId}
-          />
+          <Show
+            when={compactTableRow()}
+            fallback={
+              <ResourceSummaryCards
+                resource={resource}
+                drawer={drawer}
+                showPlatformId={showPlatformId}
+              />
+            }
+          >
+            <InlineResourceSummaryTables
+              resource={resource}
+              drawer={drawer}
+              showPlatformId={showPlatformId}
+            />
+          </Show>
         }
       >
-        <InlineResourceSummaryTables
-          resource={resource}
-          drawer={drawer}
-          showPlatformId={showPlatformId}
-        />
+        <details
+          data-testid="resource-technical-details"
+          class="rounded border border-border bg-surface px-3 py-2"
+        >
+          <summary class="cursor-pointer list-none text-[11px] font-medium text-base-content">
+            Technical details
+            <span class="ml-2 font-normal text-muted">State, identity, and source IDs</span>
+          </summary>
+          <div class="mt-3 border-t border-border pt-3">
+            <Show
+              when={compactTableRow()}
+              fallback={
+                <ResourceSummaryCards
+                  resource={resource}
+                  drawer={drawer}
+                  showPlatformId={showPlatformId}
+                />
+              }
+            >
+              <InlineResourceSummaryTables
+                resource={resource}
+                drawer={drawer}
+                showPlatformId={showPlatformId}
+              />
+            </Show>
+          </div>
+        </details>
       </Show>
 
       <div data-testid="resource-secondary-sections" class="space-y-3">

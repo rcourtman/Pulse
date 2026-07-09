@@ -360,15 +360,12 @@ describe('toDiscoveryConfig', () => {
 describe('resource drawer discovery promotion', () => {
   it('points disabled discovery readiness at Pulse Intelligence service context settings', () => {
     expect(discoveryTabSource).toContain('Service Context Disabled');
-    expect(discoveryTabSource).toContain(
-      'Settings -&gt; Pulse Intelligence -&gt; Service Context',
-    );
+    expect(discoveryTabSource).toContain('getDiscoveryServiceContextSettingsTarget');
+    expect(discoveryTabSource).toContain('serviceContextSettingsTarget.label');
     expect(discoveryTabStateSource).toContain(
       'Service context is disabled in Settings -> Pulse Intelligence -> Service Context.',
     );
-    expect(discoveryReadinessSource).toContain(
-      'Settings -> Pulse Intelligence -> Service Context',
-    );
+    expect(discoveryReadinessSource).toContain('Settings -> Pulse Intelligence -> Service Context');
   });
 
   it('does not treat command-only diagnostic records as meaningful resource context', () => {

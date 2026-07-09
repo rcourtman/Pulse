@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { AppLayout, resetPrimaryNavigationRouteMemory } from '@/AppLayout';
+import type { PlatformNavigationVisibility } from '@/features/platformNavigation/platformNavigationModel';
 import { aiChatStore } from '@/stores/aiChat';
 
 HTMLElement.prototype.scrollIntoView = vi.fn();
@@ -54,7 +55,11 @@ describe('AppLayout navigation icons', () => {
       ...overrides,
     }) as Resource;
 
-  const renderLayout = (resources: Resource[] = [], initialPath = '/settings/infrastructure') => {
+  const renderLayout = (
+    resources: Resource[] = [],
+    initialPath = '/settings/infrastructure',
+    platformVisibility?: PlatformNavigationVisibility,
+  ) => {
     window.history.replaceState({}, '', initialPath);
     const RouteStateProbe = () => {
       const navigate = useNavigate();
@@ -94,6 +99,7 @@ describe('AppLayout navigation icons', () => {
             resources,
           }) as unknown as State
         }
+        platformVisibility={platformVisibility ? () => platformVisibility : undefined}
         tokenScopes={() => ['settings:read']}
         organizations={() => []}
         activeOrgID={() => 'default'}
@@ -223,6 +229,26 @@ describe('AppLayout navigation icons', () => {
     expect(
       within(infrastructureGroup as HTMLElement).getByRole('tab', { name: 'vSphere' }),
     ).toBeTruthy();
+  });
+
+  it('does not expose cached platform evidence before navigation admission resolves', () => {
+    renderLayout(
+      [makeResource({ id: 'docker-1', type: 'docker-host', platformType: 'docker' })],
+      '/settings/infrastructure',
+      {
+        proxmox: false,
+        docker: false,
+        kubernetes: false,
+        truenas: false,
+        vmware: false,
+        standalone: false,
+      },
+    );
+
+    const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
+    const infrastructureGroup = desktopNav.querySelector('[aria-label="Infrastructure"]');
+    expect(infrastructureGroup).toBeTruthy();
+    expect(within(infrastructureGroup as HTMLElement).queryByRole('tab')).toBeNull();
   });
 
   it('restores the previous Proxmox route state when returning from another platform tab', async () => {
