@@ -1101,6 +1101,8 @@ func TestDemoReachabilityHelperSeparatesTailnetAndSshTransportProof(t *testing.T
 		`tailscale status --json`,
 		`tailscale ping --c 3 --timeout 10s "$DEMO_SERVER_HOST"`,
 		`nc -z -w 5 "$DEMO_SERVER_HOST" "$TCP_PORT"`,
+		`Runner Tailscale DNS:`,
+		`Runner Tailscale tags:`,
 		`Demo peer is not present in the runner peer map yet.`,
 		`Verify sshd and the host firewall on tailscale0.`,
 	} {

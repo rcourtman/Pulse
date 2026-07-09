@@ -36,6 +36,8 @@ except (json.JSONDecodeError, OSError):
 
 self_node = status.get("Self") or {}
 self_ips = [ip for ip in self_node.get("TailscaleIPs") or [] if ":" not in ip]
+self_dns = (self_node.get("DNSName") or "").rstrip(".")
+self_tags = sorted(self_node.get("Tags") or [])
 target = None
 for peer in (status.get("Peer") or {}).values():
     peer_ips = peer.get("TailscaleIPs") or []
@@ -46,6 +48,8 @@ for peer in (status.get("Peer") or {}).values():
 
 print(f"Tailscale backend: {status.get('BackendState', 'unknown')}")
 print(f"Runner Tailscale IPv4: {self_ips[0] if self_ips else 'unavailable'}")
+print(f"Runner Tailscale DNS: {self_dns or 'unavailable'}")
+print(f"Runner Tailscale tags: {','.join(self_tags) if self_tags else 'none'}")
 if target is None:
     print("Demo peer is not present in the runner peer map yet.")
 else:
