@@ -424,6 +424,22 @@ func canonicalAutoRegisterMatchMessage(reason string) string {
 	return "Canonical auto-register matched existing node by " + reason
 }
 
+// shouldPreserveExistingAutoRegisterHost reports whether an identity-matched
+// node keeps its stored host on re-registration. The agent orders
+// candidateHosts by preference, so an existing host that appears anywhere in
+// that list was deliberately outranked by the selected host and is replaced.
+// A host absent from the list is an admin-managed endpoint the agent cannot
+// see; keep it.
+func shouldPreserveExistingAutoRegisterHost(existingHost string, candidateHosts []string) bool {
+	existing := strings.TrimSpace(existingHost)
+	for _, candidate := range candidateHosts {
+		if strings.EqualFold(strings.TrimSpace(candidate), existing) {
+			return false
+		}
+	}
+	return true
+}
+
 func canonicalAutoRegisterCompletionPayloadMessage() string {
 	return "Incomplete canonical auto-register token completion payload"
 }
@@ -1314,10 +1330,11 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			}
 			if hostsShareResolvedIdentity(node.Host, host) {
 				existingIndex = i
-				preserveHost = true
+				preserveHost = shouldPreserveExistingAutoRegisterHost(node.Host, candidateHosts)
 				log.Info().
 					Str("existingHost", node.Host).
 					Str("newHost", host).
+					Bool("preserveHost", preserveHost).
 					Str("type", "pve").
 					Msg(canonicalAutoRegisterMatchMessage("resolved host identity"))
 				break
@@ -1391,10 +1408,11 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			}
 			if hostsShareResolvedIdentity(node.Host, host) {
 				existingIndex = i
-				preserveHost = true
+				preserveHost = shouldPreserveExistingAutoRegisterHost(node.Host, candidateHosts)
 				log.Info().
 					Str("existingHost", node.Host).
 					Str("newHost", host).
+					Bool("preserveHost", preserveHost).
 					Str("type", "pbs").
 					Msg(canonicalAutoRegisterMatchMessage("resolved host identity"))
 				break
