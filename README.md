@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="docs/images/pulse-logo.svg" alt="Pulse Logo" width="120" />
-  <p><strong>Real-time monitoring for Proxmox, Docker, Kubernetes, TrueNAS, and vSphere infrastructure.</strong></p>
+  <p><strong>Monitoring for Proxmox, Docker, Kubernetes, TrueNAS, and vSphere that watches your infrastructure so you don't have to.</strong></p>
 
   [![GitHub Stars](https://img.shields.io/github/stars/rcourtman/Pulse?style=flat&logo=github)](https://github.com/rcourtman/Pulse)
   [![GitHub release](https://img.shields.io/github/v/release/rcourtman/Pulse)](https://github.com/rcourtman/Pulse/releases/latest)
@@ -28,41 +28,28 @@ normal contribution flow for this repository. See [CONTRIBUTING.md](CONTRIBUTING
 
 ## 🚀 Overview
 
-Pulse is a modern, unified monitoring workspace for your **infrastructure** across Proxmox, Docker, Kubernetes, TrueNAS, and vSphere. It consolidates metrics, alerts, and AI-powered insights from all your systems into a single, beautiful interface.
+Dashboards show you what's happening when you look. Most infrastructure problems start while you're not looking: the backup job that has quietly failed three runs in a row, the ZFS pool creeping toward full, the VM stuck in a restart loop. Pulse is built for that gap.
 
-Designed for homelabs, sysadmins, internal IT teams, and providers who need a clear monitoring view without the complexity of enterprise monitoring stacks. MSP access is a separate, request-assisted provider path and is not part of ordinary self-hosted setup.
+Pulse monitors your Proxmox, Docker, Kubernetes, TrueNAS, and vSphere estate in one workspace and alerts you the moment something breaks. Beyond alerts, **Pulse Patrol** does an engineer's rounds on a schedule, finds the problems nobody configured a rule for, and explains what they mean. On Pro, Patrol also investigates issues and applies safe, policy-bound fixes with verification and an audit trail.
+
+Designed for homelabs, sysadmins, internal IT teams, and providers who want serious monitoring without running an enterprise monitoring stack. MSP access is a separate, request-assisted provider path and is not part of ordinary self-hosted setup.
 
 ![Pulse Infrastructure](docs/images/01-dashboard.jpg)
 
-## 🧭 A Page for Every Platform
-
-Pulse v6 gives each platform its own dedicated page, all backed by one
-unified resource model:
-- **Proxmox** (PVE, PBS, and PMG), **Docker**, **Kubernetes**, **TrueNAS**,
-  **vSphere**, and **standalone machines** each get their own view
-- Storage and Recovery (backups, snapshots, replication) surface on the
-  platform pages they belong to
-- **Alerts** and **Patrol** are top-level views across every platform
-
-Power-user shortcuts:
-- `g p` → Proxmox, `g d` → Docker, `g k` → Kubernetes, `g n` → TrueNAS, `g v` → vSphere, `g s` → standalone machines
-- `g a` → Alerts, `g r` → Patrol, `g t` → Settings
-- `/` → search, `Cmd/Ctrl+K` → command palette, `?` → shortcuts help
-
 ## ✨ Features
+
+### Watching, Not Just Showing
+- **Pulse Patrol**: Scheduled background health checks (every 10 minutes to every 7 days) that catch silent failures: failed backup jobs, pools approaching capacity, restart-looping VMs, clock drift, failing container health checks. Runs on every tier; community installs use your own AI provider or a local model.
+- **Investigation and Safe Fixes (Pro / hosted Cloud)**: Alert-triggered root-cause investigation, plus optional remediation under command safety policies with verification and an audit trail
+- **Chat Assistant (BYOK)**: Ask questions about your infrastructure in natural language
+- **Cost Tracking**: Track usage and costs per provider/model
 
 ### Core Monitoring
 - **Unified Monitoring**: View health and metrics for PVE, PBS, PMG, Docker, Kubernetes, and TrueNAS in one place
-- **Smart Alerts**: Get notified via Discord, Slack, Telegram, Email, and more
+- **Smart Alerts**: Adaptive, hysteresis-based thresholds that cut flapping noise, delivered via Discord, Slack, Telegram, Email, and more
 - **Auto-Discovery**: Automatically finds Proxmox nodes on your network
 - **Metrics History**: Persistent storage with configurable retention
 - **Recovery Views**: Backup, snapshot, and replication history for each platform (PBS, ZFS/TrueNAS, vSphere)
-
-### AI-Powered
-- **Chat Assistant (BYOK)**: Ask questions about your infrastructure in natural language
-- **Patrol**: Background health checks that generate findings on a schedule. Community self-hosted installs can run Patrol with your own AI provider or a local model.
-- **Alert Analysis (Pro / hosted Cloud)**: Optional AI analysis when alerts fire
-- **Cost Tracking**: Track usage and costs per provider/model
 
 ### Multi-Platform
 - **Proxmox VE/PBS/PMG**: Full monitoring and management
@@ -77,6 +64,22 @@ Power-user shortcuts:
 - **OIDC/SSO/SAML**: Single sign-on with multi-provider support
 - **Mobile Remote Access**: Relay protocol with end-to-end encryption for supported Pulse Mobile clients (Relay and above)
 - **Privacy Focused**: Outbound usage telemetry is enabled by default and [fully documented](docs/PRIVACY.md) — the payload uses a rotating pseudonymous install ID and does not include hostnames, credentials, names, email addresses, IP addresses, or infrastructure identifiers. Disable any time in Settings or via `PULSE_TELEMETRY=false`.
+
+## 🧭 A Page for Every Platform
+
+Patrol and alerts can only reason across your estate because Pulse sees all
+of it in one resource model. The UI keeps the platform-shaped views operators
+already know:
+- **Proxmox** (PVE, PBS, and PMG), **Docker**, **Kubernetes**, **TrueNAS**,
+  **vSphere**, and **standalone machines** each get their own page
+- Storage and Recovery (backups, snapshots, replication) surface on the
+  platform pages they belong to
+- **Alerts** and **Patrol** are top-level views across every platform
+
+Power-user shortcuts:
+- `g p` → Proxmox, `g d` → Docker, `g k` → Kubernetes, `g n` → TrueNAS, `g v` → vSphere, `g s` → standalone machines
+- `g a` → Alerts, `g r` → Patrol, `g t` → Settings
+- `/` → search, `Cmd/Ctrl+K` → command palette, `?` → shortcuts help
 
 ## ⚡ Quick Start
 
