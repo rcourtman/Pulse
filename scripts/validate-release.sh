@@ -52,24 +52,26 @@ with_network_blocked() {
 check_tar_entries_nonempty() {
     local tarball="$1"
     shift
+    local extract_dir
+    extract_dir="$(mktemp -d "$tmp_root/tar-entries.XXXXXX")"
+
+    if ! tar -xzf "$tarball" -C "$extract_dir" -- "$@"; then
+        error "$(basename "$tarball") is missing one or more required entries"
+        exit 1
+    fi
+
     for entry in "$@"; do
-        if ! tar -tzf "$tarball" "$entry" >/dev/null 2>&1; then
-            error "$(basename "$tarball") missing entry: $entry"
-            exit 1
-        fi
-        # Examine type; skip size enforcement for symlinks
-        local type
-        type=$(tar -tvf "$tarball" "$entry" 2>/dev/null | awk 'NR==1 {print substr($0,1,1)}')
-        if [ "$type" = "l" ]; then
+        local extracted_path="$extract_dir/${entry#./}"
+        if [ -L "$extracted_path" ]; then
             continue
         fi
-        local size
-        size=$(tar -xOf "$tarball" "$entry" 2>/dev/null | wc -c | tr -d '[:space:]')
-        if [ -z "$size" ] || [ "$size" -le 0 ]; then
+        if [ ! -s "$extracted_path" ]; then
             error "$(basename "$tarball") missing or empty entry: $entry"
             exit 1
         fi
     done
+
+    rm -rf "$extract_dir"
 }
 
 http_header_value() {
