@@ -294,6 +294,13 @@ TLS floor in the dynamic config.
    used Go's single-dash flag spelling, the installer-owned recovery path must
    accept both single-dash and double-dash forms for recovered agent args
    without weakening the existing missing-state failure behavior.
+   FreeBSD and pfSense updates have the same continuity obligation without
+   Linux procfs or systemd: the installer must read live process arguments via
+   `ps` (and environment via `procstat` when available), then fall back to the
+   installed rc.d service's `command_args` and `PULSE_*` exports. The parser
+   must preserve quoted argument values without evaluating service-file shell
+   content, and the rewritten rc.d service must use `--token-file` rather than
+   retaining a recovered raw token.
    The shell installer must disclose `--enable-commands` as Pulse command
    execution, disabled by default, and must name both Patrol actions and
    Proxmox LXC Docker inventory as the operator-visible reasons to enable it.
@@ -805,7 +812,7 @@ TLS floor in the dynamic config.
 
 1. Update this contract when canonical deployment or installer entry points move
 2. Keep deployment runtime and shared API proof routing aligned in `registry.json`
-3. Preserve explicit coverage for installer parity, update planning, and deployment bootstrap behavior when these surfaces change. Shell installer update recovery changes must keep `scripts/installtests/install_sh_test.go` covering both persisted `connection.env` recovery and legacy running-process/service recovery, including single-dash v5 agent flags and the rule that upgraded service args use `--token-file` instead of raw `--token`.
+3. Preserve explicit coverage for installer parity, update planning, and deployment bootstrap behavior when these surfaces change. Shell installer update recovery changes must keep `scripts/installtests/install_sh_test.go` covering both persisted `connection.env` recovery and legacy running-process/service recovery across Linux and FreeBSD/rc.d, including single-dash v5 agent flags, non-procfs process inspection, and the rule that upgraded service args use `--token-file` instead of raw `--token`.
 4. Keep stable and prerelease packet lineage explicit when `docs/releases/` or
    `VERSION` changes: preserve already-shipped RC packets under dedicated
    historical filenames before reusing canonical stable names, keep

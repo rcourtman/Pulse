@@ -256,6 +256,13 @@ update, profile rollout, command reachability, or fleet-control authority.
     smoke checks prove a live agent runtime, not merely a running service
     wrapper.
 25. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+    Legacy update recovery is cross-platform lifecycle continuity. Linux may
+    read procfs or a systemd unit, while FreeBSD and pfSense must recover the
+    same URL, token, feature, identity, and trust arguments from the live
+    process via `ps`/`procstat` or from the installed rc.d service script.
+    Successful recovery always migrates the raw legacy token into the v6
+    installer-owned token file; absence of complete local URL and token state
+    remains a fail-closed update, never a fresh enrollment.
 
 Server update planning is part of the same lifecycle contract. The System
 Updates plan must surface a structured upgrade-readiness verdict before an
@@ -1168,7 +1175,8 @@ surface and no new `internal/api/` lifecycle handler.
    Persistence-sensitive NAS targets must keep one canonical continuity model here: installer-owned bootstraps may use flash-backed or immutable-root launch hooks only as thin trampolines, while the durable wrapper, state, and reboot-surviving binary copy stay in the governed persistent state directory that updater continuity also refreshes.
    Unix `--update` re-entry must also preserve lifecycle identity for legacy
    v5.1.x agents that do not yet have v6 `connection.env` state. When a
-   running `pulse-agent` process or its systemd unit already carries the Pulse
+   running `pulse-agent` process, its systemd unit, or its FreeBSD rc.d service
+   script already carries the Pulse
    URL, token, feature flags, agent id, hostname, or trust posture, the shell
    installer may recover those values for the update handoff, but the resulting
    v6 service must be rendered through the shared exec-argument builder and

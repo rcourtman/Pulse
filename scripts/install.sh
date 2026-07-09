@@ -1847,25 +1847,120 @@ collect_running_agent_pids() {
     done
 }
 
+split_recovered_shell_words() {
+    local payload="$1"
+    local word=""
+    local quote=""
+    local char=""
+    local escaped="false"
+    local in_word="false"
+    local index=0
+
+    for ((index = 0; index < ${#payload}; index++)); do
+        char="${payload:index:1}"
+
+        if [[ "$escaped" == "true" ]]; then
+            word+="$char"
+            in_word="true"
+            escaped="false"
+            continue
+        fi
+
+        if [[ "$char" == "\\" && "$quote" != "'" ]]; then
+            escaped="true"
+            in_word="true"
+            continue
+        fi
+
+        if [[ -n "$quote" ]]; then
+            if [[ "$char" == "$quote" ]]; then
+                quote=""
+            else
+                word+="$char"
+            fi
+            in_word="true"
+            continue
+        fi
+
+        case "$char" in
+            "'"|'"')
+                quote="$char"
+                in_word="true"
+                ;;
+            ' '|$'\t'|$'\n')
+                if [[ "$in_word" == "true" ]]; then
+                    printf '%s\n' "$word"
+                    word=""
+                    in_word="false"
+                fi
+                ;;
+            *)
+                word+="$char"
+                in_word="true"
+                ;;
+        esac
+    done
+
+    if [[ "$escaped" == "true" ]]; then
+        word+="\\"
+    fi
+    if [[ "$in_word" == "true" ]]; then
+        printf '%s\n' "$word"
+    fi
+
+    [[ -z "$quote" ]]
+}
+
+running_agent_arg_stream() {
+    local pid="$1"
+    local proc_root="${2:-/proc}"
+    local payload=""
+
+    if [[ -r "${proc_root}/${pid}/cmdline" ]]; then
+        tr '\0' '\n' < "${proc_root}/${pid}/cmdline" 2>/dev/null
+        return 0
+    fi
+
+    command -v ps >/dev/null 2>&1 || return 1
+    payload=$(ps -ww -o command= -p "$pid" 2>/dev/null || true)
+    [[ -n "$payload" ]] || return 1
+    split_recovered_shell_words "$payload"
+}
+
+running_agent_env_stream() {
+    local pid="$1"
+    local proc_root="${2:-/proc}"
+
+    if [[ -r "${proc_root}/${pid}/environ" ]]; then
+        tr '\0' '\n' < "${proc_root}/${pid}/environ" 2>/dev/null
+        return 0
+    fi
+
+    # FreeBSD exposes process environment through procstat instead of procfs.
+    command -v procstat >/dev/null 2>&1 || return 1
+    procstat -e "$pid" 2>/dev/null | awk '
+        NR > 1 {
+            $1 = ""
+            $2 = ""
+            sub(/^[[:space:]]+/, "")
+            print
+        }
+    ' | tr ' ' '\n'
+}
+
 recover_connection_state_from_running_agent() {
     local pid=""
     local recovered="false"
-
-    [[ -d /proc ]] || return 1
 
     while IFS= read -r pid; do
         [[ -n "$pid" && "$pid" != "$$" ]] || continue
         recovered="false"
 
-        if [[ -r "/proc/${pid}/cmdline" ]]; then
-            if recover_connection_state_from_arg_stream < <(tr '\0' '\n' < "/proc/${pid}/cmdline" 2>/dev/null); then
-                recovered="true"
-            fi
+        if recover_connection_state_from_arg_stream < <(running_agent_arg_stream "$pid"); then
+            recovered="true"
         fi
-        if [[ -r "/proc/${pid}/environ" ]]; then
-            if recover_connection_state_from_env_stream < <(tr '\0' '\n' < "/proc/${pid}/environ" 2>/dev/null); then
-                recovered="true"
-            fi
+        if recover_connection_state_from_env_stream < <(running_agent_env_stream "$pid"); then
+            recovered="true"
         fi
         if [[ "$recovered" == "true" ]] && recovered_connection_state_ready; then
             return 0
@@ -1893,7 +1988,7 @@ recover_connection_state_from_systemd_unit() {
             case "$line" in
                 ExecStart=*)
                     payload="${line#ExecStart=}"
-                    if recover_connection_state_from_arg_stream < <(printf '%s\n' "$payload" | tr ' ' '\n'); then
+                    if recover_connection_state_from_arg_stream < <(split_recovered_shell_words "$payload"); then
                         recovered="true"
                     fi
                     ;;
@@ -1913,6 +2008,64 @@ recover_connection_state_from_systemd_unit() {
     return 1
 }
 
+recover_connection_state_from_service_scripts() {
+    local candidate=""
+    local line=""
+    local payload=""
+    local assignment=""
+    local key=""
+    local value=""
+    local recovered="false"
+    local candidates=(
+        "/usr/local/etc/rc.d/${AGENT_NAME}"
+        "${TRUENAS_STATE_DIR}/pulse-agent.service"
+        "/etc/init.d/${AGENT_NAME}"
+        "/etc/init/${AGENT_NAME}.conf"
+        "/boot/config/plugins/pulse-agent/start-pulse-agent.sh"
+    )
+
+    if (( $# > 0 )); then
+        candidates=("$@")
+    fi
+
+    for candidate in "${candidates[@]}"; do
+        [[ -n "$candidate" && -f "$candidate" ]] || continue
+        recovered="false"
+
+        while IFS= read -r line; do
+            line="${line#"${line%%[![:space:]]*}"}"
+            case "$line" in
+                command_args=*)
+                    payload=$(strip_recovered_arg_quotes "${line#command_args=}")
+                    if recover_connection_state_from_arg_stream < <(split_recovered_shell_words "$payload"); then
+                        recovered="true"
+                    fi
+                    ;;
+                exec\ *)
+                    payload="${line#exec }"
+                    if recover_connection_state_from_arg_stream < <(split_recovered_shell_words "$payload"); then
+                        recovered="true"
+                    fi
+                    ;;
+                export\ PULSE_*=*|PULSE_*=*)
+                    assignment="${line#export }"
+                    key="${assignment%%=*}"
+                    value=$(strip_recovered_arg_quotes "${assignment#*=}")
+                    if recover_connection_state_from_env_stream < <(printf '%s=%s\n' "$key" "$value"); then
+                        recovered="true"
+                    fi
+                    ;;
+            esac
+        done < "$candidate"
+
+        if [[ "$recovered" == "true" ]] && recovered_connection_state_ready; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 recover_connection_state_from_existing_agent() {
     if recover_connection_state_from_running_agent; then
         log_info "Recovered connection details from the running Pulse Agent process."
@@ -1920,6 +2073,10 @@ recover_connection_state_from_existing_agent() {
     fi
     if recover_connection_state_from_systemd_unit; then
         log_info "Recovered connection details from the existing Pulse Agent service."
+        return 0
+    fi
+    if recover_connection_state_from_service_scripts; then
+        log_info "Recovered connection details from the existing Pulse Agent service script."
         return 0
     fi
 

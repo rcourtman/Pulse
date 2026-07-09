@@ -681,6 +681,9 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		`recover_connection_state_from_existing_agent() {`,
 		`recover_connection_state_from_running_agent`,
 		`recover_connection_state_from_systemd_unit`,
+		`recover_connection_state_from_service_scripts`,
+		`running_agent_arg_stream() {`,
+		`running_agent_env_stream() {`,
 		`recover_connection_state_from_arg_stream`,
 		`recover_token_from_default_agent_token_file() {`,
 		`normalize_recovered_agent_arg_key() {`,
@@ -790,6 +793,177 @@ ARGS
 	}
 	if strings.Contains(got, "--token deadbeef") {
 		t.Fatalf("recovered service args leaked raw token:\n%s", got)
+	}
+}
+
+func TestInstallSHRecoversV5ProcessArgsWithoutProcfs(t *testing.T) {
+	script := `
+		PULSE_URL=""
+		PULSE_TOKEN=""
+		INTERVAL="30s"
+		INTERVAL_EXPLICIT="false"
+		ENABLE_HOST="true"
+		HOST_EXPLICIT="false"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBERNETES_EXPLICIT="false"
+		KUBECONFIG_PATH=""
+		ENABLE_PROXMOX=""
+		PROXMOX_EXPLICIT="false"
+		PROXMOX_TYPE=""
+		INSECURE="false"
+		ENABLE_COMMANDS="false"
+		ENROLL="false"
+		HEALTH_ADDR=""
+		HEALTH_ADDR_SET="false"
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		STATE_DIR="/var/lib/pulse-agent"
+		TRUENAS_STATE_DIR="/data/pulse-agent"
+		CURL_CA_BUNDLE=""
+		KUBE_INCLUDE_ALL_PODS="false"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+		DISK_EXCLUDES=()
+		RUNTIME_TOKEN_FILE="/var/lib/pulse-agent/token"
+		BINARY_NAME="pulse-agent"
+` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
+` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
+` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
+` + extractInstallShellFunction(t, "split_recovered_shell_words") + `
+` + extractInstallShellFunction(t, "running_agent_arg_stream") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_running_agent") + `
+` + extractInstallShellFunction(t, "build_exec_arg_items") + `
+` + extractInstallShellFunction(t, "join_exec_arg_items") + `
+` + extractInstallShellFunction(t, "build_exec_args") + `
+		collect_running_agent_pids() { printf '%s\n' 4242; }
+		running_agent_env_stream() { return 1; }
+		ps() {
+			printf '%s\n' "/usr/local/bin/pulse-agent -url http://192.168.2.96:7655 -token deadbeef -enable-host -enable-docker -insecure -agent-id firewall-1 -hostname 'edge firewall'"
+		}
+
+		if recover_connection_state_from_running_agent; then
+			echo "READY"
+		else
+			echo "NOT_READY"
+		fi
+		build_exec_args
+		printf 'URL=%s\nTOKEN=%s\nDOCKER=%s\nINSECURE=%s\nAGENT_ID=%s\nHOSTNAME=%s\nEXEC_ARGS=%s\n' \
+			"$PULSE_URL" "$PULSE_TOKEN" "$ENABLE_DOCKER" "$INSECURE" "$AGENT_ID" "$HOSTNAME_OVERRIDE" "$EXEC_ARGS"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	for _, needle := range []string{
+		"READY",
+		"URL=http://192.168.2.96:7655",
+		"TOKEN=deadbeef",
+		"DOCKER=true",
+		"INSECURE=true",
+		"AGENT_ID=firewall-1",
+		"HOSTNAME=edge firewall",
+		"--token-file /var/lib/pulse-agent/token",
+	} {
+		if !strings.Contains(got, needle) {
+			t.Fatalf("non-procfs process recovery missing %q:\n%s", needle, got)
+		}
+	}
+	if strings.Contains(got, "--token deadbeef") {
+		t.Fatalf("non-procfs process recovery leaked raw token into service args:\n%s", got)
+	}
+}
+
+func TestInstallSHRecoversV5FreeBSDRCServiceState(t *testing.T) {
+	rcScript := filepath.Join(t.TempDir(), "pulse-agent")
+	if err := os.WriteFile(rcScript, []byte(`#!/bin/sh
+command="/usr/local/bin/pulse-agent"
+command_args="-url http://192.168.2.96:7655 -token deadbeef -enable-host -insecure -agent-id firewall-1 -hostname 'edge firewall'"
+export PULSE_CACERT='/conf/pulse-ca.pem'
+`), 0600); err != nil {
+		t.Fatalf("write rc.d fixture: %v", err)
+	}
+
+	script := `
+		PULSE_URL=""
+		PULSE_TOKEN=""
+		INTERVAL="30s"
+		INTERVAL_EXPLICIT="false"
+		ENABLE_HOST="true"
+		HOST_EXPLICIT="false"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBERNETES_EXPLICIT="false"
+		KUBECONFIG_PATH=""
+		ENABLE_PROXMOX=""
+		PROXMOX_EXPLICIT="false"
+		PROXMOX_TYPE=""
+		INSECURE="false"
+		ENABLE_COMMANDS="false"
+		ENROLL="false"
+		HEALTH_ADDR=""
+		HEALTH_ADDR_SET="false"
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		STATE_DIR="/var/lib/pulse-agent"
+		TRUENAS_STATE_DIR="/data/pulse-agent"
+		CURL_CA_BUNDLE=""
+		KUBE_INCLUDE_ALL_PODS="false"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+		DISK_EXCLUDES=()
+		RUNTIME_TOKEN_FILE="/var/lib/pulse-agent/token"
+		AGENT_NAME="pulse-agent"
+` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
+` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
+` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_env_stream") + `
+` + extractInstallShellFunction(t, "split_recovered_shell_words") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_service_scripts") + `
+` + extractInstallShellFunction(t, "build_exec_arg_items") + `
+` + extractInstallShellFunction(t, "join_exec_arg_items") + `
+` + extractInstallShellFunction(t, "build_exec_args") + `
+		if recover_connection_state_from_service_scripts "${PULSE_TEST_RC_SCRIPT:?}"; then
+			echo "READY"
+		else
+			echo "NOT_READY"
+		fi
+		build_exec_args
+		printf 'URL=%s\nTOKEN=%s\nINSECURE=%s\nAGENT_ID=%s\nHOSTNAME=%s\nCACERT=%s\nEXEC_ARGS=%s\n' \
+			"$PULSE_URL" "$PULSE_TOKEN" "$INSECURE" "$AGENT_ID" "$HOSTNAME_OVERRIDE" "$CURL_CA_BUNDLE" "$EXEC_ARGS"
+	`
+
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Env = append(os.Environ(), "PULSE_TEST_RC_SCRIPT="+rcScript)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	for _, needle := range []string{
+		"READY",
+		"URL=http://192.168.2.96:7655",
+		"TOKEN=deadbeef",
+		"INSECURE=true",
+		"AGENT_ID=firewall-1",
+		"HOSTNAME=edge firewall",
+		"CACERT=/conf/pulse-ca.pem",
+		"--token-file /var/lib/pulse-agent/token",
+	} {
+		if !strings.Contains(got, needle) {
+			t.Fatalf("FreeBSD rc.d recovery missing %q:\n%s", needle, got)
+		}
+	}
+	if strings.Contains(got, "--token deadbeef") {
+		t.Fatalf("FreeBSD rc.d recovery leaked raw token into service args:\n%s", got)
 	}
 }
 
