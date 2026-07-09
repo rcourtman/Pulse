@@ -16,12 +16,6 @@ type PulseIntelligenceAIUsageEvidence struct {
 	PatrolAICalls           int
 }
 
-// AssistantCollaborationActive reports whether Assistant produced contextual
-// or tool-backed collaboration, not merely a starter prompt render.
-func (e PulseIntelligenceAIUsageEvidence) AssistantCollaborationActive() bool {
-	return e.AssistantContextAICalls > 0 || e.AssistantToolCalls > 0
-}
-
 // PulseIntelligenceAIUsageEvidenceFromHistory projects AI usage history into
 // the same content-free Pulse Intelligence evidence used by telemetry and the
 // agent operations-loop status endpoint.

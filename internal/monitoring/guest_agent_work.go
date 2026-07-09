@@ -2,7 +2,6 @@ package monitoring
 
 import (
 	"context"
-	"time"
 )
 
 func (m *Monitor) efficientQEMUWorkerCount(total int) int {
@@ -59,11 +58,4 @@ func (m *Monitor) runGuestAgentVMWork(ctx context.Context, work func(context.Con
 	defer cancel()
 	work(workCtx)
 	return true
-}
-
-func guestAgentVMBudgetOrZero(m *Monitor) time.Duration {
-	if m == nil {
-		return 0
-	}
-	return m.guestAgentVMBudget
 }

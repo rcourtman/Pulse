@@ -1579,15 +1579,6 @@ func firstNonEmptyString(values ...string) string {
 	return ""
 }
 
-func statusIsRunningOrOnline(status string) bool {
-	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "running", "online", "ready", "healthy":
-		return true
-	default:
-		return false
-	}
-}
-
 func sanitizeHandoffContextForResourcePolicy(handoffContext string, handoffResources []HandoffResource, provider tools.UnifiedResourceProvider) string {
 	return sanitizeTextForHandoffResourcePolicy(handoffContext, handoffResources, provider)
 }

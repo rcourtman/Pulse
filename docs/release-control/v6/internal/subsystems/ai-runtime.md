@@ -4133,16 +4133,28 @@ new-finding path auto-dismisses with reason `expected_behavior`,
 attributes the suppression on the lifecycle timeline
 (`operator_state_cause: maintenance_window`, with
 `maintenance_end_at` metadata), and persists the finding for audit
-history. The action broker (`executeCommandWithAudit` in
-`internal/ai/tools/action_audit.go`) consults the same
-`resource_operator_state` table on every dispatch and refuses with
+history. The action broker consults the same `resource_operator_state` table
+on every dispatch — both the agent-command path
+(`executeCommandWithAudit`) and the native provider path
+(`executeNativeActionWithAudit`) in
+`internal/ai/tools/action_audit.go` run the shared
+`checkRemediationLockForDispatch` gate — and refuses with
 `unifiedresources.ErrResourceRemediationLocked` when the operator
 has set `NeverAutoRemediate=true` on the target resource. Refusal
 persists a Failed audit record whose `ErrorMessage` is prefixed
 `resource_remediation_locked:` so the audit timeline shows every
 refused dispatch, paralleling the `plan_drift:` shape from the drift
 guard. Operator state outranks per-action approval — the broker
-refuses even when the approval ID resolves and the plan hash matches. The `IntentionallyOffline` branch is the indefinite
+refuses even when the approval ID resolves and the plan hash matches.
+When the lock state cannot be determined (no audit store wired, or
+the operator-state lookup errors), dispatches that do not carry an
+approved human decision fail CLOSED with
+`ErrRemediationLockStateUnknown` and a Failed audit record prefixed
+`remediation_lock_state_unknown:` — the broker must not assume an
+unreadable lock is unset while Patrol or Assistant run autonomously.
+Dispatches backed by an approved human decision keep the historical
+fail-open posture on unknown lock state (the operator explicitly
+signed off on the exact plan), with the degraded lookup logged. The `IntentionallyOffline` branch is the indefinite
 counterpart — same auto-dismiss but with
 `operator_state_cause: intentionally_offline` and no
 `maintenance_end_at` field because the suppression has no scheduled

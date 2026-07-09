@@ -187,10 +187,6 @@ func parseNVIDIASMIStats(output string) ([]agentshost.GPUSensor, error) {
 	return gpus, nil
 }
 
-func parseNVIDIASMITemperatureValue(value string) (float64, bool) {
-	return parseNVIDIASMINumber(value, false)
-}
-
 func parseNVIDIASMINumber(value string, allowZero bool) (float64, bool) {
 	value = strings.TrimSpace(value)
 	if value == "" {

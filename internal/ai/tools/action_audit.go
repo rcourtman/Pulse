@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -18,6 +19,16 @@ import (
 )
 
 const approvalAuditActor = approval.RequesterPulseAssistant
+
+// ErrRemediationLockStateUnknown is returned when the broker cannot
+// determine whether the operator has set NeverAutoRemediate on the
+// target resource — no audit store is wired, or the operator-state
+// lookup failed. Autonomous (non-human-approved) dispatches must fail
+// CLOSED on this error: a broker that cannot read the operator's
+// "never touch this" flag must not assume it is unset. Human-approved
+// dispatches may proceed, since the operator has explicitly signed
+// off on the specific plan.
+var ErrRemediationLockStateUnknown = errors.New("remediation lock state unknown; operator approval required")
 
 func (e *PulseToolExecutor) executeCommandWithAudit(
 	ctx context.Context,
@@ -142,29 +153,16 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 	// must refuse the dispatch even with a valid approval and matching
 	// plan hash. The operator's per-resource intent outranks the
 	// per-action approval — this is the safety mechanism for "do not
-	// touch this resource even if you think you should." Persists a
-	// Failed audit record with `resource_remediation_locked:` prefix
-	// so the audit history shows every refused dispatch.
-	if locked, lockErr := e.isResourceRemediationLocked(resourceID); lockErr != nil {
-		log.Warn().Str("action_id", plan.ActionID).Err(lockErr).Msg("Operator-state lookup failed; allowing dispatch (fail-open) but logging")
-	} else if locked {
-		log.Warn().
-			Str("action_id", plan.ActionID).
-			Str("resource_id", resourceID).
-			Str("capability", capabilityName).
-			Msg("Refusing action execution: resource is operator-locked against automated remediation")
-		now := time.Now().UTC()
-		record.State = unifiedresources.ActionStateFailed
-		record.UpdatedAt = now
-		errMessage := fmt.Sprintf("resource_remediation_locked: %s", unifiedresources.ErrResourceRemediationLocked.Error())
-		record.Result = &unifiedresources.ExecutionResult{
-			Success:      false,
-			ErrorMessage: errMessage,
-		}
-		e.recordActionAudit(record)
-		e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, "resource remediation lock refused")
-		e.publishActionCompleted(record)
-		return nil, unifiedresources.ErrResourceRemediationLocked
+	// touch this resource even if you think you should." When the lock
+	// state cannot be determined (no store, or lookup error), only a
+	// dispatch backed by an approved human decision may proceed;
+	// autonomous dispatches fail closed. Persists a Failed audit record
+	// with `resource_remediation_locked:` or
+	// `remediation_lock_state_unknown:` prefix so the audit history
+	// shows every refused dispatch.
+	if refusal := e.checkRemediationLockForDispatch(plan.ActionID, resourceID, capabilityName, hasApprovedActionApproval(approvalRecords)); refusal != nil {
+		e.refuseDispatchForRemediationLock(record, requestedBy, refusal)
+		return nil, refusal
 	}
 
 	record, err := e.recordActionExecutionStart(record, approvalID, requestedBy, fmt.Sprintf("dispatching command to agent %s", agentID), planFromApproval)
@@ -309,6 +307,15 @@ func (e *PulseToolExecutor) executeNativeActionWithAudit(
 		Plan: plan,
 	}
 	record.Approvals = approvalRecords
+
+	// Same operator-lock gate as the agent-command dispatch path: native
+	// provider dispatches (e.g. TrueNAS app start/stop/restart) are write
+	// actions on the resource, and the operator's NeverAutoRemediate flag
+	// must gate them identically — including failing closed for
+	// autonomous dispatches when the lock state cannot be determined.
+	if refusal := e.checkRemediationLockForDispatch(plan.ActionID, resourceID, capabilityName, hasApprovedActionApproval(approvalRecords)); refusal != nil {
+		return e.refuseDispatchForRemediationLock(record, requestedBy, refusal), refusal
+	}
 
 	record, err := e.recordActionExecutionStart(record, approvalID, requestedBy, "dispatching native resource action", planFromApproval)
 	if err != nil {
@@ -1084,26 +1091,106 @@ func approvalTimestamp(req *approval.ApprovalRequest) time.Time {
 
 // isResourceRemediationLocked returns whether the operator has set
 // NeverAutoRemediate=true on the resource the dispatch targets.
-// Returns (false, nil) when no audit store is wired (degraded mode —
-// the fail-open posture is consistent with the rest of audit-store
-// callers in this file), when the resource has no operator state, or
+// Returns (false, nil) when the resource has no operator state, or
 // when only IntentionallyOffline (without NeverAutoRemediate) is set.
-// Returns the error from the store on lookup failure so the caller can
-// log it; caller policy is fail-open on lookup error.
+// When the lock state cannot be determined — no audit store is wired,
+// or the store lookup fails — it returns an error wrapping
+// ErrRemediationLockStateUnknown so the caller can
+// distinguish "not locked" from "unknown". Caller policy lives in
+// checkRemediationLockForDispatch: autonomous (non-human-approved)
+// dispatches fail closed on unknown state; human-approved dispatches
+// keep the historical fail-open posture.
 func (e *PulseToolExecutor) isResourceRemediationLocked(resourceID string) (bool, error) {
-	if e == nil || e.actionAuditStore == nil {
-		return false, nil
-	}
 	canonical := strings.TrimSpace(resourceID)
 	if canonical == "" {
 		return false, nil
 	}
+	if e == nil || e.actionAuditStore == nil {
+		return false, fmt.Errorf("%w: no action audit store is wired", ErrRemediationLockStateUnknown)
+	}
 	state, found, err := e.actionAuditStore.GetResourceOperatorState(canonical)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%w: operator-state lookup failed: %s", ErrRemediationLockStateUnknown, err.Error())
 	}
 	if !found {
 		return false, nil
 	}
 	return state.NeverAutoRemediate, nil
+}
+
+// checkRemediationLockForDispatch applies the operator NeverAutoRemediate
+// policy at the dispatch decision point. Returns nil when the dispatch may
+// proceed, ErrResourceRemediationLocked when the operator has locked the
+// resource, or an ErrRemediationLockStateUnknown-wrapped error when the
+// lock state cannot be determined and the dispatch carries no approved
+// human decision. Autonomous dispatches fail CLOSED on unknown lock state:
+// a broker that cannot read the operator's "never touch this" flag must
+// not assume it is unset. Human-approved dispatches keep the historical
+// fail-open posture — the operator explicitly signed off on this exact
+// plan, so a degraded operator-state lookup does not override their
+// decision — but the degraded lookup is still logged.
+func (e *PulseToolExecutor) checkRemediationLockForDispatch(actionID, resourceID, capabilityName string, humanApproved bool) error {
+	locked, lockErr := e.isResourceRemediationLocked(resourceID)
+	if lockErr != nil {
+		if humanApproved {
+			log.Warn().
+				Str("action_id", actionID).
+				Str("resource_id", resourceID).
+				Str("capability", capabilityName).
+				Err(lockErr).
+				Msg("Remediation lock state unknown; allowing human-approved dispatch (fail-open) but logging")
+			return nil
+		}
+		log.Warn().
+			Str("action_id", actionID).
+			Str("resource_id", resourceID).
+			Str("capability", capabilityName).
+			Err(lockErr).
+			Msg("Refusing autonomous action execution: remediation lock state unknown (fail-closed); operator approval required")
+		return lockErr
+	}
+	if locked {
+		log.Warn().
+			Str("action_id", actionID).
+			Str("resource_id", resourceID).
+			Str("capability", capabilityName).
+			Msg("Refusing action execution: resource is operator-locked against automated remediation")
+		return unifiedresources.ErrResourceRemediationLocked
+	}
+	return nil
+}
+
+// refuseDispatchForRemediationLock persists a Failed audit record for a
+// dispatch refused by the remediation-lock gate and returns the
+// ExecutionResult describing the refusal. The ErrorMessage carries a
+// stable prefix (`resource_remediation_locked:` or
+// `remediation_lock_state_unknown:`) so audit-UI filters and alert rules
+// can branch on the token.
+func (e *PulseToolExecutor) refuseDispatchForRemediationLock(record unifiedresources.ActionAuditRecord, requestedBy string, refusal error) *unifiedresources.ExecutionResult {
+	now := time.Now().UTC()
+	record.State = unifiedresources.ActionStateFailed
+	record.UpdatedAt = now
+	result := &unifiedresources.ExecutionResult{
+		Success:      false,
+		ErrorMessage: remediationLockRefusalMessage(refusal),
+	}
+	record.Result = result
+	e.recordActionAudit(record)
+	e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, remediationLockLifecycleMessage(refusal))
+	e.publishActionCompleted(record)
+	return result
+}
+
+func remediationLockRefusalMessage(refusal error) string {
+	if errors.Is(refusal, ErrRemediationLockStateUnknown) {
+		return fmt.Sprintf("remediation_lock_state_unknown: %s", refusal.Error())
+	}
+	return fmt.Sprintf("resource_remediation_locked: %s", refusal.Error())
+}
+
+func remediationLockLifecycleMessage(refusal error) string {
+	if errors.Is(refusal, ErrRemediationLockStateUnknown) {
+		return "remediation lock state unknown refused"
+	}
+	return "resource remediation lock refused"
 }

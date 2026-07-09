@@ -3796,18 +3796,6 @@ func generateMockHostRate(ioType string) float64 {
 	}
 }
 
-func fluctuateMockHostRate(current float64, ioType string, min, max float64) float64 {
-	if current <= 0 {
-		current = generateMockHostRate(ioType)
-	}
-	changeFactor := 1 + ((rand.Float64()*2)-1)*0.25
-	next := current * changeFactor
-	if rand.Float64() < 0.04 {
-		next *= 1.4 + rand.Float64()*0.8
-	}
-	return clampFloat(next, min, max)
-}
-
 func generateDockerContainers(hostName string, hostIdx int, config MockConfig, podman bool) []models.DockerContainer {
 	base := config.DockerContainersPerHost
 	if base < 1 {

@@ -422,14 +422,6 @@ func shouldPreserveBackups(nodeCount int, hadSuccessfulNode bool, storagesWithBa
 	return false
 }
 
-func shouldPreservePBSBackups(datastoreCount, datastoreFetches int) bool {
-	// If there are datastores but all fetches failed, preserve existing backups
-	if datastoreCount > 0 && datastoreFetches == 0 {
-		return true
-	}
-	return false
-}
-
 func (m *Monitor) syncGuestBackupTimesAndResourceStore() {
 	if m == nil || m.state == nil {
 		return

@@ -21,12 +21,6 @@ func ResolveConfiguredChatModel(ctx context.Context, cfg *config.AIConfig) (stri
 	return modelresolution.ResolveConfiguredChatModel(ctx, cfg)
 }
 
-// ResolveConfiguredChatModelOffline returns the effective chat-suitable model
-// without calling provider model catalogs.
-func ResolveConfiguredChatModelOffline(cfg *config.AIConfig) (string, error) {
-	return modelresolution.ResolveConfiguredChatModelOffline(cfg)
-}
-
 // ResolvePreferredModelForProvider returns the best model to use for the requested
 // provider. Explicit provider-scoped selections win; otherwise Pulse resolves a
 // recommended model from the provider's live catalog.
@@ -45,24 +39,8 @@ func ResolveConfiguredChatProviderModel(ctx context.Context, cfg *config.AIConfi
 	return modelresolution.ResolveConfiguredChatProviderModel(ctx, cfg, provider)
 }
 
-// ResolveConfiguredChatProviderModelOffline resolves a chat-suitable model for
-// the requested provider without calling provider model catalogs.
-func ResolveConfiguredChatProviderModelOffline(cfg *config.AIConfig, provider string) (string, error) {
-	return modelresolution.ResolveConfiguredChatProviderModelOffline(cfg, provider)
-}
-
 // SelectRecommendedProviderModel picks the current best candidate from a provider's
 // live model catalog. The policy is intentionally vendor-neutral but Assistant first.
 func SelectRecommendedProviderModel(models []providers.ModelInfo) (providers.ModelInfo, bool) {
 	return modelresolution.SelectRecommendedProviderModel(models)
-}
-
-// isModelUsableWithConfig reports whether model names a non-retired provider
-// with usable credentials in the supplied config.
-func isModelUsableWithConfig(cfg *config.AIConfig, model string) bool {
-	return modelresolution.IsModelUsableWithConfig(cfg, model)
-}
-
-func isModelUsableForChatWithConfig(cfg *config.AIConfig, model string) bool {
-	return modelresolution.IsModelUsableForChatWithConfig(cfg, model)
 }

@@ -317,18 +317,6 @@ func (p agentFindingsProvider) ActiveFindingCount() int {
 	return p.activeCount()
 }
 
-// agentFindingsProviderFunc is a function adapter so wire-up code can
-// pass a closure without declaring a struct.
-type agentFindingsProviderFunc func(resourceID string) []AgentResourceFindingSnapshot
-
-// ActiveFindingsForResource implements AgentFindingsProvider.
-func (f agentFindingsProviderFunc) ActiveFindingsForResource(resourceID string) []AgentResourceFindingSnapshot {
-	if f == nil {
-		return nil
-	}
-	return f(resourceID)
-}
-
 // AgentApprovalsProvider returns still-pending approvals as
 // agent-stable projections. Per-resource context needs full
 // summaries; fleet context needs only a resource-keyed count map so

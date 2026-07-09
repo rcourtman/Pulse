@@ -180,20 +180,6 @@ func buildEntitlementPayloadFromLicensing(status *licenseStatus, subscriptionSta
 	return pkglicensing.BuildEntitlementPayload(status, subscriptionState)
 }
 
-func buildRuntimeCapabilitiesPayloadFromLicensing(
-	status *licenseStatus,
-	subscriptionState string,
-) runtimeCapabilitiesPayloadModel {
-	return pkglicensing.BuildRuntimeCapabilitiesPayload(status, subscriptionState)
-}
-
-func buildCommercialPosturePayloadFromLicensing(
-	status *licenseStatus,
-	subscriptionState string,
-) commercialPosturePayloadModel {
-	return pkglicensing.BuildCommercialPosturePayload(status, subscriptionState)
-}
-
 func buildFeatureMapFromLicensing(service *licenseService) map[string]bool {
 	return pkglicensing.BuildFeatureMap(service, nil)
 }

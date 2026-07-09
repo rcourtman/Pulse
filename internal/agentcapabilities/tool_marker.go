@@ -163,12 +163,6 @@ func ApprovalRequiredToolMarkerPayloadJSON(content string) ([]byte, bool) {
 	return toolMarkerPayloadJSON(content, ToolMarkerApprovalRequiredPrefix)
 }
 
-// PolicyBlockedToolMarkerPayloadJSON returns the marker payload bytes when
-// content carries the shared policy-blocked prefix.
-func PolicyBlockedToolMarkerPayloadJSON(content string) ([]byte, bool) {
-	return toolMarkerPayloadJSON(content, ToolMarkerPolicyBlockedPrefix)
-}
-
 // ParseApprovalRequiredToolMarkerPayload parses a shared approval-required
 // marker into a generic payload map and verifies the stable payload type.
 func ParseApprovalRequiredToolMarkerPayload(content string) (map[string]any, bool) {

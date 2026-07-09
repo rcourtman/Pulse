@@ -59,21 +59,6 @@ func newRuntimeHealth(ready *atomic.Bool, enabled map[string]bool) *runtimeHealt
 	return r
 }
 
-func (r *runtimeHealth) setEnabled(name string, enabled bool) {
-	if r == nil {
-		return
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	state := moduleStateDisabled
-	if enabled {
-		state = moduleStateStarting
-	}
-	r.modules[name] = moduleHealth{Name: name, Enabled: enabled, State: state, UpdatedAt: r.now()}
-	agentModuleEnabled.WithLabelValues(name).Set(boolGauge(enabled))
-	r.reconcileReadyLocked()
-}
-
 func (r *runtimeHealth) setState(name, state string, err error) {
 	if r == nil {
 		return

@@ -12,6 +12,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -67,9 +68,10 @@ func TestExecuteFileReadDocker(t *testing.T) {
 		}, nil)
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: models.StateSnapshot{}},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+			StateProvider:    &mockStateProvider{state: models.StateSnapshot{}},
+			AgentServer:      mockAgent,
+			ControlLevel:     ControlLevelAutonomous,
+			ActionAuditStore: unifiedresources.NewMemoryStore(),
 		})
 		result, err := exec.executeFileRead(ctx, "/config/settings.json", "tower", "jellyfin")
 		require.NoError(t, err)
@@ -98,9 +100,10 @@ func TestExecuteFileReadDocker(t *testing.T) {
 		}, nil)
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: models.StateSnapshot{}},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+			StateProvider:    &mockStateProvider{state: models.StateSnapshot{}},
+			AgentServer:      mockAgent,
+			ControlLevel:     ControlLevelAutonomous,
+			ActionAuditStore: unifiedresources.NewMemoryStore(),
 		})
 		result, err := exec.executeFileRead(ctx, "/etc/hostname", "tower", "") // empty container
 		require.NoError(t, err)
@@ -122,9 +125,10 @@ func TestExecuteFileReadDocker(t *testing.T) {
 		}, nil)
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: models.StateSnapshot{}},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+			StateProvider:    &mockStateProvider{state: models.StateSnapshot{}},
+			AgentServer:      mockAgent,
+			ControlLevel:     ControlLevelAutonomous,
+			ActionAuditStore: unifiedresources.NewMemoryStore(),
 		})
 		result, err := exec.executeFileRead(ctx, "/config/test.json", "tower", "nonexistent")
 		require.NoError(t, err)
@@ -168,9 +172,10 @@ func TestExecuteFileWriteDocker(t *testing.T) {
 		}, nil)
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: models.StateSnapshot{}},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+			StateProvider:    &mockStateProvider{state: models.StateSnapshot{}},
+			AgentServer:      mockAgent,
+			ControlLevel:     ControlLevelAutonomous,
+			ActionAuditStore: unifiedresources.NewMemoryStore(),
 		})
 		result, err := exec.executeFileWrite(ctx, "/etc/nginx/nginx.conf", content, "tower", "nginx", map[string]interface{}{})
 		require.NoError(t, err)
@@ -238,9 +243,10 @@ func TestExecuteFileAppendDocker(t *testing.T) {
 		}, nil)
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: models.StateSnapshot{}},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+			StateProvider:    &mockStateProvider{state: models.StateSnapshot{}},
+			AgentServer:      mockAgent,
+			ControlLevel:     ControlLevelAutonomous,
+			ActionAuditStore: unifiedresources.NewMemoryStore(),
 		})
 		result, err := exec.executeFileAppend(ctx, "/var/log/app.log", content, "tower", "logcontainer", map[string]interface{}{})
 		require.NoError(t, err)
@@ -300,9 +306,10 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		}
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+			StateProvider:    &mockStateProvider{state: state},
+			AgentServer:      mockAgent,
+			ControlLevel:     ControlLevelAutonomous,
+			ActionAuditStore: unifiedresources.NewMemoryStore(),
 		})
 		result, err := exec.executeFileWrite(ctx, "/opt/test/config.yaml", content, "homepage-docker", "", map[string]interface{}{})
 		require.NoError(t, err)
@@ -354,9 +361,10 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		}
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+			StateProvider:    &mockStateProvider{state: state},
+			AgentServer:      mockAgent,
+			ControlLevel:     ControlLevelAutonomous,
+			ActionAuditStore: unifiedresources.NewMemoryStore(),
 		})
 		result, err := exec.executeFileWrite(ctx, "/etc/test.conf", content, "test-vm", "", map[string]interface{}{})
 		require.NoError(t, err)
@@ -399,9 +407,10 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		}, nil)
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: models.StateSnapshot{}},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+			StateProvider:    &mockStateProvider{state: models.StateSnapshot{}},
+			AgentServer:      mockAgent,
+			ControlLevel:     ControlLevelAutonomous,
+			ActionAuditStore: unifiedresources.NewMemoryStore(),
 		})
 		result, err := exec.executeFileWrite(ctx, "/tmp/test.txt", content, "tower", "", map[string]interface{}{})
 		require.NoError(t, err)
@@ -453,9 +462,10 @@ func TestExecuteFileWriteLXCVMTargets(t *testing.T) {
 		}
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+			StateProvider:    &mockStateProvider{state: state},
+			AgentServer:      mockAgent,
+			ControlLevel:     ControlLevelAutonomous,
+			ActionAuditStore: unifiedresources.NewMemoryStore(),
 		})
 		result, err := exec.executeFileAppend(ctx, "/var/log/app.log", content, "homepage-docker", "", map[string]interface{}{})
 		require.NoError(t, err)
@@ -501,9 +511,10 @@ func TestExecuteFileEditDockerNestedRouting(t *testing.T) {
 		}
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+			StateProvider:    &mockStateProvider{state: state},
+			AgentServer:      mockAgent,
+			ControlLevel:     ControlLevelAutonomous,
+			ActionAuditStore: unifiedresources.NewMemoryStore(),
 		})
 		result, err := exec.executeFileRead(ctx, "/config/test.json", "homepage-docker", "nginx")
 		require.NoError(t, err)

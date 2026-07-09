@@ -317,11 +317,6 @@ func LookupAIProviderDefinition(provider string) (AIProviderDefinition, bool) {
 	return AIProviderDefinition{}, false
 }
 
-func IsKnownAIProvider(provider string) bool {
-	_, ok := LookupAIProviderDefinition(provider)
-	return ok
-}
-
 func IsOpenAICompatibleProvider(provider string) bool {
 	def, ok := LookupAIProviderDefinition(provider)
 	return ok && def.Protocol == AIProviderProtocolOpenAICompatible

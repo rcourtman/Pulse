@@ -553,15 +553,6 @@ func displayResourceName(resource unified.Resource) string {
 	return unified.CanonicalResourceID(resource.ID)
 }
 
-type normalizedIdentity struct {
-	MachineID    string   `json:"machineId,omitempty"`
-	DMIUUID      string   `json:"dmiUuid,omitempty"`
-	Hostnames    []string `json:"hostnames,omitempty"`
-	IPAddresses  []string `json:"ipAddresses,omitempty"`
-	MACAddresses []string `json:"macAddresses,omitempty"`
-	ClusterName  string   `json:"clusterName,omitempty"`
-}
-
 type normalizedCapabilityForResourceHash struct {
 	Name                 string                      `json:"name"`
 	Type                 unified.CapabilityType      `json:"type"`
@@ -623,17 +614,6 @@ func normalizeDataSources(sources []unified.DataSource) []unified.DataSource {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
 	return out
-}
-
-func normalizeIdentity(identity unified.ResourceIdentity) normalizedIdentity {
-	return normalizedIdentity{
-		MachineID:    strings.TrimSpace(identity.MachineID),
-		DMIUUID:      strings.TrimSpace(identity.DMIUUID),
-		Hostnames:    sortedTrimmedStrings(identity.Hostnames),
-		IPAddresses:  sortedTrimmedStrings(identity.IPAddresses),
-		MACAddresses: sortedTrimmedStrings(identity.MACAddresses),
-		ClusterName:  strings.TrimSpace(identity.ClusterName),
-	}
 }
 
 func normalizeCapabilitiesForResourceHash(capabilities []unified.ResourceCapability) []normalizedCapabilityForResourceHash {

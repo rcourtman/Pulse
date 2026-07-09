@@ -323,9 +323,10 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 		}
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+			StateProvider:    &mockStateProvider{state: state},
+			AgentServer:      mockAgent,
+			ControlLevel:     ControlLevelAutonomous,
+			ActionAuditStore: unifiedresources.NewMemoryStore(),
 		})
 		result, err := exec.executeRunCommand(ctx, map[string]interface{}{
 			"command":     "grep pattern /var/log/*.log",
@@ -359,9 +360,10 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 		}
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: state},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+			StateProvider:    &mockStateProvider{state: state},
+			AgentServer:      mockAgent,
+			ControlLevel:     ControlLevelAutonomous,
+			ActionAuditStore: unifiedresources.NewMemoryStore(),
 		})
 		result, err := exec.executeRunCommand(ctx, map[string]interface{}{
 			"command":     "ls /tmp/*.txt",
@@ -388,9 +390,10 @@ func TestPulseToolExecutor_RunCommandLXCRouting(t *testing.T) {
 		}, nil)
 
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			StateProvider: &mockStateProvider{state: models.StateSnapshot{}},
-			AgentServer:   mockAgent,
-			ControlLevel:  ControlLevelAutonomous,
+			StateProvider:    &mockStateProvider{state: models.StateSnapshot{}},
+			AgentServer:      mockAgent,
+			ControlLevel:     ControlLevelAutonomous,
+			ActionAuditStore: unifiedresources.NewMemoryStore(),
 		})
 		result, err := exec.executeRunCommand(ctx, map[string]interface{}{
 			"command":     "ls /tmp/*.txt",

@@ -12,13 +12,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func (r *Router) withExternalAgentActivity(activity string, handler http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		r.recordExternalAgentActivity(req, activity)
-		handler(w, req)
-	}
-}
-
 func (r *Router) withExternalAgentCapabilityActivity(capabilityName string, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		r.recordExternalAgentCapabilityActivity(req, capabilityName)

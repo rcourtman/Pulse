@@ -9,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -55,9 +56,10 @@ func TestPulseToolExecutor_ExecuteControlGuest(t *testing.T) {
 	stateProv := &mockStateProvider{}
 	agentSrv := &mockAgentServer{}
 	exec := NewPulseToolExecutor(ExecutorConfig{
-		StateProvider: stateProv,
-		AgentServer:   agentSrv,
-		ControlLevel:  ControlLevelAutonomous,
+		StateProvider:    stateProv,
+		AgentServer:      agentSrv,
+		ControlLevel:     ControlLevelAutonomous,
+		ActionAuditStore: unifiedresources.NewMemoryStore(),
 	})
 
 	state := models.StateSnapshot{
@@ -103,9 +105,10 @@ func TestPulseToolExecutor_ExecuteControlDocker(t *testing.T) {
 	stateProv := &mockStateProvider{}
 	agentSrv := &mockAgentServer{}
 	exec := NewPulseToolExecutor(ExecutorConfig{
-		StateProvider: stateProv,
-		AgentServer:   agentSrv,
-		ControlLevel:  ControlLevelAutonomous,
+		StateProvider:    stateProv,
+		AgentServer:      agentSrv,
+		ControlLevel:     ControlLevelAutonomous,
+		ActionAuditStore: unifiedresources.NewMemoryStore(),
 	})
 
 	state := models.StateSnapshot{
