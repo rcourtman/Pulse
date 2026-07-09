@@ -167,6 +167,19 @@ test('multi-tenant release auth reuses storage state and classifies login rate l
   assert.match(helpers, /\/too many\/i\.test\(lastOutcome\) \? 15_000/);
 });
 
+test('multi-tenant release org switching waits for selected org UI state', async () => {
+  const helpers = await fs.readFile(path.join(integrationRoot, 'tests', 'helpers.ts'), 'utf8');
+
+  assert.match(helpers, /export async function switchOrg\(page: Page, orgId: string\)/);
+  assert.match(helpers, /window\.sessionStorage\.setItem\("pulse_org_id", id\)/);
+  assert.match(helpers, /window\.localStorage\.setItem\("pulse_org_id", id\)/);
+  assert.match(helpers, /document\.cookie = `pulse_org_id=\$\{encodeURIComponent\(id\)\}; Path=\/; SameSite=Lax`/);
+  assert.match(helpers, /await page\.reload\(\{ waitUntil: "domcontentloaded" \}\)/);
+  assert.match(helpers, /await waitForAppShell\(page\)/);
+  assert.match(helpers, /getByRole\("combobox", \{ name: "Organization" \}\)/);
+  assert.match(helpers, /toHaveValue\(\s*orgId,\s*\{\s*timeout: 20_000\s*\},\s*\)/);
+});
+
 test('shouldBuildManagedLocalBackendBinary returns true when binary is missing', async () => {
   const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pulse-managed-backend-'));
   const state = {

@@ -1515,6 +1515,10 @@ export async function switchOrg(page: Page, orgId: string): Promise<void> {
   }, orgId);
   await page.reload({ waitUntil: "domcontentloaded" });
   await waitForAppShell(page);
+  await expect(page.getByRole("combobox", { name: "Organization" })).toHaveValue(
+    orgId,
+    { timeout: 20_000 },
+  );
 }
 
 /**

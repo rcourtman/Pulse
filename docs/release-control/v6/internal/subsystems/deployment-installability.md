@@ -481,6 +481,11 @@ TLS floor in the dynamic config.
    connection failure, and release suites that run many scenarios against one
    compose backend must prefer worker-scoped authenticated storage state over
    repeated per-test password logins.
+   Multi-tenant release helpers must also treat organization switching as a
+   visible runtime-state contract: after persisting `pulse_org_id` and reloading,
+   the helper must wait for the Organization selector to hold the requested org
+   before a scenario navigates onward, so an interrupted org-list bootstrap
+   cannot fall back to `default` and mask the scoped UI under test.
 6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, the canonical version file, prerelease feedback intake prompts, artifact publication lineage enforcement, release note or changelog packet composition, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/mobile_release_gate_test.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
    That release-promotion boundary also owns prerelease note packet lineage:
    shipped RC notes must remain historically accurate, the top-level
