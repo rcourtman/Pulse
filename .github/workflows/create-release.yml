@@ -987,9 +987,21 @@ jobs:
               -X PATCH -F draft=false -F make_latest=false
             echo "[OK] Published as prerelease: ${TAG}"
           else
-            gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
-              -X PATCH -F draft=false -F make_latest=true
-            echo "[OK] Published as latest: ${TAG}"
+            # 'latest' belongs to the highest stable semver overall. A
+            # maintenance cut of an older line (e.g. v5.1.36 after v6 GA)
+            # publishes without stealing the latest marker from the current
+            # line.
+            HIGHEST_STABLE=$(gh api --paginate "repos/${{ github.repository }}/tags" --jq '.[].name' \
+              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+            if [ "$TAG" = "$HIGHEST_STABLE" ]; then
+              gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
+                -X PATCH -F draft=false -F make_latest=true
+              echo "[OK] Published as latest: ${TAG}"
+            else
+              gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
+                -X PATCH -F draft=false -F make_latest=false
+              echo "[OK] Published WITHOUT latest marker: ${TAG} (highest stable is ${HIGHEST_STABLE})"
+            fi
           fi
 
       - name: Skip publish (draft only)

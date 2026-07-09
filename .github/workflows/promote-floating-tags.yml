@@ -40,6 +40,11 @@ on:
         required: true
         type: boolean
         default: false
+      force_latest:
+        description: 'Move :latest to this tag even if it is not the highest stable (rollback)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -155,6 +160,7 @@ jobs:
           TAG: ${{ steps.extract.outputs.tag }}
           PRERELEASE: ${{ steps.extract.outputs.prerelease }}
           OWNER: ${{ github.repository_owner }}
+          FORCE_LATEST: ${{ github.event_name == 'workflow_dispatch' && inputs.force_latest || false }}
         run: |
           set -euo pipefail
           VERSION="${TAG#v}"
@@ -172,14 +178,27 @@ jobs:
               -t ghcr.io/${OWNER}/pulse:rc \
               ghcr.io/${OWNER}/pulse:${TAG}
           else
-            echo "Promoting stable tags for ${TAG}"
+            # :latest belongs to the highest stable semver overall. A
+            # maintenance cut of an older line (e.g. v5.1.36 after v6 GA, or a
+            # 6.0.x patch after 6.1 ships) must only move its own :MAJOR and
+            # :MAJOR.MINOR tags.
+            HIGHEST_STABLE=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+            LATEST_ARGS=""
+            LATEST_ARGS_GHCR=""
+            if [ "$TAG" = "$HIGHEST_STABLE" ] || [ "${FORCE_LATEST}" = "true" ]; then
+              LATEST_ARGS="-t rcourtman/pulse:latest"
+              LATEST_ARGS_GHCR="-t ghcr.io/${OWNER}/pulse:latest"
+              echo "Promoting stable tags for ${TAG} (including :latest)"
+            else
+              echo "Promoting stable tags for ${TAG} WITHOUT :latest (highest stable is ${HIGHEST_STABLE})"
+            fi
             docker buildx imagetools create \
-              -t rcourtman/pulse:latest \
+              ${LATEST_ARGS} \
               -t rcourtman/pulse:${MAJOR_MINOR} \
               -t rcourtman/pulse:${MAJOR} \
               rcourtman/pulse:${TAG}
             docker buildx imagetools create \
-              -t ghcr.io/${OWNER}/pulse:latest \
+              ${LATEST_ARGS_GHCR} \
               -t ghcr.io/${OWNER}/pulse:${MAJOR_MINOR} \
               -t ghcr.io/${OWNER}/pulse:${MAJOR} \
               ghcr.io/${OWNER}/pulse:${TAG}
