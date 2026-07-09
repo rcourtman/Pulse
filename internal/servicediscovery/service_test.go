@@ -1176,6 +1176,7 @@ func TestService_CleanupPreservesLiveHostDiscoveries(t *testing.T) {
 
 	service := NewService(store, nil, DefaultConfig())
 	service.SetReadState(readStateFromSnapshot(state))
+	t.Cleanup(service.Stop)
 	service.cleanupOrphanedData(state)
 
 	if got, err := store.Get(live.ID); err != nil || got == nil {
@@ -1185,6 +1186,44 @@ func TestService_CleanupPreservesLiveHostDiscoveries(t *testing.T) {
 		t.Fatalf("Get(orphan) error: %v", err)
 	} else if got != nil {
 		t.Fatalf("expected decommissioned host discovery to be removed, still present: %#v", got)
+	}
+}
+
+func TestService_StopWaitsForReadStateBackfill(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+	store.crypto = nil
+	if err := store.Save(&ResourceDiscovery{
+		ID:           "agent:agent-uuid-1:agent-uuid-1",
+		ResourceType: ResourceTypeAgent,
+		TargetID:     "agent-uuid-1",
+		ResourceID:   "agent-uuid-1",
+	}); err != nil {
+		t.Fatalf("Save discovery: %v", err)
+	}
+
+	service := NewService(store, nil, DefaultConfig())
+	service.SetReadState(readStateFromSnapshot(StateSnapshot{}))
+
+	service.mu.RLock()
+	done := service.backfillDone
+	service.mu.RUnlock()
+	if done == nil {
+		t.Fatal("expected read-state backfill lifecycle channel")
+	}
+	select {
+	case <-done:
+		t.Fatal("expected empty-state backfill to wait for monitor data")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	service.Stop()
+	select {
+	case <-done:
+	default:
+		t.Fatal("Stop returned before read-state backfill exited")
 	}
 }
 

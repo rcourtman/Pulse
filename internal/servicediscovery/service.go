@@ -261,6 +261,8 @@ type Service struct {
 	stopCh            chan struct{}
 	loopDone          chan struct{}
 	runCancel         context.CancelFunc
+	backfillCancel    context.CancelFunc
+	backfillDone      chan struct{}
 	intervalCh        chan time.Duration // Channel for live interval updates
 	interval          time.Duration
 	initialDelay      time.Duration
@@ -410,10 +412,30 @@ func (s *Service) SetAIAnalyzer(analyzer AIAnalyzer) {
 // SetReadState sets the typed ReadState provider for the discovery service.
 // When set, getSnapshot() uses ReadState to build infrastructure snapshots.
 func (s *Service) SetReadState(rs unifiedresources.ReadState) {
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+
 	s.mu.Lock()
+	previousCancel := s.backfillCancel
+	previousDone := s.backfillDone
 	s.readState = rs
+	s.backfillCancel = cancel
+	s.backfillDone = done
 	s.mu.Unlock()
-	go s.backfillAvailabilitySuggestions(context.Background())
+
+	if previousCancel != nil {
+		previousCancel()
+	}
+	go func() {
+		defer close(done)
+		if previousDone != nil {
+			<-previousDone
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		s.backfillAvailabilitySuggestions(ctx)
+	}()
 }
 
 // Start begins the background discovery service.
@@ -447,19 +469,22 @@ func (s *Service) Start(ctx context.Context) {
 // Stop stops the background discovery service.
 func (s *Service) Stop() {
 	s.mu.Lock()
-	if !s.running {
-		s.mu.Unlock()
-		return
-	}
 	s.running = false
 	stopCh := s.stopCh
 	loopDone := s.loopDone
 	runCancel := s.runCancel
+	backfillCancel := s.backfillCancel
+	backfillDone := s.backfillDone
 	s.stopCh = nil
 	s.loopDone = nil
 	s.runCancel = nil
+	s.backfillCancel = nil
+	s.backfillDone = nil
 	s.mu.Unlock()
 
+	if backfillCancel != nil {
+		backfillCancel()
+	}
 	if runCancel != nil {
 		runCancel()
 	}
@@ -468,6 +493,9 @@ func (s *Service) Stop() {
 	}
 	if loopDone != nil {
 		<-loopDone
+	}
+	if backfillDone != nil {
+		<-backfillDone
 	}
 }
 
