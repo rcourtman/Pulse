@@ -286,8 +286,11 @@ func runProbe(ctx context.Context, host string, port int, client *http.Client) (
 // probeOne runs a single probe. It returns (candidate, true) only when the
 // target's identifyFn confirms the product.
 func probeOne(ctx context.Context, host string, target probeTarget, client *http.Client) (ProbeCandidate, bool) {
-	endpoint := fmt.Sprintf("%s://%s:%d%s", target.Scheme, host, target.Port, target.Path)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	endpoint, err := validatedProbeEndpoint(ctx, host, target)
+	if err != nil {
+		return ProbeCandidate{}, false
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		return ProbeCandidate{}, false
 	}
@@ -324,8 +327,21 @@ func probeOne(ctx context.Context, host string, target probeTarget, client *http
 
 	return ProbeCandidate{
 		Type:  target.Type,
-		Host:  fmt.Sprintf("%s://%s:%d", target.Scheme, host, target.Port),
+		Host:  fmt.Sprintf("%s://%s", target.Scheme, endpoint.Host),
 		Port:  target.Port,
 		Hints: hints,
 	}, true
+}
+
+func validatedProbeEndpoint(ctx context.Context, host string, target probeTarget) (*url.URL, error) {
+	endpoint := &url.URL{
+		Scheme: target.Scheme,
+		Host:   net.JoinHostPort(host, strconv.Itoa(target.Port)),
+		Path:   target.Path,
+	}
+	return securityutil.ValidateOutboundFetchURL(ctx, endpoint.String(), securityutil.RestrictedOutboundHTTPOptions{
+		AllowedSchemes:  []string{"https"},
+		AllowPrivateIPs: true,
+		AllowLoopback:   true,
+	})
 }

@@ -336,6 +336,21 @@ func TestValidateProbeHostRejectsMetadataService(t *testing.T) {
 	}
 }
 
+func TestValidatedProbeEndpointRejectsMetadataService(t *testing.T) {
+	_, err := validatedProbeEndpoint(context.Background(), "169.254.169.254", probeTarget{
+		Type:   ConnectionTypePVE,
+		Scheme: "https",
+		Port:   8006,
+		Path:   "/",
+	})
+	if err == nil {
+		t.Fatal("expected metadata service endpoint to be rejected")
+	}
+	if !strings.Contains(err.Error(), "metadata service") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestConnectionsHandlersHandleProbeRejectsBlockedAddress(t *testing.T) {
 	h := NewConnectionsHandlers(nil, nil, nil)
 	body := strings.NewReader(`{"address":"169.254.169.254"}`)

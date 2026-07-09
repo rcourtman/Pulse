@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"runtime"
 	"sort"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -428,10 +430,12 @@ func probeHTTP(ctx context.Context, target config.AvailabilityTarget, timeout ti
 	if err != nil {
 		return err
 	}
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	opts := availabilityHTTPOutboundOptions()
+	u, err = securityutil.ValidateOutboundFetchURL(ctx, u.String(), opts)
+	if err != nil {
+		return fmt.Errorf("http availability target URL validation failed: %w", err)
 	}
-	client := http.Client{Timeout: timeout, Transport: transport}
+	client := securityutil.NewRestrictedOutboundHTTPClient(timeout, opts)
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, u.String(), nil)
 	if err != nil {
 		return fmt.Errorf("build http availability request: %w", err)
@@ -441,7 +445,7 @@ func probeHTTP(ctx context.Context, target config.AvailabilityTarget, timeout ti
 	if err == nil {
 		defer resp.Body.Close()
 		if resp.StatusCode == http.StatusMethodNotAllowed {
-			return probeHTTPGet(ctx, client, u.String())
+			return probeHTTPGet(ctx, client, u)
 		}
 		if resp.StatusCode >= http.StatusInternalServerError {
 			return fmt.Errorf("http probe returned %s", resp.Status)
@@ -452,51 +456,23 @@ func probeHTTP(ctx context.Context, target config.AvailabilityTarget, timeout ti
 		return ctxErr
 	}
 
-	return probeHTTPViaSystem(ctx, u.String(), target.EffectiveTimeoutMillis())
+	return fmt.Errorf("http probe failed: %w", err)
 }
 
-func probeHTTPViaSystem(ctx context.Context, rawURL string, timeoutMillis int) error {
-	timeoutSecs := (timeoutMillis + 999) / 1000
-	if timeoutSecs < 1 {
-		timeoutSecs = 1
+func availabilityHTTPOutboundOptions() securityutil.RestrictedOutboundHTTPOptions {
+	return securityutil.RestrictedOutboundHTTPOptions{
+		AllowedSchemes:  []string{"http", "https"},
+		AllowPrivateIPs: true,
+		AllowLoopback:   true,
+		TLSConfig: &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: true, //nolint:gosec // Availability probes must support self-signed operator endpoints.
+		},
 	}
-	timeoutStr := strconv.Itoa(timeoutSecs)
-
-	args := []string{
-		"-s", "-o", "/dev/null",
-		"-w", "%{http_code}",
-		"--connect-timeout", timeoutStr,
-		"--max-time", timeoutStr,
-		"-k",
-		rawURL,
-	}
-
-	cmd := exec.CommandContext(ctx, "curl", args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return ctxErr
-		}
-		details := strings.TrimSpace(string(output))
-		if len(details) > 240 {
-			details = details[:240]
-		}
-		if details == "" {
-			return fmt.Errorf("http probe failed: %w", err)
-		}
-		return fmt.Errorf("http probe failed: %s", details)
-	}
-
-	statusCode := strings.TrimSpace(string(output))
-	code, _ := strconv.Atoi(statusCode)
-	if code >= 500 {
-		return fmt.Errorf("http probe returned status %s", statusCode)
-	}
-	return nil
 }
 
-func probeHTTPGet(ctx context.Context, client http.Client, url string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func probeHTTPGet(ctx context.Context, client *http.Client, u *url.URL) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		return fmt.Errorf("build http availability fallback request: %w", err)
 	}

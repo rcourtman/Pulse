@@ -26,13 +26,12 @@ interface ResolveTooltipPositionOptions extends TooltipOptions {
 }
 
 export function sanitizeTooltipContent(content: string): string {
-  return content
-    .replace(/<[^>]*>/g, '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;');
+  return Array.from(content)
+    .filter((char) => {
+      const codePoint = char.codePointAt(0) ?? 0;
+      return char === '\n' || char === '\t' || (codePoint >= 0x20 && codePoint !== 0x7f);
+    })
+    .join('');
 }
 
 export function resolveTooltipPosition(options: ResolveTooltipPositionOptions): TooltipPosition {

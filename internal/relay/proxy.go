@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -101,10 +102,11 @@ func (p *HTTPProxy) HandleRequest(payload []byte, apiToken string) ([]byte, erro
 		return p.errorResponse(req.ID, http.StatusBadRequest, "missing required fields (id, method, path)"), nil
 	}
 
-	// Ensure path starts with /
-	if !strings.HasPrefix(req.Path, "/") {
-		req.Path = "/" + req.Path
+	localURL, err := p.localAPIURL(req.Path)
+	if err != nil {
+		return p.errorResponse(req.ID, http.StatusBadRequest, "invalid proxy path"), nil
 	}
+	req.Path = localURL.RequestURI()
 
 	// Decode body if present
 	var bodyReader io.Reader
@@ -119,11 +121,12 @@ func (p *HTTPProxy) HandleRequest(payload []byte, apiToken string) ([]byte, erro
 		bodyReader = bytes.NewReader(bodyBytes)
 	}
 
-	url := fmt.Sprintf("http://%s%s", p.localAddr, req.Path)
-	httpReq, err := http.NewRequest(req.Method, url, bodyReader)
+	httpReq, err := http.NewRequest(req.Method, p.localAPIOrigin(), bodyReader)
 	if err != nil {
 		return p.errorResponse(req.ID, http.StatusInternalServerError, "failed to create request"), nil
 	}
+	httpReq.URL.Path = localURL.Path
+	httpReq.URL.RawQuery = localURL.RawQuery
 
 	// Allowlist: only forward safe, content-describing headers.
 	// Everything else is stripped to prevent auth-context leakage
@@ -208,9 +211,12 @@ func (p *HTTPProxy) HandleStreamRequest(ctx context.Context, payload []byte, api
 		return nil
 	}
 
-	if !strings.HasPrefix(req.Path, "/") {
-		req.Path = "/" + req.Path
+	localURL, err := p.localAPIURL(req.Path)
+	if err != nil {
+		sendFrame(p.errorResponse(req.ID, http.StatusBadRequest, "invalid proxy path"))
+		return nil
 	}
+	req.Path = localURL.RequestURI()
 
 	var bodyReader io.Reader
 	if req.Body != "" {
@@ -226,12 +232,13 @@ func (p *HTTPProxy) HandleStreamRequest(ctx context.Context, payload []byte, api
 		bodyReader = bytes.NewReader(bodyBytes)
 	}
 
-	url := fmt.Sprintf("http://%s%s", p.localAddr, req.Path)
-	httpReq, err := http.NewRequestWithContext(ctx, req.Method, url, bodyReader)
+	httpReq, err := http.NewRequestWithContext(ctx, req.Method, p.localAPIOrigin(), bodyReader)
 	if err != nil {
 		sendFrame(p.errorResponse(req.ID, http.StatusInternalServerError, "failed to create request"))
 		return nil
 	}
+	httpReq.URL.Path = localURL.Path
+	httpReq.URL.RawQuery = localURL.RawQuery
 
 	for k, v := range req.Headers {
 		headerName := strings.TrimSpace(k)
@@ -424,6 +431,51 @@ var allowedProxyHeaders = map[string]bool{
 
 func allowedProxyHeader(name string) bool {
 	return allowedProxyHeaders[strings.ToLower(strings.TrimSpace(name))]
+}
+
+func (p *HTTPProxy) localAPIURL(rawPath string) (*url.URL, error) {
+	requestURI, err := normalizeProxyRequestURI(rawPath)
+	if err != nil {
+		return nil, err
+	}
+	return &url.URL{
+		Scheme:   "http",
+		Host:     p.localAddr,
+		Path:     requestURI.Path,
+		RawQuery: requestURI.RawQuery,
+	}, nil
+}
+
+func (p *HTTPProxy) localAPIOrigin() string {
+	return "http://" + p.localAddr
+}
+
+func normalizeProxyRequestURI(rawPath string) (*url.URL, error) {
+	trimmed := strings.TrimSpace(rawPath)
+	if trimmed == "" {
+		return nil, fmt.Errorf("proxy path is required")
+	}
+	parsed, err := url.ParseRequestURI(trimmed)
+	if err != nil && !strings.HasPrefix(trimmed, "/") {
+		parsed, err = url.ParseRequestURI("/" + trimmed)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("invalid proxy path: %w", err)
+	}
+	if parsed.Scheme != "" || parsed.Host != "" || parsed.Opaque != "" {
+		return nil, fmt.Errorf("proxy path must be origin-relative")
+	}
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	}
+	if !strings.HasPrefix(parsed.Path, "/") {
+		parsed.Path = "/" + parsed.Path
+	}
+	if strings.HasPrefix(parsed.Path, "//") {
+		return nil, fmt.Errorf("proxy path must not be network-path relative")
+	}
+	parsed.Fragment = ""
+	return parsed, nil
 }
 
 func (p *HTTPProxy) errorResponse(requestID string, status int, message string) []byte {

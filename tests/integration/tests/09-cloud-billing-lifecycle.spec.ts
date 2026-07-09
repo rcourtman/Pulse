@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { randomInt } from 'node:crypto';
 import { completeStripeSandboxCheckout } from './stripe-sandbox';
 import { sendStripeWebhook } from './stripe-webhooks';
 import { preferredPlaywrightRouteBaseURL } from './runtime-defaults';
@@ -48,7 +49,7 @@ function requiredEnv(name: string): string {
 }
 
 function signupIdentity() {
-  const suffix = `${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+  const suffix = `${Date.now()}-${randomInt(1_000_000)}`;
   const domain = (process.env.PULSE_E2E_CLOUD_EMAIL_DOMAIN || 'example.com').trim() || 'example.com';
   return {
     email: `cloud-lifecycle-${suffix}@${domain}`,

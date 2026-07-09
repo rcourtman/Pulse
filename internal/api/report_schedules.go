@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -542,7 +541,7 @@ func saveGeneratedReport(persistence *config.ConfigPersistence, schedule config.
 	if err != nil {
 		return "", err
 	}
-	scheduleDir, err := securityutil.JoinStorageLeaf(generatedDir, schedule.ID)
+	scheduleDir, err := securityutil.JoinStorageLeaf(generatedDir, securityutil.HashedStorageName(schedule.ID))
 	if err != nil {
 		return "", err
 	}
@@ -553,7 +552,10 @@ func saveGeneratedReport(persistence *config.ConfigPersistence, schedule config.
 	if filename == "" {
 		filename = "report." + string(report.Format)
 	}
-	path := filepath.Join(scheduleDir, filename)
+	path, err := securityutil.JoinStorageLeaf(scheduleDir, filename)
+	if err != nil {
+		return "", err
+	}
 	if err := os.WriteFile(path, report.Data, 0o600); err != nil {
 		return "", fmt.Errorf("write generated report: %w", err)
 	}
@@ -582,7 +584,11 @@ func pruneGeneratedReports(dir string, retentionCount int) {
 		if err != nil {
 			continue
 		}
-		files = append(files, generatedFile{path: filepath.Join(dir, entry.Name()), modTime: info.ModTime()})
+		path, err := securityutil.JoinStorageLeaf(dir, entry.Name())
+		if err != nil {
+			continue
+		}
+		files = append(files, generatedFile{path: path, modTime: info.ModTime()})
 	}
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].modTime.After(files[j].modTime)

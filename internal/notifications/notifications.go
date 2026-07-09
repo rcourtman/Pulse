@@ -263,7 +263,7 @@ type webhookRequestOptions struct {
 // It exists so tests can disable or inline async behavior without relying on sleeps.
 var spawnAsync = func(f func()) { go f() }
 
-type appriseExecFunc func(ctx context.Context, path string, args []string) ([]byte, error)
+type appriseExecFunc func(ctx context.Context, args []string) ([]byte, error)
 
 // copyEmailConfig returns a defensive copy of EmailConfig including its slices to avoid data races.
 func copyEmailConfig(cfg EmailConfig) EmailConfig {
@@ -505,8 +505,8 @@ func NormalizeAppriseConfig(cfg AppriseConfig) AppriseConfig {
 	return normalized
 }
 
-func defaultAppriseExec(ctx context.Context, path string, args []string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, path, args...)
+func defaultAppriseExec(ctx context.Context, args []string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "apprise", args...)
 	return cmd.CombinedOutput()
 }
 
@@ -1699,21 +1699,21 @@ func (n *NotificationManager) sendAppriseViaCLI(cfg AppriseConfig, title, body s
 		execFn = defaultAppriseExec
 	}
 
-	output, err := execFn(ctx, cfg.CLIPath, args)
+	output, err := execFn(ctx, args)
 	if err != nil {
 		if len(output) > 0 {
 			log.Debug().
-				Str("cliPath", cfg.CLIPath).
+				Str("cliPath", "apprise").
 				Strs("targets", cfg.Targets).
 				Str("output", string(output)).
 				Msg("apprise CLI output (error)")
 		}
-		return fmt.Errorf("execute apprise CLI %q: %w", cfg.CLIPath, err)
+		return fmt.Errorf("execute apprise CLI %q: %w", "apprise", err)
 	}
 
 	if len(output) > 0 {
 		log.Debug().
-			Str("cliPath", cfg.CLIPath).
+			Str("cliPath", "apprise").
 			Strs("targets", cfg.Targets).
 			Str("output", string(output)).
 			Msg("apprise CLI output")

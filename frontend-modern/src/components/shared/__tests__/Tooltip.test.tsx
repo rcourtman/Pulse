@@ -56,8 +56,9 @@ describe('Tooltip', () => {
     if (!tooltip) return;
 
     await waitFor(() => {
-      expect(tooltip.textContent).toBe('&quot;unsafe&quot; &amp; &#x27;quoted&#x27;');
+      expect(tooltip.textContent).toBe(`<b>"unsafe"</b> & 'quoted'`);
       expect(tooltip.innerHTML).not.toContain('<b>');
+      expect(tooltip.innerHTML).toContain('&lt;b&gt;');
     });
   });
 

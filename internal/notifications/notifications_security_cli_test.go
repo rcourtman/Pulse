@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 )
 
 func TestSendAppriseViaCLINoTargets(t *testing.T) {
@@ -24,7 +23,7 @@ func TestSendAppriseViaCLIExecError(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	nm.appriseExec = func(ctx context.Context, path string, args []string) ([]byte, error) {
+	nm.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
 		return []byte("boom"), errors.New("exec failed")
 	}
 
@@ -42,7 +41,7 @@ func TestSendAppriseViaCLISuccess(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	nm.appriseExec = func(ctx context.Context, path string, args []string) ([]byte, error) {
+	nm.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
 		return []byte("ok"), nil
 	}
 
@@ -60,7 +59,7 @@ func TestSendAppriseViaCLISuccessNoOutput(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
 
-	nm.appriseExec = func(ctx context.Context, path string, args []string) ([]byte, error) {
+	nm.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
 		return nil, nil
 	}
 
@@ -71,14 +70,5 @@ func TestSendAppriseViaCLISuccessNoOutput(t *testing.T) {
 	}, "title", "body")
 	if err != nil {
 		t.Fatalf("expected success, got %v", err)
-	}
-}
-
-func TestDefaultAppriseExecRunsCommand(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	if _, err := defaultAppriseExec(ctx, "true", nil); err != nil {
-		t.Fatalf("expected defaultAppriseExec to run, got %v", err)
 	}
 }

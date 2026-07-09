@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { context } from 'esbuild';
 
 import { createPortalBuildOptions, frontendRoot } from './build_config.mjs';
@@ -19,6 +19,10 @@ function iso(value) {
 
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function randomPreviewID(prefix) {
+  return prefix + randomBytes(5).toString('hex');
 }
 
 function standardSetupTemplates() {
@@ -456,6 +460,25 @@ function escapeHTML(value) {
     .replace(/'/g, '&#39;');
 }
 
+function inlineScriptJSON(value) {
+  return JSON.stringify(value).replace(/[<>&\u2028\u2029]/g, function(char) {
+    switch (char) {
+    case '<':
+      return '\\u003c';
+    case '>':
+      return '\\u003e';
+    case '&':
+      return '\\u0026';
+    case '\u2028':
+      return '\\u2028';
+    case '\u2029':
+      return '\\u2029';
+    default:
+      return char;
+    }
+  });
+}
+
 function previewReturnURL(request, scenario, toastMessage) {
   const origin = 'http://' + previewHost + ':' + String(previewPort);
   const url = new URL('/', origin);
@@ -708,8 +731,8 @@ function buildPreviewWorkspaceHTML(bootstrap, workspaceID, targetPath, scenario,
 }
 
 function buildPreviewHTML(assets, bootstrap, previewToast) {
-  const bootstrapJSON = JSON.stringify(bootstrap).replace(/</g, '\\u003c');
-  const safeToast = previewToast ? JSON.stringify(String(previewToast)) : 'null';
+  const bootstrapJSON = inlineScriptJSON(bootstrap);
+  const safeToast = previewToast ? inlineScriptJSON(String(previewToast)) : 'null';
   return '<!DOCTYPE html>' +
     '<html lang="en">' +
       '<head>' +
@@ -851,7 +874,7 @@ function routeAccountAPI(request, response, url, bootstrap, scenario) {
         members.push({
           email,
           role,
-          user_id: 'u_' + Math.random().toString(36).slice(2, 10),
+          user_id: randomPreviewID('u_'),
           created_at: iso(new Date()),
         });
         account.members = members;
@@ -920,7 +943,7 @@ function routeAccountAPI(request, response, url, bootstrap, scenario) {
         }
         account.workspaces = account.workspaces || [];
         const workspace = {
-          id: 'ws_' + Math.random().toString(36).slice(2, 10),
+          id: randomPreviewID('ws_'),
           display_name: displayName,
           state: 'active',
           healthy: true,

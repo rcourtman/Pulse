@@ -322,6 +322,34 @@ func TestInstanceFingerprintPersistenceSurvivesActivationClear(t *testing.T) {
 	}
 }
 
+func TestInstanceFingerprintReadHardensExistingFilePermissions(t *testing.T) {
+	tmpDir := t.TempDir()
+	p, err := NewPersistence(tmpDir)
+	if err != nil {
+		t.Fatalf("create persistence: %v", err)
+	}
+
+	fingerprintPath := filepath.Join(tmpDir, InstanceFingerprintFileName)
+	if err := os.WriteFile(fingerprintPath, []byte("existing-fingerprint\n"), 0o644); err != nil {
+		t.Fatalf("write fingerprint file: %v", err)
+	}
+
+	fingerprint, err := p.LoadOrCreateInstanceFingerprint()
+	if err != nil {
+		t.Fatalf("LoadOrCreateInstanceFingerprint: %v", err)
+	}
+	if fingerprint != "existing-fingerprint" {
+		t.Fatalf("fingerprint = %q, want existing-fingerprint", fingerprint)
+	}
+	info, err := os.Stat(fingerprintPath)
+	if err != nil {
+		t.Fatalf("stat fingerprint file: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("fingerprint file perms = %o, want 600", got)
+	}
+}
+
 func TestInstanceFingerprintPersistenceSeedsFromExistingActivationState(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pulse-fingerprint-seed-test-*")
 	if err != nil {

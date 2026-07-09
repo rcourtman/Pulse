@@ -19,11 +19,8 @@ func TestSendResolvedAppriseCLI(t *testing.T) {
 	defer manager.Stop()
 
 	var called bool
-	manager.appriseExec = func(ctx context.Context, path string, args []string) ([]byte, error) {
+	manager.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
 		called = true
-		if path != "apprise" {
-			t.Fatalf("expected CLI path apprise, got %q", path)
-		}
 		if len(args) == 0 || args[len(args)-1] != "target-1" {
 			t.Fatalf("expected target to be passed, got %v", args)
 		}
@@ -545,7 +542,7 @@ func TestSendResolvedNotificationsDirectDispatchesEnabledTargets(t *testing.T) {
 	})
 
 	appriseCalled := false
-	manager.appriseExec = func(ctx context.Context, path string, args []string) ([]byte, error) {
+	manager.appriseExec = func(ctx context.Context, args []string) ([]byte, error) {
 		appriseCalled = true
 		return nil, nil
 	}

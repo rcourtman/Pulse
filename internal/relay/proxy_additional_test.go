@@ -142,6 +142,29 @@ func TestHTTPProxy_HandleRequest_ErrorBranches(t *testing.T) {
 	})
 }
 
+func TestNormalizeProxyRequestURIRejectsNonOriginRelativePaths(t *testing.T) {
+	for _, rawPath := range []string{
+		"http://169.254.169.254/latest/meta-data",
+		"//169.254.169.254/latest/meta-data",
+	} {
+		t.Run(rawPath, func(t *testing.T) {
+			if _, err := normalizeProxyRequestURI(rawPath); err == nil {
+				t.Fatalf("expected %q to be rejected", rawPath)
+			}
+		})
+	}
+}
+
+func TestNormalizeProxyRequestURIPreservesLocalPathAndQuery(t *testing.T) {
+	got, err := normalizeProxyRequestURI("api/resources?filter=http%3A%2F%2Fexample.test")
+	if err != nil {
+		t.Fatalf("normalizeProxyRequestURI() error = %v", err)
+	}
+	if got.RequestURI() != "/api/resources?filter=http%3A%2F%2Fexample.test" {
+		t.Fatalf("RequestURI() = %q", got.RequestURI())
+	}
+}
+
 func mustHandleRequest(t *testing.T, proxy *HTTPProxy, payload []byte) []byte {
 	t.Helper()
 	resp, err := proxy.HandleRequest(payload, "token")

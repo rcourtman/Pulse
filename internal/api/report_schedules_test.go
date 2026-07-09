@@ -6,10 +6,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
 
@@ -168,5 +171,37 @@ func TestRunReportSchedulePersistsFailureStatusWhenEngineUnavailable(t *testing.
 	}
 	if stored.Schedules[0].LastRunAt == nil || stored.Schedules[0].LastError == "" {
 		t.Fatalf("run status fields = lastRunAt %v lastError %q, want populated", stored.Schedules[0].LastRunAt, stored.Schedules[0].LastError)
+	}
+}
+
+func TestSaveGeneratedReportUsesHashedScheduleDirectory(t *testing.T) {
+	_, persistence := newTestReportingScheduleHandlers(t)
+	schedule := validReportSchedulePayload()
+	schedule.ID = "../tenant-owned-schedule"
+	report := generatedMultiReport{
+		Data:     []byte("report"),
+		Filename: "../unsafe-report.pdf",
+		Format:   reporting.FormatPDF,
+	}
+
+	path, err := saveGeneratedReport(persistence, schedule, report)
+	if err != nil {
+		t.Fatalf("saveGeneratedReport() error = %v", err)
+	}
+
+	wantDir := filepath.Join(
+		persistence.DataDir(),
+		"reports",
+		"generated",
+		securityutil.HashedStorageName(schedule.ID),
+	)
+	if filepath.Dir(path) != wantDir {
+		t.Fatalf("report dir = %q, want %q", filepath.Dir(path), wantDir)
+	}
+	if strings.Contains(path, schedule.ID) {
+		t.Fatalf("report path leaked raw schedule ID: %q", path)
+	}
+	if strings.ContainsAny(filepath.Base(path), `/\`) {
+		t.Fatalf("report filename still contains a path separator: %q", filepath.Base(path))
 	}
 }

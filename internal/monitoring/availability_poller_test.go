@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,6 +52,23 @@ func TestProbeAvailabilityTargetHTTPTreatsServerErrorsAsUnavailable(t *testing.T
 
 	if err := ProbeAvailabilityTarget(context.Background(), target); err == nil {
 		t.Fatal("ProbeAvailabilityTarget() error = nil, want HTTP 5xx error")
+	}
+}
+
+func TestProbeAvailabilityTargetHTTPRejectsMetadataService(t *testing.T) {
+	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+		Address:       "http://169.254.169.254/latest/meta-data",
+		Protocol:      config.AvailabilityProbeHTTP,
+		Enabled:       true,
+		TimeoutMillis: 1000,
+	})
+
+	err := ProbeAvailabilityTarget(context.Background(), target)
+	if err == nil {
+		t.Fatal("ProbeAvailabilityTarget() error = nil, want metadata-service rejection")
+	}
+	if got := err.Error(); !strings.Contains(got, "metadata service") {
+		t.Fatalf("error = %q, want metadata-service rejection", got)
 	}
 }
 

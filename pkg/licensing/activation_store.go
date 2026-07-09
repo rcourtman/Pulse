@@ -32,7 +32,7 @@ func (p *Persistence) LoadOrCreateInstanceFingerprint() (string, error) {
 		if fingerprint == "" {
 			return "", fmt.Errorf("instance fingerprint file is empty")
 		}
-		if err := os.Chmod(fingerprintPath, persistencePrivateFilePerm); err != nil {
+		if err := p.SaveInstanceFingerprint(fingerprint); err != nil {
 			return "", fmt.Errorf("secure instance fingerprint file: %w", err)
 		}
 		return fingerprint, nil
