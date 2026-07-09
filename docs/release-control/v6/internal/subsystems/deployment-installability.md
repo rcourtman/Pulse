@@ -330,6 +330,10 @@ TLS floor in the dynamic config.
    of downloading the complete release packet again. Historical repair and
    release-edit validation may use the full-download fallback because those
    paths do not have a same-run candidate manifest.
+   The candidate job timeout must cover signed multi-platform assembly, full
+   local packet validation, manifest creation, and artifact upload; the
+   observed release path requires a 60-minute ceiling even though the build
+   itself is expected to finish much earlier.
    A manually dispatched release rehearsal must activate the same signed
    candidate build whenever its required `version` input is non-empty.
    Scheduled watchdog rehearsals omit that input and must skip candidate

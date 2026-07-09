@@ -618,6 +618,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", content)
         self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", content)
         self.assertIn("Validate installer signing key pins", candidate_workflow)
+        self.assertIn("timeout-minutes: 60", candidate_workflow)
         self.assertIn("go run ./scripts/release_update_key.go public-key-ssh", candidate_workflow)
         self.assertIn("does not trust the configured release signing key", candidate_workflow)
         self.assertIn("TRUSTED_SSH_PUBLIC_KEY", update_demo_workflow)

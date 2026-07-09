@@ -22,7 +22,7 @@ jobs:
   build:
     name: Build and Validate Signed Candidate
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 60
     outputs:
       artifact_name: ${{ steps.identity.outputs.artifact_name }}
       manifest_artifact_name: ${{ steps.identity.outputs.manifest_artifact_name }}
