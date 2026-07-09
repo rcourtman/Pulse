@@ -23,6 +23,11 @@ on:
         description: 'Commit SHA associated with the release'
         required: true
         type: string
+      candidate_manifest_artifact:
+        description: 'Same-run immutable candidate manifest artifact for fast digest verification'
+        required: false
+        default: ''
+        type: string
   release:
     types: [edited]
   workflow_dispatch:
@@ -46,6 +51,11 @@ on:
       target_commitish:
         description: 'Commit SHA associated with the release'
         required: true
+        type: string
+      candidate_manifest_artifact:
+        description: 'Optional immutable candidate manifest artifact name'
+        required: false
+        default: ''
         type: string
 
 permissions:
@@ -109,8 +119,31 @@ jobs:
           cat context.env >> "$GITHUB_OUTPUT"
           cat context.env
 
-      - name: Download all release assets
+      - name: Download immutable candidate manifest
+        if: steps.context.outputs.should_run == 'true' && inputs.candidate_manifest_artifact != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.candidate_manifest_artifact }}
+          path: release-candidate-manifest
+
+      - name: Fetch release asset metadata
         if: steps.context.outputs.should_run == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api --paginate \
+            "repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}/assets?per_page=100" \
+            --slurp > "$RUNNER_TEMP/release-assets.json"
+          count="$(jq '[.[][]] | length' "$RUNNER_TEMP/release-assets.json")"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No assets found in release"
+            exit 1
+          fi
+          echo "Found ${count} published release assets."
+
+      - name: Download all release assets for legacy validation
+        if: steps.context.outputs.should_run == 'true' && inputs.candidate_manifest_artifact == ''
         id: download
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -156,11 +189,11 @@ jobs:
           ls -lh
 
       - name: Install Docker
-        if: steps.context.outputs.should_run == 'true'
+        if: steps.context.outputs.should_run == 'true' && inputs.candidate_manifest_artifact == ''
         run: docker --version
 
       - name: Pull Docker image (with retry logic)
-        if: steps.context.outputs.should_run == 'true'
+        if: steps.context.outputs.should_run == 'true' && inputs.candidate_manifest_artifact == ''
         id: docker
         continue-on-error: true
         run: |
@@ -204,13 +237,21 @@ jobs:
       - name: Run validation script
         if: steps.context.outputs.should_run == 'true'
         id: validate
+        env:
+          CANDIDATE_MANIFEST_ARTIFACT: ${{ inputs.candidate_manifest_artifact }}
         run: |
           set +e
           echo "Running validation script..."
-          chmod +x scripts/validate-release.sh
           OUTPUT_FILE=$(mktemp)
 
-          if [ "${{ steps.docker.outputs.image_available }}" = "true" ]; then
+          if [ -n "${CANDIDATE_MANIFEST_ARTIFACT}" ]; then
+            echo "Validating GitHub's stored SHA-256 digests against the immutable candidate manifest..."
+            python3 scripts/release_candidate_manifest.py verify-release \
+              --manifest release-candidate-manifest/release-candidate.json \
+              --assets-json "$RUNNER_TEMP/release-assets.json" \
+              --version "${{ steps.context.outputs.version }}" \
+              --source-sha "${{ steps.context.outputs.target_commitish }}" 2>&1 | tee "$OUTPUT_FILE"
+          elif [ "${{ steps.docker.outputs.image_available }}" = "true" ]; then
             echo "Running full validation (Docker + assets)..."
             scripts/validate-release.sh \
               "${{ steps.context.outputs.version }}" \

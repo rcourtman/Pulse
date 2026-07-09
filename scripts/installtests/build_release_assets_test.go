@@ -155,7 +155,8 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`git push origin "refs/tags/${TAG}" --force`,
 		`-F target_commitish="${HEAD_SHA}"`,
 		`historical_asset_backfill_only=${HISTORICAL_ASSET_BACKFILL_ONLY}`,
-		`if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && (github.event.inputs.draft_only == 'true' || needs.publish_docker.result == 'success') }}`,
+		`if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}`,
+		`candidate_manifest_artifact: ${{ needs.build_release_candidate.outputs.manifest_artifact_name }}`,
 		`if: ${{ needs.prepare.outputs.historical_asset_backfill_only == 'true' }}`,
 		`permissions:`,
 		`issues: write`,
@@ -718,7 +719,11 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read create-release.yml: %v", err)
 	}
-	createRelease := string(createReleaseBytes)
+	candidateWorkflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "build-release-candidate.yml"))
+	if err != nil {
+		t.Fatalf("read build-release-candidate.yml: %v", err)
+	}
+	createRelease := string(createReleaseBytes) + "\n" + string(candidateWorkflowBytes)
 	createReleaseRequired := []string{
 		`provenance: mode=max`,
 		`sbom: true`,
@@ -1494,6 +1499,77 @@ func TestPublishHelmChartReachableViaWorkflowCall(t *testing.T) {
 	}
 }
 
+func TestReleasePipelinePromotesOneImmutableCandidate(t *testing.T) {
+	createBytes, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
+	if err != nil {
+		t.Fatalf("read create-release.yml: %v", err)
+	}
+	candidateBytes, err := os.ReadFile(repoFile(".github", "workflows", "build-release-candidate.yml"))
+	if err != nil {
+		t.Fatalf("read build-release-candidate.yml: %v", err)
+	}
+	validationBytes, err := os.ReadFile(repoFile(".github", "workflows", "validate-release-assets.yml"))
+	if err != nil {
+		t.Fatalf("read validate-release-assets.yml: %v", err)
+	}
+
+	createWorkflow := string(createBytes)
+	candidateWorkflow := string(candidateBytes)
+	validationWorkflow := string(validationBytes)
+	createJob := workflowJobBlock(t, createWorkflow, "create_release")
+	backendJob := workflowJobBlock(t, createWorkflow, "backend_tests")
+	integrationJob := workflowJobBlock(t, createWorkflow, "integration_tests")
+	validationJob := workflowJobBlock(t, createWorkflow, "validate_release_assets")
+	privateJob := workflowJobBlock(t, createWorkflow, "publish_private_pro_runtime")
+
+	for _, needle := range []string{
+		`./scripts/build-release.sh "${{ inputs.version }}"`,
+		`scripts/validate-release.sh "${{ inputs.version }}" --skip-docker`,
+		`scripts/release_candidate_manifest.py create`,
+		`compression-level: 0`,
+		`retention-days: 1`,
+	} {
+		if !strings.Contains(candidateWorkflow, needle) {
+			t.Fatalf("build-release-candidate.yml missing single-build contract: %s", needle)
+		}
+	}
+
+	for _, needle := range []string{
+		`Download immutable release candidate`,
+		`scripts/release_candidate_manifest.py verify-local`,
+		`needs.build_release_candidate.outputs.artifact_name`,
+	} {
+		if !strings.Contains(createJob, needle) {
+			t.Fatalf("create_release missing candidate promotion contract: %s", needle)
+		}
+	}
+	if strings.Contains(createJob, "scripts/build-release.sh") {
+		t.Fatal("create_release must promote the verified candidate instead of rebuilding release assets")
+	}
+
+	if !strings.Contains(backendJob, "- frontend_checks") || !strings.Contains(integrationJob, "- frontend_checks") {
+		t.Fatal("backend and integration jobs must consume the shared verified frontend bundle")
+	}
+	if strings.Contains(integrationJob, "- backend_tests") {
+		t.Fatal("integration tests must run in parallel with backend tests")
+	}
+	if strings.Contains(validationJob, "- publish_docker") {
+		t.Fatal("release asset digest validation must run in parallel with Docker publication")
+	}
+	if !strings.Contains(privateJob, "- create_release") || strings.Contains(privateJob, "- validate_release_assets") {
+		t.Fatal("private Pro publication must start after release creation without waiting for asset validation")
+	}
+	for _, needle := range []string{
+		`inputs.candidate_manifest_artifact != ''`,
+		`scripts/release_candidate_manifest.py verify-release`,
+		`inputs.candidate_manifest_artifact == ''`,
+	} {
+		if !strings.Contains(validationWorkflow, needle) {
+			t.Fatalf("validate-release-assets.yml missing fast digest contract: %s", needle)
+		}
+	}
+}
+
 func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 	content, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
 	if err != nil {
@@ -1503,7 +1579,7 @@ func TestCreateReleasePublishesPrivateProRuntime(t *testing.T) {
 	job := workflowJobBlock(t, workflow, "publish_private_pro_runtime")
 
 	for _, needle := range []string{
-		`needs.validate_release_assets.result == 'success'`,
+		`needs.create_release.result == 'success'`,
 		`github.event.inputs.draft_only != 'true'`,
 		`startsWith(needs.prepare.outputs.version, '6.')`,
 		`GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}`,

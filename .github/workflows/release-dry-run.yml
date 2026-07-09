@@ -59,6 +59,16 @@ permissions:
   contents: read
 
 jobs:
+  build_release_candidate:
+    name: Build Immutable Release Candidate
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-release-candidate.yml
+    secrets: inherit
+    with:
+      version: ${{ inputs.version }}
+
   dry-run:
     name: Preflight Release Checks (No Publish)
     runs-on: ubuntu-24.04

@@ -79,7 +79,8 @@ deployment, and one definitive release verdict.
   then emits a terminal `Definitive Release Verdict`.
 - Routine stable patch release resolution no longer fabricates RC ceremony,
   but it fails closed for documented high-risk runtime changes, an existing
-  same-version RC, stale rollback lineage, or a missing exact-SHA dry run.
+  same-version RC, stale rollback lineage, or failed integrated exact-SHA
+  candidate checks.
 - `scripts/trigger-stable-patch.sh` is the noninteractive operator entrypoint.
 
 ## End-to-End Rehearsal
@@ -111,7 +112,11 @@ change is required for the currently verified `tag:infra` path.
 
 ## Current Verdict
 
-Passed. A routine stable patch now requires one recent exact-SHA preflight and
-one noninteractive publish dispatch. The publish DAG awaits release promotion,
-Docker publication, stable demo deployment, definitive public verification,
-and its terminal verdict; manual SSH is not part of the standard path.
+Passed. A routine stable patch now uses one noninteractive publish dispatch
+whose exact-SHA candidate checks run before publication. `Release Dry Run`
+remains available for explicit no-public-release rehearsal. The publish DAG
+awaits release promotion, Docker publication, stable demo deployment,
+definitive public verification, and its terminal verdict; manual SSH is not
+part of the standard path. The release-wide single-build timing contract is
+tracked in
+`docs/release-control/v6/internal/records/single-build-release-promotion-path-2026-07-09.md`.

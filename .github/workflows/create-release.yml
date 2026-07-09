@@ -84,7 +84,6 @@ jobs:
       hotfix_reason: ${{ steps.promotion.outputs.hotfix_reason }}
       promotion_mode: ${{ steps.promotion.outputs.promotion_mode }}
       is_stable_patch: ${{ steps.promotion.outputs.is_stable_patch }}
-      preflight_run_url: ${{ steps.preflight.outputs.run_url }}
       historical_asset_backfill_only: ${{ steps.extract.outputs.historical_asset_backfill_only }}
     steps:
       - name: Extract version
@@ -209,35 +208,16 @@ jobs:
 
           echo "[OK] Promotion policy validated for ${TAG}"
 
-      - name: Require recent exact-SHA stable patch preflight
-        id: preflight
-        if: ${{ steps.extract.outputs.historical_asset_backfill_only != 'true' && steps.promotion.outputs.is_stable_patch == 'true' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.extract.outputs.version }}
-        run: |
-          set -euo pipefail
-          CUTOFF="$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ')"
-          RUN="$(gh api "repos/${{ github.repository }}/actions/workflows/release-dry-run.yml/runs?event=workflow_dispatch&status=success&head_sha=${GITHUB_SHA}&per_page=20" \
-            | jq -c \
-            --arg sha "$GITHUB_SHA" \
-            --arg title "Release Dry Run v${VERSION}" \
-            --arg cutoff "$CUTOFF" \
-            '[.workflow_runs[] | select(
-              .conclusion == "success"
-              and .head_sha == $sha
-              and .display_title == $title
-              and .created_at >= $cutoff
-            )] | sort_by(.created_at) | last // empty')"
-
-          if [ -z "$RUN" ]; then
-            echo "::error::Stable patch release requires a successful Release Dry Run for v${VERSION} at exact commit ${GITHUB_SHA} within the last 24 hours. Run ./scripts/trigger-stable-patch.sh --dry-run ${VERSION}, wait for success, then dispatch once."
-            exit 1
-          fi
-
-          RUN_URL="$(jq -r '.html_url' <<<"$RUN")"
-          echo "run_url=${RUN_URL}" >> "$GITHUB_OUTPUT"
-          echo "[OK] Exact-SHA release preflight passed: ${RUN_URL}"
+  build_release_candidate:
+    name: Build Immutable Release Candidate
+    needs: prepare
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-release-candidate.yml
+    secrets: inherit
+    with:
+      version: ${{ needs.prepare.outputs.version }}
 
   # Frontend checks run in parallel with backend tests
   frontend_checks:
@@ -268,9 +248,24 @@ jobs:
       - name: Check frontend copy-paste duplication
         run: npm --prefix frontend-modern run lint:cpd
 
+      - name: Build verified frontend bundle
+        run: npm --prefix frontend-modern run build
+
+      - name: Upload verified frontend bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-frontend-${{ github.sha }}
+          path: frontend-modern/dist/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
   # Backend tests run in parallel with frontend checks
   backend_tests:
-    needs: prepare
+    needs:
+      - prepare
+      - frontend_checks
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -280,25 +275,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'frontend-modern/package-lock.json'
-
-      - name: Restore frontend build cache
-        id: frontend-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      - name: Download verified frontend bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: frontend-modern/dist
-          key: frontend-build-${{ hashFiles('frontend-modern/package-lock.json', 'frontend-modern/src/**/*', 'frontend-modern/index.html', 'frontend-modern/postcss.config.cjs', 'frontend-modern/tailwind.config.cjs') }}
-
-      - name: Build frontend (if not cached)
-        if: steps.frontend-cache.outputs.cache-hit != 'true'
-        run: |
-          npm --prefix frontend-modern ci
-          npm --prefix frontend-modern run build
+          name: release-frontend-${{ github.sha }}
 
       - name: Copy frontend to embed location
         run: |
@@ -508,7 +489,7 @@ jobs:
   integration_tests:
     needs:
       - prepare
-      - backend_tests
+      - frontend_checks
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && needs.prepare.outputs.is_prerelease != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -525,11 +506,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'frontend-modern/package-lock.json'
 
-      - name: Restore frontend build cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      - name: Download verified frontend bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: frontend-modern/dist
-          key: frontend-build-${{ hashFiles('frontend-modern/package-lock.json', 'frontend-modern/src/**/*', 'frontend-modern/index.html', 'frontend-modern/postcss.config.cjs', 'frontend-modern/tailwind.config.cjs') }}
+          name: release-frontend-${{ github.sha }}
 
       - name: Copy frontend to embed location
         run: |
@@ -661,13 +642,14 @@ jobs:
   create_release:
     needs:
       - prepare
+      - build_release_candidate
       - frontend_checks
       - backend_tests
       - docker_build
       - helm_smoke
       - integration_tests
     # Run if integration_tests passed OR was skipped (prereleases)
-    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.frontend_checks.result == 'success' && needs.backend_tests.result == 'success' && needs.docker_build.result == 'success' && needs.helm_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') }}
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.build_release_candidate.result == 'success' && needs.frontend_checks.result == 'success' && needs.backend_tests.result == 'success' && needs.docker_build.result == 'success' && needs.helm_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -685,80 +667,25 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      - name: Download immutable release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          go-version-file: go.mod
-          cache: true
+          name: ${{ needs.build_release_candidate.outputs.artifact_name }}
+          path: release
 
-      - name: Set up Node.js
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - name: Download release candidate manifest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'frontend-modern/package-lock.json'
+          name: ${{ needs.build_release_candidate.outputs.manifest_artifact_name }}
+          path: release-candidate-manifest
 
-      - name: Install dependencies
+      - name: Verify immutable release candidate
         run: |
-          sudo apt-get update
-          sudo apt-get install -y zip
-
-      - name: Set up Helm
-        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
-        with:
-          version: 'v3.15.2'
-
-      - name: Install Syft
-        run: |
-          set -euo pipefail
-
-          SYFT_VERSION="1.42.4"
-          SYFT_ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
-          SYFT_SHA256="590650c2743b83f327d1bf9bec64f6f83b7fec504187bb84f500c862bf8f2a0f"
-          TMP_DIR="$(mktemp -d)"
-          trap 'rm -rf "$TMP_DIR"' EXIT
-
-          curl -fsSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${SYFT_ARCHIVE}" \
-            -o "${TMP_DIR}/${SYFT_ARCHIVE}"
-          printf '%s  %s\n' "${SYFT_SHA256}" "${TMP_DIR}/${SYFT_ARCHIVE}" | sha256sum --check --
-          tar -xzf "${TMP_DIR}/${SYFT_ARCHIVE}" -C "${TMP_DIR}" syft
-          install -m 0755 "${TMP_DIR}/syft" /usr/local/bin/syft
-          syft version
-
-      - name: Build release artifacts
-        run: |
-          echo "Building release ${{ needs.prepare.outputs.tag }}..."
-          ./scripts/build-release.sh ${{ needs.prepare.outputs.version }}
-        env:
-          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
-          PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
-          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
-
-      - name: Validate installer signing key pins
-        env:
-          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
-        run: |
-          set -euo pipefail
-          TRUSTED_SSH_PUBLIC_KEY="$(
-            go run ./scripts/release_update_key.go public-key-ssh \
-              --public-key "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" \
-              --comment pulse-installer
-          )"
-
-          for installer in install.sh scripts/pulse-auto-update.sh release/pulse-auto-update.sh; do
-            grep -F "PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"" "${installer}" >/dev/null || {
-              echo "::error::${installer} does not trust the configured release signing key."
-              exit 1
-            }
-          done
-
-      - name: Post-build health check
-        run: |
-          if [ -x ./pulse ]; then
-            ./pulse --version
-          elif [ -x ./cmd/pulse/pulse ]; then
-            ./cmd/pulse/pulse --version
-          fi
+          python3 scripts/release_candidate_manifest.py verify-local \
+            --release-dir release \
+            --manifest release-candidate-manifest/release-candidate.json \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --source-sha "${GITHUB_SHA}"
 
       - name: Attest release assets
         uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
@@ -1155,9 +1082,9 @@ jobs:
   validate_release_assets:
     needs:
       - prepare
+      - build_release_candidate
       - create_release
-      - publish_docker
-    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && (github.event.inputs.draft_only == 'true' || needs.publish_docker.result == 'success') }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     permissions:
       contents: write
       issues: write
@@ -1170,6 +1097,7 @@ jobs:
       release_id: ${{ needs.create_release.outputs.release_id }}
       draft: ${{ github.event.inputs.draft_only == 'true' }}
       target_commitish: ${{ needs.create_release.outputs.target_commitish }}
+      candidate_manifest_artifact: ${{ needs.build_release_candidate.outputs.manifest_artifact_name }}
 
   # End-to-end install.sh smoke against the just-published release. Catches
   # runtime regressions in the documented Proxmox-LXC / systemd install flow
@@ -1243,15 +1171,15 @@ jobs:
   # when it fails the floating tags don't advance and customers pulling
   # rcourtman/pulse:latest stay on whatever the previous successful release
   # tagged. Calling promote-floating-tags as workflow_call after
-  # validate_release_assets succeeds (which itself waits for the docker
-  # image to be pullable) guarantees the floating tags advance. Draft-only
-  # runs must not promote floating tags because the release is still in
-  # private promotion state.
+  # validate_release_assets and publish_docker succeed guarantees the floating
+  # tags advance. Draft-only runs must not promote floating tags because the
+  # release is still in private promotion state.
   promote_floating_tags:
     needs:
       - prepare
+      - publish_docker
       - validate_release_assets
-    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    if: ${{ always() && needs.prepare.result == 'success' && needs.publish_docker.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
     permissions:
       contents: read
       packages: write
@@ -1271,8 +1199,8 @@ jobs:
   publish_private_pro_runtime:
     needs:
       - prepare
-      - validate_release_assets
-    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
+      - create_release
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 150
     steps:
@@ -1398,7 +1326,6 @@ jobs:
           DRAFT_ONLY: ${{ github.event.inputs.draft_only }}
           VERSION: ${{ needs.prepare.outputs.version }}
           IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
-          PREFLIGHT_RUN_URL: ${{ needs.prepare.outputs.preflight_run_url }}
           CREATE_RESULT: ${{ needs.create_release.result }}
           DOCKER_RESULT: ${{ needs.publish_docker.result }}
           VALIDATE_RESULT: ${{ needs.validate_release_assets.result }}
@@ -1436,6 +1363,3 @@ jobs:
           fi
 
           echo "Release verdict passed for v${VERSION}."
-          if [ -n "${PREFLIGHT_RUN_URL:-}" ]; then
-            echo "Stable patch preflight: ${PREFLIGHT_RUN_URL}"
-          fi
