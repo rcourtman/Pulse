@@ -1149,10 +1149,8 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		return models.DockerHost{}, fmt.Errorf("docker report missing hostname")
 	}
 
-	timestamp := report.Timestamp
-	if timestamp.IsZero() {
-		timestamp = time.Now()
-	}
+	receivedAt := time.Now()
+	observedAt := receivedAt.UTC()
 
 	agentID := strings.TrimSpace(report.Agent.ID)
 	if agentID == "" {
@@ -1270,7 +1268,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 			metrics := models.IOMetrics{
 				NetworkIn:  clampToInt64(payload.NetworkRXBytes),
 				NetworkOut: clampToInt64(payload.NetworkTXBytes),
-				Timestamp:  timestamp,
+				Timestamp:  receivedAt,
 			}
 			if payload.BlockIO != nil {
 				metrics.DiskRead = clampToInt64(payload.BlockIO.ReadBytes)
@@ -1425,7 +1423,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		Disks:             disks,
 		NetworkInterfaces: networkIfaces,
 		Status:            "online",
-		LastSeen:          timestamp,
+		LastSeen:          observedAt,
 		IntervalSeconds:   report.Agent.IntervalSeconds,
 		AgentVersion:      agentVersion,
 		Containers:        containers,

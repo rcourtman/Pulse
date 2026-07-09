@@ -91,10 +91,8 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 		m.mu.Unlock()
 	}
 
-	timestamp := report.Timestamp
-	if timestamp.IsZero() {
-		timestamp = time.Now()
-	}
+	receivedAt := time.Now()
+	observedAt := receivedAt.UTC()
 
 	agentID := strings.TrimSpace(report.Agent.ID)
 	if agentID == "" {
@@ -222,7 +220,7 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 			currentMetrics := IOMetrics{
 				NetworkIn:  pods[i].NetworkRxBytes,
 				NetworkOut: pods[i].NetworkTxBytes,
-				Timestamp:  timestamp,
+				Timestamp:  receivedAt,
 			}
 			_, _, netInRate, netOutRate := m.rateTracker.CalculateRates(metricID, currentMetrics)
 			if netInRate > 0 {
@@ -291,7 +289,7 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 		Context:                  strings.TrimSpace(report.Cluster.Context),
 		Version:                  strings.TrimSpace(report.Cluster.Version),
 		Status:                   "online",
-		LastSeen:                 timestamp,
+		LastSeen:                 observedAt,
 		IntervalSeconds:          report.Agent.IntervalSeconds,
 		AgentVersion:             agentVersion,
 		Nodes:                    nodes,
@@ -333,7 +331,7 @@ func (m *Monitor) ApplyKubernetesReport(report agentsk8s.Report, tokenRecord *co
 
 	m.state.UpsertKubernetesCluster(cluster)
 	m.state.SetConnectionHealth(kubernetesConnectionPrefix+identifier, true)
-	m.recordKubernetesPodMetrics(cluster, timestamp)
+	m.recordKubernetesPodMetrics(cluster, receivedAt)
 
 	return cluster, nil
 }

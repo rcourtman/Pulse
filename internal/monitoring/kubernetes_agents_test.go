@@ -421,3 +421,29 @@ func TestCleanupRemovedKubernetesClusters(t *testing.T) {
 		t.Fatal("expected state cleanup")
 	}
 }
+
+func TestApplyKubernetesReportUsesReceiptTimeForSkewedAgentClockLiveness(t *testing.T) {
+	monitor := newKubernetesTestMonitor()
+
+	agentClock := time.Now().UTC().Add(-3 * time.Hour)
+	before := time.Now().UTC()
+	cluster, err := monitor.ApplyKubernetesReport(agentsk8s.Report{
+		Cluster: agentsk8s.ClusterInfo{ID: "clock-skew-cluster", Name: "clock-skew"},
+		Agent: agentsk8s.AgentInfo{
+			ID:              "k8s-clock-skew-agent",
+			Version:         "6.0.3",
+			IntervalSeconds: 30,
+		},
+		Timestamp: agentClock,
+	}, nil)
+	after := time.Now().UTC()
+	if err != nil {
+		t.Fatalf("ApplyKubernetesReport: %v", err)
+	}
+	if cluster.LastSeen.Before(before) || cluster.LastSeen.After(after.Add(time.Second)) {
+		t.Fatalf("cluster LastSeen = %s, want server receipt between %s and %s", cluster.LastSeen, before, after)
+	}
+	if !cluster.LastSeen.After(agentClock.Add(2 * time.Hour)) {
+		t.Fatalf("cluster LastSeen followed skewed agent timestamp %s: got %s", agentClock, cluster.LastSeen)
+	}
+}

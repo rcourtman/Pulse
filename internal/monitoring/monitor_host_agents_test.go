@@ -827,6 +827,35 @@ func TestApplyHostReportUsesReceiptTimeForSkewedAgentClockLiveness(t *testing.T)
 	}
 }
 
+func TestApplyDockerReportUsesReceiptTimeForSkewedAgentClockLiveness(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	agentClock := time.Now().UTC().Add(-3 * time.Hour)
+	before := time.Now().UTC()
+	host, err := monitor.ApplyDockerReport(agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "docker-clock-skew-agent",
+			Version:         "6.0.3",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:  "docker-clock-skew.local",
+			MachineID: "docker-clock-skew-machine",
+		},
+		Timestamp: agentClock,
+	}, &config.APITokenRecord{ID: "docker-clock-skew-token"})
+	after := time.Now().UTC()
+	if err != nil {
+		t.Fatalf("ApplyDockerReport: %v", err)
+	}
+	if host.LastSeen.Before(before) || host.LastSeen.After(after.Add(time.Second)) {
+		t.Fatalf("docker host LastSeen = %s, want server receipt between %s and %s", host.LastSeen, before, after)
+	}
+	if !host.LastSeen.After(agentClock.Add(2 * time.Hour)) {
+		t.Fatalf("docker host LastSeen followed skewed agent timestamp %s: got %s", agentClock, host.LastSeen)
+	}
+}
+
 func TestApplyDockerReportPreservesNativeRuntimeInventory(t *testing.T) {
 	monitor := newTestMonitor(t)
 	now := time.Date(2026, 5, 24, 8, 0, 0, 0, time.UTC)
