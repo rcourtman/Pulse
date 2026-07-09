@@ -6780,7 +6780,7 @@
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/single-build-release-promotion-path-2026-07-09.md",
           "kind": "file",
-          "evidence_tier": "local-rehearsal"
+          "evidence_tier": "real-external-e2e"
         }
       ]
     },
