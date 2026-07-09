@@ -1354,16 +1354,6 @@ describe('shared primitive guardrails', () => {
     expect(apiTokenManagerSource.match(/frame="flush"/g) ?? []).toHaveLength(1);
     expect(rolesPanelSource.match(/frame="flush"/g) ?? []).toHaveLength(1);
     expect(userAssignmentsPanelSource.match(/frame="flush"/g) ?? []).toHaveLength(1);
-
-    for (const source of []) {
-      expect(source).toContain("from '@/components/shared/Table'");
-      expect(source).not.toContain('<table');
-      expect(source).not.toContain('<thead');
-      expect(source).not.toContain('<tbody');
-      expect(source).not.toContain('<tr ');
-      expect(source).not.toContain('<td ');
-      expect(source).not.toContain('<th ');
-    }
   });
 
   it('keeps chart visibility display actions on the shared toolbar toggle', () => {

@@ -2684,15 +2684,6 @@ describe('frontend resource type boundaries', () => {
     expect(storageDomainSource).toContain('export const getCephDisconnectedStatePresentation');
     expect(storageDomainSource).toContain('export const getCephNoClustersStatePresentation');
     expect(storageDomainSource).toContain('export const getCephPoolsSearchEmptyStatePresentation');
-    for (const source of []) {
-      expect(source).toContain("from '@/components/shared/Table'");
-      expect(source).not.toContain('<table');
-      expect(source).not.toContain('<thead');
-      expect(source).not.toContain('<tbody');
-      expect(source).not.toContain('<tr ');
-      expect(source).not.toContain('<td ');
-      expect(source).not.toContain('<th ');
-    }
     expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableGroupRow');
     expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableAlertRow');
     expect(alertHistoryTableAlertRowSource).toContain('getAlertHistoryStatusPresentation');
