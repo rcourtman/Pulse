@@ -947,10 +947,7 @@ func TestDeployDemoWorkflowFailsClosedForStableAndVerifiesFrontendParity(t *test
 		`          - stable`,
 		`Capture expected frontend entry asset`,
 		`Verify target host identity`,
-		`MAX_SSH_SETUP_ATTEMPTS=18`,
-		`getent hosts "$DEMO_SERVER_HOST"`,
-		`ssh-keyscan -T 10 -H "$DEMO_SERVER_HOST"`,
-		`Timed out waiting for the demo SSH host to resolve and return host keys after Tailscale setup.`,
+		`bash .github/scripts/setup-demo-ssh.sh`,
 		`SERVICE_NAME="pulse"`,
 		`Unsupported demo target: ${TARGET}`,
 		`Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.`,
@@ -991,10 +988,7 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`go run ./scripts/release_update_key.go public-key-ssh`,
 		`sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"|" /tmp/pulse-install.sh`,
 		`Verify target host identity`,
-		`MAX_SSH_SETUP_ATTEMPTS=18`,
-		`getent hosts "$DEMO_SERVER_HOST"`,
-		`ssh-keyscan -T 10 -H "$DEMO_SERVER_HOST"`,
-		`Timed out waiting for the demo SSH host to resolve and return host keys after Tailscale setup.`,
+		`bash .github/scripts/setup-demo-ssh.sh`,
 		`Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.`,
 		`Prepare demo host storage`,
 		`KEEP_BACKUPS=2`,
@@ -1022,6 +1016,69 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		if !strings.Contains(workflow, needle) {
 			t.Fatalf("update-demo-server workflow missing governed network path: %s", needle)
 		}
+	}
+}
+
+func TestDemoSshSetupHelperHandlesIpLiteralTargets(t *testing.T) {
+	helperBytes, err := os.ReadFile(repoFile(".github", "scripts", "setup-demo-ssh.sh"))
+	if err != nil {
+		t.Fatalf("read demo ssh setup helper: %v", err)
+	}
+	helper := string(helperBytes)
+	required := []string{
+		`is_ip_literal()`,
+		`ipaddress.ip_address(sys.argv[1])`,
+		`host_needs_dns=false`,
+		`Demo SSH host is an IP literal; skipping DNS resolution wait.`,
+		`[ "$host_needs_dns" = "true" ] && ! getent hosts "$DEMO_SERVER_HOST"`,
+		`ssh-keyscan -T 10 -H "$DEMO_SERVER_HOST"`,
+		`MAX_SSH_SETUP_ATTEMPTS=18`,
+		`Timed out waiting for the demo SSH host to become reachable and return host keys after Tailscale setup.`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(helper, needle) {
+			t.Fatalf("demo ssh setup helper missing guarded IP/hostname behavior: %s", needle)
+		}
+	}
+
+	tmpDir := t.TempDir()
+	fakeBin := filepath.Join(tmpDir, "bin")
+	if err := os.MkdirAll(fakeBin, 0o755); err != nil {
+		t.Fatalf("create fake bin: %v", err)
+	}
+	getentMarker := filepath.Join(tmpDir, "getent-called")
+	if err := os.WriteFile(filepath.Join(fakeBin, "getent"), []byte("#!/bin/sh\n: > \"$GETENT_MARKER\"\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("write fake getent: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(fakeBin, "ssh-keyscan"), []byte("#!/bin/sh\nprintf '100.109.163.95 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDemo\\n'\n"), 0o755); err != nil {
+		t.Fatalf("write fake ssh-keyscan: %v", err)
+	}
+
+	homeDir := filepath.Join(tmpDir, "home")
+	cmd := exec.Command("bash", repoFile(".github", "scripts", "setup-demo-ssh.sh"))
+	cmd.Env = append(os.Environ(),
+		"DEMO_SERVER_HOST=100.109.163.95",
+		"DEMO_SERVER_SSH_KEY=fake-private-key",
+		"GETENT_MARKER="+getentMarker,
+		"HOME="+homeDir,
+		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("demo ssh setup helper failed for IP literal: %v\n%s", err, output)
+	}
+	if _, err := os.Stat(getentMarker); !os.IsNotExist(err) {
+		t.Fatalf("demo ssh setup helper must not require getent hosts for IP literals; stat err=%v", err)
+	}
+	knownHosts, err := os.ReadFile(filepath.Join(homeDir, ".ssh", "known_hosts"))
+	if err != nil {
+		t.Fatalf("read generated known_hosts: %v", err)
+	}
+	if !strings.Contains(string(knownHosts), "ssh-ed25519") {
+		t.Fatalf("known_hosts missing captured key: %s", knownHosts)
+	}
+	if !strings.Contains(string(output), "Demo SSH host is an IP literal; skipping DNS resolution wait.") {
+		t.Fatalf("helper output did not report IP literal path: %s", output)
 	}
 }
 
