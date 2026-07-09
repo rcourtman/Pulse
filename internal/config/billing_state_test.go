@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,6 +87,59 @@ func TestBillingState_RoundTrip(t *testing.T) {
 	assert.ElementsMatch(t, []string{"relay", "ai_autofix"}, loaded.Capabilities)
 	assert.Equal(t, now, *loaded.TrialStartedAt)
 	assert.Equal(t, endsAt, *loaded.TrialEndsAt)
+}
+
+func TestBillingState_InvalidOrgIDsRejected(t *testing.T) {
+	dir := t.TempDir()
+	store := NewFileBillingStore(dir)
+
+	invalidIDs := []string{
+		"",
+		".",
+		"..",
+		"../bad",
+		"bad/..",
+		"bad/../evil",
+		"bad org",
+		"bad\torg",
+		"bad\norg",
+		"bad\\org",
+		"bad:org",
+		strings.Repeat("a", 65),
+	}
+
+	for _, orgID := range invalidIDs {
+		err := store.SaveBillingState(orgID, &entitlements.BillingState{})
+		require.Error(t, err, "SaveBillingState should reject orgID %q", orgID)
+
+		_, err = store.GetBillingState(orgID)
+		require.Error(t, err, "GetBillingState should reject orgID %q", orgID)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "orgs")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected orgs directory state after invalid org IDs: %v", err)
+	}
+}
+
+func TestBillingState_NonDefaultOrgUsesCanonicalStoragePath(t *testing.T) {
+	root := t.TempDir()
+	rawBaseDir := filepath.Join(root, "billing") + string(os.PathSeparator) + ".." + string(os.PathSeparator) + "billing"
+	expectedBaseDir := filepath.Clean(rawBaseDir)
+	store := NewFileBillingStore("  " + rawBaseDir + "  ")
+
+	state := &entitlements.BillingState{
+		Capabilities:      []string{"relay"},
+		SubscriptionState: entitlements.SubStateTrial,
+	}
+	require.NoError(t, store.SaveBillingState("acme.prod-1", state))
+
+	billingPath := filepath.Join(expectedBaseDir, "orgs", "acme.prod-1", "billing.json")
+	require.FileExists(t, billingPath)
+
+	loaded, err := store.GetBillingState("acme.prod-1")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	assert.Contains(t, loaded.Capabilities, "relay")
 }
 
 func TestBillingState_EncryptsHostedEntitlementSecretsAtRest(t *testing.T) {

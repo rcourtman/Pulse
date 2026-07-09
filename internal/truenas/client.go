@@ -1502,7 +1502,7 @@ func appendDiskTemperature(out map[string]int, diskName string, value any) {
 		}
 	}
 	temperature, ok := parseInt64Any(value)
-	if !ok || temperature <= 0 {
+	if !ok || temperature <= 0 || temperature >= 150 {
 		return
 	}
 	out[diskName] = int(temperature)
@@ -2887,7 +2887,7 @@ func readIntAny(record map[string]any, keys ...string) int {
 		if !ok || value == nil {
 			continue
 		}
-		if parsed, ok := parseInt64Any(value); ok {
+		if parsed, ok := parseInt64Any(value); ok && parsed >= math.MinInt32 && parsed <= math.MaxInt32 {
 			return int(parsed)
 		}
 	}
@@ -2907,13 +2907,13 @@ func readIntSliceAny(record map[string]any, keys ...string) []int {
 		case []any:
 			out := make([]int, 0, len(typed))
 			for _, item := range typed {
-				if parsed, ok := parseInt64Any(item); ok {
+				if parsed, ok := parseInt64Any(item); ok && parsed >= math.MinInt32 && parsed <= math.MaxInt32 {
 					out = append(out, int(parsed))
 				}
 			}
 			return out
 		default:
-			if parsed, ok := parseInt64Any(value); ok {
+			if parsed, ok := parseInt64Any(value); ok && parsed >= math.MinInt32 && parsed <= math.MaxInt32 {
 				return []int{int(parsed)}
 			}
 		}

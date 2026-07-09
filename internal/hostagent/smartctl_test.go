@@ -478,6 +478,33 @@ func TestParseSMARTOutputFallsBackToOriginalTextTemperature(t *testing.T) {
 	}
 }
 
+func TestParseSMARTOutputRejectsOutOfRangeATARawTemperature(t *testing.T) {
+	payload := []byte(`{
+		"device": {"protocol": "ATA"},
+		"model_name": "WDC WD40EFRX",
+		"serial_number": "WD-999",
+		"smart_status": {"passed": true},
+		"ata_smart_attributes": {
+			"table": [{
+				"id": 194,
+				"name": "Temperature_Celsius",
+				"raw": {"value": 9223372036854775807, "string": "9223372036854775807"}
+			}]
+		}
+	}`)
+
+	result, err := parseSMARTOutput(payload, smartctlTarget{Path: "/dev/ada0"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Temperature != 0 {
+		t.Fatalf("expected out-of-range ATA raw temperature to be ignored, got %#v", result)
+	}
+}
+
 func TestParseSMARTOutputFallsBackToPlainTextOutput(t *testing.T) {
 	output := []byte(`
 === START OF INFORMATION SECTION ===

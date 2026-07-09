@@ -1,0 +1,14 @@
+extensions:
+  - addsTo:
+      pack: codeql/go-all
+      extensible: barrierModel
+    data:
+      - ["github.com/rcourtman/pulse-go-rewrite/internal/securityutil", "", false, "HashedStorageName", "", "", "ReturnValue", "path-injection", "manual"]
+      - ["github.com/rcourtman/pulse-go-rewrite/internal/securityutil", "", false, "JoinStorageLeaf", "", "", "ReturnValue[0]", "path-injection", "manual"]
+      - ["github.com/rcourtman/pulse-go-rewrite/internal/securityutil", "", false, "NormalizeStorageDir", "", "", "ReturnValue[0]", "path-injection", "manual"]
+      - ["github.com/rcourtman/pulse-go-rewrite/internal/securityutil", "", false, "ValidateOutboundFetchURL", "", "", "ReturnValue[0]", "request-forgery", "manual"]
+  - addsTo:
+      pack: codeql/go-all
+      extensible: barrierGuardModel
+    data:
+      - ["github.com/rcourtman/pulse-go-rewrite/internal/config", "", false, "isValidOrgID", "", "", "Argument[0]", "true", "path-injection", "manual"]

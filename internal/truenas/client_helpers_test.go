@@ -173,6 +173,46 @@ func TestParseInt64FromAnyCoversBranches(t *testing.T) {
 	}
 }
 
+func TestReadIntHelpersSkipOutOfRangeValues(t *testing.T) {
+	record := map[string]any{
+		"overflow": "2147483648",
+		"valid":    "42",
+		"values": []any{
+			"1",
+			"2147483648",
+			"-2147483649",
+			"2",
+		},
+	}
+
+	if got := readIntAny(record, "overflow", "valid"); got != 42 {
+		t.Fatalf("readIntAny() = %d, want fallback value 42", got)
+	}
+
+	got := readIntSliceAny(record, "values")
+	if len(got) != 2 || got[0] != 1 || got[1] != 2 {
+		t.Fatalf("readIntSliceAny() = %#v, want []int{1, 2}", got)
+	}
+}
+
+func TestAppendDiskTemperatureRejectsOutOfRangeValues(t *testing.T) {
+	temperatures := map[string]int{}
+
+	appendDiskTemperature(temperatures, "sda", int64(149))
+	appendDiskTemperature(temperatures, "sdb", int64(150))
+	appendDiskTemperature(temperatures, "sdc", "2147483648")
+
+	if got := temperatures["sda"]; got != 149 {
+		t.Fatalf("expected bounded valid temperature 149, got %d", got)
+	}
+	if _, ok := temperatures["sdb"]; ok {
+		t.Fatal("expected temperature 150 to be rejected")
+	}
+	if _, ok := temperatures["sdc"]; ok {
+		t.Fatal("expected oversized temperature to be rejected")
+	}
+}
+
 func TestParseBoolFromAnyCoversBranches(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
@@ -233,7 +234,11 @@ func (s *FileBillingStore) SaveBillingState(orgID string, state *pkglicensing.Bi
 }
 
 func (s *FileBillingStore) billingCryptoManager() (*crypto.CryptoManager, error) {
-	return crypto.NewCryptoManagerAt(s.resolveDataDir())
+	dataDir, err := s.billingBaseDataDir()
+	if err != nil {
+		return nil, err
+	}
+	return crypto.NewCryptoManagerAt(dataDir)
 }
 
 func (s *FileBillingStore) billingCryptoManagerForSecrets(values ...string) (*crypto.CryptoManager, error) {
@@ -250,22 +255,45 @@ func (s *FileBillingStore) billingStatePath(orgID string) (string, error) {
 	if !isValidOrgID(orgID) {
 		return "", fmt.Errorf("invalid organization ID: %s", orgID)
 	}
+	baseDir, err := s.billingBaseDataDir()
+	if err != nil {
+		return "", err
+	}
 	// Default org stores config at the root data dir for backward compatibility,
 	// so billing state for the default org must live alongside other root configs.
 	if orgID == "default" {
-		return filepath.Join(s.resolveDataDir(), "billing.json"), nil
+		return securityutil.JoinStorageLeaf(baseDir, "billing.json")
 	}
-	return filepath.Join(s.resolveDataDir(), "orgs", orgID, "billing.json"), nil
+	orgsDir, err := securityutil.JoinStorageLeaf(baseDir, "orgs")
+	if err != nil {
+		return "", fmt.Errorf("resolve orgs directory: %w", err)
+	}
+	orgDir, err := securityutil.JoinStorageLeaf(orgsDir, orgID)
+	if err != nil {
+		return "", fmt.Errorf("resolve organization billing directory: %w", err)
+	}
+	return securityutil.JoinStorageLeaf(orgDir, "billing.json")
 }
 
-func (s *FileBillingStore) resolveDataDir() string {
-	return ResolveRuntimeDataDir(s.baseDataDir)
+func (s *FileBillingStore) billingBaseDataDir() (string, error) {
+	dataDir, err := securityutil.NormalizeStorageDir(ResolveRuntimeDataDir(s.baseDataDir))
+	if err != nil {
+		return "", fmt.Errorf("resolve billing data directory: %w", err)
+	}
+	return dataDir, nil
 }
 
 // loadHMACKey derives a purpose-specific HMAC key from the .encryption.key file.
 // Returns an error if the key file is missing or invalid (graceful degradation).
 func (s *FileBillingStore) loadHMACKey() ([]byte, error) {
-	keyPath := filepath.Join(s.resolveDataDir(), ".encryption.key")
+	dataDir, err := s.billingBaseDataDir()
+	if err != nil {
+		return nil, err
+	}
+	keyPath, err := securityutil.JoinStorageLeaf(dataDir, ".encryption.key")
+	if err != nil {
+		return nil, err
+	}
 	raw, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, err

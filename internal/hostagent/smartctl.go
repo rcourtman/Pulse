@@ -1337,9 +1337,9 @@ func parseSMARTOutput(output []byte, target smartctlTarget) (*DiskSMART, error) 
 	} else {
 		for _, attr := range smartData.ATASmartAttributes.Table {
 			if attr.ID == 194 || attr.ID == 190 {
-				temp := int(parseRawValue(attr.Raw.String, attr.Raw.Value))
+				temp := parseRawValue(attr.Raw.String, attr.Raw.Value)
 				if temp > 0 && temp < 150 {
-					result.Temperature = temp
+					result.Temperature = int(temp)
 					break
 				}
 			}
