@@ -2,7 +2,6 @@ package monitoring
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -18,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 // AvailabilityProbeStatus captures the last observed state of an agentless
@@ -464,10 +464,7 @@ func availabilityHTTPOutboundOptions() securityutil.RestrictedOutboundHTTPOption
 		AllowedSchemes:  []string{"http", "https"},
 		AllowPrivateIPs: true,
 		AllowLoopback:   true,
-		TLSConfig: &tls.Config{
-			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: true, //nolint:gosec // Availability probes must support self-signed operator endpoints.
-		},
+		TLSConfig:       tlsutil.UnverifiedPeerCertificateCaptureTLSConfig(),
 	}
 }
 

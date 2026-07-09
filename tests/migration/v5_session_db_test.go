@@ -439,7 +439,7 @@ func TestV5DataDir_AuditDBSchemaAutoMigration(t *testing.T) {
 		Success:   true,
 		Details:   "test migration verification",
 	}
-	require.NoError(t, logger.Log(event))
+	require.NoError(t, logger.Record(event))
 
 	// Query the event back
 	events, err := logger.Query(audit.QueryFilter{ID: "test-migration-event-1"})

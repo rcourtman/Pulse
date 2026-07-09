@@ -37,7 +37,7 @@ func TestExporterExportAndSummary(t *testing.T) {
 	}
 
 	for _, event := range events {
-		if err := logger.Log(event); err != nil {
+		if err := logger.Record(event); err != nil {
 			t.Fatalf("log event: %v", err)
 		}
 	}

@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 // Probe budget. Per-candidate and whole-request ceilings are kept tight to
@@ -203,10 +203,7 @@ func probeHTTPClient() *http.Client {
 		AllowedSchemes:  []string{"https"},
 		AllowPrivateIPs: true,
 		AllowLoopback:   true,
-		TLSConfig: &tls.Config{
-			MinVersion:         tls.VersionTLS12,
-			InsecureSkipVerify: true, //nolint:gosec // Probing intentionally accepts untrusted certificates for fingerprint capture.
-		},
+		TLSConfig:       tlsutil.UnverifiedPeerCertificateCaptureTLSConfig(),
 	})
 }
 

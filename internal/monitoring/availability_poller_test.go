@@ -37,6 +37,16 @@ func TestProbeAvailabilityTargetHTTPFallsBackToGETWhenHeadNotAllowed(t *testing.
 	}
 }
 
+func TestAvailabilityHTTPOutboundOptionsUsesSharedPeerCertificateCapture(t *testing.T) {
+	tlsConfig := availabilityHTTPOutboundOptions().TLSConfig
+	if tlsConfig == nil || !tlsConfig.InsecureSkipVerify {
+		t.Fatal("availability TLS config must enter explicit peer-certificate capture mode")
+	}
+	if tlsConfig.VerifyPeerCertificate == nil {
+		t.Fatal("availability TLS config must reject missing or malformed peer certificates")
+	}
+}
+
 func TestProbeAvailabilityTargetHTTPTreatsServerErrorsAsUnavailable(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)

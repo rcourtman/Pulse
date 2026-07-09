@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	sshknownhosts "github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
 	"github.com/rs/zerolog"
 )
@@ -110,6 +111,11 @@ func TestMakeSemaphore(t *testing.T) {
 	sem = makeSemaphore(3)
 	if cap(sem) != 3 {
 		t.Errorf("expected capacity 3, got %d", cap(sem))
+	}
+
+	sem = makeSemaphore(1 << 30)
+	if cap(sem) != agentexec.MaxDeployParallel {
+		t.Errorf("expected capacity %d for oversized value, got %d", agentexec.MaxDeployParallel, cap(sem))
 	}
 }
 

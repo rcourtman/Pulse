@@ -1511,6 +1511,23 @@ func TestBuildModelsCacheKey_OllamaAuthFingerprint(t *testing.T) {
 	}
 }
 
+func TestBuildModelsCacheKey_UsesKeyedCredentialIdentity(t *testing.T) {
+	cfg := &config.AIConfig{Enabled: true, OpenAIAPIKey: "provider-secret"}
+	first := buildModelsCacheKey(cfg)
+	second := buildModelsCacheKey(cfg)
+	if first != second {
+		t.Fatal("expected unchanged credentials to retain one cache identity")
+	}
+	if strings.Contains(first, cfg.OpenAIAPIKey) {
+		t.Fatal("cache key must not contain raw provider credentials")
+	}
+
+	cfg.OpenAIAPIKey = "rotated-secret"
+	if rotated := buildModelsCacheKey(cfg); rotated == first {
+		t.Fatal("expected credential rotation to invalidate the models cache")
+	}
+}
+
 // Note: ListModelsWithCache does not handle nil persistence gracefully (panics)
 // This is acceptable as NewService should always be called with a valid persistence
 

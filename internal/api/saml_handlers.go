@@ -522,25 +522,21 @@ func (r *Router) establishSAMLSession(w http.ResponseWriter, req *http.Request, 
 	}
 
 	csrfToken := generateCSRFToken(token)
-	isSecure, sameSitePolicy := getCookieSettings(req)
+	cookiePolicy := getBrowserCookiePolicy(req)
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName(isSecure),
+	cookiePolicy.set(w, &http.Cookie{
+		Name:     sessionCookieName(cookiePolicy.secure),
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
 		MaxAge:   86400,
 	})
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieNameCSRF,
-		Value:    csrfToken,
-		Path:     "/",
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
-		MaxAge:   86400,
+	cookiePolicy.set(w, &http.Cookie{
+		Name:   CookieNameCSRF,
+		Value:  csrfToken,
+		Path:   "/",
+		MaxAge: 86400,
 	})
 
 	return nil
@@ -568,7 +564,7 @@ func (r *Router) getSAMLSessionInfo(req *http.Request) *SAMLSessionInfo {
 // clearSession clears the current session - properly invalidates server-side session
 // and clears both pulse_session and pulse_csrf cookies
 func (r *Router) clearSession(w http.ResponseWriter, req *http.Request) {
-	isSecure, sameSitePolicy := getCookieSettings(req)
+	cookiePolicy := getBrowserCookiePolicy(req)
 
 	// Invalidate server-side session first
 	if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
@@ -588,25 +584,21 @@ func (r *Router) clearSession(w http.ResponseWriter, req *http.Request) {
 
 	// Clear both session cookie variants (prefixed and unprefixed)
 	for _, name := range []string{cookieNameSession, cookieNameSessionSecure} {
-		http.SetCookie(w, &http.Cookie{
+		cookiePolicy.set(w, &http.Cookie{
 			Name:     name,
 			Value:    "",
 			Path:     "/",
 			MaxAge:   -1,
 			HttpOnly: true,
-			Secure:   isSecure,
-			SameSite: sameSitePolicy,
 		})
 	}
 
 	// Clear pulse_csrf cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieNameCSRF,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
+	cookiePolicy.set(w, &http.Cookie{
+		Name:   CookieNameCSRF,
+		Value:  "",
+		Path:   "/",
+		MaxAge: -1,
 	})
 }
 

@@ -271,7 +271,7 @@ func (l *SQLiteLogger) initSchema() error {
 }
 
 // Log records an audit event with HMAC signature.
-func (l *SQLiteLogger) Log(event Event) error {
+func (l *SQLiteLogger) Record(event Event) error {
 	// Sign the event
 	event.Signature = l.signer.Sign(event)
 
@@ -310,10 +310,8 @@ func (l *SQLiteLogger) Log(event Event) error {
 	logContext := log.With().
 		Str("audit_id", event.ID).
 		Str("event", event.EventType).
-		Str("user", event.User).
-		Str("ip", event.IP).
-		Str("path", event.Path).
 		Time("timestamp", event.Timestamp)
+	logContext = appendRealtimeAuditIdentityFields(logContext, event)
 	logEvent := appendRealtimeAuditDetailFields(logContext, event.Details).Logger()
 
 	if event.Success {

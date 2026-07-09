@@ -8615,8 +8615,7 @@ func TestContract_HandoffExchangeTargetPathIsSignedAndLocalOnly(t *testing.T) {
 		"TargetPath string `json:\"target_path,omitempty\"`",
 		"sanitizeCloudHandoffTargetPath(claims.TargetPath)",
 		"http.Redirect(w, r, targetPath, http.StatusTemporaryRedirect)",
-		"strings.HasPrefix(raw, \"//\")",
-		"parsed.IsAbs() || parsed.Host != \"\"",
+		"pkgsecurityutil.NormalizeLocalRedirectPath(raw)",
 	} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("cloud handoff exchange must preserve signed local target-path contract: missing %q", required)

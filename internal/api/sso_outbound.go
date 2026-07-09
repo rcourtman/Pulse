@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,6 +15,8 @@ import (
 )
 
 var allowLoopbackSSOFetch bool
+
+const maxSSOFileSize = 4 << 20
 
 func ssoOutboundHTTPOptions(tlsConfig *tls.Config) securityutil.RestrictedOutboundHTTPOptions {
 	return securityutil.RestrictedOutboundHTTPOptions{
@@ -35,23 +36,25 @@ func newSSOHTTPClient(timeout time.Duration, tlsConfig *tls.Config) *http.Client
 }
 
 func readSSORegularFile(rawPath string) ([]byte, error) {
+	absolute, err := normalizeConfiguredSSOFilePath(rawPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return securityutil.ReadSecureStorageFile(absolute, maxSSOFileSize)
+}
+
+// normalizeConfiguredSSOFilePath establishes the privileged operator-config
+// boundary for SSO certificate and key files. Request data must never reach it.
+func normalizeConfiguredSSOFilePath(rawPath string) (string, error) {
 	cleaned := filepath.Clean(strings.TrimSpace(rawPath))
-	if cleaned == "" {
-		return nil, errors.New("SSO file path is empty")
+	if cleaned == "" || cleaned == "." {
+		return "", errors.New("SSO file path is empty")
 	}
 
 	absolute, err := filepath.Abs(cleaned)
 	if err != nil {
-		return nil, fmt.Errorf("resolve SSO file path: %w", err)
+		return "", fmt.Errorf("resolve SSO file path: %w", err)
 	}
-
-	info, err := os.Stat(absolute)
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("SSO file must be a regular file")
-	}
-
-	return os.ReadFile(absolute)
+	return filepath.Clean(absolute), nil
 }

@@ -93,14 +93,46 @@ func NormalizeHTTPBaseURL(raw string, defaultScheme string) (*url.URL, error) {
 	case ".", "/":
 		parsed.Path = ""
 	default:
-		if !strings.HasPrefix(cleanedPath, "/") {
+		if cleanedPath[0] != '/' {
 			cleanedPath = "/" + cleanedPath
+		}
+		if len(cleanedPath) > 1 && (cleanedPath[1] == '/' || cleanedPath[1] == '\\') {
+			return nil, fmt.Errorf("base URL path must be host-local")
 		}
 		parsed.Path = cleanedPath
 	}
 	parsed.RawPath = ""
 
 	return parsed, nil
+}
+
+// NormalizeLocalRedirectPath validates a browser redirect that must remain on
+// the current origin. It checks the decoded path so encoded slash or backslash
+// variants cannot become scheme-relative redirects later.
+func NormalizeLocalRedirectPath(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", fmt.Errorf("redirect path is required")
+	}
+	if strings.IndexFunc(trimmed, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		return "", fmt.Errorf("redirect path contains control characters")
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("invalid redirect path: %w", err)
+	}
+	if parsed.IsAbs() || parsed.Host != "" || parsed.Path == "" {
+		return "", fmt.Errorf("redirect must be a local absolute path")
+	}
+	if parsed.Path[0] != '/' || (len(parsed.Path) > 1 && (parsed.Path[1] == '/' || parsed.Path[1] == '\\')) {
+		return "", fmt.Errorf("redirect must remain on the current origin")
+	}
+	if strings.ContainsRune(parsed.Path, '\\') {
+		return "", fmt.Errorf("redirect path must not contain backslashes")
+	}
+
+	return trimmed, nil
 }
 
 // IsLoopbackHost reports whether host resolves to localhost or a loopback IP literal.

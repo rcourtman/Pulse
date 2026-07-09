@@ -157,3 +157,40 @@ func TestWriteSecureStorageFile_CreatesOwnerOnlyFile(t *testing.T) {
 		t.Fatalf("permissions = %o, want 600", got)
 	}
 }
+
+func TestRenameSecureStorageFile(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source.json")
+	destination := filepath.Join(root, "source.json.bak")
+	if err := os.WriteFile(source, []byte("payload"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+
+	if err := RenameSecureStorageFile(source, destination); err != nil {
+		t.Fatalf("RenameSecureStorageFile() error = %v", err)
+	}
+	if _, err := os.Stat(source); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("source stat error = %v, want not exist", err)
+	}
+	if data, err := os.ReadFile(destination); err != nil || string(data) != "payload" {
+		t.Fatalf("destination = %q, err = %v", data, err)
+	}
+}
+
+func TestRenameSecureStorageFileRejectsUnsafePaths(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source.json")
+	destination := filepath.Join(root, "source.json.bak")
+	if err := os.WriteFile(source, []byte("payload"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	if err := os.WriteFile(destination, []byte("existing"), 0o600); err != nil {
+		t.Fatalf("write destination: %v", err)
+	}
+	if err := RenameSecureStorageFile(source, destination); !errors.Is(err, ErrUnsafeStorageFile) {
+		t.Fatalf("existing destination error = %v, want ErrUnsafeStorageFile", err)
+	}
+	if err := RenameSecureStorageFile(source, filepath.Join(t.TempDir(), "other.json")); err == nil {
+		t.Fatal("expected cross-directory rename rejection")
+	}
+}

@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
 )
+
+const maxLegacyRBACFileSize = 16 << 20
 
 // SQLiteManagerConfig configures the SQLite RBAC manager.
 type SQLiteManagerConfig struct {
@@ -36,13 +37,22 @@ func NewSQLiteManager(cfg SQLiteManagerConfig) (*SQLiteManager, error) {
 		return nil, fmt.Errorf("data directory is required")
 	}
 
-	// Ensure directory exists
-	rbacDir := filepath.Join(cfg.DataDir, "rbac")
-	if err := os.MkdirAll(rbacDir, 0700); err != nil {
+	dataDir, err := securityutil.NormalizeStorageDir(cfg.DataDir)
+	if err != nil {
+		return nil, fmt.Errorf("normalize data directory: %w", err)
+	}
+	rbacDir, err := securityutil.JoinStorageLeaf(dataDir, "rbac")
+	if err != nil {
+		return nil, fmt.Errorf("resolve rbac directory: %w", err)
+	}
+	if err := securityutil.EnsureSecureStorageDir(rbacDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create rbac directory: %w", err)
 	}
 
-	dbPath := filepath.Join(rbacDir, "rbac.db")
+	dbPath, err := securityutil.JoinStorageLeaf(rbacDir, "rbac.db")
+	if err != nil {
+		return nil, fmt.Errorf("resolve rbac database path: %w", err)
+	}
 
 	// Open database with pragmas in DSN so every pool connection is configured
 	dsn := dbPath + "?" + url.Values{
@@ -89,7 +99,7 @@ func NewSQLiteManager(cfg SQLiteManagerConfig) (*SQLiteManager, error) {
 
 	// Migrate from file-based storage if requested
 	if cfg.MigrateFromFiles {
-		if err := m.migrateFromFiles(cfg.DataDir); err != nil {
+		if err := m.migrateFromFiles(dataDir); err != nil {
 			log.Warn().Err(err).Msg("Failed to migrate RBAC from files (may not exist)")
 		}
 	}
@@ -909,8 +919,22 @@ func (m *SQLiteManager) logChangeUnsafe(action, entityType, entityID, oldValue, 
 
 // migrateFromFiles migrates data from file-based storage.
 func (m *SQLiteManager) migrateFromFiles(dataDir string) error {
-	rolesFile := filepath.Join(dataDir, "rbac_roles.json")
-	assignmentsFile := filepath.Join(dataDir, "rbac_assignments.json")
+	rolesFile, err := securityutil.JoinStorageLeaf(dataDir, "rbac_roles.json")
+	if err != nil {
+		return fmt.Errorf("resolve legacy roles path: %w", err)
+	}
+	rolesBackup, err := securityutil.JoinStorageLeaf(dataDir, "rbac_roles.json.bak")
+	if err != nil {
+		return fmt.Errorf("resolve legacy roles backup path: %w", err)
+	}
+	assignmentsFile, err := securityutil.JoinStorageLeaf(dataDir, "rbac_assignments.json")
+	if err != nil {
+		return fmt.Errorf("resolve legacy assignments path: %w", err)
+	}
+	assignmentsBackup, err := securityutil.JoinStorageLeaf(dataDir, "rbac_assignments.json.bak")
+	if err != nil {
+		return fmt.Errorf("resolve legacy assignments backup path: %w", err)
+	}
 
 	// Check if migration is needed
 	var roleCount int
@@ -922,7 +946,7 @@ func (m *SQLiteManager) migrateFromFiles(dataDir string) error {
 	}
 
 	// Migrate roles
-	if data, err := os.ReadFile(rolesFile); err == nil {
+	if data, err := securityutil.ReadSecureStorageFile(rolesFile, maxLegacyRBACFileSize); err == nil {
 		var roles []Role
 		if err := json.Unmarshal(data, &roles); err == nil {
 			for _, role := range roles {
@@ -935,14 +959,14 @@ func (m *SQLiteManager) migrateFromFiles(dataDir string) error {
 			log.Info().Int("count", len(roles)).Msg("Migrated roles from file")
 
 			// Rename old file
-			if err := os.Rename(rolesFile, rolesFile+".bak"); err != nil {
+			if err := securityutil.RenameSecureStorageFile(rolesFile, rolesBackup); err != nil {
 				log.Warn().Err(err).Msg("Failed to rename migrated roles file")
 			}
 		}
 	}
 
 	// Migrate assignments
-	if data, err := os.ReadFile(assignmentsFile); err == nil {
+	if data, err := securityutil.ReadSecureStorageFile(assignmentsFile, maxLegacyRBACFileSize); err == nil {
 		var assignments []UserRoleAssignment
 		if err := json.Unmarshal(data, &assignments); err == nil {
 			for _, a := range assignments {
@@ -953,7 +977,7 @@ func (m *SQLiteManager) migrateFromFiles(dataDir string) error {
 			log.Info().Int("count", len(assignments)).Msg("Migrated assignments from file")
 
 			// Rename old file
-			if err := os.Rename(assignmentsFile, assignmentsFile+".bak"); err != nil {
+			if err := securityutil.RenameSecureStorageFile(assignmentsFile, assignmentsBackup); err != nil {
 				log.Warn().Err(err).Msg("Failed to rename migrated assignments file")
 			}
 		}

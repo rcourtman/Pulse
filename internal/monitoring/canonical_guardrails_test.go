@@ -28,6 +28,20 @@ var bannedSnapshotResourceAccessPatterns = []struct {
 	},
 }
 
+func TestAvailabilityTLSUsesSharedCertificateCaptureBoundary(t *testing.T) {
+	source, err := os.ReadFile("availability_poller.go")
+	if err != nil {
+		t.Fatalf("read availability_poller.go: %v", err)
+	}
+	text := string(source)
+	if !strings.Contains(text, "tlsutil.UnverifiedPeerCertificateCaptureTLSConfig()") {
+		t.Fatal("availability probes must use the shared peer-certificate capture boundary")
+	}
+	if strings.Contains(text, "InsecureSkipVerify: true") {
+		t.Fatal("availability probes must not define a local skip-verification TLS config")
+	}
+}
+
 type guardrailSupplementalProvider struct {
 	records []unifiedresources.IngestRecord
 }

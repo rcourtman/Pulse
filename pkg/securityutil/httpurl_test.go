@@ -15,6 +15,42 @@ func localNetworkHTTPOptions(resolver func(context.Context, string) ([]net.IPAdd
 	}
 }
 
+func TestNormalizeLocalRedirectPath(t *testing.T) {
+	tests := []struct {
+		name    string
+		raw     string
+		want    string
+		wantErr bool
+	}{
+		{name: "local path", raw: "/settings/infrastructure?add=linux-host", want: "/settings/infrastructure?add=linux-host"},
+		{name: "scheme relative", raw: "//evil.example/path", wantErr: true},
+		{name: "backslash authority", raw: `/\\evil.example/path`, wantErr: true},
+		{name: "encoded slash authority", raw: "/%2f%2fevil.example/path", wantErr: true},
+		{name: "encoded backslash authority", raw: "/%5cevil.example/path", wantErr: true},
+		{name: "absolute URL", raw: "https://evil.example/path", wantErr: true},
+		{name: "control character", raw: "/settings\nnext", wantErr: true},
+		{name: "relative path", raw: "settings", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizeLocalRedirectPath(tt.raw)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("NormalizeLocalRedirectPath(%q) = %q, want error", tt.raw, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NormalizeLocalRedirectPath(%q) error = %v", tt.raw, err)
+			}
+			if got != tt.want {
+				t.Fatalf("NormalizeLocalRedirectPath(%q) = %q, want %q", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNormalizePulseHTTPBaseURLWithOptionsAllowsResolvedLocalDNS(t *testing.T) {
 	opts := localNetworkHTTPOptions(func(_ context.Context, host string) ([]net.IPAddr, error) {
 		if host != "myhost.fritz.box" {

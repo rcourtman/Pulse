@@ -1209,6 +1209,11 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
 
 ## Current State
 
+Hosted handoff target paths are normalized by the shared host-local redirect
+validator at token minting, exchange, and provider-proof boundaries. Absolute,
+scheme-relative, backslash-authority, encoded-separator, and control-character
+targets are rejected before they can reach a browser redirect.
+
 Primary nav moved to platform-first on 2026-05-16 through
 `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, and
 `frontend-modern/src/pages/RuntimeHome.tsx`. The authenticated-runtime landing

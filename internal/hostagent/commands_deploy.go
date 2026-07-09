@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 )
 
 var deploySSHUserPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]{0,63}$`)
@@ -628,6 +629,9 @@ func (c *CommandClient) sendDeployProgress(
 func makeSemaphore(maxParallel int) chan struct{} {
 	if maxParallel <= 0 {
 		maxParallel = 1
+	}
+	if maxParallel > agentexec.MaxDeployParallel {
+		maxParallel = agentexec.MaxDeployParallel
 	}
 	return make(chan struct{}, maxParallel)
 }

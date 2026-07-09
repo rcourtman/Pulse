@@ -5,7 +5,17 @@ import (
 	"net"
 	"strings"
 	"testing"
+
+	pubsec "github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 )
+
+func TestPublicLocalRedirectBoundaryRejectsAuthorityVariants(t *testing.T) {
+	for _, raw := range []string{"//evil.example/path", `/\\evil.example/path`, "/%2f%2fevil.example/path"} {
+		if got, err := pubsec.NormalizeLocalRedirectPath(raw); err == nil {
+			t.Errorf("NormalizeLocalRedirectPath(%q) = %q, want rejection", raw, got)
+		}
+	}
+}
 
 func TestNormalizeHTTPBaseURLAddsDefaultScheme(t *testing.T) {
 	parsed, err := NormalizeHTTPBaseURL("pbs.example.com:8007", "https")

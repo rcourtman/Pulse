@@ -40,7 +40,7 @@ func TestSQLiteLoggerFactory_CreateLogger_PersistsAndSigns(t *testing.T) {
 		Details:   "hello",
 	}
 
-	if err := logger.Log(event); err != nil {
+	if err := logger.Record(event); err != nil {
 		t.Fatalf("Log failed: %v", err)
 	}
 

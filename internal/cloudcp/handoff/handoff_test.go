@@ -108,6 +108,24 @@ func TestMintHandoffTokenDropsUnsafeTargetPath(t *testing.T) {
 	}
 }
 
+func TestSanitizeTargetPathRejectsCrossOriginVariants(t *testing.T) {
+	for _, raw := range []string{
+		"//evil.example/path",
+		`/\\evil.example/path`,
+		"/%2f%2fevil.example/path",
+		"/%5cevil.example/path",
+		"https://evil.example/path",
+		"/settings\nnext",
+	} {
+		if got := sanitizeTargetPath(raw); got != "" {
+			t.Errorf("sanitizeTargetPath(%q) = %q, want empty", raw, got)
+		}
+	}
+	if got := sanitizeTargetPath("/settings/infrastructure?add=linux-host"); got != "/settings/infrastructure?add=linux-host" {
+		t.Fatalf("valid target path = %q", got)
+	}
+}
+
 func TestExpiredToken(t *testing.T) {
 	secret := []byte("0123456789abcdef0123456789abcdef")
 	past := time.Now().UTC().Add(-2 * time.Minute)

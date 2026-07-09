@@ -35,7 +35,7 @@ type testAuditLogger struct {
 	events []audit.Event
 }
 
-func (l *testAuditLogger) Log(event audit.Event) error {
+func (l *testAuditLogger) Record(event audit.Event) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.events = append(l.events, event)

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sync"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -119,21 +120,35 @@ func (p *TenantRBACProvider) ManagerCount() int {
 }
 
 func (p *TenantRBACProvider) resolveDataDir(orgID string) (string, error) {
+	baseDataDir, err := securityutil.NormalizeStorageDir(p.baseDataDir)
+	if err != nil {
+		return "", fmt.Errorf("invalid RBAC data directory: %w", err)
+	}
 	if orgID == "default" {
-		return p.baseDataDir, nil
+		return baseDataDir, nil
 	}
 
 	if !isValidTenantOrgID(orgID) {
 		return "", fmt.Errorf("invalid organization ID: %s", orgID)
 	}
 
-	orgDir := filepath.Join(p.baseDataDir, "orgs", orgID)
-	stat, err := os.Stat(orgDir)
+	orgsDir, err := securityutil.JoinStorageLeaf(baseDataDir, "orgs")
+	if err != nil {
+		return "", fmt.Errorf("resolve organization storage root: %w", err)
+	}
+	orgDir, err := securityutil.JoinStorageLeaf(orgsDir, orgID)
+	if err != nil {
+		return "", fmt.Errorf("resolve organization directory: %w", err)
+	}
+	stat, err := os.Lstat(orgDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", fmt.Errorf("organization directory does not exist: %s", orgID)
 		}
 		return "", fmt.Errorf("failed to read organization directory for %s: %w", orgID, err)
+	}
+	if stat.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("organization path must not be a symlink: %s", orgID)
 	}
 	if !stat.IsDir() {
 		return "", fmt.Errorf("organization path is not a directory: %s", orgID)

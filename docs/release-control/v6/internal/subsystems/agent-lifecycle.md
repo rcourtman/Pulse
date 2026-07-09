@@ -1623,6 +1623,13 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+Deploy fan-out concurrency is one shared protocol contract in
+`internal/agentexec`: server request normalization and host-agent semaphore
+allocation both cap `max_parallel` at the same bound, including payloads that
+bypass the normal API producer. Shared local-redirect validation in
+`pkg/securityutil/httpurl.go` likewise rejects scheme-relative and backslash
+authority forms before agent-adjacent handoff or proof flows consume them.
+
 Denied Patrol investigation-fix approvals passing through shared
 `internal/api/` handlers are adjacent AI-runtime/action-governance state only.
 The `fix_rejected` finding outcome records that an operator declined a proposed

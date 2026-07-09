@@ -3161,6 +3161,14 @@ a new API state machine, queue contract, or verification-accounting field.
 
 ## Current State
 
+Browser authentication cookies now consume one request-derived policy in
+`internal/api/auth.go`; session, CSRF, organization, magic-link, SAML, and cloud
+handoff flows must not materialize independent `Secure` or `SameSite` policy.
+SSO certificate/key file reads are privileged operator configuration and must
+pass the bounded non-symlink regular-file boundary in
+`internal/api/sso_outbound.go`. Cloud handoff redirects consume the shared
+host-local redirect validator rather than carrying route-local prefix checks.
+
 Alert delivery diagnosis is a read-only monitoring API contract.
 `GET /api/alerts/delivery-diagnosis?alertIdentifier=<id>` returns the alert
 manager's current delivery-policy projection for one active alert, including

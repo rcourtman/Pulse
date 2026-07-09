@@ -16,7 +16,7 @@ type auditCaptureLogger struct {
 	events []audit.Event
 }
 
-func (l *auditCaptureLogger) Log(event audit.Event) error {
+func (l *auditCaptureLogger) Record(event audit.Event) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.events = append(l.events, event)
@@ -51,7 +51,7 @@ func (l *auditCaptureLogger) Close() error {
 
 type auditErrorLogger struct{}
 
-func (l *auditErrorLogger) Log(event audit.Event) error { return errors.New("log failed") }
+func (l *auditErrorLogger) Record(event audit.Event) error { return errors.New("log failed") }
 func (l *auditErrorLogger) Query(filter audit.QueryFilter) ([]audit.Event, error) {
 	return nil, errors.New("query failed")
 }

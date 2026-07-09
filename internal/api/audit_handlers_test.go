@@ -32,7 +32,7 @@ type testAuditLogger struct {
 	lastCount    audit.QueryFilter
 }
 
-func (l *testAuditLogger) Log(event audit.Event) error {
+func (l *testAuditLogger) Record(event audit.Event) error {
 	l.events = append(l.events, event)
 	return nil
 }
@@ -81,7 +81,7 @@ type testAuditLoggerNoVerify struct {
 	events []audit.Event
 }
 
-func (l *testAuditLoggerNoVerify) Log(event audit.Event) error {
+func (l *testAuditLoggerNoVerify) Record(event audit.Event) error {
 	l.events = append(l.events, event)
 	return nil
 }

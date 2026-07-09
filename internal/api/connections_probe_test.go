@@ -52,6 +52,22 @@ func TestParseProbeAddress_Shapes(t *testing.T) {
 	}
 }
 
+func TestProbeHTTPClientUsesSharedPeerCertificateCapture(t *testing.T) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	resp, err := probeHTTPClient().Get(server.URL)
+	if err != nil {
+		t.Fatalf("probe client rejected parseable self-signed peer certificate: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("probe status = %d, want %d", resp.StatusCode, http.StatusNoContent)
+	}
+}
+
 func TestTargetsForPort_ExplicitNarrowsToMatching(t *testing.T) {
 	targets := targetsForPort(8006)
 	seen := map[ConnectionType]bool{}

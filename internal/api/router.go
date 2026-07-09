@@ -4215,14 +4215,11 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				if csrfErr != nil {
 					// Session exists but no CSRF cookie - issue one
 					csrfToken := generateCSRFToken(sessionCookie.Value)
-					isSecure, sameSitePolicy := getCookieSettings(req)
-					http.SetCookie(w, &http.Cookie{
-						Name:     CookieNameCSRF,
-						Value:    csrfToken,
-						Path:     "/",
-						Secure:   isSecure,
-						SameSite: sameSitePolicy,
-						MaxAge:   86400,
+					getBrowserCookiePolicy(req).set(w, &http.Cookie{
+						Name:   CookieNameCSRF,
+						Value:  csrfToken,
+						Path:   "/",
+						MaxAge: 86400,
 					})
 				}
 			}
@@ -4978,25 +4975,21 @@ func (r *Router) establishSession(w http.ResponseWriter, req *http.Request, user
 	}
 
 	csrfToken := generateCSRFToken(token)
-	isSecure, sameSitePolicy := getCookieSettings(req)
+	cookiePolicy := getBrowserCookiePolicy(req)
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName(isSecure),
+	cookiePolicy.set(w, &http.Cookie{
+		Name:     sessionCookieName(cookiePolicy.secure),
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
 		MaxAge:   86400,
 	})
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieNameCSRF,
-		Value:    csrfToken,
-		Path:     "/",
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
-		MaxAge:   86400,
+	cookiePolicy.set(w, &http.Cookie{
+		Name:   CookieNameCSRF,
+		Value:  csrfToken,
+		Path:   "/",
+		MaxAge: 86400,
 	})
 
 	return nil
@@ -5019,25 +5012,21 @@ func (r *Router) establishRecoverySession(w http.ResponseWriter, req *http.Reque
 	GetSessionStore().CreateRecoverySession(token, 24*time.Hour, userAgent, clientIP, username)
 
 	csrfToken := generateCSRFToken(token)
-	isSecure, sameSitePolicy := getCookieSettings(req)
+	cookiePolicy := getBrowserCookiePolicy(req)
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName(isSecure),
+	cookiePolicy.set(w, &http.Cookie{
+		Name:     sessionCookieName(cookiePolicy.secure),
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
 		MaxAge:   86400,
 	})
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieNameCSRF,
-		Value:    csrfToken,
-		Path:     "/",
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
-		MaxAge:   86400,
+	cookiePolicy.set(w, &http.Cookie{
+		Name:   CookieNameCSRF,
+		Value:  csrfToken,
+		Path:   "/",
+		MaxAge: 86400,
 	})
 
 	return nil
@@ -5064,25 +5053,21 @@ func (r *Router) establishOIDCSession(w http.ResponseWriter, req *http.Request, 
 	}
 
 	csrfToken := generateCSRFToken(token)
-	isSecure, sameSitePolicy := getCookieSettings(req)
+	cookiePolicy := getBrowserCookiePolicy(req)
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName(isSecure),
+	cookiePolicy.set(w, &http.Cookie{
+		Name:     sessionCookieName(cookiePolicy.secure),
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
 		MaxAge:   86400,
 	})
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieNameCSRF,
-		Value:    csrfToken,
-		Path:     "/",
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
-		MaxAge:   86400,
+	cookiePolicy.set(w, &http.Cookie{
+		Name:   CookieNameCSRF,
+		Value:  csrfToken,
+		Path:   "/",
+		MaxAge: 86400,
 	})
 
 	return nil
@@ -5193,30 +5178,26 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 		csrfToken := generateCSRFToken(token)
 
 		// Get appropriate cookie settings based on proxy detection
-		isSecure, sameSitePolicy := getCookieSettings(req)
+		cookiePolicy := getBrowserCookiePolicy(req)
 
 		// Set cookie MaxAge to match session duration
 		cookieMaxAge := int(sessionDuration.Seconds())
 
 		// Set session cookie
-		http.SetCookie(w, &http.Cookie{
-			Name:     sessionCookieName(isSecure),
+		cookiePolicy.set(w, &http.Cookie{
+			Name:     sessionCookieName(cookiePolicy.secure),
 			Value:    token,
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   isSecure,
-			SameSite: sameSitePolicy,
 			MaxAge:   cookieMaxAge,
 		})
 
 		// Set CSRF cookie (not HttpOnly so JS can read it)
-		http.SetCookie(w, &http.Cookie{
-			Name:     CookieNameCSRF,
-			Value:    csrfToken,
-			Path:     "/",
-			Secure:   isSecure,
-			SameSite: sameSitePolicy,
-			MaxAge:   cookieMaxAge,
+		cookiePolicy.set(w, &http.Cookie{
+			Name:   CookieNameCSRF,
+			Value:  csrfToken,
+			Path:   "/",
+			MaxAge: cookieMaxAge,
 		})
 
 		// Audit log successful login

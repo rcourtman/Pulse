@@ -5,12 +5,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 )
 
 const (
@@ -125,16 +125,9 @@ func sanitizeID(s string) string {
 }
 
 func sanitizeTargetPath(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") {
+	targetPath, err := securityutil.NormalizeLocalRedirectPath(raw)
+	if err != nil {
 		return ""
 	}
-	if strings.IndexFunc(raw, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
-		return ""
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil || parsed.IsAbs() || parsed.Host != "" || parsed.Path == "" || !strings.HasPrefix(parsed.Path, "/") {
-		return ""
-	}
-	return parsed.String()
+	return targetPath
 }

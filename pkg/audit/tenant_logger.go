@@ -121,7 +121,7 @@ func (m *TenantLoggerManager) Log(orgID, eventType, user, ip, path string, succe
 		Success:   success,
 		Details:   details,
 	}
-	return logger.Log(event)
+	return logger.Record(event)
 }
 
 // Query queries audit events for a specific organization.

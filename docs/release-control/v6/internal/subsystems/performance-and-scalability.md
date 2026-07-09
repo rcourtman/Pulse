@@ -756,6 +756,10 @@ shell clickable behind another overlay.
 
 ## Current State
 
+The router's shared browser-cookie writer is request-local security policy. It
+must not add per-request persistence reads, network work, or background fan-out;
+all login and CSRF call sites consume the already-derived in-memory policy.
+
 Workload and host drawer discovery-tab Suspense fallbacks now compose the
 frontend-primitives `DiscoveryLoadingFallback` template. `GuestDrawer`,
 `NodeDrawer`, and Docker host drawer consumers own tab availability and target

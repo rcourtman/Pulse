@@ -29,6 +29,7 @@ import (
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 	"github.com/spf13/cobra"
 )
 
@@ -358,9 +359,11 @@ func normalizeProviderMSPProofOptions(opts providerMSPProofOptions) (providerMSP
 	if opts.TargetPath == "" {
 		opts.TargetPath = "/settings/infrastructure?add=linux-host"
 	}
-	if !strings.HasPrefix(opts.TargetPath, "/") || strings.HasPrefix(opts.TargetPath, "//") {
+	normalizedTargetPath, err := securityutil.NormalizeLocalRedirectPath(opts.TargetPath)
+	if err != nil {
 		return opts, fmt.Errorf("--target-path must be a local absolute path")
 	}
+	opts.TargetPath = normalizedTargetPath
 	return opts, nil
 }
 

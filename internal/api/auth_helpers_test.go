@@ -335,6 +335,48 @@ func TestGetCookieSettings(t *testing.T) {
 	}
 }
 
+func TestBrowserCookiePolicyAppliesRequestSecurity(t *testing.T) {
+	tests := []struct {
+		name       string
+		secure     bool
+		wantSecure bool
+	}{
+		{name: "plain self-hosted HTTP", secure: false, wantSecure: false},
+		{name: "HTTPS", secure: true, wantSecure: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "http://pulse.local/", nil)
+			if tt.secure {
+				req.TLS = &tls.ConnectionState{}
+			}
+			rec := httptest.NewRecorder()
+			getBrowserCookiePolicy(req).set(rec, &http.Cookie{
+				Name:     CookieNameCSRF,
+				Value:    "token",
+				Path:     "/",
+				HttpOnly: true,
+			})
+
+			cookies := rec.Result().Cookies()
+			if len(cookies) != 1 {
+				t.Fatalf("cookies = %d, want 1", len(cookies))
+			}
+			cookie := cookies[0]
+			if cookie.Secure != tt.wantSecure {
+				t.Fatalf("Secure = %v, want %v", cookie.Secure, tt.wantSecure)
+			}
+			if cookie.SameSite != http.SameSiteLaxMode {
+				t.Fatalf("SameSite = %v, want Lax", cookie.SameSite)
+			}
+			if !cookie.HttpOnly {
+				t.Fatal("cookie-specific attributes must be preserved")
+			}
+		})
+	}
+}
+
 func TestGenerateSessionToken(t *testing.T) {
 	// Test that tokens are generated
 	token := generateSessionToken()

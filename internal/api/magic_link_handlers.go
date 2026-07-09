@@ -192,35 +192,29 @@ func (h *MagicLinkHandlers) HandlePublicMagicLinkVerify(w http.ResponseWriter, r
 	TrackUserSession(principal.UserID, sessionToken)
 
 	csrfToken := generateCSRFToken(sessionToken)
-	isSecure, sameSitePolicy := getCookieSettings(r)
+	cookiePolicy := getBrowserCookiePolicy(r)
 	cookieMaxAge := int(sessionDuration.Seconds())
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName(isSecure),
+	cookiePolicy.set(w, &http.Cookie{
+		Name:     sessionCookieName(cookiePolicy.secure),
 		Value:    sessionToken,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
 		MaxAge:   cookieMaxAge,
 	})
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieNameCSRF,
-		Value:    csrfToken,
-		Path:     "/",
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
-		MaxAge:   cookieMaxAge,
+	cookiePolicy.set(w, &http.Cookie{
+		Name:   CookieNameCSRF,
+		Value:  csrfToken,
+		Path:   "/",
+		MaxAge: cookieMaxAge,
 	})
 	// Org cookie is intentionally NOT HttpOnly — the frontend reads/writes it to
 	// synchronize org context for WebSocket connections (which cannot send custom headers).
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieNameOrgID,
-		Value:    token.OrgID,
-		Path:     "/",
-		Secure:   isSecure,
-		SameSite: sameSitePolicy,
-		MaxAge:   cookieMaxAge,
+	cookiePolicy.set(w, &http.Cookie{
+		Name:   CookieNameOrgID,
+		Value:  token.OrgID,
+		Path:   "/",
+		MaxAge: cookieMaxAge,
 	})
 
 	if strings.Contains(r.Header.Get("Accept"), "application/json") || r.URL.Query().Get("format") == "json" {

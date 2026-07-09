@@ -1261,7 +1261,7 @@ func (s *Scanner) performTLSProbe(ctx context.Context, address string) (*tls.Con
 	}
 
 	dialer := &net.Dialer{Timeout: timeout}
-	tlsConn, err := tls.DialWithDialer(dialer, "tcp", address, tlsutil.PeerCertificateCaptureTLSConfig())
+	tlsConn, err := tls.DialWithDialer(dialer, "tcp", address, tlsutil.UnverifiedPeerCertificateCaptureTLSConfig())
 	if err == nil {
 		state := tlsConn.ConnectionState()
 		tlsConn.Close()

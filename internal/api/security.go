@@ -132,19 +132,12 @@ func clearCSRFCookie(w http.ResponseWriter, r *http.Request) {
 	if w == nil {
 		return
 	}
-	var secure bool
-	var sameSite http.SameSite
-	if r != nil {
-		secure, sameSite = getCookieSettings(r)
-	}
-	http.SetCookie(w, &http.Cookie{
+	getBrowserCookiePolicy(r).set(w, &http.Cookie{
 		Name:     CookieNameCSRF,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: false,
-		Secure:   secure,
-		SameSite: sameSite,
 	})
 }
 
@@ -157,15 +150,11 @@ func issueNewCSRFCookie(w http.ResponseWriter, r *http.Request, sessionID string
 	}
 
 	newToken := generateCSRFToken(sessionID)
-	secure, sameSite := getCookieSettings(r)
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     CookieNameCSRF,
-		Value:    newToken,
-		Path:     "/",
-		Secure:   secure,
-		SameSite: sameSite,
-		MaxAge:   86400,
+	getBrowserCookiePolicy(r).set(w, &http.Cookie{
+		Name:   CookieNameCSRF,
+		Value:  newToken,
+		Path:   "/",
+		MaxAge: 86400,
 	})
 	return newToken
 }

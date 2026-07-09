@@ -48,8 +48,8 @@ type QueryFilter struct {
 // The OSS version uses ConsoleLogger which outputs to zerolog.
 // Enterprise implementations can provide persistent storage with signing.
 type Logger interface {
-	// Log records an audit event
-	Log(event Event) error
+	// Record persists an audit event. Realtime logging is a separate, redacted projection.
+	Record(event Event) error
 
 	// Query retrieves audit events matching the filter (optional, may return empty for console logger)
 	Query(filter QueryFilter) ([]Event, error)
@@ -149,7 +149,7 @@ func Log(eventType, user, ip, path string, success bool, details string) {
 		Details:   details,
 	}
 
-	if err := GetLogger().Log(event); err != nil {
+	if err := GetLogger().Record(event); err != nil {
 		log.Error().Err(err).Str("event", eventType).Msg("Failed to log audit event")
 	}
 }
@@ -166,6 +166,13 @@ func appendRealtimeAuditDetailFields(ctx zerolog.Context, details string) zerolo
 		Str("details_sha256", hex.EncodeToString(sum[:]))
 }
 
+func appendRealtimeAuditIdentityFields(ctx zerolog.Context, event Event) zerolog.Context {
+	return ctx.
+		Bool("user_present", event.User != "").
+		Bool("ip_present", event.IP != "").
+		Str("path", event.Path)
+}
+
 // ConsoleLogger implements Logger by writing to zerolog.
 // This is the default implementation used by the OSS version.
 type ConsoleLogger struct{}
@@ -180,15 +187,13 @@ func (c *ConsoleLogger) IsPersistentAuditLogger() bool {
 	return false
 }
 
-// Log writes an audit event to zerolog.
-func (c *ConsoleLogger) Log(event Event) error {
+// Record writes a redacted audit event projection to zerolog.
+func (c *ConsoleLogger) Record(event Event) error {
 	logContext := log.With().
 		Str("audit_id", event.ID).
 		Str("event", event.EventType).
-		Str("user", event.User).
-		Str("ip", event.IP).
-		Str("path", event.Path).
 		Time("timestamp", event.Timestamp)
+	logContext = appendRealtimeAuditIdentityFields(logContext, event)
 	logEvent := appendRealtimeAuditDetailFields(logContext, event.Details).Logger()
 
 	if event.Success {

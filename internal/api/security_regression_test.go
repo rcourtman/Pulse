@@ -30,6 +30,20 @@ type wsRawMessage struct {
 	Payload json.RawMessage       `json:"payload,omitempty"`
 }
 
+func TestBrowserCookiePolicyWritesSecureCookiesForTLS(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "https://pulse.example/api/config", nil)
+	rec := httptest.NewRecorder()
+	getBrowserCookiePolicy(req).set(rec, &http.Cookie{Name: CookieNameCSRF, Value: "token", Path: "/"})
+
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 || !cookies[0].Secure {
+		t.Fatalf("TLS cookie policy = %+v, want one Secure cookie", cookies)
+	}
+	if cookies[0].SameSite != http.SameSiteLaxMode {
+		t.Fatalf("SameSite = %v, want Lax", cookies[0].SameSite)
+	}
+}
+
 type denyAuthorizer struct{}
 
 func (d *denyAuthorizer) Authorize(_ context.Context, _ string, _ string) (bool, error) {

@@ -29,15 +29,21 @@ func verifyPresentedPeerCertificates(rawCerts [][]byte, _ [][]*x509.Certificate)
 	return nil
 }
 
-// PeerCertificateCaptureTLSConfig accepts any parseable peer certificate so discovery
-// and TOFU fingerprint workflows can inspect TLS identity material without relying on
-// blanket InsecureSkipVerify alone.
-func PeerCertificateCaptureTLSConfig() *tls.Config {
+// UnverifiedPeerCertificateCaptureTLSConfig accepts any parseable peer
+// certificate so discovery and TOFU fingerprint workflows can inspect identity
+// material before an operator establishes trust.
+func UnverifiedPeerCertificateCaptureTLSConfig() *tls.Config {
 	return &tls.Config{
 		MinVersion:            minimumTLSVersion,
 		InsecureSkipVerify:    true,
 		VerifyPeerCertificate: verifyPresentedPeerCertificates,
 	}
+}
+
+// PeerCertificateCaptureTLSConfig is retained for source compatibility. New
+// callers should use the explicitly named unverified capture boundary.
+func PeerCertificateCaptureTLSConfig() *tls.Config {
+	return UnverifiedPeerCertificateCaptureTLSConfig()
 }
 
 // FetchFingerprint connects to a host and returns the SHA256 fingerprint of its TLS certificate.
@@ -65,7 +71,7 @@ func FetchFingerprint(host string) (string, error) {
 	defer cancel()
 
 	dialer := &net.Dialer{Timeout: 5 * time.Second}
-	conn, err := tls.DialWithDialer(dialer, "tcp", targetHost, PeerCertificateCaptureTLSConfig())
+	conn, err := tls.DialWithDialer(dialer, "tcp", targetHost, UnverifiedPeerCertificateCaptureTLSConfig())
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to %s: %w", targetHost, err)
 	}
@@ -181,7 +187,7 @@ func CreateHTTPClientWithTimeout(verifySSL bool, fingerprint string, timeout tim
 
 	if !verifySSL && fingerprint == "" {
 		// Explicit opt-out mode still requires the peer to present parseable certificates.
-		transport.TLSClientConfig = PeerCertificateCaptureTLSConfig()
+		transport.TLSClientConfig = UnverifiedPeerCertificateCaptureTLSConfig()
 	} else if fingerprint != "" {
 		// Fingerprint verification mode
 		transport.TLSClientConfig = FingerprintVerifier(fingerprint)

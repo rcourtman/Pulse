@@ -816,6 +816,12 @@ func ptrFloat64(v float64) *float64 {
 }
 
 func generateNodes(config MockConfig) []models.Node {
+	if config.NodeCount < minMockNodeCount {
+		config.NodeCount = minMockNodeCount
+	}
+	if config.NodeCount > maxMockNodeCount {
+		config.NodeCount = maxMockNodeCount
+	}
 	nodes := make([]models.Node, 0, config.NodeCount)
 
 	// First 5 nodes are part of the cluster

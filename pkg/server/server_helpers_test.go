@@ -16,7 +16,7 @@ type captureAuditLogger struct {
 	events []audit.Event
 }
 
-func (c *captureAuditLogger) Log(event audit.Event) error {
+func (c *captureAuditLogger) Record(event audit.Event) error {
 	c.events = append(c.events, event)
 	return nil
 }

@@ -265,13 +265,7 @@ func (h *DeployHandlers) HandleCreatePreflight(w http.ResponseWriter, r *http.Re
 	// Build deploy targets from requested node IDs.
 	now := time.Now().UTC()
 	jobID := generateID("pf")
-	maxParallel := req.MaxParallel
-	if maxParallel <= 0 {
-		maxParallel = 2
-	}
-	if maxParallel > 10 {
-		maxParallel = 10
-	}
+	maxParallel := agentexec.NormalizeDeployMaxParallel(req.MaxParallel, 2)
 
 	job := &deploy.Job{
 		ID:            jobID,
@@ -1114,13 +1108,7 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 	// Create deploy job.
 	now := time.Now().UTC()
 	jobID := generateID("dep")
-	maxParallel := req.MaxParallel
-	if maxParallel <= 0 {
-		maxParallel = 2
-	}
-	if maxParallel > 10 {
-		maxParallel = 10
-	}
+	maxParallel := agentexec.NormalizeDeployMaxParallel(req.MaxParallel, 2)
 
 	retryMax := 3
 	if req.RetryPolicy != nil && req.RetryPolicy.MaxAttempts > 0 {

@@ -445,6 +445,19 @@ func TestBuildFixtureStateCreatesHostEntriesForKubernetesNodes(t *testing.T) {
 	}
 }
 
+func TestGenerateNodesBoundsDirectConfiguration(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.NodeCount = 1 << 30
+	if got := len(generateNodes(cfg)); got != maxMockNodeCount {
+		t.Fatalf("generateNodes() count = %d, want max %d", got, maxMockNodeCount)
+	}
+
+	cfg.NodeCount = -1
+	if got := len(generateNodes(cfg)); got != minMockNodeCount {
+		t.Fatalf("generateNodes() count = %d, want min %d", got, minMockNodeCount)
+	}
+}
+
 func TestBuildFixtureStateIncludesKubernetesStorageInventory(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.K8sClusterCount = 1

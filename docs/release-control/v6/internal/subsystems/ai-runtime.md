@@ -3456,6 +3456,13 @@ query...`, and `Reading storage...` before streamed tool arguments are
 
 ## Current State
 
+AI provider model-cache identity must never expose reusable credential material
+or deterministic unkeyed credential hashes. `internal/ai/service.go` derives
+cache-only credential identities with a process-local random HMAC key, so an
+unchanged configuration remains cacheable during the process lifetime while
+credential rotation invalidates the cache without creating an offline
+credential verifier.
+
 The canonical findings store must present one active Patrol issue per real
 problem. When the model reports an equivalent active sibling under a different
 finding ID, key, or severity for the same resource, `internal/ai/findings.go`

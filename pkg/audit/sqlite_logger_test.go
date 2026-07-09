@@ -135,7 +135,7 @@ func TestSQLiteLoggerLog(t *testing.T) {
 		Details:   "test details",
 	}
 
-	err = logger.Log(event)
+	err = logger.Record(event)
 	if err != nil {
 		t.Fatalf("Log failed: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestSQLiteLoggerQuery(t *testing.T) {
 	}
 
 	for _, e := range events {
-		if err := logger.Log(e); err != nil {
+		if err := logger.Record(e); err != nil {
 			t.Fatalf("Log failed: %v", err)
 		}
 	}
@@ -374,7 +374,7 @@ func TestSQLiteLoggerCount(t *testing.T) {
 			EventType: "test",
 			Success:   i%2 == 0,
 		}
-		if err := logger.Log(event); err != nil {
+		if err := logger.Record(event); err != nil {
 			t.Fatalf("Log failed: %v", err)
 		}
 	}
@@ -420,7 +420,7 @@ func TestSQLiteLoggerVerifySignature(t *testing.T) {
 		Success:   true,
 	}
 
-	if err := logger.Log(event); err != nil {
+	if err := logger.Record(event); err != nil {
 		t.Fatalf("Log failed: %v", err)
 	}
 
@@ -510,7 +510,7 @@ func TestSQLiteLoggerRetention(t *testing.T) {
 		EventType: "old",
 		Success:   true,
 	}
-	if err := logger.Log(oldEvent); err != nil {
+	if err := logger.Record(oldEvent); err != nil {
 		t.Fatalf("Log old event failed: %v", err)
 	}
 
@@ -521,7 +521,7 @@ func TestSQLiteLoggerRetention(t *testing.T) {
 		EventType: "new",
 		Success:   true,
 	}
-	if err := logger.Log(newEvent); err != nil {
+	if err := logger.Record(newEvent); err != nil {
 		t.Fatalf("Log new event failed: %v", err)
 	}
 
@@ -644,7 +644,7 @@ func TestSQLiteLoggerPersistence(t *testing.T) {
 		User:      "testuser",
 		Success:   true,
 	}
-	if err := logger1.Log(event); err != nil {
+	if err := logger1.Record(event); err != nil {
 		t.Fatalf("Log failed: %v", err)
 	}
 
@@ -702,7 +702,7 @@ func TestSQLiteLoggerConcurrentAccess(t *testing.T) {
 					User:      "user",
 					Success:   true,
 				}
-				if err := logger.Log(event); err != nil {
+				if err := logger.Record(event); err != nil {
 					t.Errorf("Concurrent log failed: %v", err)
 				}
 			}

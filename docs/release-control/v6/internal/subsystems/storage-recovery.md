@@ -1612,6 +1612,11 @@ must not treat starter
 
 ## Current State
 
+Authentication-cookie, SSO configured-file, deployment concurrency, and cloud
+handoff redirect hardening in shared `internal/api/` routes is adjacent
+API/security work only. It creates no storage-health, recovery-point, backup,
+restore-authorization, or provider-coverage semantics.
+
 Denied Patrol investigation-fix approvals passing through shared
 `internal/api/` handlers are adjacent AI-runtime/action-governance state only.
 The `fix_rejected` finding outcome means an operator declined a proposed Patrol

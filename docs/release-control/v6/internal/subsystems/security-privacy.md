@@ -416,6 +416,19 @@ the `white_label` branding entitlement.
 
 ## Current State
 
+The browser-auth boundary now owns one request-derived cookie policy for every
+session, CSRF, organization, SAML, magic-link, and cloud-handoff cookie. Secure
+requests use Secure cookies and host-prefixed session names; explicitly
+supported non-TLS self-hosted requests retain the bounded compatibility path
+without allowing individual handlers to choose weaker attributes. Audit
+backends persist events through `Logger.Record`; realtime projections omit raw
+actor/IP identity and redact free-form details, keeping queryable audit storage
+distinct from process logs. Certificate discovery and availability probing use
+the single `tlsutil.PeerCertificateCaptureTLSConfig` TOFU boundary, while
+fingerprint-pinned clients continue to require exact leaf-certificate identity;
+the capture helper's `Unverified` name makes the pre-trust boundary explicit to
+callers and static analysis.
+
 The multi-tenant authorization boundary now also owns default-org token
 scoping. An org-bound API token is a client-scoped credential: it must be
 denied implicit access to the default org so a token that leaks from a client

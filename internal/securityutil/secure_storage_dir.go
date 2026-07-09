@@ -92,6 +92,29 @@ func ReadSecureStorageFile(path string, maxSize int64) ([]byte, error) {
 	return data, nil
 }
 
+// RenameSecureStorageFile renames a regular, non-symlink file between two
+// validated paths in the same owned storage directory.
+func RenameSecureStorageFile(sourcePath, destinationPath string) error {
+	if filepath.Dir(sourcePath) != filepath.Dir(destinationPath) {
+		return fmt.Errorf("secure storage rename must remain in one directory")
+	}
+
+	info, err := secureStorageFileLstatFn(sourcePath)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: refusing non-regular source path %q", ErrUnsafeStorageFile, sourcePath)
+	}
+	if _, err := secureStorageFileLstatFn(destinationPath); err == nil {
+		return fmt.Errorf("%w: refusing to replace existing destination %q", ErrUnsafeStorageFile, destinationPath)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	return secureStorageFileRenameFn(sourcePath, destinationPath)
+}
+
 // WriteSecureStorageFile writes a file via a temp file + rename inside an
 // already validated storage directory so file creation stays owner-only and
 // does not follow pre-existing symlinks at the destination path.

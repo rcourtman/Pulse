@@ -14,7 +14,7 @@ type stubLogger struct {
 	urls       []string
 }
 
-func (s *stubLogger) Log(event Event) error {
+func (s *stubLogger) Record(event Event) error {
 	s.events = append(s.events, event)
 	return nil
 }

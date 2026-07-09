@@ -114,33 +114,27 @@ func HandleCloudHandoff(dataPath string) http.HandlerFunc {
 		TrackUserSession(authz.UserID, sessionToken)
 
 		csrfToken := generateCSRFToken(sessionToken)
-		isSecure, sameSitePolicy := getCookieSettings(r)
+		cookiePolicy := getBrowserCookiePolicy(r)
 		cookieMaxAge := int(sessionDuration.Seconds())
 
-		http.SetCookie(w, &http.Cookie{
-			Name:     sessionCookieName(isSecure),
+		cookiePolicy.set(w, &http.Cookie{
+			Name:     sessionCookieName(cookiePolicy.secure),
 			Value:    sessionToken,
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   isSecure,
-			SameSite: sameSitePolicy,
 			MaxAge:   cookieMaxAge,
 		})
-		http.SetCookie(w, &http.Cookie{
-			Name:     CookieNameCSRF,
-			Value:    csrfToken,
-			Path:     "/",
-			Secure:   isSecure,
-			SameSite: sameSitePolicy,
-			MaxAge:   cookieMaxAge,
+		cookiePolicy.set(w, &http.Cookie{
+			Name:   CookieNameCSRF,
+			Value:  csrfToken,
+			Path:   "/",
+			MaxAge: cookieMaxAge,
 		})
-		http.SetCookie(w, &http.Cookie{
-			Name:     CookieNameOrgID,
-			Value:    tenantID,
-			Path:     "/",
-			Secure:   isSecure,
-			SameSite: sameSitePolicy,
-			MaxAge:   cookieMaxAge,
+		cookiePolicy.set(w, &http.Cookie{
+			Name:   CookieNameOrgID,
+			Value:  tenantID,
+			Path:   "/",
+			MaxAge: cookieMaxAge,
 		})
 
 		log.Info().

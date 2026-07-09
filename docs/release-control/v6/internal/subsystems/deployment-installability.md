@@ -883,6 +883,11 @@ TLS floor in the dynamic config.
 
 ## Current State
 
+The provider MSP proof command validates its handoff target with the same
+host-local redirect contract as runtime token minting and exchange. Proof input
+must reject absolute, scheme-relative, backslash-authority, encoded-separator,
+and control-character targets before constructing the handoff request.
+
 The active stable `v6.0.5` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
 fallback, and Helm chart release metadata to the same `6.0.5` release

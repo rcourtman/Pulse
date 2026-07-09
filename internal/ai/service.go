@@ -2,6 +2,8 @@ package ai
 
 import (
 	"context"
+	"crypto/hmac"
+	cryptorand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -36,6 +38,26 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog/log"
 )
+
+var modelsCacheCredentialKey = newModelsCacheCredentialKey()
+
+func newModelsCacheCredentialKey() []byte {
+	key := make([]byte, 32)
+	if _, err := cryptorand.Read(key); err != nil {
+		panic(fmt.Sprintf("initialize AI models cache credential key: %v", err))
+	}
+	return key
+}
+
+func credentialCacheDigest(values ...string) string {
+	mac := hmac.New(sha256.New, modelsCacheCredentialKey)
+	for _, value := range values {
+		_, _ = io.WriteString(mac, strconv.Itoa(len(value)))
+		_, _ = io.WriteString(mac, ":")
+		_, _ = io.WriteString(mac, value)
+	}
+	return hex.EncodeToString(mac.Sum(nil))
+}
 
 // StateProvider is a type alias for models.SnapshotProvider.
 // Kept for local convenience; all new code should use models.SnapshotProvider directly.
@@ -4491,8 +4513,7 @@ func buildModelsCacheKey(cfg *config.AIConfig) string {
 	b.WriteString(cfg.OllamaBaseURL)
 	b.WriteString("|ollama_auth=")
 	if cfg.OllamaUsername != "" || cfg.OllamaPassword != "" {
-		sum := sha256.Sum256([]byte(cfg.OllamaUsername + "\n" + cfg.OllamaPassword))
-		b.WriteString(hex.EncodeToString(sum[:]))
+		b.WriteString(credentialCacheDigest(cfg.OllamaUsername, cfg.OllamaPassword))
 	}
 
 	return b.String()
@@ -4507,8 +4528,7 @@ func aiCredentialCacheSignature(cfg *config.AIConfig) string {
 		b.WriteString(providerName)
 		b.WriteString("=")
 		if key := cfg.GetAPIKeyForProvider(providerName); key != "" {
-			sum := sha256.Sum256([]byte(key))
-			b.WriteString(hex.EncodeToString(sum[:]))
+			b.WriteString(credentialCacheDigest(providerName, key))
 		}
 		b.WriteString(";")
 	}

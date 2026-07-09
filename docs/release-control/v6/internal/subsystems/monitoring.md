@@ -451,6 +451,14 @@ resource health.
 
 ## Current State
 
+HTTP availability probes consume the shared explicitly unverified,
+parseable-peer-certificate capture
+boundary used by connection discovery, so support for operator self-signed
+endpoints does not create independent skip-verification configurations.
+Direct mock-node generation also clamps its allocation count to the canonical
+fixture bound even when called below the normal configuration-normalization
+entry point.
+
 The monitoring-owned storage metrics runtime must preserve store-backed storage
 chart continuity during resolver warm-up. `syncUnifiedStorageMetrics` must
 prefer the resolver's canonical storage metrics target when it exists, but must

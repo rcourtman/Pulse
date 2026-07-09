@@ -138,6 +138,20 @@ type ConnectedAgent struct {
 
 // --- Deploy protocol payloads ---
 
+const MaxDeployParallel = 10
+
+// NormalizeDeployMaxParallel applies the shared server/agent concurrency
+// contract before the value reaches worker or channel allocation boundaries.
+func NormalizeDeployMaxParallel(value, defaultValue int) int {
+	if value <= 0 {
+		value = defaultValue
+	}
+	if value > MaxDeployParallel {
+		return MaxDeployParallel
+	}
+	return value
+}
+
 // DeployPreflightPayload is sent by the server to request SSH preflight checks
 // against cluster peer nodes.
 type DeployPreflightPayload struct {

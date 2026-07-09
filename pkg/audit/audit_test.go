@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,7 +26,7 @@ func TestConsoleLogger_Log(t *testing.T) {
 		Details:   "Basic auth login",
 	}
 
-	err := logger.Log(event)
+	err := logger.Record(event)
 	if err != nil {
 		t.Errorf("ConsoleLogger.Log() returned error: %v", err)
 	}
@@ -45,7 +46,7 @@ func TestConsoleLogger_Log_Failed(t *testing.T) {
 		Details:   "Invalid credentials",
 	}
 
-	err := logger.Log(event)
+	err := logger.Record(event)
 	if err != nil {
 		t.Errorf("ConsoleLogger.Log() returned error: %v", err)
 	}
@@ -119,6 +120,21 @@ func TestAppendRealtimeAuditDetailFields(t *testing.T) {
 	}
 	if payload["details_sha256"] != expected {
 		t.Fatalf("details_sha256=%v, want %s", payload["details_sha256"], expected)
+	}
+}
+
+func TestAppendRealtimeAuditIdentityFieldsOmitsRawIdentity(t *testing.T) {
+	var buf bytes.Buffer
+	event := Event{User: "alice@example.com", IP: "192.0.2.10", Path: "/api/login"}
+	logger := appendRealtimeAuditIdentityFields(zerolog.New(&buf).With(), event).Logger()
+	logger.Info().Msg("audit")
+
+	output := buf.String()
+	if strings.Contains(output, event.User) || strings.Contains(output, event.IP) {
+		t.Fatalf("realtime audit output exposed raw identity: %s", output)
+	}
+	if !strings.Contains(output, `"user_present":true`) || !strings.Contains(output, `"ip_present":true`) {
+		t.Fatalf("realtime audit output omitted presence markers: %s", output)
 	}
 }
 

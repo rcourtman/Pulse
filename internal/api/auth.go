@@ -310,6 +310,20 @@ func isWebSocketUpgrade(r *http.Request) bool {
 // Secure is still set automatically based on the actual connection state
 // (TLS, or X-Forwarded-Proto: https from a trusted proxy).
 func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
+	policy := getBrowserCookiePolicy(r)
+	return policy.secure, policy.sameSite
+}
+
+type browserCookiePolicy struct {
+	secure   bool
+	sameSite http.SameSite
+}
+
+func getBrowserCookiePolicy(r *http.Request) browserCookiePolicy {
+	if r == nil {
+		return browserCookiePolicy{}
+	}
+
 	isProxied := detectProxy(r)
 	isSecure := isConnectionSecure(r)
 
@@ -325,7 +339,22 @@ func getCookieSettings(r *http.Request) (secure bool, sameSite http.SameSite) {
 			Msg("Proxy/tunnel detected - cookies use Lax SameSite")
 	}
 
-	return isSecure, http.SameSiteLaxMode
+	return browserCookiePolicy{
+		secure:   isSecure,
+		sameSite: http.SameSiteLaxMode,
+	}
+}
+
+// set writes a browser cookie using the one request-derived policy shared by
+// every authentication flow. Plain HTTP remains limited to the supported
+// loopback/self-hosted boundary; public deployments receive Secure cookies.
+func (p browserCookiePolicy) set(w http.ResponseWriter, cookie *http.Cookie) {
+	if w == nil || cookie == nil {
+		return
+	}
+	cookie.Secure = p.secure
+	cookie.SameSite = p.sameSite
+	http.SetCookie(w, cookie)
 }
 
 // Cookie name constants. The session cookie uses the __Host- prefix when served
@@ -564,6 +593,9 @@ func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 	return true, username, isAdmin
 }
 
+// responseCapture tracks whether authentication selected an explicit HTTP
+// status. Body writes flow through the embedded ResponseWriter unchanged; auth
+// paths only emit fixed response bodies after selecting a status.
 type responseCapture struct {
 	http.ResponseWriter
 	wrote bool
@@ -574,11 +606,6 @@ func (rc *responseCapture) WriteHeader(statusCode int) {
 		rc.wrote = true
 		rc.ResponseWriter.WriteHeader(statusCode)
 	}
-}
-
-func (rc *responseCapture) Write(b []byte) (int, error) {
-	rc.wrote = true
-	return rc.ResponseWriter.Write(b)
 }
 
 func wantsJSONAuthResponse(r *http.Request) bool {
@@ -866,11 +893,11 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 								csrfToken := generateCSRFToken(token)
 
 								// Get appropriate cookie settings based on proxy detection
-								isSecure, sameSitePolicy := getCookieSettings(r)
+								cookiePolicy := getBrowserCookiePolicy(r)
 
 								// Debug logging for Cloudflare tunnel issues
 								sameSiteName := "Default"
-								switch sameSitePolicy {
+								switch cookiePolicy.sameSite {
 								case http.SameSiteNoneMode:
 									sameSiteName = "None"
 								case http.SameSiteLaxMode:
@@ -880,31 +907,27 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 								}
 
 								log.Debug().
-									Bool("secure", isSecure).
+									Bool("secure", cookiePolicy.secure).
 									Str("same_site", sameSiteName).
 									Str("token", safePrefixForLog(token, 8)+"...").
 									Str("remote_addr", r.RemoteAddr).
 									Msg("Setting session cookie after successful login")
 
-								// Set session cookie
-								http.SetCookie(w, &http.Cookie{
-									Name:     sessionCookieName(isSecure),
+									// Set session cookie
+								cookiePolicy.set(w, &http.Cookie{
+									Name:     sessionCookieName(cookiePolicy.secure),
 									Value:    token,
 									Path:     "/",
 									HttpOnly: true,
-									Secure:   isSecure,
-									SameSite: sameSitePolicy,
 									MaxAge:   86400, // 24 hours
 								})
 
 								// Set CSRF cookie (not HttpOnly so JS can read it)
-								http.SetCookie(w, &http.Cookie{
-									Name:     CookieNameCSRF,
-									Value:    csrfToken,
-									Path:     "/",
-									Secure:   isSecure,
-									SameSite: sameSitePolicy,
-									MaxAge:   86400, // 24 hours
+								cookiePolicy.set(w, &http.Cookie{
+									Name:   CookieNameCSRF,
+									Value:  csrfToken,
+									Path:   "/",
+									MaxAge: 86400, // 24 hours
 								})
 
 								// Audit log successful login

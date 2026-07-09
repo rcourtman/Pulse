@@ -17,6 +17,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	pkgsecurityutil "github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 
 	_ "modernc.org/sqlite"
 )
@@ -405,33 +406,27 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 		TrackUserSession(authz.UserID, sessionToken)
 
 		csrfToken := generateCSRFToken(sessionToken)
-		isSecure, sameSitePolicy := getCookieSettings(r)
+		cookiePolicy := getBrowserCookiePolicy(r)
 		cookieMaxAge := int(sessionDuration.Seconds())
 
-		http.SetCookie(w, &http.Cookie{
-			Name:     sessionCookieName(isSecure),
+		cookiePolicy.set(w, &http.Cookie{
+			Name:     sessionCookieName(cookiePolicy.secure),
 			Value:    sessionToken,
 			Path:     "/",
 			HttpOnly: true,
-			Secure:   isSecure,
-			SameSite: sameSitePolicy,
 			MaxAge:   cookieMaxAge,
 		})
-		http.SetCookie(w, &http.Cookie{
-			Name:     CookieNameCSRF,
-			Value:    csrfToken,
-			Path:     "/",
-			Secure:   isSecure,
-			SameSite: sameSitePolicy,
-			MaxAge:   cookieMaxAge,
+		cookiePolicy.set(w, &http.Cookie{
+			Name:   CookieNameCSRF,
+			Value:  csrfToken,
+			Path:   "/",
+			MaxAge: cookieMaxAge,
 		})
-		http.SetCookie(w, &http.Cookie{
-			Name:     CookieNameOrgID,
-			Value:    tenantID,
-			Path:     "/",
-			Secure:   isSecure,
-			SameSite: sameSitePolicy,
-			MaxAge:   cookieMaxAge,
+		cookiePolicy.set(w, &http.Cookie{
+			Name:   CookieNameOrgID,
+			Value:  tenantID,
+			Path:   "/",
+			MaxAge: cookieMaxAge,
 		})
 
 		if strings.Contains(r.Header.Get("Accept"), "application/json") || r.URL.Query().Get("format") == "json" {
@@ -463,18 +458,11 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 }
 
 func sanitizeCloudHandoffTargetPath(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") {
+	targetPath, err := pkgsecurityutil.NormalizeLocalRedirectPath(raw)
+	if err != nil {
 		return ""
 	}
-	if strings.IndexFunc(raw, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
-		return ""
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil || parsed.IsAbs() || parsed.Host != "" || parsed.Path == "" || !strings.HasPrefix(parsed.Path, "/") {
-		return ""
-	}
-	return parsed.String()
+	return targetPath
 }
 
 func authorizeHandoffOrganizationMembership(configDir, tenantID, userID, email, role string) (*handoffAuthorization, error) {

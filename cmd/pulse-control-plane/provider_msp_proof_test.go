@@ -39,6 +39,23 @@ func TestNormalizeProviderMSPProofOptionsRequiresIsolationWorkspaceCount(t *test
 	}
 }
 
+func TestNormalizeProviderMSPProofOptionsRejectsCrossOriginTargetPaths(t *testing.T) {
+	base := providerMSPProofOptions{
+		AccountName:     "Acme MSP",
+		OwnerEmail:      "owner@example.com",
+		WorkspacePrefix: "Provider MSP Proof",
+		WorkspaceCount:  2,
+		InstallType:     "pve",
+	}
+	for _, targetPath := range []string{"//evil.example/path", `/\\evil.example/path`, "/%2f%2fevil.example/path", "https://evil.example/path"} {
+		opts := base
+		opts.TargetPath = targetPath
+		if _, err := normalizeProviderMSPProofOptions(opts); err == nil {
+			t.Errorf("target path %q was accepted", targetPath)
+		}
+	}
+}
+
 func TestProviderMSPProofRequiresLicenseBackedPlanSourceByDefault(t *testing.T) {
 	cfg := testProviderMSPProofConfig(t)
 	cfg.ProviderMSPPlanSource = cloudcp.ProviderMSPPlanSourceEnvFallback

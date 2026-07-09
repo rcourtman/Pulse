@@ -43,13 +43,13 @@ func NewAsyncLogger(backend Logger, cfg AsyncLoggerConfig) *AsyncLogger {
 	return l
 }
 
-// Log enqueues the event for async processing. If the queue is full, it falls back to sync logging.
-func (l *AsyncLogger) Log(event Event) error {
+// Record enqueues the event for async persistence. If the queue is full, it falls back to a synchronous record.
+func (l *AsyncLogger) Record(event Event) error {
 	if l == nil {
 		return nil
 	}
 	if l.closed.Load() {
-		return l.backend.Log(event)
+		return l.backend.Record(event)
 	}
 
 	select {
@@ -57,7 +57,7 @@ func (l *AsyncLogger) Log(event Event) error {
 		return nil
 	default:
 		// Queue full; fall back to synchronous logging to avoid dropping events.
-		return l.backend.Log(event)
+		return l.backend.Record(event)
 	}
 }
 
@@ -129,7 +129,7 @@ func (l *AsyncLogger) drain() {
 
 func (l *AsyncLogger) logEvent(event Event) {
 	start := time.Now()
-	if err := l.backend.Log(event); err != nil {
+	if err := l.backend.Record(event); err != nil {
 		log.Error().Err(err).Str("event", event.EventType).Msg("Failed to log audit event")
 		return
 	}

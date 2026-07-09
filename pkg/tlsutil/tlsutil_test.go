@@ -44,7 +44,7 @@ func TestFingerprintVerifier_NormalizesFingerprint(t *testing.T) {
 }
 
 func TestPeerCertificateCaptureTLSConfigRequiresPeerCertificate(t *testing.T) {
-	config := PeerCertificateCaptureTLSConfig()
+	config := UnverifiedPeerCertificateCaptureTLSConfig()
 	if !config.InsecureSkipVerify {
 		t.Fatal("PeerCertificateCaptureTLSConfig should enable custom verification mode")
 	}
