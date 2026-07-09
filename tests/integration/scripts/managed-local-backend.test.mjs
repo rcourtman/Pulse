@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   buildManagedLocalBackendEnv,
@@ -10,6 +11,9 @@ import {
   shouldBuildManagedLocalBackendFrontend,
   shouldBuildManagedLocalBackendBinary,
 } from './managed-local-backend.mjs';
+
+const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
+const integrationRoot = path.resolve(scriptsDir, '..');
 
 test('buildManagedLocalBackendState uses deterministic defaults', () => {
   const state = buildManagedLocalBackendState({});
@@ -141,6 +145,26 @@ test('buildManagedLocalBackendEnv seeds deterministic auth in demo mode', () => 
 
   assert.equal(env.PULSE_AUTH_USER, 'admin');
   assert.equal(env.PULSE_AUTH_PASS, 'adminadminadmin');
+});
+
+test('multi-tenant release auth reuses storage state and classifies login rate limits', async () => {
+  const helpers = await fs.readFile(path.join(integrationRoot, 'tests', 'helpers.ts'), 'utf8');
+  const multiTenantSpec = await fs.readFile(
+    path.join(integrationRoot, 'tests', '03-multi-tenant.spec.ts'),
+    'utf8',
+  );
+
+  assert.match(multiTenantSpec, /createAuthenticatedStorageState/);
+  assert.match(multiTenantSpec, /storageState:\s*async\s*\(\{\s*authStorageStatePath\s*\},\s*use\)/);
+  assert.match(multiTenantSpec, /authStorageStatePath:\s*\[/);
+  assert.match(multiTenantSpec, /multi-tenant-\$\{workerInfo\.project\.name\}\.json/);
+  assert.match(multiTenantSpec, /\{\s*scope:\s*'worker'\s*\}/);
+
+  assert.match(helpers, /new URL\(response\.url\(\)\)\.pathname === "\/api\/login"/);
+  assert.match(helpers, /response\.request\(\)\.method\(\)\.toUpperCase\(\) === "POST"/);
+  assert.match(helpers, /loginResponse\?\.status\(\) === 429/);
+  assert.match(helpers, /return "error:Too many requests"/);
+  assert.match(helpers, /\/too many\/i\.test\(lastOutcome\) \? 15_000/);
 });
 
 test('shouldBuildManagedLocalBackendBinary returns true when binary is missing', async () => {

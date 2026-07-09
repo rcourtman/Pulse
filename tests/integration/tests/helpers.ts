@@ -925,6 +925,15 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
     .first();
 
   const submitAndAwaitOutcome = async (): Promise<string> => {
+    const loginResponsePromise = page
+      .waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === "/api/login" &&
+          response.request().method().toUpperCase() === "POST",
+        { timeout: 30_000 },
+      )
+      .catch(() => null);
+
     await page.fill('input[name="username"]', credentials.username);
     await page.fill('input[name="password"]', credentials.password);
     await page.click('button[type="submit"]');
@@ -941,6 +950,13 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
         const message = (
           (await loginErrorText.textContent()) || "login_error"
         ).trim();
+        const loginResponse = await Promise.race([
+          loginResponsePromise,
+          page.waitForTimeout(100).then(() => null),
+        ]);
+        if (loginResponse?.status() === 429) {
+          return "error:Too many requests";
+        }
         return `error:${message}`;
       }
       await page.waitForTimeout(250);

@@ -1,6 +1,10 @@
-import { expect, test } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { test as base, expect } from '@playwright/test';
 import {
   apiRequest,
+  createAuthenticatedStorageState,
   createOrg,
   deleteOrg,
   ensureAuthenticated,
@@ -9,6 +13,38 @@ import {
   switchOrg,
   waitForAppShell,
 } from './helpers';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+type WorkerFixtures = {
+  authStorageStatePath: string;
+};
+
+const test = base.extend<{}, WorkerFixtures>({
+  storageState: async ({ authStorageStatePath }, use) => {
+    await use(authStorageStatePath);
+  },
+  authStorageStatePath: [
+    async ({ browser }, use, workerInfo) => {
+      const storageStatePath = path.resolve(
+        __dirname,
+        '..',
+        '..',
+        'tmp',
+        'playwright-auth',
+        `multi-tenant-${workerInfo.project.name}.json`,
+      );
+      fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
+      await createAuthenticatedStorageState(browser, storageStatePath);
+      try {
+        await use(storageStatePath);
+      } finally {
+        fs.rmSync(storageStatePath, { force: true });
+      }
+    },
+    { scope: 'worker' },
+  ],
+});
 
 type Organization = {
   id: string;

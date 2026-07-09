@@ -474,6 +474,13 @@ TLS floor in the dynamic config.
    `PULSE_PROXMOX_GUEST_DOCKER_INVENTORY_VMIDS`) so live dev verification of
    host-side LXC Docker inventory does not silently restart into default-off
    monitoring.
+   Browser authentication helpers used by release and managed-runtime E2E must
+   keep session creation below the backend login limiter. Shared helpers must
+   treat an HTTP 429 response from `POST /api/login` as the retryable
+   `Too many requests` outcome instead of collapsing it into a generic
+   connection failure, and release suites that run many scenarios against one
+   compose backend must prefer worker-scoped authenticated storage state over
+   repeated per-test password logins.
 6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, the canonical version file, prerelease feedback intake prompts, artifact publication lineage enforcement, release note or changelog packet composition, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/mobile_release_gate.py`, `scripts/release_control/mobile_release_gate_test.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/validate_artifact_release_line.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
    That release-promotion boundary also owns prerelease note packet lineage:
    shipped RC notes must remain historically accurate, the top-level
@@ -675,6 +682,12 @@ TLS floor in the dynamic config.
    the cut, and the release-asset proof must pin the current packet to those
    runtime fixes so a patch that includes support work cannot ship as a
    metadata-only release note.
+   Release integration failures must leave enough evidence to classify the
+   failure after the compose stack is torn down. `create-release.yml` must
+   upload the Playwright report and a `release-integration-failures` artifact
+   containing Playwright `test-results/` plus
+   `release-integration-diagnostics/docker.log`; that Docker log must capture
+   container state and the Pulse test server plus mock GitHub server logs.
 7. Preserve release-matched installer and Helm operator documentation links through `scripts/install.sh`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-helm-chart.yml`, and the chart metadata itself so deployment guidance and packaged chart metadata do not drift back to branch-tip `main` docs when a release line or promoted tag already exists.
    The same governed Helm boundary also owns `deploy/helm/pulse/` itself:
    chart metadata, default values, templates, and generated chart docs must
@@ -812,6 +825,10 @@ TLS floor in the dynamic config.
    use backend-owned dev reset, admin-bypass, session-login, or token-auth paths
    instead of deleting runtime files, rebuilding bootstrap state, or accepting
    the retired dashboard route as proof of authentication.
+   Release E2E suites that use those helpers must avoid turning scenario count
+   into repeated password-login pressure: worker-scoped authenticated storage
+   state is the canonical multi-scenario shape, and helper retry proof must
+   preserve explicit 429 login-rate classification.
 8. Keep root-level Playwright wrapper routing on the canonical managed browser
    truth. `playwright.config.ts`, `tests/integration/playwright.config.ts`,
    and `tests/integration/tests/runtime-defaults.ts` must resolve the same
