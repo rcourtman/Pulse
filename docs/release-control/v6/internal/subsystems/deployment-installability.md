@@ -341,7 +341,8 @@ TLS floor in the dynamic config.
    A manually dispatched release rehearsal must activate the same signed
    candidate build whenever its required `version` input is non-empty and must
    require the same macOS notarization and Windows Authenticode lanes as a
-   publish run.
+   publish run. A cheap signing-configuration job must report every missing
+   repository secret before either platform runner is allocated.
    Scheduled watchdog rehearsals omit that input and must skip candidate
    signing while retaining the non-publish policy and integration checks.
    Release-facing agent-paradigm blurbs under `docs/releases/` must describe

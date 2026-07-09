@@ -621,6 +621,19 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", content)
         self.assertIn("Validate installer signing key pins", candidate_workflow)
         self.assertIn("timeout-minutes: 60", candidate_workflow)
+        self.assertIn("Verify Native Signing Configuration", candidate_workflow)
+        self.assertEqual(candidate_workflow.count("needs: signing-configuration"), 2)
+        for signing_secret in (
+            "APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64",
+            "APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD",
+            "APPLE_DEVELOPER_ID_APPLICATION_IDENTITY",
+            "APPLE_NOTARY_KEY_P8_BASE64",
+            "APPLE_NOTARY_KEY_ID",
+            "APPLE_NOTARY_ISSUER_ID",
+            "WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64",
+            "WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD",
+        ):
+            self.assertIn(signing_secret, candidate_workflow)
         self.assertIn('tar -xzf "$tarball" -C "$extract_dir" -- "$@"', release_validator)
         self.assertNotIn('tar -xOf "$tarball" "$entry"', release_validator)
         self.assertIn("go run ./scripts/release_update_key.go public-key-ssh", candidate_workflow)

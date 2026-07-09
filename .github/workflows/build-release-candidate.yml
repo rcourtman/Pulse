@@ -24,9 +24,45 @@ permissions:
   contents: read
 
 jobs:
+  signing-configuration:
+    name: Verify Native Signing Configuration
+    if: ${{ inputs.require_platform_signing }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Report missing signing secrets
+        env:
+          APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64 }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_DEVELOPER_ID_APPLICATION_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_IDENTITY }}
+          APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64 }}
+          WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in \
+            APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64 \
+            APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD \
+            APPLE_DEVELOPER_ID_APPLICATION_IDENTITY \
+            APPLE_NOTARY_KEY_P8_BASE64 \
+            APPLE_NOTARY_KEY_ID \
+            APPLE_NOTARY_ISSUER_ID \
+            WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64 \
+            WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required Actions secret ${name}."
+              missing=1
+            fi
+          done
+          exit "$missing"
+
   sign-macos-agent:
     name: Sign and Notarize macOS Agent
-    if: ${{ inputs.require_platform_signing }}
+    needs: signing-configuration
+    if: ${{ inputs.require_platform_signing && needs.signing-configuration.result == 'success' }}
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -111,7 +147,8 @@ jobs:
 
   sign-windows-agent:
     name: Authenticode Sign Windows Agent
-    if: ${{ inputs.require_platform_signing }}
+    needs: signing-configuration
+    if: ${{ inputs.require_platform_signing && needs.signing-configuration.result == 'success' }}
     runs-on: windows-2025
     timeout-minutes: 25
     steps:
