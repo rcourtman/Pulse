@@ -46,6 +46,32 @@ func reportCoverBrandName(brand *ReportBrand) string {
 	return "PULSE"
 }
 
+// setCoverFontToFit sets an Arial font at baseSize, then shrinks it until
+// text fits within maxWidth or minSize is reached. Cover title and brand
+// lines carry operator-controlled text, so they cannot assume a width.
+func setCoverFontToFit(pdf *fpdf.Fpdf, style, text string, baseSize, minSize, maxWidth float64) {
+	size := baseSize
+	pdf.SetFont("Arial", style, size)
+	for size > minSize && pdf.GetStringWidth(text) > maxWidth {
+		size--
+		pdf.SetFontSize(size)
+	}
+}
+
+// writeCoverLine draws one centered cover line, shrinking the font to fit
+// and wrapping onto extra lines when the minimum size still overflows.
+func writeCoverLine(pdf *fpdf.Fpdf, text string, lineHeight, baseSize, minSize float64, style string) {
+	pageWidth, _ := pdf.GetPageSize()
+	left, _, right, _ := pdf.GetMargins()
+	maxWidth := pageWidth - left - right
+	setCoverFontToFit(pdf, style, text, baseSize, minSize, maxWidth)
+	if pdf.GetStringWidth(text) > maxWidth {
+		pdf.MultiCell(0, lineHeight*0.8, text, "", "C", false)
+		return
+	}
+	pdf.CellFormat(0, lineHeight, text, "", 1, "C", false, 0, "")
+}
+
 func reportHeaderBrandName(brand *ReportBrand, fallback string) string {
 	if brand != nil && strings.TrimSpace(brand.DisplayName) != "" {
 		return strings.ToUpper(strings.TrimSpace(brand.DisplayName))
@@ -363,9 +389,8 @@ func (g *PDFGenerator) writeCoverPage(pdf *fpdf.Fpdf, data *ReportData) {
 	} else {
 		pdf.SetY(50)
 	}
-	pdf.SetFont("Arial", "B", 32)
 	pdf.SetTextColor(colorPrimary[0], colorPrimary[1], colorPrimary[2])
-	pdf.CellFormat(0, 15, reportCoverBrandName(data.Brand), "", 1, "C", false, 0, "")
+	writeCoverLine(pdf, reportCoverBrandName(data.Brand), 15, 32, 20, "B")
 
 	pdf.SetFont("Arial", "", 12)
 	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
@@ -1849,9 +1874,8 @@ func (g *PDFGenerator) writeMultiCoverPage(pdf *fpdf.Fpdf, data *MultiReportData
 	} else {
 		pdf.SetY(50)
 	}
-	pdf.SetFont("Arial", "B", 32)
 	pdf.SetTextColor(colorPrimary[0], colorPrimary[1], colorPrimary[2])
-	pdf.CellFormat(0, 15, reportCoverBrandName(data.Brand), "", 1, "C", false, 0, "")
+	writeCoverLine(pdf, reportCoverBrandName(data.Brand), 15, 32, 20, "B")
 
 	pdf.SetFont("Arial", "", 12)
 	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
@@ -1859,12 +1883,16 @@ func (g *PDFGenerator) writeMultiCoverPage(pdf *fpdf.Fpdf, data *MultiReportData
 
 	// Main title
 	pdf.SetY(100)
-	pdf.SetFont("Arial", "B", 28)
 	pdf.SetTextColor(colorTextDark[0], colorTextDark[1], colorTextDark[2])
-	pdf.CellFormat(0, 12, data.Title, "", 1, "C", false, 0, "")
+	writeCoverLine(pdf, data.Title, 12, 28, 16, "B")
 
-	// Subtitle with counts
-	pdf.SetY(120)
+	// Subtitle with counts. A wrapped title can run past the fixed band, so
+	// keep the subtitle below whatever the title actually used.
+	subtitleY := 120.0
+	if y := pdf.GetY() + 4; y > subtitleY {
+		subtitleY = y
+	}
+	pdf.SetY(subtitleY)
 	pdf.SetFont("Arial", "", 14)
 	pdf.SetTextColor(colorTextMuted[0], colorTextMuted[1], colorTextMuted[2])
 
@@ -1874,8 +1902,12 @@ func (g *PDFGenerator) writeMultiCoverPage(pdf *fpdf.Fpdf, data *MultiReportData
 	subtitle := fmt.Sprintf("%d Resources | %s", len(data.Resources), durationStr)
 	pdf.CellFormat(0, 8, subtitle, "", 1, "C", false, 0, "")
 
-	// Scope box
-	pdf.SetY(140)
+	// Scope box, kept below the flexible title/subtitle block
+	scopeY := 140.0
+	if y := pdf.GetY() + 8; y > scopeY {
+		scopeY = y
+	}
+	pdf.SetY(scopeY)
 	boxX := 40.0
 	boxWidth := pageWidth - 80
 	boxHeight := 40.0

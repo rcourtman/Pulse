@@ -104,7 +104,6 @@ work extends shared components instead of creating new local variants.
 71. `frontend-modern/src/utils/systemLogsPresentation.ts`
 72. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
 73. `frontend-modern/src/components/Settings/ResourcePicker.tsx`
-74. `frontend-modern/src/components/Settings/reportingResourceTypes.ts`
 75. `frontend-modern/src/utils/reportableResourceTypes.ts`
 76. `frontend-modern/src/utils/reportingResourceTypes.ts`
 77. `frontend-modern/src/utils/workloadEmptyStatePresentation.ts`
@@ -3886,9 +3885,9 @@ request/range/filename model and reporting-type API mapping,
 `frontend-modern/src/utils/reportableResourceTypes.ts` own the reportable
 resource selection, filter, sort, and empty-state contract, and
 `frontend-modern/src/utils/reportingPresentation.ts` owns the user-facing
-range/status copy. The compatibility re-export in
-`frontend-modern/src/components/Settings/reportingResourceTypes.ts` stays part
-of that same reporting boundary. Native Kubernetes inventory-only resource
+range/status copy. Consumers import `@/utils/reportingResourceTypes` directly;
+the former one-line compatibility re-export under `components/Settings/` was
+removed as dead code once its last importer moved. Native Kubernetes inventory-only resource
 types, including ReplicaSets, EndpointSlices, NetworkPolicies, StorageClasses,
 ConfigMaps, Secrets, ServiceAccounts, Roles, ClusterRoles, RoleBindings,
 ClusterRoleBindings, ResourceQuotas, LimitRanges, PodDisruptionBudgets, and
