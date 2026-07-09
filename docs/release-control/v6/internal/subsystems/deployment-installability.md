@@ -330,6 +330,10 @@ TLS floor in the dynamic config.
    of downloading the complete release packet again. Historical repair and
    release-edit validation may use the full-download fallback because those
    paths do not have a same-run candidate manifest.
+   A manually dispatched release rehearsal must activate the same signed
+   candidate build whenever its required `version` input is non-empty.
+   Scheduled watchdog rehearsals omit that input and must skip candidate
+   signing while retaining the non-publish policy and integration checks.
    Release-facing agent-paradigm blurbs under `docs/releases/` must describe
    `pulse-mcp` as a generic MCP adapter for MCP-speaking clients, not a
    client-specific release artifact, and full-surface token guidance must come
