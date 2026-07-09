@@ -36,7 +36,6 @@ describe('App architecture', () => {
     expect(appSource).toContain(
       "import { dialogStackHasBlockingDialog } from './components/shared/useDialogState';",
     );
-    expect(appSource).toContain('import {');
     expect(appSource).toContain("} from '@/utils/appShellScrollRestoration';");
     expect(appSource).toContain('const runtime = useAppRuntimeState();');
     expect(appSource).toContain('pendingAppShellRestoreTop');

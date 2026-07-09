@@ -93,7 +93,7 @@ describe('ErrorBoundary', () => {
 
   it('keeps fallback chrome on shared primitives', () => {
     expect(errorBoundarySource).toContain('CalloutCard');
-    expect(errorBoundarySource).toContain('Button');
+    expect(errorBoundarySource).toContain("import { Button } from '@/components/shared/Button';");
     expect(errorBoundarySource).toContain('lucide-solid/icons/alert-triangle');
     expect(errorBoundarySource).not.toContain('<svg');
     expect(errorBoundarySource).not.toContain(

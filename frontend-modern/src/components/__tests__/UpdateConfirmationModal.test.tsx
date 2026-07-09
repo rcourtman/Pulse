@@ -48,7 +48,6 @@ describe('UpdateConfirmationModal', () => {
 
   it('keeps update confirmation chrome on shared primitives', () => {
     expect(updateConfirmationModalSource).toContain('CalloutCard');
-    expect(updateConfirmationModalSource).toContain('Button');
     expect(updateConfirmationModalSource).toContain('ActionIconButton');
     expect(updateConfirmationModalSource).toContain('lucide-solid/icons/arrow-right');
     expect(updateConfirmationModalSource).not.toContain('<svg');

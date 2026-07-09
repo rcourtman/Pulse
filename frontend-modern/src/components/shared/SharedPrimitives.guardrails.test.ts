@@ -1275,7 +1275,7 @@ describe('shared primitive guardrails', () => {
 
     expect(proxmoxVersionSource).toContain('formatProxmoxVersion');
     expect(proxmoxVersionSource).toContain('pve-manager\\/');
-    expect(proxmoxVersionSource).toContain('unknown');
+    expect(proxmoxVersionSource).toContain("version.toLowerCase() === 'unknown'");
   });
 
   it('keeps product table scroll frames on the shared table shell', () => {
@@ -3331,7 +3331,7 @@ describe('shared primitive guardrails', () => {
         }),
       ]),
     );
-    expect(errorBoundarySource).toContain('Button');
+    expect(errorBoundarySource).toContain("import { Button } from '@/components/shared/Button';");
     expect(errorBoundarySource).not.toContain(
       'px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700',
     );
@@ -3341,7 +3341,6 @@ describe('shared primitive guardrails', () => {
     expect(errorBoundarySource).not.toContain(
       'text-xs px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700',
     );
-    expect(updateConfirmationModalSource).toContain('Button');
     expect(updateConfirmationModalSource).toContain('ActionIconButton');
     expect(updateConfirmationModalSource).not.toContain(
       'px-4 py-2 text-sm font-medium text-base-content hover:bg-surface-hover rounded-md transition-colors',
@@ -3349,7 +3348,6 @@ describe('shared primitive guardrails', () => {
     expect(updateConfirmationModalSource).not.toContain(
       'px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors',
     );
-    expect(updateProgressModalSource).toContain('Button');
     expect(updateProgressModalSource).toContain('ActionIconButton');
     expect(updateProgressModalSource).not.toContain(
       'mt-2 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded',
@@ -4697,7 +4695,7 @@ describe('shared primitive guardrails', () => {
       },
     ]);
     expect(errorBoundarySource).toContain('CalloutCard');
-    expect(errorBoundarySource).toContain('Button');
+    expect(errorBoundarySource).toContain("import { Button } from '@/components/shared/Button';");
     expect(errorBoundarySource).toContain('lucide-solid/icons/alert-triangle');
     expect(errorBoundarySource).not.toContain('<svg');
     expect(errorBoundarySource).not.toContain('bg-red-50 dark:bg-red-900 border border-red-200');
@@ -4749,11 +4747,9 @@ describe('shared primitive guardrails', () => {
     ]);
 
     expect(updateConfirmationModalSource).toContain('CalloutCard');
-    expect(updateConfirmationModalSource).toContain('Button');
     expect(updateConfirmationModalSource).toContain('ActionIconButton');
     expect(updateConfirmationModalSource).toContain('lucide-solid/icons/arrow-right');
     expect(updateProgressModalSource).toContain('CalloutCard');
-    expect(updateProgressModalSource).toContain('Button');
     expect(updateProgressModalSource).toContain('ActionIconButton');
     expect(updateProgressModalSource).toContain('LoadingSpinner');
 

@@ -1643,7 +1643,6 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain('currentPlanSummary.privateRuntimeAction');
     expect(proLicensePlanSectionSource).toContain('props.activationSuccessSummary');
     expect(proLicensePlanSectionSource).toContain('summary().actionUrl');
-    expect(proLicensePlanSectionSource).toContain('Button');
     expect(proLicensePlanSectionSource).toContain('ButtonLink');
     expect(proLicensePlanSectionSource).toContain('variant="warning"');
     expect(proLicensePlanSectionSource).toContain('size="settingsActionXs"');

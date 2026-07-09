@@ -106,7 +106,6 @@ describe('settings architecture guardrails', () => {
   it('keeps Settings on the canonical page shell boundary', () => {
     expect(settingsSource).toContain("import { SettingsDialogs } from './SettingsDialogs';");
     expect(settingsSource).toContain("import { SettingsPageShell } from './SettingsPageShell';");
-    expect(settingsSource).toContain('const {');
     expect(settingsSource).toContain('useSettingsNavigation({');
     expect(settingsSource).toContain('<SettingsPageShell');
     expect(settingsSource).toContain('<SettingsDialogs');
@@ -304,7 +303,6 @@ describe('settings architecture guardrails', () => {
     expect(dataHandlingPanelSource).not.toContain('Start Trial');
     expect(dataHandlingPanelSource).not.toContain('higher limits');
     expect(dataHandlingPanelSource).not.toContain('Upgrade');
-    expect(dataHandlingPanelSource).not.toContain('Pro');
     expect(auditWebhookPanelSource).toContain('getAuditWebhookFeatureGateCopy({');
     expect(auditWebhookPanelSource).toContain('paidRuntimeRequired: paidRuntimeRequired()');
     expect(auditWebhookPanelSource).not.toContain('Audit Webhooks (Pro)');
