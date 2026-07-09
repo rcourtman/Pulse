@@ -113,8 +113,8 @@ describe('InfrastructureSourceManager setup summary', () => {
 
     expect(screen.queryByRole('button', { name: /^Monitor endpoint$/i })).toBeNull();
     expect(onAddSourceStep).not.toHaveBeenCalled();
-    const discovery = screen.getByRole('region', { name: /^Network discovery$/i });
-    expect(within(discovery).getByText('Ready to scan configured networks')).toBeInTheDocument();
+    const discovery = screen.getByRole('region', { name: /^Discover Proxmox systems$/i });
+    expect(within(discovery).getByText('Ready')).toBeInTheDocument();
     expect(
       within(discovery).getByText(
         /Run discovery to look for unattached Proxmox VE, Proxmox Backup Server, and Proxmox Mail Gateway APIs/i,
@@ -124,7 +124,7 @@ describe('InfrastructureSourceManager setup summary', () => {
     fireEvent.click(within(discovery).getByRole('button', { name: /^Run discovery$/i }));
     expect(onRunDiscovery).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(within(discovery).getByRole('button', { name: /^Discovery settings$/i }));
+    fireEvent.click(within(discovery).getByRole('button', { name: /^Settings$/i }));
     expect(onOpenDiscoverySettings).toHaveBeenCalledTimes(1);
   });
 
@@ -146,8 +146,8 @@ describe('InfrastructureSourceManager setup summary', () => {
       />
     ));
 
-    const discovery = screen.getByRole('region', { name: /^Network discovery$/i });
-    expect(within(discovery).getByText('Scanning configured networks')).toBeInTheDocument();
+    const discovery = screen.getByRole('region', { name: /^Discover Proxmox systems$/i });
+    expect(within(discovery).getByText('Scanning')).toBeInTheDocument();
     expect(
       within(discovery).getByText(
         /Pulse is scanning 10\.0\.0\.0\/24 for Proxmox VE, Proxmox Backup Server, and Proxmox Mail Gateway APIs/i,
@@ -177,8 +177,8 @@ describe('InfrastructureSourceManager setup summary', () => {
       />
     ));
 
-    const discovery = screen.getByRole('region', { name: /^Network discovery$/i });
-    expect(within(discovery).getByText('1 candidate ready to review')).toBeInTheDocument();
+    const discovery = screen.getByRole('region', { name: /^Discover Proxmox systems$/i });
+    expect(within(discovery).getByText('1 to review')).toBeInTheDocument();
     expect(
       within(discovery).getByText(/Review and add credentials before Pulse starts monitoring it/i),
     ).toBeInTheDocument();
@@ -249,13 +249,12 @@ describe('InfrastructureSourceManager setup summary', () => {
       />
     ));
 
-    expect(screen.getByText('Setup status')).toBeInTheDocument();
-    expect(screen.getByText('Systems')).toBeInTheDocument();
-    expect(screen.queryByText('Endpoints')).toBeNull();
+    expect(screen.getByText('Connection posture')).toBeInTheDocument();
+    expect(screen.getByText('2 systems connected')).toBeInTheDocument();
     expect(screen.queryByText('MQTT power meter')).toBeNull();
-    expect(screen.getByText('Live')).toBeInTheDocument();
-    expect(screen.getByText('Needs attention')).toBeInTheDocument();
-    expect(screen.getByText('Needs agent')).toBeInTheDocument();
+    expect(screen.getByText('All active')).toBeInTheDocument();
+    expect(screen.getByText('1 system needs attention')).toBeInTheDocument();
+    expect(screen.getByText('1 system has limited coverage')).toBeInTheDocument();
     expect(screen.queryByText('Fleet governance')).toBeNull();
     // The row now surfaces a single plain-English problem line under its
     // status badge instead of a chip-per-signal stack. Info-toned signals
@@ -305,7 +304,7 @@ describe('InfrastructureSourceManager setup summary', () => {
       />
     ));
 
-    expect(screen.getByText('Needs attention').nextElementSibling?.textContent).toBe('0 systems');
+    expect(screen.queryByText(/needs attention/i)).toBeNull();
     expect(screen.queryByText('Config pending')).toBeNull();
     expect(screen.queryByText('Rollout pending')).toBeNull();
   });
@@ -354,12 +353,14 @@ describe('InfrastructureSourceManager setup summary', () => {
       />
     ));
 
-    expect(screen.getByText('Needs attention').nextElementSibling?.textContent).toBe('1 system');
+    expect(screen.getByText('1 system needs attention')).toBeInTheDocument();
     // "Fleet OK" is no longer rendered as a synthetic ok-chip; an empty
     // problem line is the absence of trouble. The cluster-member row
     // surfaces its single actionable problem ("Config drift") with the
     // detail attached as a tooltip.
     expect(screen.queryByText('Fleet OK')).toBeNull();
+    expect(screen.queryByText('Config drift')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show 1 node for homelab' }));
     expect(screen.getByText('Config drift')).toHaveAttribute(
       'title',
       'Desired and applied fingerprints differ.',

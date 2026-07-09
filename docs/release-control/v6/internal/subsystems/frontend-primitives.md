@@ -1041,18 +1041,19 @@ not a replacement status card, CTA band, or page-local nested card.
    `/settings/infrastructure`: the landing route should read as one
    source-manager workspace with configured infrastructure instances first
    and no redundant monitored-systems ledger beneath it. The landing route may
-   include a dedicated first-viewport toolbar that explains platform APIs and
-   Pulse Agent telemetry as infrastructure sources and exposes `Add
-infrastructure`, `Run discovery`, and `Discovery settings` inside the
-   source manager. Per-source add actions, including `Install Pulse Agent`,
+   keep `Add infrastructure` in the Connected systems header while the ledger
+   remains the first primary content. Discovery is optional setup after the
+   ledger, not a competing first-viewport toolbar. Per-source add actions,
+   including `Install Pulse Agent`,
    belong on the governed source rows, and `Detect address` stays inside the
    single API-platform probe path instead of a duplicate toolbar action. It may
-   also show a compact coverage strip derived from the same unified connection
-   rows and discovered candidates so operators can confirm connected-system
-   count, API coverage,
-   agent coverage, sources that still need an agent, and discovery review state
-   without opening a tour or second ledger. Existing sources stay visible in
-   stable source-catalog order, and add, detect, install, review, and manage
+   also show one compact posture line derived from the same unified connection
+   rows so operators can confirm the top-level connected-system count, active
+   state, actionable health, and limited coverage without opening a tour or
+   second ledger. That line must expose the relevant install action when host
+   telemetry is missing rather than expanding into a metric strip. Existing
+   sources stay visible in stable source-catalog order, and add, detect,
+   install, review, and manage
    flows open as
    secondary interactions from that same destination instead of taking over the
    whole page.
@@ -1070,10 +1071,11 @@ infrastructure`, `Run discovery`, and `Discovery settings` inside the
    The same shared shell boundary now also owns grouped source-row composition.
    `useConnectionsLedger.ts`, `InfrastructureSourceManager.tsx`, and
    `InfrastructureWorkspace.tsx` must render attached collection methods as a
-   plain-language row subtitle on the owning row (`via platform API`, `via
-Pulse Agent`, or `via platform API and Pulse Agent`), with fuller detail in
-   the edit dialog, instead of duplicating the same machine across multiple
-   peer groups or forcing operators to decode badge jargon.
+   compact labeled badge beside the owning system (`API`, `Agent`, or `API +
+Agent`), with the plain-language source phrase available through accessible
+   metadata and fuller detail in the edit dialog, instead of duplicating the
+   same machine across multiple peer groups or spending a dedicated Method
+   column on implementation detail.
    The table-level product/system group rows in
    `InfrastructureSourceManager.tsx` must also use the shared grouped table row
    presentation helper, not local table-background classes, so source-manager
@@ -1090,21 +1092,21 @@ Pulse Agent`, or `via platform API and Pulse Agent`), with fuller detail in
    always-on version column for Pulse Agent; exact version text belongs in the
    edit/detail surfaces, while the landing table only surfaces a compact
    warning badge when an attached or standalone agent actually has an update
-   available. That same table boundary must reuse the existing `System` and
-   `Endpoint` cells for compact standalone-agent identity such as
-   `Unraid 7.1.0` plus a reported host address; it must not add a new
-   diagnostics column just to surface host facts the unified agent already
-   reports.
+   available. That same table boundary must reuse the `System` cell for compact
+   standalone-agent identity such as `Unraid 7.1.0`; raw reported addresses
+   belong in the governed Manage detail or an explicitly expanded
+   cluster-member row, not an always-on diagnostics column.
    That same shared shell boundary now owns one canonical infrastructure
    destination in the Settings sidebar. `InfrastructureWorkspace.tsx` owns the
    source-manager landing inside that destination, while route-backed add flows
    and local edit flows stay single-purpose instead of stacking multiple
    page-level workspaces at once.
    The source-manager landing now also owns the explicit discovery strip for
-   that destination. `InfrastructureSourceManager.tsx` exposes one Network
-   discovery status/action band from the shared landing shell with scan state,
-   saved scope, last result metadata, errors, `Run discovery`, `Discovery
-settings`, and candidate review when discovered sources are waiting. It must
+   that destination. `InfrastructureSourceManager.tsx` exposes one optional
+   Discover Proxmox systems status/action band after the systems ledger with
+   scan state, saved scope, last result metadata, errors, `Run discovery`,
+   `Settings` / `Configure discovery`, and candidate review when discovered
+   sources are waiting. It must
    not start a network scan just because the page rendered. New-source
    admission belongs on the table's per-platform `Add` actions, the compact
    first-run/readiness actions, or the discovery band's explicit review action,

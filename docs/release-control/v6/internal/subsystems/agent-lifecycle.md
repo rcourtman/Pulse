@@ -594,15 +594,20 @@ frame and the shared `Table` shell from `frontend-primitives`; lifecycle work
 must not restore a local `overflow-x-auto` wrapper or a page-local table card
 around that table.
 The same source-manager landing surface must keep onboarding primary and
-compact: `Add infrastructure` remains the obvious action, the setup summary is
-one short status strip, and detailed governance/fleet state stays in the
-systems table rows or deeper fleet surfaces instead of expanding into duplicate
-explanatory bands above the table.
-Network discovery is the exception because manual scans are an operator command
-whose progress must be observable in the source manager. `InfrastructureSourceManager.tsx`
-must keep one explicit Network discovery band above the setup summary that
-shows the current enabled/scanning/error/result state, scan scope, last scan
-metadata, and review action for discovered candidates before anything is added.
+compact: `Add infrastructure` stays in the Connected systems header, connection
+posture is one short actionable line, and detailed governance/fleet state stays
+in the systems table rows or deeper fleet surfaces instead of expanding into
+duplicate explanatory bands above the table. A coverage gap that has an
+immediate lifecycle action, such as missing Proxmox host telemetry, must name
+that gap and expose the install action rather than appearing only as a count.
+Manual discovery remains observable because scans are an operator command, but
+it is optional setup rather than the primary connected-systems job.
+`InfrastructureSourceManager.tsx` must keep one explicit Discover Proxmox
+systems band after the configured-systems ledger that shows the current
+enabled/scanning/error/result state, scan scope, last scan metadata, and review
+action for discovered candidates before anything is added. When discovery is
+off, the landing action must configure discovery instead of presenting a
+disabled Run command.
 Its copy must describe only the platform APIs represented by the LAN discovery
 candidate model, and it must not imply TrueNAS, VMware, Docker, Kubernetes, or
 agent command discovery when this source-manager path cannot surface those
@@ -1307,10 +1312,12 @@ surface and no new `internal/api/` lifecycle handler.
     must not fork a second discovery-specific credential wizard or treat
     discovery results as already-enrolled systems before the operator saves
     the governed add form. That same landing-owned shell now keeps discovery
-    compact: the persistent page may expose only a concise discovery status
-    line plus `Run discovery` / `Discovery settings` actions, while new-source
-    admission stays on the per-platform table actions instead of competing
-    with discovery at the top of the page. Command-backed discovery sweeps and
+    compact and secondary: the persistent page may expose only a concise
+    discovery status line after the systems ledger plus `Run discovery`,
+    `Settings`, or `Configure discovery` actions appropriate to the current
+    state. New-source admission stays on the header and per-platform table
+    actions instead of competing with discovery at the top of the page.
+    Command-backed discovery sweeps and
     forced single-resource refreshes remain API/AI-owned admin operations:
     lifecycle surfaces may expose the controls, but route-level authority must
     require `settings:write` plus the Discovery enablement gate, not
@@ -2551,7 +2558,11 @@ primary objects the operator manages. The landing table is instance-first, not
 type-first: existing connections or agent-backed hosts render inside one
 platform-banded systems ledger, each platform section owns its own `Add`
 action, and the page does not fork back into a second monitored-systems ledger
-below.
+below. The default ledger prioritizes system identity, collection coverage,
+health/last activity, and actions; raw management addresses remain in the
+governed detail flow or an explicitly expanded cluster-member row. Cluster
+members are collapsed under an accurate node count by default so member rows
+cannot make the top-level connected-system count appear contradictory.
 Adding infrastructure therefore happens in two governed steps. The
 `?add=pick` modal owns grouped source-type selection and may offer
 `Detect API platform` as a secondary utility. The `?add=detect` modal owns
@@ -2566,9 +2577,12 @@ explicit actions inside `InfrastructureWorkspace.tsx`, not extra sidebar
 entries or body-replacing workspace subtabs.
 That same landing/table contract now also owns collection-method phrasing.
 `connectionsTableModel.ts`, `useConnectionsLedger.ts`, and
-`InfrastructureSourceManager.tsx` must present the same plain-language subtitle (`via platform API`, `via Pulse Agent`, or `via
-platform API and Pulse Agent`) from the shared ledger contract instead of
-shipping badge-only heuristics that operators have to decode visually.
+`InfrastructureSourceManager.tsx` must preserve the same plain-language
+collection identity (`via platform API`, `via Pulse Agent`, or `via platform
+API and Pulse Agent`) from the shared ledger contract. The compact landing may
+render its API / Agent / API + Agent badge beside the system name, with the full
+phrase available through accessible metadata and the detail flow, instead of
+spending a separate table column on collection method.
 Source badge class selection may use semantic gray treatment for API-only rows
 and typed non-gray tones for agent, probe, or combined sources, but the source
 identity remains the API/Agent/Probe label and subtitle from the shared ledger

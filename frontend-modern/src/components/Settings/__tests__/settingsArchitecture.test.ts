@@ -1120,7 +1120,8 @@ describe('settings architecture guardrails', () => {
     expect(discoverySettingsFormSource).toContain('role="radiogroup"');
     expect(discoverySettingsFormSource).toContain('role="radio"');
     expect(discoverySettingsFormSource).toContain('selectDiscoveryMode');
-    expect(infrastructureSourceManagerSource).toContain('Discovery settings');
+    expect(infrastructureSourceManagerSource).toContain('Discover Proxmox systems');
+    expect(infrastructureSourceManagerSource).toContain('Configure discovery');
     expect(monitoredSystemImpactPreviewSource).toContain('getMonitoredSystemImpactPreviewTitle');
     expect(monitoredSystemImpactPreviewSource).toContain(
       'formatMonitoredSystemImpactPreviewSummary',
@@ -1153,15 +1154,15 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('Review');
     expect(infrastructureSourceManagerSource).toContain('Manage');
     expect(infrastructureSourceManagerSource).not.toContain('Detect address');
-    expect(infrastructureSourceManagerSource).not.toContain("'Install agent'");
+    expect(infrastructureSourceManagerSource).toContain("'Install agent'");
     expect(infrastructureSourceManagerSource).toContain('Add infrastructure');
     expect(infrastructureSourceManagerSource).not.toContain('Monitor endpoint');
     expect(infrastructureSourceManagerSource).toContain('getInfrastructureEmptyStateSummary');
-    expect(infrastructureSourceManagerSource).toContain('Setup status');
-    expect(infrastructureSourceManagerSource).toContain('Systems');
-    expect(infrastructureSourceManagerSource).toContain('Live');
-    expect(infrastructureSourceManagerSource).toContain('Needs attention');
-    expect(infrastructureSourceManagerSource).toContain('Needs agent');
+    expect(infrastructureSourceManagerSource).toContain('Connection posture');
+    expect(infrastructureSourceManagerSource).toContain("'system')} connected");
+    expect(infrastructureSourceManagerSource).toContain('All active');
+    expect(infrastructureSourceManagerSource).toContain('needs attention');
+    expect(infrastructureSourceManagerSource).toContain('has limited coverage');
     expect(infrastructureSourceManagerSource).toContain('setupConfidenceAction');
     expect(infrastructureSourceManagerSource).not.toContain('Infrastructure coverage');
     expect(infrastructureSourceManagerSource).not.toContain('Fleet governance');

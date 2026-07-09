@@ -8,7 +8,16 @@ import {
   type Accessor,
   type Component,
 } from 'solid-js';
-import { AlertTriangle, Cpu, Plus, RotateCw, Search, SlidersHorizontal } from 'lucide-solid';
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  Cpu,
+  Plus,
+  RotateCw,
+  Search,
+  SlidersHorizontal,
+} from 'lucide-solid';
 import { Button } from '@/components/shared/Button';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
@@ -187,7 +196,7 @@ const memberMethodPresentation = (
   return infrastructureSourcePresentation(member.source);
 };
 
-type SetupConfidenceActionKind = 'add' | 'agent' | 'detect' | 'review' | 'scan';
+type SetupConfidenceActionKind = 'add' | 'agent' | 'scan';
 
 interface SetupConfidenceAction {
   kind: SetupConfidenceActionKind;
@@ -436,23 +445,15 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
         (row) => Boolean(row.problem) || row.members.some((member) => member.problem),
       ).length,
   );
-  const discoveryReadinessLabel = createMemo(() => {
-    if (props.discoveryScanStatus().scanning) return 'Scanning now';
-    if (discoveredCandidateCount() > 0) return `${discoveredCandidateCount()} to review`;
-    const lastResult = lastDiscoveryResultText();
-    if (lastResult) return `Last scan ${lastResult}`;
-    return props.discoveryEnabled ? 'Ready to scan' : 'Discovery off';
-  });
   const discoveryMonitorTitle = createMemo(() => {
     const status = props.discoveryScanStatus();
-    if (status.scanning) return 'Scanning configured networks';
+    if (status.scanning) return 'Scanning';
     if (discoveredCandidateCount() > 0) {
-      return `${formatCount(discoveredCandidateCount(), 'candidate')} ready to review`;
+      return `${discoveredCandidateCount()} to review`;
     }
-    if (!props.discoveryEnabled) return 'Discovery is off';
-    if (discoveryErrorSummary(status.errors)) return 'Last discovery scan needs attention';
-    if (lastDiscoveryResultText()) return 'No new candidates from the last scan';
-    return 'Ready to scan configured networks';
+    if (!props.discoveryEnabled) return 'Off';
+    if (discoveryErrorSummary(status.errors)) return 'Needs attention';
+    return 'Ready';
   });
   const discoveryMonitorDetail = createMemo(() => {
     const status = props.discoveryScanStatus();
@@ -480,8 +481,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     if (status.scanning && status.lastScanStartedAt) {
       return `Started ${formatRelativeTimestamp(status.lastScanStartedAt) ?? 'just now'}`;
     }
-    if (lastDiscoveryResultText()) return `Last scan ${lastDiscoveryResultText()}`;
-    return props.discoveryEnabled ? 'No scan has run yet' : 'Disabled';
+    if (lastDiscoveryResultText()) return `Last scanned ${lastDiscoveryResultText()}`;
+    return props.discoveryEnabled ? 'Never scanned' : 'Not configured';
   });
   const setupConfidenceAction = createMemo<SetupConfidenceAction>(() => {
     if (connectedSystemCount() === 0) {
@@ -498,7 +499,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       const target = namesText ?? formatCount(apiOnlySystemCount(), 'API-backed system');
       return {
         kind: 'agent',
-        label: 'Install agents',
+        label: apiOnlySystemCount() === 1 ? 'Install agent' : 'Install agents',
         detail: `Install Pulse Agent on ${target} when you want node-local telemetry such as temperatures, SMART data, and host identity.`,
         onClick: handleInstallAgentShortcut,
       };
@@ -521,32 +522,25 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       detail: completeAction.detail,
     };
   });
-  const setupSummaryMetrics = createMemo(() => [
-    {
-      label: 'Systems',
-      value: formatCount(connectedSystemCount(), 'system'),
-    },
-    {
-      label: 'Live',
-      value: formatCount(liveFleetSystemCount(), 'system'),
-    },
-    {
-      label: 'Needs attention',
-      value: formatCount(fleetAttentionSystemCount(), 'system'),
-    },
-    {
-      label: 'Needs agent',
-      value: formatCount(apiOnlySystemCount(), 'system'),
-    },
-    {
-      label: 'Discovery',
-      value: discoveryReadinessLabel(),
-    },
-  ]);
-
   const [layoutWidth, setLayoutWidth] = createSignal(
     typeof window !== 'undefined' ? window.innerWidth : 1024,
   );
+  const [expandedSystemIds, setExpandedSystemIds] = createSignal<ReadonlySet<string>>(new Set());
+
+  const membersExpanded = (row: InfrastructureSystemRow): boolean =>
+    expandedSystemIds().has(row.id);
+
+  const toggleMembers = (row: InfrastructureSystemRow) => {
+    setExpandedSystemIds((current) => {
+      const next = new Set(current);
+      if (next.has(row.id)) {
+        next.delete(row.id);
+      } else {
+        next.add(row.id);
+      }
+      return next;
+    });
+  };
 
   const updateLayoutWidth = (width: number) => {
     if (!Number.isFinite(width) || width <= 0) return;
@@ -583,34 +577,10 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   });
   const useCardLayout = createMemo(() => layoutWidth() <= CARD_LAYOUT_MAX_WIDTH_PX);
 
-  const headerActions = () => (
-    <Show when={!props.readOnly}>
-      <div class="border-b border-border bg-surface px-4 py-3">
-        <div class="flex flex-wrap items-center gap-2">
-          <Show when={props.onAddInfrastructure}>
-            <Button
-              type="button"
-              variant="primary"
-              size="mdCompact"
-              class="min-h-9 gap-2"
-              onClick={props.onAddInfrastructure}
-            >
-              <Plus class="h-4 w-4" />
-              Add infrastructure
-            </Button>
-          </Show>
-        </div>
-      </div>
-    </Show>
-  );
-
   const setupConfidenceActionIcon = (kind: SetupConfidenceActionKind) => (
     <>
       <Show when={kind === 'agent'}>
         <Cpu class="h-4 w-4" />
-      </Show>
-      <Show when={kind === 'detect' || kind === 'review'}>
-        <Search class="h-4 w-4" />
       </Show>
       <Show when={kind === 'scan'}>
         <RotateCw class={`h-4 w-4 ${props.discoveryScanStatus().scanning ? 'animate-spin' : ''}`} />
@@ -623,17 +593,20 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
   const discoveryMonitorBand = () => (
     <section
-      aria-label="Network discovery"
+      aria-label="Discover Proxmox systems"
       aria-live="polite"
-      class="border-b border-border bg-surface px-4 py-3"
+      class="border-t border-border bg-surface-alt/35 px-4 py-3"
     >
       <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="flex items-center gap-2 text-sm font-semibold text-base-content">
+          <div class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
+            Optional setup
+          </div>
+          <div class="mt-1 flex flex-wrap items-center gap-2">
+            <h3 class="flex items-center gap-2 text-sm font-semibold text-base-content">
               <Search class="h-4 w-4 text-blue-600 dark:text-blue-300" aria-hidden="true" />
-              Network discovery
-            </div>
+              Discover Proxmox systems
+            </h3>
             <span
               class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
                 props.discoveryScanStatus().scanning
@@ -662,14 +635,26 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
         <Show when={!props.readOnly}>
           <div class="flex flex-wrap gap-2 lg:justify-end">
-            <Show when={props.onRunDiscovery}>
+            <Show when={discoveredCandidateCount() > 0 && props.onReviewDiscoveredSource}>
               <Button
                 type="button"
                 variant="primary"
                 size="mdCompact"
                 class="min-h-9 gap-2"
+                onClick={() => props.onReviewDiscoveredSource?.(props.discoveredNodes()[0])}
+              >
+                <Search class="h-4 w-4" aria-hidden="true" />
+                {discoveredCandidateCount() === 1 ? 'Review candidate' : 'Review first candidate'}
+              </Button>
+            </Show>
+            <Show when={props.discoveryEnabled && props.onRunDiscovery}>
+              <Button
+                type="button"
+                variant={discoveredCandidateCount() > 0 ? 'secondary' : 'primary'}
+                size="mdCompact"
+                class="min-h-9 gap-2"
                 onClick={props.onRunDiscovery}
-                disabled={props.discoveryScanStatus().scanning || !props.discoveryEnabled}
+                disabled={props.discoveryScanStatus().scanning}
                 title={`Scan configured networks for reachable ${discoveryScanTargetLabel}. Discovered candidates appear here for review before they are added.`}
               >
                 <RotateCw
@@ -689,19 +674,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 title={`Configure which networks Pulse scans for ${discoveryScanTargetLabel}.`}
               >
                 <SlidersHorizontal class="h-4 w-4" aria-hidden="true" />
-                Discovery settings
-              </Button>
-            </Show>
-            <Show when={discoveredCandidateCount() > 0 && props.onReviewDiscoveredSource}>
-              <Button
-                type="button"
-                variant="secondary"
-                size="mdCompact"
-                class="min-h-9 gap-2"
-                onClick={() => props.onReviewDiscoveredSource?.(props.discoveredNodes()[0])}
-              >
-                <Search class="h-4 w-4" aria-hidden="true" />
-                {discoveredCandidateCount() === 1 ? 'Review candidate' : 'Review first candidate'}
+                {props.discoveryEnabled ? 'Settings' : 'Configure discovery'}
               </Button>
             </Show>
           </div>
@@ -711,52 +684,48 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   );
 
   const setupSummaryBand = () => (
-    <section
-      aria-label="Infrastructure setup summary"
-      class="border-b border-border bg-surface px-4 py-3"
-    >
-      <h3 class="sr-only">Setup status</h3>
-      <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        {/* Compact summary line replaces the previous 5-cell stats grid.
-            The same metrics are surfaced inline so a glance reads the
-            shape of the infrastructure ('4 systems, 4 live, 1 needs agent')
-            without giving up significant vertical real estate above the
-            table that the page is actually about. */}
-        <dl class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
-          <For each={setupSummaryMetrics()}>
-            {(metric, index) => (
-              <div class="flex items-baseline gap-1.5">
-                <Show when={index() > 0}>
-                  <span aria-hidden="true" class="text-muted">
-                    ·
-                  </span>
-                </Show>
-                <dt class="text-[11px] font-medium uppercase tracking-[0.06em] text-muted">
-                  {metric.label}
-                </dt>
-                <dd class="font-semibold text-base-content">{metric.value}</dd>
-              </div>
-            )}
-          </For>
-        </dl>
-        {/* Recommendation button hides for the apiOnly install-agents case
-            because row-level install-agent chips now surface the same
-            attention per-system. Other recommendations (discovery scan,
-            coverage coherent, add infrastructure) still render here. */}
-        <Show
-          when={
-            !props.readOnly &&
-            Boolean(setupConfidenceAction().onClick) &&
-            setupConfidenceAction().kind !== 'agent'
-          }
-        >
+    <section aria-label="Connection posture" class="border-b border-border bg-surface px-4 py-3">
+      <h3 class="sr-only">Connection posture</h3>
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          <span class="font-semibold text-base-content">
+            {formatCount(connectedSystemCount(), 'system')} connected
+          </span>
+          <Show when={connectedSystemCount() > 0}>
+            <span aria-hidden="true" class="text-muted">
+              ·
+            </span>
+            <span class="text-muted">
+              {liveFleetSystemCount() === connectedSystemCount()
+                ? 'All active'
+                : `${formatCount(liveFleetSystemCount(), 'system')} active`}
+            </span>
+          </Show>
+          <Show when={fleetAttentionSystemCount() > 0}>
+            <span aria-hidden="true" class="text-muted">
+              ·
+            </span>
+            <span class="font-medium text-amber-700 dark:text-amber-300">
+              {formatCount(fleetAttentionSystemCount(), 'system')} needs attention
+            </span>
+          </Show>
+          <Show when={apiOnlySystemCount() > 0}>
+            <span aria-hidden="true" class="text-muted">
+              ·
+            </span>
+            <span class="font-medium text-amber-700 dark:text-amber-300">
+              {formatCount(apiOnlySystemCount(), 'system')} has limited coverage
+            </span>
+          </Show>
+        </div>
+        <Show when={!props.readOnly && Boolean(setupConfidenceAction().onClick)}>
           <Button
             type="button"
             variant="secondary"
             size="mdCompact"
             onClick={() => setupConfidenceAction().onClick?.()}
             disabled={setupConfidenceAction().disabled}
-            class="min-h-9 gap-2 self-start xl:self-center"
+            class="min-h-9 gap-2 self-start sm:self-center"
           >
             {setupConfidenceActionIcon(setupConfidenceAction().kind)}
             {setupConfidenceAction().label}
@@ -764,8 +733,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
         </Show>
       </div>
 
-      <Show when={setupConfidenceAction().kind !== 'agent'}>
-        <p class="mt-3 text-xs leading-5 text-muted">{setupConfidenceAction().detail}</p>
+      <Show when={connectedSystemCount() === 0}>
+        <p class="mt-2 text-xs leading-5 text-muted">{setupConfidenceAction().detail}</p>
       </Show>
     </section>
   );
@@ -780,32 +749,41 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
   return (
     <div ref={layoutContainerRef} class="min-w-0">
-      <SettingsPanel title="Connected systems" noPadding>
-        {headerActions()}
-        {discoveryMonitorBand()}
+      <SettingsPanel
+        title="Connected systems"
+        noPadding
+        action={
+          !props.readOnly && props.onAddInfrastructure ? (
+            <Button
+              type="button"
+              variant="primary"
+              size="mdCompact"
+              class="min-h-9 w-full gap-2 sm:w-auto"
+              onClick={props.onAddInfrastructure}
+            >
+              <Plus class="h-4 w-4" />
+              Add infrastructure
+            </Button>
+          ) : undefined
+        }
+      >
         {setupSummaryBand()}
 
         <Show when={!useCardLayout()}>
           <Table class="w-full min-w-[820px] table-fixed text-sm">
             <TableHeader class="bg-surface-alt/60">
               <TableRow>
-                <TableHead class="w-[20%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="w-[30%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   System
                 </TableHead>
-                <TableHead class="w-[10%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
-                  Method
-                </TableHead>
-                <TableHead class="w-[16%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
-                  Host
-                </TableHead>
-                <TableHead class="w-[16%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                <TableHead class="w-[32%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
                   Coverage
                 </TableHead>
-                <TableHead class="w-[22%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
-                  Status
+                <TableHead class="w-[23%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap">
+                  Health
                 </TableHead>
                 <Show when={actionColumnVisible()}>
-                  <TableHead class="w-[7rem] px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap">
+                  <TableHead class="w-[12rem] px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap">
                     Actions
                   </TableHead>
                 </Show>
@@ -837,7 +815,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                               when={actionColumnVisible()}
                               fallback={
                                 <TableRow class={groupRowClass()}>
-                                  <TableCell colspan={5} class={getGroupedTableRowCellClass()}>
+                                  <TableCell colspan={3} class={getGroupedTableRowCellClass()}>
                                     <div class="flex min-w-0 items-center gap-2">
                                       <span>{group.label}</span>
                                     </div>
@@ -846,7 +824,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                               }
                             >
                               <TableRow class={groupRowClass()}>
-                                <TableCell colspan={6} class={getGroupedTableRowCellClass()}>
+                                <TableCell colspan={4} class={getGroupedTableRowCellClass()}>
                                   <div class="flex items-center justify-between gap-2 whitespace-nowrap">
                                     <span>{group.label}</span>
                                     <Show
@@ -881,52 +859,50 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       }`}
                                     >
                                       <TableCell class="py-1.5 pl-3 pr-3 align-middle">
-                                        <div
-                                          class={`truncate text-[13px] ${
-                                            row.isCluster
-                                              ? 'font-medium text-base-content'
-                                              : 'text-base-content/80'
-                                          }`}
-                                          title={rowSystemTitle(row)}
-                                        >
-                                          {row.name}
-                                        </div>
-                                      </TableCell>
-
-                                      <TableCell class="px-3 py-1.5 align-middle">
-                                        {(() => {
-                                          const presentation = infrastructureSourcePresentation(
-                                            row.source,
-                                          );
-                                          const title =
-                                            agentMethodTitleFor(row) ?? presentation.title;
-                                          return (
-                                            <span
-                                              class={`${presentation.badgeClassName} whitespace-nowrap`}
-                                              title={title}
-                                            >
-                                              {presentation.label}
-                                            </span>
-                                          );
-                                        })()}
-                                      </TableCell>
-
-                                      <TableCell class="px-3 py-1.5 align-middle">
-                                        <Show
-                                          when={row.host}
-                                          fallback={
-                                            <span class="text-xs text-muted" aria-hidden="true">
-                                              —
-                                            </span>
-                                          }
-                                        >
+                                        <div class="flex min-w-0 flex-wrap items-center gap-1.5">
                                           <div
-                                            class="truncate text-[12px] text-muted"
-                                            title={row.host}
+                                            class={`min-w-0 truncate text-[13px] ${
+                                              row.isCluster
+                                                ? 'font-medium text-base-content'
+                                                : 'text-base-content/90'
+                                            }`}
+                                            title={rowSystemTitle(row)}
                                           >
-                                            {row.host}
+                                            {row.name}
                                           </div>
-                                        </Show>
+                                          {(() => {
+                                            const presentation = infrastructureSourcePresentation(
+                                              row.source,
+                                            );
+                                            const title =
+                                              agentMethodTitleFor(row) ?? presentation.title;
+                                            return (
+                                              <span
+                                                class={`${presentation.badgeClassName} flex-shrink-0 whitespace-nowrap`}
+                                                title={title}
+                                              >
+                                                {presentation.label}
+                                              </span>
+                                            );
+                                          })()}
+                                          <Show when={row.members.length > 0}>
+                                            <button
+                                              type="button"
+                                              class="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
+                                              aria-expanded={membersExpanded(row)}
+                                              aria-label={`${membersExpanded(row) ? 'Hide' : 'Show'} ${formatCount(row.members.length, 'node')} for ${row.name}`}
+                                              onClick={() => toggleMembers(row)}
+                                            >
+                                              <Show
+                                                when={membersExpanded(row)}
+                                                fallback={<ChevronRight class="h-3.5 w-3.5" />}
+                                              >
+                                                <ChevronDown class="h-3.5 w-3.5" />
+                                              </Show>
+                                              {formatCount(row.members.length, 'node')}
+                                            </button>
+                                          </Show>
+                                        </div>
                                       </TableCell>
 
                                       <TableCell class="px-3 py-1.5 align-middle">
@@ -939,10 +915,21 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           }
                                         >
                                           <div
-                                            class="truncate text-[12px] text-muted"
+                                            class="whitespace-normal text-[12px] leading-4 text-muted"
                                             title={row.coverageLabels.join(', ')}
                                           >
                                             {row.coverageLabels.join(', ')}
+                                          </div>
+                                        </Show>
+                                        <Show
+                                          when={
+                                            row.ownerType === 'pve' &&
+                                            rowHasApiCoverage(row) &&
+                                            !rowHasAgentCoverage(row)
+                                          }
+                                        >
+                                          <div class="mt-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                                            Host telemetry not installed
                                           </div>
                                         </Show>
                                       </TableCell>
@@ -982,16 +969,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                               <span class="text-xs text-muted">Read only</span>
                                             }
                                           >
-                                            <div class="flex items-center justify-end gap-1">
-                                              {/* Row-level install-agent shortcut, scoped to
-                                                  Proxmox VE: the agent adds node-local
-                                                  telemetry (temps, SMART, host identity)
-                                                  that the PVE API doesn't expose. PBS and
-                                                  other API-only sources are fully covered
-                                                  without an agent, so we don't nudge for
-                                                  one there. Rendered icon-only so the row
-                                                  stays a single line; the full guided flow
-                                                  lives behind Manage. */}
+                                            <div class="flex items-center justify-end gap-1.5">
                                               <Show
                                                 when={
                                                   row.ownerType === 'pve' &&
@@ -1002,15 +980,18 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                   )
                                                 }
                                               >
-                                                <button
+                                                <Button
                                                   type="button"
+                                                  variant="outline"
+                                                  size="xs"
+                                                  class="gap-1.5"
                                                   onClick={handleInstallAgentShortcut}
-                                                  class="inline-flex items-center justify-center rounded p-1 text-blue-700 transition-colors hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/30"
                                                   aria-label="Install agent"
                                                   title="Install Pulse Agent on this system to add node-local telemetry (temperatures, SMART, host identity)."
                                                 >
-                                                  <Plus class="h-3.5 w-3.5" />
-                                                </button>
+                                                  <Cpu class="h-3.5 w-3.5" />
+                                                  Install agent
+                                                </Button>
                                               </Show>
                                               <Button
                                                 type="button"
@@ -1030,7 +1011,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                     <Show when={row.problem || row.lastErrorMessage}>
                                       <TableRow class="border-b border-border-subtle">
                                         <TableCell
-                                          colspan={actionColumnVisible() ? 6 : 5}
+                                          colspan={actionColumnVisible() ? 4 : 3}
                                           class="bg-surface px-3 pb-1.5 pt-0"
                                         >
                                           <Show when={row.problem}>
@@ -1059,7 +1040,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       </TableRow>
                                     </Show>
 
-                                    <Show when={row.members.length > 0}>
+                                    <Show when={row.members.length > 0 && membersExpanded(row)}>
                                       <For each={row.members}>
                                         {(member, memberIndex) => {
                                           const memberPresentation =
@@ -1072,59 +1053,35 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             <>
                                               <TableRow class="border-b border-border-subtle bg-surface-alt/30">
                                                 <TableCell class="py-1.5 pl-3 pr-3 align-middle">
-                                                  <div class="flex min-w-0 items-center gap-2 pl-4">
-                                                    <span class="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-border" />
-                                                    <div
-                                                      class="truncate text-[13px] text-base-content/85"
-                                                      title={memberSystemTitle(member)}
-                                                    >
-                                                      {member.name}
+                                                  <div class="min-w-0 pl-4">
+                                                    <div class="flex min-w-0 items-center gap-1.5">
+                                                      <span class="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-border" />
+                                                      <div
+                                                        class="truncate text-[13px] text-base-content/85"
+                                                        title={memberSystemTitle(member)}
+                                                      >
+                                                        {member.name}
+                                                      </div>
+                                                      <Show when={memberPresentation}>
+                                                        {(presentation) => (
+                                                          <span
+                                                            class={`${presentation().badgeClassName} flex-shrink-0 whitespace-nowrap`}
+                                                            title={memberSourceTitle}
+                                                          >
+                                                            {presentation().label}
+                                                          </span>
+                                                        )}
+                                                      </Show>
                                                     </div>
+                                                    <Show when={member.host}>
+                                                      <div
+                                                        class="mt-0.5 truncate pl-3.5 text-[11px] text-muted"
+                                                        title={member.host}
+                                                      >
+                                                        {member.host}
+                                                      </div>
+                                                    </Show>
                                                   </div>
-                                                </TableCell>
-
-                                                <TableCell class="px-3 py-1.5 align-middle">
-                                                  <Show
-                                                    when={memberPresentation}
-                                                    fallback={
-                                                      <span
-                                                        class="text-xs text-muted"
-                                                        title={memberSourceTitle}
-                                                      >
-                                                        —
-                                                      </span>
-                                                    }
-                                                  >
-                                                    {(presentation) => (
-                                                      <span
-                                                        class={`${presentation().badgeClassName} whitespace-nowrap`}
-                                                        title={memberSourceTitle}
-                                                      >
-                                                        {presentation().label}
-                                                      </span>
-                                                    )}
-                                                  </Show>
-                                                </TableCell>
-
-                                                <TableCell class="px-3 py-1.5 align-middle">
-                                                  <Show
-                                                    when={member.host}
-                                                    fallback={
-                                                      <span
-                                                        class="text-xs text-muted"
-                                                        aria-hidden="true"
-                                                      >
-                                                        —
-                                                      </span>
-                                                    }
-                                                  >
-                                                    <div
-                                                      class="truncate text-[12px] text-muted"
-                                                      title={member.host}
-                                                    >
-                                                      {member.host}
-                                                    </div>
-                                                  </Show>
                                                 </TableCell>
 
                                                 <TableCell class="px-3 py-1.5 align-middle">
@@ -1140,7 +1097,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                     }
                                                   >
                                                     <div
-                                                      class="truncate text-[12px] text-muted"
+                                                      class="whitespace-normal text-[12px] leading-4 text-muted"
                                                       title={member.coverageLabels.join(', ')}
                                                     >
                                                       {member.coverageLabels.join(', ')}
@@ -1177,7 +1134,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 {(problem) => (
                                                   <TableRow class="border-b border-border-subtle bg-surface-alt/30">
                                                     <TableCell
-                                                      colspan={actionColumnVisible() ? 6 : 5}
+                                                      colspan={actionColumnVisible() ? 4 : 3}
                                                       class="pb-1.5 pl-9 pr-3 pt-0"
                                                     >
                                                       <div
@@ -1210,35 +1167,33 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   return (
                                     <TableRow class={discoveryRowClass}>
                                       <TableCell class="py-1.5 pl-3 pr-3 align-middle">
-                                        <div
-                                          class="truncate text-[13px] text-base-content/85"
-                                          title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
-                                        >
-                                          {discoveredServerName(server)}
+                                        <div class="min-w-0">
+                                          <div class="flex items-center gap-1.5">
+                                            <div
+                                              class="truncate text-[13px] text-base-content/85"
+                                              title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
+                                            >
+                                              {discoveredServerName(server)}
+                                            </div>
+                                            <span
+                                              class="inline-flex flex-shrink-0 items-center rounded-full border border-dashed border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted whitespace-nowrap"
+                                              title="Discovery candidate — review to attach a source"
+                                            >
+                                              Candidate
+                                            </span>
+                                          </div>
+                                          <div
+                                            class="mt-0.5 truncate text-[11px] text-muted"
+                                            title={discoveredServerEndpoint(server)}
+                                          >
+                                            {discoveredServerEndpoint(server)}
+                                          </div>
                                         </div>
                                       </TableCell>
 
                                       <TableCell class="px-3 py-1.5 align-middle">
-                                        <span
-                                          class="inline-flex items-center rounded-full border border-dashed border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted whitespace-nowrap"
-                                          title="Discovery candidate — review to attach a source"
-                                        >
-                                          Candidate
-                                        </span>
-                                      </TableCell>
-
-                                      <TableCell class="px-3 py-1.5 align-middle">
                                         <div
-                                          class="truncate whitespace-nowrap text-[12px] text-muted"
-                                          title={discoveredServerEndpoint(server)}
-                                        >
-                                          {discoveredServerEndpoint(server)}
-                                        </div>
-                                      </TableCell>
-
-                                      <TableCell class="px-3 py-1.5 align-middle">
-                                        <div
-                                          class="truncate whitespace-nowrap text-[12px] text-muted"
+                                          class="whitespace-normal text-[12px] leading-4 text-muted"
                                           title={discoveredCoverageText(server)}
                                         >
                                           {discoveredCoverageText(server)}
@@ -1294,7 +1249,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               <Show when={!hasAnyConfigured() && !hasAnyDiscovered()}>
                 <TableRow>
                   <TableCell
-                    colspan={actionColumnVisible() ? 6 : 5}
+                    colspan={actionColumnVisible() ? 4 : 3}
                     class="px-4 py-8 text-center text-sm text-muted"
                   >
                     {emptyStateContent()}
@@ -1368,6 +1323,23 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         {row.identitySubtitle}
                                       </div>
                                     </Show>
+                                    <Show when={row.members.length > 0}>
+                                      <button
+                                        type="button"
+                                        class="mt-1 inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-medium text-muted transition-colors hover:bg-surface-alt hover:text-base-content"
+                                        aria-expanded={membersExpanded(row)}
+                                        aria-label={`${membersExpanded(row) ? 'Hide' : 'Show'} ${formatCount(row.members.length, 'node')} for ${row.name}`}
+                                        onClick={() => toggleMembers(row)}
+                                      >
+                                        <Show
+                                          when={membersExpanded(row)}
+                                          fallback={<ChevronRight class="h-3.5 w-3.5" />}
+                                        >
+                                          <ChevronDown class="h-3.5 w-3.5" />
+                                        </Show>
+                                        {formatCount(row.members.length, 'node')}
+                                      </button>
+                                    </Show>
                                   </div>
                                   <span
                                     class={`${presentation.badgeClassName} flex-shrink-0`}
@@ -1377,22 +1349,24 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   </span>
                                 </header>
 
-                                <Show when={row.host}>
-                                  <div
-                                    class="mt-1 truncate text-[12px] text-muted"
-                                    title={row.host}
-                                  >
-                                    {row.host}
-                                  </div>
-                                </Show>
-
                                 <Show when={row.coverageLabels.length > 0}>
                                   <div class="mt-1 text-[12px] leading-4 text-muted">
                                     {row.coverageLabels.join(', ')}
                                   </div>
                                 </Show>
+                                <Show
+                                  when={
+                                    row.ownerType === 'pve' &&
+                                    rowHasApiCoverage(row) &&
+                                    !rowHasAgentCoverage(row)
+                                  }
+                                >
+                                  <div class="mt-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                                    Host telemetry not installed
+                                  </div>
+                                </Show>
 
-                                <Show when={row.members.length > 0}>
+                                <Show when={row.members.length > 0 && membersExpanded(row)}>
                                   <div class="mt-3 border-t border-border-subtle pt-2">
                                     <div class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
                                       Cluster nodes
@@ -1506,15 +1480,36 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       </span>
                                     </div>
                                     <Show when={!props.readOnly && rowInteractive(row)}>
-                                      <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="xs"
-                                        class="min-w-[4.5rem] flex-shrink-0"
-                                        onClick={() => props.onOpenConnection?.(row)}
-                                      >
-                                        Manage
-                                      </Button>
+                                      <div class="flex flex-wrap justify-end gap-1.5">
+                                        <Show
+                                          when={
+                                            row.ownerType === 'pve' &&
+                                            rowHasApiCoverage(row) &&
+                                            !rowHasAgentCoverage(row) &&
+                                            Boolean(props.onAddSourceStep || props.onAddSource)
+                                          }
+                                        >
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="xs"
+                                            class="gap-1.5"
+                                            onClick={handleInstallAgentShortcut}
+                                          >
+                                            <Cpu class="h-3.5 w-3.5" />
+                                            Install agent
+                                          </Button>
+                                        </Show>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="xs"
+                                          class="min-w-[4.5rem] flex-shrink-0"
+                                          onClick={() => props.onOpenConnection?.(row)}
+                                        >
+                                          Manage
+                                        </Button>
+                                      </div>
                                     </Show>
                                   </div>
                                   <Show when={row.problem}>
@@ -1615,6 +1610,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             </Show>
           </div>
         </Show>
+        {discoveryMonitorBand()}
       </SettingsPanel>
     </div>
   );

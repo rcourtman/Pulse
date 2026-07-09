@@ -293,8 +293,8 @@ describe('InfrastructureWorkspace', () => {
     // contents distinctly. Card-level description was dropped because it
     // duplicated the page-level subtitle.
     await waitFor(() => expect(screen.getByText('Connected systems')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /^Run discovery$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Discovery settings$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Run discovery$/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Configure discovery$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Add infrastructure$/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Detect address$/i })).toBeNull();
     // Row-level 'Install agent' surfaces per system that has API coverage
@@ -302,25 +302,15 @@ describe('InfrastructureWorkspace', () => {
     // one of these buttons should exist.
     expect(screen.getAllByRole('button', { name: /^Install agent$/i }).length).toBeGreaterThan(0);
     const readiness = screen.getByRole('region', {
-      name: /Infrastructure setup summary/i,
+      name: /Connection posture/i,
     });
-    expect(within(readiness).getByText('Setup status')).toBeInTheDocument();
-    expect(within(readiness).getByText('Systems')).toBeInTheDocument();
-    expect(within(readiness).getByText('Live')).toBeInTheDocument();
-    expect(within(readiness).getByText('Needs attention')).toBeInTheDocument();
-    expect(within(readiness).getByText('Needs agent')).toBeInTheDocument();
-    expect(within(readiness).getByText('Discovery')).toBeInTheDocument();
+    expect(within(readiness).getByText('Connection posture')).toBeInTheDocument();
+    expect(within(readiness).getByText('1 system connected')).toBeInTheDocument();
+    expect(within(readiness).getByText('All active')).toBeInTheDocument();
+    expect(within(readiness).getByText('1 system has limited coverage')).toBeInTheDocument();
     expect(within(readiness).queryByText('Infrastructure coverage')).toBeNull();
     expect(within(readiness).queryByText('Fleet governance')).toBeNull();
-    expect(within(readiness).getAllByText('1 system').length).toBeGreaterThan(0);
-    expect(within(readiness).getAllByText('0 systems').length).toBeGreaterThan(0);
-    expect(within(readiness).getByText('Discovery off')).toBeInTheDocument();
-    // Global 'Install agents' recommendation button is hidden when
-    // row-level 'Install agent' chips already surface the apiOnly state
-    // per-system.
-    expect(
-      within(readiness).queryByRole('button', { name: /Install agents/i }),
-    ).not.toBeInTheDocument();
+    expect(within(readiness).getByRole('button', { name: /^Install agent$/i })).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE').closest('tr')?.className).toContain('grouped-table-row');
     expect(screen.queryByText('VMware vCenter')).toBeNull();
@@ -485,7 +475,9 @@ describe('InfrastructureWorkspace', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(
-      within(dialog).getByText('Pulse does not currently see any agents behind the target version.'),
+      within(dialog).getByText(
+        'Pulse does not currently see any agents behind the target version.',
+      ),
     ).toBeInTheDocument();
     expect(within(dialog).queryByText('zeus')).not.toBeInTheDocument();
     expect(within(dialog).queryByText(/upgrade agent:agent-zeus/)).not.toBeInTheDocument();
@@ -660,12 +652,8 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByText('discovered-pve.lab')).toBeInTheDocument());
     expect(screen.getByText('Discovered')).toBeInTheDocument();
-    const readiness = screen.getByRole('region', {
-      name: /Infrastructure setup summary/i,
-    });
-    expect(within(readiness).getByText('1 to review')).toBeInTheDocument();
-    const discovery = screen.getByRole('region', { name: /Network discovery/i });
-    expect(within(discovery).getByText('1 candidate ready to review')).toBeInTheDocument();
+    const discovery = screen.getByRole('region', { name: /Discover Proxmox systems/i });
+    expect(within(discovery).getByText('1 to review')).toBeInTheDocument();
     expect(
       within(discovery).getByText(/Review and add credentials before Pulse starts monitoring it/i),
     ).toBeInTheDocument();
@@ -677,7 +665,7 @@ describe('InfrastructureWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: /Run discovery/i }));
     expect(triggerDiscoveryScan).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: /Discovery settings/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Settings$/i }));
     expect(screen.getByRole('dialog', { name: /Discovery settings/i })).toBeInTheDocument();
     expect(
       screen.getByText(/Configure the saved network scope and background scan behavior/i),
@@ -954,11 +942,10 @@ describe('InfrastructureWorkspace', () => {
     await waitFor(() => expect(screen.getByText('Unraid')).toBeInTheDocument());
     expect(screen.queryByText('Pulse Agent hosts')).toBeNull();
     expect(screen.getByText('Tower')).toBeInTheDocument();
-    // The OS/identity descriptor now rides in the system name's tooltip so the
-    // table row stays single-line; the agent detail drawer still shows it as
-    // visible text (asserted below).
+    // Identity and network coordinates stay available through the managed
+    // detail flow without competing with health and coverage in the ledger.
     expect(screen.getByTitle('Tower · Unraid 7.1.0')).toBeInTheDocument();
-    expect(screen.getByText('192.168.0.10')).toBeInTheDocument();
+    expect(screen.queryByText('192.168.0.10')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /^Add Unraid$/i }));
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=unraid', {
       scroll: false,
@@ -1148,15 +1135,15 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByText('homelab')).toBeInTheDocument());
     const readiness = screen.getByRole('region', {
-      name: /Infrastructure setup summary/i,
+      name: /Connection posture/i,
     });
-    expect(within(readiness).getByText('Needs attention').nextElementSibling).toHaveTextContent(
-      '0 systems',
-    );
+    expect(within(readiness).queryByText(/needs attention/i)).toBeNull();
     // Cluster and member descriptors moved into the system name's tooltip to
     // keep table rows single-line.
     expect(screen.getByTitle('homelab · Cluster · 2 nodes')).toBeInTheDocument();
     expect(screen.queryByText('Fleet OK')).toBeNull();
+    expect(screen.queryByTitle('delly · Primary node')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 nodes for homelab' }));
     expect(screen.getByTitle('delly · Primary node')).toBeInTheDocument();
     expect(screen.getAllByText('Agent').length).toBeGreaterThan(0);
     expect(screen.getByText('delly')).toBeInTheDocument();
