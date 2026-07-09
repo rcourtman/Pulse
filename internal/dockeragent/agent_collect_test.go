@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -586,6 +588,20 @@ func TestPrimaryTargetAndHTTPClient(t *testing.T) {
 		}
 	})
 
+	t.Run("custom trust client selection", func(t *testing.T) {
+		custom := &http.Client{}
+		target := TargetConfig{CACertPath: "/etc/pulse/ca.pem", ServerFingerprint: "abc"}
+		agent := &Agent{
+			httpClients: map[bool]*http.Client{false: {}},
+			trustedHTTPClients: map[string]*http.Client{
+				targetTrustKey(target): custom,
+			},
+		}
+		if got := agent.httpClientFor(target); got != custom {
+			t.Fatal("expected target-specific trust client")
+		}
+	})
+
 	t.Run("http client fallback", func(t *testing.T) {
 		agent := &Agent{
 			httpClients: map[bool]*http.Client{},
@@ -631,6 +647,16 @@ func TestNewHTTPClient(t *testing.T) {
 	transport := client.Transport.(*http.Transport)
 	if !transport.TLSClientConfig.InsecureSkipVerify {
 		t.Fatal("expected insecure skip verify true")
+	}
+}
+
+func TestNewHTTPClientWithTrustRejectsInvalidCABundle(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "invalid-ca.pem")
+	if err := os.WriteFile(path, []byte("not a certificate"), 0o600); err != nil {
+		t.Fatalf("write invalid CA: %v", err)
+	}
+	if _, err := newHTTPClientWithTrust(path, false, ""); err == nil {
+		t.Fatal("expected invalid custom CA bundle to fail")
 	}
 }
 

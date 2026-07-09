@@ -61,10 +61,32 @@ const (
 	goOSLinux   goOS = "linux"
 	goOSDarwin  goOS = "darwin"
 	goOSWindows goOS = "windows"
+	goOSFreeBSD goOS = "freebsd"
 )
 
 type serverVersionResponse struct {
 	Version string `json:"version"`
+}
+
+const (
+	UpdateStateIdle            = "idle"
+	UpdateStateChecking        = "checking"
+	UpdateStateUpdateAvailable = "update-available"
+	UpdateStateUpdating        = "updating"
+	UpdateStateError           = "error"
+	UpdateStateDisabled        = "disabled"
+)
+
+// Status is a non-secret snapshot of the self-update loop suitable for agent
+// reports and fleet diagnostics.
+type Status struct {
+	State            string
+	AutoUpdate       bool
+	AvailableVersion string
+	LastCheckedAt    *time.Time
+	LastAttemptAt    *time.Time
+	LastSuccessAt    *time.Time
+	LastError        string
 }
 
 var (
@@ -136,6 +158,8 @@ type Updater struct {
 
 	checkMu         sync.Mutex
 	checkInProgress bool
+	statusMu        sync.RWMutex
+	status          Status
 
 	performUpdateFn func(context.Context) error
 	selfTestFn      func(context.Context, string) error
@@ -167,11 +191,11 @@ func New(cfg Config) *Updater {
 	)
 	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
 	if err != nil {
-		configErr = fmt.Errorf("invalid CA bundle: %w", err)
+		configErr = fmt.Errorf("invalid TLS configuration: %w", err)
 		logger.Error().
 			Err(err).
 			Str("ca_cert_path", strings.TrimSpace(cfg.CACertPath)).
-			Msg("Invalid custom CA bundle; refusing to fall back to default TLS roots")
+			Msg("Invalid agent TLS configuration; refusing to create update client")
 	} else {
 		transport := &http.Transport{
 			TLSClientConfig: tlsConfig,
@@ -191,6 +215,17 @@ func New(cfg Config) *Updater {
 		client:    client,
 		logger:    logger,
 		configErr: configErr,
+		status: Status{
+			State:      UpdateStateIdle,
+			AutoUpdate: !cfg.Disabled,
+		},
+	}
+	if cfg.Disabled {
+		u.status.State = UpdateStateDisabled
+	}
+	if configErr != nil {
+		u.status.State = UpdateStateError
+		u.status.LastError = configErr.Error()
 	}
 	u.performUpdateFn = u.performUpdate
 	u.selfTestFn = u.runDownloadedBinarySelfTest
@@ -199,14 +234,53 @@ func New(cfg Config) *Updater {
 	return u
 }
 
+// Snapshot returns a concurrency-safe copy of the current update state.
+func (u *Updater) Snapshot() Status {
+	if u == nil {
+		return Status{State: UpdateStateDisabled, AutoUpdate: false}
+	}
+	u.statusMu.RLock()
+	defer u.statusMu.RUnlock()
+	return cloneStatus(u.status)
+}
+
+func cloneStatus(status Status) Status {
+	status.LastCheckedAt = cloneTime(status.LastCheckedAt)
+	status.LastAttemptAt = cloneTime(status.LastAttemptAt)
+	status.LastSuccessAt = cloneTime(status.LastSuccessAt)
+	return status
+}
+
+func cloneTime(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
+
+func (u *Updater) updateStatus(mutator func(*Status)) {
+	u.statusMu.Lock()
+	defer u.statusMu.Unlock()
+	mutator(&u.status)
+}
+
 // RunLoop starts the update check loop. It blocks until the context is cancelled.
 func (u *Updater) RunLoop(ctx context.Context) {
 	if u.cfg.Disabled {
+		u.updateStatus(func(status *Status) {
+			status.State = UpdateStateDisabled
+			status.AutoUpdate = false
+		})
 		u.logger.Info().Msg("auto-update disabled")
 		return
 	}
 
 	if u.configErr != nil {
+		u.updateStatus(func(status *Status) {
+			status.State = UpdateStateError
+			status.LastError = u.configErr.Error()
+		})
 		u.logger.Error().Err(u.configErr).Msg("auto-update disabled due to invalid TLS client configuration")
 		return
 	}
@@ -274,19 +348,41 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 		return
 	}
 	if err := u.validatePulseURL(); err != nil {
+		u.updateStatus(func(status *Status) {
+			status.State = UpdateStateError
+			status.LastError = err.Error()
+		})
 		u.logger.Warn().Err(err).Msg("Skipping update check - insecure or invalid Pulse URL")
 		return
 	}
 
+	u.updateStatus(func(status *Status) {
+		status.State = UpdateStateChecking
+		status.LastError = ""
+	})
 	u.logger.Debug().Msg("checking for agent updates")
 
 	serverVersion, err := u.getServerVersion(ctx)
+	checkedAt := time.Now().UTC()
 	if err != nil {
+		u.updateStatus(func(status *Status) {
+			status.State = UpdateStateError
+			status.LastCheckedAt = &checkedAt
+			status.LastError = err.Error()
+		})
 		u.logger.Warn().Err(err).Msg("failed to check for updates")
 		return
 	}
+	u.updateStatus(func(status *Status) {
+		status.LastCheckedAt = &checkedAt
+		status.AvailableVersion = strings.TrimSpace(serverVersion)
+	})
 
 	if serverVersion == developmentVersion {
+		u.updateStatus(func(status *Status) {
+			status.State = UpdateStateIdle
+			status.AvailableVersion = ""
+		})
 		u.logger.Debug().Msg("Skipping update - server is in development mode")
 		return
 	}
@@ -298,10 +394,20 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 
 	cmp := utils.CompareVersions(serverNorm, currentNorm)
 	if cmp == 0 {
+		u.updateStatus(func(status *Status) {
+			status.State = UpdateStateIdle
+			status.AvailableVersion = ""
+			status.LastError = ""
+		})
 		u.logger.Debug().Str("version", u.cfg.CurrentVersion).Msg("agent is up to date")
 		return
 	}
 	if cmp < 0 {
+		u.updateStatus(func(status *Status) {
+			status.State = UpdateStateIdle
+			status.AvailableVersion = ""
+			status.LastError = ""
+		})
 		u.logger.Debug().
 			Str("currentVersion", currentNorm).
 			Str("serverVersion", serverNorm).
@@ -313,8 +419,19 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 		Str("currentVersion", u.cfg.CurrentVersion).
 		Str("availableVersion", serverVersion).
 		Msg("new agent version available, performing self-update")
+	attemptedAt := time.Now().UTC()
+	u.updateStatus(func(status *Status) {
+		status.State = UpdateStateUpdating
+		status.AvailableVersion = strings.TrimSpace(serverVersion)
+		status.LastAttemptAt = &attemptedAt
+		status.LastError = ""
+	})
 
 	if err := u.performUpdateFn(ctx); err != nil {
+		u.updateStatus(func(status *Status) {
+			status.State = UpdateStateError
+			status.LastError = err.Error()
+		})
 		u.logger.Error().
 			Err(err).
 			Str("currentVersion", u.cfg.CurrentVersion).
@@ -330,6 +447,13 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 		}
 		return
 	}
+	succeededAt := time.Now().UTC()
+	u.updateStatus(func(status *Status) {
+		status.State = UpdateStateIdle
+		status.AvailableVersion = ""
+		status.LastSuccessAt = &succeededAt
+		status.LastError = ""
+	})
 
 	u.logger.Info().Msg("agent updated successfully, restarting")
 }
@@ -540,7 +664,7 @@ func verifyBinaryMagic(path string) (retErr error) {
 	}
 
 	switch runtimeGOOS {
-	case goOSLinux:
+	case goOSLinux, goOSFreeBSD:
 		// ELF magic: 0x7f 'E' 'L' 'F'
 		if magic[0] == 0x7f && magic[1] == 'E' && magic[2] == 'L' && magic[3] == 'F' {
 			return nil
@@ -568,8 +692,7 @@ func verifyBinaryMagic(path string) (retErr error) {
 		return fmt.Errorf("verifyBinaryMagic: %s is not a valid PE binary", path)
 
 	default:
-		// Unknown platform, skip verification
-		return nil
+		return fmt.Errorf("verifyBinaryMagic: executable validation is unsupported on %s", runtimeGOOS)
 	}
 }
 

@@ -19,7 +19,7 @@ if [ -x /usr/local/go/bin/go ]; then
 fi
 
 # Release artifacts must be built with the vetted toolchain to match security-gate evidence.
-required_go="go1.25.11"
+required_go="go1.26.5"
 current_go="$(go env GOVERSION 2>/dev/null || true)"
 if [[ "${PULSE_SKIP_GO_VERSION_CHECK:-false}" != "true" ]]; then
     if [[ "${current_go}" != "${required_go}" ]]; then
@@ -146,6 +146,29 @@ for i in "${!agent_build_order[@]}"; do
         -o "$output_path" \
         ./cmd/pulse-agent
 done
+
+# Platform-native signing jobs may supply replacement desktop binaries. They
+# are copied before packaging, checksums, SBOM generation, and release signing
+# so the immutable candidate manifest covers the exact signed bytes users get.
+if [[ -n "${PULSE_AGENT_NATIVE_BINARIES_DIR:-}" ]]; then
+    native_dir="${PULSE_AGENT_NATIVE_BINARIES_DIR}"
+    native_targets=(darwin-amd64 darwin-arm64 windows-amd64 windows-arm64 windows-386)
+    for target in "${native_targets[@]}"; do
+        filename="pulse-agent-${target}"
+        if [[ "$target" == windows-* ]]; then
+            filename="${filename}.exe"
+        fi
+        if [[ ! -f "${native_dir}/${filename}" ]]; then
+            echo "Error: native agent binary override is missing ${filename}." >&2
+            exit 1
+        fi
+        cp "${native_dir}/${filename}" "${BUILD_DIR}/${filename}"
+    done
+    echo "Applied platform-native signed Unified Agent binaries."
+elif [[ "${PULSE_REQUIRE_PLATFORM_SIGNING:-false}" == "true" ]]; then
+    echo "Error: platform signing is required but PULSE_AGENT_NATIVE_BINARIES_DIR is empty." >&2
+    exit 1
+fi
 
 # Build pulse-mcp (Model Context Protocol adapter) for the same
 # multi-OS matrix as the unified agent. The MCP server runs on

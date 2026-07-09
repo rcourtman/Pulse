@@ -331,7 +331,7 @@ func TestClientNewDefaultsAndAgentLookupNotFound(t *testing.T) {
 func TestClientNew_UsesPinnedServerFingerprint(t *testing.T) {
 	client := New(Config{
 		PulseURL:          "https://pulse.example",
-		ServerFingerprint: "aabbccdd",
+		ServerFingerprint: "aabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
 	})
 
 	transport, ok := client.httpClient.Transport.(*http.Transport)
@@ -365,7 +365,7 @@ func TestClientNew_InvalidCustomCABundleFailsClosed(t *testing.T) {
 	if client.httpClient != nil {
 		t.Fatal("expected HTTP client to remain disabled when the custom CA bundle is invalid")
 	}
-	if _, _, err := client.Fetch(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid CA bundle") {
+	if _, _, err := client.Fetch(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid TLS configuration") {
 		t.Fatalf("expected invalid CA bundle error, got %v", err)
 	}
 }

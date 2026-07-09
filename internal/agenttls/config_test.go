@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -98,5 +99,13 @@ func TestNewClientTLSConfig_UsesPinnedFingerprint(t *testing.T) {
 	}
 	if err := cfg.VerifyPeerCertificate([][]byte{[]byte("mismatch")}, nil); err == nil {
 		t.Fatal("expected mismatched certificate fingerprint to be rejected")
+	}
+}
+
+func TestNewClientTLSConfig_RejectsMalformedFingerprint(t *testing.T) {
+	for _, fingerprint := range []string{"abc", strings.Repeat("z", 64), strings.Repeat("a", 62)} {
+		if _, err := NewClientTLSConfig("", false, fingerprint); err == nil {
+			t.Fatalf("expected malformed fingerprint %q to fail", fingerprint)
+		}
 	}
 }

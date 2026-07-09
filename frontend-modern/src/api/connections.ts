@@ -34,10 +34,14 @@ export type ConnectionFleetAdapterHealth =
 export type ConnectionFleetConfigRollout = 'configured' | 'paused' | 'reported' | 'unknown';
 export type ConnectionFleetCredentialStatus = 'invalid' | 'paused' | 'unknown' | 'verified';
 export type ConnectionFleetUpdateStatus =
+  | 'checking'
   | 'current'
+  | 'disabled'
+  | 'failed'
   | 'not-applicable'
   | 'unknown'
-  | 'update-available';
+  | 'update-available'
+  | 'updating';
 export type ConnectionFleetRemoteControl = 'disabled' | 'enabled' | 'not-applicable' | 'unknown';
 export type ConnectionFleetConfigDriftStatus =
   | 'current'
@@ -155,6 +159,25 @@ export interface ConnectionAgentIdentity {
   commandsEnabled?: boolean;
 }
 
+export interface ConnectionAgentUpdateStatus {
+  state: 'idle' | 'checking' | 'update-available' | 'updating' | 'error' | 'disabled';
+  autoUpdate: boolean;
+  updatedFrom?: string;
+  availableVersion?: string;
+  lastCheckedAt?: string;
+  lastAttemptAt?: string;
+  lastSuccessAt?: string;
+  lastError?: string;
+}
+
+export interface ConnectionAgentModuleStatus {
+  name: string;
+  enabled: boolean;
+  state: 'disabled' | 'starting' | 'retrying' | 'running';
+  lastError?: string;
+  updatedAt: string;
+}
+
 export interface Connection {
   id: string;
   type: ConnectionType;
@@ -173,6 +196,8 @@ export interface Connection {
   agentVersion?: string;
   expectedAgentVersion?: string;
   agentUpdateAvailable?: boolean;
+  agentUpdate?: ConnectionAgentUpdateStatus;
+  agentModules?: ConnectionAgentModuleStatus[];
   fleet?: ConnectionFleetGovernance;
   capabilities: ConnectionCapabilities;
 }

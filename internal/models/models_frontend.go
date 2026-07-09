@@ -721,8 +721,11 @@ type HostFrontend struct {
 	TokenLastUsedAt   *int64                     `json:"tokenLastUsedAt,omitempty"`
 	Tags              []string                   `json:"tags"`
 	CommandsEnabled   bool                       `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
-	IsLegacy          bool                       `json:"isLegacy,omitempty"`        // True if using legacy agent protocol
-	LinkedNodeID      string                     `json:"linkedNodeId,omitempty"`    // ID of linked PVE node (if running on a node)
+	AppliedConfig     *AgentConfigFingerprint    `json:"appliedConfig,omitempty"`
+	AgentUpdate       *AgentUpdateStatus         `json:"agentUpdate,omitempty"`
+	AgentModules      []AgentModuleStatus        `json:"agentModules,omitempty"`
+	IsLegacy          bool                       `json:"isLegacy,omitempty"`     // True if using legacy agent protocol
+	LinkedNodeID      string                     `json:"linkedNodeId,omitempty"` // ID of linked PVE node (if running on a node)
 }
 
 func (h HostFrontend) NormalizeCollections() HostFrontend {

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	gohost "github.com/shirou/gopsutil/v4/host"
@@ -107,10 +108,17 @@ func TestBuildReport(t *testing.T) {
 
 	// Create Agent with mock
 	cfg := Config{
-		AgentID:   "agent-123",
-		APIToken:  "test-token",
-		LogLevel:  -1,
-		Collector: mc,
+		AgentID:       "agent-123",
+		APIToken:      "test-token",
+		LogLevel:      -1,
+		Collector:     mc,
+		AppliedConfig: &agentshost.ConfigFingerprint{Version: "v1", Hash: "sha256:test"},
+		UpdateStatus: func() agentupdate.Status {
+			return agentupdate.Status{State: agentupdate.UpdateStateIdle, AutoUpdate: true}
+		},
+		ModuleStatus: func() []agentshost.ModuleStatus {
+			return []agentshost.ModuleStatus{{Name: "host", Enabled: true, State: "running", UpdatedAt: fixedTime}}
+		},
 	}
 	agent, err := New(cfg)
 	if err != nil {
@@ -127,6 +135,15 @@ func TestBuildReport(t *testing.T) {
 		// Verify Agent Info
 		if report.Agent.ID != "agent-123" {
 			t.Errorf("Agent.ID = %q, want %q", report.Agent.ID, "agent-123")
+		}
+		if report.Agent.AppliedConfig == nil || report.Agent.AppliedConfig.Hash != "sha256:test" {
+			t.Fatalf("Agent.AppliedConfig = %+v", report.Agent.AppliedConfig)
+		}
+		if report.Agent.Update == nil || report.Agent.Update.State != agentupdate.UpdateStateIdle || !report.Agent.Update.AutoUpdate {
+			t.Fatalf("Agent.Update = %+v", report.Agent.Update)
+		}
+		if len(report.Agent.Modules) != 1 || report.Agent.Modules[0].Name != "host" || report.Agent.Modules[0].State != "running" {
+			t.Fatalf("Agent.Modules = %+v", report.Agent.Modules)
 		}
 
 		// Verify Host Info

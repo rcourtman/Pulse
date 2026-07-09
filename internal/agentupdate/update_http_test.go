@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -149,7 +150,7 @@ func TestNew_UsesPinnedServerFingerprintForHTTPTransport(t *testing.T) {
 	u := New(Config{
 		PulseURL:          "https://pulse.example.com",
 		CurrentVersion:    "1.0.0",
-		ServerFingerprint: "aabbccdd",
+		ServerFingerprint: "aabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
 	})
 
 	transport, ok := u.client.Transport.(*http.Transport)
@@ -185,7 +186,7 @@ func TestNew_InvalidCustomCABundleFailsClosed(t *testing.T) {
 	if u.configErr == nil {
 		t.Fatal("expected invalid CA bundle to populate configErr")
 	}
-	if _, err := u.getServerVersion(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid CA bundle") {
+	if _, err := u.getServerVersion(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid TLS configuration") {
 		t.Fatalf("expected invalid CA bundle error, got %v", err)
 	}
 }
@@ -325,6 +326,52 @@ func TestUpdater_CheckAndUpdate_VersionComparePaths(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUpdater_CheckAndUpdate_RecordsLifecycleStatus(t *testing.T) {
+	t.Run("current", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(serverVersionResponse{Version: "1.0.0"})
+		}))
+		defer srv.Close()
+
+		u := New(Config{PulseURL: srv.URL, CurrentVersion: "1.0.0"})
+		u.CheckAndUpdate(context.Background())
+
+		status := u.Snapshot()
+		if status.State != UpdateStateIdle || !status.AutoUpdate || status.LastCheckedAt == nil {
+			t.Fatalf("current status = %+v", status)
+		}
+		if status.AvailableVersion != "" || status.LastError != "" {
+			t.Fatalf("current status retained transient fields: %+v", status)
+		}
+	})
+
+	t.Run("failed update", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(serverVersionResponse{Version: "1.1.0"})
+		}))
+		defer srv.Close()
+
+		u := New(Config{PulseURL: srv.URL, CurrentVersion: "1.0.0"})
+		u.performUpdateFn = func(context.Context) error { return errors.New("replacement rejected") }
+		u.CheckAndUpdate(context.Background())
+
+		status := u.Snapshot()
+		if status.State != UpdateStateError || status.AvailableVersion != "1.1.0" {
+			t.Fatalf("failed update status = %+v", status)
+		}
+		if status.LastCheckedAt == nil || status.LastAttemptAt == nil || status.LastError != "replacement rejected" {
+			t.Fatalf("failed update evidence = %+v", status)
+		}
+	})
+
+	t.Run("disabled", func(t *testing.T) {
+		status := New(Config{Disabled: true}).Snapshot()
+		if status.State != UpdateStateDisabled || status.AutoUpdate {
+			t.Fatalf("disabled status = %+v", status)
+		}
+	})
 }
 
 func TestUpdater_performUpdateWithExecPath_RejectsRedirects(t *testing.T) {

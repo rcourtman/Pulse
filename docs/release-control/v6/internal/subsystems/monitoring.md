@@ -459,6 +459,16 @@ resource health.
 
 ## Current State
 
+Unified Agent host reports now make module readiness and updater/config
+lifecycle evidence monitoring-owned observed state. Monitoring preserves the
+last successful one-shot update transition across subsequent reports, forwards
+the applied config fingerprint without config values, and records Host,
+Docker/Podman, and Kubernetes module failures so API consumers can distinguish
+an active process from an initialized monitoring source. The Kubernetes module
+uses the shared agent TLS constructor for custom CA and leaf-fingerprint trust;
+its Pulse transport must not regress to a Kubernetes-local insecure-only TLS
+configuration.
+
 HTTP availability probes consume the shared explicitly unverified,
 parseable-peer-certificate capture
 boundary used by connection discovery, so support for operator self-signed

@@ -7,6 +7,11 @@ on:
         description: 'Version number without the leading v'
         required: true
         type: string
+      require_platform_signing:
+        description: 'Require Developer ID/notarized macOS and Authenticode Windows agent binaries'
+        required: false
+        default: false
+        type: boolean
     outputs:
       artifact_name:
         description: 'Immutable release candidate artifact name'
@@ -19,8 +24,159 @@ permissions:
   contents: read
 
 jobs:
+  sign-macos-agent:
+    name: Sign and Notarize macOS Agent
+    if: ${{ inputs.require_platform_signing }}
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build, sign, and notarize agent binaries
+        shell: bash
+        env:
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_IDENTITY }}
+          APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          for name in \
+            APPLE_CERTIFICATE_P12_BASE64 \
+            APPLE_CERTIFICATE_PASSWORD \
+            APPLE_SIGNING_IDENTITY \
+            APPLE_NOTARY_KEY_P8_BASE64 \
+            APPLE_NOTARY_KEY_ID \
+            APPLE_NOTARY_ISSUER_ID \
+            PULSE_UPDATE_SIGNING_PUBLIC_KEY; do
+            test -n "${!name:-}" || { echo "::error::Missing required ${name}."; exit 1; }
+          done
+
+          mkdir -p native-agent-binaries
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          Path('developer-id.p12').write_bytes(base64.b64decode(os.environ['APPLE_CERTIFICATE_P12_BASE64']))
+          Path('AuthKey.p8').write_bytes(base64.b64decode(os.environ['APPLE_NOTARY_KEY_P8_BASE64']))
+          PY
+
+          keychain="$RUNNER_TEMP/pulse-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 24)"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import developer-id.p12 -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain"
+          security list-keychains -d user -s "$keychain"
+
+          ldflags="$(./scripts/release_ldflags.sh agent \
+            --version "v${{ inputs.version }}" \
+            --update-public-keys "$PULSE_UPDATE_SIGNING_PUBLIC_KEY")"
+          for arch in amd64 arm64; do
+            output="native-agent-binaries/pulse-agent-darwin-${arch}"
+            GOOS=darwin GOARCH="$arch" CGO_ENABLED=0 \
+              go build -buildvcs=false -trimpath -ldflags="$ldflags" -o "$output" ./cmd/pulse-agent
+            codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" "$output"
+            codesign --verify --deep --strict --verbose=2 "$output"
+          done
+
+          ditto -c -k --keepParent native-agent-binaries pulse-agent-macos-notarization.zip
+          xcrun notarytool submit pulse-agent-macos-notarization.zip \
+            --key AuthKey.p8 \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID" \
+            --wait
+          for binary in native-agent-binaries/pulse-agent-darwin-*; do
+            spctl --assess --type execute --verbose=2 "$binary"
+          done
+
+      - name: Upload signed macOS binaries
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-macos-agent-${{ github.sha }}-${{ inputs.version }}
+          path: native-agent-binaries/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  sign-windows-agent:
+    name: Authenticode Sign Windows Agent
+    if: ${{ inputs.require_platform_signing }}
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build and sign agent binaries
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD }}
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($name in @('WINDOWS_CERTIFICATE_PFX_BASE64', 'WINDOWS_CERTIFICATE_PASSWORD', 'PULSE_UPDATE_SIGNING_PUBLIC_KEY')) {
+            if ([string]::IsNullOrWhiteSpace((Get-Item "Env:$name").Value)) {
+              throw "Missing required $name."
+            }
+          }
+
+          New-Item -ItemType Directory -Path native-agent-binaries -Force | Out-Null
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'pulse-code-signing.pfx'
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX_BASE64))
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password -Exportable:$false
+          if ($null -eq $certificate) { throw 'Failed to import Windows code-signing certificate.' }
+
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if ([string]::IsNullOrWhiteSpace($signtool)) { throw 'signtool.exe was not found.' }
+
+          $ldflags = & bash ./scripts/release_ldflags.sh agent --version "v${{ inputs.version }}" --update-public-keys $env:PULSE_UPDATE_SIGNING_PUBLIC_KEY
+          foreach ($arch in @('amd64', 'arm64', '386')) {
+            $env:GOOS = 'windows'
+            $env:GOARCH = $arch
+            $env:CGO_ENABLED = '0'
+            $output = "native-agent-binaries/pulse-agent-windows-$arch.exe"
+            go build -buildvcs=false -trimpath -ldflags="$ldflags" -o $output ./cmd/pulse-agent
+            if ($LASTEXITCODE -ne 0) { throw "Go build failed for Windows $arch." }
+            & $signtool sign /sha1 $certificate.Thumbprint /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com $output
+            if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed for Windows $arch." }
+            & $signtool verify /pa /v $output
+            if ($LASTEXITCODE -ne 0) { throw "Authenticode verification failed for Windows $arch." }
+          }
+
+      - name: Upload signed Windows binaries
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-windows-agent-${{ github.sha }}-${{ inputs.version }}
+          path: native-agent-binaries/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
   build:
     name: Build and Validate Signed Candidate
+    needs: [sign-macos-agent, sign-windows-agent]
+    if: ${{ always() && (!inputs.require_platform_signing || (needs.sign-macos-agent.result == 'success' && needs.sign-windows-agent.result == 'success')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     outputs:
@@ -82,12 +238,28 @@ jobs:
           tar -xzf "${TMP_DIR}/${SYFT_ARCHIVE}" -C "${TMP_DIR}" syft
           install -m 0755 "${TMP_DIR}/syft" /usr/local/bin/syft
 
+      - name: Download signed macOS binaries
+        if: ${{ inputs.require_platform_signing }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: signed-macos-agent-${{ github.sha }}-${{ inputs.version }}
+          path: native-agent-binaries
+
+      - name: Download signed Windows binaries
+        if: ${{ inputs.require_platform_signing }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: signed-windows-agent-${{ github.sha }}-${{ inputs.version }}
+          path: native-agent-binaries
+
       - name: Build signed release candidate
         run: ./scripts/build-release.sh "${{ inputs.version }}"
         env:
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
           PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
+          PULSE_REQUIRE_PLATFORM_SIGNING: ${{ inputs.require_platform_signing }}
+          PULSE_AGENT_NATIVE_BINARIES_DIR: ${{ inputs.require_platform_signing && format('{0}/native-agent-binaries', github.workspace) || '' }}
 
       - name: Validate installer signing key pins
         env:

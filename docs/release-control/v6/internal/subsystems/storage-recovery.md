@@ -1615,6 +1615,14 @@ must not treat starter
 
 ## Current State
 
+Unified Agent lifecycle fields added to the shared host and connections API are
+adjacent monitoring/API state only. Applied config fingerprints, updater
+status, and Host, Docker/Podman, or Kubernetes module readiness do not become
+storage health, protection state, recovery points, backup verification, or
+restore authorization. Storage and recovery consumers may use the canonical
+host identity carried by those payloads, but must not derive recovery semantics
+from agent process readiness or update success.
+
 Authentication-cookie, SSO configured-file, deployment concurrency, and cloud
 handoff redirect hardening in shared `internal/api/` routes is adjacent
 API/security work only. It creates no storage-health, recovery-point, backup,

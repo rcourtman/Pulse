@@ -31,14 +31,50 @@ type ClusterNodeSensors struct {
 
 // AgentInfo describes the reporting agent.
 type AgentInfo struct {
-	ID              string   `json:"id"`
-	Version         string   `json:"version,omitempty"`
-	Type            string   `json:"type,omitempty"` // "unified", "host", or "docker" - empty means legacy
-	IntervalSeconds int      `json:"intervalSeconds,omitempty"`
-	Hostname        string   `json:"hostname,omitempty"`
-	UpdatedFrom     string   `json:"updatedFrom,omitempty"`     // Previous version if recently auto-updated
-	CommandsEnabled bool     `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
-	DiskExclude     []string `json:"diskExclude,omitempty"`     // Disk exclusion patterns from --disk-exclude flag
+	ID              string             `json:"id"`
+	Version         string             `json:"version,omitempty"`
+	Type            string             `json:"type,omitempty"` // "unified", "host", or "docker" - empty means legacy
+	IntervalSeconds int                `json:"intervalSeconds,omitempty"`
+	Hostname        string             `json:"hostname,omitempty"`
+	UpdatedFrom     string             `json:"updatedFrom,omitempty"`     // Previous version if recently auto-updated
+	CommandsEnabled bool               `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
+	DiskExclude     []string           `json:"diskExclude,omitempty"`     // Disk exclusion patterns from --disk-exclude flag
+	AppliedConfig   *ConfigFingerprint `json:"appliedConfig,omitempty"`
+	Update          *UpdateStatus      `json:"update,omitempty"`
+	Modules         []ModuleStatus     `json:"modules,omitempty"`
+}
+
+// ModuleStatus describes whether an enabled Unified Agent module initialized
+// and is actively running. Errors are deliberately limited to the latest
+// operator-facing initialization failure.
+type ModuleStatus struct {
+	Name      string    `json:"name"`
+	Enabled   bool      `json:"enabled"`
+	State     string    `json:"state"`
+	LastError string    `json:"lastError,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ConfigFingerprint identifies the effective managed configuration applied by
+// the running agent without exposing any configuration values or secrets.
+type ConfigFingerprint struct {
+	Version string `json:"version"`
+	Hash    string `json:"hash"`
+}
+
+// UpdateStatus is the agent-authored state of its self-update loop. Server-side
+// version comparison remains authoritative for whether an update is available;
+// this payload explains whether the agent is actually checking and why its last
+// attempt succeeded, failed, or is disabled.
+type UpdateStatus struct {
+	State            string     `json:"state"`
+	AutoUpdate       bool       `json:"autoUpdate"`
+	UpdatedFrom      string     `json:"updatedFrom,omitempty"`
+	AvailableVersion string     `json:"availableVersion,omitempty"`
+	LastCheckedAt    *time.Time `json:"lastCheckedAt,omitempty"`
+	LastAttemptAt    *time.Time `json:"lastAttemptAt,omitempty"`
+	LastSuccessAt    *time.Time `json:"lastSuccessAt,omitempty"`
+	LastError        string     `json:"lastError,omitempty"`
 }
 
 // HostInfo contains platform and identification details about the monitored host.

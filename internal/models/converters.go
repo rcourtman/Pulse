@@ -508,6 +508,9 @@ func (h Host) ToFrontend() HostFrontend {
 		Tags:            append([]string(nil), h.Tags...),
 		LastSeen:        timeToUnixMillis(h.LastSeen),
 		CommandsEnabled: h.CommandsEnabled,
+		AppliedConfig:   cloneAgentConfigFingerprint(h.AppliedConfig),
+		AgentUpdate:     cloneAgentUpdateStatus(h.AgentUpdate),
+		AgentModules:    cloneAgentModuleStatuses(h.AgentModules),
 		IsLegacy:        h.IsLegacy,
 		LinkedNodeID:    h.LinkedNodeID,
 	}
@@ -546,6 +549,41 @@ func (h Host) ToFrontend() HostFrontend {
 	host.TokenLastUsedAt = optionalTimeToUnixMillis(h.TokenLastUsedAt)
 
 	return host.NormalizeCollections()
+}
+
+func cloneAgentConfigFingerprint(value *AgentConfigFingerprint) *AgentConfigFingerprint {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
+
+func cloneAgentUpdateStatus(value *AgentUpdateStatus) *AgentUpdateStatus {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	if value.LastCheckedAt != nil {
+		checked := *value.LastCheckedAt
+		copy.LastCheckedAt = &checked
+	}
+	if value.LastAttemptAt != nil {
+		attempt := *value.LastAttemptAt
+		copy.LastAttemptAt = &attempt
+	}
+	if value.LastSuccessAt != nil {
+		success := *value.LastSuccessAt
+		copy.LastSuccessAt = &success
+	}
+	return &copy
+}
+
+func cloneAgentModuleStatuses(values []AgentModuleStatus) []AgentModuleStatus {
+	if len(values) == 0 {
+		return nil
+	}
+	return append([]AgentModuleStatus(nil), values...)
 }
 
 // ToFrontend converts a DockerContainer to DockerContainerFrontend

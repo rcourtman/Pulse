@@ -614,7 +614,7 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	dockerfile := string(dockerfileBytes)
 	dockerRequired := []string{
 		`FROM --platform=linux/amd64 node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-builder`,
-		`FROM --platform=linux/amd64 golang:1.25.11-alpine@sha256:8d95af53d0d58e1759ddb4028285d9b1239067e4fbf4f544618cad0f60fbc354 AS backend-builder`,
+		`FROM --platform=linux/amd64 golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS backend-builder`,
 		`FROM backend-builder AS release-assets-builder`,
 		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS agent_runtime`,
 		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS pulse-runtime-base`,
@@ -656,7 +656,7 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 		t.Fatalf("hosted_runtime target must not depend on installer rendering or embedded agent artifacts:\n%s", hostedStage)
 	}
 	if strings.Contains(dockerfile, `FROM --platform=linux/amd64 node:20-alpine AS frontend-builder`) ||
-		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.25.11-alpine AS backend-builder`) ||
+		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.26.5-alpine AS backend-builder`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.20 AS agent_runtime`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.20 AS pulse-runtime-base`) {
 		t.Fatal("Dockerfile base images must be pinned by immutable @sha256 digests")
@@ -712,6 +712,29 @@ func TestAgentRuntimeImagePersistsAgentIdentityByDefault(t *testing.T) {
 	if strings.Contains(dockerfile, `ENTRYPOINT ["/usr/local/bin/pulse-agent", "--enable-docker", "--enable-host=false"]`) {
 		t.Fatal("agent_runtime must not hard-code module flags in ENTRYPOINT; env defaults keep user args overridable")
 	}
+}
+
+func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
+	assertFileContainsAll(t, repoFile(".github", "workflows", "build-release-candidate.yml"),
+		`require_platform_signing:`,
+		`sign-macos-agent:`,
+		`codesign --force --timestamp --options runtime`,
+		`xcrun notarytool submit`,
+		`spctl --assess --type execute`,
+		`sign-windows-agent:`,
+		`signtool sign`,
+		`signtool verify /pa /v`,
+		`PULSE_AGENT_NATIVE_BINARIES_DIR:`,
+	)
+	assertFileContainsAll(t, repoFile(".github", "workflows", "create-release.yml"),
+		`require_platform_signing: true`,
+	)
+	assertFileContainsAll(t, repoFile("scripts", "build-release.sh"),
+		`PULSE_AGENT_NATIVE_BINARIES_DIR`,
+		`native_targets=(darwin-amd64 darwin-arm64 windows-amd64 windows-arm64 windows-386)`,
+		`Applied platform-native signed Unified Agent binaries.`,
+		`platform signing is required but PULSE_AGENT_NATIVE_BINARIES_DIR is empty.`,
+	)
 }
 
 func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {

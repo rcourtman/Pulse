@@ -403,6 +403,14 @@ func TestVerifyBinaryMagicOverrides(t *testing.T) {
 		t.Fatalf("expected ELF error")
 	}
 
+	runtimeGOOS = "freebsd"
+	if err := verifyBinaryMagic(elfPath); err != nil {
+		t.Fatalf("expected FreeBSD ELF to validate, got %v", err)
+	}
+	if err := verifyBinaryMagic(badELFPath); err == nil {
+		t.Fatalf("expected FreeBSD ELF error")
+	}
+
 	runtimeGOOS = "darwin"
 	machoPath := filepath.Join(tmpDir, "macho")
 	machoData := []byte{0xcf, 0xfa, 0xed, 0xfe, 0x00}
@@ -443,8 +451,8 @@ func TestVerifyBinaryMagicOverrides(t *testing.T) {
 	if err := os.WriteFile(planPath, []byte{0x00, 0x01, 0x02, 0x03}, 0644); err != nil {
 		t.Fatalf("write plan9: %v", err)
 	}
-	if err := verifyBinaryMagic(planPath); err != nil {
-		t.Fatalf("expected unknown OS to skip verification, got %v", err)
+	if err := verifyBinaryMagic(planPath); err == nil {
+		t.Fatalf("expected unknown OS to fail closed")
 	}
 }
 

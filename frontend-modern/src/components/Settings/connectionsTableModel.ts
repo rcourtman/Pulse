@@ -239,6 +239,7 @@ export type FleetGovernanceSignalKey =
   | 'liveness'
   | 'version'
   | 'adapter'
+  | 'module-health'
   | 'config'
   | 'config-drift'
   | 'credentials'
@@ -666,13 +667,46 @@ const credentialHealthSignal = (state: ConnectionFleetCredentialHealth): FleetGo
   }
 };
 
-const updateSignal = (state: ConnectionFleetUpdateStatus): FleetGovernanceSignal => {
+const updateSignal = (
+  state: ConnectionFleetUpdateStatus,
+  update?: Connection['agentUpdate'],
+): FleetGovernanceSignal => {
   switch (state) {
     case 'update-available':
       return {
         key: 'updates',
         label: 'Update available',
         detail: 'A newer Pulse Agent binary is available for this system.',
+        tone: 'warning',
+      };
+    case 'checking':
+      return {
+        key: 'updates',
+        label: 'Checking for updates',
+        detail: 'This agent is checking the Pulse server for an updated binary.',
+        tone: 'info',
+      };
+    case 'updating':
+      return {
+        key: 'updates',
+        label: 'Agent updating',
+        detail: 'This agent is verifying and applying an updated binary.',
+        tone: 'info',
+      };
+    case 'failed':
+      return {
+        key: 'updates',
+        label: 'Agent update failed',
+        detail:
+          update?.lastError ||
+          'The agent could not complete its latest update check or update attempt.',
+        tone: 'critical',
+      };
+    case 'disabled':
+      return {
+        key: 'updates',
+        label: 'Auto-update off',
+        detail: 'Automatic Pulse Agent updates are disabled on this system.',
         tone: 'warning',
       };
     case 'current':
@@ -697,6 +731,30 @@ const updateSignal = (state: ConnectionFleetUpdateStatus): FleetGovernanceSignal
         tone: 'muted',
       };
   }
+};
+
+const moduleHealthSignal = (connection: Connection): FleetGovernanceSignal | undefined => {
+  const module = connection.agentModules?.find(
+    (candidate) => candidate.enabled && candidate.state !== 'running',
+  );
+  if (!module) return undefined;
+
+  const displayName =
+    module.name === 'docker'
+      ? 'Docker'
+      : module.name === 'kubernetes'
+        ? 'Kubernetes'
+        : module.name === 'host'
+          ? 'Host'
+          : module.name;
+  return {
+    key: 'module-health',
+    label: `${displayName} module ${module.state}`,
+    detail:
+      module.lastError ||
+      `${displayName} monitoring is enabled but the module is not running yet.`,
+    tone: 'warning',
+  };
 };
 
 const commandPolicySignal = (state: ConnectionFleetCommandPolicy): FleetGovernanceSignal => {
@@ -825,11 +883,13 @@ export const fleetGovernanceSignalsForConnection = (
     credentialHealthSignal(credentialHealthFromFleet(fleet)),
   ];
   if (runsAgentFleet) {
+    const moduleSignal = moduleHealthSignal(connection);
+    if (moduleSignal) signals.push(moduleSignal);
     signals.push(
       configDriftSignal(configDriftFromFleet(fleet)),
       rolloutSignal(rolloutFromFleet(fleet)),
       versionSignal(fleet.versionDrift),
-      updateSignal(fleet.updateStatus),
+      updateSignal(fleet.updateStatus, connection.agentUpdate),
     );
   }
   signals.push(adapterSignal(fleet.adapterHealth));

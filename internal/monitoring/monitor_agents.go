@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -1947,6 +1948,13 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		}
 	}
 
+	agentUpdate := mergeAgentUpdateStatus(
+		previousHostAgentUpdate(m.state.GetHosts(), identifier),
+		convertAgentUpdateStatus(report.Agent.Update),
+		strings.TrimSpace(report.Agent.UpdatedFrom),
+		observedAt,
+	)
+
 	host := models.Host{
 		ID:                identifier,
 		Hostname:          hostname,
@@ -1985,6 +1993,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		ReportIP:        strings.TrimSpace(report.Host.ReportIP),
 		Tags:            append([]string(nil), report.Tags...),
 		DiskExclude:     append([]string(nil), report.Agent.DiskExclude...),
+		AppliedConfig:   convertAgentConfigFingerprint(report.Agent.AppliedConfig),
+		AgentUpdate:     agentUpdate,
+		AgentModules:    convertAgentModuleStatuses(report.Agent.Modules),
 		IsLegacy:        isLegacyAgent(report.Agent.Type),
 	}
 
@@ -2197,6 +2208,107 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	m.persistHostContinuity(host, report)
 
 	return host, nil
+}
+
+func convertAgentConfigFingerprint(value *agentshost.ConfigFingerprint) *models.AgentConfigFingerprint {
+	if value == nil {
+		return nil
+	}
+	return &models.AgentConfigFingerprint{
+		Version: strings.TrimSpace(value.Version),
+		Hash:    strings.TrimSpace(value.Hash),
+	}
+}
+
+func convertAgentUpdateStatus(value *agentshost.UpdateStatus) *models.AgentUpdateStatus {
+	if value == nil {
+		return nil
+	}
+	return &models.AgentUpdateStatus{
+		State:            strings.TrimSpace(value.State),
+		AutoUpdate:       value.AutoUpdate,
+		UpdatedFrom:      strings.TrimSpace(value.UpdatedFrom),
+		AvailableVersion: strings.TrimSpace(value.AvailableVersion),
+		LastCheckedAt:    cloneAgentStatusTime(value.LastCheckedAt),
+		LastAttemptAt:    cloneAgentStatusTime(value.LastAttemptAt),
+		LastSuccessAt:    cloneAgentStatusTime(value.LastSuccessAt),
+		LastError:        strings.TrimSpace(value.LastError),
+	}
+}
+
+func convertAgentModuleStatuses(values []agentshost.ModuleStatus) []models.AgentModuleStatus {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make([]models.AgentModuleStatus, 0, len(values))
+	for _, value := range values {
+		name := strings.TrimSpace(value.Name)
+		if name == "" {
+			continue
+		}
+		result = append(result, models.AgentModuleStatus{
+			Name:      name,
+			Enabled:   value.Enabled,
+			State:     strings.TrimSpace(value.State),
+			LastError: strings.TrimSpace(value.LastError),
+			UpdatedAt: value.UpdatedAt.UTC(),
+		})
+	}
+	return result
+}
+
+func previousHostAgentUpdate(hosts []models.Host, identifier string) *models.AgentUpdateStatus {
+	for i := range hosts {
+		if hosts[i].ID == identifier {
+			return cloneModelAgentUpdateStatus(hosts[i].AgentUpdate)
+		}
+	}
+	return nil
+}
+
+func mergeAgentUpdateStatus(previous, reported *models.AgentUpdateStatus, updatedFrom string, observedAt time.Time) *models.AgentUpdateStatus {
+	if reported == nil {
+		reported = cloneModelAgentUpdateStatus(previous)
+	}
+	if reported == nil && updatedFrom == "" {
+		return nil
+	}
+	if reported == nil {
+		reported = &models.AgentUpdateStatus{State: agentupdate.UpdateStateIdle, AutoUpdate: true}
+	}
+	if previous != nil {
+		if reported.LastSuccessAt == nil {
+			reported.LastSuccessAt = cloneAgentStatusTime(previous.LastSuccessAt)
+		}
+		if reported.UpdatedFrom == "" {
+			reported.UpdatedFrom = previous.UpdatedFrom
+		}
+	}
+	if updatedFrom != "" {
+		reported.UpdatedFrom = updatedFrom
+		succeededAt := observedAt.UTC()
+		reported.LastSuccessAt = &succeededAt
+	}
+	return reported
+}
+
+func cloneModelAgentUpdateStatus(value *models.AgentUpdateStatus) *models.AgentUpdateStatus {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	copy.LastCheckedAt = cloneAgentStatusTime(value.LastCheckedAt)
+	copy.LastAttemptAt = cloneAgentStatusTime(value.LastAttemptAt)
+	copy.LastSuccessAt = cloneAgentStatusTime(value.LastSuccessAt)
+	return &copy
+}
+
+func cloneAgentStatusTime(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+	copy := value.UTC()
+	return &copy
 }
 
 func hostPrimaryTemperatureCelsius(sensors models.HostSensorSummary) *float64 {

@@ -41,6 +41,30 @@ func TestInstallSHAllowsMissingTokenForOptionalAuth(t *testing.T) {
 	}
 }
 
+func TestInstallSHPersistsAndVerifiesServerFingerprint(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`SERVER_FINGERPRINT="${PULSE_SERVER_FINGERPRINT:-}"`,
+		`--server-fingerprint <sha256>`,
+		`verify_pinned_server_certificate() {`,
+		`openssl s_client -connect "$target" -servername "$host"`,
+		`EXEC_ARG_ITEMS+=(--server-fingerprint "$SERVER_FINGERPRINT")`,
+		`write_connection_state_value "$conn_env" "PULSE_SERVER_FINGERPRINT" "$SERVER_FINGERPRINT"`,
+		`SERVER_FINGERPRINT=$(read_connection_state_value "$file" "PULSE_SERVER_FINGERPRINT")`,
+		`if [[ "$OS" == "linux" || "$OS" == "freebsd" ]]; then`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing server-fingerprint lifecycle contract: %s", needle)
+		}
+	}
+}
+
 func TestInstallSHAutoDetectProxmoxKeepsRuntimeTypeUnpinned(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
@@ -687,7 +711,7 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		`recover_connection_state_from_arg_stream`,
 		`recover_token_from_default_agent_token_file() {`,
 		`normalize_recovered_agent_arg_key() {`,
-		`-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-cacert|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)`,
+		`-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-cacert|-server-fingerprint|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)`,
 		`--enable-host|-enable-host|--enable-host=true|-enable-host=true)`,
 		`recover_connection_state_from_env_stream`,
 		`recovered_connection_state_ready() {`,

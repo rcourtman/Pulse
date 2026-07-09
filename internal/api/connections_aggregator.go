@@ -41,6 +41,8 @@ const (
 	fleetStateEnabled         = "enabled"
 	fleetStateEnrolled        = "enrolled"
 	fleetStateHealthy         = "healthy"
+	fleetStateChecking        = "checking"
+	fleetStateFailed          = "failed"
 	fleetStateInvalid         = "invalid"
 	fleetStateNotApplicable   = "not-applicable"
 	fleetStatePaused          = "paused"
@@ -48,6 +50,7 @@ const (
 	fleetStateReported        = "reported"
 	fleetStateUnknown         = "unknown"
 	fleetStateUpdateAvailable = "update-available"
+	fleetStateUpdating        = "updating"
 	fleetStateVerified        = "verified"
 
 	fleetConfigDriftCurrent       = "current"
@@ -531,13 +534,56 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		AgentVersion:         currentAgentVersion,
 		ExpectedAgentVersion: expectedAgentVersion,
 		AgentUpdateAvailable: updateAvailable,
+		AgentUpdate:          connectionAgentUpdateStatus(host.AgentUpdate),
+		AgentModules:         connectionAgentModuleStatuses(host.AgentModules),
 		Capabilities:         ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
 	}, now)
-	conn.Fleet.ConfigDrift = connectionFleetAgentConfigDrift(conn, desiredConfig)
+	conn.Fleet.ConfigDrift = connectionFleetAgentConfigDrift(conn, desiredConfig, host.AppliedConfig)
 	conn.Fleet.CredentialHealth = connectionFleetAgentCredentialHealth(conn, host, now)
 	conn.Fleet.CommandPolicy = connectionFleetAgentCommandPolicy(conn, host, desiredConfig)
 	conn.Fleet.Rollout = connectionFleetRollout(conn)
 	return conn
+}
+
+func connectionAgentModuleStatuses(values []models.AgentModuleStatus) []ConnectionAgentModuleStatus {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make([]ConnectionAgentModuleStatus, 0, len(values))
+	for _, value := range values {
+		result = append(result, ConnectionAgentModuleStatus{
+			Name:      strings.TrimSpace(value.Name),
+			Enabled:   value.Enabled,
+			State:     strings.TrimSpace(value.State),
+			LastError: strings.TrimSpace(value.LastError),
+			UpdatedAt: value.UpdatedAt.UTC(),
+		})
+	}
+	return result
+}
+
+func connectionAgentUpdateStatus(value *models.AgentUpdateStatus) *ConnectionAgentUpdateStatus {
+	if value == nil {
+		return nil
+	}
+	return &ConnectionAgentUpdateStatus{
+		State:            strings.TrimSpace(value.State),
+		AutoUpdate:       value.AutoUpdate,
+		UpdatedFrom:      strings.TrimSpace(value.UpdatedFrom),
+		AvailableVersion: strings.TrimSpace(value.AvailableVersion),
+		LastCheckedAt:    cloneTime(value.LastCheckedAt),
+		LastAttemptAt:    cloneTime(value.LastAttemptAt),
+		LastSuccessAt:    cloneTime(value.LastSuccessAt),
+		LastError:        strings.TrimSpace(value.LastError),
+	}
+}
+
+func cloneTime(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+	copy := value.UTC()
+	return &copy
 }
 
 func withFleetGovernance(conn Connection, now time.Time) Connection {
@@ -590,6 +636,13 @@ func connectionFleetVersionDrift(conn Connection) string {
 }
 
 func connectionFleetAdapterHealth(conn Connection) string {
+	if conn.Type == ConnectionTypeAgent {
+		for _, module := range conn.AgentModules {
+			if module.Enabled && strings.TrimSpace(module.State) != "running" {
+				return fleetStateDegraded
+			}
+		}
+	}
 	switch conn.State {
 	case ConnectionStateActive:
 		return fleetStateHealthy
@@ -633,6 +686,20 @@ func connectionFleetCredentialStatus(conn Connection) string {
 func connectionFleetUpdateStatus(conn Connection) string {
 	if conn.Type != ConnectionTypeAgent {
 		return fleetStateNotApplicable
+	}
+	if conn.AgentUpdate != nil {
+		switch strings.TrimSpace(conn.AgentUpdate.State) {
+		case "error":
+			return fleetStateFailed
+		case "updating":
+			return fleetStateUpdating
+		case "checking":
+			return fleetStateChecking
+		case "disabled":
+			if conn.AgentUpdateAvailable {
+				return fleetStateDisabled
+			}
+		}
 	}
 	if conn.AgentUpdateAvailable {
 		return fleetStateUpdateAvailable
@@ -685,7 +752,7 @@ func connectionFleetConfigDrift(conn Connection) *ConnectionFleetConfigDrift {
 	}
 }
 
-func connectionFleetAgentConfigDrift(conn Connection, desiredConfig *connectionAgentDesiredConfig) *ConnectionFleetConfigDrift {
+func connectionFleetAgentConfigDrift(conn Connection, desiredConfig *connectionAgentDesiredConfig, appliedConfig *models.AgentConfigFingerprint) *ConnectionFleetConfigDrift {
 	if desiredConfig == nil {
 		return &ConnectionFleetConfigDrift{
 			Status: fleetStateUnknown,
@@ -699,7 +766,14 @@ func connectionFleetAgentConfigDrift(conn Connection, desiredConfig *connectionA
 			Reason:         "no managed agent configuration override is assigned",
 		}
 	}
-	return connectionFleetAgentConfigDriftForFingerprints(conn, desiredConfig.Fingerprint, nil)
+	return connectionFleetAgentConfigDriftForFingerprints(conn, desiredConfig.Fingerprint, connectionConfigFingerprintFromAgent(appliedConfig))
+}
+
+func connectionConfigFingerprintFromAgent(value *models.AgentConfigFingerprint) *ConnectionFleetConfigFingerprint {
+	if value == nil {
+		return nil
+	}
+	return connectionConfigFingerprintFromMetadata(value.Version, value.Hash)
 }
 
 func connectionFleetAgentConfigDriftForFingerprints(conn Connection, desired, applied *ConnectionFleetConfigFingerprint) *ConnectionFleetConfigDrift {

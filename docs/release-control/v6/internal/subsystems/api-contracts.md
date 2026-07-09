@@ -3168,6 +3168,16 @@ a new API state machine, queue contract, or verification-accounting field.
 
 ## Current State
 
+Unified Agent connections now carry agent-authored lifecycle evidence through
+the shared host model and `/api/connections` contract. The payload may include
+the applied managed-config fingerprint, self-update state and timestamps, and
+per-module enabled/running/error state. Fleet drift, update, and adapter-health
+projections must derive from those reported facts when present while preserving
+the existing unknown-compatible response for older agents that do not yet emit
+them. Frontend API types and the settings connection ledger must stay in lockstep
+with this backend shape; no UI-local reconstruction may infer a successful
+update or module startup from the binary version alone.
+
 Browser authentication cookies now consume one request-derived policy in
 `internal/api/auth.go`; session, CSRF, organization, magic-link, SAML, and cloud
 handoff flows must not materialize independent `Secure` or `SameSite` policy.

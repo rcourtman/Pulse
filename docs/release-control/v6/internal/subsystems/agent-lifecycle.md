@@ -4122,3 +4122,43 @@ that waits for the persistent data volume before launching the stored wrapper,
 and `internal/agentupdate/update.go` keeps the persisted QNAP binary copy in
 sync on self-update so reboot does not roll the runtime back to an older
 binary.
+
+Unified Agent lifecycle truth is agent-authored. The host report contract now
+carries the non-secret applied managed-config fingerprint, self-updater state
+and timestamps, last successful source version, and per-module initialization
+state. `/api/connections` may compare the reported applied fingerprint with the
+canonical desired fingerprint and may expose updater or module failures, but it
+must not synthesize those facts from server version comparison or from the
+mere presence of a process. Successful update evidence observed on the first
+post-restart report remains retained across later reports so a one-shot update
+marker cannot disappear before an operator sees it.
+
+The runtime readiness boundary is module-aware. `/healthz` remains process
+liveness, while `/readyz`, `/status`, and the module readiness Prometheus
+gauges identify enabled modules that are starting, retrying, or running. An
+enabled Docker or Kubernetes module that is still retrying initialization may
+not be laundered into an overall ready state.
+
+Installer-owned connection continuity includes certificate pinning. Unix and
+Windows installers must validate a supplied SHA-256 leaf-certificate
+fingerprint, persist it in `connection.env`, recover it during later lifecycle
+operations, and pass it to the long-lived service as
+`--server-fingerprint`. A certificate pin is distinct from blanket insecure
+TLS mode even when installer download tooling must temporarily bypass chain
+validation after the explicit pin check.
+
+Native support evidence is governed by
+`docs/release-control/v6/internal/UNIFIED_AGENT_PLATFORM_SUPPORT.md` and
+`.github/workflows/unified-agent-native.yml`. Cross-compilation and archive
+presence are build evidence only; platform support claims must name native CI,
+native installed-lifecycle, appliance-lab, and platform code-signing evidence
+separately.
+
+Normal release promotion requires platform-native identity for desktop agent
+binaries. macOS agents must be Developer ID signed, submitted successfully to
+Apple notarization, and accepted by `spctl`; Windows agents must carry a
+verified Authenticode signature. Those native bytes must replace cross-built
+desktop binaries before release packaging, Pulse checksum/signature creation,
+SBOM generation, and immutable candidate manifest creation. Missing signing
+credentials or failed native verification is a release failure, not a warning
+or an unsigned fallback.

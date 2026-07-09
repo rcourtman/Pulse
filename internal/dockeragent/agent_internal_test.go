@@ -16,8 +16,8 @@ import (
 
 func TestNormalizeTargets(t *testing.T) {
 	targets, err := normalizeTargets([]TargetConfig{
-		{URL: " https://pulse.example.com/ ", Token: "tokenA", InsecureSkipVerify: false},
-		{URL: "https://pulse.example.com", Token: "tokenA", InsecureSkipVerify: false}, // duplicate
+		{URL: " https://pulse.example.com/ ", Token: "tokenA", InsecureSkipVerify: false, CACertPath: " /etc/pulse/ca.pem ", ServerFingerprint: " AB:CD "},
+		{URL: "https://pulse.example.com", Token: "tokenA", InsecureSkipVerify: false, CACertPath: "/etc/pulse/ca.pem", ServerFingerprint: "AB:CD"}, // duplicate
 		{URL: "https://pulse-dr.example.com", Token: "tokenB", InsecureSkipVerify: true},
 	})
 	if err != nil {
@@ -28,7 +28,7 @@ func TestNormalizeTargets(t *testing.T) {
 		t.Fatalf("expected 2 targets, got %d", len(targets))
 	}
 
-	if targets[0].URL != "https://pulse.example.com" || targets[0].Token != "tokenA" || targets[0].InsecureSkipVerify {
+	if targets[0].URL != "https://pulse.example.com" || targets[0].Token != "tokenA" || targets[0].InsecureSkipVerify || targets[0].CACertPath != "/etc/pulse/ca.pem" || targets[0].ServerFingerprint != "AB:CD" {
 		t.Fatalf("unexpected first target: %+v", targets[0])
 	}
 

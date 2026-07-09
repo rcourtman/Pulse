@@ -247,40 +247,43 @@ func (c Container) NormalizeCollections() Container {
 
 // Host represents a generic infrastructure host reporting via external agents.
 type Host struct {
-	ID                string                 `json:"id"`
-	Hostname          string                 `json:"hostname"`
-	DisplayName       string                 `json:"displayName,omitempty"`
-	Platform          string                 `json:"platform,omitempty"`
-	OSName            string                 `json:"osName,omitempty"`
-	OSVersion         string                 `json:"osVersion,omitempty"`
-	KernelVersion     string                 `json:"kernelVersion,omitempty"`
-	Architecture      string                 `json:"architecture,omitempty"`
-	CPUCount          int                    `json:"cpuCount,omitempty"`
-	CPUUsage          float64                `json:"cpuUsage,omitempty"`
-	Memory            Memory                 `json:"memory"`
-	LoadAverage       []float64              `json:"loadAverage,omitempty"`
-	Disks             []Disk                 `json:"disks,omitempty"`
-	DiskIO            []DiskIO               `json:"diskIO,omitempty"`
-	NetworkInterfaces []HostNetworkInterface `json:"networkInterfaces,omitempty"`
-	Sensors           HostSensorSummary      `json:"sensors,omitempty"`
-	RAID              []HostRAIDArray        `json:"raid,omitempty"`
-	Unraid            *HostUnraidStorage     `json:"unraid,omitempty"`
-	Ceph              *HostCephCluster       `json:"ceph,omitempty"`
-	Status            string                 `json:"status"`
-	UptimeSeconds     int64                  `json:"uptimeSeconds,omitempty"`
-	IntervalSeconds   int                    `json:"intervalSeconds,omitempty"`
-	LastSeen          time.Time              `json:"lastSeen"`
-	AgentVersion      string                 `json:"agentVersion,omitempty"`
-	MachineID         string                 `json:"machineId,omitempty"`
-	CommandsEnabled   bool                   `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
-	ReportIP          string                 `json:"reportIp,omitempty"`        // User-specified IP for multi-NIC systems
-	TokenID           string                 `json:"tokenId,omitempty"`
-	TokenName         string                 `json:"tokenName,omitempty"`
-	TokenHint         string                 `json:"tokenHint,omitempty"`
-	TokenLastUsedAt   *time.Time             `json:"tokenLastUsedAt,omitempty"`
-	Tags              []string               `json:"tags,omitempty"`
-	DiskExclude       []string               `json:"diskExclude,omitempty"` // Agent's --disk-exclude patterns
-	IsLegacy          bool                   `json:"isLegacy,omitempty"`
+	ID                string                  `json:"id"`
+	Hostname          string                  `json:"hostname"`
+	DisplayName       string                  `json:"displayName,omitempty"`
+	Platform          string                  `json:"platform,omitempty"`
+	OSName            string                  `json:"osName,omitempty"`
+	OSVersion         string                  `json:"osVersion,omitempty"`
+	KernelVersion     string                  `json:"kernelVersion,omitempty"`
+	Architecture      string                  `json:"architecture,omitempty"`
+	CPUCount          int                     `json:"cpuCount,omitempty"`
+	CPUUsage          float64                 `json:"cpuUsage,omitempty"`
+	Memory            Memory                  `json:"memory"`
+	LoadAverage       []float64               `json:"loadAverage,omitempty"`
+	Disks             []Disk                  `json:"disks,omitempty"`
+	DiskIO            []DiskIO                `json:"diskIO,omitempty"`
+	NetworkInterfaces []HostNetworkInterface  `json:"networkInterfaces,omitempty"`
+	Sensors           HostSensorSummary       `json:"sensors,omitempty"`
+	RAID              []HostRAIDArray         `json:"raid,omitempty"`
+	Unraid            *HostUnraidStorage      `json:"unraid,omitempty"`
+	Ceph              *HostCephCluster        `json:"ceph,omitempty"`
+	Status            string                  `json:"status"`
+	UptimeSeconds     int64                   `json:"uptimeSeconds,omitempty"`
+	IntervalSeconds   int                     `json:"intervalSeconds,omitempty"`
+	LastSeen          time.Time               `json:"lastSeen"`
+	AgentVersion      string                  `json:"agentVersion,omitempty"`
+	MachineID         string                  `json:"machineId,omitempty"`
+	CommandsEnabled   bool                    `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
+	ReportIP          string                  `json:"reportIp,omitempty"`        // User-specified IP for multi-NIC systems
+	TokenID           string                  `json:"tokenId,omitempty"`
+	TokenName         string                  `json:"tokenName,omitempty"`
+	TokenHint         string                  `json:"tokenHint,omitempty"`
+	TokenLastUsedAt   *time.Time              `json:"tokenLastUsedAt,omitempty"`
+	Tags              []string                `json:"tags,omitempty"`
+	DiskExclude       []string                `json:"diskExclude,omitempty"` // Agent's --disk-exclude patterns
+	AppliedConfig     *AgentConfigFingerprint `json:"appliedConfig,omitempty"`
+	AgentUpdate       *AgentUpdateStatus      `json:"agentUpdate,omitempty"`
+	AgentModules      []AgentModuleStatus     `json:"agentModules,omitempty"`
+	IsLegacy          bool                    `json:"isLegacy,omitempty"`
 
 	// Computed I/O rates (bytes/sec), populated from cumulative counters by rate tracker
 	NetInRate     float64 `json:"netInRate,omitempty"`
@@ -292,6 +295,30 @@ type Host struct {
 	LinkedNodeID      string `json:"linkedNodeId,omitempty"`      // ID of the PVE node this agent is running on
 	LinkedVMID        string `json:"linkedVmId,omitempty"`        // ID of the VM this agent is running inside
 	LinkedContainerID string `json:"linkedContainerId,omitempty"` // ID of the container this agent is running inside
+}
+
+type AgentConfigFingerprint struct {
+	Version string `json:"version"`
+	Hash    string `json:"hash"`
+}
+
+type AgentUpdateStatus struct {
+	State            string     `json:"state"`
+	AutoUpdate       bool       `json:"autoUpdate"`
+	UpdatedFrom      string     `json:"updatedFrom,omitempty"`
+	AvailableVersion string     `json:"availableVersion,omitempty"`
+	LastCheckedAt    *time.Time `json:"lastCheckedAt,omitempty"`
+	LastAttemptAt    *time.Time `json:"lastAttemptAt,omitempty"`
+	LastSuccessAt    *time.Time `json:"lastSuccessAt,omitempty"`
+	LastError        string     `json:"lastError,omitempty"`
+}
+
+type AgentModuleStatus struct {
+	Name      string    `json:"name"`
+	Enabled   bool      `json:"enabled"`
+	State     string    `json:"state"`
+	LastError string    `json:"lastError,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 func (h Host) NormalizeCollections() Host {

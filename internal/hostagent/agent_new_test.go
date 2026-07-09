@@ -17,6 +17,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
+	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 	gohost "github.com/shirou/gopsutil/v4/host"
@@ -471,7 +472,7 @@ func TestNewCommandClient_SetsSecureCommandDefaults(t *testing.T) {
 	client := NewCommandClient(Config{
 		PulseURL:          "https://pulse.example",
 		APIToken:          "runtime-token",
-		ServerFingerprint: "aabbccdd",
+		ServerFingerprint: "aabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
 		DeploySSHUser:     "pulse-deploy",
 		Logger:            &logger,
 	}, "agent-1", "node-1", "linux", "1.0.0")
@@ -482,8 +483,8 @@ func TestNewCommandClient_SetsSecureCommandDefaults(t *testing.T) {
 	if client.stateDir != defaultStateDir {
 		t.Fatalf("stateDir = %q, want %q", client.stateDir, defaultStateDir)
 	}
-	if client.serverFingerprint != "aabbccdd" {
-		t.Fatalf("serverFingerprint = %q, want %q", client.serverFingerprint, "aabbccdd")
+	if client.serverFingerprint != "aabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd" {
+		t.Fatalf("serverFingerprint = %q, want configured SHA-256 pin", client.serverFingerprint)
 	}
 	if client.deploySSHUser != "pulse-deploy" {
 		t.Fatalf("deploySSHUser = %q, want %q", client.deploySSHUser, "pulse-deploy")
@@ -537,10 +538,37 @@ func TestAgentApplyRemoteConfigUpdatesRuntimeSnapshot(t *testing.T) {
 	if !snapshot.disableCeph {
 		t.Fatal("disableCeph = false, want true")
 	}
+	expectedMetadata, err := remoteconfig.BuildDesiredConfigMetadata(&commandsEnabled, map[string]interface{}{
+		"interval":     "45s",
+		"report_ip":    "192.0.2.20",
+		"disable_ceph": true,
+	})
+	if err != nil {
+		t.Fatalf("BuildDesiredConfigMetadata: %v", err)
+	}
+	if snapshot.appliedConfig == nil || snapshot.appliedConfig.Version != expectedMetadata.Version || snapshot.appliedConfig.Hash != expectedMetadata.Hash {
+		t.Fatalf("applied config = %+v, want %+v", snapshot.appliedConfig, expectedMetadata)
+	}
 	select {
 	case <-agent.remoteConfigChanged:
 	default:
 		t.Fatal("expected interval change signal")
+	}
+}
+
+func TestAgentApplyRemoteConfigKeepsPriorFingerprintWhenRestartIsRequired(t *testing.T) {
+	prior := &agentshost.ConfigFingerprint{Version: "host-agent-config/v1", Hash: "sha256:prior"}
+	agent := &Agent{
+		cfg:                 Config{AppliedConfig: prior},
+		remoteConfigChanged: make(chan struct{}, 1),
+		logger:              zerolog.Nop(),
+	}
+
+	agent.ApplyRemoteConfig(map[string]interface{}{"enable_docker": true}, nil)
+
+	snapshot := agent.runtimeConfigSnapshot()
+	if snapshot.appliedConfig == nil || snapshot.appliedConfig.Hash != prior.Hash {
+		t.Fatalf("restart-required config should retain prior applied fingerprint, got %+v", snapshot.appliedConfig)
 	}
 }
 
@@ -619,7 +647,7 @@ func TestNew_UsesPinnedServerFingerprintForHTTPTransport(t *testing.T) {
 	agent, err := New(Config{
 		PulseURL:          "https://pulse.example",
 		APIToken:          "token",
-		ServerFingerprint: "aabbccdd",
+		ServerFingerprint: "aabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
 		LogLevel:          zerolog.InfoLevel,
 		Collector:         mc,
 	})

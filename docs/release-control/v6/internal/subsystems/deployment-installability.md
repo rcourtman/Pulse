@@ -334,6 +334,9 @@ TLS floor in the dynamic config.
    local packet validation, manifest creation, and artifact upload; the
    observed release path requires a 60-minute ceiling even though the build
    itself is expected to finish much earlier.
+   Tarball entry validation must extract the requested files once per archive;
+   it must not decompress a multi-gigabyte release archive again for every
+   required entry.
    A manually dispatched release rehearsal must activate the same signed
    candidate build whenever its required `version` input is non-empty.
    Scheduled watchdog rehearsals omit that input and must skip candidate
@@ -1075,7 +1078,7 @@ The governed v6 release Go patch level is part of that same boundary:
 `go.mod`, `scripts/.go-version`, `scripts/install-go-toolchain.sh`,
 `scripts/build-release.sh`, the Go builder stages in `Dockerfile` and
 `deploy/provider-msp/Dockerfile.control-plane`, and the Pro release workflows
-must stay aligned on the same patched `1.25.x` floor before a release can be
+must stay aligned on the same patched `1.26.x` floor before a release can be
 treated as shippable. When `govulncheck` reports called standard-library
 vulnerabilities in the current patch level, the canonical fix is to advance the
 governed release toolchain and immutable Go builder digest together, not to

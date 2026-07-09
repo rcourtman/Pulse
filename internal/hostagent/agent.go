@@ -22,6 +22,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
+	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -69,6 +70,13 @@ type Config struct {
 	// Network configuration
 	ReportIP    string // IP address to report instead of auto-detected (for multi-NIC systems)
 	DisableCeph bool   // If true, disables local Ceph status polling
+
+	// AppliedConfig is the non-secret fingerprint of the managed config that
+	// was applied before this runtime started. UpdateStatus supplies live
+	// self-update state without coupling report collection to updater internals.
+	AppliedConfig *agentshost.ConfigFingerprint
+	UpdateStatus  func() agentupdate.Status
+	ModuleStatus  func() []agentshost.ModuleStatus
 
 	Collector SystemCollector // Optional: override default system information collector (for testing)
 
@@ -255,7 +263,7 @@ func New(cfg Config) (*Agent, error) {
 	}
 	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
 	if err != nil {
-		return nil, fmt.Errorf("invalid CA bundle: %w", err)
+		return nil, fmt.Errorf("invalid TLS configuration: %w", err)
 	}
 
 	client := &http.Client{
@@ -457,6 +465,7 @@ type runtimeConfigSnapshot struct {
 	tags            []string
 	reportIP        string
 	disableCeph     bool
+	appliedConfig   *agentshost.ConfigFingerprint
 }
 
 func (a *Agent) currentInterval() time.Duration {
@@ -485,7 +494,39 @@ func (a *Agent) runtimeConfigSnapshot() runtimeConfigSnapshot {
 		tags:            append([]string(nil), a.cfg.Tags...),
 		reportIP:        a.reportIP,
 		disableCeph:     a.cfg.DisableCeph,
+		appliedConfig:   cloneConfigFingerprint(a.cfg.AppliedConfig),
 	}
+}
+
+func cloneConfigFingerprint(value *agentshost.ConfigFingerprint) *agentshost.ConfigFingerprint {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
+}
+
+func (a *Agent) currentUpdateStatus() *agentshost.UpdateStatus {
+	if a.cfg.UpdateStatus == nil {
+		return nil
+	}
+	status := a.cfg.UpdateStatus()
+	return &agentshost.UpdateStatus{
+		State:            status.State,
+		AutoUpdate:       status.AutoUpdate,
+		AvailableVersion: status.AvailableVersion,
+		LastCheckedAt:    status.LastCheckedAt,
+		LastAttemptAt:    status.LastAttemptAt,
+		LastSuccessAt:    status.LastSuccessAt,
+		LastError:        status.LastError,
+	}
+}
+
+func (a *Agent) currentModuleStatus() []agentshost.ModuleStatus {
+	if a.cfg.ModuleStatus == nil {
+		return nil
+	}
+	return append([]agentshost.ModuleStatus(nil), a.cfg.ModuleStatus()...)
 }
 
 func (a *Agent) signalRemoteConfigChanged() {
@@ -803,6 +844,9 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			UpdatedFrom:     updatedFrom,
 			CommandsEnabled: runtimeConfig.commandsEnabled,
 			DiskExclude:     append([]string(nil), runtimeConfig.diskExclude...),
+			AppliedConfig:   runtimeConfig.appliedConfig,
+			Update:          a.currentUpdateStatus(),
+			Modules:         a.currentModuleStatus(),
 		},
 		Host: agentshost.HostInfo{
 			ID:            a.machineID,
@@ -966,6 +1010,28 @@ func (a *Agent) ApplyRemoteConfig(settings map[string]interface{}, commandsEnabl
 		a.configMu.Unlock()
 		a.logger.Info().Bool("disable_ceph", disableCeph).Msg("Applied remote Ceph collection setting")
 	}
+	if remoteConfigAppliedWithoutRestart(settings) && remoteconfig.HasAppliedDesiredConfig(commandsEnabled, settings) {
+		metadata, err := remoteconfig.BuildDesiredConfigMetadata(commandsEnabled, settings)
+		if err != nil {
+			a.logger.Warn().Err(err).Msg("Failed to derive refreshed managed configuration fingerprint")
+			return
+		}
+		a.configMu.Lock()
+		a.cfg.AppliedConfig = &agentshost.ConfigFingerprint{Version: metadata.Version, Hash: metadata.Hash}
+		a.configMu.Unlock()
+	}
+}
+
+func remoteConfigAppliedWithoutRestart(settings map[string]interface{}) bool {
+	for key := range settings {
+		switch key {
+		case "interval", "report_ip", "disable_ceph":
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // applyRemoteConfig applies server-side command execution overrides.

@@ -3,7 +3,6 @@ package dockeragent
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +15,7 @@ import (
 
 	systemtypes "github.com/moby/moby/api/types/system"
 	"github.com/moby/moby/client"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
@@ -27,6 +27,8 @@ type TargetConfig struct {
 	URL                string
 	Token              string
 	InsecureSkipVerify bool
+	CACertPath         string
+	ServerFingerprint  string
 }
 
 // Config describes runtime configuration for the Docker / Podman collection module.
@@ -39,6 +41,8 @@ type Config struct {
 	AgentType           string // "unified" when running as part of pulse-agent, empty for legacy standalone mode
 	AgentVersion        string // Version to report; if empty, uses dockeragent.Version
 	InsecureSkipVerify  bool
+	CACertPath          string
+	ServerFingerprint   string
 	DisableAutoUpdate   bool
 	DisableUpdateChecks bool // Disable Docker image update detection (registry checks)
 	Targets             []TargetConfig
@@ -108,6 +112,7 @@ type Agent struct {
 	agentVersion       string
 	supportsSwarm      bool
 	httpClients        map[bool]*http.Client
+	trustedHTTPClients map[string]*http.Client
 	logger             zerolog.Logger
 	machineID          string
 	hostName           string
@@ -160,6 +165,8 @@ func New(cfg Config) (*Agent, error) {
 			URL:                url,
 			Token:              token,
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
+			CACertPath:         cfg.CACertPath,
+			ServerFingerprint:  cfg.ServerFingerprint,
 		}})
 		if err != nil {
 			return nil, fmt.Errorf("dockeragent.New: normalize fallback target: %w", err)
@@ -170,6 +177,8 @@ func New(cfg Config) (*Agent, error) {
 	cfg.PulseURL = targets[0].URL
 	cfg.APIToken = targets[0].Token
 	cfg.InsecureSkipVerify = targets[0].InsecureSkipVerify
+	cfg.CACertPath = targets[0].CACertPath
+	cfg.ServerFingerprint = targets[0].ServerFingerprint
 
 	stateFilters, err := normalizeContainerStates(cfg.ContainerStates)
 	if err != nil {
@@ -241,11 +250,26 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	httpClients := make(map[bool]*http.Client, 2)
+	trustedHTTPClients := make(map[string]*http.Client)
 	if hasSecure {
 		httpClients[false] = newHTTPClient(false)
 	}
 	if hasInsecure {
 		httpClients[true] = newHTTPClient(true)
+	}
+	for _, target := range cfg.Targets {
+		if target.CACertPath == "" && target.ServerFingerprint == "" {
+			continue
+		}
+		key := targetTrustKey(target)
+		if _, exists := trustedHTTPClients[key]; exists {
+			continue
+		}
+		client, err := newHTTPClientWithTrust(target.CACertPath, target.InsecureSkipVerify, target.ServerFingerprint)
+		if err != nil {
+			return nil, fmt.Errorf("configure TLS for Pulse target %s: %w", target.URL, err)
+		}
+		trustedHTTPClients[key] = client
 	}
 
 	machineID, _ := readMachineID()
@@ -265,24 +289,25 @@ func New(cfg Config) (*Agent, error) {
 	const bufferCapacity = 60
 
 	agent := &Agent{
-		cfg:              cfg,
-		docker:           dockerClient,
-		daemonHost:       dockerClient.DaemonHost(),
-		daemonID:         info.ID, // Cache at init for stable agent ID
-		runtime:          runtimeKind,
-		runtimeVer:       info.ServerVersion,
-		agentVersion:     agentVersion,
-		supportsSwarm:    runtimeKind == RuntimeDocker,
-		httpClients:      httpClients,
-		logger:           *logger,
-		machineID:        machineID,
-		hostName:         hostName,
-		targets:          cfg.Targets,
-		allowedStates:    make(map[string]struct{}, len(stateFilters)),
-		stateFilters:     stateFilters,
-		prevContainerCPU: make(map[string]cpuSample),
-		reportBuffer:     utils.New[agentsdocker.Report](bufferCapacity),
-		registryChecker:  newRegistryCheckerWithConfig(*logger, !cfg.DisableUpdateChecks),
+		cfg:                cfg,
+		docker:             dockerClient,
+		daemonHost:         dockerClient.DaemonHost(),
+		daemonID:           info.ID, // Cache at init for stable agent ID
+		runtime:            runtimeKind,
+		runtimeVer:         info.ServerVersion,
+		agentVersion:       agentVersion,
+		supportsSwarm:      runtimeKind == RuntimeDocker,
+		httpClients:        httpClients,
+		trustedHTTPClients: trustedHTTPClients,
+		logger:             *logger,
+		machineID:          machineID,
+		hostName:           hostName,
+		targets:            cfg.Targets,
+		allowedStates:      make(map[string]struct{}, len(stateFilters)),
+		stateFilters:       stateFilters,
+		prevContainerCPU:   make(map[string]cpuSample),
+		reportBuffer:       utils.New[agentsdocker.Report](bufferCapacity),
+		registryChecker:    newRegistryCheckerWithConfig(*logger, !cfg.DisableUpdateChecks),
 	}
 
 	for _, state := range stateFilters {
@@ -321,7 +346,9 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 			return nil, fmt.Errorf("invalid pulse target URL %q: %w", targetURL, err)
 		}
 
-		key := fmt.Sprintf("%s|%s|%t", normalizedURL, token, target.InsecureSkipVerify)
+		caCertPath := strings.TrimSpace(target.CACertPath)
+		serverFingerprint := strings.TrimSpace(target.ServerFingerprint)
+		key := fmt.Sprintf("%s|%s|%t|%s|%s", normalizedURL, token, target.InsecureSkipVerify, caCertPath, serverFingerprint)
 		if _, exists := seen[key]; exists {
 			continue
 		}
@@ -331,6 +358,8 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 			URL:                normalizedURL,
 			Token:              token,
 			InsecureSkipVerify: target.InsecureSkipVerify,
+			CACertPath:         caCertPath,
+			ServerFingerprint:  serverFingerprint,
 		})
 	}
 
@@ -1149,6 +1178,9 @@ func (a *Agent) primaryTarget() TargetConfig {
 }
 
 func (a *Agent) httpClientFor(target TargetConfig) *http.Client {
+	if client, ok := a.trustedHTTPClients[targetTrustKey(target)]; ok {
+		return client
+	}
 	if client, ok := a.httpClients[target.InsecureSkipVerify]; ok {
 		return client
 	}
@@ -1161,12 +1193,22 @@ func (a *Agent) httpClientFor(target TargetConfig) *http.Client {
 	return newHTTPClient(target.InsecureSkipVerify)
 }
 
+func targetTrustKey(target TargetConfig) string {
+	return fmt.Sprintf("%t|%s|%s", target.InsecureSkipVerify, strings.TrimSpace(target.CACertPath), strings.TrimSpace(target.ServerFingerprint))
+}
+
 func newHTTPClient(insecure bool) *http.Client {
-	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12,
+	client, err := newHTTPClientWithTrust("", insecure, "")
+	if err != nil {
+		panic(fmt.Sprintf("build default Pulse HTTP client: %v", err))
 	}
-	if insecure {
-		tlsConfig.InsecureSkipVerify = true //nolint:gosec
+	return client
+}
+
+func newHTTPClientWithTrust(caCertPath string, insecure bool, serverFingerprint string) (*http.Client, error) {
+	tlsConfig, err := agenttls.NewClientTLSConfig(caCertPath, insecure, serverFingerprint)
+	if err != nil {
+		return nil, err
 	}
 
 	return &http.Client{
@@ -1180,7 +1222,7 @@ func newHTTPClient(insecure bool) *http.Client {
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return fmt.Errorf("server returned redirect to %s - if using a reverse proxy, ensure you use the correct protocol (https:// instead of http://) in your --url flag", req.URL)
 		},
-	}
+	}, nil
 }
 
 func (a *Agent) Close() error {
@@ -1203,6 +1245,11 @@ func (a *Agent) Close() error {
 		}
 
 		for _, client := range a.httpClients {
+			if client != nil {
+				client.CloseIdleConnections()
+			}
+		}
+		for _, client := range a.trustedHTTPClients {
 			if client != nil {
 				client.CloseIdleConnections()
 			}

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,6 +19,7 @@ import (
 	"time"
 
 	"github.com/IGLOU-EU/go-wildcard/v2"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
@@ -55,6 +55,8 @@ type Config struct {
 	AgentType          string // "unified" when running as part of pulse-agent
 	AgentVersion       string // Version to report; if empty, uses kubernetesagent.Version
 	InsecureSkipVerify bool
+	CACertPath         string
+	ServerFingerprint  string
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
 
@@ -181,10 +183,9 @@ func New(cfg Config) (*Agent, error) {
 		agentVersion = Version
 	}
 
-	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
-	if cfg.InsecureSkipVerify {
-		//nolint:gosec // Insecure mode is explicitly user-controlled.
-		tlsConfig.InsecureSkipVerify = true
+	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
+	if err != nil {
+		return nil, fmt.Errorf("configure Pulse TLS client: %w", err)
 	}
 	httpClient := &http.Client{
 		Timeout: 15 * time.Second,

@@ -12,6 +12,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
+	"github.com/rcourtman/pulse-go-rewrite/internal/kubernetesagent"
+	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sys/windows/svc"
@@ -50,9 +52,15 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 	defer agentUp.Set(0)
 
 	var ready atomic.Bool
+	runtimeStatus := newRuntimeHealth(&ready, map[string]bool{
+		"host":       ws.cfg.EnableHost,
+		"docker":     ws.cfg.EnableDocker,
+		"kubernetes": ws.cfg.EnableKubernetes,
+	})
 	if ws.cfg.HealthAddr != "" {
-		startHealthServer(ctx, ws.cfg.HealthAddr, &ready, &ws.logger)
+		startHealthServer(ctx, ws.cfg.HealthAddr, &ready, &ws.logger, runtimeStatus)
 	}
+	remoteConfigAppliers := make([]RemoteConfigApplier, 0, 1)
 
 	// Start Auto-Updater
 	updater := newUpdater(agentupdate.Config{
@@ -91,8 +99,10 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 			DeploySSHUser:      ws.cfg.DeploySSHUser,
 			LogLevel:           ws.cfg.LogLevel,
 			Logger:             &ws.logger,
+			AppliedConfig:      ws.cfg.AppliedConfig,
+			UpdateStatus:       updater.Snapshot,
+			ModuleStatus:       runtimeStatus.moduleStatuses,
 		}
-
 		agent, err := hostagent.New(hostCfg)
 		if err != nil {
 			ws.logger.Error().Err(err).Msg("Failed to create host agent")
@@ -102,6 +112,8 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 			changes <- svc.Status{State: svc.Stopped}
 			return true, 1
 		}
+		remoteConfigAppliers = append(remoteConfigAppliers, agent)
+		runtimeStatus.setState("host", moduleStateRunning, nil)
 
 		g.Go(func() error {
 			ws.logger.Info().Msg("Host agent module started")
@@ -109,7 +121,11 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 		})
 	}
 
-	// Start Docker / Podman module (if enabled)
+	// Start Docker / Podman module (if enabled). Match the foreground runtime's
+	// retry semantics so a temporarily unavailable Docker Desktop pipe does not
+	// terminate the Windows service.
+	var dockerAgent RunnableCloser
+	defer func() { cleanupDockerAgent(dockerAgent, &ws.logger) }()
 	if ws.cfg.EnableDocker {
 		dockerCfg := dockeragent.Config{
 			PulseURL:           ws.cfg.PulseURL,
@@ -120,6 +136,8 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 			AgentType:          "unified",
 			AgentVersion:       Version,
 			InsecureSkipVerify: ws.cfg.InsecureSkipVerify,
+			CACertPath:         ws.cfg.CACertPath,
+			ServerFingerprint:  ws.cfg.ServerFingerprint,
 			DisableAutoUpdate:  true,
 			LogLevel:           ws.cfg.LogLevel,
 			Logger:             &ws.logger,
@@ -132,21 +150,83 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 
 		agent, err := dockeragent.New(dockerCfg)
 		if err != nil {
-			ws.logger.Error().Err(err).Msg("Failed to create Docker / Podman module")
-			if ws.eventLog != nil {
-				ws.eventLog.Error(1, fmt.Sprintf("Failed to create Docker / Podman module: %v", err))
-			}
-			changes <- svc.Status{State: svc.Stopped}
-			return true, 1
+			runtimeStatus.setState("docker", moduleStateRetrying, err)
+			ws.logger.Warn().Err(err).Msg("Docker / Podman module unavailable, retrying")
+			g.Go(func() error {
+				retried := initDockerWithRetry(ctx, dockerCfg, &ws.logger)
+				if retried == nil {
+					return nil
+				}
+				dockerAgent = retried
+				runtimeStatus.setState("docker", moduleStateRunning, nil)
+				return retried.Run(ctx)
+			})
+		} else {
+			dockerAgent = agent
+			runtimeStatus.setState("docker", moduleStateRunning, nil)
+			g.Go(func() error {
+				ws.logger.Info().Msg("Docker / Podman module started")
+				return agent.Run(ctx)
+			})
 		}
-
-		g.Go(func() error {
-			ws.logger.Info().Msg("Docker / Podman module started")
-			return agent.Run(ctx)
-		})
 	}
 
-	ready.Store(true)
+	if ws.cfg.EnableKubernetes {
+		kubeCfg := kubernetesagent.Config{
+			PulseURL:              ws.cfg.PulseURL,
+			APIToken:              ws.cfg.APIToken,
+			Interval:              ws.cfg.Interval,
+			AgentID:               ws.cfg.AgentID,
+			AgentType:             "unified",
+			AgentVersion:          Version,
+			InsecureSkipVerify:    ws.cfg.InsecureSkipVerify,
+			CACertPath:            ws.cfg.CACertPath,
+			ServerFingerprint:     ws.cfg.ServerFingerprint,
+			LogLevel:              ws.cfg.LogLevel,
+			Logger:                &ws.logger,
+			KubeconfigPath:        ws.cfg.KubeconfigPath,
+			KubeContext:           ws.cfg.KubeContext,
+			IncludeNamespaces:     ws.cfg.KubeIncludeNamespaces,
+			ExcludeNamespaces:     ws.cfg.KubeExcludeNamespaces,
+			IncludeAllPods:        ws.cfg.KubeIncludeAllPods,
+			IncludeAllDeployments: ws.cfg.KubeIncludeAllDeployments,
+			MaxPods:               ws.cfg.KubeMaxPods,
+		}
+		agent, err := kubernetesagent.New(kubeCfg)
+		if err != nil {
+			runtimeStatus.setState("kubernetes", moduleStateRetrying, err)
+			ws.logger.Warn().Err(err).Msg("Kubernetes module unavailable, retrying")
+			g.Go(func() error {
+				retried := initKubernetesWithRetry(ctx, kubeCfg, &ws.logger)
+				if retried == nil {
+					return nil
+				}
+				runtimeStatus.setState("kubernetes", moduleStateRunning, nil)
+				return retried.Run(ctx)
+			})
+		} else {
+			runtimeStatus.setState("kubernetes", moduleStateRunning, nil)
+			g.Go(func() error { return agent.Run(ctx) })
+		}
+	}
+
+	if ws.cfg.PulseURL != "" && ws.cfg.APIToken != "" && ws.cfg.AgentID != "" && len(remoteConfigAppliers) > 0 {
+		client := remoteconfig.New(remoteconfig.Config{
+			PulseURL:           ws.cfg.PulseURL,
+			APIToken:           ws.cfg.APIToken,
+			AgentID:            ws.cfg.AgentID,
+			Hostname:           ws.cfg.HostnameOverride,
+			InsecureSkipVerify: ws.cfg.InsecureSkipVerify,
+			CACertPath:         ws.cfg.CACertPath,
+			ServerFingerprint:  ws.cfg.ServerFingerprint,
+			Logger:             ws.logger,
+		})
+		defer client.Close()
+		g.Go(func() error {
+			runRemoteConfigLoop(ctx, client, remoteConfigAppliers, &ws.logger)
+			return nil
+		})
+	}
 
 	changes <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
 	ws.logger.Info().

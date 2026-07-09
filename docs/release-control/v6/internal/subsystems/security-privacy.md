@@ -416,6 +416,14 @@ the `white_label` branding entitlement.
 
 ## Current State
 
+Unified Agent Pulse transports share one fail-closed TLS policy across host,
+Docker/Podman, Kubernetes, remote configuration, commands, and self-update.
+Custom CA bundles and SHA-256 leaf-certificate pins are runtime trust inputs,
+not monitoring data, and malformed pins must fail during client construction
+instead of silently degrading to system roots or blanket skip-verification.
+Installer persistence may carry the non-secret pin into service arguments, but
+must not copy API tokens or certificate material into reports or diagnostics.
+
 The browser-auth boundary now owns one request-derived cookie policy for every
 session, CSRF, organization, SAML, magic-link, and cloud-handoff cookie. Secure
 requests use Secure cookies and host-prefixed session names; explicitly

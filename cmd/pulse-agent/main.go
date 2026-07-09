@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -28,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/kubernetesagent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
 	gohost "github.com/shirou/gopsutil/v4/host"
 	"golang.org/x/sync/errgroup"
@@ -46,6 +48,16 @@ var (
 		Name: "pulse_agent_up",
 		Help: "Whether the Pulse agent is running (1 = up, 0 = down)",
 	})
+
+	agentModuleEnabled = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "pulse_agent_module_enabled",
+		Help: "Whether a Pulse Unified Agent module is configured to run (1 = enabled, 0 = disabled)",
+	}, []string{"module"})
+
+	agentModuleReady = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "pulse_agent_module_ready",
+		Help: "Whether a configured Pulse Unified Agent module initialized successfully (1 = ready, 0 = not ready)",
+	}, []string{"module"})
 )
 
 // Runnable is an interface for agents that can be run
@@ -246,6 +258,14 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			if len(settings) > 0 {
 				applyRemoteSettings(&cfg, settings, &logger)
 			}
+			if remoteconfig.HasAppliedDesiredConfig(commandsEnabled, settings) {
+				metadata, metadataErr := remoteconfig.BuildDesiredConfigMetadata(commandsEnabled, settings)
+				if metadataErr != nil {
+					logger.Warn().Err(metadataErr).Msg("Failed to derive applied managed configuration fingerprint")
+				} else {
+					cfg.AppliedConfig = &agentshost.ConfigFingerprint{Version: metadata.Version, Hash: metadata.Hash}
+				}
+			}
 		}
 	}
 
@@ -259,6 +279,21 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
+
+	// Resolve automatic runtime selection before publishing startup and
+	// readiness state so the process never claims a module set it did not
+	// actually attempt to start.
+	if !cfg.EnableDocker && !cfg.DockerConfigured {
+		if _, err := lookPath("docker"); err == nil {
+			logger.Info().Msg("Auto-detected Docker binary, enabling Docker monitoring")
+			cfg.EnableDocker = true
+		} else if _, err := lookPath("podman"); err == nil {
+			logger.Info().Msg("Auto-detected Podman binary, enabling Docker monitoring")
+			cfg.EnableDocker = true
+		} else {
+			logger.Debug().Msg("Docker/Podman not found, skipping Docker monitoring")
+		}
+	}
 
 	logger.Info().
 		Str("version", Version).
@@ -281,8 +316,13 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 
 	// 6. Start Health/Metrics Server
 	var ready atomic.Bool
+	runtimeStatus := newRuntimeHealth(&ready, map[string]bool{
+		"host":       cfg.EnableHost,
+		"docker":     cfg.EnableDocker,
+		"kubernetes": cfg.EnableKubernetes,
+	})
 	if cfg.HealthAddr != "" {
-		startHealthServer(ctx, cfg.HealthAddr, &ready, &logger)
+		startHealthServer(ctx, cfg.HealthAddr, &ready, &logger, runtimeStatus)
 	}
 
 	// 7. Start Auto-Updater
@@ -330,6 +370,9 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			StateDir:           cfg.StateDir,
 			ReportIP:           cfg.ReportIP,
 			DisableCeph:        cfg.DisableCeph,
+			AppliedConfig:      cfg.AppliedConfig,
+			UpdateStatus:       updater.Snapshot,
+			ModuleStatus:       runtimeStatus.moduleStatuses,
 		}
 
 		agent, err := newHostAgent(hostCfg)
@@ -339,25 +382,12 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		if applier, ok := agent.(RemoteConfigApplier); ok {
 			remoteConfigAppliers = append(remoteConfigAppliers, applier)
 		}
+		runtimeStatus.setState("host", moduleStateRunning, nil)
 
 		g.Go(func() error {
 			logger.Info().Msg("Host agent module started")
 			return agent.Run(ctx)
 		})
-	}
-
-	// Auto-detect Docker/Podman if not explicitly configured
-	if !cfg.EnableDocker && !cfg.DockerConfigured {
-		// Check for docker binary
-		if _, err := lookPath("docker"); err == nil {
-			logger.Info().Msg("Auto-detected Docker binary, enabling Docker monitoring")
-			cfg.EnableDocker = true
-		} else if _, err := lookPath("podman"); err == nil {
-			logger.Info().Msg("Auto-detected Podman binary, enabling Docker monitoring")
-			cfg.EnableDocker = true
-		} else {
-			logger.Debug().Msg("Docker/Podman not found, skipping Docker monitoring")
-		}
 	}
 
 	// 9. Start Docker / Podman module (if enabled)
@@ -372,6 +402,8 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			AgentType:           "unified",
 			AgentVersion:        Version,
 			InsecureSkipVerify:  cfg.InsecureSkipVerify,
+			CACertPath:          cfg.CACertPath,
+			ServerFingerprint:   cfg.ServerFingerprint,
 			DisableAutoUpdate:   cfg.DisableAutoUpdate,
 			DisableUpdateChecks: cfg.DisableDockerUpdateChecks,
 			Runtime:             cfg.DockerRuntime,
@@ -387,6 +419,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 
 		dockerAgent, err = newDockerAgent(dockerCfg)
 		if err != nil {
+			runtimeStatus.setState("docker", moduleStateRetrying, err)
 			// Docker isn't available yet - start retry loop in background
 			logger.Warn().
 				Err(err).
@@ -398,6 +431,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 				agent := initDockerWithRetry(ctx, dockerCfg, &logger)
 				if agent != nil {
 					dockerAgent = agent
+					runtimeStatus.setState("docker", moduleStateRunning, nil)
 					logger.Info().Msg("Docker / Podman module started (after retry)")
 					return agent.Run(ctx)
 				}
@@ -405,6 +439,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 				return nil
 			})
 		} else {
+			runtimeStatus.setState("docker", moduleStateRunning, nil)
 			g.Go(func() error {
 				logger.Info().Msg("Docker / Podman module started")
 				return dockerAgent.Run(ctx)
@@ -422,6 +457,8 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			AgentType:             "unified",
 			AgentVersion:          Version,
 			InsecureSkipVerify:    cfg.InsecureSkipVerify,
+			CACertPath:            cfg.CACertPath,
+			ServerFingerprint:     cfg.ServerFingerprint,
 			LogLevel:              cfg.LogLevel,
 			Logger:                &logger,
 			KubeconfigPath:        cfg.KubeconfigPath,
@@ -435,6 +472,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 
 		agent, err := newKubeAgent(kubeCfg)
 		if err != nil {
+			runtimeStatus.setState("kubernetes", moduleStateRetrying, err)
 			logger.Warn().
 				Err(err).
 				Str("component", "kubernetes_agent").
@@ -444,12 +482,14 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			g.Go(func() error {
 				retried := initKubernetesWithRetry(ctx, kubeCfg, &logger)
 				if retried != nil {
+					runtimeStatus.setState("kubernetes", moduleStateRunning, nil)
 					logger.Info().Msg("Kubernetes agent module started (after retry)")
 					return retried.Run(ctx)
 				}
 				return nil
 			})
 		} else {
+			runtimeStatus.setState("kubernetes", moduleStateRunning, nil)
 			g.Go(func() error {
 				logger.Info().Msg("Kubernetes agent module started")
 				return agent.Run(ctx)
@@ -463,9 +503,6 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			return nil
 		})
 	}
-
-	// Mark as ready after all agents started
-	ready.Store(true)
 
 	// 11. Wait for all agents to exit
 	if err := g.Wait(); err != nil && err != context.Canceled {
@@ -586,8 +623,12 @@ func cleanupDockerAgent(agent RunnableCloser, logger *zerolog.Logger) {
 	}
 }
 
-func healthHandler(ready *atomic.Bool) http.Handler {
+func healthHandler(ready *atomic.Bool, runtimes ...*runtimeHealth) http.Handler {
 	mux := http.NewServeMux()
+	var runtimeStatus *runtimeHealth
+	if len(runtimes) > 0 {
+		runtimeStatus = runtimes[0]
+	}
 
 	// Liveness probe - always returns 200 if server is running
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -597,6 +638,15 @@ func healthHandler(ready *atomic.Bool) http.Handler {
 
 	// Readiness probe - returns 200 only when agents are initialized
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		if runtimeStatus != nil {
+			snapshot := runtimeStatus.snapshot()
+			w.Header().Set("Content-Type", "application/json")
+			if !snapshot.Ready {
+				w.WriteHeader(http.StatusServiceUnavailable)
+			}
+			_ = json.NewEncoder(w).Encode(snapshot)
+			return
+		}
 		if ready.Load() {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("ok"))
@@ -606,15 +656,24 @@ func healthHandler(ready *atomic.Bool) http.Handler {
 		}
 	})
 
+	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if runtimeStatus == nil {
+			_ = json.NewEncoder(w).Encode(runtimeHealthSnapshot{Ready: ready.Load()})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(runtimeStatus.snapshot())
+	})
+
 	// Prometheus metrics
 	mux.Handle("/metrics", promhttp.Handler())
 	return mux
 }
 
-func startHealthServer(ctx context.Context, addr string, ready *atomic.Bool, logger *zerolog.Logger) {
+func startHealthServer(ctx context.Context, addr string, ready *atomic.Bool, logger *zerolog.Logger, runtimes ...*runtimeHealth) {
 	srv := &http.Server{
 		Addr:         addr,
-		Handler:      healthHandler(ready),
+		Handler:      healthHandler(ready, runtimes...),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  30 * time.Second,
@@ -698,7 +757,8 @@ type Config struct {
 	SelfTest    bool   // Perform self-test and exit
 
 	// Health/metrics server
-	HealthAddr string
+	HealthAddr    string
+	AppliedConfig *agentshost.ConfigFingerprint
 
 	// Kubernetes
 	KubeconfigPath            string

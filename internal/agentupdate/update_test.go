@@ -17,7 +17,7 @@ func TestDetermineArch(t *testing.T) {
 
 	// On known platforms, should return os-arch format
 	switch runtime.GOOS {
-	case "linux", "darwin", "windows":
+	case "linux", "darwin", "windows", "freebsd":
 		if result == "" {
 			t.Errorf("determineArch() returned empty string on %s/%s", runtime.GOOS, runtime.GOARCH)
 		}

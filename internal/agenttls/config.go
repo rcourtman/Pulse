@@ -1,8 +1,10 @@
 package agenttls
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
@@ -14,6 +16,13 @@ import (
 // and optional custom CA bundle support.
 func NewClientTLSConfig(caBundlePath string, insecureSkipVerify bool, expectedServerFingerprint string) (*tls.Config, error) {
 	expectedServerFingerprint = strings.TrimSpace(expectedServerFingerprint)
+	if expectedServerFingerprint != "" {
+		normalized := strings.ReplaceAll(expectedServerFingerprint, ":", "")
+		decoded, err := hex.DecodeString(normalized)
+		if err != nil || len(decoded) != sha256.Size {
+			return nil, fmt.Errorf("server fingerprint must be a SHA-256 value (64 hexadecimal characters)")
+		}
+	}
 
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 	if expectedServerFingerprint != "" {

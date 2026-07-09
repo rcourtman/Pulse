@@ -22,6 +22,7 @@
 #   --agent-id <id>     Custom agent identifier (default: auto-generated)
 #   --disk-exclude <pattern>  Exclude mount points matching pattern (repeatable)
 #   --insecure          Skip TLS certificate verification
+#   --server-fingerprint <sha256> Pin the Pulse server leaf certificate
 #   --enable-commands   Enable Pulse command execution on agent (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
 #   --health-addr <addr> Health/metrics listener address (default: 127.0.0.1:9191, use "" to disable)
 #   --update            Update an existing agent using saved connection state
@@ -77,6 +78,7 @@ PROXMOX_TYPE=""
 UPDATE_ONLY="false"
 UNINSTALL="false"
 INSECURE="false"
+SERVER_FINGERPRINT="${PULSE_SERVER_FINGERPRINT:-}"
 AGENT_ID=""
 HOSTNAME_OVERRIDE=""
 ENABLE_COMMANDS="false"
@@ -301,6 +303,7 @@ Options:
   --disk-exclude <path>   Exclude mount point (repeatable)
   --insecure              Skip TLS verification (auto-enabled for http:// URLs)
   --cacert <path>         Custom CA certificate for TLS (used by curl and agent)
+  --server-fingerprint <sha256> Pin the Pulse server leaf certificate for agent connections
   --enable-commands       Enable Pulse command execution (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
   --health-addr <addr>    Health/metrics listener address (default: 127.0.0.1:9191; use "" to disable)
   --enroll                Exchange bootstrap token for runtime token (deploy wizard)
@@ -1345,6 +1348,55 @@ auto_enable_insecure_for_plain_http_url() {
     log_info "Plain HTTP Pulse URL detected; enabling insecure mode for installer downloads and persisted agent update checks."
 }
 
+verify_pinned_server_certificate() {
+    if [[ -z "$SERVER_FINGERPRINT" ]]; then
+        return 0
+    fi
+    if pulse_url_uses_plain_http "$PULSE_URL"; then
+        fail "--server-fingerprint requires an https:// Pulse URL." "$EXIT_PREFLIGHT_FAILED"
+    fi
+    if ! command -v openssl >/dev/null 2>&1; then
+        fail "--server-fingerprint requires openssl so the installer can verify the server certificate before downloading." "$EXIT_PREFLIGHT_FAILED"
+    fi
+
+    local normalized=""
+    local authority=""
+    local host=""
+    local target=""
+    local actual=""
+    normalized=$(printf '%s' "$SERVER_FINGERPRINT" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')
+    if [[ ! "$normalized" =~ ^[a-f0-9]{64}$ ]]; then
+        fail "Invalid --server-fingerprint value. Expected a SHA-256 certificate fingerprint (64 hexadecimal characters)." "$EXIT_PREFLIGHT_FAILED"
+    fi
+
+    authority="${PULSE_URL#https://}"
+    authority="${authority%%/*}"
+    if [[ "$authority" == \[*\]* ]]; then
+        host="${authority#\[}"
+        host="${host%%\]*}"
+        target="$authority"
+        if [[ "$authority" != *"]:"* ]]; then target="${authority}:443"; fi
+    else
+        host="${authority%%:*}"
+        target="$authority"
+        if [[ "$authority" != *:* ]]; then target="${authority}:443"; fi
+    fi
+
+    actual=$(openssl s_client -connect "$target" -servername "$host" </dev/null 2>/dev/null \
+        | openssl x509 -outform DER 2>/dev/null \
+        | openssl dgst -sha256 2>/dev/null \
+        | awk '{print tolower($NF)}')
+    if [[ -z "$actual" || "$actual" != "$normalized" ]]; then
+        fail "Pulse server certificate fingerprint mismatch. Expected ${normalized}, got ${actual:-unavailable}." "$EXIT_PREFLIGHT_FAILED"
+    fi
+
+    SERVER_FINGERPRINT="$normalized"
+    # curl must accept the self-signed chain after the explicit pin check. The
+    # downloaded installer and binary still require their own signatures.
+    INSECURE="true"
+    log_info "Pulse server certificate fingerprint verified."
+}
+
 build_exec_arg_items() {
     local include_token="${1:-true}"
 
@@ -1370,6 +1422,7 @@ build_exec_arg_items() {
     if [[ "$ENABLE_PROXMOX" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-proxmox); fi
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARG_ITEMS+=(--proxmox-type "$PROXMOX_TYPE"); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARG_ITEMS+=(--insecure); fi
+    if [[ -n "$SERVER_FINGERPRINT" ]]; then EXEC_ARG_ITEMS+=(--server-fingerprint "$SERVER_FINGERPRINT"); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-commands); fi
     if [[ "$HEALTH_ADDR_SET" == "true" ]]; then EXEC_ARG_ITEMS+=(--health-addr "$HEALTH_ADDR"); fi
     if [[ "$ENROLL" == "true" ]]; then EXEC_ARG_ITEMS+=(--enroll); fi
@@ -1568,6 +1621,9 @@ recover_connection_state() {
             INSECURE="true"
         fi
     fi
+    if [[ -z "$SERVER_FINGERPRINT" ]]; then
+        SERVER_FINGERPRINT=$(read_connection_state_value "$file" "PULSE_SERVER_FINGERPRINT")
+    fi
     if [[ -z "$CURL_CA_BUNDLE" ]]; then
         CURL_CA_BUNDLE=$(read_connection_state_value "$file" "PULSE_CACERT")
     fi
@@ -1630,6 +1686,10 @@ apply_recovered_agent_arg_value() {
             if [[ -z "$CURL_CA_BUNDLE" ]]; then CURL_CA_BUNDLE="$value"; fi
             RECOVERED_AGENT_ARG_STATE="true"
             ;;
+        server-fingerprint)
+            if [[ -z "$SERVER_FINGERPRINT" ]]; then SERVER_FINGERPRINT="$value"; fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
         health-addr)
             if [[ "$HEALTH_ADDR_SET" != "true" ]]; then
                 HEALTH_ADDR="$value"
@@ -1665,7 +1725,7 @@ recovered_connection_state_ready() {
 }
 
 update_connection_state_incomplete() {
-    [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" || -z "$AGENT_ID" || -z "$HOSTNAME_OVERRIDE" || -z "$CURL_CA_BUNDLE" || "$INSECURE" != "true" ]]
+    [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" || -z "$AGENT_ID" || -z "$HOSTNAME_OVERRIDE" || -z "$CURL_CA_BUNDLE" || -z "$SERVER_FINGERPRINT" || "$INSECURE" != "true" ]]
 }
 
 recover_connection_state_from_arg_stream() {
@@ -1684,10 +1744,10 @@ recover_connection_state_from_arg_stream() {
         fi
 
         case "$arg" in
-            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--cacert|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude|-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-cacert|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)
+            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--cacert|--server-fingerprint|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude|-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-cacert|-server-fingerprint|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)
                 pending_key=$(normalize_recovered_agent_arg_key "$arg")
                 ;;
-            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--cacert=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*|-url=*|-pulse-url=*|-token=*|-token-file=*|-interval=*|-agent-id=*|-hostname=*|-cacert=*|-health-addr=*|-state-dir=*|-kubeconfig=*|-proxmox-type=*|-disk-exclude=*)
+            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--cacert=*|--server-fingerprint=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*|-url=*|-pulse-url=*|-token=*|-token-file=*|-interval=*|-agent-id=*|-hostname=*|-cacert=*|-server-fingerprint=*|-health-addr=*|-state-dir=*|-kubeconfig=*|-proxmox-type=*|-disk-exclude=*)
                 key="${arg%%=*}"
                 value="${arg#*=}"
                 apply_recovered_agent_arg_value "$key" "$value"
@@ -1814,6 +1874,11 @@ recover_connection_state_from_env_stream() {
             PULSE_CACERT=*)
                 value="${env_line#*=}"
                 if [[ -z "$CURL_CA_BUNDLE" ]]; then CURL_CA_BUNDLE="$value"; fi
+                RECOVERED_AGENT_ENV_STATE="true"
+                ;;
+            PULSE_SERVER_FINGERPRINT=*)
+                value="${env_line#*=}"
+                if [[ -z "$SERVER_FINGERPRINT" ]]; then SERVER_FINGERPRINT="$value"; fi
                 RECOVERED_AGENT_ENV_STATE="true"
                 ;;
         esac
@@ -2140,6 +2205,7 @@ save_connection_info() {
     if [[ "$INSECURE" == "true" ]]; then
         write_connection_state_value "$conn_env" "PULSE_INSECURE_SKIP_VERIFY" "true"
     fi
+    write_connection_state_value "$conn_env" "PULSE_SERVER_FINGERPRINT" "$SERVER_FINGERPRINT"
     write_connection_state_value "$conn_env" "PULSE_CACERT" "$CURL_CA_BUNDLE"
     chmod 600 "$conn_env"
     # Save a copy of this install script for offline uninstall.
@@ -2193,6 +2259,7 @@ while [[ $# -gt 0 ]]; do
         --proxmox-type) PROXMOX_TYPE="$2"; shift 2 ;;
         --insecure) INSECURE="true"; shift ;;
         --cacert) CURL_CA_BUNDLE="$2"; shift 2 ;;
+        --server-fingerprint) SERVER_FINGERPRINT="$2"; shift 2 ;;
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
         --health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;
         --enroll) ENROLL="true"; shift ;;
@@ -2651,6 +2718,7 @@ if [[ ! "$url_lower" =~ ^https?:// ]]; then
 fi
 
 auto_enable_insecure_for_plain_http_url
+verify_pinned_server_certificate
 
 # Validate token format when present (should be hex string, typically 64 chars)
 if [[ -n "$PULSE_TOKEN" && ! "$PULSE_TOKEN" =~ ^[a-fA-F0-9]+$ ]]; then
@@ -2845,11 +2913,11 @@ if [[ ! -s "$TMP_BIN" ]]; then
     fail "Downloaded file is empty." "$EXIT_DOWNLOAD_FAILED"
 fi
 
-# Check if it's a valid executable (ELF for Linux, Mach-O for macOS)
-if [[ "$OS" == "linux" ]]; then
+# Check if it's a valid executable (ELF for Linux/FreeBSD, Mach-O for macOS)
+if [[ "$OS" == "linux" || "$OS" == "freebsd" ]]; then
     MAGIC=$(od -An -tx1 -N4 "$TMP_BIN" 2>/dev/null | tr -d ' \n' || true)
     if [[ "$MAGIC" != "7f454c46" ]]; then
-        fail "Downloaded file is not a valid Linux executable." "$EXIT_DOWNLOAD_FAILED"
+        fail "Downloaded file is not a valid ${OS} ELF executable." "$EXIT_DOWNLOAD_FAILED"
     fi
 elif [[ "$OS" == "darwin" ]]; then
     # Mach-O magic: feedface (32-bit) or feedfacf (64-bit) or cafebabe (universal)
@@ -3323,6 +3391,7 @@ PULSE_ENABLE_DOCKER=${ENABLE_DOCKER}
 PULSE_ENABLE_KUBERNETES=${ENABLE_KUBERNETES}
 PULSE_KUBE_INCLUDE_ALL_PODS=${KUBE_INCLUDE_ALL_PODS}
 PULSE_KUBE_INCLUDE_ALL_DEPLOYMENTS=${KUBE_INCLUDE_ALL_DEPLOYMENTS}
+PULSE_SERVER_FINGERPRINT=${SERVER_FINGERPRINT}
 EOF
     chmod 600 "$TRUENAS_ENV_FILE"
 

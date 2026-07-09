@@ -19,6 +19,7 @@ param (
     [bool]$Insecure = $false,
     [bool]$Uninstall = $false,
     [string]$CACertPath = $env:PULSE_CACERT,
+    [string]$ServerFingerprint = $env:PULSE_SERVER_FINGERPRINT,
     [string]$AgentId = $env:PULSE_AGENT_ID,
     [string]$Hostname = $env:PULSE_HOSTNAME,
     [string]$TokenFile = $env:PULSE_TOKEN_FILE,
@@ -376,9 +377,23 @@ function Invoke-WithOptionalInsecureTls {
     )
 
     $previousCallback = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
-    if ($AllowInsecure -or $null -ne $CustomCaCertificate) {
+    if ($AllowInsecure -or $null -ne $CustomCaCertificate -or -not [string]::IsNullOrWhiteSpace($ServerFingerprint)) {
         [System.Net.ServicePointManager]::ServerCertificateValidationCallback = {
             param($sender, $certificate, $chain, $sslPolicyErrors)
+
+            if (-not [string]::IsNullOrWhiteSpace($ServerFingerprint)) {
+                try {
+                    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+                    try {
+                        $actualFingerprint = ([System.BitConverter]::ToString($sha256.ComputeHash($certificate.GetRawCertData()))).Replace('-', '').ToLowerInvariant()
+                    } finally {
+                        $sha256.Dispose()
+                    }
+                    return [string]::Equals($actualFingerprint, $ServerFingerprint, [System.StringComparison]::OrdinalIgnoreCase)
+                } catch {
+                    return $false
+                }
+            }
 
             if ($AllowInsecure) {
                 return $true
@@ -395,7 +410,7 @@ function Invoke-WithOptionalInsecureTls {
     try {
         & $Action
     } finally {
-        if ($AllowInsecure -or $null -ne $CustomCaCertificate) {
+        if ($AllowInsecure -or $null -ne $CustomCaCertificate -or -not [string]::IsNullOrWhiteSpace($ServerFingerprint)) {
             [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $previousCallback
         }
     }
@@ -417,6 +432,9 @@ function Save-ConnectionState {
     }
     if (-not [string]::IsNullOrWhiteSpace($CACertPath)) {
         $lines += "PULSE_CACERT='$CACertPath'"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($ServerFingerprint)) {
+        $lines += "PULSE_SERVER_FINGERPRINT='$ServerFingerprint'"
     }
 
     New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
@@ -484,6 +502,9 @@ if ($Uninstall) {
     }
     if ([string]::IsNullOrWhiteSpace($CACertPath)) {
         $CACertPath = Get-ConnectionStateValue "PULSE_CACERT"
+    }
+    if ([string]::IsNullOrWhiteSpace($ServerFingerprint)) {
+        $ServerFingerprint = Get-ConnectionStateValue "PULSE_SERVER_FINGERPRINT"
     }
 
     $customCaCertificate = $null
@@ -637,6 +658,15 @@ if (-not [string]::IsNullOrWhiteSpace($NormalizedProxmoxType) -and $NormalizedPr
 
 # Normalize URL (remove trailing slash)
 $Url = $Url.TrimEnd('/')
+$ServerFingerprint = ($ServerFingerprint -replace '[:\s]', '').ToLowerInvariant()
+if (-not [string]::IsNullOrWhiteSpace($ServerFingerprint) -and $ServerFingerprint -notmatch '^[a-f0-9]{64}$') {
+    Show-Error "Invalid server certificate fingerprint. Expected 64 hexadecimal SHA-256 characters."
+    Exit 1
+}
+if (-not [string]::IsNullOrWhiteSpace($ServerFingerprint) -and -not $Url.ToLowerInvariant().StartsWith("https://")) {
+    Show-Error "Server certificate fingerprint pinning requires an https:// Pulse URL."
+    Exit 1
+}
 if ($Url.ToLowerInvariant().StartsWith("http://") -and -not $Insecure) {
     Write-Host "Plain HTTP Pulse URL detected; enabling insecure mode for persisted agent update checks." -ForegroundColor Yellow
     $Insecure = $true
@@ -902,6 +932,7 @@ if (-not [string]::IsNullOrWhiteSpace($NormalizedProxmoxType)) { $ServiceArgs +=
 if ($EnableCommands) { $ServiceArgs += "--enable-commands" }
 if ($Insecure) { $ServiceArgs += "--insecure" }
 if (-not [string]::IsNullOrWhiteSpace($CACertPath)) { $ServiceArgs += @("--cacert", "`"$CACertPath`"") }
+if (-not [string]::IsNullOrWhiteSpace($ServerFingerprint)) { $ServiceArgs += @("--server-fingerprint", "`"$ServerFingerprint`"") }
 if (-not [string]::IsNullOrWhiteSpace($AgentId)) { $ServiceArgs += @("--agent-id", "`"$AgentId`"") }
 if (-not [string]::IsNullOrWhiteSpace($Hostname)) { $ServiceArgs += @("--hostname", "`"$Hostname`"") }
 

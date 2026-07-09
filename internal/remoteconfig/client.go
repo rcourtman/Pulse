@@ -79,8 +79,8 @@ func New(cfg Config) *Client {
 		cfg.Logger.Error().
 			Err(err).
 			Str("ca_cert_path", strings.TrimSpace(cfg.CACertPath)).
-			Msg("Invalid custom CA bundle; refusing to fall back to default TLS roots")
-		configErr = errors.Join(configErr, fmt.Errorf("invalid CA bundle: %w", err))
+			Msg("Invalid agent TLS configuration; refusing to create remote config client")
+		configErr = errors.Join(configErr, fmt.Errorf("invalid TLS configuration: %w", err))
 	} else {
 		httpClient = &http.Client{
 			Timeout: 10 * time.Second,

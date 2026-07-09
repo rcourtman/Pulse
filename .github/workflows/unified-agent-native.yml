@@ -1,0 +1,145 @@
+name: Unified Agent Native Verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/unified-agent-native.yml'
+      - 'cmd/pulse-agent/**'
+      - 'internal/agenttls/**'
+      - 'internal/agentupdate/**'
+      - 'internal/dockeragent/**'
+      - 'internal/hostagent/**'
+      - 'internal/kubernetesagent/**'
+      - 'internal/remoteconfig/**'
+      - 'pkg/agents/**'
+      - 'scripts/install.sh'
+      - 'scripts/install.ps1'
+      - 'scripts/installtests/**'
+      - 'go.mod'
+      - 'go.sum'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/unified-agent-native.yml'
+      - 'cmd/pulse-agent/**'
+      - 'internal/agenttls/**'
+      - 'internal/agentupdate/**'
+      - 'internal/dockeragent/**'
+      - 'internal/hostagent/**'
+      - 'internal/kubernetesagent/**'
+      - 'internal/remoteconfig/**'
+      - 'pkg/agents/**'
+      - 'scripts/install.sh'
+      - 'scripts/install.ps1'
+      - 'scripts/installtests/**'
+      - 'go.mod'
+      - 'go.sum'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-agent:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            runner: ubuntu-24.04
+            unix: true
+          - name: Linux ARM64
+            runner: ubuntu-24.04-arm
+            unix: true
+          - name: macOS ARM64
+            runner: macos-15
+            unix: true
+          - name: macOS Intel
+            runner: macos-15-intel
+            unix: true
+          - name: Windows x64
+            runner: windows-2025
+            unix: false
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test native agent runtime
+        run: >-
+          go test
+          ./cmd/pulse-agent
+          ./internal/agenttls
+          ./internal/agentupdate
+          ./internal/dockeragent
+          ./internal/hostagent
+          ./internal/kubernetesagent
+          ./internal/remoteconfig
+
+      - name: Test native Unix installer contracts
+        if: matrix.unix
+        run: go test ./scripts/installtests
+
+      - name: Build and execute native Unix agent
+        if: matrix.unix
+        shell: bash
+        run: |
+          set -euo pipefail
+          go build -o pulse-agent-native ./cmd/pulse-agent
+          ./pulse-agent-native --version
+          ./pulse-agent-native --self-test
+
+      - name: Build and execute native Windows agent
+        if: ${{ !matrix.unix }}
+        shell: pwsh
+        run: |
+          go build -o pulse-agent-native.exe ./cmd/pulse-agent
+          .\pulse-agent-native.exe --version
+          .\pulse-agent-native.exe --self-test
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'scripts/install.ps1'),
+            [ref]$null,
+            [ref]$errors
+          ) > $null
+          if ($errors.Count) {
+            $errors | ForEach-Object { Write-Error $_.ToString() }
+            exit 1
+          }
+
+  freebsd-build-contract:
+    name: FreeBSD cross-build contract
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile and validate FreeBSD binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            GOOS=freebsd GOARCH="$arch" CGO_ENABLED=0 \
+              go build -o "pulse-agent-freebsd-${arch}" ./cmd/pulse-agent
+            magic="$(od -An -tx1 -N4 "pulse-agent-freebsd-${arch}" | tr -d ' \n')"
+            test "$magic" = "7f454c46"
+          done
+          GOOS=freebsd GOARCH=amd64 go test -c -o agentupdate-freebsd.test ./internal/agentupdate

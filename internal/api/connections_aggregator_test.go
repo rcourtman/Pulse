@@ -330,8 +330,18 @@ func TestBuildConnections_AgentVersionUpdateAvailability(t *testing.T) {
 	now := time.Now()
 	in := aggregatorInputs{
 		hosts: []models.Host{
-			{ID: "current", Hostname: "current", LastSeen: now, AgentVersion: "6.0.3"},
-			{ID: "outdated", Hostname: "outdated", LastSeen: now, AgentVersion: "6.0.0"},
+			{ID: "current", Hostname: "current", LastSeen: now, AgentVersion: "6.0.3", AgentUpdate: &models.AgentUpdateStatus{State: "disabled"}},
+			{ID: "outdated", Hostname: "outdated", LastSeen: now, AgentVersion: "6.0.0", AgentUpdate: &models.AgentUpdateStatus{State: "disabled"}},
+			{
+				ID:           "failed",
+				Hostname:     "failed",
+				LastSeen:     now,
+				AgentVersion: "6.0.3",
+				AgentUpdate:  &models.AgentUpdateStatus{State: "error", LastError: "signature verification failed"},
+				AgentModules: []models.AgentModuleStatus{{
+					Name: "docker", Enabled: true, State: "retrying", LastError: "socket unavailable", UpdatedAt: now,
+				}},
+			},
 			{ID: "unknown", Hostname: "unknown", LastSeen: now},
 		},
 		expectedAgentVersion: "6.0.3",
@@ -357,6 +367,9 @@ func TestBuildConnections_AgentVersionUpdateAvailability(t *testing.T) {
 	if byID["agent:current"].AgentUpdateAvailable {
 		t.Fatal("current agent should not report an update available")
 	}
+	if byID["agent:current"].Fleet.UpdateStatus != fleetStateCurrent {
+		t.Fatalf("current agent update status = %q, want current", byID["agent:current"].Fleet.UpdateStatus)
+	}
 
 	if byID["agent:outdated"].AgentVersion != "6.0.0" {
 		t.Fatalf(
@@ -367,6 +380,16 @@ func TestBuildConnections_AgentVersionUpdateAvailability(t *testing.T) {
 	}
 	if !byID["agent:outdated"].AgentUpdateAvailable {
 		t.Fatal("outdated agent should report an update available")
+	}
+	if byID["agent:outdated"].Fleet.UpdateStatus != fleetStateDisabled {
+		t.Fatalf("outdated disabled agent update status = %q, want disabled", byID["agent:outdated"].Fleet.UpdateStatus)
+	}
+
+	if byID["agent:failed"].Fleet.UpdateStatus != fleetStateFailed || byID["agent:failed"].AgentUpdate == nil || byID["agent:failed"].AgentUpdate.LastError != "signature verification failed" {
+		t.Fatalf("failed agent update status = %+v", byID["agent:failed"])
+	}
+	if byID["agent:failed"].Fleet.AdapterHealth != fleetStateDegraded || len(byID["agent:failed"].AgentModules) != 1 {
+		t.Fatalf("failed agent module status = %+v", byID["agent:failed"])
 	}
 
 	if byID["agent:unknown"].AgentVersion != "" {
@@ -389,6 +412,10 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 				LastSeen:        now,
 				AgentVersion:    "6.0.3",
 				CommandsEnabled: true,
+				AppliedConfig: &models.AgentConfigFingerprint{
+					Version: currentDesired.Version,
+					Hash:    currentDesired.Hash,
+				},
 			},
 			{
 				ID:           "outdated",
@@ -426,14 +453,15 @@ func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
 		t.Fatalf("current agent fleet governance = %+v", current)
 	}
 	if current.ConfigDrift == nil ||
-		current.ConfigDrift.Status != fleetStatePending ||
+		current.ConfigDrift.Status != fleetConfigDriftCurrent ||
 		current.ConfigDrift.Desired == nil ||
-		current.ConfigDrift.Applied != nil ||
+		current.ConfigDrift.Applied == nil ||
 		current.ConfigDrift.Desired.Version != connectionAgentConfigFingerprintVersion ||
-		current.ConfigDrift.Desired.Hash != currentDesired.Hash {
+		current.ConfigDrift.Desired.Hash != currentDesired.Hash ||
+		current.ConfigDrift.Applied.Hash != currentDesired.Hash {
 		t.Fatalf("current agent config drift = %+v", current.ConfigDrift)
 	}
-	if current.Rollout == nil || current.Rollout.Status != fleetStatePending || current.Rollout.Stage != fleetRolloutStagePending {
+	if current.Rollout == nil || current.Rollout.Status != fleetStateCurrent || current.Rollout.Stage != fleetRolloutStageApplied {
 		t.Fatalf("current agent rollout = %+v", current.Rollout)
 	}
 	if current.CommandPolicy == nil ||

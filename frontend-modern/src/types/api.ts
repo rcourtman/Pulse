@@ -459,6 +459,9 @@ export interface Agent {
   intervalSeconds?: number;
   agentVersion?: string;
   commandsEnabled?: boolean; // Whether AI command execution is enabled on this agent
+  appliedConfig?: AgentConfigFingerprint;
+  agentUpdate?: AgentUpdateStatus;
+  agentModules?: AgentModuleStatus[];
   tokenId?: string;
   tokenName?: string;
   tokenHint?: string;
@@ -471,6 +474,30 @@ export interface Agent {
   linkedNodeId?: string; // ID of PVE node this agent is running on
   linkedVmId?: string; // ID of VM this agent is running inside
   linkedContainerId?: string; // ID of container this agent is running inside
+}
+
+export interface AgentConfigFingerprint {
+  version: string;
+  hash: string;
+}
+
+export interface AgentUpdateStatus {
+  state: 'idle' | 'checking' | 'update-available' | 'updating' | 'error' | 'disabled';
+  autoUpdate: boolean;
+  updatedFrom?: string;
+  availableVersion?: string;
+  lastCheckedAt?: string;
+  lastAttemptAt?: string;
+  lastSuccessAt?: string;
+  lastError?: string;
+}
+
+export interface AgentModuleStatus {
+  name: string;
+  enabled: boolean;
+  state: 'disabled' | 'starting' | 'retrying' | 'running';
+  lastError?: string;
+  updatedAt: string;
 }
 
 export interface HostNetworkInterface {

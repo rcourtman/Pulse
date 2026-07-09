@@ -25,6 +25,89 @@ const connectionFixture = (overrides: Partial<Connection> = {}): Connection => (
 });
 
 describe('visibleFleetGovernanceSignals', () => {
+	it('surfaces the failed module and its operator-facing reason', () => {
+		const signals = fleetGovernanceSignalsForConnection(
+			connectionFixture({
+				agentModules: [
+					{
+						name: 'docker',
+						enabled: true,
+						state: 'retrying',
+						lastError: 'cannot connect to /var/run/docker.sock',
+						updatedAt: '2026-07-09T12:00:00Z',
+					},
+				],
+				fleet: {
+					enrollmentState: 'enrolled',
+					livenessState: 'active',
+					versionDrift: 'current',
+					adapterHealth: 'degraded',
+					configRollout: 'reported',
+					credentialStatus: 'verified',
+					updateStatus: 'current',
+					remoteControl: 'disabled',
+				},
+			}),
+		);
+
+		expect(visibleFleetGovernanceSignals(signals)).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					key: 'module-health',
+					label: 'Docker module retrying',
+					detail: 'cannot connect to /var/run/docker.sock',
+					tone: 'warning',
+				}),
+			]),
+		);
+	});
+
+	it('keeps updater failures and disabled auto-update actionable', () => {
+		const failed = fleetGovernanceSignalsForConnection(
+			connectionFixture({
+				agentUpdate: {
+					state: 'error',
+					autoUpdate: true,
+					lastError: 'signature verification failed',
+				},
+				fleet: {
+					enrollmentState: 'enrolled',
+					livenessState: 'active',
+					versionDrift: 'behind',
+					adapterHealth: 'healthy',
+					configRollout: 'reported',
+					credentialStatus: 'verified',
+					updateStatus: 'failed',
+					remoteControl: 'disabled',
+				},
+			}),
+		);
+		const disabled = fleetGovernanceSignalsForConnection(
+			connectionFixture({
+				fleet: {
+					enrollmentState: 'enrolled',
+					livenessState: 'active',
+					versionDrift: 'behind',
+					adapterHealth: 'healthy',
+					configRollout: 'reported',
+					credentialStatus: 'verified',
+					updateStatus: 'disabled',
+					remoteControl: 'disabled',
+				},
+			}),
+		);
+
+		expect(failed.find((signal) => signal.key === 'updates')).toMatchObject({
+			label: 'Agent update failed',
+			detail: 'signature verification failed',
+			tone: 'critical',
+		});
+		expect(disabled.find((signal) => signal.key === 'updates')).toMatchObject({
+			label: 'Auto-update off',
+			tone: 'warning',
+		});
+	});
+
   it('hides passive agent config fingerprint handshakes while preserving raw fleet facts', () => {
     const rawSignals = fleetGovernanceSignalsForConnection(
       connectionFixture({

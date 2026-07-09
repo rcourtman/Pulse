@@ -1945,8 +1945,9 @@ func TestWindowsServiceRuntimeStartsHealthServer(t *testing.T) {
 
 	required := []string{
 		`var ready atomic.Bool`,
-		`startHealthServer(ctx, ws.cfg.HealthAddr, &ready, &ws.logger)`,
-		`ready.Store(true)`,
+		`runtimeStatus := newRuntimeHealth(&ready`,
+		`startHealthServer(ctx, ws.cfg.HealthAddr, &ready, &ws.logger, runtimeStatus)`,
+		`runtimeStatus.setState("host", moduleStateRunning, nil)`,
 		`agentUp.Set(1)`,
 		`defer agentUp.Set(0)`,
 	}

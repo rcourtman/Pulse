@@ -106,6 +106,30 @@ func TestNew_WithKubeconfig(t *testing.T) {
 	}
 }
 
+func TestNew_RejectsInvalidPulseCABundle(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/version" {
+			_, _ = w.Write([]byte(`{"gitVersion":"v1.36.2"}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	tmp := t.TempDir()
+	kubeconfigPath := filepath.Join(tmp, "config")
+	writeTestKubeconfig(t, kubeconfigPath, server.URL, "ctx-ca")
+	caPath := filepath.Join(tmp, "invalid-ca.pem")
+	if err := os.WriteFile(caPath, []byte("not a certificate"), 0o600); err != nil {
+		t.Fatalf("write invalid CA: %v", err)
+	}
+
+	_, err := New(Config{APIToken: "token", KubeconfigPath: kubeconfigPath, CACertPath: caPath})
+	if err == nil || !strings.Contains(err.Error(), "configure Pulse TLS client") {
+		t.Fatalf("expected invalid Pulse CA error, got %v", err)
+	}
+}
+
 func TestNormalizePulseURL(t *testing.T) {
 	tests := []struct {
 		name      string

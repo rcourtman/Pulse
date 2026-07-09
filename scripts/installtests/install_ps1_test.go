@@ -46,6 +46,27 @@ func TestInstallPS1DockerModeDefaultsHostOff(t *testing.T) {
 	}
 }
 
+func TestInstallPS1PersistsAndVerifiesServerFingerprint(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
+	if err != nil {
+		t.Fatalf("read install.ps1: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`[string]$ServerFingerprint = $env:PULSE_SERVER_FINGERPRINT,`,
+		`$sha256.ComputeHash($certificate.GetRawCertData())`,
+		`$lines += "PULSE_SERVER_FINGERPRINT='$ServerFingerprint'"`,
+		`$ServerFingerprint = Get-ConnectionStateValue "PULSE_SERVER_FINGERPRINT"`,
+		`$ServiceArgs += @("--server-fingerprint", "` + "`" + `"$ServerFingerprint` + "`" + `"")`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.ps1 missing server-fingerprint lifecycle contract: %s", needle)
+		}
+	}
+}
+
 func TestInstallPS1AllowsMissingTokenForOptionalAuth(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
 	if err != nil {
@@ -164,7 +185,7 @@ func TestInstallPS1UsesInsecureTlsForRuntimeTransport(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`function Invoke-WithOptionalInsecureTls {`,
-		`if ($AllowInsecure -or $null -ne $CustomCaCertificate) {`,
+		`if ($AllowInsecure -or $null -ne $CustomCaCertificate -or -not [string]::IsNullOrWhiteSpace($ServerFingerprint)) {`,
 		`if ($AllowInsecure) {`,
 		`return Test-CertificateTrustedByCustomCa -Certificate $certificate -CustomCaCertificate $CustomCaCertificate`,
 		`if ($Url.ToLowerInvariant().StartsWith("http://") -and -not $Insecure) {`,

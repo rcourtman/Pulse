@@ -319,8 +319,8 @@ test_go_module_security_dependency_floors() {
   output="$(cd "${ROOT_DIR}" && go list -m golang.org/x/net golang.org/x/crypto golang.org/x/sys)"
 
   assert_contains "Go module floor keeps x/net past restricted-outbound advisories" "${output}" "golang.org/x/net v0.56.0"
-  assert_contains "Go module floor keeps x/crypto aligned with x/net security floor" "${output}" "golang.org/x/crypto v0.53.0"
-  assert_contains "Go module floor keeps x/sys aligned with security module graph" "${output}" "golang.org/x/sys v0.46.0"
+  assert_contains "Go module floor keeps x/crypto aligned with x/net security floor" "${output}" "golang.org/x/crypto v0.54.0"
+  assert_contains "Go module floor keeps x/sys aligned with security module graph" "${output}" "golang.org/x/sys v0.47.0"
 }
 
 source "${HOT_DEV_RUNTIME_LIB}"

@@ -107,6 +107,25 @@ type ConnectionFleetCommandPolicy struct {
 	Reason      string `json:"reason,omitempty"`
 }
 
+type ConnectionAgentUpdateStatus struct {
+	State            string     `json:"state"`
+	AutoUpdate       bool       `json:"autoUpdate"`
+	UpdatedFrom      string     `json:"updatedFrom,omitempty"`
+	AvailableVersion string     `json:"availableVersion,omitempty"`
+	LastCheckedAt    *time.Time `json:"lastCheckedAt,omitempty"`
+	LastAttemptAt    *time.Time `json:"lastAttemptAt,omitempty"`
+	LastSuccessAt    *time.Time `json:"lastSuccessAt,omitempty"`
+	LastError        string     `json:"lastError,omitempty"`
+}
+
+type ConnectionAgentModuleStatus struct {
+	Name      string    `json:"name"`
+	Enabled   bool      `json:"enabled"`
+	State     string    `json:"state"`
+	LastError string    `json:"lastError,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
 // ConnectionError is the runtime error shape surfaced on a connection row.
 // Mirrors monitoring.ErrorDetail but lives in the api package so the type
 // stays stable if the internal monitoring shape evolves.
@@ -136,25 +155,27 @@ type ConnectionAgentIdentity struct {
 // per-type shapes that today require separate fetches and separate table
 // renderers.
 type Connection struct {
-	ID                   string                    `json:"id"`
-	Type                 ConnectionType            `json:"type"`
-	Name                 string                    `json:"name"`
-	Address              string                    `json:"address"`
-	HostAliases          []string                  `json:"hostAliases,omitempty"`
-	State                ConnectionState           `json:"state"`
-	StateReason          string                    `json:"stateReason,omitempty"`
-	Enabled              bool                      `json:"enabled"`
-	Surfaces             []string                  `json:"surfaces"`
-	Scope                map[string]bool           `json:"scope"`
-	LastSeen             *time.Time                `json:"lastSeen,omitempty"`
-	LastError            *ConnectionError          `json:"lastError,omitempty"`
-	Source               ConnectionSource          `json:"source"`
-	AgentIdentity        *ConnectionAgentIdentity  `json:"agentIdentity,omitempty"`
-	AgentVersion         string                    `json:"agentVersion,omitempty"`
-	ExpectedAgentVersion string                    `json:"expectedAgentVersion,omitempty"`
-	AgentUpdateAvailable bool                      `json:"agentUpdateAvailable,omitempty"`
-	Fleet                ConnectionFleetGovernance `json:"fleet"`
-	Capabilities         ConnectionCapabilities    `json:"capabilities"`
+	ID                   string                        `json:"id"`
+	Type                 ConnectionType                `json:"type"`
+	Name                 string                        `json:"name"`
+	Address              string                        `json:"address"`
+	HostAliases          []string                      `json:"hostAliases,omitempty"`
+	State                ConnectionState               `json:"state"`
+	StateReason          string                        `json:"stateReason,omitempty"`
+	Enabled              bool                          `json:"enabled"`
+	Surfaces             []string                      `json:"surfaces"`
+	Scope                map[string]bool               `json:"scope"`
+	LastSeen             *time.Time                    `json:"lastSeen,omitempty"`
+	LastError            *ConnectionError              `json:"lastError,omitempty"`
+	Source               ConnectionSource              `json:"source"`
+	AgentIdentity        *ConnectionAgentIdentity      `json:"agentIdentity,omitempty"`
+	AgentVersion         string                        `json:"agentVersion,omitempty"`
+	ExpectedAgentVersion string                        `json:"expectedAgentVersion,omitempty"`
+	AgentUpdateAvailable bool                          `json:"agentUpdateAvailable,omitempty"`
+	AgentUpdate          *ConnectionAgentUpdateStatus  `json:"agentUpdate,omitempty"`
+	AgentModules         []ConnectionAgentModuleStatus `json:"agentModules,omitempty"`
+	Fleet                ConnectionFleetGovernance     `json:"fleet"`
+	Capabilities         ConnectionCapabilities        `json:"capabilities"`
 }
 
 type ConnectionSystemComponentRole string

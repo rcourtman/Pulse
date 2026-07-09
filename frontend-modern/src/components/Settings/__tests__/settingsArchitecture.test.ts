@@ -43,6 +43,7 @@ import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import connectionsTableModelSource from '../connectionsTableModel.ts?raw';
+import connectionsApiSource from '@/api/connections.ts?raw';
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import infrastructureSourcePickerSource from '../InfrastructureSourcePicker.tsx?raw';
 import discoverySettingsFormSource from '../DiscoverySettingsForm.tsx?raw';
@@ -103,6 +104,15 @@ const settingsRuntimeSources = import.meta.glob(['../*.tsx', '../ConnectionEdito
 }) as Record<string, string>;
 
 describe('settings architecture guardrails', () => {
+  it('keeps Unified Agent lifecycle failures on the shared connections contract', () => {
+    expect(connectionsApiSource).toContain("| 'failed'");
+    expect(connectionsApiSource).toContain('agentUpdate?: ConnectionAgentUpdateStatus;');
+    expect(connectionsApiSource).toContain('agentModules?: ConnectionAgentModuleStatus[];');
+    expect(connectionsTableModelSource).toContain("key: 'module-health'");
+    expect(connectionsTableModelSource).toContain("label: 'Agent update failed'");
+    expect(connectionsTableModelSource).toContain('update?.lastError');
+  });
+
   it('keeps Settings on the canonical page shell boundary', () => {
     expect(settingsSource).toContain("import { SettingsDialogs } from './SettingsDialogs';");
     expect(settingsSource).toContain("import { SettingsPageShell } from './SettingsPageShell';");

@@ -827,6 +827,63 @@ func TestApplyHostReportUsesReceiptTimeForSkewedAgentClockLiveness(t *testing.T)
 	}
 }
 
+func TestApplyHostReportPreservesAgentLifecycleEvidence(t *testing.T) {
+	monitor := newTestMonitor(t)
+	checkedAt := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:          "lifecycle-agent",
+			Version:     "6.0.4",
+			UpdatedFrom: "6.0.3",
+			AppliedConfig: &agentshost.ConfigFingerprint{
+				Version: "pulse-agent-config-v1",
+				Hash:    "sha256:applied",
+			},
+			Update: &agentshost.UpdateStatus{
+				State:            "error",
+				AutoUpdate:       true,
+				AvailableVersion: "6.0.5",
+				LastCheckedAt:    &checkedAt,
+				LastError:        "signature verification failed",
+			},
+			Modules: []agentshost.ModuleStatus{{
+				Name: "docker", Enabled: true, State: "retrying", LastError: "socket unavailable", UpdatedAt: checkedAt,
+			}},
+		},
+		Host: agentshost.HostInfo{ID: "machine-lifecycle", Hostname: "lifecycle.local", Platform: "linux"},
+	}
+
+	host, err := monitor.ApplyHostReport(report, &config.APITokenRecord{ID: "lifecycle-token"})
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	if host.AppliedConfig == nil || host.AppliedConfig.Version != "pulse-agent-config-v1" || host.AppliedConfig.Hash != "sha256:applied" {
+		t.Fatalf("applied config = %+v", host.AppliedConfig)
+	}
+	if host.AgentUpdate == nil || host.AgentUpdate.State != "error" || host.AgentUpdate.LastCheckedAt == nil || !host.AgentUpdate.LastCheckedAt.Equal(checkedAt) {
+		t.Fatalf("agent update = %+v", host.AgentUpdate)
+	}
+	if host.AgentUpdate.LastError != "signature verification failed" {
+		t.Fatalf("last update error = %q", host.AgentUpdate.LastError)
+	}
+	if len(host.AgentModules) != 1 || host.AgentModules[0].Name != "docker" || host.AgentModules[0].LastError != "socket unavailable" {
+		t.Fatalf("agent modules = %+v", host.AgentModules)
+	}
+	if host.AgentUpdate.UpdatedFrom != "6.0.3" || host.AgentUpdate.LastSuccessAt == nil {
+		t.Fatalf("successful restart evidence = %+v", host.AgentUpdate)
+	}
+
+	report.Agent.UpdatedFrom = ""
+	report.Agent.Update = &agentshost.UpdateStatus{State: "idle", AutoUpdate: true}
+	host, err = monitor.ApplyHostReport(report, &config.APITokenRecord{ID: "lifecycle-token"})
+	if err != nil {
+		t.Fatalf("ApplyHostReport second report: %v", err)
+	}
+	if host.AgentUpdate == nil || host.AgentUpdate.UpdatedFrom != "6.0.3" || host.AgentUpdate.LastSuccessAt == nil {
+		t.Fatalf("second report lost successful restart evidence: %+v", host.AgentUpdate)
+	}
+}
+
 func TestApplyDockerReportUsesReceiptTimeForSkewedAgentClockLiveness(t *testing.T) {
 	monitor := newTestMonitor(t)
 
