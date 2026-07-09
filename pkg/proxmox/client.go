@@ -88,20 +88,19 @@ func parseFlexibleIntString(raw string) (int, error) {
 }
 
 func int64ToInt(v int64) (int, error) {
-	maxInt := int64(int(^uint(0) >> 1))
-	minInt := -maxInt - 1
-	if v > maxInt || v < minInt {
+	parsed, err := strconv.Atoi(strconv.FormatInt(v, 10))
+	if err != nil {
 		return 0, fmt.Errorf("integer %d exceeds int range", v)
 	}
-	return int(v), nil
+	return parsed, nil
 }
 
 func uint64ToInt(v uint64) (int, error) {
-	maxInt := uint64(^uint(0) >> 1)
-	if v > maxInt {
+	parsed, err := strconv.Atoi(strconv.FormatUint(v, 10))
+	if err != nil {
 		return 0, fmt.Errorf("integer %d exceeds int range", v)
 	}
-	return int(v), nil
+	return parsed, nil
 }
 
 func floatToIntTrunc(v float64) (int, error) {
