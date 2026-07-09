@@ -876,6 +876,41 @@ Companion drill:
   can expose invoice/license data, consume verification, or mutate Stripe or
   license state before the canonical case decision allows it.
 
+## Gate: `stable-patch-unattended-release-path`
+
+- Owner lanes: `L1`
+- Risk covered:
+  A stable patch can publish while its demo deployment is detached, stale
+  release code can bypass preflight, or a private-network failure can consume
+  operator time and force manual SSH deployment after the public cut.
+- Primary runtime surfaces:
+  `.github/workflows/create-release.yml`
+  `.github/workflows/release-dry-run.yml`
+  `.github/workflows/update-demo-server.yml`
+  `.github/scripts/check-demo-reachability.sh`
+  `scripts/trigger-stable-patch.sh`
+- Automated proof:
+  `python3 -m unittest scripts.release_control.resolve_release_promotion_test scripts.release_control.release_promotion_policy_test`
+  `go test ./scripts/installtests -run 'Test(Demo|DeployDemo|UpdateDemo|Release)' -count=1`
+- Manual scenario:
+  1. Push the exact candidate commit to the governed stable branch.
+  2. Dispatch `./scripts/trigger-stable-patch.sh --dry-run <version>` and do not
+     publish another release.
+  3. Confirm the run passes `Verify Current Stable Demo Path (No Mutation)` on
+     a GitHub-hosted runner, including Tailscale ping, TCP/22, SSH host identity,
+     current stable version, frontend parity, public health, and browser smoke.
+  4. Confirm the public demo version and health remain unchanged after the run.
+- Pass when:
+  The exact-SHA dry run succeeds without host mutation, routine patch metadata
+  rejects the documented RC-required risk paths, and the publish DAG awaits
+  Docker, demo, public verification, and the definitive terminal verdict.
+- Latest exercised record:
+  `docs/release-control/v6/internal/records/stable-patch-unattended-release-path-2026-07-09.md`
+- Block release if:
+  The exact-SHA dry run is missing or older than 24 hours, the no-mutation demo
+  path fails, demo deployment is detached from the release DAG, or routine mode
+  can bypass a same-version RC or an RC-required runtime change.
+
 ## Gate Ownership Rule
 
 Update these machine-visible gate states in `docs/release-control/v6/internal/status.json`

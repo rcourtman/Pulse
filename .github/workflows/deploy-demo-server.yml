@@ -133,11 +133,25 @@ jobs:
             -o pulse ./cmd/pulse/
 
       - name: Tailscale
-        uses: tailscale/github-action@4e4c49acaa9818630ce0bd7a564372c17e33fb4d # v2
+        id: tailscale
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:infra
+          version: '1.94.2'
+          ping: ${{ secrets.DEMO_SERVER_HOST }}
+
+      - name: Diagnose Tailscale setup failure
+        if: failure() && steps.tailscale.outcome == 'failure'
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+        run: bash .github/scripts/check-demo-reachability.sh diagnose
+
+      - name: Verify demo network path
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+        run: bash .github/scripts/check-demo-reachability.sh
 
       - name: Setup SSH
         env:

@@ -119,8 +119,9 @@ Cloud, and self-hosted production users.
 
 ## Stable Promotion Rules
 
-1. A stable tag must be promoted from a commit that has already been exercised
-   as a published prerelease.
+1. A first stable release, a stable minor release, and every patch that crosses
+   one of the RC-required risk boundaries below must be promoted from a commit
+   that has already been exercised as a published prerelease.
 2. A prerelease git tag counts as stable-promotion lineage only if that prerelease was
    actually published through the governed prerelease path; accidental or abandoned git
    tags do not satisfy the stable-promotion requirement.
@@ -130,24 +131,26 @@ Cloud, and self-hosted production users.
 4. Every stable promotion requires:
    - Applicable items in `PRE_RELEASE_CHECKLIST.md` complete.
    - Applicable entries in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` cleared.
+   - The previous stable rollback target and exact reinstall command recorded.
+5. A first stable release or RC-required stable promotion additionally requires:
    - No known unresolved RC-era user-visible issues intended for the v6 GA
      scope remain open. Each one must be fixed in the candidate, proven
      invalid with evidence, or conservatively superseded with the original
      failure resolved or explicitly narrowed.
-   - The previous stable rollback target and exact reinstall command recorded.
    - A live release-pipeline exercise already completed for the promoted prerelease tag,
      not only YAML lint or static workflow validation.
+6. The first v6 GA promotion additionally requires:
    - The locked 90-day v5 maintenance-only policy in
      `V5_MAINTENANCE_SUPPORT_POLICY.md` and the exact end-of-support notice
      ready to publish with the promotion.
-5. Normal stable promotions require a minimum 72-hour prerelease soak after the
-   candidate is available to internal or staging-like users.
-6. Hotfix exception:
-   - A shorter soak is allowed only for narrowly scoped fixes to active
-     customer harm.
+7. RC-derived stable promotions require a minimum 72-hour prerelease soak after
+   the candidate is available to internal or staging-like users.
+8. Hotfix exception:
+   - Bypassing an RC requirement or shortening an RC soak is allowed only for
+     narrowly scoped fixes to active customer harm.
    - The exception plus the rollback target and exact reinstall command must be
      recorded in the release notes or release ticket before promotion.
-7. v6.0.0 owner-risk exception:
+9. v6.0.0 owner-risk exception:
    - On 2026-07-02, after seven v6 release candidates, the release owner
      explicitly approved promoting the current `pulse/v6-release` branch with
      accumulated post-RC7 changes without RC8, another soak, or additional
@@ -159,6 +162,37 @@ Cloud, and self-hosted production users.
      branch after the RC line, keep rollback and v5 maintenance dates explicit,
      and retain the prior governed release-pipeline rehearsal evidence as
      automation lineage rather than claiming the post-RC7 changes were RC-tested.
+
+## Routine Stable Patch Path
+
+1. A normal stable patch may omit a same-version RC only when all of these are
+   true:
+   - the rollback target is the latest preceding stable tag and the candidate
+     descends from it;
+   - no same-version RC tag already exists;
+   - the diff does not touch authentication/authorization/tenant isolation,
+     licensing/entitlement/billing authority, persisted data/schema/migration,
+     relay/mobile trust protocol, or installer/updater/rollback execution;
+   - the canonical stable release-notes packet exists;
+   - the mobile-impact gate either proves no mobile-facing change or records
+     current candidate evidence; and
+   - `Release Dry Run` passed for the exact candidate SHA within the previous
+     24 hours. That run must include the no-mutation stable-demo path check.
+2. `scripts/trigger-stable-patch.sh` is the standard operator entrypoint. Run
+   it once with `--dry-run`, monitor asynchronously, then run it once without
+   `--dry-run`. It derives rollback and release notes, refuses local-only or
+   dirty state, and supplies the workflow metadata without interactive prompts.
+3. Creating a same-version RC or touching an RC-required path moves the patch
+   onto the RC promotion path. The resolver enforces that boundary. Do not use
+   the routine helper to relabel a risky patch as routine.
+4. `--emergency-hotfix-reason` is the narrow escape hatch for active customer
+   harm. It does not remove the exact-SHA dry-run requirement, and the reason is
+   recorded in the release metadata.
+5. The release workflow must await Docker publication, stable demo deployment,
+   public health/browser verification, install smoke, Helm publication,
+   floating-tag promotion, and private Pro promotion where applicable. The
+   terminal `Definitive Release Verdict` job is the one release result; an
+   asynchronously dispatched demo workflow is not release completion.
 
 ## Rollout Rules
 

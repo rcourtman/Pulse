@@ -125,6 +125,9 @@ TLS floor in the dynamic config.
 89. `scripts/release_asset_common.sh`
 90. `scripts/backfill-release-assets.sh`
 91. `.github/workflows/backfill-release-assets.yml`
+92. `.github/scripts/check-demo-reachability.sh`
+93. `.github/scripts/setup-demo-ssh.sh`
+94. `scripts/trigger-stable-patch.sh`
 
 ## Shared Boundaries
 
@@ -675,14 +678,17 @@ TLS floor in the dynamic config.
    `scripts/install-docker.sh` fallback from the final RC image tag to the
    stable `6.0.0` image tag in the same commit as `VERSION=6.0.0`.
    Stable patch releases after `6.0.0` stay on this same governed release
-   boundary but do not need a fabricated same-version RC tag when the release
-   owner is intentionally publishing a hotfix patch from the current stable
-   branch. In that case `resolve_release_promotion.py` may accept an omitted
-   `promoted_from_tag` only for a stable semver patch version with
-   `hotfix_exception=true`, a non-empty `hotfix_reason`, and
-   `rollback_version` set to the previous stable tag. Non-hotfix stable
-   promotions, and any first-GA or minor-line stable promotion, still require
-   explicit promoted prerelease lineage and soak proof. Stable patch release
+   boundary but do not need a fabricated same-version RC tag for a routine
+   patch. `resolve_release_promotion.py` owns the machine boundary: the
+   rollback target must be the latest preceding stable tag, the candidate must
+   descend from it, no same-version RC may already exist, and the diff may not
+   touch authentication/tenant isolation, licensing/billing authority,
+   persisted-data/schema migration, relay/mobile trust protocol, or
+   installer/updater/rollback execution. Those risk classes require exercised
+   RC lineage unless active customer harm is recorded with
+   `hotfix_exception=true` and a non-empty `hotfix_reason`. First-GA and minor
+   stable promotions still require explicit promoted prerelease lineage and
+   soak proof. Stable patch release
    packets must also enumerate every customer-visible support fix included in
    the cut, and the release-asset proof must pin the current packet to those
    runtime fixes so a patch that includes support work cannot ship as a
@@ -1115,6 +1121,17 @@ the manual `trigger-release*.sh` entrypoints must all derive their governed
 release line from control-plane metadata before they touch public artifacts or
 deployment targets, rather than treating tag names or workflow triggers as
 enough proof on their own.
+For routine stable patches, `scripts/trigger-stable-patch.sh` is the
+noninteractive operator path. It derives the latest stable rollback, consumes
+the canonical `docs/releases/RELEASE_NOTES_vX.Y.Z.md` packet, infers
+`no-mobile-impact` only when no mobile-facing path changed, and dispatches one
+dry-run or publish workflow. `create-release.yml` must independently require a
+successful `workflow_dispatch` `Release Dry Run` for the exact candidate SHA
+and version from the previous 24 hours, so the UI and alternate helpers cannot
+bypass the preflight. That dry run must call `update-demo-server.yml` in
+verification-only mode against the latest stable release. It must prove
+Tailscale, SSH host identity, runtime version, frontend parity, public health,
+and browser smoke without changing the host.
 That same release-validation boundary also owns draft-versus-published asset
 state. When `.github/workflows/create-release.yml` runs in `draft_only` mode,
 it must pass the real draft state into `.github/workflows/validate-release-assets.yml`
@@ -1188,10 +1205,19 @@ Those same governed demo deploy/update workflows also own the runner-to-host
 network path. They must establish the canonical Tailscale connectivity step
 before SSH setup so stable or preview targets may stay on governed private
 hostnames or Tailscale IPs, rather than silently depending on public SSH
-reachability from GitHub-hosted runners. After Tailscale setup, shared SSH
+reachability from GitHub-hosted runners. The workflows must use the current
+pinned Tailscale GitHub Action, its target `ping` readiness gate, and the shared
+`.github/scripts/check-demo-reachability.sh` TCP/22 diagnostic before SSH key
+capture. A successful tailnet join alone is not connectivity proof. After that
+network preflight, shared SSH
 setup must wait for configured demo hostnames to resolve, accept configured IP
 literals without a DNS precheck, and then capture host keys with bounded
-retries before any installer or binary copy runs; a one-shot `ssh-keyscan`
+short retries before any installer or binary copy runs; a long `ssh-keyscan`
+loop must not hide an ACL, peer-propagation, firewall, or sshd failure.
+`create-release.yml` must call the update workflow as an awaited reusable job,
+and its terminal `Definitive Release Verdict` must require stable demo runtime,
+frontend, public health, and browser proof. An asynchronous dispatch or manual
+SSH deployment is not release completion. A one-shot `ssh-keyscan`
 against a private demo target is not sufficient release or deploy proof.
 Those same workflows also own customer-visible browser truth for the public
 demo shell. Health checks and entry-asset parity are necessary but not

@@ -194,7 +194,12 @@ class ResolveReleasePromotionTest(unittest.TestCase):
             hotfix_exception=True,
             hotfix_reason_input="Patch release for v6.0.1 agent upgrade recovery.",
             release_notes_input="",
+            list_stable_tags_fn=lambda: ["v6.0.1"],
+            list_same_version_rc_tags_fn=lambda version: ["v6.0.2-rc.1"],
+            changed_paths_fn=lambda tag: ["internal/api/auth.go"],
             tag_exists_fn=lambda tag: tag == "v6.0.1",
+            tag_commit_fn=lambda tag: "rollback-commit",
+            head_descends_from_fn=lambda commit: commit == "rollback-commit",
         )
 
         self.assertEqual(metadata["promoted_from_tag"], "")
@@ -206,9 +211,50 @@ class ResolveReleasePromotionTest(unittest.TestCase):
             "Patch release for v6.0.1 agent upgrade recovery.",
         )
         self.assertEqual(metadata["soak_hours"], "")
+        self.assertEqual(metadata["promotion_mode"], "emergency-stable-patch")
 
-    def test_stable_patch_without_promoted_tag_requires_hotfix_exception(self) -> None:
-        with self.assertRaisesRegex(ValueError, "Stable promotion requires promoted_from_tag"):
+    def test_routine_stable_patch_can_omit_rc_ceremony(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.0.2",
+            promoted_from_tag_input="",
+            rollback_version_input="6.0.1",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=False,
+            hotfix_reason_input="",
+            release_notes_input="bounded customer fixes",
+            list_stable_tags_fn=lambda: ["v5.1.35", "v6.0.1"],
+            list_same_version_rc_tags_fn=lambda version: [],
+            changed_paths_fn=lambda tag: ["frontend-modern/src/features/settings/Settings.tsx"],
+            tag_exists_fn=lambda tag: tag == "v6.0.1",
+            tag_commit_fn=lambda tag: "rollback-commit",
+            head_descends_from_fn=lambda commit: commit == "rollback-commit",
+        )
+
+        self.assertEqual(metadata["promotion_mode"], "routine-stable-patch")
+        self.assertEqual(metadata["is_stable_patch"], "true")
+        self.assertEqual(metadata["rollback_tag"], "v6.0.1")
+        self.assertEqual(metadata["hotfix_exception"], "false")
+
+    def test_routine_stable_patch_requires_latest_stable_rollback(self) -> None:
+        with self.assertRaisesRegex(ValueError, "latest preceding stable tag v6.0.1"):
+            resolver.resolve_metadata(
+                version="6.0.2",
+                promoted_from_tag_input="",
+                rollback_version_input="6.0.0",
+                ga_date_input="",
+                v5_eos_date_input="",
+                hotfix_exception=False,
+                hotfix_reason_input="",
+                release_notes_input="bounded customer fixes",
+                list_stable_tags_fn=lambda: ["v6.0.0", "v6.0.1"],
+                list_same_version_rc_tags_fn=lambda version: [],
+                changed_paths_fn=lambda tag: [],
+                tag_exists_fn=lambda tag: True,
+            )
+
+    def test_routine_stable_patch_requires_rc_for_risk_changes(self) -> None:
+        with self.assertRaisesRegex(ValueError, "RC-required runtime changes"):
             resolver.resolve_metadata(
                 version="6.0.2",
                 promoted_from_tag_input="",
@@ -217,9 +263,47 @@ class ResolveReleasePromotionTest(unittest.TestCase):
                 v5_eos_date_input="",
                 hotfix_exception=False,
                 hotfix_reason_input="",
-                release_notes_input="",
-                tag_exists_fn=lambda tag: tag == "v6.0.1",
+                release_notes_input="authentication correction",
+                list_stable_tags_fn=lambda: ["v6.0.1"],
+                list_same_version_rc_tags_fn=lambda version: [],
+                changed_paths_fn=lambda tag: ["internal/api/auth.go"],
+                tag_exists_fn=lambda tag: True,
+                tag_commit_fn=lambda tag: "rollback-commit",
+                head_descends_from_fn=lambda commit: True,
             )
+
+    def test_routine_stable_patch_requires_rc_when_candidate_exists(self) -> None:
+        with self.assertRaisesRegex(ValueError, "same-version release candidates already exist"):
+            resolver.resolve_metadata(
+                version="6.0.2",
+                promoted_from_tag_input="",
+                rollback_version_input="6.0.1",
+                ga_date_input="",
+                v5_eos_date_input="",
+                hotfix_exception=False,
+                hotfix_reason_input="",
+                release_notes_input="bounded customer fixes",
+                list_stable_tags_fn=lambda: ["v6.0.1"],
+                list_same_version_rc_tags_fn=lambda version: ["v6.0.2-rc.1"],
+                changed_paths_fn=lambda tag: [],
+                tag_exists_fn=lambda tag: True,
+                tag_commit_fn=lambda tag: "rollback-commit",
+                head_descends_from_fn=lambda commit: True,
+            )
+
+    def test_routine_patch_risk_classifier_covers_governed_categories(self) -> None:
+        risks = resolver.classify_routine_patch_risks(
+            [
+                "internal/api/auth.go",
+                "pkg/licensing/license.go",
+                "internal/storage/schema.go",
+                "internal/relay/client.go",
+                "internal/updates/apply.go",
+                "frontend-modern/src/App.tsx",
+            ]
+        )
+        self.assertEqual(len(risks), 5)
+        self.assertFalse(any("frontend-modern/src/App.tsx" in risk for risk in risks))
 
     def test_stable_patch_hotfix_without_promoted_tag_requires_reason(self) -> None:
         with self.assertRaisesRegex(ValueError, "hotfix_reason is required"):
@@ -232,7 +316,12 @@ class ResolveReleasePromotionTest(unittest.TestCase):
                 hotfix_exception=True,
                 hotfix_reason_input="",
                 release_notes_input="",
+                list_stable_tags_fn=lambda: ["v6.0.1"],
+                list_same_version_rc_tags_fn=lambda version: [],
+                changed_paths_fn=lambda tag: [],
                 tag_exists_fn=lambda tag: tag == "v6.0.1",
+                tag_commit_fn=lambda tag: "rollback-commit",
+                head_descends_from_fn=lambda commit: True,
             )
 
     def test_stable_hotfix_requires_reason(self) -> None:

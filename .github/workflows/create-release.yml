@@ -61,6 +61,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -81,6 +82,9 @@ jobs:
       v5_eos_date: ${{ steps.promotion.outputs.v5_eos_date }}
       hotfix_exception: ${{ steps.promotion.outputs.hotfix_exception }}
       hotfix_reason: ${{ steps.promotion.outputs.hotfix_reason }}
+      promotion_mode: ${{ steps.promotion.outputs.promotion_mode }}
+      is_stable_patch: ${{ steps.promotion.outputs.is_stable_patch }}
+      preflight_run_url: ${{ steps.preflight.outputs.run_url }}
       historical_asset_backfill_only: ${{ steps.extract.outputs.historical_asset_backfill_only }}
     steps:
       - name: Extract version
@@ -204,6 +208,36 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           echo "[OK] Promotion policy validated for ${TAG}"
+
+      - name: Require recent exact-SHA stable patch preflight
+        id: preflight
+        if: ${{ steps.extract.outputs.historical_asset_backfill_only != 'true' && steps.promotion.outputs.is_stable_patch == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.extract.outputs.version }}
+        run: |
+          set -euo pipefail
+          CUTOFF="$(date -u -d '24 hours ago' '+%Y-%m-%dT%H:%M:%SZ')"
+          RUN="$(gh api "repos/${{ github.repository }}/actions/workflows/release-dry-run.yml/runs?event=workflow_dispatch&status=success&head_sha=${GITHUB_SHA}&per_page=20" \
+            | jq -c \
+            --arg sha "$GITHUB_SHA" \
+            --arg title "Release Dry Run v${VERSION}" \
+            --arg cutoff "$CUTOFF" \
+            '[.workflow_runs[] | select(
+              .conclusion == "success"
+              and .head_sha == $sha
+              and .display_title == $title
+              and .created_at >= $cutoff
+            )] | sort_by(.created_at) | last // empty')"
+
+          if [ -z "$RUN" ]; then
+            echo "::error::Stable patch release requires a successful Release Dry Run for v${VERSION} at exact commit ${GITHUB_SHA} within the last 24 hours. Run ./scripts/trigger-stable-patch.sh --dry-run ${VERSION}, wait for success, then dispatch once."
+            exit 1
+          fi
+
+          RUN_URL="$(jq -r '.html_url' <<<"$RUN")"
+          echo "run_url=${RUN_URL}" >> "$GITHUB_OUTPUT"
+          echo "[OK] Exact-SHA release preflight passed: ${RUN_URL}"
 
   # Frontend checks run in parallel with backend tests
   frontend_checks:
@@ -1044,30 +1078,6 @@ jobs:
         if: ${{ github.event.inputs.draft_only == 'true' }}
         run: 'echo "Draft-only mode: ${{ steps.create_release.outputs.release_url }}"'
 
-      - name: Trigger Docker image publish
-        if: ${{ github.event.inputs.draft_only != 'true' }}
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
-          REQUIRED_BRANCH: ${{ needs.prepare.outputs.required_branch }}
-        run: |
-          gh workflow run publish-docker.yml --ref "${REQUIRED_BRANCH}" -f tag="${{ needs.prepare.outputs.tag }}"
-          echo "[OK] Docker publish workflow dispatched from ${REQUIRED_BRANCH}"
-
-      - name: Trigger demo server update
-        if: ${{ github.event.inputs.draft_only != 'true' }}
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
-          REQUIRED_BRANCH: ${{ needs.prepare.outputs.required_branch }}
-        run: |
-          if [ "${{ needs.prepare.outputs.is_prerelease }}" = "true" ]; then
-            echo "[OK] Prerelease public demo update skipped; post-GA demo target is stable only."
-            exit 0
-          fi
-          gh workflow run update-demo-server.yml --ref "${REQUIRED_BRANCH}" -f tag="${{ needs.prepare.outputs.tag }}" -f target="stable"
-          echo "[OK] Demo server update dispatched for stable from ${REQUIRED_BRANCH}"
-
       - name: Summary
         run: |
           echo "[SUCCESS] Release published!"
@@ -1127,11 +1137,27 @@ jobs:
           echo "[SUCCESS] Historical release assets repaired"
           echo "Release: ${{ needs.prepare.outputs.tag }}"
 
+  publish_docker:
+    needs:
+      - prepare
+      - create_release
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/publish-docker.yml
+    secrets: inherit
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+
   validate_release_assets:
     needs:
       - prepare
       - create_release
-    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+      - publish_docker
+    if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && (github.event.inputs.draft_only == 'true' || needs.publish_docker.result == 'success') }}
     permissions:
       contents: write
       issues: write
@@ -1173,6 +1199,20 @@ jobs:
       tag: ${{ needs.prepare.outputs.tag }}
       version: ${{ needs.prepare.outputs.version }}
       repository: ${{ github.repository }}
+
+  update_stable_demo:
+    needs:
+      - prepare
+      - validate_release_assets
+    if: ${{ always() && needs.prepare.result == 'success' && needs.validate_release_assets.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && github.event.inputs.draft_only != 'true' && needs.prepare.outputs.is_prerelease != 'true' && startsWith(needs.prepare.outputs.version, '6.') }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/update-demo-server.yml
+    secrets: inherit
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+      target: stable
+      verify_only: false
 
   # Publish the Helm chart for this release. publish-helm-chart.yml also
   # listens for `release: published` events directly, but the create_release
@@ -1337,3 +1377,65 @@ jobs:
             -f r2_prefix="${r2_prefix}" \
             -f allow_ga_prefix="${allow_ga_publish}"
           wait_for_workflow rcourtman/pulse-pro "Promote Paid Runtime Release" main "${promote_started_at}" "private Pro live promotion" 3600
+
+  release_verdict:
+    name: Definitive Release Verdict
+    needs:
+      - prepare
+      - create_release
+      - publish_docker
+      - validate_release_assets
+      - install_sh_smoke
+      - update_stable_demo
+      - publish_helm_chart
+      - promote_floating_tags
+      - publish_private_pro_runtime
+    if: ${{ always() && needs.prepare.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Enforce terminal release outcomes
+        env:
+          DRAFT_ONLY: ${{ github.event.inputs.draft_only }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          IS_PRERELEASE: ${{ needs.prepare.outputs.is_prerelease }}
+          PREFLIGHT_RUN_URL: ${{ needs.prepare.outputs.preflight_run_url }}
+          CREATE_RESULT: ${{ needs.create_release.result }}
+          DOCKER_RESULT: ${{ needs.publish_docker.result }}
+          VALIDATE_RESULT: ${{ needs.validate_release_assets.result }}
+          INSTALL_RESULT: ${{ needs.install_sh_smoke.result }}
+          DEMO_RESULT: ${{ needs.update_stable_demo.result }}
+          HELM_RESULT: ${{ needs.publish_helm_chart.result }}
+          FLOATING_RESULT: ${{ needs.promote_floating_tags.result }}
+          PRIVATE_PRO_RESULT: ${{ needs.publish_private_pro_runtime.result }}
+        run: |
+          set -euo pipefail
+          require_result() {
+            local name="$1"
+            local actual="$2"
+            local expected="$3"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::${name} ended as ${actual}; expected ${expected}."
+              return 1
+            fi
+          }
+
+          require_result "release assembly" "$CREATE_RESULT" success
+          require_result "release asset validation" "$VALIDATE_RESULT" success
+
+          if [ "${DRAFT_ONLY:-false}" != "true" ]; then
+            require_result "Docker publication" "$DOCKER_RESULT" success
+            require_result "install.sh smoke" "$INSTALL_RESULT" success
+            require_result "Helm publication" "$HELM_RESULT" success
+            require_result "floating-tag promotion" "$FLOATING_RESULT" success
+            if [[ "$VERSION" == 6.* ]]; then
+              require_result "private Pro publication" "$PRIVATE_PRO_RESULT" success
+              if [ "$IS_PRERELEASE" != "true" ]; then
+                require_result "stable demo deployment and verification" "$DEMO_RESULT" success
+              fi
+            fi
+          fi
+
+          echo "Release verdict passed for v${VERSION}."
+          if [ -n "${PREFLIGHT_RUN_URL:-}" ]; then
+            echo "Stable patch preflight: ${PREFLIGHT_RUN_URL}"
+          fi

@@ -37,7 +37,8 @@ if is_ip_literal "$DEMO_SERVER_HOST"; then
   echo "Demo SSH host is an IP literal; skipping DNS resolution wait."
 fi
 
-MAX_SSH_SETUP_ATTEMPTS=18
+MAX_SSH_SETUP_ATTEMPTS="${DEMO_SSH_SETUP_ATTEMPTS:-3}"
+SSH_SETUP_RETRY_SECONDS="${DEMO_SSH_SETUP_RETRY_SECONDS:-5}"
 for attempt in $(seq 1 "$MAX_SSH_SETUP_ATTEMPTS"); do
   if [ "$host_needs_dns" = "true" ] && ! getent hosts "$DEMO_SERVER_HOST" >/dev/null 2>&1; then
     echo "Demo SSH host is not resolvable yet on attempt ${attempt}/${MAX_SSH_SETUP_ATTEMPTS}."
@@ -51,14 +52,11 @@ for attempt in $(seq 1 "$MAX_SSH_SETUP_ATTEMPTS"); do
   fi
 
   if [ "$attempt" -lt "$MAX_SSH_SETUP_ATTEMPTS" ]; then
-    sleep 10
+    sleep "$SSH_SETUP_RETRY_SECONDS"
   fi
 done
 
-echo "::error::Timed out waiting for the demo SSH host to become reachable and return host keys after Tailscale setup."
-if command -v tailscale >/dev/null 2>&1; then
-  tailscale status --peers=false || true
-fi
+echo "::error::Demo network preflight passed, but ssh-keyscan did not return host keys. Verify sshd host-key configuration on the target."
 if [ -s "$keyscan_error" ]; then
   sed 's/^/ssh-keyscan: /' "$keyscan_error" || true
 fi

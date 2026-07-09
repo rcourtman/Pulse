@@ -1,8 +1,22 @@
 name: Update Demo Server
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Stable release tag to deploy, or latest for verification-only checks'
+        required: true
+        type: string
+      target:
+        description: 'Demo target to deploy'
+        required: false
+        default: stable
+        type: string
+      verify_only:
+        description: 'Verify connectivity and the current stable demo without changing the host'
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       tag:
@@ -17,6 +31,11 @@ on:
         options:
           - auto
           - stable
+      verify_only:
+        description: 'Verify connectivity and the current stable demo without changing the host'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -28,25 +47,32 @@ jobs:
       tag: ${{ steps.target.outputs.tag }}
       target: ${{ steps.target.outputs.target }}
       environment_name: ${{ steps.target.outputs.environment_name }}
-      skip: ${{ steps.target.outputs.skip || steps.latest.outputs.skip || 'false' }}
+      skip: ${{ steps.target.outputs.skip || 'false' }}
 
     steps:
       - name: Resolve target tag and demo environment
         id: target
         env:
-          EVENT_NAME: ${{ github.event_name }}
           INPUT_TAG: ${{ inputs.tag }}
           INPUT_TARGET: ${{ inputs.target }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          VERIFY_ONLY: ${{ inputs.verify_only }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            TAG="$INPUT_TAG"
-            REQUESTED_TARGET="$INPUT_TARGET"
-          else
-            TAG="$RELEASE_TAG"
-            REQUESTED_TARGET="auto"
+          TAG="$INPUT_TAG"
+          REQUESTED_TARGET="$INPUT_TARGET"
+          if [ -z "$TAG" ]; then
+            echo "::error::A stable release tag is required."
+            exit 1
+          fi
+          if [ "$TAG" = "latest" ]; then
+            if [ "${VERIFY_ONLY:-false}" != "true" ]; then
+              echo "::error::The latest alias is allowed only for verification-only checks."
+              exit 1
+            fi
+            TAG="$(gh api "repos/${{ github.repository }}/releases/latest" --jq '.tag_name')"
+            echo "Resolved verification-only target to latest stable release ${TAG}."
           fi
 
           VERSION="${TAG#v}"
@@ -118,32 +144,6 @@ jobs:
 
           echo "[OK] ${TAG} validated for governed demo deployment on ${REQUIRED_BRANCH}"
 
-      - name: Skip if not latest published release for target
-        id: latest
-        if: github.event_name == 'release' && steps.target.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          TAG="${{ steps.target.outputs.tag }}"
-
-          LATEST=$(gh api "repos/${{ github.repository }}/releases/latest" --jq '.tag_name')
-
-          echo "Target tag: $TAG"
-          echo "Latest published stable release: $LATEST"
-
-          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
-            echo "::error::Could not determine the latest published stable release for demo deployment."
-            exit 1
-          fi
-
-          if [ "$TAG" != "$LATEST" ]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "Release is not the latest published stable tag; skipping demo update."
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
   update-demo:
     needs: resolve
     if: needs.resolve.outputs.skip != 'true'
@@ -163,6 +163,7 @@ jobs:
           echo "Tag: ${{ needs.resolve.outputs.tag }}"
           echo "Target: ${{ needs.resolve.outputs.target }}"
           echo "Environment: ${{ needs.resolve.outputs.environment_name }}"
+          echo "Verification only: ${{ inputs.verify_only }}"
 
       - name: Validate demo environment configuration
         env:
@@ -185,11 +186,13 @@ jobs:
           fetch-tags: true
 
       - name: Set up Go
+        if: inputs.verify_only != true
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
 
       - name: Wait for release assets
+        if: inputs.verify_only != true
         run: |
           set -euo pipefail
           TAG="${{ needs.resolve.outputs.tag }}"
@@ -224,6 +227,7 @@ jobs:
           exit 1
 
       - name: Materialize tagged installer
+        if: inputs.verify_only != true
         env:
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
         run: |
@@ -240,11 +244,25 @@ jobs:
           chmod +x /tmp/pulse-install.sh
 
       - name: Tailscale
-        uses: tailscale/github-action@4e4c49acaa9818630ce0bd7a564372c17e33fb4d # v2
+        id: tailscale
+        uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:infra
+          version: '1.94.2'
+          ping: ${{ secrets.DEMO_SERVER_HOST }}
+
+      - name: Diagnose Tailscale setup failure
+        if: failure() && steps.tailscale.outcome == 'failure'
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+        run: bash .github/scripts/check-demo-reachability.sh diagnose
+
+      - name: Verify demo network path
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+        run: bash .github/scripts/check-demo-reachability.sh
 
       - name: Setup SSH
         env:
@@ -305,8 +323,14 @@ jobs:
             echo "skip_current=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Refuse mutation during verification-only checks
+        if: inputs.verify_only == true && steps.current.outputs.skip_current != 'true'
+        run: |
+          echo "::error::Verification-only check found a demo version mismatch; refusing to update the host."
+          exit 1
+
       - name: Prepare demo host storage
-        if: steps.current.outputs.skip_current != 'true'
+        if: inputs.verify_only != true && steps.current.outputs.skip_current != 'true'
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
@@ -400,7 +424,7 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" "bash -s -- $(printf '%q ' "$SERVICE_NAME")" <<<"$REMOTE_SCRIPT"
 
       - name: Upload tagged installer
-        if: steps.current.outputs.skip_current != 'true'
+        if: inputs.verify_only != true && steps.current.outputs.skip_current != 'true'
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
@@ -409,7 +433,7 @@ jobs:
           scp -i ~/.ssh/id_ed25519 /tmp/pulse-install.sh "$DEMO_SERVER_USER@$DEMO_SERVER_HOST:/tmp/pulse-install.sh"
 
       - name: Update demo server
-        if: steps.current.outputs.skip_current != 'true'
+        if: inputs.verify_only != true && steps.current.outputs.skip_current != 'true'
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
@@ -432,6 +456,7 @@ jobs:
           ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" "bash -s -- $(printf '%q ' "$TAG" "$SERVICE_NAME")" <<<"$REMOTE_SCRIPT"
 
       - name: Restore demo runtime configuration
+        if: inputs.verify_only != true
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}

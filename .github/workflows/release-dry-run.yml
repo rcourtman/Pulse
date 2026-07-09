@@ -1,4 +1,5 @@
 name: Release Dry Run
+run-name: Release Dry Run v${{ inputs.version || 'scheduled' }}
 
 on:
   # Weekly drift watchdog: fires every Tuesday 07:00 UTC against the governed
@@ -384,3 +385,15 @@ jobs:
         with:
           name: rc-to-ga-rehearsal-summary
           path: release-dry-run/rc-to-ga-rehearsal-summary.md
+
+  demo_path_preflight:
+    name: Verify Current Stable Demo Path (No Mutation)
+    needs: dry-run
+    permissions:
+      contents: read
+    uses: ./.github/workflows/update-demo-server.yml
+    secrets: inherit
+    with:
+      tag: latest
+      target: stable
+      verify_only: true

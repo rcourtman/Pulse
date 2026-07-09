@@ -4,6 +4,12 @@ run-name: Publish Docker Images ${{ inputs.tag }}
 # Triggered by create-release.yml after staging images pass tests.
 # Builds multi-arch images (amd64+arm64) from source and publishes to Docker Hub and GHCR.
 on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Release tag (e.g., v4.34.0)'
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:

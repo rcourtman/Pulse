@@ -3299,6 +3299,8 @@
       "owned_files": [
         ".dockerignore",
         ".github/ISSUE_TEMPLATE/v6_rc_feedback.yml",
+        ".github/scripts/check-demo-reachability.sh",
+        ".github/scripts/setup-demo-ssh.sh",
         ".github/workflows/backfill-release-assets.yml",
         ".github/workflows/create-release.yml",
         ".github/workflows/deploy-demo-server.yml",
@@ -3375,6 +3377,7 @@
         "scripts/toggle-mock.sh",
         "scripts/trigger-release-dry-run.sh",
         "scripts/trigger-release.sh",
+        "scripts/trigger-stable-patch.sh",
         "tests/integration/playwright.config.ts",
         "tests/integration/QUICK_START.md",
         "tests/integration/README.md",
@@ -3453,6 +3456,8 @@
             ],
             "match_files": [
               ".github/ISSUE_TEMPLATE/v6_rc_feedback.yml",
+              ".github/scripts/check-demo-reachability.sh",
+              ".github/scripts/setup-demo-ssh.sh",
               ".github/workflows/backfill-release-assets.yml",
               ".github/workflows/create-release.yml",
               ".github/workflows/helm-pages.yml",
@@ -3478,6 +3483,7 @@
               "scripts/release_control/validate_artifact_release_line.py",
               "scripts/trigger-release-dry-run.sh",
               "scripts/trigger-release.sh",
+              "scripts/trigger-stable-patch.sh",
               "VERSION"
             ],
             "allow_same_subsystem_tests": false,

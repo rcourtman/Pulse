@@ -155,7 +155,7 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`git push origin "refs/tags/${TAG}" --force`,
 		`-F target_commitish="${HEAD_SHA}"`,
 		`historical_asset_backfill_only=${HISTORICAL_ASSET_BACKFILL_ONLY}`,
-		`if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}`,
+		`if: ${{ always() && needs.prepare.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' && (github.event.inputs.draft_only == 'true' || needs.publish_docker.result == 'success') }}`,
 		`if: ${{ needs.prepare.outputs.historical_asset_backfill_only == 'true' }}`,
 		`permissions:`,
 		`issues: write`,
@@ -947,6 +947,9 @@ func TestDeployDemoWorkflowFailsClosedForStableAndVerifiesFrontendParity(t *test
 		`          - stable`,
 		`Capture expected frontend entry asset`,
 		`Verify target host identity`,
+		`uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4`,
+		`ping: ${{ secrets.DEMO_SERVER_HOST }}`,
+		`bash .github/scripts/check-demo-reachability.sh`,
 		`bash .github/scripts/setup-demo-ssh.sh`,
 		`SERVICE_NAME="pulse"`,
 		`Unsupported demo target: ${TARGET}`,
@@ -980,10 +983,16 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 	workflow := string(workflowBytes)
 	required := []string{
 		`- name: Tailscale`,
-		`uses: tailscale/github-action@4e4c49acaa9818630ce0bd7a564372c17e33fb4d # v2`,
+		`uses: tailscale/github-action@306e68a486fd2350f2bfc3b19fcd143891a4a2d8 # v4`,
 		`oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}`,
 		`oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}`,
 		`tags: tag:infra`,
+		`version: '1.94.2'`,
+		`ping: ${{ secrets.DEMO_SERVER_HOST }}`,
+		`bash .github/scripts/check-demo-reachability.sh`,
+		`workflow_call:`,
+		`verify_only:`,
+		`Refuse mutation during verification-only checks`,
 		`uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0`,
 		`go run ./scripts/release_update_key.go public-key-ssh`,
 		`sed -i "s|^PINNED_RELEASE_SSH_PUBLIC_KEY=.*|PINNED_RELEASE_SSH_PUBLIC_KEY=\"${TRUSTED_SSH_PUBLIC_KEY}\"|" /tmp/pulse-install.sh`,
@@ -1032,8 +1041,8 @@ func TestDemoSshSetupHelperHandlesIpLiteralTargets(t *testing.T) {
 		`Demo SSH host is an IP literal; skipping DNS resolution wait.`,
 		`[ "$host_needs_dns" = "true" ] && ! getent hosts "$DEMO_SERVER_HOST"`,
 		`ssh-keyscan -T 10 -H "$DEMO_SERVER_HOST"`,
-		`MAX_SSH_SETUP_ATTEMPTS=18`,
-		`Timed out waiting for the demo SSH host to become reachable and return host keys after Tailscale setup.`,
+		`MAX_SSH_SETUP_ATTEMPTS="${DEMO_SSH_SETUP_ATTEMPTS:-3}"`,
+		`Demo network preflight passed, but ssh-keyscan did not return host keys.`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(helper, needle) {
@@ -1079,6 +1088,63 @@ func TestDemoSshSetupHelperHandlesIpLiteralTargets(t *testing.T) {
 	}
 	if !strings.Contains(string(output), "Demo SSH host is an IP literal; skipping DNS resolution wait.") {
 		t.Fatalf("helper output did not report IP literal path: %s", output)
+	}
+}
+
+func TestDemoReachabilityHelperSeparatesTailnetAndSshTransportProof(t *testing.T) {
+	helperBytes, err := os.ReadFile(repoFile(".github", "scripts", "check-demo-reachability.sh"))
+	if err != nil {
+		t.Fatalf("read demo reachability helper: %v", err)
+	}
+	helper := string(helperBytes)
+	for _, needle := range []string{
+		`tailscale status --json`,
+		`tailscale ping --c 3 --timeout 10s "$DEMO_SERVER_HOST"`,
+		`nc -z -w 5 "$DEMO_SERVER_HOST" "$TCP_PORT"`,
+		`Demo peer is not present in the runner peer map yet.`,
+		`Verify sshd and the host firewall on tailscale0.`,
+	} {
+		if !strings.Contains(helper, needle) {
+			t.Fatalf("demo reachability helper missing diagnostic contract: %s", needle)
+		}
+	}
+
+	tmpDir := t.TempDir()
+	fakeBin := filepath.Join(tmpDir, "bin")
+	if err := os.MkdirAll(fakeBin, 0o755); err != nil {
+		t.Fatalf("create fake bin: %v", err)
+	}
+	tailscaleScript := `#!/bin/sh
+if [ "$1" = "status" ]; then
+  printf '%s\n' '{"BackendState":"Running","Self":{"TailscaleIPs":["100.100.100.1"]},"Peer":{"demo":{"TailscaleIPs":["100.109.163.95"],"Online":true,"Active":true,"Relay":"lhr"}}}'
+  exit 0
+fi
+if [ "$1" = "ping" ]; then
+  echo 'pong from demo'
+  exit 0
+fi
+exit 1
+`
+	if err := os.WriteFile(filepath.Join(fakeBin, "tailscale"), []byte(tailscaleScript), 0o755); err != nil {
+		t.Fatalf("write fake tailscale: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(fakeBin, "nc"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake nc: %v", err)
+	}
+
+	cmd := exec.Command("bash", repoFile(".github", "scripts", "check-demo-reachability.sh"))
+	cmd.Env = append(os.Environ(),
+		"DEMO_SERVER_HOST=100.109.163.95",
+		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("demo reachability helper failed: %v\n%s", err, output)
+	}
+	for _, needle := range []string{"Tailscale backend: Running", "Demo peer state: online=True active=True relay=lhr", "Demo SSH transport is reachable over Tailscale."} {
+		if !strings.Contains(string(output), needle) {
+			t.Fatalf("demo reachability output missing %q: %s", needle, output)
+		}
 	}
 }
 

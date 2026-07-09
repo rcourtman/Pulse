@@ -443,6 +443,11 @@ Assertion design rules:
     Claims reduce overlap, but they do not isolate hooks, formatters, staged
     reads, or unrelated dirt. Parallel mutation should use separate worktrees
     so each agent sees one slice's git state at a time.
+22. Do not publish a routine stable patch without a successful exact-SHA
+    `Release Dry Run` from the previous 24 hours. That run must prove the
+    current stable demo network/SSH/browser path without mutation, and the
+    publish workflow must await demo deployment plus definitive verification;
+    manual SSH deployment is not an acceptable release completion path.
 
 ## Locked Decisions
 
@@ -468,9 +473,10 @@ Assertion design rules:
    and downgrade safety.
 6. Cloud and MSP Stripe `price_*` IDs are operational fill-in items, not
    architectural blockers.
-7. Stable or GA promotion for v6 must come from an exercised RC and stay
-   blocked until the RC-to-GA promotion gate is cleared and the published v5
-   maintenance-policy notice is ready. For v6.0.0 only, the 2026-07-02
+7. First-stable, GA, minor-line, and risk-bearing stable promotion for v6 must
+   come from an exercised RC and stay blocked until the applicable promotion
+   gates are cleared. Routine post-GA stable patches may use the governed
+   no-RC path defined below. For v6.0.0 only, the 2026-07-02
    release-owner risk acceptance allows the current post-RC7 `pulse/v6-release`
    branch to ship without RC8, another soak, or additional current-branch
    validation before GA; this is not validation evidence and not a standing
@@ -509,6 +515,13 @@ Assertion design rules:
     issue intended for v6 is fixed in the candidate, proven invalid with
     evidence, or conservatively superseded with the original problem resolved
     or explicitly narrowed.
+15. Routine stable patch releases after GA do not require a fabricated RC.
+    They may use the no-RC path only when the candidate descends from the latest
+    stable rollback target, no same-version RC exists, no governed high-risk
+    auth/tenant, licensing/billing, persisted-data/migration, relay/mobile
+    trust, or installer/update/rollback path changed, and the exact-SHA release
+    dry run passed. Those risk conditions require RC lineage unless an active
+    customer-harm emergency is recorded through the hotfix exception.
 
 ## TrueNAS Support Floor
 

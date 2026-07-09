@@ -37,12 +37,15 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - High-risk release confidence now lives in `docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` and should be cleared alongside this checklist.
 
 ## Promotion Policy
+- [ ] For a routine stable patch, run `./scripts/trigger-stable-patch.sh --dry-run <version>` from the exact pushed candidate SHA, wait for the whole run including `Verify Current Stable Demo Path (No Mutation)` to pass, then run `./scripts/trigger-stable-patch.sh <version>` once.
+- [ ] Confirm a routine stable patch has no same-version RC and no diff in the RC-required authentication/tenant, licensing/billing, persisted-data/migration, relay/mobile-trust, or installer/update/rollback boundaries. Otherwise use RC promotion or record the emergency hotfix reason.
+- [ ] Treat `Definitive Release Verdict` as the release result. Do not accept a green asset-publish job while Docker publication, demo deployment, public browser verification, Helm/floating-tag promotion, or private Pro promotion is detached or incomplete.
 - [x] Record the previous stable tag and exact rollback pin command before publishing a new prerelease or stable release.
 - [ ] For any prerelease or stable publication, confirm the repo variable `PULSE_UPDATE_SIGNING_PUBLIC_KEY` is set to the intended active update signer public key and that the release workflows are consuming it alongside `PULSE_UPDATE_SIGNING_KEY`, so accidental trust-root rotation fails closed before publication.
-- [x] For the GA/stable candidate, confirm the release pipeline has already been exercised on a real prerelease tag, not only linted or YAML-parsed.
-- [x] For stable promotion, confirm the candidate commit has already shipped on `rc`.
-- [x] For stable promotion, confirm the chosen `promoted_from_tag` is a prerelease that was actually published through the governed prerelease path, not an accidental git tag.
-- [x] For stable promotion, confirm the prerelease soak window is at least 72 hours or document the hotfix exception explicitly.
+- [x] For the first GA or an RC-required stable promotion, confirm the release pipeline has already been exercised on a real prerelease tag, not only linted or YAML-parsed.
+- [x] For an RC-required stable promotion, confirm the candidate commit has already shipped on `rc`.
+- [x] For an RC-required stable promotion, confirm the chosen `promoted_from_tag` is a prerelease that was actually published through the governed prerelease path, not an accidental git tag.
+- [x] For an RC-required stable promotion, confirm the prerelease soak window is at least 72 hours or document the hotfix exception explicitly.
 - [x] For stable promotion, record the 2026-07-02 release-owner decision accepting the current-branch validation risk for the post-RC7 changes.
 - [x] For GA/stable promotion, confirm `V5_MAINTENANCE_SUPPORT_POLICY.md` is still the intended policy and replace any placeholder GA notice dates with the exact v6 GA date and exact v5 end-of-support date that will ship with the announcement.
 - [x] For GA/stable promotion, confirm the pushed governed release-branch copy of `.github/workflows/release-dry-run.yml` already accepts the governed stable rehearsal metadata envelope (`promoted_from_tag`, `rollback_version`, `ga_date`, `v5_eos_date`) through `workflow_dispatch`, because GitHub executes the selected remote ref and does not see local-only governance state.

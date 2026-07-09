@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import re
 import subprocess
 import time
@@ -16,6 +17,63 @@ from repo_file_io import REPO_ROOT, git_env
 SEMVER_STABLE_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 SEMVER_STABLE_TAG_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 SEMVER_PRERELEASE_RE = re.compile(r"-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)(?:\+[0-9A-Za-z.-]+)?$")
+
+ROUTINE_PATCH_RC_REQUIRED_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "authentication, authorization, or tenant isolation",
+        (
+            "internal/api/auth*.go",
+            "internal/api/security*.go",
+            "internal/api/saml*.go",
+            "internal/api/sso*.go",
+            "internal/auth/**",
+            "internal/securityutil/**",
+            "pkg/auth/**",
+        ),
+    ),
+    (
+        "licensing, entitlement, or billing authority",
+        (
+            "internal/api/billing*.go",
+            "internal/api/license*.go",
+            "internal/entitlements/**",
+            "internal/licensing/**",
+            "pkg/licensing/**",
+        ),
+    ),
+    (
+        "persisted data format, schema, or migration",
+        (
+            "internal/database/**",
+            "internal/migrations/**",
+            "internal/storage/**",
+            "pkg/database/**",
+            "pkg/storage/**",
+            "**/migrations/**",
+            "**/*migration*.go",
+        ),
+    ),
+    (
+        "relay or mobile trust protocol",
+        (
+            "internal/api/cloud_handoff*.go",
+            "internal/api/magic_link*.go",
+            "internal/api/mobile*.go",
+            "internal/relay/**",
+            "pkg/relay/**",
+        ),
+    ),
+    (
+        "installer, updater, or rollback execution",
+        (
+            "install.sh",
+            "internal/updates/**",
+            "scripts/install.ps1",
+            "scripts/install.sh",
+            "scripts/pulse-auto-update.sh",
+        ),
+    ),
+)
 
 
 def normalize_tag(value: str) -> str:
@@ -99,6 +157,40 @@ def list_stable_tags() -> list[str]:
     return [tag for tag in result.stdout.split() if SEMVER_STABLE_TAG_RE.match(tag)]
 
 
+def list_same_version_rc_tags(version: str) -> list[str]:
+    result = subprocess.run(
+        ["git", "tag", "--list", f"v{version}-rc.*", "--sort=-version:refname"],
+        cwd=REPO_ROOT,
+        env=git_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return [tag for tag in result.stdout.splitlines() if tag.strip()]
+
+
+def changed_paths_between(base_tag: str) -> list[str]:
+    result = subprocess.run(
+        ["git", "diff", "--name-only", f"{base_tag}..HEAD"],
+        cwd=REPO_ROOT,
+        env=git_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return [path for path in result.stdout.splitlines() if path.strip()]
+
+
+def classify_routine_patch_risks(paths: list[str]) -> list[str]:
+    risks: list[str] = []
+    for path in sorted(set(paths)):
+        for reason, patterns in ROUTINE_PATCH_RC_REQUIRED_RULES:
+            if any(fnmatch.fnmatchcase(path, pattern) for pattern in patterns):
+                risks.append(f"{path} ({reason})")
+                break
+    return risks
+
+
 def derive_latest_stable_rollback_tag(version: str, stable_tags: list[str]) -> str:
     base_match = re.match(r"^(\d+)\.(\d+)\.(\d+)", (version or "").strip())
     if not base_match:
@@ -131,6 +223,8 @@ def resolve_metadata(
     release_notes_input: str,
     derive_rollback_when_missing: bool = False,
     list_stable_tags_fn: Callable[[], list[str]] = list_stable_tags,
+    list_same_version_rc_tags_fn: Callable[[str], list[str]] = list_same_version_rc_tags,
+    changed_paths_fn: Callable[[str], list[str]] = changed_paths_between,
     tag_exists_fn: Callable[[str], bool] = tag_exists,
     tag_commit_fn: Callable[[str], str] = tag_commit,
     head_descends_from_fn: Callable[[str], bool] = head_descends_from,
@@ -144,6 +238,8 @@ def resolve_metadata(
     hotfix_reason = normalize_whitespace(hotfix_reason_input)
     release_notes = release_notes_input or ""
     is_prerelease = is_prerelease_version(version)
+    stable_patch = is_stable_patch_version(version)
+    promotion_mode = "prerelease" if is_prerelease else "stable-rc-promotion"
 
     if not rollback_tag and derive_rollback_when_missing:
         rollback_tag = derive_latest_stable_rollback_tag(version, list_stable_tags_fn())
@@ -167,14 +263,56 @@ def resolve_metadata(
     else:
         promoted_from_tag = normalize_tag(promoted_from_tag_input)
         if not promoted_from_tag:
-            if is_stable_patch_version(version) and hotfix_exception:
-                if not hotfix_reason:
-                    raise ValueError("hotfix_reason is required when hotfix_exception is true.")
-            else:
+            if not stable_patch:
                 raise ValueError(
                     "Stable promotion requires promoted_from_tag naming the prerelease being promoted. "
-                    "Stable patch hotfix releases may omit promoted_from_tag only when hotfix_exception is true and hotfix_reason is set."
+                    "Only governed stable patch releases may use the routine no-RC path."
                 )
+
+            expected_rollback_tag = derive_latest_stable_rollback_tag(
+                version,
+                list_stable_tags_fn(),
+            )
+            if rollback_tag != expected_rollback_tag:
+                raise ValueError(
+                    f"Routine stable patch {tag} must roll back to the latest preceding stable tag "
+                    f"{expected_rollback_tag}, got {rollback_tag}."
+                )
+
+            rollback_commit = tag_commit_fn(rollback_tag)
+            if not head_descends_from_fn(rollback_commit):
+                raise ValueError(
+                    f"Routine stable patch {tag} must descend from rollback target {rollback_tag}."
+                )
+
+            same_version_rc_tags = list_same_version_rc_tags_fn(version)
+            routine_patch_risks = classify_routine_patch_risks(
+                changed_paths_fn(rollback_tag)
+            )
+            if (same_version_rc_tags or routine_patch_risks) and not hotfix_exception:
+                reasons: list[str] = []
+                if same_version_rc_tags:
+                    reasons.append(
+                        "same-version release candidates already exist: "
+                        + ", ".join(same_version_rc_tags)
+                    )
+                if routine_patch_risks:
+                    reasons.append(
+                        "RC-required runtime changes: "
+                        + "; ".join(routine_patch_risks)
+                    )
+                raise ValueError(
+                    "Routine stable patch mode is not allowed because "
+                    + " | ".join(reasons)
+                    + ". Promote the exercised RC, or use hotfix_exception with a concrete emergency reason."
+                )
+
+            if hotfix_exception:
+                if not hotfix_reason:
+                    raise ValueError("hotfix_reason is required when hotfix_exception is true.")
+                promotion_mode = "emergency-stable-patch"
+            else:
+                promotion_mode = "routine-stable-patch"
         else:
             if not re.match(rf"^v{re.escape(version)}-rc\.\d+$", promoted_from_tag):
                 raise ValueError(
@@ -227,6 +365,8 @@ def resolve_metadata(
                     )
 
     return {
+        "promotion_mode": promotion_mode,
+        "is_stable_patch": "true" if stable_patch else "false",
         "promoted_from_tag": promoted_from_tag,
         "rollback_tag": rollback_tag,
         "rollback_command": rollback_command,
