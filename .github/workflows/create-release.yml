@@ -582,6 +582,42 @@ jobs:
 
           docker compose -f docker-compose.test.yml down -v
 
+      - name: Collect integration diagnostics
+        if: failure()
+        working-directory: tests/integration
+        run: |
+          mkdir -p release-integration-diagnostics
+          {
+            echo "=== Docker containers ==="
+            docker ps -a || true
+            echo
+            echo "=== Pulse test server logs ==="
+            docker logs pulse-test-server 2>&1 || echo "No pulse-test-server container"
+            echo
+            echo "=== Mock GitHub server logs ==="
+            docker logs pulse-mock-github 2>&1 || echo "No pulse-mock-github container"
+          } | tee release-integration-diagnostics/docker.log
+
+      - name: Upload integration Playwright report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-integration-playwright-report
+          path: tests/integration/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload integration failures
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-integration-failures
+          path: |
+            tests/integration/test-results/
+            tests/integration/release-integration-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Cleanup
         if: always()
         working-directory: tests/integration

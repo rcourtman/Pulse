@@ -948,10 +948,33 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
     return "timeout waiting for authenticated app state after login submission";
   };
 
+  const prepareFreshLoginAttempt = async (): Promise<"login" | "authenticated" | "unknown"> => {
+    await waitForPulseReady(page);
+    await page.goto("/");
+    await waitForAppShell(page);
+
+    const retryState = await Promise.race([
+      usernameInput
+        .waitFor({ state: "visible", timeout: 15_000 })
+        .then(() => "login" as const)
+        .catch(() => undefined),
+      page
+        .waitForURL(AUTHENTICATED_URL, { timeout: 15_000 })
+        .then(() => "authenticated" as const)
+        .catch(() => undefined),
+    ]);
+
+    return retryState ?? "unknown";
+  };
+
+  const isRetryableLoginOutcome = (outcome: string): boolean =>
+    /too many|failed to connect to server|server error|timeout waiting/i.test(outcome);
+
   // The backend allows 10 login attempts per minute per IP and counts
   // successful ones, so bursts of session logins (worker fixtures plus
-  // per-test session auth) can transiently trip the limiter. Back off and
-  // retry through a fresh login form.
+  // per-test session auth) can transiently trip the limiter. CI can also see
+  // a short transport miss while the compose service is healthy-but-settling.
+  // Back off and retry through a fresh login form.
   const MAX_LOGIN_ATTEMPTS = 3;
   let lastOutcome = "pending";
   for (let attempt = 1; attempt <= MAX_LOGIN_ATTEMPTS; attempt++) {
@@ -959,22 +982,16 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
     if (lastOutcome === "authenticated") {
       return;
     }
-    if (/too many/i.test(lastOutcome) && attempt < MAX_LOGIN_ATTEMPTS) {
-      await page.waitForTimeout(15_000);
-      await page.goto("/");
-      await waitForAppShell(page);
-      const retryState = await Promise.race([
-        usernameInput
-          .waitFor({ state: "visible", timeout: 15_000 })
-          .then(() => "login")
-          .catch(() => undefined),
-        page
-          .waitForURL(AUTHENTICATED_URL, { timeout: 15_000 })
-          .then(() => "authenticated")
-          .catch(() => undefined),
-      ]);
+    if (attempt < MAX_LOGIN_ATTEMPTS && isRetryableLoginOutcome(lastOutcome)) {
+      const backoffMs = /too many/i.test(lastOutcome) ? 15_000 : 2_000 * attempt;
+      await page.waitForTimeout(backoffMs);
+      const retryState = await prepareFreshLoginAttempt();
       if (retryState === "authenticated") {
         return;
+      }
+      if (retryState !== "login") {
+        lastOutcome = `retry login form unavailable after ${lastOutcome}`;
+        break;
       }
       continue;
     }
