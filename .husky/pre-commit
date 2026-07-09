@@ -153,6 +153,11 @@ if command -v golangci-lint >/dev/null 2>&1; then
         STAGED_GO_PKGS=""
         NESTED_GO_MODULES=""
         for staged_dir in $STAGED_GO_DIRS; do
+            # Staged deletions can leave a directory that no longer exists
+            # (e.g. removing a whole package); golangci-lint hard-fails on
+            # missing paths, so skip them. Deletion-only commits fall through
+            # to the ./... default below.
+            [ -d "$staged_dir" ] || continue
             module_root="$staged_dir"
             while [ "$module_root" != "." ] && [ ! -f "$module_root/go.mod" ]; do
                 module_root=$(dirname "$module_root")
