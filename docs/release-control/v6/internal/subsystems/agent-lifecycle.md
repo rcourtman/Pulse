@@ -1629,6 +1629,10 @@ allocation both cap `max_parallel` at the same bound, including payloads that
 bypass the normal API producer. Shared local-redirect validation in
 `pkg/securityutil/httpurl.go` likewise rejects scheme-relative and backslash
 authority forms before agent-adjacent handoff or proof flows consume them.
+The host-agent semaphore materializes only literal capacities from one through
+the shared maximum after normalization, so network-derived payload values never
+reach the channel allocation site while the requested concurrency semantics are
+preserved.
 
 Denied Patrol investigation-fix approvals passing through shared
 `internal/api/` handlers are adjacent AI-runtime/action-governance state only.

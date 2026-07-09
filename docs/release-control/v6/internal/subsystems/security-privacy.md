@@ -421,7 +421,12 @@ session, CSRF, organization, SAML, magic-link, and cloud-handoff cookie. Secure
 requests use Secure cookies and host-prefixed session names; explicitly
 supported non-TLS self-hosted requests retain the bounded compatibility path
 without allowing individual handlers to choose weaker attributes. Audit
-backends persist events through `Logger.Record`; realtime projections omit raw
+Session cookies pass through a dedicated writer that forces `HttpOnly`; CSRF
+and organization cookies use a separately named client-readable writer because
+the frontend must read them. The request-derived `Secure` decision remains the
+explicit compatibility boundary for supported non-TLS self-hosted deployments,
+not a handler-local exception.
+Audit backends persist events through `Logger.Record`; realtime projections omit raw
 actor/IP identity and redact free-form details, keeping queryable audit storage
 distinct from process logs. Certificate discovery and availability probing use
 the single `tlsutil.PeerCertificateCaptureTLSConfig` TOFU boundary, while

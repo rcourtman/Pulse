@@ -464,7 +464,9 @@ boundary used by connection discovery, so support for operator self-signed
 endpoints does not create independent skip-verification configurations.
 Direct mock-node generation also clamps its allocation count to the canonical
 fixture bound even when called below the normal configuration-normalization
-entry point.
+entry point. The backing slice uses that fixed canonical capacity rather than a
+request-derived capacity, while the normalized count continues to determine the
+generated fixture length.
 
 The monitoring-owned storage metrics runtime must preserve store-backed storage
 chart continuity during resolver warm-up. `syncUnifiedStorageMetrics` must

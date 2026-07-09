@@ -1615,7 +1615,9 @@ must not treat starter
 Authentication-cookie, SSO configured-file, deployment concurrency, and cloud
 handoff redirect hardening in shared `internal/api/` routes is adjacent
 API/security work only. It creates no storage-health, recovery-point, backup,
-restore-authorization, or provider-coverage semantics.
+restore-authorization, or provider-coverage semantics. Analyzer-visible cookie
+sink separation and constant-capacity allocation refinements preserve that
+boundary and introduce no storage persistence or recovery contract.
 
 Denied Patrol investigation-fix approvals passing through shared
 `internal/api/` handlers are adjacent AI-runtime/action-governance state only.
