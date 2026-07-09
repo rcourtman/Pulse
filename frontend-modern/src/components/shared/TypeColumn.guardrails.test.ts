@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import guestRowModelSource from '@/components/Workloads/guestRowModel.tsx?raw';
-import responsiveSource from '@/types/responsive.ts?raw';
 import typeColumnDefinitionSource from '@/utils/typeColumnDefinition.ts?raw';
 import typeColumnContractSource from '@/utils/typeColumnContract.ts?raw';
 
@@ -12,7 +11,6 @@ const sourceFiles = import.meta.glob(['../../**/*.ts', '../../**/*.tsx'], {
 
 const INLINE_TYPE_COLUMN_PATTERN =
   /\{\s*id:\s*'type',\s*label:\s*'Type'[\s\S]*?toggleable:\s*true[\s\S]*?\}/g;
-const RESPONSIVE_TYPE_BLOCK_PATTERN = /type:\s*\{[\s\S]*?\n\s*\},/;
 
 describe('type column guardrails', () => {
   it('keeps the canonical Type column definition in the shared helper', () => {
@@ -35,27 +33,6 @@ describe('type column guardrails', () => {
     expect(typeColumnDefinitionSource).not.toContain("label: 'Type'");
     expect(typeColumnDefinitionSource).not.toContain("width: '60px'");
     expect(typeColumnDefinitionSource).not.toContain("sortKey: 'type'");
-    expect(responsiveSource).toContain('TYPE_COLUMN_ID');
-    expect(responsiveSource).toContain('TYPE_COLUMN_LABEL');
-    expect(responsiveSource).toContain('TYPE_COLUMN_PRIORITY');
-    expect(responsiveSource).toContain('TYPE_COLUMN_SORTABLE');
-    expect(responsiveSource).toContain('TYPE_COLUMN_MIN_WIDTH');
-    expect(responsiveSource).toContain('TYPE_COLUMN_MAX_WIDTH');
-    expect(responsiveSource).toContain('TYPE_COLUMN_ALIGN');
-    const responsiveTypeBlock = responsiveSource.match(RESPONSIVE_TYPE_BLOCK_PATTERN)?.[0] ?? '';
-    expect(responsiveTypeBlock).toContain('TYPE_COLUMN_ID');
-    expect(responsiveTypeBlock).toContain('TYPE_COLUMN_LABEL');
-    expect(responsiveTypeBlock).toContain('TYPE_COLUMN_PRIORITY');
-    expect(responsiveTypeBlock).toContain('TYPE_COLUMN_SORTABLE');
-    expect(responsiveTypeBlock).toContain('TYPE_COLUMN_MIN_WIDTH');
-    expect(responsiveTypeBlock).toContain('TYPE_COLUMN_MAX_WIDTH');
-    expect(responsiveTypeBlock).toContain('TYPE_COLUMN_ALIGN');
-    expect(responsiveTypeBlock).not.toContain("id: 'type'");
-    expect(responsiveTypeBlock).not.toContain("label: 'Type'");
-    expect(responsiveTypeBlock).not.toContain("priority: 'essential'");
-    expect(responsiveTypeBlock).not.toContain('sortable: true');
-    expect(responsiveTypeBlock).not.toContain("minWidth: '60px'");
-    expect(responsiveTypeBlock).not.toContain("maxWidth: '80px'");
   });
 
   it('routes runtime Type columns through the shared helper', () => {
@@ -124,7 +101,7 @@ describe('type column guardrails', () => {
     ]);
   });
 
-  it('limits direct type column contract imports to the shared helper, responsive schema, and label presentation util', () => {
+  it('limits direct type column contract imports to the shared helper and label presentation util', () => {
     const runtimeEntries = Object.entries(sourceFiles).filter(
       ([path]) => !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'),
     );
@@ -137,7 +114,6 @@ describe('type column guardrails', () => {
       .sort();
 
     expect(directContractImportUsers).toEqual([
-      '../../types/responsive.ts',
       '../../utils/typeColumnDefinition.ts',
       '../../utils/typeColumnPresentation.ts',
     ]);

@@ -3,7 +3,6 @@ import appSource from '@/App.tsx?raw';
 import resourceTypeCompatSource from '@/utils/resourceTypeCompat.ts?raw';
 import discoveryTypesSource from '@/types/discovery.ts?raw';
 import resourceLinksSource from '@/routing/resourceLinks.ts?raw';
-import reportingResourceTypesSource from '@/components/Settings/reportingResourceTypes.ts?raw';
 import reportingResourceTypesUtilSource from '@/utils/reportingResourceTypes.ts?raw';
 import chartsApiSource from '@/api/charts.ts?raw';
 import investigateAlertButtonSource from '@/components/Alerts/InvestigateAlertButton.tsx?raw';
@@ -544,11 +543,9 @@ describe('frontend resource type boundaries', () => {
     expect(resourceLinksSource).not.toContain("normalized === 'k8s'");
     expect(sourcePlatformsSource).toContain('export const normalizeSourcePlatformQueryValue');
 
-    expect(reportingResourceTypesSource).toContain('@/utils/reportingResourceTypes');
     expect(reportingResourceTypesUtilSource).toContain('export function toReportingResourceType');
     expect(reportingResourceTypesUtilSource).toContain("case 'k8s-cluster'");
     expect(reportingResourceTypesUtilSource).toContain("return 'k8s';");
-    expect(reportingResourceTypesSource).not.toContain("case 'host'");
 
     expect(chartsApiSource).toContain('export function toMetricsHistoryAPIResourceType');
     expect(chartsApiSource).toContain('export function asMetricsHistoryResourceType');
