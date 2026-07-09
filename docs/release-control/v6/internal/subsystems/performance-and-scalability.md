@@ -759,6 +759,8 @@ shell clickable behind another overlay.
 The router's shared browser-cookie writer is request-local security policy. It
 must not add per-request persistence reads, network work, or background fan-out;
 all login and CSRF call sites consume the already-derived in-memory policy.
+Separating `HttpOnly` session emission from client-readable cookie emission is
+an in-memory policy dispatch only and does not add a second derivation path.
 
 Workload and host drawer discovery-tab Suspense fallbacks now compose the
 frontend-primitives `DiscoveryLoadingFallback` template. `GuestDrawer`,

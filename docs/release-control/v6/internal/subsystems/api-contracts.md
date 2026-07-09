@@ -3164,6 +3164,10 @@ a new API state machine, queue contract, or verification-accounting field.
 Browser authentication cookies now consume one request-derived policy in
 `internal/api/auth.go`; session, CSRF, organization, magic-link, SAML, and cloud
 handoff flows must not materialize independent `Secure` or `SameSite` policy.
+That policy exposes separate authentication and client-readable writers:
+session-cookie emission forces `HttpOnly` at its sink, while CSRF and
+organization cookies remain explicitly browser-readable for their existing
+frontend contracts.
 SSO certificate/key file reads are privileged operator configuration and must
 pass the bounded non-symlink regular-file boundary in
 `internal/api/sso_outbound.go`. Cloud handoff redirects consume the shared
