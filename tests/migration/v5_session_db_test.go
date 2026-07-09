@@ -544,7 +544,7 @@ func TestV5DataDir_AuditDBPreExistingData(t *testing.T) {
 		Success:   true,
 		Details:   "v6 logout after migration",
 	}
-	require.NoError(t, logger.Log(newEvent))
+	require.NoError(t, logger.Record(newEvent))
 
 	// Verify both v5 and v6 events coexist
 	allEvents, err := logger.Query(audit.QueryFilter{Limit: 100})
