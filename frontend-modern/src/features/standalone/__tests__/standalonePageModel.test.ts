@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
-import { buildStandalonePageModel } from '../standalonePageModel';
+import {
+  buildStandalonePageModel,
+  buildStandalonePostureSummary,
+  sortStandaloneResourcesByAttention,
+} from '../standalonePageModel';
 
 const resource = (overrides: Partial<Resource>): Resource =>
   ({
@@ -17,6 +21,60 @@ const resource = (overrides: Partial<Resource>): Resource =>
   }) as Resource;
 
 describe('standalonePageModel', () => {
+  it('summarizes normal, attention, unknown, and freshness posture from canonical status', () => {
+    const summary = buildStandalonePostureSummary(
+      [
+        resource({ id: 'online', status: 'online', lastSeen: 1_700_000_000_000 }),
+        resource({ id: 'warning', status: 'degraded', lastSeen: 1_700_000_010_000 }),
+        resource({ id: 'offline', status: 'offline', lastSeen: 1_700_000_020_000 }),
+        resource({ id: 'unknown', status: 'unknown', lastSeen: 1_700_000_005_000 }),
+      ],
+      1_700_000_030_000,
+    );
+
+    expect(summary).toEqual({
+      attention: 3,
+      critical: 1,
+      latestUpdateAt: 1_700_000_020_000,
+      normal: 1,
+      total: 4,
+      unknown: 0,
+      warning: 2,
+    });
+  });
+
+  it('treats an online agent that stopped reporting as attention', () => {
+    const summary = buildStandalonePostureSummary(
+      [resource({ id: 'stale-agent', status: 'online', lastSeen: 1_700_000_000_000 })],
+      1_700_000_600_001,
+    );
+
+    expect(summary.attention).toBe(1);
+    expect(summary.warning).toBe(1);
+    expect(summary.normal).toBe(0);
+  });
+
+  it('orders attention before unknown and healthy resources', () => {
+    const ordered = sortStandaloneResourcesByAttention(
+      [
+        resource({ id: 'healthy', displayName: 'Healthy', status: 'online' }),
+        resource({ id: 'unknown-b', displayName: 'Unknown B', status: 'unknown' }),
+        resource({ id: 'warning', displayName: 'Warning', status: 'degraded' }),
+        resource({ id: 'offline', displayName: 'Offline', status: 'offline' }),
+        resource({ id: 'unknown-a', displayName: 'Unknown A', status: 'unknown' }),
+      ],
+      1_700_000_030_000,
+    );
+
+    expect(ordered.map((item) => item.id)).toEqual([
+      'offline',
+      'unknown-a',
+      'unknown-b',
+      'warning',
+      'healthy',
+    ]);
+  });
+
   it('projects standalone agent machine resources without admitting provider-owned host rows', () => {
     const model = buildStandalonePageModel([
       resource({ id: 'mac-mini', platformType: 'agent', type: 'agent', sources: ['agent'] }),

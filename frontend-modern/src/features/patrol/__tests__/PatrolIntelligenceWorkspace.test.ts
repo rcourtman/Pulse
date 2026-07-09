@@ -52,6 +52,8 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
     expect(workspaceSource).toContain('getPatrolQueueWorkspaceDescription');
     expect(workspaceSource).toContain('getPatrolWorkspaceWorkGroups');
     expect(workspaceSource).toContain('Patrol work groups');
+    expect(workspaceSource).toContain("group.id !== 'stale-protection'");
+    expect(workspaceSource).toContain('queueIssueCount() > 0');
     expect(workspaceSource).not.toContain('getPatrolWorkspaceProtectionPosture');
     expect(workspaceSource).not.toContain('Patrol protection posture');
     expect(workspaceSource).not.toContain('protectionPostureSummaries');

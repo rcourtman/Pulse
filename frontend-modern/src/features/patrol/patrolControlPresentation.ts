@@ -74,9 +74,15 @@ export interface MonitorContextPatrolPostureSummary {
 }
 
 interface PatrolWorkspaceWorkGroupsInput {
-  latestRun?: Pick<PatrolRunRecord, 'error_count' | 'resources_checked' | 'status'> | null;
+  latestRun?:
+    | (Pick<PatrolRunRecord, 'error_count' | 'resources_checked' | 'status'> &
+        Partial<Pick<PatrolRunRecord, 'completed_at'>>)
+    | null;
   nowMs?: number;
-  patrolStatus?: Pick<PatrolStatus, 'error_count' | 'next_patrol_at' | 'running'> | null;
+  patrolStatus?:
+    | (Pick<PatrolStatus, 'error_count' | 'next_patrol_at' | 'running'> &
+        Partial<Pick<PatrolStatus, 'interval_ms' | 'last_patrol_at'>>)
+    | null;
   pendingApprovalCount?: number;
   workTypeComposition?: PatrolWorkTypeComposition;
 }
@@ -151,6 +157,33 @@ function isScheduledPatrolOverdue(
   if (!status || status.running || !status.next_patrol_at) return false;
   const nextPatrolAt = Date.parse(status.next_patrol_at);
   return Number.isFinite(nextPatrolAt) && nextPatrolAt < nowMs;
+}
+
+const PATROL_MINIMUM_FRESHNESS_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+export function isPatrolCoverageStale(input: {
+  latestRun?: Partial<Pick<PatrolRunRecord, 'completed_at'>> | null;
+  nowMs?: number;
+  patrolStatus?:
+    | (Pick<PatrolStatus, 'running'> &
+        Partial<Pick<PatrolStatus, 'interval_ms' | 'last_patrol_at' | 'next_patrol_at'>>)
+    | null;
+}): boolean {
+  const nowMs = input.nowMs ?? Date.now();
+  if (input.patrolStatus?.running) return false;
+  if (isScheduledPatrolOverdue(input.patrolStatus, nowMs)) return true;
+
+  const lastCheckAt = input.latestRun?.completed_at || input.patrolStatus?.last_patrol_at;
+  if (!lastCheckAt) return false;
+  const lastCheckMs = Date.parse(lastCheckAt);
+  if (!Number.isFinite(lastCheckMs) || lastCheckMs > nowMs) return false;
+
+  const configuredIntervalMs = normalizeCount(input.patrolStatus?.interval_ms);
+  const freshnessWindowMs = Math.max(
+    PATROL_MINIMUM_FRESHNESS_WINDOW_MS,
+    configuredIntervalMs > 0 ? configuredIntervalMs * 2 : 0,
+  );
+  return nowMs - lastCheckMs > freshnessWindowMs;
 }
 
 function isActivePatrolRuntime(
@@ -335,11 +368,18 @@ export function getPatrolWorkspaceWorkGroups(
     });
   }
 
-  if (isScheduledPatrolOverdue(input.patrolStatus, input.nowMs ?? Date.now())) {
+  if (
+    isPatrolCoverageStale({
+      latestRun,
+      nowMs: input.nowMs,
+      patrolStatus: input.patrolStatus,
+    })
+  ) {
     groups.push({
       id: 'stale-protection',
-      label: 'Check overdue',
-      detail: 'The next scheduled Patrol check is overdue; run Patrol when the system is ready.',
+      label: 'Coverage stale',
+      detail:
+        'Patrol has not completed a fresh full check; run Patrol to refresh current coverage.',
       tone: 'warning',
     });
   }
@@ -347,7 +387,9 @@ export function getPatrolWorkspaceWorkGroups(
   return groups;
 }
 
-function shouldSuppressMonitorContextPatrolPosture(input: MonitorContextPatrolPostureInput): boolean {
+function shouldSuppressMonitorContextPatrolPosture(
+  input: MonitorContextPatrolPostureInput,
+): boolean {
   const composition = input.workTypeComposition;
   const pendingApprovalCount = normalizeCount(input.pendingApprovalCount);
   const findingCount = normalizeCount(input.findingCount);

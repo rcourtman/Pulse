@@ -1,5 +1,5 @@
 import { A } from '@solidjs/router';
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import PlusIcon from 'lucide-solid/icons/plus';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -24,6 +24,7 @@ import {
   buildAvailabilitySettingsPath,
   buildAvailabilityTargetAddPath,
 } from '@/components/Settings/availabilitySettingsModel';
+import { sortStandaloneResourcesByAttention } from './standalonePageModel';
 
 const settingsLinkClass =
   'inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover';
@@ -69,6 +70,7 @@ export const AvailabilityChecksTable: Component<{
     initialStatus: 'all' as PlatformResourceStatusFilter,
     filter: filterPlatformResources,
   });
+  const orderedChecks = createMemo(() => sortStandaloneResourcesByAttention(tableState.filtered()));
 
   return (
     <Show
@@ -127,7 +129,7 @@ export const AvailabilityChecksTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[900px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[42%] md:w-[22%]`}>
+                <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[42%] md:w-[20%]`}>
                   Check
                 </TableHead>
                 <TableHead
@@ -136,7 +138,7 @@ export const AvailabilityChecksTable: Component<{
                   Method
                 </TableHead>
                 <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[28%]`}
+                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[22%]`}
                 >
                   Target
                 </TableHead>
@@ -149,6 +151,11 @@ export const AvailabilityChecksTable: Component<{
                   class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[10%]`}
                 >
                   Checked
+                </TableHead>
+                <TableHead
+                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[10%]`}
+                >
+                  Last healthy
                 </TableHead>
                 <TableHead
                   class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[8%]`}
@@ -164,7 +171,7 @@ export const AvailabilityChecksTable: Component<{
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={orderedChecks()}>
                   {(check) => {
                     const availability = () => availabilityFor(check);
                     const probe = () => getAvailabilityProbePresentation(check);
@@ -215,7 +222,9 @@ export const AvailabilityChecksTable: Component<{
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('numeric-value')} w-[28%] text-base-content md:w-auto`}
                         >
-                          <span class={probe()?.toneClassName ?? ''}>{result()}</span>
+                          <span class={probe()?.toneClassName ?? ''} title={probe()?.detailLabel}>
+                            {result()}
+                          </span>
                         </TableCell>
                         <TableCell
                           class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
@@ -223,6 +232,14 @@ export const AvailabilityChecksTable: Component<{
                           <PlatformTableRelativeTimeValue
                             value={availability()?.lastChecked}
                             emptyText="Not checked"
+                          />
+                        </TableCell>
+                        <TableCell
+                          class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content lg:table-cell`}
+                        >
+                          <PlatformTableRelativeTimeValue
+                            value={availability()?.lastSuccess}
+                            emptyText="Never"
                           />
                         </TableCell>
                         <TableCell

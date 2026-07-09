@@ -68,7 +68,6 @@ import {
   getRaidStateTextClass,
   getRaidStateVariant,
 } from '@/utils/raidPresentation';
-import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   RESOURCE_METADATA_CHANGED_EVENT,
@@ -104,6 +103,7 @@ import {
   type AgentMachineTemperatureDetailSection,
   type AgentMachineTemperatureMetric,
 } from './agentMachineTableModel';
+import { getStandaloneResourceStatusIndicator } from './standalonePageModel';
 
 type MetricFallbackReason = {
   label: string;
@@ -1436,7 +1436,7 @@ export const AgentsMachinesTable: Component<{
                         : '';
                       return `Agent has stopped reporting.${when} Re-run the install command from the Pulse UI to refresh its token.`;
                     };
-                    const indicator = () => getSimpleStatusIndicator(machine.status);
+                    const indicator = () => getStandaloneResourceStatusIndicator(machine);
                     const canRenderMetrics = () => indicator().variant !== 'danger';
                     const telemetryFallback = () =>
                       canRenderMetrics()

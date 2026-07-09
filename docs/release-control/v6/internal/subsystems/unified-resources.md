@@ -241,6 +241,21 @@ filter semantics, drawer handoffs, and resource projections, while
 Future platform tables must keep that split: row data and platform semantics
 stay in the unified-resource consumer, and the repeated table shell stays in the
 shared frontend primitive.
+The standalone Pulse Agent and Availability monitor may add one compact status
+summary immediately above its canonical table. That summary must be derived
+from the same already-loaded unified-resource slice, use canonical resource
+status and `lastSeen` fields, keep the machine row indicator on that same
+freshness-aware presentation so an old agent cannot stay visually green while
+the summary warns, keep failed or degraded checks ahead of healthy
+checks, and route management back to the canonical infrastructure or
+availability settings paths. It must not introduce a page-local fetch, generic
+Home dashboard, decorative chart, shadow health model, or proof strip detached
+from the table it summarizes.
+Availability timestamps must preserve absence as absence. Monitoring and mock
+adapters must project zero `LastChecked` or `LastSuccess` values as nil
+canonical facet pointers so REST and WebSocket consumers render `Not checked`
+or `Never`, never a year-one timestamp expressed as hundreds of thousands of
+days ago.
 Shared text-cell fallback behavior follows the same boundary:
 unified-resource consumers own which source field is displayed, but platform
 tables must use the frontend-primitives-owned `formatPlatformTableTextValue`

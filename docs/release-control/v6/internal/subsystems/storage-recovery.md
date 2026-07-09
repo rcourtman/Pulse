@@ -1306,7 +1306,10 @@ recovery scope, or a storage/recovery-owned secret source.
     agentless monitoring. Storage and recovery must not treat that availability
     facet as protection status, backup health, or recovery readiness; an
     unreachable probe on a storage resource is monitoring evidence, not a
-    backup or recovery failure.
+    backup or recovery failure. Unknown `LastChecked` and `LastSuccess` values
+    remain absent optional timestamps on that shared facet; storage and recovery
+    must not reinterpret absence or a year-one zero-time serialization as
+    recovery age, missed backup cadence, or restore freshness.
 
 ## Forbidden Paths
 

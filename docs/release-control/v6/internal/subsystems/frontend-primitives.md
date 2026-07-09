@@ -1403,6 +1403,10 @@ settings`, and candidate review when discovered sources are waiting. It must
     compact-list or badge primitives to create protection-current,
     verification-waiting, schedule-freshness, drift, trust, or proof strips;
     empty work belongs to the plain empty-state and deliberate History affordance.
+    When canonical Patrol evidence is stale, that same empty-state primitive may
+    become warning-toned and direct the operator to run Patrol. The stale label
+    may appear in the compact work-group row only alongside real current work;
+    a calm queue must not repeat the same stale condition in both places.
     Monitor-context Patrol coverage posture must not use the shared compact list
     and badge primitives as a generic Proxmox overview or monitor-first
     launch-page proof strip. A future scoped
@@ -3138,6 +3142,11 @@ divide frame locally. Platform table consumers must preserve the owner split:
 frontend-primitives owns the repeated `PlatformTableShell` frame and guardrail
 registry, while platform and unified-resource consumers own the source-specific
 row fields, drawers, and resource semantics.
+Standalone Pulse Agent and Availability consumers may compose one compact
+status summary directly above that shared table frame. The consumer owns the
+already-loaded resource counts, freshness-aware attention ordering, and
+settings action; the shared primitive boundary still forbids a second fetch,
+detached proof strip, decorative chart, or locally recreated table frame.
 Platform table empty states follow the same registry-backed ownership.
 `PlatformTableEmptyState` owns the repeated table-card empty-state shell for
 Docker, Kubernetes, Proxmox, Standalone, TrueNAS, vSphere, and future platform

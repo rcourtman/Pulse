@@ -129,6 +129,7 @@ interface FindingsPanelProps {
   blockedReason?: string;
   overallHealth?: IntelligenceHealthScore;
   historicalRegressionCount?: number;
+  coverageStale?: boolean;
   patrolRuns?: PatrolRunRecord[];
   findingsSource?: 'unified' | 'patrol';
   onAssistantHandoff?: (finding: UnifiedFinding) => void;
@@ -504,6 +505,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       runtimeState: props.runtimeState,
       blockedReason: props.blockedReason,
       historicalRegressionCount: props.historicalRegressionCount,
+      coverageStale: props.coverageStale,
       runs: props.patrolRuns,
       runSnapshot: props.runSnapshot,
     });

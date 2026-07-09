@@ -99,6 +99,14 @@ or historical proof/counting for resolved-only work.
    may point to History for past outcomes, but the workspace must not render a
    calm-day protection-posture, verification-waiting, schedule-freshness, drift,
    trust, or proof strip just to restate that no current work exists.
+   A calm-looking queue is not an all-clear when its checking evidence is
+   stale. `patrolControlPresentation.ts` owns freshness derivation from the
+   latest completed check, the server-authored Patrol interval, and the next
+   scheduled check. Alongside current work, stale coverage may appear as the
+   existing compact cross-source work-group row. On a calm queue, the
+   current-findings empty state alone must become warning-toned so the same
+   stale condition is not repeated; neither case may add a second protection,
+   schedule, or proof strip.
    Monitor-context coverage posture is a separate presentation boundary, but it
    must not render as a generic proof strip on Proxmox overview or other
    monitor-first launch pages. A future monitor-specific Patrol affordance must
@@ -536,6 +544,11 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    Historical Patrol trust regressions must also suppress a green all-clear in
    the current findings empty state: `0 active findings` means no current Patrol
    work, while prior regressions remain Patrol history review context.
+   Stale Patrol coverage must suppress the same green all-clear even when the
+   last completed check found no issues. Freshness uses at least a 24-hour
+   tolerance and otherwise allows two configured Patrol intervals before
+   warning, so deliberately slower schedules are not mislabeled while an old
+   default-schedule result cannot remain green indefinitely.
    Assessment coverage caveats must also reconcile against current run-history
    proof: a stale coverage factor or prediction must not claim recent coverage
    is incomplete when the latest completed full Patrol run successfully checked

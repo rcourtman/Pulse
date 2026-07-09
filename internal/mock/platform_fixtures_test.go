@@ -226,6 +226,28 @@ func TestFixtureGraphProjectsAvailabilityFixturesAsNetworkEndpoints(t *testing.T
 	}
 }
 
+func TestAvailabilityFixtureRecordOmitsUnknownProbeTimes(t *testing.T) {
+	now := time.Date(2026, time.May, 6, 12, 0, 0, 0, time.UTC)
+	record, ok := availabilityFixtureRecord(AvailabilityFixture{
+		Target: AvailabilityTargetFixture{
+			ID:       "not-checked",
+			Name:     "Not checked",
+			Address:  "not-checked.example",
+			Protocol: mockAvailabilityProbeICMP,
+			Enabled:  true,
+		},
+	}, now)
+	if !ok || record.Resource.Availability == nil {
+		t.Fatalf("availabilityFixtureRecord() = (%+v, %t), want availability record", record, ok)
+	}
+	if record.Resource.Availability.LastChecked != nil {
+		t.Fatalf("last checked = %v, want nil before the first probe", record.Resource.Availability.LastChecked)
+	}
+	if record.Resource.Availability.LastSuccess != nil {
+		t.Fatalf("last success = %v, want nil before the first successful probe", record.Resource.Availability.LastSuccess)
+	}
+}
+
 func TestFixtureGraphAttachesServiceAvailabilityFixturesToServiceResources(t *testing.T) {
 	now := time.Date(2026, time.May, 6, 12, 0, 0, 0, time.UTC)
 

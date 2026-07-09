@@ -304,6 +304,8 @@ func cloneAvailabilityData(in *AvailabilityData) *AvailabilityData {
 		return nil
 	}
 	out := *in
+	out.LastChecked = cloneTimePtr(in.LastChecked)
+	out.LastSuccess = cloneTimePtr(in.LastSuccess)
 	return &out
 }
 

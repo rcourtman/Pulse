@@ -180,6 +180,27 @@ describe('patrolEmptyStatePresentation', () => {
     });
   });
 
+  it('does not present stale Patrol evidence as a healthy clear state', () => {
+    expect(
+      getPatrolFindingsEmptyState({
+        filter: 'active',
+        coverageStale: true,
+        overallHealth: {
+          score: 100,
+          grade: 'A',
+          trend: 'stable',
+          factors: [],
+          prediction: 'Infrastructure is healthy with no significant issues detected.',
+        },
+        runtimeState: 'active',
+      }),
+    ).toEqual({
+      title: 'Check needed',
+      body: 'Patrol coverage is stale. Run Patrol to check current infrastructure state.',
+      tone: 'warning',
+    });
+  });
+
   it('keeps past regressions informational when there are no current issues', () => {
     expect(
       getPatrolFindingsEmptyState({

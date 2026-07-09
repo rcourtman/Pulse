@@ -110,6 +110,7 @@ resource health.
 33. `internal/monitoring/docker_detection.go`
 34. `internal/monitoring/monitor_polling_containers.go`
 35. `internal/mock/fixture_graph.go`
+35a. `internal/mock/availability_fixtures.go`
 36. `internal/dockeragent/docker_client.go`
 37. `pkg/agents/docker/report.go`
 38. `internal/models/models.go`

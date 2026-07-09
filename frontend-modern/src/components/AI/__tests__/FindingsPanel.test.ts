@@ -64,6 +64,12 @@ const aiFindingPresentationSource = readFileSync(
 );
 
 describe('FindingsPanel assistant handoff', () => {
+  it('passes stale Patrol coverage into the current-work empty-state presenter', () => {
+    expect(findingsPanelSource).toContain('coverageStale?: boolean');
+    expect(findingsPanelSource).toContain('coverageStale: props.coverageStale');
+    expect(patrolWorkspaceSource).toContain('coverageStale={coverageStale()}');
+  });
+
   it('routes finding loading indicators through the shared LoadingSpinner primitive', () => {
     expect(findingsPanelSource).toContain("from '@/components/shared/LoadingSpinner'");
     expect(findingsPanelSource).toContain('<LoadingSpinner size="xs" />');

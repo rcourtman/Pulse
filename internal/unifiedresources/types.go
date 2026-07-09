@@ -1546,24 +1546,24 @@ type TrueNASShare struct {
 
 // AvailabilityData contains agentless endpoint probe metadata for a resource.
 type AvailabilityData struct {
-	TargetID            string    `json:"targetId,omitempty"`
-	LinkedResourceID    string    `json:"linkedResourceId,omitempty"`
-	Name                string    `json:"name,omitempty"`
-	TargetKind          string    `json:"targetKind,omitempty"`
-	Address             string    `json:"address,omitempty"`
-	Protocol            string    `json:"protocol,omitempty"`
-	Port                int       `json:"port,omitempty"`
-	Path                string    `json:"path,omitempty"`
-	Enabled             bool      `json:"enabled"`
-	Available           bool      `json:"available"`
-	LastChecked         time.Time `json:"lastChecked,omitempty"`
-	LastSuccess         time.Time `json:"lastSuccess,omitempty"`
-	LatencyMillis       int64     `json:"latencyMillis,omitempty"`
-	ConsecutiveFailures int       `json:"consecutiveFailures,omitempty"`
-	LastError           string    `json:"lastError,omitempty"`
-	FailureThreshold    int       `json:"failureThreshold,omitempty"`
-	PollIntervalSeconds int       `json:"pollIntervalSeconds,omitempty"`
-	TimeoutMillis       int       `json:"timeoutMillis,omitempty"`
+	TargetID            string     `json:"targetId,omitempty"`
+	LinkedResourceID    string     `json:"linkedResourceId,omitempty"`
+	Name                string     `json:"name,omitempty"`
+	TargetKind          string     `json:"targetKind,omitempty"`
+	Address             string     `json:"address,omitempty"`
+	Protocol            string     `json:"protocol,omitempty"`
+	Port                int        `json:"port,omitempty"`
+	Path                string     `json:"path,omitempty"`
+	Enabled             bool       `json:"enabled"`
+	Available           bool       `json:"available"`
+	LastChecked         *time.Time `json:"lastChecked,omitempty"`
+	LastSuccess         *time.Time `json:"lastSuccess,omitempty"`
+	LatencyMillis       int64      `json:"latencyMillis,omitempty"`
+	ConsecutiveFailures int        `json:"consecutiveFailures,omitempty"`
+	LastError           string     `json:"lastError,omitempty"`
+	FailureThreshold    int        `json:"failureThreshold,omitempty"`
+	PollIntervalSeconds int        `json:"pollIntervalSeconds,omitempty"`
+	TimeoutMillis       int        `json:"timeoutMillis,omitempty"`
 }
 
 // K8sMetricCapabilities describes which Kubernetes metric families are available

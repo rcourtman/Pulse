@@ -9,6 +9,7 @@ import {
   getPatrolReadyWorkDetail,
   getPatrolSetupIssueReason,
   getPatrolWorkspaceWorkGroups,
+  isPatrolCoverageStale,
   PATROL_AUTONOMY_POLICY_PRESENTATION,
   PATROL_WORKSPACE_QUEUE_TITLE,
 } from '../patrolControlPresentation';
@@ -239,12 +240,38 @@ describe('patrolControlPresentation', () => {
         tone: 'warning',
       },
       {
-        detail: 'The next scheduled Patrol check is overdue; run Patrol when the system is ready.',
+        detail:
+          'Patrol has not completed a fresh full check; run Patrol to refresh current coverage.',
         id: 'stale-protection',
-        label: 'Check overdue',
+        label: 'Coverage stale',
         tone: 'warning',
       },
     ]);
+  });
+
+  it('treats old Patrol evidence as stale relative to the configured interval', () => {
+    const nowMs = Date.parse('2026-06-30T15:00:00Z');
+
+    expect(
+      isPatrolCoverageStale({
+        latestRun: { completed_at: '2026-06-28T12:00:00Z' },
+        nowMs,
+        patrolStatus: {
+          interval_ms: 6 * 60 * 60 * 1000,
+          running: false,
+        },
+      }),
+    ).toBe(true);
+    expect(
+      isPatrolCoverageStale({
+        latestRun: { completed_at: '2026-06-30T12:00:00Z' },
+        nowMs,
+        patrolStatus: {
+          interval_ms: 6 * 60 * 60 * 1000,
+          running: false,
+        },
+      }),
+    ).toBe(false);
   });
 
   it('does not call future or running scheduled checks stale protection', () => {

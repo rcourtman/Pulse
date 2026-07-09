@@ -25,6 +25,7 @@ const availabilityResource = (overrides: Partial<Resource> = {}): Resource =>
       available: true,
       latencyMillis: 7,
       lastChecked: 1_700_000_300_000,
+      lastSuccess: 1_700_000_000_000,
       pollIntervalSeconds: 90,
       failureThreshold: 2,
     },
@@ -64,8 +65,38 @@ describe('AvailabilityChecksTable', () => {
     expect(screen.getByText('TCP 1883')).toBeInTheDocument();
     expect(screen.getByText('power-meter-01.lab.local:1883')).toBeInTheDocument();
     expect(screen.getByText('5m ago')).toBeInTheDocument();
+    expect(screen.getByText('10m ago')).toBeInTheDocument();
     expect(screen.getByText('1m 30s')).toBeInTheDocument();
     expect(screen.getByText('7 ms')).toBeInTheDocument();
+  });
+
+  it('places failing checks before healthy checks by default', () => {
+    const view = renderTable([
+      availabilityResource({ id: 'healthy', name: 'Healthy', displayName: 'Healthy' }),
+      availabilityResource({
+        id: 'offline',
+        name: 'Offline',
+        displayName: 'Offline',
+        status: 'offline',
+        availability: {
+          targetId: 'offline',
+          protocol: 'icmp',
+          address: 'offline.lab.local',
+          enabled: true,
+          available: false,
+          lastChecked: '2023-11-14T22:18:20.000Z',
+          lastSuccess: '2023-11-14T21:56:40.000Z',
+          consecutiveFailures: 4,
+          failureThreshold: 2,
+        },
+      }),
+    ]);
+
+    const rows = [...view.container.querySelectorAll('[data-availability-check-row]')];
+    expect(rows.map((row) => row.getAttribute('data-availability-check-row'))).toEqual([
+      'offline',
+      'healthy',
+    ]);
   });
 
   it('links the empty state back to the availability check add flow', () => {

@@ -946,6 +946,13 @@ payload shape change when the portal presents compact client rows.
     may present that state as factual trigger-mode context, but it must not infer
     trigger enablement or queue state from settings payloads, route state, or
     run-history labels.
+    Patrol coverage freshness is a frontend presentation derived only from the
+    canonical `runs.completed_at`, `status.last_patrol_at`,
+    `status.next_patrol_at`, `status.interval_ms`, and `status.running` fields.
+    The client may warn when the last completed full check is older than its
+    bounded freshness window, but it must not mint a second freshness endpoint,
+    rewrite the stable Patrol payload, or present old run evidence as a current
+    healthy all-clear.
 12. `frontend-modern/src/api/rbac.ts` shared with `organization-settings`: the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary.
 13. `frontend-modern/src/api/security.ts` shared with `security-privacy`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
 14. `frontend-modern/src/api/updates.ts` shared with `deployment-installability`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.

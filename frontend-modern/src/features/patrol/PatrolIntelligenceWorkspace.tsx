@@ -26,6 +26,7 @@ import {
   getPatrolQueueBadgeLabel,
   getPatrolQueueWorkspaceDescription,
   getPatrolWorkspaceWorkGroups,
+  isPatrolCoverageStale,
   getPatrolSetupIssueReason,
   PATROL_WORKSPACE_HISTORY_DESCRIPTION,
   PATROL_WORKSPACE_QUEUE_TITLE,
@@ -128,8 +129,17 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
       workTypeComposition: workTypeComposition(),
     }),
   );
+  const coverageStale = createMemo(() =>
+    isPatrolCoverageStale({
+      latestRun: latestCompletedRun(),
+      patrolStatus: state.patrolStatus(),
+    }),
+  );
+  const hasVisibleWorkGroups = () =>
+    queueIssueCount() > 0 ||
+    workGroupSummaries().some((group) => group.id !== 'stale-protection');
   const shouldShowWorkGroups = () =>
-    !isHistoryOpen() && !isSetupOnly() && !state.selectedRun() && workGroupSummaries().length > 0;
+    !isHistoryOpen() && !isSetupOnly() && !state.selectedRun() && hasVisibleWorkGroups();
 
   return (
     <>
@@ -280,6 +290,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
               blockedReason={state.blockedReason()}
               overallHealth={state.intelligenceSummary()?.overall_health}
               historicalRegressionCount={state.historicalRegressionCount()}
+              coverageStale={coverageStale()}
               patrolRuns={state.patrolRunHistory.value() ?? []}
               findingsSource="patrol"
               runSnapshot={state.selectedRun() ?? undefined}

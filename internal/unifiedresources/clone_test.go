@@ -149,6 +149,28 @@ func TestCloneResource_MutateParentBySource(t *testing.T) {
 	}
 }
 
+func TestCloneResource_MutateAvailabilityTimes(t *testing.T) {
+	checkedAt := time.Date(2026, time.July, 9, 12, 0, 0, 0, time.UTC)
+	succeededAt := checkedAt.Add(-time.Minute)
+	original := &Resource{
+		ID: "availability-router",
+		Availability: &AvailabilityData{
+			LastChecked: &checkedAt,
+			LastSuccess: &succeededAt,
+		},
+	}
+	cloned := cloneResource(original)
+
+	*cloned.Availability.LastChecked = checkedAt.Add(time.Hour)
+	*cloned.Availability.LastSuccess = succeededAt.Add(time.Hour)
+	if !original.Availability.LastChecked.Equal(checkedAt) {
+		t.Error("mutating cloned availability LastChecked should not affect original")
+	}
+	if !original.Availability.LastSuccess.Equal(succeededAt) {
+		t.Error("mutating cloned availability LastSuccess should not affect original")
+	}
+}
+
 func TestCloneResource_MutateVMwareDetailSlices(t *testing.T) {
 	createdAt := time.Date(2026, time.March, 30, 18, 15, 0, 0, time.UTC)
 	pciSlot := int64(160)

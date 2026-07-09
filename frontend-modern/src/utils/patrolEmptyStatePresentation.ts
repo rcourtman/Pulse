@@ -189,6 +189,7 @@ export function getPatrolFindingsEmptyState(args: {
   runtimeState?: PatrolRuntimeState;
   blockedReason?: string;
   historicalRegressionCount?: number;
+  coverageStale?: boolean;
   runs?: PatrolRunRecord[];
   runSnapshot?: PatrolRunSnapshotEmptyStateArgs;
 }): PatrolFindingsEmptyStateCopy {
@@ -230,6 +231,14 @@ export function getPatrolFindingsEmptyState(args: {
       title: PATROL_QUEUE_RUNNING_TITLE,
       body: PATROL_QUEUE_RUNNING_BODY,
       tone: 'info',
+    };
+  }
+
+  if (args.coverageStale) {
+    return {
+      title: PATROL_QUEUE_RECHECK_TITLE,
+      body: 'Patrol coverage is stale. Run Patrol to check current infrastructure state.',
+      tone: 'warning',
     };
   }
 

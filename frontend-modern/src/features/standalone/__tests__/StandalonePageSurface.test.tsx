@@ -82,7 +82,7 @@ const resource = (overrides: Partial<Resource>): Resource =>
     platformType: overrides.platformType ?? 'agent',
     sourceType: overrides.sourceType ?? 'agent',
     status: overrides.status ?? 'online',
-    lastSeen: overrides.lastSeen ?? 1_700_000_000_000,
+    lastSeen: overrides.lastSeen ?? Date.now(),
     ...overrides,
   }) as Resource;
 
@@ -133,6 +133,9 @@ describe('StandalonePageSurface', () => {
       'machines,availability',
     );
     expect(screen.getByTestId('agents-machines-table')).toHaveAttribute('data-resource-count', '1');
+    expect(screen.getByTestId('standalone-posture-summary')).toHaveTextContent(
+      'All 1 machine reporting normally',
+    );
     expect(screen.queryByTestId('availability-checks-table')).not.toBeInTheDocument();
   });
 
@@ -196,6 +199,46 @@ describe('StandalonePageSurface', () => {
       'data-resource-count',
       '2',
     );
+    expect(screen.getByTestId('standalone-posture-summary')).toHaveTextContent(
+      'All 2 checks reporting normally',
+    );
+    expect(screen.getByRole('link', { name: 'Manage checks' })).toHaveAttribute(
+      'href',
+      '/settings/monitoring/availability',
+    );
+  });
+
+  it('makes failed availability posture visible before the table', () => {
+    mocks.pathname = '/standalone/availability';
+    mocks.useUnifiedResources.mockReturnValue({
+      resources: () => [
+        resource({
+          id: 'failed-check',
+          type: 'network-endpoint',
+          platformType: 'availability',
+          sources: ['availability'],
+          status: 'offline',
+          availability: { targetKind: 'service', available: false },
+        }),
+        resource({
+          id: 'healthy-check',
+          type: 'network-endpoint',
+          platformType: 'availability',
+          sources: ['availability'],
+          status: 'online',
+          availability: { targetKind: 'service', available: true },
+        }),
+      ],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+
+    render(() => <StandalonePageSurface />);
+
+    const summary = screen.getByTestId('standalone-posture-summary');
+    expect(summary).toHaveTextContent('1 check offline');
+    expect(summary).toHaveTextContent('1 need attention');
   });
 
   it('uses an overview handoff when only agentless availability checks are present', () => {

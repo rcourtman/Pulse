@@ -158,3 +158,51 @@ func TestAvailabilityPollProviderListsOnlyEnabledTargets(t *testing.T) {
 		t.Fatalf("ListInstances() = %+v, want [enabled]", got)
 	}
 }
+
+func TestAvailabilityResourceFromTargetOmitsUnsetProbeTimes(t *testing.T) {
+	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+		ID:       "router",
+		Name:     "Router",
+		Address:  "192.0.2.1",
+		Protocol: config.AvailabilityProbeICMP,
+		Enabled:  true,
+	})
+	now := time.Date(2026, 7, 9, 12, 0, 0, 0, time.UTC)
+
+	resource, _ := availabilityResourceFromTarget(target, availabilityStatusFromTarget(target), "org-a", now)
+	if resource.Availability == nil {
+		t.Fatal("availability payload = nil")
+	}
+	if resource.Availability.LastChecked != nil {
+		t.Fatalf("last checked = %v, want nil before the first probe", resource.Availability.LastChecked)
+	}
+	if resource.Availability.LastSuccess != nil {
+		t.Fatalf("last success = %v, want nil before the first successful probe", resource.Availability.LastSuccess)
+	}
+}
+
+func TestAvailabilityResourceFromTargetPreservesProbeTimes(t *testing.T) {
+	target := config.NormalizeAvailabilityTarget(config.AvailabilityTarget{
+		ID:       "router",
+		Name:     "Router",
+		Address:  "192.0.2.1",
+		Protocol: config.AvailabilityProbeICMP,
+		Enabled:  true,
+	})
+	checkedAt := time.Date(2026, 7, 9, 11, 59, 55, 0, time.UTC)
+	succeededAt := checkedAt.Add(-time.Minute)
+	status := availabilityStatusFromTarget(target)
+	status.LastChecked = checkedAt
+	status.LastSuccess = succeededAt
+
+	resource, _ := availabilityResourceFromTarget(target, status, "org-a", checkedAt.Add(time.Second))
+	if resource.Availability == nil {
+		t.Fatal("availability payload = nil")
+	}
+	if resource.Availability.LastChecked == nil || !resource.Availability.LastChecked.Equal(checkedAt) {
+		t.Fatalf("last checked = %v, want %v", resource.Availability.LastChecked, checkedAt)
+	}
+	if resource.Availability.LastSuccess == nil || !resource.Availability.LastSuccess.Equal(succeededAt) {
+		t.Fatalf("last success = %v, want %v", resource.Availability.LastSuccess, succeededAt)
+	}
+}

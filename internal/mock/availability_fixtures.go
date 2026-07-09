@@ -337,8 +337,8 @@ func availabilityFixtureRecord(fixture AvailabilityFixture, now time.Time) (unif
 		Path:                target.Path,
 		Enabled:             target.Enabled,
 		Available:           fixture.Available,
-		LastChecked:         fixture.LastChecked,
-		LastSuccess:         fixture.LastSuccess,
+		LastChecked:         availabilityFixtureTimePointer(fixture.LastChecked),
+		LastSuccess:         availabilityFixtureTimePointer(fixture.LastSuccess),
 		LatencyMillis:       fixture.LatencyMillis,
 		ConsecutiveFailures: fixture.ConsecutiveFailures,
 		LastError:           fixture.LastError,
@@ -366,6 +366,14 @@ func availabilityFixtureRecord(fixture AvailabilityFixture, now time.Time) (unif
 		Resource: resource,
 		Identity: availabilityFixtureIdentity(target),
 	}, true
+}
+
+func availabilityFixtureTimePointer(value time.Time) *time.Time {
+	if value.IsZero() {
+		return nil
+	}
+	copied := value
+	return &copied
 }
 
 func availabilityFixtureResourceStatus(target AvailabilityTargetFixture, fixture AvailabilityFixture) unifiedresources.ResourceStatus {
