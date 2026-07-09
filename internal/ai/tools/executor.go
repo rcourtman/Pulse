@@ -206,6 +206,9 @@ type UpdatesProvider interface {
 	GetPendingUpdates(hostID string) []ContainerUpdateInfo
 	TriggerUpdateCheck(hostID string) (DockerCommandStatus, error)
 	UpdateContainer(hostID, containerID, containerName string) (DockerCommandStatus, error)
+	// GetCommandStatus reports the current status of a previously queued
+	// update command so callers can verify the command actually applied.
+	GetCommandStatus(commandID string) (DockerCommandStatus, bool)
 	IsUpdateActionsEnabled() bool
 }
 

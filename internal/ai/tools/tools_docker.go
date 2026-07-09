@@ -22,9 +22,31 @@ const (
 
 	// dockerUpdateQueueRetryMaxDelay caps exponential backoff for queue retries.
 	dockerUpdateQueueRetryMaxDelay = 250 * time.Millisecond
+
+	// dockerUpdateVerifyMaxAttempts bounds post-queue verification polling of the
+	// update command status. Combined with dockerUpdateVerifyPollInterval this
+	// gives the agent one report cycle (~30s) to pick the command up plus time
+	// for small-image updates to finish; slower updates report as inconclusive.
+	dockerUpdateVerifyMaxAttempts = 30
+
+	// dockerUpdateVerifyPollInterval is the delay between verification polls.
+	dockerUpdateVerifyPollInterval = 2 * time.Second
 )
 
-var dockerUpdateQueueSleepFn = sleepWithContext
+// Terminal docker host command statuses, mirroring the DockerCommandStatus*
+// constants in internal/monitoring. Duplicated as literals because the tools
+// package sits below monitoring in the wiring (monitoring satisfies the
+// UpdatesCommandRunner interface defined here).
+const (
+	dockerCommandStatusCompleted = "completed"
+	dockerCommandStatusFailed    = "failed"
+	dockerCommandStatusExpired   = "expired"
+)
+
+var (
+	dockerUpdateQueueSleepFn  = sleepWithContext
+	dockerUpdateVerifySleepFn = sleepWithContext
+)
 
 // registerDockerTools registers the pulse_docker tool
 func (e *PulseToolExecutor) registerDockerTools() {
@@ -528,17 +550,116 @@ func (e *PulseToolExecutor) executeUpdateDockerContainer(ctx context.Context, ar
 		return NewTextResult(fmt.Sprintf("Failed to queue update command: %v", err)), nil
 	}
 
+	// The agent executes the update asynchronously: it pulls the image,
+	// recreates the container, verifies the replacement is running and healthy
+	// (rolling back otherwise), then acknowledges a terminal command status.
+	// Poll that status so we report verified success, verified failure, or an
+	// honest inconclusive - never unverified success.
+	verify := e.verifyDockerUpdateCommand(ctx, cmdStatus.ID, containerName)
+	outcome, _ := verify["outcome"].(string)
+
+	var message string
+	switch outcome {
+	case "verified":
+		message = fmt.Sprintf("Update verified: container '%s' was updated, recreated, and is running again.", containerName)
+	case "failed":
+		reason := ""
+		if observed, ok := verify["observed"].(map[string]interface{}); ok {
+			if fr, ok := observed["failure_reason"].(string); ok && fr != "" {
+				reason = fr
+			} else if msg, ok := observed["message"].(string); ok {
+				reason = msg
+			}
+		}
+		if reason == "" {
+			reason = "the agent reported the update command as failed"
+		}
+		message = fmt.Sprintf("Update of container '%s' failed: %s", containerName, reason)
+	default:
+		message = fmt.Sprintf("Update command queued for container '%s', but it had not reached a terminal state within the verification window. Completion is NOT yet verified - re-check with pulse_docker action 'updates' or inspect the container before reporting success.", containerName)
+	}
+
 	response := DockerUpdateContainerResponse{
-		Success:       true,
+		Success:       outcome != "failed",
 		TargetID:      dockerHost.ID,
 		ContainerID:   container.ID,
 		ContainerName: containerName,
 		CommandID:     cmdStatus.ID,
-		Message:       fmt.Sprintf("Update command queued for container '%s'. The agent will pull the latest image and recreate the container.", containerName),
+		Message:       message,
 		Command:       cmdStatus,
+		Verification:  verify,
 	}
 
-	return NewJSONResult(response), nil
+	return NewJSONResultWithIsError(response, outcome == "failed"), nil
+}
+
+// verifyDockerUpdateCommand polls the queued update command's status until it
+// reaches a terminal state or the bounded verification window elapses. The
+// returned map follows the same verification shape as
+// verifyDockerContainerState / verifyGuestAction: confirmed only on observed
+// terminal success, with an explicit outcome of "verified", "failed", or
+// "inconclusive".
+func (e *PulseToolExecutor) verifyDockerUpdateCommand(ctx context.Context, commandID, containerName string) map[string]interface{} {
+	verification := map[string]interface{}{
+		"confirmed":  false,
+		"method":     "command_status",
+		"command_id": commandID,
+	}
+
+	if commandID == "" {
+		verification["outcome"] = "inconclusive"
+		verification["note"] = "queue returned no command ID, so the update outcome cannot be tracked"
+		return verification
+	}
+
+	var lastObserved map[string]interface{}
+
+	for attempt := 1; attempt <= dockerUpdateVerifyMaxAttempts; attempt++ {
+		status, ok := e.updatesProvider.GetCommandStatus(commandID)
+		if ok {
+			lastObserved = map[string]interface{}{"status": status.Status}
+			if status.Message != "" {
+				lastObserved["message"] = status.Message
+			}
+			if status.FailureReason != "" {
+				lastObserved["failure_reason"] = status.FailureReason
+			}
+
+			switch status.Status {
+			case dockerCommandStatusCompleted:
+				verification["confirmed"] = true
+				verification["outcome"] = "verified"
+				verification["observed"] = lastObserved
+				verification["note"] = fmt.Sprintf("agent confirmed container '%s' was recreated and is running", containerName)
+				return verification
+			case dockerCommandStatusFailed, dockerCommandStatusExpired:
+				verification["outcome"] = "failed"
+				verification["observed"] = lastObserved
+				return verification
+			}
+		}
+
+		if attempt == dockerUpdateVerifyMaxAttempts {
+			break
+		}
+		if err := dockerUpdateVerifySleepFn(ctx, dockerUpdateVerifyPollInterval); err != nil {
+			verification["outcome"] = "inconclusive"
+			verification["note"] = "verification canceled before the update reached a terminal state"
+			if lastObserved != nil {
+				verification["observed"] = lastObserved
+			}
+			return verification
+		}
+	}
+
+	verification["outcome"] = "inconclusive"
+	if lastObserved != nil {
+		verification["observed"] = lastObserved
+		verification["note"] = "update command did not reach a terminal state within the verification window; completion is unverified"
+	} else {
+		verification["note"] = "update command status was not trackable within the verification window; completion is unverified"
+	}
+	return verification
 }
 
 // Helper methods for Docker updates

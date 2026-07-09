@@ -366,6 +366,36 @@ func (m *Monitor) QueueDockerCheckUpdatesCommand(hostID string) (models.DockerHo
 	return cmd.status, nil
 }
 
+// GetDockerCommandStatus returns the current status of a docker host command
+// by ID. Active commands are looked up directly; terminal commands
+// (completed/failed) are cleared from the active map on acknowledgement but
+// persist as the host's last command in state, so those are found there.
+func (m *Monitor) GetDockerCommandStatus(commandID string) (models.DockerHostCommandStatus, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	commandID = strings.TrimSpace(commandID)
+	if commandID == "" {
+		return models.DockerHostCommandStatus{}, false
+	}
+
+	if hostID, ok := m.dockerCommandIndex[commandID]; ok {
+		if cmd, ok := m.dockerCommands[hostID]; ok && cmd.status.ID == commandID {
+			return cmd.status, true
+		}
+	}
+
+	if m.state != nil {
+		for _, host := range m.state.GetDockerHosts() {
+			if host.Command != nil && host.Command.ID == commandID {
+				return *host.Command, true
+			}
+		}
+	}
+
+	return models.DockerHostCommandStatus{}, false
+}
+
 func (m *Monitor) getDockerCommandPayload(hostID string) (map[string]any, *models.DockerHostCommandStatus) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

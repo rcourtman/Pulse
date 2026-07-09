@@ -61,6 +61,13 @@ func (s *stubUpdatesProvider) UpdateContainer(hostID, containerID, containerName
 	return s.updateStatus, s.updateErr
 }
 
+func (s *stubUpdatesProvider) GetCommandStatus(commandID string) (DockerCommandStatus, bool) {
+	if s.updateStatus.ID == commandID {
+		return s.updateStatus, true
+	}
+	return DockerCommandStatus{}, false
+}
+
 func (s *stubUpdatesProvider) IsUpdateActionsEnabled() bool {
 	return s.enabled
 }

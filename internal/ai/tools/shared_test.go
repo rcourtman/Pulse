@@ -134,6 +134,11 @@ func (m *mockUpdatesProvider) UpdateContainer(hostID, containerID, containerName
 	return args.Get(0).(DockerCommandStatus), args.Error(1)
 }
 
+func (m *mockUpdatesProvider) GetCommandStatus(commandID string) (DockerCommandStatus, bool) {
+	args := m.Called(commandID)
+	return args.Get(0).(DockerCommandStatus), args.Bool(1)
+}
+
 func (m *mockUpdatesProvider) IsUpdateActionsEnabled() bool {
 	args := m.Called()
 	return args.Bool(0)

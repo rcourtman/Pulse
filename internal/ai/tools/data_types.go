@@ -1298,10 +1298,11 @@ type ContainerUpdateInfo struct {
 
 // DockerCommandStatus represents the status of a queued Docker command
 type DockerCommandStatus struct {
-	ID      string `json:"id"`
-	Type    string `json:"type"`
-	Status  string `json:"status"`
-	Message string `json:"message"`
+	ID            string `json:"id"`
+	Type          string `json:"type"`
+	Status        string `json:"status"`
+	Message       string `json:"message"`
+	FailureReason string `json:"failure_reason,omitempty"`
 }
 
 // DockerUpdatesResponse is returned by pulse_list_docker_updates
@@ -1334,13 +1335,14 @@ type DockerCheckUpdatesResponse struct {
 
 // DockerUpdateContainerResponse is returned by pulse_update_docker_container
 type DockerUpdateContainerResponse struct {
-	Success       bool                `json:"success"`
-	TargetID      string              `json:"target_id"`
-	ContainerID   string              `json:"container_id"`
-	ContainerName string              `json:"container_name"`
-	CommandID     string              `json:"command_id"`
-	Message       string              `json:"message"`
-	Command       DockerCommandStatus `json:"command"`
+	Success       bool                   `json:"success"`
+	TargetID      string                 `json:"target_id"`
+	ContainerID   string                 `json:"container_id"`
+	ContainerName string                 `json:"container_name"`
+	CommandID     string                 `json:"command_id"`
+	Message       string                 `json:"message"`
+	Command       DockerCommandStatus    `json:"command"`
+	Verification  map[string]interface{} `json:"verification,omitempty"`
 }
 
 // ========== Kubernetes Types ==========

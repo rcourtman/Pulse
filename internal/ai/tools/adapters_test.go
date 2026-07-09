@@ -112,10 +112,11 @@ func (f *fakeMetadataUpdater) SetResourceURL(resourceType, resourceID, url strin
 }
 
 type fakeUpdatesCommandRunner struct {
-	checkStatus  models.DockerHostCommandStatus
-	updateStatus models.DockerHostCommandStatus
-	checkErr     error
-	updateErr    error
+	checkStatus   models.DockerHostCommandStatus
+	updateStatus  models.DockerHostCommandStatus
+	checkErr      error
+	updateErr     error
+	commandStatus map[string]models.DockerHostCommandStatus
 }
 
 func (f *fakeUpdatesCommandRunner) QueueDockerCheckUpdatesCommand(_ string) (models.DockerHostCommandStatus, error) {
@@ -124,6 +125,11 @@ func (f *fakeUpdatesCommandRunner) QueueDockerCheckUpdatesCommand(_ string) (mod
 
 func (f *fakeUpdatesCommandRunner) QueueDockerContainerUpdateCommand(_ string, _ string, _ string) (models.DockerHostCommandStatus, error) {
 	return f.updateStatus, f.updateErr
+}
+
+func (f *fakeUpdatesCommandRunner) GetDockerCommandStatus(commandID string) (models.DockerHostCommandStatus, bool) {
+	status, ok := f.commandStatus[commandID]
+	return status, ok
 }
 
 type fakeUpdatesConfig struct {
@@ -536,6 +542,23 @@ func TestUpdatesToolAdapter(t *testing.T) {
 	status, err = adapter.UpdateContainer("host1", "c1", "nginx")
 	if err != nil || status.ID != "cmd2" {
 		t.Fatalf("unexpected update status: %+v err=%v", status, err)
+	}
+
+	if _, ok := adapter.GetCommandStatus("cmd2"); ok {
+		t.Fatal("expected command status miss when runner has no record")
+	}
+	runner.commandStatus = map[string]models.DockerHostCommandStatus{
+		"cmd2": {ID: "cmd2", Type: "update", Status: "failed", Message: "update failed", FailureReason: "container crashed"},
+	}
+	cmdStatus, ok := adapter.GetCommandStatus("cmd2")
+	if !ok {
+		t.Fatal("expected command status hit")
+	}
+	if cmdStatus.Status != "failed" || cmdStatus.FailureReason != "container crashed" {
+		t.Fatalf("unexpected command status mapping: %+v", cmdStatus)
+	}
+	if _, ok := (&UpdatesToolAdapter{}).GetCommandStatus("cmd2"); ok {
+		t.Fatal("expected command status miss when commands runner missing")
 	}
 
 	if trimContainerName("/redis") != "redis" || trimContainerName("plain") != "plain" {

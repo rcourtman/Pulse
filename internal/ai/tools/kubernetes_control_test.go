@@ -2,7 +2,9 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -18,7 +20,13 @@ func newConfiguredKubernetesExecutor(snapshot models.StateSnapshot, mutate func(
 	adapter := unifiedresources.NewMonitorAdapter(nil)
 	adapter.PopulateFromSnapshot(snapshot)
 
-	cfg := ExecutorConfig{UnifiedResourceProvider: adapter}
+	// Autonomous dispatches fail closed when no audit store is wired
+	// (unknown remediation-lock state), so these routing/control tests
+	// always get an in-memory store.
+	cfg := ExecutorConfig{
+		UnifiedResourceProvider: adapter,
+		ActionAuditStore:        unifiedresources.NewMemoryStore(),
+	}
 	if mutate != nil {
 		mutate(&cfg)
 	}
@@ -233,7 +241,7 @@ func TestExecuteKubernetesScale(t *testing.T) {
 		assert.Contains(t, result.Content[0].Text, "scale")
 	})
 
-	t.Run("ExecuteSuccess", func(t *testing.T) {
+	t.Run("ExecuteSuccessVerified", func(t *testing.T) {
 		mockAgent := &mockAgentServer{
 			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
 		}
@@ -243,6 +251,14 @@ func TestExecuteKubernetesScale(t *testing.T) {
 		})).Return(&agentexec.CommandResultPayload{
 			ExitCode: 0,
 			Stdout:   "deployment.apps/nginx scaled",
+		}, nil)
+		// Read-after-write: the scale handler re-reads the deployment state.
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.Command == "kubectl -n 'default' get deployment 'nginx' -o 'jsonpath={.spec.replicas} {.status.readyReplicas}'" &&
+				cmd.TargetType == "agent"
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   "3 3",
 		}, nil)
 
 		state := models.StateSnapshot{
@@ -260,8 +276,140 @@ func TestExecuteKubernetesScale(t *testing.T) {
 			"replicas":   3,
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result.Content[0].Text, "Successfully scaled")
-		assert.Contains(t, result.Content[0].Text, "nginx")
+		require.False(t, result.IsError)
+
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
+		assert.Equal(t, true, resp["success"])
+		assert.Equal(t, "nginx", resp["deployment"])
+		verification, ok := resp["verification"].(map[string]interface{})
+		require.True(t, ok, "expected verification in response")
+		assert.Equal(t, true, verification["confirmed"])
+		assert.Equal(t, "kubectl_get", verification["method"])
+		observed, ok := verification["observed"].(map[string]interface{})
+		require.True(t, ok, "expected observed state in verification")
+		assert.Equal(t, float64(3), observed["replicas"])
+		assert.Equal(t, float64(3), observed["ready_replicas"])
+		mockAgent.AssertExpectations(t)
+	})
+
+	t.Run("ExecuteSuccessVerificationMismatch", func(t *testing.T) {
+		origSleep := kubernetesVerifySleepFn
+		kubernetesVerifySleepFn = func(context.Context, time.Duration) error { return nil }
+		t.Cleanup(func() { kubernetesVerifySleepFn = origSleep })
+
+		mockAgent := &mockAgentServer{
+			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
+		}
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.Command == "kubectl -n 'default' scale deployment 'nginx' --replicas=3"
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   "deployment.apps/nginx scaled",
+		}, nil).Once()
+		// The re-read keeps observing a different desired replica count.
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.Command == "kubectl -n 'default' get deployment 'nginx' -o 'jsonpath={.spec.replicas} {.status.readyReplicas}'"
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   "1 1",
+		}, nil).Times(kubernetesVerifyMaxAttempts)
+
+		state := models.StateSnapshot{
+			KubernetesClusters: []models.KubernetesCluster{
+				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
+			},
+		}
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
+		})
+		result, err := exec.executeKubernetesScale(ctx, map[string]interface{}{
+			"cluster":    "cluster-1",
+			"deployment": "nginx",
+			"replicas":   3,
+		})
+		require.NoError(t, err)
+
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
+		verification, ok := resp["verification"].(map[string]interface{})
+		require.True(t, ok, "expected verification in response")
+		assert.Equal(t, false, verification["confirmed"])
+		observed, ok := verification["observed"].(map[string]interface{})
+		require.True(t, ok, "expected observed state in verification")
+		assert.Equal(t, float64(1), observed["replicas"])
+		mockAgent.AssertExpectations(t)
+	})
+
+	t.Run("ExecuteSuccessVerificationReadError", func(t *testing.T) {
+		mockAgent := &mockAgentServer{
+			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
+		}
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.Command == "kubectl -n 'default' scale deployment 'nginx' --replicas=3"
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 0,
+			Stdout:   "deployment.apps/nginx scaled",
+		}, nil).Once()
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.Command == "kubectl -n 'default' get deployment 'nginx' -o 'jsonpath={.spec.replicas} {.status.readyReplicas}'"
+		})).Return((*agentexec.CommandResultPayload)(nil), assert.AnError).Once()
+
+		state := models.StateSnapshot{
+			KubernetesClusters: []models.KubernetesCluster{
+				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
+			},
+		}
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
+		})
+		result, err := exec.executeKubernetesScale(ctx, map[string]interface{}{
+			"cluster":    "cluster-1",
+			"deployment": "nginx",
+			"replicas":   3,
+		})
+		require.NoError(t, err)
+
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &resp))
+		// The scale itself succeeded; verification must report unconfirmed, not error out.
+		assert.Equal(t, true, resp["success"])
+		verification, ok := resp["verification"].(map[string]interface{})
+		require.True(t, ok, "expected verification in response")
+		assert.Equal(t, false, verification["confirmed"])
+		assert.NotEmpty(t, verification["note"])
+		mockAgent.AssertExpectations(t)
+	})
+
+	t.Run("ExecuteFailureNoVerification", func(t *testing.T) {
+		mockAgent := &mockAgentServer{
+			agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "k8s-host"}},
+		}
+		mockAgent.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(cmd agentexec.ExecuteCommandPayload) bool {
+			return cmd.Command == "kubectl -n 'default' scale deployment 'nginx' --replicas=3"
+		})).Return(&agentexec.CommandResultPayload{
+			ExitCode: 1,
+			Stderr:   "Error from server (NotFound): deployments.apps \"nginx\" not found",
+		}, nil).Once()
+
+		state := models.StateSnapshot{
+			KubernetesClusters: []models.KubernetesCluster{
+				{ID: "c1", Name: "cluster-1", AgentID: "agent-1"},
+			},
+		}
+		exec := newConfiguredKubernetesExecutor(state, func(cfg *ExecutorConfig) {
+			cfg.AgentServer = mockAgent
+			cfg.ControlLevel = ControlLevelAutonomous
+		})
+		result, err := exec.executeKubernetesScale(ctx, map[string]interface{}{
+			"cluster":    "cluster-1",
+			"deployment": "nginx",
+			"replicas":   3,
+		})
+		require.NoError(t, err)
+		assert.Contains(t, result.Content[0].Text, "kubectl command failed")
 		mockAgent.AssertExpectations(t)
 	})
 }

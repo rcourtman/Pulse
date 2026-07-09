@@ -3,12 +3,26 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+const (
+	// kubernetesVerifyMaxAttempts bounds read-after-write verification reads
+	// after a kubectl control action, mirroring verifyDockerContainerState.
+	kubernetesVerifyMaxAttempts = 3
+
+	// kubernetesVerifySettleDelay is the pause between verification attempts,
+	// letting the API server settle before re-reading.
+	kubernetesVerifySettleDelay = 500 * time.Millisecond
+)
+
+var kubernetesVerifySleepFn = sleepWithContext
 
 type kubernetesClusterTarget struct {
 	ID          string
@@ -591,11 +605,102 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 		output += "\n" + result.Stderr
 	}
 
-	if result.ExitCode == 0 {
-		return NewTextResult(fmt.Sprintf("✓ Successfully scaled deployment '%s' to %d replicas in namespace '%s'. Action complete - no verification needed.\n%s", deployment, replicas, namespace, output)), nil
+	if result.ExitCode != 0 {
+		return NewTextResult(fmt.Sprintf("kubectl command failed (exit code %d):\n%s", result.ExitCode, output)), nil
 	}
 
-	return NewTextResult(fmt.Sprintf("kubectl command failed (exit code %d):\n%s", result.ExitCode, output)), nil
+	// Read-after-write: re-read the deployment's replica state through the
+	// same agent instead of asserting unverified success.
+	verify := e.verifyKubernetesScale(ctx, agentID, namespace, deployment, replicas)
+	verify["ok"] = true
+
+	response := map[string]interface{}{
+		"success":            true,
+		"action":             "scale",
+		"cluster":            cluster.DisplayName,
+		"namespace":          namespace,
+		"deployment":         deployment,
+		"requested_replicas": replicas,
+		"command":            command,
+		"exit_code":          result.ExitCode,
+		"output":             output,
+		"verification":       verify,
+	}
+	return NewJSONResult(response), nil
+}
+
+// verifyKubernetesScale re-reads the deployment's replica state after a scale
+// command, mirroring the read-after-write idiom of verifyGuestAction and
+// verifyDockerContainerState. Confirmed means the desired replica count is
+// persisted on the deployment spec; readiness is reported observationally
+// since pods may still be starting or terminating.
+func (e *PulseToolExecutor) verifyKubernetesScale(ctx context.Context, agentID, namespace, deployment string, expectedReplicas int) map[string]interface{} {
+	verifyCmd := fmt.Sprintf("kubectl -n %s get deployment %s -o %s",
+		shellEscape(namespace), shellEscape(deployment), shellEscape("jsonpath={.spec.replicas} {.status.readyReplicas}"))
+
+	var lastOut string
+	var lastExit int
+	for attempt := 1; attempt <= kubernetesVerifyMaxAttempts; attempt++ {
+		res, err := e.agentServer.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
+			Command:    verifyCmd,
+			TargetType: "agent",
+		})
+		if err != nil {
+			return map[string]interface{}{"confirmed": false, "method": "kubectl_get", "command": verifyCmd, "note": err.Error()}
+		}
+		lastExit = res.ExitCode
+		lastOut = strings.TrimSpace(res.Stdout + "\n" + res.Stderr)
+
+		if res.ExitCode == 0 {
+			fields := strings.Fields(lastOut)
+			if len(fields) >= 1 {
+				observedReplicas, parseErr := strconv.Atoi(fields[0])
+				if parseErr == nil {
+					readyReplicas := 0
+					if len(fields) >= 2 {
+						if ready, readyErr := strconv.Atoi(fields[1]); readyErr == nil {
+							readyReplicas = ready
+						}
+					}
+					observed := map[string]interface{}{"replicas": observedReplicas, "ready_replicas": readyReplicas}
+					if observedReplicas == expectedReplicas {
+						return map[string]interface{}{
+							"confirmed": true,
+							"method":    "kubectl_get",
+							"command":   verifyCmd,
+							"expected":  map[string]interface{}{"replicas": expectedReplicas},
+							"observed":  observed,
+						}
+					}
+					if attempt == kubernetesVerifyMaxAttempts {
+						return map[string]interface{}{
+							"confirmed": false,
+							"method":    "kubectl_get",
+							"command":   verifyCmd,
+							"expected":  map[string]interface{}{"replicas": expectedReplicas},
+							"observed":  observed,
+						}
+					}
+				}
+			}
+		}
+
+		if attempt == kubernetesVerifyMaxAttempts {
+			break
+		}
+		if err := kubernetesVerifySleepFn(ctx, kubernetesVerifySettleDelay); err != nil {
+			return map[string]interface{}{"confirmed": false, "method": "kubectl_get", "command": verifyCmd, "note": "context canceled", "raw": lastOut, "exit_code": lastExit}
+		}
+	}
+
+	return map[string]interface{}{
+		"confirmed": false,
+		"method":    "kubectl_get",
+		"command":   verifyCmd,
+		"expected":  map[string]interface{}{"replicas": expectedReplicas},
+		"raw":       lastOut,
+		"exit_code": lastExit,
+	}
 }
 
 // kubernetesResourceAction captures how the namespaced kubectl actions

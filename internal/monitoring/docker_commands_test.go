@@ -1215,6 +1215,53 @@ func TestQueueDockerContainerUpdateCommand(t *testing.T) {
 	}
 }
 
+func TestGetDockerCommandStatus(t *testing.T) {
+	t.Parallel()
+
+	monitor := newTestMonitorForCommands(t)
+	host := models.DockerHost{
+		ID:       "host-status",
+		Hostname: "node-status",
+		Status:   "online",
+	}
+	monitor.state.UpsertDockerHost(host)
+
+	if _, ok := monitor.GetDockerCommandStatus("nonexistent"); ok {
+		t.Fatal("expected lookup miss for unknown command ID")
+	}
+	if _, ok := monitor.GetDockerCommandStatus(""); ok {
+		t.Fatal("expected lookup miss for empty command ID")
+	}
+
+	cmdStatus, err := monitor.QueueDockerContainerUpdateCommand(host.ID, "container-1", "nginx")
+	if err != nil {
+		t.Fatalf("Failed to queue update command: %v", err)
+	}
+
+	// Active command is found in the in-memory command map.
+	got, ok := monitor.GetDockerCommandStatus(cmdStatus.ID)
+	if !ok {
+		t.Fatal("expected active command to be found")
+	}
+	if got.Status != DockerCommandStatusQueued {
+		t.Fatalf("expected status %q, got %q", DockerCommandStatusQueued, got.Status)
+	}
+
+	// Terminal acknowledgement clears the active map but persists the last
+	// command on host state; the lookup must still resolve it there.
+	if _, _, _, err := monitor.AcknowledgeDockerHostCommand(cmdStatus.ID, host.ID, DockerCommandStatusCompleted, "Container nginx updated successfully"); err != nil {
+		t.Fatalf("Failed to acknowledge command: %v", err)
+	}
+
+	got, ok = monitor.GetDockerCommandStatus(cmdStatus.ID)
+	if !ok {
+		t.Fatal("expected completed command to be found via host state")
+	}
+	if got.Status != DockerCommandStatusCompleted {
+		t.Fatalf("expected status %q, got %q", DockerCommandStatusCompleted, got.Status)
+	}
+}
+
 func TestQueueDockerContainerUpdateCommand_BlockedBySecurityPosture(t *testing.T) {
 	t.Parallel()
 

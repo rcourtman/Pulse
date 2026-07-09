@@ -700,6 +700,7 @@ func (a *MetadataUpdaterToolAdapter) SetResourceURL(resourceType, resourceID, ur
 type UpdatesCommandRunner interface {
 	QueueDockerCheckUpdatesCommand(hostID string) (models.DockerHostCommandStatus, error)
 	QueueDockerContainerUpdateCommand(hostID, containerID, containerName string) (models.DockerHostCommandStatus, error)
+	GetDockerCommandStatus(commandID string) (models.DockerHostCommandStatus, bool)
 }
 
 // UpdatesConfig provides configuration for update operations
@@ -847,6 +848,26 @@ func (a *UpdatesToolAdapter) UpdateContainer(hostID, containerID, containerName 
 		Status:  cmdStatus.Status,
 		Message: cmdStatus.Message,
 	}, nil
+}
+
+// GetCommandStatus implements UpdatesProvider
+func (a *UpdatesToolAdapter) GetCommandStatus(commandID string) (DockerCommandStatus, bool) {
+	if a.commands == nil {
+		return DockerCommandStatus{}, false
+	}
+
+	cmdStatus, ok := a.commands.GetDockerCommandStatus(commandID)
+	if !ok {
+		return DockerCommandStatus{}, false
+	}
+
+	return DockerCommandStatus{
+		ID:            cmdStatus.ID,
+		Type:          cmdStatus.Type,
+		Status:        cmdStatus.Status,
+		Message:       cmdStatus.Message,
+		FailureReason: cmdStatus.FailureReason,
+	}, true
 }
 
 // IsUpdateActionsEnabled implements UpdatesProvider
