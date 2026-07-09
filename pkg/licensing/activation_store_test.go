@@ -253,3 +253,119 @@ func TestActivationStatePersistence(t *testing.T) {
 		}
 	})
 }
+
+func TestInstanceFingerprintPersistenceSurvivesActivationClear(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pulse-fingerprint-test-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	p, err := NewPersistence(tmpDir)
+	if err != nil {
+		t.Fatalf("create persistence: %v", err)
+	}
+
+	first, err := p.LoadOrCreateInstanceFingerprint()
+	if err != nil {
+		t.Fatalf("LoadOrCreateInstanceFingerprint first: %v", err)
+	}
+	if first == "" {
+		t.Fatal("expected non-empty fingerprint")
+	}
+
+	second, err := p.LoadOrCreateInstanceFingerprint()
+	if err != nil {
+		t.Fatalf("LoadOrCreateInstanceFingerprint second: %v", err)
+	}
+	if second != first {
+		t.Fatalf("fingerprint changed between reads: %q then %q", first, second)
+	}
+
+	state := &ActivationState{
+		InstallationID:      "inst_abc",
+		InstallationToken:   "pit_live_secret",
+		LicenseID:           "lic_123",
+		GrantJWT:            "header.payload.signature",
+		GrantJTI:            "grant_xyz",
+		GrantExpiresAt:      1700000000,
+		InstanceFingerprint: first,
+		LicenseServerURL:    "https://license.example.com",
+		ActivatedAt:         1699000000,
+		LastRefreshedAt:     1699500000,
+	}
+	if err := p.SaveActivationState(state); err != nil {
+		t.Fatalf("SaveActivationState: %v", err)
+	}
+	if err := p.ClearActivationState(); err != nil {
+		t.Fatalf("ClearActivationState: %v", err)
+	}
+
+	afterClear, err := p.LoadOrCreateInstanceFingerprint()
+	if err != nil {
+		t.Fatalf("LoadOrCreateInstanceFingerprint after clear: %v", err)
+	}
+	if afterClear != first {
+		t.Fatalf("fingerprint changed after activation clear: %q then %q", first, afterClear)
+	}
+
+	fingerprintPath := filepath.Join(tmpDir, InstanceFingerprintFileName)
+	info, err := os.Stat(fingerprintPath)
+	if err != nil {
+		t.Fatalf("stat fingerprint file: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0600 {
+		t.Fatalf("fingerprint file perms = %o, want 600", got)
+	}
+	if p.ActivationStateExists() {
+		t.Fatal("activation state should still be cleared")
+	}
+}
+
+func TestInstanceFingerprintPersistenceSeedsFromExistingActivationState(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pulse-fingerprint-seed-test-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	p, err := NewPersistence(tmpDir)
+	if err != nil {
+		t.Fatalf("create persistence: %v", err)
+	}
+
+	state := &ActivationState{
+		InstallationID:      "inst_existing",
+		InstallationToken:   "pit_live_existing",
+		LicenseID:           "lic_existing",
+		GrantJWT:            "header.payload.signature",
+		GrantJTI:            "grant_existing",
+		GrantExpiresAt:      1700000000,
+		InstanceFingerprint: "existing-fingerprint",
+		LicenseServerURL:    "https://license.example.com",
+		ActivatedAt:         1699000000,
+		LastRefreshedAt:     1699500000,
+	}
+	if err := p.SaveActivationState(state); err != nil {
+		t.Fatalf("SaveActivationState: %v", err)
+	}
+
+	fingerprint, err := p.LoadOrCreateInstanceFingerprint()
+	if err != nil {
+		t.Fatalf("LoadOrCreateInstanceFingerprint: %v", err)
+	}
+	if fingerprint != state.InstanceFingerprint {
+		t.Fatalf("fingerprint=%q want existing activation fingerprint %q", fingerprint, state.InstanceFingerprint)
+	}
+
+	if err := p.ClearActivationState(); err != nil {
+		t.Fatalf("ClearActivationState: %v", err)
+	}
+	afterClear, err := p.LoadOrCreateInstanceFingerprint()
+	if err != nil {
+		t.Fatalf("LoadOrCreateInstanceFingerprint after clear: %v", err)
+	}
+	if afterClear != state.InstanceFingerprint {
+		t.Fatalf("fingerprint after clear=%q want %q", afterClear, state.InstanceFingerprint)
+	}
+}

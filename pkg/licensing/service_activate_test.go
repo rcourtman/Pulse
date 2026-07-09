@@ -179,6 +179,139 @@ func TestServiceActivateWithKey_SendsClientVersion(t *testing.T) {
 	}
 }
 
+func TestServiceActivateWithKey_ReusesPersistentFingerprintAfterClear(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+	setupTestPublicKey(t)
+
+	tmpDir, err := os.MkdirTemp("", "pulse-service-fingerprint-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	p, err := NewPersistence(tmpDir)
+	if err != nil {
+		t.Fatalf("create persistence: %v", err)
+	}
+
+	var fingerprints []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/activate" {
+			t.Fatalf("Path = %q, want /v1/activate", r.URL.Path)
+		}
+
+		var req ActivateInstallationRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		fingerprints = append(fingerprints, req.InstanceFingerprint)
+		if req.InstanceFingerprint == "" {
+			t.Fatal("expected non-empty instance fingerprint")
+		}
+
+		grantJWT := makeTestGrantJWT(t, &GrantClaims{
+			LicenseID: "lic_fingerprint",
+			Tier:      "pro",
+			State:     "active",
+			IssuedAt:  time.Now().Unix(),
+			ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+		})
+
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(ActivateInstallationResponse{
+			License: ActivateResponseLicense{
+				LicenseID: "lic_fingerprint",
+				State:     "active",
+				Tier:      "pro",
+			},
+			Installation: ActivateResponseInstallation{
+				InstallationID:    "inst_fingerprint",
+				InstallationToken: "pit_live_fingerprint",
+				Status:            "active",
+			},
+			Grant: GrantEnvelope{
+				JWT:       grantJWT,
+				JTI:       "grant_fingerprint",
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+
+	svc := NewService()
+	svc.SetPersistence(p)
+	svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
+
+	if _, err := svc.Activate("ppk_live_fingerprint_test"); err != nil {
+		t.Fatalf("first Activate: %v", err)
+	}
+	svc.Clear()
+	persistedAfterClear, err := p.LoadOrCreateInstanceFingerprint()
+	if err != nil {
+		t.Fatalf("LoadOrCreateInstanceFingerprint after clear: %v", err)
+	}
+	if persistedAfterClear != fingerprints[0] {
+		t.Fatalf("clear did not preserve activation fingerprint: got %q want %q", persistedAfterClear, fingerprints[0])
+	}
+	if _, err := svc.Activate("ppk_live_fingerprint_test"); err != nil {
+		t.Fatalf("second Activate: %v", err)
+	}
+
+	if len(fingerprints) != 2 {
+		t.Fatalf("expected two activation requests, got %d", len(fingerprints))
+	}
+	if fingerprints[1] != fingerprints[0] {
+		t.Fatalf("activation fingerprint changed after clear: %q then %q", fingerprints[0], fingerprints[1])
+	}
+}
+
+func TestServiceStatusUsesLicensePeriodEndForActivationGrantDisplay(t *testing.T) {
+	now := time.Now().UTC()
+	grantExpiresAt := now.Add(72 * time.Hour).Unix()
+	periodEnd := now.Add(365 * 24 * time.Hour).Unix()
+
+	lic := grantClaimsToLicense(&GrantClaims{
+		LicenseID:        "lic_period_display",
+		Tier:             "pro",
+		State:            "active",
+		IssuedAt:         now.Unix(),
+		ExpiresAt:        grantExpiresAt,
+		CurrentPeriodEnd: periodEnd,
+		Email:            "period@example.com",
+		Features:         []string{"relay"},
+		LicenseVersion:   1,
+		InstallationID:   "inst_period_display",
+		JTI:              "grant_period_display",
+	}, "header.payload.signature")
+	if lic.Claims.ExpiresAt != grantExpiresAt {
+		t.Fatalf("grant expiry changed: got %d want %d", lic.Claims.ExpiresAt, grantExpiresAt)
+	}
+	if lic.Claims.LicensePeriodEnd != periodEnd {
+		t.Fatalf("license period end = %d, want %d", lic.Claims.LicensePeriodEnd, periodEnd)
+	}
+
+	svc := NewService()
+	svc.SetCurrentForTesting(lic)
+
+	status := svc.Status()
+	if !status.Valid {
+		t.Fatal("expected active grant to be valid")
+	}
+	if status.ExpiresAt == nil {
+		t.Fatal("expected status expires_at")
+	}
+	wantExpires := time.Unix(periodEnd, 0).Format(time.RFC3339)
+	if *status.ExpiresAt != wantExpires {
+		t.Fatalf("status expires_at = %q, want %q", *status.ExpiresAt, wantExpires)
+	}
+	if status.DaysRemaining < 360 {
+		t.Fatalf("status days_remaining = %d, want billing-period scale", status.DaysRemaining)
+	}
+	if gotGrantDays := lic.DaysRemaining(); gotGrantDays > 3 {
+		t.Fatalf("grant DaysRemaining() = %d, want short grant lease", gotGrantDays)
+	}
+}
+
 func TestServiceActivate_AllowsLegacyJWTInDevMode(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 

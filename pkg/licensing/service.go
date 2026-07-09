@@ -248,10 +248,9 @@ func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
 		return nil, fmt.Errorf("activation unavailable: license server client not configured")
 	}
 
-	// Generate a stable fingerprint for this installation.
-	fingerprint, err := generateFingerprint()
+	fingerprint, err := activationInstanceFingerprint(persistence)
 	if err != nil {
-		return nil, fmt.Errorf("generate instance fingerprint: %w", err)
+		return nil, err
 	}
 
 	hostname, _ := os.Hostname()
@@ -287,9 +286,9 @@ func (s *Service) ActivateLegacyLicense(legacyLicenseKey string) (*License, erro
 		return nil, fmt.Errorf("activation unavailable: license server client not configured")
 	}
 
-	fingerprint, err := generateFingerprint()
+	fingerprint, err := activationInstanceFingerprint(persistence)
 	if err != nil {
-		return nil, fmt.Errorf("generate instance fingerprint: %w", err)
+		return nil, err
 	}
 
 	hostname, _ := os.Hostname()
@@ -312,6 +311,21 @@ func (s *Service) ActivateLegacyLicense(legacyLicenseKey string) (*License, erro
 	return s.applyActivationResponse(resp, fingerprint, client.BaseURL(), persistence, ActivationContinuity{
 		LegacyMigration: true,
 	})
+}
+
+func activationInstanceFingerprint(persistence *Persistence) (string, error) {
+	if persistence != nil {
+		fingerprint, err := persistence.LoadOrCreateInstanceFingerprint()
+		if err != nil {
+			return "", fmt.Errorf("load instance fingerprint: %w", err)
+		}
+		return fingerprint, nil
+	}
+	fingerprint, err := generateFingerprint()
+	if err != nil {
+		return "", fmt.Errorf("generate instance fingerprint: %w", err)
+	}
+	return fingerprint, nil
 }
 
 func (s *Service) applyActivationResponse(
@@ -447,11 +461,18 @@ func (s *Service) RestoreActivation(state *ActivationState) error {
 	source := NewTokenSource(&s.license.Claims)
 	s.evaluator = NewEvaluator(source)
 	s.activationState = &stateCopy
+	persistence := s.persistence
 	cb := s.onLicenseChange
 	activationCB := s.onActivationStateChange
 	snapshot := cloneLicense(s.license)
 	stateSnapshot := cloneActivationState(&stateCopy)
 	s.mu.Unlock()
+
+	if persistence != nil && stateCopy.InstanceFingerprint != "" {
+		if err := persistence.SaveInstanceFingerprint(stateCopy.InstanceFingerprint); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to persist instance fingerprint: %v\n", err)
+		}
+	}
 
 	if cb != nil {
 		cb(snapshot)
@@ -475,6 +496,10 @@ func (s *Service) Clear() {
 	s.evaluator = nil
 	persistence := s.persistence
 	hadActivation := s.activationState != nil
+	var activationFingerprint string
+	if s.activationState != nil {
+		activationFingerprint = s.activationState.InstanceFingerprint
+	}
 	s.activationState = nil
 	cb := s.onLicenseChange
 	activationCB := s.onActivationStateChange
@@ -482,6 +507,11 @@ func (s *Service) Clear() {
 
 	// Clear persisted activation state if it existed.
 	if hadActivation && persistence != nil {
+		if activationFingerprint != "" {
+			if err := persistence.SaveInstanceFingerprint(activationFingerprint); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to persist instance fingerprint before clearing activation: %v\n", err)
+			}
+		}
 		if err := persistence.ClearActivationState(); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to clear activation state: %v\n", err)
 		}
@@ -703,15 +733,15 @@ func (s *Service) Status() *LicenseStatus {
 	status.Tier = s.license.Claims.Tier
 	status.PlanVersion = s.license.Claims.EntitlementPlanVersion()
 	status.IsLifetime = s.license.IsLifetime()
-	status.DaysRemaining = s.license.DaysRemaining()
+	status.DaysRemaining = s.license.LicensePeriodDaysRemaining()
 	status.Features = s.license.AllFeatures()
 
 	if maxGuests, ok := s.license.Claims.EffectiveLimits()["max_guests"]; ok {
 		status.MaxGuests = safeIntFromInt64(maxGuests)
 	}
 
-	if s.license.ExpiresAt() != nil {
-		exp := s.license.ExpiresAt().Format(time.RFC3339)
+	if s.license.LicensePeriodExpiresAt() != nil {
+		exp := s.license.LicensePeriodExpiresAt().Format(time.RFC3339)
 		status.ExpiresAt = &exp
 	}
 

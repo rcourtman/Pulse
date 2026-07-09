@@ -1500,10 +1500,15 @@ That same local-persistence boundary also owns the filesystem path contract for
 commercial secrets at rest. `pkg/licensing/persistence.go` and
 `pkg/licensing/activation_store.go` must normalize the owned config directory
 once and resolve only the fixed `.license-key`, `license.enc`, and
-`activation.enc` leaves through the shared storage-path helper before any
-filesystem read, write, rename, stat, or delete. Future licensing persistence
-changes must not bypass that resolver with raw `filepath.Join(configDir, ...)`
-joins or introduce caller-controlled persistence filenames.
+`activation.enc`, and `instance-fingerprint` leaves through the shared
+storage-path helper before any filesystem read, write, rename, stat, or delete.
+Future licensing persistence changes must not bypass that resolver with raw
+`filepath.Join(configDir, ...)` joins or introduce caller-controlled
+persistence filenames. The `instance-fingerprint` file is not an activation
+credential and must survive clear-license flows: native activation and legacy
+exchange must reuse it as the stable local installation identity so one machine
+does not consume another paid installation slot after a local activation clear,
+container recreation, or retry.
 That same local-persistence boundary also owns writable-but-not-owned runtime
 storage semantics for commercial state. `pkg/licensing/persistence.go` may
 harden directories it owns to `0700`, but it must not assume it can chmod the
@@ -1551,7 +1556,15 @@ unmetered.
 Activation-grant translation is part of the same boundary: when relay/license
 server grants enter the local claims model, Cloud plan keys and lifecycle state
 must still resolve through the canonical entitlement claim accessors rather
-than becoming a parallel truth path.
+than becoming a parallel truth path. The activation grant `exp` remains the
+short-lived enforcement and refresh lease; recurring self-hosted license period
+display must come from the optional grant `current_period_end` mapped into the
+local claims model and exposed through `/api/license/status` `expires_at` and
+`days_remaining`. Older grants that omit `current_period_end` may fall back to
+the grant/JWT expiry for compatibility, but new recurring grants must not make
+the UI present the 72-hour relay lease as the customer's subscription end date.
+The shared grant wire shape must stay aligned across the Pulse client, the
+`pulse-pro` license server issuer, and the relay-server grant validator.
 The legacy-license exchange transport is part of that same activation boundary:
 `pkg/licensing/activation_types.go` and `pkg/licensing/license_server_client.go`
 must treat `legacy_license_token` as the canonical v6 request field for

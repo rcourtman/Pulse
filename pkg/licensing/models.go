@@ -22,6 +22,11 @@ type Claims struct {
 	// Expires at (Unix timestamp, 0 for lifetime)
 	ExpiresAt int64 `json:"exp,omitempty"`
 
+	// LicensePeriodEnd is the paid entitlement period end. Activation grants use
+	// a short ExpiresAt lease for enforcement; this field preserves the billing
+	// period shown in status responses when the grant carries it.
+	LicensePeriodEnd int64 `json:"license_period_end,omitempty"`
+
 	// Features explicitly granted (optional, tier implies features)
 	Features []string `json:"features,omitempty"`
 
@@ -151,6 +156,38 @@ func (l *License) ExpiresAt() *time.Time {
 		return nil
 	}
 	t := time.Unix(l.Claims.ExpiresAt, 0)
+	return &t
+}
+
+// LicensePeriodDaysRemaining returns days remaining for user-facing license
+// status. It uses the paid entitlement period when present and falls back to
+// the grant/JWT expiration for legacy licenses and older grants.
+func (l *License) LicensePeriodDaysRemaining() int {
+	if l.IsLifetime() {
+		return -1
+	}
+	expiresAt := l.Claims.LicensePeriodEnd
+	if expiresAt == 0 {
+		expiresAt = l.Claims.ExpiresAt
+	}
+	remaining := time.Until(time.Unix(expiresAt, 0))
+	if remaining < 0 {
+		return 0
+	}
+	return int(remaining.Hours() / 24)
+}
+
+// LicensePeriodExpiresAt returns the user-facing license period end. Short
+// activation grant expiry remains available through ExpiresAt for enforcement.
+func (l *License) LicensePeriodExpiresAt() *time.Time {
+	if l.IsLifetime() {
+		return nil
+	}
+	expiresAt := l.Claims.LicensePeriodEnd
+	if expiresAt == 0 {
+		expiresAt = l.Claims.ExpiresAt
+	}
+	t := time.Unix(expiresAt, 0)
 	return &t
 }
 

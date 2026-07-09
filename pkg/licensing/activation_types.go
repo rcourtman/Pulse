@@ -54,22 +54,23 @@ func grantClaimsUseUncappedCoreMonitoring(gc *GrantClaims) bool {
 // GrantClaims are the claims parsed from a relay grant JWT payload.
 // The grant is a short-lived JWT (72h TTL) issued by the license server.
 type GrantClaims struct {
-	Issuer         string   `json:"iss"`
-	Audience       string   `json:"aud"`
-	LicenseID      string   `json:"lid"`
-	InstallationID string   `json:"iid"`
-	LicenseVersion int64    `json:"lv"`
-	State          string   `json:"st"`   // active|past_due|grace
-	Tier           string   `json:"tier"` // matches Tier constants: "relay", "pro", "pro_plus", etc.
-	PlanKey        string   `json:"plan"`
-	Features       []string `json:"feat"`
-	MaxGuests      int      `json:"max_guests"`
-	MaxUsers       int      `json:"max_users"`
-	IssuedAt       int64    `json:"iat"`
-	ExpiresAt      int64    `json:"exp"`
-	GraceUntil     int64    `json:"grace_until"`
-	JTI            string   `json:"jti"`   // unique grant ID
-	Email          string   `json:"email"` // license owner email
+	Issuer           string   `json:"iss"`
+	Audience         string   `json:"aud"`
+	LicenseID        string   `json:"lid"`
+	InstallationID   string   `json:"iid"`
+	LicenseVersion   int64    `json:"lv"`
+	State            string   `json:"st"`   // active|past_due|grace
+	Tier             string   `json:"tier"` // matches Tier constants: "relay", "pro", "pro_plus", etc.
+	PlanKey          string   `json:"plan"`
+	Features         []string `json:"feat"`
+	MaxGuests        int      `json:"max_guests"`
+	MaxUsers         int      `json:"max_users"`
+	IssuedAt         int64    `json:"iat"`
+	ExpiresAt        int64    `json:"exp"`
+	CurrentPeriodEnd int64    `json:"current_period_end,omitempty"`
+	GraceUntil       int64    `json:"grace_until"`
+	JTI              string   `json:"jti"`   // unique grant ID
+	Email            string   `json:"email"` // license owner email
 }
 
 func (g *GrantClaims) UnmarshalJSON(data []byte) error {
@@ -94,6 +95,7 @@ func grantClaimsToClaimsWithContinuity(gc *GrantClaims, _ ActivationContinuity) 
 		Tier:                   Tier(gc.Tier),
 		IssuedAt:               gc.IssuedAt,
 		ExpiresAt:              gc.ExpiresAt,
+		LicensePeriodEnd:       gc.CurrentPeriodEnd,
 		Features:               gc.Features,
 		MaxGuests:              gc.MaxGuests,
 		MaxUsers:               gc.MaxUsers,
@@ -218,12 +220,13 @@ type ActivateInstallationResponse struct {
 
 // ActivateResponseLicense is the license portion of the activation response.
 type ActivateResponseLicense struct {
-	LicenseID      string   `json:"license_id"`
-	State          string   `json:"state"`
-	Tier           string   `json:"tier"`
-	MaxGuests      int      `json:"max_guests"`
-	Features       []string `json:"features"`
-	LicenseVersion int64    `json:"license_version"`
+	LicenseID        string   `json:"license_id"`
+	State            string   `json:"state"`
+	Tier             string   `json:"tier"`
+	MaxGuests        int      `json:"max_guests"`
+	Features         []string `json:"features"`
+	LicenseVersion   int64    `json:"license_version"`
+	CurrentPeriodEnd string   `json:"current_period_end,omitempty"`
 }
 
 func (l *ActivateResponseLicense) UnmarshalJSON(data []byte) error {

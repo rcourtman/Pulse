@@ -5,10 +5,81 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 )
 
 // ActivationStateFileName is the name of the encrypted activation state file.
 const ActivationStateFileName = "activation.enc"
+
+// InstanceFingerprintFileName is the durable installation identity used for
+// activation-key installs. It is intentionally separate from activation.enc so
+// clearing a license does not make one machine consume another install slot.
+const InstanceFingerprintFileName = "instance-fingerprint"
+
+const maxInstanceFingerprintFileSize = 512
+
+// LoadOrCreateInstanceFingerprint returns the stable local installation
+// fingerprint, creating it if this config directory has not activated before.
+func (p *Persistence) LoadOrCreateInstanceFingerprint() (string, error) {
+	fingerprintPath, err := resolvePersistencePath(p.configDir, InstanceFingerprintFileName)
+	if err != nil {
+		return "", fmt.Errorf("resolve instance fingerprint path: %w", err)
+	}
+
+	data, err := readBoundedPersistenceRegularFile(fingerprintPath, maxInstanceFingerprintFileSize)
+	if err == nil {
+		fingerprint := strings.TrimSpace(string(data))
+		if fingerprint == "" {
+			return "", fmt.Errorf("instance fingerprint file is empty")
+		}
+		if err := os.Chmod(fingerprintPath, persistencePrivateFilePerm); err != nil {
+			return "", fmt.Errorf("secure instance fingerprint file: %w", err)
+		}
+		return fingerprint, nil
+	}
+	if !isMissingPersistencePathError(err) {
+		return "", fmt.Errorf("read instance fingerprint file: %w", err)
+	}
+
+	state, err := p.LoadActivationState()
+	if err != nil {
+		return "", fmt.Errorf("load activation state for instance fingerprint: %w", err)
+	}
+	if state != nil {
+		fingerprint := strings.TrimSpace(state.InstanceFingerprint)
+		if fingerprint != "" {
+			if err := p.SaveInstanceFingerprint(fingerprint); err != nil {
+				return "", err
+			}
+			return fingerprint, nil
+		}
+	}
+
+	fingerprint, err := generateFingerprint()
+	if err != nil {
+		return "", fmt.Errorf("generate instance fingerprint: %w", err)
+	}
+	if err := p.SaveInstanceFingerprint(fingerprint); err != nil {
+		return "", err
+	}
+	return fingerprint, nil
+}
+
+// SaveInstanceFingerprint persists the stable local installation fingerprint.
+func (p *Persistence) SaveInstanceFingerprint(fingerprint string) error {
+	fingerprint = strings.TrimSpace(fingerprint)
+	if fingerprint == "" {
+		return fmt.Errorf("instance fingerprint cannot be empty")
+	}
+	fingerprintPath, err := resolvePersistencePath(p.configDir, InstanceFingerprintFileName)
+	if err != nil {
+		return fmt.Errorf("resolve instance fingerprint path: %w", err)
+	}
+	if err := writeOwnerOnlyPersistenceFileAtomic(fingerprintPath, []byte(fingerprint+"\n")); err != nil {
+		return fmt.Errorf("write instance fingerprint file: %w", err)
+	}
+	return nil
+}
 
 // SaveActivationState encrypts and persists the activation state to disk.
 func (p *Persistence) SaveActivationState(state *ActivationState) error {
