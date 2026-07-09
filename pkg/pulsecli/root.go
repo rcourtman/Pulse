@@ -58,24 +58,6 @@ func NewRootCommand(command CommandSpec, runtime RuntimeSpec, deps CommandDeps) 
 	return cmd
 }
 
-func ResetFlags(config *ConfigDeps) {
-	if config == nil {
-		return
-	}
-	if config.ExportFile != nil {
-		*config.ExportFile = ""
-	}
-	if config.ImportFile != nil {
-		*config.ImportFile = ""
-	}
-	if config.Passphrase != nil {
-		*config.Passphrase = ""
-	}
-	if config.ForceImport != nil {
-		*config.ForceImport = false
-	}
-}
-
 func newVersionCmd(command CommandSpec) *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",

@@ -40,12 +40,6 @@ func UnverifiedPeerCertificateCaptureTLSConfig() *tls.Config {
 	}
 }
 
-// PeerCertificateCaptureTLSConfig is retained for source compatibility. New
-// callers should use the explicitly named unverified capture boundary.
-func PeerCertificateCaptureTLSConfig() *tls.Config {
-	return UnverifiedPeerCertificateCaptureTLSConfig()
-}
-
 // FetchFingerprint connects to a host and returns the SHA256 fingerprint of its TLS certificate.
 // This is used for TOFU (Trust On First Use) when discovering cluster peers.
 // The host should be in the format "hostname:port" or "https://hostname:port".

@@ -148,13 +148,6 @@ func (e *PolicyEvaluator) substituteVariables(value, username string, attributes
 	return value
 }
 
-// SetAdminUser implements AdminConfigurable.
-// The admin user always has full access regardless of roles.
-func (e *PolicyEvaluator) SetAdminUser(username string) {
-	// Store admin user for bypass - not implemented in this basic version
-	// The FileManager handles this separately
-}
-
 // RBACAuthorizer wraps PolicyEvaluator to implement Authorizer for the RBAC system.
 type RBACAuthorizer struct {
 	evaluator *PolicyEvaluator
@@ -178,18 +171,6 @@ func (a *RBACAuthorizer) Authorize(ctx context.Context, action string, resource 
 	}
 
 	return a.evaluator.Authorize(ctx, action, resource)
-}
-
-// AuthorizeWithAttributes checks authorization with ABAC attributes.
-func (a *RBACAuthorizer) AuthorizeWithAttributes(ctx context.Context, action string, resource string, attributes map[string]string) (bool, error) {
-	username := GetUser(ctx)
-
-	// Admin user bypass
-	if a.adminUser != "" && username == a.adminUser {
-		return true, nil
-	}
-
-	return a.evaluator.AuthorizeWithAttributes(ctx, action, resource, attributes)
 }
 
 // SetAdminUser sets the admin user who has full access.

@@ -43,16 +43,16 @@ func TestFingerprintVerifier_NormalizesFingerprint(t *testing.T) {
 	}
 }
 
-func TestPeerCertificateCaptureTLSConfigRequiresPeerCertificate(t *testing.T) {
+func TestUnverifiedPeerCertificateCaptureTLSConfigRequiresPeerCertificate(t *testing.T) {
 	config := UnverifiedPeerCertificateCaptureTLSConfig()
 	if !config.InsecureSkipVerify {
-		t.Fatal("PeerCertificateCaptureTLSConfig should enable custom verification mode")
+		t.Fatal("UnverifiedPeerCertificateCaptureTLSConfig should enable custom verification mode")
 	}
 	if config.VerifyPeerCertificate == nil {
-		t.Fatal("PeerCertificateCaptureTLSConfig should install a peer-certificate verifier")
+		t.Fatal("UnverifiedPeerCertificateCaptureTLSConfig should install a peer-certificate verifier")
 	}
 	if config.MinVersion != minimumTLSVersion {
-		t.Fatalf("PeerCertificateCaptureTLSConfig MinVersion = %v, want %v", config.MinVersion, minimumTLSVersion)
+		t.Fatalf("UnverifiedPeerCertificateCaptureTLSConfig MinVersion = %v, want %v", config.MinVersion, minimumTLSVersion)
 	}
 
 	err := config.VerifyPeerCertificate(nil, nil)

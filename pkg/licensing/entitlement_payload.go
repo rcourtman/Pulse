@@ -322,20 +322,6 @@ func BuildEntitlementPayload(status *LicenseStatus, subscriptionState string) En
 	return BuildEntitlementPayloadWithUsage(status, subscriptionState, EntitlementUsageSnapshot{}, nil)
 }
 
-// BuildCommercialPosturePayload constructs the canonical non-billing
-// commercial posture payload from LicenseStatus.
-func BuildCommercialPosturePayload(
-	status *LicenseStatus,
-	subscriptionState string,
-) CommercialPosturePayload {
-	return BuildCommercialPosturePayloadWithUsage(
-		status,
-		subscriptionState,
-		EntitlementUsageSnapshot{},
-		nil,
-	)
-}
-
 // BuildRuntimeCapabilitiesPayload constructs the canonical non-commercial
 // runtime capability payload from LicenseStatus.
 func BuildRuntimeCapabilitiesPayload(
