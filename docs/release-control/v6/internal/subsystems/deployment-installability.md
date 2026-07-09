@@ -336,7 +336,8 @@ TLS floor in the dynamic config.
    itself is expected to finish much earlier.
    Tarball entry validation must extract the requested files once per archive;
    it must not decompress a multi-gigabyte release archive again for every
-   required entry.
+   required entry, and the release-promotion contract test must reject a return
+   to per-entry archive streaming.
    A manually dispatched release rehearsal must activate the same signed
    candidate build whenever its required `version` input is non-empty.
    Scheduled watchdog rehearsals omit that input and must skip candidate
