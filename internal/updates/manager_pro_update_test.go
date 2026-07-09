@@ -242,10 +242,10 @@ func TestApplyUpdateProDownloadsFromBroker(t *testing.T) {
 
 		err = manager.ApplyUpdate(context.Background(), ApplyUpdateRequest{DownloadURL: applyURL, Channel: "stable"})
 		if err == nil {
-			t.Fatal("expected apply to fail at the binary-install stage (dummy tarball has no pulse binary)")
+			t.Fatal("expected apply to fail at the pre-install validation stage (dummy tarball has no pulse binary)")
 		}
 		if !strings.Contains(err.Error(), "pulse binary not found") {
-			t.Fatalf("expected failure at the apply stage after all Pro verification stages passed, got: %v", err)
+			t.Fatalf("expected failure at the validation stage after all Pro verification stages passed, got: %v", err)
 		}
 		if fixture.brokerCalls == 0 {
 			t.Fatal("apply must re-resolve signed URLs from the broker")
@@ -255,6 +255,25 @@ func TestApplyUpdateProDownloadsFromBroker(t *testing.T) {
 		}
 		if fixture.sshsigCalls != 1 {
 			t.Fatalf("expected exactly one signature download, got %d", fixture.sshsigCalls)
+		}
+	})
+
+	t.Run("corrupt pulse binary fails the pre-install self-test", func(t *testing.T) {
+		fixture := newProBrokerFixture(t, "6.0.5", false)
+		fixture.tarball = buildTarballWithPulseBinary(t, []byte{0x00, 0x01, 0x02, 0x03})
+		digest := sha256.Sum256(fixture.tarball)
+		fixture.sha256Hex = hex.EncodeToString(digest[:])
+		manager := NewManager(&config.Config{DataPath: t.TempDir()})
+		manager.SetProUpdateCredentialSource(fixture.credentialSource())
+
+		applyURL, err := proUpdateApplyURL(fixture.server.URL, "6.0.5")
+		if err != nil {
+			t.Fatalf("proUpdateApplyURL: %v", err)
+		}
+
+		err = manager.ApplyUpdate(context.Background(), ApplyUpdateRequest{DownloadURL: applyURL, Channel: "stable"})
+		if err == nil || !strings.Contains(err.Error(), "self-test") {
+			t.Fatalf("expected the pre-install self-test to reject the corrupt binary, got: %v", err)
 		}
 	})
 

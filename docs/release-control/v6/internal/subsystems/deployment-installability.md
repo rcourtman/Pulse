@@ -1612,6 +1612,18 @@ its `.sshsig` sidecar against the pinned `pulse-installer` ed25519 key
 proceed if the sidecar is missing, malformed, or fails verification. The
 in-app and unattended paths must share the same trust root so the UI's
 "Update now" button cannot run at a lower bar than the systemd timer.
+The in-app apply pipeline additionally owns pre-install binary validation:
+after extraction and before any backup or file replacement,
+`internal/updates/manager.go::ApplyUpdate` must locate the extracted `pulse`
+binary and prove it executes on this host and reports the apply-target
+version, via the `--version` probe in
+`internal/updates/selftest.go::selfTestNewBinary`. Checksum and signature
+verification prove artifact integrity, not host runnability, so a
+wrong-architecture, truncated-yet-published, or unstamped artifact must fail
+the update with zero changes applied rather than being swapped in for systemd
+to restart into. `internal/updates/selftest_test.go` and the corrupt-binary
+apply subtest in `internal/updates/manager_pro_update_test.go` are the owned
+proof surface for that validation.
 The unattended auto-update path is also fail-closed on prerelease channel
 crossing: `scripts/pulse-auto-update.sh` must refuse to act on any tag that
 carries a semver prerelease suffix (`-rc.N`, `-beta.N`, `-alpha.N`,

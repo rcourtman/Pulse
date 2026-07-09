@@ -26,11 +26,12 @@ Pulse supports one-click updates for supported deployment types, making it easy 
 
 ### Update Process
 
-1. **Download**: New version is downloaded
-2. **Backup**: Current installation is backed up
-3. **Apply**: Files are updated
-4. **Restart**: Service restarts automatically
-5. **Verify**: Health check confirms success
+1. **Download**: New version is downloaded, its signature and checksum are verified
+2. **Validate**: The new binary is executed with `--version` to prove it runs on this host and reports the expected version, before anything is touched
+3. **Backup**: Current installation is backed up
+4. **Apply**: Files are updated
+5. **Restart**: Service restarts automatically
+6. **Verify**: Health check confirms success
 
 ### Progress Tracking
 

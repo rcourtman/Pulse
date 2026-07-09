@@ -729,6 +729,25 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 		return runErr
 	}
 
+	m.updateStatus("verifying", 50, "Validating new binary...")
+
+	// Checksum and signature prove download integrity, not that the binary can
+	// run on this host or is the approved version. Probe it before anything is
+	// backed up or replaced, so a bad artifact fails with zero changes applied.
+	newBinary, err := locateExtractedPulseBinary(extractDir)
+	if err != nil {
+		m.updateStatus("error", 50, "Update package is missing the pulse binary", err)
+		runErr = err
+		return runErr
+	}
+	if err := selfTestNewBinary(ctx, newBinary, extractDir, artifact.version); err != nil {
+		selfTestErr := fmt.Errorf("new binary failed pre-install validation: %w", err)
+		m.updateStatus("error", 50, "New binary failed pre-install validation", selfTestErr)
+		runErr = selfTestErr
+		return runErr
+	}
+	log.Info().Str("version", artifact.version).Msg("New binary passed pre-install self-test")
+
 	m.updateStatus("backing-up", 60, "Creating backup...")
 
 	// Create backup
@@ -1709,15 +1728,24 @@ func (m *Manager) restoreBackup(backupDir string) error {
 }
 
 // applyUpdateFiles copies update files to the installation directory
-func (m *Manager) applyUpdateFiles(extractDir string) error {
-	// Check for pulse binary in both old (root) and new (bin/) locations
+// locateExtractedPulseBinary finds the pulse binary inside an extracted
+// update, checking both the legacy root layout and the bin/ layout.
+func locateExtractedPulseBinary(extractDir string) (string, error) {
 	pulseBinary := filepath.Join(extractDir, "pulse")
+	if _, err := os.Stat(pulseBinary); err == nil {
+		return pulseBinary, nil
+	}
+	pulseBinary = filepath.Join(extractDir, "bin", "pulse")
 	if _, err := os.Stat(pulseBinary); err != nil {
-		// Try new structure with bin/ directory
-		pulseBinary = filepath.Join(extractDir, "bin", "pulse")
-		if _, err := os.Stat(pulseBinary); err != nil {
-			return fmt.Errorf("pulse binary not found in extract (checked both / and /bin/): %w", err)
-		}
+		return "", fmt.Errorf("pulse binary not found in extract (checked both / and /bin/): %w", err)
+	}
+	return pulseBinary, nil
+}
+
+func (m *Manager) applyUpdateFiles(extractDir string) error {
+	pulseBinary, err := locateExtractedPulseBinary(extractDir)
+	if err != nil {
+		return err
 	}
 
 	// Detect where the current binary is running from
