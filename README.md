@@ -34,18 +34,20 @@ Designed for homelabs, sysadmins, internal IT teams, and providers who need a cl
 
 ![Pulse Infrastructure](docs/images/01-dashboard.jpg)
 
-## 🧭 Unified Navigation
+## 🧭 A Page for Every Platform
 
-Pulse now groups everything by task instead of data source:
-- **Infrastructure** for hosts and nodes
-- **Workloads** for VMs, containers, and Kubernetes pods
-- **Storage** and **Backups** as top-level views
-- PMG now routes into **Infrastructure** (source filter), and Kubernetes routes into **Workloads** (K8s filter)
-- Legacy URLs are no longer routed as compatibility aliases; use canonical v6 routes.
+Pulse v6 gives each platform its own dedicated page, all backed by one
+unified resource model:
+- **Proxmox** (PVE, PBS, and PMG), **Docker**, **Kubernetes**, **TrueNAS**,
+  **vSphere**, and **standalone machines** each get their own view
+- Storage and Recovery (backups, snapshots, replication) surface on the
+  platform pages they belong to
+- **Alerts** and **Patrol** are top-level views across every platform
 
 Power-user shortcuts:
-- `g i` → Infrastructure, `g w` → Workloads, `?` → shortcuts help
-- `/` or `Cmd/Ctrl+K` → global search
+- `g p` → Proxmox, `g d` → Docker, `g k` → Kubernetes, `g n` → TrueNAS, `g v` → vSphere, `g s` → standalone machines
+- `g a` → Alerts, `g r` → Patrol, `g t` → Settings
+- `/` → search, `Cmd/Ctrl+K` → command palette, `?` → shortcuts help
 
 ## ✨ Features
 
@@ -54,7 +56,7 @@ Power-user shortcuts:
 - **Smart Alerts**: Get notified via Discord, Slack, Telegram, Email, and more
 - **Auto-Discovery**: Automatically finds Proxmox nodes on your network
 - **Metrics History**: Persistent storage with configurable retention
-- **Recovery Central**: Unified backup/snapshot/replication timeline across PBS and TrueNAS
+- **Recovery Views**: Backup, snapshot, and replication history for each platform (PBS, ZFS/TrueNAS, vSphere)
 
 ### AI-Powered
 - **Chat Assistant (BYOK)**: Ask questions about your infrastructure in natural language
@@ -166,7 +168,6 @@ and Recovery desktop history-table layout are all aligned.
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common issues.
 - **[Agent Security](docs/AGENT_SECURITY.md)**: Agent privilege model, Proxmox API-only choices, and checksum/signature verification.
 - **[Docker Monitoring](docs/DOCKER.md)**: Setup and management of Docker agents.
-- **[Unified Navigation](docs/MIGRATION_UNIFIED_NAV.md)**: Guide to the new task-based navigation.
 
 ## 🌐 Community Integrations
 
