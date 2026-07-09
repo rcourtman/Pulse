@@ -584,6 +584,7 @@ func buildGuestLookupsFromReadState(readState unifiedresources.ReadState, metada
 			Node:       vm.Node(),
 			Type:       "qemu",
 			VMID:       vm.VMID(),
+			Tags:       vm.Tags(),
 		}
 		key := alerts.BuildGuestKey(vm.Instance(), vm.Node(), vm.VMID())
 		byKey[key] = info
@@ -609,6 +610,7 @@ func buildGuestLookupsFromReadState(readState unifiedresources.ReadState, metada
 			Node:       ct.Node(),
 			Type:       guestType,
 			VMID:       ct.VMID(),
+			Tags:       ct.Tags(),
 		}
 		key := alerts.BuildGuestKey(ct.Instance(), ct.Node(), ct.VMID())
 		if _, exists := byKey[key]; !exists {
@@ -836,12 +838,30 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 		return fmt.Sprintf("%s-%s-%d", instance, node, vmid)
 	}
 
-	guestNames := make(map[string]string, len(vms)+len(containers))
+	guestLookups := make(map[string]alerts.GuestLookup, len(vms)+len(containers))
 	for _, vm := range vms {
-		guestNames[guestKey(instanceName, vm.Node, vm.VMID)] = vm.Name
+		key := alerts.BuildGuestKey(vm.Instance, vm.Node, vm.VMID)
+		guestLookups[key] = alerts.GuestLookup{
+			ResourceID: key,
+			Name:       vm.Name,
+			Instance:   vm.Instance,
+			Node:       vm.Node,
+			Type:       "qemu",
+			VMID:       vm.VMID,
+			Tags:       append([]string(nil), vm.Tags...),
+		}
 	}
 	for _, ct := range containers {
-		guestNames[guestKey(instanceName, ct.Node, ct.VMID)] = ct.Name
+		key := alerts.BuildGuestKey(ct.Instance, ct.Node, ct.VMID)
+		guestLookups[key] = alerts.GuestLookup{
+			ResourceID: key,
+			Name:       ct.Name,
+			Instance:   ct.Instance,
+			Node:       ct.Node,
+			Type:       firstNonEmptyString(ct.Type, "lxc"),
+			VMID:       ct.VMID,
+			Tags:       append([]string(nil), ct.Tags...),
+		}
 	}
 
 	activeGuests := 0
@@ -1086,7 +1106,7 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPVEGuestSnapshots(allSnapshots, guestInfo))
 
 	if m.alertManager != nil {
-		m.alertManager.CheckSnapshotsForInstance(instanceName, allSnapshots, guestNames)
+		m.alertManager.CheckSnapshotsForInstance(instanceName, allSnapshots, guestLookups)
 	}
 
 	log.Debug().

@@ -1066,11 +1066,11 @@ func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
 			SizeBytes: 60 << 30,
 		},
 	}
-	guestNames := map[string]string{
-		"inst:node:100": "app-server",
+	guestLookups := map[string]GuestLookup{
+		"inst:node:100": {Name: "app-server"},
 	}
 
-	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
+	m.CheckSnapshotsForInstance("inst", snapshots, guestLookups)
 
 	m.mu.RLock()
 	snapshotSpecID := "inst:node:100/snapshot:inst-node-100-weekly"
@@ -1092,13 +1092,80 @@ func TestCheckSnapshotsForInstanceCreatesAndClearsAlerts(t *testing.T) {
 		t.Fatalf("canonicalSpecID = %v, want inst:node:100/snapshot:inst-node-100-weekly", got)
 	}
 
-	m.CheckSnapshotsForInstance("inst", nil, guestNames)
+	lookup := guestLookups["inst:node:100"]
+	lookup.Tags = []string{"pulse-no-alerts"}
+	guestLookups["inst:node:100"] = lookup
+	m.CheckSnapshotsForInstance("inst", snapshots, guestLookups)
+
+	m.mu.RLock()
+	_, exists = testLookupActiveAlert(t, m, buildCanonicalStateID("inst:node:100", snapshotSpecID))
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("expected pulse-no-alerts to clear the snapshot alert")
+	}
+
+	lookup.Tags = nil
+	guestLookups["inst:node:100"] = lookup
+	m.CheckSnapshotsForInstance("inst", snapshots, guestLookups)
+	m.mu.RLock()
+	_, exists = testLookupActiveAlert(t, m, buildCanonicalStateID("inst:node:100", snapshotSpecID))
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected snapshot alert to return after suppression is removed")
+	}
+
+	m.CheckSnapshotsForInstance("inst", nil, guestLookups)
 
 	m.mu.RLock()
 	_, exists = m.activeAlerts[buildCanonicalStateID("inst:node:100", snapshotSpecID)]
 	m.mu.RUnlock()
 	if exists {
 		t.Fatalf("expected snapshot alert to be cleared when snapshot missing")
+	}
+}
+
+func TestCheckSnapshotsRespectsConfiguredGuestTagBlacklist(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	cfg := AlertConfig{
+		Enabled: true,
+		SnapshotDefaults: SnapshotAlertConfig{
+			Enabled:      true,
+			WarningDays:  7,
+			CriticalDays: 14,
+		},
+		GuestTagBlacklist: []string{"maintenance"},
+	}
+	m.UpdateConfig(cfg)
+
+	snapshot := models.GuestSnapshot{
+		ID:       "inst-node-100-weekly",
+		Name:     "weekly",
+		Node:     "node",
+		Instance: "inst",
+		Type:     "qemu",
+		VMID:     100,
+		Time:     time.Now().Add(-10 * 24 * time.Hour),
+	}
+	guestLookups := map[string]GuestLookup{
+		"inst:node:100": {
+			Name:     "app-server",
+			Instance: "inst",
+			Node:     "node",
+			Type:     "qemu",
+			VMID:     100,
+			Tags:     []string{"production", "maintenance"},
+		},
+	}
+
+	m.CheckSnapshotsForInstance("inst", []models.GuestSnapshot{snapshot}, guestLookups)
+
+	m.mu.RLock()
+	_, exists := testLookupActiveAlert(t, m, buildCanonicalStateID("inst:node:100", "inst:node:100/snapshot:inst-node-100-weekly"))
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("expected configured ignored tag to suppress snapshot alert")
 	}
 }
 
@@ -1131,12 +1198,12 @@ func TestCheckSnapshotsRespectsOverrides(t *testing.T) {
 		},
 	}
 	resourceKey := "inst:node:100"
-	guestNames := map[string]string{
-		resourceKey: "app-server",
+	guestLookups := map[string]GuestLookup{
+		resourceKey: {Name: "app-server"},
 	}
 
 	// 1. Verify warning alert is created
-	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
+	m.CheckSnapshotsForInstance("inst", snapshots, guestLookups)
 	m.mu.RLock()
 	alert, exists := testLookupActiveAlert(t, m, "snapshot-age-inst:node:100:weekly")
 	m.mu.RUnlock()
@@ -1155,7 +1222,7 @@ func TestCheckSnapshotsRespectsOverrides(t *testing.T) {
 		},
 	}
 	m.UpdateConfig(cfg)
-	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
+	m.CheckSnapshotsForInstance("inst", snapshots, guestLookups)
 	m.mu.RLock()
 	_, exists = m.activeAlerts["snapshot-age-inst:node:100:weekly"]
 	m.mu.RUnlock()
@@ -1198,11 +1265,11 @@ func TestCheckSnapshotsForInstanceTriggersOnSnapshotSize(t *testing.T) {
 			SizeBytes: int64(120) << 30,
 		},
 	}
-	guestNames := map[string]string{
-		"inst:node:200": "db-server",
+	guestLookups := map[string]GuestLookup{
+		"inst:node:200": {Name: "db-server"},
 	}
 
-	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
+	m.CheckSnapshotsForInstance("inst", snapshots, guestLookups)
 
 	m.mu.RLock()
 	alert, exists := testLookupActiveAlert(t, m, "snapshot-age-inst-node-200-sizey")
@@ -1278,11 +1345,11 @@ func TestCheckSnapshotsForInstanceIncludesAgeAndSizeReasons(t *testing.T) {
 			SizeBytes: int64(90) << 30,
 		},
 	}
-	guestNames := map[string]string{
-		"inst:node:300": "app-server",
+	guestLookups := map[string]GuestLookup{
+		"inst:node:300": {Name: "app-server"},
 	}
 
-	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
+	m.CheckSnapshotsForInstance("inst", snapshots, guestLookups)
 
 	m.mu.RLock()
 	alert, exists := testLookupActiveAlert(t, m, "snapshot-age-inst-node-300-combined")
@@ -1373,6 +1440,30 @@ func TestCheckBackupsCreatesAndClearsAlerts(t *testing.T) {
 	}
 	if got := alert.Metadata["canonicalSpecID"]; got != "inst:node:100-backup-age" {
 		t.Fatalf("canonicalSpecID = %v, want inst:node:100-backup-age", got)
+	}
+
+	lookup := guestsByKey[key]
+	lookup.Tags = []string{"pulse-no-alerts"}
+	guestsByKey[key] = lookup
+	guestsByVMID["100"] = []GuestLookup{lookup}
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	_, exists = testLookupActiveAlert(t, m, buildCanonicalStateID("inst:node:100", backupSpecID))
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("expected pulse-no-alerts to clear the backup alert")
+	}
+
+	lookup.Tags = nil
+	guestsByKey[key] = lookup
+	guestsByVMID["100"] = []GuestLookup{lookup}
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
+	m.mu.RLock()
+	_, exists = testLookupActiveAlert(t, m, buildCanonicalStateID("inst:node:100", backupSpecID))
+	m.mu.RUnlock()
+	if !exists {
+		t.Fatalf("expected backup alert to return after suppression is removed")
 	}
 
 	// Recent backup clears alert

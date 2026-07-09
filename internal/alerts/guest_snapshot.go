@@ -188,6 +188,7 @@ func guestSnapshotFromLookup(lookup GuestLookup, fallbackName string) guestSnaps
 	if snapshot.VMID <= 0 && lookup.VMID > 0 {
 		snapshot.VMID = lookup.VMID
 	}
+	snapshot.Tags = append([]string(nil), lookup.Tags...)
 	return snapshot.normalizeCollections()
 }
 

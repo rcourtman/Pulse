@@ -209,6 +209,7 @@ type GuestLookup struct {
 	Node       string
 	Type       string
 	VMID       int
+	Tags       []string
 }
 
 // AlertConfig represents the complete alert configuration

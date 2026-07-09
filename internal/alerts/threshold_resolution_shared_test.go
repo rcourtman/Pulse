@@ -437,12 +437,12 @@ func TestCheckSnapshotsUsesGuestContextForCustomRules(t *testing.T) {
 			Time:     now.Add(-10 * 24 * time.Hour),
 		},
 	}
-	guestNames := map[string]string{
-		BuildGuestKey("inst", "node", 100): "db-server",
-		BuildGuestKey("inst", "node", 101): "web-server",
+	guestLookups := map[string]GuestLookup{
+		BuildGuestKey("inst", "node", 100): {Name: "db-server"},
+		BuildGuestKey("inst", "node", 101): {Name: "web-server"},
 	}
 
-	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
+	m.CheckSnapshotsForInstance("inst", snapshots, guestLookups)
 
 	m.mu.RLock()
 	_, dbExists := testLookupActiveAlert(t, m, "snapshot-age-inst-node-100-weekly")

@@ -247,6 +247,12 @@ posture alerts. Snapshot age, backup age, powered-off state, and
 configuration-change reevaluation must all construct a canonical lightweight
 guest snapshot and route threshold resolution through the shared
 guest-defaults → filter-driven custom rules → guest-override chain.
+That canonical guest context must preserve the live guest name and tags for
+snapshot and backup posture evaluation. Ignored prefixes, `pulse-no-alerts`,
+configured ignored tags, and required-tag filtering must resolve through the
+same guest alert policy before any guest-derived alert is created; posture
+pollers may not downgrade that context to a name-only lookup that bypasses the
+operator's suppression policy.
 Passing `nil` guest context or resolving only overrides/defaults is forbidden
 because it silently bypasses custom guest rules and makes guest lifecycle
 alerting diverge from running-guest metric truth.

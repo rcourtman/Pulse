@@ -280,7 +280,7 @@ func canonicalBackupSubjectResourceID(alertKey string, record backupRecord) stri
 }
 
 // CheckSnapshotsForInstance evaluates guest snapshots for age-based alerts.
-func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []models.GuestSnapshot, guestNames map[string]string) {
+func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []models.GuestSnapshot, guestsByKey map[string]GuestLookup) {
 	m.mu.RLock()
 	enabled := m.config.Enabled
 	snapshotCfg := m.config.SnapshotDefaults
@@ -319,9 +319,32 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		}
 
 		// Determine thresholds for this snapshot
-		resourceID := fmt.Sprintf("%s:%s:%d", snapshot.Instance, snapshot.Node, snapshot.VMID)
-		guestName := strings.TrimSpace(guestNames[BuildGuestKey(snapshot.Instance, snapshot.Node, snapshot.VMID)])
-		guestContext := guestSnapshotFromIdentity(resourceID, guestName, snapshot.Node, snapshot.Instance, snapshot.Type, "")
+		resourceID := BuildGuestKey(snapshot.Instance, snapshot.Node, snapshot.VMID)
+		lookup := guestsByKey[resourceID]
+		if lookup.ResourceID == "" {
+			lookup.ResourceID = resourceID
+		}
+		if lookup.Instance == "" {
+			lookup.Instance = snapshot.Instance
+		}
+		if lookup.Node == "" {
+			lookup.Node = snapshot.Node
+		}
+		if lookup.Type == "" {
+			lookup.Type = snapshot.Type
+		}
+		if lookup.VMID <= 0 {
+			lookup.VMID = snapshot.VMID
+		}
+		guestContext := guestSnapshotFromLookup(lookup, "")
+		guestName := guestContext.Name
+		policy := m.resolveGuestAlertPolicy(guestContext)
+		if policy.SuppressionReason != "" {
+			if cleared := m.suppressGuestAlerts(resourceID); cleared {
+				m.saveActiveAlertsAsync(policy.SuppressionReason)
+			}
+			continue
+		}
 		m.mu.RLock()
 		gh := m.getGuestThresholds(guestContext, resourceID)
 		m.mu.RUnlock()
@@ -756,6 +779,13 @@ func (m *Manager) CheckBackupsWithInventory(
 			guestResourceID = guestContext.ID
 		}
 		if guestResourceID != "" {
+			policy := m.resolveGuestAlertPolicy(guestContext)
+			if policy.SuppressionReason != "" {
+				if cleared := m.suppressGuestAlerts(guestResourceID); cleared {
+					m.saveActiveAlertsAsync(policy.SuppressionReason)
+				}
+				continue
+			}
 			m.mu.RLock()
 			gh := m.getGuestThresholds(guestContext, guestResourceID)
 			m.mu.RUnlock()

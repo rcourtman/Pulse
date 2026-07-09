@@ -239,6 +239,13 @@ resource health.
    guest slices as the primary source of truth. Clustered PVE snapshot polling
    must therefore see guests collected earlier in the same cycle before calling
    the Proxmox guest snapshot APIs.
+   Guest lookups handed from backup/snapshot polling to alert evaluation must
+   preserve the canonical instance, node, VMID, type, live display name, and
+   live guest tags from read-state. Monitoring must key snapshot lookups with
+   the shared alert guest identity and must not downgrade the handoff to a
+   name-only map, because ignored-name prefixes, `pulse-no-alerts`, ignored
+   tags, and required-tag filtering are alerts-owned policies that require the
+   same guest context as ordinary threshold evaluation.
    PBS backup snapshot refreshes in that same file must stay bounded by the
    package worker-pool constant and stream requests through workers instead of
    creating one goroutine per backup group; per-group API failures may reuse

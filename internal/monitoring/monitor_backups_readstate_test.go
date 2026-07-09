@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	proxmoxmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -84,6 +85,65 @@ func TestPopulateGuestNodeMapFromReadState_UsesCanonicalWorkloads(t *testing.T) 
 	}
 	if guestNodeMap[200] != "ct-node-from-store" {
 		t.Fatalf("expected container node from canonical read-state, got %q", guestNodeMap[200])
+	}
+}
+
+func TestBuildGuestLookupsFromReadState_PreservesCanonicalIdentityAndTags(t *testing.T) {
+	readState := backupReadState([]unifiedresources.Resource{
+		{
+			ID:     "vm-100",
+			Type:   unifiedresources.ResourceTypeVM,
+			Name:   "database",
+			Status: unifiedresources.StatusOnline,
+			Tags:   []string{"production", "pulse-no-alerts"},
+			Proxmox: &unifiedresources.ProxmoxData{
+				Instance: "pve1",
+				NodeName: "node1",
+				VMID:     100,
+			},
+		},
+		{
+			ID:     "ct-200",
+			Type:   unifiedresources.ResourceTypeSystemContainer,
+			Name:   "worker",
+			Status: unifiedresources.StatusOnline,
+			Tags:   []string{"maintenance"},
+			Proxmox: &unifiedresources.ProxmoxData{
+				Instance: "pve1",
+				NodeName: "node2",
+				VMID:     200,
+			},
+		},
+	})
+
+	byKey, byVMID := buildGuestLookupsFromReadState(readState, nil)
+
+	vmKey := alerts.BuildGuestKey("pve1", "node1", 100)
+	vm, ok := byKey[vmKey]
+	if !ok {
+		t.Fatalf("expected canonical VM lookup %q", vmKey)
+	}
+	if vm.Name != "database" || vm.Instance != "pve1" || vm.Node != "node1" || vm.VMID != 100 || vm.Type != "qemu" {
+		t.Fatalf("unexpected VM identity: %+v", vm)
+	}
+	if len(vm.Tags) != 2 || vm.Tags[0] != "production" || vm.Tags[1] != "pulse-no-alerts" {
+		t.Fatalf("expected VM tags to survive alert handoff, got %v", vm.Tags)
+	}
+
+	ctKey := alerts.BuildGuestKey("pve1", "node2", 200)
+	ct, ok := byKey[ctKey]
+	if !ok {
+		t.Fatalf("expected canonical container lookup %q", ctKey)
+	}
+	if ct.Name != "worker" || ct.Type != "lxc" || len(ct.Tags) != 1 || ct.Tags[0] != "maintenance" {
+		t.Fatalf("unexpected container lookup: %+v", ct)
+	}
+
+	if candidates := byVMID["100"]; len(candidates) != 1 || len(candidates[0].Tags) != 2 {
+		t.Fatalf("expected VMID lookup to preserve VM tags, got %+v", candidates)
+	}
+	if candidates := byVMID["200"]; len(candidates) != 1 || len(candidates[0].Tags) != 1 {
+		t.Fatalf("expected VMID lookup to preserve container tags, got %+v", candidates)
 	}
 }
 
