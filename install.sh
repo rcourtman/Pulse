@@ -5121,8 +5121,12 @@ reset_pulse() {
 }
 
 # When sourced (e.g. by tests) rather than executed, define the functions above
-# but do not run the installer.
-[[ "${BASH_SOURCE[0]}" == "$0" ]] || return 0
+# but do not run the installer. BASH_SOURCE is empty when the script is piped to
+# bash (curl ... | bash), which is an execution and not a source, so guard the
+# lookup with a default to avoid an "unbound variable" abort under `set -u`.
+if [[ -n "${BASH_SOURCE[0]:-}" && "${BASH_SOURCE[0]}" != "$0" ]]; then
+    return 0
+fi
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do

@@ -2731,7 +2731,13 @@ verify_download_signature "$TMP_BIN" "$SSH_SIGNATURE_HEADER"
 chmod +x "$TMP_BIN"
 NEW_VERSION=$("$TMP_BIN" --version 2>/dev/null | head -1 || echo "unknown")
 
-if [[ -n "$SERVER_VERSION" && -n "$NEW_VERSION" && "$NEW_VERSION" != "unknown" && "$NEW_VERSION" != "$SERVER_VERSION" ]]; then
+# Compare versions with any leading "v" stripped so the agent binary's "v6.0.4"
+# and the server /api/version "6.0.4" are treated as equal. Only a genuine
+# version difference (e.g. 6.0.3 vs 6.0.4) should raise the mismatch warning.
+NEW_VERSION_NORMALIZED="${NEW_VERSION#v}"
+SERVER_VERSION_NORMALIZED="${SERVER_VERSION#v}"
+
+if [[ -n "$SERVER_VERSION" && -n "$NEW_VERSION" && "$NEW_VERSION" != "unknown" && "$NEW_VERSION_NORMALIZED" != "$SERVER_VERSION_NORMALIZED" ]]; then
     log_warn "Downloaded agent version (${NEW_VERSION}) does not match Pulse server version (${SERVER_VERSION}). Check that Pulse is upgraded and that any reverse proxy is not serving a stale cached binary."
 fi
 
