@@ -7704,21 +7704,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "codex-lane-l1",
-      "agent_id": "codex",
-      "summary": "Prepare and publish the v6.0.6-rc.1 exact-SHA release candidate",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-10T18:14:04Z",
-      "heartbeat_at": "2026-07-10T18:14:04Z",
-      "expires_at": "2026-07-10T20:14:04Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L1"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

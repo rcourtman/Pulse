@@ -231,7 +231,7 @@ func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
 	assertFileContainsAllNormalized(t, repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"),
 		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
-		"legacy agent update token recovery, threshold-aware temperature display severity, PBS backup polling memory bounds, physical disk SMART/Proxmox merge identity, Proxmox token preservation diagnostics, legacy OIDC SSO discovery with CSP nonce handling, mobile onboarding URL handoff sanitization, SSO browser-session display labels, route-aware Proxmox host URLs, MSP report scheduling with a portal alert rollup, per-disk-type temperature thresholds, PBS backup discovery recovery, host fingerprint auto-discovery, and surfaced agent auth failures behind RC validation",
+		"the typed Pulse Intelligence lifecycle, monitor-first product workflows, native-agent update safety, Windows logged-readiness and recovery proof, OIDC callback recovery, and fail-closed security hardening behind RC validation",
 		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)
 }

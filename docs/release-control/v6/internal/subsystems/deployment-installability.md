@@ -966,23 +966,16 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
-The active stable `v6.0.5` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.0.6-rc.1` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.0.5` release
-version. This patch release uses the stable hotfix path with
-`rollback_version=v6.0.4`, `hotfix_exception=true`, a release-owner reason,
-and no fabricated same-version RC tag. It advances the v6.0.4 stable line with
-customer-support fixes for Gemini Patrol tool-call readiness, remembered-login
-submit persistence, Proxmox SATA/SAT SMART temperature fallback, legacy agent
-update token recovery, threshold-aware temperature display severity, PBS backup
-polling memory bounds, physical disk SMART/Proxmox merge identity, Proxmox
-token preservation diagnostics, legacy OIDC SSO discovery with CSP nonce
-handling, mobile onboarding URL handoff sanitization, SSO browser-session
-display labels, route-aware Proxmox host URLs, MSP report scheduling with a
-portal alert rollup, per-disk-type temperature thresholds, PBS backup discovery
-recovery, host fingerprint auto-discovery, surfaced agent auth failures,
-paid-runtime activation fingerprint reuse, billing-period license status, and
-pinned installer execution hardening to a stable patch.
+fallback, and Helm chart release metadata to the same `6.0.6-rc.1` release
+version. This support prerelease keeps `rollback_version=v6.0.5`, publishes a
+versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and
+does not move stable/latest install pointers or stable semver aliases. It puts
+the typed Pulse Intelligence lifecycle, monitor-first product workflows,
+native-agent update safety, Windows logged-readiness and recovery proof,
+OIDC callback recovery, and fail-closed security hardening behind RC
+validation before the next stable patch.
 The initial GA promotion
 metadata remains
 `promoted_from_tag=v6.0.0-rc.7`, `rollback_version=v5.1.35`,
@@ -1036,11 +1029,11 @@ compose image default, standalone installer fallback constant, and packaged
 Helm metadata. A draft release workflow failure caused by stale image or chart
 pins is a release-packet blocker until the defaults, tests, and evidence
 record are refreshed from the new branch head.
-For the active stable `v6.0.5` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.0.5`
+For the active support prerelease `v6.0.6-rc.1` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.0.6-rc.1`
 until the next governed stable cut moves them forward. The stable promotion
-guard remains in force by rejecting leftover `-rc.` defaults when the governed
-`VERSION` is a stable release.
+guard remains in force and must reject leftover `-rc.` defaults when the
+governed `VERSION` returns to a stable release.
 The RC7 packet refresh records `fc10de9b5477613316473267b72b05b6b2b7aaff`
 as the current validation-risk commit. That head includes the earlier
 Docker-default correction plus the follow-on capacity-forecast and Patrol
