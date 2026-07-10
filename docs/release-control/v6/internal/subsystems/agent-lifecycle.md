@@ -347,7 +347,11 @@ lifecycle evidence, and retry/idempotency handling must not create duplicate
 lifecycle events. Approval or rejection decisions for those plans must flow
 through `POST /api/actions/{id}/decision`, which records API-owned audit and
 lifecycle evidence only; lifecycle surfaces must not treat approval as
-implicit command execution or define a parallel execution handoff. Assistant
+implicit command execution or define a parallel execution handoff. The
+Patrol proposal broker (`internal/api/patrol_action_broker.go`) rides that
+same API-owned lifecycle; agent lifecycle surfaces must not consume
+Patrol-origin action audits as an agent command grant or lifecycle
+execution shortcut. Assistant
 handoffs that recover a live Patrol approval by finding ID are still AI/runtime
 review context only; agent lifecycle surfaces must not treat that recovered
 approval reference as an agent command grant or host-execution shortcut.

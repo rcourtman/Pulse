@@ -140,21 +140,26 @@ type FindingOperationalMemory struct {
 
 // InvestigationSession represents an AI investigation of a finding.
 type InvestigationSession struct {
-	ID             string               `json:"id"`
-	FindingID      string               `json:"finding_id"`
-	SessionID      string               `json:"session_id"` // Chat session ID
-	Status         InvestigationStatus  `json:"status"`
-	StartedAt      time.Time            `json:"started_at"`
-	CompletedAt    *time.Time           `json:"completed_at,omitempty"`
-	TurnCount      int                  `json:"turn_count"`
-	Outcome        InvestigationOutcome `json:"outcome,omitempty"`
-	ProposedFix    *Fix                 `json:"proposed_fix,omitempty"`
-	ApprovalID     string               `json:"approval_id,omitempty"`
-	ToolsAvailable []string             `json:"tools_available"`
-	ToolsUsed      []string             `json:"tools_used"`
-	EvidenceIDs    []string             `json:"evidence_ids"`
-	Summary        string               `json:"summary,omitempty"`
-	Error          string               `json:"error,omitempty"`
+	ID          string               `json:"id"`
+	FindingID   string               `json:"finding_id"`
+	SessionID   string               `json:"session_id"` // Chat session ID
+	Status      InvestigationStatus  `json:"status"`
+	StartedAt   time.Time            `json:"started_at"`
+	CompletedAt *time.Time           `json:"completed_at,omitempty"`
+	TurnCount   int                  `json:"turn_count"`
+	Outcome     InvestigationOutcome `json:"outcome,omitempty"`
+	// ProposedFix and ApprovalID are migration-only: persisted legacy
+	// command-shaped fixes stay readable as non-executable narrative, but
+	// new investigations never populate them. Typed remediation lives in
+	// Action, which references the canonical action lifecycle record.
+	ProposedFix    *Fix             `json:"proposed_fix,omitempty"`
+	ApprovalID     string           `json:"approval_id,omitempty"`
+	Action         *ActionReference `json:"action,omitempty"`
+	ToolsAvailable []string         `json:"tools_available"`
+	ToolsUsed      []string         `json:"tools_used"`
+	EvidenceIDs    []string         `json:"evidence_ids"`
+	Summary        string           `json:"summary,omitempty"`
+	Error          string           `json:"error,omitempty"`
 }
 
 func EmptyInvestigationSession() InvestigationSession {
@@ -215,8 +220,11 @@ type InvestigationRecord struct {
 	ToolsUsed         []string                      `json:"tools_used"`
 	StartedAt         time.Time                     `json:"started_at"`
 	CompletedAt       *time.Time                    `json:"completed_at,omitempty"`
-	ApprovalID        string                        `json:"approval_id,omitempty"`
-	Error             string                        `json:"error,omitempty"`
+	// ApprovalID and ProposedFix are migration-only legacy fields; new
+	// records reference the canonical action lifecycle through Action.
+	ApprovalID string           `json:"approval_id,omitempty"`
+	Action     *ActionReference `json:"action,omitempty"`
+	Error      string           `json:"error,omitempty"`
 }
 
 // InvestigationRecordSubject identifies the infrastructure object under

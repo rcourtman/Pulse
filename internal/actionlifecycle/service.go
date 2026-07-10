@@ -56,7 +56,23 @@ type Service struct {
 	// record, including refused-before-dispatch failures, so SSE bridges
 	// and reconcilers observe the full lifecycle regardless of transport.
 	OnActionCompleted func(unified.ActionAuditRecord)
-	Now               func() time.Time
+	// OnActionTransition receives the audit record after every successfully
+	// persisted state transition: plan creation, approval decisions, and
+	// terminal execution outcomes (including refusals). Persistence always
+	// happens before publication, so a subscriber that reconciles origin
+	// surfaces (e.g. Patrol finding outcomes) never observes a state the
+	// store could still lose. Terminal records additionally flow through
+	// OnActionCompleted after this hook.
+	OnActionTransition func(unified.ActionAuditRecord)
+	Now                func() time.Time
+}
+
+// PlanOptions carries broker-owned planning metadata that must never be
+// accepted from a public transport request body.
+type PlanOptions struct {
+	// Origin identifies the internal proposing surface and its
+	// correlation IDs. Nil for operator/API-initiated plans.
+	Origin *unified.ActionOrigin
 }
 
 // Sentinel errors for dependency failures. Callers map these to their
@@ -199,6 +215,13 @@ func NormalizeRequest(req unified.ActionRequest) unified.ActionRequest {
 // requirements come from the capability's declared policy, never from the
 // caller.
 func (s *Service) Plan(ctx context.Context, orgID string, req unified.ActionRequest) (unified.ActionPlan, error) {
+	return s.PlanWithOptions(ctx, orgID, req, PlanOptions{})
+}
+
+// PlanWithOptions is Plan plus broker-owned metadata. In-process proposing
+// surfaces use it to stamp the action's origin; the HTTP adapter always
+// calls plain Plan so a public request can never claim a first-party origin.
+func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified.ActionRequest, opts PlanOptions) (unified.ActionPlan, error) {
 	req.ResourceID = unified.CanonicalResourceID(req.ResourceID)
 	if req.ResourceID == "" {
 		return unified.ActionPlan{}, &actionplanner.ValidationError{Field: "resourceId", Message: "resource id is required"}
@@ -239,16 +262,46 @@ func (s *Service) Plan(ctx context.Context, orgID string, req unified.ActionRequ
 	if err != nil {
 		return unified.ActionPlan{}, err
 	}
-	if err := PersistPlanAudit(store, req, plan); err != nil {
+	record, err := persistPlanAudit(store, req, plan, opts.Origin)
+	if err != nil {
 		return unified.ActionPlan{}, &PersistError{Op: "action plan audit", Err: err}
 	}
+	s.publishTransition(record)
 	return plan, nil
+}
+
+// Capabilities returns the resource's advertised capability declarations
+// through the same registry resolution and typed errors as planning, so a
+// proposing surface can inspect capability names and parameter schemas
+// without guessing planner input or duplicating registry lookup.
+func (s *Service) Capabilities(ctx context.Context, orgID, resourceID string) ([]unified.ResourceCapability, error) {
+	_ = ctx
+	resourceID = unified.CanonicalResourceID(resourceID)
+	if resourceID == "" {
+		return nil, &actionplanner.ValidationError{Field: "resourceId", Message: "resource id is required"}
+	}
+	registry, err := s.registry(orgID)
+	if err != nil {
+		return nil, err
+	}
+	resource, ok := registry.Get(resourceID)
+	if !ok || resource == nil {
+		return nil, &ResourceNotFoundError{ResourceID: resourceID}
+	}
+	capabilities := make([]unified.ResourceCapability, len(resource.Capabilities))
+	copy(capabilities, resource.Capabilities)
+	return capabilities, nil
 }
 
 // PersistPlanAudit records the planned action's audit record and its
 // initial lifecycle events, deduplicating states that were already
 // recorded for the same action ID (idempotent replans).
 func PersistPlanAudit(store Store, req unified.ActionRequest, plan unified.ActionPlan) error {
+	_, err := persistPlanAudit(store, req, plan, nil)
+	return err
+}
+
+func persistPlanAudit(store Store, req unified.ActionRequest, plan unified.ActionPlan, origin *unified.ActionOrigin) (unified.ActionAuditRecord, error) {
 	state := PlannedActionState(plan)
 	record := unified.ActionAuditRecord{
 		ID:        plan.ActionID,
@@ -257,14 +310,15 @@ func PersistPlanAudit(store Store, req unified.ActionRequest, plan unified.Actio
 		State:     state,
 		Request:   req,
 		Plan:      plan,
+		Origin:    unified.NormalizeActionOrigin(origin),
 	}
 	if err := store.RecordActionAudit(record); err != nil {
-		return err
+		return unified.ActionAuditRecord{}, err
 	}
 
 	existingEvents, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 100)
 	if err != nil {
-		return err
+		return unified.ActionAuditRecord{}, err
 	}
 	seenStates := map[unified.ActionState]bool{}
 	for _, event := range existingEvents {
@@ -279,7 +333,7 @@ func PersistPlanAudit(store Store, req unified.ActionRequest, plan unified.Actio
 			Actor:     req.RequestedBy,
 			Message:   "Action plan created.",
 		}); err != nil {
-			return err
+			return unified.ActionAuditRecord{}, err
 		}
 	}
 	if state != unified.ActionStatePlanned && !seenStates[state] {
@@ -290,10 +344,10 @@ func PersistPlanAudit(store Store, req unified.ActionRequest, plan unified.Actio
 			Actor:     req.RequestedBy,
 			Message:   "Action is waiting for approval before execution.",
 		}); err != nil {
-			return err
+			return unified.ActionAuditRecord{}, err
 		}
 	}
-	return nil
+	return record, nil
 }
 
 // PlannedActionState is the initial audit state for a fresh plan: pending
@@ -341,6 +395,7 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, approval u
 		}
 		return unified.ActionAuditRecord{}, &PersistError{Op: "action decision", Err: err}
 	}
+	s.publishTransition(updated)
 	return updated, nil
 }
 
@@ -374,6 +429,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 			if persistErr != nil {
 				return unified.ActionAuditRecord{}, &PersistError{Op: "refused action execution", Err: persistErr}
 			}
+			s.publishTransition(failed)
 			s.publishCompleted(failed)
 			return failed, err
 		}
@@ -388,6 +444,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 			if persistErr != nil {
 				return unified.ActionAuditRecord{}, &PersistError{Op: "refused action execution", Err: persistErr}
 			}
+			s.publishTransition(failed)
 			s.publishCompleted(failed)
 			return failed, err
 		}
@@ -399,6 +456,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 			if persistErr != nil {
 				return unified.ActionAuditRecord{}, &PersistError{Op: "refused action execution", Err: persistErr}
 			}
+			s.publishTransition(failed)
 			s.publishCompleted(failed)
 			return failed, err
 		}
@@ -427,6 +485,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 	if err := store.RecordActionExecutionResult(completed, doneEvent); err != nil {
 		return unified.ActionAuditRecord{}, &PersistError{Op: "action execution result", Err: err}
 	}
+	s.publishTransition(completed)
 	s.publishCompleted(completed)
 	return completed, nil
 }
@@ -518,4 +577,13 @@ func (s *Service) publishCompleted(record unified.ActionAuditRecord) {
 		return
 	}
 	s.OnActionCompleted(record)
+}
+
+// publishTransition notifies the persisted-state subscriber. Callers invoke
+// it only after the corresponding store write succeeded.
+func (s *Service) publishTransition(record unified.ActionAuditRecord) {
+	if s == nil || s.OnActionTransition == nil {
+		return
+	}
+	s.OnActionTransition(record)
 }

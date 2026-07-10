@@ -4540,6 +4540,30 @@ investigation-fix approvals must also enter that shared decision lifecycle:
 when the approval has a governed action plan and moves the owning Patrol
 finding to `fix_rejected`, so a declined fix remains a visible governed loop
 outcome rather than disappearing when the pending approval leaves the queue.
+The typed action-proposal seam in `pkg/aicontracts/action_broker.go` is the
+successor to that command-shaped approval flow and the ONLY sanctioned route
+from an enterprise Patrol investigation to a Pulse infrastructure mutation:
+`OrchestratorActionBroker` exposes exactly `Capabilities` (read-only catalog
+of a resource's advertised capabilities and parameter schemas, including
+sensitivity) and `Submit` (plan-only typed proposal). The contract
+deliberately omits org ID, requestedBy, autonomy, risk, approval-policy,
+destructive, command, and target-host fields, and has no decide or execute
+methods, so enterprise code can neither claim authorization nor dispatch;
+authorization always derives from the capability's declared policy on the
+core lifecycle. `OrchestratorDeps.ActionBroker` carries the seam;
+`CmdExecutor` and `ApprovalStore` on the same struct are migration-only
+legacy side doors that must not gain new callers and are scheduled for
+removal with the orchestrator migration. Investigations reference their
+canonical action through the additive `Action *ActionReference` fields on
+`InvestigationSession` and `InvestigationRecord`; the command-shaped
+`ProposedFix`/`ApprovalID` fields are migration-only narrative and must
+never be populated by new investigations nor re-armed into executable
+approvals. Proposal parameters live in the canonical action audit, not
+duplicated into investigation stores. Proofs:
+`TestOrchestratorActionBrokerIsProposeOnly`,
+`TestActionProposalWireShapeIsTypedAndCommandFree`, and
+`TestActionReferenceIsAdditiveOnInvestigationShapes` in
+`pkg/aicontracts/contracts_test.go`.
 The same ownership includes the Pulse query tool schema under
 `internal/ai/tools/`: topology-query input names must stay canonical inside
 the AI runtime itself, so new tool arguments such as `max_proxmox_nodes`

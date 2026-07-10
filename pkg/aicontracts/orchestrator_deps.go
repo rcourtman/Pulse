@@ -240,15 +240,23 @@ type OrchestratorAIFindingsStore interface {
 
 // OrchestratorDeps contains all dependencies for constructing an investigation orchestrator.
 type OrchestratorDeps struct {
-	ChatService   OrchestratorChatService
+	ChatService OrchestratorChatService
+	// CmdExecutor and ApprovalStore are the legacy command-execution side
+	// doors, retained only until the typed ActionBroker migration lands.
+	// New orchestrator code must propose through ActionBroker and never
+	// dispatch command text or create command-shaped approvals.
 	CmdExecutor   OrchestratorCommandExecutor
 	Store         InvestigationStore
 	FindingsStore OrchestratorFindingsStore
 	ApprovalStore OrchestratorApprovalStore // may be nil
-	Config        InvestigationConfig
-	InfraContext  OrchestratorInfraContextProvider // may be nil
-	Autonomy      OrchestratorAutonomyProvider
-	FixVerifier   OrchestratorFixVerifier
-	License       OrchestratorLicenseChecker
-	Metrics       OrchestratorMetricsCallback
+	// ActionBroker is the typed, plan-only proposal seam into the core
+	// action lifecycle. Tenant-bound and actor-stamped by the core
+	// adapter; may be nil until wiring lands.
+	ActionBroker OrchestratorActionBroker
+	Config       InvestigationConfig
+	InfraContext OrchestratorInfraContextProvider // may be nil
+	Autonomy     OrchestratorAutonomyProvider
+	FixVerifier  OrchestratorFixVerifier
+	License      OrchestratorLicenseChecker
+	Metrics      OrchestratorMetricsCallback
 }

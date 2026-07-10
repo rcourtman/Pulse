@@ -428,7 +428,8 @@ func (s *SQLiteResourceStore) initSchema() error {
 		plan_json TEXT NOT NULL,
 		approvals_json TEXT,
 		result_json TEXT,
-		verification_outcome_json TEXT NOT NULL DEFAULT ''
+		verification_outcome_json TEXT NOT NULL DEFAULT '',
+		origin_json TEXT
 	);
 	CREATE INDEX IF NOT EXISTS idx_action_audits_canonical_created ON action_audits(canonical_id, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_action_audits_action_id ON action_audits(action_id);
@@ -550,20 +551,25 @@ func (s *SQLiteResourceStore) migrateResourceIdentitiesSchema() error {
 	return nil
 }
 
-// migrateActionAuditsSchema adds the verification_outcome_json column to
-// older action_audits tables so the VerificationOutcome field on
-// ActionAuditRecord persists across restarts. Records written before the
-// migration read back with the default unknown status via the normalizer.
+// migrateActionAuditsSchema adds the verification_outcome_json and
+// origin_json columns to older action_audits tables so the
+// VerificationOutcome and broker-owned Origin fields on ActionAuditRecord
+// persist across restarts. Records written before the migration read back
+// with the default unknown status / nil origin via the normalizer.
 func (s *SQLiteResourceStore) migrateActionAuditsSchema() error {
 	columns, err := s.tableColumns("action_audits")
 	if err != nil {
 		return err
 	}
-	if _, ok := columns["verification_outcome_json"]; ok {
-		return nil
+	if _, ok := columns["verification_outcome_json"]; !ok {
+		if _, err := s.db.Exec("ALTER TABLE action_audits ADD COLUMN verification_outcome_json TEXT NOT NULL DEFAULT ''"); err != nil {
+			return fmt.Errorf("add action_audits.verification_outcome_json column: %w", err)
+		}
 	}
-	if _, err := s.db.Exec("ALTER TABLE action_audits ADD COLUMN verification_outcome_json TEXT NOT NULL DEFAULT ''"); err != nil {
-		return fmt.Errorf("add action_audits.verification_outcome_json column: %w", err)
+	if _, ok := columns["origin_json"]; !ok {
+		if _, err := s.db.Exec("ALTER TABLE action_audits ADD COLUMN origin_json TEXT"); err != nil {
+			return fmt.Errorf("add action_audits.origin_json column: %w", err)
+		}
 	}
 	return nil
 }
@@ -1675,10 +1681,18 @@ func recordActionAuditSQL(exec sqlExecutor, record ActionAuditRecord) error {
 	if err != nil {
 		return fmt.Errorf("marshal verification outcome: %w", err)
 	}
+	originJSON := ""
+	if origin := NormalizeActionOrigin(record.Origin); origin != nil {
+		encoded, err := json.Marshal(origin)
+		if err != nil {
+			return fmt.Errorf("marshal action origin: %w", err)
+		}
+		originJSON = string(encoded)
+	}
 
 	_, err = exec.Exec(`
-		INSERT INTO action_audits (id, action_id, canonical_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO action_audits (id, action_id, canonical_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			action_id=excluded.action_id,
 			canonical_id=excluded.canonical_id,
@@ -1690,8 +1704,9 @@ func recordActionAuditSQL(exec sqlExecutor, record ActionAuditRecord) error {
 			plan_json=excluded.plan_json,
 			approvals_json=excluded.approvals_json,
 			result_json=excluded.result_json,
-			verification_outcome_json=excluded.verification_outcome_json
-	`, record.ID, record.ID, CanonicalResourceID(record.Request.ResourceID), record.Request.RequestID, record.CreatedAt, record.UpdatedAt, string(record.State), string(requestJSON), string(planJSON), string(approvalsJSON), string(resultJSON), string(verificationOutcomeJSON))
+			verification_outcome_json=excluded.verification_outcome_json,
+			origin_json=excluded.origin_json
+	`, record.ID, record.ID, CanonicalResourceID(record.Request.ResourceID), record.Request.RequestID, record.CreatedAt, record.UpdatedAt, string(record.State), string(requestJSON), string(planJSON), string(approvalsJSON), string(resultJSON), string(verificationOutcomeJSON), originJSON)
 	if err != nil {
 		return fmt.Errorf("insert action audit: %w", err)
 	}
@@ -1723,8 +1738,8 @@ func scanActionAuditRecord(scanner actionAuditScanner) (ActionAuditRecord, error
 	var record ActionAuditRecord
 	var stateStr string
 	var actionID, requestID string
-	var requestJSON, planJSON, approvalsJSON, resultJSON, verificationOutcomeJSON sql.NullString
-	if err := scanner.Scan(&record.ID, &actionID, &requestID, &record.CreatedAt, &record.UpdatedAt, &stateStr, &requestJSON, &planJSON, &approvalsJSON, &resultJSON, &verificationOutcomeJSON); err != nil {
+	var requestJSON, planJSON, approvalsJSON, resultJSON, verificationOutcomeJSON, originJSON sql.NullString
+	if err := scanner.Scan(&record.ID, &actionID, &requestID, &record.CreatedAt, &record.UpdatedAt, &stateStr, &requestJSON, &planJSON, &approvalsJSON, &resultJSON, &verificationOutcomeJSON, &originJSON); err != nil {
 		return ActionAuditRecord{}, err
 	}
 
@@ -1759,6 +1774,13 @@ func scanActionAuditRecord(scanner actionAuditScanner) (ActionAuditRecord, error
 		record.VerificationOutcome = outcome
 	}
 	record.VerificationOutcome = NormalizeVerificationOutcome(record.VerificationOutcome)
+	if originJSON.Valid && originJSON.String != "" && originJSON.String != "null" {
+		var origin ActionOrigin
+		if err := json.Unmarshal([]byte(originJSON.String), &origin); err != nil {
+			return ActionAuditRecord{}, fmt.Errorf("unmarshal action origin: %w", err)
+		}
+		record.Origin = NormalizeActionOrigin(&origin)
+	}
 	record.Request.RequestID = requestID
 	record.Request.ResourceID = CanonicalResourceID(record.Request.ResourceID)
 	_ = actionID
@@ -1801,7 +1823,7 @@ func (s *SQLiteResourceStore) GetActionAudit(actionID string) (ActionAuditRecord
 
 func (s *SQLiteResourceStore) GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error) {
 	query := `
-		SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json
+		SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
 		FROM action_audits`
 
 	args := []any{}
@@ -2024,7 +2046,7 @@ func (s *SQLiteResourceStore) getActionAudit(actionID string) (ActionAuditRecord
 		return ActionAuditRecord{}, false, nil
 	}
 	row := s.db.QueryRow(`
-		SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json
+		SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
 		FROM action_audits
 		WHERE id = ?
 	`, actionID)

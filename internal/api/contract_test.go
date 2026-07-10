@@ -20422,3 +20422,30 @@ func TestProUpdateBrokerWiringContract(t *testing.T) {
 		}
 	}
 }
+
+func TestContract_PatrolActionBrokerIsPlanOnly(t *testing.T) {
+	source, err := os.ReadFile("patrol_action_broker.go")
+	if err != nil {
+		t.Fatalf("read patrol_action_broker.go: %v", err)
+	}
+	src := string(source)
+	for _, snippet := range []string{
+		// Proposals ride the shared lifecycle service with broker-owned
+		// origin metadata and the fixed Patrol actor.
+		"PlanWithOptions(ctx, b.orgID",
+		`patrolActionBrokerActor = "pulse_patrol"`,
+		`patrolActionOriginSurface = "patrol"`,
+		"rejectSensitiveParams",
+	} {
+		if !strings.Contains(src, snippet) {
+			t.Fatalf("patrol_action_broker.go must pin plan-only broker snippet %q", snippet)
+		}
+	}
+	// The broker must stay a proposer: no decision or execution calls on
+	// the lifecycle service, ever.
+	for _, forbidden := range []string{".Decide(", ".Execute(", "ExecuteAction(", "ExecuteCommand("} {
+		if strings.Contains(src, forbidden) {
+			t.Fatalf("patrol_action_broker.go must not dispatch via %q", forbidden)
+		}
+	}
+}

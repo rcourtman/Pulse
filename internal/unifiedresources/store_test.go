@@ -2540,3 +2540,64 @@ func TestCapResourceChanges_KeepsNewestRows(t *testing.T) {
 		}
 	}
 }
+
+func TestSQLiteStoreActionAuditOriginRoundTrip(t *testing.T) {
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatalf("NewSQLiteResourceStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	record := ActionAuditRecord{
+		ID:    "act_origin_roundtrip",
+		State: ActionStatePending,
+		Request: ActionRequest{
+			RequestID:      "prop-1",
+			ResourceID:     "vm:42",
+			CapabilityName: "restart",
+			RequestedBy:    "pulse_patrol",
+		},
+		Plan: ActionPlan{
+			ActionID:         "act_origin_roundtrip",
+			RequestID:        "prop-1",
+			Allowed:          true,
+			RequiresApproval: true,
+		},
+		Origin: &ActionOrigin{
+			Surface:         " patrol ",
+			FindingID:       "finding-1",
+			InvestigationID: "inv-1",
+			ProposalID:      "prop-1",
+		},
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+
+	got, ok, err := store.GetActionAudit("act_origin_roundtrip")
+	if err != nil || !ok {
+		t.Fatalf("GetActionAudit: ok=%v err=%v", ok, err)
+	}
+	if got.Origin == nil {
+		t.Fatal("origin was not persisted")
+	}
+	if got.Origin.Surface != "patrol" || got.Origin.FindingID != "finding-1" || got.Origin.InvestigationID != "inv-1" || got.Origin.ProposalID != "prop-1" {
+		t.Fatalf("origin round-trip = %#v", got.Origin)
+	}
+
+	// An all-empty origin must normalize to nil, never persist as an
+	// empty object.
+	record.ID = "act_origin_empty"
+	record.Plan.ActionID = record.ID
+	record.Origin = &ActionOrigin{Surface: "  "}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit(empty origin): %v", err)
+	}
+	got, ok, err = store.GetActionAudit("act_origin_empty")
+	if err != nil || !ok {
+		t.Fatalf("GetActionAudit(empty origin): ok=%v err=%v", ok, err)
+	}
+	if got.Origin != nil {
+		t.Fatalf("empty origin should read back nil, got %#v", got.Origin)
+	}
+}

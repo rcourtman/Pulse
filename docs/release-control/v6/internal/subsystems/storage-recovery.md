@@ -312,7 +312,11 @@ Storage/recovery remediation or restore-adjacent workflows may consume
 contract. This subsystem must not create a storage-local approval policy,
 stale-plan hash, blast-radius model, or execution protocol outside
 `internal/api/actions.go`, `internal/actionlifecycle/service.go`, and
-`internal/actionplanner/planner.go`.
+`internal/actionplanner/planner.go`. The Patrol proposal broker
+(`internal/api/patrol_action_broker.go`) is part of that same API-owned
+boundary: storage/recovery surfaces must not treat Patrol-proposed action
+audits (origin surface `patrol`) as a storage-local execution channel or
+mint their own proposal origins.
 Storage/recovery surfaces may consume unified-resource `platformScopes` as
 read-only platform membership context, but they must not reinterpret runtime
 scope overlap as storage or recovery ownership. A Docker workload that also

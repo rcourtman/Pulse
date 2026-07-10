@@ -380,3 +380,133 @@ func TestLifecycleFailsClosedWithoutStore(t *testing.T) {
 		t.Fatalf("Execute error = %v, want ErrStoreUnavailable", err)
 	}
 }
+
+func TestCapabilitiesUsesSameRegistryResolutionAsPlanning(t *testing.T) {
+	now := time.Now().UTC()
+	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
+
+	capabilities, err := env.service.Capabilities(context.Background(), "default", "vm:42")
+	if err != nil {
+		t.Fatalf("Capabilities: %v", err)
+	}
+	if len(capabilities) != 1 || capabilities[0].Name != "restart" {
+		t.Fatalf("capabilities = %#v", capabilities)
+	}
+
+	var notFound *ResourceNotFoundError
+	if _, err := env.service.Capabilities(context.Background(), "default", "vm:404"); !errors.As(err, &notFound) {
+		t.Fatalf("unknown resource error = %v, want ResourceNotFoundError", err)
+	}
+}
+
+func TestPlanWithOptionsPersistsOriginAcrossLifecycle(t *testing.T) {
+	now := time.Now().UTC()
+	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
+
+	origin := &unified.ActionOrigin{
+		Surface:         "patrol",
+		FindingID:       "finding-9",
+		InvestigationID: "inv-9",
+		ProposalID:      "prop-9",
+	}
+	plan, err := env.service.PlanWithOptions(context.Background(), "default", restartRequest(), PlanOptions{Origin: origin})
+	if err != nil {
+		t.Fatalf("PlanWithOptions: %v", err)
+	}
+
+	record, ok, err := env.store.GetActionAudit(plan.ActionID)
+	if err != nil || !ok {
+		t.Fatalf("GetActionAudit: ok=%v err=%v", ok, err)
+	}
+	if record.Origin == nil || record.Origin.FindingID != "finding-9" {
+		t.Fatalf("plan audit origin = %#v", record.Origin)
+	}
+
+	// Origin must survive the decision transition: the decision persists
+	// the record loaded from the store, so the broker-owned metadata
+	// stays reconcilable at approval time.
+	updated, err := env.service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{
+		Actor: "operator@example.com", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved,
+	})
+	if err != nil {
+		t.Fatalf("Decide: %v", err)
+	}
+	if updated.Origin == nil || updated.Origin.ProposalID != "prop-9" {
+		t.Fatalf("decision record origin = %#v", updated.Origin)
+	}
+
+	// Plain Plan must never stamp an origin.
+	plain := restartRequest()
+	plain.RequestID = "req-plain"
+	plainPlan, err := env.service.Plan(context.Background(), "default", plain)
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	plainRecord, ok, err := env.store.GetActionAudit(plainPlan.ActionID)
+	if err != nil || !ok {
+		t.Fatalf("GetActionAudit(plain): ok=%v err=%v", ok, err)
+	}
+	if plainRecord.Origin != nil {
+		t.Fatalf("plain plan must not carry an origin, got %#v", plainRecord.Origin)
+	}
+}
+
+func TestOnActionTransitionFiresAfterEachPersistedState(t *testing.T) {
+	now := time.Now().UTC()
+	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
+	var transitions []unified.ActionState
+	env.service.OnActionTransition = func(record unified.ActionAuditRecord) {
+		transitions = append(transitions, record.State)
+	}
+
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if _, err := env.service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{
+		Actor: "operator@example.com", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved,
+	}); err != nil {
+		t.Fatalf("Decide: %v", err)
+	}
+	if _, err := env.service.Execute(context.Background(), "default", plan.ActionID, "operator@example.com", ""); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	want := []unified.ActionState{unified.ActionStatePending, unified.ActionStateApproved, unified.ActionStateCompleted}
+	if len(transitions) != len(want) {
+		t.Fatalf("transitions = %v, want %v", transitions, want)
+	}
+	for i := range want {
+		if transitions[i] != want[i] {
+			t.Fatalf("transitions = %v, want %v", transitions, want)
+		}
+	}
+}
+
+func TestOnActionTransitionFiresForPersistedRefusals(t *testing.T) {
+	now := time.Now().UTC()
+	env := newServiceEnv(t, testResource(now, unified.ApprovalNone))
+	var transitions []unified.ActionState
+	env.service.OnActionTransition = func(record unified.ActionAuditRecord) {
+		transitions = append(transitions, record.State)
+	}
+
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	if err := env.store.SetResourceOperatorState(unified.ResourceOperatorState{
+		CanonicalID:        "vm:42",
+		NeverAutoRemediate: true,
+	}); err != nil {
+		t.Fatalf("SetResourceOperatorState: %v", err)
+	}
+	if _, err := env.service.Execute(context.Background(), "default", plan.ActionID, "agent:test", ""); !errors.Is(err, unified.ErrResourceRemediationLocked) {
+		t.Fatalf("error = %v, want ErrResourceRemediationLocked", err)
+	}
+
+	want := []unified.ActionState{unified.ActionStatePlanned, unified.ActionStateFailed}
+	if len(transitions) != len(want) || transitions[0] != want[0] || transitions[1] != want[1] {
+		t.Fatalf("transitions = %v, want %v", transitions, want)
+	}
+}

@@ -1830,6 +1830,26 @@ a new API state machine, queue contract, or verification-accounting field.
    remediation locks, plan-drift revalidation, execution, and terminal
    publication. No caller, HTTP or in-process, may implement a parallel
    lifecycle or dispatch a resource mutation around this service.
+   The Patrol proposal seam rides that same service:
+   `internal/api/patrol_action_broker.go` implements the public
+   `aicontracts.OrchestratorActionBroker` contract as a tenant-bound,
+   plan-only adapter. It stamps the fixed `pulse_patrol` requestedBy actor
+   and a broker-owned `ActionOrigin` (surface/finding/investigation/proposal
+   IDs) through the service's internal `PlanWithOptions`; the public plan
+   endpoint keeps calling plain `Plan`, so an HTTP request body can never
+   claim a first-party origin. Submit never decides or executes (even an
+   `ApprovalNone` capability returns a planned disposition), and proposals
+   that populate a capability parameter declared `IsSensitive` are refused
+   with `ErrSensitiveParamsRequireOperator` before any audit persistence,
+   so secret material never enters model output, investigation stores, or
+   action audit records. Capability inspection for proposals goes through
+   `Service.Capabilities`, which shares planning's registry resolution and
+   typed errors. The service also exposes an additive `OnActionTransition`
+   persisted-state callback (plan, decision, and terminal execution
+   transitions, published only after the corresponding store write
+   succeeds) so proposing surfaces can reconcile decisions and outcomes.
+   Plan-only proof: `TestContract_PatrolActionBrokerIsPlanOnly` in
+   `internal/api/contract_test.go`.
    Executor-owned live readiness is part of planning, not a UI precheck:
    after planner validation and before audit persistence, the lifecycle
    service must ask

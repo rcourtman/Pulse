@@ -1318,6 +1318,22 @@ AI-only summary payloads, or page-local heuristics.
     the durable store-backed registry (ephemeral per-request registries
     consult, never write). Regression coverage:
     `internal/unifiedresources/canonical_id_pins_test.go`.
+26. Keep action-audit origin metadata broker-owned. `ActionAuditRecord`
+    carries an optional `Origin *ActionOrigin`
+    (`surface`/`findingId`/`investigationId`/`proposalId`), persisted in
+    the `action_audits.origin_json` column (added by
+    `migrateActionAuditsSchema`) and round-tripped through
+    `scanActionAuditRecord`. Origin identifies which internal surface
+    proposed the action (e.g. Patrol) so decisions and terminal outcomes
+    can be reconciled back onto that surface's records. It is set only by
+    in-process planning callers through the action lifecycle service's
+    plan options; the public `POST /api/actions/plan` body must never be
+    able to claim a first-party origin. `NormalizeActionOrigin` trims
+    fields and collapses an all-empty origin to nil so absent metadata
+    never persists as an empty object. Origin fields are Pulse-produced
+    identifiers, not operator text, and stay outside the redaction set.
+    Regression coverage: `TestSQLiteStoreActionAuditOriginRoundTrip` in
+    `internal/unifiedresources/store_test.go`.
 
 ## Current State
 

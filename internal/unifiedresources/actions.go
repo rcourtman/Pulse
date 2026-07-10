@@ -225,10 +225,41 @@ type ActionAuditRecord struct {
 	State               ActionState               `json:"state"`
 	Request             ActionRequest             `json:"request"`
 	Plan                ActionPlan                `json:"plan"`
+	Origin              *ActionOrigin             `json:"origin,omitempty"`
 	Approvals           []ActionApprovalRecord    `json:"approvals,omitempty"`
 	Result              *ExecutionResult          `json:"result,omitempty"`
 	Verification        *ActionVerificationResult `json:"verification,omitempty"`
 	VerificationOutcome VerificationOutcome       `json:"verificationOutcome"`
+}
+
+// ActionOrigin records which internal surface proposed the action and the
+// correlation identifiers that surface needs to reconcile decisions and
+// terminal outcomes back onto its own records (e.g. a Patrol finding).
+// Origin is broker-owned metadata: it is set by in-process planning callers
+// only and is never accepted from the public plan request body.
+type ActionOrigin struct {
+	Surface         string `json:"surface"`
+	FindingID       string `json:"findingId,omitempty"`
+	InvestigationID string `json:"investigationId,omitempty"`
+	ProposalID      string `json:"proposalId,omitempty"`
+}
+
+// NormalizeActionOrigin trims origin fields and collapses an all-empty
+// origin to nil so absent metadata never persists as an empty object.
+func NormalizeActionOrigin(origin *ActionOrigin) *ActionOrigin {
+	if origin == nil {
+		return nil
+	}
+	normalized := ActionOrigin{
+		Surface:         strings.TrimSpace(origin.Surface),
+		FindingID:       strings.TrimSpace(origin.FindingID),
+		InvestigationID: strings.TrimSpace(origin.InvestigationID),
+		ProposalID:      strings.TrimSpace(origin.ProposalID),
+	}
+	if normalized == (ActionOrigin{}) {
+		return nil
+	}
+	return &normalized
 }
 
 // ActionLifecycleEvent represents an append-only state transition in an action's life.
@@ -563,6 +594,7 @@ func NormalizeActionAuditRecord(record ActionAuditRecord) (ActionAuditRecord, er
 	record.Request.CapabilityName = strings.TrimSpace(record.Request.CapabilityName)
 	record.Request.Reason = strings.TrimSpace(record.Request.Reason)
 	record.Request.RequestedBy = strings.TrimSpace(record.Request.RequestedBy)
+	record.Origin = NormalizeActionOrigin(record.Origin)
 	if record.Request.ResourceID == "" {
 		return ActionAuditRecord{}, fmt.Errorf("action request resource id required")
 	}
