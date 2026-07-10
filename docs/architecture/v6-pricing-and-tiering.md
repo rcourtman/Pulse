@@ -29,6 +29,11 @@ release-control source wins and this file must be corrected.
    public copy must not use that entitlement relationship to recommend one job over another.
 4. **Simple to understand.** A homelabber should know which product fits the job in
    under 10 seconds.
+5. **Product-led public language.** Public marketing describes Pulse, Community, Relay,
+   Pro, Cloud, and MSP as enduring products rather than release trains. Version identifiers
+   belong only in version-sensitive tasks such as release notes, downloads, compatibility,
+   migration, support, and implementation metadata; they must not lead homepage, product,
+   pricing, or acquisition copy.
 
 ---
 
@@ -538,6 +543,7 @@ explain monitored-system identity:
 
 | Date | Change | Author |
 |---|---|---|
+| 2026-07-10 | Made public marketing product-led rather than release-led. Version identifiers remain available for version-sensitive lifecycle tasks and technical contracts, but no longer frame homepage, product, pricing, or acquisition copy. | Richard |
 | 2026-07-10 | Reframed Community, Relay, and Pro as distinct job-based product choices rather than a good/better/best ladder. Removed product recommendations from public pricing while preserving Relay connectivity as a bundled Pro entitlement. | Richard |
 | 2026-06-02 | Reconciled MSP pricing evidence with the provider-operated architecture: signed MSP license, Stripe-free provider control plane, isolated Pulse runtime per client, 5/15/40 client workspace caps, and request-assisted access until launch approval. | Richard |
 | 2026-04-29 | Replaced stale capacity-style monitoring phrasing with core-monitoring-included language across active v6 docs and upgrade-return copy so Community does not read like a former capacity upsell. | Codex |
