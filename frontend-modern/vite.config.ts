@@ -45,7 +45,7 @@ const proxyOriginOverride = process.env.PULSE_DEV_PROXY_ORIGIN ?? '';
 
 const srcAlias = path.resolve(__dirname, './src');
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [solid(), sri({ algorithm: 'sha384' })],
   resolve: {
     alias: {
@@ -57,6 +57,15 @@ export default defineConfig({
     port: frontendDevPort,
     host: frontendDevHost,
     strictPort: true,
+    // Test files are not part of the client app, but once anything requests
+    // one through the dev server it enters the client module graph, and every
+    // later save of it dead-ends HMR into a full page reload for all connected
+    // clients. Parallel agents save test files constantly, so ignore them in
+    // the dev watcher. Scoped off test mode so vitest watch re-runs still see
+    // file changes.
+    ...(mode === 'test'
+      ? {}
+      : { watch: { ignored: ['**/__tests__/**', '**/*.test.ts', '**/*.test.tsx'] } }),
     proxy: {
       '/ws': {
         target: backendWsUrl,
@@ -284,4 +293,4 @@ export default defineConfig({
       '**/tests/integration/**',
     ],
   },
-});
+}));
