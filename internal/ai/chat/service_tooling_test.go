@@ -603,13 +603,17 @@ func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 		t.Fatalf("expected error with exit code 1")
 	}
 
-	exec.RegisterTool(tools.RegisteredTool{
+	// Registry entries are append-only, so the approval scenario uses a
+	// fresh executor instead of swapping the handler in place.
+	approvalExec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	approvalExec.RegisterTool(tools.RegisteredTool{
 		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{Name: agentcapabilities.PulseRunCommandToolName},
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewTextResult("APPROVAL_REQUIRED: requires approval"), nil
 		},
 	})
+	svc = &Service{executor: approvalExec}
 
 	_, _, err = svc.ExecuteCommand(context.Background(), "uptime", "")
 	if err == nil {
@@ -648,40 +652,34 @@ func TestExecuteCommandUsesSharedResultTextProjection(t *testing.T) {
 }
 
 func TestExecuteAssistantTool_ErrorsAndSuccess(t *testing.T) {
-	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
-	exec.RegisterTool(tools.RegisteredTool{
-		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
-		Definition: tools.Tool{Name: "test_tool"},
-		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
-			return tools.NewErrorResult(context.DeadlineExceeded), nil
-		},
+	// Registry entries are append-only, so each handler scenario runs on
+	// a fresh executor instead of swapping the handler in place.
+	newService := func(handler func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error)) *Service {
+		exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+		exec.RegisterTool(tools.RegisteredTool{
+			Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+			Definition: tools.Tool{Name: "test_tool"},
+			Handler:    handler,
+		})
+		return &Service{executor: exec}
+	}
+
+	svc := newService(func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
+		return tools.NewErrorResult(context.DeadlineExceeded), nil
 	})
-
-	svc := &Service{executor: exec}
-
-	_, err := svc.ExecuteAssistantTool(context.Background(), "test_tool", map[string]interface{}{})
-	if err == nil {
+	if _, err := svc.ExecuteAssistantTool(context.Background(), "test_tool", map[string]interface{}{}); err == nil {
 		t.Fatalf("expected tool error")
 	}
 
-	exec.RegisterTool(tools.RegisteredTool{
-		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
-		Definition: tools.Tool{Name: "test_tool"},
-		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
-			return tools.NewTextResult("POLICY_BLOCKED: nope"), nil
-		},
+	svc = newService(func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
+		return tools.NewTextResult("POLICY_BLOCKED: nope"), nil
 	})
-	_, err = svc.ExecuteAssistantTool(context.Background(), "test_tool", map[string]interface{}{})
-	if err == nil {
+	if _, err := svc.ExecuteAssistantTool(context.Background(), "test_tool", map[string]interface{}{}); err == nil {
 		t.Fatalf("expected policy blocked error")
 	}
 
-	exec.RegisterTool(tools.RegisteredTool{
-		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
-		Definition: tools.Tool{Name: "test_tool"},
-		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
-			return tools.NewTextResult("ok"), nil
-		},
+	svc = newService(func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
+		return tools.NewTextResult("ok"), nil
 	})
 	output, err := svc.ExecuteAssistantTool(context.Background(), "test_tool", map[string]interface{}{})
 	if err != nil || output != "ok" {

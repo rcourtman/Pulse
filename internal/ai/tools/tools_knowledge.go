@@ -79,7 +79,7 @@ type KnowledgeEntry struct {
 
 // registerKnowledgeTools registers the pulse_knowledge tool
 func (e *PulseToolExecutor) registerKnowledgeTools() {
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PulseKnowledgeToolName,
 			Description: `Manage AI knowledge, notes, and incident analysis.

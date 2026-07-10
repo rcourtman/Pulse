@@ -14,7 +14,7 @@ import (
 // registerReadTools registers the read-only pulse_read tool
 // This tool is ALWAYS classified as ToolKindRead and will never trigger VERIFYING state
 func (e *PulseToolExecutor) registerReadTools() {
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseReadToolName,
 			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. Use target_host for agent-routed reads, or resource_id for API-backed native resource logs such as supported TrueNAS app-containers. When Pulse has attached resource context, use target_host="current_resource" or resource_id="current_resource" for the attached resource instead of copying redacted identifiers.`,

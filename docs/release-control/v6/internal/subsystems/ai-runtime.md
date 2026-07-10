@@ -4601,6 +4601,16 @@ invocation, and recomputes the offered governance action mode, so the
 offered schema and the enforcement boundary can never disagree.
 Control-level blocks keep returning the operator guidance message;
 policy blocks return the shared invocation-blocked result.
+Registration authority on the Assistant tool registry is split:
+`registerBuiltin` is the construction-time path for canonical Pulse
+tools (shared descriptor mandatory, override rejected), while
+`RegisterExtension` - the only path exposed through
+`PulseToolExecutor.RegisterTool` - rejects every canonical tool name
+outright and requires the extension to declare its own descriptor.
+Registry entries are append-only: a name registers exactly once, so a
+later registration (with or without a descriptor override) can never
+replace an already-governed handler such as pulse_read's
+execution-intent-enforcing exec path.
 The classification vocabulary is closed: descriptor validation rejects
 any class outside the known kinds and mutation targets, and
 `InvocationPolicy.Allows` independently denies unknown mutation targets

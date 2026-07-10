@@ -10,7 +10,7 @@ import (
 
 // registerAlertsTools registers the pulse_alerts tool
 func (e *PulseToolExecutor) registerAlertsTools() {
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PulseAlertsToolName,
 			Description: `Manage alerts and AI patrol findings.

@@ -37,7 +37,7 @@ type kubernetesClusterTarget struct {
 
 // registerKubernetesTools registers the pulse_kubernetes tool
 func (e *PulseToolExecutor) registerKubernetesTools() {
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseKubernetesToolName,
 			Description: `Query and control Kubernetes clusters, nodes, pods, and deployments. Query: clusters, nodes, pods, deployments. Control: scale, restart, delete_pod, exec, logs.`,

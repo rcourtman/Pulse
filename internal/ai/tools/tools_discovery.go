@@ -12,7 +12,7 @@ import (
 
 // registerDiscoveryTools registers the pulse_discovery tool
 func (e *PulseToolExecutor) registerDiscoveryTools() {
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseDiscoveryToolName,
 			Description: `Get or run AI-discovered service details from Pulse-owned resource access. action="get" returns existing discovery and triggers discovery only when missing. action="run" forces a fresh discovery run for a known resource. action="list" searches existing discoveries. Resource details must already be known from the current context or a prior resource lookup.`,

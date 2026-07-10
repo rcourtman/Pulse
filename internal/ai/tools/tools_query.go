@@ -2148,7 +2148,7 @@ func logRoutingMismatchDebug(targetHost string, childKinds, childIDs []string) {
 
 // registerQueryTools registers the pulse_query tool
 func (e *PulseToolExecutor) registerQueryTools() {
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseQueryToolName,
 			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health.`,

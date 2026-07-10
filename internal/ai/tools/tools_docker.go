@@ -50,7 +50,7 @@ var (
 
 // registerDockerTools registers the pulse_docker tool
 func (e *PulseToolExecutor) registerDockerTools() {
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseDockerToolName,
 			Description: `Manage Docker containers, updates, and Swarm services. Actions: control, updates, check_updates, update, services, tasks, swarm.`,

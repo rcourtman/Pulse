@@ -18559,6 +18559,12 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`agentcapabilities.NewUnknownToolResult(name)`,
 		`agentcapabilities.NewControlToolsDisabledToolResult()`,
 		`return result.NormalizeCollections(), err`,
+		// Registration authority is split: builtin registration is
+		// construction-only, extensions can never claim or replace a
+		// canonical name, and entries are append-only.
+		`func (r *ToolRegistry) registerBuiltin(tool RegisteredTool)`,
+		`func (r *ToolRegistry) RegisterExtension(tool RegisteredTool)`,
+		`registry entries are append-only`,
 		// Invocation-level enforcement runs before the handler and
 		// consumes the same descriptor the projection filters with.
 		`class = tool.Invocation.Classify(args)`,

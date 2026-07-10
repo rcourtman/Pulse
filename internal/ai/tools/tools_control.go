@@ -20,7 +20,7 @@ import (
 
 // registerControlTools registers the pulse_control tool
 func (e *PulseToolExecutor) registerControlTools() {
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseControlToolName,
 			Description: `WRITE operations: control canonical resources that explicitly advertise shared Pulse actions (for example Proxmox guests and supported app-containers) or execute state-modifying commands. Some canonical resources are read-only and will reject pulse_control even when their type is vm or system-container. Read-only and Docker-only workflows are exposed through their own governed tools.`,

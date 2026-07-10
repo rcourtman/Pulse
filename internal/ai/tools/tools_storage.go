@@ -16,7 +16,7 @@ import (
 
 // registerStorageTools registers the pulse_storage tool
 func (e *PulseToolExecutor) registerStorageTools() {
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseStorageToolName,
 			Description: `Query storage pools, backups, snapshots, Ceph, replication, RAID, and disk health. Use the "type" parameter to select what to query.`,

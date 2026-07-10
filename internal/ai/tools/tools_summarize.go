@@ -23,7 +23,7 @@ import (
 // the chat session so this tool can return AI-generated synthesis
 // in the same shape.
 func (e *PulseToolExecutor) registerSummarizeTools() {
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PulseSummarizeToolName,
 			Description: `Generate a retrospective summary of one resource or a fleet across a time window. Use this when the operator asks questions like "what's been happening with pve1 this week" or "where should I look across my fleet" — answers grounded in metric stats, alerts, storage state, disk health, and Patrol findings within the window.

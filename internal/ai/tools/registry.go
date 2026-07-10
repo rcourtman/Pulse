@@ -119,38 +119,67 @@ func (p InvocationPolicy) Allows(class agentcapabilities.InvocationClass) bool {
 	}
 }
 
-// Register adds a tool to the registry. Every registered tool must have a
-// canonical invocation descriptor whose cases exactly cover the schema
-// enum of its discriminator; a tool that cannot be classified must not be
-// registerable, so this panics on programmer error rather than degrading
-// to an unclassified (and therefore ungovernable) tool.
-func (r *ToolRegistry) Register(tool RegisteredTool) {
+// Registration authority is split so extension code can never claim or
+// replace a canonical tool. registerBuiltin is the construction-time path
+// for canonical Pulse tools; RegisterExtension is the only path exposed
+// outside executor construction and rejects every canonical name. Both
+// paths are append-only: a name registers exactly once, so a later
+// registration can never swap out an already-governed handler.
+
+// registerBuiltin adds a canonical Pulse tool during executor
+// construction. The tool must classify through the shared descriptor
+// table (no override) and its descriptor must validate against the schema
+// enum; a tool that cannot be classified must not be registerable, so
+// this panics on programmer error rather than degrading to an
+// unclassified (and therefore ungovernable) tool.
+func (r *ToolRegistry) registerBuiltin(tool RegisteredTool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	tool.Definition = tool.Definition.NormalizeCollections()
 	name := tool.Definition.Name
-	canonical, isCanonical := agentcapabilities.InvocationDescriptorFor(name)
-	var descriptor agentcapabilities.InvocationDescriptor
-	switch {
-	case isCanonical && tool.Invocation != nil:
+	if tool.Invocation != nil {
 		// A canonical tool name must classify through the shared table;
 		// an override could silently relax its safety classification.
-		panic(fmt.Sprintf("tool %q is canonical; its invocation descriptor comes from agentcapabilities/invocation.go and cannot be overridden", name))
-	case isCanonical:
-		descriptor = canonical
-	case tool.Invocation != nil:
-		descriptor = tool.Invocation.Clone()
-	default:
+		panic(fmt.Sprintf("tool %q is builtin; its invocation descriptor comes from agentcapabilities/invocation.go and cannot be overridden", name))
+	}
+	canonical, isCanonical := agentcapabilities.InvocationDescriptorFor(name)
+	if !isCanonical {
 		panic(fmt.Sprintf("tool %q has no canonical invocation descriptor; declare one in agentcapabilities/invocation.go", name))
+	}
+	r.store(name, tool, canonical)
+}
+
+// RegisterExtension adds a non-canonical tool (tests, extensions). It
+// rejects every canonical tool name outright - even without a descriptor
+// override, re-registering a canonical name would swap out its governed
+// handler - and requires the extension to declare its own invocation
+// descriptor.
+func (r *ToolRegistry) RegisterExtension(tool RegisteredTool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	tool.Definition = tool.Definition.NormalizeCollections()
+	name := tool.Definition.Name
+	if _, isCanonical := agentcapabilities.InvocationDescriptorFor(name); isCanonical {
+		panic(fmt.Sprintf("tool %q is a canonical Pulse tool and cannot be registered as an extension", name))
+	}
+	if tool.Invocation == nil {
+		panic(fmt.Sprintf("extension tool %q must declare its own invocation descriptor", name))
+	}
+	r.store(name, tool, tool.Invocation.Clone())
+}
+
+// store validates and appends one registration. Callers hold r.mu.
+func (r *ToolRegistry) store(name string, tool RegisteredTool, descriptor agentcapabilities.InvocationDescriptor) {
+	if _, exists := r.tools[name]; exists {
+		panic(fmt.Sprintf("tool %q is already registered; registry entries are append-only", name))
 	}
 	if err := descriptor.Validate(name, discriminatorEnum(tool.Definition, descriptor.Discriminator)); err != nil {
 		panic(err.Error())
 	}
 	tool.Invocation = &descriptor
-	if _, exists := r.tools[name]; !exists {
-		r.order = append(r.order, name)
-	}
+	r.order = append(r.order, name)
 	r.tools[name] = tool
 }
 

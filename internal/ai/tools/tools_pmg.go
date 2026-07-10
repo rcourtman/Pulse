@@ -9,7 +9,7 @@ import (
 
 // registerPMGTools registers the pulse_pmg tool
 func (e *PulseToolExecutor) registerPMGTools() {
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulsePMGToolName,
 			Description: `Query Proxmox Mail Gateway status and statistics. Types: status, mail_stats, queues, spam.`,

@@ -14,7 +14,7 @@ import (
 
 // registerMetricsTools registers the pulse_metrics tool
 func (e *PulseToolExecutor) registerMetricsTools() {
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PulseMetricsToolName,
 			Description: `Get performance metrics, baselines, and sensor data.

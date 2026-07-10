@@ -33,7 +33,7 @@ type ExecutionProvenance struct {
 
 // registerFileTools registers the file editing tool
 func (e *PulseToolExecutor) registerFileTools() {
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PulseFileEditToolName,
 			Description: `Edit files on remote hosts, containers, VMs, and Docker containers safely.

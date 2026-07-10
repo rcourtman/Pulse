@@ -13,7 +13,6 @@ import (
 
 func TestFileTools_Registry(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{})
-	exec.registerFileTools()
 	tools := exec.registry.ListTools(InvocationPolicy{ControlLevel: ControlLevelControlled})
 
 	found := false

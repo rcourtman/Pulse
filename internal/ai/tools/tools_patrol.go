@@ -12,7 +12,7 @@ import (
 // These tools are only functional during a patrol run when patrolFindingCreator is set.
 func (e *PulseToolExecutor) registerPatrolTools() {
 	// patrol_report_finding — LLM calls this to create a finding
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PatrolReportFindingToolName,
 			Description: `Report an infrastructure finding discovered during patrol investigation.
@@ -89,7 +89,7 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 	})
 
 	// patrol_resolve_finding — LLM calls this to resolve an active finding
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PatrolResolveFindingToolName,
 			Description: `Resolve an active patrol finding after verifying the issue is no longer present.
@@ -121,7 +121,7 @@ Returns: {"ok": true, "resolved": true} on success.`,
 	})
 
 	// patrol_get_findings — LLM calls this to check existing active findings
-	e.registry.Register(RegisteredTool{
+	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PatrolGetFindingsToolName,
 			Description: `Get currently active patrol findings. Use this to check what findings already exist before reporting new ones (avoids duplicates) and to identify findings that may need resolution.
