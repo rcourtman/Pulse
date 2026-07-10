@@ -4454,7 +4454,10 @@ func unifiedResourceFreshness(store ResourceStoreInterface, state *models.State)
 // unified-resource fixture graph rather than the live resource store.
 func (m *Monitor) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
 	view := m.currentUnifiedStateView()
-	return view.resources, view.freshness
+	// REST /api/resources seeds its registry from this snapshot. Apply the
+	// same user-metadata hydration (container customUrl) as the websocket
+	// broadcast path, so the two payload shapes cannot drift.
+	return m.applyDockerMetadataToUnifiedResources(view.resources), view.freshness
 }
 
 // GetUnifiedReadState returns a typed unified read-state provider when the
