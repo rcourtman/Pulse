@@ -22,7 +22,7 @@ import { MetricMiniSparkline } from '@/components/Workloads/MetricMiniSparkline'
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getNodeExternalUrl } from '@/utils/nodes';
 import { asTrimmedString } from '@/utils/stringUtils';
@@ -31,14 +31,16 @@ import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { useWorkloadTableMetricHistory } from '@/components/Workloads/useWorkloadTableMetricHistory';
 import { getWorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
 import {
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableMetricFallback,
   PlatformTableShell,
+  createPlatformTableSortState,
   formatPlatformTablePercentValue,
   formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import { type WorkloadsMetricDisplayMode } from '@/components/Workloads/workloadsFilterModel';
@@ -125,15 +127,30 @@ const projectResourceToLegacyNode = (resource: Resource): LegacyNode => {
   return projected as unknown as LegacyNode;
 };
 
-type HostSortKey = ProxmoxHostTableColumnId;
+// Every host column carries a scalar to order on, so the sortable-key list is
+// the full column-id list. Metric and count columns read "biggest on top", so
+// their first click sorts descending; the identity/context text columns start
+// ascending.
+const PROXMOX_HOST_SORT_KEYS = [
+  'node',
+  'version',
+  'uptime',
+  'cpu',
+  'memory',
+  'disk',
+  'temp',
+  'vms',
+  'cts',
+  'cluster',
+] as const satisfies readonly ProxmoxHostTableColumnId[];
 
-const TEXT_SORT_KEYS = new Set<ProxmoxHostTableColumnId>(['node', 'version', 'cluster']);
+type HostSortKey = (typeof PROXMOX_HOST_SORT_KEYS)[number];
 
 const getHostSortValue = (
   node: Resource,
   guests: Resource[],
   key: HostSortKey,
-): string | number | null => {
+): PlatformTableSortValue => {
   switch (key) {
     case 'node':
       return asTrimmedString(node.name) || node.id;
@@ -164,19 +181,6 @@ const getHostSortValue = (
   }
 };
 
-const isEmptyHostSortValue = (value: string | number | null): boolean =>
-  value === null || (typeof value === 'number' && Number.isNaN(value));
-
-const compareHostSortValues = (a: string | number | null, b: string | number | null): number => {
-  const aEmpty = isEmptyHostSortValue(a);
-  const bEmpty = isEmptyHostSortValue(b);
-  if (aEmpty && bEmpty) return 0;
-  if (aEmpty) return 1;
-  if (bEmpty) return -1;
-  if (typeof a === 'number' && typeof b === 'number') return a === b ? 0 : a < b ? -1 : 1;
-  return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' });
-};
-
 export const ProxmoxNodesTable: Component<{
   nodes: Resource[];
   guests: Resource[];
@@ -196,40 +200,14 @@ export const ProxmoxNodesTable: Component<{
   const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
   const displayMode = () => props.metricDisplayMode?.() ?? 'bars';
   const isSparklineMode = () => displayMode() === 'sparklines';
-  const [sortKey, setSortKey] = createSignal<HostSortKey | null>(null);
-  const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
-
-  const handleSort = (column: ProxmoxHostTableColumnId) => {
-    const key = column as HostSortKey;
-    const defaultDirection = TEXT_SORT_KEYS.has(key) ? 'asc' : 'desc';
-    // Cycle: default direction → flipped → cleared.
-    if (sortKey() === key) {
-      if (sortDirection() === defaultDirection) {
-        setSortDirection(defaultDirection === 'asc' ? 'desc' : 'asc');
-      } else {
-        setSortKey(null);
-        setSortDirection('asc');
-      }
-      return;
-    }
-    setSortKey(key);
-    setSortDirection(defaultDirection);
-  };
-
-  const sortedNodes = createMemo(() => {
-    const key = sortKey();
-    if (!key) return props.nodes;
-    const dir = sortDirection() === 'asc' ? 1 : -1;
-    const decorated = props.nodes.map(
-      (node) => [getHostSortValue(node, props.guests, key), node] as const,
-    );
-    decorated.sort(([a], [b]) => {
-      // Missing values stay last in either direction.
-      if (isEmptyHostSortValue(a) || isEmptyHostSortValue(b)) return compareHostSortValues(a, b);
-      return compareHostSortValues(a, b) * dir;
-    });
-    return decorated.map(([, node]) => node);
+  const sort = createPlatformTableSortState({
+    storageKey: 'proxmoxNodes',
+    sortKeys: PROXMOX_HOST_SORT_KEYS,
+    descendingFirst: ['uptime', 'cpu', 'memory', 'disk', 'temp', 'vms', 'cts'],
   });
+  const sortedNodes = createMemo(() =>
+    sort.sortRows(props.nodes, (node, key) => getHostSortValue(node, props.guests, key)),
+  );
 
   // Use the same canonical history reader the workloads table uses; cache
   // keys collide so the two readers dedupe their fetches.
@@ -271,20 +249,9 @@ export const ProxmoxNodesTable: Component<{
         header={
           <For each={visibleColumns()}>
             {(column) => (
-              <TableHead
-                class={`${getPlatformTableHeadClassForKind(column.kind)} cursor-pointer hover:bg-surface-hover`}
-                aria-sort={
-                  sortKey() === column.id
-                    ? sortDirection() === 'asc'
-                      ? 'ascending'
-                      : 'descending'
-                    : undefined
-                }
-                onClick={() => handleSort(column.id)}
-              >
+              <PlatformSortableTableHead kind={column.kind} sort={sort} sortKey={column.id}>
                 {column.label}
-                {sortKey() === column.id && (sortDirection() === 'asc' ? ' ▲' : ' ▼')}
-              </TableHead>
+              </PlatformSortableTableHead>
             )}
           </For>
         }

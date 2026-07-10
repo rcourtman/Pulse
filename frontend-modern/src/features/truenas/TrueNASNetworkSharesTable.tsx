@@ -1,17 +1,19 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   summarizePlatformTableValues,
   type PlatformTableFilterOption,
+  type PlatformTableSortValue,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -88,6 +90,34 @@ const shareName = (resource: Resource, share: ResourceTrueNASShareMeta | undefin
   asTrimmedString(resource.name) ||
   resource.id;
 
+// Columns a user can sort by. Access and Clients summarize several flags or
+// endpoints at once, so they carry no single scalar to order on.
+const TRUENAS_SHARE_SORT_KEYS = ['share', 'protocol', 'path', 'state'] as const;
+
+type TrueNASShareSortKey = (typeof TRUENAS_SHARE_SORT_KEYS)[number];
+
+const getTrueNASShareSortValue = (
+  resource: Resource,
+  key: TrueNASShareSortKey,
+): PlatformTableSortValue => {
+  const share = shareMeta(resource);
+  switch (key) {
+    case 'share':
+      return shareName(resource, share);
+    case 'protocol': {
+      const protocol = formatProtocol(share);
+      return protocol === '-' ? null : protocol;
+    }
+    case 'path':
+      return asTrimmedString(share?.path) || null;
+    case 'state':
+      return formatPlatformTableTitleCaseValue(mapTrueNASShareStatus(resource));
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const TrueNASNetworkSharesTable: Component<{
   shares: Resource[];
   scope: Resource[];
@@ -103,6 +133,13 @@ export const TrueNASNetworkSharesTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-share-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
+  const sort = createPlatformTableSortState({
+    storageKey: 'truenasShares',
+    sortKeys: TRUENAS_SHARE_SORT_KEYS,
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getTrueNASShareSortValue),
+  );
 
   return (
     <Show
@@ -145,33 +182,49 @@ export const TrueNASNetworkSharesTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[23%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="share"
+                  class="md:w-[23%]"
+                >
                   Share
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[11%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="protocol"
+                  class="md:w-[11%]"
+                >
                   Protocol
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[27%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="path"
+                  class="hidden md:table-cell md:w-[27%]"
                 >
                   Path
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[19%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[19%]">
                   Access
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[13%]`}
-                >
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden lg:table-cell md:w-[13%]">
                   Clients
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[7%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="badge"
+                  sort={sort}
+                  sortKey="state"
+                  class="md:w-[7%]"
+                >
                   State
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => {
                     const share = () => shareMeta(resource);
                     const name = () => shareName(resource, share());

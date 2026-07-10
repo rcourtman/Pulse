@@ -1,22 +1,25 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableNumberValue,
   PlatformTableTemperatureValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableBytesValue,
   formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
+  type PlatformTableSortState,
+  type PlatformTableSortValue,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -162,6 +165,80 @@ const RiskPill: Component<{ row: TrueNASStorageTopologyRow }> = (props) => (
   </span>
 );
 
+// Columns a user can sort by. Usage / Size orders pools and datasets on their
+// used percentage and disks on their raw size, so same-kind siblings compare
+// on the number their cell actually shows.
+const TRUENAS_STORAGE_SORT_KEYS = ['resource', 'kind', 'usage', 'disks', 'temp', 'health'] as const;
+
+type TrueNASStorageSortKey = (typeof TRUENAS_STORAGE_SORT_KEYS)[number];
+
+const getTrueNASStorageSortValue = (
+  row: TrueNASStorageTopologyRow,
+  key: TrueNASStorageSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'resource':
+      return resourceName(row.resource);
+    case 'kind':
+      return kindLabel(row.kind);
+    case 'usage': {
+      if (row.kind === 'disk') {
+        const size = row.resource.physicalDisk?.sizeBytes;
+        return typeof size === 'number' && Number.isFinite(size) ? size : null;
+      }
+      return capacityPercent(row.resource) ?? null;
+    }
+    case 'disks':
+      return row.kind === 'pool' ? row.counts.disks : null;
+    case 'temp': {
+      if (row.kind !== 'disk') return null;
+      const temperature = row.resource.physicalDisk?.temperature;
+      return typeof temperature === 'number' && Number.isFinite(temperature) ? temperature : null;
+    }
+    case 'health':
+      return riskLabel(row);
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
+// The topology renders as a flattened tree (pool → datasets → disks with
+// indentation), so a flat re-order would tear children away from their
+// parents. Sort each sibling group instead and re-emit depth-first: pools
+// re-order against pools, and every parent keeps its subtree directly below
+// it. Rows whose parent was filtered out re-root, matching how the filter
+// already presents them.
+const sortTrueNASStorageTopologyRows = (
+  rows: readonly TrueNASStorageTopologyRow[],
+  sort: PlatformTableSortState<TrueNASStorageSortKey>,
+): readonly TrueNASStorageTopologyRow[] => {
+  if (!sort.sortKey()) return rows;
+  const present = new Set(rows.map((row) => row.id));
+  const roots: TrueNASStorageTopologyRow[] = [];
+  const childrenByParent = new Map<string, TrueNASStorageTopologyRow[]>();
+  for (const row of rows) {
+    const parentRowId = row.parentRowId && present.has(row.parentRowId) ? row.parentRowId : '';
+    if (!parentRowId) {
+      roots.push(row);
+      continue;
+    }
+    const siblings = childrenByParent.get(parentRowId) ?? [];
+    siblings.push(row);
+    childrenByParent.set(parentRowId, siblings);
+  }
+  const ordered: TrueNASStorageTopologyRow[] = [];
+  const emit = (siblings: TrueNASStorageTopologyRow[]) => {
+    for (const row of sort.sortRows(siblings, getTrueNASStorageSortValue)) {
+      ordered.push(row);
+      const children = childrenByParent.get(row.id);
+      if (children) emit(children);
+    }
+  };
+  emit(roots);
+  return ordered;
+};
+
 export const getTrueNASStorageTopologyIndentClass = (depth: number): string => {
   if (depth <= 0) return '';
   if (depth === 1) return 'pl-5 sm:pl-7';
@@ -212,6 +289,12 @@ export const TrueNASStorageTopologyTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-storage-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
+  const sort = createPlatformTableSortState({
+    storageKey: 'truenasStorage',
+    sortKeys: TRUENAS_STORAGE_SORT_KEYS,
+    descendingFirst: ['usage', 'disks', 'temp'],
+  });
+  const sortedRows = createMemo(() => sortTrueNASStorageTopologyRows(tableState.filtered(), sort));
 
   return (
     <Show
@@ -254,33 +337,59 @@ export const TrueNASStorageTopologyTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[32%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="resource"
+                  class="md:w-[32%]"
+                >
                   Resource
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[10%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="kind"
+                  class="md:w-[10%]"
+                >
                   Kind
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[28%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="usage"
+                  class="md:w-[28%]"
+                >
                   Usage / Size
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="disks"
+                  class="hidden md:table-cell md:w-[8%]"
                 >
                   Disks
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell md:w-[8%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="temp"
+                  class="hidden lg:table-cell md:w-[8%]"
                 >
                   Temp
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[14%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="badge"
+                  sort={sort}
+                  sortKey="health"
+                  class="md:w-[14%]"
+                >
                   Health
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(row) => {
                     const resource = () => row.resource;
                     const detailRowId = () => drawer.detailRowId(resource());

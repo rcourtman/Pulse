@@ -2,7 +2,7 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { Button } from '@/components/shared/Button';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { PlatformAttentionSummary } from '@/features/platformPage/PlatformAttentionSummary';
 import {
   getRecoveryOutcomeBadgeClass,
@@ -13,15 +13,18 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import type { StatusIndicatorVariant } from '@/utils/status';
 import {
   PlatformErrorState,
+  PlatformSortableTableHead,
   PlatformTableDateTimeValue,
   PlatformTableEmptyState,
   PlatformTableLoadingState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableBytesValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
+  getPlatformTableDateTimeSortValue,
   type PlatformTableFilterOption,
+  type PlatformTableSortValue,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -166,6 +169,49 @@ const targetSecondaryLabel = (point: RecoveryPoint): string => {
 
 const sizeLabel = (point: RecoveryPoint): string =>
   formatPlatformTableBytesValue(point.sizeBytes ?? undefined, '-');
+
+// Columns a user can sort by. Every protection column carries a scalar:
+// Completed orders chronologically and Size on raw bytes, both newest/biggest
+// first on the first click.
+const TRUENAS_PROTECTION_SORT_KEYS = [
+  'dataset',
+  'artifact',
+  'target',
+  'completed',
+  'size',
+  'outcome',
+] as const;
+
+type TrueNASProtectionSortKey = (typeof TRUENAS_PROTECTION_SORT_KEYS)[number];
+
+const getTrueNASProtectionSortValue = (
+  point: RecoveryPoint,
+  key: TrueNASProtectionSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'dataset':
+      return datasetLabel(point);
+    case 'artifact':
+      return artifactLabel(point);
+    case 'target': {
+      const target = targetLabel(point);
+      return target === '-' ? null : target;
+    }
+    case 'completed':
+      return getPlatformTableDateTimeSortValue(
+        asTrimmedString(point.completedAt) || asTrimmedString(point.startedAt),
+      );
+    case 'size':
+      return typeof point.sizeBytes === 'number' && Number.isFinite(point.sizeBytes)
+        ? point.sizeBytes
+        : null;
+    case 'outcome':
+      return getRecoveryOutcomeLabel(normalizeRecoveryOutcome(point.outcome));
+    default:
+      key satisfies never;
+      return null;
+  }
+};
 
 type ProtectionDetailTone = DetailValueTone;
 type ProtectionDetailSection = DetailSection;
@@ -312,6 +358,14 @@ export const TrueNASProtectionTable: Component<{
     initialStatus: 'all' as TrueNASProtectionStatusFilter,
     filter: filterTrueNASProtectionPoints,
   });
+  const sort = createPlatformTableSortState({
+    storageKey: 'truenasProtection',
+    sortKeys: TRUENAS_PROTECTION_SORT_KEYS,
+    descendingFirst: ['completed', 'size'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getTrueNASProtectionSortValue),
+  );
 
   return (
     <Show
@@ -416,35 +470,59 @@ export const TrueNASProtectionTable: Component<{
                 tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
                 header={
                   <>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
+                    <PlatformSortableTableHead
+                      kind="name"
+                      sort={sort}
+                      sortKey="dataset"
+                      class="md:w-[22%]"
+                    >
                       Dataset
-                    </TableHead>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[25%]`}>
+                    </PlatformSortableTableHead>
+                    <PlatformSortableTableHead
+                      kind="text"
+                      sort={sort}
+                      sortKey="artifact"
+                      class="md:w-[25%]"
+                    >
                       Artifact
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[23%]`}
+                    </PlatformSortableTableHead>
+                    <PlatformSortableTableHead
+                      kind="text"
+                      sort={sort}
+                      sortKey="target"
+                      class="hidden md:table-cell md:w-[23%]"
                     >
                       Target
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[12%]`}
+                    </PlatformSortableTableHead>
+                    <PlatformSortableTableHead
+                      kind="numeric-value"
+                      sort={sort}
+                      sortKey="completed"
+                      class="md:w-[12%]"
                     >
                       Completed
-                    </TableHead>
-                    <TableHead
-                      class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell md:w-[8%]`}
+                    </PlatformSortableTableHead>
+                    <PlatformSortableTableHead
+                      kind="numeric-value"
+                      sort={sort}
+                      sortKey="size"
+                      class="hidden lg:table-cell md:w-[8%]"
                     >
                       Size
-                    </TableHead>
-                    <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[9%]`}>
+                    </PlatformSortableTableHead>
+                    <PlatformSortableTableHead
+                      kind="badge"
+                      sort={sort}
+                      sortKey="outcome"
+                      class="md:w-[9%]"
+                    >
                       Outcome
-                    </TableHead>
+                    </PlatformSortableTableHead>
                   </>
                 }
                 body={
                   <>
-                    <For each={tableState.filtered()}>
+                    <For each={sortedRows()}>
                       {(point) => {
                         const outcome = () => normalizeRecoveryOutcome(point.outcome);
                         const artifact = () => artifactLabel(point);

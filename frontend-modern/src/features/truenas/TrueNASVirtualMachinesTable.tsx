@@ -1,17 +1,19 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableBytesValue,
   formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
+  type PlatformTableSortValue,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -87,6 +89,58 @@ const flagLabels = (vm: ResourceTrueNASVMMeta | undefined): string[] => {
   return labels;
 };
 
+// Columns a user can sort by. Devices and Flags summarize several values at
+// once, so they carry no single scalar to order on. CPU orders on the
+// provisioned vCPU count (cores × threads when vCPUs are not reported) and
+// Memory on the provisioned bytes.
+const TRUENAS_VM_SORT_KEYS = ['vm', 'state', 'cpu', 'memory', 'boot'] as const;
+
+type TrueNASVMSortKey = (typeof TRUENAS_VM_SORT_KEYS)[number];
+
+const getTrueNASVMSortValue = (
+  resource: Resource,
+  key: TrueNASVMSortKey,
+): PlatformTableSortValue => {
+  const vm = vmMeta(resource);
+  switch (key) {
+    case 'vm':
+      return (
+        asTrimmedString(vm?.name) ||
+        asTrimmedString(resource.displayName) ||
+        asTrimmedString(resource.name) ||
+        resource.id
+      );
+    case 'state':
+      return asTrimmedString(vm?.state || vm?.domainState) || null;
+    case 'cpu': {
+      const vcpus = vm?.vcpus;
+      if (typeof vcpus === 'number' && Number.isFinite(vcpus) && vcpus > 0) return vcpus;
+      const cores = vm?.cores;
+      const threads = vm?.threads;
+      if (
+        typeof cores === 'number' &&
+        Number.isFinite(cores) &&
+        cores > 0 &&
+        typeof threads === 'number' &&
+        Number.isFinite(threads) &&
+        threads > 0
+      ) {
+        return cores * threads;
+      }
+      return null;
+    }
+    case 'memory':
+      return typeof vm?.memoryBytes === 'number' && Number.isFinite(vm.memoryBytes)
+        ? vm.memoryBytes
+        : null;
+    case 'boot':
+      return asTrimmedString(vm?.bootloader) || null;
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const TrueNASVirtualMachinesTable: Component<{
   vms: Resource[];
   scope: Resource[];
@@ -102,6 +156,12 @@ export const TrueNASVirtualMachinesTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-vm-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
+  const sort = createPlatformTableSortState({
+    storageKey: 'truenasVms',
+    sortKeys: TRUENAS_VM_SORT_KEYS,
+    descendingFirst: ['cpu', 'memory'],
+  });
+  const sortedRows = createMemo(() => sort.sortRows(tableState.filtered(), getTrueNASVMSortValue));
 
   return (
     <Show
@@ -144,40 +204,52 @@ export const TrueNASVirtualMachinesTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
+                <PlatformSortableTableHead kind="name" sort={sort} sortKey="vm" class="md:w-[22%]">
                   VM
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[10%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="badge"
+                  sort={sort}
+                  sortKey="state"
+                  class="md:w-[10%]"
+                >
                   State
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden sm:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="cpu"
+                  class="hidden sm:table-cell md:w-[10%]"
                 >
                   CPU
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden sm:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="memory"
+                  class="hidden sm:table-cell md:w-[10%]"
                 >
                   Memory
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[11%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="boot"
+                  class="hidden md:table-cell md:w-[11%]"
                 >
                   Boot
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[18%]`}
-                >
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[18%]">
                   Devices
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[19%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[19%]">
                   Flags
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => {
                     const vm = () => vmMeta(resource);
                     const name = () =>

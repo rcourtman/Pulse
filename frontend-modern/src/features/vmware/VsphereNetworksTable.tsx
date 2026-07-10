@@ -1,17 +1,19 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   summarizePlatformTableValues,
   type PlatformTableFilterOption,
+  type PlatformTableSortValue,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -75,6 +77,33 @@ const vmSummary = (resource: Resource): { label: string; title: string } =>
 const vmCount = (resource: Resource): number =>
   resource.vmware?.networkVmNames?.length ?? resource.vmware?.networkVmIds?.length ?? 0;
 
+// Columns a user can sort by. Hosts and Connected VMs summarize several names
+// at once, so they carry no single scalar to order on.
+const VSPHERE_NETWORK_SORT_KEYS = ['network', 'type', 'vms', 'datacenter'] as const;
+
+type VsphereNetworkSortKey = (typeof VSPHERE_NETWORK_SORT_KEYS)[number];
+
+const getVsphereNetworkSortValue = (
+  resource: Resource,
+  key: VsphereNetworkSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'network':
+      return networkName(resource);
+    case 'type': {
+      const type = networkType(resource);
+      return type === '—' ? null : type;
+    }
+    case 'vms':
+      return vmCount(resource);
+    case 'datacenter':
+      return asTrimmedString(resource.vmware?.datacenterName) || null;
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const VsphereNetworksTable: Component<{
   networks: Resource[];
   scope: Resource[];
@@ -90,6 +119,14 @@ export const VsphereNetworksTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'vsphere-network-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
+  const sort = createPlatformTableSortState({
+    storageKey: 'vsphereNetworks',
+    sortKeys: VSPHERE_NETWORK_SORT_KEYS,
+    descendingFirst: ['vms'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getVsphereNetworkSortValue),
+  );
 
   return (
     <Show
@@ -132,37 +169,49 @@ export const VsphereNetworksTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1040px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[24%]`}>
-                  Network
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[13%]`}>
-                  Type
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[18%]`}
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="network"
+                  class="md:w-[24%]"
                 >
+                  Network
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="type"
+                  class="md:w-[13%]"
+                >
+                  Type
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[18%]">
                   Hosts
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[7%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="vms"
+                  class="hidden md:table-cell md:w-[7%]"
                 >
                   VMs
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[18%]`}
-                >
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden lg:table-cell md:w-[18%]">
                   Connected VMs
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="datacenter"
+                  class="hidden md:table-cell md:w-[12%]"
                 >
                   Datacenter
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(network) => {
                     const hosts = createMemo(() => hostSummary(network));
                     const vms = createMemo(() => vmSummary(network));

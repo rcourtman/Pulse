@@ -1,20 +1,22 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableMetricFallback,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   summarizePlatformTableValues,
   type PlatformTableFilterOption,
+  type PlatformTableSortValue,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -96,6 +98,36 @@ const hasCapacityMetric = (resource: Resource): boolean => {
   );
 };
 
+// Columns a user can sort by. Hosts and Consumers summarize several names at
+// once, so they carry no single scalar to order on. Capacity orders on the
+// used percentage the bar shows.
+const VSPHERE_DATASTORE_SORT_KEYS = ['datastore', 'type', 'capacity', 'vms', 'datacenter'] as const;
+
+type VsphereDatastoreSortKey = (typeof VSPHERE_DATASTORE_SORT_KEYS)[number];
+
+const getVsphereDatastoreSortValue = (
+  resource: Resource,
+  key: VsphereDatastoreSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'datastore':
+      return datastoreName(resource);
+    case 'type': {
+      const type = datastoreType(resource);
+      return type === '—' ? null : type;
+    }
+    case 'capacity':
+      return hasCapacityMetric(resource) ? capacityDisk(resource).usage : null;
+    case 'vms':
+      return consumerCount(resource);
+    case 'datacenter':
+      return asTrimmedString(resource.vmware?.datacenterName) || null;
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const VsphereDatastoresTable: Component<{
   datastores: Resource[];
   scope: Resource[];
@@ -111,6 +143,14 @@ export const VsphereDatastoresTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'vsphere-datastore-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
+  const sort = createPlatformTableSortState({
+    storageKey: 'vsphereDatastores',
+    sortKeys: VSPHERE_DATASTORE_SORT_KEYS,
+    descendingFirst: ['capacity', 'vms'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getVsphereDatastoreSortValue),
+  );
 
   return (
     <Show
@@ -153,40 +193,57 @@ export const VsphereDatastoresTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1080px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[21%]`}>
-                  Datastore
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[9%]`}>
-                  Type
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[18%]`}>
-                  Capacity
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="datastore"
+                  class="md:w-[21%]"
                 >
+                  Datastore
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="type"
+                  class="md:w-[9%]"
+                >
+                  Type
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="capacity"
+                  class="md:w-[18%]"
+                >
+                  Capacity
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[14%]">
                   Hosts
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[7%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="vms"
+                  class="hidden md:table-cell md:w-[7%]"
                 >
                   VMs
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[13%]`}
-                >
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden lg:table-cell md:w-[13%]">
                   Consumers
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="datacenter"
+                  class="hidden md:table-cell md:w-[10%]"
                 >
                   Datacenter
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(datastore) => {
                     const hosts = createMemo(() => hostSummary(datastore));
                     const consumers = createMemo(() => consumerSummary(datastore));

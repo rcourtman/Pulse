@@ -397,15 +397,9 @@ describe('platform overview layout guardrails', () => {
     expect(dockerHostsTableSource).toMatch(/kind="metric-bar"[\s\S]{0,300}?Memory/);
     expect(dockerHostsTableSource).toMatch(/kind="metric-bar"[\s\S]{0,200}?Disk/);
 
-    expect(kubernetesClustersTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Cluster/,
-    );
-    expect(kubernetesClustersTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('numeric-value'\)[\s\S]{0,200}?Nodes/,
-    );
-    expect(kubernetesNodesTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Node/,
-    );
+    expect(kubernetesClustersTableSource).toMatch(/kind="name"[\s\S]{0,200}?Cluster/);
+    expect(kubernetesClustersTableSource).toMatch(/kind="numeric-value"[\s\S]{0,200}?Nodes/);
+    expect(kubernetesNodesTableSource).toMatch(/kind="name"[\s\S]{0,200}?Node/);
     expect(kubernetesNodesTableSource).toContain(
       '<span class="md:hidden">{compactCapacityLabel()}</span>',
     );

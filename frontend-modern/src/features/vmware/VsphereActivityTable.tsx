@@ -1,4 +1,4 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import {
   InlineDetailPanel,
   compactDetailRows,
@@ -9,16 +9,19 @@ import {
 } from '@/components/shared/DetailSectionTable';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { filterChipStatusDot } from '@/components/shared/FilterBar';
 import {
+  PlatformSortableTableHead,
   PlatformTableDateTimeValue,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
+  getPlatformTableDateTimeSortValue,
   type PlatformTableFilterOption,
+  type PlatformTableSortValue,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -193,6 +196,49 @@ const ActivityDetail: Component<{ activity: VmwareActivityRow; onClose: () => vo
   />
 );
 
+// Columns a user can sort by: every activity column carries a scalar. When
+// orders chronologically, newest first on the first click.
+const VSPHERE_ACTIVITY_SORT_KEYS = [
+  'resource',
+  'type',
+  'activity',
+  'state',
+  'actor',
+  'vcenter',
+  'when',
+] as const;
+
+type VsphereActivitySortKey = (typeof VSPHERE_ACTIVITY_SORT_KEYS)[number];
+
+const getVsphereActivitySortValue = (
+  activity: VmwareActivityRow,
+  key: VsphereActivitySortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'resource':
+      return activity.resourceName || null;
+    case 'type':
+      return formatActivityKind(activity.activityKind);
+    case 'activity':
+      return activity.title || null;
+    case 'state': {
+      const state = formatActivityState(activity);
+      return state === '-' ? null : state;
+    }
+    case 'actor':
+      return activity.actor || null;
+    case 'vcenter': {
+      const meta = activity.resource.vmware;
+      return meta?.connectionName || meta?.vcenterHost || null;
+    }
+    case 'when':
+      return getPlatformTableDateTimeSortValue(activity.occurredAt || activity.observedAt);
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const VsphereActivityTable: Component<{
   activity: VmwareActivityRow[];
   emptyIcon: JSX.Element;
@@ -206,6 +252,14 @@ export const VsphereActivityTable: Component<{
     filter: filterVmwareActivity,
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'vsphere-activity-drawer' });
+  const sort = createPlatformTableSortState({
+    storageKey: 'vsphereActivity',
+    sortKeys: VSPHERE_ACTIVITY_SORT_KEYS,
+    descendingFirst: ['when'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getVsphereActivitySortValue),
+  );
 
   return (
     <Show
@@ -248,38 +302,67 @@ export const VsphereActivityTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1120px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[20%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="resource"
+                  class="md:w-[20%]"
+                >
                   Resource
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[8%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="badge"
+                  sort={sort}
+                  sortKey="type"
+                  class="md:w-[8%]"
+                >
                   Type
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[34%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="activity"
+                  class="md:w-[34%]"
+                >
                   Activity
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[10%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="badge"
+                  sort={sort}
+                  sortKey="state"
+                  class="md:w-[10%]"
+                >
                   State
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="actor"
+                  class="hidden md:table-cell md:w-[10%]"
                 >
                   Actor
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="vcenter"
+                  class="hidden lg:table-cell md:w-[10%]"
                 >
                   vCenter
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden xl:table-cell md:w-[8%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="when"
+                  class="hidden xl:table-cell md:w-[8%]"
                 >
                   When
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(activity) => {
                     const meta = () => activity.resource.vmware;
                     const detailRowId = () => drawer.detailRowId(activity);

@@ -1,16 +1,18 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableTitleCaseValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
+  type PlatformTableSortValue,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -151,6 +153,36 @@ const ServiceDetailTable: Component<{ row: TrueNASServiceRow; onClose: () => voi
   />
 );
 
+// Columns a user can sort by. PIDs orders on the process count so the busiest
+// services surface first.
+const TRUENAS_SERVICE_SORT_KEYS = ['service', 'state', 'boot', 'pids', 'system'] as const;
+
+type TrueNASServiceSortKey = (typeof TRUENAS_SERVICE_SORT_KEYS)[number];
+
+const getTrueNASServiceSortValue = (
+  row: TrueNASServiceRow,
+  key: TrueNASServiceSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'service':
+      return formatServiceName(row.service.service);
+    case 'state':
+      return asTrimmedString(row.service.state) || null;
+    case 'boot':
+      return row.service.enabled ? 'Enabled' : 'Disabled';
+    case 'pids': {
+      const count = (row.service.pids ?? []).filter((pid) => Number.isFinite(pid) && pid > 0)
+        .length;
+      return count > 0 ? count : null;
+    }
+    case 'system':
+      return asTrimmedString(row.systemName) || null;
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const TrueNASServicesTable: Component<{
   services: TrueNASServiceRow[];
   emptyIcon: JSX.Element;
@@ -164,6 +196,14 @@ export const TrueNASServicesTable: Component<{
     filter: filterTrueNASServices,
   });
   const detail = createPlatformResourceDetailState({ idPrefix: 'truenas-service-detail' });
+  const sort = createPlatformTableSortState({
+    storageKey: 'truenasServices',
+    sortKeys: TRUENAS_SERVICE_SORT_KEYS,
+    descendingFirst: ['pids'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getTrueNASServiceSortValue),
+  );
 
   return (
     <Show
@@ -206,28 +246,51 @@ export const TrueNASServicesTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[900px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[24%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="service"
+                  class="md:w-[24%]"
+                >
                   Service
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[14%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="badge"
+                  sort={sort}
+                  sortKey="state"
+                  class="md:w-[14%]"
+                >
                   State
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[14%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="badge"
+                  sort={sort}
+                  sortKey="boot"
+                  class="md:w-[14%]"
+                >
                   Boot
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden sm:table-cell md:w-[20%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="pids"
+                  class="hidden sm:table-cell md:w-[20%]"
                 >
                   PIDs
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[28%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="system"
+                  class="md:w-[28%]"
+                >
                   System
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(row) => {
                     const status = () => mapTrueNASServiceStatus(row);
                     const pids = createMemo(() => formatPIDs(row.service.pids));

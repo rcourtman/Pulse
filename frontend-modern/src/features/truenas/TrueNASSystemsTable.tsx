@@ -2,7 +2,7 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -11,6 +11,7 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableMetricFallback,
   PlatformTableNumberValue,
   PlatformTablePercentValue,
@@ -18,13 +19,14 @@ import {
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   filterPlatformResources,
   formatPlatformTableBytesValue,
   formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
+  type PlatformTableSortValue,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -78,6 +80,57 @@ const workloadInventoryPrimary = (counts: TrueNASSystemChildCounts): string =>
 const workloadInventorySecondary = (counts: TrueNASSystemChildCounts): string =>
   plural(counts.apps, 'app');
 
+// Columns a user can sort by. The Inventory and VMs / Apps columns summarize
+// several counts at once, so they carry no single scalar to order on.
+const TRUENAS_SYSTEM_SORT_KEYS = [
+  'system',
+  'cpu',
+  'memory',
+  'capacity',
+  'temp',
+  'shares',
+  'services',
+] as const;
+
+type TrueNASSystemSortKey = (typeof TRUENAS_SYSTEM_SORT_KEYS)[number];
+
+const getTrueNASSystemSortValue = (
+  system: Resource,
+  counts: TrueNASSystemChildCounts,
+  key: TrueNASSystemSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'system':
+      return asTrimmedString(system.name) || system.id;
+    case 'cpu':
+      return getPlatformTableFiniteMetric(system.cpu?.current) ?? null;
+    case 'memory': {
+      const total = getPlatformTableFiniteMetric(system.memory?.total) ?? 0;
+      if (total > 0) {
+        return ((getPlatformTableFiniteMetric(system.memory?.used) ?? 0) / total) * 100;
+      }
+      return getPlatformTableFiniteMetric(system.memory?.current) ?? null;
+    }
+    case 'capacity': {
+      const current = getPlatformTableFiniteMetric(system.disk?.current);
+      if (current !== undefined) return current;
+      const used = getPlatformTableFiniteMetric(system.disk?.used);
+      const total = getPlatformTableFiniteMetric(system.disk?.total);
+      if (used !== undefined && total !== undefined && total > 0) return (used / total) * 100;
+      return null;
+    }
+    case 'temp':
+      return getPlatformTableFiniteMetric(system.temperature) ?? null;
+    case 'shares':
+      return counts.shares;
+    case 'services':
+      return counts.services;
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const TrueNASSystemsTable: Component<{
   systems: Resource[];
   // Full TrueNAS resource scope so we can count pools / datasets / apps
@@ -102,6 +155,16 @@ export const TrueNASSystemsTable: Component<{
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
   const countsBySystem = createMemo(() =>
     buildTrueNASSystemChildCounts(props.scope, props.systems),
+  );
+  const sort = createPlatformTableSortState({
+    storageKey: 'truenasSystems',
+    sortKeys: TRUENAS_SYSTEM_SORT_KEYS,
+    descendingFirst: ['cpu', 'memory', 'capacity', 'temp', 'shares', 'services'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), (system, key) =>
+      getTrueNASSystemSortValue(system, countsBySystem().get(system.id) ?? EMPTY_COUNTS, key),
+    ),
   );
 
   return (
@@ -145,48 +208,73 @@ export const TrueNASSystemsTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[17%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="system"
+                  class="md:w-[17%]"
+                >
                   System
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[10%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="cpu"
+                  class="md:w-[10%]"
+                >
                   CPU
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[10%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="memory"
+                  class="md:w-[10%]"
+                >
                   Memory
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[13%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="capacity"
+                  class="md:w-[13%]"
+                >
                   Capacity
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="temp"
+                  class="hidden md:table-cell md:w-[6%]"
                 >
                   Temp
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell lg:w-[15%]`}
-                >
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden lg:table-cell lg:w-[15%]">
                   Inventory
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[8%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="shares"
+                  class="hidden lg:table-cell lg:w-[8%]"
                 >
                   Shares
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell lg:w-[10%]`}
-                >
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden lg:table-cell lg:w-[10%]">
                   VMs / Apps
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden lg:table-cell lg:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="services"
+                  class="hidden lg:table-cell lg:w-[10%]"
                 >
                   Services
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(system) => {
                     const name = () => asTrimmedString(system.name) || system.id;
                     const version = () => asTrimmedString(system.agent?.osVersion) || '—';

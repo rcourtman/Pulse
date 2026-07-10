@@ -2,21 +2,23 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { getShortImageName } from '@/utils/format';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
+  PlatformSortableTableHead,
   PlatformTableMetricFallback,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableTitleCaseValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   type PlatformTableFilterOption,
+  type PlatformTableSortValue,
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -121,6 +123,56 @@ const UpdatePills: Component<{ app: ResourceTrueNASAppMeta | undefined }> = (pro
   );
 };
 
+// Columns a user can sort by. Ports and Images summarize several values at
+// once, so they carry no single scalar to order on. Updates orders on how
+// many update kinds (app / image) are pending so outdated apps surface first.
+const TRUENAS_APP_SORT_KEYS = [
+  'app',
+  'version',
+  'cpu',
+  'memory',
+  'containers',
+  'updates',
+] as const;
+
+type TrueNASAppSortKey = (typeof TRUENAS_APP_SORT_KEYS)[number];
+
+const getTrueNASAppSortValue = (
+  resource: Resource,
+  key: TrueNASAppSortKey,
+): PlatformTableSortValue => {
+  const app = appMeta(resource);
+  switch (key) {
+    case 'app':
+      return (
+        asTrimmedString(app?.name) ||
+        asTrimmedString(resource.displayName) ||
+        asTrimmedString(resource.name) ||
+        resource.id
+      );
+    case 'version': {
+      const version = appVersionLabel(app);
+      return version === '-' ? null : version;
+    }
+    case 'cpu':
+      return getPlatformTableFiniteMetric(resource.cpu?.current) ?? null;
+    case 'memory': {
+      const total = getPlatformTableFiniteMetric(resource.memory?.total) ?? 0;
+      if (total > 0) {
+        return ((getPlatformTableFiniteMetric(resource.memory?.used) ?? 0) / total) * 100;
+      }
+      return getPlatformTableFiniteMetric(resource.memory?.current) ?? null;
+    }
+    case 'containers':
+      return appContainerCount(app);
+    case 'updates':
+      return (app?.upgradeAvailable === true ? 1 : 0) + (app?.imageUpdatesAvailable === true ? 1 : 0);
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const TrueNASAppsTable: Component<{
   apps: Resource[];
   scope: Resource[];
@@ -136,6 +188,12 @@ export const TrueNASAppsTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'truenas-app-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.scope);
+  const sort = createPlatformTableSortState({
+    storageKey: 'truenasApps',
+    sortKeys: TRUENAS_APP_SORT_KEYS,
+    descendingFirst: ['cpu', 'memory', 'containers', 'updates'],
+  });
+  const sortedRows = createMemo(() => sort.sortRows(tableState.filtered(), getTrueNASAppSortValue));
 
   return (
     <Show
@@ -178,43 +236,60 @@ export const TrueNASAppsTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[960px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[17%]`}>
+                <PlatformSortableTableHead kind="name" sort={sort} sortKey="app" class="md:w-[17%]">
                   App
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="version"
+                  class="hidden md:table-cell md:w-[10%]"
                 >
                   Version
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[9%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="cpu"
+                  class="md:w-[9%]"
+                >
                   CPU
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[12%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="memory"
+                  class="md:w-[12%]"
+                >
                   Memory
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden sm:table-cell md:w-[12%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="containers"
+                  class="hidden sm:table-cell md:w-[12%]"
                 >
                   Containers
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[18%]`}
-                >
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[18%]">
                   Ports
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden lg:table-cell md:w-[12%]`}
-                >
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden lg:table-cell md:w-[12%]">
                   Images
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[10%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="badge"
+                  sort={sort}
+                  sortKey="updates"
+                  class="md:w-[10%]"
+                >
                   Updates
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => {
                     const app = () => appMeta(resource);
                     const name = () =>

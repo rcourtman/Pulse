@@ -2,7 +2,7 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -17,17 +17,19 @@ import {
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableMetricFallback,
   PlatformTableEmptyState,
   PlatformTableShell,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   filterPlatformResources,
   formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   type PlatformResourceStatusFilter,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -49,6 +51,65 @@ import type { Resource } from '@/types/resource';
 // treatment so the Overview stack reads as one consistent surface.
 // Per-host VM count is computed from the page scope client-side (no
 // extra API calls).
+
+// Columns a user can sort by: every host column carries a scalar. VMs orders
+// on the per-host count computed from the page scope, so the getter takes the
+// count map alongside the row.
+const VSPHERE_HOST_SORT_KEYS = [
+  'host',
+  'version',
+  'datacenter',
+  'cluster',
+  'power',
+  'cpu',
+  'memory',
+  'datastores',
+  'vms',
+  'uptime',
+  'vcenter',
+] as const;
+
+type VsphereHostSortKey = (typeof VSPHERE_HOST_SORT_KEYS)[number];
+
+const getVsphereHostSortValue = (
+  host: Resource,
+  vmCountByHost: Map<string, number>,
+  key: VsphereHostSortKey,
+): PlatformTableSortValue => {
+  const meta = host.vmware;
+  switch (key) {
+    case 'host':
+      return asTrimmedString(host.name) || host.id;
+    case 'version':
+      return asTrimmedString(host.agent?.osVersion) || null;
+    case 'datacenter':
+      return asTrimmedString(meta?.datacenterName) || null;
+    case 'cluster':
+      return asTrimmedString(meta?.clusterName) || null;
+    case 'power':
+      return asTrimmedString(formatVmwarePowerState(meta?.powerState)) || null;
+    case 'cpu':
+      return getPlatformTableFiniteMetric(host.cpu?.current) ?? null;
+    case 'memory': {
+      const total = getPlatformTableFiniteMetric(host.memory?.total) ?? 0;
+      if (total > 0) {
+        return ((getPlatformTableFiniteMetric(host.memory?.used) ?? 0) / total) * 100;
+      }
+      return getPlatformTableFiniteMetric(host.memory?.current) ?? null;
+    }
+    case 'datastores':
+      return meta?.datastoreIds?.length ?? meta?.datastoreNames?.length ?? 0;
+    case 'vms':
+      return vmCountByHost.get(asTrimmedString(meta?.managedObjectId) || '') ?? 0;
+    case 'uptime':
+      return typeof host.uptime === 'number' && host.uptime > 0 ? host.uptime : null;
+    case 'vcenter':
+      return asTrimmedString(meta?.vcenterHost) || null;
+    default:
+      key satisfies never;
+      return null;
+  }
+};
 
 export const VsphereHostsTable: Component<{
   hosts: Resource[];
@@ -83,6 +144,17 @@ export const VsphereHostsTable: Component<{
     }
     return map;
   });
+
+  const sort = createPlatformTableSortState({
+    storageKey: 'vsphereHosts',
+    sortKeys: VSPHERE_HOST_SORT_KEYS,
+    descendingFirst: ['cpu', 'memory', 'datastores', 'vms', 'uptime'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), (host, key) =>
+      getVsphereHostSortValue(host, vmCountByHost(), key),
+    ),
+  );
 
   return (
     <Show
@@ -132,58 +204,99 @@ export const VsphereHostsTable: Component<{
                     integer-count columns to what their content actually
                     needs. Mobile widths are unchanged.
                   */}
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[16%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="host"
+                  class="md:w-[16%]"
+                >
                   Host
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[6%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="version"
+                  class="hidden md:table-cell md:w-[6%]"
                 >
                   Version
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="datacenter"
+                  class="hidden md:table-cell md:w-[10%]"
                 >
                   Datacenter
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="cluster"
+                  class="hidden md:table-cell md:w-[10%]"
                 >
                   Cluster
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="power"
+                  class="hidden md:table-cell md:w-[7%]"
                 >
                   Power
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[12%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="cpu"
+                  class="md:w-[12%]"
+                >
                   CPU
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[13%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="memory"
+                  class="md:w-[13%]"
+                >
                   Memory
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[7%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="datastores"
+                  class="hidden md:table-cell md:w-[7%]"
                 >
                   Datastores
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[4%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="vms"
+                  class="md:w-[4%]"
+                >
                   VMs
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[6%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="uptime"
+                  class="hidden md:table-cell md:w-[6%]"
                 >
                   Uptime
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="vcenter"
+                  class="hidden md:table-cell md:w-[9%]"
                 >
                   vCenter
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(host) => {
                     const meta = () => host.vmware;
                     const name = () => asTrimmedString(host.name) || host.id;

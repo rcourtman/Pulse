@@ -92,6 +92,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // The header sort persists per table via localStorage; clear it so one
+  // test's sort choice cannot leak into the next render.
+  window.localStorage.clear();
   cleanup();
 });
 
