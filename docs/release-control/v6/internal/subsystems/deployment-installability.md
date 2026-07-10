@@ -387,9 +387,8 @@ TLS floor in the dynamic config.
    at `./scripts/install.sh` and inside Docker images at
    `/opt/pulse/scripts/install.sh`, and is served at the running server's
    `/install.sh` endpoint; it is intentionally never the top-level GitHub
-   Releases asset. `internal/updates/adapter_installsh.go`,
-   `scripts/pulse-auto-update.sh`, and the root `install.sh`'s own
-   `--rc` / `--stable` / `--version` self-refetch flows all fetch
+   Releases asset. `scripts/pulse-auto-update.sh` and the root `install.sh`'s
+   own `--rc` / `--stable` / `--version` self-refetch flows all fetch
    `releases/<tag>/install.sh` and execute it via `bash -s -- --version vX.Y.Z`,
    and the README quickstart documents the same pattern. Publishing the agent
    installer in that slot silently breaks every one of those flows because the
@@ -1368,10 +1367,6 @@ That same storage boundary also governs update-history persistence:
 `internal/updates/history.go` must normalize its owned data directory and
 resolve the fixed `update-history.jsonl` leaf through the shared storage-path
 helper instead of joining raw caller-provided directory strings.
-That same boundary also governs install.sh rollback restore targets:
-`adapter_installsh.go` may not hardcode `/etc/pulse` for rollback safety
-backups or config restore, and must derive the rollback config directory
-through that same shared runtime data-dir helper.
 That same runtime env contract also governs `pulse mock`: the CLI may not keep
 writing a separate `mock.env` sidecar when supported runtime installs already
 carry mock-mode ownership through `.env`. Mock enable/disable/status must use
@@ -1601,12 +1596,13 @@ root `install.sh`, its generated update helper, and
 `scripts/pulse-auto-update.sh` must verify downloaded release tarballs and
 installer scripts against the pinned release `.sshsig` sidecars before
 execution, rather than treating same-origin checksum files as a sufficient
-trust anchor. The in-app updater binds to the same invariant: every
-release artifact the Go updater fetches before applying or rolling back —
-the update tarball in `internal/updates/manager.go::ApplyUpdate`, the
-`install.sh` piped into bash by `internal/updates/adapter_installsh.go::downloadInstallScript`,
-and the rollback binary tarball in
-`internal/updates/adapter_installsh.go::downloadBinary` — must verify
+trust anchor. The in-app updater binds to the same invariant: the only
+place the Go updater fetches release artifacts is the apply pipeline in
+`internal/updates/manager.go::ApplyUpdate` (the adapters in
+`internal/updates/adapter_installsh.go` are plan providers only and download
+nothing), and every artifact that pipeline fetches — community tarballs via
+`downloadAndVerifyReleaseSignature`, Pro broker artifacts via their explicit
+sidecar URL — must verify
 its `.sshsig` sidecar against the pinned `pulse-installer` ed25519 key
 (identity `pulse-installer`, namespace `pulse-install`) and refuse to
 proceed if the sidecar is missing, malformed, or fails verification. The

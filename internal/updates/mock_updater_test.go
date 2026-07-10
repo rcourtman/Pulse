@@ -25,24 +25,3 @@ func TestMockUpdaterBasics(t *testing.T) {
 		t.Fatal("unexpected plan result")
 	}
 }
-
-func TestMockUpdaterExecute(t *testing.T) {
-	updater := NewMockUpdater()
-	var stages []UpdateProgress
-	err := updater.Execute(context.Background(), UpdateRequest{}, func(stage UpdateProgress) {
-		stages = append(stages, stage)
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(stages) == 0 || !stages[len(stages)-1].IsComplete {
-		t.Fatalf("unexpected stages: %+v", stages)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	err = updater.Execute(ctx, UpdateRequest{}, func(UpdateProgress) {})
-	if err == nil {
-		t.Fatal("expected context error")
-	}
-}

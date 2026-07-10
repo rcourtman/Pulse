@@ -12,20 +12,15 @@ import (
 	"testing"
 )
 
-// stubReleaseSignatureVerification replaces the package-level signature
-// verifier and fetch-and-verify helper with no-op stubs so tests that
-// exercise update paths don't need ssh-keygen or a real .sshsig endpoint.
-// The previous values are restored via t.Cleanup.
-func stubReleaseSignatureVerification(t *testing.T) {
+// downloadAndVerifyReleaseSignatureForTest resolves rawURL and runs the
+// manager's fetch-and-verify path against it.
+func downloadAndVerifyReleaseSignatureForTest(t *testing.T, rawURL, assetPath string) error {
 	t.Helper()
-	prevFetch := fetchAndVerifyReleaseSignature
-	prevVerify := verifyReleaseSignatureFunc
-	fetchAndVerifyReleaseSignature = func(ctx context.Context, assetURL, assetPath string) error { return nil }
-	verifyReleaseSignatureFunc = func(ctx context.Context, targetPath, signaturePath string) error { return nil }
-	t.Cleanup(func() {
-		fetchAndVerifyReleaseSignature = prevFetch
-		verifyReleaseSignatureFunc = prevVerify
-	})
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatalf("parse %q: %v", rawURL, err)
+	}
+	return NewManager(nil).downloadAndVerifyReleaseSignature(context.Background(), parsed, assetPath)
 }
 
 func TestSignatureURLForAppendsSshsig(t *testing.T) {
@@ -40,7 +35,7 @@ func TestSignatureURLForAppendsSshsig(t *testing.T) {
 	}
 }
 
-func TestFetchAndVerifyReleaseSignatureSuccess(t *testing.T) {
+func TestManagerDownloadAndVerifyReleaseSignatureSuccess(t *testing.T) {
 	dir := t.TempDir()
 	assetPath := filepath.Join(dir, "asset.bin")
 	if err := os.WriteFile(assetPath, []byte("payload"), 0600); err != nil {
@@ -69,12 +64,12 @@ func TestFetchAndVerifyReleaseSignatureSuccess(t *testing.T) {
 	}
 	t.Cleanup(func() { verifyReleaseSignatureFunc = prev })
 
-	if err := fetchAndVerifyReleaseSignatureReal(context.Background(), server.URL+"/asset.bin", assetPath); err != nil {
-		t.Fatalf("fetchAndVerifyReleaseSignatureReal error: %v", err)
+	if err := downloadAndVerifyReleaseSignatureForTest(t, server.URL+"/asset.bin", assetPath); err != nil {
+		t.Fatalf("downloadAndVerifyReleaseSignature error: %v", err)
 	}
 }
 
-func TestFetchAndVerifyReleaseSignatureFailsOnMissingSidecar(t *testing.T) {
+func TestManagerDownloadAndVerifyReleaseSignatureFailsOnMissingSidecar(t *testing.T) {
 	dir := t.TempDir()
 	assetPath := filepath.Join(dir, "asset.bin")
 	if err := os.WriteFile(assetPath, []byte("payload"), 0600); err != nil {
@@ -86,13 +81,13 @@ func TestFetchAndVerifyReleaseSignatureFailsOnMissingSidecar(t *testing.T) {
 	}))
 	defer server.Close()
 
-	err := fetchAndVerifyReleaseSignatureReal(context.Background(), server.URL+"/asset.bin", assetPath)
+	err := downloadAndVerifyReleaseSignatureForTest(t, server.URL+"/asset.bin", assetPath)
 	if err == nil || !strings.Contains(err.Error(), "404") {
 		t.Fatalf("expected 404 error, got: %v", err)
 	}
 }
 
-func TestFetchAndVerifyReleaseSignatureFailsOnEmptySignature(t *testing.T) {
+func TestManagerDownloadAndVerifyReleaseSignatureFailsOnEmptySignature(t *testing.T) {
 	dir := t.TempDir()
 	assetPath := filepath.Join(dir, "asset.bin")
 	if err := os.WriteFile(assetPath, []byte("payload"), 0600); err != nil {
@@ -104,13 +99,13 @@ func TestFetchAndVerifyReleaseSignatureFailsOnEmptySignature(t *testing.T) {
 	}))
 	defer server.Close()
 
-	err := fetchAndVerifyReleaseSignatureReal(context.Background(), server.URL+"/asset.bin", assetPath)
+	err := downloadAndVerifyReleaseSignatureForTest(t, server.URL+"/asset.bin", assetPath)
 	if err == nil || !strings.Contains(err.Error(), "empty") {
 		t.Fatalf("expected empty-signature error, got: %v", err)
 	}
 }
 
-func TestFetchAndVerifyReleaseSignatureFailsWhenVerifierRejects(t *testing.T) {
+func TestManagerDownloadAndVerifyReleaseSignatureFailsWhenVerifierRejects(t *testing.T) {
 	dir := t.TempDir()
 	assetPath := filepath.Join(dir, "asset.bin")
 	if err := os.WriteFile(assetPath, []byte("payload"), 0600); err != nil {
@@ -129,13 +124,13 @@ func TestFetchAndVerifyReleaseSignatureFailsWhenVerifierRejects(t *testing.T) {
 	}
 	t.Cleanup(func() { verifyReleaseSignatureFunc = prev })
 
-	err := fetchAndVerifyReleaseSignatureReal(context.Background(), server.URL+"/asset.bin", assetPath)
+	err := downloadAndVerifyReleaseSignatureForTest(t, server.URL+"/asset.bin", assetPath)
 	if err == nil || !strings.Contains(err.Error(), "signature does not match") {
 		t.Fatalf("expected verifier rejection, got: %v", err)
 	}
 }
 
-func TestFetchAndVerifyReleaseSignatureFailsOnOversizedSignature(t *testing.T) {
+func TestManagerDownloadAndVerifyReleaseSignatureFailsOnOversizedSignature(t *testing.T) {
 	dir := t.TempDir()
 	assetPath := filepath.Join(dir, "asset.bin")
 	if err := os.WriteFile(assetPath, []byte("payload"), 0600); err != nil {
@@ -152,7 +147,7 @@ func TestFetchAndVerifyReleaseSignatureFailsOnOversizedSignature(t *testing.T) {
 	}))
 	defer server.Close()
 
-	err := fetchAndVerifyReleaseSignatureReal(context.Background(), server.URL+"/asset.bin", assetPath)
+	err := downloadAndVerifyReleaseSignatureForTest(t, server.URL+"/asset.bin", assetPath)
 	if err == nil || !strings.Contains(err.Error(), "exceeds") {
 		t.Fatalf("expected oversize error, got: %v", err)
 	}

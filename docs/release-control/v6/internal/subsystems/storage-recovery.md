@@ -545,7 +545,10 @@ recovery scope, or a storage/recovery-owned secret source.
    plumbing, not storage or recovery surface: storage and recovery must not
    consume them, and the pre-update backup and rollback machinery in
    `internal/updates` stays identical for community and private Pro archives
-   so recovery semantics never fork by edition.
+   so recovery semantics never fork by edition. That machinery lives solely
+   in the `internal/updates/manager.go` apply pipeline; the deployment
+   adapters behind the update-plan endpoint are plan providers only and own
+   no download, restore, or rollback path.
    Proxmox-side LXC Docker inventory wiring may also pass through
    `internal/api/router.go` and Proxmox agent install-command generation, but
    storage and recovery may consume the resulting app-container/resource

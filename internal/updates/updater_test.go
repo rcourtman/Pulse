@@ -11,8 +11,6 @@ type mockUpdater struct {
 	deploymentType string
 	supportsApply  bool
 	prepareErr     error
-	executeErr     error
-	rollbackErr    error
 }
 
 func (m *mockUpdater) SupportsApply() bool {
@@ -26,14 +24,6 @@ func (m *mockUpdater) PrepareUpdate(ctx context.Context, request UpdateRequest) 
 	return &UpdatePlan{
 		CanAutoUpdate: m.supportsApply,
 	}, nil
-}
-
-func (m *mockUpdater) Execute(ctx context.Context, request UpdateRequest, progressCb ProgressCallback) error {
-	return m.executeErr
-}
-
-func (m *mockUpdater) Rollback(ctx context.Context, eventID string) error {
-	return m.rollbackErr
 }
 
 func (m *mockUpdater) GetDeploymentType() string {
@@ -215,49 +205,6 @@ func TestUpdatePlan_NormalizeCollectionsInitializesReadinessChecks(t *testing.T)
 	}
 }
 
-func TestUpdateProgress_Fields(t *testing.T) {
-	progress := UpdateProgress{
-		Stage:      "downloading",
-		Progress:   50,
-		Message:    "Downloading update...",
-		IsComplete: false,
-		Error:      "",
-	}
-
-	if progress.Stage != "downloading" {
-		t.Errorf("Stage = %q, want %q", progress.Stage, "downloading")
-	}
-	if progress.Progress != 50 {
-		t.Errorf("Progress = %d, want 50", progress.Progress)
-	}
-	if progress.Message != "Downloading update..." {
-		t.Errorf("Message = %q, want %q", progress.Message, "Downloading update...")
-	}
-	if progress.IsComplete {
-		t.Error("IsComplete should be false")
-	}
-	if progress.Error != "" {
-		t.Errorf("Error = %q, want empty string", progress.Error)
-	}
-}
-
-func TestUpdateProgress_WithError(t *testing.T) {
-	progress := UpdateProgress{
-		Stage:      "failed",
-		Progress:   0,
-		Message:    "Update failed",
-		IsComplete: true,
-		Error:      "connection timeout",
-	}
-
-	if !progress.IsComplete {
-		t.Error("IsComplete should be true for failed state")
-	}
-	if progress.Error != "connection timeout" {
-		t.Errorf("Error = %q, want %q", progress.Error, "connection timeout")
-	}
-}
-
 func TestMockUpdater_SupportsApply(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -298,50 +245,6 @@ func TestMockUpdater_PrepareUpdate(t *testing.T) {
 		_, err := updater.PrepareUpdate(ctx, req)
 		if err != expectedErr {
 			t.Errorf("PrepareUpdate() error = %v, want %v", err, expectedErr)
-		}
-	})
-}
-
-func TestMockUpdater_Execute(t *testing.T) {
-	ctx := context.Background()
-	req := UpdateRequest{Version: "1.0.0"}
-	progressCb := func(p UpdateProgress) {}
-
-	t.Run("success", func(t *testing.T) {
-		updater := &mockUpdater{}
-		err := updater.Execute(ctx, req, progressCb)
-		if err != nil {
-			t.Errorf("Execute() error = %v, want nil", err)
-		}
-	})
-
-	t.Run("error", func(t *testing.T) {
-		expectedErr := errors.New("execute failed")
-		updater := &mockUpdater{executeErr: expectedErr}
-		err := updater.Execute(ctx, req, progressCb)
-		if err != expectedErr {
-			t.Errorf("Execute() error = %v, want %v", err, expectedErr)
-		}
-	})
-}
-
-func TestMockUpdater_Rollback(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("success", func(t *testing.T) {
-		updater := &mockUpdater{}
-		err := updater.Rollback(ctx, "event-123")
-		if err != nil {
-			t.Errorf("Rollback() error = %v, want nil", err)
-		}
-	})
-
-	t.Run("error", func(t *testing.T) {
-		expectedErr := errors.New("rollback failed")
-		updater := &mockUpdater{rollbackErr: expectedErr}
-		err := updater.Rollback(ctx, "event-123")
-		if err != expectedErr {
-			t.Errorf("Rollback() error = %v, want %v", err, expectedErr)
 		}
 	})
 }

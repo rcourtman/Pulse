@@ -32,8 +32,8 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 		// The rendered AGENT installer is shipped inside tarballs and Docker images
 		// at ./scripts/install.sh and served at the running server's /install.sh
 		// endpoint, but is intentionally not a top-level GitHub Releases asset:
-		// adapter_installsh, pulse-auto-update.sh, the root install.sh's own --rc/
-		// --version flows, and the README quickstart all expect releases/<tag>/install.sh
+		// pulse-auto-update.sh, the root install.sh's own --rc/--version flows, and
+		// the README quickstart all expect releases/<tag>/install.sh
 		// to be the server installer that accepts --version vX.Y.Z.
 		`cp install.sh "$RELEASE_DIR/install.sh"`,
 		`[ -f "${RENDERED_INSTALLERS_DIR}/install.ps1" ] && cp "${RENDERED_INSTALLERS_DIR}/install.ps1" "$RELEASE_DIR/install.ps1"`,

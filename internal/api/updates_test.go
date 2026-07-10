@@ -642,6 +642,46 @@ func TestHandleGetUpdatePlan(t *testing.T) {
 	}
 }
 
+// TestUpdateHandlersRegistryProvidesPlans pins the registry wiring behind
+// GET /api/updates/plan: every registered deployment adapter is a plan
+// provider that yields usable instructions. The adapters own no apply or
+// rollback machinery; the real apply runs through the manager pipeline.
+func TestUpdateHandlersRegistryProvidesPlans(t *testing.T) {
+	h := NewUpdateHandlers(nil, nil)
+
+	cases := []struct {
+		deploymentType string
+		supportsApply  bool
+	}{
+		{"systemd", true},
+		{"proxmoxve", true},
+		{"docker", false},
+		{"aur", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.deploymentType, func(t *testing.T) {
+			updater, err := h.registry.Get(tc.deploymentType)
+			if err != nil {
+				t.Fatalf("registry.Get(%q): %v", tc.deploymentType, err)
+			}
+			if updater.SupportsApply() != tc.supportsApply {
+				t.Errorf("SupportsApply() = %v, want %v", updater.SupportsApply(), tc.supportsApply)
+			}
+			plan, err := updater.PrepareUpdate(context.Background(), updates.UpdateRequest{Version: "v6.0.5"})
+			if err != nil {
+				t.Fatalf("PrepareUpdate: %v", err)
+			}
+			if len(plan.Instructions) == 0 {
+				t.Errorf("expected plan instructions for %q", tc.deploymentType)
+			}
+			if plan.CanAutoUpdate != tc.supportsApply {
+				t.Errorf("CanAutoUpdate = %v, want %v", plan.CanAutoUpdate, tc.supportsApply)
+			}
+		})
+	}
+}
+
 func TestHandleGetUpdatePlan_IncludesUpgradeReadiness(t *testing.T) {
 	setMockModeForTest(t, true)
 

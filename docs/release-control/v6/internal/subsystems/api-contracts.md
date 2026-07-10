@@ -1576,6 +1576,11 @@ payload shape change when the portal presents compact client rows.
     target, so installer preflight failures point operators at the artifact
     they actually need.
 84. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
+    The updater registry behind `GET /api/updates/plan` is a plan-provider
+    seam only (`SupportsApply`, `PrepareUpdate`, `GetDeploymentType`); apply
+    and rollback semantics ride the manager pipeline behind
+    `POST /api/updates/apply`, and the updates API exposes no per-deployment
+    adapter execute or rollback transport.
 85. `pkg/aicontracts/fix_execution.go` shared with `ai-runtime`: the public approved-fix execution contract is both an AI runtime approved-action boundary and a canonical API dependency contract for Patrol and enterprise auto-fix binders.
 86. `pkg/aicontracts/investigation.go` shared with `ai-runtime`: the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces.
 87. `pkg/aicontracts/orchestrator_deps.go` shared with `ai-runtime`: the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history.

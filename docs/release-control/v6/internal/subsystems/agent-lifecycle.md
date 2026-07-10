@@ -156,7 +156,11 @@ credential wiring in `internal/api/router.go` (feeding the activation's
 installation token and instance fingerprint to the server updater's
 download-broker path) is likewise server self-update plumbing: agent
 enrollment, agent update liveness, and fleet-control semantics must not key
-off it. Workflow starter counts on that endpoint,
+off it. The same boundary covers the server updater's deployment adapters
+behind `GET /api/updates/plan` in `internal/api/updates.go`: they are plan
+providers only, with the real apply in the `internal/updates/manager.go`
+pipeline, and lifecycle surfaces must not read them as an agent-side apply,
+update, or rollback transport. Workflow starter counts on that endpoint,
 contextual Assistant/external-agent collaboration counts inside the Assistant
 step, the content-free Patrol control starter split, and Patrol control
 completed-loop, resolved-loop, or `patrolControlValueState` proof mirrored to

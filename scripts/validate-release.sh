@@ -497,7 +497,7 @@ if ! grep -qE '^# Pulse Installer Script' "$install_sh_path"; then
     exit 1
 fi
 if ! grep -qE '^[[:space:]]*--version\)' "$install_sh_path"; then
-    error "install.sh is missing the --version arg handler — required by adapter_installsh, pulse-auto-update.sh, and the README quickstart"
+    error "install.sh is missing the --version arg handler — required by pulse-auto-update.sh and the README quickstart"
     exit 1
 fi
 if grep -q 'Pulse Unified Agent Installer' "$install_sh_path"; then

@@ -112,34 +112,6 @@ func (m *Manager) downloadAndVerifyReleaseSignature(ctx context.Context, assetUR
 	return readSignatureAndVerify(ctx, resp, sigURL.String(), assetPath)
 }
 
-// fetchAndVerifyReleaseSignature is the http.Get-based counterpart to
-// downloadAndVerifyReleaseSignature, used by callers that aren't on Manager.
-// It is a package-level variable so tests can stub the full fetch+verify
-// without standing up a real .sshsig endpoint.
-var fetchAndVerifyReleaseSignature = fetchAndVerifyReleaseSignatureReal
-
-func fetchAndVerifyReleaseSignatureReal(ctx context.Context, assetURL string, assetPath string) error {
-	parsed, err := url.Parse(assetURL)
-	if err != nil {
-		return fmt.Errorf("parse asset URL: %w", err)
-	}
-	sigURL := signatureURLFor(parsed)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, sigURL.String(), nil)
-	if err != nil {
-		return fmt.Errorf("build signature request: %w", err)
-	}
-
-	client := &http.Client{Timeout: signatureFetchTimeout}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("fetch %s: %w", sigURL.String(), err)
-	}
-	defer resp.Body.Close()
-
-	return readSignatureAndVerify(ctx, resp, sigURL.String(), assetPath)
-}
-
 func readSignatureAndVerify(ctx context.Context, resp *http.Response, sigURL string, assetPath string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("signature URL %s returned status %d", sigURL, resp.StatusCode)

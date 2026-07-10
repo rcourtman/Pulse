@@ -182,7 +182,6 @@ type Manager struct {
 	cacheTime      map[string]time.Time   // keyed by channel
 	cacheDuration  time.Duration
 	progressChan   chan UpdateStatus
-	queue          *UpdateQueue
 	sseBroadcast   *SSEBroadcaster
 	lifecycleMu    sync.RWMutex
 	shutdownCh     chan struct{}
@@ -212,7 +211,6 @@ func NewManager(cfg *config.Config) *Manager {
 		cacheTime:     make(map[string]time.Time),
 		cacheDuration: 5 * time.Minute, // Cache update checks for 5 minutes
 		progressChan:  make(chan UpdateStatus, 100),
-		queue:         NewUpdateQueue(),
 		sseBroadcast:  NewSSEBroadcaster(),
 		shutdownCh:    make(chan struct{}),
 		status: UpdateStatus{

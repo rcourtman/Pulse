@@ -88,24 +88,6 @@ func TestUpdaterPrepareUpdateInstructions(t *testing.T) {
 	}
 }
 
-func TestUpdaterExecuteRollbackErrors(t *testing.T) {
-	ctx := context.Background()
-
-	if err := NewDockerUpdater().Execute(ctx, UpdateRequest{}, nil); err == nil {
-		t.Fatal("expected docker Execute error")
-	}
-	if err := NewDockerUpdater().Rollback(ctx, "event"); err == nil {
-		t.Fatal("expected docker Rollback error")
-	}
-
-	if err := NewAURUpdater().Execute(ctx, UpdateRequest{}, nil); err == nil {
-		t.Fatal("expected aur Execute error")
-	}
-	if err := NewAURUpdater().Rollback(ctx, "event"); err == nil {
-		t.Fatal("expected aur Rollback error")
-	}
-}
-
 func TestManagerCloseAndBackup(t *testing.T) {
 	manager := NewManager(&config.Config{})
 	manager.Close()

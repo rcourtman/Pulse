@@ -60,31 +60,15 @@ func (p UpdatePlan) NormalizeCollections() UpdatePlan {
 	return p
 }
 
-// UpdateProgress represents progress updates during an update
-type UpdateProgress struct {
-	Stage      string `json:"stage"`
-	Progress   int    `json:"progress"` // 0-100
-	Message    string `json:"message"`
-	IsComplete bool   `json:"isComplete"`
-	Error      string `json:"error,omitempty"`
-}
-
-// ProgressCallback is called during update execution
-type ProgressCallback func(progress UpdateProgress)
-
-// Updater defines the interface for deployment-specific update logic
+// Updater describes how an update would be performed for a deployment type.
+// Implementations are plan providers only; the actual apply runs through the
+// in-Go pipeline in manager.go ApplyUpdate.
 type Updater interface {
 	// SupportsApply returns true if this deployment type supports automated updates
 	SupportsApply() bool
 
 	// PrepareUpdate returns a plan describing how the update will be performed
 	PrepareUpdate(ctx context.Context, request UpdateRequest) (*UpdatePlan, error)
-
-	// Execute performs the update
-	Execute(ctx context.Context, request UpdateRequest, progressCb ProgressCallback) error
-
-	// Rollback rolls back to a previous version using a backup
-	Rollback(ctx context.Context, eventID string) error
 
 	// GetDeploymentType returns the deployment type this updater handles
 	GetDeploymentType() string

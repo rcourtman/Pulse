@@ -57,8 +57,8 @@ func NewUpdateHandlersWithContext(manager UpdateManager, history *updates.Update
 	registry := updates.NewUpdaterRegistry()
 
 	// Register adapters
-	registry.Register("systemd", updates.NewInstallShAdapter(history))
-	registry.Register("proxmoxve", updates.NewInstallShAdapter(history))
+	registry.Register("systemd", updates.NewInstallShAdapter())
+	registry.Register("proxmoxve", updates.NewInstallShAdapter())
 	registry.Register("docker", updates.NewDockerUpdater())
 	registry.Register("aur", updates.NewAURUpdater())
 	if mockmode.IsEnabled() || strings.EqualFold(os.Getenv("PULSE_ALLOW_DOCKER_UPDATES"), "true") {

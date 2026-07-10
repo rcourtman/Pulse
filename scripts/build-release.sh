@@ -465,9 +465,8 @@ fi
 # instead of pulling from main branch (which may have newer, incompatible changes)
 echo "Copying install scripts to release directory..."
 # The published install.sh is the Pulse SERVER installer (LXC/systemd/Proxmox VE).
-# In-product self-update (internal/updates/adapter_installsh.go), scripts/pulse-auto-update.sh,
-# the root install.sh's own --rc/--stable/--version flows, and the README quickstart all
-# fetch this asset and run `bash install.sh --version vX.Y.Z`. The rendered AGENT installer
+# scripts/pulse-auto-update.sh, the root install.sh's own --rc/--stable/--version flows,
+# and the README quickstart all fetch this asset and run `bash install.sh --version vX.Y.Z`. The rendered AGENT installer
 # (scripts/install.sh) ships inside tarballs and Docker images at ./scripts/install.sh and
 # is served at the running server's /install.sh endpoint — it is not a GitHub Releases asset.
 cp install.sh "$RELEASE_DIR/install.sh"
