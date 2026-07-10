@@ -8291,4 +8291,14 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('const statusDot = (className: string)');
     }
   });
+
+  it('keeps shared navigation and row actions usable at phone widths', () => {
+    expect(subtabsSource).toContain('overflow-x-auto');
+    expect(subtabsSource).toContain('whitespace-nowrap');
+    expect(subtabsSource).toContain('min-h-10');
+    expect(summaryRowActionButtonSource).toContain('h-10 w-10');
+    expect(searchFieldSource).toContain('min-h-10');
+    expect(filterToolbarSource).toContain('min-h-10');
+    expect(inlineDetailTableRowSource).toContain('max-w-[calc(100vw-3.5rem)]');
+  });
 });

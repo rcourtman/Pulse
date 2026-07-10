@@ -1799,3 +1799,10 @@ The compact provenance marker for those values is presentation-only. It
 may identify already-loaded Discovery fields, but must not introduce
 additional discovery fetches, provider lookups, endpoint probes, or
 per-row layout measurement on the Workloads hot path.
+
+The canonical Workloads table mobile floor is 36rem. The mobile table branch
+must preserve that intrinsic width inside its existing scroll shell instead of
+combining it with `min-w-full`, which allows the five operational columns to
+compress into unreadable phone-width fragments. This is a layout-only contract:
+it must not add row-time measurement, duplicate tables, or viewport listeners
+to the Workloads rendering hot path.

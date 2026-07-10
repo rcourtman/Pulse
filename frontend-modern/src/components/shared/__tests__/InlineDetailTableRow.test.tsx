@@ -34,6 +34,11 @@ describe('InlineDetailTableRow', () => {
     expect(cell).toHaveClass('bg-surface-alt');
     expect(detail.parentElement).toHaveClass('px-2');
     expect(detail.parentElement).toHaveClass('sm:px-4');
+    expect(detail.parentElement).toHaveClass('sticky');
+    expect(detail.parentElement).toHaveClass('left-0');
+    expect(detail.parentElement).toHaveClass('max-w-[calc(100vw-3.5rem)]');
+    expect(detail.parentElement).toHaveClass('lg:static');
+    expect(detail.parentElement).toHaveClass('lg:max-w-none');
   });
 
   it('contains clicks inside the detail content by default', () => {

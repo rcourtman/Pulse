@@ -92,14 +92,14 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
         </div>
       </Show>
 
-      <Card padding="none" class="relative flex lg:flex-row overflow-hidden min-h-[600px]">
+      <Card padding="none" class="relative flex overflow-hidden lg:min-h-[600px] lg:flex-row">
         <div
-          class={`${props.isMobileMenuOpen() ? 'flex flex-col w-full' : 'hidden lg:flex lg:flex-col'} ${props.sidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:align-top flex-shrink-0 transition-all duration-200 bg-surface lg:bg-transparent z-10`}
+          class={`${props.isMobileMenuOpen() ? 'flex w-full flex-col' : 'hidden lg:flex lg:flex-col'} ${props.sidebarCollapsed() ? 'lg:w-16 lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:w-72 lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative z-10 max-h-[calc(100dvh-12rem)] flex-shrink-0 overflow-y-auto overscroll-contain border-b border-border bg-surface transition-all duration-200 lg:max-h-none lg:overflow-visible lg:border-b-0 lg:border-r lg:bg-transparent lg:align-top`}
           aria-label={shellCopy().navigationAriaLabel}
           aria-expanded={!props.sidebarCollapsed()}
         >
           <div
-            class={`sticky top-0 ${props.sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
+            class={`${props.sidebarCollapsed() ? 'px-2' : 'px-4'} space-y-5 py-5 transition-all duration-200 lg:sticky lg:top-0`}
           >
             <Show when={!props.sidebarCollapsed()}>
               <div class="flex items-center justify-between pb-2 border-b border-border">
@@ -109,7 +109,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                 <button
                   type="button"
                   onClick={() => props.setSidebarCollapsed(true)}
-                  class="p-1 rounded-md hover:bg-surface-hover transition-colors"
+                  class="inline-flex h-10 w-10 items-center justify-center rounded-md transition-colors hover:bg-surface-hover lg:h-auto lg:w-auto lg:p-1"
                   aria-label={shellCopy().collapseSidebarLabel}
                 >
                   <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -238,7 +238,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
               <button
                 type="button"
                 onClick={() => props.setIsMobileMenuOpen(true)}
-                class="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium active:bg-blue-50 dark:active:bg-blue-900 px-2 py-1.5 rounded-md transition-colors"
+                class="flex min-h-10 items-center gap-1.5 rounded-md px-2 py-1.5 font-medium text-blue-600 transition-colors active:bg-blue-50 dark:text-blue-400 dark:active:bg-blue-900"
               >
                 <svg
                   class="h-5 w-5 -ml-1 flex-shrink-0"

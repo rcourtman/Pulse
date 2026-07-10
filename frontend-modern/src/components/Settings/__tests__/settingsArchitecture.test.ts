@@ -129,6 +129,10 @@ describe('settings architecture guardrails', () => {
     expect(settingsPageShellSource).toContain(
       '<PageHeader title={props.headerMeta().title} description={props.headerMeta().description} />',
     );
+    expect(settingsPageShellSource).toContain('max-h-[calc(100dvh-12rem)]');
+    expect(settingsPageShellSource).toContain('overflow-y-auto overscroll-contain');
+    expect(settingsPageShellSource).toContain('lg:min-h-[600px]');
+    expect(settingsPageShellSource).not.toContain('min-h-[600px]">');
     expect(settingsDialogsSource).toContain('export const SettingsDialogs');
   });
 
@@ -1118,9 +1122,7 @@ describe('settings architecture guardrails', () => {
     // suppression off the compiled runtime identity, and the install guide
     // routes both the available-update steps and the idle Docker box through
     // that flag.
-    expect(updatesSettingsPanelSource).toContain(
-      "runtimeCapabilities()?.runtime?.build === 'pro'",
-    );
+    expect(updatesSettingsPanelSource).toContain("runtimeCapabilities()?.runtime?.build === 'pro'");
     expect(updatesSettingsPanelSource).toContain('isProRuntime={isProRuntime()}');
     expect(updateInstallGuideSource).toContain('isProRuntime: boolean');
     expect(updateInstallGuideSource).toContain('IDLE_DOCKER_PRO_NOTICE');

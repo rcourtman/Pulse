@@ -3824,6 +3824,71 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA34",
+      "summary": "Every authenticated Pulse product and Settings page remains usable at supported phone widths: page-level overflow stays contained; dense tables and tab rails scroll instead of compressing or wrapping; active destinations, expanded inline detail, and Settings navigation remain visible; primary touch actions keep a 40-pixel mobile floor; and exact-route browser proof must not count redirects as audited pages.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L8",
+        "L10"
+      ],
+      "subsystem_ids": [
+        "frontend-primitives",
+        "performance-and-scalability"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "route-wide-mobile-browser-proof",
+          "run": [
+            "npm",
+            "--prefix",
+            "tests/integration",
+            "test",
+            "--",
+            "tests/04-mobile.spec.ts",
+            "tests/05-settings-mobile-audit.spec.ts",
+            "--project=mobile-chrome"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/shared/InlineDetailTableRow.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Workloads/WorkloadsTable.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/04-mobile.spec.ts",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/05-settings-mobile-audit.spec.ts",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {

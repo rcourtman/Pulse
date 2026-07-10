@@ -28,6 +28,8 @@ describe('SearchTipsPopover', () => {
     expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverPositionClass');
     expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverTriggerVariant');
     expect(searchTipsPopoverModelSource).toContain('shouldSearchTipsPopoverOpenOnHover');
+    expect(searchTipsPopoverModelSource).toContain('h-10 w-10');
+    expect(searchTipsPopoverModelSource).toContain('sm:h-5 sm:w-5');
   });
 
   it('toggles the popover on click by default', async () => {

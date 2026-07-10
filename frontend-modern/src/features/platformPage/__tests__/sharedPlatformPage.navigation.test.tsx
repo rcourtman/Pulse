@@ -51,13 +51,16 @@ describe('PlatformSectionTabs', () => {
     ));
 
     const navigation = screen.getByRole('navigation', { name: 'TrueNAS sections' });
+    expect(navigation).toHaveClass('overflow-x-auto');
+    expect(navigation).toHaveClass('scrollbar-hide');
+    expect(navigation).not.toHaveClass('flex-wrap');
     expect(within(navigation).getByRole('link', { name: 'Overview' })).toHaveAttribute(
       'href',
       '/truenas/overview',
     );
-    expect(within(navigation).getByRole('link', { name: 'Storage' })).toHaveAttribute(
-      'aria-current',
-      'page',
-    );
+    const activeLink = within(navigation).getByRole('link', { name: 'Storage' });
+    expect(activeLink).toHaveAttribute('aria-current', 'page');
+    expect(activeLink).toHaveClass('shrink-0');
+    expect(activeLink).toHaveClass('whitespace-nowrap');
   });
 });

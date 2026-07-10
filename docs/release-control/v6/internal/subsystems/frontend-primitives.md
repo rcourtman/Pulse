@@ -4909,3 +4909,13 @@ computers monitored only by agentless reachability checks may use
 checks until a Pulse Agent registers and supplies CPU, memory, disk, and network
 telemetry. Machines empty and handoff actions must lead to Pulse Agent install
 or the Availability checks tab, not to an agentless machine row in Machines.
+
+Mobile product layout is a shared primitive contract, not a page-local styling
+exception. At supported phone widths, tab rails and dense data surfaces must
+preserve their readable intrinsic width inside an owned horizontal scroll
+container; expanded inline detail must remain bounded by the visible viewport;
+and active destinations must be scrolled into view. Shared search, filter,
+disclosure, navigation, copy, and row-action controls must keep a 40-pixel
+mobile touch floor while retaining their compact desktop density. Settings
+navigation must own a viewport-bounded vertical scroll region so its route list
+does not push the active panel below the page.

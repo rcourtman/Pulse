@@ -143,6 +143,8 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.timeline.unavailable': 'No hay linea de tiempo de incidente disponible.',
   'runtimeHome.openingWorkspace': 'Abriendo el espacio de trabajo...',
   'setup.completion.action.addInfrastructure': 'Agregar infraestructura',
+  'setup.completion.action.copyAdminToken': 'Copiar token de API de administrador',
+  'setup.completion.action.copyPassword': 'Copiar contraseña',
   'setup.completion.action.downloadCredentials': 'Descargar credenciales',
   'setup.completion.action.installAgent': 'Instalar Pulse Agent',
   'setup.completion.action.openInfrastructure': 'Abrir Infraestructura',

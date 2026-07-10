@@ -1,8 +1,8 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { test as base, expect } from '@playwright/test';
-import { createAuthenticatedStorageState } from './helpers';
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { test as base, expect } from "@playwright/test";
+import { createAuthenticatedStorageState } from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 type WorkerFixtures = {
@@ -10,41 +10,62 @@ type WorkerFixtures = {
 };
 
 const SETTINGS_ROUTES = [
-  '/settings/infrastructure',
-  '/settings/monitoring/availability',
-  '/settings/pulse-intelligence/provider',
-  '/settings/pulse-intelligence/patrol',
-  '/settings/pulse-intelligence/assistant',
-  '/settings/pulse-intelligence/discovery',
-  '/settings/pulse-intelligence/billing/plan',
-  '/settings/pulse-intelligence/billing/usage',
-  '/settings/organization',
-  '/settings/organization/access',
-  '/settings/organization/sharing',
-  '/settings/organization/billing',
-  '/settings/organization/billing-admin',
-  '/settings/system-general',
-  '/settings/system-network',
-  '/settings/system-updates',
-  '/settings/system-recovery',
-  '/settings/system-relay',
-  '/settings/support/diagnostics',
-  '/settings/support/reporting',
-  '/settings/support/logs',
-  '/settings/security/api',
-  '/settings/security-overview',
-  '/settings/security-data-handling',
-  '/settings/security-auth',
-  '/settings/security-sso',
-  '/settings/security-roles',
-  '/settings/security-users',
-  '/settings/security-audit',
-  '/settings/security-webhooks',
+  "/settings/infrastructure",
+  "/settings/monitoring/availability",
+  "/settings/pulse-intelligence/provider",
+  "/settings/pulse-intelligence/patrol",
+  "/settings/pulse-intelligence/assistant",
+  "/settings/pulse-intelligence/billing/plan",
+  "/settings/system-general",
+  "/settings/system-network",
+  "/settings/system-updates",
+  "/settings/system-recovery",
+  "/settings/system-relay",
+  "/settings/support/diagnostics",
+  "/settings/support/reporting",
+  "/settings/support/logs",
+  "/settings/security/api",
+  "/settings/security-overview",
+  "/settings/security-data-handling",
+  "/settings/security-auth",
+  "/settings/security-sso",
+  "/settings/security-roles",
+  "/settings/security-users",
+  "/settings/security-audit",
+  "/settings/security-webhooks",
+] as const;
+
+const SETTINGS_ROUTE_REDIRECTS = [
+  {
+    route: "/settings/pulse-intelligence/discovery",
+    expectedPath: "/settings/pulse-intelligence/assistant",
+  },
+  {
+    route: "/settings/pulse-intelligence/billing/usage",
+    expectedPath: "/settings/pulse-intelligence/billing/plan",
+  },
+  { route: "/settings/organization", expectedPath: "/settings/infrastructure" },
+  {
+    route: "/settings/organization/access",
+    expectedPath: "/settings/infrastructure",
+  },
+  {
+    route: "/settings/organization/sharing",
+    expectedPath: "/settings/infrastructure",
+  },
+  {
+    route: "/settings/organization/billing",
+    expectedPath: "/settings/infrastructure",
+  },
+  {
+    route: "/settings/organization/billing-admin",
+    expectedPath: "/settings/infrastructure",
+  },
 ] as const;
 
 const MOBILE_VIEWPORTS = [
-  { width: 320, height: 568, label: 'compact phone' },
-  { width: 390, height: 844, label: 'modern phone' },
+  { width: 320, height: 568, label: "compact phone" },
+  { width: 390, height: 844, label: "modern phone" },
 ] as const;
 
 const test = base.extend<{}, WorkerFixtures>({
@@ -55,10 +76,10 @@ const test = base.extend<{}, WorkerFixtures>({
     async ({ browser }, use, workerInfo) => {
       const storageStatePath = path.resolve(
         __dirname,
-        '..',
-        '..',
-        'tmp',
-        'playwright-auth',
+        "..",
+        "..",
+        "tmp",
+        "playwright-auth",
         `settings-mobile-audit-${workerInfo.project.name}.json`,
       );
       fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
@@ -69,7 +90,7 @@ const test = base.extend<{}, WorkerFixtures>({
         fs.rmSync(storageStatePath, { force: true });
       }
     },
-    { scope: 'worker' },
+    { scope: "worker" },
   ],
 });
 
@@ -81,7 +102,7 @@ type OverflowAudit = {
 };
 
 const auditHorizontalOverflow = async (
-  page: import('@playwright/test').Page,
+  page: import("@playwright/test").Page,
 ): Promise<OverflowAudit> =>
   page.evaluate(() => {
     const viewportWidth = Math.max(
@@ -95,18 +116,18 @@ const auditHorizontalOverflow = async (
       document.documentElement.offsetWidth,
     );
 
-    const offenders = Array.from(document.querySelectorAll('body *'))
+    const offenders = Array.from(document.querySelectorAll("body *"))
       .map((el) => {
         const rect = el.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) return null;
         const style = window.getComputedStyle(el);
-        if (style.position === 'fixed' || style.position === 'absolute')
+        if (style.position === "fixed" || style.position === "absolute")
           return null;
         const overflow = rect.right - viewportWidth;
         if (overflow <= 1) return null;
         return {
           tag: el.tagName.toLowerCase(),
-          className: (el.getAttribute('class') || '').trim().slice(0, 120),
+          className: (el.getAttribute("class") || "").trim().slice(0, 120),
           overflow: Number(overflow.toFixed(1)),
         };
       })
@@ -127,7 +148,7 @@ const auditHorizontalOverflow = async (
   });
 
 const scrollToBottom = async (
-  page: import('@playwright/test').Page,
+  page: import("@playwright/test").Page,
 ): Promise<void> => {
   const viewportHeight = await page.evaluate(() => window.innerHeight || 800);
   const step = Math.max(240, Math.floor(viewportHeight * 0.75));
@@ -147,7 +168,7 @@ const scrollToBottom = async (
   }
 };
 
-test.describe('Settings mobile optimization audit', () => {
+test.describe("Settings mobile optimization audit", () => {
   test.setTimeout(180_000);
 
   for (const route of SETTINGS_ROUTES) {
@@ -156,9 +177,15 @@ test.describe('Settings mobile optimization audit', () => {
     }) => {
       for (const viewport of MOBILE_VIEWPORTS) {
         await page.setViewportSize(viewport);
-        await page.goto(route, { waitUntil: 'domcontentloaded' });
-        await page.waitForURL(/\/settings/, { timeout: 15000 });
-        await expect(page.locator('#root')).toBeVisible();
+        await page.goto(route, { waitUntil: "domcontentloaded" });
+        await page.waitForURL((url) => url.pathname === route, {
+          timeout: 15000,
+        });
+        expect(
+          new URL(page.url()).pathname,
+          `${route} must remain the surface being audited rather than silently redirecting`,
+        ).toBe(route);
+        await expect(page.locator("#root")).toBeVisible();
         await page.waitForTimeout(600);
 
         await scrollToBottom(page);
@@ -183,4 +210,52 @@ test.describe('Settings mobile optimization audit', () => {
       }
     });
   }
+
+  for (const { route, expectedPath } of SETTINGS_ROUTE_REDIRECTS) {
+    test(`resolves unavailable or compatibility route ${route} explicitly`, async ({
+      page,
+    }) => {
+      await page.goto(route, { waitUntil: "domcontentloaded" });
+      await page.waitForURL((url) => url.pathname === expectedPath, {
+        timeout: 15000,
+      });
+      expect(new URL(page.url()).pathname).toBe(expectedPath);
+    });
+  }
+
+  test("mobile Settings navigation is viewport-bounded and independently scrollable", async ({
+    page,
+  }) => {
+    await page.setViewportSize(MOBILE_VIEWPORTS[0]);
+    await page.goto("/settings/system-general", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForURL(
+      (url) => url.pathname === "/settings/system-general",
+      {
+        timeout: 15000,
+      },
+    );
+
+    await page
+      .getByRole("main")
+      .getByRole("button", { name: "Settings", exact: true })
+      .click();
+    const navigation = page.getByLabel("Settings navigation", { exact: true });
+    await expect(navigation).toBeVisible();
+
+    const geometry = await navigation.evaluate((element) => {
+      const style = window.getComputedStyle(element);
+      return {
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+        overflowY: style.overflowY,
+        viewportHeight: window.innerHeight,
+      };
+    });
+
+    expect(["auto", "scroll"]).toContain(geometry.overflowY);
+    expect(geometry.clientHeight).toBeLessThan(geometry.viewportHeight);
+    expect(geometry.scrollHeight).toBeGreaterThan(geometry.clientHeight);
+  });
 });

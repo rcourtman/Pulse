@@ -162,6 +162,8 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByText('Shown during setup')).toBeInTheDocument();
     expect(screen.getByText('admin')).toBeInTheDocument();
     expect(screen.getByText('password')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy password' })).toHaveClass('min-h-10');
+    expect(screen.getByRole('button', { name: 'Copy admin API token' })).toHaveClass('min-w-10');
 
     fireEvent.click(screen.getByRole('button', { name: /Credentials you must save now/i }));
 

@@ -4,6 +4,7 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
+import { ActionIconButton } from '@/components/shared/Button';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import {
@@ -281,9 +282,12 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
                   <code class="text-base-content font-mono text-sm break-all">
                     {props.state.password}
                   </code>
-                  <button
+                  <ActionIconButton
+                    label={t('setup.completion.action.copyPassword')}
+                    tone="outline"
+                    size="lg"
                     onClick={() => handleCopy('password', props.state.password)}
-                    class="ml-3 p-1.5 bg-surface border border-border hover:bg-surface-hover rounded-md transition-colors shrink-0"
+                    class="ml-3 min-h-10 min-w-10 sm:min-h-9 sm:min-w-9"
                   >
                     {copied() === 'password' ? (
                       <svg
@@ -314,7 +318,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
                         />
                       </svg>
                     )}
-                  </button>
+                  </ActionIconButton>
                 </div>
               </div>
 
@@ -326,9 +330,12 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
                   <code class="text-base-content font-mono text-xs break-all pr-4">
                     {props.state.apiToken}
                   </code>
-                  <button
+                  <ActionIconButton
+                    label={t('setup.completion.action.copyAdminToken')}
+                    tone="outline"
+                    size="lg"
                     onClick={() => handleCopy('admin-token', props.state.apiToken)}
-                    class="ml-2 p-1.5 bg-surface border border-border hover:bg-surface-hover rounded-md transition-colors shrink-0"
+                    class="ml-2 min-h-10 min-w-10 sm:min-h-9 sm:min-w-9"
                   >
                     {copied() === 'admin-token' ? (
                       <svg
@@ -359,7 +366,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
                         />
                       </svg>
                     )}
-                  </button>
+                  </ActionIconButton>
                 </div>
               </div>
 

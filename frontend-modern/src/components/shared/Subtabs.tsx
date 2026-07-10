@@ -23,10 +23,10 @@ interface SubtabsProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onChang
 }
 
 export const subtabsShellClass = 'border-b border-border';
-export const subtabsListClass = 'flex flex-wrap items-center gap-6';
+export const subtabsListClass = 'flex min-w-0 items-center gap-6 overflow-x-auto scrollbar-hide';
 export const subtabsTrailingRowClass = 'flex flex-wrap items-center justify-between gap-3';
 export const subtabButtonClass =
-  'inline-flex min-h-10 items-center border-b-2 px-1 py-2 text-sm font-medium transition-colors';
+  'inline-flex min-h-10 shrink-0 items-center whitespace-nowrap border-b-2 px-1 py-2 text-sm font-medium transition-colors';
 export const subtabButtonActiveClass = 'border-blue-600 text-base-content';
 export const subtabButtonInactiveClass = 'border-transparent text-muted hover:text-base-content';
 export const Subtabs: Component<SubtabsProps> = (props) => {

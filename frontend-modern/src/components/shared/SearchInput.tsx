@@ -25,6 +25,7 @@ export const SearchInput: Component<SearchInputProps> = (props) => {
         clearOnFocusedEscape={props.clearOnFocusedEscape}
         shortcutHint={search.shortcutHint()}
         hasTrailingControls={search.showTrailingControls()}
+        trailingControlCount={search.trailingControlCount()}
         onClearMouseDown={search.enhancements.onClearMouseDown}
         onKeyDown={search.enhancements.onFieldKeyDown}
         onBlur={search.enhancements.onFieldBlur}

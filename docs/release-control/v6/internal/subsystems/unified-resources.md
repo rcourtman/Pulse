@@ -1583,6 +1583,13 @@ narrow. Shared resource adapters may admit explicit aliases such as `host`,
 through the canonical resource model, but unified-resource consumers must not
 reintroduce removed workload aliases or feature-local resource-type shims just
 to satisfy one table, drawer, or badge surface.
+
+Unified-resource row actions must remain operable at phone widths without
+changing capability ownership. Docker and Podman lifecycle controls retain
+their backend-authored availability and approval semantics while using the
+shared 40-pixel mobile touch floor; compact desktop sizing may resume at the
+small breakpoint. Responsive styling must not synthesize capabilities, widen
+the action set, or create provider-local lifecycle state.
 That same runtime now also owns prospective monitored-system projection. Add
 and update consumers must ask the unified-resource layer whether candidate or
 preview records change the deduped top-level monitored-system count, including

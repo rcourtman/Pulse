@@ -3,7 +3,8 @@ import { splitProps, type JSX } from 'solid-js';
 import { TableCell, TableRow, type TableRowProps } from './Table';
 
 export const INLINE_DETAIL_TABLE_CELL_CLASS = 'p-0 border-b border-border bg-surface-alt';
-export const INLINE_DETAIL_TABLE_CONTENT_CLASS = 'px-2 py-3 sm:px-4 sm:py-4';
+export const INLINE_DETAIL_TABLE_CONTENT_CLASS =
+  'sticky left-0 max-w-[calc(100vw-3.5rem)] px-2 py-3 sm:px-4 sm:py-4 lg:static lg:max-w-none';
 
 export interface InlineDetailTableRowProps extends TableRowProps {
   cellId?: string;

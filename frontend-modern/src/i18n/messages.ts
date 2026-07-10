@@ -9,6 +9,8 @@ export const EN_MESSAGES = {
   'pricing.handoff.title.publicPricing': 'Redirecting to pricing',
   'pricing.handoff.title.pulseAccount': 'Redirecting to Pulse Account',
   'setup.completion.action.addInfrastructure': 'Add infrastructure',
+  'setup.completion.action.copyAdminToken': 'Copy admin API token',
+  'setup.completion.action.copyPassword': 'Copy password',
   'setup.completion.action.downloadCredentials': 'Download credentials',
   'setup.completion.action.installAgent': 'Install Pulse Agent',
   'setup.completion.action.openInfrastructure': 'Open Infrastructure',
@@ -540,6 +542,8 @@ export const COMMERCIAL_PRICING_HANDOFF_MIGRATED_MESSAGE_KEYS = [
 export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
   'runtimeHome.openingWorkspace',
   'setup.completion.action.addInfrastructure',
+  'setup.completion.action.copyAdminToken',
+  'setup.completion.action.copyPassword',
   'setup.completion.action.downloadCredentials',
   'setup.completion.action.installAgent',
   'setup.completion.action.openInfrastructure',

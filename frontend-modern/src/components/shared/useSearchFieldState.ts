@@ -18,6 +18,7 @@ type SearchFieldStateOptions = Pick<
   | 'onKeyDown'
   | 'showClearButton'
   | 'shortcutHint'
+  | 'trailingControlCount'
   | 'value'
 >;
 
@@ -52,6 +53,7 @@ export function useSearchFieldState(options: SearchFieldStateOptions) {
   const inputPaddingRight = () =>
     getSearchFieldInputPaddingRightClass({
       hasTrailingControls: options.hasTrailingControls,
+      trailingControlCount: options.trailingControlCount,
       showShortcutHint: showShortcutHint(),
       showClearButton: showClearButton(),
     });

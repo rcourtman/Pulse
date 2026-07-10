@@ -1,7 +1,15 @@
 import { A } from '@solidjs/router';
 import RotateCcwIcon from 'lucide-solid/icons/rotate-ccw';
 import TriangleAlertIcon from 'lucide-solid/icons/triangle-alert';
-import { For, Show, createMemo, createSignal, type Component, type JSX } from 'solid-js';
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  type Component,
+  type JSX,
+} from 'solid-js';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { type FilterOption as PlatformTableFilterOption } from '@/components/shared/FilterButtonGroup';
 import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
@@ -35,17 +43,36 @@ export function PlatformSectionTabs<TabId extends string>(props: {
   active: TabId;
   ariaLabel: string;
 }) {
+  let tabListRef: HTMLElement | undefined;
+
+  createEffect(() => {
+    const activeTabId = props.active;
+    window.setTimeout(() => {
+      if (props.active !== activeTabId) return;
+      const activeTab = tabListRef?.querySelector<HTMLElement>('[aria-current="page"]');
+      if (!tabListRef || !activeTab) return;
+
+      tabListRef.scrollLeft = Math.max(
+        0,
+        activeTab.offsetLeft - (tabListRef.clientWidth - activeTab.offsetWidth) / 2,
+      );
+    });
+  });
+
   return (
     <Show when={props.tabs.length > 1}>
       <nav
-        class="flex flex-wrap items-center gap-1 border-b border-border"
+        ref={(element) => {
+          tabListRef = element;
+        }}
+        class="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-border scrollbar-hide"
         aria-label={props.ariaLabel}
       >
         <For each={props.tabs}>
           {(tab) => (
             <A
               href={tab.path}
-              class={`inline-flex min-h-10 items-center border-b-2 px-3 text-sm font-medium transition-colors ${
+              class={`inline-flex min-h-10 shrink-0 items-center whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors ${
                 props.active === tab.id
                   ? 'border-blue-500 text-blue-600 dark:text-blue-300'
                   : 'border-transparent text-muted hover:border-border hover:text-base-content'

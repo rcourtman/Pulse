@@ -2,7 +2,11 @@ import { Component, For, JSX, Show, splitProps } from 'solid-js';
 import BarChartIcon from 'lucide-solid/icons/bar-chart';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { FormSelect } from './FormSelect';
-import { FilterButtonGroup, type FilterButtonGroupOptionTone, type FilterOption } from './FilterButtonGroup';
+import {
+  FilterButtonGroup,
+  type FilterButtonGroupOptionTone,
+  type FilterOption,
+} from './FilterButtonGroup';
 
 export const filterToolbarShellClass = '';
 export const filterToolbarRowClass = 'flex flex-wrap items-center gap-2 text-xs text-muted';
@@ -14,8 +18,7 @@ export const filterLabelClass =
   'px-1.5 text-[9px] font-semibold uppercase tracking-wide text-muted';
 export const filterActionButtonClass =
   'inline-flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1 text-xs font-medium text-muted ring-1 ring-border-subtle transition-colors hover:bg-surface hover:text-base-content';
-export const filterActionButtonActiveClass =
-  'bg-surface text-base-content shadow-sm';
+export const filterActionButtonActiveClass = 'bg-surface text-base-content shadow-sm';
 export const filterSelectClass =
   'rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500';
 export const filterDividerClass = 'hidden h-5 w-px bg-surface-hover sm:block';
@@ -25,7 +28,7 @@ export const filterPanelDefaultWidthClass = 'w-[min(40rem,calc(100vw-2rem))]';
 export const filterPanelTitleClass = 'text-sm font-medium text-base-content';
 export const filterPanelDescriptionClass = 'text-xs text-muted';
 export const mobileFiltersButtonClass =
-  'flex items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted';
+  'flex min-h-10 items-center gap-1.5 rounded-md bg-surface-hover px-2.5 py-1.5 text-xs font-medium text-muted';
 export const filterCountBadgeClass =
   'ml-0.5 rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white';
 export const filterUtilityBadgeClass =
@@ -209,13 +212,20 @@ interface FilterSegmentedControlProps extends Omit<JSX.HTMLAttributes<HTMLDivEle
 }
 
 export const FilterSegmentedControl: Component<FilterSegmentedControlProps> = (props) => {
-  const [local, divProps] = splitProps(props, ['value', 'onChange', 'options', 'label', 'class', 'disabled']);
+  const [local, divProps] = splitProps(props, [
+    'value',
+    'onChange',
+    'options',
+    'label',
+    'class',
+    'disabled',
+  ]);
   const options = (): FilterOption<string>[] =>
     local.options.map((option) => ({
       value: option.value,
       label:
         option.ariaLabel ??
-        (typeof option.label === 'string' ? option.label : option.title ?? option.value),
+        (typeof option.label === 'string' ? option.label : (option.title ?? option.value)),
       visualLabel: option.label,
       leading: option.leading,
       title: option.title,

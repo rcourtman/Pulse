@@ -8,7 +8,7 @@ export const SEARCH_HISTORY_ENTRY_BUTTON_CLASS =
 export const SEARCH_HISTORY_CLEAR_LABEL = 'Clear history';
 
 export function getSearchHistoryToggleButtonClass(isOpen: boolean): string {
-  return `flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+  return `flex h-10 w-10 items-center justify-center rounded-md transition-colors sm:h-7 sm:w-7 ${
     isOpen
       ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400'
       : 'text-muted hover:bg-surface-hover hover:text-base-content'

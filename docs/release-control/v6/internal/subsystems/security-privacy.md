@@ -1245,3 +1245,9 @@ port, so a port reachable from an untrusted agent network cannot widen into the
 operator console. Enabling the dedicated port is additive: the main listener
 keeps serving agent ingest too, so the default single-port deployment and
 existing agents are unaffected.
+
+Locale-catalog additions for shared mobile copy controls remain contract-neutral
+to security and privacy only while they preserve every governed token, scope,
+privacy disclosure, and API name unchanged. Responsive presentation work may
+add localized accessible labels, but it must not rename or weaken security-owned
+terms through a mobile-specific catalog variant.

@@ -255,6 +255,7 @@ describe('FilterHeader', () => {
     expect(filterPanelClass).toContain('z-[80]');
     expect(filterPanelClass).not.toContain('w-[min(40rem,calc(100vw-2rem))]');
     expect(filterPanelDefaultWidthClass).toContain('w-[min(40rem,calc(100vw-2rem))]');
+    expect(filterToolbarSource).toContain("'flex min-h-10 items-center gap-1.5");
   });
 
   it('allows narrow shared popovers to opt out of the default wide panel width', () => {

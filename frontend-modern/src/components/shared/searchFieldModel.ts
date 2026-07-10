@@ -30,6 +30,7 @@ export interface SearchFieldProps {
   clearOnFocusedEscape?: boolean;
   shortcutHint?: string;
   hasTrailingControls?: boolean;
+  trailingControlCount?: number;
   trailingControls?: JSX.Element;
   onClearMouseDown?: (event: SearchFieldMouseEvent) => void;
 }
@@ -45,11 +46,20 @@ export const shouldShowSearchFieldClearButton = (
 
 export const getSearchFieldInputPaddingRightClass = (options: {
   hasTrailingControls?: boolean;
+  trailingControlCount?: number;
   showShortcutHint: boolean;
   showClearButton: boolean;
 }) => {
-  if (options.hasTrailingControls) return 'pr-14 sm:pr-20';
+  const trailingControlCount = Math.max(
+    options.trailingControlCount ?? (options.hasTrailingControls ? 1 : 0),
+    0,
+  );
+  const visibleControlCount = trailingControlCount + (options.showClearButton ? 1 : 0);
+
+  if (visibleControlCount >= 3) return 'pr-36 sm:pr-24';
+  if (visibleControlCount === 2) return 'pr-24 sm:pr-20';
+  if (trailingControlCount === 1) return 'pr-14 sm:pr-20';
   if (options.showShortcutHint) return 'pr-20 sm:pr-24';
-  if (options.showClearButton) return 'pr-8';
+  if (options.showClearButton) return 'pr-12 sm:pr-8';
   return 'pr-8';
 };

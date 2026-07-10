@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import dockerContainerLifecycleControlsSource from '../DockerContainerLifecycleControls.tsx?raw';
+
 import type { Resource } from '@/types/resource';
 import {
   dockerContainerLifecycleCapability,
@@ -42,6 +44,11 @@ const resource = (overrides: Partial<Resource> = {}): Resource => ({
 });
 
 describe('dockerContainerLifecycleActions', () => {
+  it('keeps lifecycle actions touchable on phones and compact on larger screens', () => {
+    expect(dockerContainerLifecycleControlsSource).toContain('h-10 w-10');
+    expect(dockerContainerLifecycleControlsSource).toContain('sm:h-7 sm:w-7');
+  });
+
   it('enables advertised runtime-matched capabilities', () => {
     const running = resource();
 

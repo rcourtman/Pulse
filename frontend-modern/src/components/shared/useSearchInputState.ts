@@ -29,6 +29,7 @@ export function useSearchInputState(options: SearchInputStateOptions): {
   enhancements: SearchInputEnhancementsState;
   setInputRef: (el: HTMLInputElement) => void;
   shortcutHint: () => string | undefined;
+  trailingControlCount: () => number;
   showTrailingControls: () => boolean;
 } {
   let searchInputEl: HTMLInputElement | undefined;
@@ -64,13 +65,15 @@ export function useSearchInputState(options: SearchInputStateOptions): {
 
   const shortcutHint = () =>
     getSearchInputShortcutHint(enhancements.isSimple(), options.shortcutHint);
-  const showTrailingControls = () =>
-    shouldSearchInputShowTrailingControls(enhancements.isSimple());
+  const showTrailingControls = () => shouldSearchInputShowTrailingControls(enhancements.isSimple());
+  const trailingControlCount = () =>
+    Number(enhancements.hasHistory()) + Number(enhancements.hasTips());
 
   return {
     enhancements,
     setInputRef,
     shortcutHint,
+    trailingControlCount,
     showTrailingControls,
   };
 }

@@ -9,6 +9,8 @@ import type { WorkloadsState } from './useWorkloadsState';
 import { WorkloadPanel } from './WorkloadPanel';
 import { WorkloadTableHeader } from './WorkloadTableHeader';
 
+export const WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS = 'min-w-[36rem]';
+
 type WorkloadsTableProps = Pick<
   WorkloadsState,
   | 'activeAlerts'
@@ -70,7 +72,7 @@ export function WorkloadsTable(props: WorkloadsTableProps) {
       >
         <Table
           wrapperRef={props.setTableWrapperRef}
-          class={`workload-table min-w-full table-fixed ${props.isMobile() ? 'workload-table--mobile' : 'workload-table--desktop'}`}
+          class={`workload-table table-fixed ${props.isMobile() ? `workload-table--mobile ${WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS}` : 'workload-table--desktop min-w-full'}`}
         >
           <colgroup>
             <For each={props.workloadTableVisibleColumns()}>

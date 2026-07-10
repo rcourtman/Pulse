@@ -2,6 +2,7 @@ import type { Component } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 
 import { Card } from '@/components/shared/Card';
+import { Button } from '@/components/shared/Button';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { PageHeader } from '@/components/shared/PageHeader';
 
@@ -20,13 +21,14 @@ const NotFound: Component = () => {
           description={`No route matched ${path()}.`}
           actions={
             <div class="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                class="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700"
+              <Button
+                variant="primaryFlat"
+                size="settingsActionXs"
+                class="gap-2 font-semibold"
                 onClick={() => navigate('/')}
               >
                 Go to workspace
-              </button>
+              </Button>
             </div>
           }
         />

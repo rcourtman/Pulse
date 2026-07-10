@@ -5,6 +5,7 @@ import searchFieldSource from '@/components/shared/SearchField.tsx?raw';
 import searchFieldModelSource from '@/components/shared/searchFieldModel.ts?raw';
 import searchFieldStateSource from '@/components/shared/useSearchFieldState.ts?raw';
 import { SearchField } from '@/components/shared/SearchField';
+import { getSearchFieldInputPaddingRightClass } from '@/components/shared/searchFieldModel';
 
 describe('SearchField', () => {
   afterEach(() => {
@@ -37,6 +38,24 @@ describe('SearchField', () => {
     ));
 
     expect(screen.getByText('Cmd+K')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search field')).toHaveClass('min-h-10');
+  });
+
+  it('reserves mobile input space for every visible trailing action', () => {
+    expect(
+      getSearchFieldInputPaddingRightClass({
+        trailingControlCount: 1,
+        showShortcutHint: false,
+        showClearButton: true,
+      }),
+    ).toBe('pr-24 sm:pr-20');
+    expect(
+      getSearchFieldInputPaddingRightClass({
+        trailingControlCount: 2,
+        showShortcutHint: false,
+        showClearButton: true,
+      }),
+    ).toBe('pr-36 sm:pr-24');
   });
 
   it('clears and blurs on focused Escape by default', async () => {
@@ -90,6 +109,8 @@ describe('SearchField', () => {
     ));
 
     expect(screen.getByRole('button', { name: 'Clear search' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('h-10');
+    expect(screen.getByRole('button', { name: 'Clear search' })).toHaveClass('w-10');
     expect(screen.getByRole('button', { name: 'Extra' })).toBeInTheDocument();
   });
 

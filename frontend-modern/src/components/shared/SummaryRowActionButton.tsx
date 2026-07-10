@@ -26,7 +26,7 @@ type SummaryRowActionButtonProps =
     };
 
 const DISCLOSURE_BUTTON_CLASS = [
-  'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted transition-colors',
+  'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted transition-colors sm:h-6 sm:w-6',
   'hover:bg-surface hover:text-base-content',
   SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS,
 ].join(' ');
@@ -77,11 +77,7 @@ export const SummaryRowActionButton: Component<SummaryRowActionButtonProps> = (p
             stroke-width="2"
             aria-hidden="true"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M9 5l7 7-7 7"
-            />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
           </svg>
         }
       >

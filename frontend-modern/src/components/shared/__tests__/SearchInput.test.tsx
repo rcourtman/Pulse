@@ -44,7 +44,9 @@ describe('SearchInput', () => {
     expect(searchInputSource).not.toContain('let searchInputEl: HTMLInputElement');
     expect(searchInputSource).not.toContain('useTypeToSearch');
     expect(searchInputSource).not.toContain('useSearchInputEnhancements');
-    expect(searchInputSource).not.toContain('enhancements.isSimple() ? props.shortcutHint : undefined');
+    expect(searchInputSource).not.toContain(
+      'enhancements.isSimple() ? props.shortcutHint : undefined',
+    );
 
     expect(searchInputStateSource).toContain('export function useSearchInputState');
     expect(searchInputStateSource).toContain('let searchInputEl: HTMLInputElement');
@@ -77,6 +79,8 @@ describe('SearchInput', () => {
     expect(searchInputEnhancementsModelSource).toContain('getSearchHistoryToggleTitle');
     expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_CLEAR_LABEL');
     expect(searchInputEnhancementsModelSource).toContain('SEARCH_HISTORY_MENU_CLASS');
+    expect(searchInputEnhancementsModelSource).toContain('h-10 w-10');
+    expect(searchInputEnhancementsModelSource).toContain('sm:h-7 sm:w-7');
   });
 
   it('captures typed characters by default when focus is outside the input', async () => {
@@ -225,5 +229,4 @@ describe('SearchInput', () => {
       expect(document.activeElement).toBe(second);
     });
   });
-
 });

@@ -149,6 +149,8 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.timeline.unavailable': 'Keine Vorfall-Zeitleiste verfuegbar.',
   'runtimeHome.openingWorkspace': 'Arbeitsbereich wird geoeffnet...',
   'setup.completion.action.addInfrastructure': 'Infrastruktur hinzufuegen',
+  'setup.completion.action.copyAdminToken': 'Admin-API-Token kopieren',
+  'setup.completion.action.copyPassword': 'Passwort kopieren',
   'setup.completion.action.downloadCredentials': 'Zugangsdaten herunterladen',
   'setup.completion.action.installAgent': 'Pulse Agent installieren',
   'setup.completion.action.openInfrastructure': 'Infrastruktur oeffnen',

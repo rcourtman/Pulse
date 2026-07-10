@@ -30,7 +30,7 @@ export type DockerContainerLifecycleControlsProps = {
 };
 
 const buttonBaseClass =
-  'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded border text-muted transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface';
+  'inline-flex h-10 w-10 shrink-0 items-center justify-center rounded border text-muted transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60 focus-visible:ring-offset-1 focus-visible:ring-offset-surface sm:h-7 sm:w-7';
 const enabledButtonClass =
   'border-border-subtle bg-surface hover:border-blue-400 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950/40 dark:hover:text-blue-300';
 const confirmButtonClass =

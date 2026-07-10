@@ -350,4 +350,11 @@ describe('i18n foundation', () => {
       expect(I18N_MESSAGES[locale]['pricing.handoff.link.pulseAccount']).toContain('Pulse Account');
     }
   });
+
+  it('localizes setup preview copy action names in every supported catalog', () => {
+    for (const locale of SUPPORTED_LOCALES) {
+      expect(I18N_MESSAGES[locale]['setup.completion.action.copyPassword']).toBeTruthy();
+      expect(I18N_MESSAGES[locale]['setup.completion.action.copyAdminToken']).toBeTruthy();
+    }
+  });
 });

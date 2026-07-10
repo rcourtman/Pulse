@@ -4211,3 +4211,9 @@ desktop binaries before release packaging, Pulse checksum/signature creation,
 SBOM generation, and immutable candidate manifest creation. Missing signing
 credentials or failed native verification is a release failure, not a warning
 or an unsigned fallback.
+
+Setup completion preview actions are part of the lifecycle handoff contract.
+The preview copy affordances must use the shared accessible action-button
+primitive, carry localized names for the exact value being copied, and retain
+a 40-pixel mobile touch floor. The setup surface must not reintroduce raw,
+unlabelled icon buttons or a phone-only copy-control fork.

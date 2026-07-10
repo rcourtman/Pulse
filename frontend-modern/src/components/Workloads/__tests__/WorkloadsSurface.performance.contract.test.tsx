@@ -1475,6 +1475,11 @@ describe('Workloads performance contract', () => {
       expect(workloadsWorkloadTableSource).toContain('WorkloadPanel');
       expect(workloadsWorkloadTableSource).not.toContain('style={{');
       expect(workloadsWorkloadTableSource).toContain('style={getGuestColumnWidthStyle(');
+      expect(workloadsWorkloadTableSource).toContain(
+        "WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS = 'min-w-[36rem]'",
+      );
+      expect(workloadsWorkloadTableSource).toContain('workload-table--mobile');
+      expect(workloadsWorkloadTableSource).toContain('WORKLOAD_TABLE_MOBILE_MIN_WIDTH_CLASS');
       expect(workloadsWorkloadTableSource).toContain('props.workloadTableLayoutMode()');
       expect(workloadsWorkloadTableSource).toContain('props.workloadTableVisibleColumnIds()');
       expect(workloadsWorkloadTableSource).toContain('<colgroup>');

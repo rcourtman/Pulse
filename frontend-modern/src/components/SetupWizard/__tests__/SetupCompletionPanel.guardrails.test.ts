@@ -189,4 +189,11 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(stepIndicatorSource).toContain('setup.progress.stepAriaLabel');
     expect(runtimeHomeSource).toContain('runtimeHome.openingWorkspace');
   });
+
+  it('keeps setup preview copy actions accessible at phone widths', () => {
+    expect(setupCompletionPanelSource).toContain('import { ActionIconButton }');
+    expect(setupCompletionPanelSource).toContain('setup.completion.action.copyPassword');
+    expect(setupCompletionPanelSource).toContain('setup.completion.action.copyAdminToken');
+    expect(setupCompletionPanelSource).toContain('min-h-10 min-w-10');
+  });
 });
