@@ -171,5 +171,5 @@ func TestRouteTestConnection_NoConfig(t *testing.T) {
 	assert.False(t, resp.Success)
 	assert.Equal(t, "Provider not ready", resp.Message)
 	assert.Equal(t, "provider_not_configured", resp.Cause)
-	assert.Contains(t, resp.Recommendation, "provider settings")
+	assert.Contains(t, resp.Recommendation, "Provider & Models")
 }
