@@ -6015,9 +6015,9 @@ describe('shared primitive guardrails', () => {
       }
     }
 
-    expect(vsphereActivityTableSource).toContain(
-      "getPlatformTableHeadClassForKind('numeric-value')",
-    );
+    // The When header renders through the shared sortable head; the
+    // numeric-value alignment intent now lives on its kind prop.
+    expect(vsphereActivityTableSource).toContain('kind="numeric-value"');
     expect(vsphereActivityTableSource).toContain('minYear={2000}');
   });
 
