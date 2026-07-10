@@ -10,7 +10,7 @@ import (
 )
 
 const patrolRuntimeFailureDetailLimit = 2000
-const patrolProviderNotConfiguredReason = "Patrol provider not configured - open Assistant & Patrol provider settings, configure a provider, and choose a Patrol model that supports tools"
+const patrolProviderNotConfiguredReason = "Patrol provider not configured - open Pulse Intelligence settings, configure a provider, and choose a Patrol model that supports tools"
 
 var patrolRuntimeFailureDetailRedactors = []struct {
 	pattern     *regexp.Regexp
@@ -181,12 +181,12 @@ func ClassifyProviderConnectionFailure(err error) PatrolRuntimeFailureDiagnostic
 		diagnostic.Title = "Provider authentication issue"
 		diagnostic.Summary = "Provider authentication issue"
 		diagnostic.Description = "The provider rejected the configured credentials or account access."
-		diagnostic.Recommendation = "Check the API key or provider authentication in Assistant and Patrol settings, then retry."
+		diagnostic.Recommendation = "Check the API key or provider authentication on the Provider & Models settings page, then retry."
 	case PatrolFailureCauseProviderNotConfigured, PatrolFailureCauseModelNotSelected, PatrolFailureCauseModelProviderUnconfigured, PatrolFailureCauseAssistantDisabled, PatrolFailureCauseSettingsPersistence:
 		diagnostic.Title = "Provider not ready"
 		diagnostic.Summary = "Provider not ready"
 		diagnostic.Description = "Pulse cannot test this provider because the provider runtime is not ready."
-		diagnostic.Recommendation = "Open Assistant and Patrol provider settings, complete provider configuration, verify the selected model, and retry."
+		diagnostic.Recommendation = "Open the Provider & Models settings page, complete provider configuration, verify the selected model, and retry."
 	}
 
 	return diagnostic

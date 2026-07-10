@@ -243,7 +243,7 @@ describe('AIAPI', () => {
       cause: 'provider_auth',
       summary: 'The provider rejected the configured credentials or account access.',
       recommendation:
-        'Check the API key or provider authentication in Assistant and Patrol settings, then retry.',
+        'Check the API key or provider authentication on the Provider & Models settings page, then retry.',
       action: 'open_provider_settings',
     };
     apiFetchJSONMock.mockResolvedValueOnce(diagnostic as any);

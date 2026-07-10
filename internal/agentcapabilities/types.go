@@ -27,7 +27,7 @@ const (
 // ControlToolsDisabledMessage is the stable operator guidance returned when a
 // caller attempts to run a control-gated Assistant tool while the shared control
 // level is read-only or otherwise not allowed to expose control tools.
-const ControlToolsDisabledMessage = "Control tools are disabled. Open Assistant & Patrol settings, then set Pulse Assistant Permissions > Control mode to Controlled before using action tools."
+const ControlToolsDisabledMessage = "Control tools are disabled. Open Pulse Intelligence settings, then set Pulse Assistant Permissions > Control mode to Controlled before using action tools."
 
 // DefaultApprovalPolicyDescription returns a concise operator-facing
 // explanation for a shared approval-policy value.

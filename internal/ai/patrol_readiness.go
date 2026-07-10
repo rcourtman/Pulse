@@ -48,7 +48,7 @@ type PatrolConfigReadiness struct {
 
 func EvaluatePatrolConfigReadiness(cfg *config.AIConfig) PatrolConfigReadiness {
 	if cfg == nil {
-		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseSettingsPersistence, "Assistant & Patrol settings could not be loaded from persistence.")
+		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseSettingsPersistence, "Pulse Intelligence settings could not be loaded from persistence.")
 	}
 	if !cfg.Enabled {
 		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseAssistantDisabled, "Pulse Intelligence is turned off, so Patrol cannot run.")

@@ -145,7 +145,7 @@ func TestEvaluatePatrolConfigReadiness_NilConfigUsesAssistantPatrolSettingsCopy(
 	if readiness.Cause != PatrolFailureCauseSettingsPersistence {
 		t.Fatalf("cause = %q, want %q", readiness.Cause, PatrolFailureCauseSettingsPersistence)
 	}
-	if readiness.Summary != "Assistant & Patrol settings could not be loaded from persistence." {
+	if readiness.Summary != "Pulse Intelligence settings could not be loaded from persistence." {
 		t.Fatalf("summary = %q", readiness.Summary)
 	}
 }

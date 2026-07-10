@@ -414,7 +414,7 @@ func TestAISettingsHandler_PatrolReadinessBranches(t *testing.T) {
 			wantReady:       false,
 			wantCheckID:     "enabled",
 			wantCheck:       patrolReadinessNotReady,
-			wantSummary:     "disabled",
+			wantSummary:     "turned off",
 			configure: func(aiCfg *config.AIConfig) {
 				aiCfg.Enabled = false
 				aiCfg.Model = "ollama:llama3"
@@ -1634,7 +1634,7 @@ func TestAISettingsHandler_TestConnection_NoConfig(t *testing.T) {
 	assert.False(t, resp.Success)
 	assert.Equal(t, "Provider not ready", resp.Message)
 	assert.Equal(t, string(ai.PatrolFailureCauseProviderNotConfigured), resp.Cause)
-	assert.Contains(t, resp.Recommendation, "provider settings")
+	assert.Contains(t, resp.Recommendation, "Provider & Models settings page")
 }
 
 // ========================================
@@ -1728,7 +1728,7 @@ func TestAISettingsHandler_TestProvider_NoAIConfig(t *testing.T) {
 	assert.Equal(t, "Provider not configured", resp.Message)
 	assert.Equal(t, "ollama", resp.Provider)
 	assert.Equal(t, string(ai.PatrolFailureCauseProviderNotConfigured), resp.Cause)
-	assert.Contains(t, resp.Recommendation, "provider settings")
+	assert.Contains(t, resp.Recommendation, "Provider & Models settings page")
 	assert.Equal(t, "open_provider_settings", resp.Action)
 }
 

@@ -2571,8 +2571,8 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 	ctx := r.Context()
 	settings, err := h.loadAIConfig(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to load Assistant & Patrol settings")
-		http.Error(w, "Failed to load Assistant & Patrol settings", http.StatusInternalServerError)
+		log.Error().Err(err).Msg("Failed to load Pulse Intelligence settings")
+		http.Error(w, "Failed to load Pulse Intelligence settings", http.StatusInternalServerError)
 		return
 	}
 
@@ -3029,7 +3029,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	// Save settings
 	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
 		log.Error().Err(err).Msg("Failed to save AI settings")
-		writeErrorResponse(w, http.StatusInternalServerError, "ai_settings_save_failed", "Failed to save Assistant & Patrol settings", nil)
+		writeErrorResponse(w, http.StatusInternalServerError, "ai_settings_save_failed", "Failed to save Pulse Intelligence settings", nil)
 		return
 	}
 
@@ -3257,8 +3257,8 @@ func newAIProviderTestNotConfiguredResponse(provider string) aiProviderTestRespo
 		Message:        "Provider not configured",
 		Provider:       provider,
 		Cause:          string(ai.PatrolFailureCauseProviderNotConfigured),
-		Summary:        "Pulse cannot test this provider because it is not configured for the current Assistant and Patrol settings.",
-		Recommendation: "Open Assistant and Patrol provider settings, configure the provider credentials or base URL, choose a model, and retry.",
+		Summary:        "Pulse cannot test this provider because it is not configured for the current Pulse Intelligence settings.",
+		Recommendation: "Open the Provider & Models settings page, configure the provider credentials or base URL, choose a model, and retry.",
 		Action:         "open_provider_settings",
 	}
 }
@@ -4981,7 +4981,7 @@ func (h *AISettingsHandler) HandleOAuthDisconnect(w http.ResponseWriter, r *http
 	}
 	settings, err := h.loadAIConfig(r.Context())
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to load Assistant & Patrol settings for OAuth disconnect")
+		log.Error().Err(err).Msg("Failed to load Pulse Intelligence settings for OAuth disconnect")
 		http.Error(w, "Failed to load settings", http.StatusInternalServerError)
 		return
 	}
@@ -5109,10 +5109,10 @@ func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService 
 
 	cfg, err := h.loadAIConfig(ctx)
 	if err != nil || cfg == nil {
-		addCheck("settings", patrolReadinessNotReady, ai.PatrolFailureCauseSettingsPersistence, "Settings persistence", "Assistant & Patrol settings could not be loaded from persistence.", "open_provider_settings")
+		addCheck("settings", patrolReadinessNotReady, ai.PatrolFailureCauseSettingsPersistence, "Settings persistence", "Pulse Intelligence settings could not be loaded from persistence.", "open_provider_settings")
 		return summarizePatrolReadiness("", "", checks)
 	}
-	addCheck("settings", patrolReadinessReady, ai.PatrolFailureCauseNone, "Settings persistence", "Assistant & Patrol settings are readable.", "")
+	addCheck("settings", patrolReadinessReady, ai.PatrolFailureCauseNone, "Settings persistence", "Pulse Intelligence settings are readable.", "")
 
 	if !cfg.Enabled {
 		addCheck("enabled", patrolReadinessNotReady, ai.PatrolFailureCauseAssistantDisabled, "Assistant enabled", "Pulse Intelligence is turned off, so Patrol cannot run.", "open_provider_settings")

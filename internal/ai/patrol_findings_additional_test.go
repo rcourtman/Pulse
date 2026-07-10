@@ -112,8 +112,8 @@ func TestPatrolService_DismissFinding_RejectsPatrolRuntimeFinding(t *testing.T) 
 	if got := err.Error(); !strings.Contains(got, "cannot be dismissed manually") {
 		t.Fatalf("unexpected error: %q", got)
 	}
-	if got := err.Error(); !strings.Contains(got, "Assistant & Patrol settings") {
-		t.Fatalf("dismissal guidance must point to Assistant & Patrol settings: %q", got)
+	if got := err.Error(); !strings.Contains(got, "Pulse Intelligence settings") {
+		t.Fatalf("dismissal guidance must point to Pulse Intelligence settings: %q", got)
 	}
 
 	stored := ps.findings.Get("runtime-1")
@@ -143,7 +143,7 @@ func TestPatrolService_RejectManualActionForRuntimeFindingUsesProviderSettingsGu
 		t.Fatal("expected Patrol runtime finding manual action to be rejected")
 	}
 	got := err.Error()
-	if !strings.Contains(got, "fix Patrol provider configuration in Assistant & Patrol settings") {
+	if !strings.Contains(got, "fix Patrol provider configuration in Pulse Intelligence settings") {
 		t.Fatalf("manual action guidance = %q", got)
 	}
 	if strings.Contains(got, "AI settings") {

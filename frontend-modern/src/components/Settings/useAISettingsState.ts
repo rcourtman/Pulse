@@ -110,13 +110,11 @@ const isGenericAISettingsSaveFailure = (error: unknown): boolean => {
   const message = error instanceof Error ? error.message.trim().toLowerCase() : '';
   if (!message) return true;
   return (
-    message === 'failed to save assistant & patrol settings' ||
+    message === 'failed to save pulse intelligence settings' ||
     message === 'failed to save provider & models settings' ||
-    message === 'unable to save assistant & patrol settings.' ||
-    message === 'unable to save assistant & patrol settings' ||
     message === 'unable to save provider & models settings.' ||
     message === 'unable to save provider & models settings' ||
-    message.includes('failed to save assistant & patrol settings') ||
+    message.includes('failed to save pulse intelligence settings') ||
     message.includes('failed to save provider & models settings') ||
     message.startsWith('request failed with status')
   );

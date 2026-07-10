@@ -51,7 +51,7 @@ const baseSettings = (): MockAISettings => ({
   available_models: [],
 });
 
-test.describe("Assistant & Patrol settings provider setup", () => {
+test.describe("Pulse Intelligence settings provider setup", () => {
   test("OpenRouter setup submits credentials without a hardcoded model and renders backend-selected state", async ({
     page,
   }, testInfo) => {
@@ -355,7 +355,7 @@ test.describe("Assistant & Patrol settings provider setup", () => {
         status: 500,
         contentType: "application/json",
         body: JSON.stringify({
-          error: "Unable to save Assistant & Patrol settings.",
+          error: "Failed to save Pulse Intelligence settings",
         }),
       });
     });
@@ -379,7 +379,7 @@ test.describe("Assistant & Patrol settings provider setup", () => {
 
     await expect.poll(() => updateHits).toBe(1);
     const failureMessage = page.getByText(
-      /OpenRouter provider.*Provider authentication issue.*Unable to save Assistant & Patrol settings/i,
+      /OpenRouter provider.*Provider authentication issue.*Failed to save Pulse Intelligence settings/i,
     );
     await expect(failureMessage).toBeVisible();
     await expect(failureMessage).toContainText(

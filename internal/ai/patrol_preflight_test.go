@@ -277,10 +277,10 @@ func TestRunPatrolToolPreflight_SettingsUnavailableUsesAssistantPatrolCopy(t *te
 	if result.Cause != PatrolFailureCauseSettingsPersistence {
 		t.Fatalf("unexpected cause %q", result.Cause)
 	}
-	if result.Title != "Pulse Patrol: Assistant & Patrol settings unavailable" {
+	if result.Title != "Pulse Patrol: Pulse Intelligence settings unavailable" {
 		t.Fatalf("unexpected title %q", result.Title)
 	}
-	if result.Summary != "Assistant & Patrol settings could not be loaded" {
+	if result.Summary != "Pulse Intelligence settings could not be loaded" {
 		t.Fatalf("unexpected summary %q", result.Summary)
 	}
 }

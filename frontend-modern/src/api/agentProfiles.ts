@@ -378,7 +378,7 @@ export class AgentProfilesAPI {
     await assertAPIResponseOKOrThrowStatus(
       response,
       503,
-      'Pulse Intelligence is not available. Please check Assistant & Patrol settings.',
+      'Pulse Intelligence is not available. Please check Pulse Intelligence settings.',
       `Failed to get suggestion: ${response.status}`,
     );
 

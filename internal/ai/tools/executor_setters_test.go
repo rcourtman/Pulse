@@ -317,7 +317,7 @@ func TestToolRegistry_ExecuteControlToolReadOnlyUsesAssistantAndPatrolGuidance(t
 	require.Len(t, result.Content, 1)
 	text := result.Content[0].Text
 	assert.Equal(t, agentcapabilities.ControlToolsDisabledMessage, text)
-	assert.Contains(t, text, "Assistant & Patrol settings")
+	assert.Contains(t, text, "Pulse Intelligence settings")
 	assert.Contains(t, text, "Pulse Assistant Permissions > Control mode")
 	assert.NotContains(t, text, "Settings > Pulse Assistant")
 }

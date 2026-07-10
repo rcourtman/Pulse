@@ -118,8 +118,8 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 
 	if cfg == nil {
 		result.Cause = PatrolFailureCauseSettingsPersistence
-		result.Title = "Pulse Patrol: Assistant & Patrol settings unavailable"
-		result.Summary = "Assistant & Patrol settings could not be loaded"
+		result.Title = "Pulse Patrol: Pulse Intelligence settings unavailable"
+		result.Summary = "Pulse Intelligence settings could not be loaded"
 		result.Recommendation = "Confirm Pulse settings persistence is healthy, then re-run preflight."
 		result.DurationMs = time.Since(started).Milliseconds()
 		s.recordPatrolPreflight(result, time.Now())

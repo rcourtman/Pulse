@@ -1033,7 +1033,7 @@ func (s *Service) patrolConfigFromAIConfig(cfg *config.AIConfig) PatrolConfig {
 	patrolCfg := DefaultPatrolConfig()
 	if cfg == nil {
 		patrolCfg.Enabled = false
-		patrolCfg.RuntimeBlockedReason = "Assistant & Patrol settings could not be loaded from persistence."
+		patrolCfg.RuntimeBlockedReason = "Pulse Intelligence settings could not be loaded from persistence."
 		patrolCfg.RuntimeBlockedCause = PatrolFailureCauseSettingsPersistence
 		return patrolCfg
 	}
