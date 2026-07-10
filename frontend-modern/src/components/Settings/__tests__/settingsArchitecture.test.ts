@@ -1098,6 +1098,21 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps Pro-runtime docker updates off the community image commands', () => {
+    // A Pro-runtime container updates with digest-pinned commands from the
+    // license server broker; pulling the community rcourtman/pulse image
+    // would silently downgrade it to the community build. The panel keys the
+    // suppression off the compiled runtime identity, and the install guide
+    // routes both the available-update steps and the idle Docker box through
+    // that flag.
+    expect(updatesSettingsPanelSource).toContain(
+      "runtimeCapabilities()?.runtime?.build === 'pro'",
+    );
+    expect(updatesSettingsPanelSource).toContain('isProRuntime={isProRuntime()}');
+    expect(updateInstallGuideSource).toContain('isProRuntime: boolean');
+    expect(updateInstallGuideSource).toContain('IDLE_DOCKER_PRO_NOTICE');
+  });
+
   it('keeps update history and rollback on the dedicated section boundary', () => {
     // The panel shell mounts the history section; it must not inline history
     // rows or rollback confirmation itself.

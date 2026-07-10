@@ -274,6 +274,14 @@ deployment-lane-only panel. `UpdateInstallGuide` must render the canonical
 update-plan readiness verdict inline with the update action, and a blocked
 readiness status must make automatic install visibly unavailable until the
 blocking check is resolved.
+That install guide also owns the Pro-runtime Docker guidance: when the
+compiled runtime identity is `pro` (`runtimeCapabilities().runtime.build`,
+the same signal the update banner keys off), the Docker install steps and
+the idle Docker box must render the license server broker's digest-pinned
+commands from `UpdateInfo.dockerUpdate` (or an explicit Pro notice when they
+are absent) and must never show the community `rcourtman/pulse` pull
+commands, which would silently downgrade the container to the community
+build.
 
 `frontend-modern/src/components/shared/DiscoveryReadinessBadge.tsx` is the
 shared presentation primitive for discovery freshness/readiness indicators.

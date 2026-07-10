@@ -11,6 +11,19 @@ export interface UpdateInfo {
   isPrerelease: boolean;
   isMajorUpgrade: boolean;
   warning?: string;
+  dockerUpdate?: DockerUpdateCommands;
+}
+
+// Digest-pinned Docker update commands from the license server download
+// broker. Only present for Docker deployments of the Pro runtime, which must
+// never be pointed at the community rcourtman/pulse image.
+export interface DockerUpdateCommands {
+  version: string;
+  image: string;
+  imageDigest: string;
+  loginCommand?: string;
+  composePullCommand: string;
+  composeUpCommand: string;
 }
 
 export interface UpdateStatus {

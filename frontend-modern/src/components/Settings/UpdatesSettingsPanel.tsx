@@ -12,6 +12,7 @@ import CheckCircle from 'lucide-solid/icons/check-circle';
 import ArrowRight from 'lucide-solid/icons/arrow-right';
 import Package from 'lucide-solid/icons/package';
 import type { UpdateInfo, VersionInfo, UpdatePlan } from '@/api/updates';
+import { runtimeCapabilities } from '@/stores/license';
 import { buildDockerImageTag, buildLinuxAmd64DownloadCommand } from '@/components/updateVersion';
 import { UpdateInstallGuide } from '@/components/Settings/UpdateInstallGuide';
 import { UpdateHistorySection } from '@/components/Settings/UpdateHistorySection';
@@ -53,6 +54,9 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
   const latestVersion = () => props.updateInfo()?.latestVersion;
   const dockerImageTag = () => buildDockerImageTag(latestVersion());
   const systemdDownloadCommand = () => buildLinuxAmd64DownloadCommand(latestVersion());
+  // Keys off the compiled runtime identity (same signal UpdateBanner uses):
+  // a Pro-runtime install must never be shown community pull commands.
+  const isProRuntime = () => runtimeCapabilities()?.runtime?.build === 'pro';
   const isPreviewChannel = () => props.updateChannel() === 'rc';
   const autoUpdateLocked = () => Boolean(props.versionInfo()?.isSourceBuild || isPreviewChannel());
   const updateChannelOptions = (): SelectionCardOption<UpdateChannelOptionValue>[] =>
@@ -221,6 +225,7 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
             isInstalling={props.isInstalling()}
             dockerImageTag={dockerImageTag()}
             systemdDownloadCommand={systemdDownloadCommand()}
+            isProRuntime={isProRuntime()}
             onInstallUpdate={props.onInstallUpdate}
           />
         </div>

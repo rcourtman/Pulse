@@ -52,6 +52,7 @@ describe('UpdateInstallGuide', () => {
         isInstalling={false}
         dockerImageTag="v6.0.0"
         systemdDownloadCommand="curl -fsSL https://example.invalid | tar"
+        isProRuntime={false}
         onInstallUpdate={vi.fn()}
       />
     ));
@@ -107,6 +108,7 @@ describe('UpdateInstallGuide', () => {
         isInstalling={false}
         dockerImageTag="v6.0.0"
         systemdDownloadCommand="curl -fsSL https://example.invalid | tar"
+        isProRuntime={false}
         onInstallUpdate={onInstallUpdate}
       />
     ));
@@ -115,5 +117,126 @@ describe('UpdateInstallGuide', () => {
     expect(installButton).toBeDisabled();
     fireEvent.click(installButton);
     expect(onInstallUpdate).not.toHaveBeenCalled();
+  });
+
+  const dockerVersionInfo = {
+    version: 'v6.0.0',
+    build: 'release',
+    runtime: 'go',
+    isDocker: true,
+    isSourceBuild: false,
+    isDevelopment: false,
+    deploymentType: 'docker',
+  };
+
+  const dockerUpdatePlan = {
+    canAutoUpdate: false,
+    instructions: [],
+    prerequisites: [],
+    requiresRoot: false,
+    rollbackSupport: true,
+  };
+
+  const digest = 'sha256:' + 'ab'.repeat(32);
+  const pinnedRef = `registry.pulserelay.pro/pulse/pulse-pro@${digest}`;
+  const dockerUpdate = {
+    version: 'v6.0.5',
+    image: 'registry.pulserelay.pro/pulse/pulse-pro',
+    imageDigest: digest,
+    loginCommand:
+      "printf '%s' '<activation-key>' | docker login registry.pulserelay.pro -u 'lic_test' --password-stdin",
+    composePullCommand: `PULSE_IMAGE='${pinnedRef}' docker compose pull`,
+    composeUpCommand: `PULSE_IMAGE='${pinnedRef}' docker compose up -d`,
+  };
+
+  const availableDockerUpdateInfo = {
+    available: true,
+    currentVersion: 'v6.0.0',
+    latestVersion: 'v6.0.5',
+    releaseNotes: '',
+    releaseDate: '2026-07-01T00:00:00Z',
+    downloadUrl: 'https://license.example.invalid/v1/downloads/pulse-pro?version=v6.0.5',
+    isPrerelease: false,
+    isMajorUpgrade: false,
+  };
+
+  it('shows the broker digest-pinned commands for a Pro docker install, never the community image', () => {
+    render(() => (
+      <UpdateInstallGuide
+        versionInfo={dockerVersionInfo}
+        updateInfo={{ ...availableDockerUpdateInfo, dockerUpdate }}
+        updatePlan={dockerUpdatePlan}
+        isInstalling={false}
+        dockerImageTag="v6.0.5"
+        systemdDownloadCommand=""
+        isProRuntime={true}
+        onInstallUpdate={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose pull`)).toBeInTheDocument();
+    expect(
+      screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose up -d`),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/docker pull rcourtman\/pulse/)).not.toBeInTheDocument();
+  });
+
+  it('withholds community commands on a Pro docker install even without broker commands', () => {
+    render(() => (
+      <UpdateInstallGuide
+        versionInfo={dockerVersionInfo}
+        updateInfo={availableDockerUpdateInfo}
+        updatePlan={dockerUpdatePlan}
+        isInstalling={false}
+        dockerImageTag="v6.0.5"
+        systemdDownloadCommand=""
+        isProRuntime={true}
+        onInstallUpdate={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText(/Private Release Access/)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/docker compose pull && docker compose up -d/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('replaces the idle docker community commands with the Pro notice', () => {
+    render(() => (
+      <UpdateInstallGuide
+        versionInfo={dockerVersionInfo}
+        updateInfo={{ ...availableDockerUpdateInfo, available: false, latestVersion: 'v6.0.0' }}
+        updatePlan={null}
+        isInstalling={false}
+        dockerImageTag="v6.0.0"
+        systemdDownloadCommand=""
+        isProRuntime={true}
+        onInstallUpdate={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText(/digest-pinned commands from your license server/)).toBeInTheDocument();
+    expect(screen.queryByText(/docker pull rcourtman\/pulse/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('docker compose pull && docker compose up -d'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the community docker guidance for community installs', () => {
+    render(() => (
+      <UpdateInstallGuide
+        versionInfo={dockerVersionInfo}
+        updateInfo={availableDockerUpdateInfo}
+        updatePlan={dockerUpdatePlan}
+        isInstalling={false}
+        dockerImageTag="v6.0.5"
+        systemdDownloadCommand=""
+        isProRuntime={false}
+        onInstallUpdate={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('docker compose pull && docker compose up -d')).toBeInTheDocument();
+    expect(screen.getByText(/docker pull rcourtman\/pulse:v6\.0\.5/)).toBeInTheDocument();
   });
 });

@@ -686,6 +686,18 @@ TLS floor in the dynamic config.
    affordance for auto-updatable Pro deployments (the broker path preserves
    the Pro runtime) and surfaces the portal path for deployments the updater
    cannot drive, such as Docker.
+   A Docker deployment of the compiled Pro binary is part of that same
+   boundary: the container cannot self-replace its binary and a Pro compose
+   file pins the previous image digest, so `internal/updates/pro_update.go`
+   must relay the broker manifest's Docker command block (login plus compose
+   pull/up referencing `image@sha256:<digest>`, never a mutable tag) as
+   `UpdateInfo.dockerUpdate` on the update-check response for Docker
+   deployments, behind the same stable/rc channel guard as the binary path,
+   failing closed when the broker block is missing or not digest-pinned.
+   In-app update guidance (the Settings updates surfaces, the update banner,
+   and the docker update plan in `internal/updates/adapter_installsh.go`)
+   must never show the community `rcourtman/pulse` pull commands when the
+   compiled runtime is Pro.
    Customer-facing private Pro RC/GA promotion is part of that same boundary:
    for every non-draft v6 public release, `create-release.yml` must call the
    private `rcourtman/pulse-enterprise` `Build Pro Release` workflow after

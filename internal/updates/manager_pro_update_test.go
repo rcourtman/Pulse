@@ -19,13 +19,14 @@ import (
 // signed R2 URLs it hands out: /v1/downloads/pulse-pro returns the manifest,
 // and the artifact/.sshsig endpoints simulate the presigned object URLs.
 type proBrokerFixture struct {
-	t          *testing.T
-	server     *httptest.Server
-	version    string
-	prerelease bool
-	tarball    []byte
-	sha256Hex  string // manifest hash; may deliberately mismatch the tarball
-	omitSSHSig bool   // drop the sshsig_url from the manifest
+	t           *testing.T
+	server      *httptest.Server
+	version     string
+	prerelease  bool
+	tarball     []byte
+	sha256Hex   string         // manifest hash; may deliberately mismatch the tarball
+	omitSSHSig  bool           // drop the sshsig_url from the manifest
+	dockerBlock map[string]any // broker docker block; nil for the default digest-pinned one
 
 	brokerCalls  int
 	tarballCalls int
@@ -66,12 +67,17 @@ func newProBrokerFixture(t *testing.T, version string, prerelease bool) *proBrok
 		if !f.omitSSHSig {
 			artifact["sshsig_url"] = f.server.URL + "/r2/pulse-pro.tar.gz.sshsig?X-Amz-Signature=signed"
 		}
+		dockerBlock := f.dockerBlock
+		if dockerBlock == nil {
+			dockerBlock = defaultBrokerDockerBlock(f.version)
+		}
 		resp := map[string]any{
 			"release": map[string]any{
 				"version":    f.version,
 				"prerelease": f.prerelease,
 			},
 			"artifacts": []any{artifact},
+			"docker":    dockerBlock,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -100,6 +106,24 @@ func newProBrokerFixture(t *testing.T, version string, prerelease bool) *proBrok
 	f.server = httptest.NewServer(mux)
 	t.Cleanup(f.server.Close)
 	return f
+}
+
+// defaultBrokerDockerBlock mirrors the license server's docker block: a
+// digest-pinned private image ref inside ready-to-run compose commands (the
+// broker never emits mutable-tag commands; see pro_downloads_test.go in
+// pulse-pro).
+func defaultBrokerDockerBlock(version string) map[string]any {
+	digest := "sha256:" + strings.Repeat("ab", 32)
+	pinnedRef := "registry.pulserelay.pro/pulse/pulse-pro@" + digest
+	return map[string]any{
+		"registry":             "registry.pulserelay.pro",
+		"image":                "registry.pulserelay.pro/pulse/pulse-pro",
+		"tag":                  "v" + strings.TrimPrefix(version, "v"),
+		"image_digest":         digest,
+		"login_command":        "printf '%s' '<activation-key>' | docker login registry.pulserelay.pro -u 'lic_test' --password-stdin",
+		"compose_pull_command": "PULSE_IMAGE='" + pinnedRef + "' docker compose pull",
+		"compose_up_command":   "PULSE_IMAGE='" + pinnedRef + "' docker compose up -d",
+	}
 }
 
 func (f *proBrokerFixture) credentialSource() func() (ProUpdateCredentials, bool) {
@@ -211,6 +235,140 @@ func TestCheckForUpdatesProUsesBroker(t *testing.T) {
 		}
 		if !strings.Contains(info.Warning, "activated license") {
 			t.Fatalf("expected activation guidance in warning, got %q", info.Warning)
+		}
+	})
+}
+
+// TestCheckProUpdatesDockerCommands proves a Docker deployment of the Pro
+// binary gets the broker's digest-pinned image commands on the update check
+// (its only sane update path: the self-updater refuses to run in a container,
+// and the community `docker pull rcourtman/pulse` guidance would silently
+// downgrade the install to the community build).
+func TestCheckProUpdatesDockerCommands(t *testing.T) {
+	setupProUpdateTest(t, "6.0.0")
+
+	dockerVersionInfo := func(version string) *VersionInfo {
+		return &VersionInfo{Version: version, Build: "release", Runtime: "go", IsDocker: true, DeploymentType: "docker"}
+	}
+
+	t.Run("docker deployment gets digest-pinned commands", func(t *testing.T) {
+		fixture := newProBrokerFixture(t, "6.0.5", false)
+		manager := NewManager(&config.Config{DataPath: t.TempDir()})
+		manager.SetProUpdateCredentialSource(fixture.credentialSource())
+
+		currentVer, err := ParseVersion("6.0.0")
+		if err != nil {
+			t.Fatalf("ParseVersion: %v", err)
+		}
+		info, err := manager.checkProUpdates(context.Background(), "stable", dockerVersionInfo("6.0.0"), currentVer)
+		if err != nil {
+			t.Fatalf("checkProUpdates: %v", err)
+		}
+		if !info.Available {
+			t.Fatalf("expected update to be available, got %+v", info)
+		}
+		cmds := info.DockerUpdate
+		if cmds == nil {
+			t.Fatal("expected DockerUpdate commands for a Pro docker deployment")
+		}
+		if cmds.Version != "v6.0.5" {
+			t.Fatalf("DockerUpdate.Version = %q, want v6.0.5", cmds.Version)
+		}
+		pinnedRef := cmds.Image + "@" + cmds.ImageDigest
+		if !strings.Contains(cmds.ComposePullCommand, pinnedRef) || !strings.Contains(cmds.ComposeUpCommand, pinnedRef) {
+			t.Fatalf("compose commands must reference the digest-pinned image %q, got pull=%q up=%q", pinnedRef, cmds.ComposePullCommand, cmds.ComposeUpCommand)
+		}
+		if strings.Contains(cmds.ComposePullCommand, "rcourtman/pulse") {
+			t.Fatalf("Pro docker commands must never reference the community image, got %q", cmds.ComposePullCommand)
+		}
+		// The frontend consumes this via /api/updates/check; pin the wire key.
+		encoded, err := json.Marshal(info)
+		if err != nil {
+			t.Fatalf("marshal UpdateInfo: %v", err)
+		}
+		if !strings.Contains(string(encoded), `"dockerUpdate"`) {
+			t.Fatalf("UpdateInfo JSON must carry dockerUpdate, got %s", encoded)
+		}
+	})
+
+	t.Run("commands attach even when already up to date", func(t *testing.T) {
+		fixture := newProBrokerFixture(t, "6.0.0", false)
+		manager := NewManager(&config.Config{DataPath: t.TempDir()})
+		manager.SetProUpdateCredentialSource(fixture.credentialSource())
+
+		currentVer, err := ParseVersion("6.0.0")
+		if err != nil {
+			t.Fatalf("ParseVersion: %v", err)
+		}
+		info, err := manager.checkProUpdates(context.Background(), "stable", dockerVersionInfo("6.0.0"), currentVer)
+		if err != nil {
+			t.Fatalf("checkProUpdates: %v", err)
+		}
+		if info.Available {
+			t.Fatalf("expected no update at the same version, got %+v", info)
+		}
+		if info.DockerUpdate == nil {
+			t.Fatal("expected DockerUpdate commands to ride along even when up to date")
+		}
+	})
+
+	t.Run("non-docker deployment gets no docker commands", func(t *testing.T) {
+		fixture := newProBrokerFixture(t, "6.0.5", false)
+		manager := NewManager(&config.Config{DataPath: t.TempDir()})
+		manager.SetProUpdateCredentialSource(fixture.credentialSource())
+
+		info, err := manager.CheckForUpdatesWithChannel(context.Background(), "stable")
+		if err != nil {
+			t.Fatalf("CheckForUpdatesWithChannel: %v", err)
+		}
+		if !info.Available {
+			t.Fatalf("expected update to be available, got %+v", info)
+		}
+		if info.DockerUpdate != nil {
+			t.Fatalf("non-docker deployments must not carry docker commands, got %+v", info.DockerUpdate)
+		}
+	})
+
+	t.Run("stable channel prerelease pin withholds commands with the version", func(t *testing.T) {
+		fixture := newProBrokerFixture(t, "6.1.0-rc.1", true)
+		manager := NewManager(&config.Config{DataPath: t.TempDir()})
+		manager.SetProUpdateCredentialSource(fixture.credentialSource())
+
+		currentVer, err := ParseVersion("6.0.0")
+		if err != nil {
+			t.Fatalf("ParseVersion: %v", err)
+		}
+		info, err := manager.checkProUpdates(context.Background(), "stable", dockerVersionInfo("6.0.0"), currentVer)
+		if err != nil {
+			t.Fatalf("checkProUpdates: %v", err)
+		}
+		if info.Available || info.DockerUpdate != nil {
+			t.Fatalf("stable channel must withhold prerelease docker commands, got %+v", info)
+		}
+	})
+
+	t.Run("fails closed on a mutable-tag broker block", func(t *testing.T) {
+		fixture := newProBrokerFixture(t, "6.0.5", false)
+		fixture.dockerBlock = map[string]any{
+			"registry":             "registry.pulserelay.pro",
+			"image":                "registry.pulserelay.pro/pulse/pulse-pro",
+			"tag":                  "v6.0.5",
+			"compose_pull_command": "PULSE_IMAGE='registry.pulserelay.pro/pulse/pulse-pro:v6.0.5' docker compose pull",
+			"compose_up_command":   "PULSE_IMAGE='registry.pulserelay.pro/pulse/pulse-pro:v6.0.5' docker compose up -d",
+		}
+		manager := NewManager(&config.Config{DataPath: t.TempDir()})
+		manager.SetProUpdateCredentialSource(fixture.credentialSource())
+
+		currentVer, err := ParseVersion("6.0.0")
+		if err != nil {
+			t.Fatalf("ParseVersion: %v", err)
+		}
+		info, err := manager.checkProUpdates(context.Background(), "stable", dockerVersionInfo("6.0.0"), currentVer)
+		if err != nil {
+			t.Fatalf("checkProUpdates: %v", err)
+		}
+		if info.DockerUpdate != nil {
+			t.Fatalf("a broker block without a digest-pinned ref must be dropped, got %+v", info.DockerUpdate)
 		}
 	})
 }

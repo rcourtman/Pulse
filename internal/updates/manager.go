@@ -65,6 +65,11 @@ type UpdateInfo struct {
 	IsPrerelease   bool      `json:"isPrerelease"`
 	IsMajorUpgrade bool      `json:"isMajorUpgrade"`
 	Warning        string    `json:"warning,omitempty"`
+	// DockerUpdate carries digest-pinned image update commands from the
+	// license server download broker. Only set for Docker deployments of the
+	// compiled Pro binary, which cannot self-update in a container and must
+	// never be pointed at the community rcourtman/pulse image.
+	DockerUpdate *DockerUpdateCommands `json:"dockerUpdate,omitempty"`
 }
 
 var (

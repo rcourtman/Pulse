@@ -5,6 +5,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const { mock } = vi.hoisted(() => ({
   mock: {
     runtimeBuild: 'community' as string,
+    dockerUpdate: undefined as
+      | {
+          version: string;
+          image: string;
+          imageDigest: string;
+          loginCommand?: string;
+          composePullCommand: string;
+          composeUpCommand: string;
+        }
+      | undefined,
     plan: {
       canAutoUpdate: true,
       requiresRoot: false,
@@ -32,6 +42,7 @@ vi.mock('@/stores/updates', () => ({
         'https://github.com/rcourtman/Pulse/releases/download/v6.1.0/pulse-v6.1.0-linux-amd64.tar.gz',
       isPrerelease: false,
       isMajorUpgrade: false,
+      dockerUpdate: mock.dockerUpdate,
     }),
     versionInfo: () => ({ version: '6.0.0', deploymentType: 'systemd' }),
     isUpdateVisible: () => true,
@@ -57,6 +68,7 @@ const PORTAL_URL = 'https://pulserelay.pro/download.html';
 afterEach(() => {
   cleanup();
   mock.runtimeBuild = 'community';
+  mock.dockerUpdate = undefined;
   mock.plan = { canAutoUpdate: true, requiresRoot: false, rollbackSupport: false, instructions: [] };
 });
 
@@ -113,6 +125,34 @@ describe('UpdateBanner Pro edition update paths', () => {
       'href',
       PORTAL_URL,
     );
+  });
+
+  it('shows digest-pinned docker commands for Pro docker deployments when expanded', async () => {
+    const digest = 'sha256:' + 'ab'.repeat(32);
+    const pinnedRef = `registry.pulserelay.pro/pulse/pulse-pro@${digest}`;
+    mock.runtimeBuild = 'pro';
+    mock.plan = { canAutoUpdate: false, requiresRoot: false, rollbackSupport: false, instructions: [] };
+    mock.dockerUpdate = {
+      version: 'v6.1.0',
+      image: 'registry.pulserelay.pro/pulse/pulse-pro',
+      imageDigest: digest,
+      composePullCommand: `PULSE_IMAGE='${pinnedRef}' docker compose pull`,
+      composeUpCommand: `PULSE_IMAGE='${pinnedRef}' docker compose up -d`,
+    };
+
+    render(() => <UpdateBanner />);
+    await screen.findByRole('link', { name: /Private Release Access/ });
+    fireEvent.click(screen.getByTitle('Show more'));
+
+    expect(screen.getByText('Pulse Pro update')).toBeInTheDocument();
+    expect(screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose pull`)).toBeInTheDocument();
+    expect(
+      screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose up -d`),
+    ).toBeInTheDocument();
+    // The binary archive steps and community image must not appear for a
+    // Docker Pro deployment with broker commands available.
+    expect(screen.queryByText(/install\.sh --archive/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/docker pull rcourtman\/pulse/)).not.toBeInTheDocument();
   });
 
   it('keeps the in-app apply button for the community binary', async () => {

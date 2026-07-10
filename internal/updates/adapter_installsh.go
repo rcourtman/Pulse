@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/edition"
 )
 
 // The adapters in this file are plan providers only: they describe how an
@@ -72,6 +74,22 @@ func (u *DockerUpdater) GetDeploymentType() string {
 }
 
 func (u *DockerUpdater) PrepareUpdate(ctx context.Context, request UpdateRequest) (*UpdatePlan, error) {
+	// The compiled Pro binary must never be pointed at the community image:
+	// pulling rcourtman/pulse silently replaces the container with the
+	// community build. Its digest-pinned commands come from the license
+	// server broker on the update-check response instead.
+	if edition.IsPro() {
+		return &UpdatePlan{
+			CanAutoUpdate: false,
+			Instructions: []string{
+				fmt.Sprintf("Update to Pulse Pro %s with the digest-pinned Docker commands shown in Settings → Updates (fetched from your license server).", request.Version),
+			},
+			RequiresRoot:    false,
+			RollbackSupport: true,
+			EstimatedTime:   "1-2 minutes",
+		}, nil
+	}
+
 	imageRepo := strings.TrimSpace(os.Getenv("PULSE_DOCKER_IMAGE_REPO"))
 	if imageRepo == "" {
 		imageRepo = defaultDockerImageRepo

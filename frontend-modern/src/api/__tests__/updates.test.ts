@@ -119,4 +119,34 @@ describe('UpdatesAPI', () => {
     await expect(UpdatesAPI.getUpdatePlan('   ', 'stable')).rejects.toThrow('Version is required');
     expect(apiFetchJSONMock).not.toHaveBeenCalled();
   });
+
+  it('preserves digest-pinned Pro docker update commands from update checks', async () => {
+    // Docker deployments of the Pro runtime cannot self-update; the check
+    // response relays the license server broker's digest-pinned image
+    // commands, and the transport must carry them through untouched.
+    const digest = 'sha256:' + 'ab'.repeat(32);
+    const pinnedRef = `registry.pulserelay.pro/pulse/pulse-pro@${digest}`;
+    const response = {
+      available: true,
+      currentVersion: '6.0.0',
+      latestVersion: '6.0.5',
+      releaseNotes: '',
+      releaseDate: '',
+      downloadUrl: 'https://license.example.invalid/v1/downloads/pulse-pro?version=v6.0.5',
+      isPrerelease: false,
+      isMajorUpgrade: false,
+      dockerUpdate: {
+        version: 'v6.0.5',
+        image: 'registry.pulserelay.pro/pulse/pulse-pro',
+        imageDigest: digest,
+        loginCommand:
+          "printf '%s' '<activation-key>' | docker login registry.pulserelay.pro -u 'lic_test' --password-stdin",
+        composePullCommand: `PULSE_IMAGE='${pinnedRef}' docker compose pull`,
+        composeUpCommand: `PULSE_IMAGE='${pinnedRef}' docker compose up -d`,
+      },
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(response as any);
+
+    await expect(UpdatesAPI.checkForUpdates()).resolves.toEqual(response);
+  });
 });

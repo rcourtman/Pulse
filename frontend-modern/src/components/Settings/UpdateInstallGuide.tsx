@@ -16,6 +16,7 @@ import {
   buildIdleDockerComposeCommand,
   buildIdleDockerUpdateCommand,
   buildUpdateInstallGuide,
+  IDLE_DOCKER_PRO_NOTICE,
   type UpdateInstallStep,
 } from '@/components/Settings/updatesSettingsModel';
 
@@ -26,6 +27,10 @@ interface UpdateInstallGuideProps {
   isInstalling: boolean;
   dockerImageTag: string;
   systemdDownloadCommand: string;
+  // Compiled runtime identity (business hooks presence), not license tier: a
+  // Pro-runtime container must never see the community rcourtman/pulse
+  // commands, which would silently downgrade it to the community build.
+  isProRuntime: boolean;
   onInstallUpdate: () => void;
 }
 
@@ -136,6 +141,7 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
       props.updatePlan,
       props.dockerImageTag,
       props.systemdDownloadCommand,
+      props.isProRuntime,
     );
   const readinessBlocked = () => props.updatePlan?.readiness?.status === 'blocked';
   const introText = () =>
@@ -157,23 +163,31 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
             </svg>
             <p class="text-sm font-medium text-blue-800 dark:text-blue-200">Docker Installation</p>
           </div>
-          <p class="text-xs text-blue-700 dark:text-blue-300">
-            Updates are managed through Docker. Use these commands to check for and apply updates:
-          </p>
-          <div class="space-y-2">
-            <CopyCommandBlock
-              command={buildIdleDockerComposeCommand()}
-              codeClass="block rounded-md border border-border bg-base p-2.5 font-mono text-xs text-blue-400"
-            />
-            <p class="text-[10px] text-blue-600 dark:text-blue-400">
-              Not using Compose?{' '}
-              <code class="rounded bg-blue-100 px-1 py-0.5 text-[10px] dark:bg-blue-800">
-                {buildIdleDockerUpdateCommand()}
-              </code>{' '}
-              then re-run your original docker run command. A plain docker restart keeps the old
-              image running.
+          <Show
+            when={!props.isProRuntime}
+            fallback={
+              <p class="text-xs text-blue-700 dark:text-blue-300">{IDLE_DOCKER_PRO_NOTICE}</p>
+            }
+          >
+            <p class="text-xs text-blue-700 dark:text-blue-300">
+              Updates are managed through Docker. Use these commands to check for and apply
+              updates:
             </p>
-          </div>
+            <div class="space-y-2">
+              <CopyCommandBlock
+                command={buildIdleDockerComposeCommand()}
+                codeClass="block rounded-md border border-border bg-base p-2.5 font-mono text-xs text-blue-400"
+              />
+              <p class="text-[10px] text-blue-600 dark:text-blue-400">
+                Not using Compose?{' '}
+                <code class="rounded bg-blue-100 px-1 py-0.5 text-[10px] dark:bg-blue-800">
+                  {buildIdleDockerUpdateCommand()}
+                </code>{' '}
+                then re-run your original docker run command. A plain docker restart keeps the old
+                image running.
+              </p>
+            </div>
+          </Show>
         </div>
       </Show>
 

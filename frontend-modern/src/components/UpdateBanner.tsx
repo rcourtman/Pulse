@@ -282,24 +282,54 @@ export function UpdateBanner() {
                 <Show when={isProEdition() && updatePlan() && !updatePlan()?.canAutoUpdate}>
                   <div class="mt-2 p-3 rounded-md border bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200">
                     <div class="font-medium mb-1">Pulse Pro update</div>
-                    <p>
-                      This deployment updates manually, and the public community build would remove
-                      Pro features (Audit, RBAC, Reporting, SSO). Update from Private Release
-                      Access instead:
-                    </p>
-                    <ol class="list-decimal ml-5 mt-1 space-y-0.5">
-                      <li>
-                        Download the new Pro archive and its{' '}
-                        <code class="font-mono text-xs">.sshsig</code> sidecar from the portal.
-                      </li>
-                      <li>
-                        Run{' '}
-                        <code class="font-mono text-xs">
-                          sudo bash install.sh --archive ./pulse-pro-…tar.gz
-                        </code>
-                        .
-                      </li>
-                    </ol>
+                    <Show
+                      when={updateStore.updateInfo()?.dockerUpdate}
+                      fallback={
+                        <>
+                          <p>
+                            This deployment updates manually, and the public community build would
+                            remove Pro features (Audit, RBAC, Reporting, SSO). Update from Private
+                            Release Access instead:
+                          </p>
+                          <ol class="list-decimal ml-5 mt-1 space-y-0.5">
+                            <li>
+                              Download the new Pro archive and its{' '}
+                              <code class="font-mono text-xs">.sshsig</code> sidecar from the
+                              portal.
+                            </li>
+                            <li>
+                              Run{' '}
+                              <code class="font-mono text-xs">
+                                sudo bash install.sh --archive ./pulse-pro-…tar.gz
+                              </code>
+                              .
+                            </li>
+                          </ol>
+                        </>
+                      }
+                    >
+                      {(dockerUpdate) => (
+                        <>
+                          <p>
+                            This container runs the Pulse Pro image (the public rcourtman/pulse
+                            image would remove Pro features). Run these digest-pinned commands on
+                            the Docker host, or copy them from Settings → Updates:
+                          </p>
+                          <ol class="list-decimal ml-5 mt-1 space-y-0.5">
+                            <li>
+                              <code class="font-mono text-xs break-all">
+                                {dockerUpdate().composePullCommand}
+                              </code>
+                            </li>
+                            <li>
+                              <code class="font-mono text-xs break-all">
+                                {dockerUpdate().composeUpCommand}
+                              </code>
+                            </li>
+                          </ol>
+                        </>
+                      )}
+                    </Show>
                     <a
                       href={PRO_RELEASE_ACCESS_URL}
                       target="_blank"

@@ -1,4 +1,4 @@
-import type { UpdateInfo, UpdatePlan, VersionInfo } from '@/api/updates';
+import type { DockerUpdateCommands, UpdateInfo, UpdatePlan, VersionInfo } from '@/api/updates';
 
 export type UpdateChannelOptionValue = 'stable' | 'rc';
 
@@ -54,15 +54,52 @@ export function buildIdleDockerUpdateCommand(): string {
   return 'docker pull rcourtman/pulse:latest && docker stop pulse && docker rm pulse';
 }
 
+// Copy shown in the idle Docker box for Pro-runtime containers instead of the
+// community pull commands: a Pro compose file pins the exact image digest, so
+// a plain `docker compose pull` can never update it, and pulling the public
+// rcourtman/pulse image would silently downgrade the install to the community
+// build. The digest-pinned commands come from the license server on the
+// update-check response when a new release is available.
+export const IDLE_DOCKER_PRO_NOTICE =
+  'This container runs the Pulse Pro image, so it updates with digest-pinned commands from your license server, not the public rcourtman/pulse image. When a new release is available, the exact commands appear here.';
+
+function buildProDockerUpdateSteps(dockerUpdate: DockerUpdateCommands): UpdateInstallStep[] {
+  const steps: UpdateInstallStep[] = [
+    {
+      id: 'docker-pro-pull',
+      title: 'Pull the new Pulse Pro image (pinned to this release’s digest)',
+      command: dockerUpdate.composePullCommand,
+      commandCodeClass:
+        'block rounded-md border border-border bg-base p-3 font-mono text-sm text-green-400 whitespace-pre-wrap break-all',
+    },
+    {
+      id: 'docker-pro-up',
+      title: 'Recreate the container on the new image',
+      command: dockerUpdate.composeUpCommand,
+      commandCodeClass:
+        'block rounded-md border border-border bg-base p-3 font-mono text-sm text-green-400 whitespace-pre-wrap break-all',
+    },
+  ];
+  if (dockerUpdate.loginCommand) {
+    steps.push({
+      id: 'docker-pro-login-note',
+      title: '',
+      note: `If the pull is denied, sign in to the registry first (replace <activation-key> with the key from Settings → License): ${dockerUpdate.loginCommand}`,
+    });
+  }
+  return steps;
+}
+
 export function buildUpdateInstallGuide(
   versionInfo: Pick<
     VersionInfo,
     'deploymentType' | 'isDocker'
   > | null | undefined,
-  updateInfo: Pick<UpdateInfo, 'latestVersion'> | null | undefined,
+  updateInfo: Pick<UpdateInfo, 'latestVersion' | 'dockerUpdate'> | null | undefined,
   updatePlan: Pick<UpdatePlan, 'canAutoUpdate'> | null | undefined,
   dockerImageTag: string,
   systemdDownloadCommand: string,
+  isProRuntime = false,
 ): UpdateInstallGuide | null {
   if (!versionInfo) {
     return null;
@@ -90,6 +127,31 @@ export function buildUpdateInstallGuide(
   }
 
   if (versionInfo.deploymentType === 'docker' || (!versionInfo.deploymentType && versionInfo.isDocker)) {
+    // Pro runtime: only ever show the broker's digest-pinned commands. The
+    // community pull below would replace the container with the community
+    // build and silently strip Pro features.
+    if (updateInfo?.dockerUpdate) {
+      return {
+        headerTitle: 'Update Available',
+        headerSummary: `Version ${updateInfo?.latestVersion} is ready to install`,
+        introText: 'Run these two commands on the Docker host to update:',
+        steps: buildProDockerUpdateSteps(updateInfo.dockerUpdate),
+      };
+    }
+    if (isProRuntime) {
+      return {
+        headerTitle: 'Update Available',
+        headerSummary: `Version ${updateInfo?.latestVersion} is ready to install`,
+        introText: 'Follow these steps to update:',
+        steps: [
+          {
+            id: 'docker-pro-unavailable',
+            title: '',
+            note: 'This container runs the Pulse Pro image, and the license server did not provide Docker update commands for this release. Update from Private Release Access (https://pulserelay.pro/download.html), which shows the digest-pinned pull commands for your license. Do not pull the public rcourtman/pulse image: it would replace this container with the community build.',
+          },
+        ],
+      };
+    }
     return {
       headerTitle: 'Update Available',
       headerSummary: `Version ${updateInfo?.latestVersion} is ready to install`,

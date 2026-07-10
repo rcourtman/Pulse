@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -84,6 +85,21 @@ type proBrokerResponse struct {
 		Channel    string `json:"channel"`
 	} `json:"release"`
 	Artifacts []proBrokerArtifact `json:"artifacts"`
+	Docker    *proBrokerDocker    `json:"docker"`
+}
+
+// proBrokerDocker mirrors the broker's docker block: the digest-pinned private
+// Pro image plus ready-to-run login/compose commands. The broker deliberately
+// never emits mutable-tag commands (a customer compose file pins the previous
+// digest, so a plain `docker compose pull` can never update it).
+type proBrokerDocker struct {
+	Registry           string `json:"registry"`
+	Image              string `json:"image"`
+	Tag                string `json:"tag"`
+	ImageDigest        string `json:"image_digest"`
+	LoginCommand       string `json:"login_command"`
+	ComposePullCommand string `json:"compose_pull_command"`
+	ComposeUpCommand   string `json:"compose_up_command"`
 }
 
 type proBrokerArtifact struct {
@@ -92,6 +108,55 @@ type proBrokerArtifact struct {
 	SHA256          string `json:"sha256"`
 	DownloadURL     string `json:"download_url"`
 	SSHSignatureURL string `json:"sshsig_url"`
+}
+
+// DockerUpdateCommands carries the digest-pinned Pulse Pro image reference and
+// the copyable update commands for Docker deployments of the Pro binary. The
+// self-updater cannot replace a binary inside a container, so this is the
+// supported Docker update path: the commands come from the license server
+// download broker and always pin the exact image digest. The community
+// `docker pull rcourtman/pulse:<tag>` guidance must never be shown to a Pro
+// container; following it silently downgrades the install to the community
+// build (same failure mode the broker-based binary self-update already fixed).
+type DockerUpdateCommands struct {
+	Version            string `json:"version"`
+	Image              string `json:"image"`
+	ImageDigest        string `json:"imageDigest"`
+	LoginCommand       string `json:"loginCommand,omitempty"`
+	ComposePullCommand string `json:"composePullCommand"`
+	ComposeUpCommand   string `json:"composeUpCommand"`
+}
+
+var dockerImageDigestRe = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+// proDockerUpdateCommands extracts the Docker update commands from a broker
+// manifest. Fails closed: if the block is missing, incomplete, or either
+// compose command does not reference the digest-pinned image, it returns nil
+// rather than surface a command that could pull a mutable tag.
+func proDockerUpdateCommands(manifest *proBrokerResponse) *DockerUpdateCommands {
+	if manifest == nil || manifest.Docker == nil {
+		return nil
+	}
+	d := manifest.Docker
+	digest := strings.ToLower(strings.TrimSpace(d.ImageDigest))
+	image := strings.TrimSpace(d.Image)
+	pull := strings.TrimSpace(d.ComposePullCommand)
+	up := strings.TrimSpace(d.ComposeUpCommand)
+	if image == "" || pull == "" || up == "" || !dockerImageDigestRe.MatchString(digest) {
+		return nil
+	}
+	pinnedRef := image + "@" + digest
+	if !strings.Contains(pull, pinnedRef) || !strings.Contains(up, pinnedRef) {
+		return nil
+	}
+	return &DockerUpdateCommands{
+		Version:            "v" + strings.TrimPrefix(strings.TrimSpace(manifest.Release.Version), "v"),
+		Image:              image,
+		ImageDigest:        digest,
+		LoginCommand:       strings.TrimSpace(d.LoginCommand),
+		ComposePullCommand: pull,
+		ComposeUpCommand:   up,
+	}
 }
 
 type proBrokerErrorResponse struct {
@@ -279,6 +344,12 @@ func (m *Manager) checkProUpdates(ctx context.Context, channel string, currentIn
 		DownloadURL:    downloadURL,
 		IsPrerelease:   isPrerelease,
 		IsMajorUpgrade: isMajorUpgrade,
+	}
+	// A Pro binary in a container cannot self-update (ApplyUpdate refuses in
+	// Docker), so relay the broker's digest-pinned image commands instead;
+	// they ride the same channel-guarded manifest fetch as the version check.
+	if currentInfo.IsDocker || currentInfo.DeploymentType == "docker" {
+		info.DockerUpdate = proDockerUpdateCommands(manifest)
 	}
 	info.Warning = updateWarning(info.Available, isMajorUpgrade, isPrerelease, currentVer.Major, latestVer.Major)
 	return info, nil

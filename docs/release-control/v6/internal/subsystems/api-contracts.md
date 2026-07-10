@@ -5322,6 +5322,12 @@ That same rule also applies to the shared update transport surface:
 `frontend-modern/src/api/updates.ts` and `internal/api/updates.go` must carry a
 direct API-contract proof path instead of relying only on the generic frontend
 client or backend payload fallback coverage.
+That shared update transport surface also owns the Pro Docker update command
+block: `/api/updates/check` may attach `dockerUpdate` (the digest-pinned
+private image reference plus broker-issued login/compose commands) only for
+Docker deployments of the compiled Pro runtime, sourced from the license
+server download broker response, and the transport must never carry a
+mutable-tag image command in that block.
 That same rule also applies to the shared security transport surface:
 `frontend-modern/src/api/security.ts`, `internal/api/security.go`,
 `internal/api/security_tokens.go`, and `internal/api/system_settings.go` must
