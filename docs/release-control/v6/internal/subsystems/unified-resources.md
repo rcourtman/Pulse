@@ -1025,6 +1025,21 @@ AI-only summary payloads, or page-local heuristics.
     platform's top-level system as a unified resource so the builder
     default still resolves to a populated table.
 
+17. Platform table ordering is a two-layer contract. Each platform table's
+    default order is owned by its page model's status-first compare
+    (`compareDockerContainers`, `compareKubernetesPods`, and peers), which
+    keeps unhealthy rows surfaced without user configuration. User-selected
+    column sorting layered on top must come from the shared platform-table
+    sort fabric in
+    `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx`
+    (`createPlatformTableSortState` plus `PlatformSortableTableHead`) as
+    governed by the frontend-primitives contract, must never replace the
+    built-in compare as the default order, and must keep missing metric
+    values at the bottom in both directions so sparse agent data cannot
+    float to the top of an ascending sort. This restores the v5
+    sortable-table capability (v5.1.36 Docker and Kubernetes tables) that
+    the v6 platform rebuild had dropped.
+
 ## Forbidden Paths
 
 1. New ad hoc resource-type aliases outside unified resource normalization

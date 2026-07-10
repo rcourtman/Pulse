@@ -1727,6 +1727,25 @@ default` instead of fusing provider and badge text such as
     rejected no-execution terminal decisions, approved-action verification, and
     external-agent parity.
 
+17. Keep user column sorting on platform tables on the shared sort fabric.
+    Tables composed from
+    `frontend-modern/src/features/platformPage/sharedPlatformPage.tsx` that
+    offer user-facing column sorting must own it through
+    `createPlatformTableSortState` plus `PlatformSortableTableHead` rather
+    than page-local sort signals, ad hoc header buttons, or v5-style
+    sort-drives-grouping designs. The shared fabric owns the interaction
+    contract: click cycles a column's natural first direction, then the
+    flipped direction, then back to the table's built-in order; sort state
+    persists per table through `usePersistentSignal` storage keys; rows with
+    missing values sink to the bottom regardless of direction; headers expose
+    `aria-sort` and the arrow indicator consistent with the workloads table
+    header; and header alignment stays on the canonical
+    `getPlatformTableHeadClassForKind` helpers from `columnAlignment.ts`. A
+    table's default order remains its page-model status-first compare until
+    the user selects a column, and grouped modes (for example Docker's
+    grouped-by-host containers view) sort within groups while grouping itself
+    stays orthogonal to sort state.
+
 ## Forbidden Paths
 
 1. Reinventing table/filter/toggle primitives when a shared version exists
