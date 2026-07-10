@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -3705,6 +3706,50 @@ func TestApplyRestartRequiresAuthInAPIMode(t *testing.T) {
 	}
 }
 
+func TestApplyRestartRequiresBootstrapTokenBeforeAuthentication(t *testing.T) {
+	t.Setenv("INVOCATION_ID", "")
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	resetTrustedProxyConfig()
+
+	cfg := newTestConfigWithTokens(t)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	bootstrapToken, _, _, err := loadOrCreateBootstrapToken(cfg.DataPath)
+	if err != nil {
+		t.Fatalf("load bootstrap token: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		token      string
+		wantStatus int
+	}{
+		{name: "missing token", wantStatus: http.StatusUnauthorized},
+		{name: "invalid token", token: "invalid-token", wantStatus: http.StatusUnauthorized},
+		{name: "valid token", token: bootstrapToken, wantStatus: http.StatusOK},
+	}
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/api/security/apply-restart", nil)
+			if tt.token == bootstrapToken {
+				req.RemoteAddr = "127.0.0.1:54321"
+			} else {
+				req.RemoteAddr = fmt.Sprintf("198.51.100.%d:54321", 101+i)
+			}
+			if tt.token != "" {
+				req.Header.Set(bootstrapTokenHeader, tt.token)
+			}
+			rec := httptest.NewRecorder()
+
+			router.Handler().ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf("status = %d, want %d (%s)", rec.Code, tt.wantStatus, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestApplyRestartRequiresSettingsWriteScope(t *testing.T) {
 	rawToken := "apply-restart-scope-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
@@ -4181,7 +4226,7 @@ func TestSecurityStatusHidesBootstrapTokenWhenAuthConfigured(t *testing.T) {
 	}
 }
 
-func TestSecurityStatusIncludesBootstrapTokenWhenUnauthenticated(t *testing.T) {
+func TestSecurityStatusOmitsPrivilegedDetailsWhenUnauthenticated(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
@@ -4198,9 +4243,30 @@ func TestSecurityStatusIncludesBootstrapTokenWhenUnauthenticated(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	path, ok := payload["bootstrapTokenPath"].(string)
-	if !ok || path == "" {
-		t.Fatalf("expected bootstrapTokenPath to be present for unauthenticated setup")
+	if got := payload["detailLevel"]; got != securityStatusDetailPublic {
+		t.Fatalf("detailLevel = %v, want %q", got, securityStatusDetailPublic)
+	}
+	if got, _ := payload["hasAuthentication"].(bool); got {
+		t.Fatalf("hasAuthentication = %v, want false", payload["hasAuthentication"])
+	}
+	privilegedKeys := []string{
+		"apiTokenConfigured",
+		"apiTokenHint",
+		"authLastModified",
+		"bootstrapTokenPath",
+		"clientIP",
+		"agentUrl",
+		"hasAuditLogging",
+		"isDocker",
+		"inContainer",
+		"lxcCtid",
+		"dockerContainerName",
+		"settingsCapabilities",
+	}
+	for _, key := range privilegedKeys {
+		if _, ok := payload[key]; ok {
+			t.Errorf("unauthenticated status exposed privileged field %q", key)
+		}
 	}
 }
 
@@ -4260,11 +4326,50 @@ func TestSecurityStatusAcceptsTokenHeader(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if hint, ok := payload["apiTokenHint"].(string); !ok || hint != cfg.PrimaryAPITokenHint() {
-		t.Fatalf("expected apiTokenHint %q, got %v", cfg.PrimaryAPITokenHint(), payload["apiTokenHint"])
+	if _, ok := payload["apiTokenHint"]; ok {
+		t.Fatalf("scoped token status exposed apiTokenHint: %v", payload["apiTokenHint"])
 	}
 	if scopes, ok := payload["tokenScopes"].([]interface{}); !ok || len(scopes) == 0 {
 		t.Fatalf("expected tokenScopes to be present when authenticated via API token")
+	}
+	if got := payload["detailLevel"]; got != securityStatusDetailAuthenticated {
+		t.Fatalf("detailLevel = %v, want %q", got, securityStatusDetailAuthenticated)
+	}
+	if _, ok := payload["clientIP"]; ok {
+		t.Fatalf("scoped token status exposed privileged clientIP: %v", payload["clientIP"])
+	}
+}
+
+func TestSecurityStatusExposesPrivilegedDetailsToSettingsReadToken(t *testing.T) {
+	rawToken := "status-privileged-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.RemoteAddr = "198.51.100.63:54321"
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if got := payload["detailLevel"]; got != securityStatusDetailPrivileged {
+		t.Fatalf("detailLevel = %v, want %q", got, securityStatusDetailPrivileged)
+	}
+	if got, _ := payload["clientIP"].(string); got != "198.51.100.63" {
+		t.Fatalf("clientIP = %q, want %q", got, "198.51.100.63")
+	}
+	if _, ok := payload["apiTokenConfigured"]; !ok {
+		t.Fatal("privileged status omitted apiTokenConfigured")
+	}
+	if got, _ := payload["apiTokenHint"].(string); got != cfg.PrimaryAPITokenHint() {
+		t.Fatalf("apiTokenHint = %q, want %q", got, cfg.PrimaryAPITokenHint())
 	}
 }
 

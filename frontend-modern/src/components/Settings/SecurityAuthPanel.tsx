@@ -22,7 +22,7 @@ import type { VersionInfo } from '@/api/updates';
 
 interface SecurityStatusInfo {
   hasAuthentication: boolean;
-  apiTokenConfigured: boolean;
+  apiTokenConfigured?: boolean;
   authUsername?: string;
   configuredButPendingRestart?: boolean;
   hasProxyAuth?: boolean;

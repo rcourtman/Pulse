@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import { DEFAULT_LOCALE, setActiveLocale } from '@/i18n';
 import RuntimeHome from '@/pages/RuntimeHome';
 import { SetupCompletionPanel } from '../SetupCompletionPanel';
@@ -68,10 +68,6 @@ describe('localized setup wizard journey', () => {
         setIsUnlocked={vi.fn()}
       />
     ));
-
-    await waitFor(() => {
-      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/security/status');
-    });
 
     expect(screen.getByText('Bienvenido a Pulse')).toBeInTheDocument();
     expect(screen.getByText('Desbloquear configuración')).toBeInTheDocument();

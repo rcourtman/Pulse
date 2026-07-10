@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -145,6 +146,87 @@ func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 	}
 	if router.bootstrapTokenHash != "" {
 		t.Fatalf("expected bootstrap token hash to be cleared after successful setup")
+	}
+}
+
+func TestQuickSecuritySetupRejectsUnsafeUsernamesBeforeStateChanges(t *testing.T) {
+	tests := []struct {
+		name     string
+		username string
+	}{
+		{name: "systemd directive injection", username: "admin\n[Service]\nExecStartPre=/bin/false"},
+		{name: "environment quote injection", username: "admin'\nPULSE_AUTH_PASS='attacker"},
+		{name: "leading whitespace", username: " admin"},
+		{name: "unsupported punctuation", username: "admin;restart"},
+		{name: "too long", username: strings.Repeat("a", maxLocalAuthUsernameRunes+1)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+			resetTrustedProxyConfig()
+
+			dataDir := t.TempDir()
+			cfg := &config.Config{DataPath: dataDir, ConfigPath: dataDir}
+			router := &Router{
+				config:      cfg,
+				persistence: config.NewConfigPersistence(dataDir),
+			}
+			router.initializeBootstrapToken()
+			InitPersistentAuthStores(dataDir)
+			bootstrapToken, _, _, err := bootstrap.Load(dataDir)
+			if err != nil {
+				t.Fatalf("load bootstrap token: %v", err)
+			}
+
+			body, err := json.Marshal(map[string]string{
+				"username": tt.username,
+				"password": "StrongPass!1",
+				"apiToken": strings.Repeat("ab", 24),
+			})
+			if err != nil {
+				t.Fatalf("marshal request: %v", err)
+			}
+
+			authLimiter.Reset("198.51.100.91")
+			req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(string(body)))
+			req.RemoteAddr = "198.51.100.91:54321"
+			req.Header.Set(bootstrapTokenHeader, bootstrapToken)
+			rec := httptest.NewRecorder()
+
+			handleQuickSecuritySetupFixed(router)(rec, req)
+
+			if rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400 (%s)", rec.Code, rec.Body.String())
+			}
+			if !strings.Contains(strings.ToLower(rec.Body.String()), "username") {
+				t.Fatalf("response = %q, want username validation error", rec.Body.String())
+			}
+			if cfg.AuthUser != "" || cfg.AuthPass != "" || cfg.HasAPITokens() {
+				t.Fatalf("unsafe username changed runtime auth state: user=%q pass_set=%v tokens=%d", cfg.AuthUser, cfg.AuthPass != "", len(cfg.APITokens))
+			}
+			if _, err := os.Stat(resolveAuthEnvPath(dataDir)); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("unsafe username created auth env file: %v", err)
+			}
+		})
+	}
+}
+
+func TestAuthConfigurationRenderersRejectStructuralInjection(t *testing.T) {
+	if _, err := quoteAuthEnvValue("admin'\nPULSE_AUTH_PASS='attacker"); err == nil {
+		t.Fatal("quoteAuthEnvValue accepted structural injection")
+	}
+	if _, err := quoteSystemdEnvironment("PULSE_AUTH_USER", "admin\nExecStartPre=/bin/false"); err == nil {
+		t.Fatal("quoteSystemdEnvironment accepted structural injection")
+	}
+
+	generatedAt := time.Date(2026, time.July, 10, 0, 0, 0, 0, time.UTC)
+	content, err := renderSystemdAuthOverride(generatedAt, "admin@example.com", "$2a$10$abcdefghijklmnopqrstuvwxyzABCDE1234567890123456789012")
+	if err != nil {
+		t.Fatalf("renderSystemdAuthOverride: %v", err)
+	}
+	if strings.Count(string(content), "\nEnvironment=") != 3 {
+		t.Fatalf("rendered override does not contain exactly three environment directives:\n%s", content)
 	}
 }
 

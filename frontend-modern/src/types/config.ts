@@ -120,19 +120,24 @@ export interface SecurityStatusPresentationPolicy {
 }
 
 export interface SecurityStatus {
+  detailLevel?: 'public' | 'authenticated' | 'privileged';
   hasAuthentication: boolean;
-  apiTokenConfigured: boolean;
-  apiTokenHint: string;
   requiresAuth: boolean;
-  credentialsEncrypted: boolean;
-  exportProtected: boolean;
-  hasAuditLogging: boolean;
-  configuredButPendingRestart: boolean;
+  ssoEnabled?: boolean;
+  hideLocalLogin?: boolean; // Login discovery metadata
+  ssoProviders?: SSOProviderInfo[];
+  presentationPolicy?: SecurityStatusPresentationPolicy;
+  apiTokenConfigured?: boolean;
+  apiTokenHint?: string;
+  credentialsEncrypted?: boolean;
+  exportProtected?: boolean;
+  hasAuditLogging?: boolean;
+  configuredButPendingRestart?: boolean;
   unprotectedExportAllowed?: boolean;
   hasHTTPS?: boolean;
-  ssoEnabled?: boolean;
   publicAccess?: boolean;
   isPrivateNetwork?: boolean;
+  isTrustedNetwork?: boolean;
   clientIP?: string;
   hasProxyAuth?: boolean;
   proxyAuthUsername?: string;
@@ -144,20 +149,10 @@ export interface SecurityStatus {
   ssoSessionUsername?: string;
   ssoSessionDisplayName?: string;
   ssoLogoutURL?: string;
-  hideLocalLogin?: boolean; // Hide local login form
   agentUrl?: string; // URL for agent install commands (from PULSE_PUBLIC_URL or auto-detected)
-  // First run setup fields
-  bootstrapTokenPath?: string;
-  isDocker?: boolean;
-  inContainer?: boolean;
-  lxcCtid?: string;
-  dockerContainerName?: string;
-  // Multi-provider SSO
-  ssoProviders?: SSOProviderInfo[];
   // Token auth scopes (for kiosk/limited-access mode)
   tokenScopes?: string[];
   sessionCapabilities?: SecurityStatusSessionCapabilities;
-  presentationPolicy?: SecurityStatusPresentationPolicy;
   settingsCapabilities?: SecurityStatusSettingsCapabilities;
 }
 

@@ -10200,8 +10200,11 @@ func TestContract_ResetFirstRunSecurityClearsEnvBackedStatus(t *testing.T) {
 	if got, _ := payload["hasAuthentication"].(bool); got {
 		t.Fatalf("hasAuthentication = %v, want false", payload["hasAuthentication"])
 	}
-	if got, _ := payload["bootstrapTokenPath"].(string); strings.TrimSpace(got) == "" {
-		t.Fatalf("bootstrapTokenPath = %v, want non-empty", payload["bootstrapTokenPath"])
+	if _, ok := payload["bootstrapTokenPath"]; ok {
+		t.Fatalf("unauthenticated status exposed bootstrapTokenPath = %v", payload["bootstrapTokenPath"])
+	}
+	if got := payload["detailLevel"]; got != securityStatusDetailPublic {
+		t.Fatalf("detailLevel = %v, want %q", got, securityStatusDetailPublic)
 	}
 }
 
@@ -10242,7 +10245,7 @@ func TestContract_SetupScriptURLResponseJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
-func TestContract_SecurityStatusIncludesSessionCapabilitiesDemoMode(t *testing.T) {
+func TestContract_PublicSecurityStatusIncludesDemoPresentationPolicy(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.DemoMode = true
 
@@ -10260,12 +10263,11 @@ func TestContract_SecurityStatusIncludesSessionCapabilitiesDemoMode(t *testing.T
 		t.Fatalf("decode security status payload: %v", err)
 	}
 
-	sessionCapabilities, ok := payload["sessionCapabilities"].(map[string]any)
-	if !ok {
-		t.Fatalf("sessionCapabilities = %#v, want object", payload["sessionCapabilities"])
+	if got := payload["detailLevel"]; got != securityStatusDetailPublic {
+		t.Fatalf("detailLevel = %v, want %q", got, securityStatusDetailPublic)
 	}
-	if got, _ := sessionCapabilities["demoMode"].(bool); !got {
-		t.Fatalf("sessionCapabilities.demoMode = %v, want true", sessionCapabilities["demoMode"])
+	if _, ok := payload["sessionCapabilities"]; ok {
+		t.Fatalf("public security status exposed sessionCapabilities = %#v", payload["sessionCapabilities"])
 	}
 
 	presentationPolicy, ok := payload["presentationPolicy"].(map[string]any)

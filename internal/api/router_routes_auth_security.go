@@ -13,13 +13,135 @@ import (
 
 	"github.com/crewjam/saml"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	"github.com/rs/zerolog/log"
 )
 
 const featureSSOKey = "sso"
+
+const (
+	securityStatusDetailPublic        = "public"
+	securityStatusDetailAuthenticated = "authenticated"
+	securityStatusDetailPrivileged    = "privileged"
+)
+
+type securityStatusSSOProvider struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	DisplayName string `json:"displayName,omitempty"`
+	IconURL     string `json:"iconUrl,omitempty"`
+	LoginURL    string `json:"loginUrl"`
+}
+
+// publicSecurityStatusResponse is the intentional unauthenticated contract for
+// login and first-run routing. Deployment, network, credential, and operator
+// configuration details must never be added to this type.
+type publicSecurityStatusResponse struct {
+	DetailLevel        string                           `json:"detailLevel"`
+	HasAuthentication  bool                             `json:"hasAuthentication"`
+	RequiresAuth       bool                             `json:"requiresAuth"`
+	SSOEnabled         bool                             `json:"ssoEnabled"`
+	HideLocalLogin     bool                             `json:"hideLocalLogin"`
+	SSOProviders       []securityStatusSSOProvider      `json:"ssoProviders,omitempty"`
+	PresentationPolicy securityStatusPresentationPolicy `json:"presentationPolicy"`
+}
+
+type authenticatedSecurityStatusResponse struct {
+	publicSecurityStatusResponse
+	HasProxyAuth          bool                               `json:"hasProxyAuth"`
+	ProxyAuthLogoutURL    string                             `json:"proxyAuthLogoutURL"`
+	ProxyAuthUsername     string                             `json:"proxyAuthUsername"`
+	ProxyAuthIsAdmin      bool                               `json:"proxyAuthIsAdmin"`
+	SSOSessionUsername    string                             `json:"ssoSessionUsername"`
+	SSOSessionDisplayName string                             `json:"ssoSessionDisplayName"`
+	SSOLogoutURL          string                             `json:"ssoLogoutURL,omitempty"`
+	TokenScopes           []string                           `json:"tokenScopes,omitempty"`
+	SessionCapabilities   securityStatusSessionCapabilities  `json:"sessionCapabilities"`
+	SettingsCapabilities  securityStatusSettingsCapabilities `json:"settingsCapabilities"`
+}
+
+type privilegedSecurityStatusResponse struct {
+	authenticatedSecurityStatusResponse
+	APITokenConfigured          bool   `json:"apiTokenConfigured"`
+	APITokenHint                string `json:"apiTokenHint"`
+	ExportProtected             bool   `json:"exportProtected"`
+	UnprotectedExportAllowed    bool   `json:"unprotectedExportAllowed"`
+	ConfiguredButPendingRestart bool   `json:"configuredButPendingRestart"`
+	HasAuditLogging             bool   `json:"hasAuditLogging"`
+	CredentialsEncrypted        bool   `json:"credentialsEncrypted"`
+	HasHTTPS                    bool   `json:"hasHTTPS"`
+	ClientIP                    string `json:"clientIP"`
+	IsPrivateNetwork            bool   `json:"isPrivateNetwork"`
+	IsTrustedNetwork            bool   `json:"isTrustedNetwork"`
+	PublicAccess                bool   `json:"publicAccess"`
+	AuthUsername                string `json:"authUsername"`
+	AuthLastModified            string `json:"authLastModified"`
+	AgentURL                    string `json:"agentUrl"`
+}
+
+func (r *Router) securityAuthenticationConfigured() bool {
+	if r == nil || r.config == nil {
+		return false
+	}
+	if (r.config.AuthUser != "" && r.config.AuthPass != "") ||
+		r.config.HasAPITokens() ||
+		r.config.ProxyAuthSecret != "" ||
+		r.hostedMode {
+		return true
+	}
+	ssoCfg := r.ensureSSOConfig()
+	return ssoCfg != nil && ssoCfg.HasEnabledProviders()
+}
+
+func (r *Router) authorizeSecurityRestart(w http.ResponseWriter, req *http.Request) bool {
+	clientIP := GetClientIP(req)
+	if r.securityAuthenticationConfigured() {
+		if !CheckAuth(r.config, w, req) {
+			log.Warn().Str("ip", clientIP).Msg("Unauthenticated apply-restart attempt blocked")
+			return false
+		}
+		if r.config.ProxyAuthSecret != "" {
+			if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid && !isAdmin {
+				log.Warn().
+					Str("ip", clientIP).
+					Str("username", username).
+					Msg("Non-admin user attempted service restart")
+				http.Error(w, "Admin privileges required", http.StatusForbidden)
+				return false
+			}
+		}
+		return ensureSettingsWriteScope(r.config, w, req)
+	}
+
+	if r.bootstrapTokenHash == "" {
+		log.Error().Msg("Bootstrap setup token unavailable; refusing unauthenticated service restart")
+		http.Error(w, "Bootstrap token unavailable", http.StatusServiceUnavailable)
+		return false
+	}
+
+	if limiter := r.bootstrapTokenLimiter(); limiter != nil {
+		if allowed, retryAfter := limiter.allowAt(clientIP, time.Now()); !allowed {
+			retrySeconds := int(retryAfter.Round(time.Second) / time.Second)
+			if retrySeconds < 1 {
+				retrySeconds = 1
+			}
+			w.Header().Set("Retry-After", fmt.Sprintf("%d", retrySeconds))
+			http.Error(w, "Too many bootstrap token attempts", http.StatusTooManyRequests)
+			return false
+		}
+	}
+
+	providedToken := strings.TrimSpace(req.Header.Get(bootstrapTokenHeader))
+	if providedToken == "" || !r.bootstrapTokenValid(providedToken) {
+		log.Warn().Str("ip", clientIP).Msg("Rejected apply-restart attempt without a valid bootstrap token")
+		http.Error(w, "Valid bootstrap token required", http.StatusUnauthorized)
+		return false
+	}
+
+	return true
+}
 
 func (r *Router) registerAuthSecurityInstallRoutes() {
 	// API routes
@@ -177,213 +299,158 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 		r.handleDeleteAPIToken(w, req)
 	}))
 	r.mux.HandleFunc("/api/security/status", func(w http.ResponseWriter, req *http.Request) {
-		if req.Method == http.MethodGet {
-			w.Header().Set("Content-Type", "application/json")
-
-			// Check for basic auth configuration
-			// Check both environment variables and loaded config
-			ssoCfg := r.ensureSSOConfig()
-			enabledProviders := []config.SSOProvider{}
-			if ssoCfg != nil {
-				enabledProviders = ssoCfg.GetEnabledProviders()
-			}
-			hasEnabledSSO := len(enabledProviders) > 0
-			var primaryOIDCConfig *config.OIDCProviderConfig
-			for i := range enabledProviders {
-				if enabledProviders[i].Type == config.SSOProviderTypeOIDC && enabledProviders[i].OIDC != nil {
-					primaryOIDCConfig = enabledProviders[i].OIDC
-					break
-				}
-			}
-			hasAuthentication := os.Getenv("PULSE_AUTH_USER") != "" ||
-				os.Getenv("REQUIRE_AUTH") == "true" ||
-				r.config.AuthUser != "" ||
-				r.config.AuthPass != "" ||
-				r.config.HasAPITokens() ||
-				r.config.ProxyAuthSecret != "" ||
-				r.hostedMode ||
-				hasEnabledSSO
-
-			// Check if .env file exists but hasn't been loaded yet (pending restart)
-			configuredButPendingRestart := false
-			envPath := resolveAuthEnvPath(r.config.ConfigPath)
-
-			authLastModified := ""
-			if stat, err := os.Stat(envPath); err == nil {
-				authLastModified = stat.ModTime().UTC().Format(time.RFC3339)
-				if !hasAuthentication && r.config.AuthUser == "" && r.config.AuthPass == "" {
-					configuredButPendingRestart = true
-				}
-			}
-
-			// Check for audit logging
-			hasAuditLogging := os.Getenv("PULSE_AUDIT_LOG") == "true" || os.Getenv("AUDIT_LOG_ENABLED") == "true"
-
-			// Credentials are always encrypted in current implementation
-			credentialsEncrypted := true
-
-			// Check network context
-			clientIP := GetClientIP(req)
-			isPrivateNetwork := isPrivateIP(clientIP)
-
-			// Get trusted networks from environment
-			trustedNetworks := []string{}
-			if nets := os.Getenv("PULSE_TRUSTED_NETWORKS"); nets != "" {
-				trustedNetworks = strings.Split(nets, ",")
-			}
-			isTrustedNetwork := isTrustedNetwork(clientIP, trustedNetworks)
-
-			// Determine whether the caller is authenticated before exposing sensitive fields.
-			// SECURITY: Do NOT check bearer or query-string tokens here. This endpoint is
-			// intentionally limited to session cookies, proxy auth, and X-API-Token.
-			authSnapshot := r.buildSecurityStatusAuthSnapshot(req)
-			isAuthenticated := authSnapshot.authenticated
-			tokenScopes := authSnapshot.tokenScopes()
-
-			// Create token hint if token exists (only revealed to authenticated callers)
-			apiTokenHint := ""
-			if isAuthenticated {
-				apiTokenHint = r.config.PrimaryAPITokenHint()
-			}
-
-			// Check for proxy auth
-			hasProxyAuth := r.config.ProxyAuthSecret != ""
-			proxyAuthUsername := ""
-			proxyAuthIsAdmin := false
-			if hasProxyAuth {
-				// Check if current request has valid proxy auth
-				if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid {
-					proxyAuthUsername = username
-					proxyAuthIsAdmin = isAdmin
-				}
-			}
-
-			// Check for SSO-backed session
-			ssoSessionUsername := ""
-			ssoSessionDisplayName := ""
-			if hasEnabledSSO {
-				if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" {
-					if ValidateSession(cookie.Value) {
-						session := GetSessionStore().GetSession(cookie.Value)
-						if session != nil && (strings.TrimSpace(session.OIDCIssuer) != "" || strings.TrimSpace(session.SAMLProviderID) != "") {
-							ssoSessionUsername = GetSessionUsername(cookie.Value)
-							ssoSessionDisplayName = GetSessionDisplayUsername(cookie.Value)
-						}
-					}
-				}
-			}
-
-			requiresAuth := r.config.HasAPITokens() ||
-				(r.config.AuthUser != "" && r.config.AuthPass != "") ||
-				r.config.ProxyAuthSecret != "" ||
-				hasEnabledSSO
-
-			// Resolve the public URL for agent install commands
-			// If PULSE_PUBLIC_URL is configured, use that; otherwise derive from request
-			agentURL := r.resolvePublicURL(req)
-
-			status := map[string]interface{}{
-				"apiTokenConfigured":          r.config.HasAPITokens(),
-				"apiTokenHint":                apiTokenHint,
-				"requiresAuth":                requiresAuth,
-				"exportProtected":             r.config.HasAPITokens() || os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true",
-				"unprotectedExportAllowed":    os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true",
-				"hasAuthentication":           hasAuthentication,
-				"configuredButPendingRestart": configuredButPendingRestart,
-				"hasAuditLogging":             hasAuditLogging,
-				"credentialsEncrypted":        credentialsEncrypted,
-				"hasHTTPS":                    req.TLS != nil || strings.EqualFold(req.Header.Get("X-Forwarded-Proto"), "https"),
-				"clientIP":                    clientIP,
-				"isPrivateNetwork":            isPrivateNetwork,
-				"isTrustedNetwork":            isTrustedNetwork,
-				"publicAccess":                !isPrivateNetwork,
-				"hasProxyAuth":                hasProxyAuth,
-				"proxyAuthLogoutURL":          r.config.ProxyAuthLogoutURL,
-				"proxyAuthUsername":           proxyAuthUsername,
-				"proxyAuthIsAdmin":            proxyAuthIsAdmin,
-				"authUsername":                "",
-				"authLastModified":            "",
-				"ssoEnabled":                  hasEnabledSSO,
-				"ssoSessionUsername":          ssoSessionUsername,
-				"ssoSessionDisplayName":       ssoSessionDisplayName,
-				"hideLocalLogin":              r.config.HideLocalLogin,
-				"agentUrl":                    agentURL,
-				"sessionCapabilities":         r.securityStatusSessionCapabilities(req.Context()),
-				"presentationPolicy":          r.securityStatusPresentationPolicy(),
-				"settingsCapabilities":        r.securityStatusSettingsCapabilitiesFromSnapshot(authSnapshot),
-			}
-
-			if isAuthenticated {
-				status["authUsername"] = r.config.AuthUser
-				status["authLastModified"] = authLastModified
-			}
-
-			// Include token scopes when authenticated via API token (for kiosk mode UI)
-			if len(tokenScopes) > 0 {
-				status["tokenScopes"] = tokenScopes
-			}
-
-			if primaryOIDCConfig != nil {
-				status["ssoLogoutURL"] = primaryOIDCConfig.LogoutURL
-			}
-
-			// Include SSO providers for login page discovery
-			if len(enabledProviders) > 0 {
-				baseURL := r.config.PublicURL
-				if baseURL == "" {
-					baseURL = ""
-				}
-				type ssoProviderInfo struct {
-					ID          string `json:"id"`
-					Name        string `json:"name"`
-					Type        string `json:"type"`
-					DisplayName string `json:"displayName,omitempty"`
-					IconURL     string `json:"iconUrl,omitempty"`
-					LoginURL    string `json:"loginUrl"`
-				}
-				var ssoProviders []ssoProviderInfo
-				for _, p := range enabledProviders {
-					info := ssoProviderInfo{
-						ID:          p.ID,
-						Name:        p.Name,
-						Type:        string(p.Type),
-						DisplayName: p.DisplayName,
-						IconURL:     p.IconURL,
-					}
-					if info.DisplayName == "" {
-						info.DisplayName = p.Name
-					}
-					switch p.Type {
-					case config.SSOProviderTypeOIDC:
-						info.LoginURL = "/api/oidc/" + p.ID + "/login"
-					case config.SSOProviderTypeSAML:
-						info.LoginURL = "/api/saml/" + p.ID + "/login"
-					}
-					ssoProviders = append(ssoProviders, info)
-				}
-				status["ssoProviders"] = ssoProviders
-			}
-
-			// Add bootstrap token location for first-run setup UI
-			if r.bootstrapTokenHash != "" {
-				status["bootstrapTokenPath"] = r.bootstrapTokenPath
-				status["isDocker"] = os.Getenv("PULSE_DOCKER") == "true"
-				status["inContainer"] = system.InContainer()
-				// Try auto-detection first, then fall back to env override
-				if ctid := system.DetectLXCCTID(); ctid != "" {
-					status["lxcCtid"] = ctid
-				} else if envCtid := os.Getenv("PULSE_LXC_CTID"); envCtid != "" {
-					status["lxcCtid"] = envCtid
-				}
-				if containerName := system.DetectDockerContainerName(); containerName != "" {
-					status["dockerContainerName"] = containerName
-				}
-			}
-
-			json.NewEncoder(w).Encode(status)
-		} else {
+		if req.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
 		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		ssoCfg := r.ensureSSOConfig()
+		enabledProviders := []config.SSOProvider{}
+		if ssoCfg != nil {
+			enabledProviders = ssoCfg.GetEnabledProviders()
+		}
+		hasEnabledSSO := len(enabledProviders) > 0
+		var primaryOIDCConfig *config.OIDCProviderConfig
+		ssoProviders := make([]securityStatusSSOProvider, 0, len(enabledProviders))
+		for i := range enabledProviders {
+			provider := enabledProviders[i]
+			if primaryOIDCConfig == nil && provider.Type == config.SSOProviderTypeOIDC && provider.OIDC != nil {
+				primaryOIDCConfig = provider.OIDC
+			}
+			info := securityStatusSSOProvider{
+				ID:          provider.ID,
+				Name:        provider.Name,
+				Type:        string(provider.Type),
+				DisplayName: provider.DisplayName,
+				IconURL:     provider.IconURL,
+			}
+			if info.DisplayName == "" {
+				info.DisplayName = provider.Name
+			}
+			switch provider.Type {
+			case config.SSOProviderTypeOIDC:
+				info.LoginURL = "/api/oidc/" + provider.ID + "/login"
+			case config.SSOProviderTypeSAML:
+				info.LoginURL = "/api/saml/" + provider.ID + "/login"
+			}
+			ssoProviders = append(ssoProviders, info)
+		}
+
+		hasAuthentication := os.Getenv("PULSE_AUTH_USER") != "" ||
+			os.Getenv("REQUIRE_AUTH") == "true" ||
+			r.config.AuthUser != "" ||
+			r.config.AuthPass != "" ||
+			r.config.HasAPITokens() ||
+			r.config.ProxyAuthSecret != "" ||
+			r.hostedMode ||
+			hasEnabledSSO
+		requiresAuth := r.config.HasAPITokens() ||
+			(r.config.AuthUser != "" && r.config.AuthPass != "") ||
+			r.config.ProxyAuthSecret != "" ||
+			hasEnabledSSO
+
+		publicStatus := publicSecurityStatusResponse{
+			DetailLevel:        securityStatusDetailPublic,
+			HasAuthentication:  hasAuthentication,
+			RequiresAuth:       requiresAuth,
+			SSOEnabled:         hasEnabledSSO,
+			HideLocalLogin:     r.config.HideLocalLogin,
+			SSOProviders:       ssoProviders,
+			PresentationPolicy: r.securityStatusPresentationPolicy(),
+		}
+
+		// Bearer and query-string tokens are intentionally not accepted here. The
+		// public endpoint exposes only login discovery until a session, proxy
+		// identity, or X-API-Token proves the caller's authority.
+		authSnapshot := r.buildSecurityStatusAuthSnapshot(req)
+		if !authSnapshot.authenticated {
+			_ = json.NewEncoder(w).Encode(publicStatus)
+			return
+		}
+
+		hasProxyAuth := r.config.ProxyAuthSecret != ""
+		proxyAuthUsername := ""
+		proxyAuthIsAdmin := false
+		if authSnapshot.authMethod == "proxy" {
+			if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid {
+				proxyAuthUsername = username
+				proxyAuthIsAdmin = isAdmin
+			}
+		}
+
+		ssoSessionUsername := ""
+		ssoSessionDisplayName := ""
+		if hasEnabledSSO {
+			if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
+				session := GetSessionStore().GetSession(cookie.Value)
+				if session != nil && (strings.TrimSpace(session.OIDCIssuer) != "" || strings.TrimSpace(session.SAMLProviderID) != "") {
+					ssoSessionUsername = GetSessionUsername(cookie.Value)
+					ssoSessionDisplayName = GetSessionDisplayUsername(cookie.Value)
+				}
+			}
+		}
+
+		publicStatus.DetailLevel = securityStatusDetailAuthenticated
+		authenticatedStatus := authenticatedSecurityStatusResponse{
+			publicSecurityStatusResponse: publicStatus,
+			HasProxyAuth:                 authSnapshot.authMethod == "proxy",
+			ProxyAuthLogoutURL:           r.config.ProxyAuthLogoutURL,
+			ProxyAuthUsername:            proxyAuthUsername,
+			ProxyAuthIsAdmin:             proxyAuthIsAdmin,
+			SSOSessionUsername:           ssoSessionUsername,
+			SSOSessionDisplayName:        ssoSessionDisplayName,
+			TokenScopes:                  authSnapshot.tokenScopes(),
+			SessionCapabilities:          r.securityStatusSessionCapabilities(req.Context()),
+			SettingsCapabilities:         r.securityStatusSettingsCapabilitiesFromSnapshot(authSnapshot),
+		}
+		if primaryOIDCConfig != nil && ssoSessionUsername != "" {
+			authenticatedStatus.SSOLogoutURL = primaryOIDCConfig.LogoutURL
+		}
+		if !authSnapshot.canAccessAdminSurface(config.ScopeSettingsRead) {
+			_ = json.NewEncoder(w).Encode(authenticatedStatus)
+			return
+		}
+
+		configuredButPendingRestart := false
+		authLastModified := ""
+		if stat, err := os.Stat(resolveAuthEnvPath(r.config.ConfigPath)); err == nil {
+			authLastModified = stat.ModTime().UTC().Format(time.RFC3339)
+			if !hasAuthentication && r.config.AuthUser == "" && r.config.AuthPass == "" {
+				configuredButPendingRestart = true
+			}
+		}
+
+		clientIP := GetClientIP(req)
+		isPrivateNetwork := isPrivateIP(clientIP)
+		trustedNetworks := []string{}
+		if nets := os.Getenv("PULSE_TRUSTED_NETWORKS"); nets != "" {
+			trustedNetworks = strings.Split(nets, ",")
+		}
+
+		authenticatedStatus.DetailLevel = securityStatusDetailPrivileged
+		authenticatedStatus.HasProxyAuth = hasProxyAuth
+		status := privilegedSecurityStatusResponse{
+			authenticatedSecurityStatusResponse: authenticatedStatus,
+			APITokenConfigured:                  r.config.HasAPITokens(),
+			APITokenHint:                        r.config.PrimaryAPITokenHint(),
+			ExportProtected:                     r.config.HasAPITokens() || os.Getenv("ALLOW_UNPROTECTED_EXPORT") != "true",
+			UnprotectedExportAllowed:            os.Getenv("ALLOW_UNPROTECTED_EXPORT") == "true",
+			ConfiguredButPendingRestart:         configuredButPendingRestart,
+			HasAuditLogging:                     os.Getenv("PULSE_AUDIT_LOG") == "true" || os.Getenv("AUDIT_LOG_ENABLED") == "true",
+			CredentialsEncrypted:                true,
+			HasHTTPS:                            req.TLS != nil || strings.EqualFold(req.Header.Get("X-Forwarded-Proto"), "https"),
+			ClientIP:                            clientIP,
+			IsPrivateNetwork:                    isPrivateNetwork,
+			IsTrustedNetwork:                    isTrustedNetwork(clientIP, trustedNetworks),
+			PublicAccess:                        !isPrivateNetwork,
+			AuthUsername:                        r.config.AuthUser,
+			AuthLastModified:                    authLastModified,
+			AgentURL:                            r.resolvePublicURL(req),
+		}
+
+		_ = json.NewEncoder(w).Encode(status)
 	})
 
 	// Quick security setup route - using fixed version
@@ -397,40 +464,10 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 	r.mux.HandleFunc("/api/security/validate-token", r.HandleValidateAPIToken)
 
 	// Apply security restart endpoint
-	// SECURITY: Require admin auth to prevent DoS via unauthenticated service restarts
 	r.mux.HandleFunc("/api/security/apply-restart", func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == http.MethodPost {
-			// SECURITY: Require authentication - this endpoint can trigger service restart (DoS risk)
-			// Allow if: (1) auth is not configured yet (initial setup), or (2) caller is admin-authenticated
-			authConfigured := (r.config.AuthUser != "" && r.config.AuthPass != "") ||
-				r.config.HasAPITokens() ||
-				r.config.ProxyAuthSecret != "" ||
-				(func() bool {
-					ssoCfg := r.ensureSSOConfig()
-					return ssoCfg != nil && ssoCfg.HasEnabledProviders()
-				})()
-			if authConfigured {
-				if !CheckAuth(r.config, w, req) {
-					log.Warn().
-						Str("ip", GetClientIP(req)).
-						Msg("Unauthenticated apply-restart attempt blocked")
-					return // CheckAuth already wrote the error
-				}
-				// Check proxy auth for admin status (session users with basic auth are implicitly admin)
-				if r.config.ProxyAuthSecret != "" {
-					if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid && !isAdmin {
-						log.Warn().
-							Str("ip", GetClientIP(req)).
-							Str("username", username).
-							Msg("Non-admin user attempted service restart")
-						http.Error(w, "Admin privileges required", http.StatusForbidden)
-						return
-					}
-				}
-				// Require settings:write scope for API tokens
-				if !ensureSettingsWriteScope(r.config, w, req) {
-					return
-				}
+			if !r.authorizeSecurityRestart(w, req) {
+				return
 			}
 
 			// Only allow restart if we're running under systemd (safer)

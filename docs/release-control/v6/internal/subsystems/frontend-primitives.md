@@ -533,6 +533,13 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
    stay explicitly excluded.
 7. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 8. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+   These settings panels consume the privileged security-status projection,
+   while the shared status type also represents intentionally sparse public and
+   authenticated tiers. Privileged posture booleans therefore remain optional
+   at the transport boundary and must be normalized fail-closed before the
+   settings shell derives posture summaries or hardening actions. The first-run
+   shell must use generic host, Docker, and LXC bootstrap commands rather than
+   probing public status for deployment identity.
 9. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
 10. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
     Assistant session pickers and reloads must restore only safe

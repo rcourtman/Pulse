@@ -125,7 +125,10 @@ func TestResetFirstRunSecurityClearsEnvBackedAuthFromStatus(t *testing.T) {
 	if got, _ := payload["hasAuthentication"].(bool); got {
 		t.Fatalf("expected hasAuthentication=false after reset, got %v", payload["hasAuthentication"])
 	}
-	if got, _ := payload["bootstrapTokenPath"].(string); strings.TrimSpace(got) == "" {
-		t.Fatalf("expected bootstrapTokenPath in unauthenticated status, got %v", payload["bootstrapTokenPath"])
+	if _, ok := payload["bootstrapTokenPath"]; ok {
+		t.Fatalf("unauthenticated status exposed bootstrapTokenPath: %v", payload["bootstrapTokenPath"])
+	}
+	if got := payload["detailLevel"]; got != securityStatusDetailPublic {
+		t.Fatalf("detailLevel = %v, want %q", got, securityStatusDetailPublic)
 	}
 }

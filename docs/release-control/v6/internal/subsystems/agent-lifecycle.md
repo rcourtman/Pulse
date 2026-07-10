@@ -697,6 +697,15 @@ identity. The scoped Patrol request carries resource identity only and reuses
 the existing Patrol scoped engine, so it adds no agent lifecycle control
 surface and no new `internal/api/` lifecycle handler.
 
+First-run security discovery under shared `internal/api/` is likewise an
+adjacent API/security boundary, not an agent-lifecycle discovery surface.
+Unauthenticated `/api/security/status` responses must stay on the public tier
+and must not disclose bootstrap-token paths, container/runtime identity,
+credential state, token diagnostics, or agent URL configuration. Agent setup
+may consume those details only after the caller reaches the authenticated or
+privileged security-status tier; it must not infer lifecycle readiness from
+the intentionally sparse public response.
+
 1. Add or change install-command generation, canonical /api/auto-register behavior, or installer download behavior through the owned `internal/api/` files above.
    Canonical `/api/auto-register` auth is split by intent: when the setup-token
    bootstrap path succeeds, lifecycle clients must complete registration with

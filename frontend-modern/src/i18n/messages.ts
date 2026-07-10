@@ -231,6 +231,8 @@ export const EN_MESSAGES = {
   'setup.welcome.action.verifyToken': 'Verify bootstrap token',
   'setup.welcome.action.verifyingToken': 'Verifying bootstrap token...',
   'setup.welcome.copyCommandTitle': 'Copy command',
+  'setup.welcome.deploymentHint.choose':
+    'Run the command that matches how Pulse is installed. The server does not reveal deployment details before setup is unlocked.',
   'setup.welcome.deploymentHint.containerized':
     'Pulse appears to be running in a containerized environment. Run the command from the host that manages the container so you can print the one-time setup token.',
   'setup.welcome.deploymentHint.direct':
@@ -251,7 +253,7 @@ export const EN_MESSAGES = {
   'setup.welcome.error.invalidBootstrapTokenResponse': 'Invalid bootstrap token',
   'setup.welcome.error.missingBootstrapToken': 'Please enter the bootstrap token',
   'setup.welcome.error.snapshotPaste':
-    'That looks like the encrypted .bootstrap_token file contents, not the raw setup token. Run the command above and paste the token string it prints.',
+    'That looks like the encrypted .bootstrap_token file contents, not the raw setup token. Run the matching command above and paste the token string it prints.',
   'setup.welcome.hero.coverage':
     'Connect a platform API, install Pulse Agent, or use both for full coverage.',
   'setup.welcome.hero.step.admin': 'Create the admin account',
@@ -272,6 +274,8 @@ export const EN_MESSAGES = {
     'This one-time bootstrap token only unlocks first-run setup. Run the command above and paste the token string it prints. After verification, you will create the admin account and Pulse will generate the long-lived API token separately.',
   'setup.welcome.tokenHelp.host':
     'This one-time bootstrap token only unlocks first-run setup on this Pulse server. Run the command above and paste the token string it prints. It is not your admin password and it is not the API token you will use after setup.',
+  'setup.welcome.tokenHelp.generic':
+    'This one-time bootstrap token only unlocks first-run setup on this Pulse server. Run the matching command above and paste the token string it prints. It is not your admin password or long-lived API token.',
   'setup.welcome.tokenHelp.title': 'What this token does',
   'setup.welcome.unlockTitle': 'Unlock setup',
   'settings.general.appearance.title': 'Appearance',
@@ -613,6 +617,7 @@ export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
   'setup.welcome.action.verifyingToken',
   'setup.welcome.copyCommandTitle',
   'setup.welcome.deploymentHint.containerized',
+  'setup.welcome.deploymentHint.choose',
   'setup.welcome.deploymentHint.direct',
   'setup.welcome.deploymentHint.dockerNamed',
   'setup.welcome.deploymentHint.dockerUnnamed',
@@ -641,6 +646,7 @@ export const FIRST_SESSION_MONITORING_MIGRATED_MESSAGE_KEYS = [
   'setup.welcome.tokenHelp.afterVerify',
   'setup.welcome.tokenHelp.docker',
   'setup.welcome.tokenHelp.host',
+  'setup.welcome.tokenHelp.generic',
   'setup.welcome.tokenHelp.title',
 ] as const satisfies readonly I18nMessageKey[];
 

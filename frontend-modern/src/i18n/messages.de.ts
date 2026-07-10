@@ -245,6 +245,8 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.welcome.action.verifyToken': 'Bootstrap-Token pruefen',
   'setup.welcome.action.verifyingToken': 'Bootstrap-Token wird geprueft...',
   'setup.welcome.copyCommandTitle': 'Befehl kopieren',
+  'setup.welcome.deploymentHint.choose':
+    'Fuehren Sie den Befehl aus, der zur Pulse-Installation passt. Der Server legt vor dem Entsperren der Einrichtung keine Bereitstellungsdetails offen.',
   'setup.welcome.deploymentHint.containerized':
     'Pulse scheint in einer containerisierten Umgebung zu laufen. Fuehren Sie den Befehl auf dem Host aus, der den Container verwaltet, damit Sie das einmalige Setup-Token ausgeben koennen.',
   'setup.welcome.deploymentHint.direct':
@@ -265,7 +267,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'setup.welcome.error.invalidBootstrapTokenResponse': 'Ungueltiges Bootstrap-Token',
   'setup.welcome.error.missingBootstrapToken': 'Bitte geben Sie das Bootstrap-Token ein',
   'setup.welcome.error.snapshotPaste':
-    'Das sieht nach dem verschluesselten Inhalt der Datei .bootstrap_token aus, nicht nach dem rohen Setup-Token. Fuehren Sie den obigen Befehl aus und fuegen Sie die ausgegebene Token-Zeichenfolge ein.',
+    'Das sieht nach dem verschluesselten Inhalt der Datei .bootstrap_token aus, nicht nach dem rohen Setup-Token. Fuehren Sie den passenden Befehl aus und fuegen Sie die ausgegebene Token-Zeichenfolge ein.',
   'setup.welcome.hero.coverage':
     'Verbinden Sie eine Plattform-API, installieren Sie Pulse Agent oder verwenden Sie beides fuer vollstaendige Abdeckung.',
   'setup.welcome.hero.step.admin': 'Admin-Konto erstellen',
@@ -286,6 +288,8 @@ export const DE_MESSAGE_OVERRIDES = {
     'Dieses einmalige Bootstrap-Token entsperrt nur die Ersteinrichtung. Fuehren Sie den obigen Befehl aus und fuegen Sie die ausgegebene Token-Zeichenfolge ein. Nach der Pruefung erstellen Sie das Admin-Konto, und Pulse erzeugt das langlebige API-Token separat.',
   'setup.welcome.tokenHelp.host':
     'Dieses einmalige Bootstrap-Token entsperrt nur die Ersteinrichtung auf diesem Pulse-Server. Fuehren Sie den obigen Befehl aus und fuegen Sie die ausgegebene Token-Zeichenfolge ein. Es ist nicht Ihr Admin-Passwort und nicht das API-Token, das Sie nach der Einrichtung verwenden.',
+  'setup.welcome.tokenHelp.generic':
+    'Dieses einmalige Bootstrap-Token entsperrt nur die Ersteinrichtung auf diesem Pulse-Server. Fuehren Sie den passenden Befehl aus und fuegen Sie die ausgegebene Zeichenfolge ein. Es ist weder Ihr Admin-Passwort noch ein langlebiges API-Token.',
   'setup.welcome.tokenHelp.title': 'Was dieses Token macht',
   'setup.welcome.unlockTitle': 'Einrichtung entsperren',
   'settings.general.appearance.title': 'Darstellung',

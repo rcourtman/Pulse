@@ -1545,6 +1545,16 @@ payload shape change when the portal presents compact client rows.
     from SSO claims for app chrome. Frontend consumers may display the label,
     but API, organization, token, and permission checks must continue to bind
     to the stable principal.
+    `/api/security/status` also owns an explicit three-tier disclosure
+    contract. Unauthenticated callers receive only the public login/setup
+    allowlist (`detailLevel=public`): authentication presence, login routing,
+    SSO provider discovery, and browser presentation policy. Authenticated
+    callers may additionally receive their own session identity, token scopes,
+    and capability projection (`detailLevel=authenticated`). Deployment,
+    network, credential, token-hint, audit, proxy-configuration, and agent URL
+    details require an admin/session boundary or an API token carrying
+    `settings:read` (`detailLevel=privileged`). Bootstrap token paths, LXC IDs,
+    and Docker container names are not part of any security-status tier.
 79. `internal/api/security_tokens.go` shared with `security-privacy`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
     Token owner identity is reserved for the server-authenticated principal:
     shared token-minting helpers must derive `owner_user_id` from the current
@@ -2453,10 +2463,12 @@ a new API state machine, queue contract, or verification-accounting field.
     `internal/api/router_routes_auth_security.go`,
     `internal/api/security_status_capabilities.go`, frontend security-status
     consumers, and shared demo-mode stores must treat
-    `/api/security/status.sessionCapabilities.demoMode` as the canonical
-    browser bootstrap signal for public demo posture instead of asking
+    `/api/security/status.presentationPolicy.demoMode` as the canonical public
+    browser bootstrap signal for demo posture instead of asking
     frontend callers to infer demo state from response headers, `/api/health`
-    probes, or hostname heuristics. Shared browser stores that consume
+    probes, or hostname heuristics. The more detailed
+    `sessionCapabilities.demoMode` projection is authenticated caller context,
+    not part of the unauthenticated response. Shared browser stores that consume
     Patrol approvals must also fail closed from that resolved demo policy at
     the store boundary, so public demo shells do not probe `/api/ai/approvals`
     or `/api/ai/remediation/plans` after the read-only demo posture is already
@@ -3143,11 +3155,13 @@ a new API state machine, queue contract, or verification-accounting field.
 30. Keep `/api/security/dev/reset-first-run` transport-backed and genuinely
     unauthenticated: when the dev reset route clears first-run auth it must
     also clear any env-backed auth state that feeds `/api/security/status`, so
-    the status payload flips `hasAuthentication` to `false`, preserves
-    `bootstrapTokenPath`, and allows browser-owned first-session proof to
+    the public status payload flips `hasAuthentication` to `false` without
+    disclosing the bootstrap token path or deployment fingerprint, and allows
+    browser-owned first-session proof to
     re-enter the real setup wizard instead of silently falling back to an
-    already-authenticated app state. That recovery transport may expose the
-    bootstrap token file path, but it must not emit the token value into
+    already-authenticated app state. The explicitly dev-gated reset response
+    may expose the newly created bootstrap token and file path to its authorized
+    caller, but it must not emit the token value into
     automatic runtime logs.
 31. Keep shared SSO test and metadata-preview transport fail-closed: SAML
     metadata URLs and OIDC issuer URLs must reject non-HTTP or userinfo-bearing
@@ -3976,6 +3990,13 @@ unbounded growth, bootstrap token validation must enforce a per-client retry
 limit with an explicit `Retry-After` contract, and incoming `X-Request-ID`
 headers may only round-trip when they fit the bounded safe character set used
 for logs and response headers.
+The same fail-closed auth boundary requires `/api/security/apply-restart` to
+prove normal admin/settings-write authorization after setup or a valid
+rate-limited bootstrap token during first-run state; absence of configured
+authentication is never restart authority. Quick security setup validates the
+local admin username before any runtime mutation and renders `.env` plus
+systemd assignments through structural encoders, so request text cannot create
+new environment keys, unit sections, or service directives.
 That same shared settings/licensing contract now also owns the split usage-data
 payload model. `frontend-modern/src/api/settings.ts`,
 `internal/api/router_routes_licensing.go`, and adjacent settings callers must
@@ -4292,10 +4313,8 @@ internal-versus-external navigation behavior inside API-adjacent page or hook
 owners once the contract can resolve to both in-app and public destinations.
 That same shared `internal/api/` boundary now also owns browser presentation
 policy for public-demo and commercial suppression. `/api/security/status` must
-continue to expose the raw session capability fact
-`sessionCapabilities.demoMode`, but browser shells and shared frontend stores
-now consume the explicit `presentationPolicy` payload from that same response
-as the canonical runtime contract for `demoMode`, `readOnly`,
+expose `presentationPolicy` on the public response as the canonical browser
+runtime contract for `demoMode`, `readOnly`,
 `hideCommercial`, and `hideUpgrade`. Commercial posture and billing stores
 must therefore defer their first read until that policy has resolved, so
 public demos fail closed without probing hidden commercial routes during

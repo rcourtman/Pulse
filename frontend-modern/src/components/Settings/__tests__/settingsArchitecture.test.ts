@@ -547,6 +547,25 @@ describe('settings architecture guardrails', () => {
     }
   });
 
+  it('normalizes sparse security status before deriving privileged posture', () => {
+    expect(securityAuthPanelSource).toContain('apiTokenConfigured?: boolean;');
+    expect(securityOverviewPanelSource).toContain(
+      'const postureStatus = createMemo<SecurityPostureStatus | null>',
+    );
+    expect(securityOverviewPanelSource).toContain(
+      'apiTokenConfigured: status.apiTokenConfigured === true',
+    );
+    expect(securityOverviewPanelSource).toContain(
+      'exportProtected: status.exportProtected === true',
+    );
+    expect(securityOverviewPanelSource).toContain(
+      'hasAuditLogging: status.hasAuditLogging === true',
+    );
+    expect(securityOverviewPanelSource).toContain(
+      'postureStatus() ? getSecurityHardeningActions(postureStatus()!) : []',
+    );
+  });
+
   it('keeps settings loading spinners on the shared spinner primitive', () => {
     const spinnerConsumers: Array<[string, string[]]> = [
       [

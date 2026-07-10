@@ -237,6 +237,8 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.welcome.action.verifyToken': 'Verificar token de bootstrap',
   'setup.welcome.action.verifyingToken': 'Verificando token de bootstrap...',
   'setup.welcome.copyCommandTitle': 'Copiar comando',
+  'setup.welcome.deploymentHint.choose':
+    'Ejecuta el comando que corresponda a cómo está instalado Pulse. El servidor no revela detalles del despliegue antes de desbloquear la configuración.',
   'setup.welcome.deploymentHint.containerized':
     'Pulse parece ejecutarse en un entorno contenedorizado. Ejecuta el comando desde el host que administra el contenedor para imprimir el token de configuración de un solo uso.',
   'setup.welcome.deploymentHint.direct':
@@ -257,7 +259,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'setup.welcome.error.invalidBootstrapTokenResponse': 'Token de bootstrap no válido',
   'setup.welcome.error.missingBootstrapToken': 'Ingresa el token de bootstrap',
   'setup.welcome.error.snapshotPaste':
-    'Eso parece el contenido cifrado del archivo .bootstrap_token, no el token de configuración sin procesar. Ejecuta el comando anterior y pega la cadena de token que imprime.',
+    'Eso parece el contenido cifrado del archivo .bootstrap_token, no el token de configuración sin procesar. Ejecuta el comando correspondiente y pega la cadena de token que imprime.',
   'setup.welcome.hero.coverage':
     'Conecta una API de plataforma, instala Pulse Agent o usa ambos para cobertura completa.',
   'setup.welcome.hero.step.admin': 'Crear la cuenta de administrador',
@@ -278,6 +280,8 @@ export const ES_MESSAGE_OVERRIDES = {
     'Este token de bootstrap de un solo uso solo desbloquea la configuración inicial. Ejecuta el comando anterior y pega la cadena de token que imprime. Después de la verificación, crearás la cuenta de administrador y Pulse generará el token de API de larga duración por separado.',
   'setup.welcome.tokenHelp.host':
     'Este token de bootstrap de un solo uso solo desbloquea la configuración inicial en este servidor Pulse. Ejecuta el comando anterior y pega la cadena de token que imprime. No es tu contraseña de administrador ni el token de API que usarás después de la configuración.',
+  'setup.welcome.tokenHelp.generic':
+    'Este token de bootstrap de un solo uso solo desbloquea la configuración inicial en este servidor Pulse. Ejecuta el comando correspondiente y pega la cadena que imprime. No es tu contraseña de administrador ni un token de API de larga duración.',
   'setup.welcome.tokenHelp.title': 'Qué hace este token',
   'setup.welcome.unlockTitle': 'Desbloquear configuración',
   'settings.general.appearance.title': 'Apariencia',

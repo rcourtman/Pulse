@@ -1361,6 +1361,13 @@ recovery scope, or a storage/recovery-owned secret source.
    coverage, storage-health proof, restore readiness, recovery-job state, or
    evidence that any storage or recovery endpoint was read, changed, or
    verified.
+   Public first-run security status under the same shared API tree is also
+   adjacent-only. Its sparse login-routing and presentation-policy fields are
+   not recovery configuration, and storage/recovery consumers must not expect
+   bootstrap-token paths, deployment/container identity, credential state,
+   token diagnostics, or agent URLs before authenticated privileged access.
+   Bootstrap-token authorization for the unconfigured server restart path is a
+   security boundary, not a restore credential or recovery-control primitive.
    External-agent activity may be counted for narrow tokens that satisfy the
    called manifest capability scope, including read-only context calls. That
    keeps MCP collaboration measurable, but storage and recovery must not treat

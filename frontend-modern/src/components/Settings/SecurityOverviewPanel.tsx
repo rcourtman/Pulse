@@ -16,17 +16,18 @@ import AlertTriangle from 'lucide-solid/icons/alert-triangle';
 import {
   getSecurityHardeningActions,
   type SecurityHardeningAction,
+  type SecurityPostureStatus,
 } from '@/utils/securityScorePresentation';
 
 interface SecurityStatusInfo {
   hasAuthentication: boolean;
   ssoEnabled?: boolean;
   hasProxyAuth?: boolean;
-  apiTokenConfigured: boolean;
-  exportProtected: boolean;
+  apiTokenConfigured?: boolean;
+  exportProtected?: boolean;
   unprotectedExportAllowed?: boolean;
   hasHTTPS?: boolean;
-  hasAuditLogging: boolean;
+  hasAuditLogging?: boolean;
   requiresAuth: boolean;
   publicAccess?: boolean;
   isPrivateNetwork?: boolean;
@@ -42,8 +43,18 @@ interface SecurityOverviewPanelProps {
 }
 
 export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (props) => {
+  const postureStatus = createMemo<SecurityPostureStatus | null>(() => {
+    const status = props.securityStatus();
+    if (!status) return null;
+    return {
+      ...status,
+      apiTokenConfigured: status.apiTokenConfigured === true,
+      exportProtected: status.exportProtected === true,
+      hasAuditLogging: status.hasAuditLogging === true,
+    };
+  });
   const hardeningActions = createMemo(() =>
-    props.securityStatus() ? getSecurityHardeningActions(props.securityStatus()!) : [],
+    postureStatus() ? getSecurityHardeningActions(postureStatus()!) : [],
   );
   const criticalHardeningActions = createMemo(
     () => hardeningActions().filter((action) => action.severity === 'critical').length,
@@ -120,8 +131,8 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
         </SettingsLoadingSkeleton>
       </Show>
 
-      <Show when={!props.securityStatusLoading() && props.securityStatus()}>
-        <SecurityPostureSummary status={props.securityStatus()!} embedded />
+      <Show when={!props.securityStatusLoading() && postureStatus()}>
+        <SecurityPostureSummary status={postureStatus()!} embedded />
       </Show>
 
       <Show when={!props.securityStatusLoading() && hardeningActions().length > 0}>

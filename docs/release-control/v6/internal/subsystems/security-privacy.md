@@ -1195,16 +1195,26 @@ shows no `lastUsedAt`. Refreshing or hiding a QR payload must not delete a
 token that an already paired device is actively depending on.
 That same auth/security boundary also owns browser session-capability posture:
 `internal/api/router_routes_auth_security.go` together with
-`internal/api/security_status_capabilities.go` must expose
-`/api/security/status.sessionCapabilities.demoMode` as the backend-owned
-public-demo posture signal, and security/privacy consumers must not infer demo
-state from response headers, `/api/health`, or hostname heuristics. That same
+`internal/api/security_status_capabilities.go` must expose public demo posture
+through `/api/security/status.presentationPolicy.demoMode`; authenticated
+responses may additionally expose `sessionCapabilities.demoMode` as caller
+context. Security/privacy consumers must not infer demo state from response
+headers, `/api/health`, or hostname heuristics. That authenticated
 session-capability contract now also carries the closed-shell assistant
 availability fact through
 `/api/security/status.sessionCapabilities.assistantEnabled`, so general
 settings or security surfaces do not probe `/api/settings/ai` or other
 assistant endpoints merely to decide whether dormant assistant chrome may be
 opened.
+Security status disclosure is tiered by construction: public callers receive
+only login/setup discovery, authenticated callers receive their own identity
+and capability context, and deployment, network, credential, token-hint,
+audit, proxy-configuration, and agent URL details require an admin session or
+a `settings:read` API token. Bootstrap paths and container identifiers are not
+security-status fields. Initial service restart requires either normal
+admin/settings-write authorization or the rate-limited bootstrap token, and
+quick security setup rejects structurally unsafe local usernames before it
+mutates runtime state or renders `.env` and systemd configuration.
 That same token-management boundary now also depends on one neutral
 app-runtime context owner. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
 may consume websocket-backed revocation fan-out through

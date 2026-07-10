@@ -233,10 +233,17 @@ describe('i18n foundation', () => {
   it('keeps machine-facing identifiers unchanged in first-session monitoring catalog copy', () => {
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
       const telemetryNotice = I18N_MESSAGES[locale]['setup.welcome.telemetryNotice.description'];
+      const deploymentChoice = I18N_MESSAGES[locale]['setup.welcome.deploymentHint.choose'];
+      const genericTokenHelp = I18N_MESSAGES[locale]['setup.welcome.tokenHelp.generic'];
 
       expect(telemetryNotice).toContain('Pulse');
       expect(telemetryNotice).toContain('PULSE_TELEMETRY=false');
       expect(telemetryNotice).not.toMatch(/anonymous/i);
+      expect(deploymentChoice).toContain('Pulse');
+      expect(deploymentChoice).not.toContain('Docker');
+      expect(deploymentChoice).not.toContain('LXC');
+      expect(genericTokenHelp).toContain('Pulse');
+      expect(genericTokenHelp).toContain('API');
       expect(I18N_MESSAGES[locale]['setup.welcome.deploymentHint.dockerUnnamed']).toContain(
         '<pulse-container>',
       );

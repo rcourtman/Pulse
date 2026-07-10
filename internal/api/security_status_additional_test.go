@@ -533,10 +533,13 @@ func TestSecurityStatusRestrictsSessionCapabilitiesToConfiguredAdmin(t *testing.
 
 func TestSecurityStatusIncludesDemoModeSessionCapabilities(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
-	cfg := &config.Config{DemoMode: true}
+	rawToken := "status-demo-capabilities-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := &config.Config{DemoMode: true, APITokens: []config.APITokenRecord{record}}
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 
@@ -568,7 +571,9 @@ func TestSecurityStatusIncludesDemoModeSessionCapabilities(t *testing.T) {
 
 func TestSecurityStatusIncludesAssistantAvailability(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
-	cfg := &config.Config{}
+	rawToken := "status-assistant-capabilities-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := &config.Config{APITokens: []config.APITokenRecord{record}}
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	persistence := router.aiSettingsHandler.getPersistence(context.Background())
@@ -583,6 +588,7 @@ func TestSecurityStatusIncludesAssistantAvailability(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
 

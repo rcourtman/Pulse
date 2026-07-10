@@ -1,8 +1,7 @@
-import { Component, createMemo, createSignal, onMount, onCleanup, Show } from 'solid-js';
+import { Component, createSignal, onCleanup, For, Show } from 'solid-js';
 import { t } from '@/i18n';
 import { showError, showSuccess } from '@/utils/toast';
-import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
-import { logger } from '@/utils/logger';
+import { apiFetch } from '@/utils/apiClient';
 import { copyToClipboard } from '@/utils/clipboard';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { PRIVACY_DOC_URL } from '@/utils/docsLinks';
@@ -18,51 +17,42 @@ interface WelcomeStepProps {
 
 export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
   const [isValidating, setIsValidating] = createSignal(false);
-  const [isDocker, setIsDocker] = createSignal(false);
-  const [inContainer, setInContainer] = createSignal(false);
-  const [lxcCtid, setLxcCtid] = createSignal('');
-  const [dockerContainerName, setDockerContainerName] = createSignal('');
-  const [copied, setCopied] = createSignal(false);
+  const [copiedCommand, setCopiedCommand] = createSignal<string | null>(null);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   onCleanup(() => {
     if (copiedTimer) clearTimeout(copiedTimer);
   });
 
-  const copyCommand = async () => {
-    const copied = await copyToClipboard(getTokenCommand());
+  const bootstrapCommands = () => [
+    {
+      id: 'host',
+      label: t('setup.welcome.deploymentLabel.direct'),
+      command: 'sudo pulse bootstrap-token',
+    },
+    {
+      id: 'docker',
+      label: t('setup.welcome.deploymentLabel.docker'),
+      command: 'docker exec <pulse-container> /app/pulse bootstrap-token',
+    },
+    {
+      id: 'lxc',
+      label: t('setup.welcome.deploymentLabel.lxc'),
+      command: 'pct exec <ctid> -- pulse bootstrap-token',
+    },
+  ];
+
+  const copyCommand = async (id: string, command: string) => {
+    const copied = await copyToClipboard(command);
     if (copied) {
-      setCopied(true);
+      setCopiedCommand(id);
       if (copiedTimer) clearTimeout(copiedTimer);
-      copiedTimer = setTimeout(() => setCopied(false), 2000);
+      copiedTimer = setTimeout(() => setCopiedCommand(null), 2000);
       showSuccess(t('setup.welcome.success.commandCopied'));
     } else {
       showError(t('setup.welcome.error.copyCommandFailed'));
     }
   };
-
-  // Fetch bootstrap info on mount
-  const fetchBootstrapInfo = async () => {
-    try {
-      const data = await apiFetchJSON<{
-        bootstrapTokenPath?: string;
-        isDocker?: boolean;
-        inContainer?: boolean;
-        lxcCtid?: string;
-        dockerContainerName?: string;
-      }>('/api/security/status');
-      setIsDocker(data?.isDocker || false);
-      setInContainer(data?.inContainer || false);
-      setLxcCtid(data?.lxcCtid || '');
-      setDockerContainerName(data?.dockerContainerName || '');
-    } catch (error) {
-      logger.error('Failed to fetch bootstrap info:', error);
-    }
-  };
-
-  onMount(() => {
-    void fetchBootstrapInfo();
-  });
 
   const looksLikeBootstrapTokenSnapshot = (value: string) => {
     const trimmed = value.trim();
@@ -123,56 +113,6 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
     }
   };
 
-  const getTokenCommand = () => {
-    if (isDocker()) {
-      return `docker exec ${dockerContainerName() || '<pulse-container>'} /app/pulse bootstrap-token`;
-    }
-    if (inContainer() && lxcCtid()) {
-      return `pct exec ${lxcCtid()} -- pulse bootstrap-token`;
-    }
-    if (inContainer()) {
-      return `pct exec <ctid> -- pulse bootstrap-token`;
-    }
-    return `sudo pulse bootstrap-token`;
-  };
-
-  const deploymentLabel = createMemo(() => {
-    if (isDocker()) {
-      return t('setup.welcome.deploymentLabel.docker');
-    }
-    if (inContainer() && lxcCtid()) {
-      return t('setup.welcome.deploymentLabel.lxc');
-    }
-    if (inContainer()) {
-      return t('setup.welcome.deploymentLabel.containerized');
-    }
-    return t('setup.welcome.deploymentLabel.direct');
-  });
-
-  const deploymentHint = createMemo(() => {
-    if (isDocker()) {
-      return dockerContainerName()
-        ? t('setup.welcome.deploymentHint.dockerNamed', {
-            containerName: dockerContainerName(),
-          })
-        : t('setup.welcome.deploymentHint.dockerUnnamed');
-    }
-    if (inContainer() && lxcCtid()) {
-      return t('setup.welcome.deploymentHint.lxc', { ctid: lxcCtid() });
-    }
-    if (inContainer()) {
-      return t('setup.welcome.deploymentHint.containerized');
-    }
-    return t('setup.welcome.deploymentHint.direct');
-  });
-
-  const unlockHelp = createMemo(() => {
-    if (isDocker()) {
-      return t('setup.welcome.tokenHelp.docker');
-    }
-    return t('setup.welcome.tokenHelp.host');
-  });
-
   return (
     <div class="text-center relative">
       <div class="mb-8 relative z-10">
@@ -218,36 +158,38 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
           <h3 class="text-lg font-semibold text-base-content mb-2 tracking-tight">
             {t('setup.welcome.unlockTitle')}
           </h3>
-          <p class="text-sm text-muted mb-5">{deploymentHint()}</p>
+          <p class="text-sm text-muted mb-5">{t('setup.welcome.deploymentHint.choose')}</p>
 
-          <div class="mb-5">
-            <div class="bg-base rounded-md p-4 font-mono text-sm text-emerald-400 border border-border-subtle flex items-center justify-between">
-              <div class="flex items-center space-x-3 overflow-x-auto scrollbar-hide">
-                <Terminal class="w-4 h-4 flex-shrink-0" />
-                <code class="whitespace-nowrap select-all">{getTokenCommand()}</code>
-              </div>
-              <button
-                onClick={copyCommand}
-                class="ml-4 flex-shrink-0 p-2 rounded-md bg-surface hover:bg-slate-700 text-slate-300 hover:text-white transition-colors focus:outline-none focus:ring-0"
-                title={t('setup.welcome.copyCommandTitle')}
-              >
-                <Show when={copied()} fallback={<Copy class="w-4 h-4" />}>
-                  <Check class="w-4 h-4 text-emerald-400" />
-                </Show>
-              </button>
-            </div>
-            <div class="mt-2 flex items-center gap-2 text-[11px] text-muted">
-              <span class="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 font-semibold text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
-                {deploymentLabel()}
-              </span>
-            </div>
+          <div class="mb-5 space-y-2">
+            <For each={bootstrapCommands()}>
+              {(item) => (
+                <div class="bg-base rounded-md border border-border-subtle px-3 py-2.5">
+                  <div class="mb-1.5 text-[11px] font-semibold text-muted">{item.label}</div>
+                  <div class="flex items-center justify-between gap-3 font-mono text-sm text-emerald-400">
+                    <div class="flex min-w-0 items-center space-x-3 overflow-x-auto scrollbar-hide">
+                      <Terminal class="h-4 w-4 flex-shrink-0" />
+                      <code class="whitespace-nowrap select-all">{item.command}</code>
+                    </div>
+                    <button
+                      onClick={() => void copyCommand(item.id, item.command)}
+                      class="flex-shrink-0 rounded-md bg-surface p-2 text-slate-300 transition-colors hover:bg-slate-700 hover:text-white focus:outline-none focus:ring-0"
+                      title={`${t('setup.welcome.copyCommandTitle')}: ${item.label}`}
+                    >
+                      <Show when={copiedCommand() === item.id} fallback={<Copy class="h-4 w-4" />}>
+                        <Check class="h-4 w-4 text-emerald-400" />
+                      </Show>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </For>
           </div>
 
           <div class="mb-5 text-left">
             <div class="text-[11px] font-semibold uppercase tracking-wide text-muted">
               {t('setup.welcome.tokenHelp.title')}
             </div>
-            <p class="mt-1 text-sm text-muted">{unlockHelp()}</p>
+            <p class="mt-1 text-sm text-muted">{t('setup.welcome.tokenHelp.generic')}</p>
           </div>
 
           <div class="space-y-3">
