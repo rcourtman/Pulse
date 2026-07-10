@@ -19,20 +19,22 @@ import { getSimpleStatusIndicator } from '@/utils/status';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { getWorkloadTableLayoutMode } from '@/components/Workloads/guestRowModel';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { DOCKER_QUERY_PARAMS } from '@/routing/resourceLinks';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableMetricFallback,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -57,9 +59,12 @@ import {
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
 import {
+  DOCKER_CONTAINER_SORTABLE_COLUMN_IDS,
   getDockerContainerColumnWidthStyle,
+  getDockerContainerSortKey,
   getDockerContainerTableMinWidthClass,
   getDockerContainerVisibleColumnsForLayout,
+  type DockerContainerSortKey,
   type DockerContainerTableColumn,
 } from './dockerContainerTableModel';
 import type { DockerContainerUpdateStatus } from '@/types/api';
@@ -199,6 +204,52 @@ const containerUpdateAction = (
   };
 };
 
+// Scalar per column that user-controlled sorting orders on. '—' style empty
+// renders map to null so rows without the datum sink to the bottom.
+const getDockerContainerSortValue = (
+  resource: Resource,
+  key: DockerContainerSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'container':
+      return dockerResourceName(resource);
+    case 'host': {
+      const host = dockerHostName(resource);
+      return host === '—' ? null : host;
+    }
+    case 'runtime': {
+      const runtime = runtimeSummary(resource);
+      return runtime === '—' ? null : runtime;
+    }
+    case 'image':
+      return asTrimmedString(resource.docker?.image) || null;
+    case 'state': {
+      const state = containerState(resource);
+      return state === '—' ? null : state;
+    }
+    case 'cpu':
+      return getPlatformTableFiniteMetric(resource.cpu?.current) ?? null;
+    case 'memory': {
+      const total = getPlatformTableFiniteMetric(resource.memory?.total) ?? 0;
+      if (total > 0) {
+        return ((getPlatformTableFiniteMetric(resource.memory?.used) ?? 0) / total) * 100;
+      }
+      return getPlatformTableFiniteMetric(resource.memory?.current) ?? null;
+    }
+    case 'restarts':
+      return typeof resource.docker?.restartCount === 'number'
+        ? resource.docker.restartCount
+        : null;
+    case 'updates': {
+      const label = updateStatusLabel(resource);
+      return label === '—' ? null : label;
+    }
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 const DOCKER_CONTAINER_SEARCH_TIPS = {
   popoverId: 'docker-containers-search-help',
   intro: 'Filter containers by name, image, compose stack, or label.',
@@ -299,7 +350,19 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
       },
       { replace: true },
     );
-  const sortedRows = createMemo(() => [...scopedRows()].sort(compareDockerContainers));
+  // User-controlled sorting layered over the attention-first default: rows
+  // are pre-sorted by the status compare, so a user sort keeps that order for
+  // ties and the table falls straight back to it when the sort is cleared.
+  // Sorting reorders rows only; grouped mode re-buckets the sorted rows, so
+  // the sort applies within each host group and stays orthogonal to grouping.
+  const sort = createPlatformTableSortState({
+    storageKey: 'dockerContainers',
+    sortKeys: DOCKER_CONTAINER_SORTABLE_COLUMN_IDS,
+    descendingFirst: ['cpu', 'memory', 'restarts'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows([...scopedRows()].sort(compareDockerContainers), getDockerContainerSortValue),
+  );
   // Grouped-by-host view, mirroring the workloads table: preference persists
   // locally (not in the URL) and only applies once the fleet spans more than
   // one host; a single-host list gains nothing from a group header.
@@ -708,12 +771,16 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
               <>
                 <For each={visibleColumns()}>
                   {(column) => (
-                    <TableHead class={getPlatformTableHeadClassForKind(column.kind)}>
+                    <PlatformSortableTableHead
+                      kind={column.kind}
+                      sort={sort}
+                      sortKey={getDockerContainerSortKey(column.id)}
+                    >
                       <Show when={column.id === 'memory'} fallback={<>{column.label}</>}>
                         <span class="md:hidden">Mem</span>
                         <span class="hidden md:inline">Memory</span>
                       </Show>
-                    </TableHead>
+                    </PlatformSortableTableHead>
                   )}
                 </For>
               </>

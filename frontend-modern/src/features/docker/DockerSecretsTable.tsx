@@ -1,22 +1,55 @@
-import { For, Show, type Component } from 'solid-js';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { For, Show, createMemo, type Component } from 'solid-js';
+import { TableCell, TableRow } from '@/components/shared/Table';
+import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
+  getPlatformTableDateTimeSortValue,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   DockerResourceNameCell,
   dockerHostName,
   dockerLabelsSummary,
+  dockerResourceName,
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
 import { filterDockerResources, type DockerResourceStatusFilter } from './dockerPageModel';
+import type { Resource } from '@/types/resource';
+
+const DOCKER_SECRET_SORT_KEYS = ['secret', 'driver', 'template', 'created', 'host'] as const;
+
+type DockerSecretSortKey = (typeof DOCKER_SECRET_SORT_KEYS)[number];
+
+const getDockerSecretSortValue = (
+  resource: Resource,
+  key: DockerSecretSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'secret':
+      return dockerResourceName(resource);
+    case 'driver':
+      return asTrimmedString(resource.docker?.driver) || null;
+    case 'template':
+      return asTrimmedString(resource.docker?.templatingDriver) || null;
+    case 'created':
+      return getPlatformTableDateTimeSortValue(resource.docker?.objectCreatedAt);
+    case 'host': {
+      const host = dockerHostName(resource);
+      return host === '—' ? null : host;
+    }
+    default:
+      key satisfies never;
+      return null;
+  }
+};
 
 export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => {
   const tableState = createPlatformTableFilterState({
@@ -24,6 +57,12 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
     initialStatus: 'all' as DockerResourceStatusFilter,
     filter: filterDockerResources,
   });
+  const sort = createPlatformTableSortState({
+    storageKey: 'dockerSecrets',
+    sortKeys: DOCKER_SECRET_SORT_KEYS,
+    descendingFirst: ['created'],
+  });
+  const sortedRows = createMemo(() => sort.sortRows(tableState.filtered(), getDockerSecretSortValue));
 
   return (
     <Show
@@ -66,35 +105,58 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
             tableClass="min-w-full table-fixed text-xs md:min-w-[1080px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[24%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="secret"
+                  class="md:w-[24%]"
+                >
                   Secret
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="driver"
+                  class="md:w-[14%]"
+                >
                   Driver
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="template"
+                  class="hidden md:table-cell md:w-[14%]"
                 >
                   Template
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="created"
+                  class="hidden md:table-cell md:w-[14%]"
                 >
                   Created
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[18%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[18%]"
                 >
                   Labels
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[16%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="host"
+                  class="md:w-[16%]"
+                >
                   Host
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => (
                     <TableRow class="text-[11px] sm:text-xs" data-docker-secret-row={resource.id}>
                       <DockerResourceNameCell resource={resource} />

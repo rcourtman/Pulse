@@ -25,6 +25,29 @@ export type DockerContainerTableColumn = {
   kind: PlatformTableColumnKind;
 };
 
+// Columns a user can sort by. The multi-value summary columns (ports,
+// networks, mounts) and the actions column carry no scalar to order on.
+export const DOCKER_CONTAINER_SORTABLE_COLUMN_IDS = [
+  'container',
+  'host',
+  'runtime',
+  'image',
+  'state',
+  'cpu',
+  'memory',
+  'restarts',
+  'updates',
+] as const satisfies readonly DockerContainerTableColumnId[];
+
+export type DockerContainerSortKey = (typeof DOCKER_CONTAINER_SORTABLE_COLUMN_IDS)[number];
+
+export const getDockerContainerSortKey = (
+  columnId: DockerContainerTableColumnId,
+): DockerContainerSortKey | undefined =>
+  (DOCKER_CONTAINER_SORTABLE_COLUMN_IDS as readonly string[]).includes(columnId)
+    ? (columnId as DockerContainerSortKey)
+    : undefined;
+
 const DOCKER_CONTAINER_TABLE_LAYOUT_ORDER: Record<WorkloadTableLayoutMode, number> = {
   mobile: 0,
   tablet: 1,

@@ -14,10 +14,11 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { type FilterOption as PlatformTableFilterOption } from '@/components/shared/FilterButtonGroup';
 import { FilterBar, filterChipStatusDot, type FilterDef } from '@/components/shared/FilterBar';
 import { type SearchInputProps } from '@/components/shared/SearchInput';
-import { Table, TableBody, TableHeader, TableRow } from '@/components/shared/Table';
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import { TableCard } from '@/components/shared/TableCard';
 import { TableCardHeader } from '@/components/shared/TableCardHeader';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import type { Resource } from '@/types/resource';
 import { formatBytes, formatRelativeTime, formatUptime } from '@/utils/format';
@@ -184,6 +185,154 @@ export const getPlatformTableHeadClassForKind = (kind: PlatformTableColumnKind):
 
 export const getPlatformTableCellClassForKind = (kind: PlatformTableColumnKind): string =>
   getPlatformTableCellClass(getPlatformColumnAlign(kind));
+
+// --- User-controlled column sorting ----------------------------------------
+//
+// Platform tables keep their built-in attention-first ordering until the user
+// clicks a sortable header. Clicking cycles per column: first-click direction
+// → flipped → back to the built-in order. The chosen column and direction
+// persist per table via usePersistentSignal, so the preference survives
+// reloads. Sorting only reorders rows, so it stays orthogonal to grouping: a
+// grouped table re-buckets the sorted rows, which sorts rows within each
+// group without changing the group order.
+
+export type PlatformTableSortDirection = 'asc' | 'desc';
+
+// null means "no value for this column" — those rows sink to the bottom in
+// either direction so real values stay scannable.
+export type PlatformTableSortValue = string | number | null;
+
+const isEmptyPlatformTableSortValue = (value: PlatformTableSortValue): boolean =>
+  value === null || (typeof value === 'number' && Number.isNaN(value));
+
+const comparePlatformTableSortValues = (
+  a: PlatformTableSortValue,
+  b: PlatformTableSortValue,
+): number => {
+  const aEmpty = isEmptyPlatformTableSortValue(a);
+  const bEmpty = isEmptyPlatformTableSortValue(b);
+  if (aEmpty && bEmpty) return 0;
+  if (aEmpty) return 1;
+  if (bEmpty) return -1;
+  if (typeof a === 'number' && typeof b === 'number') return a === b ? 0 : a < b ? -1 : 1;
+  return String(a).localeCompare(String(b), undefined, { sensitivity: 'base' });
+};
+
+// Timestamp columns (Created / Started) sort numerically via this helper so
+// string timestamps compare chronologically instead of lexically.
+export const getPlatformTableDateTimeSortValue = (
+  value: PlatformTableDateTimeValueInput,
+): number | null => {
+  const parsed = resolvePlatformTableDateTime(value);
+  return parsed ? parsed.getTime() : null;
+};
+
+export type PlatformTableSortState<SortKey extends string> = {
+  sortKey: () => SortKey | null;
+  sortDirection: () => PlatformTableSortDirection;
+  handleSort: (key: SortKey) => void;
+  getAriaSort: (key: SortKey) => 'ascending' | 'descending' | undefined;
+  sortRows: <Row>(
+    rows: readonly Row[],
+    getSortValue: (row: Row, key: SortKey) => PlatformTableSortValue,
+  ) => readonly Row[];
+};
+
+export function createPlatformTableSortState<SortKey extends string>(options: {
+  // Storage namespace, e.g. 'dockerContainers' → dockerContainersSortKey /
+  // dockerContainersSortDirection in localStorage.
+  storageKey: string;
+  sortKeys: readonly SortKey[];
+  // Columns whose first click sorts descending — metrics and counts read
+  // "biggest on top". Everything else starts ascending.
+  descendingFirst?: readonly SortKey[];
+}): PlatformTableSortState<SortKey> {
+  const isSortKey = (value: string): value is SortKey =>
+    (options.sortKeys as readonly string[]).includes(value);
+  const [sortKey, setSortKey] = usePersistentSignal<SortKey | null>(
+    `${options.storageKey}SortKey`,
+    null,
+    // A persisted key for a renamed or removed column falls back to the
+    // table's built-in order instead of throwing the sort into limbo.
+    { deserialize: (raw) => (isSortKey(raw) ? raw : null) },
+  );
+  const [sortDirection, setSortDirection] = usePersistentSignal<PlatformTableSortDirection>(
+    `${options.storageKey}SortDirection`,
+    'asc',
+    { deserialize: (raw) => (raw === 'desc' ? 'desc' : 'asc') },
+  );
+  const descendingFirst = new Set<SortKey>(options.descendingFirst ?? []);
+  const firstClickDirection = (key: SortKey): PlatformTableSortDirection =>
+    descendingFirst.has(key) ? 'desc' : 'asc';
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey() === key) {
+      if (sortDirection() === firstClickDirection(key)) {
+        setSortDirection(firstClickDirection(key) === 'asc' ? 'desc' : 'asc');
+      } else {
+        setSortKey(null);
+        setSortDirection('asc');
+      }
+      return;
+    }
+    setSortKey(() => key);
+    setSortDirection(firstClickDirection(key));
+  };
+
+  const getAriaSort = (key: SortKey): 'ascending' | 'descending' | undefined => {
+    if (sortKey() !== key) return undefined;
+    return sortDirection() === 'asc' ? 'ascending' : 'descending';
+  };
+
+  const sortRows = <Row,>(
+    rows: readonly Row[],
+    getSortValue: (row: Row, key: SortKey) => PlatformTableSortValue,
+  ): readonly Row[] => {
+    const key = sortKey();
+    if (!key) return rows;
+    const dir = sortDirection() === 'asc' ? 1 : -1;
+    const decorated = rows.map((row) => [getSortValue(row, key), row] as const);
+    decorated.sort(([a], [b]) => {
+      // Missing values stay last in either direction.
+      if (isEmptyPlatformTableSortValue(a) || isEmptyPlatformTableSortValue(b)) {
+        return comparePlatformTableSortValues(a, b);
+      }
+      return comparePlatformTableSortValues(a, b) * dir;
+    });
+    return decorated.map(([, row]) => row);
+  };
+
+  return { sortKey, sortDirection, handleSort, getAriaSort, sortRows };
+}
+
+export function PlatformSortableTableHead<SortKey extends string>(props: {
+  kind: PlatformTableColumnKind;
+  sort: PlatformTableSortState<SortKey>;
+  // Omit to render a non-sortable header with the same canonical alignment.
+  sortKey?: SortKey;
+  class?: string;
+  children: JSX.Element;
+}) {
+  const isSorted = () => props.sortKey !== undefined && props.sort.sortKey() === props.sortKey;
+  const handleClick = () => {
+    const key = props.sortKey;
+    if (key !== undefined) props.sort.handleSort(key);
+  };
+  return (
+    <TableHead
+      class={`${getPlatformTableHeadClassForKind(props.kind)} ${
+        props.sortKey !== undefined ? 'cursor-pointer select-none hover:bg-surface-hover' : ''
+      } ${props.class ?? ''}`
+        .replace(/\s+/g, ' ')
+        .trim()}
+      aria-sort={props.sortKey !== undefined ? props.sort.getAriaSort(props.sortKey) : undefined}
+      onClick={handleClick}
+    >
+      {props.children}
+      {isSorted() && (props.sort.sortDirection() === 'asc' ? ' ▲' : ' ▼')}
+    </TableHead>
+  );
+}
 
 export const formatPlatformTableTextValue = (value: unknown, emptyText = '—'): string =>
   asTrimmedString(value) || emptyText;

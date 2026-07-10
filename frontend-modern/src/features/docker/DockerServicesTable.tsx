@@ -1,16 +1,18 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableNumberValue,
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource } from '@/types/resource';
 import {
@@ -68,6 +70,47 @@ const formatServiceUpdate = (
   return { label, title };
 };
 
+const DOCKER_SERVICE_SORT_KEYS = [
+  'service',
+  'stack',
+  'image',
+  'mode',
+  'desired',
+  'running',
+  'update',
+  'host',
+] as const;
+
+type DockerServiceSortKey = (typeof DOCKER_SERVICE_SORT_KEYS)[number];
+
+const getDockerServiceSortValue = (
+  service: Resource,
+  key: DockerServiceSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'service':
+      return asTrimmedString(service.name) || service.id;
+    case 'stack':
+      return dockerServiceStack(service) || null;
+    case 'image':
+      return asTrimmedString(service.docker?.image) || null;
+    case 'mode':
+      return asTrimmedString(service.docker?.mode) || null;
+    case 'desired':
+      // Rendered as 0 when unreported, so sort on the same number.
+      return service.docker?.desiredTasks ?? 0;
+    case 'running':
+      return service.docker?.runningTasks ?? 0;
+    case 'update':
+      return formatServiceUpdate(service.docker?.serviceUpdate).label;
+    case 'host':
+      return asTrimmedString(service.docker?.hostname) || null;
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const DockerServicesTable: Component<{
   resources: Resource[];
   sourceCount?: number;
@@ -82,7 +125,14 @@ export const DockerServicesTable: Component<{
     initialStatus: 'all' as DockerResourceStatusFilter,
     filter: filterDockerResources,
   });
-  const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareDockerServices));
+  const sort = createPlatformTableSortState({
+    storageKey: 'dockerServices',
+    sortKeys: DOCKER_SERVICE_SORT_KEYS,
+    descendingFirst: ['desired', 'running'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows([...tableState.filtered()].sort(compareDockerServices), getDockerServiceSortValue),
+  );
 
   const hasFilteredSourceRows = () => (props.sourceCount ?? props.resources.length) > 0;
 
@@ -141,45 +191,77 @@ export const DockerServicesTable: Component<{
                     Host get middle slices for rollout state, port lists, and
                     hostnames. Mobile widths are unchanged.
                   */}
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[16%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="service"
+                  class="md:w-[16%]"
+                >
                   Service
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="stack"
+                  class="hidden md:table-cell md:w-[9%]"
                 >
                   Stack
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[19%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="image"
+                  class="hidden md:table-cell md:w-[19%]"
                 >
                   Image
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[8%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="mode"
+                  class="md:w-[8%]"
+                >
                   Mode
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="desired"
+                  class="hidden md:table-cell md:w-[8%]"
                 >
                   Desired
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="running"
+                  class="md:w-[8%]"
+                >
                   Running
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="update"
+                  class="hidden md:table-cell md:w-[12%]"
                 >
                   Update
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[14%]"
                 >
                   Ports
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="host"
+                  class="hidden md:table-cell md:w-[10%]"
                 >
                   Host
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={

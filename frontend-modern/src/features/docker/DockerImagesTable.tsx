@@ -1,13 +1,15 @@
-import { For, Show, type Component } from 'solid-js';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { For, Show, createMemo, type Component } from 'solid-js';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -37,6 +39,10 @@ const updateToneClass: Record<DockerImageUpdateTone, string> = {
   muted: 'bg-surface-hover text-muted',
 };
 
+const DOCKER_IMAGE_SORT_KEYS = ['image', 'host', 'usedBy', 'size', 'update'] as const;
+
+type DockerImageSortKey = (typeof DOCKER_IMAGE_SORT_KEYS)[number];
+
 export const DockerImagesTable: Component<
   DockerNativeTableProps & { relatedContainers?: Resource[] }
 > = (props) => {
@@ -47,6 +53,44 @@ export const DockerImagesTable: Component<
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-image-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
+  const sort = createPlatformTableSortState({
+    storageKey: 'dockerImages',
+    sortKeys: DOCKER_IMAGE_SORT_KEYS,
+    descendingFirst: ['size'],
+  });
+  // Closure rather than a module-level accessor: the operational columns
+  // (Used by / Update check) derive from props.relatedContainers.
+  const getImageSortValue = (
+    resource: Resource,
+    key: DockerImageSortKey,
+  ): PlatformTableSortValue => {
+    switch (key) {
+      case 'image':
+        return dockerResourceName(resource);
+      case 'host': {
+        const host = dockerHostName(resource);
+        return host === '—' ? null : host;
+      }
+      case 'usedBy': {
+        const summary = getDockerImageOperationalPresentation(
+          resource,
+          props.relatedContainers ?? [],
+        ).consumerSummary;
+        return summary && summary !== '—' ? summary : null;
+      }
+      case 'size':
+        return typeof resource.docker?.sizeBytes === 'number' && resource.docker.sizeBytes > 0
+          ? resource.docker.sizeBytes
+          : null;
+      case 'update':
+        return getDockerImageOperationalPresentation(resource, props.relatedContainers ?? [])
+          .updateLabel;
+      default:
+        key satisfies never;
+        return null;
+    }
+  };
+  const sortedRows = createMemo(() => sort.sortRows(tableState.filtered(), getImageSortValue));
 
   return (
     <Show
@@ -89,28 +133,51 @@ export const DockerImagesTable: Component<
             tableClass="min-w-full table-fixed text-xs md:min-w-[880px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[30%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="image"
+                  class="md:w-[30%]"
+                >
                   Image
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[18%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="host"
+                  class="md:w-[18%]"
+                >
                   Host
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[24%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="usedBy"
+                  class="md:w-[24%]"
+                >
                   Used by
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[12%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="size"
+                  class="md:w-[12%]"
                 >
                   Size
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('badge')} md:w-[16%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="badge"
+                  sort={sort}
+                  sortKey="update"
+                  class="md:w-[16%]"
+                >
                   Update check
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => {
                     const operational = () =>
                       getDockerImageOperationalPresentation(

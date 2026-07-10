@@ -1,18 +1,22 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
+import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   DockerResourceNameCell,
   dockerByteValue,
   dockerCpuValue,
+  dockerResourceName,
   dockerTextValue,
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
@@ -22,6 +26,59 @@ import {
   mapDockerSwarmNodeStatus,
   type DockerResourceStatusFilter,
 } from './dockerPageModel';
+import type { Resource } from '@/types/resource';
+
+const DOCKER_SWARM_NODE_SORT_KEYS = [
+  'node',
+  'role',
+  'availability',
+  'reachability',
+  'engine',
+  'cpus',
+  'memory',
+  'address',
+] as const;
+
+type DockerSwarmNodeSortKey = (typeof DOCKER_SWARM_NODE_SORT_KEYS)[number];
+
+const getDockerSwarmNodeSortValue = (
+  resource: Resource,
+  key: DockerSwarmNodeSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'node':
+      return dockerResourceName(resource);
+    case 'role':
+      return asTrimmedString(resource.docker?.nodeRole) || null;
+    case 'availability':
+      return asTrimmedString(resource.docker?.availability) || null;
+    case 'reachability':
+      return (
+        asTrimmedString(
+          resource.docker?.leader ? 'leader' : resource.docker?.managerReachability,
+        ) || null
+      );
+    case 'engine':
+      return (
+        asTrimmedString(resource.docker?.engineVersion || resource.docker?.runtimeVersion) || null
+      );
+    case 'cpus':
+      return typeof resource.docker?.nanoCpus === 'number' && resource.docker.nanoCpus > 0
+        ? resource.docker.nanoCpus
+        : null;
+    case 'memory':
+      return typeof resource.docker?.memoryBytes === 'number' && resource.docker.memoryBytes > 0
+        ? resource.docker.memoryBytes
+        : null;
+    case 'address':
+      return (
+        asTrimmedString(resource.docker?.address || resource.docker?.managerAddress) || null
+      );
+    default:
+      key satisfies never;
+      return null;
+  }
+};
 
 export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) => {
   const tableState = createPlatformTableFilterState({
@@ -29,7 +86,17 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
     initialStatus: 'all' as DockerResourceStatusFilter,
     filter: filterDockerResources,
   });
-  const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareDockerSwarmNodes));
+  const sort = createPlatformTableSortState({
+    storageKey: 'dockerSwarmNodes',
+    sortKeys: DOCKER_SWARM_NODE_SORT_KEYS,
+    descendingFirst: ['cpus', 'memory'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(
+      [...tableState.filtered()].sort(compareDockerSwarmNodes),
+      getDockerSwarmNodeSortValue,
+    ),
+  );
 
   return (
     <Show
@@ -72,40 +139,70 @@ export const DockerSwarmNodesTable: Component<DockerNativeTableProps> = (props) 
             tableClass="min-w-full table-fixed text-xs md:min-w-[1120px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[20%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="node"
+                  class="md:w-[20%]"
+                >
                   Node
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[10%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="role"
+                  class="md:w-[10%]"
+                >
                   Role
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="availability"
+                  class="md:w-[12%]"
+                >
                   Availability
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="reachability"
+                  class="hidden md:table-cell md:w-[14%]"
                 >
                   Reachability
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[16%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="engine"
+                  class="hidden md:table-cell md:w-[16%]"
                 >
                   Engine
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="cpus"
+                  class="hidden md:table-cell md:w-[8%]"
                 >
                   CPUs
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="memory"
+                  class="md:w-[10%]"
                 >
                   Memory
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="address"
+                  class="hidden md:table-cell md:w-[10%]"
                 >
                   Address
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={

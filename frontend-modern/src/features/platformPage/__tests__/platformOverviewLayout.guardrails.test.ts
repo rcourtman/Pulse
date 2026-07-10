@@ -187,7 +187,14 @@ describe('platform overview layout guardrails', () => {
 
     for (const source of platformShellTableSources) {
       expect(source).toContain('PlatformTableShell');
-      expect(source).toContain('getPlatformTableHeadClass');
+      // Headers resolve their canonical kind-based class either directly
+      // (getPlatformTableHeadClassForKind) or through the shared sortable
+      // header component, which applies the same helper internally.
+      expect(
+        source.includes('getPlatformTableHeadClass') ||
+          source.includes('PlatformSortableTableHead'),
+        'table headers must use getPlatformTableHeadClassForKind or PlatformSortableTableHead',
+      ).toBe(true);
       expect(source).toContain('getPlatformTableCellClass');
       expect(source).not.toContain('TableCard class={PLATFORM_TABLE_CARD_CLASS}');
       expect(source).not.toContain('TableCardHeader');
@@ -380,21 +387,15 @@ describe('platform overview layout guardrails', () => {
   });
 
   it('keeps mobile host tables focused on useful operational columns', () => {
-    // Assertions use the canonical kind-based helpers
-    // (getPlatformTableHeadClassForKind('<kind>')) so the platform overview
-    // tables keep aligned metric and numeric columns across providers.
-    expect(dockerHostsTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Host/,
-    );
-    expect(dockerHostsTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('metric-bar'\)[\s\S]{0,200}?CPU/,
-    );
-    expect(dockerHostsTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('metric-bar'\)[\s\S]{0,200}?Memory/,
-    );
-    expect(dockerHostsTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('metric-bar'\)[\s\S]{0,200}?Disk/,
-    );
+    // Assertions use the canonical kind-based helpers — either
+    // getPlatformTableHeadClassForKind('<kind>') on a raw TableHead or the
+    // kind="<kind>" prop on the shared PlatformSortableTableHead — so the
+    // platform overview tables keep aligned metric and numeric columns
+    // across providers.
+    expect(dockerHostsTableSource).toMatch(/kind="name"[\s\S]{0,200}?Host/);
+    expect(dockerHostsTableSource).toMatch(/kind="metric-bar"[\s\S]{0,200}?CPU/);
+    expect(dockerHostsTableSource).toMatch(/kind="metric-bar"[\s\S]{0,300}?Memory/);
+    expect(dockerHostsTableSource).toMatch(/kind="metric-bar"[\s\S]{0,200}?Disk/);
 
     expect(kubernetesClustersTableSource).toMatch(
       /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Cluster/,

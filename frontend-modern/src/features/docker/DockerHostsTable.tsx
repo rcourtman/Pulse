@@ -5,7 +5,7 @@ import { DockerHostDrawer } from './DockerHostDrawer';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
 import { StackedDiskBar } from '@/components/Workloads/StackedDiskBar';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { getAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -15,16 +15,18 @@ import { normalizeDiskArray } from '@/utils/format';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableMetricFallback,
   PlatformTableEmptyState,
   PlatformTableTemperatureValue,
   PlatformTableShell,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import { PlatformResourceDetailToggleButton } from '@/features/platformPage/PlatformResourceDetailTableRow';
 import type { Disk } from '@/types/api';
@@ -66,6 +68,20 @@ const memoryPercentOnlyFor = (host: Resource): number | undefined => {
   );
 };
 
+// Host telemetry the Docker agent reports beyond the typed Resource docker
+// block. One cast site shared by the row renderer and the sort accessor.
+type DockerHostDockerMeta = NonNullable<Resource['docker']> & {
+  runtime?: string;
+  runtimeVersion?: string;
+  containerCount?: number;
+  uptimeSeconds?: number;
+  temperature?: number;
+  swarm?: { nodeRole?: string };
+};
+
+const dockerHostMeta = (host: Resource): DockerHostDockerMeta | undefined =>
+  host.docker as DockerHostDockerMeta | undefined;
+
 const aggregateDiskFor = (host: Resource): Disk | undefined => {
   if (!host.disk) return undefined;
   const total = getPlatformTableFiniteMetric(host.disk.total) ?? 0;
@@ -78,6 +94,59 @@ const aggregateDiskFor = (host: Resource): Disk | undefined => {
       : (getPlatformTableFiniteMetric(host.disk.current) ?? 0);
   if (total <= 0 && usage <= 0) return undefined;
   return { total, used, free, usage };
+};
+
+const DOCKER_HOST_SORT_KEYS = [
+  'host',
+  'system',
+  'version',
+  'containers',
+  'cpu',
+  'memory',
+  'disk',
+  'uptime',
+  'temp',
+  'swarm',
+] as const;
+
+type DockerHostSortKey = (typeof DOCKER_HOST_SORT_KEYS)[number];
+
+const getDockerHostSortValue = (
+  host: Resource,
+  key: DockerHostSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'host':
+      return asTrimmedString(host.name) || host.id;
+    case 'system':
+      return getDockerHostSystemBadge(host)?.label ?? null;
+    case 'version':
+      return asTrimmedString(dockerHostMeta(host)?.runtimeVersion) || null;
+    case 'containers':
+      return dockerHostMeta(host)?.containerCount ?? null;
+    case 'cpu':
+      return percentFromMetric(host.cpu) ?? null;
+    case 'memory': {
+      const total = memoryTotalFor(host);
+      if (total > 0) return (memoryUsedFor(host) / total) * 100;
+      return memoryPercentOnlyFor(host) ?? null;
+    }
+    case 'disk':
+      return aggregateDiskFor(host)?.usage ?? null;
+    case 'uptime':
+      return host.uptime ?? dockerHostMeta(host)?.uptimeSeconds ?? null;
+    case 'temp': {
+      const temp = host.temperature ?? dockerHostMeta(host)?.temperature;
+      return typeof temp === 'number' && Number.isFinite(temp) && temp > 0 ? temp : null;
+    }
+    case 'swarm': {
+      if (!hasDockerSwarmEvidence(host)) return null;
+      return asTrimmedString(dockerHostMeta(host)?.swarm?.nodeRole) || null;
+    }
+    default:
+      key satisfies never;
+      return null;
+  }
 };
 
 export const DockerHostsTable: Component<{
@@ -100,6 +169,12 @@ export const DockerHostsTable: Component<{
   const showSwarmColumn = createMemo(() => props.resources.some(hasDockerSwarmEvidence));
   const [selectedHostId, setSelectedHostId] = createSignal<string | null>(null);
   const drawerColspan = createMemo(() => (showSwarmColumn() ? 10 : 9));
+  const sort = createPlatformTableSortState({
+    storageKey: 'dockerHosts',
+    sortKeys: DOCKER_HOST_SORT_KEYS,
+    descendingFirst: ['containers', 'cpu', 'memory', 'disk', 'uptime', 'temp'],
+  });
+  const sortedHosts = createMemo(() => sort.sortRows(tableState.filtered(), getDockerHostSortValue));
 
   const hasFilteredSourceRows = () => (props.sourceCount ?? props.resources.length) > 0;
 
@@ -154,74 +229,96 @@ export const DockerHostsTable: Component<{
                     bars aren't squeezed by table-fixed's equal split. Mobile
                     widths (w-[40%], w-[20%]) are unchanged.
                   */}
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} w-[40%] md:w-[13%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="host"
+                  class="w-[40%] md:w-[13%]"
+                >
                   Host
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="system"
+                  class="hidden md:table-cell md:w-[7%]"
                 >
                   System
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="version"
+                  class="hidden md:table-cell md:w-[7%]"
                 >
                   Version
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="containers"
+                  class="hidden md:table-cell md:w-[9%]"
                 >
                   Containers
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="cpu"
+                  class="w-[20%] md:w-[14%]"
                 >
                   CPU
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="memory"
+                  class="w-[20%] md:w-[14%]"
                 >
                   <span class="md:hidden">Mem</span>
                   <span class="hidden md:inline">Memory</span>
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('metric-bar')} w-[20%] md:w-[14%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="disk"
+                  class="w-[20%] md:w-[14%]"
                 >
                   Disk
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="uptime"
+                  class="hidden md:table-cell md:w-[6%]"
                 >
                   Uptime
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="temp"
+                  class="hidden md:table-cell md:w-[6%]"
                 >
                   Temp
-                </TableHead>
+                </PlatformSortableTableHead>
                 <Show when={showSwarmColumn()}>
-                  <TableHead
-                    class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                  <PlatformSortableTableHead
+                    kind="text"
+                    sort={sort}
+                    sortKey="swarm"
+                    class="hidden md:table-cell md:w-[10%]"
                   >
                     Swarm role
-                  </TableHead>
+                  </PlatformSortableTableHead>
                 </Show>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedHosts()}>
                   {(host) => {
-                    const docker = () =>
-                      host.docker as
-                        | (NonNullable<Resource['docker']> & {
-                            runtime?: string;
-                            runtimeVersion?: string;
-                            containerCount?: number;
-                            uptimeSeconds?: number;
-                            temperature?: number;
-                            swarm?: { nodeRole?: string };
-                          })
-                        | undefined;
+                    const docker = () => dockerHostMeta(host);
                     const name = () => asTrimmedString(host.name) || host.id;
                     const systemBadge = () => getDockerHostSystemBadge(host);
                     const version = () => asTrimmedString(docker()?.runtimeVersion) || '—';

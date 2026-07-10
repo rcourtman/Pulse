@@ -1,15 +1,19 @@
-import { For, Show, type Component } from 'solid-js';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { For, Show, createMemo, type Component } from 'solid-js';
+import { TableCell, TableRow } from '@/components/shared/Table';
+import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableRelativeTimeValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableDateTimeValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
+  getPlatformTableDateTimeSortValue,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -27,6 +31,46 @@ import {
   type DockerNativeTableProps,
 } from './DockerNativeTableShared';
 import { filterDockerResources, type DockerResourceStatusFilter } from './dockerPageModel';
+import type { Resource } from '@/types/resource';
+
+const DOCKER_VOLUME_SORT_KEYS = [
+  'volume',
+  'driver',
+  'scope',
+  'size',
+  'refs',
+  'created',
+  'mountpoint',
+] as const;
+
+type DockerVolumeSortKey = (typeof DOCKER_VOLUME_SORT_KEYS)[number];
+
+const getDockerVolumeSortValue = (
+  resource: Resource,
+  key: DockerVolumeSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'volume':
+      return dockerResourceName(resource);
+    case 'driver':
+      return asTrimmedString(resource.docker?.driver) || null;
+    case 'scope':
+      return asTrimmedString(resource.docker?.scope) || null;
+    case 'size':
+      return typeof resource.docker?.sizeBytes === 'number' && resource.docker.sizeBytes > 0
+        ? resource.docker.sizeBytes
+        : null;
+    case 'refs':
+      return typeof resource.docker?.refCount === 'number' ? resource.docker.refCount : null;
+    case 'created':
+      return getPlatformTableDateTimeSortValue(resource.docker?.createdAt);
+    case 'mountpoint':
+      return asTrimmedString(resource.docker?.mountpoint) || null;
+    default:
+      key satisfies never;
+      return null;
+  }
+};
 
 export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => {
   const tableState = createPlatformTableFilterState({
@@ -38,6 +82,12 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'docker-volume-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
+  const sort = createPlatformTableSortState({
+    storageKey: 'dockerVolumes',
+    sortKeys: DOCKER_VOLUME_SORT_KEYS,
+    descendingFirst: ['size', 'refs', 'created'],
+  });
+  const sortedRows = createMemo(() => sort.sortRows(tableState.filtered(), getDockerVolumeSortValue));
 
   return (
     <Show
@@ -82,42 +132,67 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
             tableClass="min-w-full table-fixed text-xs md:min-w-[1120px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[22%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="volume"
+                  class="md:w-[22%]"
+                >
                   Volume
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="driver"
+                  class="md:w-[12%]"
+                >
                   Driver
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="scope"
+                  class="hidden md:table-cell md:w-[10%]"
                 >
                   Scope
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="size"
+                  class="md:w-[10%]"
                 >
                   Size
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="refs"
+                  class="hidden md:table-cell md:w-[8%]"
                 >
                   Refs
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="created"
+                  class="hidden md:table-cell md:w-[14%]"
                 >
                   Created
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[24%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="mountpoint"
+                  class="hidden md:table-cell md:w-[24%]"
                 >
                   Mountpoint
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => {
                     const detailRowId = () => drawer.detailRowId(resource);
                     const isExpanded = () => drawer.isExpanded(resource);
