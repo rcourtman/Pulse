@@ -1877,7 +1877,18 @@ a new API state machine, queue contract, or verification-accounting field.
    validates through the planner's exported canonical rules
    (`actionplanner.FindCapability` / `actionplanner.ValidateParams`),
    so a proposal that validates is exactly a proposal the planner will
-   accept.
+   accept; the broker's `ActionCapabilityParamInfo` projection carries
+   `Pattern` alongside enum and sensitivity so that validation parity
+   survives the cross-repo boundary. The Patrol proposal broker and the
+   per-org proposal capability catalog are wired from the router onto the
+   AI settings handler (`SetActionBrokerFactory` /
+   `SetProposalCatalogFactory`), and the investigation adapter
+   (`orchestratorChatAdapter`) exposes only
+   `ExecuteInvestigationStream` (returning the structured investigation
+   result with its typed proposal errors) and `ListInvestigationTools`.
+   The retired command-execution, autonomy, and command-shaped approval
+   adapters are removed, and the legacy `aiautofix` command-approval
+   endpoints fail closed with `command_fix_retired`.
    Executor-owned live readiness is part of planning, not a UI precheck:
    after planner validation and before audit persistence, the lifecycle
    service must ask

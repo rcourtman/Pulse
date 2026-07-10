@@ -4566,20 +4566,48 @@ deliberately omits org ID, requestedBy, autonomy, risk, approval-policy,
 destructive, command, and target-host fields, and has no decide or execute
 methods, so enterprise code can neither claim authorization nor dispatch;
 authorization always derives from the capability's declared policy on the
-core lifecycle. `OrchestratorDeps.ActionBroker` carries the seam;
-`CmdExecutor` and `ApprovalStore` on the same struct are migration-only
-legacy side doors that must not gain new callers and are scheduled for
-removal with the orchestrator migration. Investigations reference their
-canonical action through the additive `Action *ActionReference` fields on
+core lifecycle. `OrchestratorDeps.ActionBroker` carries the seam and is
+now REQUIRED: the enterprise factory disables the orchestrator when it is
+absent rather than falling back. The command-execution side doors are
+gone. `OrchestratorChatService` exposes only investigation-specific
+execution and listing (`ExecuteInvestigationStream` returning a
+structured `OrchestratorInvestigationResult`, and
+`ListInvestigationTools`); it has no generic `ExecuteStream`, no
+`SetAutonomousMode`, no `ListAvailableTools`, and the request type carries
+no autonomy field, so enterprise code can neither select a profile nor
+grant execution authority. `OrchestratorCommandExecutor`,
+`OrchestratorApprovalStore`, and the autonomy/fix-verifier/license
+dependency interfaces are removed along with their pulse-side adapters
+(`orchestratorChatAdapter.ExecuteStream`/`ExecuteCommand`/
+`SetAutonomousMode`, `orchestratorApprovalAdapter`,
+`autonomyLevelProviderAdapter`, `patrolFixVerifierAdapter`,
+`licenseCheckerForOrchestrator`). The enterprise investigation
+orchestrator no longer parses `PROPOSED_FIX`, runs guardrails, executes
+commands, or queues command-shaped approvals: it consumes the structured
+investigation result and, only for a non-nil proposal from a completely
+successful run, submits through the broker and persists the resulting
+`ActionReference`. Command text in investigation prose is inert
+historical text with no execution, approval, or remediation-plan pathway
+(`classifyInvestigationOutcome` reads only conclusion markers). The core
+`PatrolService.generateRemediationPlanFromInvestigation` path that copied
+`Fix.Commands` into an executable remediation plan is deleted, so no
+second command-backed remediation artifact remains. The legacy
+`aiautofix` command-approval endpoints fail closed
+(`command_fix_retired`), never approving, re-arming, or executing a
+persisted command-shaped fix. Investigations reference their canonical
+action through the additive `Action *ActionReference` fields on
 `InvestigationSession` and `InvestigationRecord`; the command-shaped
-`ProposedFix`/`ApprovalID` fields are migration-only narrative and must
-never be populated by new investigations nor re-armed into executable
-approvals. Proposal parameters live in the canonical action audit, not
-duplicated into investigation stores. Proofs:
+`ProposedFix`/`ApprovalID` fields remain readable for old persisted
+records only and are never populated by new investigations nor re-armed
+into executable approvals. Proposal parameters live in the canonical
+action audit, not duplicated into investigation stores. Proofs:
 `TestOrchestratorActionBrokerIsProposeOnly`,
+`TestOrchestratorChatServiceIsInvestigationOnly`,
+`TestOrchestratorDepsHasNoCommandOrAutonomyDeps`,
 `TestActionProposalWireShapeIsTypedAndCommandFree`, and
 `TestActionReferenceIsAdditiveOnInvestigationShapes` in
-`pkg/aicontracts/contracts_test.go`.
+`pkg/aicontracts/contracts_test.go`, plus the enterprise
+`TestProposedFixProseIsInertHistoricalText` negative regression.
 Tool-call safety classification is registry-owned through the canonical
 invocation descriptors in `internal/agentcapabilities/invocation.go`:
 every registered Pulse tool has a static or discriminator-based

@@ -3,6 +3,7 @@ package aicontracts
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
@@ -19,17 +20,57 @@ import (
 // OrchestratorChatService provides AI chat session management for investigations.
 type OrchestratorChatService interface {
 	CreateSession(ctx context.Context) (*OrchestratorChatSession, error)
-	ExecuteStream(ctx context.Context, req OrchestratorExecuteRequest, callback OrchestratorStreamCallback) error
 	GetMessages(ctx context.Context, sessionID string) ([]OrchestratorMessage, error)
 	DeleteSession(ctx context.Context, sessionID string) error
-	ListAvailableTools(ctx context.Context, prompt string) []string
-	SetAutonomousMode(enabled bool)
+	// ExecuteInvestigationStream runs one Patrol investigation under the
+	// core-owned investigation execution profile and returns the
+	// structured result. There is deliberately no generic execution
+	// method, no tool listing outside the investigation projection, and
+	// no autonomy field anywhere on this interface: non-interactive
+	// operation grants no authority, and enterprise code can neither
+	// select a profile nor relax one.
+	ExecuteInvestigationStream(ctx context.Context, req OrchestratorInvestigationRequest, callback OrchestratorStreamCallback) (*OrchestratorInvestigationResult, error)
+	// ListInvestigationTools names the tools an investigation run
+	// offers, projected through the same profile path the run uses.
+	ListInvestigationTools(ctx context.Context) []string
 }
 
-// OrchestratorCommandExecutor executes commands directly (bypasses the LLM).
-type OrchestratorCommandExecutor interface {
-	ExecuteCommand(ctx context.Context, command, targetHost string) (output string, exitCode int, err error)
+// OrchestratorInvestigationRequest is one investigation run. Correlation
+// identity is injected here by the orchestrator from trusted context; the
+// model's proposal tool schema never carries it.
+type OrchestratorInvestigationRequest struct {
+	SessionID       string   `json:"session_id,omitempty"`
+	Prompt          string   `json:"prompt"`
+	SystemPrompt    string   `json:"system_prompt,omitempty"`
+	MaxTurns        int      `json:"max_turns,omitempty"`
+	ExecutionID     string   `json:"execution_id,omitempty"`
+	ProposalID      string   `json:"proposal_id"`
+	FindingID       string   `json:"finding_id"`
+	InvestigationID string   `json:"investigation_id"`
+	EvidenceIDs     []string `json:"evidence_ids,omitempty"`
 }
+
+// OrchestratorInvestigationResult is the structured outcome of one
+// investigation run. Proposal cardinality is first-class: consumers never
+// reconstruct proposals from session messages. A non-nil Proposal is
+// immutable, canonically valid, fully correlated, exposure-safe, and
+// produced only by a completely successful run - ready for
+// OrchestratorActionBroker.Submit.
+type OrchestratorInvestigationResult struct {
+	Content                string          `json:"content"`
+	Proposal               *ActionProposal `json:"proposal,omitempty"`
+	FailedProposalAttempts int             `json:"failed_proposal_attempts,omitempty"`
+	InputTokens            int             `json:"input_tokens"`
+	OutputTokens           int             `json:"output_tokens"`
+}
+
+// Typed investigation proposal errors surfaced across the contract
+// boundary. Any of them means the run produced no actionable proposal.
+var (
+	ErrInvestigationProposalAmbiguous      = errors.New("ambiguous investigation result: multiple distinct action proposals were submitted")
+	ErrInvestigationProposalIntegrity      = errors.New("proposal integrity violation: one tool-use id submitted conflicting payloads")
+	ErrInvestigationProposalAttemptsFailed = errors.New("investigation made proposal attempts but none validated")
+)
 
 // OrchestratorFindingsStore provides access to patrol findings for the orchestrator.
 type OrchestratorFindingsStore interface {
@@ -37,30 +78,9 @@ type OrchestratorFindingsStore interface {
 	Update(f *Finding) bool
 }
 
-// OrchestratorApprovalStore queues fixes for human approval.
-type OrchestratorApprovalStore interface {
-	Create(approval *OrchestratorApproval) error
-}
-
 // OrchestratorInfraContextProvider provides discovered infrastructure context.
 type OrchestratorInfraContextProvider interface {
 	GetInfrastructureContext() string
-}
-
-// OrchestratorAutonomyProvider provides the current autonomy level.
-type OrchestratorAutonomyProvider interface {
-	GetCurrentAutonomyLevel() string
-	IsFullModeUnlocked() bool
-}
-
-// OrchestratorFixVerifier verifies that a fix resolved the issue.
-type OrchestratorFixVerifier interface {
-	VerifyFixResolved(ctx context.Context, finding *Finding) (bool, error)
-}
-
-// OrchestratorLicenseChecker provides license feature checking.
-type OrchestratorLicenseChecker interface {
-	HasFeature(feature string) bool
 }
 
 // OrchestratorMetricsCallback receives metrics events from the orchestrator.
@@ -76,14 +96,6 @@ type OrchestratorMetricsCallback interface {
 // OrchestratorChatSession represents a chat session.
 type OrchestratorChatSession struct {
 	ID string `json:"id"`
-}
-
-// OrchestratorExecuteRequest represents a chat execution request.
-type OrchestratorExecuteRequest struct {
-	Prompt         string `json:"prompt"`
-	SessionID      string `json:"session_id,omitempty"`
-	MaxTurns       int    `json:"max_turns,omitempty"`
-	AutonomousMode *bool  `json:"autonomous_mode,omitempty"`
 }
 
 // OrchestratorStreamCallback is called for each streaming event.
@@ -240,23 +252,16 @@ type OrchestratorAIFindingsStore interface {
 
 // OrchestratorDeps contains all dependencies for constructing an investigation orchestrator.
 type OrchestratorDeps struct {
-	ChatService OrchestratorChatService
-	// CmdExecutor and ApprovalStore are the legacy command-execution side
-	// doors, retained only until the typed ActionBroker migration lands.
-	// New orchestrator code must propose through ActionBroker and never
-	// dispatch command text or create command-shaped approvals.
-	CmdExecutor   OrchestratorCommandExecutor
+	ChatService   OrchestratorChatService
 	Store         InvestigationStore
 	FindingsStore OrchestratorFindingsStore
-	ApprovalStore OrchestratorApprovalStore // may be nil
 	// ActionBroker is the typed, plan-only proposal seam into the core
-	// action lifecycle. Tenant-bound and actor-stamped by the core
-	// adapter; may be nil until wiring lands.
+	// action lifecycle - the ONLY route from an investigation to an
+	// infrastructure mutation. Tenant-bound and actor-stamped by the
+	// core adapter. REQUIRED: a missing broker disables the
+	// orchestrator; there is no command-execution fallback.
 	ActionBroker OrchestratorActionBroker
 	Config       InvestigationConfig
 	InfraContext OrchestratorInfraContextProvider // may be nil
-	Autonomy     OrchestratorAutonomyProvider
-	FixVerifier  OrchestratorFixVerifier
-	License      OrchestratorLicenseChecker
 	Metrics      OrchestratorMetricsCallback
 }

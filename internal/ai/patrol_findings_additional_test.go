@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -1346,5 +1347,25 @@ func TestPatrolFindingCreatorAdapter_ResolveFinding_FallsThroughWhenNoVerifierAv
 	}
 	if stored := ps.findings.Get(finding.ID); stored == nil || stored.ResolvedAt == nil {
 		t.Fatalf("expected finding to be resolved, got %+v", stored)
+	}
+}
+
+// TestGenerateRemediationPlanFromInvestigationIsDeleted pins the sixth
+// side door closed: the path that copied Fix.Commands into an executable
+// enterprise remediation plan must not return. Typed remediation flows
+// only through the action proposal channel.
+func TestGenerateRemediationPlanFromInvestigationIsDeleted(t *testing.T) {
+	source, err := os.ReadFile("patrol_findings.go")
+	if err != nil {
+		t.Fatalf("read patrol_findings.go: %v", err)
+	}
+	src := string(source)
+	for _, forbidden := range []string{
+		"generateRemediationPlanFromInvestigation",
+		"inv.ProposedFix.Commands",
+	} {
+		if strings.Contains(src, forbidden) {
+			t.Fatalf("command-backed remediation path must stay deleted; found %q", forbidden)
+		}
 	}
 }

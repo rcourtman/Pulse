@@ -352,7 +352,11 @@ Patrol proposal broker (`internal/api/patrol_action_broker.go`) rides that
 same API-owned lifecycle; agent lifecycle surfaces must not consume
 Patrol-origin action audits as an agent command grant or lifecycle
 execution shortcut, and must not subscribe lifecycle side effects to the
-API-owned org-scoped action-transition hook. Assistant
+API-owned org-scoped action-transition hook. The investigation
+orchestrator adapter wired here exposes only investigation-specific
+execution and listing with no autonomy or command-execution surface, so
+agent lifecycle surfaces gain no command-dispatch path through Patrol
+investigations. Assistant
 handoffs that recover a live Patrol approval by finding ID are still AI/runtime
 review context only; agent lifecycle surfaces must not treat that recovered
 approval reference as an agent command grant or host-execution shortcut.

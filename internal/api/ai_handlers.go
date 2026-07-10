@@ -63,6 +63,8 @@ type AISettingsHandler struct {
 	readState               unifiedresources.ReadState
 	unifiedResourceProvider ai.UnifiedResourceProvider
 	resourceStoreProvider   func(orgID string) (unifiedresources.ResourceStore, error)
+	actionBrokerFactory     func(orgID string) aicontracts.OrchestratorActionBroker
+	proposalCatalogFactory  func(orgID string) tools.ProposalCatalog
 	metadataProvider        ai.MetadataProvider
 	patrolThresholdProvider ai.ThresholdProvider
 	metricsHistoryProvider  ai.MetricsHistoryProvider
@@ -131,6 +133,57 @@ func (h *AISettingsHandler) SetResourceStoreProvider(provider func(orgID string)
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.resourceStoreProvider = provider
+}
+
+// SetActionBrokerFactory installs the per-org typed action proposal broker
+// used by the investigation orchestrator. Core-owned: it binds the tenant
+// and the fixed Patrol actor, so enterprise code can only propose typed
+// capabilities, never dispatch commands or claim authority.
+func (h *AISettingsHandler) SetActionBrokerFactory(factory func(orgID string) aicontracts.OrchestratorActionBroker) {
+	if h == nil {
+		return
+	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.actionBrokerFactory = factory
+}
+
+// SetProposalCatalogFactory installs the per-org capability catalog used
+// for proposal validation, resolved from the tenant-bound action
+// lifecycle service so acceptance and planning share one contract.
+func (h *AISettingsHandler) SetProposalCatalogFactory(factory func(orgID string) tools.ProposalCatalog) {
+	if h == nil {
+		return
+	}
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.proposalCatalogFactory = factory
+}
+
+func (h *AISettingsHandler) actionBrokerFor(orgID string) aicontracts.OrchestratorActionBroker {
+	if h == nil {
+		return nil
+	}
+	h.stateMu.RLock()
+	factory := h.actionBrokerFactory
+	h.stateMu.RUnlock()
+	if factory == nil {
+		return nil
+	}
+	return factory(orgID)
+}
+
+func (h *AISettingsHandler) proposalCatalogFor(orgID string) tools.ProposalCatalog {
+	if h == nil {
+		return nil
+	}
+	h.stateMu.RLock()
+	factory := h.proposalCatalogFactory
+	h.stateMu.RUnlock()
+	if factory == nil {
+		return nil
+	}
+	return factory(orgID)
 }
 
 func (h *AISettingsHandler) stateRefs() (
@@ -1954,7 +2007,10 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	})
 
 	// Build local adapters that implement aicontracts.Orchestrator* interfaces
-	chatAdapter := &orchestratorChatAdapter{svc: chatService}
+	chatAdapter := &orchestratorChatAdapter{
+		svc:     chatService,
+		catalog: h.proposalCatalogFor(orgID),
+	}
 
 	// Create findings store adapter
 	findingsStore := patrol.GetFindings()
@@ -1963,16 +2019,6 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		return
 	}
 	findingsAdapter := &orchestratorFindingsAdapter{store: &findingsStoreWrapper{store: findingsStore}}
-
-	// Create approval adapter from the global approval store
-	var approvalAdapter aicontracts.OrchestratorApprovalStore
-	if approvalStoreInst := approval.GetStore(); approvalStoreInst != nil {
-		approvalAdapter = &orchestratorApprovalAdapter{
-			store:            approvalStoreInst,
-			orgID:            approval.NormalizeOrgID(orgID),
-			actionAuditStore: chatService.GetActionAuditStore(),
-		}
-	}
 
 	// Get config for investigation settings
 	cfg := svc.GetConfig()
@@ -2008,18 +2054,16 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 		infraContext = knowledgeStore
 	}
 
-	// Build deps struct and call factory
+	// Build deps struct and call factory. The typed action broker is
+	// REQUIRED: without it the factory disables the orchestrator - there
+	// is no command-execution fallback.
 	deps := aicontracts.OrchestratorDeps{
 		ChatService:   chatAdapter,
-		CmdExecutor:   chatAdapter, // ChatServiceAdapter implements both interfaces
 		Store:         store,
 		FindingsStore: findingsAdapter,
-		ApprovalStore: approvalAdapter,
+		ActionBroker:  h.actionBrokerFor(approval.NormalizeOrgID(orgID)),
 		Config:        invConfig,
 		InfraContext:  infraContext,
-		Autonomy:      &autonomyLevelProviderAdapter{svc: svc},
-		FixVerifier:   &patrolFixVerifierAdapter{patrol: patrol},
-		License:       &licenseCheckerForOrchestrator{svc: svc},
 		Metrics:       &patrolMetricsCallbackAdapter{},
 	}
 
@@ -2041,9 +2085,16 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 // ---------------------------------------------------------------------------
 
 // orchestratorChatAdapter wraps *chat.Service to implement
-// aicontracts.OrchestratorChatService and OrchestratorCommandExecutor.
+// aicontracts.OrchestratorChatService. It exposes only the
+// investigation-specific execution/listing surface: there is no generic
+// chat execution, no autonomy control, and no command execution here -
+// the typed proposal channel is the only route from an investigation to
+// an infrastructure mutation.
 type orchestratorChatAdapter struct {
 	svc *chat.Service
+	// catalog resolves advertised resource capabilities for proposal
+	// validation, from the tenant-bound action lifecycle service.
+	catalog tools.ProposalCatalog
 }
 
 func (a *orchestratorChatAdapter) CreateSession(ctx context.Context) (*aicontracts.OrchestratorChatSession, error) {
@@ -2054,25 +2105,73 @@ func (a *orchestratorChatAdapter) CreateSession(ctx context.Context) (*aicontrac
 	return &aicontracts.OrchestratorChatSession{ID: session.ID}, nil
 }
 
-func (a *orchestratorChatAdapter) ExecuteStream(ctx context.Context, req aicontracts.OrchestratorExecuteRequest, callback aicontracts.OrchestratorStreamCallback) error {
+func (a *orchestratorChatAdapter) ExecuteInvestigationStream(ctx context.Context, req aicontracts.OrchestratorInvestigationRequest, callback aicontracts.OrchestratorStreamCallback) (*aicontracts.OrchestratorInvestigationResult, error) {
 	if a.svc == nil {
-		return fmt.Errorf("chat service is nil")
+		return nil, fmt.Errorf("chat service is nil")
 	}
 	if !a.svc.IsRunning() {
-		return fmt.Errorf("chat service is not running")
+		return nil, fmt.Errorf("chat service is not running")
 	}
-	chatReq := chat.ExecuteRequest{
-		Prompt:         req.Prompt,
-		SessionID:      req.SessionID,
-		MaxTurns:       req.MaxTurns,
-		AutonomousMode: req.AutonomousMode,
-	}
-	return a.svc.ExecuteStream(ctx, chatReq, func(event chat.StreamEvent) {
+	runResult, err := a.svc.ExecuteInvestigationStream(ctx, chat.InvestigationRunRequest{
+		SessionID:    req.SessionID,
+		Prompt:       req.Prompt,
+		SystemPrompt: req.SystemPrompt,
+		MaxTurns:     req.MaxTurns,
+		ExecutionID:  req.ExecutionID,
+		Identity: tools.ProposalIdentity{
+			ProposalID:      req.ProposalID,
+			FindingID:       req.FindingID,
+			InvestigationID: req.InvestigationID,
+			EvidenceIDs:     req.EvidenceIDs,
+		},
+		Catalog: a.catalog,
+	}, func(event chat.StreamEvent) {
 		callback(aicontracts.OrchestratorStreamEvent{
 			Type: event.Type,
 			Data: event.Data,
 		})
 	})
+	if runResult == nil {
+		return nil, mapInvestigationProposalError(err)
+	}
+	result := &aicontracts.OrchestratorInvestigationResult{
+		Content:                runResult.Content,
+		FailedProposalAttempts: runResult.FailedProposalAttempts,
+		InputTokens:            runResult.InputTokens,
+		OutputTokens:           runResult.OutputTokens,
+	}
+	if runResult.Proposal != nil {
+		captured := runResult.Proposal
+		result.Proposal = &aicontracts.ActionProposal{
+			ProposalID:      captured.Identity.ProposalID,
+			FindingID:       captured.Identity.FindingID,
+			InvestigationID: captured.Identity.InvestigationID,
+			ResourceID:      captured.ResourceID,
+			CapabilityName:  captured.CapabilityName,
+			Params:          captured.Params,
+			Reason:          captured.Reason,
+			EvidenceIDs:     captured.Identity.EvidenceIDs,
+		}
+	}
+	return result, mapInvestigationProposalError(err)
+}
+
+// mapInvestigationProposalError projects the core proposal-channel errors
+// onto the public contract sentinels so enterprise outcome mapping can
+// key on errors.Is without importing internal packages.
+func mapInvestigationProposalError(err error) error {
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, tools.ErrProposalAmbiguous):
+		return aicontracts.ErrInvestigationProposalAmbiguous
+	case errors.Is(err, tools.ErrProposalIntegrity):
+		return aicontracts.ErrInvestigationProposalIntegrity
+	case errors.Is(err, tools.ErrProposalAttemptsFailed):
+		return aicontracts.ErrInvestigationProposalAttemptsFailed
+	default:
+		return err
+	}
 }
 
 //nolint:dupl // mirrors chatServiceAdapter.GetMessages: same source messages mapped onto a deliberately separate output contract that may diverge
@@ -2106,24 +2205,12 @@ func (a *orchestratorChatAdapter) DeleteSession(ctx context.Context, sessionID s
 	return a.svc.DeleteSession(ctx, sessionID)
 }
 
-func (a *orchestratorChatAdapter) ListAvailableTools(ctx context.Context, prompt string) []string {
+func (a *orchestratorChatAdapter) ListInvestigationTools(ctx context.Context) []string {
+	_ = ctx
 	if a.svc == nil {
 		return nil
 	}
-	return a.svc.ListAvailableTools(ctx, prompt)
-}
-
-func (a *orchestratorChatAdapter) SetAutonomousMode(enabled bool) {
-	if a.svc != nil {
-		a.svc.SetAutonomousMode(enabled)
-	}
-}
-
-func (a *orchestratorChatAdapter) ExecuteCommand(ctx context.Context, command, targetHost string) (string, int, error) {
-	if a.svc == nil {
-		return "", -1, fmt.Errorf("chat service not available")
-	}
-	return a.svc.ExecuteCommand(ctx, command, targetHost)
+	return a.svc.ListInvestigationTools()
 }
 
 // orchestratorFindingsAdapter wraps findingsStoreWrapper to implement
@@ -2173,59 +2260,6 @@ func (a *orchestratorFindingsAdapter) Update(f *aicontracts.Finding) bool {
 	)
 }
 
-// orchestratorApprovalAdapter wraps *approval.Store to implement
-// aicontracts.OrchestratorApprovalStore.
-type orchestratorApprovalAdapter struct {
-	store            *approval.Store
-	orgID            string
-	actionAuditStore unifiedresources.ResourceStore
-}
-
-func (a *orchestratorApprovalAdapter) Create(appr *aicontracts.OrchestratorApproval) error {
-	if a.store == nil {
-		return nil
-	}
-	riskLevel := approval.RiskLow
-	switch appr.RiskLevel {
-	case "low":
-		riskLevel = approval.RiskLow
-	case "medium":
-		riskLevel = approval.RiskMedium
-	case "high", "critical":
-		riskLevel = approval.RiskHigh
-	}
-	req := &approval.ApprovalRequest{
-		OrgID:      a.orgID,
-		ID:         appr.ID,
-		ToolID:     "investigation_fix",
-		Command:    appr.Command,
-		TargetType: "investigation",
-		TargetID:   appr.FindingID,
-		TargetName: strings.TrimSpace(appr.TargetHost),
-		Context:    "Automated fix from patrol investigation: " + appr.Description,
-		RiskLevel:  riskLevel,
-	}
-	if req.TargetName == "" {
-		req.TargetName = appr.Description
-	}
-	tools.AttachApprovalActionPlan(req, time.Now().UTC())
-	if err := a.store.CreateApproval(req); err != nil {
-		return err
-	}
-	tools.RecordPendingApprovalAction(a.actionAuditStore, req)
-	return nil
-}
-
-// patrolFixVerifierAdapter wraps *ai.PatrolService to implement
-// aicontracts.OrchestratorFixVerifier.
-type patrolFixVerifierAdapter struct {
-	patrol *ai.PatrolService
-}
-
-func (v *patrolFixVerifierAdapter) VerifyFixResolved(ctx context.Context, finding *aicontracts.Finding) (bool, error) {
-	return v.patrol.VerifyFixResolved(ctx, finding.ResourceID, finding.ResourceType, finding.Key, finding.ID)
-}
-
 // patrolMetricsCallbackAdapter implements aicontracts.OrchestratorMetricsCallback
 // by delegating to the global PatrolMetrics singleton.
 type patrolMetricsCallbackAdapter struct{}
@@ -2236,15 +2270,6 @@ func (c *patrolMetricsCallbackAdapter) RecordInvestigationOutcome(outcome string
 
 func (c *patrolMetricsCallbackAdapter) RecordFixVerification(result string) {
 	ai.GetPatrolMetrics().RecordFixVerification(result)
-}
-
-// licenseCheckerForOrchestrator adapts *ai.Service to aicontracts.OrchestratorLicenseChecker
-type licenseCheckerForOrchestrator struct {
-	svc *ai.Service
-}
-
-func (l *licenseCheckerForOrchestrator) HasFeature(feature string) bool {
-	return l.svc.HasLicenseFeature(feature)
 }
 
 // findingsStoreWrapper wraps *ai.FindingsStore to implement aicontracts.OrchestratorAIFindingsStore
@@ -2268,29 +2293,6 @@ func (w *findingsStoreWrapper) UpdateInvestigation(id, sessionID, status, outcom
 		return false
 	}
 	return w.store.UpdateInvestigation(id, sessionID, status, outcome, lastInvestigatedAt, attempts)
-}
-
-// autonomyLevelProviderAdapter provides current autonomy level from config for re-checking before fix execution
-type autonomyLevelProviderAdapter struct {
-	svc *ai.Service
-}
-
-func (a *autonomyLevelProviderAdapter) GetCurrentAutonomyLevel() string {
-	if a.svc == nil {
-		return config.PatrolAutonomyMonitor
-	}
-	return a.svc.GetEffectivePatrolAutonomyLevel()
-}
-
-func (a *autonomyLevelProviderAdapter) IsFullModeUnlocked() bool {
-	if a.svc == nil {
-		return false
-	}
-	cfg := a.svc.GetConfig()
-	if cfg == nil {
-		return false
-	}
-	return cfg.PatrolFullModeUnlocked
 }
 
 // AISettingsResponse is returned by GET /api/settings/ai

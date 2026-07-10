@@ -249,3 +249,56 @@ func TestOrchestratorDepsExposesTypedActionBroker(t *testing.T) {
 		t.Fatalf("ActionBroker field type = %v, want OrchestratorActionBroker", field.Type)
 	}
 }
+
+func TestOrchestratorChatServiceIsInvestigationOnly(t *testing.T) {
+	svcType := reflect.TypeOf((*OrchestratorChatService)(nil)).Elem()
+	// The generic-execution and autonomy surface is gone: no method may
+	// carry autonomy, generic execution, or a broad tool listing.
+	for _, forbidden := range []string{"ExecuteStream", "SetAutonomousMode", "ListAvailableTools"} {
+		if _, ok := svcType.MethodByName(forbidden); ok {
+			t.Fatalf("OrchestratorChatService must not expose %s", forbidden)
+		}
+	}
+	for _, required := range []string{"ExecuteInvestigationStream", "ListInvestigationTools"} {
+		if _, ok := svcType.MethodByName(required); !ok {
+			t.Fatalf("OrchestratorChatService must expose %s", required)
+		}
+	}
+	// The investigation request must carry no autonomy field.
+	reqType := reflect.TypeOf(OrchestratorInvestigationRequest{})
+	for i := 0; i < reqType.NumField(); i++ {
+		name := strings.ToLower(reqType.Field(i).Name)
+		if strings.Contains(name, "autonom") {
+			t.Fatalf("investigation request must carry no autonomy field, found %s", reqType.Field(i).Name)
+		}
+	}
+}
+
+func TestOrchestratorDepsHasNoCommandOrAutonomyDeps(t *testing.T) {
+	depsType := reflect.TypeOf(OrchestratorDeps{})
+	for _, forbidden := range []string{"CmdExecutor", "ApprovalStore", "Autonomy", "FixVerifier", "License"} {
+		if _, ok := depsType.FieldByName(forbidden); ok {
+			t.Fatalf("OrchestratorDeps must not expose %s after the typed-lifecycle migration", forbidden)
+		}
+	}
+}
+
+func TestActionCapabilityParamInfoCarriesPattern(t *testing.T) {
+	// Canonical planner validation enforces Pattern; the cross-repo
+	// capability projection must carry it or proposal validation parity
+	// dies at the boundary.
+	if _, ok := reflect.TypeOf(ActionCapabilityParamInfo{}).FieldByName("Pattern"); !ok {
+		t.Fatal("ActionCapabilityParamInfo must carry Pattern")
+	}
+}
+
+func TestInvestigationResultCarriesStructuredProposal(t *testing.T) {
+	resultType := reflect.TypeOf(OrchestratorInvestigationResult{})
+	field, ok := resultType.FieldByName("Proposal")
+	if !ok {
+		t.Fatal("investigation result must carry a structured Proposal")
+	}
+	if field.Type != reflect.TypeOf((*ActionProposal)(nil)) {
+		t.Fatalf("Proposal field type = %v, want *ActionProposal", field.Type)
+	}
+}

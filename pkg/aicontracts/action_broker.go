@@ -59,6 +59,7 @@ type ActionCapabilityParamInfo struct {
 	Type        string   `json:"type"`
 	Required    bool     `json:"required"`
 	Enum        []string `json:"enum,omitempty"`
+	Pattern     string   `json:"pattern,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Sensitive   bool     `json:"sensitive,omitempty"`
 }

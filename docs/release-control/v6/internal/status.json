@@ -3946,6 +3946,93 @@
           "evidence_tier": "test-proof"
         }
       ]
+    },
+    {
+      "id": "RA35",
+      "summary": "Every Patrol-initiated infrastructure mutation originates as a typed action proposal and reaches execution only through the canonical action lifecycle; unsupported proposals fail closed with no raw-command fallback.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6",
+        "L20"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "ra35-typed-proposal-channel",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai/tools",
+            "-run",
+            "TestConcurrentValidProposalsLatchAmbiguityWithNoProposal|TestProposalReplaySemanticsByInvocationID|TestFailedAttemptsWithoutSuccessAreATypedError|TestSensitiveProposalParamsRejectedWithoutEcho|TestProposeActionIsInvestigationProfileOnly|TestCapturedProposalIsImmuneToCallerMutation|TestProposalCapabilityMatchingIsExactLikePlanning|TestPatrolDetectionProfileEnforcesAllowlistedPulseState|TestPatrolInvestigationProfileIsStructurallyReadOnly",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "ra35-typed-proposal-contract",
+          "run": [
+            "go",
+            "test",
+            "./pkg/aicontracts",
+            "-run",
+            "TestOrchestratorChatServiceIsInvestigationOnly|TestOrchestratorDepsHasNoCommandOrAutonomyDeps|TestOrchestratorActionBrokerIsProposeOnly|TestActionCapabilityParamInfoCarriesPattern|TestInvestigationResultCarriesStructuredProposal",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/service_investigation.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/tools/execution_profile.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/tools/proposal_capture.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/tools/proposal_capture_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/tools/tools_propose.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/patrol_action_broker.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/aicontracts/action_broker.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/aicontracts/contracts_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/aicontracts/orchestrator_deps.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -5503,7 +5590,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Action governance now has a first-class governed floor: tool capability declarations include typed agent-operable infrastructure onboarding over the canonical node lifecycle and LAN-discovery APIs, approval-backed action plans, plan-level preflight and dry-run posture, fail-closed action-audit normalization, bounded lifecycle events, API-visible action audit preflight, and a resource-scoped action-history surface are owned by the shared AI, API, security, Patrol, and unified-resource contracts. Broader enterprise policy execution, richer dry-run providers, multi-actor approvals, full onboarding import-plan approvals, continuous discovery-to-finding reconciliation, and deeper safe-execution contracts remain named post-RC hardening tracks.",
+        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. The enterprise orchestrator consumes a structured investigation result and submits through the required action broker; PROPOSED_FIX parsing, direct command execution, command-shaped approval creation and re-arming, and the core-generated remediation-plan path are all removed, and command text in investigation prose is inert. Registry-owned invocation descriptors classify every tool by workflow kind and mutation target and enforce control level and profile at both projection and execution. Remaining post-RC hardening: policy-scoped autonomy presets (per tenant/resource/action/window), host-update and storage-pressure workflows as the second and third complete verticals, richer dry-run providers, multi-actor approvals, and a real-lab detect-plan-execute-verify-rollback journey proof.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -8382,6 +8469,16 @@
         "L5",
         "L9",
         "L12"
+      ]
+    },
+    {
+      "id": "mobile-candidate-refresh-in-release-workflow",
+      "summary": "Governed release workflow must account for Pulse Mobile candidate freshness when release work changes mobile-facing relay, auth, approval, notification, download, or customer-access surfaces: refresh the TestFlight and Play internal-testing candidate, or explicitly record why the existing mobile candidate remains valid. This does not convert the direct-link beta into public App Store or Play rollout; public mobile release remains gated by current mobile proof and the non-public rollout policy.",
+      "kind": "release-policy",
+      "decided_at": "2026-07-07",
+      "subsystem_ids": [],
+      "lane_ids": [
+        "L5"
       ]
     }
   ]

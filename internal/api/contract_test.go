@@ -607,13 +607,29 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 	}
 
 	settingsHandlerText := string(settingsHandlerSource)
+	// Patrol remediation now enters as a typed action proposal through the
+	// required action broker; the investigation adapter carries no
+	// command execution, no autonomy, and no command-shaped approval
+	// seeding.
 	for _, required := range []string{
-		"actionAuditStore: chatService.GetActionAuditStore()",
-		"tools.AttachApprovalActionPlan(req, time.Now().UTC())",
-		"tools.RecordPendingApprovalAction(a.actionAuditStore, req)",
+		"ActionBroker:  h.actionBrokerFor(approval.NormalizeOrgID(orgID))",
+		"catalog: h.proposalCatalogFor(orgID)",
+		"func (a *orchestratorChatAdapter) ExecuteInvestigationStream(",
 	} {
 		if !strings.Contains(settingsHandlerText, required) {
-			t.Fatalf("ai_handlers.go must preserve Patrol queued-fix action-audit seeding: missing %q", required)
+			t.Fatalf("ai_handlers.go must wire the typed investigation proposal channel: missing %q", required)
+		}
+	}
+	for _, forbidden := range []string{
+		"func (a *orchestratorChatAdapter) ExecuteStream(",
+		"func (a *orchestratorChatAdapter) SetAutonomousMode(",
+		"func (a *orchestratorChatAdapter) ExecuteCommand(",
+		"orchestratorApprovalAdapter",
+		"autonomyLevelProviderAdapter",
+		"patrolFixVerifierAdapter",
+	} {
+		if strings.Contains(settingsHandlerText, forbidden) {
+			t.Fatalf("ai_handlers.go must not retain a retired command/autonomy adapter: found %q", forbidden)
 		}
 	}
 

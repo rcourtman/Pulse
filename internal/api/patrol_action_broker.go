@@ -65,6 +65,7 @@ func (b *patrolActionBroker) Capabilities(ctx context.Context, resourceID string
 				Type:        param.Type,
 				Required:    param.Required,
 				Enum:        append([]string(nil), param.Enum...),
+				Pattern:     param.Pattern,
 				Description: param.Description,
 				Sensitive:   param.IsSensitive,
 			})

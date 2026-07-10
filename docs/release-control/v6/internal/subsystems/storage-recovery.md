@@ -119,7 +119,12 @@ metadata) that is ai-runtime config-surface, not storage or recovery
 state; a manual scoped Patrol check routed through this handler is
 investigate-only as well (it may analyze storage resources but invokes no
 backup, restore, SMART, or recovery operation, and carries resource identity
-only). Starter counts, contextual Assistant/external-agent collaboration
+only). The Patrol action-broker and proposal-catalog factories wired from
+`internal/api/router.go` onto that AI settings handler are likewise
+ai-runtime/api-owned: a storage-targeted investigation may only emit a typed
+action proposal onto the canonical action lifecycle, never a storage or
+recovery operation, so this wiring creates no storage/recovery execution
+surface. Starter counts, contextual Assistant/external-agent collaboration
 counts, Patrol control completed-loop or resolved-loop outcome evidence,
 `patrolControlValueState`, legacy `patrolAutonomy*` compatibility aliases, and
 the operator-readable `progressLabel` on that

@@ -658,6 +658,15 @@ func (r *Router) setupRoutes() {
 	r.aiSettingsHandler = NewAISettingsHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
 	if r.resourceHandlers != nil {
 		r.aiSettingsHandler.SetResourceStoreProvider(r.resourceHandlers.getStore)
+		resourceHandlers := r.resourceHandlers
+		r.aiSettingsHandler.SetActionBrokerFactory(func(orgID string) aicontracts.OrchestratorActionBroker {
+			return NewPatrolActionBroker(orgID, resourceHandlers)
+		})
+		r.aiSettingsHandler.SetProposalCatalogFactory(func(orgID string) tools.ProposalCatalog {
+			return func(ctx context.Context, resourceID string) ([]unifiedresources.ResourceCapability, error) {
+				return resourceHandlers.ActionLifecycle().Capabilities(ctx, orgID, resourceID)
+			}
+		})
 	}
 	r.aiSettingsHandler.SetConfig(r.config)
 	// Inject state provider so AI has access to full infrastructure context (VMs, containers, IPs)

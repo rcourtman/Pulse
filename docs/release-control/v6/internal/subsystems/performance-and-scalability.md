@@ -352,6 +352,11 @@ regression protection.
    while per-action resource refresh, policy validation, agent command dispatch,
    polling verification, and audit completion must occur inside the route-local
    execute handler path.
+   The Patrol action-broker and proposal-catalog factories are wired the same
+   bounded way: `internal/api/router.go` installs the per-org factory closures
+   on the AI settings handler once at startup, and each broker or catalog is
+   constructed lazily per investigation run rather than eagerly per request, so
+   the wiring adds no fan-out to the protected hot path.
    Proxmox VM/LXC lifecycle execution follows that same routed-executor budget:
    router setup may register the Proxmox executor alongside Docker / Podman,
    but it must not resolve guests, probe node agents, call `qm` / `pct`, poll

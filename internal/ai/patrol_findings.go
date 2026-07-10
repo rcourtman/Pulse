@@ -14,7 +14,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
@@ -191,133 +190,6 @@ func (p *PatrolService) clearBlockedReason() {
 	p.lastBlockedCause = ""
 	p.lastBlockedAt = time.Time{}
 	p.mu.Unlock()
-}
-
-// generateRemediationPlanFromInvestigation persists a remediation plan artifact when
-// an investigation proposes a concrete fix command. This is intentionally separate
-// from the "approval" execution pipeline; it's a durable summary users can act on
-// later (often via Pulse Assistant).
-func (p *PatrolService) generateRemediationPlanFromInvestigation(findingID string) {
-	p.mu.RLock()
-	engine := p.remediationEngine
-	orchestrator := p.investigationOrchestrator
-	p.mu.RUnlock()
-
-	if engine == nil || orchestrator == nil || p.findings == nil || findingID == "" {
-		return
-	}
-
-	finding := p.findings.Get(findingID)
-	if finding == nil {
-		return
-	}
-
-	inv := orchestrator.GetInvestigationByFinding(findingID)
-	if inv == nil || inv.ProposedFix == nil || len(inv.ProposedFix.Commands) == 0 {
-		return
-	}
-	fix := inv.ProposedFix
-
-	targetHost := strings.TrimSpace(fix.TargetHost)
-	if targetHost == "" {
-		targetHost = "local"
-	}
-
-	// Map investigation risk strings into remediation risk levels.
-	riskLevel := aicontracts.RiskMedium
-	switch strings.ToLower(strings.TrimSpace(fix.RiskLevel)) {
-	case "low":
-		riskLevel = aicontracts.RiskLow
-	case "medium":
-		riskLevel = aicontracts.RiskMedium
-	case "high":
-		riskLevel = aicontracts.RiskHigh
-	case "critical":
-		riskLevel = aicontracts.RiskHigh
-	}
-
-	steps := make([]aicontracts.RemediationStep, 0, 2+len(fix.Commands))
-	steps = append(steps, aicontracts.RemediationStep{
-		Order:       1,
-		Description: "Review the finding context and confirm the proposed fix is appropriate",
-	})
-
-	blockedCount := 0
-	order := 2
-	for _, raw := range fix.Commands {
-		cmd := strings.TrimSpace(raw)
-		if cmd == "" {
-			continue
-		}
-
-		stepCommand := cmd
-		stepDesc := fmt.Sprintf("Run the proposed fix on %s", targetHost)
-		if safety.IsBlockedCommand(cmd) {
-			// Don't store blocked commands in the remediation engine; keep the plan as an
-			// artifact for users to review and apply manually (typically via Assistant).
-			stepCommand = ""
-			stepDesc = fmt.Sprintf("Blocked command proposed by investigation (review and apply manually): %s", cmd)
-			blockedCount++
-		}
-
-		steps = append(steps, aicontracts.RemediationStep{
-			Order:       order,
-			Description: stepDesc,
-			Command:     stepCommand,
-			Target:      targetHost,
-		})
-		order++
-	}
-
-	steps = append(steps, aicontracts.RemediationStep{
-		Order:       order,
-		Description: "Verify the issue is resolved (re-check metrics/logs, confirm service health)",
-	})
-
-	description := strings.TrimSpace(fix.Rationale)
-	if description == "" {
-		description = strings.TrimSpace(inv.Summary)
-	}
-	if description == "" {
-		description = finding.Description
-	}
-
-	plan := &aicontracts.RemediationPlan{
-		FindingID:   finding.ID,
-		ResourceID:  finding.ResourceID,
-		Title:       fmt.Sprintf("Investigation Fix: %s", finding.Title),
-		Description: description,
-		Category:    aicontracts.CategoryGuided,
-		RiskLevel:   riskLevel,
-		Steps:       steps,
-		Rationale:   fix.Description,
-	}
-
-	// Patrol findings are often reviewed hours/days later; keep investigation-derived
-	// plans around longer than the default ephemeral remediation TTL.
-	expires := time.Now().Add(7 * 24 * time.Hour)
-	plan.ExpiresAt = &expires
-
-	if blockedCount > 0 {
-		plan.Warnings = append(plan.Warnings, "Investigation suggested one or more commands that are blocked by safety policy. Review carefully and apply manually (prefer Pulse Assistant).")
-	}
-
-	if err := engine.CreatePlan(plan); err != nil {
-		// As a fallback, keep the plan as purely informational so it can still be
-		// surfaced to the user without enabling remediation engine execution.
-		for i := range plan.Steps {
-			if plan.Steps[i].Command == "" {
-				continue
-			}
-			plan.Steps[i].Description = fmt.Sprintf("%s: %s", plan.Steps[i].Description, plan.Steps[i].Command)
-			plan.Steps[i].Command = ""
-		}
-		plan.RiskLevel = aicontracts.RiskMedium
-		plan.Warnings = append(plan.Warnings, fmt.Sprintf("Failed to store command steps for automated remediation: %v", err))
-		if createErr := engine.CreatePlan(plan); createErr != nil {
-			log.Warn().Err(createErr).Str("findingID", finding.ID).Msg("failed to create fallback remediation plan")
-		}
-	}
 }
 
 // GetFindingsForResource returns active findings for a specific resource
@@ -1277,9 +1149,10 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 			}
 		}
 
-		// Investigation finished successfully. If it produced a proposed fix, persist a
-		// remediation plan artifact so the user can review and execute later.
-		p.generateRemediationPlanFromInvestigation(f.ID)
+		// Typed remediation now flows exclusively through the action
+		// proposal channel: the investigation's ActionReference points at
+		// the canonical action audit, so no command-shaped remediation
+		// plan artifact is generated from investigation prose.
 	}()
 
 	log.Info().

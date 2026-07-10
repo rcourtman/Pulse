@@ -321,7 +321,12 @@ the `white_label` branding entitlement.
     `RequireAuth` and scope checks, resource-policy redaction pass, or
     read-only Agent-context boundary. Router glue may connect providers, but
     it must not become an alternate command path, raw provider-command path,
-    config path, environment path, or secret-bearing metadata path.
+    config path, environment path, or secret-bearing metadata path. The Patrol
+    action-broker and proposal-catalog factory glue wired here is bound by the
+    same rule: it may connect the investigation orchestrator to the tenant-bound
+    action lifecycle, but it exposes only typed-proposal capture and gives the
+    orchestrator no autonomy control, command execution, or command-shaped
+    approval path.
     Router glue may also pass monitor-owned source freshness thresholds into
     unified-resource adapters, but those thresholds are operational cadence
     metadata only. They must not disclose credentials, command output, raw
