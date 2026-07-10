@@ -23,8 +23,11 @@ release-control source wins and this file must be corrected.
    configured provider or local model. We never cap how many times users can run
    Patrol through their own provider. The paid gate is on auto-execution of fixes,
    not on analysis or suggestions.
-3. **Smooth upgrade ladder.** No large price gaps. Every step up has a clear reason.
-4. **Simple to understand.** A homelabber should know which tier is right for them in
+3. **Distinct jobs, clear bundles.** Community, Relay, and Pro are not a
+   good/better/best ladder. Community is the monitoring foundation, Relay is the access
+   service, and Pro is the operations product. Pro may bundle Relay connectivity, but
+   public copy must not use that entitlement relationship to recommend one job over another.
+4. **Simple to understand.** A homelabber should know which product fits the job in
    under 10 seconds.
 
 ---
@@ -94,7 +97,7 @@ than sold by monitored-system volume.
 
 ---
 
-## Self-Hosted Tiers
+## Self-Hosted Products
 
 ### Community (Free) — $0
 
@@ -133,7 +136,8 @@ outcomes, and record what happened.
 | Element | Value |
 |---|---|
 | Monitoring scope | **Core self-hosted monitoring included** |
-| Everything in Free | Yes |
+| Product job | Secure remote access, Mobile pairing, and push delivery |
+| Community monitoring | Remains free and unchanged |
 | Relay remote access | **Yes** |
 | Pulse Mobile handoff pairing | **Yes** (handoff and push notifications) |
 | Push notifications | **Yes** |
@@ -144,16 +148,18 @@ outcomes, and record what happened.
 | RBAC/Audit/Reporting | No |
 | Reporting | No |
 
-**Positioning:** The convenience tier. It should feel cheap enough to buy on the spot when
-someone wants secure remote access, Pulse Mobile handoff pairing, push notifications, and longer history
-without changing their self-hosted monitoring scope.
+**Positioning:** Relay is the access service. Present it when someone wants secure remote
+access, Pulse Mobile handoff pairing, push notifications, and longer history without changing
+their self-hosted monitoring scope. Do not recommend Relay over Pro, or describe Relay as a
+step toward Pro; the products solve different jobs.
 
 ### Pro — $8.99/month or $79/year
 
 | Element | Value |
 |---|---|
 | Monitoring scope | **Core self-hosted monitoring included** |
-| Everything in Relay | Yes |
+| Product job | Patrol-powered investigation and governed operations |
+| Relay connectivity | Included as a bundled service |
 | Patrol modes | **Yes** (choose how much Patrol can do) |
 | Issue investigation | **Yes** |
 | Governed fixes | **Yes** (approved execution, safety preflight, rollback, verification) |
@@ -165,14 +171,15 @@ without changing their self-hosted monitoring scope.
 | PDF/CSV reporting | **Yes** |
 | Self-hosted trial acquisition | No; local trial CTAs are retired for v6 GA |
 
-**Positioning:** For serious self-hosted operators who want Pulse to move from monitoring
-into operations. The marketing pitch focuses on three things:
+**Positioning:** Pro is the operations product for self-hosted operators who want Pulse to
+move from monitoring into investigation and governed action. It is not "more Relay." The
+marketing pitch focuses on three things:
 1. "Choose Patrol mode" (how much Patrol can do)
 2. "Let Patrol investigate and fix governed issues" (issue investigation, governed fixes, verification)
 3. "Keep longer operating memory" (90-day history)
 
-Relay convenience and the team extras (RBAC, audit logging, reporting, and agent
-profiles) are included, but they are supporting value rather than the headline.
+Relay connectivity and the team extras (RBAC, audit logging, reporting, and agent profiles)
+are bundled, but they are supporting entitlements rather than evidence of a product ladder.
 
 ### Pro+ — Legacy continuity tier only
 
@@ -514,12 +521,12 @@ explain monitored-system identity:
 ### 30-day post-launch review
 - Free → Relay opt-in purchase rate
 - Free → Pro opt-in purchase rate
-- Relay → Pro upgrade rate
+- Relay customers who later adopt Pro operations
 - Which explicit commercial handoffs are used most (pricing, activation, recovery, hosted)
-- Support load per tier
+- Support load per product
 
 ### 60-day post-launch review
-- Churn by tier
+- Churn by product
 - Revenue per user (actual vs projected)
 - Cloud margin analysis
 - MSP pipeline health
@@ -531,6 +538,7 @@ explain monitored-system identity:
 
 | Date | Change | Author |
 |---|---|---|
+| 2026-07-10 | Reframed Community, Relay, and Pro as distinct job-based product choices rather than a good/better/best ladder. Removed product recommendations from public pricing while preserving Relay connectivity as a bundled Pro entitlement. | Richard |
 | 2026-06-02 | Reconciled MSP pricing evidence with the provider-operated architecture: signed MSP license, Stripe-free provider control plane, isolated Pulse runtime per client, 5/15/40 client workspace caps, and request-assisted access until launch approval. | Richard |
 | 2026-04-29 | Replaced stale capacity-style monitoring phrasing with core-monitoring-included language across active v6 docs and upgrade-return copy so Community does not read like a former capacity upsell. | Codex |
 | 2026-04-23 | Removed stale self-hosted monitored-system capacity and Pro+ public-checkout language. Reaffirmed Community / Relay / Pro as current public self-hosted tiers, with Pro+ as continuity only and Pro value centered on operations, history, and admin controls. | Codex |
