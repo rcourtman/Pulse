@@ -36,13 +36,13 @@ vi.mock('@/stores/updates', () => ({
     versionInfo: () => ({ version: '6.0.0', deploymentType: 'systemd' }),
     isUpdateVisible: () => true,
     dismissUpdate: vi.fn(),
+    applyUpdate: vi.fn(() => Promise.resolve(true)),
   },
 }));
 
 vi.mock('@/api/updates', () => ({
   UpdatesAPI: {
     getUpdatePlan: vi.fn(() => Promise.resolve(mock.plan)),
-    applyUpdate: vi.fn(() => Promise.resolve()),
   },
 }));
 

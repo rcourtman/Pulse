@@ -14,7 +14,6 @@ import {
   getBackupIntervalSummary,
   getDockerUpdateActionsUpdateErrorMessage,
   getHideLocalLoginUpdateErrorMessage,
-  getStartUpdateErrorMessage,
   getSystemSettingsSaveErrorMessage,
   getTelemetryUpdateErrorMessage,
   getTemperatureMonitoringUpdateErrorMessage,
@@ -461,18 +460,13 @@ export function useSystemSettingsState({
   };
 
   const handleConfirmUpdate = async () => {
-    const info = updateInfo();
-    if (!info?.downloadUrl) {
-      return;
-    }
-
     setIsInstallingUpdate(true);
     try {
-      await UpdatesAPI.applyUpdate(info.downloadUrl);
-      setShowUpdateConfirmation(false);
-    } catch (error) {
-      logger.error('Failed to start update', error);
-      notificationStore.error(getStartUpdateErrorMessage());
+      // The shared store action owns the POST and error toast.
+      const started = await updateStore.applyUpdate();
+      if (started) {
+        setShowUpdateConfirmation(false);
+      }
     } finally {
       setIsInstallingUpdate(false);
     }

@@ -68,17 +68,14 @@ export function UpdateBanner() {
   };
 
   const handleConfirmUpdate = async () => {
-    const info = updateStore.updateInfo();
-    if (!info?.downloadUrl) return;
-
     setIsApplying(true);
     try {
-      await UpdatesAPI.applyUpdate(info.downloadUrl);
-      // Close confirmation - GlobalUpdateProgressWatcher will auto-open the progress modal
-      setShowConfirmModal(false);
-    } catch (error) {
-      logger.error('Failed to start update', error);
-      alert('Failed to start update. Please try again.');
+      // The shared store action owns the POST and error toast.
+      const started = await updateStore.applyUpdate();
+      if (started) {
+        // Close confirmation - GlobalUpdateProgressWatcher will auto-open the progress modal
+        setShowConfirmModal(false);
+      }
     } finally {
       setIsApplying(false);
     }

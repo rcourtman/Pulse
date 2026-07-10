@@ -3,11 +3,22 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const mockGetVersion = vi.fn();
 const mockCheckForUpdates = vi.fn();
+const mockApplyUpdate = vi.fn();
+const mockNotifySuccess = vi.fn();
+const mockNotifyError = vi.fn();
 
 vi.mock('@/api/updates', () => ({
   UpdatesAPI: {
     getVersion: (...args: unknown[]) => mockGetVersion(...args),
     checkForUpdates: (...args: unknown[]) => mockCheckForUpdates(...args),
+    applyUpdate: (...args: unknown[]) => mockApplyUpdate(...args),
+  },
+}));
+
+vi.mock('@/stores/notifications', () => ({
+  notificationStore: {
+    success: (...args: unknown[]) => mockNotifySuccess(...args),
+    error: (...args: unknown[]) => mockNotifyError(...args),
   },
 }));
 
@@ -43,6 +54,9 @@ describe('updateStore', () => {
     localStorage.clear();
     mockGetVersion.mockReset();
     mockCheckForUpdates.mockReset();
+    mockApplyUpdate.mockReset();
+    mockNotifySuccess.mockReset();
+    mockNotifyError.mockReset();
   });
 
   it('retries transient update-check failures before succeeding', async () => {
@@ -111,5 +125,129 @@ describe('updateStore', () => {
     // Dismissed version (v1.2.0) !== latest version (v1.3.0), so dismissed is cleared
     expect(updateStore.isDismissed()).toBe(false);
     expect(updateStore.updateAvailable()).toBe(true);
+  });
+
+  describe('applyUpdate', () => {
+    it('posts the apply and records the pending-apply marker before it', async () => {
+      mockApplyUpdate.mockResolvedValue({ status: 'ok', message: '' });
+
+      const updateStore = await loadUpdateStore();
+      updateStore.simulateUpdate('v1.1.0');
+
+      const started = await updateStore.applyUpdate();
+
+      expect(started).toBe(true);
+      expect(mockApplyUpdate).toHaveBeenCalledWith('#');
+      const persisted = JSON.parse(localStorage.getItem(STORAGE_KEYS.UPDATES) ?? '{}');
+      expect(persisted.pendingApply).toMatchObject({
+        fromVersion: 'v6.0.0',
+        toVersion: 'v1.1.0',
+      });
+      expect(mockNotifyError).not.toHaveBeenCalled();
+    });
+
+    it('clears the marker and toasts the shared error message when the apply fails', async () => {
+      mockApplyUpdate.mockRejectedValue(new Error('boom'));
+
+      const updateStore = await loadUpdateStore();
+      updateStore.simulateUpdate('v1.1.0');
+
+      const started = await updateStore.applyUpdate();
+
+      expect(started).toBe(false);
+      expect(mockNotifyError).toHaveBeenCalledWith('Unable to start the update. Please try again.');
+      const persisted = JSON.parse(localStorage.getItem(STORAGE_KEYS.UPDATES) ?? '{}');
+      expect(persisted.pendingApply).toBeUndefined();
+    });
+
+    it('does nothing without a download URL', async () => {
+      const updateStore = await loadUpdateStore();
+
+      const started = await updateStore.applyUpdate();
+
+      expect(started).toBe(false);
+      expect(mockApplyUpdate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('post-update confirmation', () => {
+    const seedPendingApply = (fromVersion: string, toVersion: string) => {
+      localStorage.setItem(
+        STORAGE_KEYS.UPDATES,
+        JSON.stringify({
+          lastCheck: 0,
+          pendingApply: { fromVersion, toVersion, startedAt: Date.now() },
+        }),
+      );
+    };
+
+    it('toasts once when the running version moved off the pre-update version', async () => {
+      seedPendingApply('v1.0.0', 'v1.1.0');
+      mockGetVersion.mockResolvedValue({ ...baseVersionInfo, version: 'v1.1.0' });
+      mockCheckForUpdates.mockResolvedValue({
+        ...baseUpdateInfo,
+        available: false,
+        currentVersion: 'v1.1.0',
+      });
+
+      const updateStore = await loadUpdateStore();
+      await updateStore.checkForUpdates(true);
+
+      expect(mockNotifySuccess).toHaveBeenCalledWith('Updated to v1.1.0');
+      const persisted = JSON.parse(localStorage.getItem(STORAGE_KEYS.UPDATES) ?? '{}');
+      expect(persisted.pendingApply).toBeUndefined();
+
+      // The marker is consumed: a later check must not toast again.
+      mockNotifySuccess.mockClear();
+      await updateStore.checkForUpdates(true);
+      expect(mockNotifySuccess).not.toHaveBeenCalled();
+    });
+
+    it('confirms even for dev builds that skip the update check itself', async () => {
+      seedPendingApply('v1.0.0', 'v1.1.0');
+      mockGetVersion.mockResolvedValue({
+        ...baseVersionInfo,
+        version: 'v1.1.0',
+        isDevelopment: true,
+      });
+
+      const updateStore = await loadUpdateStore();
+      await updateStore.checkForUpdates(true);
+
+      expect(mockCheckForUpdates).not.toHaveBeenCalled();
+      expect(mockNotifySuccess).toHaveBeenCalledWith('Updated to v1.1.0');
+    });
+
+    it('clears the marker silently when the version did not change', async () => {
+      seedPendingApply('v1.0.0', 'v1.1.0');
+      mockGetVersion.mockResolvedValue({ ...baseVersionInfo, version: 'v1.0.0' });
+      mockCheckForUpdates.mockResolvedValue({ ...baseUpdateInfo, available: false });
+
+      const updateStore = await loadUpdateStore();
+      await updateStore.checkForUpdates(true);
+
+      expect(mockNotifySuccess).not.toHaveBeenCalled();
+      const persisted = JSON.parse(localStorage.getItem(STORAGE_KEYS.UPDATES) ?? '{}');
+      expect(persisted.pendingApply).toBeUndefined();
+    });
+
+    it('does not resurrect a consumed marker when the check later saves state', async () => {
+      // Fresh-path save at the end of checkForUpdates spreads the in-memory
+      // state; a stale copy would re-persist the consumed marker.
+      seedPendingApply('v1.0.0', 'v1.1.0');
+      mockGetVersion.mockResolvedValue({ ...baseVersionInfo, version: 'v1.1.0' });
+      mockCheckForUpdates.mockResolvedValue({
+        ...baseUpdateInfo,
+        currentVersion: 'v1.1.0',
+        latestVersion: 'v1.2.0',
+      });
+
+      const updateStore = await loadUpdateStore();
+      await updateStore.checkForUpdates(true);
+
+      const persisted = JSON.parse(localStorage.getItem(STORAGE_KEYS.UPDATES) ?? '{}');
+      expect(persisted.updateInfo?.latestVersion).toBe('v1.2.0');
+      expect(persisted.pendingApply).toBeUndefined();
+    });
   });
 });

@@ -1,18 +1,29 @@
 import { createSignal } from 'solid-js';
 import { UpdatesAPI } from '@/api/updates';
 import type { UpdateInfo, VersionInfo } from '@/api/updates';
+import { notificationStore } from '@/stores/notifications';
 import { getPulseHostname } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { getStartUpdateErrorMessage } from '@/utils/systemSettingsPresentation';
 
 const CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
 const TRANSIENT_RETRY_MAX_ATTEMPTS = 3;
 const TRANSIENT_RETRY_BASE_DELAY_MS = import.meta.env.MODE === 'test' ? 0 : 400;
 
+// Persisted before POSTing an apply so the boot after the post-update page
+// reload can confirm the update landed (in-memory state does not survive it).
+interface PendingApply {
+  fromVersion: string;
+  toVersion: string;
+  startedAt: number;
+}
+
 interface UpdateState {
   lastCheck: number;
   dismissedVersion?: string;
   updateInfo?: UpdateInfo;
+  pendingApply?: PendingApply;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -65,6 +76,21 @@ const normalizeUpdateInfo = (value: unknown): UpdateInfo | undefined => {
   };
 };
 
+const normalizePendingApply = (value: unknown): PendingApply | undefined => {
+  if (!isRecord(value)) return undefined;
+
+  const { fromVersion, toVersion, startedAt } = value;
+  if (
+    typeof fromVersion !== 'string' ||
+    typeof toVersion !== 'string' ||
+    !isFiniteNumber(startedAt)
+  ) {
+    return undefined;
+  }
+
+  return { fromVersion, toVersion, startedAt };
+};
+
 const normalizeUpdateState = (value: unknown): UpdateState => {
   if (!isRecord(value)) {
     return { lastCheck: 0 };
@@ -81,6 +107,11 @@ const normalizeUpdateState = (value: unknown): UpdateState => {
   const normalizedUpdateInfo = normalizeUpdateInfo(value.updateInfo);
   if (normalizedUpdateInfo) {
     normalized.updateInfo = normalizedUpdateInfo;
+  }
+
+  const normalizedPendingApply = normalizePendingApply(value.pendingApply);
+  if (normalizedPendingApply) {
+    normalized.pendingApply = normalizedPendingApply;
   }
 
   return normalized;
@@ -164,6 +195,59 @@ export const withTransientRetry = async <T>(
   }
 };
 
+const markApplyStarted = (fromVersion: string, toVersion: string) => {
+  const state = loadState();
+  saveState({ ...state, pendingApply: { fromVersion, toVersion, startedAt: Date.now() } });
+};
+
+const clearPendingApply = () => {
+  const state = loadState();
+  if (!state.pendingApply) return;
+  delete state.pendingApply;
+  saveState(state);
+};
+
+const formatVersionLabel = (version: string) =>
+  version.startsWith('v') ? version : `v${version}`;
+
+// One-time post-update confirmation: consume the pending-apply marker on the
+// first version fetch after an apply. When the running version moved off the
+// recorded pre-update version, the update landed; toast it once. When it did
+// not (apply failed or rolled back), clear the marker silently. Mutates the
+// caller's state object so later saveState(state) calls in the same check
+// cannot resurrect the consumed marker.
+const confirmPendingApply = (currentVersion: string, state: UpdateState) => {
+  const pending = state.pendingApply;
+  if (!pending) return;
+
+  delete state.pendingApply;
+  saveState(state);
+
+  if (currentVersion && currentVersion !== pending.fromVersion) {
+    notificationStore.success(`Updated to ${formatVersionLabel(currentVersion)}`);
+  }
+};
+
+// Shared confirm/apply action for both update surfaces (banner and Settings).
+// Persists the pre-update version so the post-restart boot can confirm the
+// update, and owns the single error-handling path. Returns true when the
+// backend accepted the apply request.
+const applyUpdate = async (): Promise<boolean> => {
+  const info = updateInfo();
+  if (!info?.downloadUrl) return false;
+
+  markApplyStarted(versionInfo()?.version || info.currentVersion, info.latestVersion);
+  try {
+    await UpdatesAPI.applyUpdate(info.downloadUrl);
+    return true;
+  } catch (error) {
+    clearPendingApply();
+    logger.error('Failed to start update', error);
+    notificationStore.error(getStartUpdateErrorMessage());
+    return false;
+  }
+};
+
 // Check for updates
 const checkForUpdates = async (force = false): Promise<void> => {
   // Don't check if already checking
@@ -181,6 +265,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
         const currentVersion = await withTransientRetry('version check', () =>
           UpdatesAPI.getVersion(),
         );
+        confirmPendingApply(currentVersion.version, state);
         if (state.updateInfo.currentVersion !== currentVersion.version) {
           // Version changed, invalidate cache and check again
           state.updateInfo = undefined;
@@ -215,6 +300,7 @@ const checkForUpdates = async (force = false): Promise<void> => {
     // First get version info to check deployment type
     const version = await withTransientRetry('version check', () => UpdatesAPI.getVersion());
     setVersionInfo(version);
+    confirmPendingApply(version.version, state);
 
     // Clear cache if version has changed (user updated)
     if (state.updateInfo && state.updateInfo.currentVersion !== version.version) {
@@ -319,6 +405,7 @@ export const updateStore = {
 
   // Actions
   checkForUpdates,
+  applyUpdate,
   dismissUpdate,
   clearDismissed,
 

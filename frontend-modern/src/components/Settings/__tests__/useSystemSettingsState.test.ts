@@ -162,7 +162,6 @@ describe('useSystemSettingsState', () => {
       UpdatesAPI: {
         getVersion: getVersionMock,
         getUpdatePlan: vi.fn(),
-        applyUpdate: vi.fn(),
       },
     }));
 
@@ -195,6 +194,7 @@ describe('useSystemSettingsState', () => {
     vi.doMock('@/stores/updates', () => ({
       updateStore: {
         checkForUpdates: vi.fn().mockResolvedValue(undefined),
+        applyUpdate: vi.fn().mockResolvedValue(true),
         updateInfo: vi.fn().mockReturnValue(null),
         versionInfo: updateStoreVersionInfoMock,
         isDismissed: vi.fn().mockReturnValue(false),
