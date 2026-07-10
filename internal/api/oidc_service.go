@@ -85,6 +85,34 @@ func (m *OIDCServiceManager) InitializeProvider(ctx context.Context, providerID 
 	return nil
 }
 
+// LookupStateProvider returns the provider ID whose pending authorization
+// state store holds the given state token. The legacy v5 callback path
+// (/api/oidc/callback) does not encode a provider ID, so the callback handler
+// uses this to recover the provider that actually initiated the flow. The
+// state is only peeked, never consumed: single-use semantics are enforced by
+// the consumeState call that follows in the callback handler.
+func (m *OIDCServiceManager) LookupStateProvider(state string) (string, bool) {
+	if m == nil || state == "" {
+		return "", false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for providerID, service := range m.services {
+		entry, ok := service.peekState(state)
+		if !ok || entry == nil {
+			continue
+		}
+		// The entry records the provider that minted it; require it to match
+		// the service holding it so a stale or foreign entry can never route
+		// resolution to a different provider.
+		if entry.ProviderID != providerID {
+			continue
+		}
+		return providerID, true
+	}
+	return "", false
+}
+
 // RemoveService removes and cleans up the OIDC service for a provider.
 func (m *OIDCServiceManager) RemoveService(providerID string) {
 	if m == nil {
@@ -259,6 +287,14 @@ func (s *OIDCService) newStateEntry(providerID, returnTo string) (string, *oidcS
 
 func (s *OIDCService) consumeState(state string) (*oidcStateEntry, bool) {
 	return s.stateStore.Consume(state)
+}
+
+// peekState returns the pending state entry without consuming it.
+func (s *OIDCService) peekState(state string) (*oidcStateEntry, bool) {
+	if s == nil || s.stateStore == nil {
+		return nil, false
+	}
+	return s.stateStore.Peek(state)
 }
 
 func (s *OIDCService) authCodeURL(state string, entry *oidcStateEntry) string {
@@ -474,6 +510,23 @@ func (s *oidcStateStore) Consume(state string) (*oidcStateEntry, bool) {
 		return nil, false
 	}
 
+	return entry, true
+}
+
+// Peek returns the entry for a state without consuming it. Expired entries
+// are treated as absent. The entry stays in the store, so a subsequent
+// Consume call keeps its single-use semantics.
+func (s *oidcStateStore) Peek(state string) (*oidcStateEntry, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	entry, exists := s.entries[state]
+	if !exists || entry == nil {
+		return nil, false
+	}
+	if time.Now().After(entry.ExpiresAt) {
+		return nil, false
+	}
 	return entry, true
 }
 

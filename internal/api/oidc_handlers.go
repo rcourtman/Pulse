@@ -297,6 +297,12 @@ func extractOIDCProviderID(urlPath, endpoint string) string {
 	return ""
 }
 
+// isEnabledOIDCProvider reports whether the provider is a configured, enabled
+// SSO OIDC provider.
+func isEnabledOIDCProvider(provider *config.SSOProvider) bool {
+	return provider != nil && provider.Type == config.SSOProviderTypeOIDC && provider.Enabled
+}
+
 // buildSSOOIDCCallbackURL constructs the callback URL for a multi-provider OIDC flow.
 // The path includes the provider ID: /api/oidc/{providerID}/callback
 func buildSSOOIDCCallbackURL(req *http.Request, providerID string, configuredURL string) string {
@@ -464,8 +470,28 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
+	query := req.URL.Query()
+
 	provider := r.getSSOProvider(providerID)
-	if provider == nil || provider.Type != config.SSOProviderTypeOIDC || !provider.Enabled {
+	if providerID == config.LegacyOIDCProviderID && !isEnabledOIDCProvider(provider) {
+		// The legacy v5 callback path (/api/oidc/callback) does not name a
+		// provider, so extractOIDCProviderID hard-maps it to the migrated
+		// legacy provider ID. Providers created in the v6 UI get a random
+		// UUID, yet their IdP may still be registered with the legacy
+		// redirect URI (carried over from v5 or configured explicitly), so
+		// the sentinel misses. Recover the provider that actually initiated
+		// the flow from its pending authorization state. The state is only
+		// peeked here; it stays single-use for consumeState below.
+		if recoveredID, ok := r.oidcManager.LookupStateProvider(query.Get("state")); ok && validateProviderID(recoveredID) {
+			if recovered := r.getSSOProvider(recoveredID); isEnabledOIDCProvider(recovered) {
+				log.Debug().Str("provider_id", recoveredID).Msg("Resolved legacy OIDC callback path to initiating provider via pending state")
+				providerID = recoveredID
+				provider = recovered
+			}
+		}
+	}
+	if !isEnabledOIDCProvider(provider) {
+		log.Warn().Str("provider_id", providerID).Str("path", req.URL.Path).Msg("OIDC callback rejected: provider not found or not enabled")
 		r.redirectOIDCError(w, req, "/", "provider_not_found")
 		return
 	}
@@ -497,7 +523,6 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	query := req.URL.Query()
 	if errParam := query.Get("error"); errParam != "" {
 		log.Warn().Str("error", errParam).Str("provider_id", providerID).Msg("OIDC provider returned error")
 		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", "", GetClientIP(req), req.URL.Path, false, "Provider error: "+errParam)
