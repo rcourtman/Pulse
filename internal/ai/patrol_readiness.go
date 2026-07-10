@@ -51,10 +51,10 @@ func EvaluatePatrolConfigReadiness(cfg *config.AIConfig) PatrolConfigReadiness {
 		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseSettingsPersistence, "Assistant & Patrol settings could not be loaded from persistence.")
 	}
 	if !cfg.Enabled {
-		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseAssistantDisabled, "Pulse Assistant is disabled, so Patrol cannot run model-backed verification.")
+		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseAssistantDisabled, "Pulse Intelligence is turned off, so Patrol cannot run.")
 	}
 	if !cfg.IsConfigured() {
-		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseProviderNotConfigured, "No AI provider is configured for Patrol.")
+		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseProviderNotConfigured, "No AI provider is configured yet. Add a provider API key or an Ollama server on the Provider & Models settings page.")
 	}
 
 	model := strings.TrimSpace(cfg.GetPatrolModel())

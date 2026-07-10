@@ -21,7 +21,7 @@ import { formatRelativeTime } from '@/utils/format';
 import { getPatrolPageHeaderMeta } from '@/utils/patrolPagePresentation';
 import { getPatrolTriggerStatusSummary } from '@/utils/patrolRunPresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
-import { getPatrolProviderSettingsAction } from '@/utils/patrolRuntimeActions';
+import { getPatrolSetupAction } from '@/utils/patrolRuntimeActions';
 import { getPatrolRecencyPresentation } from '@/utils/patrolSummaryPresentation';
 import { PATROL_CONTROL_ANCHOR, PATROL_OPERATIONS_LOOP_ANCHOR } from '@/routing/resourceLinks';
 import type { PatrolConfigurationFailureInput } from './patrolInvestigationContextModel';
@@ -74,7 +74,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       manualRunBlockedReason: state.triggerPatrolDisabledReason(),
     }),
   );
-  const providerSetupAction = getPatrolProviderSettingsAction();
+  const providerSetupAction = () => getPatrolSetupAction(state.patrolReadiness()?.cause);
   const runControlBusy = createMemo(
     () =>
       state.isTriggeringPatrol() || state.manualRunRequested() || state.patrolStream.isStreaming(),
@@ -99,9 +99,9 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
       when={!runBlockedByProviderSetup()}
       fallback={
         <A
-          href={providerSetupAction.href}
-          aria-label={`Check Patrol model: ${state.triggerPatrolDisabledReason() || 'Patrol model needs attention'}`}
-          title={state.triggerPatrolDisabledReason() || 'Open Patrol settings'}
+          href={providerSetupAction().href}
+          aria-label={`${providerSetupAction().label}: ${state.triggerPatrolDisabledReason() || 'Patrol setup needs attention'}`}
+          title={state.triggerPatrolDisabledReason() || providerSetupAction().label}
           class={className}
         >
           <SettingsIcon class="w-4 h-4" />

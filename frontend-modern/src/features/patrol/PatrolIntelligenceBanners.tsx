@@ -9,7 +9,7 @@ import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
 import { getAIProviderDisplayName } from '@/utils/aiProviderPresentation';
-import { PATROL_PROVIDER_SETTINGS_ACTION } from '@/utils/patrolRuntimeActions';
+import { getPatrolSetupAction } from '@/utils/patrolRuntimeActions';
 import { getPatrolAutonomyAvailabilityPresentation } from './patrolAutonomyAvailability';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
@@ -229,11 +229,11 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
             </div>
             <Show when={shouldShowReadinessAction()}>
               <a
-                href={PATROL_PROVIDER_SETTINGS_ACTION.href}
+                href={getPatrolSetupAction(state.patrolReadiness()?.cause).href}
                 class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-md border border-amber-200 bg-amber-100 text-amber-900 transition-colors hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-100 dark:hover:bg-amber-900"
               >
                 <SettingsIcon class="w-3.5 h-3.5" />
-                {PATROL_PROVIDER_SETTINGS_ACTION.label}
+                {getPatrolSetupAction(state.patrolReadiness()?.cause).label}
               </a>
             </Show>
           </div>
@@ -261,11 +261,11 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
             </div>
             <div class="flex items-center gap-2">
               <a
-                href={PATROL_PROVIDER_SETTINGS_ACTION.href}
+                href={getPatrolSetupAction(state.patrolReadiness()?.cause).href}
                 class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-700 rounded-md hover:bg-amber-200 dark:hover:bg-amber-900 transition-colors"
               >
                 <SettingsIcon class="w-3.5 h-3.5" />
-                {PATROL_PROVIDER_SETTINGS_ACTION.label}
+                {getPatrolSetupAction(state.patrolReadiness()?.cause).label}
               </a>
             </div>
           </div>

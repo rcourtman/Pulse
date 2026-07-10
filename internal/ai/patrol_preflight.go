@@ -127,9 +127,9 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 	}
 	if !cfg.Enabled {
 		result.Cause = PatrolFailureCauseAssistantDisabled
-		result.Title = "Pulse Patrol: Assistant disabled"
-		result.Summary = "Pulse Assistant is not enabled"
-		result.Recommendation = "Enable Pulse Assistant in Assistant & Patrol settings, then re-run preflight."
+		result.Title = "Pulse Patrol: Pulse Intelligence turned off"
+		result.Summary = "Pulse Intelligence is turned off"
+		result.Recommendation = "Turn on Pulse Intelligence on the Provider & Models settings page, then run Check Patrol model again."
 		result.DurationMs = time.Since(started).Milliseconds()
 		s.recordPatrolPreflight(result, time.Now())
 		return result
@@ -143,7 +143,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 		result.Cause = PatrolFailureCauseModelNotSelected
 		result.Title = "Pulse Patrol: No model selected"
 		result.Summary = "Patrol has no model selected"
-		result.Recommendation = "Select a Patrol model in Assistant & Patrol settings, then re-run preflight."
+		result.Recommendation = "Select a Patrol model in Patrol settings. If no models are listed, add a provider API key or an Ollama server on the Provider & Models settings page first."
 		result.DurationMs = time.Since(started).Milliseconds()
 		s.recordPatrolPreflight(result, time.Now())
 		return result

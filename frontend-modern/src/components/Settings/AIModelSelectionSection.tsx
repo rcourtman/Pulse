@@ -1,6 +1,8 @@
+import { A } from '@solidjs/router';
 import { Component, Show } from 'solid-js';
 import { AIProviderConfigurationSection } from '@/components/Settings/AIProviderConfigurationSection';
 import { isModelProviderConfigured } from '@/components/Settings/aiSettingsModel';
+import { settingsTabPath } from '@/components/Settings/settingsNavigationModel';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
 import { AIModelPicker } from '@/components/shared/AIModelPicker';
 import { formField, labelClass, controlClass } from '@/components/shared/Form';
@@ -122,7 +124,10 @@ export const PatrolPreflightControl: Component<{ state: AISettingsState }> = (co
     if (r.cause === 'model_tool_support_unverified') {
       return 'Run Patrol once to confirm this model works correctly in practice.';
     }
-    return r.summary || r.message || '';
+    // Summary and message are often the same string on config-level
+    // failures; don't render the headline twice.
+    const fallback = r.summary || r.message || '';
+    return fallback === headline() ? '' : fallback;
   };
 
   const formatDuration = (ms: number) => {
@@ -230,15 +235,31 @@ export const AIModelOverrideField: Component<{
       <Show
         when={selectableModels().length > 0}
         fallback={
-          <input
-            type="text"
-            value={selectedModel()}
-            onInput={(e) => setSelectedModel(e.currentTarget.value)}
-            placeholder="Use shared default model"
-            aria-label={config().ariaLabel}
-            class={controlClass()}
-            disabled={state.saving()}
-          />
+          <Show
+            when={state.hasConfiguredProvider()}
+            fallback={
+              <p class="rounded-md border border-border bg-surface-alt px-3 py-2 text-xs text-base-content">
+                No AI provider is configured yet. Add an API key or an Ollama server on{' '}
+                <A
+                  href={settingsTabPath('system-ai')}
+                  class="font-medium text-blue-600 underline dark:text-blue-400"
+                >
+                  Provider & Models
+                </A>
+                , then pick a model here.
+              </p>
+            }
+          >
+            <input
+              type="text"
+              value={selectedModel()}
+              onInput={(e) => setSelectedModel(e.currentTarget.value)}
+              placeholder="Use shared default model"
+              aria-label={config().ariaLabel}
+              class={controlClass()}
+              disabled={state.saving()}
+            />
+          </Show>
         }
       >
         <AIModelPicker

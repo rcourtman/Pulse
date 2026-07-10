@@ -67,7 +67,8 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
     expect(workspaceSource).not.toContain(removedAllModeCopy);
     expect(workspaceSource).toContain('Patrol cannot run yet');
     expect(workspaceSource).toContain('Once ready');
-    expect(workspaceSource).toContain('getPatrolProviderSettingsAction');
+    expect(workspaceSource).toContain('getPatrolSetupAction');
+    expect(workspaceSource).toContain('getPatrolSetupHint');
     expect(workspaceSource).toContain('state.patrolRunHistory.value()?.length');
     expect(workspaceSource).not.toContain('showControls={!state.selectedRun() && !isSetupOnly()}');
     expect(PATROL_WORKSPACE_SETUP_TITLE).toBe('Patrol needs setup');

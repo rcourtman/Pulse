@@ -22,7 +22,7 @@ import {
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
-import { getPatrolProviderSettingsAction } from '@/utils/patrolRuntimeActions';
+import { getPatrolSetupAction, getPatrolSetupHint } from '@/utils/patrolRuntimeActions';
 import {
   getPatrolProInvestigationHandoff,
   getPatrolQueueBadgeLabel,
@@ -67,7 +67,8 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
   const isHistoryOpen = () => state.activeTab() === 'history';
   const isSetupOnly = () =>
     !isHistoryOpen() && !state.selectedRun() && state.shouldShowPatrolSetupOnly();
-  const setupAction = getPatrolProviderSettingsAction();
+  const setupAction = () => getPatrolSetupAction(state.patrolReadiness()?.cause);
+  const setupHint = () => getPatrolSetupHint(state.patrolReadiness()?.cause);
   const setupFinding = () => state.findingsTabBadgeFindings().find(isPatrolRuntimeFinding);
   const setupReason = () => {
     const finding = setupFinding();
@@ -318,18 +319,17 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
                   <h3 class="text-sm font-semibold">Patrol cannot run yet</h3>
                 </div>
                 <p class="mt-2 text-sm leading-6 text-base-content">{setupReason()}</p>
-                <p class="mt-1 text-xs leading-5 text-muted">
-                  Open Patrol settings and run the model check. Provider connectivity can be healthy
-                  even when the selected model cannot use Patrol tools.
-                </p>
+                <Show when={setupHint()}>
+                  <p class="mt-1 text-xs leading-5 text-muted">{setupHint()}</p>
+                </Show>
                 <ButtonLink
-                  href={setupAction.href}
+                  href={setupAction().href}
                   variant="primary"
                   size="sm"
                   class="mt-4 gap-1.5"
                 >
                   <SettingsIcon class="h-4 w-4" aria-hidden="true" />
-                  {setupAction.label}
+                  {setupAction().label}
                 </ButtonLink>
               </div>
               <div class="rounded-md border border-amber-200 bg-surface/80 p-3 dark:border-amber-900">

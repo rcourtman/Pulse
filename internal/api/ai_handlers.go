@@ -5115,13 +5115,13 @@ func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService 
 	addCheck("settings", patrolReadinessReady, ai.PatrolFailureCauseNone, "Settings persistence", "Assistant & Patrol settings are readable.", "")
 
 	if !cfg.Enabled {
-		addCheck("enabled", patrolReadinessNotReady, ai.PatrolFailureCauseAssistantDisabled, "Assistant enabled", "Pulse Assistant is disabled, so Patrol cannot run model-backed verification.", "open_provider_settings")
+		addCheck("enabled", patrolReadinessNotReady, ai.PatrolFailureCauseAssistantDisabled, "Assistant enabled", "Pulse Intelligence is turned off, so Patrol cannot run.", "open_provider_settings")
 	} else {
 		addCheck("enabled", patrolReadinessReady, ai.PatrolFailureCauseNone, "Assistant enabled", "Pulse Assistant is enabled for Patrol verification.", "")
 	}
 
 	if !cfg.IsConfigured() {
-		addCheck("provider", patrolReadinessNotReady, ai.PatrolFailureCauseProviderNotConfigured, "Provider configured", "No AI provider is configured for Patrol.", "open_provider_settings")
+		addCheck("provider", patrolReadinessNotReady, ai.PatrolFailureCauseProviderNotConfigured, "Provider configured", "No AI provider is configured yet. Add a provider API key or an Ollama server on the Provider & Models settings page.", "open_provider_settings")
 		return summarizePatrolReadiness("", "", checks)
 	}
 	addCheck("provider", patrolReadinessReady, ai.PatrolFailureCauseNone, "Provider configured", "At least one AI provider is configured.", "")
