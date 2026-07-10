@@ -1870,8 +1870,14 @@ a new API state machine, queue contract, or verification-accounting field.
    the model supplying only resource/capability/params/reason and all
    correlation identity injected from trusted orchestration context.
    Proposal parameter values are redacted from durable transcripts and
-   stream events by the shared exposure projector; the action audit is
-   their canonical durable home once the broker plans the proposal.
+   stream events by the shared exposure projector (including
+   provider-streamed raw-input overrides, which are discarded for
+   exposure-restricted tools); the action audit is their canonical
+   durable home once the broker plans the proposal. Proposal acceptance
+   validates through the planner's exported canonical rules
+   (`actionplanner.FindCapability` / `actionplanner.ValidateParams`),
+   so a proposal that validates is exactly a proposal the planner will
+   accept.
    Executor-owned live readiness is part of planning, not a UI precheck:
    after planner validation and before audit persistence, the lifecycle
    service must ask

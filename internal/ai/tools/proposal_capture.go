@@ -7,10 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -109,13 +109,38 @@ type ProposalCapture struct {
 	failedAttempts int
 }
 
-// NewProposalCapture builds the sink with trusted identity and the
-// capability catalog used for validation.
-func NewProposalCapture(identity ProposalIdentity, catalog ProposalCatalog) *ProposalCapture {
-	return &ProposalCapture{identity: identity, catalog: catalog}
+func (i ProposalIdentity) clone() ProposalIdentity {
+	i.EvidenceIDs = append([]string(nil), i.EvidenceIDs...)
+	return i
 }
 
-func proposalFingerprint(resourceID, capabilityName, reason string, params map[string]interface{}) string {
+// NewProposalCapture builds the sink with trusted identity and the
+// capability catalog used for validation. The identity is deep-cloned so
+// later caller-side mutation cannot alter captured correlation.
+func NewProposalCapture(identity ProposalIdentity, catalog ProposalCatalog) *ProposalCapture {
+	return &ProposalCapture{identity: identity.clone(), catalog: catalog}
+}
+
+// cloneParams deep-clones a parameter map via JSON round-trip (the values
+// arrived as decoded JSON, so the round-trip is lossless). The sink never
+// retains or returns the caller's map: mutation after validation must not
+// be able to change the actionable proposal.
+func cloneParams(params map[string]interface{}) (map[string]interface{}, error) {
+	if params == nil {
+		return map[string]interface{}{}, nil
+	}
+	encoded, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("proposal parameters are not serializable")
+	}
+	clone := map[string]interface{}{}
+	if err := json.Unmarshal(encoded, &clone); err != nil {
+		return nil, fmt.Errorf("proposal parameters are not serializable")
+	}
+	return clone, nil
+}
+
+func proposalFingerprint(resourceID, capabilityName, reason string, params map[string]interface{}) (string, error) {
 	payload := struct {
 		ResourceID     string                 `json:"resourceId"`
 		CapabilityName string                 `json:"capabilityName"`
@@ -124,10 +149,10 @@ func proposalFingerprint(resourceID, capabilityName, reason string, params map[s
 	}{resourceID, capabilityName, reason, params}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
-		return "unfingerprintable"
+		return "", fmt.Errorf("proposal payload is not fingerprintable")
 	}
 	sum := sha256.Sum256(encoded)
-	return hex.EncodeToString(sum[:])
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // RecordFailedAttempt tallies a proposal call that failed validation.
@@ -156,7 +181,20 @@ func (c *ProposalCapture) Submit(invocationID, resourceID, capabilityName, reaso
 		c.mu.Unlock()
 		return fmt.Errorf("proposal call carries no tool-use id; cannot establish call identity")
 	}
-	fingerprint := proposalFingerprint(resourceID, capabilityName, reason, params)
+	params, cloneErr := cloneParams(params)
+	if cloneErr != nil {
+		c.mu.Lock()
+		c.failedAttempts++
+		c.mu.Unlock()
+		return cloneErr
+	}
+	fingerprint, fingerprintErr := proposalFingerprint(resourceID, capabilityName, reason, params)
+	if fingerprintErr != nil {
+		c.mu.Lock()
+		c.failedAttempts++
+		c.mu.Unlock()
+		return fingerprintErr
+	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -170,7 +208,7 @@ func (c *ProposalCapture) Submit(invocationID, resourceID, capabilityName, reaso
 		c.fingerprint = fingerprint
 		c.proposal = &CapturedProposal{
 			InvocationID:   invocationID,
-			Identity:       c.identity,
+			Identity:       c.identity.clone(),
 			ResourceID:     resourceID,
 			CapabilityName: capabilityName,
 			Params:         params,
@@ -207,6 +245,14 @@ func (c *ProposalCapture) Outcome() (*CapturedProposal, int, error) {
 		return nil, c.failedAttempts, ErrProposalIntegrity
 	case proposalCaptureHeld:
 		proposal := *c.proposal
+		proposal.Identity = proposal.Identity.clone()
+		clonedParams, err := cloneParams(proposal.Params)
+		if err != nil {
+			// Unreachable in practice (params cloned on capture), but a
+			// proposal that cannot be copied must not be actionable.
+			return nil, c.failedAttempts, err
+		}
+		proposal.Params = clonedParams
 		return &proposal, c.failedAttempts, nil
 	default:
 		if c.failedAttempts > 0 {
@@ -228,58 +274,27 @@ func validateProposalAgainstCatalog(ctx context.Context, catalog ProposalCatalog
 	if err != nil {
 		return fmt.Errorf("capability catalog lookup failed for resource %q", resourceID)
 	}
-	var capability *unified.ResourceCapability
-	for i := range capabilities {
-		if strings.EqualFold(strings.TrimSpace(capabilities[i].Name), capabilityName) {
-			capability = &capabilities[i]
-			break
-		}
-	}
-	if capability == nil {
+	// Exact-name resolution and full parameter validation are the
+	// planner's canonical implementations, so proposal acceptance and
+	// planning can never drift on matching, types, enums, patterns,
+	// required presence, or malformed capability schemas.
+	capability, found := actionplanner.FindCapability(capabilities, capabilityName)
+	if !found {
 		return fmt.Errorf("resource %q does not advertise capability %q", resourceID, capabilityName)
 	}
-
-	declared := map[string]unified.CapabilityParam{}
+	// Proposal-specific ratchet on top of planning: investigations must
+	// never carry sensitive values (operators supply those at approval
+	// time on the canonical surface).
 	for _, param := range capability.Params {
-		declared[param.Name] = param
-	}
-	var missing []string
-	for _, param := range capability.Params {
-		if !param.Required {
+		if !param.IsSensitive {
 			continue
 		}
-		if _, ok := params[param.Name]; !ok {
-			missing = append(missing, param.Name)
+		if value, ok := params[param.Name]; ok && value != nil {
+			return fmt.Errorf("parameter %q is sensitive and must be supplied by an operator on the canonical approval surface, never by an investigation", param.Name)
 		}
 	}
-	sort.Strings(missing)
-	if len(missing) > 0 {
-		return fmt.Errorf("proposal is missing required parameter(s) %v for capability %q", missing, capabilityName)
-	}
-	for name, value := range params {
-		param, ok := declared[name]
-		if !ok {
-			return fmt.Errorf("parameter %q is not declared by capability %q", name, capabilityName)
-		}
-		if param.IsSensitive && value != nil {
-			return fmt.Errorf("parameter %q is sensitive and must be supplied by an operator on the canonical approval surface, never by an investigation", name)
-		}
-		if len(param.Enum) > 0 {
-			text, isString := value.(string)
-			if !isString {
-				return fmt.Errorf("parameter %q must be one of the declared enum values", name)
-			}
-			allowed := false
-			for _, candidate := range param.Enum {
-				if candidate == text {
-					allowed = true
-					break
-				}
-			}
-			if !allowed {
-				return fmt.Errorf("parameter %q must be one of the declared enum values", name)
-			}
-		}
+	if err := actionplanner.ValidateParams(params, capability.Params); err != nil {
+		return fmt.Errorf("proposal parameters are invalid for capability %q: %s", capabilityName, err.Error())
 	}
 	return nil
 }

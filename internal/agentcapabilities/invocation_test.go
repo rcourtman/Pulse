@@ -150,3 +150,22 @@ func TestInvocationBlockedResultCoversAllMutationTargets(t *testing.T) {
 		}
 	}
 }
+
+func TestRestrictedExposureVocabulary(t *testing.T) {
+	if !ToolHasRestrictedExposure(PatrolProposeActionToolName) {
+		t.Fatal("patrol_propose_action must be exposure-restricted")
+	}
+	for _, name := range []string{PulseQueryToolName, PulseDockerToolName, PulseReadToolName} {
+		if ToolHasRestrictedExposure(name) {
+			t.Fatalf("%s must not be exposure-restricted", name)
+		}
+	}
+	// Restricted exposure implies raw provider overrides are discarded;
+	// the projected form is the only exposable one.
+	projected := RedactToolCallArgumentsForExposure(PatrolProposeActionToolName, map[string]interface{}{
+		"params": map[string]interface{}{"token": "secret"},
+	})
+	if projected["params"] != RedactedProposalParamsMarker {
+		t.Fatalf("projector must redact params, got %#v", projected["params"])
+	}
+}

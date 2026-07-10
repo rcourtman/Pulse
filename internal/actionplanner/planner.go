@@ -211,6 +211,13 @@ func validateRequest(req unified.ActionRequest) error {
 	return nil
 }
 
+// FindCapability resolves a capability by its exact (trimmed) name -
+// the same matching planning uses, exported so proposal validation and
+// planning can never drift on name resolution.
+func FindCapability(capabilities []unified.ResourceCapability, name string) (unified.ResourceCapability, bool) {
+	return findCapability(capabilities, name)
+}
+
 func findCapability(capabilities []unified.ResourceCapability, name string) (unified.ResourceCapability, bool) {
 	name = strings.TrimSpace(name)
 	for _, capability := range capabilities {
@@ -219,6 +226,15 @@ func findCapability(capabilities []unified.ResourceCapability, name string) (uni
 		}
 	}
 	return unified.ResourceCapability{}, false
+}
+
+// ValidateParams checks concrete parameter values against a capability's
+// declared parameter specs: declared/duplicate/trimmed names, required
+// presence with empty-value detection, types, enums, and patterns. It is
+// the single canonical validation for both planning and proposal
+// acceptance, exported so the two can never drift.
+func ValidateParams(params map[string]any, specs []unified.CapabilityParam) error {
+	return validateParams(params, specs)
 }
 
 func validateParams(params map[string]any, specs []unified.CapabilityParam) error {

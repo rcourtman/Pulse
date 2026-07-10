@@ -261,7 +261,10 @@ func emitToolProgressEventWithRawInput(callback StreamCallback, id, name string,
 		return
 	}
 	inputStr, rawInput := formatToolInputForFrontend(name, input, false)
-	if rawInputOverride != "" {
+	// The provider-streamed raw override is unredacted model output;
+	// exposure-restricted tools must never surface it, or the override
+	// would reintroduce exactly the values the projector removed.
+	if rawInputOverride != "" && !agentcapabilities.ToolHasRestrictedExposure(name) {
 		rawInput = rawInputOverride
 	}
 	jsonData, _ := json.Marshal(ToolProgressData{

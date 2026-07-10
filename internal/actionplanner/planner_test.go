@@ -226,3 +226,39 @@ func TestPlannerReturnsCapabilityNotFound(t *testing.T) {
 		t.Fatalf("Plan() error = %v, want ErrCapabilityNotFound", err)
 	}
 }
+
+func TestExportedValidationMatchesPlanningExactly(t *testing.T) {
+	capabilities := []unified.ResourceCapability{{
+		Name: "restart",
+		Params: []unified.CapabilityParam{
+			{Name: "mode", Type: "string", Required: true, Enum: []string{"graceful", "force"}},
+		},
+	}}
+
+	// FindCapability is the planner's exact-name matcher, exported so
+	// proposal acceptance can never drift on resolution.
+	if _, ok := FindCapability(capabilities, "restart"); !ok {
+		t.Fatal("exact name must resolve")
+	}
+	if _, ok := FindCapability(capabilities, "Restart"); ok {
+		t.Fatal("case-mismatched name must not resolve; planning matches exactly")
+	}
+	if _, ok := FindCapability(capabilities, "  restart  "); !ok {
+		t.Fatal("trimmed name must resolve like planning")
+	}
+
+	// ValidateParams is the canonical parameter validation shared with
+	// proposal acceptance.
+	if err := ValidateParams(map[string]any{"mode": "graceful"}, capabilities[0].Params); err != nil {
+		t.Fatalf("valid params rejected: %v", err)
+	}
+	if err := ValidateParams(map[string]any{"mode": "   "}, capabilities[0].Params); err == nil {
+		t.Fatal("whitespace-only required value must fail")
+	}
+	if err := ValidateParams(map[string]any{"mode": 42}, capabilities[0].Params); err == nil {
+		t.Fatal("wrong-typed value must fail")
+	}
+	if err := ValidateParams(map[string]any{"mode": "graceful", "extra": "x"}, capabilities[0].Params); err == nil {
+		t.Fatal("undeclared parameter must fail")
+	}
+}

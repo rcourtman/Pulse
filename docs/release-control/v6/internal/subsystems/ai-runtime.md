@@ -4683,11 +4683,28 @@ canonical exposure projector
 (`RedactToolCallArgumentsForExposure`) redacts them from the durable
 chat transcript and every tool_start/tool_progress/tool_end stream
 event, while the action audit remains their canonical durable home.
+Proposal validation reuses the planner's canonical exported rules
+(`actionplanner.FindCapability` exact-name matching and
+`actionplanner.ValidateParams` for declared/required/typed/enum/pattern
+parameters and malformed schemas), so proposal acceptance and planning
+can never drift; the sensitive-parameter rejection stays a
+proposal-specific ratchet on top. Captured proposals are immutable:
+params and evidence identity are deep-cloned on capture and again on
+outcome, and fingerprint serialization failures are errors, never a
+shared sentinel value. Provider-streamed RawInput overrides on progress
+events are discarded for exposure-restricted tools - the override is
+unredacted model output and would reintroduce exactly what the
+projector removed. An investigation run refuses to start without
+finding and investigation identity, and any run error nils the
+proposal while preserving simultaneous proposal errors via errors.Join:
+a non-nil proposal exists only from a completely successful run.
 Proofs: `internal/ai/tools/proposal_capture_test.go` (concurrent
 ambiguity with nil proposal, replay/integrity semantics by tool-use ID,
 failed-attempts typed error, sensitive rejection without echo,
-profile-only projection and execution) and the end-to-end loop
-redaction proof in `internal/ai/chat/service_tooling_test.go`. A blocked question call is persisted to
+profile-only projection and execution, caller-mutation immunity,
+exact-name matching, canonical planner validation) and the end-to-end
+loop redaction and progress-override proofs in
+`internal/ai/chat/service_tooling_test.go`. A blocked question call is persisted to
 the durable transcript paired with its refusal result (the assistant
 message records the call, so the transcript must never retain an
 unanswered call). Profile proofs live in

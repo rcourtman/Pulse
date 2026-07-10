@@ -278,6 +278,14 @@ func ClassifyRegisteredInvocation(toolName string, args map[string]interface{}) 
 // durable or user-visible exposure of a patrol_propose_action call.
 const RedactedProposalParamsMarker = "[redacted-proposal-params]"
 
+// ToolHasRestrictedExposure reports whether a tool's raw arguments are
+// exposure-restricted: durable and user-visible surfaces must use only
+// the projected form and must never substitute provider-streamed raw
+// argument text.
+func ToolHasRestrictedExposure(toolName string) bool {
+	return strings.TrimSpace(toolName) == PatrolProposeActionToolName
+}
+
 // RedactToolCallArgumentsForExposure is the canonical exposure projector
 // for tool-call arguments: everything durable or user-visible (chat
 // transcripts, tool_start/tool_progress/tool_end stream events) must route

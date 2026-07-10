@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -52,6 +53,13 @@ type InvestigationRunResult struct {
 // Proposal-channel violations (ambiguity, integrity, failed-only
 // attempts) return the result alongside the typed proposal error.
 func (s *Service) ExecuteInvestigationStream(ctx context.Context, req InvestigationRunRequest, callback StreamCallback) (*InvestigationRunResult, error) {
+	// Correlation identity is a precondition: without it a captured
+	// proposal could never be reconciled, so the run refuses before any
+	// provider call or session exists.
+	if strings.TrimSpace(req.Identity.FindingID) == "" || strings.TrimSpace(req.Identity.InvestigationID) == "" {
+		return nil, fmt.Errorf("investigation run requires finding and investigation identity before it can start")
+	}
+
 	s.mu.RLock()
 	if !s.started {
 		s.mu.RUnlock()
@@ -163,11 +171,12 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 		InputTokens:            loop.GetTotalInputTokens(),
 		OutputTokens:           loop.GetTotalOutputTokens(),
 	}
-	if runErr != nil {
-		return result, runErr
-	}
-	if proposalErr != nil {
-		return result, proposalErr
+	if runErr != nil || proposalErr != nil {
+		// A proposal is actionable only from a completely successful
+		// run: any error nils it, and simultaneous run/proposal errors
+		// are both preserved.
+		result.Proposal = nil
+		return result, errors.Join(runErr, proposalErr)
 	}
 	return result, nil
 }

@@ -225,3 +225,70 @@ func TestProposalExposureProjectorRedactsParams(t *testing.T) {
 		t.Fatal("non-proposal tools must not be redacted")
 	}
 }
+
+func TestCapturedProposalIsImmuneToCallerMutation(t *testing.T) {
+	capture := NewProposalCapture(ProposalIdentity{InvestigationID: "inv-1", EvidenceIDs: []string{"ev-1"}}, testProposalCatalog())
+	args := proposeArgs()
+	params := args["params"].(map[string]interface{})
+
+	require.NoError(t, capture.Submit("call-a", "vm:42", "restart", "recover", params))
+
+	// Mutating the caller's map after validation must not change the
+	// actionable proposal (or its fingerprint identity).
+	params["mode"] = "force"
+
+	proposal, _, err := capture.Outcome()
+	require.NoError(t, err)
+	require.NotNil(t, proposal)
+	assert.Equal(t, "graceful", proposal.Params["mode"])
+
+	// Mutating the returned copy must not affect a later outcome read.
+	proposal.Params["mode"] = "force"
+	proposal.Identity.EvidenceIDs[0] = "tampered"
+	again, _, err := capture.Outcome()
+	require.NoError(t, err)
+	assert.Equal(t, "graceful", again.Params["mode"])
+	assert.Equal(t, "ev-1", again.Identity.EvidenceIDs[0])
+}
+
+func TestProposalCapabilityMatchingIsExactLikePlanning(t *testing.T) {
+	capture := NewProposalCapture(ProposalIdentity{}, testProposalCatalog())
+	exec := newInvestigationExecutor(t, capture)
+
+	// The catalog advertises "restart"; a case-mismatched proposal must
+	// fail exactly as planning would, so acceptance and planning never
+	// drift on name resolution.
+	args := proposeArgs()
+	args["capability_name"] = "Restart"
+	result := executePropose(t, exec, "call-a", args)
+	assert.Contains(t, result.Content[0].Text, "does not advertise")
+
+	_, failed, err := capture.Outcome()
+	assert.Equal(t, 1, failed)
+	if !errors.Is(err, ErrProposalAttemptsFailed) {
+		t.Fatalf("outcome error = %v, want ErrProposalAttemptsFailed", err)
+	}
+}
+
+func TestProposalValidationUsesCanonicalPlannerRules(t *testing.T) {
+	capture := NewProposalCapture(ProposalIdentity{}, testProposalCatalog())
+	exec := newInvestigationExecutor(t, capture)
+
+	// Empty required value: planner treats whitespace as missing.
+	args := proposeArgs()
+	args["params"] = map[string]interface{}{"mode": "   "}
+	result := executePropose(t, exec, "call-a", args)
+	assert.Contains(t, result.Content[0].Text, "invalid for capability")
+
+	// Wrong type for an enum string parameter.
+	args = proposeArgs()
+	args["params"] = map[string]interface{}{"mode": 42}
+	result = executePropose(t, exec, "call-b", args)
+	assert.Contains(t, result.Content[0].Text, "invalid for capability")
+
+	_, failed, err := capture.Outcome()
+	assert.Equal(t, 2, failed)
+	if !errors.Is(err, ErrProposalAttemptsFailed) {
+		t.Fatalf("outcome error = %v, want ErrProposalAttemptsFailed", err)
+	}
+}

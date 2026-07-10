@@ -1274,3 +1274,54 @@ func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
 		t.Fatalf("captured proposal = %#v", proposal)
 	}
 }
+
+func TestProposalRawInputOverrideNeverLeaksThroughProgressEvents(t *testing.T) {
+	var events []string
+	callback := func(event StreamEvent) { events = append(events, string(event.Data)) }
+
+	// Providers stream the accumulating raw tool-call JSON as a
+	// RawInput override on progress events; for exposure-restricted
+	// tools that override must be discarded, not substituted back in
+	// after projection.
+	secret := `{"params":{"join_token":"super-secret-value"}}`
+	emitToolProgressEventWithRawInput(callback, "p-1",
+		agentcapabilities.PatrolProposeActionToolName,
+		map[string]interface{}{
+			"resource_id": "vm:42",
+			"params":      map[string]interface{}{"join_token": "super-secret-value"},
+		},
+		secret, "streaming", "Receiving tool call.")
+
+	if len(events) != 1 {
+		t.Fatalf("expected one event, got %d", len(events))
+	}
+	if strings.Contains(events[0], "super-secret-value") {
+		t.Fatalf("progress event leaked raw proposal params: %s", events[0])
+	}
+	if !strings.Contains(events[0], agentcapabilities.RedactedProposalParamsMarker) {
+		t.Fatalf("progress event should carry the projected form, got %s", events[0])
+	}
+
+	// Unrestricted tools keep the provider's raw override.
+	events = nil
+	emitToolProgressEventWithRawInput(callback, "q-1", "pulse_query",
+		map[string]interface{}{"action": "health"},
+		`{"action":"health","extra":"raw-override"}`, "streaming", "Receiving tool call.")
+	if len(events) != 1 {
+		t.Fatalf("expected one event, got %d", len(events))
+	}
+	if !strings.Contains(events[0], "raw-override") {
+		t.Fatalf("unrestricted tools should keep the raw override, got %s", events[0])
+	}
+}
+
+func TestInvestigationRunRequiresIdentityBeforeStarting(t *testing.T) {
+	svc := &Service{}
+	_, err := svc.ExecuteInvestigationStream(context.Background(), InvestigationRunRequest{
+		Prompt:   "investigate",
+		Identity: tools.ProposalIdentity{FindingID: "f-1"}, // missing investigation ID
+	}, func(StreamEvent) {})
+	if err == nil || !strings.Contains(err.Error(), "identity") {
+		t.Fatalf("expected identity precondition error, got %v", err)
+	}
+}
