@@ -1269,3 +1269,10 @@ decision or execution request only through the existing scoped route checks;
 they cannot supply requester identity, origin, approval policy, capability
 catalog entries, or verification outcome. Legacy command-shaped investigation
 history is never exposed as an executable payload in desktop or mobile review.
+Core-owned Patrol policy authorization is additive to that boundary, not a new
+caller grant. It requires an eligible capability, an explicit persisted
+per-resource capability allowlist (and any configured recurring window), an
+effective tenant Patrol mode that admits the eligibility class, and an absent
+Never-auto-remediate lock. Missing or unknown state denies automatic execution.
+The policy actor/method are server-stamped and cannot be supplied by the model,
+enterprise orchestrator, browser, relay, or action-proposal payload.

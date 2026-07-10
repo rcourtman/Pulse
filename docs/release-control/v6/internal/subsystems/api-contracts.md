@@ -1814,7 +1814,7 @@ a new API state machine, queue contract, or verification-accounting field.
    returns `503` `audit_store_unavailable`, and unrelated query failures remain
    `query_failed`. List pagination must stay bounded so audit history reads
    cannot become unbounded table scans through API parameters.
-   Plan-only unified action planning is part of that same API-first action
+   Unified action planning is part of that same API-first action
    contract: `POST /api/actions/plan` must route through
    `internal/api/actions.go`, `internal/actionlifecycle/service.go`,
    `internal/actionplanner/planner.go`, and
@@ -1823,9 +1823,10 @@ a new API state machine, queue contract, or verification-accounting field.
    versions, plan hash, and preflight checks without approving or executing the
    capability. A successful plan must also be durably recorded in the unified
    action-audit store with initial lifecycle evidence before the API returns:
-   approval-required plans land as `pending_approval`, retries with the same
-   deterministic action identity may upsert the audit record, and retries must
-   not duplicate the initial lifecycle events. MCP, CLI, and UI consumers may
+   approval-required plans land as `pending_approval`, and retries with the same
+   deterministic action identity must return the existing audit without
+   rewinding an approved, executing, or terminal record or duplicating its
+   lifecycle events. MCP, CLI, and UI consumers may
    adapt this payload, but they must not become the source of truth for action
    planning semantics.
    The plan/decision/execution lifecycle itself is transport-independent and
@@ -1839,13 +1840,22 @@ a new API state machine, queue contract, or verification-accounting field.
    lifecycle or dispatch a resource mutation around this service.
    The Patrol proposal seam rides that same service:
    `internal/api/patrol_action_broker.go` implements the public
-   `aicontracts.OrchestratorActionBroker` contract as a tenant-bound,
-   plan-only adapter. It stamps the fixed `pulse_patrol` requestedBy actor
+   `aicontracts.OrchestratorActionBroker` contract as a tenant-bound proposal
+   adapter. It stamps the fixed `pulse_patrol` requestedBy actor
    and a broker-owned `ActionOrigin` (surface/finding/investigation/proposal
    IDs) through the service's internal `PlanWithOptions`; the public plan
    endpoint keeps calling plain `Plan`, so an HTTP request body can never
-   claim a first-party origin. Submit never decides or executes (even an
-   `ApprovalNone` capability returns a planned disposition), and proposals
+   claim a first-party origin. Enterprise still has no decision or execution
+   method. After planning, core may auto-authorize only when the capability's
+   declared eligibility, the persisted resource capability allowlist and
+   optional recurring window, `NeverAutoRemediate`, and the tenant's effective
+   Patrol mode all allow it. Assisted mode admits only `low_risk`; unlocked full
+   mode may also admit `elevated`; monitor, approval, dry-run-only, MFA, missing,
+   and unknown policy fail closed to the pending disposition. Core re-reads the
+   policy immediately before execution and records the decision as actor
+   `pulse_patrol_policy` with approval method `policy`; the canonical lifecycle
+   still owns locks, drift validation, execution, verification, publication,
+   and replay safety. Proposals
    that populate a capability parameter declared `IsSensitive` are refused
    with `ErrSensitiveParamsRequireOperator` before any audit persistence,
    so secret material never enters model output, investigation stores, or
@@ -1861,7 +1871,7 @@ a new API state machine, queue contract, or verification-accounting field.
    Patrol proposal must carry both its finding and investigation IDs
    before anything persists; identity-less proposals are refused so a
    governed action can never lose deterministic correlation.
-   Plan-only proof: `TestContract_PatrolActionBrokerIsPlanOnly` in
+   Authority proof: `TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned` in
    `internal/api/contract_test.go`.
    The proposal enters that broker from the investigation-only
    `patrol_propose_action` capture (canonical name and descriptor in

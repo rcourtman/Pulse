@@ -143,20 +143,22 @@ func ResourceVersion(resource unified.Resource) string {
 
 func PolicyVersion(capability unified.ResourceCapability) string {
 	payload := struct {
-		Name                 string                      `json:"name"`
-		Type                 unified.CapabilityType      `json:"type"`
-		Description          string                      `json:"description"`
-		MinimumApprovalLevel unified.ActionApprovalLevel `json:"minimumApprovalLevel"`
-		Platform             string                      `json:"platform,omitempty"`
-		InternalHandler      string                      `json:"internalHandler,omitempty"`
-		Params               []unified.CapabilityParam   `json:"params,omitempty"`
-		NormalizedPolicy     unified.ActionApprovalLevel `json:"normalizedPolicy"`
-		ParamNames           []string                    `json:"paramNames,omitempty"`
+		Name                 string                               `json:"name"`
+		Type                 unified.CapabilityType               `json:"type"`
+		Description          string                               `json:"description"`
+		MinimumApprovalLevel unified.ActionApprovalLevel          `json:"minimumApprovalLevel"`
+		AutoAuthorization    unified.ActionAutoAuthorizationClass `json:"autoAuthorization,omitempty"`
+		Platform             string                               `json:"platform,omitempty"`
+		InternalHandler      string                               `json:"internalHandler,omitempty"`
+		Params               []unified.CapabilityParam            `json:"params,omitempty"`
+		NormalizedPolicy     unified.ActionApprovalLevel          `json:"normalizedPolicy"`
+		ParamNames           []string                             `json:"paramNames,omitempty"`
 	}{
 		Name:                 strings.TrimSpace(capability.Name),
 		Type:                 capability.Type,
 		Description:          strings.TrimSpace(capability.Description),
 		MinimumApprovalLevel: capability.MinimumApprovalLevel,
+		AutoAuthorization:    capability.AutoAuthorization,
 		Platform:             strings.TrimSpace(capability.Platform),
 		InternalHandler:      strings.TrimSpace(capability.InternalHandler),
 		Params:               normalizeCapabilityParams(capability.Params),
@@ -570,12 +572,13 @@ func displayResourceName(resource unified.Resource) string {
 }
 
 type normalizedCapabilityForResourceHash struct {
-	Name                 string                      `json:"name"`
-	Type                 unified.CapabilityType      `json:"type"`
-	Description          string                      `json:"description"`
-	MinimumApprovalLevel unified.ActionApprovalLevel `json:"minimumApprovalLevel"`
-	Platform             string                      `json:"platform,omitempty"`
-	Params               []unified.CapabilityParam   `json:"params,omitempty"`
+	Name                 string                               `json:"name"`
+	Type                 unified.CapabilityType               `json:"type"`
+	Description          string                               `json:"description"`
+	MinimumApprovalLevel unified.ActionApprovalLevel          `json:"minimumApprovalLevel"`
+	AutoAuthorization    unified.ActionAutoAuthorizationClass `json:"autoAuthorization,omitempty"`
+	Platform             string                               `json:"platform,omitempty"`
+	Params               []unified.CapabilityParam            `json:"params,omitempty"`
 }
 
 type normalizedRelationship struct {
@@ -640,6 +643,7 @@ func normalizeCapabilitiesForResourceHash(capabilities []unified.ResourceCapabil
 			Type:                 capability.Type,
 			Description:          strings.TrimSpace(capability.Description),
 			MinimumApprovalLevel: capability.MinimumApprovalLevel,
+			AutoAuthorization:    capability.AutoAuthorization,
 			Platform:             strings.TrimSpace(capability.Platform),
 			Params:               normalizeCapabilityParams(capability.Params),
 		})

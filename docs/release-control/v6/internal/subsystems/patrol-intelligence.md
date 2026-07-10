@@ -326,7 +326,7 @@ attention`, `approval needed`, `outcome verified`, `no active work`) instead
    Intelligence settings and external-agent surfaces own MCP setup/readiness,
    while API security owns only the scoped-token creation surface they link to.
    Patrol mode labels and details must match the backend execution policy:
-   assisted mode may say it can run low or medium-risk fixes allowed by policy,
+   assisted mode may say it can run low-risk fixes explicitly allowed by policy,
    but it must not imply that warning severity alone makes a command safe;
    high-risk, critical, destructive, or unknown-risk fixes remain approval-bound
    unless the operator has selected a broader autonomy level. Compact Patrol
@@ -963,6 +963,13 @@ not inside the secondary Schedule & model drawer: the first configurable decisio
 what Patrol may handle automatically (`Watch only`, `Ask first`,
 `Safe auto-fix`, `Autopilot`), and there must be only one visible chooser for
 that decision.
+Per-resource automatic-action scope is configured in the canonical resource
+drawer, not duplicated on the Patrol page. The drawer may expose only
+capabilities whose backend contract declares auto-authorization eligibility,
+requires an explicit capability allowlist, and may collect an optional daily
+time/timezone window. Patrol mode remains the tenant-wide upper bound: a
+resource opt-in cannot widen Watch only or Ask first, admit elevated work in
+Safe auto-fix, bypass the full-mode unlock, or override Never auto-remediate.
 Commercial, runtime, and documentation copy that describes this same decision
 must also use those visible labels and the umbrella name `Patrol mode`, not
 the retired `Only watch`, `Fix safe issues`, `Full control`, or generic

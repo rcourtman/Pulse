@@ -95,6 +95,13 @@ func TestResourceFromDockerContainerAdvertisesLifecycleCapabilities(t *testing.T
 		if capability.Platform != "docker" || capability.InternalHandler != "docker.container.lifecycle" {
 			t.Fatalf("capability %q platform/handler = %q/%q", capability.Name, capability.Platform, capability.InternalHandler)
 		}
+		wantAuto := AutoAuthorizeNever
+		if capability.Name == "restart" {
+			wantAuto = AutoAuthorizeLowRisk
+		}
+		if capability.AutoAuthorization != wantAuto {
+			t.Fatalf("capability %q auto authorization = %q, want %q", capability.Name, capability.AutoAuthorization, wantAuto)
+		}
 	}
 
 	exited, _ := resourceFromDockerContainer(models.DockerContainer{

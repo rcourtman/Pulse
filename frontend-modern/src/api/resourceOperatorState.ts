@@ -9,6 +9,18 @@ import { apiFetchJSON } from '@/utils/apiClient';
  */
 export type ResourceCriticality = 'high' | 'medium' | 'low' | '';
 
+export interface AutoRemediationWindow {
+  timezone: string;
+  startMinute: number;
+  endMinute: number;
+}
+
+export interface AutoRemediationPolicy {
+  enabled: boolean;
+  capabilityNames: string[];
+  window?: AutoRemediationWindow;
+}
+
 export interface ResourceOperatorState {
   canonicalId: string;
   /**
@@ -26,6 +38,8 @@ export interface ResourceOperatorState {
    * record with `resource_remediation_locked:` prefix on the error.
    */
   neverAutoRemediate: boolean;
+  /** Explicit capability allowlist; tenant mode and backend eligibility remain upper bounds. */
+  autoRemediationPolicy?: AutoRemediationPolicy;
   /**
    * Maintenance window — when present and `now` falls within it, all
    * new findings on this resource get auto-acknowledged with

@@ -474,6 +474,7 @@ func (s *SQLiteResourceStore) initSchema() error {
 		canonical_id TEXT PRIMARY KEY,
 		intentionally_offline INTEGER NOT NULL DEFAULT 0,
 		never_auto_remediate INTEGER NOT NULL DEFAULT 0,
+		auto_remediation_policy_json TEXT,
 		maintenance_start_at DATETIME,
 		maintenance_end_at DATETIME,
 		maintenance_reason TEXT,
@@ -533,8 +534,24 @@ func (s *SQLiteResourceStore) initSchema() error {
 	if err := s.migrateActionAuditsSchema(); err != nil {
 		return err
 	}
+	if err := s.migrateResourceOperatorStateSchema(); err != nil {
+		return err
+	}
 	if err := s.migrateActionAuditRedaction(); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (s *SQLiteResourceStore) migrateResourceOperatorStateSchema() error {
+	columns, err := s.tableColumns("resource_operator_state")
+	if err != nil {
+		return err
+	}
+	if _, ok := columns["auto_remediation_policy_json"]; !ok {
+		if _, err := s.db.Exec("ALTER TABLE resource_operator_state ADD COLUMN auto_remediation_policy_json TEXT"); err != nil {
+			return fmt.Errorf("add resource_operator_state.auto_remediation_policy_json column: %w", err)
+		}
 	}
 	return nil
 }
@@ -2291,6 +2308,7 @@ func getResourceOperatorStateSQL(queryer resourceOperatorStateQueryRower, canoni
 	}
 	row := queryer.QueryRow(`
 		SELECT canonical_id, intentionally_offline, never_auto_remediate,
+		       auto_remediation_policy_json,
 		       maintenance_start_at, maintenance_end_at, maintenance_reason,
 		       criticality, note, set_at, set_by
 		FROM resource_operator_state WHERE canonical_id = ?`, canonicalID)
@@ -2309,6 +2327,7 @@ func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOp
 	var (
 		intentional    int
 		neverRemediate int
+		autoPolicyJSON sql.NullString
 		startAt, endAt sql.NullTime
 		reason         sql.NullString
 		criticality    sql.NullString
@@ -2319,6 +2338,7 @@ func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOp
 		&state.CanonicalID,
 		&intentional,
 		&neverRemediate,
+		&autoPolicyJSON,
 		&startAt,
 		&endAt,
 		&reason,
@@ -2331,6 +2351,12 @@ func scanResourceOperatorState(scanner resourceOperatorStateScanner) (ResourceOp
 	}
 	state.IntentionallyOffline = intentional != 0
 	state.NeverAutoRemediate = neverRemediate != 0
+	if autoPolicyJSON.Valid && strings.TrimSpace(autoPolicyJSON.String) != "" {
+		if err := json.Unmarshal([]byte(autoPolicyJSON.String), &state.AutoRemediationPolicy); err != nil {
+			return ResourceOperatorState{}, fmt.Errorf("unmarshal auto remediation policy: %w", err)
+		}
+		state.AutoRemediationPolicy = NormalizeAutoRemediationPolicy(state.AutoRemediationPolicy)
+	}
 	if startAt.Valid {
 		t := startAt.Time
 		state.MaintenanceStartAt = &t
@@ -2386,7 +2412,16 @@ func setResourceOperatorStateSQL(execer sqlExecutor, state ResourceOperatorState
 		criticality    sql.NullString
 		note           sql.NullString
 		setBy          sql.NullString
+		autoPolicyJSON sql.NullString
 	)
+	if policy := NormalizeAutoRemediationPolicy(state.AutoRemediationPolicy); policy.Enabled || len(policy.CapabilityNames) > 0 || policy.Window != nil {
+		encoded, err := json.Marshal(policy)
+		if err != nil {
+			return fmt.Errorf("marshal auto remediation policy: %w", err)
+		}
+		autoPolicyJSON.String = string(encoded)
+		autoPolicyJSON.Valid = true
+	}
 	if state.MaintenanceStartAt != nil {
 		startAt.Time = *state.MaintenanceStartAt
 		startAt.Valid = true
@@ -2414,12 +2449,14 @@ func setResourceOperatorStateSQL(execer sqlExecutor, state ResourceOperatorState
 	_, err := execer.Exec(`
 		INSERT INTO resource_operator_state (
 			canonical_id, intentionally_offline, never_auto_remediate,
+			auto_remediation_policy_json,
 			maintenance_start_at, maintenance_end_at, maintenance_reason,
 			criticality, note, set_at, set_by
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(canonical_id) DO UPDATE SET
 			intentionally_offline = excluded.intentionally_offline,
 			never_auto_remediate = excluded.never_auto_remediate,
+			auto_remediation_policy_json = excluded.auto_remediation_policy_json,
 			maintenance_start_at = excluded.maintenance_start_at,
 			maintenance_end_at = excluded.maintenance_end_at,
 			maintenance_reason = excluded.maintenance_reason,
@@ -2430,6 +2467,7 @@ func setResourceOperatorStateSQL(execer sqlExecutor, state ResourceOperatorState
 		state.CanonicalID,
 		intentional,
 		neverRemediate,
+		autoPolicyJSON,
 		startAt,
 		endAt,
 		reason,

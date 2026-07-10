@@ -18,30 +18,32 @@ import (
 // adapts to and from `unified.ResourceOperatorState` so the storage
 // type's evolution stays decoupled from the wire format.
 type resourceOperatorStateAPI struct {
-	CanonicalID          string     `json:"canonicalId"`
-	IntentionallyOffline bool       `json:"intentionallyOffline"`
-	NeverAutoRemediate   bool       `json:"neverAutoRemediate"`
-	MaintenanceStartAt   *time.Time `json:"maintenanceStartAt,omitempty"`
-	MaintenanceEndAt     *time.Time `json:"maintenanceEndAt,omitempty"`
-	MaintenanceReason    string     `json:"maintenanceReason,omitempty"`
-	Criticality          string     `json:"criticality,omitempty"`
-	Note                 string     `json:"note,omitempty"`
-	SetAt                time.Time  `json:"setAt"`
-	SetBy                string     `json:"setBy,omitempty"`
+	CanonicalID           string                        `json:"canonicalId"`
+	IntentionallyOffline  bool                          `json:"intentionallyOffline"`
+	NeverAutoRemediate    bool                          `json:"neverAutoRemediate"`
+	AutoRemediationPolicy unified.AutoRemediationPolicy `json:"autoRemediationPolicy"`
+	MaintenanceStartAt    *time.Time                    `json:"maintenanceStartAt,omitempty"`
+	MaintenanceEndAt      *time.Time                    `json:"maintenanceEndAt,omitempty"`
+	MaintenanceReason     string                        `json:"maintenanceReason,omitempty"`
+	Criticality           string                        `json:"criticality,omitempty"`
+	Note                  string                        `json:"note,omitempty"`
+	SetAt                 time.Time                     `json:"setAt"`
+	SetBy                 string                        `json:"setBy,omitempty"`
 }
 
 func toResourceOperatorStateAPI(state unified.ResourceOperatorState) resourceOperatorStateAPI {
 	return resourceOperatorStateAPI{
-		CanonicalID:          state.CanonicalID,
-		IntentionallyOffline: state.IntentionallyOffline,
-		NeverAutoRemediate:   state.NeverAutoRemediate,
-		MaintenanceStartAt:   state.MaintenanceStartAt,
-		MaintenanceEndAt:     state.MaintenanceEndAt,
-		MaintenanceReason:    state.MaintenanceReason,
-		Criticality:          string(state.Criticality),
-		Note:                 state.Note,
-		SetAt:                state.SetAt,
-		SetBy:                state.SetBy,
+		CanonicalID:           state.CanonicalID,
+		IntentionallyOffline:  state.IntentionallyOffline,
+		NeverAutoRemediate:    state.NeverAutoRemediate,
+		AutoRemediationPolicy: state.AutoRemediationPolicy,
+		MaintenanceStartAt:    state.MaintenanceStartAt,
+		MaintenanceEndAt:      state.MaintenanceEndAt,
+		MaintenanceReason:     state.MaintenanceReason,
+		Criticality:           string(state.Criticality),
+		Note:                  state.Note,
+		SetAt:                 state.SetAt,
+		SetBy:                 state.SetBy,
 	}
 }
 
@@ -100,14 +102,15 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 		// canonical_id from URL wins over body to prevent scope confusion
 		// (operator wrote vm:101 in the URL but vm:102 in the body).
 		state := unified.ResourceOperatorState{
-			CanonicalID:          resourceID,
-			IntentionallyOffline: payload.IntentionallyOffline,
-			NeverAutoRemediate:   payload.NeverAutoRemediate,
-			MaintenanceStartAt:   payload.MaintenanceStartAt,
-			MaintenanceEndAt:     payload.MaintenanceEndAt,
-			MaintenanceReason:    payload.MaintenanceReason,
-			Criticality:          unified.ResourceCriticality(payload.Criticality),
-			Note:                 payload.Note,
+			CanonicalID:           resourceID,
+			IntentionallyOffline:  payload.IntentionallyOffline,
+			NeverAutoRemediate:    payload.NeverAutoRemediate,
+			AutoRemediationPolicy: payload.AutoRemediationPolicy,
+			MaintenanceStartAt:    payload.MaintenanceStartAt,
+			MaintenanceEndAt:      payload.MaintenanceEndAt,
+			MaintenanceReason:     payload.MaintenanceReason,
+			Criticality:           unified.ResourceCriticality(payload.Criticality),
+			Note:                  payload.Note,
 			// Server-populated attribution: ignore any client values so
 			// the audit trail can't be spoofed.
 			SetAt: time.Now().UTC(),

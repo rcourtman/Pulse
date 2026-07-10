@@ -308,6 +308,7 @@ export interface ResourceCapability {
   type: string;
   description?: string;
   minimumApprovalLevel?: string;
+  autoAuthorization?: 'never' | 'low_risk' | 'elevated';
   platform?: string;
   params?: ResourceCapabilityParam[];
 }

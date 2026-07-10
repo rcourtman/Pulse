@@ -20485,7 +20485,7 @@ func TestProUpdateBrokerWiringContract(t *testing.T) {
 	}
 }
 
-func TestContract_PatrolActionBrokerIsPlanOnly(t *testing.T) {
+func TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned(t *testing.T) {
 	source, err := os.ReadFile("patrol_action_broker.go")
 	if err != nil {
 		t.Fatalf("read patrol_action_broker.go: %v", err)
@@ -20504,14 +20504,25 @@ func TestContract_PatrolActionBrokerIsPlanOnly(t *testing.T) {
 		"action proposal requires an investigation id",
 	} {
 		if !strings.Contains(src, snippet) {
-			t.Fatalf("patrol_action_broker.go must pin plan-only broker snippet %q", snippet)
+			t.Fatalf("patrol_action_broker.go must pin typed broker snippet %q", snippet)
 		}
 	}
-	// The broker must stay a proposer: no decision or execution calls on
-	// the lifecycle service, ever.
-	for _, forbidden := range []string{".Decide(", ".Execute(", "ExecuteAction(", "ExecuteCommand("} {
+	for _, required := range []string{
+		"autoAuthorizationDecision",
+		"AutoAuthorizeLowRisk",
+		"AllowsAutoRemediationAt",
+		"MethodPolicy",
+		"pulse_patrol_policy",
+	} {
+		if !strings.Contains(src, required) {
+			t.Fatalf("patrol_action_broker.go must keep core policy authorization guard %q", required)
+		}
+	}
+	// Enterprise/model code still cannot dispatch directly. Core may call
+	// only the canonical lifecycle decision/execute methods after policy.
+	for _, forbidden := range []string{"ExecuteAction(", "ExecuteCommand("} {
 		if strings.Contains(src, forbidden) {
-			t.Fatalf("patrol_action_broker.go must not dispatch via %q", forbidden)
+			t.Fatalf("patrol_action_broker.go must not bypass the lifecycle via %q", forbidden)
 		}
 	}
 }

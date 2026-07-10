@@ -363,6 +363,11 @@ same API-owned lifecycle; agent lifecycle surfaces must not consume
 Patrol-origin action audits as an agent command grant or lifecycle
 execution shortcut, and must not subscribe lifecycle side effects to the
 API-owned org-scoped action-transition hook. The investigation
+broker may authorize eligible actions under core-owned tenant/resource policy,
+but that policy decision does not grant agent lifecycle code a parallel
+authorization primitive: all execution still enters through the shared action
+lifecycle and its agent executor.
+The investigation
 continuity reconciler in `internal/api/patrol_action_reconciliation.go` is
 also API-owned: callbacks only wake an authoritative action-audit re-read,
 and missed callbacks recover during investigation reads. Agent lifecycle

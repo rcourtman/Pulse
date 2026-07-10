@@ -31,6 +31,15 @@ describe('ResourceOperatorStateSection', () => {
     expect(sectionSource).toContain('setNote');
   });
 
+  it('requires explicit capability scope and preserves the backend eligibility ceiling', () => {
+    expect(sectionSource).toContain('Automatic actions');
+    expect(sectionSource).toContain("capability.autoAuthorization !== 'never'");
+    expect(sectionSource).toContain('Select at least one eligible capability.');
+    expect(sectionSource).toContain('Restrict to daily hours');
+    expect(sectionSource).toContain('autoRemediationPolicy');
+    expect(sectionSource).toContain('disabled={saving() || Boolean(autoPolicyValidationError())}');
+  });
+
   it('keeps the section out of the parent Suspense fallback by using createNonSuspendingQuery', () => {
     // The drawer wraps its children in a page-level Suspense fallback;
     // a vanilla createResource here would flicker the fallback every
@@ -178,9 +187,7 @@ describe('ResourceDetailDrawerOverviewTab integration', () => {
     // what Pulse actually did. They belong on the same drawer surface
     // so the operator can read both stories together.
     expect(overviewTabSource).toContain("from './ResourceOperatorStateSection'");
-    expect(overviewTabSource).toContain(
-      '<ResourceOperatorStateSection resourceId={resource.id} />',
-    );
+    expect(overviewTabSource).toContain('capabilities={resource.capabilities}');
     // Section must precede the action-history block so the override
     // explains the actions that follow, not vice versa.
     const operatorIndex = overviewTabSource.indexOf('<ResourceOperatorStateSection');
@@ -188,5 +195,14 @@ describe('ResourceDetailDrawerOverviewTab integration', () => {
     expect(operatorIndex).toBeGreaterThan(0);
     expect(historyIndex).toBeGreaterThan(0);
     expect(operatorIndex).toBeLessThan(historyIndex);
+  });
+
+  it('keeps eligible automatic actions reachable from compact platform rows', () => {
+    expect(overviewTabSource).toContain('shouldRenderOperatorStateSection');
+    expect(overviewTabSource).toContain('capability.autoAuthorization');
+    expect(overviewTabSource).toContain("capability.autoAuthorization !== 'never'");
+    expect(overviewTabSource).toContain(
+      '<Show when={shouldRenderOperatorStateSection() && resource.id}>',
+    );
   });
 });

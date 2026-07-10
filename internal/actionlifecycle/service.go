@@ -264,12 +264,47 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 	if err != nil {
 		return unified.ActionPlan{}, err
 	}
+	if existing, found, queryErr := store.GetActionAudit(plan.ActionID); queryErr != nil {
+		return unified.ActionPlan{}, &QueryError{Op: "idempotent action audit", Err: queryErr}
+	} else if found {
+		// Replayed proposals must never rewind an approved, executing, or
+		// terminal action back to its initial plan state. The deterministic
+		// action id already binds request, resource, and capability policy.
+		return existing.Plan, nil
+	}
 	record, err := persistPlanAudit(store, req, plan, opts.Origin)
 	if err != nil {
 		return unified.ActionPlan{}, &PersistError{Op: "action plan audit", Err: err}
 	}
 	s.publishTransition(orgID, record)
 	return plan, nil
+}
+
+// Get returns the authoritative audit record for an action.
+func (s *Service) Get(orgID, actionID string) (unified.ActionAuditRecord, bool, error) {
+	store, err := s.store(orgID)
+	if err != nil {
+		return unified.ActionAuditRecord{}, false, err
+	}
+	record, found, err := store.GetActionAudit(strings.TrimSpace(actionID))
+	if err != nil {
+		return unified.ActionAuditRecord{}, false, &QueryError{Op: "action audit", Err: err}
+	}
+	return record, found, nil
+}
+
+// ResourceOperatorState returns the authoritative per-resource policy used by
+// execution and Patrol policy authorization.
+func (s *Service) ResourceOperatorState(orgID, resourceID string) (unified.ResourceOperatorState, bool, error) {
+	store, err := s.store(orgID)
+	if err != nil {
+		return unified.ResourceOperatorState{}, false, err
+	}
+	state, found, err := store.GetResourceOperatorState(unified.CanonicalResourceID(resourceID))
+	if err != nil {
+		return unified.ResourceOperatorState{}, false, &QueryError{Op: "resource operator state", Err: err}
+	}
+	return state, found, nil
 }
 
 // Capabilities returns the resource's advertised capability declarations

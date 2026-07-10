@@ -66,6 +66,11 @@ describe('resourceOperatorState api', () => {
     const input: ResourceOperatorStateInput = {
       intentionallyOffline: true,
       neverAutoRemediate: false,
+      autoRemediationPolicy: {
+        enabled: true,
+        capabilityNames: ['restart'],
+        window: { timezone: 'Europe/London', startMinute: 60, endMinute: 180 },
+      },
     };
     const result = await setResourceOperatorState('vm:101', input);
 
@@ -80,6 +85,13 @@ describe('resourceOperatorState api', () => {
     // (setAt, setBy) — never echo the input verbatim.
     expect(result.setAt).toBe('2026-05-09T11:00:00Z');
     expect(result.setBy).toBe('operator:richard');
+    expect(JSON.parse(apiFetchJSONMock.mock.calls[0][1]?.body as string)).toMatchObject({
+      autoRemediationPolicy: {
+        enabled: true,
+        capabilityNames: ['restart'],
+        window: { timezone: 'Europe/London', startMinute: 60, endMinute: 180 },
+      },
+    });
   });
 
   it('DELETEs without expecting a body response', async () => {

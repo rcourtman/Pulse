@@ -10,6 +10,36 @@ const (
 	ApprovalMultiFactor ActionApprovalLevel = "mfa"          // Requires strict explicit 2FA
 )
 
+// ActionAutoAuthorizationClass declares whether a capability may ever be
+// authorized by core-owned Patrol policy instead of a human decision. This is
+// independent from MinimumApprovalLevel: the approval floor remains the human
+// fallback and audit classification, while this class is an explicit
+// capability-owner opt-in to policy authorization. Empty and unknown values
+// always mean never.
+type ActionAutoAuthorizationClass string
+
+const (
+	AutoAuthorizeNever    ActionAutoAuthorizationClass = "never"
+	AutoAuthorizeLowRisk  ActionAutoAuthorizationClass = "low_risk"
+	AutoAuthorizeElevated ActionAutoAuthorizationClass = "elevated"
+)
+
+func IsValidActionAutoAuthorizationClass(value ActionAutoAuthorizationClass) bool {
+	switch value {
+	case "", AutoAuthorizeNever, AutoAuthorizeLowRisk, AutoAuthorizeElevated:
+		return true
+	default:
+		return false
+	}
+}
+
+func NormalizeActionAutoAuthorizationClass(value ActionAutoAuthorizationClass) ActionAutoAuthorizationClass {
+	if value == "" || !IsValidActionAutoAuthorizationClass(value) {
+		return AutoAuthorizeNever
+	}
+	return value
+}
+
 // CapabilityType represents a standard unified intent or a vendor-specific escape hatch.
 type CapabilityType string
 
@@ -32,13 +62,14 @@ type CapabilityParam struct {
 
 // ResourceCapability defines a bounded safe action that can be performed against a resource.
 type ResourceCapability struct {
-	Name                 string              `json:"name"`
-	Type                 CapabilityType      `json:"type"`
-	Description          string              `json:"description"`
-	MinimumApprovalLevel ActionApprovalLevel `json:"minimumApprovalLevel"` // Policy may escalate this
-	Platform             string              `json:"platform,omitempty"`
-	InternalHandler      string              `json:"-"` // DO NOT expose execution plumbing to public surfaces
-	Params               []CapabilityParam   `json:"params,omitempty"`
+	Name                 string                       `json:"name"`
+	Type                 CapabilityType               `json:"type"`
+	Description          string                       `json:"description"`
+	MinimumApprovalLevel ActionApprovalLevel          `json:"minimumApprovalLevel"`        // Policy may escalate this
+	AutoAuthorization    ActionAutoAuthorizationClass `json:"autoAuthorization,omitempty"` // Missing/never stays human-authorized
+	Platform             string                       `json:"platform,omitempty"`
+	InternalHandler      string                       `json:"-"` // DO NOT expose execution plumbing to public surfaces
+	Params               []CapabilityParam            `json:"params,omitempty"`
 }
 
 // ResourceActionReadiness carries backend-owned current executability state

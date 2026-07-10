@@ -3743,6 +3743,12 @@ billing state grants relay, the shared runtime helper must persist the
 canonical hosted relay config and keep subsequent reads on that same
 machine-owned state instead of letting adjacent surfaces invent their own
 fallback bootstrap or disable heuristics.
+Storage and recovery consumers of the shared action lifecycle must also treat
+core-owned Patrol auto-authorization as action-audit state, not as a reusable
+storage mutation grant. Per-resource capability allowlists and recurring
+windows may admit only capabilities whose canonical resource contract declares
+eligibility; storage-pressure remediation remains approval-bound until a
+complete capability and verification workflow explicitly declares otherwise.
 That same shared `internal/api/` boundary also owns hosted browser-session
 precedence for adjacent protected reads. Storage- and recovery-adjacent hosted
 surfaces may run without local auth configured, but a valid tenant

@@ -227,6 +227,38 @@ func TestPlannerReturnsCapabilityNotFound(t *testing.T) {
 	}
 }
 
+func TestPlannerIdentityChangesWhenAutoAuthorizationEligibilityChanges(t *testing.T) {
+	resource := unified.Resource{
+		ID:     "app-container:demo",
+		Type:   unified.ResourceTypeAppContainer,
+		Name:   "demo",
+		Status: unified.StatusOnline,
+		Capabilities: []unified.ResourceCapability{{
+			Name:                 "restart",
+			MinimumApprovalLevel: unified.ApprovalAdmin,
+		}},
+	}
+	req := unified.ActionRequest{
+		RequestID:      "proposal-1",
+		ResourceID:     resource.ID,
+		CapabilityName: "restart",
+		Reason:         "recover service",
+		RequestedBy:    "pulse_patrol",
+	}
+	withoutEligibility, err := (Planner{}).Plan(req, resource)
+	if err != nil {
+		t.Fatalf("plan without eligibility: %v", err)
+	}
+	resource.Capabilities[0].AutoAuthorization = unified.AutoAuthorizeLowRisk
+	withEligibility, err := (Planner{}).Plan(req, resource)
+	if err != nil {
+		t.Fatalf("plan with eligibility: %v", err)
+	}
+	if withoutEligibility.PolicyVersion == withEligibility.PolicyVersion || withoutEligibility.ActionID == withEligibility.ActionID || withoutEligibility.PlanHash == withEligibility.PlanHash {
+		t.Fatalf("auto-authorization eligibility must participate in plan identity: without=%#v with=%#v", withoutEligibility, withEligibility)
+	}
+}
+
 func TestExportedValidationMatchesPlanningExactly(t *testing.T) {
 	capabilities := []unified.ResourceCapability{{
 		Name: "restart",

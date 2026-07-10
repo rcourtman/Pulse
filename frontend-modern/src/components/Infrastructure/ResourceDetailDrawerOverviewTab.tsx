@@ -326,6 +326,12 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
     drawer.resourceTimelineCount() > 0 ||
     Boolean(drawer.facetBundleError());
   const shouldRenderOperationalGovernanceSections = () => !compactTableRow();
+  const shouldRenderOperatorStateSection = () =>
+    !compactTableRow() ||
+    resource.capabilities?.some(
+      (capability) =>
+        capability.autoAuthorization && capability.autoAuthorization !== 'never',
+    );
   const shouldRenderActionHistorySection = () =>
     drawer.actionAuditAvailable() &&
     (!compactTableRow() ||
@@ -661,8 +667,11 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             the "what overrides has the operator set" and "what actions
             has Pulse taken" stories read together. The section is
             self-fetching keyed on the canonical resource id. */}
-        <Show when={shouldRenderOperationalGovernanceSections() && resource.id}>
-          <ResourceOperatorStateSection resourceId={resource.id} />
+        <Show when={shouldRenderOperatorStateSection() && resource.id}>
+          <ResourceOperatorStateSection
+            resourceId={resource.id}
+            capabilities={resource.capabilities}
+          />
         </Show>
 
         {/* Maintenance Verification Reports sit directly under the

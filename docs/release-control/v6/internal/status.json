@@ -5590,7 +5590,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. Action continuity is audit-authoritative: callbacks trigger org-scoped re-reads, investigation reads recover missed transitions by trusted origin, desktop and mobile decisions use the canonical /api/actions routes, terminal verification maps honestly onto Patrol findings and push outcomes, and legacy command-shaped history remains inert. The enterprise orchestrator consumes the exact capability catalog and preserves independent runtime/proposal failures; a code-level detect-plan-approve-execute-verify-reconcile journey proves one execution and durable verified completion. Remaining post-RC hardening: policy-scoped autonomy presets (per tenant/resource/action/window), host-update and storage-pressure workflows as the second and third complete verticals, richer dry-run providers, multi-actor approvals, and a real-lab detect-plan-execute-verify-rollback journey proof.",
+        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. The first policy-authorized vertical is live: Docker/Podman restart is capability-owned low-risk eligible, requires an explicit per-resource capability allowlist, supports an optional recurring timezone window, remains bounded by the tenant Patrol mode and full-mode unlock, rechecks policy before decision and dispatch, and records its server-owned policy approval plus terminal verification in the same audit trail. Never-auto-remediate, missing/unknown policy, unsupported capabilities, dry-run/MFA floors, closed windows, and mode downgrades all fail closed. Action continuity is audit-authoritative: idempotent proposal replay cannot rewind or double-execute a terminal action, callbacks trigger org-scoped re-reads, investigation reads recover missed transitions by trusted origin, desktop and mobile decisions use the canonical /api/actions routes, terminal verification maps honestly onto Patrol findings and push outcomes, and legacy command-shaped history remains inert. Remaining post-RC hardening: broader tenant defaults/inheritance and automation rate budgets, host-update and storage-pressure workflows as the second and third complete verticals, richer dry-run providers, multi-actor approvals, and a real-lab detect-plan-execute-verify-rollback journey proof.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -5676,6 +5676,11 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts",
           "kind": "file"
         },
@@ -5741,6 +5746,11 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/patrol_action_broker.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/patrol_action_broker_test.go",
           "kind": "file"
         },
@@ -5757,6 +5767,11 @@
         {
           "repo": "pulse",
           "path": "internal/unifiedresources/actions_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/resource_operator_state_policy_test.go",
           "kind": "file"
         },
         {

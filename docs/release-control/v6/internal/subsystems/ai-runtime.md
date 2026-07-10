@@ -4561,12 +4561,16 @@ successor to that command-shaped approval flow and the ONLY sanctioned route
 from an enterprise Patrol investigation to a Pulse infrastructure mutation:
 `OrchestratorActionBroker` exposes exactly `Capabilities` (read-only catalog
 of a resource's advertised capabilities and parameter schemas, including
-sensitivity) and `Submit` (plan-only typed proposal). The contract
+sensitivity and core-owned auto-authorization eligibility) and `Submit`
+(typed proposal). The contract
 deliberately omits org ID, requestedBy, autonomy, risk, approval-policy,
 destructive, command, and target-host fields, and has no decide or execute
 methods, so enterprise code can neither claim authorization nor dispatch;
-authorization always derives from the capability's declared policy on the
-core lifecycle. `OrchestratorDeps.ActionBroker` carries the seam and is
+authorization always derives inside core from the tenant Patrol mode,
+capability eligibility, persisted per-resource allowlist/window, remediation
+lock, and the canonical lifecycle. Enterprise receives the resulting pending
+or terminal disposition, including honest verification status, but never an
+authorization primitive. `OrchestratorDeps.ActionBroker` carries the seam and is
 now REQUIRED: the enterprise factory disables the orchestrator when it is
 absent rather than falling back. The command-execution side doors are
 gone. `OrchestratorChatService` exposes only investigation-specific
@@ -5662,3 +5666,9 @@ so a missed callback cannot strand Patrol on stale approval state. Finding
 lifecycle publication is idempotent and emits unified lifecycle updates plus
 honest terminal push outcomes without turning unverified execution into an
 all-clear.
+Policy-authorized submission is still audit-authoritative. Missing policy
+state, provider errors, closed/out-of-window resource policy, unsupported
+eligibility, or a Patrol mode below the capability's class leave the action
+pending rather than converting a valid proposal into an investigation failure.
+An idempotent resubmission returns the existing action disposition and must not
+execute a terminal action twice.

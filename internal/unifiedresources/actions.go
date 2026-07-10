@@ -45,6 +45,7 @@ const (
 	MethodUI           ApprovalMethod = "ui"
 	MethodAPI          ApprovalMethod = "api"
 	MethodMFAChallenge ApprovalMethod = "mfa_challenge"
+	MethodPolicy       ApprovalMethod = "policy"
 )
 
 // ActionApprovalRecord captures a specific approval or rejection event.

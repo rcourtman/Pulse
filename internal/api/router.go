@@ -661,7 +661,21 @@ func (r *Router) setupRoutes() {
 		r.resourceHandlers.SetActionTransitionPublisher(r.aiSettingsHandler.ReconcilePatrolActionTransition)
 		resourceHandlers := r.resourceHandlers
 		r.aiSettingsHandler.SetActionBrokerFactory(func(orgID string) aicontracts.OrchestratorActionBroker {
-			return NewPatrolActionBroker(orgID, resourceHandlers)
+			return NewPatrolActionBroker(orgID, resourceHandlers, func(ctx context.Context, scopedOrgID string) (PatrolActionPolicySnapshot, error) {
+				orgCtx := context.WithValue(ctx, OrgIDContextKey, approval.NormalizeOrgID(scopedOrgID))
+				svc := r.aiSettingsHandler.GetAIService(orgCtx)
+				if svc == nil {
+					return PatrolActionPolicySnapshot{}, nil
+				}
+				cfg := svc.GetConfig()
+				if cfg == nil {
+					return PatrolActionPolicySnapshot{}, nil
+				}
+				return PatrolActionPolicySnapshot{
+					EffectiveAutonomyLevel: svc.GetEffectivePatrolAutonomyLevel(),
+					FullModeUnlocked:       cfg.PatrolFullModeUnlocked,
+				}, nil
+			})
 		})
 		r.aiSettingsHandler.SetProposalCatalogFactory(func(orgID string) tools.ProposalCatalog {
 			return func(ctx context.Context, resourceID string) ([]unifiedresources.ResourceCapability, error) {

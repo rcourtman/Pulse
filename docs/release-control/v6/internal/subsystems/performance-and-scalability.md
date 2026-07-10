@@ -357,6 +357,11 @@ regression protection.
    on the AI settings handler once at startup, and each broker or catalog is
    constructed lazily per investigation run rather than eagerly per request, so
    the wiring adds no fan-out to the protected hot path.
+   Core-owned Patrol policy resolution follows that same boundary: the broker
+   may resolve the already-scoped AI service and read its in-memory effective
+   autonomy/full-unlock posture only during proposal submission. Router setup
+   and unrelated protected requests must not enumerate tenants, load provider
+   catalogs, scan resource policy, or execute action planning eagerly.
    Proxmox VM/LXC lifecycle execution follows that same routed-executor budget:
    router setup may register the Proxmox executor alongside Docker / Podman,
    but it must not resolve guests, probe node agents, call `qm` / `pct`, poll

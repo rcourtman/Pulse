@@ -18,6 +18,10 @@ import (
 )
 
 func newPatrolBrokerTestHandlers(t *testing.T, minimumApproval unified.ActionApprovalLevel) (*ResourceHandlers, *stubActionExecutor) {
+	return newPatrolBrokerTestHandlersWithEligibility(t, minimumApproval, unified.AutoAuthorizeLowRisk)
+}
+
+func newPatrolBrokerTestHandlersWithEligibility(t *testing.T, minimumApproval unified.ActionApprovalLevel, eligibility unified.ActionAutoAuthorizationClass) (*ResourceHandlers, *stubActionExecutor) {
 	t.Helper()
 	now := time.Now().UTC()
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
@@ -38,6 +42,7 @@ func newPatrolBrokerTestHandlers(t *testing.T, minimumApproval unified.ActionApp
 						Type:                 unified.CapabilityTypeCommon,
 						Description:          "Restart the VM",
 						MinimumApprovalLevel: minimumApproval,
+						AutoAuthorization:    eligibility,
 						InternalHandler:      "proxmox.vm.restart",
 						Params: []unified.CapabilityParam{
 							{Name: "mode", Type: "string", Required: true, Enum: []string{"graceful", "force"}},
@@ -92,7 +97,7 @@ func TestPatrolActionBrokerSubmitPlansThroughCanonicalLifecycle(t *testing.T) {
 		t.Fatalf("plan projection = %#v", disposition.Plan)
 	}
 	if executor.calls != 0 {
-		t.Fatalf("submit must never execute, executor calls = %d", executor.calls)
+		t.Fatalf("submit without core policy must not execute, executor calls = %d", executor.calls)
 	}
 
 	store, err := h.getStore("default")
@@ -115,7 +120,7 @@ func TestPatrolActionBrokerSubmitPlansThroughCanonicalLifecycle(t *testing.T) {
 	}
 }
 
-func TestPatrolActionBrokerSubmitIsPlanOnlyForApprovalNone(t *testing.T) {
+func TestPatrolActionBrokerApprovalNoneDoesNotExecuteWithoutCorePolicy(t *testing.T) {
 	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalNone)
 	broker := NewPatrolActionBroker("default", h)
 
@@ -130,7 +135,7 @@ func TestPatrolActionBrokerSubmitIsPlanOnlyForApprovalNone(t *testing.T) {
 		t.Fatal("ApprovalNone capability should not require approval")
 	}
 	if executor.calls != 0 {
-		t.Fatalf("submit must never auto-execute, executor calls = %d", executor.calls)
+		t.Fatalf("submit without core policy must not execute, executor calls = %d", executor.calls)
 	}
 }
 
@@ -178,7 +183,7 @@ func TestPatrolActionBrokerCapabilitiesCatalog(t *testing.T) {
 		byName[capability.Name] = capability
 	}
 	restart := byName["restart"]
-	if restart.MinimumApprovalLevel != string(unified.ApprovalAdmin) || len(restart.Params) != 1 || restart.Params[0].Sensitive {
+	if restart.MinimumApprovalLevel != string(unified.ApprovalAdmin) || restart.AutoAuthorization != string(unified.AutoAuthorizeLowRisk) || len(restart.Params) != 1 || restart.Params[0].Sensitive {
 		t.Fatalf("restart capability = %#v", restart)
 	}
 	join := byName["join_cluster"]
@@ -188,6 +193,179 @@ func TestPatrolActionBrokerCapabilitiesCatalog(t *testing.T) {
 
 	if _, err := broker.Capabilities(context.Background(), "vm:404"); err == nil {
 		t.Fatal("unknown resource must error")
+	}
+}
+
+func TestPatrolActionBrokerAutoAuthorizesOnlyExplicitScopedEligibleCapability(t *testing.T) {
+	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	if err := store.SetResourceOperatorState(unified.ResourceOperatorState{
+		CanonicalID: "vm:42",
+		AutoRemediationPolicy: unified.AutoRemediationPolicy{
+			Enabled:         true,
+			CapabilityNames: []string{"restart"},
+		},
+		SetAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("SetResourceOperatorState: %v", err)
+	}
+	broker := NewPatrolActionBroker("default", h, func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+		return PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "assisted"}, nil
+	})
+
+	disposition, err := broker.Submit(context.Background(), patrolTestProposal())
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if disposition.State != string(unified.ActionStateCompleted) {
+		t.Fatalf("state = %q, want completed", disposition.State)
+	}
+	if executor.calls != 1 {
+		t.Fatalf("executor calls = %d, want 1", executor.calls)
+	}
+	audit, found, err := store.GetActionAudit(disposition.ActionID)
+	if err != nil || !found {
+		t.Fatalf("GetActionAudit: found=%v err=%v", found, err)
+	}
+	if len(audit.Approvals) != 1 || audit.Approvals[0].Actor != patrolActionPolicyActor || audit.Approvals[0].Method != unified.MethodPolicy {
+		t.Fatalf("policy approval = %#v", audit.Approvals)
+	}
+
+	// An idempotent proposal replay returns the terminal audit and cannot
+	// rewind or execute the action a second time.
+	replayed, err := broker.Submit(context.Background(), patrolTestProposal())
+	if err != nil || replayed.State != string(unified.ActionStateCompleted) {
+		t.Fatalf("replay disposition=%#v err=%v", replayed, err)
+	}
+	if executor.calls != 1 {
+		t.Fatalf("replay executor calls = %d, want 1", executor.calls)
+	}
+}
+
+func TestPatrolActionBrokerPolicyScopeAndWindowFailClosed(t *testing.T) {
+	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	if err := store.SetResourceOperatorState(unified.ResourceOperatorState{
+		CanonicalID: "vm:42",
+		AutoRemediationPolicy: unified.AutoRemediationPolicy{
+			Enabled:         true,
+			CapabilityNames: []string{"restart"},
+			Window: &unified.AutoRemediationWindow{
+				Timezone: "UTC", StartMinute: 60, EndMinute: 120,
+			},
+		},
+		SetAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("SetResourceOperatorState: %v", err)
+	}
+	broker := NewPatrolActionBroker("default", h, func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+		return PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "assisted"}, nil
+	}).(*patrolActionBroker)
+	broker.now = func() time.Time { return time.Date(2026, 7, 10, 3, 0, 0, 0, time.UTC) }
+
+	disposition, err := broker.Submit(context.Background(), patrolTestProposal())
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if disposition.State != string(unified.ActionStatePending) || executor.calls != 0 {
+		t.Fatalf("outside-window disposition=%#v calls=%d", disposition, executor.calls)
+	}
+}
+
+func TestPatrolActionBrokerAutonomyModeIsAnUpperBound(t *testing.T) {
+	tests := []struct {
+		name        string
+		eligibility unified.ActionAutoAuthorizationClass
+		snapshot    PatrolActionPolicySnapshot
+		wantCalls   int
+	}{
+		{name: "monitor denies low risk", eligibility: unified.AutoAuthorizeLowRisk, snapshot: PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "monitor"}},
+		{name: "approval denies low risk", eligibility: unified.AutoAuthorizeLowRisk, snapshot: PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "approval"}},
+		{name: "assisted denies elevated", eligibility: unified.AutoAuthorizeElevated, snapshot: PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "assisted"}},
+		{name: "locked full denies elevated", eligibility: unified.AutoAuthorizeElevated, snapshot: PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "full"}},
+		{name: "unlocked full admits elevated", eligibility: unified.AutoAuthorizeElevated, snapshot: PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "full", FullModeUnlocked: true}, wantCalls: 1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h, executor := newPatrolBrokerTestHandlersWithEligibility(t, unified.ApprovalAdmin, tc.eligibility)
+			store, err := h.getStore("default")
+			if err != nil {
+				t.Fatalf("getStore: %v", err)
+			}
+			if err := store.SetResourceOperatorState(unified.ResourceOperatorState{
+				CanonicalID: "vm:42",
+				AutoRemediationPolicy: unified.AutoRemediationPolicy{
+					Enabled:         true,
+					CapabilityNames: []string{"restart"},
+				},
+				SetAt: time.Now().UTC(),
+			}); err != nil {
+				t.Fatalf("SetResourceOperatorState: %v", err)
+			}
+			broker := NewPatrolActionBroker("default", h, func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+				return tc.snapshot, nil
+			})
+			disposition, err := broker.Submit(context.Background(), patrolTestProposal())
+			if err != nil {
+				t.Fatalf("Submit: %v", err)
+			}
+			if executor.calls != tc.wantCalls {
+				t.Fatalf("executor calls = %d, want %d (disposition=%#v)", executor.calls, tc.wantCalls, disposition)
+			}
+			if tc.wantCalls == 0 && disposition.State != string(unified.ActionStatePending) {
+				t.Fatalf("denied state = %q, want pending_approval", disposition.State)
+			}
+			if tc.wantCalls == 1 && disposition.State != string(unified.ActionStateCompleted) {
+				t.Fatalf("authorized state = %q, want completed", disposition.State)
+			}
+		})
+	}
+}
+
+func TestPatrolActionBrokerRevokedPolicyCannotLeaveReusableApproval(t *testing.T) {
+	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	if err := store.SetResourceOperatorState(unified.ResourceOperatorState{
+		CanonicalID: "vm:42",
+		AutoRemediationPolicy: unified.AutoRemediationPolicy{
+			Enabled:         true,
+			CapabilityNames: []string{"restart"},
+		},
+		SetAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("SetResourceOperatorState: %v", err)
+	}
+	policyReads := 0
+	broker := NewPatrolActionBroker("default", h, func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+		policyReads++
+		if policyReads == 1 {
+			return PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "assisted"}, nil
+		}
+		return PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "approval"}, nil
+	})
+
+	disposition, err := broker.Submit(context.Background(), patrolTestProposal())
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if disposition.State != string(unified.ActionStatePending) || executor.calls != 0 {
+		t.Fatalf("revoked disposition=%#v calls=%d", disposition, executor.calls)
+	}
+	record, found, err := store.GetActionAudit(disposition.ActionID)
+	if err != nil || !found {
+		t.Fatalf("GetActionAudit: found=%v err=%v", found, err)
+	}
+	if len(record.Approvals) != 0 || record.Result != nil {
+		t.Fatalf("revoked policy left reusable authority: approvals=%#v result=%#v", record.Approvals, record.Result)
 	}
 }
 

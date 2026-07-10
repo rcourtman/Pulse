@@ -261,6 +261,39 @@ func TestOrchestratorActionBrokerIsProposeOnly(t *testing.T) {
 	}
 }
 
+func TestActionBrokerPolicyMetadataCarriesNoAuthorizationMethod(t *testing.T) {
+	catalogPayload, err := json.Marshal(ActionCapabilityCatalog{
+		ResourceID: "app-container:demo",
+		Capabilities: []ActionCapabilityInfo{{
+			Name:              "restart",
+			AutoAuthorization: "low_risk",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("marshal capability catalog: %v", err)
+	}
+	if !strings.Contains(string(catalogPayload), `"auto_authorization":"low_risk"`) {
+		t.Fatalf("catalog must expose core-owned eligibility: %s", catalogPayload)
+	}
+
+	dispositionPayload, err := json.Marshal(ActionDisposition{
+		ActionID:           "act-1",
+		State:              "completed",
+		VerificationStatus: "verified",
+	})
+	if err != nil {
+		t.Fatalf("marshal action disposition: %v", err)
+	}
+	if !strings.Contains(string(dispositionPayload), `"verification_status":"verified"`) {
+		t.Fatalf("disposition must carry terminal verification: %s", dispositionPayload)
+	}
+	for _, forbidden := range []string{"authorize", "approve", "execute"} {
+		if strings.Contains(string(catalogPayload), forbidden) || strings.Contains(string(dispositionPayload), forbidden) {
+			t.Fatalf("broker wire metadata must not carry a %s authority field", forbidden)
+		}
+	}
+}
+
 func TestOrchestratorDepsExposesTypedActionBroker(t *testing.T) {
 	depsType := reflect.TypeOf(OrchestratorDeps{})
 	field, ok := depsType.FieldByName("ActionBroker")

@@ -2219,11 +2219,16 @@ func dockerContainerLifecycleCapabilitySet(runtime string, names ...string) []Re
 		if name == "" {
 			continue
 		}
+		autoAuthorization := AutoAuthorizeNever
+		if name == "restart" {
+			autoAuthorization = AutoAuthorizeLowRisk
+		}
 		capabilities = append(capabilities, ResourceCapability{
 			Name:                 name,
 			Type:                 CapabilityTypeCommon,
 			Description:          fmt.Sprintf("%s this %s container through its reporting Pulse agent.", titleAction(name), displayRuntime),
 			MinimumApprovalLevel: ApprovalAdmin,
+			AutoAuthorization:    autoAuthorization,
 			Platform:             runtime,
 			InternalHandler:      "docker.container.lifecycle",
 		})

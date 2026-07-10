@@ -15,8 +15,9 @@ import (
 // (the adapter always stamps the fixed Patrol actor), no autonomy, risk,
 // approval-policy, or destructive fields (authorization derives from the
 // capability's declared policy, never from model or enterprise input), no
-// Decide/Execute methods, and no command or target-host fields. Submit is
-// plan-only; approval and execution stay on the canonical core lifecycle.
+// Decide/Execute methods, and no command or target-host fields. Submit hands
+// the proposal to core; only core may progress it under capability-owned
+// eligibility plus operator policy.
 // ---------------------------------------------------------------------------
 
 // ActionProposal is a typed, no-authority remediation proposal produced by
@@ -46,6 +47,7 @@ type ActionCapabilityInfo struct {
 	Name                 string                      `json:"name"`
 	Description          string                      `json:"description"`
 	MinimumApprovalLevel string                      `json:"minimum_approval_level"`
+	AutoAuthorization    string                      `json:"auto_authorization"`
 	Platform             string                      `json:"platform,omitempty"`
 	Params               []ActionCapabilityParamInfo `json:"params,omitempty"`
 }
@@ -65,14 +67,15 @@ type ActionCapabilityParamInfo struct {
 }
 
 // ActionDisposition reports what the canonical planner did with a proposal.
-// State reflects the persisted audit state (pending_approval or planned);
-// the proposal never executes as a side effect of submission. Plan reuses
+// State reflects the persisted audit state, including a terminal state when
+// core policy authorized and executed the proposal. Plan reuses
 // the existing safe ActionPlanInfo projection shared with approval
 // surfaces (see fix_execution.go).
 type ActionDisposition struct {
-	ActionID string         `json:"action_id"`
-	State    string         `json:"state"`
-	Plan     ActionPlanInfo `json:"plan"`
+	ActionID           string         `json:"action_id"`
+	State              string         `json:"state"`
+	VerificationStatus string         `json:"verification_status,omitempty"`
+	Plan               ActionPlanInfo `json:"plan"`
 }
 
 // ActionReference links an investigation to its canonical action lifecycle
@@ -116,8 +119,8 @@ type OrchestratorActionBroker interface {
 	// Capabilities returns the resource's advertised capability catalog.
 	Capabilities(ctx context.Context, resourceID string) (ActionCapabilityCatalog, error)
 	// Submit plans the proposal through the canonical action lifecycle
-	// and returns its persisted disposition. Plan-only: even a capability
-	// that requires no approval is returned as a planned disposition,
-	// never auto-executed by submission.
+	// and returns its persisted disposition. Any policy authorization and
+	// execution is core-owned; the enterprise caller has no decide/execute
+	// authority.
 	Submit(ctx context.Context, proposal ActionProposal) (ActionDisposition, error)
 }

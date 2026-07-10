@@ -3,6 +3,7 @@ package unifiedresources
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -18,6 +19,25 @@ const (
 	CriticalityMedium ResourceCriticality = "medium"
 	CriticalityLow    ResourceCriticality = "low"
 )
+
+// AutoRemediationWindow is an optional recurring daily window in an IANA
+// timezone. StartMinute is inclusive and EndMinute is exclusive. Windows may
+// cross midnight; a nil window means any time. The explicit timezone keeps
+// policy evaluation stable across server moves and daylight-saving changes.
+type AutoRemediationWindow struct {
+	Timezone    string `json:"timezone"`
+	StartMinute int    `json:"startMinute"`
+	EndMinute   int    `json:"endMinute"`
+}
+
+// AutoRemediationPolicy is the operator's explicit per-resource allowlist.
+// Tenant Patrol mode and capability eligibility are independent upper bounds:
+// this record can only narrow them. Disabled or empty policy fails closed.
+type AutoRemediationPolicy struct {
+	Enabled         bool                   `json:"enabled"`
+	CapabilityNames []string               `json:"capabilityNames"`
+	Window          *AutoRemediationWindow `json:"window,omitempty"`
+}
 
 // IsValidCriticality reports whether the value is empty or one of the three
 // canonical levels. Empty is valid (operator has not set a hint). Anything
@@ -64,6 +84,12 @@ type ResourceOperatorState struct {
 	// operator must clear the flag to allow remediation.
 	NeverAutoRemediate bool `json:"neverAutoRemediate"`
 
+	// AutoRemediationPolicy explicitly opts this resource and named
+	// capabilities into policy authorization. It never overrides
+	// NeverAutoRemediate, capability eligibility, tenant mode, MFA, dry-run,
+	// or any execution-time safety gate.
+	AutoRemediationPolicy AutoRemediationPolicy `json:"autoRemediationPolicy"`
+
 	// MaintenanceStartAt and MaintenanceEndAt define a time-bounded
 	// suppression window. When now is within [start, end), all findings
 	// raised against this resource get auto-acknowledged with
@@ -106,6 +132,9 @@ type ResourceOperatorState struct {
 func (s ResourceOperatorState) IsEmpty() bool {
 	return !s.IntentionallyOffline &&
 		!s.NeverAutoRemediate &&
+		!s.AutoRemediationPolicy.Enabled &&
+		len(s.AutoRemediationPolicy.CapabilityNames) == 0 &&
+		s.AutoRemediationPolicy.Window == nil &&
 		s.MaintenanceStartAt == nil &&
 		s.MaintenanceEndAt == nil &&
 		strings.TrimSpace(s.MaintenanceReason) == "" &&
@@ -150,6 +179,9 @@ func ValidateResourceOperatorState(state ResourceOperatorState) error {
 	if !IsValidCriticality(string(state.Criticality)) {
 		return fmt.Errorf("%w: criticality %q is not one of (high, medium, low, empty)", ErrResourceOperatorStateInvalid, state.Criticality)
 	}
+	if err := ValidateAutoRemediationPolicy(state.AutoRemediationPolicy); err != nil {
+		return fmt.Errorf("%w: %v", ErrResourceOperatorStateInvalid, err)
+	}
 	startSet := state.MaintenanceStartAt != nil
 	endSet := state.MaintenanceEndAt != nil
 	if startSet != endSet {
@@ -173,7 +205,93 @@ func NormalizeResourceOperatorState(state ResourceOperatorState) ResourceOperato
 	state.Note = strings.TrimSpace(state.Note)
 	state.SetBy = strings.TrimSpace(state.SetBy)
 	state.Criticality = ResourceCriticality(strings.ToLower(strings.TrimSpace(string(state.Criticality))))
+	state.AutoRemediationPolicy = NormalizeAutoRemediationPolicy(state.AutoRemediationPolicy)
 	return state
+}
+
+// NormalizeAutoRemediationPolicy returns a deterministic copy for storage,
+// hashing, and exact capability matching.
+func NormalizeAutoRemediationPolicy(policy AutoRemediationPolicy) AutoRemediationPolicy {
+	seen := map[string]struct{}{}
+	names := make([]string, 0, len(policy.CapabilityNames))
+	for _, name := range policy.CapabilityNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	policy.CapabilityNames = names
+	if policy.Window != nil {
+		window := *policy.Window
+		window.Timezone = strings.TrimSpace(window.Timezone)
+		policy.Window = &window
+	}
+	return policy
+}
+
+func ValidateAutoRemediationPolicy(policy AutoRemediationPolicy) error {
+	policy = NormalizeAutoRemediationPolicy(policy)
+	if policy.Enabled && len(policy.CapabilityNames) == 0 {
+		return errors.New("enabled auto remediation requires at least one capability")
+	}
+	if policy.Window == nil {
+		return nil
+	}
+	if policy.Window.Timezone == "" {
+		return errors.New("auto remediation window requires an IANA timezone")
+	}
+	if _, err := time.LoadLocation(policy.Window.Timezone); err != nil {
+		return fmt.Errorf("auto remediation timezone %q is invalid", policy.Window.Timezone)
+	}
+	if policy.Window.StartMinute < 0 || policy.Window.StartMinute > 1439 || policy.Window.EndMinute < 0 || policy.Window.EndMinute > 1439 {
+		return errors.New("auto remediation window minutes must be between 0 and 1439")
+	}
+	if policy.Window.StartMinute == policy.Window.EndMinute {
+		return errors.New("auto remediation window start and end must differ")
+	}
+	return nil
+}
+
+// AllowsAutoRemediationAt evaluates only the explicit per-resource scope.
+// Tenant mode, capability class, and lifecycle gates remain separate checks.
+func (s ResourceOperatorState) AllowsAutoRemediationAt(capabilityName string, now time.Time) bool {
+	if s.NeverAutoRemediate {
+		return false
+	}
+	policy := NormalizeAutoRemediationPolicy(s.AutoRemediationPolicy)
+	if !policy.Enabled {
+		return false
+	}
+	capabilityName = strings.TrimSpace(capabilityName)
+	allowed := false
+	for _, name := range policy.CapabilityNames {
+		if name == capabilityName {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return false
+	}
+	if policy.Window == nil {
+		return true
+	}
+	location, err := time.LoadLocation(policy.Window.Timezone)
+	if err != nil {
+		return false
+	}
+	local := now.In(location)
+	minute := local.Hour()*60 + local.Minute()
+	if policy.Window.StartMinute < policy.Window.EndMinute {
+		return minute >= policy.Window.StartMinute && minute < policy.Window.EndMinute
+	}
+	return minute >= policy.Window.StartMinute || minute < policy.Window.EndMinute
 }
 
 type resourceOperatorStateLifecycleStore interface {

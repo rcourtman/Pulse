@@ -87,7 +87,8 @@ temperature, capacity, health, and identity enrichment.
 47. `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`
 48. `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx`
 49. `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx`
-50. `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
+50. `frontend-modern/src/components/Infrastructure/ResourceOperatorStateSection.tsx`
+50a. `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
 51. `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
 52. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
 53. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
@@ -1433,18 +1434,27 @@ canonical resource. This freshness gate belongs in
 rendering or frontend fallback code.
 
 `resource_operator_state.go` owns the operator-set per-resource intent
-schema. `ResourceOperatorState` carries four narrow operator-intent
+schema. `ResourceOperatorState` carries five narrow operator-intent
 fields (`IntentionallyOffline`, `NeverAutoRemediate`, maintenance
 window via `MaintenanceStartAt` / `MaintenanceEndAt` / `MaintenanceReason`,
-and a canonical `Criticality` hint of `high|medium|low|""`) plus
+canonical `Criticality` hint of `high|medium|low|""`, and an explicit
+`AutoRemediationPolicy`) plus
 operator-attribution metadata (`Note`, `SetAt`, `SetBy`). The shape is
 intentionally fixed-field rather than a freeform metadata bag so
 downstream finding-suppression and severity-weighting logic has a stable
 contract to honor. `ValidateResourceOperatorState` rejects malformed
 records with a stable `ErrResourceOperatorStateInvalid` sentinel
 (empty canonical id, partial maintenance window, end ≤ start, unknown
-criticality), and `NormalizeResourceOperatorState` trims whitespace
-and lower-cases the criticality value before persistence. The
+criticality, enabled automatic-action policy without a capability allowlist,
+unknown timezone, or invalid recurring-window minute). The automatic-action
+policy is opt-in and names exact capability IDs; its optional daily IANA-timezone
+window may cross midnight. `NeverAutoRemediate` always wins. Capability-owned
+`ResourceCapability.AutoAuthorization` independently declares whether a
+capability is never eligible, low-risk eligible, or elevated eligible; it does
+not lower `MinimumApprovalLevel`. The first eligible vertical is Docker/Podman
+container `restart` at `low_risk`; unspecified capabilities normalize to never.
+`NormalizeResourceOperatorState` trims whitespace, de-duplicates capability
+names, and lower-cases the criticality value before persistence. The
 `ResourceStore` interface now exposes
 `GetResourceOperatorState`, `SetResourceOperatorState`, and
 `ClearResourceOperatorState`; both the SQLite (table
@@ -1463,12 +1473,13 @@ The operator-facing surface for this contract is
 `ResourceOperatorStateSection.tsx` on the resource detail drawer
 overview tab, which routes through the canonical TS client at
 `frontend-modern/src/api/resourceOperatorState.ts` to
-`/api/resources/{id}/operator-state`. The drawer integration is
-read-only on maintenance windows (the section badges an active
-window when `now` falls within it but does not let the operator
-schedule one — that lives in a follow-up slice). The two boolean
-toggles (intentionally offline, never auto-remediate) are the
-operator-facing primitives this slice surfaces.
+`/api/resources/{id}/operator-state`. Alongside the existing operator-state
+controls, the drawer offers automatic actions only for backend-advertised
+eligible capabilities. Enabling it requires selecting exact capabilities and
+may add a recurring daily time/timezone window; copy must state that this is a
+resource allowlist and that the tenant Patrol mode remains the upper bound.
+The UI must never infer eligibility from capability names, severity, or the
+human approval floor.
 
 The `/api/resources/{id}/operator-state` API surface (GET / PUT /
 DELETE) in `internal/api/resources_operator_state.go` is the
