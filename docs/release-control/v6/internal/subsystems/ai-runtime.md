@@ -4649,7 +4649,12 @@ tool-only-turn wrap-up guardrail is interactive-profile-owned rather
 than keyed on autonomy. The system prompt describes detection and
 investigation modes directly instead of claiming controlled or
 autonomous execution. Non-interactive operation grants no mutation
-authority. Profile proofs live in
+authority. The profile vocabulary is closed: unknown profile values are
+rejected at apply time and classify as non-interactive, never as the
+permissive interactive default. A blocked question call is persisted to
+the durable transcript paired with its refusal result (the assistant
+message records the call, so the transcript must never retain an
+unanswered call). Profile proofs live in
 `internal/ai/tools/invocation_policy_test.go` (detection allowlist,
 investigation structural read-only, profile clone isolation) and
 `internal/ai/chat/service_tooling_test.go` (profile prompt modes,

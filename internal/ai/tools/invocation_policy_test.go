@@ -351,3 +351,20 @@ func TestExecutionProfileSurvivesCloneIsolation(t *testing.T) {
 		t.Fatal("original executor lost its profile policy after clone reset")
 	}
 }
+
+func TestExecutionProfileVocabularyIsClosed(t *testing.T) {
+	unknown := ExecutionProfile(99)
+	if unknown.Valid() {
+		t.Fatal("unknown profile must not validate")
+	}
+	if !unknown.NonInteractive() {
+		t.Fatal("unknown profile must fail closed as non-interactive, never interactive")
+	}
+	exec := newInvocationPolicyExecutor(t)
+	defer func() {
+		if recover() == nil {
+			t.Fatal("applying an unknown execution profile must panic")
+		}
+	}()
+	exec.ApplyExecutionProfile(unknown)
+}

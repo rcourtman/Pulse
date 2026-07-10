@@ -25,6 +25,9 @@ func (a *AgenticLoop) SetAutonomousMode(enabled bool) {
 // it is deliberately separate from autonomous mode, which only affects
 // approval waiting and grants no mutation authority.
 func (a *AgenticLoop) SetExecutionProfile(profile tools.ExecutionProfile) {
+	if !profile.Valid() {
+		panic("unknown execution profile: profiles are a closed vocabulary and cannot default to interactive permissions")
+	}
 	a.mu.Lock()
 	a.executionProfile = profile
 	a.mu.Unlock()

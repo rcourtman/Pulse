@@ -1234,6 +1234,16 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					Msg("[AgenticLoop] Blocked pulse_question in non-interactive execution profile")
 				projection := newProviderToolResultContextProjection(tc.ID,
 					"pulse_question is unavailable: this is a non-interactive run and no user can answer. Continue with the available evidence.", true)
+				// Persist the refusal alongside the provider context: the
+				// assistant message above already recorded the question
+				// call, so the durable transcript must pair it with this
+				// result rather than retaining an unanswered call.
+				resultMessages = append(resultMessages, Message{
+					ID:         uuid.New().String(),
+					Role:       "user",
+					Timestamp:  time.Now(),
+					ToolResult: &projection.Transcript,
+				})
 				providerMessages = append(providerMessages, providers.Message{
 					Role:       "user",
 					ToolResult: &projection.Model,

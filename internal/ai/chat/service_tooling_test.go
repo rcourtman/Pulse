@@ -1085,3 +1085,92 @@ func TestToolsForExecutorHidesQuestionToolForPatrolProfiles(t *testing.T) {
 		t.Fatalf("investigation manifest must keep read tools, got %v", set)
 	}
 }
+
+func TestNonInteractiveProfileBlocksQuestionPersistsPairAndContinues(t *testing.T) {
+	turn := 0
+	provider := &stubStreamingProvider{}
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		turn++
+		switch turn {
+		case 1:
+			// The model fabricates an interactive question alongside a
+			// legitimate read in the same provider turn.
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{
+				ToolCalls: []providers.ToolCall{
+					{ID: "q-1", Name: pulseQuestionToolName, Input: map[string]interface{}{"question": "which host?"}},
+					{ID: "r-1", Name: "pulse_query", Input: map[string]interface{}{"action": "health"}},
+				},
+			}})
+		default:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "diagnosis complete"}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		}
+		return nil
+	}
+
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
+	})
+	exec.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+
+	loop := NewAgenticLoop(provider, exec, "base prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+
+	var sawWaiting bool
+	messages, err := loop.ExecuteWithTools(
+		context.Background(),
+		"session-noninteractive",
+		[]Message{{Role: "user", Content: "investigate"}},
+		nil,
+		func(event StreamEvent) {
+			if strings.Contains(string(event.Data), "Waiting for your answer") {
+				sawWaiting = true
+			}
+		},
+	)
+	if err != nil {
+		t.Fatalf("ExecuteWithTools: %v", err)
+	}
+	if sawWaiting {
+		t.Fatal("non-interactive profile must not emit a waiting-for-answer event")
+	}
+	if turn < 2 {
+		t.Fatalf("inference must continue after the blocked question, provider turns = %d", turn)
+	}
+
+	var questionCallSeen, questionResultSeen, queryResultSeen, finalTextSeen bool
+	for _, msg := range messages {
+		for _, tc := range msg.ToolCalls {
+			if tc.Name == pulseQuestionToolName {
+				questionCallSeen = true
+			}
+		}
+		if msg.ToolResult != nil {
+			switch msg.ToolResult.ToolUseID {
+			case "q-1":
+				questionResultSeen = true
+				if !msg.ToolResult.IsError || !strings.Contains(msg.ToolResult.Content, "non-interactive") {
+					t.Fatalf("question result must be a non-interactive error, got %+v", msg.ToolResult)
+				}
+			case "r-1":
+				queryResultSeen = true
+			}
+		}
+		if msg.Role == "assistant" && strings.Contains(msg.Content, "diagnosis complete") {
+			finalTextSeen = true
+		}
+	}
+	if !questionCallSeen {
+		t.Fatal("persisted transcript must retain the question tool call")
+	}
+	if !questionResultSeen {
+		t.Fatal("persisted transcript must pair the question call with its refusal result")
+	}
+	if !queryResultSeen {
+		t.Fatal("sibling tool call from the same provider turn must still execute")
+	}
+	if !finalTextSeen {
+		t.Fatal("loop must continue to the model's final answer after the blocked question")
+	}
+}

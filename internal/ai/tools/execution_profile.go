@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"fmt"
+
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
@@ -30,12 +32,27 @@ const (
 	ProfilePatrolInvestigation
 )
 
+// Valid reports whether the profile is one of the closed set. Like the
+// invocation-class vocabulary, execution profiles are a closed
+// vocabulary: an unknown value must be rejected, never silently treated
+// as the permissive interactive default.
+func (p ExecutionProfile) Valid() bool {
+	switch p {
+	case ProfileInteractiveAssistant, ProfilePatrolDetection, ProfilePatrolInvestigation:
+		return true
+	default:
+		return false
+	}
+}
+
 // NonInteractive reports whether the profile forbids interactive user
 // input. This is deliberately independent of autonomous mode: suppressing
 // questions grants no mutation authority, and mutation policy never
-// loosens because a run is interactive.
+// loosens because a run is interactive. Unknown profiles are treated as
+// non-interactive: an unclassifiable posture must never gain the
+// interactive default's permissions.
 func (p ExecutionProfile) NonInteractive() bool {
-	return p == ProfilePatrolDetection || p == ProfilePatrolInvestigation
+	return p != ProfileInteractiveAssistant
 }
 
 // patrolDetectionPulseStateAllowlist names the only tools whose
@@ -53,7 +70,12 @@ func patrolDetectionPulseStateAllowlist() map[string]bool {
 // instance (normally a request-scoped clone). Both Patrol profiles deny
 // infrastructure mutations, clear any inherited autonomous mode, and mark
 // the executor non-interactive; they differ only in pulse-state policy.
+// Unknown profiles are rejected outright (panic on programmer error)
+// rather than falling through to the interactive default's permissions.
 func (e *PulseToolExecutor) ApplyExecutionProfile(profile ExecutionProfile) {
+	if !profile.Valid() {
+		panic(fmt.Sprintf("unknown execution profile %d: profiles are a closed vocabulary and cannot default to interactive permissions", int(profile)))
+	}
 	e.executionProfile = profile
 	switch profile {
 	case ProfilePatrolDetection:
