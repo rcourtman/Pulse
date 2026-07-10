@@ -8,7 +8,7 @@ import (
 
 func TestCanonicalToolGovernanceMirrorsRegisteredRegistry(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{})
-	registryGovernance := exec.registry.ListToolGovernance(ControlLevelControlled)
+	registryGovernance := exec.registry.ListToolGovernance(InvocationPolicy{ControlLevel: ControlLevelControlled})
 	canonical := CanonicalToolGovernance(ControlLevelControlled)
 
 	if len(canonical) != len(registryGovernance) {
@@ -23,7 +23,7 @@ func TestCanonicalToolGovernanceMirrorsRegisteredRegistry(t *testing.T) {
 
 func TestCanonicalToolGovernanceForAssistantSurfaceMirrorsRegisteredRegistry(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{})
-	registryGovernance := exec.registry.ListToolGovernance(ControlLevelControlled)
+	registryGovernance := exec.registry.ListToolGovernance(InvocationPolicy{ControlLevel: ControlLevelControlled})
 	canonical := CanonicalToolGovernanceForSurface(ControlLevelControlled, ToolGovernanceSurfacePulseAssistant)
 
 	filtered := make([]ToolGovernanceDescriptor, 0, len(registryGovernance))

@@ -539,6 +539,14 @@
       ]
     },
     {
+      "path": "internal/agentcapabilities/invocation.go",
+      "rationale": "the canonical registry-owned invocation descriptors (per-tool discriminator, enum-exact case coverage, workflow kind plus mutation target, fail-closed classification) are both the native Assistant/FSM safety-classification contract and the canonical API/agent governed-invocation policy contract consumed by provider projection and registry runtime enforcement",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "internal/agentcapabilities/manifest.go",
       "rationale": "the canonical Pulse Intelligence agent capabilities manifest declaration, including capability display titles, manifest-owned finding lifecycle schemas, manifest-owned governed action schemas and routes, manifest-owned external-adapter surface tool contracts, and manifest-owned structured output schemas, is both the API discovery payload source and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools",
       "subsystems": [
@@ -1626,6 +1634,7 @@
             "exact_files": [
               "cmd/pulse-mcp/main_test.go",
               "internal/agentcapabilities/action_target_test.go",
+              "internal/agentcapabilities/invocation_test.go",
               "internal/agentcapabilities/manifest_test.go",
               "internal/agentcapabilities/mcp_test.go",
               "internal/agentcapabilities/schema_test.go",
@@ -2116,6 +2125,7 @@
             "exact_files": [
               "cmd/pulse-mcp/main_test.go",
               "internal/agentcapabilities/action_target_test.go",
+              "internal/agentcapabilities/invocation_test.go",
               "internal/agentcapabilities/manifest_test.go",
               "internal/agentcapabilities/mcp_test.go",
               "internal/agentcapabilities/schema_test.go",

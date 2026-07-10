@@ -22,7 +22,7 @@ const (
 // honored.
 func CanonicalToolGovernance(controlLevel ControlLevel) []ToolGovernanceDescriptor {
 	e := NewPulseToolExecutor(ExecutorConfig{})
-	return e.registry.ListToolGovernance(controlLevel)
+	return e.registry.ListToolGovernance(InvocationPolicy{ControlLevel: controlLevel})
 }
 
 // CanonicalToolGovernanceForSurface returns the registry-owned fallback

@@ -2917,7 +2917,7 @@ class SubsystemLookupTest(unittest.TestCase):
 				{
 					"heading": "## Shared Boundaries",
 					"path": "internal/api/access_control_handlers.go",
-					"line": 1202,
+					"line": 1203,
 					"heading_line": 141,
 				}
             ],
@@ -4246,7 +4246,7 @@ class SubsystemLookupTest(unittest.TestCase):
             ),
             _contract_reference(
                 "docs/release-control/v6/internal/subsystems/ai-runtime.md",
-                "35. `internal/api/ai_handler.go` shared with `api-contracts`",
+                "36. `internal/api/ai_handler.go` shared with `api-contracts`",
                 "internal/api/ai_handler.go",
             ),
             _contract_reference(
@@ -4258,7 +4258,7 @@ class SubsystemLookupTest(unittest.TestCase):
         api_contracts_expected = [
             _contract_reference(
                 "docs/release-control/v6/internal/subsystems/api-contracts.md",
-                "63. `internal/api/ai_handler.go` shared with `ai-runtime`",
+                "64. `internal/api/ai_handler.go` shared with `ai-runtime`",
                 "internal/api/ai_handler.go",
             ),
             _contract_reference(
@@ -4302,7 +4302,7 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 _contract_reference(
                     "docs/release-control/v6/internal/subsystems/api-contracts.md",
-                    "63. `internal/api/ai_handler.go` shared with `ai-runtime`",
+                    "64. `internal/api/ai_handler.go` shared with `ai-runtime`",
                     "internal/api/ai_handler.go",
                 )["line"],
                 _contract_reference(
@@ -4322,8 +4322,8 @@ class SubsystemLookupTest(unittest.TestCase):
         rendered = render_pretty(lookup_paths(["internal/api/ai_handler.go"], lean=True))
         self.assertIn(
             "contract focus: "
-            f"{_contract_reference('docs/release-control/v6/internal/subsystems/api-contracts.md', '63. `internal/api/ai_handler.go` shared with `ai-runtime`', 'internal/api/ai_handler.go')['heading']} "
-            f"@L{_contract_reference('docs/release-control/v6/internal/subsystems/api-contracts.md', '63. `internal/api/ai_handler.go` shared with `ai-runtime`', 'internal/api/ai_handler.go')['line']}: "
+            f"{_contract_reference('docs/release-control/v6/internal/subsystems/api-contracts.md', '64. `internal/api/ai_handler.go` shared with `ai-runtime`', 'internal/api/ai_handler.go')['heading']} "
+            f"@L{_contract_reference('docs/release-control/v6/internal/subsystems/api-contracts.md', '64. `internal/api/ai_handler.go` shared with `ai-runtime`', 'internal/api/ai_handler.go')['line']}: "
             "internal/api/ai_handler.go",
             rendered,
         )

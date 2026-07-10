@@ -399,6 +399,7 @@ func TestExecuteToolCallTreatsSharedApprovalAndPolicyMarkersAsInconclusive(t *te
 					Name:        "patrol_marker_probe",
 					Description: "test-only marker probe",
 				},
+				Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 				Handler: func(context.Context, *tools.PulseToolExecutor, map[string]interface{}) (tools.CallToolResult, error) {
 					return tools.NewTextResult(tt.resultText), nil
 				},

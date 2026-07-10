@@ -562,6 +562,7 @@ func TestToolsForExecutionMode_PatrolScopeUsesConfigNotPrompt(t *testing.T) {
 func TestExecuteCommand_SuccessAndExitCode(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{Name: agentcapabilities.PulseRunCommandToolName},
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewTextResult("Command failed (exit code 7): boom"), nil
@@ -585,6 +586,7 @@ func TestExecuteCommand_SuccessAndExitCode(t *testing.T) {
 func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{Name: agentcapabilities.PulseRunCommandToolName},
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewErrorResult(context.Canceled), nil
@@ -599,6 +601,7 @@ func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 	}
 
 	exec.RegisterTool(tools.RegisteredTool{
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{Name: agentcapabilities.PulseRunCommandToolName},
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewTextResult("APPROVAL_REQUIRED: requires approval"), nil
@@ -614,6 +617,7 @@ func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 func TestExecuteCommandUsesSharedResultTextProjection(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{Name: agentcapabilities.PulseRunCommandToolName},
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.CallToolResult{
@@ -643,6 +647,7 @@ func TestExecuteCommandUsesSharedResultTextProjection(t *testing.T) {
 func TestExecuteAssistantTool_ErrorsAndSuccess(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{Name: "test_tool"},
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewErrorResult(context.DeadlineExceeded), nil
@@ -657,6 +662,7 @@ func TestExecuteAssistantTool_ErrorsAndSuccess(t *testing.T) {
 	}
 
 	exec.RegisterTool(tools.RegisteredTool{
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{Name: "test_tool"},
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewTextResult("POLICY_BLOCKED: nope"), nil
@@ -668,6 +674,7 @@ func TestExecuteAssistantTool_ErrorsAndSuccess(t *testing.T) {
 	}
 
 	exec.RegisterTool(tools.RegisteredTool{
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{Name: "test_tool"},
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewTextResult("ok"), nil
@@ -682,6 +689,7 @@ func TestExecuteAssistantTool_ErrorsAndSuccess(t *testing.T) {
 func TestExecuteAssistantToolUsesSharedResultTextProjection(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{Name: "test_tool"},
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.CallToolResult{

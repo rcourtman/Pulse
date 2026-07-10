@@ -89,9 +89,18 @@ func PrepareToolRegistryExecution(name string, args map[string]any) (ToolCallPar
 }
 
 // ClassifyToolCall classifies a provider/registry tool call for safety gates
-// and workflow state transitions. Unknown tools default to write so newly
-// introduced tools cannot bypass governed-action checks accidentally.
+// and workflow state transitions. Registry tools classify through their
+// canonical invocation descriptors (the same table the tool registry
+// enforces at execution time), so FSM classification and runtime policy
+// can never disagree. The switch below covers only genuinely non-registry
+// names: chat-native tools, MCP/native adapter names, and legacy assistant
+// aliases. Unknown tools default to write so newly introduced tools cannot
+// bypass governed-action checks accidentally.
 func ClassifyToolCall(toolName string, args map[string]interface{}) ToolCallKind {
+	if descriptor, ok := InvocationDescriptorFor(toolName); ok {
+		return descriptor.Classify(args).Kind
+	}
+
 	action, _ := args["action"].(string)
 	actionLower := strings.ToLower(action)
 	operation, _ := args["operation"].(string)
@@ -101,59 +110,8 @@ func ClassifyToolCall(toolName string, args map[string]interface{}) ToolCallKind
 	case PulseQuestionToolName:
 		return ToolCallKindUserInput
 
-	case PulseQueryToolName, PulseDiscoveryToolName:
-		return ToolCallKindResolve
-
-	case PulseMetricsToolName, PulseStorageToolName, PulsePMGToolName, PulseSummarizeToolName:
+	case LegacyAssistantFetchURLToolName:
 		return ToolCallKindRead
-
-	case PulseAlertsToolName:
-		switch actionLower {
-		case "resolve", "dismiss":
-			return ToolCallKindWrite
-		default:
-			return ToolCallKindRead
-		}
-
-	case PulseKubernetesToolName:
-		switch actionLower {
-		case "scale", "restart", "delete_pod", "exec":
-			return ToolCallKindWrite
-		default:
-			return ToolCallKindRead
-		}
-
-	case PulseKnowledgeToolName:
-		switch actionLower {
-		case "remember", "note", "save":
-			return ToolCallKindWrite
-		default:
-			return ToolCallKindRead
-		}
-
-	case PulseReadToolName, LegacyAssistantFetchURLToolName:
-		return ToolCallKindRead
-
-	case PulseControlToolName:
-		return ToolCallKindWrite
-
-	case PulseDockerToolName:
-		switch actionLower {
-		case "control", "update", "check_updates", "trigger_update":
-			return ToolCallKindWrite
-		default:
-			return ToolCallKindRead
-		}
-
-	case PulseFileEditToolName:
-		switch actionLower {
-		case "read":
-			return ToolCallKindRead
-		case "write", "append":
-			return ToolCallKindWrite
-		default:
-			return ToolCallKindRead
-		}
 
 	case PulseRunCommandToolName, PulseControlGuestToolName, PulseControlDockerToolName,
 		LegacyAssistantRunCommandToolName, LegacyAssistantSetResourceURLToolName:
@@ -166,11 +124,6 @@ func ClassifyToolCall(toolName string, args map[string]interface{}) ToolCallKind
 	case PulseGetDockerLogsToolName, PulseGetPerformanceMetricsToolName,
 		PulseGetTemperaturesToolName, PulseGetBaselinesToolName, PulseGetPatternsToolName:
 		return ToolCallKindRead
-
-	case PatrolGetFindingsToolName:
-		return ToolCallKindRead
-	case PatrolReportFindingToolName, PatrolResolveFindingToolName:
-		return ToolCallKindWrite
 	}
 
 	if toolCallActionIsWrite(actionLower) || toolCallActionIsWrite(operationLower) {
@@ -227,4 +180,15 @@ func NewUnknownToolResult(name string) ToolResult {
 // level.
 func NewControlToolsDisabledToolResult() ToolResult {
 	return NewToolTextResult(ControlToolsDisabledMessage)
+}
+
+// NewInvocationBlockedToolResult is the stable shared result for a tool
+// invocation the registry's invocation policy refuses before the handler
+// runs: an infrastructure-mutating (or unclassifiable, therefore
+// fail-closed) invocation under a read-only control level or a
+// deny-infrastructure-mutations request policy.
+func NewInvocationBlockedToolResult(toolName string, class InvocationClass) ToolResult {
+	return NewToolTextResultWithIsError(fmt.Sprintf(
+		"Invocation blocked: this %s call classifies as an infrastructure-mutating action (%s), which the current session policy does not permit. Read-only investigation may gather evidence and propose a typed action instead of mutating directly.",
+		toolName, class.Mutation), true)
 }

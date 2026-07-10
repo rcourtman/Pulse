@@ -559,6 +559,14 @@ type PulseToolExecutor struct {
 	targetID     string
 	isAutonomous bool
 	orgID        string
+	// denyInfrastructureMutations is the request-local execution
+	// restriction for non-interactive read-only workloads (e.g. Patrol
+	// investigations): every infrastructure-mutating invocation is
+	// blocked by the registry before its handler runs, regardless of
+	// control level or autonomy. Core-owned and never serialized; it is
+	// deliberately separate from isAutonomous, which only suppresses
+	// interactive questions and grants no mutation authority.
+	denyInfrastructureMutations bool
 
 	// Session-scoped resolved context for resource validation
 	// This is set per-session by the agentic loop before tool execution
@@ -681,45 +689,46 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 	}
 
 	clone := &PulseToolExecutor{
-		stateProvider:              e.stateProvider,
-		policy:                     e.policy,
-		agentServer:                e.agentServer,
-		metricsHistory:             e.metricsHistory,
-		baselineProvider:           e.baselineProvider,
-		patternProvider:            e.patternProvider,
-		alertProvider:              e.alertProvider,
-		findingsProvider:           e.findingsProvider,
-		backupProvider:             e.backupProvider,
-		replicationProvider:        e.replicationProvider,
-		connectionHealth:           e.connectionHealth,
-		recoveryPointsProvider:     e.recoveryPointsProvider,
-		guestConfigProvider:        e.guestConfigProvider,
-		appContainerConfigProvider: e.appContainerConfigProvider,
-		diskHealthProvider:         e.diskHealthProvider,
-		updatesProvider:            e.updatesProvider,
-		metadataUpdater:            e.metadataUpdater,
-		findingsManager:            e.findingsManager,
-		agentProfileManager:        e.agentProfileManager,
-		incidentRecorderProvider:   e.incidentRecorderProvider,
-		eventCorrelatorProvider:    e.eventCorrelatorProvider,
-		knowledgeStoreProvider:     e.knowledgeStoreProvider,
-		discoveryProvider:          e.discoveryProvider,
-		unifiedResourceProvider:    e.unifiedResourceProvider,
-		appContainerActionProvider: e.appContainerActionProvider,
-		appContainerReadProvider:   e.appContainerReadProvider,
-		actionAuditStore:           e.actionAuditStore,
-		readState:                  e.readState,
-		controlLevel:               e.controlLevel,
-		protectedGuests:            append([]string(nil), e.protectedGuests...),
-		targetType:                 e.targetType,
-		targetID:                   e.targetID,
-		isAutonomous:               e.isAutonomous,
-		orgID:                      e.orgID,
-		telemetryCallback:          e.telemetryCallback,
-		reportNarrator:             e.reportNarrator,
-		reportFleetNarrator:        e.reportFleetNarrator,
-		reportFindingsProvider:     e.reportFindingsProvider,
-		registry:                   e.registry,
+		stateProvider:               e.stateProvider,
+		policy:                      e.policy,
+		agentServer:                 e.agentServer,
+		metricsHistory:              e.metricsHistory,
+		baselineProvider:            e.baselineProvider,
+		patternProvider:             e.patternProvider,
+		alertProvider:               e.alertProvider,
+		findingsProvider:            e.findingsProvider,
+		backupProvider:              e.backupProvider,
+		replicationProvider:         e.replicationProvider,
+		connectionHealth:            e.connectionHealth,
+		recoveryPointsProvider:      e.recoveryPointsProvider,
+		guestConfigProvider:         e.guestConfigProvider,
+		appContainerConfigProvider:  e.appContainerConfigProvider,
+		diskHealthProvider:          e.diskHealthProvider,
+		updatesProvider:             e.updatesProvider,
+		metadataUpdater:             e.metadataUpdater,
+		findingsManager:             e.findingsManager,
+		agentProfileManager:         e.agentProfileManager,
+		incidentRecorderProvider:    e.incidentRecorderProvider,
+		eventCorrelatorProvider:     e.eventCorrelatorProvider,
+		knowledgeStoreProvider:      e.knowledgeStoreProvider,
+		discoveryProvider:           e.discoveryProvider,
+		unifiedResourceProvider:     e.unifiedResourceProvider,
+		appContainerActionProvider:  e.appContainerActionProvider,
+		appContainerReadProvider:    e.appContainerReadProvider,
+		actionAuditStore:            e.actionAuditStore,
+		readState:                   e.readState,
+		controlLevel:                e.controlLevel,
+		protectedGuests:             append([]string(nil), e.protectedGuests...),
+		targetType:                  e.targetType,
+		targetID:                    e.targetID,
+		isAutonomous:                e.isAutonomous,
+		orgID:                       e.orgID,
+		denyInfrastructureMutations: e.denyInfrastructureMutations,
+		telemetryCallback:           e.telemetryCallback,
+		reportNarrator:              e.reportNarrator,
+		reportFleetNarrator:         e.reportFleetNarrator,
+		reportFindingsProvider:      e.reportFindingsProvider,
+		registry:                    e.registry,
 	}
 	clone.patrolFindingCreator = e.GetPatrolFindingCreator()
 	return clone
@@ -970,9 +979,28 @@ func (e *PulseToolExecutor) GetResolvedContext() ResolvedContextProvider {
 	return e.resolvedContext
 }
 
+// invocationPolicy is the request-scoped safety policy for this executor
+// instance: the session control level plus the deny-infrastructure
+// restriction. Clones snapshot the policy, so a per-request restriction
+// on one clone can never leak into concurrent sessions.
+func (e *PulseToolExecutor) invocationPolicy() InvocationPolicy {
+	return InvocationPolicy{
+		ControlLevel:                e.controlLevel,
+		DenyInfrastructureMutations: e.denyInfrastructureMutations,
+	}
+}
+
+// SetDenyInfrastructureMutations toggles the request-local restriction
+// that blocks every infrastructure-mutating invocation at the registry
+// boundary, before any handler runs. Intended for non-interactive
+// read-only workloads such as Patrol investigations.
+func (e *PulseToolExecutor) SetDenyInfrastructureMutations(deny bool) {
+	e.denyInfrastructureMutations = deny
+}
+
 // ListTools returns the list of available tools
 func (e *PulseToolExecutor) ListTools() []Tool {
-	tools := e.registry.ListTools(e.controlLevel)
+	tools := e.registry.ListTools(e.invocationPolicy())
 	if len(tools) == 0 {
 		return tools
 	}
@@ -988,7 +1016,7 @@ func (e *PulseToolExecutor) ListTools() []Tool {
 
 // ListToolGovernance returns the governed manifest for currently available tools.
 func (e *PulseToolExecutor) ListToolGovernance() []ToolGovernanceDescriptor {
-	tools := e.registry.ListToolGovernance(e.controlLevel)
+	tools := e.registry.ListToolGovernance(e.invocationPolicy())
 	if len(tools) == 0 {
 		return tools
 	}

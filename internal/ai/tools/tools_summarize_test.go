@@ -44,7 +44,7 @@ func TestSummarizeTool_RegisteredAndDiscoverable(t *testing.T) {
 	exec, cleanup := newSummarizeTestEnvironment(t)
 	defer cleanup()
 
-	tools := exec.registry.ListTools("")
+	tools := exec.registry.ListTools(InvocationPolicy{})
 	var found bool
 	for _, tool := range tools {
 		if tool.Name == agentcapabilities.PulseSummarizeToolName {

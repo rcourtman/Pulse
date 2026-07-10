@@ -17403,10 +17403,12 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`ToolCallKindUserInput`,
 		`func (k ToolCallKind) String() string`,
 		`func ClassifyToolCall(toolName string, args map[string]interface{}) ToolCallKind`,
+		// Registry tools classify through the canonical invocation
+		// descriptors; the switch keeps only non-registry names.
+		`if descriptor, ok := InvocationDescriptorFor(toolName); ok {`,
+		`return descriptor.Classify(args).Kind`,
 		`case PulseQuestionToolName:`,
-		`case PulseQueryToolName, PulseDiscoveryToolName:`,
-		`case PulseControlToolName:`,
-		`case PulseReadToolName, LegacyAssistantFetchURLToolName:`,
+		`case LegacyAssistantFetchURLToolName:`,
 		`LegacyAssistantRunCommandToolName, LegacyAssistantSetResourceURLToolName`,
 		`return ToolCallKindWrite`,
 	} {
@@ -18548,15 +18550,22 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`ControlLevelReadOnly ControlLevel = agentcapabilities.ControlLevelReadOnly`,
 		`ControlLevelControlled ControlLevel = agentcapabilities.ControlLevelControlled`,
 		`ControlLevelAutonomous ControlLevel = agentcapabilities.ControlLevelAutonomous`,
-		`!agentcapabilities.ControlLevelAllowsControlTools(controlLevel)`,
+		`!agentcapabilities.ControlLevelAllowsControlTools(policy.ControlLevel)`,
 		`!agentcapabilities.ControlLevelAllowsControlTools(e.controlLevel)`,
 		`agentcapabilities.NewToolGovernanceDescriptor(`,
 		`tool.Definition = tool.Definition.NormalizeCollections()`,
-		`result = append(result, tool.Definition.NormalizeCollections())`,
+		`result = append(result, projected.Definition.NormalizeCollections())`,
 		`params, invalidResult, ok := agentcapabilities.PrepareToolRegistryExecution(name, args)`,
 		`agentcapabilities.NewUnknownToolResult(name)`,
 		`agentcapabilities.NewControlToolsDisabledToolResult()`,
 		`return result.NormalizeCollections(), err`,
+		// Invocation-level enforcement runs before the handler and
+		// consumes the same descriptor the projection filters with.
+		`class = tool.Invocation.Classify(args)`,
+		`if class.Mutation == agentcapabilities.MutationInfrastructure {`,
+		`agentcapabilities.NewInvocationBlockedToolResult(name, class)`,
+		`descriptor.Validate(name, discriminatorEnum(tool.Definition, descriptor.Discriminator))`,
+		`func projectToolForPolicy(tool RegisteredTool, policy InvocationPolicy) (RegisteredTool, bool)`,
 	} {
 		if !strings.Contains(registrySrc, fragment) {
 			t.Errorf("Assistant tool registry must use shared agentcapabilities contracts; missing %s", fragment)

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
@@ -61,6 +62,14 @@ type RegisteredTool struct {
 	Handler        ToolHandler
 	RequireControl bool // If true, only available when control level is not read_only
 	Governance     ToolGovernance
+	// Invocation optionally overrides the canonical invocation
+	// descriptor. Canonical Pulse tools must leave it nil (their
+	// descriptor comes from the shared agentcapabilities table); it
+	// exists for test doubles and extension tools that are not part of
+	// the canonical manifest. Register resolves and stores the
+	// effective descriptor, so execution and projection always consult
+	// the same classification the registration validated.
+	Invocation *agentcapabilities.InvocationDescriptor
 }
 
 // ToolRegistry manages tool registration and execution
@@ -78,55 +87,199 @@ func NewToolRegistry() *ToolRegistry {
 	}
 }
 
-// Register adds a tool to the registry
+// InvocationPolicy is the request-scoped safety policy the registry
+// enforces on every invocation: the session control level plus an
+// optional deny-infrastructure-mutations restriction (e.g. Patrol
+// investigations). It is core-owned, never serialized, and consulted by
+// both provider projection and runtime execution so the offered schema
+// and the enforcement boundary can never disagree.
+type InvocationPolicy struct {
+	ControlLevel                ControlLevel
+	DenyInfrastructureMutations bool
+}
+
+// Allows reports whether the policy permits an invocation class.
+// Infrastructure mutations require a control level that allows control
+// tools and are always blocked under the deny restriction; pulse-state
+// and non-mutating invocations are not control-gated here (handlers keep
+// their own defense-in-depth checks).
+func (p InvocationPolicy) Allows(class agentcapabilities.InvocationClass) bool {
+	if class.Mutation != agentcapabilities.MutationInfrastructure {
+		return true
+	}
+	if p.DenyInfrastructureMutations {
+		return false
+	}
+	return agentcapabilities.ControlLevelAllowsControlTools(p.ControlLevel)
+}
+
+// Register adds a tool to the registry. Every registered tool must have a
+// canonical invocation descriptor whose cases exactly cover the schema
+// enum of its discriminator; a tool that cannot be classified must not be
+// registerable, so this panics on programmer error rather than degrading
+// to an unclassified (and therefore ungovernable) tool.
 func (r *ToolRegistry) Register(tool RegisteredTool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	tool.Definition = tool.Definition.NormalizeCollections()
 	name := tool.Definition.Name
+	descriptor := agentcapabilities.InvocationDescriptor{}
+	if tool.Invocation != nil {
+		descriptor = *tool.Invocation
+	} else {
+		canonical, ok := agentcapabilities.InvocationDescriptorFor(name)
+		if !ok {
+			panic(fmt.Sprintf("tool %q has no canonical invocation descriptor; declare one in agentcapabilities/invocation.go", name))
+		}
+		descriptor = canonical
+	}
+	if err := descriptor.Validate(name, discriminatorEnum(tool.Definition, descriptor.Discriminator)); err != nil {
+		panic(err.Error())
+	}
+	tool.Invocation = &descriptor
 	if _, exists := r.tools[name]; !exists {
 		r.order = append(r.order, name)
 	}
 	r.tools[name] = tool
 }
 
-// ListTools returns all tools available for the given control level
-func (r *ToolRegistry) ListTools(controlLevel ControlLevel) []Tool {
+// StaticInvocation builds a static invocation descriptor. Convenience for
+// extension and test tool registrations that are not part of the
+// canonical descriptor table.
+func StaticInvocation(kind agentcapabilities.ToolCallKind, mutation agentcapabilities.MutationTarget) *agentcapabilities.InvocationDescriptor {
+	class := agentcapabilities.InvocationClass{Kind: kind, Mutation: mutation}
+	return &agentcapabilities.InvocationDescriptor{Static: &class}
+}
+
+// discriminatorEnum returns the schema enum for the descriptor's
+// discriminator property, or nil for static descriptors.
+func discriminatorEnum(definition Tool, discriminator string) []string {
+	if discriminator == "" {
+		return nil
+	}
+	property, ok := definition.InputSchema.Properties[discriminator]
+	if !ok {
+		return nil
+	}
+	return property.Enum
+}
+
+// ListTools returns all tools available under the given invocation
+// policy. Mixed tools whose discriminator has forbidden subactions are
+// offered with those enum values removed; tools with no permitted
+// invocation are dropped entirely. The same descriptor drives runtime
+// enforcement in Execute, so the offered schema and the enforcement
+// boundary always agree.
+func (r *ToolRegistry) ListTools(policy InvocationPolicy) []Tool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	result := make([]Tool, 0, len(r.tools))
 	for _, name := range r.order {
 		tool := r.tools[name]
-		// Skip control tools if in read-only mode
-		if tool.RequireControl && !agentcapabilities.ControlLevelAllowsControlTools(controlLevel) {
+		// Legacy tool-level gate, kept as defense in depth.
+		if tool.RequireControl && !agentcapabilities.ControlLevelAllowsControlTools(policy.ControlLevel) {
 			continue
 		}
-		result = append(result, tool.Definition.NormalizeCollections())
+		projected, ok := projectToolForPolicy(tool, policy)
+		if !ok {
+			continue
+		}
+		result = append(result, projected.Definition.NormalizeCollections())
 	}
 	return result
 }
 
-// ListToolGovernance returns the governed tool manifest available at a control level.
-func (r *ToolRegistry) ListToolGovernance(controlLevel ControlLevel) []ToolGovernanceDescriptor {
+// ListToolGovernance returns the governed tool manifest available under
+// the given invocation policy, with each tool's action mode recomputed
+// from the subactions the policy actually offers.
+func (r *ToolRegistry) ListToolGovernance(policy InvocationPolicy) []ToolGovernanceDescriptor {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	result := make([]ToolGovernanceDescriptor, 0, len(r.tools))
 	for _, name := range r.order {
 		tool := r.tools[name]
-		if tool.RequireControl && !agentcapabilities.ControlLevelAllowsControlTools(controlLevel) {
+		if tool.RequireControl && !agentcapabilities.ControlLevelAllowsControlTools(policy.ControlLevel) {
+			continue
+		}
+		projected, ok := projectToolForPolicy(tool, policy)
+		if !ok {
 			continue
 		}
 		result = append(result, agentcapabilities.NewToolGovernanceDescriptor(
-			tool.Definition.Name,
-			tool.Definition.Description,
-			tool.RequireControl,
-			tool.Governance,
+			projected.Definition.Name,
+			projected.Definition.Description,
+			projected.RequireControl,
+			projected.Governance,
 		))
 	}
 	return result
+}
+
+// projectToolForPolicy filters one registered tool against the policy.
+// Static tools pass or drop whole; discriminator-based tools are offered
+// with forbidden enum values removed and their governance action mode
+// recomputed from what remains. Returns false when no invocation of the
+// tool is permitted.
+func projectToolForPolicy(tool RegisteredTool, policy InvocationPolicy) (RegisteredTool, bool) {
+	if tool.Invocation == nil {
+		// Unregisterable in practice (Register resolves and stores the
+		// descriptor), but fail closed.
+		return RegisteredTool{}, false
+	}
+	descriptor := *tool.Invocation
+	if descriptor.Static != nil {
+		if !policy.Allows(*descriptor.Static) {
+			return RegisteredTool{}, false
+		}
+		return tool, true
+	}
+
+	property, ok := tool.Definition.InputSchema.Properties[descriptor.Discriminator]
+	if !ok {
+		return RegisteredTool{}, false
+	}
+	allowed := make([]string, 0, len(property.Enum))
+	sawWrite := false
+	sawRead := false
+	for _, value := range property.Enum {
+		class := descriptor.Classify(map[string]interface{}{descriptor.Discriminator: value})
+		if !policy.Allows(class) {
+			continue
+		}
+		allowed = append(allowed, value)
+		if class.Kind == agentcapabilities.ToolCallKindWrite {
+			sawWrite = true
+		} else {
+			sawRead = true
+		}
+	}
+	if len(allowed) == 0 {
+		return RegisteredTool{}, false
+	}
+	if len(allowed) == len(property.Enum) {
+		return tool, true
+	}
+
+	projected := tool
+	projected.Definition.InputSchema.Properties = make(map[string]PropertySchema, len(tool.Definition.InputSchema.Properties))
+	for key, value := range tool.Definition.InputSchema.Properties {
+		projected.Definition.InputSchema.Properties[key] = value
+	}
+	property.Enum = allowed
+	projected.Definition.InputSchema.Properties[descriptor.Discriminator] = property
+
+	switch {
+	case sawWrite && sawRead:
+		projected.Governance.ActionMode = agentcapabilities.ActionModeMixed
+	case sawWrite:
+		projected.Governance.ActionMode = agentcapabilities.ActionModeWrite
+	default:
+		projected.Governance.ActionMode = agentcapabilities.ActionModeRead
+	}
+	return projected, true
 }
 
 // allNames returns the canonical list of registered tool names in
@@ -156,7 +309,24 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 		return agentcapabilities.NewUnknownToolResult(name), nil
 	}
 
-	// Centralized control level check
+	// Invocation-level policy enforcement, before the handler runs.
+	// The classification fails closed (missing/unknown discriminators
+	// count as infrastructure writes), so a fabricated or hidden enum
+	// value can never reach a handler under a policy that forbids it.
+	class := agentcapabilities.FailClosedInvocationClass()
+	if tool.Invocation != nil {
+		class = tool.Invocation.Classify(args)
+	}
+	if class.Mutation == agentcapabilities.MutationInfrastructure {
+		if e.invocationPolicy().DenyInfrastructureMutations {
+			return agentcapabilities.NewInvocationBlockedToolResult(name, class), nil
+		}
+		if !agentcapabilities.ControlLevelAllowsControlTools(e.controlLevel) {
+			return agentcapabilities.NewControlToolsDisabledToolResult(), nil
+		}
+	}
+
+	// Legacy tool-level control check, kept as defense in depth.
 	if tool.RequireControl {
 		if !agentcapabilities.ControlLevelAllowsControlTools(e.controlLevel) {
 			return agentcapabilities.NewControlToolsDisabledToolResult(), nil

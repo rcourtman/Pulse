@@ -684,7 +684,7 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	exec := NewPulseToolExecutor(ExecutorConfig{})
 
 	// Patrol tools should be registered but availability depends on patrolFindingCreator
-	tools := exec.registry.ListTools(ControlLevelReadOnly)
+	tools := exec.registry.ListTools(InvocationPolicy{ControlLevel: ControlLevelReadOnly})
 	found := map[string]bool{}
 	var resolveTool Tool
 	for _, tool := range tools {

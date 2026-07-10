@@ -101,7 +101,9 @@ func TestClassifyToolCallUsesSharedSafetyClassification(t *testing.T) {
 	}{
 		{name: "native question", toolName: PulseQuestionToolName, want: ToolCallKindUserInput},
 		{name: "query resolves", toolName: "pulse_query", want: ToolCallKindResolve},
-		{name: "discovery resolves", toolName: "pulse_discovery", want: ToolCallKindResolve},
+		{name: "discovery get resolves", toolName: "pulse_discovery", args: map[string]interface{}{"action": "get"}, want: ToolCallKindResolve},
+		{name: "discovery run resolves", toolName: "pulse_discovery", args: map[string]interface{}{"action": "run"}, want: ToolCallKindResolve},
+		{name: "discovery missing action fails closed", toolName: "pulse_discovery", want: ToolCallKindWrite},
 		{name: "metrics reads", toolName: "pulse_metrics", want: ToolCallKindRead},
 		{name: "summarize reads", toolName: PulseSummarizeToolName, want: ToolCallKindRead},
 		{name: "alert list reads", toolName: "pulse_alerts", args: map[string]interface{}{"action": "list"}, want: ToolCallKindRead},
@@ -110,9 +112,15 @@ func TestClassifyToolCallUsesSharedSafetyClassification(t *testing.T) {
 		{name: "control writes", toolName: "pulse_control", args: map[string]interface{}{"type": "command"}, want: ToolCallKindWrite},
 		{name: "docker services reads", toolName: "pulse_docker", args: map[string]interface{}{"action": "services"}, want: ToolCallKindRead},
 		{name: "docker update writes", toolName: "pulse_docker", args: map[string]interface{}{"action": "update"}, want: ToolCallKindWrite},
-		{name: "kubernetes pods reads", toolName: "pulse_kubernetes", args: map[string]interface{}{"action": "pods"}, want: ToolCallKindRead},
-		{name: "kubernetes exec writes", toolName: "pulse_kubernetes", args: map[string]interface{}{"action": "exec"}, want: ToolCallKindWrite},
-		{name: "file read reads", toolName: "pulse_file_edit", args: map[string]interface{}{"action": "read"}, want: ToolCallKindRead},
+		// Kubernetes's real discriminator is `type`; the retired
+		// hard-coded classifier read `action` and therefore classified
+		// scale/restart/delete_pod/exec as read.
+		{name: "kubernetes pods reads", toolName: "pulse_kubernetes", args: map[string]interface{}{"type": "pods"}, want: ToolCallKindRead},
+		{name: "kubernetes scale writes", toolName: "pulse_kubernetes", args: map[string]interface{}{"type": "scale"}, want: ToolCallKindWrite},
+		{name: "kubernetes exec writes", toolName: "pulse_kubernetes", args: map[string]interface{}{"type": "exec"}, want: ToolCallKindWrite},
+		{name: "kubernetes wrong discriminator fails closed", toolName: "pulse_kubernetes", args: map[string]interface{}{"action": "pods"}, want: ToolCallKindWrite},
+		// pulse_file_edit is write-only; file reads route via pulse_read.
+		{name: "file read fails closed", toolName: "pulse_file_edit", args: map[string]interface{}{"action": "read"}, want: ToolCallKindWrite},
 		{name: "file append writes", toolName: "pulse_file_edit", args: map[string]interface{}{"action": "append"}, want: ToolCallKindWrite},
 		{name: "knowledge recall reads", toolName: "pulse_knowledge", args: map[string]interface{}{"action": "recall"}, want: ToolCallKindRead},
 		{name: "knowledge remember writes", toolName: "pulse_knowledge", args: map[string]interface{}{"action": "remember"}, want: ToolCallKindWrite},

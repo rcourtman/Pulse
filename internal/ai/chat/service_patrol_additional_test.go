@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -252,6 +253,7 @@ func TestServiceExecutePatrolStreamReturnsPartialTokenCountsOnError(t *testing.T
 		cfg:      &config.AIConfig{PatrolModel: "mock:model"},
 	}
 	executor.RegisterTool(tools.RegisteredTool{
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{
 			Name:        "test_tool",
 			Description: "test tool",

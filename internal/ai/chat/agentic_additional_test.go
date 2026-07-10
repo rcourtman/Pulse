@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
@@ -372,6 +373,7 @@ func TestBuildAutomaticFallbackSummary_UsesToolNamesNotCallIDsOrRawOutput(t *tes
 func TestExecuteToolSafely_RecoversPanic(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{
 			Name: "panic_tool",
 			InputSchema: tools.InputSchema{
@@ -664,6 +666,7 @@ func TestAgenticLoop_DoesNotAutoRecoverStructuredToolCall(t *testing.T) {
 	recoveryCalls := 0
 
 	executor.RegisterTool(tools.RegisteredTool{
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{
 			Name: "fail_tool",
 			InputSchema: tools.InputSchema{
@@ -683,6 +686,7 @@ func TestAgenticLoop_DoesNotAutoRecoverStructuredToolCall(t *testing.T) {
 		},
 	})
 	executor.RegisterTool(tools.RegisteredTool{
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{
 			Name: "recovery_tool",
 			InputSchema: tools.InputSchema{
@@ -766,6 +770,7 @@ func TestAgenticLoop_NormalizesProviderToolCallsThroughSharedProjection(t *testi
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	var capturedArgs map[string]interface{}
 	executor.RegisterTool(tools.RegisteredTool{
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
 		Definition: tools.Tool{
 			Name: "test_tool",
 			InputSchema: tools.InputSchema{

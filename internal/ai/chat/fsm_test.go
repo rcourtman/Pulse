@@ -285,7 +285,9 @@ func TestClassifyToolCall(t *testing.T) {
 	}{
 		// Resolve tools
 		{"pulse_query", "pulse_query", nil, ToolKindResolve},
-		{"pulse_discovery", "pulse_discovery", nil, ToolKindResolve},
+		{"pulse_discovery get", "pulse_discovery", map[string]interface{}{"action": "get"}, ToolKindResolve},
+		// Missing required discriminators fail closed as write.
+		{"pulse_discovery no action", "pulse_discovery", nil, ToolKindWrite},
 		{"pulse_search_resources", "pulse_search_resources", nil, ToolKindResolve},
 
 		// Interactive user input tools
@@ -294,7 +296,8 @@ func TestClassifyToolCall(t *testing.T) {
 		// Read tools
 		{"pulse_metrics", "pulse_metrics", nil, ToolKindRead},
 		{"pulse_storage", "pulse_storage", nil, ToolKindRead},
-		{"pulse_kubernetes", "pulse_kubernetes", nil, ToolKindRead},
+		// Kubernetes without its required `type` discriminator fails closed.
+		{"pulse_kubernetes no type", "pulse_kubernetes", nil, ToolKindWrite},
 		{"pulse_pmg", "pulse_pmg", nil, ToolKindRead},
 		{"pulse_alerts list", "pulse_alerts", map[string]interface{}{"action": "list"}, ToolKindRead},
 
@@ -318,13 +321,16 @@ func TestClassifyToolCall(t *testing.T) {
 		{"pulse_docker control", "pulse_docker", map[string]interface{}{"action": "control"}, ToolKindWrite},
 		{"pulse_docker update", "pulse_docker", map[string]interface{}{"action": "update"}, ToolKindWrite},
 
-		// Kubernetes - depends on action
-		{"pulse_kubernetes pods", "pulse_kubernetes", map[string]interface{}{"action": "pods"}, ToolKindRead},
-		{"pulse_kubernetes scale", "pulse_kubernetes", map[string]interface{}{"action": "scale"}, ToolKindWrite},
-		{"pulse_kubernetes exec", "pulse_kubernetes", map[string]interface{}{"action": "exec"}, ToolKindWrite},
+		// Kubernetes - depends on `type`, its real schema discriminator.
+		// The retired hard-coded classifier read `action` and therefore
+		// classified scale/exec as read.
+		{"pulse_kubernetes pods", "pulse_kubernetes", map[string]interface{}{"type": "pods"}, ToolKindRead},
+		{"pulse_kubernetes scale", "pulse_kubernetes", map[string]interface{}{"type": "scale"}, ToolKindWrite},
+		{"pulse_kubernetes exec", "pulse_kubernetes", map[string]interface{}{"type": "exec"}, ToolKindWrite},
+		{"pulse_kubernetes wrong discriminator", "pulse_kubernetes", map[string]interface{}{"action": "pods"}, ToolKindWrite},
 
-		// File edit - depends on action
-		{"pulse_file_edit read", "pulse_file_edit", map[string]interface{}{"action": "read"}, ToolKindRead},
+		// File edit is write-only; file reads route through pulse_read.
+		{"pulse_file_edit read fails closed", "pulse_file_edit", map[string]interface{}{"action": "read"}, ToolKindWrite},
 		{"pulse_file_edit write", "pulse_file_edit", map[string]interface{}{"action": "write"}, ToolKindWrite},
 		{"pulse_file_edit append", "pulse_file_edit", map[string]interface{}{"action": "append"}, ToolKindWrite},
 

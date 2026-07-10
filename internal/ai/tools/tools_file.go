@@ -36,12 +36,13 @@ func (e *PulseToolExecutor) registerFileTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PulseFileEditToolName,
-			Description: `Read and edit files on remote hosts, containers, VMs, and Docker containers safely.
+			Description: `Edit files on remote hosts, containers, VMs, and Docker containers safely.
 
 Actions:
-- read: Read the contents of a file
 - append: Append content to the end of a file
 - write: Write/overwrite a file with new content (creates if doesn't exist)
+
+To READ a file, use pulse_read with action="file" instead; this tool is write-only.
 
 This tool handles escaping automatically - just provide the content as-is.
 Use this instead of shell commands for editing config files (YAML, JSON, etc.)
@@ -51,17 +52,15 @@ Routing: target_host can be a node (pve-node), a container name (homepage-docker
 Docker container support: Use container to access files INSIDE a Docker container. The target_host specifies where Docker runs.
 
 Examples:
-- Read from container: action="read", path="/opt/app/config.yaml", target_host="homepage-docker"
 - Write to host: action="write", path="/tmp/test.txt", content="hello", target_host="pve-node"
-- Read from Docker: action="read", path="/config/settings.json", target_host="tower", container="jellyfin"
 - Write to Docker: action="write", path="/tmp/test.txt", content="hello", target_host="tower", container="nginx"`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"action": {
 						Type:        "string",
-						Description: "File action: read, append, or write",
-						Enum:        []string{"read", "append", "write"},
+						Description: "File action: append or write",
+						Enum:        []string{"append", "write"},
 					},
 					"path": {
 						Type:        "string",
@@ -128,14 +127,15 @@ func (e *PulseToolExecutor) executeFileEdit(ctx context.Context, args map[string
 		}
 	}
 
-	// Check control level
-	if e.controlLevel == ControlLevelReadOnly && action != "read" {
+	// Check control level (defense in depth; the registry blocks
+	// infrastructure mutations before this handler runs).
+	if e.controlLevel == ControlLevelReadOnly {
 		return NewTextResult("File editing is not available in read-only mode."), nil
 	}
 
 	switch action {
 	case "read":
-		return e.executeFileRead(ctx, path, targetHost, dockerContainer)
+		return NewErrorResult(fmt.Errorf("pulse_file_edit is write-only; read files with pulse_read action=\"file\"")), nil
 	case "append":
 		if content == "" {
 			return NewErrorResult(fmt.Errorf("content is required for append action")), nil
@@ -147,7 +147,7 @@ func (e *PulseToolExecutor) executeFileEdit(ctx context.Context, args map[string
 		}
 		return e.executeFileWrite(ctx, path, content, targetHost, dockerContainer, args)
 	default:
-		return NewErrorResult(fmt.Errorf("unknown action: %s. Use: read, append, write", action)), nil
+		return NewErrorResult(fmt.Errorf("unknown action: %s. Use: append, write", action)), nil
 	}
 }
 
