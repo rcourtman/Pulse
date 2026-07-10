@@ -64,6 +64,7 @@ export interface IncomingOrganizationShare extends OrganizationShare {
 export const OrgsAPI = {
   list: () =>
     apiFetchJSON<Organization[]>('/api/orgs', {
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
@@ -71,11 +72,13 @@ export const OrgsAPI = {
     apiFetchJSON<Organization>('/api/orgs', {
       method: 'POST',
       body: JSON.stringify(payload),
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
   get: (id: string) =>
     apiFetchJSON<Organization>(`/api/orgs/${encodeURIComponent(id)}`, {
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
@@ -83,27 +86,32 @@ export const OrgsAPI = {
     apiFetchJSON<Organization>(`/api/orgs/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(payload),
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
   remove: (id: string) =>
     apiFetchJSON<void>(`/api/orgs/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
   listMembers: (id: string) =>
     apiFetchJSON<OrganizationMember[]>(`/api/orgs/${encodeURIComponent(id)}/members`, {
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
   listPendingInvitations: (id: string) =>
     apiFetchJSON<OrganizationInvitation[]>(`/api/orgs/${encodeURIComponent(id)}/invitations`, {
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
   listMyInvitations: () =>
     apiFetchJSON<UserOrganizationInvitation[]>('/api/org-invitations', {
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
@@ -111,6 +119,7 @@ export const OrgsAPI = {
     apiFetchJSON<OrganizationAccessMutationResult>(`/api/orgs/${encodeURIComponent(id)}/members`, {
       method: 'POST',
       body: JSON.stringify(payload),
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
@@ -119,6 +128,7 @@ export const OrgsAPI = {
       `/api/org-invitations/${encodeURIComponent(id)}/accept`,
       {
         method: 'POST',
+        preferSessionAuth: true,
         skipOrgContext: true,
       },
     ),
@@ -126,6 +136,7 @@ export const OrgsAPI = {
   declineMyInvitation: (id: string) =>
     apiFetchJSON<void>(`/api/org-invitations/${encodeURIComponent(id)}`, {
       method: 'DELETE',
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
@@ -133,6 +144,7 @@ export const OrgsAPI = {
     apiFetchJSON<OrganizationAccessMutationResult>(`/api/orgs/${encodeURIComponent(id)}/members`, {
       method: 'POST',
       body: JSON.stringify(payload),
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
@@ -141,6 +153,7 @@ export const OrgsAPI = {
       `/api/orgs/${encodeURIComponent(id)}/invitations/${encodeURIComponent(userId)}`,
       {
         method: 'DELETE',
+        preferSessionAuth: true,
         skipOrgContext: true,
       },
     ),
@@ -150,12 +163,14 @@ export const OrgsAPI = {
       `/api/orgs/${encodeURIComponent(id)}/members/${encodeURIComponent(userId)}`,
       {
         method: 'DELETE',
+        preferSessionAuth: true,
         skipOrgContext: true,
       },
     ),
 
   listShares: (id: string) =>
     apiFetchJSON<OrganizationShare[]>(`/api/orgs/${encodeURIComponent(id)}/shares`, {
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
@@ -163,6 +178,7 @@ export const OrgsAPI = {
     apiFetchJSON<IncomingOrganizationShare[]>(
       `/api/orgs/${encodeURIComponent(id)}/shares/incoming`,
       {
+        preferSessionAuth: true,
         skipOrgContext: true,
       },
     ),
@@ -172,6 +188,7 @@ export const OrgsAPI = {
       `/api/orgs/${encodeURIComponent(id)}/shares/incoming/${encodeURIComponent(shareId)}/accept`,
       {
         method: 'POST',
+        preferSessionAuth: true,
         skipOrgContext: true,
       },
     ),
@@ -181,6 +198,7 @@ export const OrgsAPI = {
       `/api/orgs/${encodeURIComponent(id)}/shares/incoming/${encodeURIComponent(shareId)}`,
       {
         method: 'DELETE',
+        preferSessionAuth: true,
         skipOrgContext: true,
       },
     ),
@@ -198,6 +216,7 @@ export const OrgsAPI = {
     apiFetchJSON<OrganizationShare>(`/api/orgs/${encodeURIComponent(id)}/shares`, {
       method: 'POST',
       body: JSON.stringify(payload),
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
@@ -206,6 +225,7 @@ export const OrgsAPI = {
       `/api/orgs/${encodeURIComponent(id)}/shares/${encodeURIComponent(shareId)}`,
       {
         method: 'DELETE',
+        preferSessionAuth: true,
         skipOrgContext: true,
       },
     ),

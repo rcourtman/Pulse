@@ -3827,20 +3827,62 @@
     },
     {
       "id": "RA34",
-      "summary": "Every authenticated Pulse product and Settings page remains usable at supported phone widths: page-level overflow stays contained; dense tables and tab rails scroll instead of compressing or wrapping; active destinations, expanded inline detail, and Settings navigation remain visible; primary touch actions keep a 40-pixel mobile floor; and exact-route browser proof must not count redirects as audited pages.",
+      "summary": "Every authenticated Pulse product and Settings page remains usable at supported phone widths, including capability-gated organization and hosted-administration surfaces rendered under their real runtime modes: page-level overflow stays contained; dense tables and tab rails scroll instead of compressing or wrapping; active destinations, expanded inline detail, and Settings navigation remain visible; primary touch actions keep a 40-pixel mobile floor; and exact-route browser proof must not count redirects as audited pages.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
       "lane_ids": [
+        "L3",
+        "L6",
         "L8",
-        "L10"
+        "L10",
+        "L14"
       ],
       "subsystem_ids": [
+        "api-contracts",
+        "cloud-paid",
         "frontend-primitives",
+        "organization-settings",
         "performance-and-scalability"
       ],
       "release_gate_ids": [],
       "proof_commands": [
+        {
+          "id": "hosted-billing-admin-mobile-browser-proof",
+          "run": [
+            "env",
+            "PULSE_E2E_USE_LOCAL_BACKEND=true",
+            "PULSE_HOSTED_MODE=true",
+            "PULSE_MULTI_TENANT_ENABLED=true",
+            "PULSE_E2E_ENTITLEMENT_PROFILE=multi-tenant",
+            "npm",
+            "--prefix",
+            "tests/integration",
+            "test",
+            "--",
+            "tests/05-settings-mobile-audit.spec.ts",
+            "--project=mobile-chrome",
+            "--grep",
+            "billing-admin"
+          ]
+        },
+        {
+          "id": "multi-tenant-settings-mobile-browser-proof",
+          "run": [
+            "env",
+            "PULSE_MULTI_TENANT_ENABLED=true",
+            "PULSE_E2E_ENTITLEMENT_PROFILE=multi-tenant",
+            "npm",
+            "--prefix",
+            "tests/integration",
+            "test",
+            "--",
+            "tests/05-settings-mobile-audit.spec.ts",
+            "--project=mobile-chrome",
+            "--grep",
+            "/settings/organization"
+          ]
+        },
         {
           "id": "route-wide-mobile-browser-proof",
           "run": [
@@ -3856,6 +3898,16 @@
         }
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/api/billingAdmin.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/api/orgs.ts",
+          "kind": "file"
+        },
         {
           "repo": "pulse",
           "path": "frontend-modern/src/components/Settings/SettingsPageShell.tsx",
@@ -3874,6 +3926,11 @@
         {
           "repo": "pulse",
           "path": "frontend-modern/src/features/platformPage/sharedPlatformPage.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/apiClient.ts",
           "kind": "file"
         },
         {

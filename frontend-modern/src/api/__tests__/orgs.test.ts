@@ -18,7 +18,10 @@ describe('OrgsAPI', () => {
 
       const result = await OrgsAPI.list();
 
-      expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs', { skipOrgContext: true });
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs', {
+        preferSessionAuth: true,
+        skipOrgContext: true,
+      });
       expect(result).toEqual(mockOrgs);
     });
   });
@@ -35,6 +38,7 @@ describe('OrgsAPI', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ id: 'org-new', displayName: 'New Org' }),
+          preferSessionAuth: true,
           skipOrgContext: true,
         }),
       );
@@ -49,7 +53,10 @@ describe('OrgsAPI', () => {
 
       const result = await OrgsAPI.get('org-1');
 
-      expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs/org-1', { skipOrgContext: true });
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs/org-1', {
+        preferSessionAuth: true,
+        skipOrgContext: true,
+      });
       expect(result).toEqual(mockOrg);
     });
   });
@@ -65,6 +72,7 @@ describe('OrgsAPI', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify({ displayName: 'Updated' }),
+          preferSessionAuth: true,
           skipOrgContext: true,
         }),
       );
@@ -79,7 +87,11 @@ describe('OrgsAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/orgs/org-1',
-        expect.objectContaining({ method: 'DELETE', skipOrgContext: true }),
+        expect.objectContaining({
+          method: 'DELETE',
+          preferSessionAuth: true,
+          skipOrgContext: true,
+        }),
       );
     });
   });
@@ -92,6 +104,7 @@ describe('OrgsAPI', () => {
       const result = await OrgsAPI.listMembers('org-1');
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs/org-1/members', {
+        preferSessionAuth: true,
         skipOrgContext: true,
       });
       expect(result).toEqual(mockMembers);
@@ -106,6 +119,7 @@ describe('OrgsAPI', () => {
       const result = await OrgsAPI.listPendingInvitations('org-1');
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs/org-1/invitations', {
+        preferSessionAuth: true,
         skipOrgContext: true,
       });
       expect(result).toEqual(mockInvitations);
@@ -120,6 +134,7 @@ describe('OrgsAPI', () => {
       const result = await OrgsAPI.listMyInvitations();
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/org-invitations', {
+        preferSessionAuth: true,
         skipOrgContext: true,
       });
       expect(result).toEqual(mockInvitations);
@@ -141,6 +156,7 @@ describe('OrgsAPI', () => {
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({ userId: 'user-1', role: 'viewer' }),
+          preferSessionAuth: true,
           skipOrgContext: true,
         }),
       );
@@ -159,6 +175,7 @@ describe('OrgsAPI', () => {
         '/api/org-invitations/org-1/accept',
         expect.objectContaining({
           method: 'POST',
+          preferSessionAuth: true,
           skipOrgContext: true,
         }),
       );
@@ -176,6 +193,7 @@ describe('OrgsAPI', () => {
         '/api/org-invitations/org-1',
         expect.objectContaining({
           method: 'DELETE',
+          preferSessionAuth: true,
           skipOrgContext: true,
         }),
       );
@@ -192,6 +210,7 @@ describe('OrgsAPI', () => {
         '/api/orgs/org-1/invitations/user-1',
         expect.objectContaining({
           method: 'DELETE',
+          preferSessionAuth: true,
           skipOrgContext: true,
         }),
       );
@@ -206,7 +225,11 @@ describe('OrgsAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/orgs/org-1/members/user-1',
-        expect.objectContaining({ method: 'DELETE', skipOrgContext: true }),
+        expect.objectContaining({
+          method: 'DELETE',
+          preferSessionAuth: true,
+          skipOrgContext: true,
+        }),
       );
     });
   });
@@ -218,7 +241,10 @@ describe('OrgsAPI', () => {
 
       const result = await OrgsAPI.listShares('org-1');
 
-      expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs/org-1/shares', { skipOrgContext: true });
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs/org-1/shares', {
+        preferSessionAuth: true,
+        skipOrgContext: true,
+      });
       expect(result).toEqual(mockShares);
     });
   });
@@ -231,6 +257,7 @@ describe('OrgsAPI', () => {
       const result = await OrgsAPI.listIncomingShares('org-1');
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs/org-1/shares/incoming', {
+        preferSessionAuth: true,
         skipOrgContext: true,
       });
       expect(result).toEqual(mockShares);
@@ -253,6 +280,7 @@ describe('OrgsAPI', () => {
         '/api/orgs/org-1/shares',
         expect.objectContaining({
           method: 'POST',
+          preferSessionAuth: true,
           skipOrgContext: true,
         }),
       );
@@ -269,7 +297,11 @@ describe('OrgsAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/orgs/org-1/shares/incoming/share-1/accept',
-        expect.objectContaining({ method: 'POST', skipOrgContext: true }),
+        expect.objectContaining({
+          method: 'POST',
+          preferSessionAuth: true,
+          skipOrgContext: true,
+        }),
       );
       expect(result).toEqual(mockShare);
     });
@@ -283,7 +315,11 @@ describe('OrgsAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/orgs/org-1/shares/incoming/share-1',
-        expect.objectContaining({ method: 'DELETE', skipOrgContext: true }),
+        expect.objectContaining({
+          method: 'DELETE',
+          preferSessionAuth: true,
+          skipOrgContext: true,
+        }),
       );
     });
   });
@@ -296,7 +332,11 @@ describe('OrgsAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith(
         '/api/orgs/org-1/shares/share-1',
-        expect.objectContaining({ method: 'DELETE', skipOrgContext: true }),
+        expect.objectContaining({
+          method: 'DELETE',
+          preferSessionAuth: true,
+          skipOrgContext: true,
+        }),
       );
     });
   });

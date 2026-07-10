@@ -2,14 +2,22 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test as base, expect } from "@playwright/test";
-import { createAuthenticatedStorageState } from "./helpers";
+import {
+  apiRequest,
+  createAuthenticatedStorageState,
+  createOrg,
+} from "./helpers";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 type WorkerFixtures = {
   authStorageStatePath: string;
 };
 
-const SETTINGS_ROUTES = [
+const MULTI_TENANT_ENABLED = process.env.PULSE_MULTI_TENANT_ENABLED === "true";
+const HOSTED_BILLING_ADMIN_ENABLED =
+  MULTI_TENANT_ENABLED && process.env.PULSE_HOSTED_MODE === "true";
+
+const STANDARD_SETTINGS_ROUTES = [
   "/settings/infrastructure",
   "/settings/monitoring/availability",
   "/settings/pulse-intelligence/provider",
@@ -35,6 +43,23 @@ const SETTINGS_ROUTES = [
   "/settings/security-webhooks",
 ] as const;
 
+const ORGANIZATION_SETTINGS_ROUTES = [
+  "/settings/organization",
+  "/settings/organization/access",
+  "/settings/organization/sharing",
+  "/settings/organization/billing",
+] as const;
+
+const HOSTED_SETTINGS_ROUTES = [
+  "/settings/organization/billing-admin",
+] as const;
+
+const SETTINGS_ROUTES = [
+  ...STANDARD_SETTINGS_ROUTES,
+  ...(MULTI_TENANT_ENABLED ? ORGANIZATION_SETTINGS_ROUTES : []),
+  ...(HOSTED_BILLING_ADMIN_ENABLED ? HOSTED_SETTINGS_ROUTES : []),
+] as const;
+
 const SETTINGS_ROUTE_REDIRECTS = [
   {
     route: "/settings/pulse-intelligence/discovery",
@@ -44,29 +69,92 @@ const SETTINGS_ROUTE_REDIRECTS = [
     route: "/settings/pulse-intelligence/billing/usage",
     expectedPath: "/settings/pulse-intelligence/billing/plan",
   },
-  { route: "/settings/organization", expectedPath: "/settings/infrastructure" },
-  {
-    route: "/settings/organization/access",
-    expectedPath: "/settings/infrastructure",
-  },
-  {
-    route: "/settings/organization/sharing",
-    expectedPath: "/settings/infrastructure",
-  },
-  {
-    route: "/settings/organization/billing",
-    expectedPath: "/settings/infrastructure",
-  },
-  {
-    route: "/settings/organization/billing-admin",
-    expectedPath: "/settings/infrastructure",
-  },
+  ...(!MULTI_TENANT_ENABLED
+    ? ORGANIZATION_SETTINGS_ROUTES.map((route) => ({
+        route,
+        expectedPath: "/settings/infrastructure",
+      }))
+    : []),
+  ...(!HOSTED_BILLING_ADMIN_ENABLED
+    ? [
+        {
+          route: "/settings/organization/billing-admin",
+          expectedPath: "/settings/infrastructure",
+        } as const,
+      ]
+    : []),
 ] as const;
 
 const MOBILE_VIEWPORTS = [
   { width: 320, height: 568, label: "compact phone" },
   { width: 390, height: 844, label: "modern phone" },
 ] as const;
+
+const prepareOrganizationAuditFixture = async (
+  page: import("@playwright/test").Page,
+  route: string,
+): Promise<string[]> => {
+  if (!(ORGANIZATION_SETTINGS_ROUTES as readonly string[]).includes(route))
+    return [];
+
+  await page.goto("/settings/infrastructure", {
+    waitUntil: "domcontentloaded",
+  });
+  const createdOrgIDs: string[] = [];
+  let targetOrgID = "";
+
+  if (route === "/settings/organization/sharing") {
+    const target = await createOrg(page, "Mobile Audit Target");
+    targetOrgID = target.id;
+    createdOrgIDs.push(target.id);
+  }
+
+  const source = await createOrg(page, "Mobile Audit Organization");
+  createdOrgIDs.push(source.id);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const organizationSwitcher = page.getByRole("combobox", {
+    name: "Organization",
+  });
+  await expect(organizationSwitcher).toBeVisible({ timeout: 20000 });
+  await organizationSwitcher.selectOption(source.id);
+  await expect(organizationSwitcher).toHaveValue(source.id, {
+    timeout: 20000,
+  });
+
+  if (route === "/settings/organization/access") {
+    const invitation = await apiRequest(
+      page,
+      `/api/orgs/${encodeURIComponent(source.id)}/members`,
+      {
+        method: "POST",
+        data: { userId: "mobile-audit-viewer", role: "viewer" },
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+    expect(invitation.ok(), "mobile access fixture invitation").toBeTruthy();
+  }
+
+  if (route === "/settings/organization/sharing") {
+    const share = await apiRequest(
+      page,
+      `/api/orgs/${encodeURIComponent(source.id)}/shares`,
+      {
+        method: "POST",
+        data: {
+          targetOrgId: targetOrgID,
+          resourceType: "view",
+          resourceId: "mobile-audit-view",
+          resourceName: "Mobile Audit Shared View",
+          accessRole: "viewer",
+        },
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+    expect(share.ok(), "mobile sharing fixture").toBeTruthy();
+  }
+
+  return createdOrgIDs;
+};
 
 const test = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
@@ -175,38 +263,96 @@ test.describe("Settings mobile optimization audit", () => {
     test(`no horizontal overflow after full scroll on ${route}`, async ({
       page,
     }) => {
-      for (const viewport of MOBILE_VIEWPORTS) {
-        await page.setViewportSize(viewport);
-        await page.goto(route, { waitUntil: "domcontentloaded" });
-        await page.waitForURL((url) => url.pathname === route, {
-          timeout: 15000,
-        });
-        expect(
-          new URL(page.url()).pathname,
-          `${route} must remain the surface being audited rather than silently redirecting`,
-        ).toBe(route);
-        await expect(page.locator("#root")).toBeVisible();
-        await page.waitForTimeout(600);
+      const createdOrgIDs = await prepareOrganizationAuditFixture(page, route);
+      try {
+        for (const viewport of MOBILE_VIEWPORTS) {
+          await page.setViewportSize(viewport);
+          await page.goto(route, { waitUntil: "domcontentloaded" });
+          await page.waitForURL((url) => url.pathname === route, {
+            timeout: 15000,
+          });
+          expect(
+            new URL(page.url()).pathname,
+            `${route} must remain the surface being audited rather than silently redirecting`,
+          ).toBe(route);
+          await expect(page.locator("#root")).toBeVisible();
+          await page.waitForTimeout(1500);
 
-        await scrollToBottom(page);
-        const atBottom = await page.evaluate(() => {
-          const scrollTop = window.scrollY;
-          const maxScrollTop = Math.max(
-            0,
-            document.documentElement.scrollHeight - window.innerHeight,
+          const loadFailure = page
+            .getByRole("alert")
+            .filter({ hasText: /^Unable to load .* settings\.$/ });
+          await expect(
+            loadFailure,
+            `${route} must render its real settings state instead of an API-error shell`,
+          ).toHaveCount(0);
+
+          if (
+            route === "/settings/organization/billing-admin" &&
+            viewport.width === MOBILE_VIEWPORTS[0].width
+          ) {
+            const organizationToggle = page
+              .locator("tbody button")
+              .filter({ hasText: "default" });
+            await expect(organizationToggle).toHaveCount(1);
+            await organizationToggle.click();
+            await expect(
+              page.getByText("Billing state JSON", { exact: true }),
+            ).toBeVisible();
+          }
+
+          await scrollToBottom(page);
+          const atBottom = await page.evaluate(() => {
+            const scrollTop = window.scrollY;
+            const maxScrollTop = Math.max(
+              0,
+              document.documentElement.scrollHeight - window.innerHeight,
+            );
+            return scrollTop >= maxScrollTop - 3;
+          });
+          expect(
+            atBottom,
+            `Expected to reach the bottom while auditing ${route} on a ${viewport.label}`,
+          ).toBeTruthy();
+
+          const audit = await auditHorizontalOverflow(page);
+          expect(
+            audit.pageWidth,
+            `Mobile overflow on ${route} at ${viewport.width}px (viewport=${audit.viewportWidth}, page=${audit.pageWidth}, offenders=${JSON.stringify(audit.offenders)})`,
+          ).toBeLessThanOrEqual(audit.viewportWidth + 1);
+        }
+      } finally {
+        if (createdOrgIDs.length > 0) {
+          const organizationSwitcher = page.getByRole("combobox", {
+            name: "Organization",
+          });
+          if (await organizationSwitcher.isVisible().catch(() => false)) {
+            await organizationSwitcher.selectOption("default");
+            await expect(organizationSwitcher).toHaveValue("default", {
+              timeout: 20000,
+            });
+            await page.reload({ waitUntil: "domcontentloaded" });
+            await expect(
+              page.getByRole("combobox", { name: "Organization" }),
+            ).toHaveValue("default", { timeout: 20000 });
+          }
+        }
+        for (const orgID of [...createdOrgIDs].reverse()) {
+          const response = await apiRequest(
+            page,
+            `/api/orgs/${encodeURIComponent(orgID)}`,
+            {
+              method: "DELETE",
+              headers: {
+                "X-Org-ID": "default",
+                "X-Pulse-Org-ID": "default",
+              },
+            },
           );
-          return scrollTop >= maxScrollTop - 3;
-        });
-        expect(
-          atBottom,
-          `Expected to reach the bottom while auditing ${route} on a ${viewport.label}`,
-        ).toBeTruthy();
-
-        const audit = await auditHorizontalOverflow(page);
-        expect(
-          audit.pageWidth,
-          `Mobile overflow on ${route} at ${viewport.width}px (viewport=${audit.viewportWidth}, page=${audit.pageWidth}, offenders=${JSON.stringify(audit.offenders)})`,
-        ).toBeLessThanOrEqual(audit.viewportWidth + 1);
+          expect(
+            [204, 404].includes(response.status()),
+            `cleanup organization ${orgID}`,
+          ).toBeTruthy();
+        }
       }
     });
   }

@@ -32,6 +32,7 @@ describe('BillingAdminAPI', () => {
       const result = await BillingAdminAPI.listOrganizations();
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/hosted/organizations', {
+        preferSessionAuth: true,
         skipOrgContext: true,
       });
       expect(result).toEqual(mockOrgs);
@@ -50,6 +51,7 @@ describe('BillingAdminAPI', () => {
       const result = await BillingAdminAPI.getBillingState('org-1');
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/admin/orgs/org-1/billing-state', {
+        preferSessionAuth: true,
         skipOrgContext: true,
       });
       expect(result).toEqual(mockState);
@@ -61,6 +63,7 @@ describe('BillingAdminAPI', () => {
       await BillingAdminAPI.getBillingState('org/1');
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/admin/orgs/org%2F1/billing-state', {
+        preferSessionAuth: true,
         skipOrgContext: true,
       });
     });
@@ -82,6 +85,7 @@ describe('BillingAdminAPI', () => {
         expect.objectContaining({
           method: 'PUT',
           body: JSON.stringify(mockState),
+          preferSessionAuth: true,
           skipOrgContext: true,
         }),
       );

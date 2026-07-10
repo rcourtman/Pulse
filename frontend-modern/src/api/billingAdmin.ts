@@ -25,11 +25,13 @@ export interface BillingState {
 export const BillingAdminAPI = {
   listOrganizations: () =>
     apiFetchJSON<HostedOrganizationSummary[]>('/api/hosted/organizations', {
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
   getBillingState: (orgID: string) =>
     apiFetchJSON<BillingState>(`/api/admin/orgs/${encodeURIComponent(orgID)}/billing-state`, {
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 
@@ -37,6 +39,7 @@ export const BillingAdminAPI = {
     apiFetchJSON<BillingState>(`/api/admin/orgs/${encodeURIComponent(orgID)}/billing-state`, {
       method: 'PUT',
       body: JSON.stringify(payload),
+      preferSessionAuth: true,
       skipOrgContext: true,
     }),
 };

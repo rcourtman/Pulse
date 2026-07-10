@@ -73,6 +73,7 @@ const getSessionStorage = (): Storage | undefined => {
 
 interface FetchOptions extends Omit<RequestInit, 'headers'> {
   headers?: Record<string, string>;
+  preferSessionAuth?: boolean;
   skipAuth?: boolean;
   skipOrgContext?: boolean;
 }
@@ -577,7 +578,13 @@ class ApiClient {
 
   // Main fetch wrapper that adds authentication
   async fetch(url: string, options: FetchOptions = {}): Promise<Response> {
-    const { skipAuth = false, skipOrgContext = false, headers = {}, ...fetchOptions } = options;
+    const {
+      preferSessionAuth = false,
+      skipAuth = false,
+      skipOrgContext = false,
+      headers = {},
+      ...fetchOptions
+    } = options;
 
     // Build headers object
     const finalHeaders: Record<string, string> = { ...headers };
@@ -603,7 +610,7 @@ class ApiClient {
 
     // Add authentication if available and not skipped
     if (!skipAuth) {
-      if (this.apiToken) {
+      if (this.apiToken && !preferSessionAuth) {
         finalHeaders['X-API-Token'] = this.apiToken;
       }
     }
@@ -629,7 +636,27 @@ class ApiClient {
       credentials: 'include', // Important for session cookies
     };
 
-    const response = await fetch(url, finalOptions);
+    let response = await fetch(url, finalOptions);
+
+    // Session-preferred reads intentionally omit the API token on their first
+    // attempt because HttpOnly session cookies cannot be detected from browser
+    // JavaScript. Token-only clients still retain scoped read access by
+    // retrying an unauthenticated idempotent response once with their token.
+    if (
+      response.status === 401 &&
+      preferSessionAuth &&
+      !skipAuth &&
+      this.apiToken &&
+      IDEMPOTENT_METHODS.has(method)
+    ) {
+      response = await fetch(url, {
+        ...finalOptions,
+        headers: {
+          ...finalHeaders,
+          'X-API-Token': this.apiToken,
+        },
+      });
+    }
 
     // Handle stale/invalid org context by clearing it and retrying once against default org.
     if (

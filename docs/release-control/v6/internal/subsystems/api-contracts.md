@@ -7197,3 +7197,11 @@ they differ only in skipping the fpdf/csv stage. Test stubs
 implementing the Engine interface must implement these methods so
 the contract is honoured across the entire interface surface, not
 just the export-shaped subset.
+
+The shared frontend API client now exposes explicit session-preferred request
+selection for user-facing organization administration. When a valid browser
+session and a stored API token coexist, organization and hosted billing clients
+must omit the token and let the session cookie satisfy session-only authority;
+when no session cookie exists, the same request may retain the API-token
+fallback for scoped read access. This prevents first-run token persistence from
+silently converting session administration calls into rejected token calls.

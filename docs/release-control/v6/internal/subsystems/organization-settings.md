@@ -330,3 +330,12 @@ The hidden-upgrade posture also applies to locked-card titles and bodies
 themselves: RBAC gates may show neutral unavailable-capability copy, but must
 not keep `(Pro)`, plan-tier labels, or paid-action wording after the CTA is
 suppressed.
+
+Organization Settings is a browser-session administration surface even when
+first-run also leaves a generated API token in browser storage. Its API client
+must prefer the active session cookie for organization reads, invitations,
+membership, sharing, ownership, and billing administration, while preserving
+token fallback only when no session exists. Mobile proof must render Overview,
+Access, Sharing, and Billing with populated multitenant fixtures at supported
+phone widths; hosted Billing Admin requires a real hosted-mode capability
+runtime and expanded-row proof rather than being counted through a redirect.

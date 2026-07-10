@@ -1325,6 +1325,13 @@ nullable until the formatting edge, but it must normalize the message through
 the shared monitored-system presentation helper instead of branching on
 demo/billing state inside settings panels or inventing a second mock-only
 license explanation path.
+
+Hosted organization and Billing Admin browser clients must prefer an active
+`pulse_session` cookie when the same browser also retains an API token from
+first-run setup. Platform-admin and session-required organization operations
+must not let that ambient token override the authenticated administrator
+session. Token-only browser clients retain their existing scoped fallback when
+no session cookie is present.
 That same cloud-paid/browser boundary now also governs public demo posture.
 `DEMO_MODE` may run against a real internal entitlement, but public demo
 surfaces must not reveal self-hosted license metadata, hosted billing state,

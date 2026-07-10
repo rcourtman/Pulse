@@ -109,6 +109,35 @@ describe('apiClient org context', () => {
     expect(headers['X-Pulse-Org-ID']).toBe('default');
   });
 
+  it('prefers a browser session over a stored API token when requested', async () => {
+    mockFetch.mockResolvedValue(new Response('[]', { status: 200 }));
+    setApiToken('stored-api-token');
+
+    await apiFetch('/api/org-invitations', { preferSessionAuth: true });
+
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers['X-API-Token']).toBeUndefined();
+    expect(options.credentials).toBe('include');
+  });
+
+  it('falls back to a stored API token when no browser session is available', async () => {
+    mockFetch
+      .mockResolvedValueOnce(new Response('{}', { status: 401 }))
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }));
+    setApiToken('stored-api-token');
+
+    await apiFetch('/api/orgs', { preferSessionAuth: true });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    const [, firstOptions] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const firstHeaders = firstOptions.headers as Record<string, string>;
+    expect(firstHeaders['X-API-Token']).toBeUndefined();
+    const [, retryOptions] = mockFetch.mock.calls[1] as [string, RequestInit];
+    const retryHeaders = retryOptions.headers as Record<string, string>;
+    expect(retryHeaders['X-API-Token']).toBe('stored-api-token');
+  });
+
   it('does not treat intentional unauthenticated 401 responses as expired sessions', async () => {
     document.cookie = 'pulse_csrf=csrf-token; Path=/';
     mockFetch.mockResolvedValue(
@@ -209,7 +238,9 @@ describe('apiClient org context', () => {
       }),
     );
 
-    await expect(apiFetchJSON('/api/security/tokens', { method: 'POST', body: '{}' })).rejects.toMatchObject({
+    await expect(
+      apiFetchJSON('/api/security/tokens', { method: 'POST', body: '{}' }),
+    ).rejects.toMatchObject({
       message: 'missing_scope',
       status: 403,
       requiredScope: 'settings:write',
