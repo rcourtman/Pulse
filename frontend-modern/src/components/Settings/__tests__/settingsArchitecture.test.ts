@@ -715,6 +715,20 @@ describe('settings architecture guardrails', () => {
     expect(aiProviderConfigurationSectionSource).not.toContain('extraField()');
   });
 
+  it('keeps the Ollama quickstart on the server-authored suggested-model projection', () => {
+    // The blessed Patrol model is registry-owned backend metadata; the
+    // provider row renders the projection and must not hardcode model IDs.
+    expect(aiProviderConfigurationSectionSource).toContain(
+      "registryDefinition()?.suggested_model ?? ''",
+    );
+    expect(aiProviderConfigurationSectionSource).toContain(
+      'command={`ollama pull ${suggestedModel()}`}',
+    );
+    expect(aiProviderConfigurationSectionSource).toContain('suggested_model_equivalents');
+    expect(aiProviderConfigurationSectionSource).not.toContain('qwen');
+    expect(aiSettingsModelSource).not.toContain('qwen');
+  });
+
   it('keeps Assistant session maintenance limited to Pulse-owned session actions', () => {
     expect(aiChatMaintenanceSectionSource).toContain('Summarize session');
     expect(aiChatMaintenanceSectionSource).toContain('handleSessionSummarize');

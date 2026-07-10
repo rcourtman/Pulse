@@ -43,7 +43,29 @@ type AIProviderDefinition struct {
 	EnvVars             []string
 	DocsURL             string
 	FallbackModels      []AIProviderModelDefinition
+	// SuggestedModel is a model verified to pass Patrol's tool-call
+	// preflight, surfaced as a guided quickstart on the provider's setup
+	// row. Only set for providers where users must choose a model without
+	// a curated catalog (Ollama). Re-verify with RunPatrolToolPreflight
+	// before changing the blessing.
+	SuggestedModel string
+	// SuggestedModelNote is the hardware-expectations copy rendered next
+	// to the suggested model's pull command.
+	SuggestedModelNote string
+	// SuggestedModelEquivalents lists additional catalog IDs that satisfy
+	// the same blessing (smaller same-family tags, alias tags).
+	SuggestedModelEquivalents []string
 }
+
+// OllamaSuggestedPatrolModel is the Ollama model blessed for Patrol:
+// verified to emit tool_calls through Patrol's preflight
+// (RunPatrolToolPreflight). qwen3 is the model family Ollama's own
+// tool-calling docs are written against. qwen3:4b was tried as a low-RAM
+// alternative and consistently failed the preflight (0/4 runs emitted a
+// tool call), so no smaller tag is suggested. When re-blessing, re-run
+// the preflight against the new tag and sweep the test pins on the
+// readiness copy.
+const OllamaSuggestedPatrolModel = "qwen3:8b"
 
 func aiProviderDefinitions() []AIProviderDefinition {
 	return []AIProviderDefinition{
@@ -255,17 +277,20 @@ func aiProviderDefinitions() []AIProviderDefinition {
 			DocsURL:             "https://docs.fireworks.ai/tools-sdks/openai-compatibility",
 		},
 		{
-			ID:               AIProviderOllama,
-			DisplayName:      "Ollama",
-			Description:      "Local models served by Ollama",
-			Protocol:         AIProviderProtocolOllama,
-			DefaultModel:     "llama3.2",
-			DefaultBaseURL:   DefaultOllamaBaseURL,
-			ConfiguredField:  "ollama_configured",
-			ClearKeyField:    "clear_ollama_url",
-			BaseURLField:     "ollama_base_url",
-			UserConfigurable: true,
-			DocsURL:          "https://ollama.com",
+			ID:                        AIProviderOllama,
+			DisplayName:               "Ollama",
+			Description:               "Local models served by Ollama",
+			Protocol:                  AIProviderProtocolOllama,
+			DefaultModel:              OllamaSuggestedPatrolModel,
+			DefaultBaseURL:            DefaultOllamaBaseURL,
+			ConfiguredField:           "ollama_configured",
+			ClearKeyField:             "clear_ollama_url",
+			BaseURLField:              "ollama_base_url",
+			UserConfigurable:          true,
+			DocsURL:                   "https://ollama.com",
+			SuggestedModel:            OllamaSuggestedPatrolModel,
+			SuggestedModelNote:        "Allow about 8 GB of free RAM (5.2 GB download). Smaller qwen3 tags did not pass Patrol's tool check reliably.",
+			SuggestedModelEquivalents: []string{"qwen3:latest"},
 		},
 		{
 			ID:              AIProviderQuickstart,
@@ -285,6 +310,7 @@ func AIProviderDefinitions() []AIProviderDefinition {
 	for i := range defs {
 		defs[i].EnvVars = append([]string(nil), defs[i].EnvVars...)
 		defs[i].FallbackModels = append([]AIProviderModelDefinition(nil), defs[i].FallbackModels...)
+		defs[i].SuggestedModelEquivalents = append([]string(nil), defs[i].SuggestedModelEquivalents...)
 	}
 	return defs
 }
@@ -311,10 +337,38 @@ func LookupAIProviderDefinition(provider string) (AIProviderDefinition, bool) {
 		if def.ID == provider {
 			def.EnvVars = append([]string(nil), def.EnvVars...)
 			def.FallbackModels = append([]AIProviderModelDefinition(nil), def.FallbackModels...)
+			def.SuggestedModelEquivalents = append([]string(nil), def.SuggestedModelEquivalents...)
 			return def, true
 		}
 	}
 	return AIProviderDefinition{}, false
+}
+
+// SuggestedModelForProvider returns the provider's Patrol-blessed model ID,
+// or "" when the provider has no blessing.
+func SuggestedModelForProvider(provider string) string {
+	def, ok := LookupAIProviderDefinition(provider)
+	if !ok {
+		return ""
+	}
+	return def.SuggestedModel
+}
+
+// SuggestedModelIDSet returns the normalized (lowercase, trimmed) union of
+// every provider's suggested model plus its equivalents. Model recommendation
+// uses exact-ID membership here so blessed models outrank catalog neighbours
+// without fuzzy family matching pulling in unrelated cloud variants.
+func SuggestedModelIDSet() map[string]struct{} {
+	out := make(map[string]struct{})
+	for _, def := range aiProviderDefinitions() {
+		for _, id := range append([]string{def.SuggestedModel}, def.SuggestedModelEquivalents...) {
+			id = strings.ToLower(strings.TrimSpace(id))
+			if id != "" {
+				out[id] = struct{}{}
+			}
+		}
+	}
+	return out
 }
 
 func IsOpenAICompatibleProvider(provider string) bool {

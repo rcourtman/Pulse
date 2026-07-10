@@ -1933,6 +1933,27 @@ func TestContract_AISettingsProviderRegistryMetadata(t *testing.T) {
 	if !byID["ollama"].Configured {
 		t.Fatal("Ollama provider metadata should reflect the default local endpoint")
 	}
+
+	// The Ollama guided quickstart is registry-derived: the blessed Patrol
+	// model, its hardware note, and equivalent tags ride the providers
+	// projection so the frontend never hardcodes model IDs.
+	if byID["ollama"].SuggestedModel != config.OllamaSuggestedPatrolModel {
+		t.Fatalf("Ollama suggested model = %q, want %q", byID["ollama"].SuggestedModel, config.OllamaSuggestedPatrolModel)
+	}
+	if byID["ollama"].SuggestedModelNote == "" {
+		t.Fatal("Ollama suggested model note must carry the hardware-expectation copy")
+	}
+	if len(byID["ollama"].SuggestedModelEquivalents) == 0 {
+		t.Fatal("Ollama suggested model equivalents must include the alias tags that satisfy the same blessing")
+	}
+	for id, def := range byID {
+		if id == "ollama" {
+			continue
+		}
+		if def.SuggestedModel != "" || def.SuggestedModelNote != "" || len(def.SuggestedModelEquivalents) != 0 {
+			t.Fatalf("provider %s must not carry suggested-model quickstart metadata", id)
+		}
+	}
 }
 
 func TestContract_ChartMetricPointsPreserveMillisecondPrecision(t *testing.T) {

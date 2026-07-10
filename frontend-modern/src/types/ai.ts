@@ -34,6 +34,11 @@ export interface AIProviderDefinition {
   models_dev_provider_id?: string;
   env_vars: string[];
   docs_url?: string;
+  // Patrol-blessed quickstart model for providers where users must pick a
+  // model themselves (Ollama). Absent for curated-catalog providers.
+  suggested_model?: string;
+  suggested_model_note?: string;
+  suggested_model_equivalents?: string[];
 }
 
 export interface PatrolReadinessCheck {

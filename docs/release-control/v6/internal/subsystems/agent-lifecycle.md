@@ -713,7 +713,12 @@ investigation-only over agent-reporting resources: it must not alter agent
 lifecycle, registration, token binding, reporting contracts, or install-command
 identity. The scoped Patrol request carries resource identity only and reuses
 the existing Patrol scoped engine, so it adds no agent lifecycle control
-surface and no new `internal/api/` lifecycle handler.
+surface and no new `internal/api/` lifecycle handler. AI settings projection
+changes in `internal/api/ai_handlers.go`, such as the registry's suggested
+Patrol quickstart model metadata on `/api/settings/ai`, are likewise
+ai-runtime configuration surface: they must not become an agent lifecycle
+install-guidance or discovery channel, and agent setup surfaces must not
+consume them as lifecycle state.
 
 First-run security discovery under shared `internal/api/` is likewise an
 adjacent API/security boundary, not an agent-lifecycle discovery surface.

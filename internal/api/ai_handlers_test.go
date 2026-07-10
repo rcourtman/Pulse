@@ -230,6 +230,30 @@ func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) 
 	require.Contains(t, premiumRec.Body.String(), "limited to Monitor")
 }
 
+func TestAISettingsProvidersProjectionCarriesSuggestedModelWireShape(t *testing.T) {
+	payload, err := json.Marshal(aiProviderDefinitionResponses(nil))
+	require.NoError(t, err)
+
+	var decoded []map[string]any
+	require.NoError(t, json.Unmarshal(payload, &decoded))
+
+	var ollama map[string]any
+	for _, entry := range decoded {
+		if entry["id"] == config.AIProviderOllama {
+			ollama = entry
+			continue
+		}
+		// omitempty: providers without a blessing must not emit the keys.
+		require.NotContains(t, entry, "suggested_model")
+		require.NotContains(t, entry, "suggested_model_note")
+		require.NotContains(t, entry, "suggested_model_equivalents")
+	}
+	require.NotNil(t, ollama)
+	require.Equal(t, config.OllamaSuggestedPatrolModel, ollama["suggested_model"])
+	require.NotEmpty(t, ollama["suggested_model_note"])
+	require.NotEmpty(t, ollama["suggested_model_equivalents"])
+}
+
 func TestAISettingsHandler_PatrolReadinessFlagsReasoningOnlyModel(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}

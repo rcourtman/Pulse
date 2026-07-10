@@ -1,6 +1,7 @@
 import { For, Show, type Accessor, type Component, type Setter } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { CalloutCard } from '@/components/shared/CalloutCard';
+import { CopyCommandBlock } from '@/components/Settings/CopyCommandBlock';
 import { ExternalTextLink } from '@/components/shared/ExternalTextLink';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { controlClass } from '@/components/shared/Form';
@@ -126,6 +127,27 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
               props.providerTestResult()?.provider === config.provider
                 ? props.providerTestResult()
                 : null;
+            const registryDefinition = () =>
+              props.settings()?.providers?.find((def) => def.id === config.provider);
+            const suggestedModel = () => registryDefinition()?.suggested_model ?? '';
+            const suggestedModelNote = () => registryDefinition()?.suggested_model_note ?? '';
+            const testedModelIsSuggested = () => {
+              const definition = registryDefinition();
+              if (!definition?.suggested_model) {
+                return true;
+              }
+              const tested = (testResult()?.model ?? '').toLowerCase();
+              if (!tested) {
+                return true;
+              }
+              const bare = tested.startsWith(`${config.provider}:`)
+                ? tested.slice(config.provider.length + 1)
+                : tested;
+              return [
+                definition.suggested_model,
+                ...(definition.suggested_model_equivalents ?? []),
+              ].some((id) => id.toLowerCase() === bare);
+            };
 
             return (
               <div
@@ -223,6 +245,21 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                       )}
                     </For>
 
+                    <Show when={config.provider === 'ollama' && suggestedModel()}>
+                      <div class="space-y-1">
+                        <p class="text-xs text-muted">
+                          Patrol needs a model that can call tools. This one is tested with Pulse:
+                        </p>
+                        <CopyCommandBlock
+                          command={`ollama pull ${suggestedModel()}`}
+                          codeClass="block whitespace-pre overflow-x-auto rounded-md border border-border bg-base p-3 pr-10 font-mono text-xs text-base-content"
+                        />
+                        <Show when={suggestedModelNote()}>
+                          <p class="text-xs text-muted">{suggestedModelNote()}</p>
+                        </Show>
+                      </div>
+                    </Show>
+
                     <Show when={config.helperText}>
                       <p class="text-xs text-muted">{config.helperText}</p>
                     </Show>
@@ -264,6 +301,18 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                         class={`text-xs ${getAIProviderTestResultTextClass(Boolean(testResult()?.success))}`}
                       >
                         {testResult()?.message}
+                      </p>
+                    </Show>
+                    <Show
+                      when={
+                        config.provider === 'ollama' &&
+                        testResult()?.success &&
+                        !testedModelIsSuggested()
+                      }
+                    >
+                      <p class="text-xs text-amber-600 dark:text-amber-400">
+                        Next step for Patrol: run the ollama pull command above, then pick{' '}
+                        {suggestedModel()} as the Patrol model.
                       </p>
                     </Show>
                   </div>

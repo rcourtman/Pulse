@@ -2378,6 +2378,11 @@ type AIProviderDefinitionResponse struct {
 	ModelsDevProviderID string   `json:"models_dev_provider_id,omitempty"`
 	EnvVars             []string `json:"env_vars"`
 	DocsURL             string   `json:"docs_url,omitempty"`
+	// Patrol-blessed quickstart model for providers where users must pick a
+	// model themselves (Ollama). Empty for curated-catalog providers.
+	SuggestedModel            string   `json:"suggested_model,omitempty"`
+	SuggestedModelNote        string   `json:"suggested_model_note,omitempty"`
+	SuggestedModelEquivalents []string `json:"suggested_model_equivalents,omitempty"`
 }
 
 // PatrolPreflightSnapshot is the API-shaped projection of the cached
@@ -2444,6 +2449,10 @@ func aiProviderDefinitionResponses(settings *config.AIConfig) []AIProviderDefini
 			ModelsDevProviderID: def.ModelsDevProviderID,
 			EnvVars:             append([]string(nil), def.EnvVars...),
 			DocsURL:             def.DocsURL,
+			SuggestedModel:      def.SuggestedModel,
+			SuggestedModelNote:  def.SuggestedModelNote,
+			SuggestedModelEquivalents: append(
+				[]string(nil), def.SuggestedModelEquivalents...),
 		})
 	}
 	return responses

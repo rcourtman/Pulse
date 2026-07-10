@@ -346,7 +346,7 @@ func TestDefaultModelForProvider_UsesCanonicalProviderFallbacks(t *testing.T) {
 		{provider: AIProviderCerebras, expected: "cerebras:llama-4-scout-17b-16e-instruct"},
 		{provider: AIProviderTogether, expected: "together:meta-llama/Llama-3.3-70B-Instruct-Turbo"},
 		{provider: AIProviderFireworks, expected: "fireworks:accounts/fireworks/models/llama-v3p1-70b-instruct"},
-		{provider: AIProviderOllama, expected: "ollama:llama3.2"},
+		{provider: AIProviderOllama, expected: "ollama:" + OllamaSuggestedPatrolModel},
 		{provider: AIProviderQuickstart, expected: ""},
 		{provider: "unknown", expected: ""},
 	}

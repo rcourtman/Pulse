@@ -153,6 +153,20 @@ Provider definitions that declare a BaseURLField (today OpenAI, Ollama, and
 Z.ai) expose a user-overridable endpoint via the AI settings payload; the
 registry default base URL applies when no override is stored, so one provider
 can serve both standard and alternate (e.g. Z.ai coding) endpoint tiers.
+Patrol-blessed quickstart models are registry-owned the same way. For a
+provider whose model catalog is user-supplied (today Ollama), the suggested
+Patrol model, its hardware-expectation note, and its equivalent catalog tags
+live on the provider definition in `internal/config/ai_providers.go` and
+project through `/api/settings/ai`; settings surfaces render that projection
+and must not hardcode blessed model IDs. A blessing must be verified against
+Patrol's real tool-call preflight before it ships or changes; the env-gated
+`TestManualOllamaBlessedModelPreflight` harness in `internal/ai/` is the
+re-blessing procedure, and connectivity or catalog presence alone is not
+verification (qwen3:4b passed connectivity yet emitted a tool call in 0 of 4
+preflight runs, which is why only qwen3:8b is blessed). Recommended-model
+resolution may prefer blessed models only by exact normalized catalog ID
+match, never by family or substring, so cloud-gateway catalog neighbours of
+the same model family are not promoted by fuzzy matching.
 Native provider tool-calling is a transport projection over the shared
 provider-neutral `Tool`, `ToolChoice`, `ToolCall`, and `ToolResult` shapes.
 Nil `ToolChoice` means provider-owned automatic selection, `none` disables

@@ -105,7 +105,8 @@ Operations-loop status wiring in `internal/api/agent_resource_context.go` is
 storage/recovery-adjacent only through the shared action-audit and verification
 projection. Sibling handlers in `internal/api/` such as the AI settings handler
 (`ai_handlers.go`) carry AI provider configuration (for example per-provider
-base URL overrides) that is ai-runtime config-surface, not storage or recovery
+base URL overrides or the registry's suggested Patrol quickstart model
+metadata) that is ai-runtime config-surface, not storage or recovery
 state; a manual scoped Patrol check routed through this handler is
 investigate-only as well (it may analyze storage resources but invokes no
 backup, restore, SMART, or recovery operation, and carries resource identity

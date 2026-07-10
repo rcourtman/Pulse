@@ -1506,6 +1506,12 @@ Agent`), with the plain-language source phrase available through accessible
     arrays/maps and the backend registry projection instead of introducing
     provider-specific JSX branches, local configured-state inference, or
     browser-owned default endpoint facts.
+    The Ollama guided quickstart on that card (the copyable `ollama pull`
+    command block, the hardware-expectation note, and the post-test next-step
+    hint) renders the backend registry's `suggested_model` projection from the
+    settings payload; the browser must not hardcode blessed model IDs or their
+    equivalent tags, and the hint must compare the tested model against the
+    server-authored suggestion set rather than a frontend literal.
     Provider connection controls are page-scoped: the global Pulse
     Intelligence enable toggle, provider readiness strip, and Test Connection
     action belong to `Provider & Models`; Patrol, Assistant, and Service Context

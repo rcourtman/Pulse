@@ -300,13 +300,17 @@ func resolveConfiguredProviderModel(ctx context.Context, cfg *config.AIConfig, p
 // SelectRecommendedProviderModel picks the current best candidate from a provider's
 // live model catalog. The policy is intentionally vendor-neutral but Assistant
 // first:
-//  1. ignore obvious non-chat catalog entries such as moderation, embeddings, and
+//  1. prefer Patrol-blessed models (exact-ID match against the registry's
+//     suggested models, e.g. Ollama's guided-quickstart pick) so a user who
+//     followed the setup instructions gets that model without selecting it,
+//  2. ignore obvious non-chat catalog entries such as moderation, embeddings, and
 //     content-safety endpoints,
-//  2. prefer likely chat/instruction models over unknown model families,
-//  3. prefer notable models,
-//  4. then prefer models with a newer created timestamp,
-//  5. then fall back to a stable lexical tie-break.
+//  3. prefer likely chat/instruction models over unknown model families,
+//  4. prefer notable models,
+//  5. then prefer models with a newer created timestamp,
+//  6. then fall back to a stable lexical tie-break.
 func SelectRecommendedProviderModel(models []providers.ModelInfo) (providers.ModelInfo, bool) {
+	blessed := config.SuggestedModelIDSet()
 	bestIndex := -1
 	var best providers.ModelInfo
 	for i, candidate := range models {
@@ -316,7 +320,7 @@ func SelectRecommendedProviderModel(models []providers.ModelInfo) (providers.Mod
 		if recommendedModelSuitabilityRank(candidate) >= recommendedModelRankSpecialized {
 			continue
 		}
-		if bestIndex == -1 || recommendedModelBetter(candidate, i, best, bestIndex) {
+		if bestIndex == -1 || recommendedModelBetter(blessed, candidate, i, best, bestIndex) {
 			best = candidate
 			bestIndex = i
 		}
@@ -324,7 +328,18 @@ func SelectRecommendedProviderModel(models []providers.ModelInfo) (providers.Mod
 	return best, bestIndex >= 0
 }
 
-func recommendedModelBetter(candidate providers.ModelInfo, candidateIndex int, current providers.ModelInfo, currentIndex int) bool {
+func recommendedModelBlessed(blessed map[string]struct{}, model providers.ModelInfo) bool {
+	_, ok := blessed[strings.ToLower(strings.TrimSpace(model.ID))]
+	return ok
+}
+
+func recommendedModelBetter(blessed map[string]struct{}, candidate providers.ModelInfo, candidateIndex int, current providers.ModelInfo, currentIndex int) bool {
+	candidateBlessed := recommendedModelBlessed(blessed, candidate)
+	currentBlessed := recommendedModelBlessed(blessed, current)
+	if candidateBlessed != currentBlessed {
+		return candidateBlessed
+	}
+
 	candidateRank := recommendedModelSuitabilityRank(candidate)
 	currentRank := recommendedModelSuitabilityRank(current)
 	if candidateRank != currentRank {

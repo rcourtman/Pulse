@@ -895,7 +895,12 @@ payload shape change when the portal presents compact client rows.
    non-secret provider metadata from the config-layer registry, including
    provider id, display name, protocol family, default route, default base URL,
    credential field names, configured-state field names, clear-key field names,
-   env-var hints, docs URL, gateway flag, and current configured state. The
+   env-var hints, docs URL, gateway flag, current configured state, and, for
+   providers whose model catalog is user-supplied (today Ollama), the
+   Patrol-blessed `suggested_model` with its `suggested_model_note` hardware
+   copy and `suggested_model_equivalents` tags. Those suggested-model fields
+   are registry-derived guidance, omitted when a provider has no blessing, and
+   must never be inferred or overridden browser-side. The
    legacy top-level configured booleans may remain for browser compatibility,
    but new provider additions must update the registry-backed projection and
    contract tests rather than adding an untyped browser-only provider list.
