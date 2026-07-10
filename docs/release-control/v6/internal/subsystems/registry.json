@@ -2021,6 +2021,7 @@
       "owned_prefixes": [
         "cmd/pulse-mcp/",
         "frontend-modern/src/api/",
+        "internal/actionlifecycle/",
         "internal/actionplanner/",
         "internal/agentcapabilities/",
         "internal/api/"
@@ -2540,6 +2541,21 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/actionplanner/planner_test.go"
+            ]
+          },
+          {
+            "id": "action-lifecycle-service-runtime",
+            "label": "transport-independent action lifecycle service proof",
+            "match_prefixes": [
+              "internal/actionlifecycle/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/actionlifecycle/service_test.go",
+              "internal/api/actions_test.go",
+              "internal/api/contract_test.go"
             ]
           }
         ],

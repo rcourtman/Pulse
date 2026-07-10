@@ -336,7 +336,8 @@ fleet projection used by Infrastructure.
 
 Agent lifecycle and fleet-operation surfaces may consume
 `POST /api/actions/plan` for resource capability planning, but the action plan
-contract remains API-owned through `internal/api/actions.go` and
+contract remains API-owned through `internal/api/actions.go`,
+`internal/actionlifecycle/service.go`, and
 `internal/actionplanner/planner.go`. Agent lifecycle work must not define a
 parallel approval policy, blast-radius model, stale-plan hash, or execution
 contract for those resource actions. Successful action plans also belong to

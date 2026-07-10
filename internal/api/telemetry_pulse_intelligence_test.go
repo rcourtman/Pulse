@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
@@ -146,7 +147,7 @@ func TestGetPulseIntelligenceActionTelemetry_CountsApprovedLifecycleAttemptsInsi
 	if err := store.RecordActionAudit(oldRefused); err != nil {
 		t.Fatalf("RecordActionAudit(oldRefused): %v", err)
 	}
-	if _, err := recordRefusedActionExecution(store, oldRefused, "operator", now.Add(-30*time.Minute), unifiedresources.ErrActionPlanDrift); err != nil {
+	if _, err := actionlifecycle.RecordRefusedExecution(store, oldRefused, "operator", now.Add(-30*time.Minute), unifiedresources.ErrActionPlanDrift); err != nil {
 		t.Fatalf("recordRefusedActionExecution(oldRefused): %v", err)
 	}
 
@@ -155,7 +156,7 @@ func TestGetPulseIntelligenceActionTelemetry_CountsApprovedLifecycleAttemptsInsi
 	if err := store.RecordActionAudit(unapprovedRefused); err != nil {
 		t.Fatalf("RecordActionAudit(unapprovedRefused): %v", err)
 	}
-	if _, err := recordRefusedActionExecution(store, unapprovedRefused, "operator", now.Add(-15*time.Minute), unifiedresources.ErrActionPlanDrift); err != nil {
+	if _, err := actionlifecycle.RecordRefusedExecution(store, unapprovedRefused, "operator", now.Add(-15*time.Minute), unifiedresources.ErrActionPlanDrift); err != nil {
 		t.Fatalf("recordRefusedActionExecution(unapprovedRefused): %v", err)
 	}
 

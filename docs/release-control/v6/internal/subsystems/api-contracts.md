@@ -37,6 +37,7 @@ product API routes free of maintainer commercial analytics.
    5a. `internal/api/action_executor.go`
    5b. `internal/api/docker_container_action_executor.go`
    5c. `internal/api/proxmox_guest_action_executor.go`
+   6a. `internal/actionlifecycle/service.go`
 7. `internal/actionplanner/planner.go`
 8. `pkg/pulsecli/api_client.go`
 9. `pkg/pulsecli/actions.go`
@@ -1808,7 +1809,8 @@ a new API state machine, queue contract, or verification-accounting field.
    cannot become unbounded table scans through API parameters.
    Plan-only unified action planning is part of that same API-first action
    contract: `POST /api/actions/plan` must route through
-   `internal/api/actions.go`, `internal/actionplanner/planner.go`, and
+   `internal/api/actions.go`, `internal/actionlifecycle/service.go`,
+   `internal/actionplanner/planner.go`, and
    `internal/api/contract_test.go` together, returning deterministic
    `ActionPlan` identity, approval policy, blast radius, resource/policy
    versions, plan hash, and preflight checks without approving or executing the
@@ -1819,8 +1821,18 @@ a new API state machine, queue contract, or verification-accounting field.
    not duplicate the initial lifecycle events. MCP, CLI, and UI consumers may
    adapt this payload, but they must not become the source of truth for action
    planning semantics.
+   The plan/decision/execution lifecycle itself is transport-independent and
+   lives in `internal/actionlifecycle/service.go`; the REST handlers in
+   `internal/api/actions.go` are thin decode/actor/error-mapping adapters over
+   that one service. In-process consumers (for example a Patrol action broker)
+   must call the same service and therefore inherit identical resource lookup,
+   availability checks, plan hashing, audit persistence, approval decisions,
+   remediation locks, plan-drift revalidation, execution, and terminal
+   publication. No caller, HTTP or in-process, may implement a parallel
+   lifecycle or dispatch a resource mutation around this service.
    Executor-owned live readiness is part of planning, not a UI precheck:
-   after planner validation and before audit persistence, `actions.go` must ask
+   after planner validation and before audit persistence, the lifecycle
+   service must ask
    the registered executor whether the resource/capability is currently
    executable. A failed readiness check returns `409`
    `action_execution_unavailable`, does not create or mutate an action audit

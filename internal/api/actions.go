@@ -1,15 +1,13 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -19,17 +17,14 @@ const maxActionPlanRequestBytes = 1 << 20
 const maxActionDecisionRequestBytes = 64 << 10
 const maxActionExecutionRequestBytes = 64 << 10
 
-// ActionExecutor runs a previously planned and approved action through the
-// API-owned execution contract.
-type ActionExecutor interface {
-	ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error)
-}
+// ActionExecutor is the API-facing name for the canonical action lifecycle
+// execution contract. The interface is owned by internal/actionlifecycle;
+// the alias keeps existing executor implementations and wiring source-stable.
+type ActionExecutor = actionlifecycle.Executor
 
-// ActionAvailabilityChecker lets an executor contribute live readiness checks
-// before Pulse advertises or persists an executable action plan.
-type ActionAvailabilityChecker interface {
-	CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness
-}
+// ActionAvailabilityChecker is the API-facing name for the canonical
+// pre-plan readiness contract owned by internal/actionlifecycle.
+type ActionAvailabilityChecker = actionlifecycle.AvailabilityChecker
 
 type actionDecisionRequest struct {
 	Outcome unified.ApprovalOutcome `json:"outcome"`
@@ -54,6 +49,22 @@ type actionExecutionResponse struct {
 	Audit    unified.ActionAuditRecord `json:"audit"`
 }
 
+// ActionLifecycle returns the shared transport-independent action lifecycle
+// service bound to this handler set's registry, store, executor, and
+// completion publisher. The REST handlers below and any in-process broker
+// (e.g. Patrol) must route through this one service; there is no other
+// sanctioned path from a typed action request to execution.
+func (h *ResourceHandlers) ActionLifecycle() *actionlifecycle.Service {
+	return &actionlifecycle.Service{
+		Registry: h.buildRegistry,
+		Store: func(orgID string) (actionlifecycle.Store, error) {
+			return h.getStore(orgID)
+		},
+		Executor:          h.actionExecutor,
+		OnActionCompleted: h.actionCompleted,
+	}
+}
+
 func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -76,69 +87,9 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	req.ResourceID = unified.CanonicalResourceID(req.ResourceID)
-	if req.ResourceID == "" {
-		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionRequest, "Invalid action planning request", map[string]string{
-			"resourceId": "resource id is required",
-		})
-		return
-	}
-
-	orgID := GetOrgID(r.Context())
-	registry, err := h.buildRegistry(orgID)
+	plan, err := h.ActionLifecycle().Plan(r.Context(), GetOrgID(r.Context()), req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "resource_registry_unavailable", sanitizeErrorForClient(err, "Resource registry unavailable"))
-		return
-	}
-
-	resource, ok := registry.Get(req.ResourceID)
-	if !ok || resource == nil {
-		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeResourceNotFound, "Resource not found", map[string]string{
-			"resourceId": req.ResourceID,
-		})
-		return
-	}
-
-	plan, err := (actionplanner.Planner{}).Plan(req, *resource)
-	if err != nil {
-		if validationErr, ok := actionplanner.AsValidationError(err); ok {
-			details := map[string]string{}
-			if validationErr.Field != "" {
-				details[validationErr.Field] = validationErr.Message
-			}
-			writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionRequest, "Invalid action planning request", details)
-			return
-		}
-		if errors.Is(err, actionplanner.ErrCapabilityNotFound) {
-			writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeCapabilityNotFound, "Capability not found on resource", map[string]string{
-				"resourceId":     req.ResourceID,
-				"capabilityName": req.CapabilityName,
-			})
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, "action_plan_failed", sanitizeErrorForClient(err, "Action planning failed"))
-		return
-	}
-
-	req = normalizeActionRequestForAudit(req)
-	if checker, ok := h.actionExecutor.(ActionAvailabilityChecker); ok {
-		if readiness := checker.CheckActionAvailable(r.Context(), req, *resource); readiness.Name != "" && !readiness.Available {
-			writeJSONErrorWithDetails(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionExecutionUnavailable, "Action execution is unavailable", map[string]string{
-				"resourceId":     req.ResourceID,
-				"capabilityName": req.CapabilityName,
-				"reasonCode":     readiness.ReasonCode,
-				"reason":         firstNonEmpty(readiness.Reason, "action execution is unavailable"),
-			})
-			return
-		}
-	}
-	store, err := h.getStore(orgID)
-	if err != nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available")
-		return
-	}
-	if err := persistActionPlanAudit(store, req, plan); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "action_audit_persist_failed", sanitizeErrorForClient(err, "Failed to persist action audit"))
+		writeActionPlanError(w, err)
 		return
 	}
 
@@ -148,71 +99,46 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-func normalizeActionRequestForAudit(req unified.ActionRequest) unified.ActionRequest {
-	req.RequestID = strings.TrimSpace(req.RequestID)
-	req.ResourceID = unified.CanonicalResourceID(req.ResourceID)
-	req.CapabilityName = strings.TrimSpace(req.CapabilityName)
-	req.Reason = strings.TrimSpace(req.Reason)
-	req.RequestedBy = strings.TrimSpace(req.RequestedBy)
-	if req.Params == nil {
-		req.Params = map[string]any{}
-	}
-	return req
-}
-
-func persistActionPlanAudit(store unified.ResourceStore, req unified.ActionRequest, plan unified.ActionPlan) error {
-	state := plannedActionState(plan)
-	record := unified.ActionAuditRecord{
-		ID:        plan.ActionID,
-		CreatedAt: plan.PlannedAt,
-		UpdatedAt: plan.PlannedAt,
-		State:     state,
-		Request:   req,
-		Plan:      plan,
-	}
-	if err := store.RecordActionAudit(record); err != nil {
-		return err
-	}
-
-	existingEvents, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 100)
-	if err != nil {
-		return err
-	}
-	seenStates := map[unified.ActionState]bool{}
-	for _, event := range existingEvents {
-		seenStates[event.State] = true
-	}
-
-	if !seenStates[unified.ActionStatePlanned] {
-		if err := store.RecordActionLifecycleEvent(unified.ActionLifecycleEvent{
-			ActionID:  plan.ActionID,
-			Timestamp: plan.PlannedAt,
-			State:     unified.ActionStatePlanned,
-			Actor:     req.RequestedBy,
-			Message:   "Action plan created.",
-		}); err != nil {
-			return err
+func writeActionPlanError(w http.ResponseWriter, err error) {
+	var validationErr *actionplanner.ValidationError
+	var notFound *actionlifecycle.ResourceNotFoundError
+	var unavailable *actionlifecycle.AvailabilityRefusedError
+	var persist *actionlifecycle.PersistError
+	switch {
+	case errors.As(err, &validationErr):
+		details := map[string]string{}
+		if validationErr.Field != "" {
+			details[validationErr.Field] = validationErr.Message
 		}
-	}
-	if state != unified.ActionStatePlanned && !seenStates[state] {
-		if err := store.RecordActionLifecycleEvent(unified.ActionLifecycleEvent{
-			ActionID:  plan.ActionID,
-			Timestamp: plan.PlannedAt,
-			State:     state,
-			Actor:     req.RequestedBy,
-			Message:   "Action is waiting for approval before execution.",
-		}); err != nil {
-			return err
+		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionRequest, "Invalid action planning request", details)
+	case errors.Is(err, actionplanner.ErrCapabilityNotFound):
+		details := map[string]string{}
+		var capabilityNotFound *actionlifecycle.CapabilityNotFoundError
+		if errors.As(err, &capabilityNotFound) {
+			details["resourceId"] = capabilityNotFound.ResourceID
+			details["capabilityName"] = capabilityNotFound.CapabilityName
 		}
+		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeCapabilityNotFound, "Capability not found on resource", details)
+	case errors.As(err, &notFound):
+		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeResourceNotFound, "Resource not found", map[string]string{
+			"resourceId": notFound.ResourceID,
+		})
+	case errors.As(err, &unavailable):
+		writeJSONErrorWithDetails(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionExecutionUnavailable, "Action execution is unavailable", map[string]string{
+			"resourceId":     unavailable.ResourceID,
+			"capabilityName": unavailable.CapabilityName,
+			"reasonCode":     unavailable.Readiness.ReasonCode,
+			"reason":         firstNonEmpty(unavailable.Readiness.Reason, "action execution is unavailable"),
+		})
+	case errors.Is(err, actionlifecycle.ErrRegistryUnavailable):
+		writeJSONError(w, http.StatusInternalServerError, "resource_registry_unavailable", sanitizeErrorForClient(err, "Resource registry unavailable"))
+	case errors.Is(err, actionlifecycle.ErrStoreUnavailable):
+		writeJSONError(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available")
+	case errors.As(err, &persist):
+		writeJSONError(w, http.StatusInternalServerError, "action_audit_persist_failed", sanitizeErrorForClient(err, "Failed to persist action audit"))
+	default:
+		writeJSONError(w, http.StatusInternalServerError, "action_plan_failed", sanitizeErrorForClient(err, "Action planning failed"))
 	}
-	return nil
-}
-
-func plannedActionState(plan unified.ActionPlan) unified.ActionState {
-	if plan.RequiresApproval {
-		return unified.ActionStatePending
-	}
-	return unified.ActionStatePlanned
 }
 
 func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Request) {
@@ -255,44 +181,22 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	orgID := GetOrgID(r.Context())
-	store, err := h.getStore(orgID)
-	if err != nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available")
-		return
-	}
-	record, ok, err := store.GetActionAudit(actionID)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit")
-		return
-	}
-	if !ok {
-		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{
-			"actionId": actionID,
-		})
-		return
-	}
-
-	actor := actionDecisionActor(h, r)
-	now := time.Now().UTC()
 	approval := unified.ActionApprovalRecord{
-		Actor:     actor,
-		Method:    unified.MethodAPI,
-		Timestamp: now,
-		Outcome:   decision.Outcome,
-		Reason:    decision.Reason,
+		Actor:   actionDecisionActor(h, r),
+		Method:  unified.MethodAPI,
+		Outcome: decision.Outcome,
+		Reason:  decision.Reason,
 	}
-	updated, event, err := unified.ApplyActionDecision(record, approval, now)
+	updated, err := h.ActionLifecycle().Decide(r.Context(), GetOrgID(r.Context()), actionID, approval)
 	if err != nil {
-		writeActionDecisionApplyError(w, err)
-		return
-	}
-	if err := store.RecordActionDecision(updated, event); err != nil {
-		if errors.Is(err, unified.ErrActionNotPending) {
+		writeActionLifecycleReadError(w, err, func() {
+			var persist *actionlifecycle.PersistError
+			if errors.As(err, &persist) {
+				writeJSONError(w, http.StatusInternalServerError, "action_decision_persist_failed", sanitizeErrorForClient(err, "Failed to persist action decision"))
+				return
+			}
 			writeActionDecisionApplyError(w, err)
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, "action_decision_persist_failed", sanitizeErrorForClient(err, "Failed to persist action decision"))
+		})
 		return
 	}
 
@@ -345,98 +249,13 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 	}
 	execution.Reason = strings.TrimSpace(execution.Reason)
 
-	orgID := GetOrgID(r.Context())
-	store, err := h.getStore(orgID)
+	completed, err := h.ActionLifecycle().Execute(r.Context(), GetOrgID(r.Context()), actionID, actionDecisionActor(h, r), execution.Reason)
 	if err != nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available")
-		return
-	}
-	record, ok, err := store.GetActionAudit(actionID)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit")
-		return
-	}
-	if !ok {
-		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{
-			"actionId": actionID,
+		writeActionLifecycleReadError(w, err, func() {
+			writeActionExecuteError(w, err)
 		})
 		return
 	}
-
-	actor := actionDecisionActor(h, r)
-	now := time.Now().UTC()
-	if err := unified.ValidateActionExecutionStart(record, now); err != nil {
-		if unified.IsPermanentActionExecutionRefusal(err) {
-			if failed, persistErr := recordRefusedActionExecution(store, record, actor, now, err); persistErr == nil {
-				h.publishActionCompleted(failed)
-			} else {
-				writeJSONError(w, http.StatusInternalServerError, "action_execution_persist_failed", sanitizeErrorForClient(persistErr, "Failed to persist refused action execution"))
-				return
-			}
-		}
-		writeActionExecutionApplyError(w, err)
-		return
-	}
-	if h.actionExecutor == nil {
-		writeJSONError(w, http.StatusNotImplemented, agentcapabilities.AgentErrCodeActionExecutorUnavailable, "No action executor is configured for this API instance")
-		return
-	}
-	if err := h.validateActionPlanFresh(orgID, record); err != nil {
-		if errors.Is(err, unified.ErrActionPlanDrift) {
-			if failed, persistErr := recordRefusedActionExecution(store, record, actor, now, err); persistErr == nil {
-				h.publishActionCompleted(failed)
-			} else {
-				writeJSONError(w, http.StatusInternalServerError, "action_execution_persist_failed", sanitizeErrorForClient(persistErr, "Failed to persist refused action execution"))
-				return
-			}
-			writeActionExecutionApplyError(w, err)
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, "action_plan_validation_failed", sanitizeErrorForClient(err, "Failed to validate action plan freshness"))
-		return
-	}
-	if err := h.validateActionExecutionPolicy(store, record); err != nil {
-		if unified.IsPermanentActionExecutionRefusal(err) {
-			if failed, persistErr := recordRefusedActionExecution(store, record, actor, now, err); persistErr == nil {
-				h.publishActionCompleted(failed)
-			} else {
-				writeJSONError(w, http.StatusInternalServerError, "action_execution_persist_failed", sanitizeErrorForClient(persistErr, "Failed to persist refused action execution"))
-				return
-			}
-			writeActionExecutionApplyError(w, err)
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, "action_policy_validation_failed", sanitizeErrorForClient(err, "Failed to validate action policy"))
-		return
-	}
-
-	started, startEvent, err := unified.BeginActionExecution(record, actor, now)
-	if err != nil {
-		writeActionExecutionApplyError(w, err)
-		return
-	}
-	if execution.Reason != "" {
-		startEvent.Message = "Action execution started: " + execution.Reason
-	}
-	if err := store.RecordActionExecutionStart(started, startEvent); err != nil {
-		writeActionExecutionPersistError(w, err)
-		return
-	}
-
-	result, execErr := h.actionExecutor.ExecuteAction(r.Context(), started)
-	if execErr != nil {
-		result = &unified.ExecutionResult{Success: false, ErrorMessage: execErr.Error()}
-	}
-	completed, doneEvent, err := unified.CompleteActionExecution(started, result, actor, time.Now().UTC())
-	if err != nil {
-		writeActionExecutionApplyError(w, err)
-		return
-	}
-	if err := store.RecordActionExecutionResult(completed, doneEvent); err != nil {
-		writeActionExecutionPersistError(w, err)
-		return
-	}
-	h.publishActionCompleted(completed)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(actionExecutionResponse{
@@ -449,86 +268,42 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 	}
 }
 
-func (h *ResourceHandlers) validateActionPlanFresh(orgID string, record unified.ActionAuditRecord) error {
-	if h == nil {
-		return fmt.Errorf("%w: resource handler unavailable", unified.ErrActionPlanDrift)
+// writeActionLifecycleReadError handles the store/query/not-found failures
+// shared by the decision and execution endpoints, delegating anything else
+// to the endpoint-specific fallback.
+func writeActionLifecycleReadError(w http.ResponseWriter, err error, fallback func()) {
+	var notFound *actionlifecycle.ActionNotFoundError
+	var query *actionlifecycle.QueryError
+	switch {
+	case errors.Is(err, actionlifecycle.ErrStoreUnavailable):
+		writeJSONError(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action audit history is not available")
+	case errors.As(err, &query):
+		writeJSONError(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit")
+	case errors.As(err, &notFound):
+		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{
+			"actionId": notFound.ActionID,
+		})
+	default:
+		fallback()
 	}
-	normalized, err := unified.NormalizeActionAuditRecord(record)
-	if err != nil {
-		return fmt.Errorf("%w: %v", unified.ErrActionPlanDrift, err)
-	}
-	registry, err := h.buildRegistry(orgID)
-	if err != nil {
-		return err
-	}
-	resource, ok := registry.Get(normalized.Request.ResourceID)
-	if !ok || resource == nil {
-		return fmt.Errorf("%w: resource %q is no longer present", unified.ErrActionPlanDrift, normalized.Request.ResourceID)
-	}
-	currentPlan, err := (actionplanner.Planner{Now: func() time.Time {
-		return normalized.Plan.PlannedAt
-	}}).Plan(normalized.Request, *resource)
-	if err != nil {
-		return fmt.Errorf("%w: %v", unified.ErrActionPlanDrift, err)
-	}
-	if currentPlan.ActionID != normalized.Plan.ActionID {
-		return fmt.Errorf("%w: action identity changed", unified.ErrActionPlanDrift)
-	}
-	if currentPlan.PlanHash != normalized.Plan.PlanHash {
-		return fmt.Errorf("%w: plan hash changed", unified.ErrActionPlanDrift)
-	}
-	if currentPlan.ResourceVersion != normalized.Plan.ResourceVersion {
-		return fmt.Errorf("%w: resource version changed", unified.ErrActionPlanDrift)
-	}
-	if currentPlan.PolicyVersion != normalized.Plan.PolicyVersion {
-		return fmt.Errorf("%w: capability policy changed", unified.ErrActionPlanDrift)
-	}
-	return nil
 }
 
-func (h *ResourceHandlers) validateActionExecutionPolicy(store unified.ResourceStore, record unified.ActionAuditRecord) error {
-	if store == nil {
-		return errors.New("action audit store unavailable")
+func writeActionExecuteError(w http.ResponseWriter, err error) {
+	var persist *actionlifecycle.PersistError
+	var freshness *actionlifecycle.FreshnessCheckError
+	var policy *actionlifecycle.PolicyCheckError
+	switch {
+	case errors.Is(err, actionlifecycle.ErrExecutorUnavailable):
+		writeJSONError(w, http.StatusNotImplemented, agentcapabilities.AgentErrCodeActionExecutorUnavailable, "No action executor is configured for this API instance")
+	case errors.As(err, &persist):
+		writeActionExecutionPersistError(w, err)
+	case errors.As(err, &freshness):
+		writeJSONError(w, http.StatusInternalServerError, "action_plan_validation_failed", sanitizeErrorForClient(err, "Failed to validate action plan freshness"))
+	case errors.As(err, &policy):
+		writeJSONError(w, http.StatusInternalServerError, "action_policy_validation_failed", sanitizeErrorForClient(err, "Failed to validate action policy"))
+	default:
+		writeActionExecutionApplyError(w, err)
 	}
-	normalized, err := unified.NormalizeActionAuditRecord(record)
-	if err != nil {
-		return err
-	}
-	state, found, err := store.GetResourceOperatorState(normalized.Request.ResourceID)
-	if err != nil || !found {
-		return err
-	}
-	if state.NeverAutoRemediate {
-		return unified.ErrResourceRemediationLocked
-	}
-	return nil
-}
-
-func recordRefusedActionExecution(store unified.ResourceStore, record unified.ActionAuditRecord, actor string, now time.Time, reason error) (unified.ActionAuditRecord, error) {
-	failed, event, err := unified.RefuseActionExecution(record, reason, actor, now)
-	if err != nil {
-		return unified.ActionAuditRecord{}, err
-	}
-	if store == nil {
-		return unified.ActionAuditRecord{}, errors.New("action audit store unavailable")
-	}
-	if err := store.RecordActionAudit(failed); err != nil {
-		return unified.ActionAuditRecord{}, err
-	}
-	if err := store.RecordActionLifecycleEvent(event); err != nil {
-		return unified.ActionAuditRecord{}, err
-	}
-	return failed, nil
-}
-
-func (h *ResourceHandlers) publishActionCompleted(record unified.ActionAuditRecord) {
-	if h == nil || h.actionCompleted == nil {
-		return
-	}
-	if record.State != unified.ActionStateCompleted && record.State != unified.ActionStateFailed {
-		return
-	}
-	h.actionCompleted(record)
 }
 
 func actionDecisionActor(h *ResourceHandlers, r *http.Request) string {

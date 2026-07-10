@@ -311,7 +311,8 @@ Storage/recovery remediation or restore-adjacent workflows may consume
 `POST /api/actions/plan` only as the API-owned resource capability planning
 contract. This subsystem must not create a storage-local approval policy,
 stale-plan hash, blast-radius model, or execution protocol outside
-`internal/api/actions.go` and `internal/actionplanner/planner.go`.
+`internal/api/actions.go`, `internal/actionlifecycle/service.go`, and
+`internal/actionplanner/planner.go`.
 Storage/recovery surfaces may consume unified-resource `platformScopes` as
 read-only platform membership context, but they must not reinterpret runtime
 scope overlap as storage or recovery ownership. A Docker workload that also

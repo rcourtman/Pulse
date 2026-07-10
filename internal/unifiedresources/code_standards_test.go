@@ -639,16 +639,28 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 		filepath.Join(".", "types.go"): {
 			"ActionReadiness       []ResourceActionReadiness `json:\"actionReadiness,omitempty\"`",
 		},
-		filepath.Join("..", "api", "actions.go"): {
-			"type ActionExecutor interface",
-			"type ActionAvailabilityChecker interface",
+		filepath.Join("..", "actionlifecycle", "service.go"): {
+			// The transport-independent lifecycle service is the only
+			// sanctioned path from a typed action request to execution.
+			// REST handlers and in-process brokers must both route
+			// through it; pin its execution-boundary invariants here.
+			"type Executor interface",
+			"type AvailabilityChecker interface",
 			"CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness",
-			"func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Request)",
-			"func (h *ResourceHandlers) validateActionPlanFresh(orgID string, record unified.ActionAuditRecord) error",
-			"func recordRefusedActionExecution(store unified.ResourceStore, record unified.ActionAuditRecord",
-			"func (h *ResourceHandlers) publishActionCompleted(record unified.ActionAuditRecord)",
+			"func (s *Service) ValidatePlanFresh(orgID string, record unified.ActionAuditRecord) error",
+			"func RecordRefusedExecution(store Store, record unified.ActionAuditRecord",
+			"func (s *Service) publishCompleted(record unified.ActionAuditRecord)",
 			"store.RecordActionExecutionStart(started, startEvent)",
 			"store.RecordActionExecutionResult(completed, doneEvent)",
+		},
+		filepath.Join("..", "api", "actions.go"): {
+			// The REST layer is a thin adapter over the shared lifecycle
+			// service; it owns only decode, actor resolution, and error
+			// code mapping.
+			"type ActionExecutor = actionlifecycle.Executor",
+			"type ActionAvailabilityChecker = actionlifecycle.AvailabilityChecker",
+			"func (h *ResourceHandlers) ActionLifecycle() *actionlifecycle.Service",
+			"func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Request)",
 			"agentcapabilities.AgentErrCodeActionExecutionUnavailable",
 			"agentcapabilities.AgentErrCodeActionPlanDrift",
 			"agentcapabilities.AgentErrCodeActionExecutorUnavailable",

@@ -23,6 +23,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
@@ -13732,7 +13733,7 @@ func TestContract_ActionPlanAuditLifecycleSnapshot(t *testing.T) {
 	}
 
 	store := unifiedresources.NewMemoryStore()
-	if err := persistActionPlanAudit(store, req, plan); err != nil {
+	if err := actionlifecycle.PersistPlanAudit(store, req, plan); err != nil {
 		t.Fatalf("persist action plan audit: %v", err)
 	}
 	audits, err := store.GetActionAudits("vm:42", time.Time{}, 10)
@@ -14276,26 +14277,33 @@ func TestContract_ActionDryRunOnlyExecutionErrorJSONSnapshot(t *testing.T) {
 }
 
 func TestContract_APIActionExecutionRevalidatesPlanFreshness(t *testing.T) {
-	source, err := os.ReadFile("actions.go")
+	source, err := os.ReadFile(filepath.Join("..", "actionlifecycle", "service.go"))
 	if err != nil {
-		t.Fatalf("read actions.go: %v", err)
+		t.Fatalf("read actionlifecycle service source: %v", err)
 	}
 	src := string(source)
 	for _, snippet := range []string{
 		"if unified.IsPermanentActionExecutionRefusal(err)",
-		"if err := h.validateActionPlanFresh(orgID, record); err != nil",
+		"if err := s.ValidatePlanFresh(orgID, record); err != nil",
 		"errors.Is(err, unified.ErrActionPlanDrift)",
-		"recordRefusedActionExecution(store, record, actor, now, err)",
+		"RecordRefusedExecution(store, record, actor, now, err)",
 		"unified.RefuseActionExecution(record, reason, actor, now)",
-		"writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanDrift",
 	} {
 		if !strings.Contains(src, snippet) {
-			t.Fatalf("actions.go must pin API execute plan freshness guard snippet %q", snippet)
+			t.Fatalf("actionlifecycle service must pin execute plan freshness guard snippet %q", snippet)
 		}
 	}
-	if strings.Index(src, "if err := h.validateActionPlanFresh(orgID, record); err != nil") >
+	if strings.Index(src, "if err := s.ValidatePlanFresh(orgID, record); err != nil") >
 		strings.Index(src, "started, startEvent, err := unified.BeginActionExecution(record, actor, now)") {
-		t.Fatal("HandleExecuteAction must validate plan freshness before entering executing state or calling the executor")
+		t.Fatal("Execute must validate plan freshness before entering executing state or calling the executor")
+	}
+
+	adapterSource, err := os.ReadFile("actions.go")
+	if err != nil {
+		t.Fatalf("read actions.go: %v", err)
+	}
+	if !strings.Contains(string(adapterSource), "writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanDrift") {
+		t.Fatal("actions.go must map plan drift to a 409 conflict with the canonical drift error code")
 	}
 }
 

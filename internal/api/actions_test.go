@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -547,7 +548,7 @@ func TestHandleExecuteActionRejectsStalePlanBeforeExecutor(t *testing.T) {
 	if !ok {
 		t.Fatal("expected approved action audit before execute")
 	}
-	if err := h.validateActionPlanFresh("default", approvedAudit); !errors.Is(err, unified.ErrActionPlanDrift) {
+	if err := h.ActionLifecycle().ValidatePlanFresh("default", approvedAudit); !errors.Is(err, unified.ErrActionPlanDrift) {
 		t.Fatalf("expected current resource contract to drift before execute, got %v", err)
 	}
 
@@ -874,7 +875,7 @@ func TestPersistActionPlanAuditFillsMissingLifecycleState(t *testing.T) {
 		t.Fatalf("seed lifecycle event: %v", err)
 	}
 
-	if err := persistActionPlanAudit(store, req, plan); err != nil {
+	if err := actionlifecycle.PersistPlanAudit(store, req, plan); err != nil {
 		t.Fatalf("persistActionPlanAudit: %v", err)
 	}
 	events, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
@@ -889,7 +890,7 @@ func TestPersistActionPlanAuditFillsMissingLifecycleState(t *testing.T) {
 		t.Fatalf("events = %#v, want one planned and one pending event", events)
 	}
 
-	if err := persistActionPlanAudit(store, req, plan); err != nil {
+	if err := actionlifecycle.PersistPlanAudit(store, req, plan); err != nil {
 		t.Fatalf("persistActionPlanAudit retry: %v", err)
 	}
 	events, err = store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
