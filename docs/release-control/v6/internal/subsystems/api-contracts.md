@@ -1589,8 +1589,19 @@ payload shape change when the portal presents compact client rows.
     The updater registry behind `GET /api/updates/plan` is a plan-provider
     seam only (`SupportsApply`, `PrepareUpdate`, `GetDeploymentType`); apply
     and rollback semantics ride the manager pipeline behind
-    `POST /api/updates/apply`, and the updates API exposes no per-deployment
-    adapter execute or rollback transport.
+    `POST /api/updates/apply` and `POST /api/updates/rollback`, and the
+    updates API exposes no per-deployment adapter execute or rollback
+    transport.
+    `POST /api/updates/apply` rejects target versions at or below the running
+    version with a conflict response unless the request body sets the
+    explicit `allowDowngrade` flag, so a stale-but-valid release asset URL is
+    a refused downgrade rather than a silent install.
+    `POST /api/updates/rollback` takes the `eventId` of an update history
+    entry, is gated admin plus `settings:write` exactly like apply, restores
+    the retained backup recorded on that entry through the manager pipeline,
+    and answers with the same started-acknowledgement shape as apply;
+    conflict responses cover pruned or missing backups and Docker
+    deployments, and not-found covers unknown history entries.
 85. `pkg/aicontracts/fix_execution.go` shared with `ai-runtime`: the public approved-fix execution contract is both an AI runtime approved-action boundary and a canonical API dependency contract for Patrol and enterprise auto-fix binders.
 86. `pkg/aicontracts/investigation.go` shared with `ai-runtime`: the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces.
 87. `pkg/aicontracts/orchestrator_deps.go` shared with `ai-runtime`: the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history.

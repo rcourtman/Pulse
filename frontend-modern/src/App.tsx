@@ -140,9 +140,19 @@ async function preloadAppShellRoutes() {
 }
 
 // Helper to detect if an update is actively in progress (not just checking for updates)
+// Mirrors the stage names emitted by internal/updates/manager.go updateStatus:
+// the apply pipeline plus 'restoring' from the rollback path.
 function isUpdateInProgress(status: string | undefined): boolean {
   if (!status) return false;
-  const inProgressStates = ['downloading', 'verifying', 'extracting', 'installing', 'restarting'];
+  const inProgressStates = [
+    'downloading',
+    'verifying',
+    'extracting',
+    'backing-up',
+    'applying',
+    'restoring',
+    'restarting',
+  ];
   return inProgressStates.includes(status);
 }
 

@@ -201,6 +201,19 @@ type ApplyUpdateRequest struct {
 	InitiatedBy  InitiatedBy
 	InitiatedVia InitiatedVia
 	Notes        string
+	// AllowDowngrade permits installing a target at or below the running
+	// version. The normal apply path rejects those so a valid-but-older
+	// release asset URL cannot silently downgrade; sanctioned rollbacks go
+	// through RollbackToBackup instead.
+	AllowDowngrade bool
+}
+
+// RollbackRequest describes a rollback of a recorded update, restoring the
+// retained backup captured before that update was applied.
+type RollbackRequest struct {
+	EventID      string
+	InitiatedBy  InitiatedBy
+	InitiatedVia InitiatedVia
 }
 
 // NewManager creates a new update manager
@@ -604,10 +617,23 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	} else {
 		targetVersion, validationErr := ValidateApplyTargetVersion(channel, req.DownloadURL)
 		if validationErr != nil {
+			m.updateStatus("error", 10, "Update rejected", validationErr)
 			return validationErr
 		}
 		artifact = resolvedUpdateArtifact{downloadURL: req.DownloadURL, version: targetVersion}
 	}
+
+	// A valid release asset URL can still point at an older release than the
+	// running binary; without this guard the "update" would silently install a
+	// downgrade. Sanctioned downgrades either restore a retained backup via
+	// RollbackToBackup or set AllowDowngrade explicitly on the request.
+	if !req.AllowDowngrade {
+		if err := ensureApplyTargetIsNewer(currentInfo.Version, artifact.version); err != nil {
+			m.updateStatus("error", 10, "Update rejected", err)
+			return err
+		}
+	}
+
 	initiatedBy := req.InitiatedBy
 	if initiatedBy == "" {
 		initiatedBy = InitiatedByUser
@@ -1663,9 +1689,177 @@ func (m *Manager) createBackup(ctx context.Context) (string, error) {
 	return backupDir, nil
 }
 
+// ensureApplyTargetIsNewer rejects update targets at or below the running
+// version so a valid-but-older release asset URL cannot silently downgrade.
+// Versions that do not parse as semver (development builds) are left to the
+// existing URL and channel validation.
+func ensureApplyTargetIsNewer(currentVersion, targetVersion string) error {
+	current, err := ParseVersion(currentVersion)
+	if err != nil {
+		return nil
+	}
+	target, err := ParseVersion(targetVersion)
+	if err != nil {
+		return nil
+	}
+	if target.Compare(current) <= 0 {
+		return fmt.Errorf("target version %s is not newer than the running version %s; use the update history rollback to return to an earlier version", target.String(), current.String())
+	}
+	return nil
+}
+
+// validateRetainedBackupDir confirms a history-recorded backup path still
+// points at an existing managed update backup directory before anything is
+// restored from it. The history file is server-owned state, but the path is
+// re-checked against the managed backup roots so a corrupted or hand-edited
+// history entry cannot direct a restore from an arbitrary filesystem location.
+func validateRetainedBackupDir(raw string) (string, error) {
+	cleaned := filepath.Clean(strings.TrimSpace(raw))
+	managed := false
+	for _, root := range managedUpdateBackupRoots() {
+		if filepath.Dir(cleaned) != root {
+			continue
+		}
+		if strings.HasPrefix(filepath.Base(cleaned), managedUpdateBackupPrefix(root)) {
+			managed = true
+			break
+		}
+	}
+	if !managed {
+		return "", fmt.Errorf("backup path is not a managed update backup: %s", cleaned)
+	}
+
+	info, err := os.Stat(cleaned)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("backup no longer exists on disk: %s", cleaned)
+		}
+		return "", fmt.Errorf("stat backup directory %q: %w", cleaned, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("backup path is not a directory: %s", cleaned)
+	}
+	return cleaned, nil
+}
+
+// RollbackToBackup restores the retained backup recorded on an update history
+// entry, records the rollback as its own history entry, and restarts through
+// the same exit-for-systemd path as ApplyUpdate. It is a purely local
+// restore: no release download, broker call, or edition gate is involved, so
+// it behaves identically on community and Pro binaries.
+func (m *Manager) RollbackToBackup(ctx context.Context, req RollbackRequest) error {
+	if m.history == nil {
+		return fmt.Errorf("update history is not available")
+	}
+	eventID := strings.TrimSpace(req.EventID)
+	if eventID == "" {
+		return fmt.Errorf("event ID is required")
+	}
+
+	source, err := m.history.GetEntry(eventID)
+	if err != nil {
+		return fmt.Errorf("update history entry not found: %s", eventID)
+	}
+	if strings.TrimSpace(source.BackupPath) == "" {
+		return fmt.Errorf("no retained backup for this update; it may have been pruned by backup retention")
+	}
+	backupDir, err := validateRetainedBackupDir(source.BackupPath)
+	if err != nil {
+		return err
+	}
+
+	currentInfo, _ := GetCurrentVersion()
+	if currentInfo.IsDocker {
+		return fmt.Errorf("rollback cannot be applied in Docker environment")
+	}
+
+	// Rollback and update share the single in-flight slot: restoring a backup
+	// while an update is replacing the same files would corrupt both.
+	m.updateMu.Lock()
+	if m.updateInFlight {
+		m.updateMu.Unlock()
+		return fmt.Errorf("update already in progress")
+	}
+	m.updateInFlight = true
+	m.updateMu.Unlock()
+	defer func() {
+		m.updateMu.Lock()
+		m.updateInFlight = false
+		m.updateMu.Unlock()
+	}()
+
+	initiatedBy := req.InitiatedBy
+	if initiatedBy == "" {
+		initiatedBy = InitiatedByUser
+	}
+	initiatedVia := req.InitiatedVia
+	if initiatedVia == "" {
+		initiatedVia = InitiatedViaAPI
+	}
+
+	m.updateStatus("restoring", 20, fmt.Sprintf("Restoring Pulse %s from backup...", source.VersionFrom))
+
+	start := time.Now()
+	rollbackEventID := m.createHistoryEntry(ctx, UpdateHistoryEntry{
+		Action:         "rollback",
+		Channel:        source.Channel,
+		VersionFrom:    currentInfo.Version,
+		VersionTo:      source.VersionFrom,
+		DeploymentType: currentInfo.DeploymentType,
+		InitiatedBy:    initiatedBy,
+		InitiatedVia:   initiatedVia,
+		Status:         StatusInProgress,
+		BackupPath:     backupDir,
+		RelatedEventID: source.EventID,
+	})
+
+	var runErr error
+	defer func() {
+		if rollbackEventID == "" {
+			return
+		}
+		status := StatusSuccess
+		if runErr != nil {
+			status = StatusFailed
+		}
+		m.completeHistoryEntry(ctx, rollbackEventID, status, start, runErr)
+	}()
+
+	if err := m.restoreBackup(backupDir); err != nil {
+		restoreErr := fmt.Errorf("failed to restore backup: %w", err)
+		m.updateStatus("error", 40, "Failed to restore backup", restoreErr)
+		runErr = restoreErr
+		return restoreErr
+	}
+
+	// The update this backup predates is no longer the running install.
+	m.updateHistoryEntry(ctx, eventID, func(entry *UpdateHistoryEntry) {
+		entry.Status = StatusRolledBack
+	})
+
+	m.updateStatus("restarting", 95, "Restarting service...")
+
+	// Schedule a clean exit after a short delay - systemd will restart us
+	if !dockerUpdatesAllowed() {
+		go func() {
+			time.Sleep(2 * time.Second)
+			log.Info().Msg("Exiting for restart after rollback")
+			os.Exit(0)
+		}()
+	} else {
+		log.Info().Msg("Skipping process exit after rollback (mock/CI mode)")
+	}
+
+	m.updateStatus("completed", 100, "Rollback completed, restarting...")
+	return nil
+}
+
 // restoreBackup restores from a backup
 func (m *Manager) restoreBackup(backupDir string) error {
-	pulseDir := "/opt/pulse"
+	pulseDir := os.Getenv("PULSE_INSTALL_DIR")
+	if pulseDir == "" {
+		pulseDir = "/opt/pulse"
+	}
 
 	// Restore directories
 	dirsToRestore := []string{"data", "config"}

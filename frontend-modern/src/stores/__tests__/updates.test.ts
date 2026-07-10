@@ -4,6 +4,7 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 const mockGetVersion = vi.fn();
 const mockCheckForUpdates = vi.fn();
 const mockApplyUpdate = vi.fn();
+const mockRollbackUpdate = vi.fn();
 const mockNotifySuccess = vi.fn();
 const mockNotifyError = vi.fn();
 
@@ -12,6 +13,7 @@ vi.mock('@/api/updates', () => ({
     getVersion: (...args: unknown[]) => mockGetVersion(...args),
     checkForUpdates: (...args: unknown[]) => mockCheckForUpdates(...args),
     applyUpdate: (...args: unknown[]) => mockApplyUpdate(...args),
+    rollbackUpdate: (...args: unknown[]) => mockRollbackUpdate(...args),
   },
 }));
 
@@ -55,6 +57,7 @@ describe('updateStore', () => {
     mockGetVersion.mockReset();
     mockCheckForUpdates.mockReset();
     mockApplyUpdate.mockReset();
+    mockRollbackUpdate.mockReset();
     mockNotifySuccess.mockReset();
     mockNotifyError.mockReset();
   });
@@ -170,6 +173,47 @@ describe('updateStore', () => {
     });
   });
 
+  describe('rollbackUpdate', () => {
+    const rollbackParams = {
+      eventId: '01JZEXAMPLE',
+      fromVersion: 'v1.1.0',
+      toVersion: 'v1.0.0',
+    };
+
+    it('posts the rollback and records a rollback pending marker before it', async () => {
+      mockRollbackUpdate.mockResolvedValue({ status: 'started', message: '' });
+
+      const updateStore = await loadUpdateStore();
+      const started = await updateStore.rollbackUpdate(rollbackParams);
+
+      expect(started).toBe(true);
+      expect(mockRollbackUpdate).toHaveBeenCalledWith('01JZEXAMPLE');
+      const persisted = JSON.parse(localStorage.getItem(STORAGE_KEYS.UPDATES) ?? '{}');
+      expect(persisted.pendingApply).toMatchObject({
+        fromVersion: 'v1.1.0',
+        toVersion: 'v1.0.0',
+        action: 'rollback',
+      });
+      expect(mockNotifyError).not.toHaveBeenCalled();
+    });
+
+    it('clears the marker and toasts the backend error when the rollback is rejected', async () => {
+      mockRollbackUpdate.mockRejectedValue(
+        new Error('no retained backup for this update; it may have been pruned by backup retention'),
+      );
+
+      const updateStore = await loadUpdateStore();
+      const started = await updateStore.rollbackUpdate(rollbackParams);
+
+      expect(started).toBe(false);
+      expect(mockNotifyError).toHaveBeenCalledWith(
+        'no retained backup for this update; it may have been pruned by backup retention',
+      );
+      const persisted = JSON.parse(localStorage.getItem(STORAGE_KEYS.UPDATES) ?? '{}');
+      expect(persisted.pendingApply).toBeUndefined();
+    });
+  });
+
   describe('post-update confirmation', () => {
     const seedPendingApply = (fromVersion: string, toVersion: string) => {
       localStorage.setItem(
@@ -216,6 +260,32 @@ describe('updateStore', () => {
 
       expect(mockCheckForUpdates).not.toHaveBeenCalled();
       expect(mockNotifySuccess).toHaveBeenCalledWith('Updated to v1.1.0');
+    });
+
+    it('uses rollback wording when a rollback marker confirms', async () => {
+      localStorage.setItem(
+        STORAGE_KEYS.UPDATES,
+        JSON.stringify({
+          lastCheck: 0,
+          pendingApply: {
+            fromVersion: 'v1.1.0',
+            toVersion: 'v1.0.0',
+            startedAt: Date.now(),
+            action: 'rollback',
+          },
+        }),
+      );
+      mockGetVersion.mockResolvedValue({ ...baseVersionInfo, version: 'v1.0.0' });
+      mockCheckForUpdates.mockResolvedValue({
+        ...baseUpdateInfo,
+        available: false,
+        currentVersion: 'v1.0.0',
+      });
+
+      const updateStore = await loadUpdateStore();
+      await updateStore.checkForUpdates(true);
+
+      expect(mockNotifySuccess).toHaveBeenCalledWith('Rolled back to v1.0.0');
     });
 
     it('clears the marker silently when the version did not change', async () => {

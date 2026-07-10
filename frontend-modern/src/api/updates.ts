@@ -61,6 +61,32 @@ export interface UpdatePlan {
   readiness?: UpdateReadiness;
 }
 
+export interface UpdateHistoryEntryError {
+  message: string;
+  code?: string;
+  details?: string;
+}
+
+export interface UpdateHistoryEntry {
+  event_id: string;
+  timestamp: string;
+  action: string;
+  channel: string;
+  version_from: string;
+  version_to: string;
+  deployment_type: string;
+  initiated_by: string;
+  initiated_via: string;
+  status: string;
+  duration_ms: number;
+  backup_path?: string;
+  log_path?: string;
+  error?: UpdateHistoryEntryError;
+  download_bytes?: number;
+  related_event_id?: string;
+  notes?: string;
+}
+
 const requireNonEmpty = (value: string, fieldName: string): string => {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -87,6 +113,19 @@ export class UpdatesAPI {
       method: 'POST',
       body: JSON.stringify({ downloadUrl: normalizedDownloadUrl }),
     });
+  }
+
+  static async rollbackUpdate(eventId: string): Promise<{ status: string; message: string }> {
+    const normalizedEventId = requireNonEmpty(eventId, 'Event ID');
+    return apiFetchJSON('/api/updates/rollback', {
+      method: 'POST',
+      body: JSON.stringify({ eventId: normalizedEventId }),
+    });
+  }
+
+  static async listUpdateHistory(limit = 20): Promise<UpdateHistoryEntry[]> {
+    const search = new URLSearchParams({ limit: String(limit) });
+    return apiFetchJSON(`/api/updates/history?${search.toString()}`);
   }
 
   static async getUpdateStatus(): Promise<UpdateStatus> {

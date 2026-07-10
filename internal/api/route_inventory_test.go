@@ -447,6 +447,7 @@ var allRouteAllowlist = []string{
 	"GET /api/onboarding/deep-link",
 	"/api/updates/check",
 	"/api/updates/apply",
+	"/api/updates/rollback",
 	"/api/updates/status",
 	"/api/updates/stream",
 	"/api/updates/plan",

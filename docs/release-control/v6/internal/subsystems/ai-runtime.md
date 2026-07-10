@@ -4319,6 +4319,11 @@ The retired monitored-system capacity banner follows the same shell rule:
 volume warnings just because settings or support surfaces still expose
 monitored-system grouping data. Assistant state and shell notices stay
 independent from retired infrastructure-volume commerce.
+The global update progress watcher in `frontend-modern/src/App.tsx` is
+likewise server-updater shell chrome, not assistant surface: its in-progress
+stage vocabulary mirrors the backend updater pipeline (including the
+`restoring` stage emitted by update rollback), and assistant state, drawer
+ownership, and AI runtime surfaces must not key off those update stages.
 That same shared shell boundary must respect blocking modal ownership.
 `frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` may use
 the shared dialog runtime to hide the closed assistant launcher and close the

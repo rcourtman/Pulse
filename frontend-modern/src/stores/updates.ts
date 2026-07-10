@@ -17,6 +17,9 @@ interface PendingApply {
   fromVersion: string;
   toVersion: string;
   startedAt: number;
+  // Distinguishes the post-restart toast wording; absent on markers written
+  // before rollbacks existed, which read as updates.
+  action?: 'update' | 'rollback';
 }
 
 interface UpdateState {
@@ -79,7 +82,7 @@ const normalizeUpdateInfo = (value: unknown): UpdateInfo | undefined => {
 const normalizePendingApply = (value: unknown): PendingApply | undefined => {
   if (!isRecord(value)) return undefined;
 
-  const { fromVersion, toVersion, startedAt } = value;
+  const { fromVersion, toVersion, startedAt, action } = value;
   if (
     typeof fromVersion !== 'string' ||
     typeof toVersion !== 'string' ||
@@ -88,7 +91,12 @@ const normalizePendingApply = (value: unknown): PendingApply | undefined => {
     return undefined;
   }
 
-  return { fromVersion, toVersion, startedAt };
+  return {
+    fromVersion,
+    toVersion,
+    startedAt,
+    ...(action === 'update' || action === 'rollback' ? { action } : {}),
+  };
 };
 
 const normalizeUpdateState = (value: unknown): UpdateState => {
@@ -195,9 +203,13 @@ export const withTransientRetry = async <T>(
   }
 };
 
-const markApplyStarted = (fromVersion: string, toVersion: string) => {
+const markApplyStarted = (
+  fromVersion: string,
+  toVersion: string,
+  action: 'update' | 'rollback' = 'update',
+) => {
   const state = loadState();
-  saveState({ ...state, pendingApply: { fromVersion, toVersion, startedAt: Date.now() } });
+  saveState({ ...state, pendingApply: { fromVersion, toVersion, startedAt: Date.now(), action } });
 };
 
 const clearPendingApply = () => {
@@ -224,7 +236,8 @@ const confirmPendingApply = (currentVersion: string, state: UpdateState) => {
   saveState(state);
 
   if (currentVersion && currentVersion !== pending.fromVersion) {
-    notificationStore.success(`Updated to ${formatVersionLabel(currentVersion)}`);
+    const verb = pending.action === 'rollback' ? 'Rolled back to' : 'Updated to';
+    notificationStore.success(`${verb} ${formatVersionLabel(currentVersion)}`);
   }
 };
 
@@ -244,6 +257,31 @@ const applyUpdate = async (): Promise<boolean> => {
     clearPendingApply();
     logger.error('Failed to start update', error);
     notificationStore.error(getStartUpdateErrorMessage());
+    return false;
+  }
+};
+
+// Sanctioned rollback of a recorded update: restores the retained backup on
+// the selected history entry. Reuses the pending-apply marker so the boot
+// after the post-rollback restart confirms the version moved, with rollback
+// wording on the toast. Returns true when the backend accepted the request.
+const rollbackUpdate = async (params: {
+  eventId: string;
+  fromVersion: string;
+  toVersion: string;
+}): Promise<boolean> => {
+  markApplyStarted(params.fromVersion, params.toVersion, 'rollback');
+  try {
+    await UpdatesAPI.rollbackUpdate(params.eventId);
+    return true;
+  } catch (error) {
+    clearPendingApply();
+    logger.error('Failed to start rollback', error);
+    notificationStore.error(
+      error instanceof Error && error.message
+        ? error.message
+        : 'Unable to start the rollback. Please try again.',
+    );
     return false;
   }
 };
@@ -406,6 +444,7 @@ export const updateStore = {
   // Actions
   checkForUpdates,
   applyUpdate,
+  rollbackUpdate,
   dismissUpdate,
   clearDismissed,
 

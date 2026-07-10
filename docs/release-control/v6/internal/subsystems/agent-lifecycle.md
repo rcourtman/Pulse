@@ -160,7 +160,11 @@ off it. The same boundary covers the server updater's deployment adapters
 behind `GET /api/updates/plan` in `internal/api/updates.go`: they are plan
 providers only, with the real apply in the `internal/updates/manager.go`
 pipeline, and lifecycle surfaces must not read them as an agent-side apply,
-update, or rollback transport. Workflow starter counts on that endpoint,
+update, or rollback transport. The server updater's own downgrade guard and
+`POST /api/updates/rollback` backup-restore endpoint are equally server
+self-update plumbing: they roll the Pulse server binary and its local
+backups, never agent binaries, and agent lifecycle surfaces must not key
+enrollment, update liveness, or fleet-control semantics off them. Workflow starter counts on that endpoint,
 contextual Assistant/external-agent collaboration counts inside the Assistant
 step, the content-free Patrol control starter split, and Patrol control
 completed-loop, resolved-loop, or `patrolControlValueState` proof mirrored to

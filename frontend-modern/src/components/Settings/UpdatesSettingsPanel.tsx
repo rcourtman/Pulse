@@ -14,6 +14,7 @@ import Package from 'lucide-solid/icons/package';
 import type { UpdateInfo, VersionInfo, UpdatePlan } from '@/api/updates';
 import { buildDockerImageTag, buildLinuxAmd64DownloadCommand } from '@/components/updateVersion';
 import { UpdateInstallGuide } from '@/components/Settings/UpdateInstallGuide';
+import { UpdateHistorySection } from '@/components/Settings/UpdateHistorySection';
 import {
   getUpdateChannelCardOptions,
   type UpdateChannelOptionValue,
@@ -364,6 +365,10 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
             </Show>
           </div>
         </div>
+      </div>
+
+      <div class="p-4 sm:p-6">
+        <UpdateHistorySection />
       </div>
     </SettingsPanel>
   );

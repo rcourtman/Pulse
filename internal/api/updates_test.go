@@ -19,6 +19,7 @@ import (
 type MockUpdateManager struct {
 	CheckForUpdatesFunc    func(ctx context.Context, channel string) (*updates.UpdateInfo, error)
 	ApplyUpdateFunc        func(ctx context.Context, req updates.ApplyUpdateRequest) error
+	RollbackToBackupFunc   func(ctx context.Context, req updates.RollbackRequest) error
 	GetStatusFunc          func() updates.UpdateStatus
 	GetSSECachedStatusFunc func() (updates.UpdateStatus, time.Time)
 	AddSSEClientFunc       func(w http.ResponseWriter, clientID string) *updates.SSEClient
@@ -35,6 +36,13 @@ func (m *MockUpdateManager) CheckForUpdatesWithChannel(ctx context.Context, chan
 func (m *MockUpdateManager) ApplyUpdate(ctx context.Context, req updates.ApplyUpdateRequest) error {
 	if m.ApplyUpdateFunc != nil {
 		return m.ApplyUpdateFunc(ctx, req)
+	}
+	return nil
+}
+
+func (m *MockUpdateManager) RollbackToBackup(ctx context.Context, req updates.RollbackRequest) error {
+	if m.RollbackToBackupFunc != nil {
+		return m.RollbackToBackupFunc(ctx, req)
 	}
 	return nil
 }
@@ -153,6 +161,146 @@ func TestHandleApplyUpdate_Success(t *testing.T) {
 	}
 
 	// Note: ApplyUpdate runs in background, so we just check it was accepted
+}
+
+func TestHandleApplyUpdate_PassesAllowDowngrade(t *testing.T) {
+	received := make(chan updates.ApplyUpdateRequest, 1)
+	mockManager := &MockUpdateManager{
+		ApplyUpdateFunc: func(ctx context.Context, req updates.ApplyUpdateRequest) error {
+			received <- req
+			return nil
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	body := `{"downloadUrl": "https://example.com/update.tar.gz", "allowDowngrade": true}`
+	r := httptest.NewRequest(http.MethodPost, "/updates/apply", strings.NewReader(body))
+
+	h.HandleApplyUpdate(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+	select {
+	case req := <-received:
+		if !req.AllowDowngrade {
+			t.Fatal("expected AllowDowngrade to be passed through to the manager request")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("ApplyUpdate was not invoked")
+	}
+}
+
+func TestHandleRollbackUpdate_Success(t *testing.T) {
+	received := make(chan updates.RollbackRequest, 1)
+	mockManager := &MockUpdateManager{
+		RollbackToBackupFunc: func(ctx context.Context, req updates.RollbackRequest) error {
+			received <- req
+			return nil
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	w := httptest.NewRecorder()
+	body := `{"eventId": "01JZEXAMPLE"}`
+	r := httptest.NewRequest(http.MethodPost, "/updates/rollback", strings.NewReader(body))
+
+	h.HandleRollbackUpdate(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp["status"] != "started" {
+		t.Fatalf("expected started status, got %q", resp["status"])
+	}
+	select {
+	case req := <-received:
+		if req.EventID != "01JZEXAMPLE" {
+			t.Fatalf("expected event ID to be passed through, got %q", req.EventID)
+		}
+		if req.InitiatedBy != updates.InitiatedByUser || req.InitiatedVia != updates.InitiatedViaUI {
+			t.Fatalf("expected user/ui initiation, got %q/%q", req.InitiatedBy, req.InitiatedVia)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("RollbackToBackup was not invoked")
+	}
+}
+
+func TestHandleRollbackUpdate_InvalidRequests(t *testing.T) {
+	mockManager := &MockUpdateManager{
+		RollbackToBackupFunc: func(ctx context.Context, req updates.RollbackRequest) error {
+			t.Fatal("RollbackToBackup should not be called for invalid requests")
+			return nil
+		},
+	}
+	h := NewUpdateHandlers(mockManager, nil)
+
+	t.Run("rejects non-POST", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodGet, "/updates/rollback", nil)
+		h.HandleRollbackUpdate(w, r)
+		if w.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("Expected status %d, got %d", http.StatusMethodNotAllowed, w.Code)
+		}
+	})
+
+	t.Run("rejects unknown fields", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		body := `{"eventId":"01JZEXAMPLE","unexpected":true}`
+		r := httptest.NewRequest(http.MethodPost, "/updates/rollback", strings.NewReader(body))
+		h.HandleRollbackUpdate(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+
+	t.Run("rejects missing event ID", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		body := `{"eventId":"   "}`
+		r := httptest.NewRequest(http.MethodPost, "/updates/rollback", strings.NewReader(body))
+		h.HandleRollbackUpdate(w, r)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+		}
+	})
+}
+
+func TestHandleRollbackUpdate_ErrorMapping(t *testing.T) {
+	cases := []struct {
+		name       string
+		managerErr error
+		wantCode   int
+	}{
+		{"entry not found", errors.New("update history entry not found: x"), http.StatusNotFound},
+		{"backup pruned", errors.New("no retained backup for this update; it may have been pruned by backup retention"), http.StatusConflict},
+		{"backup missing on disk", errors.New("backup no longer exists on disk: /var/lib/pulse/backup-1"), http.StatusConflict},
+		{"unmanaged path", errors.New("backup path is not a managed update backup: /etc/passwd"), http.StatusConflict},
+		{"docker", errors.New("rollback cannot be applied in Docker environment"), http.StatusConflict},
+		{"in progress", errors.New("update already in progress"), http.StatusConflict},
+		{"unexpected", errors.New("disk exploded"), http.StatusInternalServerError},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockManager := &MockUpdateManager{
+				RollbackToBackupFunc: func(ctx context.Context, req updates.RollbackRequest) error {
+					return tc.managerErr
+				},
+			}
+			h := NewUpdateHandlers(mockManager, nil)
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodPost, "/updates/rollback", strings.NewReader(`{"eventId":"01JZEXAMPLE"}`))
+			h.HandleRollbackUpdate(w, r)
+			if w.Code != tc.wantCode {
+				t.Fatalf("expected status %d, got %d: %s", tc.wantCode, w.Code, w.Body.String())
+			}
+		})
+	}
 }
 
 func TestHandleApplyUpdate_AlreadyInProgress(t *testing.T) {

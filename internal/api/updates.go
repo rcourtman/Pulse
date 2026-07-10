@@ -36,6 +36,7 @@ type UpdateHandlers struct {
 type UpdateManager interface {
 	CheckForUpdatesWithChannel(ctx context.Context, channel string) (*updates.UpdateInfo, error)
 	ApplyUpdate(ctx context.Context, req updates.ApplyUpdateRequest) error
+	RollbackToBackup(ctx context.Context, req updates.RollbackRequest) error
 	GetStatus() updates.UpdateStatus
 	GetSSECachedStatus() (updates.UpdateStatus, time.Time)
 	AddSSEClient(w http.ResponseWriter, clientID string) *updates.SSEClient
@@ -134,6 +135,9 @@ func (h *UpdateHandlers) HandleApplyUpdate(w http.ResponseWriter, r *http.Reques
 
 	var req struct {
 		DownloadURL string `json:"downloadUrl"`
+		// AllowDowngrade opts in to installing a target at or below the
+		// running version; without it the manager rejects downgrades.
+		AllowDowngrade bool `json:"allowDowngrade"`
 	}
 
 	if err := decodeStrictJSONBody(r.Body, &req); err != nil {
@@ -184,10 +188,11 @@ func (h *UpdateHandlers) HandleApplyUpdate(w http.ResponseWriter, r *http.Reques
 	}
 
 	applyReq := updates.ApplyUpdateRequest{
-		DownloadURL:  req.DownloadURL,
-		Channel:      channel,
-		InitiatedBy:  updates.InitiatedByUser,
-		InitiatedVia: updates.InitiatedViaUI,
+		DownloadURL:    req.DownloadURL,
+		Channel:        channel,
+		InitiatedBy:    updates.InitiatedByUser,
+		InitiatedVia:   updates.InitiatedViaUI,
+		AllowDowngrade: req.AllowDowngrade,
 	}
 	result := make(chan error, 1)
 
@@ -255,7 +260,8 @@ func classifyApplyUpdateStartError(err error) (int, string) {
 		return http.StatusConflict, "Update already in progress"
 	case strings.Contains(errMsg, "download url is required"), strings.Contains(errMsg, "invalid download url"):
 		return http.StatusBadRequest, "Invalid download URL"
-	case strings.Contains(errMsg, "stable channel cannot install prerelease builds"):
+	case strings.Contains(errMsg, "stable channel cannot install prerelease builds"),
+		strings.Contains(errMsg, "not newer than the running version"):
 		return http.StatusConflict, err.Error()
 	case strings.Contains(errMsg, "cannot be applied in docker environment"),
 		strings.Contains(errMsg, "manual migration required"),
@@ -263,6 +269,89 @@ func classifyApplyUpdateStartError(err error) (int, string) {
 		return http.StatusConflict, err.Error()
 	default:
 		return http.StatusInternalServerError, "Failed to start update"
+	}
+}
+
+// HandleRollbackUpdate handles rollback requests: it restores the retained
+// backup recorded on the selected update history entry.
+func (h *UpdateHandlers) HandleRollbackUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Limit request body to 8KB to prevent memory exhaustion
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+	defer r.Body.Close()
+
+	var req struct {
+		EventID string `json:"eventId"`
+	}
+
+	if err := decodeStrictJSONBody(r.Body, &req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	req.EventID = strings.TrimSpace(req.EventID)
+
+	if req.EventID == "" {
+		http.Error(w, "Event ID is required", http.StatusBadRequest)
+		return
+	}
+
+	rollbackReq := updates.RollbackRequest{
+		EventID:      req.EventID,
+		InitiatedBy:  updates.InitiatedByUser,
+		InitiatedVia: updates.InitiatedViaUI,
+	}
+	result := make(chan error, 1)
+
+	// Start rollback in background with a new context (not request context which gets canceled)
+	go func() {
+		result <- h.manager.RollbackToBackup(context.Background(), rollbackReq)
+	}()
+
+	select {
+	case err := <-result:
+		if err != nil {
+			statusCode, msg := classifyRollbackStartError(err)
+			if statusCode >= http.StatusInternalServerError {
+				log.Error().Err(err).Str("event_id", req.EventID).Msg("Failed to start rollback")
+			} else {
+				log.Warn().Err(err).Str("event_id", req.EventID).Msg("Rollback request rejected")
+			}
+			http.Error(w, msg, statusCode)
+			return
+		}
+	case <-time.After(applyUpdateStartAckTimeout):
+	}
+
+	// Return success immediately
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]string{
+		"status":  "started",
+		"message": "Rollback process started",
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to encode rollback start response")
+	}
+}
+
+func classifyRollbackStartError(err error) (int, string) {
+	errMsg := strings.ToLower(strings.TrimSpace(err.Error()))
+	switch {
+	case strings.Contains(errMsg, "already in progress"):
+		return http.StatusConflict, "Update already in progress"
+	case strings.Contains(errMsg, "event id is required"):
+		return http.StatusBadRequest, "Event ID is required"
+	case strings.Contains(errMsg, "history entry not found"):
+		return http.StatusNotFound, "Update history entry not found"
+	case strings.Contains(errMsg, "no retained backup"),
+		strings.Contains(errMsg, "backup no longer exists"),
+		strings.Contains(errMsg, "not a managed update backup"),
+		strings.Contains(errMsg, "cannot be applied in docker environment"):
+		return http.StatusConflict, err.Error()
+	default:
+		return http.StatusInternalServerError, "Failed to start rollback"
 	}
 }
 

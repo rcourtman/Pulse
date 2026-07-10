@@ -212,6 +212,23 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('monitoredSystemLimitWarningBanner');
   });
 
+  it('keeps the update progress watcher aligned with the backend updater stages', () => {
+    // The in-progress stage list must mirror internal/updates/manager.go
+    // updateStatus emissions, including the rollback path's restoring stage,
+    // so the progress modal auto-opens for every real update or rollback.
+    expect(appSource).toContain("'downloading',");
+    expect(appSource).toContain("'verifying',");
+    expect(appSource).toContain("'extracting',");
+    expect(appSource).toContain("'backing-up',");
+    expect(appSource).toContain("'applying',");
+    expect(appSource).toContain("'restoring',");
+    expect(appSource).toContain("'restarting',");
+    // 'checking' is a probe, not an apply: it must never pop the modal, and
+    // the never-emitted legacy 'installing' stage must not return.
+    expect(appSource).not.toContain("'checking',");
+    expect(appSource).not.toContain("'installing'");
+  });
+
   it('keeps integration browser proofs off the retired AI route', () => {
     const routesSource = readFileSync(join(integrationTestsDir, 'routes.ts'), 'utf8');
     const retiredRouteNavigations = readIntegrationTestSources(integrationTestsDir).flatMap(

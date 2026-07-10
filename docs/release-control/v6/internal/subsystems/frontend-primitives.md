@@ -3873,7 +3873,13 @@ top-level settings shell, while
 `frontend-modern/src/components/Settings/updatesSettingsModel.ts` plus
 `frontend-modern/src/utils/updatesPresentation.ts` own the
 deployment-specific install guide, copy-command block, and update-channel/install
-model data plus customer-facing update status/action copy. The panel shell must
+model data plus customer-facing update status/action copy.
+`frontend-modern/src/components/Settings/UpdateHistorySection.tsx` joins that
+split as the presentation owner for the update history table and the
+rollback confirmation dialog: the panel shell mounts it as a section and must
+not inline history rows, rollback gating, or rollback confirmation copy
+itself, and the section starts rollbacks through the shared
+`updateStore.rollbackUpdate` action rather than its own POST path. The panel shell must
 not rebuild copy-to-clipboard command cards, deployment instruction trees, or
 update-surface wording inline. `CopyCommandBlock` must use the shared
 `copyToClipboard` helper so install/update/agent snippets keep the same

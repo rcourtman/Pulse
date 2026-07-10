@@ -2278,3 +2278,37 @@ for that volume before launching the wrapper, recover the same state during
 uninstall, and keep the persisted boot copy aligned with updater-owned runtime
 binary replacements instead of assuming `/usr/local/bin` survives reboot on
 QTS/QuTS hero.
+
+The in-app updater's apply pipeline now owns a downgrade guard on the normal
+apply path. A syntactically valid release asset URL can name a release older
+than the running binary, so `internal/updates/manager.go` `ApplyUpdate` must
+reject any resolved target version at or below the running version, on both
+the community release-asset path and the Pro broker path, before any history
+entry is written or byte is downloaded. Sanctioned downgrades are an explicit
+opt-in through the `AllowDowngrade` request flag carried by
+`POST /api/updates/apply`, never a silent side effect of a stale download
+URL. The guard fails open only for versions that do not parse as semver
+(development builds), which stay covered by the existing URL and channel
+validation. `internal/updates/manager_rollback_test.go` and the apply handler
+tests in `internal/api/updates_test.go` are the direct proof surface for this
+rule.
+
+That same updater boundary now also owns the sanctioned rollback path from
+retained update backups. `RollbackToBackup` in `internal/updates/manager.go`
+restores the backup directory recorded on an update history entry after
+re-validating that the path still names a managed update backup on disk,
+shares the single update-in-flight slot with `ApplyUpdate`, records the
+rollback as its own history entry with `Action` `rollback` and a
+`RelatedEventID` back to the rolled-back update, marks that source entry
+`rolled_back`, streams progress through the existing update status and SSE
+machinery as the `restoring` stage, and restarts through the same
+exit-for-systemd path as a normal update. The transport surface is
+`POST /api/updates/rollback`, admin plus `settings:write` gated exactly like
+apply, and the Settings update history table in
+`frontend-modern/src/components/Settings/UpdateHistorySection.tsx` is the
+user-facing rollback surface. Rollback is a purely local restore: it must not
+touch the Pro download broker or any edition gate, so it behaves identically
+on community and Pro binaries. The rollback tests in
+`internal/updates/manager_rollback_test.go`, the rollback handler tests in
+`internal/api/updates_test.go`, and the route inventory pin for
+`/api/updates/rollback` are the proof surface for this path.

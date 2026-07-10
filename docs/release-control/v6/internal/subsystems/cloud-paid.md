@@ -2081,6 +2081,12 @@ theme synchronization, and authenticated runtime startup, and
 as org switching and kiosk-safe navigation. Future hosted browser bootstrap
 work must extend that split rather than pulling org bootstrap and app chrome
 back into one monolithic route component.
+The global update progress watcher inside that entry shell is self-hosted
+server-update chrome: its stage vocabulary tracks the backend updater
+pipeline (downloading through restarting, including the `restoring` stage
+emitted by update rollback) and it carries no hosted entitlement, org, or
+paid-gating semantics; hosted and paid surfaces must not key tenant or
+billing behavior off update progress stages.
 That same authenticated shell split must also respect shared blocking dialogs:
 hosted chrome may not leave the Pulse Assistant launcher or an already-open
 assistant drawer interactive behind a modal that currently owns the viewport.

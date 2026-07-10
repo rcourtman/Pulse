@@ -548,7 +548,12 @@ recovery scope, or a storage/recovery-owned secret source.
    so recovery semantics never fork by edition. That machinery lives solely
    in the `internal/updates/manager.go` apply pipeline; the deployment
    adapters behind the update-plan endpoint are plan providers only and own
-   no download, restore, or rollback path.
+   no download, restore, or rollback path. The sanctioned rollback behind
+   `POST /api/updates/rollback` restores the updater's own retained
+   pre-update backup (binary, data, config, env, VERSION) through that same
+   manager pipeline; it is server self-update recovery, purely local with no
+   broker or edition fork, and storage/recovery surfaces must not read it as
+   guest backup, datastore restore, or recovery-point coverage.
    Proxmox-side LXC Docker inventory wiring may also pass through
    `internal/api/router.go` and Proxmox agent install-command generation, but
    storage and recovery may consume the resulting app-container/resource

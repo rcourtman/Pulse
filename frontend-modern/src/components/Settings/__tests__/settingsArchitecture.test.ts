@@ -37,6 +37,7 @@ import securityAuthPanelSource from '../SecurityAuthPanel.tsx?raw';
 import securityOverviewPanelSource from '../SecurityOverviewPanel.tsx?raw';
 import systemLogsPanelSource from '../SystemLogsPanel.tsx?raw';
 import updatesSettingsPanelSource from '../UpdatesSettingsPanel.tsx?raw';
+import updateHistorySectionSource from '../UpdateHistorySection.tsx?raw';
 import updateInstallGuideSource from '../UpdateInstallGuide.tsx?raw';
 import agentProfilesPanelSource from '../AgentProfilesPanel.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
@@ -1080,6 +1081,26 @@ describe('settings architecture guardrails', () => {
     expect(updateInstallGuideSource).toContain('Install blocked');
     expect(updateInstallGuideSource).toContain(
       'disabled={props.isInstalling || readinessBlocked()}',
+    );
+  });
+
+  it('keeps update history and rollback on the dedicated section boundary', () => {
+    // The panel shell mounts the history section; it must not inline history
+    // rows or rollback confirmation itself.
+    expect(updatesSettingsPanelSource).toContain(
+      "import { UpdateHistorySection } from '@/components/Settings/UpdateHistorySection';",
+    );
+    expect(updatesSettingsPanelSource).toContain('<UpdateHistorySection />');
+    expect(updatesSettingsPanelSource).not.toContain('listUpdateHistory');
+    expect(updatesSettingsPanelSource).not.toContain('rollbackUpdate');
+    // The section starts rollbacks through the shared store action, never its
+    // own POST, and always behind an explicit confirmation dialog gated to
+    // successful updates whose backup is still retained.
+    expect(updateHistorySectionSource).toContain('updateStore.rollbackUpdate');
+    expect(updateHistorySectionSource).not.toContain('apiFetchJSON');
+    expect(updateHistorySectionSource).toContain('ariaLabel="Confirm rollback"');
+    expect(updateHistorySectionSource).toContain(
+      "entry.action === 'update' && entry.status === 'success' && Boolean(entry.backup_path)",
     );
   });
 
