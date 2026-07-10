@@ -272,7 +272,7 @@ call when building tool-result turns.
 13. `internal/agentcapabilities/events.go` shared with `api-contracts`: the Pulse Intelligence event vocabulary is both the canonical API SSE event contract and the AI runtime adapter notification contract for Assistant and external-agent surfaces.
 14. `internal/agentcapabilities/governance_prompt.go` shared with `api-contracts`: the Pulse Intelligence surface-affordance-resolved model-facing operating-instruction, tool-governance prompt, reusable provider-tool governance description, Assistant-native offered-tool filtering, and Assistant-native interactive question-tool governance projections are both the Assistant system-prompt governance section and the shared API/agent vocabulary for action mode, approval posture, MCP affordance advertisement, and non-registry interaction-tool boundaries.
 15. `internal/agentcapabilities/http.go` shared with `api-contracts`: the Pulse Intelligence agent HTTP substrate is both the API capabilities invocation contract and the shared AI runtime adapter execution primitive for MCP and reference agent clients.
-16. `internal/agentcapabilities/invocation.go` shared with `api-contracts`: the canonical registry-owned invocation descriptors (per-tool discriminator, enum-exact case coverage, workflow kind plus mutation target, fail-closed classification) are both the native Assistant/FSM safety-classification contract and the canonical API/agent governed-invocation policy contract consumed by provider projection and registry runtime enforcement.
+16. `internal/agentcapabilities/invocation.go` shared with `api-contracts`: the canonical registry-owned invocation descriptors (per-tool discriminator, enum-exact case coverage, closed workflow-kind and mutation-target vocabularies, deep-copied lookups, fail-closed classification with unknown targets denied at policy evaluation) are both the native Assistant/FSM safety-classification contract and the canonical API/agent governed-invocation policy contract consumed by provider projection and registry runtime enforcement; canonical tool names cannot carry descriptor overrides.
 17. `internal/agentcapabilities/manifest.go` shared with `api-contracts`: the canonical Pulse Intelligence agent capabilities manifest declaration, including capability display titles, manifest-owned finding lifecycle schemas, manifest-owned governed action schemas and routes, manifest-owned external-adapter surface tool contracts, and manifest-owned structured output schemas, is both the API discovery payload source and the AI runtime projection contract for Pulse Assistant and MCP-facing agent tools.
 18. `internal/agentcapabilities/markdown.go` shared with `api-contracts`: the Pulse Intelligence manifest Markdown projection, including manifest-owned capability titles, surface-filtered Pulse MCP tool/error inventories, and prompt labels, is both the canonical API/agent documentation projection and the AI runtime onboarding projection for Assistant-compatible external-agent surfaces.
 19. `internal/agentcapabilities/mcp.go` shared with `api-contracts`: the Pulse Intelligence MCP protocol version, JSON-RPC, method dispatch, method payload, surface-tool-contract-gated initialize operating-instruction and capability advertisement payload, manifest surface-filtered tools/list and tools/call execution bridge, manifest surface-gated resources/list and resources/read bridge, manifest-owned and surface-affordance-gated workflow prompt projection, protocol wire aliases, resource and prompt handler gates, and notification projection collectively define the external-agent adapter wire contract over the shared Pulse Intelligence tool core; MCP initialize, tools/call execution, resource list/read projection, and prompt list/get projection must enter through manifest-owned surface and workflow-prompt contracts so raw capability slices cannot bypass the published external-adapter contract.
@@ -4601,8 +4601,26 @@ invocation, and recomputes the offered governance action mode, so the
 offered schema and the enforcement boundary can never disagree.
 Control-level blocks keep returning the operator guidance message;
 policy blocks return the shared invocation-blocked result.
-Handler-level checks (the file-edit read-only guard and pulse_read's
-structural execution-intent classifier) remain defense in depth. The
+The classification vocabulary is closed: descriptor validation rejects
+any class outside the known kinds and mutation targets, and
+`InvocationPolicy.Allows` independently denies unknown mutation targets
+outright, so an unvalidated class still cannot execute. Descriptor
+lookups and registration store deep copies, so callers can never mutate
+the canonical table through shared case maps or static class pointers,
+and registration rejects descriptor overrides for canonical tool names
+(overrides exist only for genuinely non-canonical extension/test
+names). The projected governance action mode derives from mutation
+targets, not workflow kinds, and is recomputed even when no enum value
+was removed; a projection whose remaining invocations mutate nothing
+downgrades to scope-only approval metadata. Docker `check_updates`
+classifies read/none: it queues a read-only scan and must not drive
+verification workflow or make a read-only Docker projection look mixed.
+Handler-level checks remain defense in depth, and pulse_read's
+structural execution-intent classifier
+(`ClassifyExecutionIntent` rejecting write-or-unknown command text
+before dispatch) is mandatory second-stage enforcement for exec, not
+merely defense in depth: the static read/none descriptor alone cannot
+prove arbitrary command text safe. The
 deny restriction is deliberately separate from autonomous mode:
 suppressing interactive questions grants no mutation authority.
 `pulse_file_edit` is write-only (append/write); file inspection routes

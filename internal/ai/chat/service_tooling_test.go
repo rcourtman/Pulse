@@ -388,8 +388,11 @@ func TestBuildToolGovernancePromptSection_FallbackDiscoveryMatchesRunContract(t 
 
 	prompt := svc.buildToolGovernancePromptSection()
 
-	if !strings.Contains(prompt, "pulse_discovery: mode=mixed") {
-		t.Fatalf("expected fallback governance to classify pulse_discovery as mixed, got %q", prompt)
+	// Discovery's run subaction is read-only evidence collection that
+	// updates only the discovery cache, so the mutation-derived action
+	// mode is read (the pre-descriptor manifest declared it mixed).
+	if !strings.Contains(prompt, "pulse_discovery: mode=read") {
+		t.Fatalf("expected fallback governance to classify pulse_discovery as read, got %q", prompt)
 	}
 	if !strings.Contains(prompt, "run uses read-only evidence collection and updates the discovery cache") {
 		t.Fatalf("expected fallback governance to describe discovery refresh behavior, got %q", prompt)
@@ -448,7 +451,7 @@ func TestBuildToolGovernancePromptSection_OfferedToolsUseCanonicalFallback(t *te
 
 	prompt := svc.buildToolGovernancePromptSectionForOfferedTools([]providers.Tool{{Name: "pulse_discovery"}})
 
-	if !strings.Contains(prompt, "pulse_discovery: mode=mixed; approval=scope_only (no approval required; run uses read-only evidence collection and updates the discovery cache)") {
+	if !strings.Contains(prompt, "pulse_discovery: mode=read; approval=scope_only (no approval required; run uses read-only evidence collection and updates the discovery cache)") {
 		t.Fatalf("expected offered fallback prompt to use canonical discovery governance, got %q", prompt)
 	}
 	if strings.Contains(prompt, "pulse_control:") {

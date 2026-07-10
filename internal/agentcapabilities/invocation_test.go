@@ -81,7 +81,7 @@ func TestCanonicalDescriptorsPinSafetyCriticalClassifications(t *testing.T) {
 	assertClass(PulseDockerToolName, map[string]interface{}{"action": "update"},
 		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure})
 	assertClass(PulseDockerToolName, map[string]interface{}{"action": "check_updates"},
-		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationNone})
+		InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone})
 	assertClass(PulseAlertsToolName, map[string]interface{}{"action": "resolve"},
 		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationPulseState})
 	assertClass(PulseControlToolName, nil,
@@ -90,4 +90,44 @@ func TestCanonicalDescriptorsPinSafetyCriticalClassifications(t *testing.T) {
 		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure})
 	assertClass(PulseReadToolName, map[string]interface{}{"action": "exec"},
 		InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone})
+}
+
+func TestInvocationClassValidationRejectsOpenVocabulary(t *testing.T) {
+	missingMutation := InvocationDescriptor{Static: &InvocationClass{Kind: ToolCallKindWrite}}
+	if err := missingMutation.Validate("demo", nil); err == nil {
+		t.Fatal("static class without a mutation target must fail validation")
+	}
+	unknownKind := InvocationDescriptor{Static: &InvocationClass{Kind: ToolCallKind(99), Mutation: MutationNone}}
+	if err := unknownKind.Validate("demo", nil); err == nil {
+		t.Fatal("static class with an unknown kind must fail validation")
+	}
+	badCase := InvocationDescriptor{
+		Discriminator: "action",
+		Cases: map[string]InvocationClass{
+			"list": {Kind: ToolCallKindRead, Mutation: MutationTarget("estate")},
+		},
+	}
+	if err := badCase.Validate("demo", []string{"list"}); err == nil {
+		t.Fatal("case with an unknown mutation target must fail validation")
+	}
+}
+
+func TestInvocationDescriptorForReturnsIsolatedCopies(t *testing.T) {
+	first, ok := InvocationDescriptorFor(PulseDockerToolName)
+	if !ok {
+		t.Fatal("docker descriptor missing")
+	}
+	first.Cases["update"] = InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone}
+
+	second, _ := InvocationDescriptorFor(PulseDockerToolName)
+	if got := second.Cases["update"]; got.Mutation != MutationInfrastructure {
+		t.Fatalf("mutating a returned descriptor leaked into the canonical table: %#v", got)
+	}
+
+	static, _ := InvocationDescriptorFor(PulseControlToolName)
+	static.Static.Mutation = MutationNone
+	refetched, _ := InvocationDescriptorFor(PulseControlToolName)
+	if refetched.Static.Mutation != MutationInfrastructure {
+		t.Fatalf("mutating a returned static class leaked into the canonical table: %#v", refetched.Static)
+	}
 }

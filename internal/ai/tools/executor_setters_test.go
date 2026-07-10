@@ -190,13 +190,18 @@ func TestPulseToolExecutor_GetReadStatePrefersUnifiedResourceProvider(t *testing
 func TestToolRegistry_ListTools(t *testing.T) {
 	registry := NewToolRegistry()
 	registry.Register(RegisteredTool{
-		Invocation: StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+		Invocation: StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
 		Definition: Tool{Name: "read"},
 	})
 	registry.Register(RegisteredTool{
-		Invocation:     StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+		Invocation:     StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationInfrastructure),
 		Definition:     Tool{Name: "control"},
 		RequireControl: true,
+		Governance: ToolGovernance{
+			ActionMode:      ToolActionWrite,
+			ApprovalPolicy:  ToolApprovalActionPlan,
+			ApprovalSummary: "hidden in read-only mode; approval required in controlled mode",
+		},
 	})
 
 	readOnly := registry.ListTools(InvocationPolicy{ControlLevel: ControlLevelReadOnly})

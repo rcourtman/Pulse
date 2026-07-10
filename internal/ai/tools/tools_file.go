@@ -90,7 +90,7 @@ Examples:
 			ActionMode:      ToolActionWrite,
 			ApprovalPolicy:  ToolApprovalActionPlan,
 			ApprovalSummary: "hidden in read-only mode; approval required in controlled mode",
-			Summary:         "Reads or changes files through the governed file-edit path; read-only file inspection is exposed through the read-only tool surface.",
+			Summary:         "Changes files through the governed file-edit path (append/write only); file inspection routes through the read-only pulse_read tool.",
 		},
 	})
 }

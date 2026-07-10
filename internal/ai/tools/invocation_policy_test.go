@@ -147,3 +147,41 @@ func TestExecutorClonesKeepRequestPoliciesIsolated(t *testing.T) {
 	// And the restriction survives further cloning of the restricted clone.
 	assert.True(t, clone.Clone().invocationPolicy().DenyInfrastructureMutations)
 }
+
+func TestInvocationPolicyDeniesUnknownMutationTargets(t *testing.T) {
+	policy := InvocationPolicy{ControlLevel: ControlLevelAutonomous}
+	assert.False(t, policy.Allows(agentcapabilities.InvocationClass{Kind: agentcapabilities.ToolCallKindRead}),
+		"an empty mutation target must be denied outright")
+	assert.False(t, policy.Allows(agentcapabilities.InvocationClass{
+		Kind: agentcapabilities.ToolCallKindRead, Mutation: agentcapabilities.MutationTarget("estate"),
+	}), "an unknown mutation target must be denied outright")
+}
+
+func TestRegisterRejectsOverridesForCanonicalToolNames(t *testing.T) {
+	registry := NewToolRegistry()
+	defer func() {
+		if recover() == nil {
+			t.Fatal("overriding a canonical tool's descriptor must panic")
+		}
+	}()
+	registry.Register(RegisteredTool{
+		Definition: Tool{Name: agentcapabilities.PulseControlToolName},
+		Invocation: StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
+	})
+}
+
+func TestReadOnlyDockerProjectsAsReadScopeOnly(t *testing.T) {
+	exec := newInvocationPolicyExecutor(t)
+	exec.SetControlLevel(ControlLevelReadOnly)
+	for _, descriptor := range exec.registry.ListToolGovernance(exec.invocationPolicy()) {
+		if descriptor.Name != agentcapabilities.PulseDockerToolName {
+			continue
+		}
+		assert.Equal(t, agentcapabilities.ActionModeRead, descriptor.ActionMode,
+			"read-only Docker projection must report read, not mixed")
+		assert.Equal(t, agentcapabilities.ApprovalPolicyScopeOnly, descriptor.ApprovalPolicy,
+			"a projection with no mutating subactions must carry scope-only approval")
+		return
+	}
+	t.Fatal("pulse_docker missing from read-only governance projection")
+}

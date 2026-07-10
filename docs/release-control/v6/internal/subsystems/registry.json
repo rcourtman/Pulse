@@ -540,7 +540,7 @@
     },
     {
       "path": "internal/agentcapabilities/invocation.go",
-      "rationale": "the canonical registry-owned invocation descriptors (per-tool discriminator, enum-exact case coverage, workflow kind plus mutation target, fail-closed classification) are both the native Assistant/FSM safety-classification contract and the canonical API/agent governed-invocation policy contract consumed by provider projection and registry runtime enforcement",
+      "rationale": "the canonical registry-owned invocation descriptors (per-tool discriminator, enum-exact case coverage, closed workflow-kind and mutation-target vocabularies, deep-copied lookups, fail-closed classification with unknown targets denied at policy evaluation) are both the native Assistant/FSM safety-classification contract and the canonical API/agent governed-invocation policy contract consumed by provider projection and registry runtime enforcement; canonical tool names cannot carry descriptor overrides",
       "subsystems": [
         "ai-runtime",
         "api-contracts"

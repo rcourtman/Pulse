@@ -102,15 +102,21 @@ type InvocationPolicy struct {
 // Infrastructure mutations require a control level that allows control
 // tools and are always blocked under the deny restriction; pulse-state
 // and non-mutating invocations are not control-gated here (handlers keep
-// their own defense-in-depth checks).
+// their own defense-in-depth checks). Unknown mutation targets are
+// denied outright, independent of registration validation, so a class
+// that somehow bypasses Validate still cannot execute.
 func (p InvocationPolicy) Allows(class agentcapabilities.InvocationClass) bool {
-	if class.Mutation != agentcapabilities.MutationInfrastructure {
+	switch class.Mutation {
+	case agentcapabilities.MutationNone, agentcapabilities.MutationPulseState:
 		return true
-	}
-	if p.DenyInfrastructureMutations {
+	case agentcapabilities.MutationInfrastructure:
+		if p.DenyInfrastructureMutations {
+			return false
+		}
+		return agentcapabilities.ControlLevelAllowsControlTools(p.ControlLevel)
+	default:
 		return false
 	}
-	return agentcapabilities.ControlLevelAllowsControlTools(p.ControlLevel)
 }
 
 // Register adds a tool to the registry. Every registered tool must have a
@@ -124,15 +130,19 @@ func (r *ToolRegistry) Register(tool RegisteredTool) {
 
 	tool.Definition = tool.Definition.NormalizeCollections()
 	name := tool.Definition.Name
-	descriptor := agentcapabilities.InvocationDescriptor{}
-	if tool.Invocation != nil {
-		descriptor = *tool.Invocation
-	} else {
-		canonical, ok := agentcapabilities.InvocationDescriptorFor(name)
-		if !ok {
-			panic(fmt.Sprintf("tool %q has no canonical invocation descriptor; declare one in agentcapabilities/invocation.go", name))
-		}
+	canonical, isCanonical := agentcapabilities.InvocationDescriptorFor(name)
+	var descriptor agentcapabilities.InvocationDescriptor
+	switch {
+	case isCanonical && tool.Invocation != nil:
+		// A canonical tool name must classify through the shared table;
+		// an override could silently relax its safety classification.
+		panic(fmt.Sprintf("tool %q is canonical; its invocation descriptor comes from agentcapabilities/invocation.go and cannot be overridden", name))
+	case isCanonical:
 		descriptor = canonical
+	case tool.Invocation != nil:
+		descriptor = tool.Invocation.Clone()
+	default:
+		panic(fmt.Sprintf("tool %q has no canonical invocation descriptor; declare one in agentcapabilities/invocation.go", name))
 	}
 	if err := descriptor.Validate(name, discriminatorEnum(tool.Definition, descriptor.Discriminator)); err != nil {
 		panic(err.Error())
@@ -234,7 +244,7 @@ func projectToolForPolicy(tool RegisteredTool, policy InvocationPolicy) (Registe
 		if !policy.Allows(*descriptor.Static) {
 			return RegisteredTool{}, false
 		}
-		return tool, true
+		return applyProjectedGovernance(tool, []agentcapabilities.InvocationClass{*descriptor.Static}), true
 	}
 
 	property, ok := tool.Definition.InputSchema.Properties[descriptor.Discriminator]
@@ -242,44 +252,62 @@ func projectToolForPolicy(tool RegisteredTool, policy InvocationPolicy) (Registe
 		return RegisteredTool{}, false
 	}
 	allowed := make([]string, 0, len(property.Enum))
-	sawWrite := false
-	sawRead := false
+	classes := make([]agentcapabilities.InvocationClass, 0, len(property.Enum))
 	for _, value := range property.Enum {
 		class := descriptor.Classify(map[string]interface{}{descriptor.Discriminator: value})
 		if !policy.Allows(class) {
 			continue
 		}
 		allowed = append(allowed, value)
-		if class.Kind == agentcapabilities.ToolCallKindWrite {
-			sawWrite = true
-		} else {
-			sawRead = true
-		}
+		classes = append(classes, class)
 	}
 	if len(allowed) == 0 {
 		return RegisteredTool{}, false
 	}
-	if len(allowed) == len(property.Enum) {
-		return tool, true
-	}
 
 	projected := tool
-	projected.Definition.InputSchema.Properties = make(map[string]PropertySchema, len(tool.Definition.InputSchema.Properties))
-	for key, value := range tool.Definition.InputSchema.Properties {
-		projected.Definition.InputSchema.Properties[key] = value
+	if len(allowed) != len(property.Enum) {
+		projected.Definition.InputSchema.Properties = make(map[string]PropertySchema, len(tool.Definition.InputSchema.Properties))
+		for key, value := range tool.Definition.InputSchema.Properties {
+			projected.Definition.InputSchema.Properties[key] = value
+		}
+		property.Enum = allowed
+		projected.Definition.InputSchema.Properties[descriptor.Discriminator] = property
 	}
-	property.Enum = allowed
-	projected.Definition.InputSchema.Properties[descriptor.Discriminator] = property
+	return applyProjectedGovernance(projected, classes), true
+}
 
-	switch {
-	case sawWrite && sawRead:
-		projected.Governance.ActionMode = agentcapabilities.ActionModeMixed
-	case sawWrite:
-		projected.Governance.ActionMode = agentcapabilities.ActionModeWrite
-	default:
-		projected.Governance.ActionMode = agentcapabilities.ActionModeRead
+// applyProjectedGovernance recomputes the offered governance from the
+// mutation targets the policy actually permits: the action mode reflects
+// what the offered invocations can change (not their workflow kind), and
+// a tool whose remaining invocations mutate nothing carries scope-only
+// approval metadata instead of a stale action-plan requirement.
+func applyProjectedGovernance(tool RegisteredTool, classes []agentcapabilities.InvocationClass) RegisteredTool {
+	sawMutating := false
+	sawNonMutating := false
+	for _, class := range classes {
+		if class.Mutation == agentcapabilities.MutationNone {
+			sawNonMutating = true
+		} else {
+			sawMutating = true
+		}
 	}
-	return projected, true
+	switch {
+	case sawMutating && sawNonMutating:
+		tool.Governance.ActionMode = agentcapabilities.ActionModeMixed
+	case sawMutating:
+		tool.Governance.ActionMode = agentcapabilities.ActionModeWrite
+	default:
+		tool.Governance.ActionMode = agentcapabilities.ActionModeRead
+		if tool.Governance.ApprovalPolicy != ToolApprovalScopeOnly {
+			// Downgrading from action-plan approval: the registered
+			// approval summary no longer applies, so clear it and let
+			// the shared normalization supply the scope-only default.
+			tool.Governance.ApprovalPolicy = ToolApprovalScopeOnly
+			tool.Governance.ApprovalSummary = ""
+		}
+	}
+	return tool
 }
 
 // allNames returns the canonical list of registered tool names in

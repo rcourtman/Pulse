@@ -30,6 +30,23 @@ type InvocationClass struct {
 	Mutation MutationTarget
 }
 
+// Valid reports whether the class uses the closed kind and mutation
+// vocabularies. Descriptor validation rejects anything else, so an
+// unclassifiable or typo'd class can never register.
+func (c InvocationClass) Valid() bool {
+	switch c.Kind {
+	case ToolCallKindResolve, ToolCallKindRead, ToolCallKindWrite, ToolCallKindUserInput:
+	default:
+		return false
+	}
+	switch c.Mutation {
+	case MutationNone, MutationPulseState, MutationInfrastructure:
+	default:
+		return false
+	}
+	return true
+}
+
 // FailClosedInvocationClass is what missing, malformed, or unknown
 // invocations classify as: a newly introduced or fabricated subaction can
 // never bypass governed-mutation checks by being unclassified.
@@ -85,6 +102,9 @@ func (d InvocationDescriptor) Validate(toolName string, enumValues []string) err
 		if d.Discriminator != "" || len(d.Cases) != 0 {
 			return fmt.Errorf("tool %q invocation descriptor must be static or discriminator-based, not both", toolName)
 		}
+		if !d.Static.Valid() {
+			return fmt.Errorf("tool %q static invocation class uses an unknown kind or mutation target", toolName)
+		}
 		return nil
 	}
 	if d.Discriminator == "" {
@@ -103,9 +123,12 @@ func (d InvocationDescriptor) Validate(toolName string, enumValues []string) err
 			missing = append(missing, v)
 		}
 	}
-	for v := range d.Cases {
+	for v, class := range d.Cases {
 		if !want[v] {
 			extra = append(extra, v)
+		}
+		if !class.Valid() {
+			return fmt.Errorf("tool %q invocation case %q uses an unknown kind or mutation target", toolName, v)
 		}
 	}
 	sort.Strings(missing)
@@ -185,8 +208,10 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 			"tasks":    {Kind: ToolCallKindRead, Mutation: MutationNone},
 			"swarm":    {Kind: ToolCallKindRead, Mutation: MutationNone},
 			// check_updates queues a read-only scan command on the
-			// agent; it changes nothing on the container estate.
-			"check_updates": {Kind: ToolCallKindWrite, Mutation: MutationNone},
+			// agent; it changes nothing on the container estate, so it
+			// is read for workflow purposes too (write would drive the
+			// FSM into verification for a non-mutating refresh).
+			"check_updates": {Kind: ToolCallKindRead, Mutation: MutationNone},
 			"control":       {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
 			"update":        {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
 		},
@@ -205,11 +230,32 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 	PatrolResolveFindingToolName: staticClass(ToolCallKindWrite, MutationPulseState),
 }
 
-// InvocationDescriptorFor returns the canonical invocation descriptor for
-// a registry tool name.
+// Clone returns a deep copy of the descriptor so callers can never
+// mutate the canonical table through shared case maps or the static
+// class pointer.
+func (d InvocationDescriptor) Clone() InvocationDescriptor {
+	clone := InvocationDescriptor{Discriminator: d.Discriminator}
+	if d.Static != nil {
+		static := *d.Static
+		clone.Static = &static
+	}
+	if d.Cases != nil {
+		clone.Cases = make(map[string]InvocationClass, len(d.Cases))
+		for value, class := range d.Cases {
+			clone.Cases[value] = class
+		}
+	}
+	return clone
+}
+
+// InvocationDescriptorFor returns a deep copy of the canonical invocation
+// descriptor for a registry tool name.
 func InvocationDescriptorFor(toolName string) (InvocationDescriptor, bool) {
 	d, ok := registryInvocationDescriptors[strings.TrimSpace(toolName)]
-	return d, ok
+	if !ok {
+		return InvocationDescriptor{}, false
+	}
+	return d.Clone(), true
 }
 
 // ClassifyRegisteredInvocation classifies a concrete invocation of a
