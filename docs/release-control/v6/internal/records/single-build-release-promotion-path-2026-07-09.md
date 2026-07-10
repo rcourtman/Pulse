@@ -131,3 +131,30 @@ demo runtime unchanged.
 Blocked only on the absent native platform signing credentials. Repository-side
 orchestration, diagnostics, timeout hardening, archive validation performance,
 and late backend-flake containment are implemented and covered by contracts.
+
+## Prerelease Windows Signing Boundary (2026-07-10)
+
+The first `v6.0.6-rc.1` publication attempt proved Apple signing and
+notarization credentials are configured, but Windows Authenticode credentials
+are not. Pulse Monitoring Ltd submitted the public community project to the
+SignPath Foundation open-source programme on 2026-07-10; approval and CI
+integration remain externally owned and asynchronous.
+
+RC publication may proceed while that application is pending, provided all of
+the following remain true:
+
+- macOS agent binaries are Developer ID signed and notarized;
+- Windows agent binaries retain the exact-SHA candidate, checksums, detached
+  release signatures, and post-publication digest verification;
+- the RC release notes state explicitly that Windows binaries are not
+  Authenticode-signed and may show an unknown-publisher warning; and
+- stable publication continues to require successful Windows Authenticode
+  signing and verification.
+
+The reusable candidate workflow therefore separates the macOS platform-signing
+requirement from the Windows Authenticode requirement. `create-release.yml`
+requires Windows signing for stable versions and relaxes only that requirement
+for recognized prerelease versions. `release-dry-run.yml` continues to require
+both platforms so the full stable-promotion path remains rehearsed and the
+`single-build-release-promotion-path` release gate remains blocked for stable
+release readiness until the external signing path is proven.

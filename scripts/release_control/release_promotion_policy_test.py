@@ -486,7 +486,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("rc-to-ga-rehearsal-summary", workflow)
         self.assertIn("build_release_candidate:", workflow)
         self.assertIn("if: ${{ inputs.version != '' }}", workflow)
-        self.assertIn("require_platform_signing: true", workflow)
+        self.assertIn("require_macos_signing: true", workflow)
+        self.assertIn("require_windows_signing: true", workflow)
         self.assertNotIn("if: ${{ github.event_name == 'workflow_dispatch' }}", workflow)
         self.assertIn("record_rc_to_ga_rehearsal.py --run-id ${{ github.run_id }}", workflow)
         self.assertIn("rc-to-ga-promotion-readiness-rehearsal-<record-date>.md", workflow)
@@ -623,6 +624,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("timeout-minutes: 60", candidate_workflow)
         self.assertIn("Verify Native Signing Configuration", candidate_workflow)
         self.assertEqual(candidate_workflow.count("needs: signing-configuration"), 2)
+        self.assertIn("require_windows_signing: ${{ needs.prepare.outputs.is_prerelease != 'true' }}", content)
+        self.assertIn('if [[ "$REQUIRE_WINDOWS_SIGNING" == "true" ]]', candidate_workflow)
+        self.assertIn("inputs.require_windows_signing", candidate_workflow)
         for signing_secret in (
             "APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64",
             "APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD",

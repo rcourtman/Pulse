@@ -68,7 +68,8 @@ jobs:
     secrets: inherit
     with:
       version: ${{ inputs.version }}
-      require_platform_signing: true
+      require_macos_signing: true
+      require_windows_signing: true
 
   dry-run:
     name: Preflight Release Checks (No Publish)

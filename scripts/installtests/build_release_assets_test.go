@@ -709,7 +709,8 @@ func TestAgentRuntimeImagePersistsAgentIdentityByDefault(t *testing.T) {
 func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 	candidateWorkflowPath := repoFile(".github", "workflows", "build-release-candidate.yml")
 	assertFileContainsAll(t, candidateWorkflowPath,
-		`require_platform_signing:`,
+		`require_macos_signing:`,
+		`require_windows_signing:`,
 		`sign-macos-agent:`,
 		`codesign --force --timestamp --options runtime`,
 		`xcrun notarytool submit`,
@@ -729,13 +730,18 @@ func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
 		t.Fatal("bare command-line Mach-O binaries must not use Gatekeeper app assessment after notarization")
 	}
 	assertFileContainsAll(t, repoFile(".github", "workflows", "create-release.yml"),
-		`require_platform_signing: true`,
+		`require_macos_signing: true`,
+		`require_windows_signing: ${{ needs.prepare.outputs.is_prerelease != 'true' }}`,
 	)
 	assertFileContainsAll(t, repoFile("scripts", "build-release.sh"),
 		`PULSE_AGENT_NATIVE_BINARIES_DIR`,
-		`native_targets=(darwin-amd64 darwin-arm64 windows-amd64 windows-arm64 windows-386)`,
-		`Applied platform-native signed Unified Agent binaries.`,
-		`platform signing is required but PULSE_AGENT_NATIVE_BINARIES_DIR is empty.`,
+		`native_targets=()`,
+		`PULSE_REQUIRE_MACOS_SIGNING:-false`,
+		`native_targets+=(darwin-amd64 darwin-arm64)`,
+		`PULSE_REQUIRE_WINDOWS_SIGNING:-false`,
+		`native_targets+=(windows-amd64 windows-arm64 windows-386)`,
+		`Applied required platform-native signed Unified Agent binaries.`,
+		`required native signing is enabled but PULSE_AGENT_NATIVE_BINARIES_DIR is empty.`,
 	)
 }
 

@@ -152,7 +152,13 @@ done
 # so the immutable candidate manifest covers the exact signed bytes users get.
 if [[ -n "${PULSE_AGENT_NATIVE_BINARIES_DIR:-}" ]]; then
     native_dir="${PULSE_AGENT_NATIVE_BINARIES_DIR}"
-    native_targets=(darwin-amd64 darwin-arm64 windows-amd64 windows-arm64 windows-386)
+    native_targets=()
+    if [[ "${PULSE_REQUIRE_MACOS_SIGNING:-false}" == "true" ]]; then
+        native_targets+=(darwin-amd64 darwin-arm64)
+    fi
+    if [[ "${PULSE_REQUIRE_WINDOWS_SIGNING:-false}" == "true" ]]; then
+        native_targets+=(windows-amd64 windows-arm64 windows-386)
+    fi
     for target in "${native_targets[@]}"; do
         filename="pulse-agent-${target}"
         if [[ "$target" == windows-* ]]; then
@@ -164,9 +170,9 @@ if [[ -n "${PULSE_AGENT_NATIVE_BINARIES_DIR:-}" ]]; then
         fi
         cp "${native_dir}/${filename}" "${BUILD_DIR}/${filename}"
     done
-    echo "Applied platform-native signed Unified Agent binaries."
-elif [[ "${PULSE_REQUIRE_PLATFORM_SIGNING:-false}" == "true" ]]; then
-    echo "Error: platform signing is required but PULSE_AGENT_NATIVE_BINARIES_DIR is empty." >&2
+    echo "Applied required platform-native signed Unified Agent binaries."
+elif [[ "${PULSE_REQUIRE_MACOS_SIGNING:-false}" == "true" || "${PULSE_REQUIRE_WINDOWS_SIGNING:-false}" == "true" ]]; then
+    echo "Error: required native signing is enabled but PULSE_AGENT_NATIVE_BINARIES_DIR is empty." >&2
     exit 1
 fi
 

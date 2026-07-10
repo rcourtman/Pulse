@@ -7,8 +7,13 @@ on:
         description: 'Version number without the leading v'
         required: true
         type: string
-      require_platform_signing:
-        description: 'Require Developer ID/notarized macOS and Authenticode Windows agent binaries'
+      require_macos_signing:
+        description: 'Require Developer ID signed and notarized macOS agent binaries'
+        required: false
+        default: false
+        type: boolean
+      require_windows_signing:
+        description: 'Require Authenticode-signed Windows agent binaries'
         required: false
         default: false
         type: boolean
@@ -26,7 +31,7 @@ permissions:
 jobs:
   signing-configuration:
     name: Verify Native Signing Configuration
-    if: ${{ inputs.require_platform_signing }}
+    if: ${{ inputs.require_macos_signing || inputs.require_windows_signing }}
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -40,18 +45,31 @@ jobs:
           APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
           WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64 }}
           WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD }}
+          REQUIRE_MACOS_SIGNING: ${{ inputs.require_macos_signing }}
+          REQUIRE_WINDOWS_SIGNING: ${{ inputs.require_windows_signing }}
         run: |
           set -euo pipefail
           missing=0
-          for name in \
-            APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64 \
-            APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD \
-            APPLE_DEVELOPER_ID_APPLICATION_IDENTITY \
-            APPLE_NOTARY_KEY_P8_BASE64 \
-            APPLE_NOTARY_KEY_ID \
-            APPLE_NOTARY_ISSUER_ID \
-            WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64 \
-            WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD; do
+          required=()
+          if [[ "$REQUIRE_MACOS_SIGNING" == "true" ]]; then
+            required+=(
+              APPLE_DEVELOPER_ID_CERTIFICATE_P12_BASE64
+              APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD
+              APPLE_DEVELOPER_ID_APPLICATION_IDENTITY
+              APPLE_NOTARY_KEY_P8_BASE64
+              APPLE_NOTARY_KEY_ID
+              APPLE_NOTARY_ISSUER_ID
+            )
+          fi
+          if [[ "$REQUIRE_WINDOWS_SIGNING" == "true" ]]; then
+            required+=(
+              WINDOWS_CODE_SIGNING_CERTIFICATE_PFX_BASE64
+              WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD
+            )
+          else
+            echo "::notice::Windows Authenticode is not required for this candidate."
+          fi
+          for name in "${required[@]}"; do
             if [ -z "${!name:-}" ]; then
               echo "::error::Missing required Actions secret ${name}."
               missing=1
@@ -62,7 +80,7 @@ jobs:
   sign-macos-agent:
     name: Sign and Notarize macOS Agent
     needs: signing-configuration
-    if: ${{ inputs.require_platform_signing && needs.signing-configuration.result == 'success' }}
+    if: ${{ inputs.require_macos_signing && needs.signing-configuration.result == 'success' }}
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -160,7 +178,7 @@ jobs:
   sign-windows-agent:
     name: Authenticode Sign Windows Agent
     needs: signing-configuration
-    if: ${{ inputs.require_platform_signing && needs.signing-configuration.result == 'success' }}
+    if: ${{ inputs.require_windows_signing && needs.signing-configuration.result == 'success' }}
     runs-on: windows-2025
     timeout-minutes: 25
     steps:
@@ -225,7 +243,7 @@ jobs:
   build:
     name: Build and Validate Signed Candidate
     needs: [sign-macos-agent, sign-windows-agent]
-    if: ${{ always() && (!inputs.require_platform_signing || (needs.sign-macos-agent.result == 'success' && needs.sign-windows-agent.result == 'success')) }}
+    if: ${{ always() && (!inputs.require_macos_signing || needs.sign-macos-agent.result == 'success') && (!inputs.require_windows_signing || needs.sign-windows-agent.result == 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     outputs:
@@ -288,14 +306,14 @@ jobs:
           install -m 0755 "${TMP_DIR}/syft" /usr/local/bin/syft
 
       - name: Download signed macOS binaries
-        if: ${{ inputs.require_platform_signing }}
+        if: ${{ inputs.require_macos_signing }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: signed-macos-agent-${{ github.sha }}-${{ inputs.version }}
           path: native-agent-binaries
 
       - name: Download signed Windows binaries
-        if: ${{ inputs.require_platform_signing }}
+        if: ${{ inputs.require_windows_signing }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: signed-windows-agent-${{ github.sha }}-${{ inputs.version }}
@@ -307,8 +325,9 @@ jobs:
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
           PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
           PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
-          PULSE_REQUIRE_PLATFORM_SIGNING: ${{ inputs.require_platform_signing }}
-          PULSE_AGENT_NATIVE_BINARIES_DIR: ${{ inputs.require_platform_signing && format('{0}/native-agent-binaries', github.workspace) || '' }}
+          PULSE_REQUIRE_MACOS_SIGNING: ${{ inputs.require_macos_signing }}
+          PULSE_REQUIRE_WINDOWS_SIGNING: ${{ inputs.require_windows_signing }}
+          PULSE_AGENT_NATIVE_BINARIES_DIR: ${{ (inputs.require_macos_signing || inputs.require_windows_signing) && format('{0}/native-agent-binaries', github.workspace) || '' }}
 
       - name: Validate installer signing key pins
         env:

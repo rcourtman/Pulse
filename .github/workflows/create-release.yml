@@ -218,7 +218,8 @@ jobs:
     secrets: inherit
     with:
       version: ${{ needs.prepare.outputs.version }}
-      require_platform_signing: true
+      require_macos_signing: true
+      require_windows_signing: ${{ needs.prepare.outputs.is_prerelease != 'true' }}
 
   # Frontend checks run in parallel with backend tests
   frontend_checks:

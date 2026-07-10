@@ -2301,6 +2301,17 @@ release-packet SBOM is absent so published RC/stable downloads can keep the
 updater and installer trust chain fail-closed instead of downgrading to
 checksum-only trust and can publish a shareable non-image software inventory
 alongside the signed binaries.
+The immutable candidate builder must model macOS Developer ID/notarization and
+Windows Authenticode as independent native-signing requirements rather than one
+all-or-nothing platform switch. Governed RC publication may require signed and
+notarized macOS agent binaries while Windows Authenticode approval is still an
+externally owned bounded residual, but only when the RC packet explicitly
+discloses the unsigned Windows publisher state and the Windows binaries retain
+the exact-SHA candidate, checksum, detached-signature, and post-publication
+digest controls. Stable publication and the stable-path dry-run must continue
+to require both native signing lanes. `scripts/build-release.sh` must replace
+only the native targets required by those independent inputs and must fail
+closed when a required native-binary directory or target is absent.
 Historical published-release repair must flow through
 `scripts/backfill-release-assets.sh` and
 `.github/workflows/backfill-release-assets.yml` or the canonical

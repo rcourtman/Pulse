@@ -44,6 +44,8 @@ behavior, and broad security and reliability hardening.
   fail fast when signing configuration is incomplete.
 - Docker updates now recreate the container instead of attempting a restart
   that cannot apply a new image.
+- Docker containers retain their grouped-by-host view and open configured web
+  links consistently after REST resource snapshot hydration.
 - Docker and Kubernetes agents tolerate realistic clock skew when evaluating
   liveness, and posture alerts no longer ignore the intended guest-suppression
   rules.
@@ -70,6 +72,11 @@ stable-patch path.
 Pulse Mobile candidate builds with runtime version 1 receive the matching
 typed-action approval client through the candidate OTA channel; no public store
 rollout is part of this RC.
+
+Windows Unified Agent binaries in this release candidate retain the same
+checksum and detached-signature verification used by `v6.0.5`, but they are
+not yet Authenticode-signed and Windows may show an unknown-publisher warning.
+Public Windows Authenticode signing remains required before stable promotion.
 
 Paid Pulse Pro, Relay, and eligible legacy customers should continue to use the
 private download page and private runtime image for paid runtime features.
