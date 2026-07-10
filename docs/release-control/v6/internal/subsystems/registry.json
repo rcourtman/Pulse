@@ -957,6 +957,14 @@
       ]
     },
     {
+      "path": "pkg/aicontracts/action_broker.go",
+      "rationale": "the public typed action-proposal broker contract is both an AI runtime proposal boundary (the only sanctioned Patrol route to an infrastructure mutation) and a canonical API dependency contract over the shared action lifecycle service",
+      "subsystems": [
+        "ai-runtime",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "pkg/aicontracts/fix_execution.go",
       "rationale": "the public approved-fix execution contract is both an AI runtime approved-action boundary and a canonical API dependency contract for Patrol and enterprise auto-fix binders",
       "subsystems": [
@@ -1481,6 +1489,7 @@
         "internal/api/ai_handlers.go",
         "internal/api/ai_intelligence_handlers.go",
         "internal/config/ai.go",
+        "pkg/aicontracts/action_broker.go",
         "pkg/aicontracts/fix_execution.go",
         "pkg/aicontracts/investigation.go",
         "pkg/aicontracts/orchestrator_deps.go",
@@ -1723,6 +1732,19 @@
             "test_prefixes": [],
             "exact_files": [
               "scripts/release_control/ai_runtime_docs_policy_test.py"
+            ]
+          },
+          {
+            "id": "ai-action-proposal-broker-contract",
+            "label": "AI action proposal broker contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/aicontracts/action_broker.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/aicontracts/contracts_test.go"
             ]
           }
         ],
@@ -2057,6 +2079,7 @@
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
         "internal/api/setup_script_render.go",
         "internal/websocket/hub.go",
+        "pkg/aicontracts/action_broker.go",
         "pkg/aicontracts/fix_execution.go",
         "pkg/aicontracts/investigation.go",
         "pkg/aicontracts/orchestrator_deps.go",
@@ -2556,6 +2579,19 @@
               "internal/actionlifecycle/service_test.go",
               "internal/api/actions_test.go",
               "internal/api/contract_test.go"
+            ]
+          },
+          {
+            "id": "ai-action-proposal-broker-contract",
+            "label": "AI action proposal broker API contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/aicontracts/action_broker.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/aicontracts/contracts_test.go"
             ]
           }
         ],

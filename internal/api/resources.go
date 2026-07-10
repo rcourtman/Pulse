@@ -33,6 +33,7 @@ type ResourceHandlers struct {
 	tenantStateProvider TenantStateProvider
 	actionExecutor      ActionExecutor
 	actionCompleted     func(unified.ActionAuditRecord)
+	actionTransition    func(orgID string, record unified.ActionAuditRecord)
 	discoveryReadiness  ResourceDiscoveryReadinessProvider
 }
 
@@ -108,6 +109,15 @@ func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor) {
 // implementations all publish from the API-owned lifecycle boundary.
 func (h *ResourceHandlers) SetActionCompletedPublisher(publisher func(unified.ActionAuditRecord)) {
 	h.actionCompleted = publisher
+}
+
+// SetActionTransitionPublisher configures the persisted-state transition
+// hook on the shared action lifecycle: plan creation, approval decisions,
+// and terminal execution outcomes, published only after the corresponding
+// store write succeeds. The org ID keys per-tenant reconciliation (e.g.
+// mapping a Patrol-origin action's decision back onto its finding).
+func (h *ResourceHandlers) SetActionTransitionPublisher(publisher func(orgID string, record unified.ActionAuditRecord)) {
+	h.actionTransition = publisher
 }
 
 // SetDiscoveryReadinessProvider wires the canonical discovery-readiness

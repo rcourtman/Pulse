@@ -455,8 +455,10 @@ func TestOnActionTransitionFiresAfterEachPersistedState(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
 	var transitions []unified.ActionState
-	env.service.OnActionTransition = func(record unified.ActionAuditRecord) {
+	var transitionOrgs []string
+	env.service.OnActionTransition = func(orgID string, record unified.ActionAuditRecord) {
 		transitions = append(transitions, record.State)
+		transitionOrgs = append(transitionOrgs, orgID)
 	}
 
 	plan, err := env.service.Plan(context.Background(), "default", restartRequest())
@@ -480,6 +482,9 @@ func TestOnActionTransitionFiresAfterEachPersistedState(t *testing.T) {
 		if transitions[i] != want[i] {
 			t.Fatalf("transitions = %v, want %v", transitions, want)
 		}
+		if transitionOrgs[i] != "default" {
+			t.Fatalf("transition org = %q, want default", transitionOrgs[i])
+		}
 	}
 }
 
@@ -487,7 +492,7 @@ func TestOnActionTransitionFiresForPersistedRefusals(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalNone))
 	var transitions []unified.ActionState
-	env.service.OnActionTransition = func(record unified.ActionAuditRecord) {
+	env.service.OnActionTransition = func(orgID string, record unified.ActionAuditRecord) {
 		transitions = append(transitions, record.State)
 	}
 

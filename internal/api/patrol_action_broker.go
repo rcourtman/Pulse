@@ -90,6 +90,16 @@ func (b *patrolActionBroker) Submit(ctx context.Context, proposal aicontracts.Ac
 	if proposal.Reason == "" {
 		return aicontracts.ActionDisposition{}, fmt.Errorf("action proposal requires a reason")
 	}
+	// Finding and investigation identity are required before persistence:
+	// without them the planned action cannot be deterministically
+	// reconciled back onto its Patrol finding at decision or terminal
+	// time, which would orphan a valid governed action.
+	if proposal.FindingID == "" {
+		return aicontracts.ActionDisposition{}, fmt.Errorf("action proposal requires a finding id")
+	}
+	if proposal.InvestigationID == "" {
+		return aicontracts.ActionDisposition{}, fmt.Errorf("action proposal requires an investigation id")
+	}
 
 	if err := b.rejectSensitiveParams(ctx, proposal); err != nil {
 		return aicontracts.ActionDisposition{}, err

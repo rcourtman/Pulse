@@ -185,3 +185,58 @@ func TestPatrolActionBrokerCapabilitiesCatalog(t *testing.T) {
 		t.Fatal("unknown resource must error")
 	}
 }
+
+func TestPatrolActionBrokerRequiresCorrelationIdentity(t *testing.T) {
+	h, _ := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	broker := NewPatrolActionBroker("default", h)
+
+	missingFinding := patrolTestProposal()
+	missingFinding.FindingID = " "
+	if _, err := broker.Submit(context.Background(), missingFinding); err == nil {
+		t.Fatal("proposal without finding id must be refused")
+	}
+
+	missingInvestigation := patrolTestProposal()
+	missingInvestigation.InvestigationID = ""
+	if _, err := broker.Submit(context.Background(), missingInvestigation); err == nil {
+		t.Fatal("proposal without investigation id must be refused")
+	}
+
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	audits, err := store.GetActionAudits("vm:42", time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetActionAudits: %v", err)
+	}
+	if len(audits) != 0 {
+		t.Fatalf("identity-less proposals must not persist audits, got %d", len(audits))
+	}
+}
+
+func TestPatrolActionBrokerSubmitPublishesOrgScopedTransition(t *testing.T) {
+	h, _ := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	var gotOrg string
+	var gotState unified.ActionState
+	var gotOrigin *unified.ActionOrigin
+	h.SetActionTransitionPublisher(func(orgID string, record unified.ActionAuditRecord) {
+		gotOrg = orgID
+		gotState = record.State
+		gotOrigin = record.Origin
+	})
+	broker := NewPatrolActionBroker("default", h)
+
+	if _, err := broker.Submit(context.Background(), patrolTestProposal()); err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	if gotOrg != "default" {
+		t.Fatalf("transition org = %q, want default", gotOrg)
+	}
+	if gotState != unified.ActionStatePending {
+		t.Fatalf("transition state = %q, want pending_approval", gotState)
+	}
+	if gotOrigin == nil || gotOrigin.FindingID != "finding-1" {
+		t.Fatalf("transition origin = %#v", gotOrigin)
+	}
+}

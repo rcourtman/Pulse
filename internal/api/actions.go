@@ -60,8 +60,9 @@ func (h *ResourceHandlers) ActionLifecycle() *actionlifecycle.Service {
 		Store: func(orgID string) (actionlifecycle.Store, error) {
 			return h.getStore(orgID)
 		},
-		Executor:          h.actionExecutor,
-		OnActionCompleted: h.actionCompleted,
+		Executor:           h.actionExecutor,
+		OnActionCompleted:  h.actionCompleted,
+		OnActionTransition: h.actionTransition,
 	}
 }
 

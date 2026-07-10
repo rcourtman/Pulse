@@ -1616,7 +1616,7 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 			"status":"warning",
 			"ready":true,
 			"cause":"model_tool_support_unverified",
-			"summary":"Ollama connectivity alone does not prove tool support. Use an Ollama model that returns tool_calls for Patrol verification.",
+			"summary":"Ollama connectivity alone does not prove tool support. qwen3:8b passes Patrol's tool check; run ollama pull qwen3:8b and select it as the Patrol model.",
 			"provider":"ollama",
 			"model":"ollama:llama3:latest",
 			"checks":[{
@@ -1624,7 +1624,7 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 				"status":"warning",
 				"cause":"model_tool_support_unverified",
 				"label":"Patrol control",
-				"message":"Ollama connectivity alone does not prove tool support. Use an Ollama model that returns tool_calls for Patrol verification."
+				"message":"Ollama connectivity alone does not prove tool support. qwen3:8b passes Patrol's tool check; run ollama pull qwen3:8b and select it as the Patrol model."
 			}]
 		}
 	}`, ollama.URL)
@@ -20436,6 +20436,10 @@ func TestContract_PatrolActionBrokerIsPlanOnly(t *testing.T) {
 		`patrolActionBrokerActor = "pulse_patrol"`,
 		`patrolActionOriginSurface = "patrol"`,
 		"rejectSensitiveParams",
+		// Correlation identity is mandatory before persistence so a
+		// planned action can always be reconciled onto its finding.
+		"action proposal requires a finding id",
+		"action proposal requires an investigation id",
 	} {
 		if !strings.Contains(src, snippet) {
 			t.Fatalf("patrol_action_broker.go must pin plan-only broker snippet %q", snippet)

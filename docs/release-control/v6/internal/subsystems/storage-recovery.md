@@ -316,7 +316,8 @@ stale-plan hash, blast-radius model, or execution protocol outside
 (`internal/api/patrol_action_broker.go`) is part of that same API-owned
 boundary: storage/recovery surfaces must not treat Patrol-proposed action
 audits (origin surface `patrol`) as a storage-local execution channel or
-mint their own proposal origins.
+mint their own proposal origins, and they must not subscribe storage-local
+side effects to the API-owned org-scoped action-transition hook.
 Storage/recovery surfaces may consume unified-resource `platformScopes` as
 read-only platform membership context, but they must not reinterpret runtime
 scope overlap as storage or recovery ownership. A Docker workload that also

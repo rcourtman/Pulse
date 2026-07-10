@@ -56,14 +56,16 @@ type Service struct {
 	// record, including refused-before-dispatch failures, so SSE bridges
 	// and reconcilers observe the full lifecycle regardless of transport.
 	OnActionCompleted func(unified.ActionAuditRecord)
-	// OnActionTransition receives the audit record after every successfully
-	// persisted state transition: plan creation, approval decisions, and
-	// terminal execution outcomes (including refusals). Persistence always
-	// happens before publication, so a subscriber that reconciles origin
-	// surfaces (e.g. Patrol finding outcomes) never observes a state the
-	// store could still lose. Terminal records additionally flow through
-	// OnActionCompleted after this hook.
-	OnActionTransition func(unified.ActionAuditRecord)
+	// OnActionTransition receives the org ID and audit record after every
+	// successfully persisted state transition: plan creation, approval
+	// decisions, and terminal execution outcomes (including refusals).
+	// Persistence always happens before publication, so a subscriber that
+	// reconciles origin surfaces (e.g. Patrol finding outcomes) never
+	// observes a state the store could still lose. The org ID keys the
+	// subscriber's per-tenant stores; without it a multi-tenant
+	// reconciler could apply a transition to the wrong tenant. Terminal
+	// records additionally flow through OnActionCompleted after this hook.
+	OnActionTransition func(orgID string, record unified.ActionAuditRecord)
 	Now                func() time.Time
 }
 
@@ -266,7 +268,7 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 	if err != nil {
 		return unified.ActionPlan{}, &PersistError{Op: "action plan audit", Err: err}
 	}
-	s.publishTransition(record)
+	s.publishTransition(orgID, record)
 	return plan, nil
 }
 
@@ -395,7 +397,7 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, approval u
 		}
 		return unified.ActionAuditRecord{}, &PersistError{Op: "action decision", Err: err}
 	}
-	s.publishTransition(updated)
+	s.publishTransition(orgID, updated)
 	return updated, nil
 }
 
@@ -429,7 +431,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 			if persistErr != nil {
 				return unified.ActionAuditRecord{}, &PersistError{Op: "refused action execution", Err: persistErr}
 			}
-			s.publishTransition(failed)
+			s.publishTransition(orgID, failed)
 			s.publishCompleted(failed)
 			return failed, err
 		}
@@ -444,7 +446,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 			if persistErr != nil {
 				return unified.ActionAuditRecord{}, &PersistError{Op: "refused action execution", Err: persistErr}
 			}
-			s.publishTransition(failed)
+			s.publishTransition(orgID, failed)
 			s.publishCompleted(failed)
 			return failed, err
 		}
@@ -456,7 +458,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 			if persistErr != nil {
 				return unified.ActionAuditRecord{}, &PersistError{Op: "refused action execution", Err: persistErr}
 			}
-			s.publishTransition(failed)
+			s.publishTransition(orgID, failed)
 			s.publishCompleted(failed)
 			return failed, err
 		}
@@ -485,7 +487,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 	if err := store.RecordActionExecutionResult(completed, doneEvent); err != nil {
 		return unified.ActionAuditRecord{}, &PersistError{Op: "action execution result", Err: err}
 	}
-	s.publishTransition(completed)
+	s.publishTransition(orgID, completed)
 	s.publishCompleted(completed)
 	return completed, nil
 }
@@ -581,9 +583,9 @@ func (s *Service) publishCompleted(record unified.ActionAuditRecord) {
 
 // publishTransition notifies the persisted-state subscriber. Callers invoke
 // it only after the corresponding store write succeeded.
-func (s *Service) publishTransition(record unified.ActionAuditRecord) {
+func (s *Service) publishTransition(orgID string, record unified.ActionAuditRecord) {
 	if s == nil || s.OnActionTransition == nil {
 		return
 	}
-	s.OnActionTransition(record)
+	s.OnActionTransition(orgID, record)
 }

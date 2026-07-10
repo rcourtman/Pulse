@@ -1332,6 +1332,12 @@ AI-only summary payloads, or page-local heuristics.
     fields and collapses an all-empty origin to nil so absent metadata
     never persists as an empty object. Origin fields are Pulse-produced
     identifiers, not operator text, and stay outside the redaction set.
+    Downstream reconciliation of origin-tagged records rides the shared
+    lifecycle service's org-scoped `OnActionTransition` hook (wired via
+    `ResourceHandlers.SetActionTransitionPublisher`): transitions publish
+    only after the corresponding store write succeeds, so a subscriber
+    keyed by org ID never observes a state this store could still lose
+    or apply it to the wrong tenant.
     Regression coverage: `TestSQLiteStoreActionAuditOriginRoundTrip` in
     `internal/unifiedresources/store_test.go`.
 

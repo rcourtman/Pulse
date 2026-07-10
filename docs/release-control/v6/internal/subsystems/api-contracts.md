@@ -1587,6 +1587,7 @@ payload shape change when the portal presents compact client rows.
     target, so installer preflight failures point operators at the artifact
     they actually need.
 84. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
+85. `pkg/aicontracts/action_broker.go` shared with `ai-runtime`: the public typed action-proposal broker contract is both an AI runtime proposal boundary (the only sanctioned Patrol route to an infrastructure mutation) and a canonical API dependency contract over the shared action lifecycle service.
     The updater registry behind `GET /api/updates/plan` is a plan-provider
     seam only (`SupportsApply`, `PrepareUpdate`, `GetDeploymentType`); apply
     and rollback semantics ride the manager pipeline behind
@@ -1603,11 +1604,11 @@ payload shape change when the portal presents compact client rows.
     and answers with the same started-acknowledgement shape as apply;
     conflict responses cover pruned or missing backups and Docker
     deployments, and not-found covers unknown history entries.
-85. `pkg/aicontracts/fix_execution.go` shared with `ai-runtime`: the public approved-fix execution contract is both an AI runtime approved-action boundary and a canonical API dependency contract for Patrol and enterprise auto-fix binders.
-86. `pkg/aicontracts/investigation.go` shared with `ai-runtime`: the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces.
-87. `pkg/aicontracts/orchestrator_deps.go` shared with `ai-runtime`: the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history.
-88. `pkg/extensions/ai_autofix.go` shared with `ai-runtime`: the enterprise auto-fix extension dependency seam is both an AI runtime approved-action boundary and a canonical API extension contract over Assistant and Patrol execution dependencies.
-89. `scripts/generate-pulse-intelligence-docs.go` shared with `ai-runtime`: the Pulse Intelligence manifest docs generator is both an AI runtime docs/onboarding projection and a canonical API contract projection over the agent capabilities manifest and Pulse MCP surface tool contract.
+86. `pkg/aicontracts/fix_execution.go` shared with `ai-runtime`: the public approved-fix execution contract is both an AI runtime approved-action boundary and a canonical API dependency contract for Patrol and enterprise auto-fix binders.
+87. `pkg/aicontracts/investigation.go` shared with `ai-runtime`: the public Patrol investigation record and finding contract is both an AI runtime handoff boundary and a canonical API payload contract for Patrol, Assistant, unified findings, persistence, and audit surfaces.
+88. `pkg/aicontracts/orchestrator_deps.go` shared with `ai-runtime`: the public investigation orchestrator dependency contract is both an AI runtime handoff boundary and a canonical API payload contract for Assistant and Patrol tool-call history.
+89. `pkg/extensions/ai_autofix.go` shared with `ai-runtime`: the enterprise auto-fix extension dependency seam is both an AI runtime approved-action boundary and a canonical API extension contract over Assistant and Patrol execution dependencies.
+90. `scripts/generate-pulse-intelligence-docs.go` shared with `ai-runtime`: the Pulse Intelligence manifest docs generator is both an AI runtime docs/onboarding projection and a canonical API contract projection over the agent capabilities manifest and Pulse MCP surface tool contract.
     Update-plan responses own the structured readiness verdict for server
     updater capability, rollback support, agent continuity, v5 agent migration
     transport security, and agent reporting token scope. That verdict is part
@@ -1844,10 +1845,16 @@ a new API state machine, queue contract, or verification-accounting field.
    so secret material never enters model output, investigation stores, or
    action audit records. Capability inspection for proposals goes through
    `Service.Capabilities`, which shares planning's registry resolution and
-   typed errors. The service also exposes an additive `OnActionTransition`
-   persisted-state callback (plan, decision, and terminal execution
+   typed errors. The service also exposes an additive, org-scoped
+   `OnActionTransition` persisted-state callback
+   (`func(orgID, record)`; plan, decision, and terminal execution
    transitions, published only after the corresponding store write
-   succeeds) so proposing surfaces can reconcile decisions and outcomes.
+   succeeds), wired through
+   `ResourceHandlers.SetActionTransitionPublisher`, so proposing surfaces
+   can reconcile decisions and outcomes onto the correct tenant. A
+   Patrol proposal must carry both its finding and investigation IDs
+   before anything persists; identity-less proposals are refused so a
+   governed action can never lose deterministic correlation.
    Plan-only proof: `TestContract_PatrolActionBrokerIsPlanOnly` in
    `internal/api/contract_test.go`.
    Executor-owned live readiness is part of planning, not a UI precheck:

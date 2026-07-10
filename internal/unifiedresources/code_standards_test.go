@@ -650,6 +650,12 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"func (s *Service) ValidatePlanFresh(orgID string, record unified.ActionAuditRecord) error",
 			"func RecordRefusedExecution(store Store, record unified.ActionAuditRecord",
 			"func (s *Service) publishCompleted(record unified.ActionAuditRecord)",
+			// The persisted-state transition hook is org-scoped so
+			// multi-tenant reconcilers (e.g. Patrol finding outcomes)
+			// can never apply a transition to the wrong tenant, and it
+			// publishes only after the corresponding store write.
+			"OnActionTransition func(orgID string, record unified.ActionAuditRecord)",
+			"func (s *Service) publishTransition(orgID string, record unified.ActionAuditRecord)",
 			"store.RecordActionExecutionStart(started, startEvent)",
 			"store.RecordActionExecutionResult(completed, doneEvent)",
 		},
@@ -668,8 +674,10 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 		filepath.Join("..", "api", "resources.go"): {
 			"actionExecutor      ActionExecutor",
 			"actionCompleted     func(unified.ActionAuditRecord)",
+			"actionTransition    func(orgID string, record unified.ActionAuditRecord)",
 			"func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor)",
 			"func (h *ResourceHandlers) SetActionCompletedPublisher(",
+			"func (h *ResourceHandlers) SetActionTransitionPublisher(",
 			"func (h *ResourceHandlers) applyActionAvailability(ctx context.Context, resources []unified.Resource)",
 			"resources[i].ActionReadiness = readinesses",
 		},
