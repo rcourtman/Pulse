@@ -1,6 +1,7 @@
 package agentcapabilities
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -129,5 +130,23 @@ func TestInvocationDescriptorForReturnsIsolatedCopies(t *testing.T) {
 	refetched, _ := InvocationDescriptorFor(PulseControlToolName)
 	if refetched.Static.Mutation != MutationInfrastructure {
 		t.Fatalf("mutating a returned static class leaked into the canonical table: %#v", refetched.Static)
+	}
+}
+
+func TestInvocationBlockedResultCoversAllMutationTargets(t *testing.T) {
+	// The blocked-invocation result is the shared refusal for every
+	// profile-denied mutation, not just infrastructure: pulse-state
+	// blocks (e.g. Patrol detection's finding-tool allowlist) use it too.
+	for _, target := range []MutationTarget{MutationPulseState, MutationInfrastructure} {
+		result := NewInvocationBlockedToolResult("pulse_alerts", InvocationClass{Kind: ToolCallKindWrite, Mutation: target})
+		text := ToolResultText(result)
+		if text == "" {
+			t.Fatal("blocked result must carry text")
+		}
+		for _, want := range []string{"Invocation blocked", "pulse_alerts", string(target), "propose a typed action"} {
+			if !strings.Contains(text, want) {
+				t.Fatalf("blocked result for %s missing %q: %s", target, want, text)
+			}
+		}
 	}
 }

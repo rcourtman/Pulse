@@ -122,7 +122,7 @@ func TestToolsForExecutionMode_InteractiveExposesGovernedTools(t *testing.T) {
 		},
 	}
 
-	interactiveTools := svc.toolsForExecutionMode(false, false)
+	interactiveTools := svc.toolsForExecutor(nil, false)
 	interactiveSet := toolNameSet(interactiveTools)
 	if !interactiveSet["pulse_kubernetes"] ||
 		!interactiveSet["pulse_storage"] ||
@@ -283,7 +283,7 @@ func TestToolsForExecutionMode_AutonomousNonPatrolExposesGovernedTools(t *testin
 	})
 
 	svc := &Service{executor: exec}
-	toolsList := svc.toolsForExecutionMode(true, false)
+	toolsList := svc.toolsForExecutor(nil, true)
 	set := toolNameSet(toolsList)
 	if !set["pulse_storage"] {
 		t.Fatalf("expected storage tool to be exposed without prompt keyword routing")
@@ -526,7 +526,7 @@ func TestToolsForExecutionMode_RecoveryOnlyKeepsStorage(t *testing.T) {
 	})
 
 	svc := &Service{executor: exec}
-	toolsList := svc.toolsForExecutionMode(false, false)
+	toolsList := svc.toolsForExecutor(nil, false)
 	set := toolNameSet(toolsList)
 	if !set["pulse_storage"] {
 		t.Fatalf("expected storage tool to be kept when recovery points are the only storage source")
@@ -548,7 +548,8 @@ func TestToolsForExecutionMode_PatrolScopeUsesConfigNotPrompt(t *testing.T) {
 		},
 	}
 
-	filtered := svc.toolsForExecutionMode(true, true)
+	exec.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	filtered := svc.toolsForExecutor(exec, false)
 	set := toolNameSet(filtered)
 
 	if set["pulse_docker"] {
@@ -1013,5 +1014,74 @@ func TestService_StartInitializesActionAuditStore(t *testing.T) {
 	}
 	if svc.actionAuditStore != nil {
 		t.Fatalf("expected action audit store to be cleared on stop")
+	}
+}
+
+func TestExecutionProfilePromptModes(t *testing.T) {
+	loop := &AgenticLoop{baseSystemPrompt: "base"}
+
+	prompt := loop.getSystemPrompt()
+	if !strings.Contains(prompt, "EXECUTION MODE: Controlled") {
+		t.Fatalf("default interactive profile should describe controlled mode, got %q", prompt)
+	}
+
+	loop.SetAutonomousMode(true)
+	prompt = loop.getSystemPrompt()
+	if !strings.Contains(prompt, "EXECUTION MODE: Autonomous") {
+		t.Fatalf("interactive autonomous should describe autonomous mode, got %q", prompt)
+	}
+
+	// Patrol profiles own their mode text and never claim controlled or
+	// autonomous execution, regardless of inherited autonomy flags.
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	prompt = loop.getSystemPrompt()
+	if !strings.Contains(prompt, "EXECUTION MODE: Patrol detection") ||
+		strings.Contains(prompt, "EXECUTION MODE: Autonomous") ||
+		strings.Contains(prompt, "EXECUTION MODE: Controlled") {
+		t.Fatalf("detection profile prompt wrong: %q", prompt)
+	}
+
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	prompt = loop.getSystemPrompt()
+	if !strings.Contains(prompt, "EXECUTION MODE: Patrol investigation") {
+		t.Fatalf("investigation profile prompt wrong: %q", prompt)
+	}
+	if !strings.Contains(prompt, "propose a typed action") {
+		t.Fatalf("investigation prompt must direct toward typed proposals, got %q", prompt)
+	}
+}
+
+func TestToolsForExecutorHidesQuestionToolForPatrolProfiles(t *testing.T) {
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
+		ControlLevel:  tools.ControlLevelControlled,
+		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
+	})
+	svc := &Service{executor: exec, cfg: &config.AIConfig{}}
+
+	interactive := svc.toolsForExecutor(nil, false)
+	if !toolNameSet(interactive)[pulseQuestionToolName] {
+		t.Fatal("interactive non-autonomous manifest must offer pulse_question")
+	}
+
+	detection := exec.Clone()
+	detection.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	detectionTools := svc.toolsForExecutor(detection, false)
+	if toolNameSet(detectionTools)[pulseQuestionToolName] {
+		t.Fatal("detection profile must hide pulse_question")
+	}
+
+	investigation := exec.Clone()
+	investigation.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	investigationTools := svc.toolsForExecutor(investigation, false)
+	set := toolNameSet(investigationTools)
+	if set[pulseQuestionToolName] {
+		t.Fatal("investigation profile must hide pulse_question")
+	}
+	if set["patrol_report_finding"] || set["pulse_control"] || set["pulse_file_edit"] {
+		t.Fatalf("investigation manifest must not offer mutation tools, got %v", set)
+	}
+	if !set["pulse_query"] || !set["pulse_read"] {
+		t.Fatalf("investigation manifest must keep read tools, got %v", set)
 	}
 }

@@ -88,27 +88,52 @@ func NewToolRegistry() *ToolRegistry {
 }
 
 // InvocationPolicy is the request-scoped safety policy the registry
-// enforces on every invocation: the session control level plus an
-// optional deny-infrastructure-mutations restriction (e.g. Patrol
-// investigations). It is core-owned, never serialized, and consulted by
-// both provider projection and runtime execution so the offered schema
-// and the enforcement boundary can never disagree.
+// enforces on every invocation: the session control level plus the
+// execution profile's restrictions (deny infrastructure mutations, and
+// optionally an allowlist of tools permitted to mutate Pulse state). It
+// is core-owned, never serialized, and consulted by both provider
+// projection and runtime execution so the offered schema and the
+// enforcement boundary can never disagree.
 type InvocationPolicy struct {
 	ControlLevel                ControlLevel
 	DenyInfrastructureMutations bool
+	// PulseStateAllowlist restricts pulse-state mutations to the named
+	// tools when non-nil (an empty map denies all pulse-state
+	// mutations). Nil leaves pulse-state mutations unrestricted. An
+	// allowlist rather than a boolean: Patrol detection must record and
+	// resolve findings without also being able to dismiss alerts or
+	// write knowledge.
+	PulseStateAllowlist map[string]bool
 }
 
-// Allows reports whether the policy permits an invocation class.
-// Infrastructure mutations require a control level that allows control
-// tools and are always blocked under the deny restriction; pulse-state
-// and non-mutating invocations are not control-gated here (handlers keep
-// their own defense-in-depth checks). Unknown mutation targets are
-// denied outright, independent of registration validation, so a class
-// that somehow bypasses Validate still cannot execute.
-func (p InvocationPolicy) Allows(class agentcapabilities.InvocationClass) bool {
+func clonePulseStateAllowlist(allowlist map[string]bool) map[string]bool {
+	if allowlist == nil {
+		return nil
+	}
+	clone := make(map[string]bool, len(allowlist))
+	for name, allowed := range allowlist {
+		clone[name] = allowed
+	}
+	return clone
+}
+
+// Allows reports whether the policy permits an invocation class for the
+// named tool. Infrastructure mutations require a control level that
+// allows control tools and are always blocked under the deny restriction;
+// pulse-state mutations honor the profile allowlist; non-mutating
+// invocations are not gated here (handlers keep their own
+// defense-in-depth checks). Unknown mutation targets are denied outright,
+// independent of registration validation, so a class that somehow
+// bypasses Validate still cannot execute.
+func (p InvocationPolicy) Allows(toolName string, class agentcapabilities.InvocationClass) bool {
 	switch class.Mutation {
-	case agentcapabilities.MutationNone, agentcapabilities.MutationPulseState:
+	case agentcapabilities.MutationNone:
 		return true
+	case agentcapabilities.MutationPulseState:
+		if p.PulseStateAllowlist == nil {
+			return true
+		}
+		return p.PulseStateAllowlist[toolName]
 	case agentcapabilities.MutationInfrastructure:
 		if p.DenyInfrastructureMutations {
 			return false
@@ -270,7 +295,7 @@ func projectToolForPolicy(tool RegisteredTool, policy InvocationPolicy) (Registe
 	}
 	descriptor := *tool.Invocation
 	if descriptor.Static != nil {
-		if !policy.Allows(*descriptor.Static) {
+		if !policy.Allows(tool.Definition.Name, *descriptor.Static) {
 			return RegisteredTool{}, false
 		}
 		return applyProjectedGovernance(tool, []agentcapabilities.InvocationClass{*descriptor.Static}), true
@@ -284,7 +309,7 @@ func projectToolForPolicy(tool RegisteredTool, policy InvocationPolicy) (Registe
 	classes := make([]agentcapabilities.InvocationClass, 0, len(property.Enum))
 	for _, value := range property.Enum {
 		class := descriptor.Classify(map[string]interface{}{descriptor.Discriminator: value})
-		if !policy.Allows(class) {
+		if !policy.Allows(tool.Definition.Name, class) {
 			continue
 		}
 		allowed = append(allowed, value)
@@ -374,13 +399,14 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 	if tool.Invocation != nil {
 		class = tool.Invocation.Classify(args)
 	}
-	if class.Mutation == agentcapabilities.MutationInfrastructure {
-		if e.invocationPolicy().DenyInfrastructureMutations {
-			return agentcapabilities.NewInvocationBlockedToolResult(name, class), nil
-		}
-		if !agentcapabilities.ControlLevelAllowsControlTools(e.controlLevel) {
+	policy := e.invocationPolicy()
+	if !policy.Allows(name, class) {
+		if class.Mutation == agentcapabilities.MutationInfrastructure && !policy.DenyInfrastructureMutations {
+			// Refused purely by control level: keep the actionable
+			// operator guidance for enabling control tools.
 			return agentcapabilities.NewControlToolsDisabledToolResult(), nil
 		}
+		return agentcapabilities.NewInvocationBlockedToolResult(name, class), nil
 	}
 
 	// Legacy tool-level control check, kept as defense in depth.

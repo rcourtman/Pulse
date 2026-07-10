@@ -1,5 +1,9 @@
 package chat
 
+import (
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+)
+
 // Abort aborts an ongoing session.
 func (a *AgenticLoop) Abort(sessionID string) {
 	a.mu.Lock()
@@ -13,6 +17,23 @@ func (a *AgenticLoop) SetAutonomousMode(enabled bool) {
 	a.mu.Lock()
 	a.autonomousMode = enabled
 	a.mu.Unlock()
+}
+
+// SetExecutionProfile applies the core-owned execution profile for this
+// loop. The profile owns non-interactive behavior (question handling,
+// tool-only-turn wrap-up) and the prompt's execution-mode description;
+// it is deliberately separate from autonomous mode, which only affects
+// approval waiting and grants no mutation authority.
+func (a *AgenticLoop) SetExecutionProfile(profile tools.ExecutionProfile) {
+	a.mu.Lock()
+	a.executionProfile = profile
+	a.mu.Unlock()
+}
+
+func (a *AgenticLoop) currentExecutionProfile() tools.ExecutionProfile {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.executionProfile
 }
 
 // SetSessionFSM sets the workflow FSM for the current session.

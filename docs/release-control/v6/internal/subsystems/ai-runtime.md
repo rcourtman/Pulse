@@ -284,7 +284,7 @@ call when building tool-result turns.
 25. `internal/agentcapabilities/sse.go` shared with `api-contracts`: the Pulse Intelligence SSE subscription transport and record parser are both the canonical API event-stream consumption contract and the AI runtime adapter push bridge contract for MCP and reference agent clients.
 26. `internal/agentcapabilities/surface_contract.go` shared with `api-contracts`: the Pulse Intelligence operator-surface affordance contract, shared surface-affordance, surface-tool identity, Assistant surface tool filtering, normalized external surface tool resolver, surface lookup, affordance labels, and manifest-published external-adapter surface tool allowlist projection are both the canonical API manifest surface model and the AI runtime prompt and onboarding guardrail for Assistant and MCP-facing surfaces.
 27. `internal/agentcapabilities/text_tool_invocation.go` shared with `api-contracts`: the Pulse Intelligence text tool invocation parser, internal approval argument, and current_resource handle vocabulary are both the Assistant approved-action execution projection and the shared tool-call params bridge for governed Pulse Intelligence tool calls, with MCP tools/call compatibility staying at the adapter edge.
-28. `internal/agentcapabilities/tool_call.go` shared with `api-contracts`: the Pulse Intelligence shared tool-call params, normalization, validation, direct registry preparation, registry-entrypoint failure result helpers, and provider/registry tool-call safety classification are both the native Assistant execution/FSM contract and the canonical API/agent tools/call compatibility contract for governed Pulse Intelligence tool calls.
+28. `internal/agentcapabilities/tool_call.go` shared with `api-contracts`: the Pulse Intelligence shared tool-call params, normalization, validation, direct registry preparation, registry-entrypoint failure result helpers, and provider/registry tool-call safety classification are both the native Assistant execution/FSM contract and the canonical API/agent tools/call compatibility contract for governed Pulse Intelligence tool calls; the shared invocation-blocked result is the stable refusal for every profile-denied mutation (pulse-state and infrastructure alike).
 29. `internal/agentcapabilities/tool_execution.go` shared with `api-contracts`: the Pulse Intelligence neutral capability tool HTTP execution helper and direct tool execution output/error mapper are both the Assistant-native direct execution contract and the canonical API/agent request/response execution contract, with MCP adapters consuming the neutral helpers only after the shared MCP manifest-surface execution bridge has applied the published surface tool contract.
 30. `internal/agentcapabilities/tool_marker.go` shared with `api-contracts`: the Pulse Intelligence Assistant tool marker vocabulary and approval/policy marker parser are both the Assistant structured tool-result compatibility contract and the canonical API/agent branching contract for governed tool outcomes.
 31. `internal/agentcapabilities/tool_names.go` shared with `api-contracts`: the Pulse Intelligence registry tool-name vocabulary is both the native Assistant execution/display contract and the canonical API/agent tool identity contract for MCP-facing external-agent adapters.
@@ -4625,6 +4625,35 @@ was removed; a projection whose remaining invocations mutate nothing
 downgrades to scope-only approval metadata. Docker `check_updates`
 classifies read/none: it queues a read-only scan and must not drive
 verification workflow or make a read-only Docker projection look mixed.
+Execution posture is profile-owned through the core-only, never-
+serialized `tools.ExecutionProfile` (interactive Assistant, Patrol
+detection, Patrol investigation). Both Patrol profiles are
+non-interactive, deny infrastructure mutations, and clear any inherited
+autonomous mode; detection additionally restricts pulse-state mutations
+to an explicit allowlist of the finding lifecycle tools
+(patrol_report_finding / patrol_resolve_finding - a blanket pulse-state
+allowance would also permit alert dismissal and knowledge writes),
+while investigation denies all pulse-state mutations. Chat turns build
+ONE effective request executor (control level, autonomy, profile,
+resolved context) BEFORE provider projection and clone that executor
+for every provider attempt, so the offered schema and the runtime
+boundary always agree; scheduled Patrol (`ExecutePatrolStream`) applies
+the detection profile the same way, and `ListAvailableTools` projects
+through the identical path. Non-interactive profiles independently hide
+pulse_question from the manifest AND runtime-block it in the agentic
+loop before the interactive-call-set special case - a fabricated
+question call returns a non-interactive error without emitting a
+waiting event and sibling tool calls from the same provider turn keep
+processing; approval waits never block (they queue), and the
+tool-only-turn wrap-up guardrail is interactive-profile-owned rather
+than keyed on autonomy. The system prompt describes detection and
+investigation modes directly instead of claiming controlled or
+autonomous execution. Non-interactive operation grants no mutation
+authority. Profile proofs live in
+`internal/ai/tools/invocation_policy_test.go` (detection allowlist,
+investigation structural read-only, profile clone isolation) and
+`internal/ai/chat/service_tooling_test.go` (profile prompt modes,
+question-tool hiding, effective-executor projection).
 Handler-level checks remain defense in depth, and pulse_read's
 structural execution-intent classifier
 (`ClassifyExecutionIntent` rejecting write-or-unknown command text

@@ -3,6 +3,8 @@ package chat
 import (
 	"fmt"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
 
 // getSystemPrompt builds the full system prompt including the current mode context.
@@ -13,21 +15,42 @@ import (
 func (a *AgenticLoop) getSystemPrompt() string {
 	a.mu.Lock()
 	isAutonomous := a.autonomousMode
+	profile := a.executionProfile
 	a.mu.Unlock()
 
 	var modeContext string
-	if isAutonomous {
+	switch profile {
+	case tools.ProfilePatrolDetection:
 		modeContext = `
+EXECUTION MODE: Patrol detection
+This is a non-interactive scheduled detection run. You cannot ask the user questions and you
+cannot change infrastructure. Inspect the estate with read-only tools and record what you find
+through the Patrol finding tools (report or resolve findings). Do not attempt any other
+state-changing action; such calls will be blocked.`
+	case tools.ProfilePatrolInvestigation:
+		modeContext = `
+EXECUTION MODE: Patrol investigation
+This is a non-interactive, strictly read-only investigation of one finding. You cannot ask the
+user questions and you cannot change anything - neither infrastructure nor Pulse's own records.
+Gather evidence with read-only tools and conclude with your diagnosis. If remediation is
+appropriate, propose a typed action referencing an advertised resource capability instead of
+attempting to perform it; every state-changing call will be blocked.`
+	case tools.ProfileInteractiveAssistant:
+		fallthrough
+	default:
+		if isAutonomous {
+			modeContext = `
 EXECUTION MODE: Autonomous
 Commands may execute without per-command approval when policy allows. Decide whether current
 context is enough, whether read-only evidence is needed, or whether a state-changing tool is
 appropriate. Prefer current evidence before changing state.`
-	} else {
-		modeContext = `
+		} else {
+			modeContext = `
 EXECUTION MODE: Controlled
 State-changing tools require governed approval when policy says approval is required. If the
 user asks you to perform an action, choose the appropriate tool and Pulse will handle any
 required approval prompt.`
+		}
 	}
 
 	// Give the model the current time directly. Without this the Assistant has no

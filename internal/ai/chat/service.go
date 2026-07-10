@@ -833,7 +833,20 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	// the full governed manifest, and the selected model decides whether to
 	// answer directly, ask, or call tools. The only manifest-boundary
 	// exception is the contract-sanctioned context-only resource handoff turn.
-	filteredTools := s.toolsForExecutionMode(autonomousMode, false)
+	// Build ONE effective request executor before provider projection:
+	// control level, autonomy, execution profile, and resolved context are
+	// applied here, the manifest is projected from it, and every provider
+	// attempt clones this same effective executor - so the offered schema
+	// and the runtime enforcement boundary always agree.
+	var effectiveExecutor *tools.PulseToolExecutor
+	if baseExecutor != nil {
+		effectiveExecutor = baseExecutor.Clone()
+		effectiveExecutor.SetControlLevel(effectiveControlLevel)
+		effectiveExecutor.SetAutonomousMode(autonomousMode)
+		effectiveExecutor.ApplyExecutionProfile(tools.ProfileInteractiveAssistant)
+		effectiveExecutor.SetResolvedContext(resolvedCtx)
+	}
+	filteredTools := s.toolsForExecutor(effectiveExecutor, autonomousMode)
 	if resourceContextTurnIsContextOnly(req.Prompt, handoffResources, handoffMetadata) {
 		filteredTools = []providers.Tool{}
 		log.Debug().
@@ -874,15 +887,15 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		}
 
 		var executor *tools.PulseToolExecutor
-		if baseExecutor != nil {
-			executor = baseExecutor.Clone()
-			executor.SetControlLevel(effectiveControlLevel)
-			executor.SetAutonomousMode(autonomousMode)
-			executor.SetResolvedContext(resolvedCtx)
+		if effectiveExecutor != nil {
+			// Clone the effective request executor (not the shared base):
+			// each attempt stays isolated while inheriting the exact
+			// policy the manifest was projected from.
+			executor = effectiveExecutor.Clone()
 			log.Debug().
 				Str("session_id", session.ID).
 				Int("resolved_resources", len(resolvedCtx.Resources)).
-				Msg("[ChatService] Set resolved context on executor")
+				Msg("[ChatService] Cloned effective request executor for attempt")
 		}
 
 		// Create a per-attempt AgenticLoop to ensure complete isolation between
@@ -2743,6 +2756,12 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	if baseExecutor != nil {
 		executor = baseExecutor.Clone()
 		executor.SetControlLevel(effectiveControlLevel)
+		// Scheduled Patrol runs under the detection profile: non-
+		// interactive, no infrastructure mutations, and Pulse-state
+		// mutations restricted to the finding lifecycle tools. This also
+		// clears any inherited autonomous mode - detection needs no
+		// mutation authority, only its allowlisted finding tools.
+		executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
 	}
 
 	// Determine model: use patrol model or fall back to chat model
@@ -2770,7 +2789,10 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	}
 	tempLoop := NewAgenticLoop(provider, executor, systemPrompt)
 	tempLoop.SetOrgID(s.orgID)
-	tempLoop.SetAutonomousMode(true) // Patrol runs without approval prompts
+	// The detection profile owns non-interactive behavior (question
+	// blocking, non-blocking approvals, tool-only turns); Patrol grants
+	// no autonomous mutation authority.
+	tempLoop.SetExecutionProfile(tools.ProfilePatrolDetection)
 	tempLoop.SetExecutionID(req.ExecutionID)
 	tempLoop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(patrolModel, unifiedResourceProvider))
 	if req.MaxTurns > 0 {
@@ -2837,8 +2859,9 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	// this run's user prompt; the session is just a forensic log.
 	messages := []Message{userMsg}
 
-	// Get governed tools for the Patrol run.
-	filteredTools := s.toolsForExecutionMode(true, true)
+	// Get governed tools for the Patrol run, projected from the same
+	// effective executor that will run them under the detection profile.
+	filteredTools := s.toolsForExecutor(executor, false)
 
 	// Run the agentic loop
 	resultMessages, err := tempLoop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, callback)
@@ -2971,15 +2994,23 @@ func (s *Service) createPatrolProviderForModel(modelStr string) (providers.Strea
 func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []string {
 	s.mu.RLock()
 	executor := s.executor
+	effectiveControlLevel := s.effectiveControlLevelLocked()
 	s.mu.RUnlock()
 
 	if executor == nil {
 		return nil
 	}
 
-	tools := s.toolsForExecutionMode(s.isAutonomousModeEnabled(), false)
-	names := make([]string, 0, len(tools))
-	for _, tool := range tools {
+	// Project from an effective executor built the same way ExecuteStream
+	// builds one, so the advertised list matches what a turn would offer.
+	autonomousMode := s.isAutonomousModeEnabled()
+	effectiveExecutor := executor.Clone()
+	effectiveExecutor.SetControlLevel(effectiveControlLevel)
+	effectiveExecutor.SetAutonomousMode(autonomousMode)
+	effectiveExecutor.ApplyExecutionProfile(tools.ProfileInteractiveAssistant)
+	availableTools := s.toolsForExecutor(effectiveExecutor, autonomousMode)
+	names := make([]string, 0, len(availableTools))
+	for _, tool := range availableTools {
 		if tool.Name == "" {
 			continue
 		}
@@ -3929,21 +3960,33 @@ func firstNonEmptyRecentString(values ...string) string {
 	return ""
 }
 
-func (s *Service) toolsForExecutionMode(autonomousMode bool, patrolMode bool) []providers.Tool {
-	includeQuestionTool := !autonomousMode && !patrolMode
-	providerTools := s.executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{
+// toolsForExecutor projects the provider tool manifest from ONE effective
+// request executor: the same clone (control level, autonomy, execution
+// profile already applied) that will execute the calls at runtime, so the
+// offered schema and the enforcement boundary can never disagree. The
+// profile owns question-tool availability: non-interactive Patrol
+// profiles never offer it, and the interactive profile keeps the
+// historical autonomous exemption.
+func (s *Service) toolsForExecutor(executor *tools.PulseToolExecutor, autonomousMode bool) []providers.Tool {
+	if executor == nil {
+		executor = s.executor
+	}
+	profile := executor.ExecutionProfile()
+	includeQuestionTool := !profile.NonInteractive() && !autonomousMode
+	providerTools := executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{
 		IncludeQuestionTool: includeQuestionTool,
 	})
 
-	// Patrol may be scoped by explicit product configuration, but never by
-	// prompt keyword inference. The selected Patrol model owns tool choice.
-	if patrolMode {
+	// Patrol detection may be scoped by explicit product configuration,
+	// but never by prompt keyword inference. The selected Patrol model
+	// owns tool choice within the profile-projected manifest.
+	if profile == tools.ProfilePatrolDetection {
 		filtered := s.filterToolsForPatrol(providerTools)
 		log.Debug().
 			Int("total_tools", len(providerTools)).
 			Int("tool_manifest_count", len(filtered)).
 			Bool("patrol_scope_filter", true).
-			Msg("[toolsForExecutionMode] Built Patrol tool manifest from configured subsystem scope")
+			Msg("[toolsForExecutor] Built Patrol detection manifest from profile projection and subsystem scope")
 		return filtered
 	}
 
@@ -3951,8 +3994,9 @@ func (s *Service) toolsForExecutionMode(autonomousMode bool, patrolMode bool) []
 	log.Debug().
 		Int("total_tools", len(providerTools)).
 		Int("tool_manifest_count", len(filtered)).
+		Int("execution_profile", int(profile)).
 		Bool("autonomous", autonomousMode).
-		Msg("[toolsForExecutionMode] Exposing governed tool manifest")
+		Msg("[toolsForExecutor] Exposing governed tool manifest")
 
 	return filtered
 }

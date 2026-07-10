@@ -184,11 +184,10 @@ func NewControlToolsDisabledToolResult() ToolResult {
 
 // NewInvocationBlockedToolResult is the stable shared result for a tool
 // invocation the registry's invocation policy refuses before the handler
-// runs: an infrastructure-mutating (or unclassifiable, therefore
-// fail-closed) invocation under a read-only control level or a
-// deny-infrastructure-mutations request policy.
+// runs: a mutating (or unclassifiable, therefore fail-closed) invocation
+// the current execution profile does not permit.
 func NewInvocationBlockedToolResult(toolName string, class InvocationClass) ToolResult {
 	return NewToolTextResultWithIsError(fmt.Sprintf(
-		"Invocation blocked: this %s call classifies as an infrastructure-mutating action (%s), which the current session policy does not permit. Read-only investigation may gather evidence and propose a typed action instead of mutating directly.",
+		"Invocation blocked: this %s call classifies as a state-mutating action (mutation target: %s), which the current session policy does not permit. Gather evidence with read-only tools and propose a typed action instead of mutating directly.",
 		toolName, class.Mutation), true)
 }

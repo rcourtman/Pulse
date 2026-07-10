@@ -496,6 +496,10 @@ type AgenticLoop struct {
 	aborted        map[string]bool                  // sessionID -> aborted
 	pendingQs      map[string]chan []QuestionAnswer // questionID -> answer channel
 	autonomousMode bool                             // When true, don't wait for approvals (for investigations)
+	// executionProfile is the core-owned request posture (interactive
+	// Assistant, Patrol detection, Patrol investigation). It owns
+	// non-interactive behavior and the prompt's execution-mode text.
+	executionProfile tools.ExecutionProfile
 
 	// Per-session FSMs for workflow enforcement (set before each execution)
 	sessionFSM *SessionFSM
@@ -1211,6 +1215,39 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		}
 		var pendingExec []pendingToolExec
 
+		// Non-interactive profiles (Patrol detection/investigation) cannot
+		// wait for user input. A fabricated pulse_question call must not
+		// reach the interactive-call-set path below - that path emits a
+		// "waiting for your answer" event and skips sibling tool calls.
+		// Instead, answer each question call with a non-interactive error
+		// and keep processing the other calls from the same provider turn.
+		if a.currentExecutionProfile().NonInteractive() {
+			remaining := toolCalls[:0]
+			for _, tc := range toolCalls {
+				if tc.Name != pulseQuestionToolName {
+					remaining = append(remaining, tc)
+					continue
+				}
+				log.Warn().
+					Str("id", tc.ID).
+					Str("session_id", sessionID).
+					Msg("[AgenticLoop] Blocked pulse_question in non-interactive execution profile")
+				projection := newProviderToolResultContextProjection(tc.ID,
+					"pulse_question is unavailable: this is a non-interactive run and no user can answer. Continue with the available evidence.", true)
+				providerMessages = append(providerMessages, providers.Message{
+					Role:       "user",
+					ToolResult: &projection.Model,
+				})
+			}
+			toolCalls = remaining
+			if len(toolCalls) == 0 {
+				// Same next-turn bookkeeping as the interactive-set path.
+				currentTurnStartIndex = len(providerMessages)
+				turn++
+				continue
+			}
+		}
+
 		// pulse_question is interactive and must not run in parallel with other tools.
 		// If the provider emits multiple tool calls alongside pulse_question, skip the
 		// others and let the model retry after receiving the user's answer.
@@ -1639,14 +1676,17 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					// Instead, return with approval info so the orchestrator can queue it.
 					a.mu.Lock()
 					isAutonomous := a.autonomousMode
+					nonInteractive := a.executionProfile.NonInteractive()
 					loopOrgID := approval.NormalizeOrgID(a.orgID)
 					a.mu.Unlock()
 
-					if isAutonomous {
+					// Non-interactive profiles must never block on a human
+					// decision either; they queue exactly like autonomous mode.
+					if isAutonomous || nonInteractive {
 						log.Debug().
 							Str("approval_id", approvalData.ApprovalID).
 							Str("command", approvalData.Command).
-							Msg("[AgenticLoop] Autonomous mode: returning approval request without waiting")
+							Msg("[AgenticLoop] Non-blocking approval posture: returning approval request without waiting")
 						resultText = fmt.Sprintf("FIX_QUEUED: This action requires user approval. The fix has been queued for review. Approval ID: %s, Command: %s", approvalData.ApprovalID, approvalData.Command)
 						isError = false
 					} else {
@@ -1829,11 +1869,15 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		}
 
 		// Guardrail: in interactive chat mode, force wrap-up after repeated
-		// tool-only turns to avoid long no-answer chains.
+		// tool-only turns to avoid long no-answer chains. Profile-owned:
+		// non-interactive Patrol runs are tool-only by design, so the
+		// guardrail applies only to the interactive Assistant profile
+		// (and, within it, keeps the historical autonomous exemption).
 		a.mu.Lock()
 		autonomousMode := a.autonomousMode
+		interactiveProfile := !a.executionProfile.NonInteractive()
 		a.mu.Unlock()
-		if !autonomousMode && consecutiveToolOnlyTurns >= maxConsecutiveToolOnlyTurns {
+		if interactiveProfile && !autonomousMode && consecutiveToolOnlyTurns >= maxConsecutiveToolOnlyTurns {
 			toolBlockedLastTurn = true
 			log.Warn().
 				Int("consecutive_tool_only_turns", consecutiveToolOnlyTurns).

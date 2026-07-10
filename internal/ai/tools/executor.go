@@ -567,6 +567,13 @@ type PulseToolExecutor struct {
 	// deliberately separate from isAutonomous, which only suppresses
 	// interactive questions and grants no mutation authority.
 	denyInfrastructureMutations bool
+	// pulseStateAllowlist restricts pulse-state mutations to the named
+	// tools when non-nil (empty map = deny all). Nil means the default
+	// posture: pulse-state mutations are not restricted by profile.
+	pulseStateAllowlist map[string]bool
+	// executionProfile is the core-owned request posture; see
+	// execution_profile.go.
+	executionProfile ExecutionProfile
 
 	// Session-scoped resolved context for resource validation
 	// This is set per-session by the agentic loop before tool execution
@@ -724,6 +731,8 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 		isAutonomous:                e.isAutonomous,
 		orgID:                       e.orgID,
 		denyInfrastructureMutations: e.denyInfrastructureMutations,
+		pulseStateAllowlist:         clonePulseStateAllowlist(e.pulseStateAllowlist),
+		executionProfile:            e.executionProfile,
 		telemetryCallback:           e.telemetryCallback,
 		reportNarrator:              e.reportNarrator,
 		reportFleetNarrator:         e.reportFleetNarrator,
@@ -987,6 +996,7 @@ func (e *PulseToolExecutor) invocationPolicy() InvocationPolicy {
 	return InvocationPolicy{
 		ControlLevel:                e.controlLevel,
 		DenyInfrastructureMutations: e.denyInfrastructureMutations,
+		PulseStateAllowlist:         clonePulseStateAllowlist(e.pulseStateAllowlist),
 	}
 }
 

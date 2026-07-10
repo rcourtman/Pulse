@@ -635,7 +635,7 @@ func TestService_ToolsForExecutionMode_ExposesGovernedTools(t *testing.T) {
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_docker"))
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_query"))
 
-	filtered := service.toolsForExecutionMode(true, false)
+	filtered := service.toolsForExecutor(nil, true)
 	assert.True(t, hasProviderTool(filtered, "pulse_control"))
 	assert.True(t, hasProviderTool(filtered, "pulse_docker"))
 	assert.True(t, hasProviderTool(filtered, "pulse_query"))
@@ -651,7 +651,7 @@ func TestService_ToolsForExecutionMode_InteractiveAddsQuestionTool(t *testing.T)
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_docker"))
 	require.True(t, hasTool(service.executor.ListTools(), "pulse_query"))
 
-	filtered := service.toolsForExecutionMode(false, false)
+	filtered := service.toolsForExecutor(nil, false)
 	assert.True(t, hasProviderTool(filtered, "pulse_control"))
 	assert.True(t, hasProviderTool(filtered, "pulse_docker"))
 	assert.True(t, hasProviderTool(filtered, "pulse_query"))
