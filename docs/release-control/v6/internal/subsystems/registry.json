@@ -1019,6 +1019,7 @@
       "lane": "L16",
       "contract": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
       "owned_prefixes": [
+        "internal/agentexec/",
         "internal/agentupdate/",
         "internal/hostagent/"
       ],
@@ -1423,6 +1424,25 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/infrastructureSettingsPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "agent-command-execution-runtime",
+            "label": "agent command execution and approval-grant runtime proof",
+            "match_prefixes": [
+              "internal/agentexec/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/agentexec/approval_grant_test.go",
+              "internal/agentexec/deploy_test.go",
+              "internal/agentexec/policy_test.go",
+              "internal/agentexec/server_coverage_test.go",
+              "internal/agentexec/server_test.go",
+              "internal/agentexec/server_websocket_test.go",
+              "internal/agentexec/verifier_postconditions_test.go"
             ]
           }
         ],
@@ -2001,6 +2021,7 @@
       "owned_prefixes": [
         "cmd/pulse-mcp/",
         "frontend-modern/src/api/",
+        "internal/actionplanner/",
         "internal/agentcapabilities/",
         "internal/api/"
       ],
@@ -2506,6 +2527,19 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/infrastructureSettingsPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "typed-action-planner-runtime",
+            "label": "typed action planner runtime proof",
+            "match_prefixes": [
+              "internal/actionplanner/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/actionplanner/planner_test.go"
             ]
           }
         ],
