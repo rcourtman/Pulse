@@ -271,6 +271,14 @@ update, profile rollout, command reachability, or fleet-control authority.
     Successful recovery always migrates the raw legacy token into the v6
     installer-owned token file; absence of complete local URL and token state
     remains a fail-closed update, never a fresh enrollment.
+    FreeBSD-family uninstall must stop the installer-owned rc.d supervisor
+    before removing the agent binary so daemon(8) cannot restart a deleted
+    child. It must also remove the rc.d script, pfSense boot wrapper,
+    `pulse_agent_enable` rc.conf state, supervisor and child PID files, runtime
+    token/state directory, and residual agent process before reporting
+    success. `scripts/installtests/install_sh_test.go` owns the static teardown
+    contract, and native FreeBSD rehearsal must prove clean install, update,
+    reboot persistence, and complete uninstall.
 
 Server update planning is part of the same lifecycle contract. The System
 Updates plan must surface a structured upgrade-readiness verdict before an

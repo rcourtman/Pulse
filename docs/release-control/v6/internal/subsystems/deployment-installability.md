@@ -303,6 +303,12 @@ TLS floor in the dynamic config.
    must preserve quoted argument values without evaluating service-file shell
    content, and the rewritten rc.d service must use `--token-file` rather than
    retaining a recovered raw token.
+   FreeBSD-family uninstall must stop the rc.d daemon(8) supervisor before
+   removing the binary, then remove service registration, rc.conf enablement,
+   boot wrappers, PID files, token/state, and residual processes before it can
+   report success. A checksum-verified native rehearsal must cover install,
+   update, reboot persistence, and clean uninstall rather than treating a
+   cross-build as complete lifecycle proof.
    The shell installer must disclose `--enable-commands` as Pulse command
    execution, disabled by default, and must name both Patrol actions and
    Proxmox LXC Docker inventory as the operator-visible reasons to enable it.
@@ -343,6 +349,11 @@ TLS floor in the dynamic config.
    require the same macOS notarization and Windows Authenticode lanes as a
    publish run. A cheap signing-configuration job must report every missing
    repository secret before either platform runner is allocated.
+   macOS command-line agent notarization must fail closed unless
+   `notarytool --wait --output-format json` reports `Accepted`, then verify the
+   exact candidate bytes with strict `codesign`. Bare Mach-O command-line
+   binaries are not app bundles, so `spctl --assess --type execute` is not a
+   valid post-notarization gate for this artifact shape.
    Scheduled watchdog rehearsals omit that input and must skip candidate
    signing while retaining the non-publish policy and integration checks.
    Release-facing agent-paradigm blurbs under `docs/releases/` must describe
