@@ -8,6 +8,11 @@ import (
 )
 
 func formatToolInputForFrontend(toolName string, input map[string]interface{}, emptyIfNil bool) (inputStr string, rawInput string) {
+	// Canonical exposure projection: every user-visible or durable view
+	// of tool-call arguments routes through here, so restricted values
+	// (proposal params) never leave the transient provider/validation
+	// path.
+	input = agentcapabilities.RedactToolCallArgumentsForExposure(toolName, input)
 	if input == nil {
 		if emptyIfNil {
 			return "", ""

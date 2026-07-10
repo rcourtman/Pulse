@@ -18398,7 +18398,7 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`agentcapabilities.SurfaceIDPulseAssistant`,
 		`fallbackAssistantToolGovernanceOfferedNames(manifest)`,
 		`agentcapabilities.ManifestSurfaceAffordances(`,
-		`providerTools := s.executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{`,
+		`providerTools := executor.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{`,
 		`IncludeQuestionTool: includeQuestionTool`,
 		`agentcapabilities.BuildPulseAssistantOperatingInstructions()`,
 		`func (s *Service) executeAssistantRegistryToolDirect(ctx context.Context, toolName string, args map[string]interface{}, opts agentcapabilities.DirectToolExecutionOptions) (agentcapabilities.DirectToolExecutionOutcome, error)`,
@@ -18568,7 +18568,8 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		// Invocation-level enforcement runs before the handler and
 		// consumes the same descriptor the projection filters with.
 		`class = tool.Invocation.Classify(args)`,
-		`if class.Mutation == agentcapabilities.MutationInfrastructure {`,
+		`if !policy.Allows(name, class) {`,
+		`if class.Mutation == agentcapabilities.MutationInfrastructure && !policy.DenyInfrastructureMutations {`,
 		`agentcapabilities.NewInvocationBlockedToolResult(name, class)`,
 		`descriptor.Validate(name, discriminatorEnum(tool.Definition, descriptor.Discriminator))`,
 		`func projectToolForPolicy(tool RegisteredTool, policy InvocationPolicy) (RegisteredTool, bool)`,

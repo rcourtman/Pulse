@@ -1863,6 +1863,15 @@ a new API state machine, queue contract, or verification-accounting field.
    governed action can never lose deterministic correlation.
    Plan-only proof: `TestContract_PatrolActionBrokerIsPlanOnly` in
    `internal/api/contract_test.go`.
+   The proposal enters that broker from the investigation-only
+   `patrol_propose_action` capture (canonical name and descriptor in
+   `internal/agentcapabilities/`): mutation-none, side-effect-free,
+   rejected by registry policy outside the investigation profile, with
+   the model supplying only resource/capability/params/reason and all
+   correlation identity injected from trusted orchestration context.
+   Proposal parameter values are redacted from durable transcripts and
+   stream events by the shared exposure projector; the action audit is
+   their canonical durable home once the broker plans the proposal.
    Executor-owned live readiness is part of planning, not a UI precheck:
    after planner validation and before audit persistence, the lifecycle
    service must ask

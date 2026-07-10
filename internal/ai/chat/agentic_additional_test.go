@@ -387,7 +387,7 @@ func TestExecuteToolSafely_RecoversPanic(t *testing.T) {
 	})
 
 	loop := &AgenticLoop{executor: exec}
-	result, err := loop.executeToolSafely(context.Background(), "panic_tool", map[string]interface{}{})
+	result, err := loop.executeToolSafely(context.Background(), "call-1", "panic_tool", map[string]interface{}{})
 	if err == nil {
 		t.Fatalf("expected panic recovery error")
 	}

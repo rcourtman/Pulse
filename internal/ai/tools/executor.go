@@ -574,6 +574,10 @@ type PulseToolExecutor struct {
 	// executionProfile is the core-owned request posture; see
 	// execution_profile.go.
 	executionProfile ExecutionProfile
+	// proposalCapture is the request-local typed-proposal sink for
+	// investigation runs; nil outside them. Clones share the pointer
+	// deliberately: one run, one capture.
+	proposalCapture *ProposalCapture
 
 	// Session-scoped resolved context for resource validation
 	// This is set per-session by the agentic loop before tool execution
@@ -733,6 +737,7 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 		denyInfrastructureMutations: e.denyInfrastructureMutations,
 		pulseStateAllowlist:         clonePulseStateAllowlist(e.pulseStateAllowlist),
 		executionProfile:            e.executionProfile,
+		proposalCapture:             e.proposalCapture,
 		telemetryCallback:           e.telemetryCallback,
 		reportNarrator:              e.reportNarrator,
 		reportFleetNarrator:         e.reportFleetNarrator,
@@ -997,6 +1002,7 @@ func (e *PulseToolExecutor) invocationPolicy() InvocationPolicy {
 		ControlLevel:                e.controlLevel,
 		DenyInfrastructureMutations: e.denyInfrastructureMutations,
 		PulseStateAllowlist:         clonePulseStateAllowlist(e.pulseStateAllowlist),
+		Profile:                     e.executionProfile,
 	}
 }
 
@@ -1079,12 +1085,20 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 
 // ExecuteTool executes a tool and returns the result
 func (e *PulseToolExecutor) ExecuteTool(ctx context.Context, name string, args map[string]interface{}) (CallToolResult, error) {
+	return e.ExecuteInvocation(ctx, ToolInvocation{Name: name, Arguments: args})
+}
+
+// ExecuteInvocation runs one tool call carrying its full invocation
+// envelope (tool-use ID, name, arguments). The ID rides the context so
+// stateful capture can key on call identity even under the loop's
+// concurrent per-turn execution.
+func (e *PulseToolExecutor) ExecuteInvocation(ctx context.Context, inv ToolInvocation) (CallToolResult, error) {
 	log.Debug().
-		Str("tool", name).
-		Interface("args", args).
+		Str("tool", inv.Name).
+		Str("invocation_id", inv.ID).
 		Msg("Executing Pulse tool")
 
-	return e.registry.Execute(ctx, e, name, args)
+	return e.registry.Execute(withInvocationID(ctx, inv.ID), e, inv.Name, inv.Arguments)
 }
 
 // registerTools registers all available tools
@@ -1132,6 +1146,8 @@ func (e *PulseToolExecutor) registerTools() {
 	// patrol_report_finding, patrol_resolve_finding, patrol_get_findings
 	// These are always registered but only functional when patrolFindingCreator is set.
 	e.registerPatrolTools()
+
+	e.registerProposeTools()
 
 	// pulse_summarize - retrospective synthesis for one resource or a fleet
 	e.registerSummarizeTools()

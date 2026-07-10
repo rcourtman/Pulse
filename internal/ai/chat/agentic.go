@@ -456,7 +456,7 @@ func stripProviderErrorPayload(msg string) string {
 	return cleaned
 }
 
-func (a *AgenticLoop) executeToolSafely(ctx context.Context, name string, input map[string]interface{}) (result tools.CallToolResult, err error) {
+func (a *AgenticLoop) executeToolSafely(ctx context.Context, id, name string, input map[string]interface{}) (result tools.CallToolResult, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			panicErr := fmt.Errorf("tool panic in %s: %v", name, recovered)
@@ -469,7 +469,7 @@ func (a *AgenticLoop) executeToolSafely(ctx context.Context, name string, input 
 			err = panicErr
 		}
 	}()
-	return a.executor.ExecuteTool(ctx, name, input)
+	return a.executor.ExecuteInvocation(ctx, tools.ToolInvocation{ID: id, Name: name, Arguments: input})
 }
 
 // AgenticLoop handles the tool-calling loop with streaming
@@ -1574,13 +1574,13 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					defer wg.Done()
 					sem <- struct{}{}
 					defer func() { <-sem }()
-					r, e := a.executeToolSafely(ctx, tc.Name, tc.Input)
+					r, e := a.executeToolSafely(ctx, tc.ID, tc.Name, tc.Input)
 					execResults[idx] = parallelToolResult{Result: r, Err: e}
 				}(j, pe.tc)
 			}
 			wg.Wait()
 		} else if len(pendingExec) == 1 {
-			r, e := a.executeToolSafely(ctx, pendingExec[0].tc.Name, pendingExec[0].tc.Input)
+			r, e := a.executeToolSafely(ctx, pendingExec[0].tc.ID, pendingExec[0].tc.Name, pendingExec[0].tc.Input)
 			execResults[0] = parallelToolResult{Result: r, Err: e}
 		}
 
@@ -1727,7 +1727,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 									inputWithApproval[k] = v
 								}
 								inputWithApproval = agentcapabilities.WithApprovalArgument(inputWithApproval, approvalData.ApprovalID)
-								result, err = a.executeToolSafely(ctx, tc.Name, inputWithApproval)
+								result, err = a.executeToolSafely(ctx, tc.ID, tc.Name, inputWithApproval)
 								if err != nil {
 									toolResult := agentcapabilities.NewProviderToolErrorResult(tc.ID, fmt.Sprintf("Error after approval: %v", err))
 									resultText = toolResult.Content

@@ -225,7 +225,12 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 			"remember":  {Kind: ToolCallKindWrite, Mutation: MutationPulseState},
 		},
 	},
-	PatrolGetFindingsToolName:    staticClass(ToolCallKindRead, MutationNone),
+	PatrolGetFindingsToolName: staticClass(ToolCallKindRead, MutationNone),
+	// patrol_propose_action is side-effect-free capture (mutation-none)
+	// and read-kind so a concluding proposal never drives the FSM into
+	// write verification. It is additionally profile-gated: the registry
+	// policy rejects it outside the Patrol investigation profile.
+	PatrolProposeActionToolName:  staticClass(ToolCallKindRead, MutationNone),
 	PatrolReportFindingToolName:  staticClass(ToolCallKindWrite, MutationPulseState),
 	PatrolResolveFindingToolName: staticClass(ToolCallKindWrite, MutationPulseState),
 }
@@ -267,4 +272,30 @@ func ClassifyRegisteredInvocation(toolName string, args map[string]interface{}) 
 		return FailClosedInvocationClass()
 	}
 	return descriptor.Classify(args)
+}
+
+// RedactedProposalParamsMarker replaces proposal parameter values in every
+// durable or user-visible exposure of a patrol_propose_action call.
+const RedactedProposalParamsMarker = "[redacted-proposal-params]"
+
+// RedactToolCallArgumentsForExposure is the canonical exposure projector
+// for tool-call arguments: everything durable or user-visible (chat
+// transcripts, tool_start/tool_progress/tool_end stream events) must route
+// its arguments through here. Proposal parameter values exist only
+// transiently for provider continuation and validation; the action audit
+// is their canonical durable home. Returns the original map unchanged for
+// tools without exposure restrictions.
+func RedactToolCallArgumentsForExposure(toolName string, args map[string]interface{}) map[string]interface{} {
+	if strings.TrimSpace(toolName) != PatrolProposeActionToolName || args == nil {
+		return args
+	}
+	if _, ok := args["params"]; !ok {
+		return args
+	}
+	redacted := make(map[string]interface{}, len(args))
+	for key, value := range args {
+		redacted[key] = value
+	}
+	redacted["params"] = RedactedProposalParamsMarker
+	return redacted
 }

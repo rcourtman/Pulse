@@ -33,4 +33,10 @@ const (
 	PatrolGetFindingsToolName    = "patrol_get_findings"
 	PatrolReportFindingToolName  = "patrol_report_finding"
 	PatrolResolveFindingToolName = "patrol_resolve_finding"
+	// PatrolProposeActionToolName is the side-effect-free typed action
+	// proposal capture for Patrol investigations. Mutation-none: it
+	// records a validated proposal in the request-local capture sink;
+	// planning, approval, and execution stay on the canonical action
+	// lifecycle.
+	PatrolProposeActionToolName = "patrol_propose_action"
 )

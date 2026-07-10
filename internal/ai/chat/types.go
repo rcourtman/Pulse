@@ -146,9 +146,13 @@ func (t ToolCall) NormalizeCollections() ToolCall {
 func ToolCallFromProvider(tc agentcapabilities.ProviderToolCall) ToolCall {
 	tc = tc.NormalizeCollections()
 	return ToolCall{
-		ID:               tc.ID,
-		Name:             tc.Name,
-		Input:            tc.Input,
+		ID:   tc.ID,
+		Name: tc.Name,
+		// The durable transcript routes through the canonical exposure
+		// projector: proposal params live only transiently for provider
+		// continuation and validation; the action audit is their
+		// canonical durable home.
+		Input:            agentcapabilities.RedactToolCallArgumentsForExposure(tc.Name, tc.Input),
 		ThoughtSignature: tc.ThoughtSignature,
 	}.NormalizeCollections()
 }

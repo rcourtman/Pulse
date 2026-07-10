@@ -1174,3 +1174,103 @@ func TestNonInteractiveProfileBlocksQuestionPersistsPairAndContinues(t *testing.
 		t.Fatal("loop must continue to the model's final answer after the blocked question")
 	}
 }
+
+func TestInvestigationLoopRedactsProposalParamsEverywhereDurable(t *testing.T) {
+	turn := 0
+	provider := &stubStreamingProvider{}
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		turn++
+		if turn == 1 {
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{
+				ToolCalls: []providers.ToolCall{{
+					ID:   "p-1",
+					Name: agentcapabilities.PatrolProposeActionToolName,
+					Input: map[string]interface{}{
+						"resource_id":     "vm:42",
+						"capability_name": "restart",
+						"params":          map[string]interface{}{"mode": "graceful"},
+						"reason":          "recover the stalled web tier",
+					},
+				}},
+			}})
+			return nil
+		}
+		// The provider continuation must still see the raw params from
+		// its own prior call.
+		for _, msg := range req.Messages {
+			for _, tc := range msg.ToolCalls {
+				if tc.Name == agentcapabilities.PatrolProposeActionToolName {
+					params, ok := tc.Input["params"].(map[string]interface{})
+					if !ok || params["mode"] != "graceful" {
+						t.Errorf("provider continuation lost raw proposal params: %#v", tc.Input["params"])
+					}
+				}
+			}
+		}
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "diagnosis: restart proposed"}})
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		return nil
+	}
+
+	capture := tools.NewProposalCapture(
+		tools.ProposalIdentity{ProposalID: "prop-9", FindingID: "f-9", InvestigationID: "inv-9"},
+		func(ctx context.Context, resourceID string) ([]ur.ResourceCapability, error) {
+			return []ur.ResourceCapability{{
+				Name: "restart",
+				Params: []ur.CapabilityParam{
+					{Name: "mode", Type: "string", Required: true, Enum: []string{"graceful", "force"}},
+				},
+			}}, nil
+		})
+	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	exec.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	exec.SetProposalCapture(capture)
+
+	loop := NewAgenticLoop(provider, exec, "base prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+
+	var streamedRawParam bool
+	messages, err := loop.ExecuteWithTools(
+		context.Background(),
+		"session-investigation",
+		[]Message{{Role: "user", Content: "investigate finding f-9"}},
+		nil,
+		func(event StreamEvent) {
+			if strings.Contains(string(event.Data), "graceful") {
+				streamedRawParam = true
+			}
+		},
+	)
+	if err != nil {
+		t.Fatalf("ExecuteWithTools: %v", err)
+	}
+	if streamedRawParam {
+		t.Fatal("stream events must never expose proposal parameter values")
+	}
+
+	// The durable transcript keeps the call but with redacted params.
+	var sawCall bool
+	for _, msg := range messages {
+		for _, tc := range msg.ToolCalls {
+			if tc.Name != agentcapabilities.PatrolProposeActionToolName {
+				continue
+			}
+			sawCall = true
+			if tc.Input["params"] != agentcapabilities.RedactedProposalParamsMarker {
+				t.Fatalf("transcript tool call must carry redacted params, got %#v", tc.Input["params"])
+			}
+		}
+	}
+	if !sawCall {
+		t.Fatal("transcript must retain the proposal tool call")
+	}
+
+	// The structured capture holds the validated raw values.
+	proposal, failed, outcomeErr := capture.Outcome()
+	if outcomeErr != nil || failed != 0 {
+		t.Fatalf("outcome = (%v, %d), want clean capture", outcomeErr, failed)
+	}
+	if proposal == nil || proposal.Params["mode"] != "graceful" || proposal.Identity.FindingID != "f-9" || proposal.InvocationID != "p-1" {
+		t.Fatalf("captured proposal = %#v", proposal)
+	}
+}

@@ -4651,7 +4651,43 @@ investigation modes directly instead of claiming controlled or
 autonomous execution. Non-interactive operation grants no mutation
 authority. The profile vocabulary is closed: unknown profile values are
 rejected at apply time and classify as non-interactive, never as the
-permissive interactive default. A blocked question call is persisted to
+permissive interactive default.
+The typed proposal channel rides the investigation profile.
+`patrol_propose_action` (side-effect-free, mutation-none, read-kind) is
+projected and executable ONLY under the investigation profile: the
+registry policy rejects a fabricated call under any other posture
+before the handler runs. The model's tool schema carries only
+resource_id, capability_name, params, and reason; proposal, finding,
+investigation, and evidence identity are injected from trusted
+orchestration context through the request-local proposal capture sink
+(`tools.ProposalCapture`), which executor clones share so one run has
+exactly one capture. Tool calls carry an explicit invocation envelope
+(tool-use ID, name, arguments) through `ExecuteInvocation`, and the
+sink keys on call identity plus payload fingerprint: an idempotent
+replay (same ID, same payload) re-succeeds; the same ID with a
+different payload latches a terminal integrity error; a second distinct
+valid proposal latches terminal ambiguity - and both terminal states
+INVALIDATE the captured proposal, because concurrent per-turn execution
+makes "first" nondeterministic. Proposals count only after catalog
+validation (advertised capability, declared/required/enum parameters,
+sensitive parameters rejected before success with no value echo in any
+output) and a successful tool result. `ExecuteInvestigationStream`
+returns proposal cardinality as a structured result - consumers never
+reconstruct proposals from session messages - with typed errors for
+ambiguity, integrity violations, and the failed-attempts-only case
+(zero successful proposals with failed attempts is an error outcome,
+never the valid zero-proposal conclusion); `ListInvestigationTools`
+projects through the identical profile path. Proposal parameter values
+exist only transiently for provider continuation and validation: the
+canonical exposure projector
+(`RedactToolCallArgumentsForExposure`) redacts them from the durable
+chat transcript and every tool_start/tool_progress/tool_end stream
+event, while the action audit remains their canonical durable home.
+Proofs: `internal/ai/tools/proposal_capture_test.go` (concurrent
+ambiguity with nil proposal, replay/integrity semantics by tool-use ID,
+failed-attempts typed error, sensitive rejection without echo,
+profile-only projection and execution) and the end-to-end loop
+redaction proof in `internal/ai/chat/service_tooling_test.go`. A blocked question call is persisted to
 the durable transcript paired with its refusal result (the assistant
 message records the call, so the transcript must never retain an
 unanswered call). Profile proofs live in

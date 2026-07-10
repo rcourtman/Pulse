@@ -104,6 +104,9 @@ type InvocationPolicy struct {
 	// resolve findings without also being able to dismiss alerts or
 	// write knowledge.
 	PulseStateAllowlist map[string]bool
+	// Profile is the execution posture; profile-restricted tools (the
+	// investigation-only proposal capture) key on it.
+	Profile ExecutionProfile
 }
 
 func clonePulseStateAllowlist(allowlist map[string]bool) map[string]bool {
@@ -126,6 +129,13 @@ func clonePulseStateAllowlist(allowlist map[string]bool) map[string]bool {
 // independent of registration validation, so a class that somehow
 // bypasses Validate still cannot execute.
 func (p InvocationPolicy) Allows(toolName string, class agentcapabilities.InvocationClass) bool {
+	// patrol_propose_action is investigation-profile-only: a fabricated
+	// call under any other posture is rejected here, before the handler,
+	// and the same check keeps it out of every other profile's projected
+	// manifest.
+	if toolName == agentcapabilities.PatrolProposeActionToolName && p.Profile != ProfilePatrolInvestigation {
+		return false
+	}
 	switch class.Mutation {
 	case agentcapabilities.MutationNone:
 		return true
