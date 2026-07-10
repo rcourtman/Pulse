@@ -58,7 +58,7 @@ describe('patrol commercial boundary', () => {
       "state.patrolReadiness()?.status !== 'not_ready'",
     );
     expect(patrolIntelligenceBannersSource).toContain('<Show when={shouldShowReadinessAction()}>');
-    expect(patrolIntelligenceHeaderSource).toContain('Check model');
+    expect(patrolIntelligenceHeaderSource).toContain('Fix setup');
   });
 
   it('does not carry the removed patrol configuration panel chrome', () => {

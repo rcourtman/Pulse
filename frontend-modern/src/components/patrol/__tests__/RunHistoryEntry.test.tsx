@@ -238,9 +238,9 @@ describe('RunHistoryEntry', () => {
     expect(screen.queryByText(/tool_choice/)).toBeNull();
     expect(screen.queryByText(/No endpoints found/)).toBeNull();
     expect(screen.getByText('error')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open Provider & Models' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Check Patrol model' })).toHaveAttribute(
       'href',
-      '/settings/pulse-intelligence/provider',
+      '/settings/pulse-intelligence/patrol',
     );
   });
 
@@ -260,7 +260,7 @@ describe('RunHistoryEntry', () => {
       />
     ));
 
-    expect(screen.queryByRole('link', { name: 'Open Provider & Models' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Check Patrol model' })).toBeNull();
   });
 
   it('opens Assistant with structured run history context', () => {

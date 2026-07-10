@@ -262,9 +262,9 @@ describe('FindingsPanel resource links', () => {
 
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
 
-    expect(screen.getByRole('link', { name: 'Open Provider & Models' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Check Patrol model' })).toHaveAttribute(
       'href',
-      '/settings/pulse-intelligence/provider',
+      '/settings/pulse-intelligence/patrol',
     );
 
     fireEvent.click(
@@ -273,9 +273,9 @@ describe('FindingsPanel resource links', () => {
       }),
     );
 
-    expect(screen.getByRole('link', { name: 'Open Provider & Models' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Check Patrol model' })).toHaveAttribute(
       'href',
-      '/settings/pulse-intelligence/provider',
+      '/settings/pulse-intelligence/patrol',
     );
     expect(screen.queryByRole('button', { name: 'Open in Assistant' })).not.toBeInTheDocument();
     expect(screen.queryByText('Manage')).not.toBeInTheDocument();
