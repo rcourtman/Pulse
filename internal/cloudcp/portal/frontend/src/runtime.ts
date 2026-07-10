@@ -103,6 +103,10 @@ export function createBootstrapDefaults(
     : '/signup';
   return {
     has_self_hosted_commercial: embeddedBootstrap.has_self_hosted_commercial === true,
+    // Default to available so Pulse-hosted cloud (which always has email)
+    // never hides the sign-in form if the flag is missing from an older payload.
+    email_sign_in_available: embeddedBootstrap.email_sign_in_available !== false,
+    provider_hosted_mode: embeddedBootstrap.provider_hosted_mode === true,
     public_site_url: embeddedBootstrap.public_site_url || 'https://pulserelay.pro',
     support_email: embeddedBootstrap.support_email || 'support@pulserelay.pro',
     commercial_api_base_url: embeddedBootstrap.commercial_api_base_url || '',

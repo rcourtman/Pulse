@@ -16,6 +16,8 @@ async function flushAsync() {
 
 const bootstrapDefaults: Omit<PortalBootstrapData, 'authenticated' | 'email' | 'accounts'> = {
   has_self_hosted_commercial: false,
+  email_sign_in_available: true,
+  provider_hosted_mode: false,
   public_site_url: 'https://pulserelay.pro',
   support_email: 'support@pulserelay.pro',
   commercial_api_base_url: '/api/portal/commercial',

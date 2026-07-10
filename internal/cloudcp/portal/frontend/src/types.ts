@@ -55,6 +55,8 @@ export interface PortalBootstrapData {
   authenticated: boolean;
   email: string;
   has_self_hosted_commercial: boolean;
+  email_sign_in_available: boolean;
+  provider_hosted_mode: boolean;
   public_site_url: string;
   support_email: string;
   commercial_api_base_url: string;

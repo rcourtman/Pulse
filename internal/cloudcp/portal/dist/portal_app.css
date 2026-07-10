@@ -1889,6 +1889,48 @@ header .logout-btn:hover,
   color: var(--accent);
   font-weight: 500;
 }
+.portal-auth-command {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--surface-sunken, #f6f7f9);
+  border: 1px solid var(--line, #e3e6ea);
+  overflow-x: auto;
+}
+.portal-auth-command code {
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  font-size: 12.5px;
+  white-space: pre;
+  color: var(--ink);
+}
+.access-invite-delivery-note {
+  font-size: 12.5px;
+  color: var(--ink-secondary);
+}
+.access-invite-delivery-note code {
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  font-size: 11.5px;
+  word-break: break-all;
+}
+.portal-auth-card > p code {
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  font-size: 12.5px;
+}
 .portal-page-header {
   display: flex;
   flex-direction: column;

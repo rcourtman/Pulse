@@ -969,7 +969,7 @@ function renderWorkspaceSetupQueue(entries: WorkspaceSummaryEntry[], accountAPIB
                     escapeAttr(entry.account.id) +
                     '" data-workspace-id="' +
                     escapeAttr(entry.workspace.id) +
-                    '">' + escapeHTML(clientLanguage ? 'Onboarding' : 'Checklist') + '</button>'
+                    '">' + escapeHTML(clientLanguage ? 'Client onboarding' : 'Setup checklist') + '</button>'
                   : renderWorkspaceHandoffForm(entry.account.id, entry.workspace.id, accountAPIBasePath, clientLanguage ? 'Open client' : 'Open workspace')) +
               '</div>' +
             '</article>'
@@ -1324,7 +1324,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
   );
 }
 
-function renderAccountAccessSection(account: PortalAccountSummary): string {
+function renderAccountAccessSection(account: PortalAccountSummary, emailSignInAvailable = true): string {
   var clientLanguage = accountUsesClientLanguage(account);
   var hasBilling = account.has_billing === true;
   var accessRoleCopy = {
@@ -1360,12 +1360,16 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
         '<div class="access-policy-row"><strong>Read-only</strong><span>' + escapeHTML(accessRoleCopy.readOnly) + '</span></div>' +
       '</div>' +
     '</div>';
+  var inviteDeliveryNote = emailSignInAvailable
+    ? ''
+    : '<p class="access-invite-delivery-note">No email provider is configured, so invitation emails are not sent. After inviting, print their one-time sign-in link on the control plane host: <code>docker compose run --rm control-plane provider-msp portal-link --email their@address</code></p>';
   var accessInvitePanel = account.can_manage
     ? (
       '<div class="access-invite-panel">' +
         '<div class="access-panel-heading">' +
           '<h4>Invite people</h4>' +
           '<p>Add one person with the minimum role they need on this account.</p>' +
+          inviteDeliveryNote +
         '</div>' +
         '<div class="access-invite">' +
           '<div><label for="invite-email-' +
@@ -1377,7 +1381,7 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
           escapeAttr(account.id) +
           '">Role</label><select id="invite-role-' +
           escapeAttr(account.id) +
-          '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
+          '"><option value="read_only">Read-only</option><option value="tech">Tech</option><option value="admin">Admin</option></select></div>' +
           '<button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' +
           escapeAttr(account.id) +
           '">Invite</button>' +
@@ -1564,15 +1568,19 @@ function renderSupportSection(context: ShellViewContext): string {
       (hasBillingSection ? '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>' : '')
     )
     : '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>';
+  var providerOpsRow = context.bootstrap.provider_hosted_mode === true
+    ? '<div class="portal-support-simple-row"><strong>Operations guide</strong><span>Backups, upgrades, firewall baseline, and the validation checklist live in <a href="https://github.com/rcourtman/Pulse/blob/main/docs/MSP.md" target="_blank" rel="noopener">docs/MSP.md</a>.</span></div>'
+    : '';
   return (
     '<section class="portal-support-panel">' +
-      '<p>Use Support only after the self-service path fails. Retry the same step before you escalate.</p>' +
+      '<p>Most issues clear on a retry of the same step. If it fails twice, email the details below and we will pick it up from there.</p>' +
       '<div class="portal-support-simple">' +
         '<div class="portal-support-simple-card">' +
           '<div class="portal-support-simple-list">' +
             '<div class="portal-support-simple-row"><strong>Try first</strong><span>' + escapeHTML(retryCopy) + '</span></div>' +
             '<div class="portal-support-simple-row"><strong>Scope</strong><span>' + escapeHTML(supportRunbookPathCopy(isHosted, hostedViewOnly, showSelfHostedCommercial, hasHostedBillingAccounts(accounts), clientLanguage)) + '</span></div>' +
             '<div class="portal-support-simple-row"><strong>Include</strong><span>Account, email, and the exact action that failed.</span></div>' +
+            providerOpsRow +
           '</div>' +
           '<div class="portal-support-simple-actions">' +
             supportActions +
@@ -1636,7 +1644,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
       return (
         '<section class="account-surface">' +
           renderAccountSurfaceHeader(account, accounts.length > 1) +
-          renderAccountAccessSection(account) +
+          renderAccountAccessSection(account, context.bootstrap.email_sign_in_available !== false) +
         '</section>'
       );
     }).join('')
@@ -1750,6 +1758,7 @@ function renderAuthScopeRow(title: string, copy: string): string {
 }
 
 export function renderSignedOutPortalHTML(context: ShellViewContext): string {
+  var providerMode = context.bootstrap.provider_hosted_mode === true;
   var statusHTML = '';
   if (context.loginState.request.error) {
     statusHTML = '<div class="billing-status visible error">' + escapeHTML(context.loginState.request.error) + '</div>';
@@ -1764,34 +1773,62 @@ export function renderSignedOutPortalHTML(context: ShellViewContext): string {
   var signupHTML = hasSignupPath(context.signupPath)
     ? '<p class="portal-auth-secondary-action">Need a new Pulse Account? <a href="' + escapeAttr(context.signupPath) + '">Create an account</a>.</p>'
     : '';
+  var introHTML = providerMode
+    ? '<h1>Sign in to Pulse Account</h1>' +
+      '<p>This portal manages the client workspaces on your Pulse control plane.</p>' +
+      '<div class="portal-auth-scope-list" aria-label="Pulse Account scope">' +
+        renderAuthScopeRow('Clients', 'Add clients, follow onboarding, and review client health and alerts.') +
+        renderAuthScopeRow('Access', 'Invite provider staff and keep every person on the smallest useful role.') +
+        renderAuthScopeRow('Isolation', 'Each client runs in its own workspace boundary; opening a client hands you into that boundary.') +
+      '</div>'
+    : '<h1>Sign in to Pulse Account</h1>' +
+      '<p>Use one commercial email address for hosted workspaces, account access, billing, licenses, refunds, and privacy requests.</p>' +
+      '<div class="portal-auth-scope-list" aria-label="Pulse Account scope">' +
+        renderAuthScopeRow('Workspaces', 'Open hosted workspaces and review workspace state.') +
+        renderAuthScopeRow('Access', 'Review account access and manage roles when permitted.') +
+        renderAuthScopeRow('Billing', 'Open hosted billing or self-hosted commercial tools when they apply.') +
+      '</div>';
+  var cardHTML;
+  if (context.bootstrap.email_sign_in_available === false) {
+    // No transactional email provider is configured, so a "we sent you a
+    // link" form would be a false promise. Point at the operator command
+    // that actually produces a sign-in link.
+    cardHTML =
+      '<h2 id="portal-auth-title">Sign-in links come from your control plane host</h2>' +
+      '<p>This control plane has no email provider configured, so it cannot send sign-in links. Generate a one-time link on the host where the control plane runs, then open it in this browser:</p>' +
+      '<pre class="portal-auth-command"><code>docker compose run --rm control-plane \\\n  provider-msp portal-link --email you@example.com</code></pre>' +
+      '<p>Run it from your deploy directory. The email address must already be an account member or hold a pending invitation.</p>' +
+      '<p>To enable email sign-in, set <code>RESEND_API_KEY</code> in the control plane <code>.env</code> and restart it.</p>';
+  } else {
+    var emailLabel = providerMode ? 'Email' : 'Commercial email';
+    var emailIntro = providerMode
+      ? 'Enter the email address for your Pulse account. A sign-in link will be sent to that address.'
+      : 'Enter the commercial email address for your Pulse account. A sign-in link will be sent to that address.';
+    cardHTML =
+      '<h2 id="portal-auth-title">Email sign-in link</h2>' +
+      '<p>' + escapeHTML(emailIntro) + '</p>' +
+      '<div class="form-group portal-auth-form-group">' +
+        '<label for="portal-login-email">' + escapeHTML(emailLabel) + '</label>' +
+        '<input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' +
+        escapeAttr(context.loginState.emailValue || '') +
+        '" data-portal-input="login-email">' +
+      '</div>' +
+      '<div class="form-actions portal-auth-actions">' +
+        '<button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' +
+        (context.loginState.request.pending ? 'Sending…' : 'Send sign-in link') +
+        '</button>' +
+      '</div>' +
+      signupHTML +
+      statusHTML;
+  }
   return (
     '<section class="portal-auth-shell">' +
       '<div class="portal-auth-intro">' +
-        '<h1>Sign in to Pulse Account</h1>' +
-        '<p>Use one commercial email address for hosted workspaces, account access, billing, licenses, refunds, and privacy requests.</p>' +
-        '<div class="portal-auth-scope-list" aria-label="Pulse Account scope">' +
-          renderAuthScopeRow('Workspaces', 'Open hosted workspaces and review workspace state.') +
-          renderAuthScopeRow('Access', 'Review account access and manage roles when permitted.') +
-          renderAuthScopeRow('Billing', 'Open hosted billing or self-hosted commercial tools when they apply.') +
-        '</div>' +
+        introHTML +
       '</div>' +
       '<section class="portal-auth-panel" aria-labelledby="portal-auth-title">' +
         '<div class="portal-auth-card">' +
-          '<h2 id="portal-auth-title">Email sign-in link</h2>' +
-          '<p>Enter the commercial email address for your Pulse account. A sign-in link will be sent to that address.</p>' +
-          '<div class="form-group portal-auth-form-group">' +
-            '<label for="portal-login-email">Commercial email</label>' +
-            '<input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' +
-            escapeAttr(context.loginState.emailValue || '') +
-            '" data-portal-input="login-email">' +
-          '</div>' +
-          '<div class="form-actions portal-auth-actions">' +
-            '<button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' +
-            (context.loginState.request.pending ? 'Sending…' : 'Send sign-in link') +
-            '</button>' +
-          '</div>' +
-          signupHTML +
-          statusHTML +
+          cardHTML +
         '</div>' +
       '</section>' +
     '</section>'

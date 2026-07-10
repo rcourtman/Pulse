@@ -31,6 +31,11 @@ export function installAuthController(deps: AuthControllerDeps): AuthController 
   }, { notify: false });
 
   async function sendMagicLink() {
+    if (deps.store.getBootstrap().email_sign_in_available === false) {
+      // The signed-out view replaces the form with operator instructions in
+      // this state; this guard covers any stale markup.
+      return;
+    }
     var loginState = deps.store.getLoginState();
     var email = String(loginState.emailValue || '').trim();
     if (!email) {

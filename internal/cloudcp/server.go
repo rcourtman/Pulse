@@ -86,6 +86,7 @@ func Run(ctx context.Context, version string) error {
 		return fmt.Errorf("init magic link service: %w", err)
 	}
 	defer magicLinkSvc.Close()
+	magicLinkSvc.SetSessionTTL(cfg.SessionTTL)
 
 	// Initialize email sender
 	var emailSender email.Sender

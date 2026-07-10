@@ -43,10 +43,11 @@ type Token struct {
 // Service manages magic link token generation and validation for the control plane.
 // It does NOT import internal/api — it is a standalone reimplementation using its own SQLite store.
 type Service struct {
-	hmacKey []byte
-	store   *Store
-	ttl     time.Duration
-	now     func() time.Time
+	hmacKey    []byte
+	store      *Store
+	ttl        time.Duration
+	sessionTTL time.Duration
+	now        func() time.Time
 }
 
 // NewService creates a Service backed by a SQLite store in cpDataDir.

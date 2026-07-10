@@ -955,3 +955,51 @@ func TestLoadConfig_LegacyTrialActivationKeyNameStillWorks(t *testing.T) {
 		t.Fatal("legacy CP_TRIAL_ACTIVATION_PRIVATE_KEY fallback no longer derives a key")
 	}
 }
+
+func TestLoadConfig_SessionTTLDefaults(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_SESSION_TTL", "")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.SessionTTL != 12*time.Hour {
+		t.Fatalf("SessionTTL = %v, want 12h for pulse-hosted mode", cfg.SessionTTL)
+	}
+}
+
+func TestLoadConfig_SessionTTLProviderHostedDefault(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_SESSION_TTL", "")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.SessionTTL != 7*24*time.Hour {
+		t.Fatalf("SessionTTL = %v, want 168h for provider-hosted MSP mode", cfg.SessionTTL)
+	}
+}
+
+func TestLoadConfig_SessionTTLOverride(t *testing.T) {
+	setProviderHostedMSPEnv(t)
+	t.Setenv("CP_SESSION_TTL", "36h")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.SessionTTL != 36*time.Hour {
+		t.Fatalf("SessionTTL = %v, want 36h override", cfg.SessionTTL)
+	}
+}
+
+func TestLoadConfig_SessionTTLInvalid(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_SESSION_TTL", "not-a-duration")
+
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("expected error for invalid CP_SESSION_TTL")
+	}
+}

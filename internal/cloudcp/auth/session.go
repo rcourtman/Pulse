@@ -26,6 +26,24 @@ var (
 	ErrSessionExpired = errors.New("session token expired")
 )
 
+// SetSessionTTL overrides the session token lifetime issued by this service.
+// Values <= 0 leave the default in place.
+func (s *Service) SetSessionTTL(ttl time.Duration) {
+	if s == nil || ttl <= 0 {
+		return
+	}
+	s.sessionTTL = ttl
+}
+
+// SessionTTLOrDefault returns the configured session lifetime, falling back
+// to the package default.
+func (s *Service) SessionTTLOrDefault() time.Duration {
+	if s == nil || s.sessionTTL <= 0 {
+		return SessionTTL
+	}
+	return s.sessionTTL
+}
+
 // SessionClaims are the authenticated claims for a control-plane session.
 type SessionClaims struct {
 	UserID         string

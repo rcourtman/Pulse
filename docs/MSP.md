@@ -37,6 +37,31 @@ pulse-control-plane provider-msp recover   # restore workspaces from backup or d
 pulse-control-plane provider-msp preflight # pre-install environment checks
 ```
 
+### Portal sign-in and sessions
+
+The management portal signs you in with one-time links, not passwords. With
+no email provider configured (the bundle default), the portal cannot send
+those links itself; the sign-in page says so and points at the host command
+that prints one:
+
+```bash
+# Owner sign-in link (also safe to re-run any time; it never duplicates the account)
+docker compose run --rm control-plane provider-msp bootstrap \
+  --account-name "Your MSP" --owner-email you@example.com
+
+# Sign-in link for an invited teammate
+docker compose run --rm control-plane provider-msp portal-link --email teammate@example.com
+```
+
+Teammates are invited from the portal Access tab; without an email provider
+the invitation email is not sent, so print their first sign-in link with
+`portal-link` after inviting them. To let the portal send sign-in links and
+invitations itself, set `RESEND_API_KEY` (plus `PULSE_EMAIL_FROM` and
+`PULSE_EMAIL_REPLY_TO`) in `.env` and restart the control plane.
+
+Portal sessions last 7 days on provider-hosted control planes; override with
+`CP_SESSION_TTL` (Go duration, e.g. `12h`, `168h`).
+
 Each client runtime is a normal Pulse instance, so it connects to that
 client's infrastructure with the standard methods: agents push over HTTPS for
 hosts, and Proxmox/PBS polling reaches across networks through your existing

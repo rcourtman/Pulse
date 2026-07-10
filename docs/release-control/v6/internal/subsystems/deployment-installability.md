@@ -233,6 +233,17 @@ TLS floor in the dynamic config.
    Docker subnet, create the storage-admission marker directories, and install a
    host-level `DOCKER-USER` rule blocking `169.254.169.254` from tenant
    containers when iptables is available.
+   The setup summary must leave the operator on a working next step, not a
+   dead end: it must print the `provider-msp bootstrap` command that creates
+   the operator account and portal sign-in link, and the day-2 sign-in
+   guidance (re-running `bootstrap` for a fresh owner link and
+   `provider-msp portal-link --email` for invited teammates), because the
+   bundle default ships without a transactional email provider and the portal
+   cannot send sign-in links in that state. `.env.example` must document the
+   same commands next to `RESEND_API_KEY` so the runbook and the portal
+   sign-in page agree. `provider-msp portal-link` is part of the packaged
+   day-2 surface and mints links only for existing account members or pending
+   invitees.
    Provider-hosted MSP installability must also pass provider-default report
    branding through the packaged tenant environment rather than requiring
    report-specific operator provisioning. The deployable control-plane config

@@ -177,7 +177,7 @@ func HandleCreateTenantWithWorkspaceLimitPolicy(reg *registry.TenantRegistry, pr
 				Int("current_count", limitErr.current).
 				Int("limit", limitErr.limit).
 				Msg("Tenant creation blocked by workspace limit")
-			http.Error(w, limitErr.message, limitErr.statusCode)
+			writeTenantCreateError(w, limitErr.statusCode, limitErr.reason, limitErr.message, limitErr.current, limitErr.limit)
 			return
 		}
 		if provisionErr != nil {
@@ -190,10 +190,13 @@ func HandleCreateTenantWithWorkspaceLimitPolicy(reg *registry.TenantRegistry, pr
 					Int("current_count", limitErr.Current).
 					Int("limit", limitErr.Limit).
 					Msg("Tenant creation blocked by registry workspace limit")
-				http.Error(
+				writeTenantCreateError(
 					w,
-					fmt.Sprintf("workspace limit reached: %d of %d allowed", limitErr.Current, limitErr.Limit),
 					http.StatusForbidden,
+					"workspace_limit_reached",
+					fmt.Sprintf("workspace limit reached: %d of %d allowed", limitErr.Current, limitErr.Limit),
+					limitErr.Current,
+					limitErr.Limit,
 				)
 				return
 			}
@@ -227,6 +230,27 @@ type workspaceLimitError struct {
 	statusCode int
 	current    int
 	limit      int
+}
+
+type tenantCreateErrorResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+	Current int    `json:"current,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
+}
+
+// writeTenantCreateError responds with a JSON error payload so the portal
+// frontend can show the reason (plain http.Error text bodies were dropped by
+// the portal API client and rendered as a generic failure).
+func writeTenantCreateError(w http.ResponseWriter, statusCode int, reason, message string, current, limit int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	encodeJSON(w, tenantCreateErrorResponse{
+		Error:   reason,
+		Message: message,
+		Current: current,
+		Limit:   limit,
+	})
 }
 
 // enforceWorkspaceLimit checks whether the account is allowed to create

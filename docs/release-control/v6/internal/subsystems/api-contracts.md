@@ -2464,6 +2464,15 @@ a new API state machine, queue contract, or verification-accounting field.
     account/billing shell must remain understandable from the primary header,
     section title, and factual body content alone instead of depending on a
     second context-chip strip to restate the same scope.
+    The bootstrap payload is also the portal's honesty contract about the
+    runtime it runs on: `internal/cloudcp/portal/bootstrap.go` carries
+    `email_sign_in_available` and `provider_hosted_mode`, both the HTML page
+    path and `/api/portal/bootstrap` must populate them from the control-plane
+    environment (`PortalEnvironment`), and the signed-out shell must render
+    the operator sign-in instructions instead of an email-send form whenever
+    `email_sign_in_available` is false. Older payloads without the flags must
+    default to the email form (available) so Pulse-hosted cloud behavior is
+    unchanged.
 33. Keep storage wire metadata lossless across shared API payload types.
     `frontend-modern/src/types/api.ts` must continue to expose provider-backed
     storage metadata such as Proxmox `pool` and `zfsPool` fields when the

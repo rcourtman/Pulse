@@ -13,6 +13,7 @@ func newProviderMSPCmd() *cobra.Command {
 		Short: "Operate a provider-hosted MSP control plane",
 	}
 	cmd.AddCommand(newProviderMSPBootstrapCmd())
+	cmd.AddCommand(newProviderMSPPortalLinkCmd())
 	cmd.AddCommand(newProviderMSPBackupCmd())
 	cmd.AddCommand(newProviderMSPInstallProofCmd())
 	cmd.AddCommand(newProviderMSPPreflightCmd())
@@ -56,6 +57,50 @@ func newProviderMSPBootstrapCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("account-name")
 	_ = cmd.MarkFlagRequired("owner-email")
 	return cmd
+}
+
+func newProviderMSPPortalLinkCmd() *cobra.Command {
+	var email string
+
+	cmd := &cobra.Command{
+		Use:   "portal-link",
+		Short: "Print a one-time portal sign-in link for an account member or pending invitee",
+		Long: `Print a one-time portal sign-in link for an account member or pending invitee.
+
+Use this when the control plane has no email provider configured, so the
+portal cannot send sign-in links or invitation emails itself. The email
+address must already be an account member or hold a pending invitation
+created from the portal Access tab.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := cloudcp.LoadConfig()
+			if err != nil {
+				return fmt.Errorf("load control plane config: %w", err)
+			}
+			result, err := cloudcp.ProviderMSPPortalLink(cmd.Context(), cfg, cloudcp.ProviderMSPPortalLinkOptions{
+				Email: email,
+			})
+			if err != nil {
+				return err
+			}
+			printProviderMSPPortalLinkResult(result)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&email, "email", "", "Email address of the account member or pending invitee")
+	_ = cmd.MarkFlagRequired("email")
+	return cmd
+}
+
+func printProviderMSPPortalLinkResult(result *cloudcp.ProviderMSPPortalLinkResult) {
+	if result == nil {
+		fmt.Println("provider_msp_portal_link_ok=false")
+		return
+	}
+	fmt.Println("provider_msp_portal_link_ok=true")
+	fmt.Printf("email=%s\n", result.Email)
+	fmt.Printf("access_state=%s\n", result.AccessState)
+	fmt.Printf("role=%s\n", result.Role)
+	fmt.Printf("portal_magic_link=%s\n", result.MagicLinkURL)
 }
 
 func printProviderMSPBootstrapResult(result *cloudcp.ProviderMSPBootstrapResult) {

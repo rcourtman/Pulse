@@ -556,12 +556,22 @@ Paths:
   - Data dir:   ${data_dir}
   - Network:    ${network}
 
-Proof:
+Next step: create your operator account (prints your portal sign-in link):
   cd ${PULSE_PROVIDER_MSP_INSTALL_DIR}
+  docker compose run --rm control-plane provider-msp bootstrap \\
+    --account-name "Example MSP" --owner-email owner@example.com
+
+Prove the platform before the first real client:
   ./run-install-proof.sh --account-name "Example MSP" --owner-email owner@example.com
 
-Portal:
-  https://${domain}/
+Portal (after bootstrap):
+  https://${domain}/portal
+
+Day 2: portal sessions last 7 days. Re-run the bootstrap command above any
+time to print a fresh owner sign-in link, or use
+  docker compose run --rm control-plane provider-msp portal-link --email you@example.com
+for any invited teammate. Set RESEND_API_KEY in .env to enable emailed
+sign-in links instead.
 
 Lease signing public key (your provider MSP license must bind this key;
 re-print any time with ./setup.sh --print-lease-signing-public-key):

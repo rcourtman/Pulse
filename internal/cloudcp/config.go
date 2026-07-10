@@ -28,6 +28,12 @@ const (
 	ProviderMSPPlanSourceLicenseFile                     = "license_file"
 	ProviderMSPPlanSourceEnvFallback                     = "environment_fallback"
 	maxProviderMSPLicenseFileBytes                       = 64 * 1024
+
+	// cpauthDefaultSessionTTL mirrors cpauth.SessionTTL for Pulse-hosted
+	// control planes; providerHostedSessionTTL is the default for
+	// provider-operated MSP portals (see CP_SESSION_TTL).
+	cpauthDefaultSessionTTL  = 12 * time.Hour
+	providerHostedSessionTTL = 7 * 24 * time.Hour
 )
 
 // CPConfig holds all configuration for the control plane.
@@ -89,8 +95,9 @@ type CPConfig struct {
 	LicenseAdminToken                 string
 	TrialActivationPrivateKey         string
 	TrialActivationPublicKey          string
+	SessionTTL                        time.Duration // Portal session lifetime (CP_SESSION_TTL)
 	RequireEmailProvider              bool
-	ResendAPIKey                      string // Resend API key (optional — if empty, emails are logged)
+	ResendAPIKey                      string // Resend API key (optional; if empty, emails are logged)
 	EmailFrom                         string // Sender email address (e.g. "noreply@pulserelay.pro")
 	EmailReplyTo                      string // Support reply address for transactional email
 }
@@ -186,6 +193,17 @@ func LoadConfig() (*CPConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	defaultSessionTTL := cpauthDefaultSessionTTL
+	if controlPlaneMode == ControlPlaneModeProviderHostedMSP {
+		// Provider-hosted portals are operated by the provider themselves and
+		// often run without an email provider, so re-login means minting a
+		// link on the host. A longer session keeps day-2 use painless.
+		defaultSessionTTL = providerHostedSessionTTL
+	}
+	sessionTTL, err := envOrDefaultDuration("CP_SESSION_TTL", defaultSessionTTL)
+	if err != nil {
+		return nil, err
+	}
 	providerMSPLicenseFile := strings.TrimSpace(os.Getenv("CP_PROVIDER_MSP_LICENSE_FILE"))
 	providerMSPPlanVersion := pkglicensing.CanonicalizePlanVersion(envOrDefault("CP_PROVIDER_MSP_PLAN_VERSION", defaultProviderHostedMSPPlanVersion))
 	providerMSPPlanSource := ProviderMSPPlanSourceEnvFallback
@@ -266,6 +284,7 @@ func LoadConfig() (*CPConfig, error) {
 		// legacy spelling from the retired trial-activation era, kept as a
 		// fallback for already-deployed control planes.
 		TrialActivationPrivateKey: envFirstNonEmpty("CP_ENTITLEMENT_SIGNING_PRIVATE_KEY", "CP_TRIAL_ACTIVATION_PRIVATE_KEY"),
+		SessionTTL:                sessionTTL,
 		RequireEmailProvider:      envOrDefaultBool("CP_REQUIRE_EMAIL_PROVIDER", true),
 		ResendAPIKey:              strings.TrimSpace(os.Getenv("RESEND_API_KEY")),
 		EmailFrom:                 envOrDefault("PULSE_EMAIL_FROM", "noreply@pulserelay.pro"),
@@ -451,6 +470,9 @@ func (c *CPConfig) validate() error {
 	}
 	if c.ProofTenantMaxAge <= 0 {
 		return fmt.Errorf("CP_PROOF_TENANT_MAX_AGE must be greater than 0")
+	}
+	if c.SessionTTL <= 0 {
+		return fmt.Errorf("CP_SESSION_TTL must be greater than 0")
 	}
 	if c.RequireEmailProvider {
 		if strings.TrimSpace(c.ResendAPIKey) == "" {

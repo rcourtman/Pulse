@@ -61,10 +61,28 @@ type BootstrapAccount struct {
 	SetupTemplates []BootstrapSetupTemplate `json:"setup_templates,omitempty"`
 }
 
+// PortalEnvironment carries control-plane runtime facts the portal frontend
+// needs to render honestly: whether emailed sign-in links can actually be
+// delivered, and whether this is a provider-hosted (self-operated) control
+// plane rather than Pulse-hosted cloud.
+type PortalEnvironment struct {
+	SignupPath           string
+	EmailSignInAvailable bool
+	ProviderHostedMode   bool
+}
+
+// DefaultPortalEnvironment matches the historical behavior: Pulse-hosted
+// cloud with a working transactional email provider.
+func DefaultPortalEnvironment(signupPath string) PortalEnvironment {
+	return PortalEnvironment{SignupPath: signupPath, EmailSignInAvailable: true}
+}
+
 type BootstrapData struct {
 	Authenticated           bool               `json:"authenticated"`
 	Email                   string             `json:"email"`
 	HasSelfHostedCommercial bool               `json:"has_self_hosted_commercial"`
+	EmailSignInAvailable    bool               `json:"email_sign_in_available"`
+	ProviderHostedMode      bool               `json:"provider_hosted_mode"`
 	PublicSiteURL           string             `json:"public_site_url"`
 	SupportEmail            string             `json:"support_email"`
 	CommercialAPIBaseURL    string             `json:"commercial_api_base_url"`
@@ -88,6 +106,10 @@ func MarshalBootstrapJSON(data BootstrapData) (template.JS, error) {
 }
 
 func BuildBootstrapDataWithSignupPath(authenticated bool, email string, accounts []portalPageAccount, hasSelfHostedCommercial bool, signupPath string) BootstrapData {
+	return BuildBootstrapDataWithEnvironment(authenticated, email, accounts, hasSelfHostedCommercial, DefaultPortalEnvironment(signupPath))
+}
+
+func BuildBootstrapDataWithEnvironment(authenticated bool, email string, accounts []portalPageAccount, hasSelfHostedCommercial bool, env PortalEnvironment) BootstrapData {
 	bootstrapAccounts := make([]BootstrapAccount, 0, len(accounts))
 	for _, account := range accounts {
 		workspaces := make([]BootstrapWorkspace, 0, len(account.Workspaces))
@@ -159,6 +181,8 @@ func BuildBootstrapDataWithSignupPath(authenticated bool, email string, accounts
 		Authenticated:           authenticated,
 		Email:                   email,
 		HasSelfHostedCommercial: hasSelfHostedCommercial,
+		EmailSignInAvailable:    env.EmailSignInAvailable,
+		ProviderHostedMode:      env.ProviderHostedMode,
 		PublicSiteURL:           defaultPublicSiteURL,
 		SupportEmail:            defaultSupportEmail,
 		CommercialAPIBaseURL:    defaultCommercialAPIBaseURL,
@@ -166,7 +190,7 @@ func BuildBootstrapDataWithSignupPath(authenticated bool, email string, accounts
 		PortalPath:              defaultPortalPath,
 		BootstrapPath:           PortalBootstrapPath,
 		MagicLinkRequestPath:    PortalMagicLinkRequestPath,
-		SignupPath:              signupPath,
+		SignupPath:              env.SignupPath,
 		LogoutPath:              defaultLogoutPath,
 		AccountAPIBasePath:      defaultAccountAPIBasePath,
 		PortalAPIBasePath:       defaultPortalAPIBasePath,
@@ -196,6 +220,10 @@ func BuildBootstrapData(authenticated bool, email string, accounts []portalPageA
 
 func BuildAnonymousBootstrapDataWithSignupPath(signupPath string) BootstrapData {
 	return BuildBootstrapDataWithSignupPath(false, "", nil, false, signupPath)
+}
+
+func BuildAnonymousBootstrapDataWithEnvironment(env PortalEnvironment) BootstrapData {
+	return BuildBootstrapDataWithEnvironment(false, "", nil, false, env)
 }
 
 func BuildAnonymousBootstrapData() BootstrapData {

@@ -15,6 +15,8 @@ function createBootstrap(overrides: Partial<PortalBootstrapData> = {}): PortalBo
     authenticated: true,
     email: 'owner@example.com',
     has_self_hosted_commercial: false,
+    email_sign_in_available: true,
+    provider_hosted_mode: false,
     public_site_url: 'https://pulserelay.pro',
     support_email: 'support@pulserelay.pro',
     commercial_api_base_url: '/api/portal/commercial',
@@ -340,6 +342,8 @@ describe('shell view', function() {
       createContext({
         bootstrap: createBootstrap({
           has_self_hosted_commercial: true,
+          email_sign_in_available: true,
+          provider_hosted_mode: false,
           accounts: [
             {
               id: 'acct_mixed',
@@ -382,6 +386,8 @@ describe('shell view', function() {
       createContext({
         bootstrap: createBootstrap({
           has_self_hosted_commercial: true,
+          email_sign_in_available: true,
+          provider_hosted_mode: false,
           accounts: [],
         }),
       })
@@ -789,6 +795,8 @@ describe('shell view', function() {
       createContext({
         bootstrap: createBootstrap({
           has_self_hosted_commercial: false,
+          email_sign_in_available: true,
+          provider_hosted_mode: false,
           accounts: [
             {
               id: 'acct_hosted',

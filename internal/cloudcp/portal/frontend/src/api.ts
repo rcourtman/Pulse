@@ -71,29 +71,41 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
   }
 
   async function readPayload(response: Response): Promise<unknown> {
+    // Read the body exactly once. Calling response.json() speculatively and
+    // falling back to response.text() consumed the stream, so non-JSON error
+    // bodies (e.g. plain-text http.Error responses) were silently dropped.
     var contentType = response.headers && typeof response.headers.get === 'function'
       ? response.headers.get('content-type') || ''
       : '';
-    if (typeof response.json === 'function') {
-      try {
-        return await response.json();
-      } catch {
-        // Fall through to text/null handling.
-      }
-    }
-    if (contentType.includes('application/json')) {
+    if (contentType.includes('application/json') && typeof response.json === 'function') {
       try {
         return await response.json();
       } catch {
         return null;
       }
     }
-    try {
-      var text = await response.text();
-      return text || null;
-    } catch {
-      return null;
+    if (typeof response.text === 'function') {
+      var text = '';
+      try {
+        text = await response.text();
+      } catch {
+        return null;
+      }
+      if (!text) return null;
+      try {
+        return JSON.parse(text);
+      } catch {
+        return text;
+      }
     }
+    if (typeof response.json === 'function') {
+      try {
+        return await response.json();
+      } catch {
+        return null;
+      }
+    }
+    return null;
   }
 
   function messageFromPayload(payload: unknown, fallback: string): string {

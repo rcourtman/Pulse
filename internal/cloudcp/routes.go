@@ -286,7 +286,12 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, handoffHandler)))
 
 	// MSP portal API (session + account-membership authenticated)
-	mux.Handle(portal.PortalBootstrapPath, portalAPILimiter.Middleware(sessionAuth(portal.HandlePortalBootstrapWithSignupPathAndSetupFacts(deps.MagicLinks, deps.Registry, portalCommercialLookup, publicCloudSignupPath, portalSetupFacts))))
+	portalEnv := portal.PortalEnvironment{
+		SignupPath:           publicCloudSignupPath,
+		EmailSignInAvailable: strings.TrimSpace(deps.Config.ResendAPIKey) != "",
+		ProviderHostedMode:   deps.Config.IsProviderHostedMSP(),
+	}
+	mux.Handle(portal.PortalBootstrapPath, portalAPILimiter.Middleware(sessionAuth(portal.HandlePortalBootstrapWithEnvironment(deps.MagicLinks, deps.Registry, portalCommercialLookup, portalEnv, portalSetupFacts))))
 	mux.Handle(portal.PortalDashboardPath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboardWithSetupFacts(deps.Registry, portalSetupFacts))))
 	mux.Handle(portal.PortalWorkspacePath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry))))
 
@@ -304,5 +309,5 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 
 	// MSP/Cloud portal HTML page — self-authenticating (shows login form if no session)
 	portalPageLimiter := NewCPRateLimiter(60, time.Minute)
-	mux.Handle(portal.PortalPagePath, portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPageWithSignupPathAndSetupFacts(deps.MagicLinks, deps.Registry, portalCommercialLookup, controlPlaneFaviconHref(), publicCloudSignupPath, portalSetupFacts))))
+	mux.Handle(portal.PortalPagePath, portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPageWithEnvironment(deps.MagicLinks, deps.Registry, portalCommercialLookup, controlPlaneFaviconHref(), portalEnv, portalSetupFacts))))
 }

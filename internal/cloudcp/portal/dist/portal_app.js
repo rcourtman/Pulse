@@ -943,25 +943,35 @@
     }
     async function readPayload(response) {
       var contentType = response.headers && typeof response.headers.get === "function" ? response.headers.get("content-type") || "" : "";
-      if (typeof response.json === "function") {
-        try {
-          return await response.json();
-        } catch {
-        }
-      }
-      if (contentType.includes("application/json")) {
+      if (contentType.includes("application/json") && typeof response.json === "function") {
         try {
           return await response.json();
         } catch {
           return null;
         }
       }
-      try {
-        var text = await response.text();
-        return text || null;
-      } catch {
-        return null;
+      if (typeof response.text === "function") {
+        var text = "";
+        try {
+          text = await response.text();
+        } catch {
+          return null;
+        }
+        if (!text) return null;
+        try {
+          return JSON.parse(text);
+        } catch {
+          return text;
+        }
       }
+      if (typeof response.json === "function") {
+        try {
+          return await response.json();
+        } catch {
+          return null;
+        }
+      }
+      return null;
     }
     function messageFromPayload(payload, fallback) {
       if (payload && typeof payload === "object") {
@@ -1420,6 +1430,14 @@
         entry.selectedWorkspaceID = "";
       });
     };
+    function workspaceLimitMessageFromPayload(payload, clientLanguage) {
+      if (!payload || typeof payload !== "object") return "";
+      var body = payload;
+      if (body.error !== "workspace_limit_reached") return "";
+      var entity = clientLanguage ? "client workspaces" : "workspaces";
+      var counts = typeof body.current === "number" && typeof body.limit === "number" && body.limit > 0 ? " (" + body.current + " of " + body.limit + " in use)" : "";
+      return "Your license limit for " + entity + " is reached" + counts + ". Remove a " + (clientLanguage ? "client" : "workspace") + " or upgrade your license to add more.";
+    }
     var createWorkspace = async function(accountID) {
       var nameEl = getElement("ws-name-" + accountID);
       if (!nameEl) return;
@@ -1456,7 +1474,12 @@
         revealElementWhenReady("workspace-management-" + accountID);
         deps.showToast(accountUsesClientLanguage2(accountID) ? "Client added. Finish onboarding next." : "Workspace created. Finish setup next.");
       } catch (error) {
-        var message = error instanceof Error ? error.message : accountUsesClientLanguage2(accountID) ? "Failed to add client." : "Failed to create workspace.";
+        var clientLanguage = accountUsesClientLanguage2(accountID);
+        var message = error instanceof Error ? error.message : clientLanguage ? "Failed to add client." : "Failed to create workspace.";
+        if (error instanceof PortalAPIError) {
+          var limitMessage = workspaceLimitMessageFromPayload(error.payload, clientLanguage);
+          if (limitMessage) message = limitMessage;
+        }
         deps.store.updateAccountState(function(accountState) {
           var entry = ensurePortalAccountUIEntry(accountState, accountID);
           failMutationState(entry.createWorkspace, message);
@@ -1645,6 +1668,9 @@
       syncLoginStateBootstrapEmail(loginState, bootstrap.email || "");
     }, { notify: false });
     async function sendMagicLink() {
+      if (deps.store.getBootstrap().email_sign_in_available === false) {
+        return;
+      }
       var loginState = deps.store.getLoginState();
       var email = String(loginState.emailValue || "").trim();
       if (!email) {
@@ -3140,7 +3166,7 @@
     if (!setupNeeded.length) return "";
     var visible = setupNeeded.slice(0, 5);
     return '<section class="workspace-setup-queue" aria-label="' + escapeAttr(clientLanguage ? "Client onboarding queue" : "Unfinished workspace setup") + '"><div class="workspace-setup-queue-header"><div><h3>' + escapeHTML(clientLanguage ? "Clients in setup" : "Unfinished setup") + "</h3><p>" + escapeHTML(clientLanguage ? "Clients stay here until agents, alert routing, and reports are in place." : "Client workspaces stay here until agents, alert routing, and reports are in place.") + "</p></div><span>" + escapeHTML(setupNeededWorkspaceChipLabel(setupNeeded.length, clientLanguage)) + '</span></div><div class="workspace-setup-queue-list">' + visible.map(function(entry) {
-      return '<article class="workspace-setup-queue-row"><div class="workspace-setup-queue-main">' + setupBadgeHTML(entry.workspace) + "<div><strong>" + escapeHTML(entry.workspace.display_name) + "</strong><span>" + escapeHTML(entry.account.name + " \xB7 " + workspaceSetupDiagnosticsLine(entry.workspace)) + "</span><small>" + escapeHTML(workspaceSetupFactsLine(entry.workspace)) + '</small></div></div><div class="workspace-setup-queue-actions">' + renderWorkspaceSetupQueueAction(entry, accountAPIBasePath) + (entry.account.can_manage ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' + escapeAttr(entry.account.id) + '" data-workspace-id="' + escapeAttr(entry.workspace.id) + '">' + escapeHTML(clientLanguage ? "Onboarding" : "Checklist") + "</button>" : renderWorkspaceHandoffForm(entry.account.id, entry.workspace.id, accountAPIBasePath, clientLanguage ? "Open client" : "Open workspace")) + "</div></article>";
+      return '<article class="workspace-setup-queue-row"><div class="workspace-setup-queue-main">' + setupBadgeHTML(entry.workspace) + "<div><strong>" + escapeHTML(entry.workspace.display_name) + "</strong><span>" + escapeHTML(entry.account.name + " \xB7 " + workspaceSetupDiagnosticsLine(entry.workspace)) + "</span><small>" + escapeHTML(workspaceSetupFactsLine(entry.workspace)) + '</small></div></div><div class="workspace-setup-queue-actions">' + renderWorkspaceSetupQueueAction(entry, accountAPIBasePath) + (entry.account.can_manage ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' + escapeAttr(entry.account.id) + '" data-workspace-id="' + escapeAttr(entry.workspace.id) + '">' + escapeHTML(clientLanguage ? "Client onboarding" : "Setup checklist") + "</button>" : renderWorkspaceHandoffForm(entry.account.id, entry.workspace.id, accountAPIBasePath, clientLanguage ? "Open client" : "Open workspace")) + "</div></article>";
     }).join("") + "</div></section>";
   }
   function workspaceSectionHeaderCopy(accounts, entries) {
@@ -3206,7 +3232,7 @@
     ) + "</p>" + (workspaceHeaderActions ? '<div style="margin-top: 8px">' + workspaceHeaderActions + "</div>" : "") + "</div>";
     return '<section class="account-content-panel account-content-panel-workspaces"><div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' + escapeAttr(account.id) + '"><div class="workspace-operations-detail" id="workspace-operations-detail-' + escapeAttr(account.id) + '" hidden>' + workspaceManagement + '</div><div class="workspace-operations-main">' + workspaceHTML + "</div></div></section>";
   }
-  function renderAccountAccessSection(account) {
+  function renderAccountAccessSection(account, emailSignInAvailable = true) {
     var clientLanguage = accountUsesClientLanguage(account);
     var hasBilling = account.has_billing === true;
     var accessRoleCopy = {
@@ -3216,7 +3242,8 @@
     };
     var accessTaskStrip = account.can_manage ? '<div class="access-task-strip"><button type="button" class="access-task-button" id="access-task-invite-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="invite">Invite people</button><button type="button" class="access-task-button" id="access-task-change_role-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="change_role">Change roles</button><button type="button" class="access-task-button" id="access-task-remove-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="remove">Remove access</button></div>' : renderSectionContextChips(["View roster", "Owner or admin required"]);
     var accessRoleGuide = '<div class="access-policy-panel"><div class="access-panel-heading"><h4>' + (account.can_manage ? "Choose the smallest role" : "Role meanings") + "</h4><p>" + (account.can_manage ? "Match each person to the narrowest role that still lets them do the job they own." : "Use these role meanings to understand what each person on this roster can do.") + '</p></div><div class="access-policy-list"><div class="access-policy-row"><strong>Owner</strong><span>' + escapeHTML(hasBilling ? "Full account, billing, and access control." : "Full account and access control.") + '</span></div><div class="access-policy-row"><strong>Admin</strong><span>' + escapeHTML(accessRoleCopy.admin) + '</span></div><div class="access-policy-row"><strong>Tech</strong><span>' + escapeHTML(accessRoleCopy.tech) + '</span></div><div class="access-policy-row"><strong>Read-only</strong><span>' + escapeHTML(accessRoleCopy.readOnly) + "</span></div></div></div>";
-    var accessInvitePanel = account.can_manage ? '<div class="access-invite-panel"><div class="access-panel-heading"><h4>Invite people</h4><p>Add one person with the minimum role they need on this account.</p></div><div class="access-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>' : "";
+    var inviteDeliveryNote = emailSignInAvailable ? "" : '<p class="access-invite-delivery-note">No email provider is configured, so invitation emails are not sent. After inviting, print their one-time sign-in link on the control plane host: <code>docker compose run --rm control-plane provider-msp portal-link --email their@address</code></p>';
+    var accessInvitePanel = account.can_manage ? '<div class="access-invite-panel"><div class="access-panel-heading"><h4>Invite people</h4><p>Add one person with the minimum role they need on this account.</p>' + inviteDeliveryNote + '</div><div class="access-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="read_only">Read-only</option><option value="tech">Tech</option><option value="admin">Admin</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>' : "";
     var accessChangeRolePanel = '<div class="access-job-note-panel"><div class="access-panel-heading"><h4>Change roles on the roster</h4><p>Use the role column in the roster to change one person at a time. Keep each person on the smallest role they need.</p></div></div>' + accessRoleGuide;
     var accessRemovePanel = '<div class="access-job-note-panel"><div class="access-panel-heading"><h4>Remove stale access</h4><p>Use removal only when this person should no longer be on this hosted account. Owners may still be protected when they are the last owner.</p></div><div class="access-remove-points"><div class="access-remove-point"><strong>Pick the exact person</strong><span>Use the roster to remove one account member at a time.</span></div><div class="access-remove-point"><strong>Keep current owners safe</strong><span>The last owner cannot be removed until another owner exists.</span></div></div></div>';
     return '<section class="account-content-panel account-content-panel-access"><section class="access-management-panel access-section access-section-shell" id="access-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '" data-can-manage="' + escapeAttr(account.can_manage ? "true" : "false") + '" data-client-language="' + escapeAttr(clientLanguage ? "true" : "false") + '">' + (!account.can_manage ? '<p class="portal-section-copy">' + escapeHTML("Review who has access. An owner or admin must make changes.") + "</p>" : "") + '<div class="access-management-stats" id="access-stats-' + escapeAttr(account.id) + '"></div><div class="access-shell access-shell-idle" id="access-shell-' + escapeAttr(account.id) + '">' + (account.can_manage ? '<div class="access-shell-detail" id="access-detail-' + escapeAttr(account.id) + '" hidden><div class="access-task-panel" id="access-task-panel-' + escapeAttr(account.id) + '" hidden><div class="access-task-header"><div><h4 id="access-task-title-' + escapeAttr(account.id) + '">Invite people</h4><p id="access-task-copy-' + escapeAttr(account.id) + '"></p></div><button type="button" class="btn-secondary btn-compact" data-action="clear-access-job" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="access-task-body" id="access-task-body-invite-' + escapeAttr(account.id) + '" hidden>' + accessInvitePanel + accessRoleGuide + '</div><div class="access-task-body" id="access-task-body-change_role-' + escapeAttr(account.id) + '" hidden>' + accessChangeRolePanel + '</div><div class="access-task-body" id="access-task-body-remove-' + escapeAttr(account.id) + '" hidden>' + accessRemovePanel + "</div></div></div>" : "") + '<div class="access-shell-main"><div class="access-roster-column"><div class="access-roster">' + (account.can_manage ? '<div class="access-roster-toolbar">' + accessTaskStrip + "</div>" : "") + '<div class="access-roster-list" id="access-list-' + escapeAttr(account.id) + '"><div class="access-list-message">Loading\u2026</div></div></div></div></div></div></section></section>';
@@ -3257,7 +3284,8 @@
     var hostedViewOnly = isHosted && !canManageHostedTasks;
     var retryCopy = isHosted ? hostedViewOnly ? hasBillingSection ? "Review " + primarySectionLabel + " or Access first. If billing is involved, hand it to an owner or admin before you escalate." : "Review " + primarySectionLabel + " or Access first. If account ownership is involved, hand it to an owner or admin before you escalate." : "Retry the same " + primarySectionLabel + (hasBillingSection ? ", Access, or Billing" : " or Access") + " step before you escalate." : "Retry the same Billing step before you escalate.";
     var supportActions = isHosted ? '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">' + escapeHTML(primarySectionLabel) + '</button><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Access</button>' + (hasBillingSection ? '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>' : "") : '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>';
-    return '<section class="portal-support-panel"><p>Use Support only after the self-service path fails. Retry the same step before you escalate.</p><div class="portal-support-simple"><div class="portal-support-simple-card"><div class="portal-support-simple-list"><div class="portal-support-simple-row"><strong>Try first</strong><span>' + escapeHTML(retryCopy) + '</span></div><div class="portal-support-simple-row"><strong>Scope</strong><span>' + escapeHTML(supportRunbookPathCopy(isHosted, hostedViewOnly, showSelfHostedCommercial, hasHostedBillingAccounts(accounts), clientLanguage)) + '</span></div><div class="portal-support-simple-row"><strong>Include</strong><span>Account, email, and the exact action that failed.</span></div></div><div class="portal-support-simple-actions">' + supportActions + '<a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + "</a></div></div></div></section>";
+    var providerOpsRow = context.bootstrap.provider_hosted_mode === true ? '<div class="portal-support-simple-row"><strong>Operations guide</strong><span>Backups, upgrades, firewall baseline, and the validation checklist live in <a href="https://github.com/rcourtman/Pulse/blob/main/docs/MSP.md" target="_blank" rel="noopener">docs/MSP.md</a>.</span></div>' : "";
+    return '<section class="portal-support-panel"><p>Most issues clear on a retry of the same step. If it fails twice, email the details below and we will pick it up from there.</p><div class="portal-support-simple"><div class="portal-support-simple-card"><div class="portal-support-simple-list"><div class="portal-support-simple-row"><strong>Try first</strong><span>' + escapeHTML(retryCopy) + '</span></div><div class="portal-support-simple-row"><strong>Scope</strong><span>' + escapeHTML(supportRunbookPathCopy(isHosted, hostedViewOnly, showSelfHostedCommercial, hasHostedBillingAccounts(accounts), clientLanguage)) + '</span></div><div class="portal-support-simple-row"><strong>Include</strong><span>Account, email, and the exact action that failed.</span></div>' + providerOpsRow + '</div><div class="portal-support-simple-actions">' + supportActions + '<a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + "</a></div></div></div></section>";
   }
   function renderHeaderHTML(context) {
     if (context.bootstrap.authenticated) {
@@ -3287,7 +3315,7 @@
     }).join("") : renderNoHostedWorkspacesSection();
     var workspaceSummaryContent = hosted ? renderWorkspaceSummarySection(context) : "";
     var accessContent = accounts.length ? accounts.map(function(account) {
-      return '<section class="account-surface">' + renderAccountSurfaceHeader(account, accounts.length > 1) + renderAccountAccessSection(account) + "</section>";
+      return '<section class="account-surface">' + renderAccountSurfaceHeader(account, accounts.length > 1) + renderAccountAccessSection(account, context.bootstrap.email_sign_in_available !== false) + "</section>";
     }).join("") : renderNoHostedAccessSection();
     var selfHostedBillingLeadCopy = showSelfHostedCommercial ? "Use self-hosted billing only for self-hosted purchases." : "Pulse Account owns the commercial handoff for self-hosted upgrades from the app.";
     var selfHostedBillingActionsHTML = renderSelfHostedUpgradeActionRow(context);
@@ -3324,6 +3352,7 @@
     return '<article class="portal-auth-scope-row"><h3>' + escapeHTML(title) + "</h3><p>" + escapeHTML(copy) + "</p></article>";
   }
   function renderSignedOutPortalHTML(context) {
+    var providerMode = context.bootstrap.provider_hosted_mode === true;
     var statusHTML = "";
     if (context.loginState.request.error) {
       statusHTML = '<div class="billing-status visible error">' + escapeHTML(context.loginState.request.error) + "</div>";
@@ -3332,7 +3361,16 @@
       statusHTML = '<div class="billing-status visible success">' + escapeHTML(successMessage) + '<br><br><strong>Need another link?</strong> <a href="#" data-portal-action="resend-magic-link">Send it again</a>.</div>';
     }
     var signupHTML = hasSignupPath(context.signupPath) ? '<p class="portal-auth-secondary-action">Need a new Pulse Account? <a href="' + escapeAttr(context.signupPath) + '">Create an account</a>.</p>' : "";
-    return '<section class="portal-auth-shell"><div class="portal-auth-intro"><h1>Sign in to Pulse Account</h1><p>Use one commercial email address for hosted workspaces, account access, billing, licenses, refunds, and privacy requests.</p><div class="portal-auth-scope-list" aria-label="Pulse Account scope">' + renderAuthScopeRow("Workspaces", "Open hosted workspaces and review workspace state.") + renderAuthScopeRow("Access", "Review account access and manage roles when permitted.") + renderAuthScopeRow("Billing", "Open hosted billing or self-hosted commercial tools when they apply.") + '</div></div><section class="portal-auth-panel" aria-labelledby="portal-auth-title"><div class="portal-auth-card"><h2 id="portal-auth-title">Email sign-in link</h2><p>Enter the commercial email address for your Pulse account. A sign-in link will be sent to that address.</p><div class="form-group portal-auth-form-group"><label for="portal-login-email">Commercial email</label><input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' + escapeAttr(context.loginState.emailValue || "") + '" data-portal-input="login-email"></div><div class="form-actions portal-auth-actions"><button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' + (context.loginState.request.pending ? "Sending\u2026" : "Send sign-in link") + "</button></div>" + signupHTML + statusHTML + "</div></section></section>";
+    var introHTML = providerMode ? '<h1>Sign in to Pulse Account</h1><p>This portal manages the client workspaces on your Pulse control plane.</p><div class="portal-auth-scope-list" aria-label="Pulse Account scope">' + renderAuthScopeRow("Clients", "Add clients, follow onboarding, and review client health and alerts.") + renderAuthScopeRow("Access", "Invite provider staff and keep every person on the smallest useful role.") + renderAuthScopeRow("Isolation", "Each client runs in its own workspace boundary; opening a client hands you into that boundary.") + "</div>" : '<h1>Sign in to Pulse Account</h1><p>Use one commercial email address for hosted workspaces, account access, billing, licenses, refunds, and privacy requests.</p><div class="portal-auth-scope-list" aria-label="Pulse Account scope">' + renderAuthScopeRow("Workspaces", "Open hosted workspaces and review workspace state.") + renderAuthScopeRow("Access", "Review account access and manage roles when permitted.") + renderAuthScopeRow("Billing", "Open hosted billing or self-hosted commercial tools when they apply.") + "</div>";
+    var cardHTML;
+    if (context.bootstrap.email_sign_in_available === false) {
+      cardHTML = '<h2 id="portal-auth-title">Sign-in links come from your control plane host</h2><p>This control plane has no email provider configured, so it cannot send sign-in links. Generate a one-time link on the host where the control plane runs, then open it in this browser:</p><pre class="portal-auth-command"><code>docker compose run --rm control-plane \\\n  provider-msp portal-link --email you@example.com</code></pre><p>Run it from your deploy directory. The email address must already be an account member or hold a pending invitation.</p><p>To enable email sign-in, set <code>RESEND_API_KEY</code> in the control plane <code>.env</code> and restart it.</p>';
+    } else {
+      var emailLabel = providerMode ? "Email" : "Commercial email";
+      var emailIntro = providerMode ? "Enter the email address for your Pulse account. A sign-in link will be sent to that address." : "Enter the commercial email address for your Pulse account. A sign-in link will be sent to that address.";
+      cardHTML = '<h2 id="portal-auth-title">Email sign-in link</h2><p>' + escapeHTML(emailIntro) + '</p><div class="form-group portal-auth-form-group"><label for="portal-login-email">' + escapeHTML(emailLabel) + '</label><input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' + escapeAttr(context.loginState.emailValue || "") + '" data-portal-input="login-email"></div><div class="form-actions portal-auth-actions"><button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' + (context.loginState.request.pending ? "Sending\u2026" : "Send sign-in link") + "</button></div>" + signupHTML + statusHTML;
+    }
+    return '<section class="portal-auth-shell"><div class="portal-auth-intro">' + introHTML + '</div><section class="portal-auth-panel" aria-labelledby="portal-auth-title"><div class="portal-auth-card">' + cardHTML + "</div></section></section>";
   }
 
   // src/shell.ts
@@ -3629,6 +3667,10 @@
     var signupPath = typeof embeddedBootstrap.signup_path === "string" ? embeddedBootstrap.signup_path : "/signup";
     return {
       has_self_hosted_commercial: embeddedBootstrap.has_self_hosted_commercial === true,
+      // Default to available so Pulse-hosted cloud (which always has email)
+      // never hides the sign-in form if the flag is missing from an older payload.
+      email_sign_in_available: embeddedBootstrap.email_sign_in_available !== false,
+      provider_hosted_mode: embeddedBootstrap.provider_hosted_mode === true,
       public_site_url: embeddedBootstrap.public_site_url || "https://pulserelay.pro",
       support_email: embeddedBootstrap.support_email || "support@pulserelay.pro",
       commercial_api_base_url: embeddedBootstrap.commercial_api_base_url || "",

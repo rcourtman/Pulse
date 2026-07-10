@@ -95,7 +95,7 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 				writeError(w, http.StatusInternalServerError, "session_error", "Unable to establish portal session")
 				return
 			}
-			sessionToken, err := svc.GenerateSessionTokenWithVersion(userID, token.Email, sessionVersion, SessionTTL)
+			sessionToken, err := svc.GenerateSessionTokenWithVersion(userID, token.Email, sessionVersion, svc.SessionTTLOrDefault())
 			if err != nil {
 				auditEvent(r, "cp_magic_link_verify", "failure").
 					Err(err).
@@ -112,7 +112,7 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 				HttpOnly: true,
 				Secure:   true,
 				SameSite: http.SameSiteLaxMode,
-				MaxAge:   int(SessionTTL.Seconds()),
+				MaxAge:   int(svc.SessionTTLOrDefault().Seconds()),
 			})
 
 			auditEvent(r, "cp_magic_link_verify", "success").
@@ -197,7 +197,7 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 				Str("email", token.Email).
 				Str("user_id", userID).
 				Msg("Failed to read user session version")
-		} else if sessionToken, err := svc.GenerateSessionTokenWithVersion(userID, token.Email, sessionVersion, SessionTTL); err != nil {
+		} else if sessionToken, err := svc.GenerateSessionTokenWithVersion(userID, token.Email, sessionVersion, svc.SessionTTLOrDefault()); err != nil {
 			log.Warn().
 				Err(err).
 				Str("tenant_id", tenant.ID).
@@ -211,7 +211,7 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 				HttpOnly: true,
 				Secure:   true,
 				SameSite: http.SameSiteLaxMode,
-				MaxAge:   int(SessionTTL.Seconds()),
+				MaxAge:   int(svc.SessionTTLOrDefault().Seconds()),
 			})
 		}
 

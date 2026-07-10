@@ -78,6 +78,8 @@ func TestProviderMSPDeployEnvExampleMatchesBootstrapPath(t *testing.T) {
 		"CP_ENTITLEMENT_SIGNING_PRIVATE_KEY=",
 		"sudo -E ./setup.sh",
 		"docker compose run --rm control-plane provider-msp bootstrap",
+		"docker compose run --rm control-plane provider-msp portal-link",
+		"CP_SESSION_TTL",
 		"docker compose run --rm control-plane provider-msp preflight",
 		"docker compose run --rm control-plane provider-msp status",
 		"docker compose run --rm control-plane provider-msp status --require-backup",
@@ -155,6 +157,8 @@ func TestProviderMSPSetupScriptMatchesProviderContract(t *testing.T) {
 		"PULSE_PROVIDER_MSP_ACCOUNT_NAME",
 		"PULSE_PROVIDER_MSP_OWNER_EMAIL",
 		"./run-install-proof.sh",
+		"Next step: create your operator account",
+		"provider-msp portal-link --email",
 	)
 	assertNotContainsAny(t, text, "docker network create --subnet")
 }

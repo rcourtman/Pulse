@@ -178,6 +178,20 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     });
   };
 
+  // Maps the control plane's workspace_limit_reached payload to copy a
+  // provider can act on; returns '' for any other error payload.
+  function workspaceLimitMessageFromPayload(payload: unknown, clientLanguage: boolean): string {
+    if (!payload || typeof payload !== 'object') return '';
+    var body = payload as { error?: unknown; current?: unknown; limit?: unknown };
+    if (body.error !== 'workspace_limit_reached') return '';
+    var entity = clientLanguage ? 'client workspaces' : 'workspaces';
+    var counts = typeof body.current === 'number' && typeof body.limit === 'number' && body.limit > 0
+      ? ' (' + body.current + ' of ' + body.limit + ' in use)'
+      : '';
+    return 'Your license limit for ' + entity + ' is reached' + counts + '. Remove a ' +
+      (clientLanguage ? 'client' : 'workspace') + ' or upgrade your license to add more.';
+  }
+
   var createWorkspace = async function(accountID: string): Promise<void> {
     var nameEl = getElement<HTMLInputElement>('ws-name-' + accountID);
     if (!nameEl) return;
@@ -214,7 +228,12 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       revealElementWhenReady('workspace-management-' + accountID);
       deps.showToast(accountUsesClientLanguage(accountID) ? 'Client added. Finish onboarding next.' : 'Workspace created. Finish setup next.');
     } catch (error) {
-      var message = error instanceof Error ? error.message : (accountUsesClientLanguage(accountID) ? 'Failed to add client.' : 'Failed to create workspace.');
+      var clientLanguage = accountUsesClientLanguage(accountID);
+      var message = error instanceof Error ? error.message : (clientLanguage ? 'Failed to add client.' : 'Failed to create workspace.');
+      if (error instanceof PortalAPIError) {
+        var limitMessage = workspaceLimitMessageFromPayload(error.payload, clientLanguage);
+        if (limitMessage) message = limitMessage;
+      }
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         failMutationState(entry.createWorkspace, message);

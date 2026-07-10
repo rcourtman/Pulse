@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -450,13 +451,36 @@ func TestCreateWorkspace_MSPStarterLimitEnforced(t *testing.T) {
 		t.Fatalf("direct provision error = %v, want workspace limit", err)
 	}
 
-	// The handler should also return the product-level limit response.
+	// The handler should also return the product-level limit response as a
+	// JSON payload the portal frontend can present (plain-text bodies were
+	// dropped by the portal API client and shown as a generic failure).
 	body := fmt.Sprintf(`{"display_name":"Client %d"}`, workspaceLimit+1)
 	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
 	rec := doRequest(t, mux, req)
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Fatalf("content-type = %q, want application/json (body=%q)", ct, rec.Body.String())
+	}
+	var limitPayload struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+		Current int    `json:"current"`
+		Limit   int    `json:"limit"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &limitPayload); err != nil {
+		t.Fatalf("unmarshal limit payload: %v (body=%q)", err, rec.Body.String())
+	}
+	if limitPayload.Error != "workspace_limit_reached" {
+		t.Fatalf("error = %q, want workspace_limit_reached", limitPayload.Error)
+	}
+	if limitPayload.Message == "" {
+		t.Fatal("limit payload message is empty")
+	}
+	if limitPayload.Current != workspaceLimit || limitPayload.Limit != workspaceLimit {
+		t.Fatalf("current/limit = %d/%d, want %d/%d", limitPayload.Current, limitPayload.Limit, workspaceLimit, workspaceLimit)
 	}
 }
 

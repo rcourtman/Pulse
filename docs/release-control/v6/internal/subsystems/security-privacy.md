@@ -296,6 +296,12 @@ the `white_label` branding entitlement.
    and purchase-return state exactly.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
 7. Change data-at-rest encryption-key or control-plane magic-link HMAC key and storage-root hardening semantics through `internal/crypto/crypto.go`, `internal/cloudcp/auth/magiclink.go`, `internal/cloudcp/auth/magiclink_store.go`, and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.
+   Control-plane portal session lifetime rides on that same service: the auth
+   service session TTL is configurable (`CP_SESSION_TTL`, longer
+   provider-hosted MSP default) but must stay bounded; non-positive overrides
+   are ignored so a misconfigured caller cannot issue never-expiring or
+   instantly-expired sessions, and session issuance sites must read the
+   service TTL instead of the package constant.
 8. Change auth-env password normalization, hosted commercial base URL
    normalization, or shared TLS fingerprint verification defaults through
    `internal/config/config.go`, `internal/config/watcher.go`, and

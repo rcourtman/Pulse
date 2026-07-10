@@ -752,6 +752,26 @@ or other self-hosted uncapped continuity plans.
    pairing for handoff, push notifications, and 14-day history; it must not imply that the
    native mobile app is a full monitoring dashboard until that product surface
    exists.
+   Portal sessions and sign-in delivery are part of this boundary. Session
+   lifetime is configured through `CP_SESSION_TTL` and flows through the
+   control-plane auth service (`SetSessionTTL`/`SessionTTLOrDefault`); portal
+   session issuance sites must use the service value rather than the package
+   constant so provider-hosted MSP control planes can default to 7 days while
+   Pulse-hosted control planes stay at 12 hours.
+   The portal bootstrap payload carries `email_sign_in_available` (false when
+   no transactional email provider is configured) and `provider_hosted_mode`
+   (true for `provider_hosted_msp` control planes). The signed-out portal must
+   not promise an emailed sign-in link when `email_sign_in_available` is
+   false; it must instead present the operator host command
+   (`provider-msp portal-link --email ...`), and the Access invite panel must
+   disclose that invitation emails are not sent in that state. The
+   `provider-msp portal-link` CLI mints one-time portal links only for an
+   existing account member or a pending invitee, never for arbitrary
+   addresses.
+   Workspace-limit rejections from tenant creation must be JSON payloads
+   (`error=workspace_limit_reached` with `message`, `current`, and `limit`)
+   so the portal can present the licence reason instead of a generic failure;
+   the portal API client must not drop non-JSON error bodies.
 7. Add or change Stripe provisioning plan resolution through
    `internal/cloudcp/stripe/provisioner.go`, `internal/cloudcp/stripe/webhook.go`,
    and `pkg/licensing/stripe_subscription.go`. Checkout-session provisioning

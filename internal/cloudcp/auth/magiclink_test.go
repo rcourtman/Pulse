@@ -311,3 +311,42 @@ func TestNewService_HardensExistingPermissiveDataDir(t *testing.T) {
 		t.Fatalf("data dir perms = %o, want %o", got, privateDirPerm)
 	}
 }
+
+func TestSessionTTLOrDefault(t *testing.T) {
+	dir := t.TempDir()
+	svc, err := NewService(dir)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	defer svc.Close()
+
+	if got := svc.SessionTTLOrDefault(); got != SessionTTL {
+		t.Fatalf("SessionTTLOrDefault = %v, want package default %v", got, SessionTTL)
+	}
+
+	svc.SetSessionTTL(7 * 24 * time.Hour)
+	if got := svc.SessionTTLOrDefault(); got != 7*24*time.Hour {
+		t.Fatalf("SessionTTLOrDefault = %v, want 168h after SetSessionTTL", got)
+	}
+
+	// Non-positive overrides are ignored so a misconfigured caller cannot
+	// issue never-expiring or instantly-expired sessions.
+	svc.SetSessionTTL(0)
+	if got := svc.SessionTTLOrDefault(); got != 7*24*time.Hour {
+		t.Fatalf("SessionTTLOrDefault = %v, want 168h after ignored zero override", got)
+	}
+
+	// The issued session token must honor the configured TTL.
+	token, err := svc.GenerateSessionToken("u_test", "owner@example.com", svc.SessionTTLOrDefault())
+	if err != nil {
+		t.Fatalf("GenerateSessionToken: %v", err)
+	}
+	claims, err := svc.ValidateSessionToken(token)
+	if err != nil {
+		t.Fatalf("ValidateSessionToken: %v", err)
+	}
+	lifetime := claims.ExpiresAt.Sub(claims.IssuedAt)
+	if lifetime != 7*24*time.Hour {
+		t.Fatalf("session lifetime = %v, want 168h", lifetime)
+	}
+}
