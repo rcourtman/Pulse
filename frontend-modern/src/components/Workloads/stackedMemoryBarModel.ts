@@ -29,6 +29,8 @@ export interface StackedMemorySegment {
   label: string;
   leftPercent: number;
   widthPercent: number;
+  /** Diagonal-stripe texture so reclaimable cache stays distinguishable from a warning-yellow used segment. */
+  striped?: boolean;
 }
 
 export interface StackedMemoryTooltipRow {
@@ -129,6 +131,7 @@ function getSegments(
       label: 'Reclaimable',
       leftPercent: usedPercent,
       widthPercent: cachePercent,
+      striped: true,
     });
   }
 
