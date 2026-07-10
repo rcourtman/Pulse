@@ -1,18 +1,20 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableBytesValue,
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -143,6 +145,63 @@ const bindingTarget = (resource: Resource): { label: string; title: string } => 
   return { label: volumeName || 'Unbound', title: volumeName || 'Unbound' };
 };
 
+// Access / policy is a composite label (access modes + reclaim policy +
+// expansion), so it stays non-sortable. Size sorts on the same bytes the
+// capacity label renders (capacity, falling back to the PVC request).
+const KUBERNETES_STORAGE_SORT_KEYS = [
+  'resource',
+  'kind',
+  'scope',
+  'phase',
+  'class',
+  'size',
+  'provider',
+] as const;
+
+type KubernetesStorageSortKey = (typeof KUBERNETES_STORAGE_SORT_KEYS)[number];
+
+const getKubernetesStorageSortValue = (
+  resource: Resource,
+  key: KubernetesStorageSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'resource':
+      return storageName(resource);
+    case 'kind':
+      return storageKind(resource);
+    case 'scope':
+      return kubernetesScopeLabel(resource);
+    case 'phase': {
+      const phase = bindingOrPhase(resource);
+      return phase === '—' ? null : phase;
+    }
+    case 'class': {
+      const klass = storageClass(resource);
+      return klass === '—' ? null : klass;
+    }
+    case 'size': {
+      const capacity = resource.kubernetes?.capacityBytes;
+      if (typeof capacity === 'number' && capacity > 0) return capacity;
+      const requested = resource.kubernetes?.requestedBytes;
+      if (
+        resource.type === 'k8s-persistent-volume-claim' &&
+        typeof requested === 'number' &&
+        requested > 0
+      ) {
+        return requested;
+      }
+      return null;
+    }
+    case 'provider': {
+      const target = bindingTarget(resource).label;
+      return target === '—' ? null : target;
+    }
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const KubernetesStorageTable: Component<{
   resources: Resource[];
   emptyIcon: JSX.Element;
@@ -158,6 +217,14 @@ export const KubernetesStorageTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-storage-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
+  const sort = createPlatformTableSortState({
+    storageKey: 'kubernetesStorage',
+    sortKeys: KUBERNETES_STORAGE_SORT_KEYS,
+    descendingFirst: ['size'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getKubernetesStorageSortValue),
+  );
 
   return (
     <Show
@@ -200,43 +267,65 @@ export const KubernetesStorageTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1120px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[19%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="resource"
+                  class="md:w-[19%]"
+                >
                   Resource
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[10%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} sortKey="kind" class="md:w-[10%]">
                   Kind
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="scope"
+                  class="hidden md:table-cell md:w-[13%]"
                 >
                   Scope
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="phase"
+                  class="md:w-[14%]"
+                >
                   Binding / phase
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="class"
+                  class="hidden md:table-cell md:w-[10%]"
                 >
                   Class
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}>
-                  Size
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[12%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="size"
+                  class="md:w-[8%]"
                 >
+                  Size
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[12%]">
                   Access / policy
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="provider"
+                  class="hidden md:table-cell md:w-[14%]"
                 >
                   Provider / binding
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => storageName(resource);

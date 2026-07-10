@@ -1,19 +1,21 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableCountRatioValue,
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   summarizePlatformTableValues,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -100,6 +102,33 @@ const targetSummary = (resource: Resource): { label: string; title: string } => 
   };
 };
 
+// Address / hosts, Ports, and Targets are composite summaries with no single
+// scalar to order on, so they stay non-sortable.
+const KUBERNETES_NETWORKING_SORT_KEYS = ['resource', 'kind', 'scope', 'typeClass'] as const;
+
+type KubernetesNetworkingSortKey = (typeof KUBERNETES_NETWORKING_SORT_KEYS)[number];
+
+const getKubernetesNetworkingSortValue = (
+  resource: Resource,
+  key: KubernetesNetworkingSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'resource':
+      return resourceName(resource);
+    case 'kind':
+      return networkKind(resource);
+    case 'scope':
+      return kubernetesScopeLabel(resource);
+    case 'typeClass': {
+      const typeClass = typeOrClass(resource);
+      return typeClass === '—' ? null : typeClass;
+    }
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const KubernetesNetworkingTable: Component<{
   resources: Resource[];
   emptyIcon: JSX.Element;
@@ -119,6 +148,13 @@ export const KubernetesNetworkingTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-networking-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
+  const sort = createPlatformTableSortState({
+    storageKey: 'kubernetesNetworking',
+    sortKeys: KUBERNETES_NETWORKING_SORT_KEYS,
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getKubernetesNetworkingSortValue),
+  );
 
   return (
     <Show
@@ -161,38 +197,47 @@ export const KubernetesNetworkingTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1180px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[19%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="resource"
+                  class="md:w-[19%]"
+                >
                   Resource
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} sortKey="kind" class="md:w-[12%]">
                   Kind
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="scope"
+                  class="hidden md:table-cell md:w-[14%]"
                 >
                   Scope
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="typeClass"
+                  class="md:w-[12%]"
+                >
                   Type / class
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[18%]`}
-                >
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[18%]">
                   Address / hosts
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[12%]">
                   Ports
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
-                >
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[13%]">
                   Targets
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => resourceName(resource);

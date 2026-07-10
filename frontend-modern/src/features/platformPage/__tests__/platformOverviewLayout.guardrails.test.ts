@@ -410,18 +410,12 @@ describe('platform overview layout guardrails', () => {
       '<span class="md:hidden">{compactCapacityLabel()}</span>',
     );
 
-    expect(truenasSystemsTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?System/,
-    );
+    expect(truenasSystemsTableSource).toMatch(/kind="name"[\s\S]{0,200}?System/);
     expect(truenasSystemsTableSource).toMatch(
       /<span class="md:hidden">\s*<PlatformTablePercentValue value={storagePercent\(\)} \/>\s*<\/span>/,
     );
-    expect(vsphereHostsTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('name'\)[\s\S]{0,200}?Host/,
-    );
-    expect(vsphereHostsTableSource).toMatch(
-      /getPlatformTableHeadClassForKind\('numeric-value'\)[\s\S]{0,200}?VMs/,
-    );
+    expect(vsphereHostsTableSource).toMatch(/kind="name"[\s\S]{0,200}?Host/);
+    expect(vsphereHostsTableSource).toMatch(/kind="numeric-value"[\s\S]{0,200}?VMs/);
     expect(vsphereHostsTableSource).toContain('hidden md:table-cell');
     // AgentsMachinesTable uses a column-config pattern: kind helpers are
     // applied dynamically in the table render, with labels living in the

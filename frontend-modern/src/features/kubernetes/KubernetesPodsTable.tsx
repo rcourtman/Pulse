@@ -1,17 +1,19 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableNumberValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -71,6 +73,62 @@ const ageValue = (resource: Resource): string => {
   return `${Math.floor(seconds / 86_400)}d`;
 };
 
+const KUBERNETES_POD_SORT_KEYS = [
+  'pod',
+  'scope',
+  'node',
+  'status',
+  'ready',
+  'restarts',
+  'owner',
+  'image',
+  'age',
+] as const;
+
+type KubernetesPodSortKey = (typeof KUBERNETES_POD_SORT_KEYS)[number];
+
+// Scalar per column that user-controlled sorting orders on. Ready sorts by
+// the ready fraction (ascending-first, so the least-ready pods surface on
+// the first click); '—' style empty renders map to null so rows without
+// the datum sink to the bottom.
+const getKubernetesPodSortValue = (
+  resource: Resource,
+  key: KubernetesPodSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'pod':
+      return podName(resource);
+    case 'scope':
+      return kubernetesScopeLabel(resource);
+    case 'node':
+      return asTrimmedString(resource.kubernetes?.nodeName) || null;
+    case 'status':
+      return mapKubernetesPodStatus(resource).label;
+    case 'ready': {
+      const containers = podContainers(resource);
+      if (containers.length === 0) return null;
+      return containers.filter((container) => container.ready).length / containers.length;
+    }
+    case 'restarts':
+      return restartCount(resource) ?? null;
+    case 'owner': {
+      const owner = ownerValue(resource);
+      return owner === '—' ? null : owner;
+    }
+    case 'image': {
+      const image = imageValue(resource);
+      return image === '—' ? null : image;
+    }
+    case 'age': {
+      const seconds = resource.kubernetes?.uptimeSeconds ?? resource.uptime;
+      return typeof seconds === 'number' && seconds >= 0 ? seconds : null;
+    }
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const KubernetesPodsTable: Component<{
   resources: Resource[];
   emptyIcon: JSX.Element;
@@ -88,7 +146,17 @@ export const KubernetesPodsTable: Component<{
     externalSearch: props.externalSearch,
     externalStatus: props.externalStatus,
   });
-  const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareKubernetesPods));
+  // User-controlled sorting layered over the attention-first default: rows
+  // are pre-sorted by the status compare, so a user sort keeps that order
+  // for ties and the table falls straight back to it when the sort clears.
+  const sort = createPlatformTableSortState({
+    storageKey: 'kubernetesPods',
+    sortKeys: KUBERNETES_POD_SORT_KEYS,
+    descendingFirst: ['restarts', 'age'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows([...tableState.filtered()].sort(compareKubernetesPods), getKubernetesPodSortValue),
+  );
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-pod-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
 
@@ -133,43 +201,68 @@ export const KubernetesPodsTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1240px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[20%]`}>
+                <PlatformSortableTableHead kind="name" sort={sort} sortKey="pod" class="md:w-[20%]">
                   Pod
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="scope"
+                  class="hidden md:table-cell md:w-[13%]"
                 >
                   Scope
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="node"
+                  class="hidden md:table-cell md:w-[13%]"
                 >
                   Node
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[8%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} sortKey="status" class="md:w-[8%]">
                   Status
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[7%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="ready"
+                  class="md:w-[7%]"
+                >
                   Ready
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="restarts"
+                  class="md:w-[8%]"
+                >
                   Restarts
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="owner"
+                  class="hidden md:table-cell md:w-[13%]"
                 >
                   Owner
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="image"
+                  class="hidden md:table-cell md:w-[14%]"
                 >
                   Image
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[4%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="age"
+                  class="hidden md:table-cell md:w-[4%]"
                 >
                   Age
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={

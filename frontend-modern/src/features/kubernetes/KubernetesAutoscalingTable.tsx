@@ -1,19 +1,21 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableNumberValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   summarizePlatformTableValues,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -55,6 +57,41 @@ const bounds = (resource: Resource): string => {
   return `${min ?? '—'}-${max ?? '—'}`;
 };
 
+// Bounds ("1-10"), Metrics, and Labels are composite summaries with no single
+// scalar to order on, so they stay non-sortable.
+const KUBERNETES_AUTOSCALING_SORT_KEYS = [
+  'autoscaler',
+  'scope',
+  'target',
+  'current',
+  'desired',
+] as const;
+
+type KubernetesAutoscalingSortKey = (typeof KUBERNETES_AUTOSCALING_SORT_KEYS)[number];
+
+const getKubernetesAutoscalingSortValue = (
+  resource: Resource,
+  key: KubernetesAutoscalingSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'autoscaler':
+      return autoscalerName(resource);
+    case 'scope':
+      return kubernetesScopeLabel(resource);
+    case 'target': {
+      const target = targetRef(resource);
+      return target === '—' ? null : target;
+    }
+    case 'current':
+      return resource.kubernetes?.currentReplicas ?? null;
+    case 'desired':
+      return resource.kubernetes?.desiredReplicas ?? null;
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const KubernetesAutoscalingTable: Component<{
   resources: Resource[];
   emptyIcon: JSX.Element;
@@ -74,6 +111,14 @@ export const KubernetesAutoscalingTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-autoscaling-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
+  const sort = createPlatformTableSortState({
+    storageKey: 'kubernetesAutoscaling',
+    sortKeys: KUBERNETES_AUTOSCALING_SORT_KEYS,
+    descendingFirst: ['current', 'desired'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getKubernetesAutoscalingSortValue),
+  );
 
   return (
     <Show
@@ -116,39 +161,60 @@ export const KubernetesAutoscalingTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1080px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[20%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="autoscaler"
+                  class="md:w-[20%]"
+                >
                   Autoscaler
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[16%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="scope"
+                  class="hidden md:table-cell md:w-[16%]"
                 >
                   Scope
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[18%]`}>
-                  Scale target
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[10%]`}>
-                  Bounds
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[9%]`}>
-                  Current
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[9%]`}>
-                  Desired
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[11%]`}>
-                  Metrics
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[7%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="target"
+                  class="md:w-[18%]"
                 >
+                  Scale target
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[10%]">
+                  Bounds
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="current"
+                  class="md:w-[9%]"
+                >
+                  Current
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="desired"
+                  class="md:w-[9%]"
+                >
+                  Desired
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[11%]">
+                  Metrics
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[7%]">
                   Labels
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => autoscalerName(resource);

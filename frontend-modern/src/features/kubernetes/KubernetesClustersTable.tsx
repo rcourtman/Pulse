@@ -2,22 +2,24 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableCountRatioValue,
   PlatformTableMetricFallback,
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableTextValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -44,6 +46,19 @@ import {
 // CPU/Memory utilisation. It reuses the same shared primitives every
 // other platform-page table uses.
 
+const KUBERNETES_CLUSTER_SORT_KEYS = [
+  'cluster',
+  'context',
+  'version',
+  'nodes',
+  'pods',
+  'deployments',
+  'cpu',
+  'memory',
+] as const;
+
+type KubernetesClusterSortKey = (typeof KUBERNETES_CLUSTER_SORT_KEYS)[number];
+
 export const KubernetesClustersTable: Component<{
   clusters: Resource[];
   // All Kubernetes-tagged resources from the same query, so the table can
@@ -67,6 +82,50 @@ export const KubernetesClustersTable: Component<{
   const countsByCluster = createMemo(() =>
     buildKubernetesClusterChildCounts(props.scope, props.clusters),
   );
+
+  const sort = createPlatformTableSortState({
+    storageKey: 'kubernetesClusters',
+    sortKeys: KUBERNETES_CLUSTER_SORT_KEYS,
+    descendingFirst: ['nodes', 'pods', 'deployments', 'cpu', 'memory'],
+  });
+  // Closure rather than a module-level accessor: the count columns derive
+  // from the countsByCluster memo over props.scope.
+  const getClusterSortValue = (
+    cluster: Resource,
+    key: KubernetesClusterSortKey,
+  ): PlatformTableSortValue => {
+    switch (key) {
+      case 'cluster':
+        return (
+          asTrimmedString(cluster.kubernetes?.clusterName) ||
+          asTrimmedString(cluster.name) ||
+          cluster.id
+        );
+      case 'context':
+        return asTrimmedString(cluster.kubernetes?.context) || null;
+      case 'version':
+        return asTrimmedString(cluster.kubernetes?.version) || null;
+      case 'nodes':
+        return countsByCluster().get(cluster.id)?.nodes.total ?? null;
+      case 'pods':
+        return countsByCluster().get(cluster.id)?.pods.total ?? null;
+      case 'deployments':
+        return countsByCluster().get(cluster.id)?.deployments.total ?? null;
+      case 'cpu':
+        return getPlatformTableFiniteMetric(cluster.cpu?.current) ?? null;
+      case 'memory': {
+        const total = getPlatformTableFiniteMetric(cluster.memory?.total) ?? 0;
+        if (total > 0) {
+          return ((getPlatformTableFiniteMetric(cluster.memory?.used) ?? 0) / total) * 100;
+        }
+        return getPlatformTableFiniteMetric(cluster.memory?.current) ?? null;
+      }
+      default:
+        key satisfies never;
+        return null;
+    }
+  };
+  const sortedRows = createMemo(() => sort.sortRows(tableState.filtered(), getClusterSortValue));
 
   return (
     <Show
@@ -109,43 +168,75 @@ export const KubernetesClustersTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1040px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[17%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="cluster"
+                  class="md:w-[17%]"
+                >
                   Cluster
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[15%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="context"
+                  class="hidden md:table-cell md:w-[15%]"
                 >
                   Context
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="version"
+                  class="hidden md:table-cell md:w-[10%]"
                 >
                   Version
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="nodes"
+                  class="md:w-[8%]"
+                >
                   Nodes
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="pods"
+                  class="hidden md:table-cell md:w-[8%]"
                 >
                   Pods
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[12%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="deployments"
+                  class="hidden md:table-cell md:w-[12%]"
                 >
                   Deployments
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[15%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="cpu"
+                  class="md:w-[15%]"
+                >
                   CPU
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[15%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="memory"
+                  class="md:w-[15%]"
+                >
                   Memory
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(cluster) => {
                     const name = () =>
                       asTrimmedString(cluster.kubernetes?.clusterName) ||

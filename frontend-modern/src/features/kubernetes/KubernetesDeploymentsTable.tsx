@@ -1,18 +1,21 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableNumberValue,
   PlatformTableRelativeTimeValue,
   PlatformTableToolbar,
   PlatformTableEmptyState,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
+  getPlatformTableDateTimeSortValue,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -40,6 +43,48 @@ import {
 // observedGeneration is deliberately not a column: without the spec
 // generation beside it the raw number is unactionable.
 
+const KUBERNETES_DEPLOYMENT_SORT_KEYS = [
+  'deployment',
+  'namespace',
+  'cluster',
+  'desired',
+  'updated',
+  'ready',
+  'available',
+  'age',
+] as const;
+
+type KubernetesDeploymentSortKey = (typeof KUBERNETES_DEPLOYMENT_SORT_KEYS)[number];
+
+// Replica counts sort on the same `?? 0` fallback the cells render, so a
+// deployment displaying 0 orders as 0 instead of sinking as missing.
+const getKubernetesDeploymentSortValue = (
+  deployment: Resource,
+  key: KubernetesDeploymentSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'deployment':
+      return asTrimmedString(deployment.name) || deployment.id;
+    case 'namespace':
+      return asTrimmedString(deployment.kubernetes?.namespace) || null;
+    case 'cluster':
+      return kubernetesClusterLabel(deployment) || null;
+    case 'desired':
+      return deployment.kubernetes?.desiredReplicas ?? 0;
+    case 'updated':
+      return deployment.kubernetes?.updatedReplicas ?? 0;
+    case 'ready':
+      return deployment.kubernetes?.readyReplicas ?? 0;
+    case 'available':
+      return deployment.kubernetes?.availableReplicas ?? 0;
+    case 'age':
+      return getPlatformTableDateTimeSortValue(deployment.kubernetes?.createdAt);
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const KubernetesDeploymentsTable: Component<{
   resources: Resource[];
   emptyIcon: JSX.Element;
@@ -57,8 +102,19 @@ export const KubernetesDeploymentsTable: Component<{
     externalSearch: props.externalSearch,
     externalStatus: props.externalStatus,
   });
+  // User-controlled sorting layered over the attention-first default: rows
+  // are pre-sorted by the status compare, so a user sort keeps that order
+  // for ties and the table falls straight back to it when the sort clears.
+  const sort = createPlatformTableSortState({
+    storageKey: 'kubernetesDeployments',
+    sortKeys: KUBERNETES_DEPLOYMENT_SORT_KEYS,
+    descendingFirst: ['desired', 'updated', 'ready', 'available', 'age'],
+  });
   const sortedRows = createMemo(() =>
-    [...tableState.filtered()].sort(compareKubernetesDeployments),
+    sort.sortRows(
+      [...tableState.filtered()].sort(compareKubernetesDeployments),
+      getKubernetesDeploymentSortValue,
+    ),
   );
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-deployment-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
@@ -111,38 +167,70 @@ export const KubernetesDeploymentsTable: Component<{
                     Available) trim to what their headers plus 1-2 digit
                     values need. Mobile widths are unchanged.
                   */}
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[25%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="deployment"
+                  class="md:w-[25%]"
+                >
                   Deployment
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[20%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="namespace"
+                  class="hidden md:table-cell md:w-[20%]"
                 >
                   Namespace
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[17%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="cluster"
+                  class="hidden md:table-cell md:w-[17%]"
                 >
                   Cluster
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="desired"
+                  class="hidden md:table-cell md:w-[8%]"
                 >
                   Desired
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[8%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="updated"
+                  class="hidden md:table-cell md:w-[8%]"
                 >
                   Updated
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[7%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="ready"
+                  class="md:w-[7%]"
+                >
                   Ready
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[9%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="available"
+                  class="md:w-[9%]"
+                >
                   Available
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[6%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="age"
+                  class="md:w-[6%]"
+                >
                   Age
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={

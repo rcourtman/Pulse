@@ -1,18 +1,20 @@
 import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableNumberValue,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -148,6 +150,53 @@ const apiDetail = (resource: Resource): string => {
   }
 };
 
+// The Detail column is a per-kind grab-bag (service names, timestamps,
+// generation counters) with no single scalar meaning across rows, so it
+// stays non-sortable.
+const KUBERNETES_CONTROLLER_SORT_KEYS = [
+  'controller',
+  'kind',
+  'scope',
+  'target',
+  'current',
+  'ready',
+  'available',
+  'exceptions',
+] as const;
+
+type KubernetesControllerSortKey = (typeof KUBERNETES_CONTROLLER_SORT_KEYS)[number];
+
+const getKubernetesControllerSortValue = (
+  resource: Resource,
+  key: KubernetesControllerSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'controller':
+      return controllerName(resource);
+    case 'kind':
+      return controllerKind(resource);
+    case 'scope':
+      return kubernetesScopeLabel(resource);
+    case 'target': {
+      const target = targetValue(resource);
+      return target === '—' ? null : target;
+    }
+    case 'current':
+      return currentValue(resource) ?? null;
+    case 'ready':
+      return readyOrDoneValue(resource) ?? null;
+    case 'available':
+      return availableValue(resource) ?? null;
+    case 'exceptions': {
+      const exceptions = exceptionSummary(resource);
+      return exceptions === '—' ? null : exceptions;
+    }
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const KubernetesControllersTable: Component<{
   resources: Resource[];
   emptyIcon: JSX.Element;
@@ -165,8 +214,19 @@ export const KubernetesControllersTable: Component<{
     externalSearch: props.externalSearch,
     externalStatus: props.externalStatus,
   });
+  // User-controlled sorting layered over the attention-first default: rows
+  // are pre-sorted by the status compare, so a user sort keeps that order
+  // for ties and the table falls straight back to it when the sort clears.
+  const sort = createPlatformTableSortState({
+    storageKey: 'kubernetesControllers',
+    sortKeys: KUBERNETES_CONTROLLER_SORT_KEYS,
+    descendingFirst: ['current', 'ready', 'available'],
+  });
   const sortedRows = createMemo(() =>
-    [...tableState.filtered()].sort(compareKubernetesControllers),
+    sort.sortRows(
+      [...tableState.filtered()].sort(compareKubernetesControllers),
+      getKubernetesControllerSortValue,
+    ),
   );
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-controller-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
@@ -212,41 +272,68 @@ export const KubernetesControllersTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1120px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="controller"
+                  class="md:w-[18%]"
+                >
                   Controller
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[9%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} sortKey="kind" class="md:w-[9%]">
                   Kind
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[14%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="scope"
+                  class="hidden md:table-cell md:w-[14%]"
                 >
                   Scope
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[12%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="target"
+                  class="md:w-[12%]"
+                >
                   Target
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[8%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="current"
+                  class="md:w-[8%]"
+                >
                   Current
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="ready"
+                  class="md:w-[10%]"
                 >
                   Ready/Done
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[9%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="available"
+                  class="hidden md:table-cell md:w-[9%]"
                 >
                   Available
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[11%]`}>
-                  Exceptions
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[9%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="exceptions"
+                  class="md:w-[11%]"
                 >
+                  Exceptions
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[9%]">
                   Detail
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={

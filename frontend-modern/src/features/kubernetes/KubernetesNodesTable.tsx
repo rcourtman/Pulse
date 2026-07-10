@@ -2,7 +2,7 @@ import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { asTrimmedString } from '@/utils/stringUtils';
 import { getAlertStyles } from '@/utils/alerts';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -10,17 +10,19 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableMetricFallback,
   PlatformTableEmptyState,
   PlatformTableShell,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableBytesValue,
   formatPlatformTableTextValue,
   formatPlatformTableUptimeValue,
   getPlatformTableFiniteMetric,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -55,6 +57,61 @@ const formatRoles = (roles: string[] | undefined): string => {
   return roles.map((role) => role.replace('node-role.kubernetes.io/', '')).join(', ');
 };
 
+const KUBERNETES_NODE_SORT_KEYS = [
+  'node',
+  'cluster',
+  'roles',
+  'kubelet',
+  'runtime',
+  'cpu',
+  'memory',
+  'uptime',
+  'capacity',
+] as const;
+
+type KubernetesNodeSortKey = (typeof KUBERNETES_NODE_SORT_KEYS)[number];
+
+// Scalar per column that user-controlled sorting orders on. Capacity is a
+// composite label (cores / bytes / pods); CPU core count is its dominant
+// scalar, so that is what the column sorts by.
+const getKubernetesNodeSortValue = (
+  node: Resource,
+  key: KubernetesNodeSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'node':
+      return asTrimmedString(node.name) || node.id;
+    case 'cluster':
+      return kubernetesClusterLabel(node) || null;
+    case 'roles': {
+      const roles = formatRoles(node.kubernetes?.roles);
+      return roles === '—' ? null : roles;
+    }
+    case 'kubelet':
+      return asTrimmedString(node.kubernetes?.kubeletVersion) || null;
+    case 'runtime':
+      return asTrimmedString(node.kubernetes?.containerRuntimeVersion) || null;
+    case 'cpu':
+      return getPlatformTableFiniteMetric(node.cpu?.current) ?? null;
+    case 'memory': {
+      const total = getPlatformTableFiniteMetric(node.memory?.total) ?? 0;
+      if (total > 0) {
+        return ((getPlatformTableFiniteMetric(node.memory?.used) ?? 0) / total) * 100;
+      }
+      return getPlatformTableFiniteMetric(node.memory?.current) ?? null;
+    }
+    case 'uptime':
+      return getPlatformTableFiniteMetric(node.uptime) ?? null;
+    case 'capacity': {
+      const cores = node.kubernetes?.capacityCpuCores;
+      return typeof cores === 'number' && cores > 0 ? cores : null;
+    }
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const KubernetesNodesTable: Component<{
   resources: Resource[];
   emptyIcon: JSX.Element;
@@ -73,7 +130,20 @@ export const KubernetesNodesTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-node-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
-  const sortedRows = createMemo(() => [...tableState.filtered()].sort(compareKubernetesNodes));
+  // User-controlled sorting layered over the attention-first default: rows
+  // are pre-sorted by the status compare, so a user sort keeps that order
+  // for ties and the table falls straight back to it when the sort clears.
+  const sort = createPlatformTableSortState({
+    storageKey: 'kubernetesNodes',
+    sortKeys: KUBERNETES_NODE_SORT_KEYS,
+    descendingFirst: ['cpu', 'memory', 'uptime', 'capacity'],
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(
+      [...tableState.filtered()].sort(compareKubernetesNodes),
+      getKubernetesNodeSortValue,
+    ),
+  );
 
   return (
     <Show
@@ -126,45 +196,73 @@ export const KubernetesNodesTable: Component<{
                     desktop gets extra room without forcing normal desktop
                     viewports to hide Capacity behind horizontal scroll.
                   */}
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[15%]`}>
+                <PlatformSortableTableHead kind="name" sort={sort} sortKey="node" class="md:w-[15%]">
                   Node
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="cluster"
+                  class="hidden md:table-cell md:w-[10%]"
                 >
                   Cluster
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="roles"
+                  class="hidden md:table-cell md:w-[10%]"
                 >
                   Roles
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[8%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="kubelet"
+                  class="hidden md:table-cell md:w-[8%]"
                 >
                   Kubelet
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[15%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="runtime"
+                  class="hidden md:table-cell md:w-[15%]"
                 >
                   Runtime
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="cpu"
+                  class="md:w-[11%]"
+                >
                   CPU
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('metric-bar')} md:w-[11%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="metric-bar"
+                  sort={sort}
+                  sortKey="memory"
+                  class="md:w-[11%]"
+                >
                   Memory
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} hidden md:table-cell md:w-[6%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="uptime"
+                  class="hidden md:table-cell md:w-[6%]"
                 >
                   Uptime
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('numeric-value')} md:w-[14%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="numeric-value"
+                  sort={sort}
+                  sortKey="capacity"
+                  class="md:w-[14%]"
                 >
                   Capacity
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={

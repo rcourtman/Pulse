@@ -1,18 +1,20 @@
-import { For, Show, type Component, type JSX } from 'solid-js';
+import { For, Show, createMemo, type Component, type JSX } from 'solid-js';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
+import { TableCell, TableRow } from '@/components/shared/Table';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { asTrimmedString } from '@/utils/stringUtils';
 import {
   PLATFORM_HEALTH_FILTER_OPTIONS,
+  PlatformSortableTableHead,
   PlatformTableEmptyState,
   PlatformTableToolbar,
   createPlatformTableFilterState,
+  createPlatformTableSortState,
   formatPlatformTableTextValue,
   getPlatformTableCellClassForKind,
-  getPlatformTableHeadClassForKind,
   summarizePlatformTableValues,
   PlatformTableShell,
+  type PlatformTableSortValue,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
   PlatformResourceDetailToggleButton,
@@ -155,6 +157,34 @@ const serviceAccountRefs = (resource: Resource): { label: string; title: string 
 const labelSummary = (resource: Resource): { label: string; title: string } =>
   summarizePlatformTableValues(resource.tags);
 
+// Data shape, Token refs, and Labels are composite summaries with no single
+// scalar to order on, so they stay non-sortable. Lifecycle / trust is a
+// single categorical string per row, which makes sorting group like rows.
+const KUBERNETES_CONFIG_SORT_KEYS = ['resource', 'kind', 'scope', 'lifecycle'] as const;
+
+type KubernetesConfigSortKey = (typeof KUBERNETES_CONFIG_SORT_KEYS)[number];
+
+const getKubernetesConfigSortValue = (
+  resource: Resource,
+  key: KubernetesConfigSortKey,
+): PlatformTableSortValue => {
+  switch (key) {
+    case 'resource':
+      return configName(resource);
+    case 'kind':
+      return configKind(resource);
+    case 'scope':
+      return kubernetesScopeLabel(resource);
+    case 'lifecycle': {
+      const state = lifecycleOrTrust(resource);
+      return state === '—' ? null : state;
+    }
+    default:
+      key satisfies never;
+      return null;
+  }
+};
+
 export const KubernetesConfigTable: Component<{
   resources: Resource[];
   emptyIcon: JSX.Element;
@@ -174,6 +204,13 @@ export const KubernetesConfigTable: Component<{
   });
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-config-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
+  const sort = createPlatformTableSortState({
+    storageKey: 'kubernetesConfig',
+    sortKeys: KUBERNETES_CONFIG_SORT_KEYS,
+  });
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getKubernetesConfigSortValue),
+  );
 
   return (
     <Show
@@ -216,38 +253,47 @@ export const KubernetesConfigTable: Component<{
             tableClass="min-w-full table-fixed text-xs md:min-w-[1160px]"
             header={
               <>
-                <TableHead class={`${getPlatformTableHeadClassForKind('name')} md:w-[18%]`}>
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="resource"
+                  class="md:w-[18%]"
+                >
                   Resource
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[13%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} sortKey="kind" class="md:w-[13%]">
                   Kind
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[16%]`}
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="scope"
+                  class="hidden md:table-cell md:w-[16%]"
                 >
                   Scope
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[16%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="lifecycle"
+                  class="md:w-[16%]"
+                >
                   Lifecycle / trust
-                </TableHead>
-                <TableHead class={`${getPlatformTableHeadClassForKind('text')} md:w-[14%]`}>
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[14%]">
                   Data shape
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[13%]`}
-                >
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[13%]">
                   Token refs
-                </TableHead>
-                <TableHead
-                  class={`${getPlatformTableHeadClassForKind('text')} hidden md:table-cell md:w-[10%]`}
-                >
+                </PlatformSortableTableHead>
+                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[10%]">
                   Labels
-                </TableHead>
+                </PlatformSortableTableHead>
               </>
             }
             body={
               <>
-                <For each={tableState.filtered()}>
+                <For each={sortedRows()}>
                   {(resource) => {
                     const indicator = () => getSimpleStatusIndicator(resource.status);
                     const name = () => configName(resource);
