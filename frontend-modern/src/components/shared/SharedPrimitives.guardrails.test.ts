@@ -5188,6 +5188,12 @@ describe('shared primitive guardrails', () => {
     expect(sharedPlatformPageSource).toContain('TableCard class={props.cardClass');
     expect(sharedPlatformPageSource).toContain('TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}');
     expect(sharedPlatformPageSource).toContain('TableBody class={PLATFORM_TABLE_BODY_CLASS}');
+    expect(sharedPlatformPageSource).toContain(
+      "export const PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS = 'min-w-[48rem]'",
+    );
+    expect(sharedPlatformPageSource).toContain(
+      'getPlatformTableResponsiveMinWidthClass(props.tableClass)',
+    );
 
     for (const [path, source] of [
       ['src/features/docker/DockerHostsTable.tsx', dockerHostsTableSource],

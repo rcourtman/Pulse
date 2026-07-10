@@ -284,7 +284,10 @@ const buildUnifiedResourceTableColumnPresentation = (
 
 export const getUnifiedResourceTableShellClass = (
   layoutMode: UnifiedResourceTableLayoutMode,
-): string => `table-fixed min-w-full${layoutMode === 'wide' ? '' : ' text-[11px] sm:text-xs'}`;
+): string =>
+  `table-fixed min-w-[640px] sm:min-w-full${
+    layoutMode === 'wide' ? '' : ' text-[11px] sm:text-xs'
+  }`;
 
 export const getUnifiedResourceTableHeaderLabels = (
   layoutMode: UnifiedResourceTableLayoutMode,

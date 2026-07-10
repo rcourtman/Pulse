@@ -18,48 +18,65 @@ export function MobileNavBar(props: MobileNavBarProps) {
 
   return (
     <>
-      <nav class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-safe lg:hidden">
-        <div class="relative">
+      <nav
+        class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-safe lg:hidden"
+        role="tablist"
+        aria-label="Mobile navigation"
+      >
+        <div class="flex min-w-0 items-stretch">
+          <div class="relative min-w-0 flex-1">
+            <div
+              ref={mobileNav.setNavRef}
+              data-mobile-nav-rail="primary"
+              class="flex h-full min-w-0 items-center gap-1 overflow-x-auto scrollbar-hide px-2 py-1.5 sm:gap-2 sm:px-4"
+            >
+              <For each={mobileNav.orderedPrimaryTabs()}>
+                {(tab) => {
+                  const Icon = tab.icon;
+
+                  return (
+                    <button
+                      type="button"
+                      data-tab-id={tab.id}
+                      onClick={() => mobileNav.handlePrimaryClick(tab)}
+                      title={tab.tooltip}
+                      class={getMobileNavTabButtonClass({
+                        active: props.activeTab() === tab.id,
+                        enabled: tab.enabled,
+                      })}
+                    >
+                      <span aria-hidden="true" class="relative flex items-center justify-center">
+                        <Icon class={tabIconClass} />
+                      </span>
+                      <span class="whitespace-nowrap">{tab.label}</span>
+                      <Show when={!tab.enabled}>
+                        <span class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-900 dark:text-amber-200">
+                          Setup
+                        </span>
+                      </Show>
+                      <Show when={tab.badge}>
+                        <span class="rounded-full bg-surface-hover px-1.5 py-0.5 text-[9px] font-semibold text-muted">
+                          {tab.badge}
+                        </span>
+                      </Show>
+                    </button>
+                  );
+                }}
+              </For>
+            </div>
+
+            <Show when={mobileNav.showLeftFade()}>
+              <div class="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-surface to-transparent"></div>
+            </Show>
+            <Show when={mobileNav.showFade()}>
+              <div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-surface to-transparent"></div>
+            </Show>
+          </div>
+
           <div
-            ref={mobileNav.setNavRef}
-            class="flex items-center gap-1 overflow-x-auto scrollbar-hide px-2 py-1.5 sm:gap-2 sm:overflow-x-visible sm:px-4 sm:justify-between"
-            role="tablist"
-            aria-label="Mobile navigation"
+            data-mobile-nav-rail="utility"
+            class="relative z-10 flex shrink-0 items-center gap-0.5 border-l border-border bg-surface px-1 py-1.5"
           >
-            <For each={mobileNav.orderedPrimaryTabs()}>
-              {(tab) => {
-                const Icon = tab.icon;
-
-                return (
-                  <button
-                    type="button"
-                    data-tab-id={tab.id}
-                    onClick={() => mobileNav.handlePrimaryClick(tab)}
-                    title={tab.tooltip}
-                    class={getMobileNavTabButtonClass({
-                      active: props.activeTab() === tab.id,
-                      enabled: tab.enabled,
-                    })}
-                  >
-                    <span aria-hidden="true" class="relative flex items-center justify-center">
-                      <Icon class={tabIconClass} />
-                    </span>
-                    <span class="whitespace-nowrap">{tab.label}</span>
-                    <Show when={!tab.enabled}>
-                      <span class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                        Setup
-                      </span>
-                    </Show>
-                    <Show when={tab.badge}>
-                      <span class="rounded-full bg-surface-hover px-1.5 py-0.5 text-[9px] font-semibold text-muted">
-                        {tab.badge}
-                      </span>
-                    </Show>
-                  </button>
-                );
-              }}
-            </For>
-
             <For each={mobileNav.orderedUtilityTabs()}>
               {(tab) => {
                 const alertBadges = () => getMobileNavAlertBadgeCounts(tab);
@@ -126,13 +143,6 @@ export function MobileNavBar(props: MobileNavBarProps) {
               }}
             </For>
           </div>
-
-          <Show when={mobileNav.showLeftFade()}>
-            <div class="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-surface to-transparent"></div>
-          </Show>
-          <Show when={mobileNav.showFade()}>
-            <div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-surface to-transparent"></div>
-          </Show>
         </div>
       </nav>
     </>

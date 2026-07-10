@@ -217,12 +217,25 @@ describe('MobileNavBar', () => {
       />
     ));
 
-    const navList = screen.getByRole('tablist', { name: 'Mobile navigation' });
-    Object.defineProperty(navList, 'scrollWidth', { configurable: true, value: 400 });
-    Object.defineProperty(navList, 'clientWidth', { configurable: true, value: 200 });
-    Object.defineProperty(navList, 'scrollLeft', { configurable: true, value: 20, writable: true });
+    const primaryRail = container.querySelector('[data-mobile-nav-rail="primary"]');
+    const utilityRail = container.querySelector('[data-mobile-nav-rail="utility"]');
+    expect(primaryRail).toBeTruthy();
+    expect(utilityRail).toBeTruthy();
+    Object.defineProperty(primaryRail as Element, 'scrollWidth', {
+      configurable: true,
+      value: 400,
+    });
+    Object.defineProperty(primaryRail as Element, 'clientWidth', {
+      configurable: true,
+      value: 200,
+    });
+    Object.defineProperty(primaryRail as Element, 'scrollLeft', {
+      configurable: true,
+      value: 20,
+      writable: true,
+    });
 
-    fireEvent.scroll(navList);
+    fireEvent.scroll(primaryRail as Element);
 
     const buttons = container.querySelectorAll('button[data-tab-id]');
     expect(buttons[0]).toHaveAttribute('data-tab-id', 'proxmox');
@@ -233,6 +246,8 @@ describe('MobileNavBar', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('Pro')).toBeInTheDocument();
+    expect(within(utilityRail as HTMLElement).getByTitle('Alerts')).toBeInTheDocument();
+    expect(within(utilityRail as HTMLElement).getByTitle('Settings')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTitle('Machines'));
     expect(onPrimaryClick).toHaveBeenCalledWith(expect.objectContaining({ id: 'standalone' }));

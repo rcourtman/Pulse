@@ -97,6 +97,12 @@ export type PlatformTableCellAlign = 'left' | 'right' | 'center';
 export const PLATFORM_TABLE_CARD_CLASS = 'rounded-md';
 export const PLATFORM_TABLE_HEADER_ROW_CLASS = 'bg-surface-alt text-muted border-b border-border';
 export const PLATFORM_TABLE_BODY_CLASS = 'divide-y divide-border';
+export const PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS = 'min-w-[48rem]';
+
+export function getPlatformTableResponsiveMinWidthClass(tableClass?: string): string {
+  const hasExplicitBaseFloor = /(?:^|\s)min-w-\[[^\]]+\]/.test(tableClass ?? '');
+  return hasExplicitBaseFloor ? '' : PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS;
+}
 
 export type PlatformTableShellProps = {
   title?: JSX.Element;
@@ -113,7 +119,12 @@ export function PlatformTableShell(props: PlatformTableShellProps) {
   return (
     <TableCard class={props.cardClass ?? PLATFORM_TABLE_CARD_CLASS}>
       <TableCardHeader title={props.title} actions={props.actions} />
-      <Table class={props.tableClass} wrapperClass={props.tableWrapperClass}>
+      <Table
+        class={`${getPlatformTableResponsiveMinWidthClass(props.tableClass)} ${
+          props.tableClass ?? ''
+        }`.trim()}
+        wrapperClass={props.tableWrapperClass}
+      >
         {props.colgroup}
         <TableHeader>
           <TableRow class={PLATFORM_TABLE_HEADER_ROW_CLASS}>{props.header}</TableRow>

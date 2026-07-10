@@ -27,6 +27,7 @@ import {
   formatPlatformTableTextValue,
   getPlatformTableFiniteMetric,
   getPlatformResourceCountNoun,
+  getPlatformTableResponsiveMinWidthClass,
   getPlatformTableWeightedColumnWidthStyle,
   normalizePlatformResourceStatusFilter,
   summarizePlatformTableValues,
@@ -45,6 +46,20 @@ describe('getPlatformResourceCountNoun', () => {
   it('keeps plural platform nouns for every other count', () => {
     expect(getPlatformResourceCountNoun('machines', 0)).toBe('machines');
     expect(getPlatformResourceCountNoun('machines', 2)).toBe('machines');
+  });
+});
+
+describe('getPlatformTableResponsiveMinWidthClass', () => {
+  it('keeps dense platform columns readable on narrow viewports', () => {
+    expect(getPlatformTableResponsiveMinWidthClass()).toBe('min-w-[48rem]');
+    expect(
+      getPlatformTableResponsiveMinWidthClass('min-w-full table-fixed text-xs md:min-w-[1120px]'),
+    ).toBe('min-w-[48rem]');
+    expect(
+      getPlatformTableResponsiveMinWidthClass(
+        'min-w-[850px] table-fixed text-xs md:min-w-[1320px]',
+      ),
+    ).toBe('');
   });
 });
 

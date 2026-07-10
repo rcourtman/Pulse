@@ -1492,6 +1492,11 @@ and viewport-sync plus selected-row reveal behavior now live in
 so future hot-path table-state changes must not fold selector derivation,
 layout policy, and scroll coordination back into one mixed owner or the render
 shell.
+The same shared layout policy now preserves a 640-pixel mobile table floor for
+the prioritized identity and metric columns. That width remains class-based
+and contained by the frontend-primitives `Table` overflow shell, so phone
+layouts gain legible tracks without reintroducing document-level overflow,
+inline sizing maps, or extra hot-path measurement state.
 That same hot-path boundary now also owns CSP-safe table sizing. Infrastructure
 host, PBS, and PMG table shells must take their layout and column sizing from
 the shared presentation owner in

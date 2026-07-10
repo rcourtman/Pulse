@@ -889,6 +889,14 @@ not a replacement status card, CTA band, or page-local nested card.
    an existing panel/card frame must use the shared `frame="flush"` mode rather
    than caller-local border overrides, horizontal-scroll wrappers, or negative
    margin compensation.
+   Dense platform tables must also preserve readable columns at phone widths.
+   `PlatformTableShell` owns the responsive minimum-width policy, preserves any
+   explicit base floor declared by the feature table, and otherwise applies
+   the shared platform minimum before breakpoint-specific widths take over.
+   Narrow viewports keep document-level overflow
+   contained by `Table` and scroll the table itself; feature tables must not
+   squeeze every declared column into the viewport, override the shared floor,
+   or add a second page-local scroll wrapper.
    Product-table subgroup/header rows must likewise consume the shared
    `frontend-modern/src/components/shared/groupedTableRowPresentation.ts`
    helper and `.grouped-table-row` CSS token contract instead of local
@@ -3443,6 +3451,11 @@ of pushing tab-order or DOM lifecycle logic back into the shared shell. With
 support/admin controls moved under Settings, that utility ordering must no longer
 reserve a standalone `operations` slot; alerts, Patrol, and Settings are the
 remaining authenticated utility tabs.
+The platform rail is the only horizontally scrolling region in that shell.
+Alerts, Patrol, and Settings stay pinned in a separate utility rail so primary
+platform breadth cannot push those global destinations beyond the phone
+viewport, while active-platform centering and fade state remain scoped to the
+primary rail.
 The shared command palette now follows that same owner split.
 `frontend-modern/src/components/shared/CommandPaletteModal.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useCommandPaletteState.ts`

@@ -129,12 +129,13 @@ describe('unifiedResourceTableStateModel', () => {
     const wideColumns = getUnifiedResourceTableColumnPresentations('wide');
 
     expect(getUnifiedResourceTableShellClass('mobile')).toContain('table-fixed');
-    expect(getUnifiedResourceTableShellClass('mobile')).toContain('min-w-full');
-    expect(getUnifiedResourceTableShellClass('compact')).toContain('min-w-full');
-    expect(getUnifiedResourceTableShellClass('wide')).toContain('min-w-full');
+    expect(getUnifiedResourceTableShellClass('mobile')).toContain('min-w-[640px]');
+    expect(getUnifiedResourceTableShellClass('mobile')).toContain('sm:min-w-full');
+    expect(getUnifiedResourceTableShellClass('compact')).toContain('min-w-[640px]');
+    expect(getUnifiedResourceTableShellClass('wide')).toContain('min-w-[640px]');
     expect(getUnifiedResourceTableShellClass('wide')).not.toContain('min-w-[max-content]');
-    // Mobile and tablet use percentage widths so the visible-column set fills
-    // the table surface without horizontal overflow. Wider modes keep all
+    // Mobile keeps the prioritized column set but preserves a readable width
+    // floor inside the shared horizontal-scroll shell. Wider modes keep all
     // host columns visible while compressing their tracks before any
     // lower-priority columns are dropped.
     expect(mobileColumns.resourceColumn.width).toBe('40%');

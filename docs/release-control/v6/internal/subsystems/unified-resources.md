@@ -956,8 +956,11 @@ AI-only summary payloads, or page-local heuristics.
     and `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
     owns the column-priority breakpoints for host and service infrastructure
     rows. When the app shell leaves tablet-sized space during live resize, the
-    table must hide lower-priority resource metadata columns rather than
-    publishing a horizontally scrolling canonical resource list.
+    table hides lower-priority metadata first, then preserves a readable
+    640-pixel floor for the remaining identity and health columns inside the
+    shared table scroll shell. The document must not overflow, but the table
+    must not compress the prioritized mobile columns until resource names and
+    metric headings become ambiguous.
 15. Keep shared policy-posture framing on the unified-resource card owner.
     `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
     may accept caller-owned subtitle or resource-count wording when Patrol or
@@ -2252,6 +2255,11 @@ and viewport reveal plus scroll synchronization now route through
 `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`,
 so the shared consumer model is no longer interleaving selector derivation,
 layout policy, and DOM viewport coordination inside one mixed state boundary.
+The mobile shell class from that shared state model now keeps a 640-pixel
+minimum table width below the small-screen breakpoint while restoring
+`min-w-full` above it. This retains the prioritized mobile column set without
+forcing those columns into unreadable tracks, and the existing shared `Table`
+overflow owner contains the horizontal scroll locally.
 That same unified-resource consumer contract now also owns CSP-safe table
 presentation for infrastructure rows. Host, PBS, and PMG table sections must
 consume the shared column presentation owner and render canonical table sizing

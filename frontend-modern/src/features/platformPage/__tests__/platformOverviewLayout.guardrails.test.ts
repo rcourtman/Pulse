@@ -177,6 +177,8 @@ describe('platform overview layout guardrails', () => {
     expect(sharedPlatformPageSource).toContain('PLATFORM_TABLE_BODY_CLASS');
     expect(sharedPlatformPageSource).toContain('getPlatformTableHeadClass');
     expect(sharedPlatformPageSource).toContain('getPlatformTableCellClass');
+    expect(sharedPlatformPageSource).toContain('getPlatformTableResponsiveMinWidthClass');
+    expect(sharedPlatformPageSource).toContain('PLATFORM_TABLE_DEFAULT_RESPONSIVE_MIN_WIDTH_CLASS');
     expect(sharedPlatformPageSource).toContain('PlatformTableToolbar');
     expect(sharedPlatformPageSource).toContain('PlatformTableLoadingState');
     expect(sharedPlatformPageSource).toContain('PlatformTableShell');
