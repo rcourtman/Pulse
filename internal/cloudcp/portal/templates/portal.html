@@ -5,12 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pulse Account</title>
   <link rel="icon" href="{{.FaviconHref}}" type="image/svg+xml">
+  <script nonce="{{.Nonce}}">(function(){try{var t=localStorage.getItem("pulse-portal-theme");if(t==="dark"||t==="light"){document.documentElement.setAttribute("data-theme",t);}}catch(e){}})();</script>
   <style nonce="{{.Nonce}}">{{.Styles}}</style>
 </head>
 <body>
 <header>
   <span class="brand">Pulse Account</span>
-  <div class="user-info" id="portal-user-info"></div>
+  <div class="header-controls">
+    <button class="theme-toggle" id="portal-theme-toggle" type="button" aria-label="Toggle color theme"></button>
+    <div class="user-info" id="portal-user-info"></div>
+  </div>
 </header>
 
 <script id="pulse-account-bootstrap" type="application/json">{{.BootstrapJSON}}</script>

@@ -1,5 +1,5 @@
 {
-  "source_hash": "dba4960a5e3f046f4331c8b0dd39d1e7cf0b2b6cb1940c80b44e8d1bb0f86883",
+  "source_hash": "d8861eb2959ecc855b778cfdd3c5e94973b115a01bb720778786fa8bf6d2a7da",
   "build_inputs": [
     "package.json",
     "tsconfig.json",
@@ -26,8 +26,6 @@
     "src/billing_controller.ts",
     "src/billing_view.test.ts",
     "src/billing_view.ts",
-    "src/fonts/roboto-latin-ext.woff2",
-    "src/fonts/roboto-latin.woff2",
     "src/index.ts",
     "src/runtime.test.ts",
     "src/runtime.ts",
@@ -41,6 +39,8 @@
     "src/store.test.ts",
     "src/store.ts",
     "src/styles.css",
+    "src/theme.test.ts",
+    "src/theme.ts",
     "src/types.ts",
     "src/workspace_presentation.test.ts",
     "src/workspace_presentation.ts"

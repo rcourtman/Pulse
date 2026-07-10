@@ -1,4 +1,5 @@
 import { installAccountController } from './account_controller';
+import { installPortalThemeToggle } from './theme';
 import { installAccountRuntime } from './account_runtime';
 import { createPortalAPI, PortalAPIError } from './api';
 import { installAuthController } from './auth_controller';
@@ -109,6 +110,7 @@ export function installPortalApp(deps: PortalAppDeps): PortalApp {
 
 export function startPortalApp(): PortalApp {
   var runtime = createPortalRuntime();
+  installPortalThemeToggle();
   return installPortalApp({
     bootstrapDefaults: runtime.bootstrapDefaults,
     store: runtime.store,
