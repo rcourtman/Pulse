@@ -715,17 +715,27 @@ func TestAgentRuntimeImagePersistsAgentIdentityByDefault(t *testing.T) {
 }
 
 func TestReleaseCandidateRequiresPlatformNativeAgentSigning(t *testing.T) {
-	assertFileContainsAll(t, repoFile(".github", "workflows", "build-release-candidate.yml"),
+	candidateWorkflowPath := repoFile(".github", "workflows", "build-release-candidate.yml")
+	assertFileContainsAll(t, candidateWorkflowPath,
 		`require_platform_signing:`,
 		`sign-macos-agent:`,
 		`codesign --force --timestamp --options runtime`,
 		`xcrun notarytool submit`,
-		`spctl --assess --type execute`,
+		`--output-format json > notarization-result.json`,
+		`result.get('status') != 'Accepted'`,
+		`codesign --verify --deep --strict --verbose=2`,
 		`sign-windows-agent:`,
 		`signtool sign`,
 		`signtool verify /pa /v`,
 		`PULSE_AGENT_NATIVE_BINARIES_DIR:`,
 	)
+	candidateWorkflow, err := os.ReadFile(candidateWorkflowPath)
+	if err != nil {
+		t.Fatalf("read build-release-candidate.yml: %v", err)
+	}
+	if strings.Contains(string(candidateWorkflow), `spctl --assess --type execute`) {
+		t.Fatal("bare command-line Mach-O binaries must not use Gatekeeper app assessment after notarization")
+	}
 	assertFileContainsAll(t, repoFile(".github", "workflows", "create-release.yml"),
 		`require_platform_signing: true`,
 	)

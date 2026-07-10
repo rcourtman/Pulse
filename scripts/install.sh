@@ -593,12 +593,31 @@ teardown_openrc_agent_service() {
     rm -f "$init_path"
 }
 
-teardown_service_command_agent() {
-    local service_path="$1"
-    service "${AGENT_NAME}" stop 2>/dev/null || true
-    if [[ -n "$service_path" ]]; then
-        rm -f "$service_path"
+teardown_freebsd_agent_service() {
+    local service_path="${1:-/usr/local/etc/rc.d/${AGENT_NAME}}"
+
+    # Stop the rc.d supervisor before removing the executable. Killing only the
+    # child is insufficient because daemon(8) immediately restarts it.
+    if [[ -x "$service_path" ]]; then
+        "$service_path" stop 2>/dev/null || true
+    elif command -v service >/dev/null 2>&1; then
+        service "${AGENT_NAME}" stop 2>/dev/null || true
     fi
+
+    if command -v sysrc >/dev/null 2>&1; then
+        sysrc -x pulse_agent_enable >/dev/null 2>&1 || true
+    else
+        for rc_config in /etc/rc.conf /etc/rc.conf.local; do
+            if [[ -f "$rc_config" ]]; then
+                sed -i '' '/^[[:space:]]*pulse_agent_enable[[:space:]]*=/d' "$rc_config" 2>/dev/null || \
+                    sed -i '/^[[:space:]]*pulse_agent_enable[[:space:]]*=/d' "$rc_config" 2>/dev/null || true
+            fi
+        done
+    fi
+
+    rm -f "$service_path"
+    rm -f /usr/local/etc/rc.d/pulse_agent.sh
+    rm -f /var/run/pulse_agent.pid /var/run/pulse_agent.child.pid
 }
 
 teardown_sysv_agent_service() {
@@ -2678,7 +2697,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
             teardown_systemd_agent_service
         elif [[ "$(uname -s)" == "FreeBSD" ]]; then
             log_info "Removing TrueNAS CORE installation..."
-            teardown_service_command_agent "/usr/local/etc/rc.d/${AGENT_NAME}"
+            teardown_freebsd_agent_service "/usr/local/etc/rc.d/${AGENT_NAME}"
         fi
         # Remove Init/Shutdown task
         if command -v midclt >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
@@ -2694,6 +2713,13 @@ if [[ "$UNINSTALL" == "true" ]]; then
     # OpenRC (Alpine, Gentoo, Artix, etc.)
     if command -v rc-service >/dev/null 2>&1; then
         teardown_openrc_agent_service
+    fi
+
+    # Vanilla FreeBSD, OPNsense, and pfSense all use the rc.d service rendered
+    # by this installer. This must run even when no TrueNAS marker is present.
+    if [[ "$(uname -s)" == "FreeBSD" ]]; then
+        log_info "Removing FreeBSD rc.d installation..."
+        teardown_freebsd_agent_service "/usr/local/etc/rc.d/${AGENT_NAME}"
     fi
 
     # SysV init (legacy systems like Asustor, older Debian/RHEL, etc.)

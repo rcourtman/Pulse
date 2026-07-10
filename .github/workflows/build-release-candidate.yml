@@ -131,9 +131,21 @@ jobs:
             --key AuthKey.p8 \
             --key-id "$APPLE_NOTARY_KEY_ID" \
             --issuer "$APPLE_NOTARY_ISSUER_ID" \
-            --wait
+            --wait \
+            --output-format json > notarization-result.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path('notarization-result.json').read_text())
+          if result.get('status') != 'Accepted':
+              raise SystemExit(f"Apple notarization was not accepted: {result.get('status', 'unknown')}")
+          PY
           for binary in native-agent-binaries/pulse-agent-darwin-*; do
-            spctl --assess --type execute --verbose=2 "$binary"
+            # Gatekeeper's spctl app assessment rejects bare command-line
+            # Mach-O binaries even when the notary service accepted them.
+            # Verify the signed bytes that will be packaged instead.
+            codesign --verify --deep --strict --verbose=2 "$binary"
           done
 
       - name: Upload signed macOS binaries

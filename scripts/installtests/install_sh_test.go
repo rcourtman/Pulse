@@ -1374,10 +1374,10 @@ func TestInstallSHUsesCanonicalServiceTeardownHelpers(t *testing.T) {
 	required := []string{
 		`teardown_systemd_agent_service() {`,
 		`teardown_openrc_agent_service() {`,
-		`teardown_service_command_agent() {`,
+		`teardown_freebsd_agent_service() {`,
 		`teardown_sysv_agent_service() {`,
 		`teardown_systemd_agent_service`,
-		`teardown_service_command_agent "/usr/local/etc/rc.d/${AGENT_NAME}"`,
+		`teardown_freebsd_agent_service "/usr/local/etc/rc.d/${AGENT_NAME}"`,
 		`teardown_openrc_agent_service`,
 		`teardown_sysv_agent_service "/etc/init.d/${AGENT_NAME}"`,
 	}
@@ -1667,6 +1667,29 @@ func TestInstallSHUsesCanonicalFreeBSDAgentEnablement(t *testing.T) {
 
 	if strings.Count(script, `grep -q "pulse_agent_enable" /etc/rc.conf`) != 1 {
 		t.Fatalf("expected one canonical FreeBSD enablement definition, found %d", strings.Count(script, `grep -q "pulse_agent_enable" /etc/rc.conf`))
+	}
+}
+
+func TestInstallSHUsesCanonicalFreeBSDAgentTeardown(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`teardown_freebsd_agent_service() {`,
+		`"$service_path" stop 2>/dev/null || true`,
+		`sysrc -x pulse_agent_enable >/dev/null 2>&1 || true`,
+		`rm -f /usr/local/etc/rc.d/pulse_agent.sh`,
+		`rm -f /var/run/pulse_agent.pid /var/run/pulse_agent.child.pid`,
+		`log_info "Removing FreeBSD rc.d installation..."`,
+		`teardown_freebsd_agent_service "/usr/local/etc/rc.d/${AGENT_NAME}"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing canonical FreeBSD teardown contract: %s", needle)
+		}
 	}
 }
 
