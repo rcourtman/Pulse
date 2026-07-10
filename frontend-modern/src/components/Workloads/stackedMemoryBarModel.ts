@@ -6,8 +6,8 @@ import {
   formatBytes,
   formatPercent,
 } from '@/utils/format';
-import { getMetricColorRgba } from '@/utils/metricThresholds';
-import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
+import { getMetricColorRgba, getMetricSeverity } from '@/utils/metricThresholds';
+import type { MetricDisplayThresholds, MetricSeverity } from '@/utils/metricThresholds';
 
 export interface StackedMemoryBarProps {
   used: number;
@@ -52,6 +52,14 @@ export interface StackedMemoryBarPresentation {
   tooltipRows: StackedMemoryTooltipRow[];
   tooltipTitle: string;
 }
+
+// Tooltip legend for the used segment tracks the same severity that colors
+// the bar, so the legend never claims green while the bar shows warning/red.
+const USED_LABEL_CLASS: Record<MetricSeverity, string> = {
+  normal: 'text-green-400',
+  warning: 'text-yellow-400',
+  critical: 'text-red-400',
+};
 
 const MEMORY_COLORS = {
   active: 'rgba(34, 197, 94, 0.6)',
@@ -154,10 +162,11 @@ function getTooltipRows(
   const hasSwap = (props.swapTotal || 0) > 0;
 
   if (props.total > 0) {
+    const usedPercent = (props.used / props.total) * 100;
     rows.push({
       borderTop: false,
       label: 'Used',
-      labelClass: 'text-green-400',
+      labelClass: USED_LABEL_CLASS[getMetricSeverity(usedPercent, 'memory', props.thresholds)],
       value: formatBytes(props.used),
     });
 

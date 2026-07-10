@@ -61,6 +61,29 @@ describe('buildStackedMemoryBarPresentation', () => {
     expect(rows['Free']).toBe('2.00 GB');
   });
 
+  it('colors the Used tooltip label with the same severity as the bar segment', () => {
+    const normal = buildStackedMemoryBarPresentation(
+      { used: 4 * GiB, total: 16 * GiB, cache: 6 * GiB },
+      400,
+    );
+    expect(normal.tooltipRows[0].label).toBe('Used');
+    expect(normal.tooltipRows[0].labelClass).toBe('text-green-400');
+
+    // 80% used trips the default memory warning threshold (75), so the used
+    // segment renders yellow and the legend must not claim green.
+    const warning = buildStackedMemoryBarPresentation(
+      { used: 12.8 * GiB, total: 16 * GiB, cache: 3.2 * GiB },
+      400,
+    );
+    expect(warning.tooltipRows[0].labelClass).toBe('text-yellow-400');
+
+    const critical = buildStackedMemoryBarPresentation(
+      { used: 14 * GiB, total: 16 * GiB, cache: 2 * GiB },
+      400,
+    );
+    expect(critical.tooltipRows[0].labelClass).toBe('text-red-400');
+  });
+
   it('matches the pre-cache layout when no cache is reported', () => {
     const presentation = buildStackedMemoryBarPresentation(
       { used: 4 * GiB, total: 16 * GiB },
