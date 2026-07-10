@@ -140,6 +140,7 @@ const setViewportWidth = (width: number) => {
 afterEach(() => {
   window.history.pushState({}, '', '/');
   setViewportWidth(1024);
+  window.localStorage.clear();
   cleanup();
   vi.clearAllMocks();
 });
@@ -220,7 +221,9 @@ describe('Docker native tables', () => {
     expect(screen.queryByText('Health')).not.toBeInTheDocument();
     expect(screen.queryByText('State')).not.toBeInTheDocument();
     expect(screen.getByText('edge-web')).toBeInTheDocument();
-    expect(screen.getByText('edge-01')).toBeInTheDocument();
+    // Multi-host fleets group by host by default, so the host name renders
+    // twice: once in the group header row and once in the host column.
+    expect(screen.getAllByText('edge-01')).toHaveLength(2);
     expect(screen.getByText('docker 27.5.1')).toBeInTheDocument();
     expect(screen.getByText('podman 5.2.1')).toBeInTheDocument();
     expect(screen.getByText('nginx:latest')).toBeInTheDocument();
@@ -323,9 +326,144 @@ describe('Docker native tables', () => {
     ));
 
     expect(screen.getByText('edge-cache')).toBeInTheDocument();
-    expect(screen.getByText('edge-02')).toBeInTheDocument();
+    // Scoped to edge-02: group header + host column both show the host name.
+    expect(screen.getAllByText('edge-02')).toHaveLength(2);
     expect(screen.queryByText('edge-web')).not.toBeInTheDocument();
     expect(screen.queryByText('edge-01')).not.toBeInTheDocument();
+  });
+
+  it('groups containers under host headers with counts and host web links', () => {
+    const { container } = renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: { hostname: 'edge-01', image: 'nginx:latest', containerState: 'running' },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-cache',
+            status: 'running',
+            docker: { hostname: 'edge-02', image: 'redis:7.4', containerState: 'running' },
+          }),
+          makeResource({
+            id: 'container-3',
+            type: 'app-container',
+            name: 'edge-proxy',
+            status: 'running',
+            docker: { hostname: 'edge-01', image: 'traefik:v3', containerState: 'running' },
+          }),
+        ]}
+        hosts={[
+          makeResource({
+            id: 'host-1',
+            type: 'docker-host',
+            name: 'edge-01',
+            status: 'online',
+            customUrl: 'https://edge-01.example:9443',
+            docker: { hostname: 'edge-01' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    const headers = [...container.querySelectorAll('[data-docker-host-group]')];
+    expect(headers.map((row) => row.getAttribute('data-docker-host-group'))).toEqual([
+      'edge-01',
+      'edge-02',
+    ]);
+    expect(within(headers[0] as HTMLElement).getByText('2 containers')).toBeInTheDocument();
+    expect(within(headers[1] as HTMLElement).getByText('1 container')).toBeInTheDocument();
+    // Host resource provides the group header's web interface link.
+    const hostLink = within(headers[0] as HTMLElement).getByRole('link', {
+      name: 'Open web interface for edge-01',
+    });
+    expect(hostLink).toHaveAttribute('href', 'https://edge-01.example:9443');
+  });
+
+  it('renders a flat list when only one host is present', () => {
+    const { container } = renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: { hostname: 'edge-01', image: 'nginx:latest', containerState: 'running' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(container.querySelector('[data-docker-host-group]')).toBeNull();
+  });
+
+  it('honors a persisted flat preference for multi-host fleets', () => {
+    window.localStorage.setItem('dockerContainersGroupingMode', 'flat');
+
+    const { container } = renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            docker: { hostname: 'edge-01', image: 'nginx:latest', containerState: 'running' },
+          }),
+          makeResource({
+            id: 'container-2',
+            type: 'app-container',
+            name: 'edge-cache',
+            status: 'running',
+            docker: { hostname: 'edge-02', image: 'redis:7.4', containerState: 'running' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    expect(container.querySelector('[data-docker-host-group]')).toBeNull();
+  });
+
+  it('links the container name to its custom web interface URL', () => {
+    renderInRouter(() => (
+      <DockerContainersTable
+        resources={[
+          makeResource({
+            id: 'container-1',
+            type: 'app-container',
+            name: 'edge-web',
+            status: 'running',
+            customUrl: 'http://edge-01.example:8080',
+            docker: { hostname: 'edge-01', image: 'nginx:latest', containerState: 'running' },
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No containers"
+        emptyDescription="No containers"
+        showToolbar={false}
+      />
+    ));
+
+    const nameLink = screen.getByRole('link', { name: 'Open web interface for edge-web' });
+    expect(nameLink).toHaveAttribute('href', 'http://edge-01.example:8080');
   });
 
   it('applies the URL search filter, including -term exclusions, to container rows', () => {

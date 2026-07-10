@@ -357,6 +357,7 @@ function DockerOverview(props: {
       />
       <DockerContainersTable
         resources={props.containers}
+        hosts={props.hosts}
         emptyIcon={dockerIcon()}
         emptyTitle="No Docker or Podman containers"
         emptyDescription="Containers appear here when a Docker or Podman host reports workload inventory."
