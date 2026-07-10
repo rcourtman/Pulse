@@ -27,6 +27,75 @@ func TestInstallPS1ParsesWithPowerShell(t *testing.T) {
 	}
 }
 
+func TestWindowsAgentLifecycleHarnessParsesWithPowerShell(t *testing.T) {
+	pwsh, err := exec.LookPath("pwsh")
+	if err != nil {
+		t.Skip("pwsh not installed")
+	}
+
+	scriptPath := repoFile("scripts", "installtests", "windows_agent_lifecycle.ps1")
+	cmd := exec.Command(pwsh,
+		"-NoLogo",
+		"-NoProfile",
+		"-NonInteractive",
+		"-Command",
+		`$errors = $null; [System.Management.Automation.Language.Parser]::ParseFile($env:PULSE_WINDOWS_LIFECYCLE_PATH, [ref]$null, [ref]$errors) > $null; if ($errors.Count) { $errors | ForEach-Object { Write-Error $_.ToString() }; exit 1 }`,
+	)
+	cmd.Env = append(os.Environ(), "PULSE_WINDOWS_LIFECYCLE_PATH="+scriptPath)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Windows lifecycle harness failed PowerShell parser check: %v\n%s", err, output)
+	}
+}
+
+func TestWindowsAgentLifecycleHarnessPinsCompleteServiceProof(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "installtests", "windows_agent_lifecycle.ps1"))
+	if err != nil {
+		t.Fatalf("read Windows lifecycle harness: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`[ValidateSet('Full', 'InstallUpdate', 'PostRebootUninstall')]`,
+		`Pass -ConfirmLifecycleMutation`,
+		`-PreflightOnly ` + "`" + `$true`,
+		`Assert-AgentRuntime -ExpectedVersion $versionV1`,
+		`Assert-AgentRuntime -ExpectedVersion $versionV2`,
+		`Assert-CrashRecovery -ExpectedVersion $versionV2`,
+		`Post-reboot persistence and uninstall proof passed.`,
+		`PulseAgent service still exists after uninstall.`,
+		`Pulse Agent state directory still exists after uninstall.`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("Windows lifecycle harness missing proof contract: %s", needle)
+		}
+	}
+}
+
+func TestInstallPS1OwnsWindowsServiceLoggingAndRecovery(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
+	if err != nil {
+		t.Fatalf("read install.ps1: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`$ServiceArgs += @("--log-file", "` + "`" + `"$LogFile` + "`" + `"")`,
+		`$scOutput = sc.exe failure $AgentName reset= 86400 actions= restart/5000/restart/5000/restart/5000`,
+		`Show-Error "Failed to configure service recovery actions: $scOutput"`,
+		`$scOutput = sc.exe failureflag $AgentName 1`,
+		`Show-Error "Failed to enable service recovery for non-crash failures: $scOutput"`,
+		`$logReady = (Test-Path $LogFile) -and ((Get-Item $LogFile).Length -gt 0)`,
+		`if ($response.StatusCode -eq 200 -and $logReady)`,
+		`Installation did not reach a healthy, logged runtime.`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.ps1 missing Windows service logging/recovery contract: %s", needle)
+		}
+	}
+}
+
 func TestInstallPS1DockerModeDefaultsHostOff(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
 	if err != nil {

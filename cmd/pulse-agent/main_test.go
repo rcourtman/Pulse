@@ -67,6 +67,60 @@ func TestDockerRuntimeHelpUsesDockerPodmanCopy(t *testing.T) {
 	}
 }
 
+func TestLoadConfigPreservesAgentLogFile(t *testing.T) {
+	t.Run("environment", func(t *testing.T) {
+		cfg, err := loadConfig(nil, func(key string) string {
+			if key == "PULSE_LOG_FILE" {
+				return ` C:\ProgramData\Pulse\pulse-agent.log `
+			}
+			return ""
+		})
+		if err != nil {
+			t.Fatalf("loadConfig: %v", err)
+		}
+		if cfg.LogFile != `C:\ProgramData\Pulse\pulse-agent.log` {
+			t.Fatalf("LogFile = %q", cfg.LogFile)
+		}
+	})
+
+	t.Run("flag overrides environment", func(t *testing.T) {
+		cfg, err := loadConfig([]string{"--log-file", `D:\Pulse\agent.jsonl`}, func(key string) string {
+			if key == "PULSE_LOG_FILE" {
+				return `C:\ProgramData\Pulse\pulse-agent.log`
+			}
+			return ""
+		})
+		if err != nil {
+			t.Fatalf("loadConfig: %v", err)
+		}
+		if cfg.LogFile != `D:\Pulse\agent.jsonl` {
+			t.Fatalf("LogFile = %q", cfg.LogFile)
+		}
+	})
+}
+
+func TestAgentFileLoggingUsesCanonicalRotatingSink(t *testing.T) {
+	source, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatalf("read pulse-agent main.go: %v", err)
+	}
+	text := string(source)
+	for _, want := range []string{
+		`pulselogging.NewStandaloneLogger(pulselogging.Config{`,
+		`MaxSizeMB:  agentLogMaxSizeMB`,
+		`MaxAgeDays: agentLogMaxAgeDays`,
+		`Compress:   true`,
+		`Write rotating JSON logs to this file`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("expected canonical rotating agent log contract %q", want)
+		}
+	}
+	if strings.Contains(text, "newLogger := zerolog.New(os.Stdout)") {
+		t.Fatal("remote log-level updates must not replace the configured file sink")
+	}
+}
+
 func TestGatherTags(t *testing.T) {
 	tests := []struct {
 		name     string

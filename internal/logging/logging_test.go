@@ -345,6 +345,78 @@ func TestRollingFileWriter(t *testing.T) {
 	}
 }
 
+func TestNewStandaloneLoggerWritesIndependentRotatingFile(t *testing.T) {
+	logFile := filepath.Join(t.TempDir(), "pulse-agent.log")
+	var console bytes.Buffer
+	logger, closer, err := NewStandaloneLogger(Config{
+		Component:  "pulse-agent",
+		FilePath:   logFile,
+		MaxSizeMB:  1,
+		MaxAgeDays: 1,
+		Compress:   true,
+	}, &console)
+	if err != nil {
+		t.Fatalf("NewStandaloneLogger error: %v", err)
+	}
+	if closer == nil {
+		t.Fatal("expected standalone file closer")
+	}
+
+	logger.Info().Str("version", "test.1").Msg("service started")
+	if err := closer.Close(); err != nil {
+		t.Fatalf("close standalone logger: %v", err)
+	}
+
+	fileContent, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("read standalone log: %v", err)
+	}
+	for label, content := range map[string]string{
+		"console": console.String(),
+		"file":    string(fileContent),
+	} {
+		if !strings.Contains(content, `"component":"pulse-agent"`) ||
+			!strings.Contains(content, `"version":"test.1"`) ||
+			!strings.Contains(content, `"message":"service started"`) {
+			t.Fatalf("%s output missing structured event: %s", label, content)
+		}
+	}
+}
+
+type failingLogWriter struct{}
+
+func (failingLogWriter) Write([]byte) (int, error) {
+	return 0, errors.New("console handle unavailable")
+}
+
+func TestNewStandaloneLoggerPrioritizesFileWhenConsoleFails(t *testing.T) {
+	logFile := filepath.Join(t.TempDir(), "pulse-agent.log")
+	logger, closer, err := NewStandaloneLogger(Config{
+		Component:  "pulse-agent",
+		FilePath:   logFile,
+		MaxSizeMB:  1,
+		MaxAgeDays: 1,
+	}, failingLogWriter{})
+	if err != nil {
+		t.Fatalf("NewStandaloneLogger error: %v", err)
+	}
+	if closer == nil {
+		t.Fatal("expected standalone file closer")
+	}
+
+	logger.Info().Msg("service survives invalid console")
+	if err := closer.Close(); err != nil {
+		t.Fatalf("close standalone logger: %v", err)
+	}
+	content, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("read standalone log: %v", err)
+	}
+	if !strings.Contains(string(content), `"message":"service survives invalid console"`) {
+		t.Fatalf("durable log did not receive event after console failure: %s", content)
+	}
+}
+
 func TestInitClosesPreviousRollingFileWriter(t *testing.T) {
 	t.Cleanup(resetLoggingState)
 

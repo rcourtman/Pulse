@@ -34,6 +34,9 @@ that binary, not separate customer-facing agent products.
 6. `cmd/pulse-agent/main.go`
 7. `scripts/install.sh`
 8. `scripts/install.ps1`
+   8a. `.github/workflows/unified-agent-native.yml`
+   8b. `scripts/installtests/windows_agent_lifecycle.ps1`
+   8c. `scripts/installtests/windowslifecycleserver/main.go`
 9. `frontend-modern/src/api/agentProfiles.ts`
 10. `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`
 11. `frontend-modern/src/components/Settings/agentProfileSettings.ts`
@@ -262,7 +265,14 @@ update, profile rollout, command reachability, or fleet-control authority.
     also expose the same local health/readiness server as foreground
     `pulse-agent` runs so installer "healthy" verification and post-install
     smoke checks prove a live agent runtime, not merely a running service
-    wrapper.
+    wrapper. The service must pass the installer-owned ProgramData log path to
+    the agent's canonical rotating file sink, and install success requires both
+    `/readyz` and a non-empty log file. SCM recovery must be configured as a
+    required lifecycle contract, including non-crash failures, rather than a
+    best-effort warning. Native Windows proof must exercise preflight, install,
+    version replacement, logged readiness, forced-process recovery, service
+    restart or OS reboot persistence, and complete uninstall cleanup through
+    the reusable lifecycle harness under `scripts/installtests/`.
 25. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
     Legacy update recovery is cross-platform lifecycle continuity. Linux may
     read procfs or a systemd unit, while FreeBSD and pfSense must recover the

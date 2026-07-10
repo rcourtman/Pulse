@@ -27,6 +27,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/kubernetesagent"
+	pulselogging "github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -58,6 +59,11 @@ var (
 		Name: "pulse_agent_module_ready",
 		Help: "Whether a configured Pulse Unified Agent module initialized successfully (1 = ready, 0 = not ready)",
 	}, []string{"module"})
+)
+
+const (
+	agentLogMaxSizeMB  = 25
+	agentLogMaxAgeDays = 14
 )
 
 // Runnable is an interface for agents that can be run
@@ -131,8 +137,11 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	}
 
 	// 2. Setup Logging
-	zerolog.SetGlobalLevel(cfg.LogLevel)
-	logger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Logger()
+	logger, closeLogger, err := configureAgentLogger(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to configure unified agent logging: %w", err)
+	}
+	defer closeLogger()
 	cfg.Logger = &logger
 
 	if cfg.InsecureSkipVerify && cfg.ServerFingerprint == "" {
@@ -520,6 +529,32 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	return nil
 }
 
+func configureAgentLogger(cfg Config) (zerolog.Logger, func(), error) {
+	zerolog.SetGlobalLevel(cfg.LogLevel)
+	if cfg.LogFile == "" {
+		logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+		return logger, func() {}, nil
+	}
+
+	logger, closer, err := pulselogging.NewStandaloneLogger(pulselogging.Config{
+		Format:     "json",
+		Level:      cfg.LogLevel.String(),
+		Component:  "pulse-agent",
+		FilePath:   cfg.LogFile,
+		MaxSizeMB:  agentLogMaxSizeMB,
+		MaxAgeDays: agentLogMaxAgeDays,
+		Compress:   true,
+	}, os.Stdout)
+	if err != nil {
+		return zerolog.Logger{}, func() {}, fmt.Errorf("initialize log file %q: %w", cfg.LogFile, err)
+	}
+	return logger, func() {
+		if closer != nil {
+			_ = closer.Close()
+		}
+	}, nil
+}
+
 // readAgentIDFile reads a persisted agent identifier from the given path.
 func readAgentIDFile(path string) (string, error) {
 	if path == "" {
@@ -723,6 +758,7 @@ type Config struct {
 	ServerFingerprint  string
 	DeploySSHUser      string
 	LogLevel           zerolog.Level
+	LogFile            string
 	Logger             *zerolog.Logger
 
 	// Module flags
@@ -784,6 +820,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envDeploySSHUser := strings.TrimSpace(getenv("PULSE_DEPLOY_SSH_USER"))
 	envTags := strings.TrimSpace(getenv("PULSE_TAGS"))
 	envLogLevel := strings.TrimSpace(getenv("LOG_LEVEL"))
+	envLogFile := strings.TrimSpace(getenv("PULSE_LOG_FILE"))
 	envEnableHost := strings.TrimSpace(getenv("PULSE_ENABLE_HOST"))
 	envEnableDocker := strings.TrimSpace(getenv("PULSE_ENABLE_DOCKER"))
 	envEnableKubernetes := strings.TrimSpace(getenv("PULSE_ENABLE_KUBERNETES"))
@@ -864,6 +901,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	serverFingerprintFlag := fs.String("server-fingerprint", envServerFingerprint, "Expected Pulse server TLS certificate fingerprint (SHA256)")
 	deploySSHUserFlag := fs.String("deploy-ssh-user", envDeploySSHUser, "SSH user for peer deploy fan-out (default: root; non-root requires passwordless sudo)")
 	logLevelFlag := fs.String("log-level", defaultLogLevel(envLogLevel), "Log level")
+	logFileFlag := fs.String("log-file", envLogFile, "Write rotating JSON logs to this file")
 
 	enableHostFlag := fs.Bool("enable-host", defaultEnableHost, "Enable Host Agent module")
 	enableDockerFlag := fs.Bool("enable-docker", defaultEnableDocker, "Enable Docker / Podman Agent module")
@@ -995,6 +1033,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		ServerFingerprint:         strings.TrimSpace(*serverFingerprintFlag),
 		DeploySSHUser:             deploySSHUser,
 		LogLevel:                  logLevel,
+		LogFile:                   strings.TrimSpace(*logFileFlag),
 		EnableHost:                *enableHostFlag,
 		EnableDocker:              *enableDockerFlag,
 		DockerConfigured:          dockerConfigured,
@@ -1348,9 +1387,6 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 				if l, err := zerolog.ParseLevel(s); err == nil {
 					cfg.LogLevel = l
 					zerolog.SetGlobalLevel(l)
-					// Re-create logger with new level
-					newLogger := zerolog.New(os.Stdout).Level(l).With().Timestamp().Logger()
-					cfg.Logger = &newLogger
 					logger.Info().Str("val", s).Msg("Remote config: log_level")
 				}
 			}

@@ -935,8 +935,16 @@ if (-not [string]::IsNullOrWhiteSpace($CACertPath)) { $ServiceArgs += @("--cacer
 if (-not [string]::IsNullOrWhiteSpace($ServerFingerprint)) { $ServiceArgs += @("--server-fingerprint", "`"$ServerFingerprint`"") }
 if (-not [string]::IsNullOrWhiteSpace($AgentId)) { $ServiceArgs += @("--agent-id", "`"$AgentId`"") }
 if (-not [string]::IsNullOrWhiteSpace($Hostname)) { $ServiceArgs += @("--hostname", "`"$Hostname`"") }
+$ServiceArgs += @("--log-file", "`"$LogFile`"")
 
 $BinPath = "`"$DestPath`" $($ServiceArgs -join ' ')"
+
+# Create the state/log directory before SCM starts the service so the agent can
+# establish its rotating file sink as part of startup.
+$LogDir = Split-Path $LogFile -Parent
+if (-not (Test-Path $LogDir)) {
+    New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+}
 
 # Create Service using New-Service (more reliable than sc.exe create)
 try {
@@ -953,13 +961,14 @@ try {
 
 $scOutput = sc.exe failure $AgentName reset= 86400 actions= restart/5000/restart/5000/restart/5000 2>&1
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Warning: Failed to configure service recovery: $scOutput" -ForegroundColor Yellow
+    Show-Error "Failed to configure service recovery actions: $scOutput"
+    Exit 1
 }
 
-# Ensure log directory exists
-$LogDir = Split-Path $LogFile -Parent
-if (-not (Test-Path $LogDir)) {
-    New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+$scOutput = sc.exe failureflag $AgentName 1 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Show-Error "Failed to enable service recovery for non-crash failures: $scOutput"
+    Exit 1
 }
 
 # Start the service
@@ -983,7 +992,8 @@ Start-Sleep -Seconds 2
 for ($i = 0; $i -lt $maxIterations; $i++) {
     try {
         $response = Invoke-WebRequest -Uri $healthUrl -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
-        if ($response.StatusCode -eq 200) {
+        $logReady = (Test-Path $LogFile) -and ((Get-Item $LogFile).Length -gt 0)
+        if ($response.StatusCode -eq 200 -and $logReady) {
             $healthy = $true
             break
         }
@@ -1012,8 +1022,8 @@ Write-Host ""
 if ($healthy) {
     Write-Host "Installation complete! Agent is running." -ForegroundColor Green
 } else {
-    Write-Host "Installation complete, but the agent may not be running correctly." -ForegroundColor Yellow
-    Write-Host "Check logs: Get-Content '$LogFile' -Tail 50" -ForegroundColor Yellow
+    Show-Error "Installation did not reach a healthy, logged runtime. Check logs with: Get-Content '$LogFile' -Tail 50"
+    Exit 1
 }
 Write-Host "Service: $AgentName"
 Write-Host "Binary:  $DestPath"

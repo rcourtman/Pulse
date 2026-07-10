@@ -134,6 +134,38 @@ func newBaseLogger() zerolog.Logger {
 	return zerolog.New(globalSink).Hook(componentHook{}).With().Timestamp().Logger()
 }
 
+// NewStandaloneLogger creates a logger with an independent output chain and
+// optional rotating file sink. Unlike Init, it does not replace package-global
+// logging state, so long-lived service binaries can retain their own file sink
+// even when imported server/config packages reconfigure the global logger.
+func NewStandaloneLogger(cfg Config, output io.Writer) (zerolog.Logger, io.Closer, error) {
+	if output == nil {
+		output = os.Stderr
+	}
+
+	writer := output
+	fileWriter, err := newRollingFileWriter(cfg)
+	if err != nil {
+		return zerolog.Logger{}, nil, err
+	}
+	var closer io.Closer
+	if fileWriter != nil {
+		// Put the durable sink first. Windows services may inherit an invalid
+		// stdout/stderr handle; io.MultiWriter stops on the first writer error,
+		// so console-first ordering would silently starve the service log.
+		writer = io.MultiWriter(fileWriter, writer)
+		if candidate, ok := fileWriter.(io.Closer); ok {
+			closer = candidate
+		}
+	}
+
+	context := zerolog.New(writer).With().Timestamp()
+	if component := strings.TrimSpace(cfg.Component); component != "" {
+		context = context.Str("component", component)
+	}
+	return context.Logger(), closer, nil
+}
+
 // Init configures zerolog globals and refreshes the package logger output.
 func Init(cfg Config) zerolog.Logger {
 	mu.Lock()

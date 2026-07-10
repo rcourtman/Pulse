@@ -92,6 +92,10 @@ jobs:
         if: matrix.unix
         run: go test ./scripts/installtests
 
+      - name: Test native Windows installer contracts
+        if: ${{ !matrix.unix }}
+        run: go test ./scripts/installtests -run '^Test(InstallPS1|WindowsAgentLifecycle)'
+
       - name: Build and execute native Unix agent
         if: matrix.unix
         shell: bash
@@ -118,6 +122,22 @@ jobs:
             $errors | ForEach-Object { Write-Error $_.ToString() }
             exit 1
           }
+
+      - name: Exercise native Windows service lifecycle
+        if: ${{ !matrix.unix }}
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          go build -buildvcs=false -trimpath -ldflags="-s -w -X main.Version=6.0.5-ci.1" -o pulse-agent-windows-ci-1.exe ./cmd/pulse-agent
+          go build -buildvcs=false -trimpath -ldflags="-s -w -X main.Version=6.0.5-ci.2" -o pulse-agent-windows-ci-2.exe ./cmd/pulse-agent
+          go build -buildvcs=false -trimpath -o windows-lifecycle-server.exe ./scripts/installtests/windowslifecycleserver
+          & ./scripts/installtests/windows_agent_lifecycle.ps1 `
+            -Phase Full `
+            -ServerBinary ./windows-lifecycle-server.exe `
+            -AgentV1 ./pulse-agent-windows-ci-1.exe `
+            -AgentV2 ./pulse-agent-windows-ci-2.exe `
+            -InstallerPath ./scripts/install.ps1 `
+            -ConfirmLifecycleMutation
 
   freebsd-build-contract:
     name: FreeBSD cross-build contract

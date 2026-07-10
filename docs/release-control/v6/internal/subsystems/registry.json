@@ -1040,6 +1040,7 @@
         "internal/hostagent/"
       ],
       "owned_files": [
+        ".github/workflows/unified-agent-native.yml",
         "cmd/pulse-agent/main.go",
         "frontend-modern/src/api/agentProfiles.ts",
         "frontend-modern/src/api/nodes.ts",
@@ -1101,7 +1102,9 @@
         "internal/securityutil/httpurl.go",
         "pkg/securityutil/httpurl.go",
         "scripts/install.ps1",
-        "scripts/install.sh"
+        "scripts/install.sh",
+        "scripts/installtests/windows_agent_lifecycle.ps1",
+        "scripts/installtests/windowslifecycleserver/main.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -1233,6 +1236,21 @@
             "match_prefixes": [],
             "match_files": [
               "scripts/install.ps1"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/install_ps1_test.go"
+            ]
+          },
+          {
+            "id": "windows-agent-native-lifecycle-proof",
+            "label": "Windows agent native lifecycle harness proof",
+            "match_prefixes": [],
+            "match_files": [
+              ".github/workflows/unified-agent-native.yml",
+              "scripts/installtests/windows_agent_lifecycle.ps1",
+              "scripts/installtests/windowslifecycleserver/main.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -5590,6 +5608,7 @@
         "internal/config/config.go",
         "internal/config/watcher.go",
         "internal/crypto/crypto.go",
+        "internal/logging/logging.go",
         "internal/securityutil/secure_storage_dir.go",
         "internal/telemetry/telemetry.go",
         "pkg/audit/async_logger.go",
@@ -5768,6 +5787,19 @@
               "internal/cloudcp/auth/magiclink_test.go",
               "internal/crypto/crypto_test.go",
               "internal/securityutil/secure_storage_dir_test.go"
+            ]
+          },
+          {
+            "id": "secure-rotating-log-sink",
+            "label": "secure rotating log sink proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/logging/logging.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/logging/logging_test.go"
             ]
           },
           {

@@ -282,7 +282,12 @@ TLS floor in the dynamic config.
    It must expose a non-mutating preflight for the exact Windows agent
    architecture before Administrator-only install changes, accept token-file
    enrollment input, and avoid interactive download-failure prompts when
-   launched by generated non-interactive onboarding commands.
+   launched by generated non-interactive onboarding commands. A completed
+   install must own a durable rotating ProgramData log, verify that log
+   together with local `/readyz`, and fail closed if required SCM recovery
+   actions or non-crash recovery cannot be configured. The Windows native CI
+   path must run the reusable lifecycle harness rather than stopping at a
+   parser check or foreground self-test.
 8. `scripts/install.sh` shared with `agent-lifecycle`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
    Existing-agent update commands copied from the settings UI must use the
    installer-owned `--update` mode rather than serializing a fresh enrollment
@@ -2117,7 +2122,13 @@ persisted Windows service ever starts.
 Windows installability proof must also verify the installed service's local
 readiness endpoint, not just SCM `Running` state: the Windows service runtime
 must start the shared Pulse Agent health/readiness server so `/readyz` can prove
-the agent modules initialized after install.
+the agent modules initialized after install. That proof must also require the
+installer-advertised ProgramData log to exist and contain startup evidence,
+exercise configured SCM crash recovery, replace one real agent version with a
+second, and prove uninstall removes the service, binary, state, token/log
+artifacts, and readiness listener. OS-reboot-capable labs use the harness's
+split install/update and post-reboot/uninstall phases; hosted CI uses its full
+service-lifecycle phase without rebooting the ephemeral runner.
 Copied PowerShell uninstall commands must preserve that same
 `PULSE_INSECURE_SKIP_VERIFY` setting so the governed deregistration request can
 still reach self-signed Pulse deployments during removal.

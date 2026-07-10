@@ -68,6 +68,7 @@ controls as normal product settings.
 40. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
 41. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
 42. `internal/api/agent_exec_token_binding.go`
+43. `internal/logging/logging.go`
 
 ## Shared Boundaries
 
@@ -310,6 +311,11 @@ the `white_label` branding entitlement.
    pinned-fingerprint TLS clients keep one fail-closed security floor.
 9. Change operator-facing Resource Privacy/Data Handling posture through `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` and `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` together so resource classification, handling-boundary, redaction copy, and the route-backed/hidden-sidebar presentation stay governed as a trust surface.
 10. Change inside-guest runtime collection boundaries through `docs/AGENT_SECURITY.md`, `docs/UNIFIED_AGENT.md`, `cmd/pulse-agent/main.go`, `internal/api/router.go`, and `internal/config/config.go` together. Docker / Podman inventory inside a VM or LXC may come from a guest-local `pulse-agent` module or explicitly reported guest data; LXC Docker inventory may also be collected by a Proxmox host agent only through explicit server opt-in, with optional VMID allowlisting and a minimal summary command set that avoids `docker inspect`, environment, mount, file, command, and process collection. Local Unified Agent Docker / Podman disables must not be reversed by remote profile configuration, and self-test/update preflight that needs the live runtime token must pass it through a short-lived token file rather than argv. The `--enable-docker` help line is part of that operator privacy control, so it must remain "Enable Docker / Podman Agent module" instead of exposing internal collection-module wording. The `--enable-commands` help line and installer disclosure must identify Pulse command execution as disabled by default and required for Patrol actions or the explicit Proxmox LXC Docker inventory path, not as implicit guest access.
+    Agent file logging is local operational state, not a second telemetry path:
+    `cmd/pulse-agent/main.go` must use the canonical owner-only rotating sink,
+    retain that sink when remote configuration changes log level, and never
+    place runtime tokens or enrollment secrets in the service command or log
+    output.
     Global resource timeline reads through `/api/resources/timeline` are
     adjacent monitoring-read surfaces, not a privacy bypass. Provider activity
     filters may expose backend-authored task/event metadata, but the endpoint
