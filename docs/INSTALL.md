@@ -11,6 +11,20 @@ Pulse offers flexible installation options from Docker to enterprise-ready Kuber
 > `rcourtman/pulse` image line with the private image shown on the download
 > page.
 
+## Windows code-signing status
+
+Pulse is applying to the SignPath Foundation open-source programme. Once
+approved, Windows community release artifacts will use free code signing
+provided by [SignPath.io](https://signpath.io/), with the certificate issued by
+the [SignPath Foundation](https://signpath.org/). Until that integration is
+complete, release notes identify Windows artifacts that are not
+Authenticode-signed; published checksums and detached Pulse signatures remain
+mandatory.
+
+See the [Code Signing Policy](CODE_SIGNING_POLICY.md) for build provenance,
+approval roles, signing scope, and reporting requirements. Release downloads
+are published on the [GitHub Releases page](https://github.com/rcourtman/Pulse/releases).
+
 ## 🚀 Quick Start (Recommended)
 
 ### Proxmox VE (LXC installer)

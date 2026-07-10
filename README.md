@@ -170,6 +170,7 @@ and Recovery desktop history-table layout are all aligned.
 - **[Multi-Tenant](docs/MULTI_TENANT.md)**: Enterprise/internal multi-organization setup and configuration.
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common issues.
 - **[Agent Security](docs/AGENT_SECURITY.md)**: Agent privilege model, Proxmox API-only choices, and checksum/signature verification.
+- **[Code Signing Policy](docs/CODE_SIGNING_POLICY.md)**: Build provenance, signing scope, approvals, and Windows publisher trust.
 - **[Docker Monitoring](docs/DOCKER.md)**: Setup and management of Docker agents.
 
 ## 🌐 Community Integrations
