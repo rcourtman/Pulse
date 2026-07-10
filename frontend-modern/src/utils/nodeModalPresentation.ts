@@ -33,6 +33,9 @@ export interface NodeModalFormData {
   monitorQueues: boolean;
   monitorQuarantine: boolean;
   monitorDomainStats: boolean;
+  // PVE clusters: per-member connection address overrides keyed by node name.
+  // Empty string means "use the discovered address".
+  clusterEndpointOverrides: Record<string, string>;
 }
 
 export interface NodeModalTestResultPresentation {
@@ -71,6 +74,7 @@ export function getNodeModalDefaultFormData(nodeType: NodeModalNodeType): NodeMo
     monitorQueues: true,
     monitorQuarantine: true,
     monitorDomainStats: false,
+    clusterEndpointOverrides: {},
   };
 }
 

@@ -284,6 +284,143 @@ func TestHandleUpdateNode_PreservesPVESecretsAndConnectionFieldsWhenOmitted(t *t
 	}
 }
 
+func TestHandleUpdateNode_ClusterEndpointOverrides(t *testing.T) {
+	newClusterConfig := func(t *testing.T) *config.Config {
+		t.Helper()
+		return &config.Config{
+			DataPath: t.TempDir(),
+			PVEInstances: []config.PVEInstance{{
+				Name:        "cluster",
+				Host:        "https://pve1.local:8006",
+				TokenName:   "root@pam!pulse",
+				TokenValue:  "secret",
+				IsCluster:   true,
+				ClusterName: "homelab",
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeID: "node/pve1", NodeName: "pve1", Host: "https://pve1.local:8006", IP: "10.0.0.1"},
+					{NodeID: "node/pve2", NodeName: "pve2", Host: "https://pve2.local:8006", IP: "192.168.100.2", IPOverride: "10.0.0.2"},
+				},
+			}},
+		}
+	}
+
+	update := func(t *testing.T, cfg *config.Config, overrides []map[string]string) *httptest.ResponseRecorder {
+		t.Helper()
+		handler := newTestConfigHandlers(t, cfg)
+		body, _ := json.Marshal(map[string]any{"clusterEndpointOverrides": overrides})
+		req := httptest.NewRequest(http.MethodPut, "/api/config/nodes/pve-0", bytes.NewBuffer(body))
+		rec := httptest.NewRecorder()
+		handler.HandleUpdateNode(rec, req)
+		return rec
+	}
+
+	t.Run("sets_override_and_leaves_other_members_untouched", func(t *testing.T) {
+		cfg := newClusterConfig(t)
+		rec := update(t, cfg, []map[string]string{{"nodeName": "pve1", "ipOverride": "10.0.0.11"}})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		endpoints := cfg.PVEInstances[0].ClusterEndpoints
+		if endpoints[0].IPOverride != "10.0.0.11" {
+			t.Fatalf("pve1 override = %q, want 10.0.0.11", endpoints[0].IPOverride)
+		}
+		if endpoints[0].Host != "https://pve1.local:8006" || endpoints[0].IP != "10.0.0.1" {
+			t.Fatalf("discovered host/IP changed: %+v", endpoints[0])
+		}
+		if endpoints[1].IPOverride != "10.0.0.2" {
+			t.Fatalf("pve2 override changed unexpectedly: %q", endpoints[1].IPOverride)
+		}
+	})
+
+	t.Run("empty_value_clears_override", func(t *testing.T) {
+		cfg := newClusterConfig(t)
+		rec := update(t, cfg, []map[string]string{{"nodeName": "pve2", "ipOverride": ""}})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if got := cfg.PVEInstances[0].ClusterEndpoints[1].IPOverride; got != "" {
+			t.Fatalf("override not cleared: %q", got)
+		}
+	})
+
+	t.Run("accepts_hostname_with_port_and_pasted_url", func(t *testing.T) {
+		cfg := newClusterConfig(t)
+		rec := update(t, cfg, []map[string]string{
+			{"nodeName": "pve1", "ipOverride": "mgmt.pve1.lan:8007"},
+			{"nodeName": "pve2", "ipOverride": "https://10.0.0.22:8006/"},
+		})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		endpoints := cfg.PVEInstances[0].ClusterEndpoints
+		if endpoints[0].IPOverride != "mgmt.pve1.lan:8007" {
+			t.Fatalf("pve1 override = %q", endpoints[0].IPOverride)
+		}
+		if endpoints[1].IPOverride != "10.0.0.22:8006" {
+			t.Fatalf("pve2 override = %q, want URL reduced to host:port", endpoints[1].IPOverride)
+		}
+	})
+
+	t.Run("rejects_unknown_member", func(t *testing.T) {
+		cfg := newClusterConfig(t)
+		rec := update(t, cfg, []map[string]string{{"nodeName": "pve9", "ipOverride": "10.0.0.9"}})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for unknown member, got %d", rec.Code)
+		}
+		if got := cfg.PVEInstances[0].ClusterEndpoints[0].IPOverride; got != "" {
+			t.Fatalf("config mutated by rejected update: %q", got)
+		}
+	})
+
+	t.Run("rejects_invalid_address", func(t *testing.T) {
+		cfg := newClusterConfig(t)
+		rec := update(t, cfg, []map[string]string{{"nodeName": "pve1", "ipOverride": "not a host"}})
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 for invalid address, got %d", rec.Code)
+		}
+	})
+}
+
+func TestNormalizeClusterEndpointIPOverride(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{in: "", want: ""},
+		{in: "  ", want: ""},
+		{in: "10.0.0.5", want: "10.0.0.5"},
+		{in: "10.0.0.5:8006", want: "10.0.0.5:8006"},
+		{in: "node1.lan", want: "node1.lan"},
+		{in: "node1.lan:8006", want: "node1.lan:8006"},
+		{in: "fe80::1", want: "fe80::1"},
+		{in: "[fe80::1]", want: "fe80::1"},
+		{in: "[fe80::1]:8006", want: "[fe80::1]:8006"},
+		{in: "https://10.0.0.5:8006/", want: "10.0.0.5:8006"},
+		{in: "http://node1.lan", want: "node1.lan"},
+		{in: "not a host", wantErr: true},
+		{in: "node1.lan/path", wantErr: true},
+		{in: "node1.lan:notaport", wantErr: true},
+		{in: "user@node1.lan", wantErr: true},
+	}
+	for _, tc := range cases {
+		got, err := normalizeClusterEndpointIPOverride(tc.in)
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf("normalizeClusterEndpointIPOverride(%q) = %q, want error", tc.in, got)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("normalizeClusterEndpointIPOverride(%q) unexpected error: %v", tc.in, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("normalizeClusterEndpointIPOverride(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestHandleUpdateNode_RejectsTokenNameChangeWithoutNewSecret(t *testing.T) {
 	cfg := &config.Config{
 		DataPath: t.TempDir(),

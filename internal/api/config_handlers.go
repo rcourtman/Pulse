@@ -692,8 +692,20 @@ type NodeConfigRequest struct {
 	MonitorQuarantine            *bool    `json:"monitorQuarantine,omitempty"`            // PMG only
 	MonitorDomainStats           *bool    `json:"monitorDomainStats,omitempty"`           // PMG only
 	Enabled                      *bool    `json:"enabled,omitempty"`                      // Lifecycle toggle; nil on update preserves current
-	guestURLSet                  bool     `json:"-"`
-	fingerprintSet               bool     `json:"-"`
+	// PVE only: per-cluster-member connection address overrides. Only the
+	// members named here are touched; an empty ipOverride clears the override.
+	ClusterEndpointOverrides []ClusterEndpointOverrideRequest `json:"clusterEndpointOverrides,omitempty"`
+	guestURLSet              bool                             `json:"-"`
+	fingerprintSet           bool                             `json:"-"`
+}
+
+// ClusterEndpointOverrideRequest sets or clears the connection address Pulse
+// uses for one cluster member (ClusterEndpoint.IPOverride). Host and IP are
+// rebuilt from cluster status on every re-discovery, so IPOverride is the
+// only durable user-editable endpoint field.
+type ClusterEndpointOverrideRequest struct {
+	NodeName   string `json:"nodeName"`
+	IPOverride string `json:"ipOverride"`
 }
 
 func (r *NodeConfigRequest) UnmarshalJSON(data []byte) error {

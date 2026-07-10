@@ -24,6 +24,15 @@ export interface ClusterEndpoint {
   pulseError?: string; // Last error Pulse encountered connecting to this endpoint
 }
 
+// Write-only PUT payload entry: sets or clears the connection address Pulse
+// uses for one cluster member (ClusterEndpoint.ipOverride). The discovered
+// host and IP are rebuilt on every cluster re-discovery, so ipOverride is the
+// only durable user-editable endpoint field. Empty string clears it.
+export interface ClusterEndpointOverridePayload {
+  nodeName: string;
+  ipOverride: string;
+}
+
 export interface PVENodeConfig {
   id: string;
   name: string;
@@ -47,6 +56,9 @@ export interface PVENodeConfig {
   isCluster?: boolean;
   clusterName?: string;
   clusterEndpoints?: ClusterEndpoint[];
+  // Write-only: per-member connection address overrides included in PUT
+  // payloads; never returned by the API.
+  clusterEndpointOverrides?: ClusterEndpointOverridePayload[];
 }
 
 export interface PBSNodeConfig {

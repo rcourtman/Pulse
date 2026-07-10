@@ -62,6 +62,7 @@ import nodeCredentialSlotSource from '../ConnectionEditor/CredentialSlots/NodeCr
 import nodeCandidateImportPlanSource from '../ConnectionEditor/CredentialSlots/NodeCandidateImportPlan.tsx?raw';
 import networkBoundarySettingsSectionSource from '../NetworkBoundarySettingsSection.tsx?raw';
 import nodeModalBasicInfoSectionSource from '../NodeModalBasicInfoSection.tsx?raw';
+import nodeModalClusterMembersSectionSource from '../NodeModalClusterMembersSection.tsx?raw';
 import nodeModalAuthenticationSectionSource from '../NodeModalAuthenticationSection.tsx?raw';
 import nodeModalMonitoringSectionSource from '../NodeModalMonitoringSection.tsx?raw';
 import nodeModalSetupGuideSectionSource from '../NodeModalSetupGuideSection.tsx?raw';
@@ -1012,6 +1013,18 @@ describe('settings architecture guardrails', () => {
     expect(nodeModalMonitoringSectionSource).not.toContain('dashboard readings');
     expect(recoverySettingsPanelSource).toContain('Required for workload backup status');
     expect(recoverySettingsPanelSource).not.toContain('dashboard backup status');
+  });
+
+  it('keeps cluster member address edits on the durable IPOverride boundary', () => {
+    // Existing PVE clusters expose per-member connection addresses in the
+    // node editor; the discovered Host and IP are rebuilt on re-discovery,
+    // so the editor must write ClusterEndpoint.ipOverride, never host.
+    expect(nodeCredentialSlotSource).toContain('<NodeModalClusterMembersSection');
+    expect(nodeModalClusterMembersSectionSource).toContain('updateClusterEndpointOverride(');
+    expect(nodeModalClusterMembersSectionSource).toContain('Connection address for ');
+    // Only changed members ride the write-only PUT payload.
+    expect(nodeModalStateSource).toContain('buildClusterEndpointOverridesPayload(');
+    expect(nodeModalModelSource).toContain('export const buildClusterEndpointOverridesPayload = (');
   });
 
   it('keeps system AI model catalogs on the shared searchable picker boundary', () => {

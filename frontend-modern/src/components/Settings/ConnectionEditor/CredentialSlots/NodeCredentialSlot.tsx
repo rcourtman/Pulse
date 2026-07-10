@@ -6,6 +6,7 @@ import {
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import { NodeModalAuthenticationSection } from '@/components/Settings/NodeModalAuthenticationSection';
 import { NodeModalBasicInfoSection } from '@/components/Settings/NodeModalBasicInfoSection';
+import { NodeModalClusterMembersSection } from '@/components/Settings/NodeModalClusterMembersSection';
 import { NodeModalMonitoringSection } from '@/components/Settings/NodeModalMonitoringSection';
 import { NodeModalStatusFooter } from '@/components/Settings/NodeModalStatusFooter';
 import { useNodeModalState } from '@/components/Settings/useNodeModalState';
@@ -180,6 +181,7 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
         />
       )}
       <NodeModalBasicInfoSection modalProps={modalProps} state={state} />
+      <NodeModalClusterMembersSection modalProps={modalProps} state={state} />
       <NodeModalAuthenticationSection modalProps={modalProps} state={state} />
       <NodeModalMonitoringSection modalProps={modalProps} state={state} />
       <NodeModalStatusFooter

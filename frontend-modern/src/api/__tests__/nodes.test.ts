@@ -183,6 +183,24 @@ describe('NodesAPI', () => {
         expect.objectContaining({ method: 'PUT' }),
       );
     });
+
+    it('sends per-member cluster endpoint overrides in the PUT payload', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce({ success: true });
+
+      const node = makePveNode({
+        clusterEndpointOverrides: [
+          { nodeName: 'pve2', ipOverride: '10.0.0.2' },
+          { nodeName: 'pve3', ipOverride: '' },
+        ],
+      });
+      await NodesAPI.updateNode('pve-1', node as NodeConfig);
+
+      const body = JSON.parse(vi.mocked(apiFetchJSON).mock.calls[0][1]!.body as string);
+      expect(body.clusterEndpointOverrides).toEqual([
+        { nodeName: 'pve2', ipOverride: '10.0.0.2' },
+        { nodeName: 'pve3', ipOverride: '' },
+      ]);
+    });
   });
 
   describe('deleteNode', () => {

@@ -1,4 +1,8 @@
-import type { NodeConfig } from '@/types/nodes';
+import type {
+  ClusterEndpoint,
+  ClusterEndpointOverridePayload,
+  NodeConfig,
+} from '@/types/nodes';
 import type { SecurityStatus } from '@/types/config';
 import type { NodeModalNodeType } from '@/utils/nodeModalPresentation';
 
@@ -20,6 +24,43 @@ export interface NodeModalProps {
   setupHandoffDisabled?: () => boolean;
   setupHandoffDisabledReason?: string;
 }
+
+// Build the write-only clusterEndpointOverrides payload from the form's
+// per-member address record, including only members whose value actually
+// changed from the saved override. Returns undefined when nothing changed so
+// the PUT stays a no-op for endpoints (partial-update semantics).
+export const buildClusterEndpointOverridesPayload = (
+  endpoints: ClusterEndpoint[] | undefined,
+  overrides: Record<string, string>,
+): ClusterEndpointOverridePayload[] | undefined => {
+  if (!endpoints?.length) return undefined;
+  const changed = endpoints
+    .filter((endpoint) => {
+      const value = overrides[endpoint.nodeName];
+      if (value === undefined) return false;
+      return value.trim() !== (endpoint.ipOverride ?? '');
+    })
+    .map((endpoint) => ({
+      nodeName: endpoint.nodeName,
+      ipOverride: (overrides[endpoint.nodeName] ?? '').trim(),
+    }));
+  return changed.length > 0 ? changed : undefined;
+};
+
+// Mirror a saved clusterEndpointOverrides payload onto locally cached
+// endpoints so the editor reflects the save without a full nodes reload.
+export const applyClusterEndpointOverridesLocally = (
+  endpoints: ClusterEndpoint[] | undefined,
+  overrides: ClusterEndpointOverridePayload[] | undefined,
+): ClusterEndpoint[] | undefined => {
+  if (!endpoints?.length || !overrides?.length) return endpoints;
+  const byNodeName = new Map(overrides.map((override) => [override.nodeName, override.ipOverride]));
+  return endpoints.map((endpoint) => {
+    const value = byNodeName.get(endpoint.nodeName);
+    if (value === undefined) return endpoint;
+    return { ...endpoint, ipOverride: value || undefined };
+  });
+};
 
 export const deriveNameFromHost = (host: string): string => {
   let value = host.trim();

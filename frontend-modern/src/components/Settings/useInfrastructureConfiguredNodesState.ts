@@ -5,8 +5,13 @@ import { NodesAPI } from '@/api/nodes';
 import { useResources } from '@/hooks/useResources';
 import { getPreferredConfiguredNodeLabel } from '@/utils/resourceIdentity';
 import type { Temperature } from '@/types/api';
-import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
+import type {
+  ClusterEndpointOverridePayload,
+  NodeConfig,
+  NodeConfigWithStatus,
+} from '@/types/nodes';
 import { settingsAgentNodeLabel } from './settingsRouting';
+import { applyClusterEndpointOverridesLocally } from './nodeModalModel';
 import {
   matchConfiguredNodeToResource,
   type NodeType,
@@ -284,18 +289,32 @@ export const useInfrastructureConfiguredNodesState = ({
       const existingNode = editingNode();
       if (existingNode?.id) {
         await NodesAPI.updateNode(existingNode.id, nodeData as NodeConfig);
+        // clusterEndpointOverrides is a write-only payload field: mirror it
+        // onto the cached endpoints instead of spreading it onto the node.
+        const { clusterEndpointOverrides, ...nodePatch } = nodeData as Partial<NodeConfig> & {
+          clusterEndpointOverrides?: ClusterEndpointOverridePayload[];
+        };
         setNodes(
-          nodes().map((node) =>
-            node.id === existingNode.id
-              ? {
-                  ...node,
-                  ...nodeData,
-                  hasPassword: nodeData.password ? true : node.hasPassword,
-                  hasToken: nodeData.tokenValue ? true : node.hasToken,
-                  status: 'pending',
-                }
-              : node,
-          ),
+          nodes().map((node) => {
+            if (node.id !== existingNode.id) return node;
+            const endpointPatch =
+              clusterEndpointOverrides?.length && 'clusterEndpoints' in node
+                ? {
+                    clusterEndpoints: applyClusterEndpointOverridesLocally(
+                      node.clusterEndpoints,
+                      clusterEndpointOverrides,
+                    ),
+                  }
+                : undefined;
+            return {
+              ...node,
+              ...nodePatch,
+              ...endpointPatch,
+              hasPassword: nodeData.password ? true : node.hasPassword,
+              hasToken: nodeData.tokenValue ? true : node.hasToken,
+              status: 'pending',
+            };
+          }),
         );
         notificationStore.success('Node updated successfully');
       } else {

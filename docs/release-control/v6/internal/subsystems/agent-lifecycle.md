@@ -2969,9 +2969,22 @@ timestamp-suffixed or rerun-local token identities.
 The corresponding node setup modal owner is now an explicit shell-plus-sections
 surface:
 `ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` composes
-`NodeModalBasicInfoSection.tsx`, `NodeModalAuthenticationSection.tsx`,
-`NodeModalMonitoringSection.tsx`, `NodeModalStatusFooter.tsx`,
-`nodeModalModel.ts`, and `useNodeModalState.ts`.
+`NodeModalBasicInfoSection.tsx`, `NodeModalClusterMembersSection.tsx`,
+`NodeModalAuthenticationSection.tsx`, `NodeModalMonitoringSection.tsx`,
+`NodeModalStatusFooter.tsx`, `nodeModalModel.ts`, and `useNodeModalState.ts`.
+The cluster members section is the canonical manual override surface for
+per-member connection addresses on an existing PVE cluster: it writes only
+`ClusterEndpoints[n].IPOverride` through the write-only
+`clusterEndpointOverrides` node update payload built by
+`buildClusterEndpointOverridesPayload` in `nodeModalModel.ts` (changed
+members only; blank clears), because discovered member `Host` and `IP` are
+rebuilt on every cluster re-discovery while `IPOverride` is preserved and
+preferred at poll time. Server-side agent re-registration adoption remains
+the automatic path for agent-managed members; this editor surface is the
+lifecycle path for members without an agent. The configured-nodes cache in
+`useInfrastructureConfiguredNodesState.ts` must mirror saved overrides onto
+its cached `clusterEndpoints` rather than spreading the write-only payload
+field onto node config state.
 That same node setup owner also includes
 `frontend-modern/src/utils/nodeModalPresentation.ts`, which now owns the
 canonical node-type defaults, endpoint/auth placeholders, monitoring coverage

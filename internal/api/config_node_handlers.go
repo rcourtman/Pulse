@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1208,6 +1210,98 @@ func normalizePMGUser(user string) string {
 }
 
 // HandleUpdateNode updates an existing node
+// normalizeClusterEndpointIPOverride validates a user-supplied per-member
+// connection address and returns the canonical stored form. Empty clears the
+// override. Accepts an IP or hostname, optionally with a port; a pasted URL
+// is reduced to its host[:port]. The stored value stays scheme-less and a
+// bare IPv6 address stays unbracketed because clusterEndpointEffectiveURL
+// builds the URL (and re-brackets) at poll time.
+func normalizeClusterEndpointIPOverride(raw string) (string, error) {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return "", nil
+	}
+
+	if strings.Contains(value, "://") {
+		parsed, err := url.Parse(value)
+		if err != nil || parsed.Host == "" {
+			return "", fmt.Errorf("invalid connection address")
+		}
+		value = parsed.Host
+	}
+	if strings.ContainsAny(value, "/\\?#@ \t") {
+		return "", fmt.Errorf("invalid connection address")
+	}
+
+	host := value
+	port := ""
+	if splitHost, splitPort, err := net.SplitHostPort(value); err == nil {
+		if _, perr := strconv.ParseUint(splitPort, 10, 16); perr != nil {
+			return "", fmt.Errorf("invalid connection address")
+		}
+		host = splitHost
+		port = splitPort
+	}
+	host = strings.Trim(host, "[]")
+	if host == "" {
+		return "", fmt.Errorf("invalid connection address")
+	}
+
+	if net.ParseIP(host) == nil && !isPlausibleHostname(host) {
+		return "", fmt.Errorf("invalid connection address")
+	}
+	if port != "" {
+		return net.JoinHostPort(host, port), nil
+	}
+	return host, nil
+}
+
+func isPlausibleHostname(host string) bool {
+	if len(host) == 0 || len(host) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 {
+			return false
+		}
+		for _, r := range label {
+			if r != '-' && r != '_' && (r < '0' || r > '9') && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// applyClusterEndpointOverrides returns a copy of endpoints with the
+// requested per-member IPOverride values applied. Members not named in
+// overrides are left untouched; naming an unknown member is an error so a
+// stale UI cannot silently no-op.
+func applyClusterEndpointOverrides(endpoints []config.ClusterEndpoint, overrides []ClusterEndpointOverrideRequest) ([]config.ClusterEndpoint, error) {
+	result := append([]config.ClusterEndpoint(nil), endpoints...)
+	for _, override := range overrides {
+		nodeName := strings.TrimSpace(override.NodeName)
+		if nodeName == "" {
+			return nil, fmt.Errorf("cluster member name is required")
+		}
+		value, err := normalizeClusterEndpointIPOverride(override.IPOverride)
+		if err != nil {
+			return nil, fmt.Errorf("invalid connection address for cluster member %q: enter an IP or hostname, optionally with a port", nodeName)
+		}
+		found := false
+		for i := range result {
+			if strings.EqualFold(strings.TrimSpace(result[i].NodeName), nodeName) {
+				result[i].IPOverride = value
+				found = true
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("unknown cluster member %q", nodeName)
+		}
+	}
+	return result, nil
+}
+
 func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 	// Prevent node modifications in mock mode
 	if mock.IsMockEnabled() {
@@ -1269,6 +1363,15 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 
 		if req.hasGuestURLField() {
 			updated.GuestURL = req.GuestURL
+		}
+
+		if len(req.ClusterEndpointOverrides) > 0 {
+			endpoints, err := applyClusterEndpointOverrides(updated.ClusterEndpoints, req.ClusterEndpointOverrides)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			updated.ClusterEndpoints = endpoints
 		}
 
 		if err := applyPVEAuthUpdate(&updated, req); err != nil {

@@ -6480,6 +6480,19 @@ frontend consumers may normalize endpoint fields, but they must not fork the
 canonical collection-shape guard or reintroduce legacy `alert_identifier`
 field access once camelCase `alertIdentifier` has been promoted by the shared
 response helpers.
+The node update payload on `PUT /api/config/nodes/{id}` now also carries an
+optional write-only `clusterEndpointOverrides` collection of
+`{nodeName, ipOverride}` entries handled by
+`internal/api/config_node_handlers.go`: only the members named in the request
+are touched, an empty `ipOverride` clears the stored override, naming an
+unknown cluster member is a `400` rather than a silent no-op, and accepted
+values are normalized to a scheme-less IP or hostname with optional port
+(pasted URLs are reduced to their `host[:port]`). The override writes
+`ClusterEndpoints[n].IPOverride` exclusively; discovered `Host` and `IP`
+remain re-discovery-owned and must not become client-writable through this
+payload. `GET /api/config/nodes` continues to expose the stored value as the
+optional `ipOverride` endpoint field consumed by the shared normalization in
+`frontend-modern/src/api/nodes.ts`.
 The same frontend API contract now also governs Proxmox agent-install command
 transport in `frontend-modern/src/api/nodes.ts`: the canonical client request
 shape for `/api/agent-install-command` must support both `type:"pve"` and

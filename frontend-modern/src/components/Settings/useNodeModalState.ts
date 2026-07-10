@@ -13,7 +13,11 @@ import {
   type NodeModalFormData,
 } from '@/utils/nodeModalPresentation';
 
-import { deriveNameFromHost, type NodeModalProps } from './nodeModalModel';
+import {
+  buildClusterEndpointOverridesPayload,
+  deriveNameFromHost,
+  type NodeModalProps,
+} from './nodeModalModel';
 
 type NodeModalTestResult = {
   status: string;
@@ -315,6 +319,15 @@ export const useNodeModalState = (props: NodeModalProps) => {
       monitorQueues: pmgConfig?.monitorQueues ?? true,
       monitorQuarantine: pmgConfig?.monitorQuarantine ?? true,
       monitorDomainStats: pmgConfig?.monitorDomainStats ?? false,
+      clusterEndpointOverrides:
+        node.type === 'pve' && 'clusterEndpoints' in node
+          ? Object.fromEntries(
+              (node.clusterEndpoints ?? []).map((endpoint) => [
+                endpoint.nodeName,
+                endpoint.ipOverride ?? '',
+              ]),
+            )
+          : {},
     };
 
     const formSourceSignature = JSON.stringify(formSource);
@@ -376,6 +389,20 @@ export const useNodeModalState = (props: NodeModalProps) => {
     }
 
     Object.assign(nodeData, buildNodeModalMonitoringPayload(props.nodeType, data));
+
+    if (props.nodeType === 'pve' && isEditingExistingNode()) {
+      const editingNode = props.editingNode;
+      const endpoints =
+        editingNode && 'clusterEndpoints' in editingNode ? editingNode.clusterEndpoints : undefined;
+      const overrides = buildClusterEndpointOverridesPayload(
+        endpoints,
+        data.clusterEndpointOverrides,
+      );
+      if (overrides) {
+        Object.assign(nodeData, { clusterEndpointOverrides: overrides });
+      }
+    }
+
     props.onSave(nodeData);
   };
 
@@ -405,6 +432,13 @@ export const useNodeModalState = (props: NodeModalProps) => {
         setAgentInstallCommand('');
       }
     }
+  };
+
+  const updateClusterEndpointOverride = (nodeName: string, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      clusterEndpointOverrides: { ...prev.clusterEndpointOverrides, [nodeName]: value },
+    }));
   };
 
   const handleTestConnection = async () => {
@@ -525,6 +559,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     temperatureMonitoringEnabledValue,
     testResult,
     testResultPresentation,
+    updateClusterEndpointOverride,
     updateField,
   };
 };

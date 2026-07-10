@@ -3,6 +3,7 @@ import type { ConnectedInfrastructureItem } from '@/types/api';
 import type { UnifiedAgentRow } from '../infrastructureOperationsModel';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
+import useInfrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
 import useInfrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import {
   INSTALL_PROFILE_OPTIONS,
@@ -331,6 +332,19 @@ describe('infrastructure operations model', () => {
     expect(useInfrastructureInstallStateSource).not.toMatch(
       /finally \{[\s\S]*?if \(disposed\) \{[\s\S]*?return;/,
     );
+  });
+
+  it('mirrors saved cluster member overrides onto cached node config', () => {
+    // clusterEndpointOverrides is a write-only PUT payload field. The nodes
+    // cache must apply it to clusterEndpoints (matching the optimistic host
+    // patch) instead of spreading the raw payload key onto config state.
+    expect(useInfrastructureConfiguredNodesStateSource).toContain(
+      'const { clusterEndpointOverrides, ...nodePatch }',
+    );
+    expect(useInfrastructureConfiguredNodesStateSource).toContain(
+      'applyClusterEndpointOverridesLocally(',
+    );
+    expect(useInfrastructureConfiguredNodesStateSource).not.toContain('...nodeData,');
   });
 
   it('keeps reusable install tokens out of the command-exec scope', () => {
