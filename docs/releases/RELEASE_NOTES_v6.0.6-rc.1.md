@@ -13,6 +13,10 @@ behavior, and broad security and reliability hardening.
 - Patrol action state now reconciles from the authoritative action audit and
   stays current across investigation history, desktop approval controls, and
   Pulse Mobile approve or reject flows.
+- Patrol can authorize low-risk Docker and Podman restarts through explicit
+  per-resource capability allowlists and optional recurring maintenance
+  windows, while unsupported, out-of-window, or downgraded-mode actions remain
+  approval-gated and fail closed.
 - Local AI setup includes a guided Ollama quickstart for `qwen3:8b`, with
   clearer Provider & Models readiness guidance.
 - Cluster members can override their connection addresses when the discovered
@@ -36,6 +40,8 @@ behavior, and broad security and reliability hardening.
 - Investigation prompts receive the real typed capability catalog, including
   approval requirements and parameter constraints, instead of asking the
   model to guess which actions are available.
+- Docker, Kubernetes, TrueNAS, vSphere, and Proxmox node tables preserve
+  user-controlled column sorting through one shared platform-table model.
 
 ## Fixed
 

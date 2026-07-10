@@ -14,6 +14,9 @@ stable `v6.0.5`._
   approval endpoints.
 - Docker and Kubernetes actions verify supported scale and update outcomes
   after execution.
+- Policy-scoped Patrol autonomy can authorize low-risk Docker and Podman
+  restarts only for explicitly allowed resources and optional recurring
+  maintenance windows.
 - Local provider setup includes a guided Ollama `qwen3:8b` quickstart.
 - Cluster members can override discovered connection addresses.
 - The Unified Agent accepts a rotating JSON log path for native service use.
@@ -34,6 +37,8 @@ stable `v6.0.5`._
   read later.
 - Investigation prompts include the validated capability catalog with approval
   floors, parameter schemas, and sensitive/operator-only constraints.
+- Docker, Kubernetes, TrueNAS, vSphere, and Proxmox node tables share one
+  sortable platform-table model and retain user-controlled column ordering.
 - Windows native CI exercises installer parsing, install, version replacement,
   logged readiness, forced-process recovery, restart persistence, and cleanup.
 - Release automation builds one signed exact-SHA candidate and promotes that
@@ -67,8 +72,9 @@ stable `v6.0.5`._
 - Autonomous dispatches fail closed when remediation lock state is unknown.
 - Request, storage, integer-conversion, allocation, and cookie boundaries have
   additional CodeQL-driven hardening.
-- Native release signing configuration is required and exercised during
-  release rehearsals.
+- macOS native release signing and notarization are required for this RC;
+  Windows Authenticode remains required for stable promotion and is disclosed
+  explicitly while the public signing application is pending.
 - Demo SSH setup no longer weakens host-key handling for private deploy hosts
   or IP targets.
 
