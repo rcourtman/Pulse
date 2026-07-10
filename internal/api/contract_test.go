@@ -15759,8 +15759,8 @@ func TestContract_ExecutorPostCompletionCallback(t *testing.T) {
 	terminalSites := []string{
 		`e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, "plan drift refused")
 			e.publishActionCompleted(record)`,
-		`e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, "resource remediation lock refused")
-		e.publishActionCompleted(record)`,
+		`e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, remediationLockLifecycleMessage(refusal))` +
+			"\n\t" + `e.publishActionCompleted(record)`,
 		`e.recordActionLifecycle(record.ID, record.State, actor, message)
 		e.publishActionCompleted(record)`,
 	}
