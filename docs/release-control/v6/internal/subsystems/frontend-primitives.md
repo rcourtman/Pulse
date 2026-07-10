@@ -1982,7 +1982,10 @@ default` instead of fusing provider and badge text such as
     token only unlocks first-run setup, state where the command should run, and
     adapt command/help text to detected Docker or containerized deployments
     instead of assuming the operator already knows which host or container owns
-    the Pulse install.
+    the Pulse install. Bootstrap validation must remain an explicit operator
+    action rather than auto-submitting on a token-length heuristic, and it must
+    be single-flight so one successful validation advances the wizard exactly
+    once even when click and keyboard submission overlap.
 16. Keep the settings-shell infrastructure landing path aligned with that same
     first-session story. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
     must treat `/settings` and the infrastructure settings tab as the canonical

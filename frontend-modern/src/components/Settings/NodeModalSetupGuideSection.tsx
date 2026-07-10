@@ -291,7 +291,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                         </svg>
                       </button>
                       <Show
-                        when={state.quickSetupPreviewCommand().length > 0}
+                        when={state.quickSetupCommandReady()}
                         fallback={
                           <code class="text-muted">
                             {state.formData().host
@@ -300,9 +300,13 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           </code>
                         }
                       >
-                        <code class="block text-base-content whitespace-pre-wrap break-words">
-                          {state.quickSetupPreviewCommand()}
-                        </code>
+                        <div class="pr-10 font-sans text-left">
+                          <p class="font-medium text-base-content">Credentialed command ready</p>
+                          <p class="mt-1 text-xs leading-5 text-muted">
+                            Use Copy command to place the runnable command on your clipboard. The
+                            one-time setup token is intentionally not shown on this page.
+                          </p>
+                        </div>
                       </Show>
                       <Show when={state.quickSetupTokenHint().length > 0}>
                         <div class="mt-2 text-xs text-blue-800 dark:text-blue-200">
@@ -745,7 +749,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                         </button>
                       </Show>
                       <Show
-                        when={state.quickSetupPreviewCommand().length > 0}
+                        when={state.quickSetupCommandReady()}
                         fallback={
                           <code class="text-muted">
                             {state.formData().host
@@ -754,9 +758,13 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           </code>
                         }
                       >
-                        <code class="block text-base-content whitespace-pre-wrap break-words">
-                          {state.quickSetupPreviewCommand()}
-                        </code>
+                        <div class="pr-10 font-sans text-left">
+                          <p class="font-medium text-base-content">Credentialed command ready</p>
+                          <p class="mt-1 text-xs leading-5 text-muted">
+                            Use Copy command to place the runnable command on your clipboard. The
+                            one-time setup token is intentionally not shown on this page.
+                          </p>
+                        </div>
                       </Show>
                       <Show when={state.quickSetupTokenHint().length > 0}>
                         <div class="mt-2 text-xs text-blue-800 dark:text-blue-200">

@@ -19,6 +19,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
   const [isValidating, setIsValidating] = createSignal(false);
   const [copiedCommand, setCopiedCommand] = createSignal<string | null>(null);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+  let unlockInFlight = false;
 
   onCleanup(() => {
     if (copiedTimer) clearTimeout(copiedTimer);
@@ -78,6 +79,10 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
   const snapshotPasteHelp = () => t('setup.welcome.error.snapshotPaste');
 
   const handleUnlock = async () => {
+    if (unlockInFlight) {
+      return;
+    }
+
     const trimmedToken = props.bootstrapToken.trim();
     if (!trimmedToken) {
       showError(t('setup.welcome.error.missingBootstrapToken'));
@@ -88,6 +93,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
       return;
     }
 
+    unlockInFlight = true;
     setIsValidating(true);
     try {
       const response = await apiFetch('/api/security/validate-bootstrap-token', {
@@ -109,6 +115,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
     } catch (_error) {
       showError(t('setup.welcome.error.invalidBootstrapToken'));
     } finally {
+      unlockInFlight = false;
       setIsValidating(false);
     }
   };
@@ -197,16 +204,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
               type="text"
               value={props.bootstrapToken}
               onInput={(e) => {
-                const val = e.currentTarget.value;
-                props.setBootstrapToken(val);
-                // Premium UX: Auto-submit if we detect a pasted token (length heuristic)
-                if (val.length > 20) {
-                  setTimeout(() => {
-                    if (props.bootstrapToken === val && !isValidating()) {
-                      handleUnlock();
-                    }
-                  }, 400);
-                }
+                props.setBootstrapToken(e.currentTarget.value);
               }}
               onKeyDown={(e) => e.key === 'Enter' && void handleUnlock()}
               class="w-full px-5 py-3.5 bg-surface border border-border rounded-md text-base-content placeholder-slate-400 focus:outline-none focus:ring-0 focus:border-blue-500 transition-colors font-mono"

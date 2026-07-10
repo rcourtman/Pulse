@@ -1404,6 +1404,12 @@ describe('settings architecture guardrails', () => {
     );
     expect(nodeModalSetupGuideSectionSource).toContain('setupCommandButtonTitle');
     expect(nodeModalSetupGuideSectionSource).toContain('disabled={setupHandoffDisabled()}');
+    expect(nodeModalSetupGuideSectionSource).toContain('Credentialed command ready');
+    expect(nodeModalSetupGuideSectionSource).toContain(
+      'one-time setup token is intentionally not shown on this page',
+    );
+    expect(nodeModalStateSource).toContain('data.commandWithEnv');
+    expect(nodeModalStateSource).not.toContain('quickSetupPreviewCommand');
     expect(nodeModalStatusFooterSource).toContain('guidedSetupOnlyMode');
     expect(nodeModalStatusFooterSource).toContain('props.saveDisabled');
     expect(nodeModalStateSource).toContain("enableCommands: type === 'pve'");

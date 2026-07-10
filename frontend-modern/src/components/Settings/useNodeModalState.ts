@@ -38,7 +38,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
     cacheKey: string;
     response: ProxmoxSetupCommandResponse;
   } | null>(null);
-  const [quickSetupPreviewCommand, setQuickSetupPreviewCommand] = createSignal('');
   const [quickSetupTokenHint, setQuickSetupTokenHint] = createSignal('');
   const [quickSetupExpiry, setQuickSetupExpiry] = createSignal<number | null>(null);
   const [agentInstallCommand, setAgentInstallCommand] = createSignal('');
@@ -50,6 +49,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     typeof props.temperatureMonitoringEnabled === 'boolean';
   const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
   const isEditingExistingNode = () => Boolean(props.editingNode?.id);
+  const quickSetupCommandReady = () => quickSetupBootstrap() !== null;
 
   const quickSetupExpiryLabel = () => {
     const expiry = quickSetupExpiry();
@@ -65,7 +65,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
 
   const clearQuickSetupState = () => {
     setQuickSetupBootstrap(null);
-    setQuickSetupPreviewCommand('');
     setQuickSetupTokenHint('');
     setQuickSetupExpiry(null);
   };
@@ -122,9 +121,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
     const cached = quickSetupBootstrap();
     const nowUnix = Date.now() / 1000;
     if (cached && cached.cacheKey === cacheKey && cached.response.expires > nowUnix) {
-      setQuickSetupPreviewCommand(
-        cached.response.commandWithoutEnv ?? cached.response.commandWithEnv,
-      );
       setQuickSetupTokenHint(cached.response.tokenHint);
       setQuickSetupExpiry(cached.response.expires);
       return cached.response;
@@ -136,7 +132,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
       backupPerms,
     });
     setQuickSetupBootstrap({ cacheKey, response });
-    setQuickSetupPreviewCommand(response.commandWithoutEnv ?? response.commandWithEnv);
     setQuickSetupTokenHint(response.tokenHint);
     setQuickSetupExpiry(response.expires);
     return response;
@@ -553,7 +548,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     loadingAgentCommand,
     quickSetupExpiry,
     quickSetupExpiryLabel,
-    quickSetupPreviewCommand,
+    quickSetupCommandReady,
     quickSetupTokenHint,
     showTemperatureMonitoringSection,
     temperatureMonitoringEnabledValue,

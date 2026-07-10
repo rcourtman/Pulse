@@ -3498,16 +3498,17 @@ beyond the shared client boundary.
 The extracted node setup modal owner must then consume that canonicalized
 response directly,
 including copying the token-bearing `commandWithEnv` field while rendering the
-non-secret `commandWithoutEnv` preview instead of re-interpreting the
-bootstrap payload through local nullable fallbacks.
+non-executable credentialed-command readiness state instead of rendering the
+tokenless `commandWithoutEnv` shell command as if it were runnable or
+re-interpreting the bootstrap payload through local nullable fallbacks.
 Operator-facing quick-setup display must also stay on the runtime-owned token
 boundary: the shared frontend client must require masked `tokenHint`, and the
 extracted node setup modal owner must render that hint rather than the full returned
 `setupToken` once the bootstrap artifact itself already carries the live
-secret. That non-secret preview contract applies to both the PVE and PBS
-quick-setup panes; the settings surface may not let one path keep rendering
-the token-bearing command after the other has switched to the governed
-`commandWithoutEnv` preview. Operator guidance on those panes must stay
+secret. That non-executable readiness contract applies to both the PVE and PBS
+quick-setup panes; the settings surface may not render either the token-bearing
+command or a tokenless lookalike command after bootstrap generation. Operator
+guidance on those panes must stay
 truthful too: once the visible UI only shows a masked hint, copy-success text
 may not instruct the operator to paste a token "shown below" and must instead
 state that the copied command already embeds the one-time setup token. The same settings quick-setup surface must also trim and validate the Endpoint URL

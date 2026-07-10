@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { WelcomeStep } from '../steps/WelcomeStep';
 
 const apiFetchMock = vi.fn();
@@ -45,6 +46,7 @@ describe('WelcomeStep', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     cleanup();
   });
 
@@ -152,6 +154,69 @@ describe('WelcomeStep', () => {
     expect(setIsUnlocked).toHaveBeenCalledWith(true);
     expect(onNext).toHaveBeenCalledTimes(1);
     expect(showErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('waits for an explicit verification action after a token is pasted', async () => {
+    vi.useFakeTimers();
+    const rawToken = '0123456789abcdef0123456789abcdef0123456789abcdef';
+    const onNext = vi.fn();
+
+    const Harness = () => {
+      const [bootstrapToken, setBootstrapToken] = createSignal('');
+      return (
+        <WelcomeStep
+          onNext={onNext}
+          bootstrapToken={bootstrapToken()}
+          setBootstrapToken={setBootstrapToken}
+          isUnlocked={false}
+          setIsUnlocked={vi.fn()}
+        />
+      );
+    };
+
+    render(() => <Harness />);
+    fireEvent.input(screen.getByPlaceholderText('Paste your bootstrap token'), {
+      target: { value: rawToken },
+    });
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onNext).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('keeps bootstrap validation single-flight across repeated submit actions', async () => {
+    const rawToken = '0123456789abcdef0123456789abcdef0123456789abcdef';
+    const onNext = vi.fn();
+    const setIsUnlocked = vi.fn();
+    let resolveValidation: ((value: { ok: boolean }) => void) | undefined;
+    apiFetchMock.mockReturnValue(
+      new Promise<{ ok: boolean }>((resolve) => {
+        resolveValidation = resolve;
+      }),
+    );
+
+    render(() => (
+      <WelcomeStep
+        onNext={onNext}
+        bootstrapToken={rawToken}
+        setBootstrapToken={vi.fn()}
+        isUnlocked={false}
+        setIsUnlocked={setIsUnlocked}
+      />
+    ));
+
+    const verifyButton = screen.getByRole('button', { name: 'Verify bootstrap token →' });
+    const tokenInput = screen.getByDisplayValue(rawToken);
+    fireEvent.click(verifyButton);
+    fireEvent.keyDown(tokenInput, { key: 'Enter' });
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    resolveValidation?.({ ok: true });
+    await waitFor(() => expect(onNext).toHaveBeenCalledTimes(1));
+    expect(setIsUnlocked).toHaveBeenCalledTimes(1);
   });
 
   it('blocks encrypted bootstrap snapshot pastes with a specific error', async () => {

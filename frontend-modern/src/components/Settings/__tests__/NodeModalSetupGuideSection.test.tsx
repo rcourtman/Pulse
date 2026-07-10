@@ -11,6 +11,8 @@ const renderSetupGuide = (
     isEditingExistingNode?: boolean;
     setupHandoffDisabled?: boolean;
     setupHandoffDisabledReason?: string;
+    quickSetupCommandReady?: boolean;
+    quickSetupTokenHint?: string;
   } = {},
 ) => {
   const copyCommand = vi.fn();
@@ -36,8 +38,8 @@ const renderSetupGuide = (
       loadingAgentCommand: () => false,
       quickSetupExpiry: () => null,
       quickSetupExpiryLabel: () => '',
-      quickSetupPreviewCommand: () => '',
-      quickSetupTokenHint: () => '',
+      quickSetupCommandReady: () => Boolean(options.quickSetupCommandReady),
+      quickSetupTokenHint: () => options.quickSetupTokenHint ?? '',
       updateField,
     } as unknown as NodeModalState;
 
@@ -77,6 +79,23 @@ describe('NodeModalSetupGuideSection', () => {
     // Tab renamed from 'API Inventory' (internal term) to 'Connect via API'.
     expect(screen.getByRole('button', { name: /Connect via API/i })).toBeInTheDocument();
     expect(screen.queryByText('Manual API token')).not.toBeInTheDocument();
+  });
+
+  it('does not present the tokenless setup preview as a runnable command', () => {
+    renderSetupGuide('pve', {
+      quickSetupCommandReady: true,
+      quickSetupTokenHint: 'set…123',
+    });
+
+    expect(screen.getByText('Credentialed command ready')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Use Copy command to place the runnable command on your clipboard/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/one-time setup token is intentionally not shown/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/curl -fsSL/i)).not.toBeInTheDocument();
+    expect(screen.getByText('set…123')).toBeInTheDocument();
   });
 
   it('keeps the root agent path explicit as optional full host telemetry', () => {

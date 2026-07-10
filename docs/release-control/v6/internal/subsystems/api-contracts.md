@@ -6019,15 +6019,19 @@ directly:
 inside
 `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`
 must copy the governed token-bearing `commandWithEnv` field but render
-`commandWithoutEnv` as the visible preview, using the guaranteed `expires`
-value without reintroducing module-local nullable fallbacks. The same shared
+an explicit non-executable credentialed-command readiness state, using the
+guaranteed `expires` value without reintroducing module-local nullable
+fallbacks. It must not render `commandWithoutEnv` as a runnable-looking command
+because that transport omits the one-time token required for automatic
+registration. The same shared
 surface must
 also treat `setupToken` as bootstrap transport data and `tokenHint` as the
 operator-facing display field, so the UI does not re-expose the full one-time
 token once the copied/downloaded artifact already carries it. That preview
 secrecy rule must stay symmetric across both supported Proxmox types, so the
-PBS quick-setup branch may not preserve the token-bearing preview after the
-PVE branch has moved to the governed `commandWithoutEnv` display contract.
+PBS quick-setup branch may not preserve either a token-bearing command or a
+tokenless lookalike after the PVE branch has moved to the governed readiness
+display contract.
 That same quick-setup guidance must also stay truthful after the preview is
 masked: copy-success messaging may not tell the operator to paste a token
 "shown below" once only `tokenHint` remains visible, and stale raw-token
