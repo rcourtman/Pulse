@@ -7,15 +7,11 @@ import { apiFetchJSON } from '@/utils/apiClient';
 import { arrayOrEmpty, promoteLegacyAlertIdentifier } from './responseUtils';
 import type { InvestigationRecord } from './ai';
 import type { ResourceCriticality } from './resourceOperatorState';
+import type { PatrolActionReference } from '@/types/actionAudit';
 
 export type FindingSeverity = 'info' | 'watch' | 'warning' | 'critical';
 export type FindingCategory =
-  | 'performance'
-  | 'capacity'
-  | 'reliability'
-  | 'backup'
-  | 'security'
-  | 'general';
+  'performance' | 'capacity' | 'reliability' | 'backup' | 'security' | 'general';
 
 export interface Finding {
   id: string;
@@ -88,11 +84,7 @@ export interface CapacityForecast {
 }
 
 export type InvestigationStatus =
-  | 'pending'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'needs_attention';
+  'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
 export type InvestigationOutcome =
   | 'resolved'
   | 'fix_queued'
@@ -130,6 +122,7 @@ export interface Investigation {
   error?: string;
   proposed_fix?: ProposedFix;
   approval_id?: string;
+  action?: PatrolActionReference;
 }
 
 export interface ProposedFix {

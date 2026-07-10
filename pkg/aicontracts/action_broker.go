@@ -88,6 +88,23 @@ type ActionReference struct {
 	Plan           ActionPlanInfo `json:"plan"`
 }
 
+// CloneActionReference returns an immutable deep copy suitable for crossing
+// investigation-store and product-read-model boundaries.
+func CloneActionReference(reference *ActionReference) *ActionReference {
+	if reference == nil {
+		return nil
+	}
+	clone := *reference
+	clone.Plan.PredictedBlastRadius = append([]string(nil), reference.Plan.PredictedBlastRadius...)
+	if reference.Plan.Preflight != nil {
+		preflight := *reference.Plan.Preflight
+		preflight.SafetyChecks = append([]string(nil), reference.Plan.Preflight.SafetyChecks...)
+		preflight.VerificationSteps = append([]string(nil), reference.Plan.Preflight.VerificationSteps...)
+		clone.Plan.Preflight = &preflight
+	}
+	return &clone
+}
+
 // ErrSensitiveParamsRequireOperator reports that a proposal populated a
 // parameter the capability declares sensitive. Such proposals stop for
 // operator input instead of persisting secret material.

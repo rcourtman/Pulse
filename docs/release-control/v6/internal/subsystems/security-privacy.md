@@ -1262,3 +1262,10 @@ to security and privacy only while they preserve every governed token, scope,
 privacy disclosure, and API name unchanged. Responsive presentation work may
 add localized accessible labels, but it must not rename or weaken security-owned
 terms through a mobile-specific catalog variant.
+
+Patrol action authority remains server-derived through the canonical action
+lifecycle. Relay-mobile callers may read their pending queue and submit a
+decision or execution request only through the existing scoped route checks;
+they cannot supply requester identity, origin, approval policy, capability
+catalog entries, or verification outcome. Legacy command-shaped investigation
+history is never exposed as an executable payload in desktop or mobile review.

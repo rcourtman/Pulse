@@ -1,11 +1,5 @@
 export type ActionAuditState =
-  | 'planned'
-  | 'pending_approval'
-  | 'approved'
-  | 'rejected'
-  | 'executing'
-  | 'completed'
-  | 'failed';
+  'planned' | 'pending_approval' | 'approved' | 'rejected' | 'executing' | 'completed' | 'failed';
 
 export type ActionAuditApprovalPolicy = 'none' | 'dry_run_only' | 'admin' | 'mfa' | string;
 
@@ -79,10 +73,7 @@ export interface ActionAuditExecutionResult {
 export type ActionVerificationStatus = 'unknown' | 'verified' | 'unverified' | 'failed' | string;
 
 export type ActionAuditRefusalPrefix =
-  | 'plan_drift:'
-  | 'action_plan_expired:'
-  | 'action_dry_run_only:'
-  | 'resource_remediation_locked:';
+  'plan_drift:' | 'action_plan_expired:' | 'action_dry_run_only:' | 'resource_remediation_locked:';
 
 export interface ActionVerificationOutcome {
   status: ActionVerificationStatus;
@@ -96,10 +87,35 @@ export interface ActionAuditRecord {
   state: ActionAuditState;
   request: ActionAuditRequest;
   plan: ActionAuditPlan;
+  origin?: ActionAuditOrigin;
   approvals?: ActionAuditApprovalRecord[];
   result?: ActionAuditExecutionResult;
   verification?: ActionVerificationResult;
   verificationOutcome?: ActionVerificationOutcome;
+}
+
+export interface ActionAuditOrigin {
+  surface: string;
+  findingId?: string;
+  investigationId?: string;
+  proposalId?: string;
+}
+
+// PatrolActionReference is the compact investigation projection of the
+// canonical action audit. Lifecycle state and proposal parameters remain
+// authoritative in the action API; Patrol never reconstructs command fixes.
+export interface PatrolActionReference {
+  action_id: string;
+  proposal_id?: string;
+  resource_id: string;
+  capability_name: string;
+  state: ActionAuditState;
+  plan: ActionAuditPlan;
+}
+
+export interface PendingActionsResponse {
+  actions: ActionAuditRecord[];
+  count: number;
 }
 
 export interface ActionAuditListResponse {

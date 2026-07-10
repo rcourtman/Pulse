@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,6 +18,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -3638,5 +3641,22 @@ func TestOrchestratorAndChatAdaptersMapTheSameMessageFields(t *testing.T) {
 	}
 	if !strings.Contains(string(chatAdapter), "result[i] = adaptChatMessage(m)") {
 		t.Error("chatServiceAdapter.GetMessages must route through adaptChatMessage")
+	}
+}
+
+func TestMapInvestigationProposalErrorPreservesSimultaneousRunFailure(t *testing.T) {
+	runFailure := errors.New("provider stream failed")
+	coreErr := chat.NewInvestigationRunError(runFailure, tools.ErrProposalAmbiguous)
+
+	mapped := mapInvestigationProposalError(coreErr)
+	if !errors.Is(mapped, runFailure) {
+		t.Fatal("mapped error lost the provider/runtime failure")
+	}
+	if !errors.Is(mapped, aicontracts.ErrInvestigationProposalAmbiguous) {
+		t.Fatal("mapped error lost the public proposal sentinel")
+	}
+	var investigationErr *aicontracts.OrchestratorInvestigationError
+	if !errors.As(mapped, &investigationErr) || investigationErr.RunFailure() == nil {
+		t.Fatalf("mapped error = %#v, want a runtime-bearing investigation error", mapped)
 	}
 }

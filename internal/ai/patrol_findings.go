@@ -1122,25 +1122,12 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 			if pushCb != nil {
 				switch latest.InvestigationOutcome {
 				case string(InvestigationOutcomeFixQueued):
-					approvalID := ""
-					riskLevel := ""
-					if latestInvestigation != nil {
-						approvalID = latestInvestigation.ApprovalID
-						if latestInvestigation.ProposedFix != nil {
-							riskLevel = latestInvestigation.ProposedFix.RiskLevel
-						}
+					if latestInvestigation != nil && latestInvestigation.Action != nil && latestInvestigation.Action.State == "pending_approval" {
+						pushCb(relay.NewActionDecisionNotification(
+							latestInvestigation.Action.ActionID,
+							latest.Title,
+						))
 					}
-					if approvalID == "" {
-						log.Warn().
-							Str("finding_id", latest.ID).
-							Str("investigation_session_id", latest.InvestigationSessionID).
-							Msg("Investigation queued for approval but approval ID missing")
-					}
-					pushCb(relay.NewApprovalRequestNotification(
-						approvalID,
-						latest.Title,
-						riskLevel,
-					))
 				case string(InvestigationOutcomeFixExecuted), string(InvestigationOutcomeFixVerified):
 					pushCb(relay.NewFixCompletedNotification(latest.ID, latest.Title, true))
 				case string(InvestigationOutcomeFixFailed), string(InvestigationOutcomeFixVerificationFailed):
@@ -1161,6 +1148,44 @@ func (p *PatrolService) MaybeInvestigateFinding(f *Finding) {
 		Str("resource", f.ResourceName).
 		Str("autonomy_level", autonomyLevel).
 		Msg("Triggered autonomous investigation for finding")
+}
+
+// PublishFindingLifecycleUpdate projects a reconciled action outcome to the
+// unified finding owner and, for terminal execution outcomes, to mobile push.
+// It is called only after the finding store changed, so duplicate action
+// callbacks and read-time hydration do not emit duplicate notifications.
+func (p *PatrolService) PublishFindingLifecycleUpdate(findingID string) {
+	if p == nil || p.findings == nil {
+		return
+	}
+	finding := p.findings.Get(findingID)
+	if finding == nil {
+		return
+	}
+	p.mu.RLock()
+	pushUnified := p.unifiedFindingCallback
+	resolveUnified := p.unifiedFindingResolver
+	pushNotify := p.pushNotifyCallback
+	p.mu.RUnlock()
+	if pushUnified != nil {
+		pushUnified(finding)
+	}
+	if finding.ResolvedAt != nil && resolveUnified != nil {
+		resolveUnified(finding.ID)
+	}
+	if pushNotify == nil {
+		return
+	}
+	switch InvestigationOutcome(finding.InvestigationOutcome) {
+	case InvestigationOutcomeFixVerified:
+		pushNotify(relay.NewActionOutcomeNotification(finding.ID, finding.Title, "verified"))
+	case InvestigationOutcomeFixVerificationFailed:
+		pushNotify(relay.NewActionOutcomeNotification(finding.ID, finding.Title, "failed"))
+	case InvestigationOutcomeFixVerificationUnknown:
+		pushNotify(relay.NewActionOutcomeNotification(finding.ID, finding.Title, "unverified"))
+	case InvestigationOutcomeFixFailed:
+		pushNotify(relay.NewActionOutcomeNotification(finding.ID, finding.Title, "execution_failed"))
+	}
 }
 
 // VerifyFixResolved runs a lightweight scoped patrol to check if the issue

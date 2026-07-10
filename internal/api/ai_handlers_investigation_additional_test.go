@@ -18,6 +18,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
@@ -221,6 +222,86 @@ func (s *testInvestigationStore) GetAll() []*aicontracts.InvestigationSession {
 func (s *testInvestigationStore) CountFixed() int             { return 0 }
 func (s *testInvestigationStore) Cleanup(_ time.Duration) int { return 0 }
 func (s *testInvestigationStore) EnforceSizeLimit(_ int) int  { return 0 }
+
+func TestReconcilePatrolActionTransitionUsesAuthoritativeAudit(t *testing.T) {
+	investigations := newTestInvestigationStore()
+	investigation := investigations.Create("finding-1", "session-1")
+	audits := unifiedresources.NewMemoryStore()
+	now := time.Now().UTC()
+	pending := unifiedresources.ActionAuditRecord{
+		ID: "act-1", CreatedAt: now, UpdatedAt: now, State: unifiedresources.ActionStatePending,
+		Request: unifiedresources.ActionRequest{RequestID: "proposal-1", ResourceID: "vm:42", CapabilityName: "restart", RequestedBy: "pulse_patrol"},
+		Plan:    unifiedresources.ActionPlan{ActionID: "act-1", RequestID: "proposal-1", Allowed: true, RequiresApproval: true},
+		Origin:  &unifiedresources.ActionOrigin{Surface: patrolActionOriginSurface, FindingID: "finding-1", InvestigationID: investigation.ID, ProposalID: "proposal-1"},
+	}
+	if err := audits.RecordActionAudit(pending); err != nil {
+		t.Fatalf("RecordActionAudit(pending): %v", err)
+	}
+	completed := pending
+	completed.State = unifiedresources.ActionStateCompleted
+	completed.UpdatedAt = now.Add(time.Second)
+	completed.VerificationOutcome = unifiedresources.VerificationOutcome{Status: unifiedresources.VerificationVerified}
+	if err := audits.RecordActionAudit(completed); err != nil {
+		t.Fatalf("RecordActionAudit(completed): %v", err)
+	}
+
+	handler := &AISettingsHandler{
+		investigationStores:   map[string]aicontracts.InvestigationStore{"default": investigations},
+		resourceStoreProvider: func(string) (unifiedresources.ResourceStore, error) { return audits, nil },
+	}
+	// A stale callback payload must not regress the already-completed audit.
+	handler.ReconcilePatrolActionTransition("default", pending)
+	got := investigations.Get(investigation.ID)
+	if got.Action == nil || got.Action.ActionID != "act-1" || got.Action.State != string(unifiedresources.ActionStateCompleted) {
+		t.Fatalf("reconciled action = %#v, want authoritative completed action", got.Action)
+	}
+	if got.Outcome != aicontracts.OutcomeFixVerified {
+		t.Fatalf("outcome = %q, want %q", got.Outcome, aicontracts.OutcomeFixVerified)
+	}
+}
+
+func TestHydratePatrolInvestigationActionRepairsMissedCallbackByOrigin(t *testing.T) {
+	investigations := newTestInvestigationStore()
+	investigation := investigations.Create("finding-1", "session-1")
+	audits := unifiedresources.NewMemoryStore()
+	record := unifiedresources.ActionAuditRecord{
+		ID: "act-missed", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), State: unifiedresources.ActionStateRejected,
+		Request: unifiedresources.ActionRequest{RequestID: "proposal-1", ResourceID: "vm:42", CapabilityName: "restart", RequestedBy: "pulse_patrol"},
+		Plan:    unifiedresources.ActionPlan{ActionID: "act-missed", RequestID: "proposal-1", Allowed: true, RequiresApproval: true},
+		Origin:  &unifiedresources.ActionOrigin{Surface: patrolActionOriginSurface, FindingID: "finding-1", InvestigationID: investigation.ID, ProposalID: "proposal-1"},
+	}
+	if err := audits.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+	handler := &AISettingsHandler{
+		investigationStores:   map[string]aicontracts.InvestigationStore{"default": investigations},
+		resourceStoreProvider: func(string) (unifiedresources.ResourceStore, error) { return audits, nil },
+	}
+
+	hydrated := handler.hydratePatrolInvestigationAction("default", investigation)
+	if hydrated.Action == nil || hydrated.Action.ActionID != "act-missed" || hydrated.Action.State != string(unifiedresources.ActionStateRejected) {
+		t.Fatalf("hydrated action = %#v", hydrated.Action)
+	}
+	if hydrated.Outcome != aicontracts.OutcomeFixRejected {
+		t.Fatalf("hydrated outcome = %q, want rejected", hydrated.Outcome)
+	}
+	persisted := investigations.Get(investigation.ID)
+	if persisted.Action == nil || persisted.Action.ActionID != "act-missed" || persisted.Outcome != aicontracts.OutcomeFixRejected {
+		t.Fatalf("persisted repair = %#v", persisted)
+	}
+}
+
+func TestPatrolOutcomeForActionAuditPreservesInconclusiveVerification(t *testing.T) {
+	for _, status := range []unifiedresources.VerificationStatus{unifiedresources.VerificationUnknown, unifiedresources.VerificationUnverified} {
+		audit := unifiedresources.ActionAuditRecord{
+			State:               unifiedresources.ActionStateCompleted,
+			VerificationOutcome: unifiedresources.VerificationOutcome{Status: status},
+		}
+		if got := patrolOutcomeForActionAudit(audit); got != aicontracts.OutcomeFixVerificationUnknown {
+			t.Fatalf("status %q mapped to %q, want verification_unknown", status, got)
+		}
+	}
+}
 
 type stubInvestigationOrchestrator struct {
 	session           *ai.InvestigationSession

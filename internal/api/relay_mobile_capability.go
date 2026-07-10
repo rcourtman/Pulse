@@ -29,6 +29,9 @@ const (
 	relayMobileRouteApprovalsList                relayMobileRuntimeRouteID = "approvals-list"
 	relayMobileRouteApprovalApprove              relayMobileRuntimeRouteID = "approval-approve"
 	relayMobileRouteApprovalDeny                 relayMobileRuntimeRouteID = "approval-deny"
+	relayMobileRoutePendingActions               relayMobileRuntimeRouteID = "pending-actions"
+	relayMobileRouteActionDecision               relayMobileRuntimeRouteID = "action-decision"
+	relayMobileRouteActionExecute                relayMobileRuntimeRouteID = "action-execute"
 	relayMobileRouteChatSend                     relayMobileRuntimeRouteID = "chat-send"
 	relayMobileRouteSessionsList                 relayMobileRuntimeRouteID = "sessions-list"
 	relayMobileRouteSessionCreate                relayMobileRuntimeRouteID = "session-create"
@@ -51,6 +54,9 @@ var relayMobileRuntimeRouteOrder = []relayMobileRuntimeRouteID{
 	relayMobileRouteApprovalsList,
 	relayMobileRouteApprovalApprove,
 	relayMobileRouteApprovalDeny,
+	relayMobileRoutePendingActions,
+	relayMobileRouteActionDecision,
+	relayMobileRouteActionExecute,
 	relayMobileRouteChatSend,
 	relayMobileRouteSessionsList,
 	relayMobileRouteSessionCreate,
@@ -131,6 +137,24 @@ var relayMobileRuntimeRouteSpecs = map[relayMobileRuntimeRouteID]relayMobileRunt
 		id:            relayMobileRouteApprovalDeny,
 		method:        http.MethodPost,
 		path:          "/api/ai/approvals/{approval_id}/deny",
+		requiredScope: config.ScopeAIExecute,
+	},
+	relayMobileRoutePendingActions: {
+		id:            relayMobileRoutePendingActions,
+		method:        http.MethodGet,
+		path:          "/api/actions/pending",
+		requiredScope: config.ScopeAIExecute,
+	},
+	relayMobileRouteActionDecision: {
+		id:            relayMobileRouteActionDecision,
+		method:        http.MethodPost,
+		path:          "/api/actions/{action_id}/decision",
+		requiredScope: config.ScopeAIExecute,
+	},
+	relayMobileRouteActionExecute: {
+		id:            relayMobileRouteActionExecute,
+		method:        http.MethodPost,
+		path:          "/api/actions/{action_id}/execute",
 		requiredScope: config.ScopeAIExecute,
 	},
 	relayMobileRouteChatSend: {

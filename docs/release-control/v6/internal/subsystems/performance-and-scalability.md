@@ -1811,3 +1811,9 @@ combining it with `min-w-full`, which allows the five operational columns to
 compress into unreadable phone-width fragments. This is a layout-only contract:
 it must not add row-time measurement, duplicate tables, or viewport listeners
 to the Workloads rendering hot path.
+
+The router owns exactly one in-process Patrol action transition publisher.
+Publication remains an O(1) wakeup keyed by org and action id; reconciliation
+and read-time recovery use indexed action-audit lookups rather than scanning
+findings or audit history. SQLite keeps dedicated state and valid-origin JSON
+indexes for pending queues and missed-callback hydration.

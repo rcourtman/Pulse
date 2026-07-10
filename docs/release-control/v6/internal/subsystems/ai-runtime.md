@@ -5644,3 +5644,21 @@ via `Service.CostStore()`. `ExecutePatrolStream` deliberately
 does NOT record here — its caller (`patrol_ai.go`) records via
 its own helper, so cost is never double-counted on the
 patrol-via-chat path.
+
+Patrol action continuity is audit-authoritative after proposal submission.
+Investigation execution exposes run failure and proposal failure as independent
+typed channels; a proposal-only failure may become a needs-attention outcome,
+but a simultaneous provider/runtime failure must remain a failed investigation.
+Before the model runs, the enterprise orchestrator receives the exact broker
+capability catalog, including approval floor, parameter types, enums, patterns,
+and sensitivity, and must explicitly forbid proposal guessing when catalog
+lookup fails or returns no capabilities. Once `ActionBroker.Submit` succeeds,
+action-transition callbacks are wakeups only: `internal/api/patrol_action_reconciliation.go`
+re-reads the authoritative action audit, projects its current `ActionReference`
+onto both the investigation and finding, and maps terminal verification onto
+`fix_verified`, `fix_verification_failed`, or `fix_verification_unknown`.
+Investigation reads perform the same hydration by action id or trusted origin,
+so a missed callback cannot strand Patrol on stale approval state. Finding
+lifecycle publication is idempotent and emits unified lifecycle updates plus
+honest terminal push outcomes without turning unverified execution into an
+all-clear.

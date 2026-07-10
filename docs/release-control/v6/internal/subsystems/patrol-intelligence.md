@@ -1945,3 +1945,18 @@ either a rejected governed decision or an approved governed decision with
 verified outcome evidence. Patrol may use the resolved-loop count only as
 stricter approved-and-verified detail after the loop also has an approved
 governed decision and verified outcome evidence.
+
+The typed `ActionReference` is the primary Patrol workflow model in both the
+finding row and expanded action review. Pending actions say approve or reject;
+planned or approved actions say run; executing actions say running; terminal
+actions present verified, failed, or honestly inconclusive verification. The
+expanded `ApprovalSection` renders the canonical plan, approval floor,
+preflight, safety checks, verification steps, and rollback availability, then
+uses only `/api/actions` decision/execute calls. Legacy `ProposedFix` and
+`ApprovalID` data may explain historical records but must never reveal a raw
+command, present an approve/run control, or reconstruct an executable action;
+when the typed reference is absent the UI says action details are unavailable
+and offers an Assistant handoff. Collapsed-row attention state must consult the
+same investigation action reference, so it cannot claim there is no approval
+while the expanded panel has one. Browser proof must exercise pending,
+terminal-verified, and legacy-history states rather than judging only source.

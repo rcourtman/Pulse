@@ -99,6 +99,26 @@ func TestBuildFindingInvestigationRecord_FromSession(t *testing.T) {
 	}
 }
 
+func TestBuildFindingInvestigationRecordCarriesTypedActionReference(t *testing.T) {
+	now := time.Now().UTC()
+	finding := &Finding{ID: "finding-1", ResourceID: "vm:42", DetectedAt: now, InvestigationOutcome: string(InvestigationOutcomeFixQueued)}
+	session := &InvestigationSession{
+		ID: "investigation-1", FindingID: finding.ID, StartedAt: now, Outcome: aicontracts.OutcomeFixQueued,
+		Action: &aicontracts.ActionReference{
+			ActionID: "act-1", ProposalID: "proposal-1", ResourceID: "vm:42", CapabilityName: "restart", State: "pending_approval",
+			Plan: aicontracts.ActionPlanInfo{ActionID: "act-1", PredictedBlastRadius: []string{"vm:42"}},
+		},
+	}
+	record := BuildFindingInvestigationRecord(finding, session)
+	if record == nil || record.Action == nil || record.Action.ActionID != "act-1" {
+		t.Fatalf("record action = %#v", record)
+	}
+	session.Action.Plan.PredictedBlastRadius[0] = "mutated"
+	if record.Action.Plan.PredictedBlastRadius[0] != "vm:42" {
+		t.Fatal("record action reference must be an immutable copy")
+	}
+}
+
 func TestEmptyInvestigationRecord_NormalizesRollback(t *testing.T) {
 	record := aicontracts.EmptyInvestigationRecord()
 	if record.Rollback == nil || len(record.Rollback) != 0 {

@@ -72,6 +72,58 @@ var (
 	ErrInvestigationProposalAttemptsFailed = errors.New("investigation made proposal attempts but none validated")
 )
 
+// OrchestratorInvestigationError preserves the independent runtime and
+// proposal-channel failures across the Pulse/Enterprise boundary. A proposal
+// failure may be handled as a completed needs-attention outcome only when
+// RunFailure is nil.
+type OrchestratorInvestigationError struct {
+	runFailure      error
+	proposalFailure error
+}
+
+// NewOrchestratorInvestigationError constructs the public cross-repo failure
+// without exposing mutable error fields.
+func NewOrchestratorInvestigationError(runFailure, proposalFailure error) error {
+	if runFailure == nil && proposalFailure == nil {
+		return nil
+	}
+	return &OrchestratorInvestigationError{
+		runFailure:      runFailure,
+		proposalFailure: proposalFailure,
+	}
+}
+
+func (e *OrchestratorInvestigationError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return errors.Join(e.runFailure, e.proposalFailure).Error()
+}
+
+// Unwrap preserves errors.Is/errors.As behavior for both failure channels.
+func (e *OrchestratorInvestigationError) Unwrap() []error {
+	if e == nil {
+		return nil
+	}
+	return []error{e.runFailure, e.proposalFailure}
+}
+
+// RunFailure returns the provider/runtime failure, if any.
+func (e *OrchestratorInvestigationError) RunFailure() error {
+	if e == nil {
+		return nil
+	}
+	return e.runFailure
+}
+
+// ProposalFailure returns the proposal-channel failure, if any.
+func (e *OrchestratorInvestigationError) ProposalFailure() error {
+	if e == nil {
+		return nil
+	}
+	return e.proposalFailure
+}
+
 // OrchestratorFindingsStore provides access to patrol findings for the orchestrator.
 type OrchestratorFindingsStore interface {
 	Get(id string) *Finding

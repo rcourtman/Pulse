@@ -333,6 +333,12 @@ boundary: storage/recovery surfaces must not treat Patrol-proposed action
 audits (origin surface `patrol`) as a storage-local execution channel or
 mint their own proposal origins, and they must not subscribe storage-local
 side effects to the API-owned org-scoped action-transition hook.
+Patrol continuity re-reads action audits by id or trusted origin and treats
+callback payloads only as wakeups. The underlying SQLite origin path persists
+absent origins as NULL and guards JSON extraction/indexing with `json_valid`,
+so legacy empty values cannot make audit insertion or recovery fail. Storage
+and recovery consumers may observe the reconciled result but must not cache a
+second authoritative Patrol action state.
 Storage/recovery surfaces may consume unified-resource `platformScopes` as
 read-only platform membership context, but they must not reinterpret runtime
 scope overlap as storage or recovery ownership. A Docker workload that also

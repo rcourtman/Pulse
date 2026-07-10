@@ -429,6 +429,7 @@ var allRouteAllowlist = []string{
 	"/api/agent/capabilities",
 	"/api/agent/events",
 	"POST /api/actions/plan",
+	"GET /api/actions/pending",
 	"POST /api/actions/{id}/decision",
 	"POST /api/actions/{id}/execute",
 	"/api/guests/metadata",

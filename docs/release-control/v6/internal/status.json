@@ -5590,7 +5590,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. The enterprise orchestrator consumes a structured investigation result and submits through the required action broker; PROPOSED_FIX parsing, direct command execution, command-shaped approval creation and re-arming, and the core-generated remediation-plan path are all removed, and command text in investigation prose is inert. Registry-owned invocation descriptors classify every tool by workflow kind and mutation target and enforce control level and profile at both projection and execution. Remaining post-RC hardening: policy-scoped autonomy presets (per tenant/resource/action/window), host-update and storage-pressure workflows as the second and third complete verticals, richer dry-run providers, multi-actor approvals, and a real-lab detect-plan-execute-verify-rollback journey proof.",
+        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. Action continuity is audit-authoritative: callbacks trigger org-scoped re-reads, investigation reads recover missed transitions by trusted origin, desktop and mobile decisions use the canonical /api/actions routes, terminal verification maps honestly onto Patrol findings and push outcomes, and legacy command-shaped history remains inert. The enterprise orchestrator consumes the exact capability catalog and preserves independent runtime/proposal failures; a code-level detect-plan-approve-execute-verify-reconcile journey proves one execution and durable verified completion. Remaining post-RC hardening: policy-scoped autonomy presets (per tenant/resource/action/window), host-update and storage-pressure workflows as the second and third complete verticals, richer dry-run providers, multi-actor approvals, and a real-lab detect-plan-execute-verify-rollback journey proof.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -5681,6 +5681,16 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/components/patrol/__tests__/ApprovalSection.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/patrol/ApprovalSection.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/types/actionAudit.ts",
           "kind": "file"
         },
@@ -5731,6 +5741,16 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/patrol_action_broker_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/patrol_action_reconciliation.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/unifiedresources/actions.go",
           "kind": "file"
         },
@@ -5747,6 +5767,21 @@
         {
           "repo": "pulse",
           "path": "internal/unifiedresources/store_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-enterprise",
+          "path": "internal/investigation/orchestrator_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "src/api/__tests__/approvals.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "src/api/approvals.ts",
           "kind": "file"
         }
       ]
@@ -7669,7 +7704,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-lane-l1",
+      "agent_id": "codex",
+      "summary": "Prepare and publish the v6.0.6-rc.1 exact-SHA release candidate",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-10T18:14:04Z",
+      "heartbeat_at": "2026-07-10T18:14:04Z",
+      "expires_at": "2026-07-10T20:14:04Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L1"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

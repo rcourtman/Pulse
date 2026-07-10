@@ -626,6 +626,38 @@ describe('patrolInvestigationContextModel', () => {
     expect(JSON.stringify(handoff)).not.toContain('systemctl restart workload.service');
   });
 
+  it('keeps a typed pending action approval-bound without a legacy approval id', () => {
+    const handoff = buildPatrolAssessmentAssistantHandoff({
+      assessment: { title: 'Issues detected' },
+      activeFindings: [
+        {
+          id: 'finding-typed-action',
+          title: 'Unhealthy workload',
+          severity: 'warning',
+          status: 'active',
+          resourceId: 'docker:container:web',
+          pendingApproval: {
+            id: '',
+            status: 'pending_approval',
+            riskLevel: 'governed',
+            requestedAt: '2026-07-10T18:00:00Z',
+            actionId: 'action-typed-1',
+            actionApprovalPolicy: 'admin',
+            actionRequestedBy: 'pulse_patrol',
+          },
+        },
+      ],
+    });
+
+    expect(handoff.context.handoffActions?.[0]).toMatchObject({
+      findingId: 'finding-typed-action',
+      actionId: 'action-typed-1',
+      actionApprovalPolicy: 'admin',
+      actionRequiresApproval: true,
+    });
+    expect(handoff.context.handoffActions?.[0].approvalId).toBeUndefined();
+  });
+
   it('builds a model-only Assistant handoff for a Patrol run runtime failure', () => {
     const run: PatrolRunRecord = {
       id: 'run-runtime-error',

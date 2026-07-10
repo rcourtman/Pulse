@@ -132,3 +132,10 @@ boundary. `POST /api/security/tokens/relay-mobile` lives in the shared
 auth/security router, but it must require the paid `relay` entitlement before
 creating a `relay:mobile:access` token so Community installs cannot bypass
 Relay/mobile gating through direct API calls.
+
+The mobile relay capability inventory and router allowlist include the
+canonical pending-action read, action decision, and action execution routes.
+Patrol approval pushes use `decide_action` with a canonical action id; terminal
+pushes distinguish verified, unverified, verification-failed, and
+execution-failed outcomes. Relay must not revive `/api/ai/approvals` as a live
+mutation route or claim that executor completion alone verified the change.

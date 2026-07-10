@@ -1,30 +1,34 @@
 /**
- * ApprovalSection
+ * Patrol action lifecycle
  *
- * Shows when investigation has a proposed fix.
- * States: Pending, Expired, Executed, Denied, Failed, Verified, VerificationFailed.
+ * Presents the canonical typed action referenced by an investigation. Legacy
+ * command-shaped proposed_fix/approval_id fields are history only and never
+ * become executable UI authority.
  */
 
 import CheckIcon from 'lucide-solid/icons/check';
 import MessageSquareIcon from 'lucide-solid/icons/message-square';
+import PlayIcon from 'lucide-solid/icons/play';
 import XIcon from 'lucide-solid/icons/x';
-import { Component, For, Show, createSignal, createResource, createMemo } from 'solid-js';
-import { aiIntelligenceStore } from '@/stores/aiIntelligence';
-import { notificationStore } from '@/stores/notifications';
-import { aiChatStore } from '@/stores/aiChat';
-import { hasFeature } from '@/stores/license';
-import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
+import { Component, For, Show, createMemo, createResource, createSignal } from 'solid-js';
+import { AIAPI } from '@/api/ai';
+import { ResourceActionsAPI } from '@/api/resourceActions';
 import { Button } from '@/components/shared/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
-import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import {
   buildPatrolAssistantFindingHandoff,
-  buildPatrolAssistantApprovalBriefingInput,
   buildPatrolAssistantProposedFixBriefingInput,
-  type PatrolAssistantProposedFixBriefingSource,
 } from '@/features/patrol/patrolInvestigationContextModel';
-import { RemediationStatus } from './RemediationStatus';
+import { aiChatStore } from '@/stores/aiChat';
+import { aiIntelligenceStore } from '@/stores/aiIntelligence';
+import { hasFeature } from '@/stores/license';
+import { notificationStore } from '@/stores/notifications';
+import type {
+  ActionAuditRecord,
+  ActionAuditState,
+  PatrolActionReference,
+} from '@/types/actionAudit';
 
 interface ApprovalSectionProps {
   findingId: string;
@@ -35,95 +39,63 @@ interface ApprovalSectionProps {
   resourceId?: string;
 }
 
-const APPROVAL_SECTION_BADGE_PROPS = { size: 'xs', shape: 'rounded' } as const;
+const FIX_RELATED_OUTCOMES = new Set([
+  'fix_queued',
+  'fix_executed',
+  'fix_failed',
+  'fix_rejected',
+  'fix_verified',
+  'fix_verification_failed',
+  'fix_verification_unknown',
+]);
+
+const BADGE_PROPS = { size: 'xs', shape: 'rounded' } as const;
+
+function actionReferenceFromAudit(audit: ActionAuditRecord): PatrolActionReference {
+  return {
+    action_id: audit.id,
+    proposal_id: audit.origin?.proposalId,
+    resource_id: audit.request.resourceId,
+    capability_name: audit.request.capabilityName,
+    state: audit.state,
+    plan: audit.plan,
+  };
+}
+
+function statePresentation(state: ActionAuditState): {
+  label: string;
+  tone: 'neutral' | 'info' | 'warning' | 'success' | 'danger';
+} {
+  switch (state) {
+    case 'planned':
+      return { label: 'Ready to run', tone: 'info' };
+    case 'pending_approval':
+      return { label: 'Approval required', tone: 'warning' };
+    case 'approved':
+      return { label: 'Approved', tone: 'success' };
+    case 'rejected':
+      return { label: 'Rejected', tone: 'warning' };
+    case 'executing':
+      return { label: 'Applying', tone: 'info' };
+    case 'completed':
+      return { label: 'Completed', tone: 'success' };
+    case 'failed':
+      return { label: 'Failed', tone: 'danger' };
+  }
+}
+
+function capabilityLabel(value: string): string {
+  return value.replace(/[._-]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
+}
 
 export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
-  const [actionLoading, setActionLoading] = createSignal<string | null>(null);
-  const [executionResult, setExecutionResult] = createSignal<ApprovalExecutionResult | null>(null);
+  const [busyAction, setBusyAction] = createSignal<string | null>(null);
+  const [latestAudit, setLatestAudit] = createSignal<ActionAuditRecord | null>(null);
 
-  // Find the pending approval for this finding from the store
-  const pendingApproval = createMemo(() => {
-    return (
-      aiIntelligenceStore.patrolPendingApprovals.find(
-        (a: ApprovalRequest) => a.toolId === 'investigation_fix' && a.targetId === props.findingId,
-      ) ?? null
-    );
-  });
-
-  const canAutoFix = createMemo(() => hasFeature('ai_autofix'));
-
-  const proposedFixBriefing = (
-    approval: ApprovalRequest | null,
-    fix?: PatrolAssistantProposedFixBriefingSource | null,
-  ) =>
-    buildPatrolAssistantProposedFixBriefingInput(
-      fix ||
-        (approval
-          ? {
-              description: approval.context,
-              riskLevel: approval.riskLevel,
-              targetHost: approval.targetName,
-              commandCount: approval.command ? 1 : 0,
-            }
-          : null),
-    );
-
-  const assistantHandoff = (
-    approval: ApprovalRequest | null,
-    fix?: PatrolAssistantProposedFixBriefingSource | null,
-  ) =>
-    buildPatrolAssistantFindingHandoff({
-      id: props.findingId,
-      title: props.findingTitle || 'Patrol finding',
-      subject: props.resourceName || 'affected resource',
-      description:
-        approval?.context ||
-        fix?.description ||
-        (!approval && props.investigationOutcome === 'fix_queued'
-          ? 'The original approval details are no longer available. Recover or regenerate the governed approval before execution.'
-          : undefined),
-      findingStatus: 'active',
-      investigationOutcome: props.investigationOutcome,
-      loopState: props.investigationOutcome || 'awaiting_approval',
-      resourceId: props.resourceId,
-      resourceName: props.resourceName,
-      resourceType: props.resourceType,
-      pendingApproval: buildPatrolAssistantApprovalBriefingInput(approval),
-      proposedFix: proposedFixBriefing(approval, fix),
-    });
-
-  const handleFixWithAssistant = (
-    approval: ApprovalRequest | null,
-    fix: PatrolAssistantProposedFixBriefingSource | null,
-    e: Event,
-  ) => {
-    e.stopPropagation();
-    const handoff = assistantHandoff(approval, fix);
-    aiChatStore.open(handoff.context);
-  };
-
-  const handleDiscussQueuedFix = (e: Event) => {
-    e.stopPropagation();
-    const handoff = assistantHandoff(null);
-    aiChatStore.open(handoff.context);
-  };
-
-  // Load investigation details when outcome indicates a fix was proposed/executed
-  const fixRelatedOutcomes = new Set([
-    'fix_queued',
-    'fix_executed',
-    'fix_failed',
-    'fix_rejected',
-    'fix_verified',
-    'fix_verification_failed',
-    'fix_verification_unknown',
-  ]);
-  const [investigation] = createResource(
+  const [investigation, { refetch }] = createResource(
     () => ({ findingId: props.findingId, outcome: props.investigationOutcome }),
     async ({ findingId, outcome }) => {
-      if (!outcome || !fixRelatedOutcomes.has(outcome)) {
-        return null;
-      }
+      if (!outcome || !FIX_RELATED_OUTCOMES.has(outcome)) return null;
       try {
         return await AIAPI.getInvestigation(findingId);
       } catch {
@@ -132,427 +104,309 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     },
   );
 
-  // Determine state
-  const isExpired = createMemo(
-    () =>
-      !pendingApproval() &&
-      props.investigationOutcome === 'fix_queued' &&
-      investigation()?.proposed_fix,
-  );
-
-  const isQueuedWithoutDetails = createMemo(
-    () =>
-      !pendingApproval() &&
-      props.investigationOutcome === 'fix_queued' &&
-      !investigation.loading &&
-      !investigation()?.proposed_fix,
-  );
-
-  const isVerificationUnknown = createMemo(
-    () => props.investigationOutcome === 'fix_verification_unknown',
-  );
-
-  const isExecuted = createMemo(
-    () =>
-      props.investigationOutcome === 'fix_executed' ||
-      props.investigationOutcome === 'fix_verified' ||
-      props.investigationOutcome === 'fix_verification_unknown' ||
-      executionResult()?.success,
-  );
-
-  const isFailed = createMemo(
-    () =>
-      props.investigationOutcome === 'fix_failed' ||
-      props.investigationOutcome === 'fix_verification_failed' ||
-      (executionResult() && !executionResult()!.success),
-  );
-  const isRejected = createMemo(() => props.investigationOutcome === 'fix_rejected');
-
-  // Show section only when there's something to display
-  const shouldShow = createMemo(
-    () =>
-      pendingApproval() ||
-      isExpired() ||
-      isQueuedWithoutDetails() ||
-      isExecuted() ||
-      isFailed() ||
-      isRejected() ||
-      executionResult(),
-  );
-
-  const handleApprove = async (approval: ApprovalRequest, e: Event) => {
-    e.stopPropagation();
-    setActionLoading(approval.id);
-    try {
-      const result = await aiIntelligenceStore.approveInvestigationFix(approval.id);
-      if (result) {
-        setExecutionResult(result);
-        if (result.success) {
-          notificationStore.success('Fix executed successfully');
-        } else {
-          notificationStore.error(result.error || 'Fix execution failed');
-        }
-      } else {
-        notificationStore.error('Failed to execute fix — no response from server');
-      }
-    } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to execute fix');
-    } finally {
-      setActionLoading(null);
+  const action = createMemo<PatrolActionReference | null>(() => {
+    const audit = latestAudit();
+    if (audit) return actionReferenceFromAudit(audit);
+    return investigation()?.action ?? null;
+  });
+  const canManageAction = createMemo(() => hasFeature('ai_autofix'));
+  const verificationStatus = createMemo(() => {
+    const auditedStatus = latestAudit()?.verificationOutcome?.status;
+    if (auditedStatus) return auditedStatus;
+    switch (investigation()?.outcome) {
+      case 'fix_verified':
+        return 'verified';
+      case 'fix_verification_failed':
+        return 'failed';
+      case 'fix_verification_unknown':
+        return 'unverified';
+      default:
+        return 'unknown';
     }
+  });
+  const shouldShow = createMemo(() =>
+    Boolean(props.investigationOutcome && FIX_RELATED_OUTCOMES.has(props.investigationOutcome)),
+  );
+
+  const refreshPatrol = async () => {
+    await refetch();
+    await aiIntelligenceStore.loadFindings();
   };
 
-  const handleDeny = async (approval: ApprovalRequest, e: Event) => {
-    e.stopPropagation();
-    setActionLoading(approval.id);
-    try {
-      await aiIntelligenceStore.denyInvestigationFix(approval.id);
-      notificationStore.success('Fix rejected');
-    } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to reject fix');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleReapprove = async (e: Event) => {
-    e.stopPropagation();
-    setActionLoading('reapprove');
-    try {
-      const result = await AIAPI.reapproveInvestigationFix(props.findingId);
-      const execResult = await aiIntelligenceStore.approveInvestigationFix(result.approval_id);
-      if (execResult) {
-        setExecutionResult(execResult);
-        if (execResult.success) {
-          notificationStore.success('Fix executed successfully');
-        } else {
-          notificationStore.error(execResult.error || 'Fix execution failed');
-        }
-      } else {
-        notificationStore.error('Failed to execute fix — no response from server');
-      }
-    } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to execute fix');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const renderTechnicalCommandDetails = (commands: readonly string[] | string | undefined) => {
-    const commandList = Array.isArray(commands)
-      ? commands.filter(Boolean)
-      : commands
-        ? [commands]
-        : [];
-    if (commandList.length === 0) {
-      return null;
-    }
-
-    return (
-      <details class="rounded border border-border bg-surface-alt px-2 py-1.5 text-xs">
-        <summary class="cursor-pointer font-medium text-muted">Technical details</summary>
-        <div class="mt-2 space-y-1">
-          <For each={commandList}>
-            {(command) => (
-              <code class="block break-all rounded bg-surface px-2 py-1 font-mono text-base-content">
-                {command}
-              </code>
-            )}
-          </For>
-        </div>
-      </details>
+  const execute = async (actionId: string) => {
+    const result = await ResourceActionsAPI.executeAction(
+      actionId,
+      'Operator requested execution from the Patrol action review',
     );
+    setLatestAudit(result.audit);
+    const verification = result.audit.verificationOutcome?.status;
+    if (result.state === 'completed' && verification === 'verified') {
+      notificationStore.success('Action completed and verified');
+    } else if (result.state === 'completed') {
+      notificationStore.warning('Action completed, but verification was inconclusive');
+    } else {
+      notificationStore.error(result.result?.errorMessage || 'Action failed');
+    }
   };
 
-  const renderRecoveryActions = (assistantLabel: string, onAssistantClick: (e: Event) => void) => (
-    <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
-      <Show when={canAutoFix()}>
-        <Button
-          type="button"
-          variant="warningSolid"
-          size="sm"
-          onClick={handleReapprove}
-          disabled={actionLoading() === 'reapprove'}
-          class="flex-1 gap-1.5"
-        >
-          <Show when={actionLoading() === 'reapprove'}>
-            <LoadingSpinner size="sm" tone="inverse" />
-          </Show>
-          <Show when={actionLoading() !== 'reapprove'}>
-            <CheckIcon class="w-3.5 h-3.5" />
-          </Show>
-          Re-approve fix
-        </Button>
-      </Show>
-      <Show when={!canAutoFix()}>
-        <Button
-          type="button"
-          variant="primary"
-          size="sm"
-          onClick={onAssistantClick}
-          class="flex-1 gap-1.5"
-        >
-          <MessageSquareIcon class="w-3.5 h-3.5" />
-          {assistantLabel}
-        </Button>
-      </Show>
-    </div>
-  );
+  const handleApproveAndRun = async (event: Event) => {
+    event.stopPropagation();
+    const current = action();
+    if (!current) return;
+    setBusyAction('approve');
+    try {
+      const decision = await ResourceActionsAPI.decideAction(
+        current.action_id,
+        'approved',
+        'Approved from the Patrol action review',
+      );
+      setLatestAudit(decision.audit);
+      await execute(current.action_id);
+      await refreshPatrol();
+    } catch (error) {
+      notificationStore.error((error as Error).message || 'Failed to approve and run action');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleRun = async (event: Event) => {
+    event.stopPropagation();
+    const current = action();
+    if (!current) return;
+    setBusyAction('execute');
+    try {
+      await execute(current.action_id);
+      await refreshPatrol();
+    } catch (error) {
+      notificationStore.error((error as Error).message || 'Failed to run action');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleReject = async (event: Event) => {
+    event.stopPropagation();
+    const current = action();
+    if (!current) return;
+    setBusyAction('reject');
+    try {
+      const decision = await ResourceActionsAPI.decideAction(
+        current.action_id,
+        'rejected',
+        'Rejected from the Patrol action review',
+      );
+      setLatestAudit(decision.audit);
+      notificationStore.success('Action rejected');
+      await refreshPatrol();
+    } catch (error) {
+      notificationStore.error((error as Error).message || 'Failed to reject action');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleDiscuss = (event: Event) => {
+    event.stopPropagation();
+    const current = action();
+    const handoff = buildPatrolAssistantFindingHandoff({
+      id: props.findingId,
+      title: props.findingTitle || 'Patrol finding',
+      subject: props.resourceName || 'affected resource',
+      description:
+        current?.plan.message ||
+        investigation()?.summary ||
+        'Review the current Patrol finding and its governed action state.',
+      findingStatus: 'active',
+      investigationOutcome: props.investigationOutcome,
+      loopState: props.investigationOutcome || current?.state,
+      resourceId: props.resourceId || current?.resource_id,
+      resourceName: props.resourceName,
+      resourceType: props.resourceType,
+      pendingApproval: current
+        ? {
+            status: current.state,
+            targetName: props.resourceName || current.resource_id,
+            actionId: current.action_id,
+            actionApprovalPolicy: current.plan.approvalPolicy,
+            actionPlanExpiresAt: current.plan.expiresAt,
+            actionPlanMessage: current.plan.message,
+            actionPreflight: current.plan.preflight?.intendedChange,
+            actionDryRunSummary: current.plan.preflight?.dryRunSummary,
+            actionRequestedBy: 'pulse_patrol',
+          }
+        : null,
+      proposedFix: buildPatrolAssistantProposedFixBriefingInput(
+        current
+          ? {
+              description: current.plan.message || capabilityLabel(current.capability_name),
+              targetHost: props.resourceName || current.resource_id,
+              commandCount: 0,
+              destructive: false,
+            }
+          : null,
+      ),
+    });
+    aiChatStore.open(handoff.context);
+  };
 
   return (
     <Show when={shouldShow()}>
-      <div class="mt-3 pt-3 border-t border-border-subtle">
-        {/* Pending approval */}
-        <Show when={pendingApproval() && !executionResult()}>
-          {(() => {
-            const approval = pendingApproval()!;
-            const approvalRisk = getApprovalRiskPresentation(approval.riskLevel);
-            return (
-              <>
-                <div class="flex items-center gap-2 mb-2">
-                  <svg
-                    class="w-4 h-4 text-green-600 dark:text-green-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M13 10V3L4 14h7v7l9-11h-7z"
-                    />
-                  </svg>
-                  <span class="text-sm font-medium text-base-content">Fix Available</span>
-                  <MetadataBadge {...APPROVAL_SECTION_BADGE_PROPS} tone={approvalRisk.badgeTone}>
-                    {approvalRisk.label} risk
-                  </MetadataBadge>
-                </div>
-                <div class="space-y-2 text-sm">
-                  <div class="text-muted">{approval.context}</div>
-                  <Show when={approval.targetName}>
-                    <div class="text-xs text-muted">Target: {approval.targetName}</div>
-                  </Show>
-                  {renderTechnicalCommandDetails(approval.command)}
-                </div>
-                <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
-                  <Show when={canAutoFix()}>
-                    <Button
-                      type="button"
-                      variant="success"
-                      size="sm"
-                      onClick={(e) => handleApprove(approval, e)}
-                      disabled={actionLoading() === approval.id}
-                      class="flex-1 gap-1.5"
-                    >
-                      <Show when={actionLoading() === approval.id}>
-                        <LoadingSpinner size="sm" tone="inverse" />
-                      </Show>
-                      <Show when={actionLoading() !== approval.id}>
-                        <CheckIcon class="w-3.5 h-3.5" />
-                      </Show>
-                      Approve fix
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => handleDeny(approval, e)}
-                      disabled={actionLoading() === approval.id}
-                      class="text-muted"
-                    >
-                      Reject
-                    </Button>
-                  </Show>
-                  <Show when={!canAutoFix()}>
-                    <Button
-                      type="button"
-                      variant="primary"
-                      size="sm"
-                      onClick={(e) => handleFixWithAssistant(approval, null, e)}
-                      class="flex-1 gap-1.5"
-                    >
-                      <MessageSquareIcon class="w-3.5 h-3.5" />
-                      Fix with Assistant
-                    </Button>
-                  </Show>
-                </div>
-              </>
-            );
-          })()}
-        </Show>
-
-        {/* Expired approval - show re-approve */}
-        <Show when={isExpired() && !executionResult()}>
-          {(() => {
-            const fix = investigation()!.proposed_fix!;
-            const fixRisk = getApprovalRiskPresentation(fix.risk_level);
-            return (
-              <>
-                <div class="flex items-center gap-2 mb-2">
-                  <svg
-                    class="w-4 h-4 text-amber-600 dark:text-amber-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
-                  <span class="text-sm font-medium text-base-content">Fix Pending Approval</span>
-                  <MetadataBadge {...APPROVAL_SECTION_BADGE_PROPS} tone={fixRisk.badgeTone}>
-                    {fixRisk.label} risk
-                  </MetadataBadge>
-                  <MetadataBadge {...APPROVAL_SECTION_BADGE_PROPS} tone="warning">
-                    approval expired
-                  </MetadataBadge>
-                </div>
-                <div class="space-y-2 text-sm">
-                  <div class="text-muted">{fix.description}</div>
-                  <Show when={fix.target_host}>
-                    <div class="text-xs text-muted">Target: {fix.target_host}</div>
-                  </Show>
-                  {renderTechnicalCommandDetails(fix.commands)}
-                </div>
-                {renderRecoveryActions('Fix with Assistant', (e) =>
-                  handleFixWithAssistant(null, fix, e),
-                )}
-              </>
-            );
-          })()}
-        </Show>
-
-        {/* Queued approval with missing detail payload - keep recovery path visible */}
-        <Show when={isQueuedWithoutDetails() && !executionResult()}>
-          <>
-            <div class="flex items-center gap-2 mb-2">
-              <svg
-                class="w-4 h-4 text-amber-600 dark:text-amber-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-              <span class="text-sm font-medium text-base-content">Fix Pending Approval</span>
-              <MetadataBadge {...APPROVAL_SECTION_BADGE_PROPS} tone="warning">
-                details unavailable
-              </MetadataBadge>
+      <div class="mt-3 border-t border-border-subtle pt-3">
+        <Show
+          when={!investigation.loading}
+          fallback={
+            <div class="flex items-center gap-2 text-sm text-muted">
+              <LoadingSpinner size="sm" />
+              Loading governed action…
             </div>
-            <div class="space-y-2 text-sm">
-              <div class="text-muted">
-                Patrol queued a fix for this finding, but the original approval details are no
-                longer available.
+          }
+        >
+          <Show
+            when={action()}
+            fallback={
+              <div class="space-y-3">
+                <div>
+                  <div class="text-sm font-medium text-base-content">
+                    Action details unavailable
+                  </div>
+                  <div class="mt-1 text-sm text-muted">
+                    This investigation predates the typed action lifecycle or its action record is
+                    no longer available. It cannot be approved or executed from legacy fix data.
+                  </div>
+                </div>
+                <Button type="button" variant="primary" size="sm" onClick={handleDiscuss}>
+                  <MessageSquareIcon class="h-3.5 w-3.5" />
+                  Discuss with Assistant
+                </Button>
               </div>
-              <div class="text-xs text-muted">
-                Regenerate the approval to continue, or rerun the investigation to let Patrol
-                rebuild the remediation plan.
-              </div>
-            </div>
-            {renderRecoveryActions('Discuss with Assistant', handleDiscussQueuedFix)}
-          </>
-        </Show>
-
-        {/* Execution result */}
-        <Show when={executionResult()}>
-          <RemediationStatus result={executionResult()!} />
-        </Show>
-
-        {/* Executed (from backend state, no local result) */}
-        <Show when={isExecuted() && !executionResult()}>
-          <div
-            class={`flex items-center gap-2 ${isVerificationUnknown() ? 'text-amber-700 dark:text-amber-300' : 'text-green-600 dark:text-green-400'}`}
+            }
           >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span class="text-sm font-medium">
-              {props.investigationOutcome === 'fix_verified'
-                ? 'Fix verified — issue resolved'
-                : props.investigationOutcome === 'fix_verification_unknown'
-                  ? 'Fix executed — verification inconclusive'
-                  : 'Fix executed successfully'}
-            </span>
-          </div>
-          <Show when={investigation()?.proposed_fix}>
-            {(fix) => (
-              <div class="mt-2 space-y-1 text-sm">
-                <div class="text-muted">{fix().description}</div>
-                <Show when={fix().target_host}>
-                  <div class="text-xs text-muted">Target: {fix().target_host}</div>
-                </Show>
-                <Show when={fix().rationale}>
-                  <div class="text-xs text-muted whitespace-pre-line mt-1">{fix().rationale}</div>
-                </Show>
-                {renderTechnicalCommandDetails(fix().commands)}
-              </div>
-            )}
-          </Show>
-        </Show>
+            {(currentAction) => {
+              const presentation = createMemo(() => statePresentation(currentAction().state));
+              const preflight = createMemo(() => currentAction().plan.preflight);
+              return (
+                <div class="space-y-3">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-sm font-medium text-base-content">
+                      {capabilityLabel(currentAction().capability_name)}
+                    </span>
+                    <MetadataBadge {...BADGE_PROPS} tone={presentation().tone}>
+                      {presentation().label}
+                    </MetadataBadge>
+                    <Show when={currentAction().plan.rollbackAvailable}>
+                      <MetadataBadge {...BADGE_PROPS} tone="neutral">
+                        Rollback available
+                      </MetadataBadge>
+                    </Show>
+                  </div>
 
-        {/* Rejected by operator */}
-        <Show when={isRejected() && !executionResult()}>
-          <div class="flex items-center gap-2 text-amber-700 dark:text-amber-300">
-            <XIcon class="w-4 h-4" />
-            <span class="text-sm font-medium">Fix rejected before execution</span>
-          </div>
-          <Show when={investigation()?.proposed_fix}>
-            {(fix) => (
-              <div class="mt-2 space-y-1 text-sm">
-                <div class="text-muted">{fix().description}</div>
-                <Show when={fix().target_host}>
-                  <div class="text-xs text-muted">Target: {fix().target_host}</div>
-                </Show>
-              </div>
-            )}
-          </Show>
-          {renderRecoveryActions('Discuss with Assistant', handleDiscussQueuedFix)}
-        </Show>
+                  <div class="space-y-1 text-sm text-muted">
+                    <div>
+                      {currentAction().plan.message || 'Patrol proposed a governed action.'}
+                    </div>
+                    <div class="text-xs">
+                      Target: {props.resourceName || currentAction().resource_id}
+                    </div>
+                    <Show when={preflight()?.intendedChange}>
+                      <div class="text-xs">Change: {preflight()!.intendedChange}</div>
+                    </Show>
+                    <Show when={preflight()?.dryRunSummary}>
+                      <div class="text-xs">Dry run: {preflight()!.dryRunSummary}</div>
+                    </Show>
+                  </div>
 
-        {/* Failed (from backend state, no local result) */}
-        <Show when={isFailed() && !executionResult()}>
-          <div class="flex items-center gap-2 text-red-600 dark:text-red-400">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span class="text-sm font-medium">
-              {props.investigationOutcome === 'fix_verification_failed'
-                ? 'Fix executed but issue persists'
-                : 'Fix execution failed'}
-            </span>
-          </div>
-          <Show when={investigation()?.proposed_fix}>
-            {(fix) => (
-              <div class="mt-2 space-y-1 text-sm">
-                <div class="text-muted">{fix().description}</div>
-                <Show when={fix().target_host}>
-                  <div class="text-xs text-muted">Target: {fix().target_host}</div>
-                </Show>
-                <Show when={fix().rationale}>
-                  <div class="text-xs text-muted whitespace-pre-line mt-1">{fix().rationale}</div>
-                </Show>
-                {renderTechnicalCommandDetails(fix().commands)}
-              </div>
-            )}
+                  <Show when={(preflight()?.safetyChecks?.length || 0) > 0}>
+                    <details class="rounded border border-border bg-surface-alt px-2 py-1.5 text-xs">
+                      <summary class="cursor-pointer font-medium text-muted">
+                        Safety and verification
+                      </summary>
+                      <ul class="mt-2 list-disc space-y-1 pl-4 text-muted">
+                        <For each={preflight()?.safetyChecks}>{(check) => <li>{check}</li>}</For>
+                        <For each={preflight()?.verificationSteps}>{(step) => <li>{step}</li>}</For>
+                      </ul>
+                    </details>
+                  </Show>
+
+                  <Show when={currentAction().state === 'completed'}>
+                    <div
+                      class={`text-sm font-medium ${
+                        verificationStatus() === 'verified'
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-amber-700 dark:text-amber-300'
+                      }`}
+                    >
+                      {verificationStatus() === 'verified'
+                        ? 'Outcome verified'
+                        : 'Execution finished; verification was not conclusive'}
+                    </div>
+                  </Show>
+                  <Show when={currentAction().state === 'failed'}>
+                    <div class="text-sm font-medium text-red-600 dark:text-red-400">
+                      {latestAudit()?.result?.errorMessage ||
+                        'The action failed before verification.'}
+                    </div>
+                  </Show>
+
+                  <div class="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3">
+                    <Show when={canManageAction() && currentAction().state === 'pending_approval'}>
+                      <Button
+                        type="button"
+                        variant="success"
+                        size="sm"
+                        onClick={handleApproveAndRun}
+                        disabled={busyAction() !== null}
+                      >
+                        <Show
+                          when={busyAction() === 'approve'}
+                          fallback={<CheckIcon class="h-3.5 w-3.5" />}
+                        >
+                          <LoadingSpinner size="sm" tone="inverse" />
+                        </Show>
+                        Approve and run
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleReject}
+                        disabled={busyAction() !== null}
+                      >
+                        <XIcon class="h-3.5 w-3.5" />
+                        Reject
+                      </Button>
+                    </Show>
+                    <Show
+                      when={
+                        canManageAction() &&
+                        (currentAction().state === 'planned' ||
+                          currentAction().state === 'approved')
+                      }
+                    >
+                      <Button
+                        type="button"
+                        variant="success"
+                        size="sm"
+                        onClick={handleRun}
+                        disabled={busyAction() !== null}
+                      >
+                        <Show
+                          when={busyAction() === 'execute'}
+                          fallback={<PlayIcon class="h-3.5 w-3.5" />}
+                        >
+                          <LoadingSpinner size="sm" tone="inverse" />
+                        </Show>
+                        Run action
+                      </Button>
+                    </Show>
+                    <Button type="button" variant="ghost" size="sm" onClick={handleDiscuss}>
+                      <MessageSquareIcon class="h-3.5 w-3.5" />
+                      Discuss with Assistant
+                    </Button>
+                  </div>
+                </div>
+              );
+            }}
           </Show>
         </Show>
       </div>

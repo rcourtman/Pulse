@@ -4922,3 +4922,9 @@ disclosure, navigation, copy, and row-action controls must keep a 40-pixel
 mobile touch floor while retaining their compact desktop density. Settings
 navigation must own a viewport-bounded vertical scroll region so its route list
 does not push the active panel below the page.
+
+Patrol finding handoffs must derive approval posture from the canonical typed
+action state and approval policy, not only from a legacy approval id. A
+`pending_approval` action or any non-`none` approval floor remains explicitly
+approval-bound in shared handoff metadata so Assistant, the collapsed finding
+row, and the expanded action review cannot disagree.

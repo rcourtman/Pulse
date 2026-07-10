@@ -1370,6 +1370,8 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/relay/client_test.go",
                 "internal/relay/config_env_test.go",
                 "internal/relay/encryption_test.go",
+                "internal/relay/protocol_test.go",
+                "internal/relay/push_test.go",
             ],
         )
 

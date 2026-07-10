@@ -171,6 +171,24 @@ func NormalizeVerificationOutcome(outcome VerificationOutcome) VerificationOutco
 	return outcome
 }
 
+// VerificationOutcomeFromExecutionResult derives the durable lifecycle
+// classification from the executor's read-after-write result at the single
+// completion boundary. Executors report evidence; they do not get to write a
+// separate audit classification that can drift from it.
+func VerificationOutcomeFromExecutionResult(result *ExecutionResult) VerificationOutcome {
+	if result == nil || !result.Success || result.Verification == nil {
+		return VerificationOutcome{Status: VerificationUnknown}
+	}
+	verification := NormalizeActionVerificationResult(result.Verification)
+	if verification == nil || !verification.Ran {
+		return VerificationOutcome{Status: VerificationUnverified, EvidenceSummary: strings.TrimSpace(verification.Note)}
+	}
+	if verification.Success {
+		return VerificationOutcome{Status: VerificationVerified, EvidenceSummary: strings.TrimSpace(verification.Note)}
+	}
+	return VerificationOutcome{Status: VerificationFailed, EvidenceSummary: strings.TrimSpace(verification.Note)}
+}
+
 // NormalizeActionVerificationResult applies the canonical verification field
 // hygiene used by stored audit records and every action-audit projection.
 func NormalizeActionVerificationResult(result *ActionVerificationResult) *ActionVerificationResult {
@@ -436,6 +454,7 @@ func CompleteActionExecution(record ActionAuditRecord, result *ExecutionResult, 
 	record.State = nextState
 	record.UpdatedAt = now
 	record.Result = result
+	record.VerificationOutcome = VerificationOutcomeFromExecutionResult(result)
 	normalized, err := NormalizeActionAuditRecord(record)
 	if err != nil {
 		return ActionAuditRecord{}, ActionLifecycleEvent{}, err

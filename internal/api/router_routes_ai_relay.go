@@ -584,6 +584,7 @@ func approvalPlanRequestToInfo(plan *unifiedresources.ActionPlan) *aicontracts.A
 		ResourceVersion:      plan.ResourceVersion,
 		PolicyVersion:        plan.PolicyVersion,
 		PlanHash:             plan.PlanHash,
+		Preflight:            preflightRequestToInfo(plan.Preflight),
 	}
 }
 
@@ -605,6 +606,7 @@ func approvalPlanInfoToRequest(plan *aicontracts.ActionPlanInfo) *unifiedresourc
 		ResourceVersion:      plan.ResourceVersion,
 		PolicyVersion:        plan.PolicyVersion,
 		PlanHash:             plan.PlanHash,
+		Preflight:            preflightInfoToRequest(plan.Preflight),
 	}
 }
 

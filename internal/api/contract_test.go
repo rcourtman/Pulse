@@ -19616,8 +19616,9 @@ func TestContract_OperatorStateWriteEmitsStableErrorTokens(t *testing.T) {
 // carry on failure"; this test enforces that claim by reading every
 // writeJSONError call from the two agent-surface handler files and
 // asserting each emitted code is either (a) declared by the matching
-// capability, or (b) one of the three cross-cutting codes the auth
-// middleware emits universally. Drift in either direction is a
+// capability, (b) one of the cross-cutting codes the auth middleware
+// emits universally, or (c) an explicitly enumerated internal-only
+// failure code. Drift in either direction is a
 // contract regression — emitting an undeclared code silently breaks
 // agents that branch on the closed set; declaring a code the
 // handler never emits misleads agents into writing dead-code paths.
@@ -19660,6 +19661,9 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"action_execution_persist_failed": true,
 		"action_execution_encode_failed":  true,
 		"action_execution_failed":         true,
+		"action_queue_unavailable":        true,
+		"action_queue_query_failed":       true,
+		"action_queue_encode_failed":      true,
 		"action_not_executing":            true,
 		"action_policy_validation_failed": true,
 		"action_plan_validation_failed":   true,
@@ -19691,6 +19695,9 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"AgentErrCodeActionPlanDrift":            agentcapabilities.AgentErrCodeActionPlanDrift,
 		"AgentErrCodeResourceRemediationLocked":  agentcapabilities.AgentErrCodeResourceRemediationLocked,
 		"AgentErrCodeActionExecutorUnavailable":  agentcapabilities.AgentErrCodeActionExecutorUnavailable,
+		"AgentErrCodeActionQueueUnavailable":     agentcapabilities.AgentErrCodeActionQueueUnavailable,
+		"AgentErrCodeActionQueueQueryFailed":     agentcapabilities.AgentErrCodeActionQueueQueryFailed,
+		"AgentErrCodeActionQueueEncodeFailed":    agentcapabilities.AgentErrCodeActionQueueEncodeFailed,
 	}
 
 	// Extract every emitted shared code from writeJSONError /
@@ -19736,13 +19743,15 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		}
 	}
 
-	// Every emitted code must be either declared somewhere in the
-	// manifest OR a cross-cutting code.
+	// Every emitted code must be declared somewhere in the manifest,
+	// cross-cutting, or explicitly internal-only. Internal-only codes are
+	// still shared constants so handlers and clients cannot invent local
+	// spellings, but they do not describe an agent capability branch.
 	for code := range emitted {
-		if declared[code] || crossCutting[code] {
+		if declared[code] || crossCutting[code] || internalOnlyCodes[code] {
 			continue
 		}
-		t.Errorf("handler emits %q but no capability in the manifest declares it and it is not a documented cross-cutting code — drift here breaks agents that branch on the closed set", code)
+		t.Errorf("handler emits %q but it is neither manifest-declared, cross-cutting, nor explicitly internal-only — drift here breaks clients that branch on the closed set", code)
 	}
 
 	// Every manifest-declared code must have a matching emission

@@ -50,6 +50,27 @@ func TestNormalizeActionAuditRecordDefaultsVerificationOutcomeToUnknown(t *testi
 	}
 }
 
+func TestVerificationOutcomeFromExecutionResult(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		result *ExecutionResult
+		want   VerificationStatus
+	}{
+		{name: "no result", result: nil, want: VerificationUnknown},
+		{name: "execution failed", result: &ExecutionResult{Success: false}, want: VerificationUnknown},
+		{name: "no verifier", result: &ExecutionResult{Success: true}, want: VerificationUnknown},
+		{name: "inconclusive", result: &ExecutionResult{Success: true, Verification: &ActionVerificationResult{Ran: false, Note: "agent unreachable"}}, want: VerificationUnverified},
+		{name: "verified", result: &ExecutionResult{Success: true, Verification: &ActionVerificationResult{Ran: true, Success: true, Note: "healthy"}}, want: VerificationVerified},
+		{name: "postcondition failed", result: &ExecutionResult{Success: true, Verification: &ActionVerificationResult{Ran: true, Success: false, Note: "still degraded"}}, want: VerificationFailed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := VerificationOutcomeFromExecutionResult(tc.result); got.Status != tc.want {
+				t.Fatalf("status = %q, want %q", got.Status, tc.want)
+			}
+		})
+	}
+}
+
 // TestActionAuditRecordJSONRoundtripWithMissingVerificationOutcome simulates an
 // older record persisted before the verifier substrate was added: the JSON
 // blob omits the verificationOutcome field. After unmarshal + normalize, the

@@ -1584,6 +1584,20 @@ through the canonical resource model, but unified-resource consumers must not
 reintroduce removed workload aliases or feature-local resource-type shims just
 to satisfy one table, drawer, or badge surface.
 
+Action audits are the durable source of truth for Patrol action continuity.
+The store exposes optional `ActionAuditOriginReader` and
+`PendingActionAuditReader` capabilities; origin lookup is scoped by org and
+investigation identity, while pending reads are oldest-first. SQLite persists
+an absent origin as NULL, guards JSON-expression queries and indexes with
+`json_valid(origin_json)`, and keeps dedicated origin/state indexes so an old
+empty or malformed value cannot reject otherwise valid audit rows. Memory and
+SQLite implementations preserve the same ordering and clone semantics.
+Terminal audit persistence derives `VerificationOutcome` from the canonical
+execution result: no verifier is unknown, a configured verifier that did not
+run is unverified, a successful read-back is verified, and a failed read-back
+is failed. Consumers must use that durable result rather than inferring
+success from executor completion alone.
+
 Unified-resource row actions must remain operable at phone widths without
 changing capability ownership. Docker and Podman lifecycle controls retain
 their backend-authored availability and approval semantics while using the

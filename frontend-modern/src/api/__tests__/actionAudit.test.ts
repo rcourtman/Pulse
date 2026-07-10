@@ -21,6 +21,39 @@ describe('ActionAuditAPI', () => {
     apiFetchJSONMock.mockReset();
   });
 
+  it('loads the canonical oldest-first pending action queue', async () => {
+    const response = {
+      actions: [
+        {
+          id: 'action-1',
+          createdAt: '2026-07-10T18:00:00Z',
+          updatedAt: '2026-07-10T18:00:00Z',
+          state: 'pending_approval' as const,
+          request: {
+            requestId: 'proposal-1',
+            resourceId: 'docker:container:web',
+            capabilityName: 'restart',
+            reason: 'Health checks failed',
+            requestedBy: 'pulse_patrol',
+          },
+          plan: {
+            actionId: 'action-1',
+            requestId: 'proposal-1',
+            allowed: true,
+            requiresApproval: true,
+            approvalPolicy: 'admin',
+            rollbackAvailable: true,
+          },
+        },
+      ],
+      count: 1,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(response);
+
+    await expect(ResourceActionsAPI.listPendingActions()).resolves.toEqual(response);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/actions/pending');
+  });
+
   it('builds the canonical resource-scoped action audit query', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       audits: [

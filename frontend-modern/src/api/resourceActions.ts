@@ -3,12 +3,17 @@ import type {
   ActionAuditPlan,
   ActionDecisionResponse,
   ActionExecutionResponse,
+  PendingActionsResponse,
   ResourceActionRequest,
 } from '@/types/actionAudit';
 
 export type ActionDecisionOutcome = 'approved' | 'rejected';
 
 export class ResourceActionsAPI {
+  static async listPendingActions(): Promise<PendingActionsResponse> {
+    return apiFetchJSON<PendingActionsResponse>('/api/actions/pending');
+  }
+
   static async planAction(request: ResourceActionRequest): Promise<ActionAuditPlan> {
     return apiFetchJSON<ActionAuditPlan>('/api/actions/plan', {
       method: 'POST',

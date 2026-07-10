@@ -48,6 +48,56 @@ type InvestigationRunResult struct {
 	OutputTokens           int
 }
 
+// InvestigationRunError preserves the two independent failure channels from
+// an investigation run. Proposal-only failures are valid completed runs that
+// require operator attention; RunErr means the provider/runtime itself failed
+// and must never be collapsed into that completed outcome.
+type InvestigationRunError struct {
+	runErr      error
+	proposalErr error
+}
+
+// NewInvestigationRunError constructs a two-channel investigation failure.
+// The package is internal; the exported constructor lets the API adapter's
+// boundary tests exercise the same concrete error it receives at runtime.
+func NewInvestigationRunError(runErr, proposalErr error) *InvestigationRunError {
+	if runErr == nil && proposalErr == nil {
+		return nil
+	}
+	return &InvestigationRunError{runErr: runErr, proposalErr: proposalErr}
+}
+
+func (e *InvestigationRunError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return errors.Join(e.runErr, e.proposalErr).Error()
+}
+
+// Unwrap preserves errors.Is/errors.As behavior for both failure channels.
+func (e *InvestigationRunError) Unwrap() []error {
+	if e == nil {
+		return nil
+	}
+	return []error{e.runErr, e.proposalErr}
+}
+
+// RunFailure returns the provider/runtime failure, if any.
+func (e *InvestigationRunError) RunFailure() error {
+	if e == nil {
+		return nil
+	}
+	return e.runErr
+}
+
+// ProposalFailure returns the proposal-channel failure, if any.
+func (e *InvestigationRunError) ProposalFailure() error {
+	if e == nil {
+		return nil
+	}
+	return e.proposalErr
+}
+
 // ExecuteInvestigationStream runs one Patrol investigation under the
 // investigation execution profile and returns the structured result.
 // Proposal-channel violations (ambiguity, integrity, failed-only
@@ -176,7 +226,7 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 		// run: any error nils it, and simultaneous run/proposal errors
 		// are both preserved.
 		result.Proposal = nil
-		return result, errors.Join(runErr, proposalErr)
+		return result, NewInvestigationRunError(runErr, proposalErr)
 	}
 	return result, nil
 }

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -71,6 +72,21 @@ type ResourceStore interface {
 	// on each tick without scanning the whole table.
 	FindLoopReportByWindow(reportType LoopReportType, canonicalID string, windowEndedAt time.Time) (LoopReport, bool, error)
 	Close() error
+}
+
+// ActionAuditOriginReader is the optional origin-indexed lookup used by
+// proposing surfaces to repair missed transition callbacks at read time. It is
+// separate from ResourceStore so external/test stores that do not support
+// broker-origin recovery remain source-compatible.
+type ActionAuditOriginReader interface {
+	GetLatestActionAuditByOrigin(surface, investigationID string) (ActionAuditRecord, bool, error)
+}
+
+// PendingActionAuditReader owns the indexed operator queue for canonical
+// actions awaiting a decision. Mobile and desktop clients must not reconstruct
+// this queue from the retired command-approval store.
+type PendingActionAuditReader interface {
+	GetPendingActionAudits(limit int) ([]ActionAuditRecord, error)
 }
 
 // ResourceLink represents a manual merge.
@@ -433,7 +449,6 @@ func (s *SQLiteResourceStore) initSchema() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_action_audits_canonical_created ON action_audits(canonical_id, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_action_audits_action_id ON action_audits(action_id);
-
 	CREATE TABLE IF NOT EXISTS action_lifecycle_events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		action_id TEXT NOT NULL,
@@ -570,6 +585,19 @@ func (s *SQLiteResourceStore) migrateActionAuditsSchema() error {
 		if _, err := s.db.Exec("ALTER TABLE action_audits ADD COLUMN origin_json TEXT"); err != nil {
 			return fmt.Errorf("add action_audits.origin_json column: %w", err)
 		}
+	}
+	if _, err := s.db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_action_audits_origin_investigation_updated_v2
+		ON action_audits(json_extract(origin_json, '$.surface'), json_extract(origin_json, '$.investigationId'), updated_at DESC)
+		WHERE json_valid(origin_json)
+	`); err != nil {
+		return fmt.Errorf("create action audit origin investigation index: %w", err)
+	}
+	if _, err := s.db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_action_audits_state_updated
+		ON action_audits(state, updated_at ASC, created_at ASC)
+	`); err != nil {
+		return fmt.Errorf("create action audit state index: %w", err)
 	}
 	return nil
 }
@@ -1681,7 +1709,7 @@ func recordActionAuditSQL(exec sqlExecutor, record ActionAuditRecord) error {
 	if err != nil {
 		return fmt.Errorf("marshal verification outcome: %w", err)
 	}
-	originJSON := ""
+	var originJSON any
 	if origin := NormalizeActionOrigin(record.Origin); origin != nil {
 		encoded, err := json.Marshal(origin)
 		if err != nil {
@@ -1819,6 +1847,60 @@ func normalizeActionAuditRecordFromStore(record ActionAuditRecord) ActionAuditRe
 
 func (s *SQLiteResourceStore) GetActionAudit(actionID string) (ActionAuditRecord, bool, error) {
 	return s.getActionAudit(actionID)
+}
+
+func (s *SQLiteResourceStore) GetLatestActionAuditByOrigin(surface, investigationID string) (ActionAuditRecord, bool, error) {
+	surface = strings.TrimSpace(surface)
+	investigationID = strings.TrimSpace(investigationID)
+	if surface == "" || investigationID == "" {
+		return ActionAuditRecord{}, false, nil
+	}
+	row := s.db.QueryRow(`
+		SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
+		FROM action_audits
+		WHERE json_valid(origin_json)
+		  AND json_extract(origin_json, '$.surface') = ?
+		  AND json_extract(origin_json, '$.investigationId') = ?
+		ORDER BY updated_at DESC, created_at DESC
+		LIMIT 1
+	`, surface, investigationID)
+	record, err := scanActionAuditRecord(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ActionAuditRecord{}, false, nil
+	}
+	if err != nil {
+		return ActionAuditRecord{}, false, fmt.Errorf("query action audit by origin: %w", err)
+	}
+	return record, true, nil
+}
+
+func (s *SQLiteResourceStore) GetPendingActionAudits(limit int) ([]ActionAuditRecord, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := s.db.Query(`
+		SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
+		FROM action_audits
+		WHERE state = ?
+		ORDER BY updated_at ASC, created_at ASC
+		LIMIT ?
+	`, ActionStatePending, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query pending action audits: %w", err)
+	}
+	defer rows.Close()
+	records := make([]ActionAuditRecord, 0)
+	for rows.Next() {
+		record, err := scanActionAuditRecord(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan pending action audit row: %w", err)
+		}
+		records = append(records, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pending action audit rows: %w", err)
+	}
+	return records, nil
 }
 
 func (s *SQLiteResourceStore) GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error) {
@@ -2863,6 +2945,52 @@ func (m *MemoryStore) GetActionAudit(actionID string) (ActionAuditRecord, bool, 
 		}
 	}
 	return ActionAuditRecord{}, false, nil
+}
+
+func (m *MemoryStore) GetLatestActionAuditByOrigin(surface, investigationID string) (ActionAuditRecord, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	surface = strings.TrimSpace(surface)
+	investigationID = strings.TrimSpace(investigationID)
+	if surface == "" || investigationID == "" {
+		return ActionAuditRecord{}, false, nil
+	}
+	var latest ActionAuditRecord
+	found := false
+	for _, record := range m.actionAudits {
+		if record.Origin == nil || strings.TrimSpace(record.Origin.Surface) != surface || strings.TrimSpace(record.Origin.InvestigationID) != investigationID {
+			continue
+		}
+		if !found || record.UpdatedAt.After(latest.UpdatedAt) || (record.UpdatedAt.Equal(latest.UpdatedAt) && record.CreatedAt.After(latest.CreatedAt)) {
+			latest = record
+			found = true
+		}
+	}
+	return latest, found, nil
+}
+
+func (m *MemoryStore) GetPendingActionAudits(limit int) ([]ActionAuditRecord, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	out := make([]ActionAuditRecord, 0)
+	for _, record := range m.actionAudits {
+		if record.State == ActionStatePending {
+			out = append(out, record)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].UpdatedAt.Equal(out[j].UpdatedAt) {
+			return out[i].CreatedAt.Before(out[j].CreatedAt)
+		}
+		return out[i].UpdatedAt.Before(out[j].UpdatedAt)
+	})
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
 }
 
 func (m *MemoryStore) RecordActionDecision(record ActionAuditRecord, event ActionLifecycleEvent) error {

@@ -2,6 +2,7 @@ package aicontracts
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -215,6 +216,27 @@ func TestActionReferenceIsAdditiveOnInvestigationShapes(t *testing.T) {
 	}
 	if strings.Contains(string(emptyPayload), `"action"`) {
 		t.Fatalf("empty investigation session must omit the action reference, got %s", emptyPayload)
+	}
+}
+
+func TestOrchestratorInvestigationErrorPreservesBothFailureChannels(t *testing.T) {
+	runFailure := errors.New("provider unavailable")
+	err := NewOrchestratorInvestigationError(runFailure, ErrInvestigationProposalAmbiguous)
+	if !errors.Is(err, runFailure) {
+		t.Fatal("joined investigation error lost the runtime failure")
+	}
+	if !errors.Is(err, ErrInvestigationProposalAmbiguous) {
+		t.Fatal("joined investigation error lost the proposal failure")
+	}
+	var investigationErr *OrchestratorInvestigationError
+	if !errors.As(err, &investigationErr) {
+		t.Fatalf("error type = %T, want *OrchestratorInvestigationError", err)
+	}
+	if investigationErr.RunFailure() != runFailure {
+		t.Fatalf("RunFailure() = %v, want %v", investigationErr.RunFailure(), runFailure)
+	}
+	if investigationErr.ProposalFailure() != ErrInvestigationProposalAmbiguous {
+		t.Fatalf("ProposalFailure() = %v", investigationErr.ProposalFailure())
 	}
 }
 

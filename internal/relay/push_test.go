@@ -74,6 +74,22 @@ func TestNewApprovalRequestNotification(t *testing.T) {
 	})
 }
 
+func TestNewActionDecisionNotificationUsesCanonicalActionIdentity(t *testing.T) {
+	n := NewActionDecisionNotification("act-123", "Restart unhealthy workload")
+	if n.Type != PushTypeApprovalRequest || n.Priority != PushPriorityHigh {
+		t.Fatalf("notification posture = %#v", n)
+	}
+	if n.ActionType != PushActionDecideAction {
+		t.Fatalf("ActionType = %q, want %q", n.ActionType, PushActionDecideAction)
+	}
+	if n.ActionID != "act-123" {
+		t.Fatalf("ActionID = %q, want canonical action id", n.ActionID)
+	}
+	if strings.Contains(n.Body, "fix") {
+		t.Fatalf("typed action notification must not claim a command-shaped fix: %q", n.Body)
+	}
+}
+
 func TestNewFixCompletedNotification(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		n := NewFixCompletedNotification("finding-100", "Cleared disk space", true)
@@ -102,6 +118,23 @@ func TestNewFixCompletedNotification(t *testing.T) {
 			t.Errorf("Body should indicate failure, got %q", n.Body)
 		}
 	})
+}
+
+func TestNewActionOutcomeNotificationIsHonestAboutVerification(t *testing.T) {
+	for _, tc := range []struct {
+		status string
+		body   string
+	}{
+		{status: "verified", body: "Action completed and verified"},
+		{status: "unverified", body: "Action completed; verification was inconclusive"},
+		{status: "failed", body: "Action completed, but verification failed"},
+		{status: "execution_failed", body: "Action failed before verification"},
+	} {
+		n := NewActionOutcomeNotification("finding-1", "Workload action", tc.status)
+		if n.Body != tc.body || n.ActionType != PushActionViewFixResult || n.ActionID != "finding-1" {
+			t.Fatalf("status %q notification = %#v", tc.status, n)
+		}
+	}
 }
 
 func TestNotificationTruncation(t *testing.T) {

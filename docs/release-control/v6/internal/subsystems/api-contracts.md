@@ -3695,6 +3695,14 @@ request. Agents must accept these alongside any capability's
 declared codes; the manifest deliberately does not duplicate them
 on every entry.
 
+Authenticated support endpoints that are not agent capabilities may emit
+shared, internal-only failure codes. The pending action queue uses
+`action_queue_unavailable`, `action_queue_query_failed`, and
+`action_queue_encode_failed`. These values are canonical
+`agentcapabilities` constants so relay, mobile, and desktop clients see one
+closed vocabulary, but they are intentionally not advertised as capability
+errors in the agent manifest.
+
 The external-agent substrate is end-to-end exercised by two paired tests in
 `internal/api/agent_substrate_e2e_test.go`. The first test boots
 the full router stack and walks discovery → triage → depth: fetch
@@ -7220,3 +7228,17 @@ must omit the token and let the session cookie satisfy session-only authority;
 when no session cookie exists, the same request may retain the API-token
 fallback for scoped read access. This prevents first-run token persistence from
 silently converting session administration calls into rejected token calls.
+
+The canonical pending-action surface is `GET /api/actions/pending`; decisions
+and execution remain `POST /api/actions/{id}/decision` and
+`POST /api/actions/{id}/execute`. All three routes are in the relay-mobile
+inventory and router allowlist, and queue failures use the shared
+`agentcapabilities` vocabulary. Pending rows are oldest-first and expose the
+same action audit shape, including requester and origin, used by desktop and
+mobile. The mobile client must approve by recording an approved decision and
+then calling execute, and must reject through the decision endpoint; legacy
+`/api/ai/approvals` routes are readable history only and are not a live Patrol
+action path. `ActionPlanInfo` carries canonical preflight detail across the
+broker boundary. Transition publication is org-scoped, persistence precedes
+publication, and API reconciliation treats the callback payload only as an id
+to re-read from the action lifecycle store.

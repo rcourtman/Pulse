@@ -1,15 +1,20 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func newPatrolBrokerTestHandlers(t *testing.T, minimumApproval unified.ActionApprovalLevel) (*ResourceHandlers, *stubActionExecutor) {
@@ -238,5 +243,89 @@ func TestPatrolActionBrokerSubmitPublishesOrgScopedTransition(t *testing.T) {
 	}
 	if gotOrigin == nil || gotOrigin.FindingID != "finding-1" {
 		t.Fatalf("transition origin = %#v", gotOrigin)
+	}
+}
+
+func TestPatrolTypedActionJourneyDetectPlanApproveExecuteVerifyAndReconcile(t *testing.T) {
+	resources, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	executor.result = &unified.ExecutionResult{
+		Success: true,
+		Output:  "restart dispatched",
+		Verification: &unified.ActionVerificationResult{
+			Ran: true, Success: true, RanAt: time.Now().UTC(), Note: "workload health confirmed",
+		},
+	}
+	aiHandler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+	pushes := make(chan relay.PushNotificationPayload, 1)
+	patrol.SetPushNotifyCallback(func(payload relay.PushNotificationPayload) { pushes <- payload })
+	finding := addPatrolFindingForResource(t, patrol, "finding-1", time.Now().UTC(), "vm:42", "Unhealthy workload")
+	investigations := newTestInvestigationStore()
+	investigation := investigations.Create(finding.ID, "session-1")
+	if investigation.ID != "inv-1" {
+		t.Fatalf("investigation id = %q, journey proposal expects inv-1", investigation.ID)
+	}
+	aiHandler.investigationStores = map[string]aicontracts.InvestigationStore{"default": investigations}
+	aiHandler.SetResourceStoreProvider(resources.getStore)
+	resources.SetActionTransitionPublisher(aiHandler.ReconcilePatrolActionTransition)
+
+	disposition, err := NewPatrolActionBroker("default", resources).Submit(context.Background(), patrolTestProposal())
+	if err != nil {
+		t.Fatalf("Submit: %v", err)
+	}
+	planned := investigations.Get(investigation.ID)
+	if planned.Action == nil || planned.Action.ActionID != disposition.ActionID || planned.Action.State != string(unified.ActionStatePending) {
+		t.Fatalf("planned investigation action = %#v", planned.Action)
+	}
+	if planned.Outcome != aicontracts.OutcomeFixQueued {
+		t.Fatalf("planned outcome = %q", planned.Outcome)
+	}
+
+	decisionRec := httptest.NewRecorder()
+	decisionReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+disposition.ActionID+"/decision", bytes.NewBufferString(`{"outcome":"approved","reason":"maintenance window"}`))
+	decisionReq.SetPathValue("id", disposition.ActionID)
+	decisionReq = decisionReq.WithContext(auth.WithUser(decisionReq.Context(), "operator@example.com"))
+	resources.HandleDecideAction(decisionRec, decisionReq)
+	if decisionRec.Code != http.StatusOK {
+		t.Fatalf("decision status = %d body=%s", decisionRec.Code, decisionRec.Body.String())
+	}
+
+	executionRec := httptest.NewRecorder()
+	executionReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+disposition.ActionID+"/execute", bytes.NewBufferString(`{"reason":"approved maintenance window"}`))
+	executionReq.SetPathValue("id", disposition.ActionID)
+	executionReq = executionReq.WithContext(auth.WithUser(executionReq.Context(), "operator@example.com"))
+	resources.HandleExecuteAction(executionRec, executionReq)
+	if executionRec.Code != http.StatusOK {
+		t.Fatalf("execution status = %d body=%s", executionRec.Code, executionRec.Body.String())
+	}
+
+	completed := investigations.Get(investigation.ID)
+	if completed.Action == nil || completed.Action.State != string(unified.ActionStateCompleted) {
+		t.Fatalf("completed investigation action = %#v", completed.Action)
+	}
+	if completed.Outcome != aicontracts.OutcomeFixVerified {
+		t.Fatalf("completed outcome = %q, want verified", completed.Outcome)
+	}
+	updatedFinding := patrol.GetFindings().Get(finding.ID)
+	if updatedFinding == nil || updatedFinding.InvestigationOutcome != string(aicontracts.OutcomeFixVerified) || updatedFinding.ResolvedAt == nil {
+		t.Fatalf("reconciled finding = %#v", updatedFinding)
+	}
+	store, err := resources.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+	audit, found, err := store.GetActionAudit(disposition.ActionID)
+	if err != nil || !found || audit.VerificationOutcome.Status != unified.VerificationVerified {
+		t.Fatalf("terminal audit: found=%v err=%v audit=%#v", found, err, audit)
+	}
+	if executor.calls != 1 {
+		t.Fatalf("executor calls = %d, want exactly one", executor.calls)
+	}
+	select {
+	case push := <-pushes:
+		if push.ActionType != relay.PushActionViewFixResult || push.ActionID != finding.ID || push.Body != "Action completed and verified" {
+			t.Fatalf("terminal push = %#v", push)
+		}
+	default:
+		t.Fatal("verified lifecycle did not publish a terminal mobile notification")
 	}
 }

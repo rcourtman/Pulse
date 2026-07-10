@@ -325,12 +325,7 @@ export interface FindingCompactBadgePresentation {
 }
 
 export type FindingPatrolWorkflowStage =
-  | 'investigating'
-  | 'approval'
-  | 'verification'
-  | 'attention'
-  | 'recorded'
-  | 'paused';
+  'investigating' | 'approval' | 'verification' | 'attention' | 'recorded' | 'paused';
 
 export interface FindingPatrolWorkflowPresentation {
   stage: FindingPatrolWorkflowStage;
@@ -678,13 +673,7 @@ export interface PatrolActionableStatePresentation {
 }
 
 export type PatrolFindingRowScaffoldItemId =
-  | 'affected'
-  | 'checked'
-  | 'next-step'
-  | 'problem'
-  | 'verification'
-  | 'workflow'
-  | 'why';
+  'affected' | 'checked' | 'next-step' | 'problem' | 'verification' | 'workflow' | 'why';
 
 export interface PatrolFindingRowScaffoldItem {
   id: PatrolFindingRowScaffoldItemId;
@@ -721,11 +710,22 @@ export function getPatrolFindingActionableState(
 }
 
 function getPatrolFindingVerificationSummary(
-  finding: Pick<UnifiedFinding, 'investigationStatus' | 'investigationOutcome'>,
+  finding: Pick<
+    UnifiedFinding,
+    'investigationStatus' | 'investigationOutcome' | 'investigationRecord'
+  >,
 ): string {
+  const actionState = finding.investigationRecord?.action?.state;
+  if (finding.investigationOutcome === 'fix_queued') {
+    if (actionState === 'planned') return 'The governed action is ready to run.';
+    if (actionState === 'approved') return 'The governed action is approved and ready to run.';
+    if (actionState === 'executing') return 'The governed action is running; verification follows.';
+    if (actionState === 'pending_approval')
+      return 'Waiting for an approval decision before the action runs.';
+  }
   switch (finding.investigationOutcome) {
     case 'fix_queued':
-      return 'Waiting for approval before any fix runs.';
+      return 'Waiting for the governed action record before any change runs.';
     case 'fix_executed':
       return 'Fix ran; verification is in progress.';
     case 'fix_verified':
@@ -762,9 +762,13 @@ function getPatrolFindingWorkflowSummary(
 
   switch (workflow.stage) {
     case 'approval':
-      return workflow.label === 'Approve or reject'
-        ? 'Review evidence first; no change runs until the proposed fix is approved, then Patrol verifies the outcome.'
-        : 'Recover the queued fix before any action can run, then verify the outcome after a decision.';
+      if (workflow.label === 'Approve or reject') {
+        return 'Review evidence first; no change runs until the typed action is approved, then Patrol verifies the outcome.';
+      }
+      if (workflow.label === 'Run action' || workflow.label === 'Run approved action') {
+        return 'Review the typed plan, run it through the governed action lifecycle, then verify the outcome.';
+      }
+      return 'Recover the queued action before any change can run, then verify the outcome after a decision.';
     case 'verification':
       return 'The governed action ran; review follow-up evidence before closing the issue.';
     case 'attention':
@@ -778,10 +782,7 @@ function getPatrolFindingWorkflowSummary(
   }
 }
 
-const getNonEmptyPresentationText = (
-  value: string | undefined,
-  fallback: string,
-): string => {
+const getNonEmptyPresentationText = (value: string | undefined, fallback: string): string => {
   const normalized = String(value || '').trim();
   return normalized || fallback;
 };
@@ -1034,9 +1035,9 @@ export const hasFindingInvestigationDetails = (
 ): boolean =>
   Boolean(
     finding.investigationSessionId?.trim() ||
-      finding.investigationStatus ||
-      finding.investigationOutcome ||
-      (finding.investigationAttempts ?? 0) > 0,
+    finding.investigationStatus ||
+    finding.investigationOutcome ||
+    (finding.investigationAttempts ?? 0) > 0,
   );
 
 // hasFindingInvestigationHandoffPointer is the narrower check used by the
@@ -1081,7 +1082,7 @@ export const isPatrolInvestigationFixApproval = (
 ): boolean => approval.toolId === 'investigation_fix';
 
 export const doesFindingNeedAttention = (
-  finding: Pick<UnifiedFinding, 'id' | 'status' | 'investigationOutcome'>,
+  finding: Pick<UnifiedFinding, 'id' | 'status' | 'investigationOutcome' | 'investigationRecord'>,
   approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId' | 'expiresAt'>[] = [],
 ): boolean => {
   if (finding.status !== 'active' || !finding.investigationOutcome) {
@@ -1094,7 +1095,8 @@ export const doesFindingNeedAttention = (
 
   return (
     finding.investigationOutcome === 'fix_queued' &&
-    !hasPendingInvestigationFixApproval(finding.id, approvals)
+    !hasPendingInvestigationFixApproval(finding.id, approvals) &&
+    !finding.investigationRecord?.action
   );
 };
 
@@ -1109,6 +1111,7 @@ export const getFindingPatrolWorkflowPresentation = (
     | 'title'
     | 'investigationStatus'
     | 'investigationOutcome'
+    | 'investigationRecord'
     | 'loopState'
   >,
   approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId' | 'expiresAt'>[] = [],
@@ -1149,6 +1152,40 @@ export const getFindingPatrolWorkflowPresentation = (
     };
   }
 
+  const typedActionState = finding.investigationRecord?.action?.state;
+  if (typedActionState === 'pending_approval') {
+    return {
+      stage: 'approval',
+      label: 'Approve or reject',
+      detail: 'A typed governed action is waiting for an operator decision.',
+      tone: 'warning',
+    };
+  }
+  if (typedActionState === 'planned') {
+    return {
+      stage: 'approval',
+      label: 'Run action',
+      detail: 'The typed action plan is ready to run under its declared policy.',
+      tone: 'info',
+    };
+  }
+  if (typedActionState === 'approved') {
+    return {
+      stage: 'approval',
+      label: 'Run approved action',
+      detail: 'The typed action is approved; execution remains a separate operator step.',
+      tone: 'success',
+    };
+  }
+  if (typedActionState === 'executing') {
+    return {
+      stage: 'verification',
+      label: 'Action running',
+      detail: 'The governed action is running and will publish its verification result.',
+      tone: 'info',
+    };
+  }
+
   const hasLiveApproval = hasPendingInvestigationFixApproval(finding.id, approvals, now);
   if (hasLiveApproval) {
     return {
@@ -1184,9 +1221,9 @@ export const getFindingPatrolWorkflowPresentation = (
     case 'fix_queued':
       return {
         stage: 'approval',
-        label: 'Review fix',
+        label: 'Recover action',
         detail:
-          'A fix was queued, but no live approval is available. Expand the finding to recover it.',
+          'An older queued outcome has no canonical action reference. Expand the finding to review recovery options.',
         tone: 'warning',
       };
     case 'fix_executed':

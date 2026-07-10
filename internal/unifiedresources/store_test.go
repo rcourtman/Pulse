@@ -400,6 +400,8 @@ func TestNewSQLiteResourceStore_InitializesCanonicalAuditSchemas(t *testing.T) {
 			indexes: []string{
 				"idx_action_audits_canonical_created",
 				"idx_action_audits_action_id",
+				"idx_action_audits_origin_investigation_updated_v2",
+				"idx_action_audits_state_updated",
 			},
 		},
 		{
@@ -2599,5 +2601,82 @@ func TestSQLiteStoreActionAuditOriginRoundTrip(t *testing.T) {
 	}
 	if got.Origin != nil {
 		t.Fatalf("empty origin should read back nil, got %#v", got.Origin)
+	}
+}
+
+func TestActionAuditOriginReaderReturnsLatestTransition(t *testing.T) {
+	constructors := []struct {
+		name string
+		new  func(t *testing.T) ResourceStore
+	}{
+		{
+			name: "sqlite",
+			new: func(t *testing.T) ResourceStore {
+				store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+				if err != nil {
+					t.Fatalf("NewSQLiteResourceStore: %v", err)
+				}
+				t.Cleanup(func() { _ = store.Close() })
+				return store
+			},
+		},
+		{name: "memory", new: func(_ *testing.T) ResourceStore { return NewMemoryStore() }},
+	}
+	for _, tc := range constructors {
+		t.Run(tc.name, func(t *testing.T) {
+			store := tc.new(t)
+			reader, ok := store.(ActionAuditOriginReader)
+			if !ok {
+				t.Fatalf("%T does not implement ActionAuditOriginReader", store)
+			}
+			now := time.Now().UTC()
+			for _, record := range []ActionAuditRecord{
+				{
+					ID: "act-old", CreatedAt: now.Add(-time.Minute), UpdatedAt: now.Add(-time.Minute), State: ActionStatePending,
+					Request: ActionRequest{RequestID: "prop-old", ResourceID: "vm:42", CapabilityName: "restart", RequestedBy: "pulse_patrol"},
+					Plan:    ActionPlan{ActionID: "act-old", RequestID: "prop-old", Allowed: true},
+					Origin:  &ActionOrigin{Surface: "patrol", FindingID: "finding-1", InvestigationID: "inv-1", ProposalID: "prop-old"},
+				},
+				{
+					ID: "act-new", CreatedAt: now, UpdatedAt: now, State: ActionStateCompleted,
+					Request:             ActionRequest{RequestID: "prop-new", ResourceID: "vm:42", CapabilityName: "restart", RequestedBy: "pulse_patrol"},
+					Plan:                ActionPlan{ActionID: "act-new", RequestID: "prop-new", Allowed: true},
+					Origin:              &ActionOrigin{Surface: "patrol", FindingID: "finding-1", InvestigationID: "inv-1", ProposalID: "prop-new"},
+					VerificationOutcome: VerificationOutcome{Status: VerificationVerified},
+				},
+			} {
+				if err := store.RecordActionAudit(record); err != nil {
+					t.Fatalf("RecordActionAudit(%s): %v", record.ID, err)
+				}
+			}
+			got, found, err := reader.GetLatestActionAuditByOrigin("patrol", "inv-1")
+			if err != nil || !found {
+				t.Fatalf("GetLatestActionAuditByOrigin: found=%v err=%v", found, err)
+			}
+			if got.ID != "act-new" || got.State != ActionStateCompleted {
+				t.Fatalf("latest audit = %#v, want act-new completed", got)
+			}
+		})
+	}
+}
+
+func TestPendingActionAuditReaderReturnsOldestPendingFirst(t *testing.T) {
+	store := NewMemoryStore()
+	now := time.Now().UTC()
+	for _, record := range []ActionAuditRecord{
+		{ID: "act-new", CreatedAt: now, UpdatedAt: now, State: ActionStatePending, Request: ActionRequest{RequestID: "new", ResourceID: "vm:2", CapabilityName: "restart", RequestedBy: "pulse_patrol"}, Plan: ActionPlan{ActionID: "act-new", RequestID: "new", Allowed: true}},
+		{ID: "act-old", CreatedAt: now.Add(-time.Minute), UpdatedAt: now.Add(-time.Minute), State: ActionStatePending, Request: ActionRequest{RequestID: "old", ResourceID: "vm:1", CapabilityName: "restart", RequestedBy: "pulse_patrol"}, Plan: ActionPlan{ActionID: "act-old", RequestID: "old", Allowed: true}},
+		{ID: "act-done", CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour), State: ActionStateCompleted, Request: ActionRequest{RequestID: "done", ResourceID: "vm:3", CapabilityName: "restart", RequestedBy: "pulse_patrol"}, Plan: ActionPlan{ActionID: "act-done", RequestID: "done", Allowed: true}},
+	} {
+		if err := store.RecordActionAudit(record); err != nil {
+			t.Fatalf("RecordActionAudit(%s): %v", record.ID, err)
+		}
+	}
+	got, err := store.GetPendingActionAudits(100)
+	if err != nil {
+		t.Fatalf("GetPendingActionAudits: %v", err)
+	}
+	if len(got) != 2 || got[0].ID != "act-old" || got[1].ID != "act-new" {
+		t.Fatalf("pending actions = %#v, want oldest pending first", got)
 	}
 }

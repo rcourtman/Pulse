@@ -63,6 +63,7 @@ func BuildFindingInvestigationRecord(f *Finding, session *InvestigationSession) 
 		record.CompletedAt = normalized.CompletedAt
 		record.ToolsUsed = uniqueNonEmptyStrings(normalized.ToolsUsed)
 		record.ApprovalID = strings.TrimSpace(normalized.ApprovalID)
+		record.Action = aicontracts.CloneActionReference(normalized.Action)
 		record.Error = strings.TrimSpace(normalized.Error)
 		if summary := strings.TrimSpace(normalized.Summary); summary != "" {
 			record.Conclusion = summary

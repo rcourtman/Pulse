@@ -2160,6 +2160,17 @@ func (a *orchestratorChatAdapter) ExecuteInvestigationStream(ctx context.Context
 // onto the public contract sentinels so enterprise outcome mapping can
 // key on errors.Is without importing internal packages.
 func mapInvestigationProposalError(err error) error {
+	var runErr *chat.InvestigationRunError
+	if errors.As(err, &runErr) {
+		return aicontracts.NewOrchestratorInvestigationError(
+			runErr.RunFailure(),
+			mapInvestigationProposalSentinel(runErr.ProposalFailure()),
+		)
+	}
+	return mapInvestigationProposalSentinel(err)
+}
+
+func mapInvestigationProposalSentinel(err error) error {
 	switch {
 	case err == nil:
 		return nil
@@ -7392,11 +7403,15 @@ func (h *AISettingsHandler) updateFindingOutcome(ctx context.Context, orgID, fin
 		log.Warn().Str("orgID", orgID).Msg("Findings store not available for finding update")
 		return
 	}
+	if existing := findingsStore.Get(findingID); existing != nil && existing.InvestigationOutcome == outcome {
+		return
+	}
 
 	if !findingsStore.UpdateInvestigationOutcome(findingID, outcome) {
 		log.Warn().Str("findingID", findingID).Msg("Finding not found for outcome update")
 		return
 	}
+	patrol.PublishFindingLifecycleUpdate(findingID)
 
 	log.Info().Str("findingID", findingID).Str("outcome", outcome).Msg("Updated finding investigation outcome")
 }
@@ -7700,6 +7715,8 @@ func (h *AISettingsHandler) HandleGetInvestigation(w http.ResponseWriter, r *htt
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "No investigation found for this finding", nil)
 		return
 	}
+	orgID := GetOrgID(r.Context())
+	investigation = h.hydratePatrolInvestigationAction(orgID, investigation)
 	normalizedInvestigation := investigation.NormalizeCollections()
 
 	w.Header().Set("Content-Type", "application/json")

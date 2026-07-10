@@ -25,6 +25,7 @@ import type {
   LearningStatusResponse,
   ResourceIntelligence,
 } from '@/types/aiIntelligence';
+import type { PatrolActionReference } from '@/types/actionAudit';
 
 export class AIAPI {
   private static baseUrl = '/api';
@@ -408,6 +409,7 @@ export interface InvestigationRecord {
   started_at: string;
   completed_at?: string;
   approval_id?: string;
+  action?: PatrolActionReference;
   error?: string;
 }
 
@@ -672,11 +674,7 @@ export type ApprovalDecisionResult =
 // ============================================
 
 export type InvestigationStatus =
-  | 'pending'
-  | 'running'
-  | 'completed'
-  | 'failed'
-  | 'needs_attention';
+  'pending' | 'running' | 'completed' | 'failed' | 'needs_attention';
 export type InvestigationOutcome =
   | 'resolved'
   | 'fix_queued'
@@ -714,6 +712,7 @@ export interface InvestigationSession {
   evidence_ids?: string[];
   proposed_fix?: ProposedFix;
   approval_id?: string;
+  action?: PatrolActionReference;
   summary?: string;
   error?: string;
 }

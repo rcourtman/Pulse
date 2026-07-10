@@ -1265,7 +1265,11 @@ function buildPatrolFindingHandoffAction(
     actionId: pendingApproval.actionId || undefined,
     actionRequestedBy: pendingApproval.actionRequestedBy || undefined,
     actionApprovalPolicy: pendingApproval.actionApprovalPolicy || undefined,
-    actionRequiresApproval: Boolean(approvalId),
+    actionRequiresApproval: Boolean(
+      approvalId ||
+      pendingApproval.status === 'pending_approval' ||
+      (pendingApproval.actionApprovalPolicy && pendingApproval.actionApprovalPolicy !== 'none'),
+    ),
     actionPlanExpiresAt: pendingApproval.actionPlanExpiresAt || undefined,
     actionPlanMessage: pendingApproval.actionPlanMessage || undefined,
     actionPreflight: pendingApproval.actionPreflight || undefined,

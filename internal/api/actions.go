@@ -16,6 +16,7 @@ import (
 const maxActionPlanRequestBytes = 1 << 20
 const maxActionDecisionRequestBytes = 64 << 10
 const maxActionExecutionRequestBytes = 64 << 10
+const maxPendingActionAudits = 100
 
 // ActionExecutor is the API-facing name for the canonical action lifecycle
 // execution contract. The interface is owned by internal/actionlifecycle;
@@ -47,6 +48,11 @@ type actionExecutionResponse struct {
 	State    unified.ActionState       `json:"state"`
 	Result   *unified.ExecutionResult  `json:"result,omitempty"`
 	Audit    unified.ActionAuditRecord `json:"audit"`
+}
+
+type pendingActionsResponse struct {
+	Actions []unified.ActionAuditRecord `json:"actions"`
+	Count   int                         `json:"count"`
 }
 
 // ActionLifecycle returns the shared transport-independent action lifecycle
@@ -97,6 +103,38 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(plan); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "action_plan_encode_failed", "Failed to encode action plan")
+	}
+}
+
+// HandleListPendingActions returns the canonical decision queue. It is not an
+// audit-log endpoint and has no enterprise audit-log entitlement dependency;
+// authorization is the same ai:execute scope required to decide an action.
+func (h *ResourceHandlers) HandleListPendingActions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	store, err := h.getStore(GetOrgID(r.Context()))
+	if err != nil || store == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action decision queue is not available")
+		return
+	}
+	reader, ok := store.(unified.PendingActionAuditReader)
+	if !ok {
+		writeJSONError(w, http.StatusServiceUnavailable, agentcapabilities.AgentErrCodeActionQueueUnavailable, "Action decision queue is not available")
+		return
+	}
+	actions, err := reader.GetPendingActionAudits(maxPendingActionAudits)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionQueueQueryFailed, "Failed to query pending actions")
+		return
+	}
+	if actions == nil {
+		actions = []unified.ActionAuditRecord{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(pendingActionsResponse{Actions: actions, Count: len(actions)}); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionQueueEncodeFailed, "Failed to encode pending actions")
 	}
 }
 

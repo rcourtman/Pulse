@@ -24,6 +24,7 @@ const (
 const (
 	PushActionViewFinding   = "view_finding"
 	PushActionApproveFix    = "approve_fix"
+	PushActionDecideAction  = "decide_action"
 	PushActionViewFixResult = "view_fix_result"
 )
 
@@ -122,6 +123,20 @@ func NewApprovalRequestNotification(approvalID, findingTitle, riskLevel string) 
 	}
 }
 
+// NewActionDecisionNotification creates a push notification for a canonical
+// typed action awaiting an operator decision. ActionID is the lifecycle audit
+// identity consumed by /api/actions/{id}; it is never a legacy approval ID.
+func NewActionDecisionNotification(actionID, findingTitle string) PushNotificationPayload {
+	return PushNotificationPayload{
+		Type:       PushTypeApprovalRequest,
+		Priority:   PushPriorityHigh,
+		Title:      truncate(sanitizeTitle(findingTitle), maxPushTitleLen),
+		Body:       "A proposed action requires your approval",
+		ActionType: PushActionDecideAction,
+		ActionID:   actionID,
+	}
+}
+
 // NewFixCompletedNotification creates a push notification for a completed fix.
 func NewFixCompletedNotification(findingID, title string, success bool) PushNotificationPayload {
 	body := "Fix applied successfully"
@@ -132,6 +147,33 @@ func NewFixCompletedNotification(findingID, title string, success bool) PushNoti
 	return PushNotificationPayload{
 		Type:       PushTypeFixCompleted,
 		Priority:   PushPriorityNormal,
+		Title:      truncate(sanitizeTitle(title), maxPushTitleLen),
+		Body:       truncate(body, maxPushBodyLen),
+		ActionType: PushActionViewFixResult,
+		ActionID:   findingID,
+	}
+}
+
+// NewActionOutcomeNotification reports the verified lifecycle truth of a
+// canonical typed action without calling an inconclusive outcome successful or
+// failed. The finding remains the mobile destination because it owns the
+// operator-facing investigation and action reference.
+func NewActionOutcomeNotification(findingID, title, verificationStatus string) PushNotificationPayload {
+	body := "Action completed; verification was inconclusive"
+	priority := PushPriorityNormal
+	switch verificationStatus {
+	case "verified":
+		body = "Action completed and verified"
+	case "failed":
+		body = "Action completed, but verification failed"
+		priority = PushPriorityHigh
+	case "execution_failed":
+		body = "Action failed before verification"
+		priority = PushPriorityHigh
+	}
+	return PushNotificationPayload{
+		Type:       PushTypeFixCompleted,
+		Priority:   priority,
 		Title:      truncate(sanitizeTitle(title), maxPushTitleLen),
 		Body:       truncate(body, maxPushBodyLen),
 		ActionType: PushActionViewFixResult,

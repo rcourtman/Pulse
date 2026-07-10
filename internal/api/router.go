@@ -658,6 +658,7 @@ func (r *Router) setupRoutes() {
 	r.aiSettingsHandler = NewAISettingsHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
 	if r.resourceHandlers != nil {
 		r.aiSettingsHandler.SetResourceStoreProvider(r.resourceHandlers.getStore)
+		r.resourceHandlers.SetActionTransitionPublisher(r.aiSettingsHandler.ReconcilePatrolActionTransition)
 		resourceHandlers := r.resourceHandlers
 		r.aiSettingsHandler.SetActionBrokerFactory(func(orgID string) aicontracts.OrchestratorActionBroker {
 			return NewPatrolActionBroker(orgID, resourceHandlers)

@@ -40,19 +40,20 @@ type ApprovalInfo struct {
 }
 
 type ActionPlanInfo struct {
-	ActionID             string    `json:"actionId,omitempty"`
-	RequestID            string    `json:"requestId,omitempty"`
-	Allowed              bool      `json:"allowed"`
-	RequiresApproval     bool      `json:"requiresApproval"`
-	ApprovalPolicy       string    `json:"approvalPolicy,omitempty"`
-	PredictedBlastRadius []string  `json:"predictedBlastRadius,omitempty"`
-	RollbackAvailable    bool      `json:"rollbackAvailable"`
-	Message              string    `json:"message,omitempty"`
-	PlannedAt            time.Time `json:"plannedAt,omitempty"`
-	ExpiresAt            time.Time `json:"expiresAt,omitempty"`
-	ResourceVersion      string    `json:"resourceVersion,omitempty"`
-	PolicyVersion        string    `json:"policyVersion,omitempty"`
-	PlanHash             string    `json:"planHash,omitempty"`
+	ActionID             string               `json:"actionId,omitempty"`
+	RequestID            string               `json:"requestId,omitempty"`
+	Allowed              bool                 `json:"allowed"`
+	RequiresApproval     bool                 `json:"requiresApproval"`
+	ApprovalPolicy       string               `json:"approvalPolicy,omitempty"`
+	PredictedBlastRadius []string             `json:"predictedBlastRadius,omitempty"`
+	RollbackAvailable    bool                 `json:"rollbackAvailable"`
+	Message              string               `json:"message,omitempty"`
+	PlannedAt            time.Time            `json:"plannedAt,omitempty"`
+	ExpiresAt            time.Time            `json:"expiresAt,omitempty"`
+	ResourceVersion      string               `json:"resourceVersion,omitempty"`
+	PolicyVersion        string               `json:"policyVersion,omitempty"`
+	PlanHash             string               `json:"planHash,omitempty"`
+	Preflight            *ActionPreflightInfo `json:"preflight,omitempty"`
 }
 
 type ContextConfidenceInfo struct {

@@ -195,7 +195,7 @@ type PushNotificationPayload struct {
 	Title      string `json:"title"`                 // Short title (≤100 chars)
 	Body       string `json:"body"`                  // Body text (≤200 chars)
 	InstanceID string `json:"instance_id,omitempty"` // Canonical relay instance identifier for mobile routing/repair
-	ActionType string `json:"action_type,omitempty"` // "view_finding", "approve_fix", "view_fix_result"
+	ActionType string `json:"action_type,omitempty"` // "view_finding", "decide_action", legacy "approve_fix", "view_fix_result"
 	ActionID   string `json:"action_id,omitempty"`   // Finding ID or Approval ID
 	Category   string `json:"category,omitempty"`    // Finding category (performance, capacity, etc.)
 	Severity   string `json:"severity,omitempty"`    // Finding severity

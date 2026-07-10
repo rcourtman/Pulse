@@ -215,6 +215,49 @@ func TestHandlePlanActionPersistsAuditAndLifecycle(t *testing.T) {
 	}
 }
 
+func TestHandleListPendingActionsReturnsOnlyCanonicalDecisionQueue(t *testing.T) {
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get store: %v", err)
+	}
+	now := time.Now().UTC()
+	for _, record := range []unified.ActionAuditRecord{
+		{
+			ID: "act-pending", CreatedAt: now, UpdatedAt: now, State: unified.ActionStatePending,
+			Request: unified.ActionRequest{RequestID: "proposal-1", ResourceID: "vm:42", CapabilityName: "restart", Reason: "Recover workload", RequestedBy: "pulse_patrol"},
+			Plan:    unified.ActionPlan{ActionID: "act-pending", RequestID: "proposal-1", Allowed: true, RequiresApproval: true, ApprovalPolicy: unified.ApprovalAdmin},
+			Origin:  &unified.ActionOrigin{Surface: patrolActionOriginSurface, FindingID: "finding-1", InvestigationID: "investigation-1", ProposalID: "proposal-1"},
+		},
+		{
+			ID: "act-completed", CreatedAt: now, UpdatedAt: now, State: unified.ActionStateCompleted,
+			Request: unified.ActionRequest{RequestID: "proposal-2", ResourceID: "vm:43", CapabilityName: "restart", Reason: "Recovered", RequestedBy: "pulse_patrol"},
+			Plan:    unified.ActionPlan{ActionID: "act-completed", RequestID: "proposal-2", Allowed: true},
+		},
+	} {
+		if err := store.RecordActionAudit(record); err != nil {
+			t.Fatalf("RecordActionAudit(%s): %v", record.ID, err)
+		}
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/actions/pending", nil)
+	h.HandleListPendingActions(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var response pendingActionsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Count != 1 || len(response.Actions) != 1 || response.Actions[0].ID != "act-pending" {
+		t.Fatalf("pending response = %#v", response)
+	}
+	if response.Actions[0].Origin == nil || response.Actions[0].Origin.InvestigationID != "investigation-1" {
+		t.Fatalf("pending action lost Patrol origin: %#v", response.Actions[0].Origin)
+	}
+}
+
 func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
 	now := time.Date(2026, 5, 4, 14, 0, 0, 0, time.UTC)
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
