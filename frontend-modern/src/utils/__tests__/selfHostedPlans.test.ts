@@ -136,8 +136,8 @@ describe('selfHostedPlans', () => {
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).not.toContain('how much control');
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementHighlights).toEqual([
-      'Patrol Investigates Issues',
-      'Patrol Handles Safe Fixes',
+      'Patrol Investigates Issues and Explains the Root Cause',
+      'Patrol Applies Safe Fixes and Verifies the Result',
       '90-day metric history',
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.includedExtras).toEqual([

@@ -335,7 +335,7 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
-        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Handles Safe Fixes'],
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Applies Safe Fixes and Verifies the Result'],
       }),
     ).toMatchObject({
       title: 'Current plan: Pulse Pro',
@@ -357,7 +357,7 @@ describe('licensePresentation', () => {
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
           'Pulse Mobile Pairing',
-          'Patrol Handles Safe Fixes',
+          'Patrol Applies Safe Fixes and Verifies the Result',
         ],
       }),
     ).toEqual({
@@ -365,8 +365,8 @@ describe('licensePresentation', () => {
       body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
-        'Patrol Investigates Issues',
-        'Patrol Handles Safe Fixes',
+        'Patrol Investigates Issues and Explains the Root Cause',
+        'Patrol Applies Safe Fixes and Verifies the Result',
         '90-day metric history',
       ],
       includedExtrasLabel: 'Included extras',
@@ -398,7 +398,7 @@ describe('licensePresentation', () => {
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
           'Pulse Mobile Pairing',
-          'Patrol Handles Safe Fixes',
+          'Patrol Applies Safe Fixes and Verifies the Result',
         ],
         patrolOperatorStatus: {
           patrolAutonomyOperationsLoopStarterCount: 1,
@@ -429,7 +429,7 @@ describe('licensePresentation', () => {
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
           'Pulse Mobile Pairing',
-          'Patrol Handles Safe Fixes',
+          'Patrol Applies Safe Fixes and Verifies the Result',
         ],
         patrolOperatorStatus: {
           proActivationOperationsLoopStarterCount: 1,
@@ -458,7 +458,7 @@ describe('licensePresentation', () => {
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
           'Pulse Mobile Pairing',
-          'Patrol Handles Safe Fixes',
+          'Patrol Applies Safe Fixes and Verifies the Result',
         ],
         patrolOperatorStatus: {
           patrolControlOperationsLoopStarterCount: 1,
@@ -485,7 +485,7 @@ describe('licensePresentation', () => {
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
           'Pulse Mobile Pairing',
-          'Patrol Handles Safe Fixes',
+          'Patrol Applies Safe Fixes and Verifies the Result',
         ],
         patrolOperatorStatus: {
           patrolControlOperationsLoopStarterCount: 2,
@@ -512,7 +512,7 @@ describe('licensePresentation', () => {
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
           'Pulse Mobile Pairing',
-          'Patrol Handles Safe Fixes',
+          'Patrol Applies Safe Fixes and Verifies the Result',
         ],
         patrolOperatorStatus: {
           patrolControlOperationsLoopStarterCount: 1,
@@ -544,7 +544,7 @@ describe('licensePresentation', () => {
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
           'Pulse Mobile Pairing',
-          'Patrol Handles Safe Fixes',
+          'Patrol Applies Safe Fixes and Verifies the Result',
         ],
         patrolOperatorStatus: {
           patrolAutonomyOperationsLoopStarterCount: 1,
@@ -573,7 +573,7 @@ describe('licensePresentation', () => {
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
           'Pulse Mobile Pairing',
-          'Patrol Handles Safe Fixes',
+          'Patrol Applies Safe Fixes and Verifies the Result',
         ],
         patrolOperatorStatus: {
           nextAction: 'complete',
@@ -602,7 +602,7 @@ describe('licensePresentation', () => {
         displayableCapabilities: [
           'Pulse Relay (Remote Access)',
           'Pulse Mobile Pairing',
-          'Patrol Handles Safe Fixes',
+          'Patrol Applies Safe Fixes and Verifies the Result',
         ],
         patrolOperatorStatus: {
           nextAction: 'open_mcp',
@@ -629,15 +629,15 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
-        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Handles Safe Fixes'],
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Applies Safe Fixes and Verifies the Result'],
       }),
     ).toMatchObject({
       title: 'Current plan: Legacy Pulse Pro+',
       body: 'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
-        'Patrol Investigates Issues',
-        'Patrol Handles Safe Fixes',
+        'Patrol Investigates Issues and Explains the Root Cause',
+        'Patrol Applies Safe Fixes and Verifies the Result',
         '90-day metric history',
       ],
     });
@@ -660,8 +660,8 @@ describe('licensePresentation', () => {
       body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
-        'Patrol Investigates Issues',
-        'Patrol Handles Safe Fixes',
+        'Patrol Investigates Issues and Explains the Root Cause',
+        'Patrol Applies Safe Fixes and Verifies the Result',
         '90-day metric history',
       ],
       includedExtrasLabel: 'Included extras',
@@ -803,7 +803,7 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
-        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Handles Safe Fixes'],
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Applies Safe Fixes and Verifies the Result'],
       }).body,
     ).toBe(getSelfHostedPlanEntitlementSummary('pro', 'Legacy Pulse Pro+'));
   });
@@ -825,7 +825,7 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
-        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Handles Safe Fixes'],
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Applies Safe Fixes and Verifies the Result'],
       }).patrolControlAction,
     ).toEqual(patrolControlAction);
 
@@ -839,7 +839,7 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
           runtime: { build: 'pro', label: 'Pulse Pro runtime' },
         },
-        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        displayableCapabilities: ['Patrol Applies Safe Fixes and Verifies the Result'],
       }).patrolControlAction,
     ).toEqual(patrolControlAction);
 
@@ -853,7 +853,7 @@ describe('licensePresentation', () => {
           upgrade_reasons: [],
           runtime: { build: 'community', label: 'Pulse Community runtime' },
         },
-        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        displayableCapabilities: ['Patrol Applies Safe Fixes and Verifies the Result'],
       }).patrolControlAction,
     ).toBeUndefined();
 
@@ -870,7 +870,7 @@ describe('licensePresentation', () => {
           'Pulse Relay (Remote Access)',
           'Pulse Mobile Pairing',
           'Push Notifications',
-          'Patrol Handles Safe Fixes',
+          'Patrol Applies Safe Fixes and Verifies the Result',
         ],
       }).patrolControlAction,
     ).toBeUndefined();
@@ -1234,7 +1234,7 @@ describe('licensePresentation', () => {
           'Pulse Relay (Remote Access)',
           'Pulse Mobile Pairing',
           'Push Notifications',
-          'Patrol Handles Safe Fixes',
+          'Patrol Applies Safe Fixes and Verifies the Result',
         ],
         source: 'purchase',
       }),
@@ -1244,8 +1244,8 @@ describe('licensePresentation', () => {
       body: 'Checkout completed and Pulse Pro is active. Choose Patrol mode.',
       highlightsLabel: 'Available now on this instance',
       highlights: [
-        'Patrol Investigates Issues',
-        'Patrol Handles Safe Fixes',
+        'Patrol Investigates Issues and Explains the Root Cause',
+        'Patrol Applies Safe Fixes and Verifies the Result',
         '90-day metric history',
         'Role-Based Access Control (RBAC)',
         'Audit Logging',
@@ -1295,7 +1295,7 @@ describe('licensePresentation', () => {
           limits: [],
           upgrade_reasons: [],
         },
-        displayableCapabilities: ['Pulse Patrol', 'Patrol Handles Safe Fixes'],
+        displayableCapabilities: ['Pulse Patrol', 'Patrol Applies Safe Fixes and Verifies the Result'],
         source: 'purchase',
       }),
     ).toBeNull();
@@ -1328,7 +1328,7 @@ describe('licensePresentation', () => {
     expect(
       getSelfHostedActivationSuccessPresentation({
         entitlements: proEntitlements,
-        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        displayableCapabilities: ['Patrol Applies Safe Fixes and Verifies the Result'],
         patrolOperatorStatus: {
           patrolAutonomyOperationsLoopStarterCount: 1,
           patrolAutonomyCompletedOperationsLoopCount: 0,
@@ -1346,7 +1346,7 @@ describe('licensePresentation', () => {
     expect(
       getSelfHostedActivationSuccessPresentation({
         entitlements: proEntitlements,
-        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        displayableCapabilities: ['Patrol Applies Safe Fixes and Verifies the Result'],
         patrolOperatorStatus: {
           proActivationOperationsLoopStarterCount: 1,
           proActivationCompletedOperationsLoopCount: 0,
@@ -1365,7 +1365,7 @@ describe('licensePresentation', () => {
     expect(
       getSelfHostedActivationSuccessPresentation({
         entitlements: proEntitlements,
-        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        displayableCapabilities: ['Patrol Applies Safe Fixes and Verifies the Result'],
         patrolOperatorStatus: {
           patrolControlOperationsLoopStarterCount: 1,
           proActivationOperationsLoopStarterCount: 1,
@@ -1382,7 +1382,7 @@ describe('licensePresentation', () => {
     expect(
       getSelfHostedActivationSuccessPresentation({
         entitlements: proEntitlements,
-        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        displayableCapabilities: ['Patrol Applies Safe Fixes and Verifies the Result'],
         patrolOperatorStatus: {
           nextAction: 'open_mcp',
           patrolAutonomyOperationsLoopStarterCount: 1,
@@ -1402,7 +1402,7 @@ describe('licensePresentation', () => {
     expect(
       getSelfHostedActivationSuccessPresentation({
         entitlements: proEntitlements,
-        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        displayableCapabilities: ['Patrol Applies Safe Fixes and Verifies the Result'],
         patrolOperatorStatus: {
           nextAction: 'complete',
           patrolAutonomyOperationsLoopStarterCount: 1,
@@ -1422,7 +1422,7 @@ describe('licensePresentation', () => {
     expect(
       getSelfHostedActivationSuccessPresentation({
         entitlements: proEntitlements,
-        displayableCapabilities: ['Patrol Handles Safe Fixes'],
+        displayableCapabilities: ['Patrol Applies Safe Fixes and Verifies the Result'],
         patrolOperatorStatus: {
           patrolAutonomyOperationsLoopStarterCount: 1,
           patrolAutonomyCompletedOperationsLoopCount: 1,

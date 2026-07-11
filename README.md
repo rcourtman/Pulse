@@ -209,8 +209,8 @@ Runtime-aligned capability summary:
 |---|:---:|:---:|:---:|:---:|
 | Pulse Patrol (Background Health Checks) | ✅ | ✅ | ✅ | ✅ |
 | Remote Access / Mobile / Push | — | ✅ | ✅ | ✅ |
-| Patrol Investigates Issues | — | — | ✅ | ✅ |
-| Patrol Handles Safe Fixes | — | — | ✅ | ✅ |
+| Patrol Investigates Issues and Explains the Root Cause | — | — | ✅ | ✅ |
+| Patrol Applies Safe Fixes and Verifies the Result | — | — | ✅ | ✅ |
 | Centralized Agent Profiles | — | — | ✅ | ✅ |
 | Update Alerts (Container/Package Updates) | ✅ | ✅ | ✅ | ✅ |
 | SSO (OIDC/SAML/Multi-Provider) | ✅ | ✅ | ✅ | ✅ |

@@ -535,7 +535,7 @@ test.describe("Self-hosted upgrade return flow", () => {
       ),
     ).toBeVisible();
     await expect(activationSummary.getByText("Available now on this instance")).toBeVisible();
-    await expect(activationSummary.getByText("Patrol Handles Safe Fixes")).toBeVisible();
+    await expect(activationSummary.getByText("Patrol Applies Safe Fixes and Verifies the Result")).toBeVisible();
     await expect(page.getByRole("link", { name: "Review usage" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Review plan" })).toHaveCount(0);
   });
@@ -572,7 +572,7 @@ test.describe("Self-hosted upgrade return flow", () => {
       page.getByText("Checkout completed and this instance is now running Pulse Pro."),
     ).toHaveCount(0);
     await expect(page.getByText("Current plan: Community")).toBeVisible();
-    await expect(page.getByText("Patrol Handles Safe Fixes")).toHaveCount(0);
+    await expect(page.getByText("Patrol Applies Safe Fixes and Verifies the Result")).toHaveCount(0);
     await expect.poll(() => requestCounts.inactive.entitlements).toBeGreaterThan(0);
     expect(requestCounts.activated.entitlements).toBe(0);
   });
@@ -655,7 +655,7 @@ test.describe("Self-hosted upgrade return flow", () => {
       ),
     ).toBeVisible();
     await expect(activationSummary.getByText("Available now on this instance")).toBeVisible();
-    await expect(activationSummary.getByText("Patrol Handles Safe Fixes")).toBeVisible();
+    await expect(activationSummary.getByText("Patrol Applies Safe Fixes and Verifies the Result")).toBeVisible();
     await expect(page.getByRole("link", { name: "Review plan" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Review usage" })).toHaveCount(0);
   });

@@ -398,7 +398,7 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getAllByText('Trial').length).toBeGreaterThan(0);
     expect(screen.getByText('7')).toBeInTheDocument();
-    expect(screen.getByText('Patrol Handles Safe Fixes')).toBeInTheDocument();
+    expect(screen.getByText('Patrol Applies Safe Fixes and Verifies the Result')).toBeInTheDocument();
   });
 
   it('keeps the Patrol mode entry point visible for existing active Pro plans', async () => {
@@ -836,8 +836,8 @@ describe('ProLicensePanel', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Primary capabilities')).toBeInTheDocument();
-    expect(screen.getByText('Patrol Investigates Issues')).toBeInTheDocument();
-    expect(screen.getByText('Patrol Handles Safe Fixes')).toBeInTheDocument();
+    expect(screen.getByText('Patrol Investigates Issues and Explains the Root Cause')).toBeInTheDocument();
+    expect(screen.getByText('Patrol Applies Safe Fixes and Verifies the Result')).toBeInTheDocument();
     expect(screen.getByText('Included extras')).toBeInTheDocument();
     expect(screen.getByText('Capability details')).toBeInTheDocument();
     expect(screen.getByText('(5 items ready)')).toBeInTheDocument();
@@ -1085,8 +1085,8 @@ describe('ProLicensePanel', () => {
 
     // Verify self-hosted displayable capabilities render with their expected labels.
     expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
-    expect(screen.getByText('Patrol Investigates Issues')).toBeInTheDocument();
-    expect(screen.getByText('Patrol Handles Safe Fixes')).toBeInTheDocument();
+    expect(screen.getByText('Patrol Investigates Issues and Explains the Root Cause')).toBeInTheDocument();
+    expect(screen.getByText('Patrol Applies Safe Fixes and Verifies the Result')).toBeInTheDocument();
     expect(screen.getByText('Update Alerts')).toBeInTheDocument();
     expect(screen.getByText('Role-Based Access Control (RBAC)')).toBeInTheDocument();
     expect(screen.getByText('Audit Logging')).toBeInTheDocument();
@@ -1195,7 +1195,7 @@ describe('ProLicensePanel', () => {
           ),
         ).toBeInTheDocument();
         expect(screen.getByText('Available now on this instance')).toBeInTheDocument();
-        expect(screen.getAllByText('Patrol Handles Safe Fixes').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('Patrol Applies Safe Fixes and Verifies the Result').length).toBeGreaterThan(0);
         expect(screen.getAllByRole('link', { name: 'Choose Patrol mode' })).toHaveLength(1);
         const patrolControlLink = screen.getByRole('link', { name: 'Choose Patrol mode' });
         expect(patrolControlLink).toHaveAttribute('href', PATROL_CONTROL_STARTER_URL);
@@ -1285,7 +1285,7 @@ describe('ProLicensePanel', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Select a plan')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Patrol Handles Safe Fixes').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Patrol Applies Safe Fixes and Verifies the Result').length).toBeGreaterThan(0);
     expect(screen.queryByText('Available plans')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Review plan' })).not.toBeInTheDocument();
   });
@@ -1310,7 +1310,7 @@ describe('ProLicensePanel', () => {
       ),
     ).not.toBeInTheDocument();
     expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
-    expect(screen.queryByText('Patrol Handles Safe Fixes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol Applies Safe Fixes and Verifies the Result')).not.toBeInTheDocument();
     expect(screen.queryByText('Available now on this instance')).not.toBeInTheDocument();
     expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_HREF, {
       replace: true,
