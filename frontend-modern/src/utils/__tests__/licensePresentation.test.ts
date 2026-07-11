@@ -339,7 +339,7 @@ describe('licensePresentation', () => {
       }),
     ).toMatchObject({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
       supplementalBadges: [],
       supplementalSummary: '',
     });
@@ -362,7 +362,7 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Patrol Investigates Issues',
@@ -633,7 +633,7 @@ describe('licensePresentation', () => {
       }),
     ).toMatchObject({
       title: 'Current plan: Legacy Pulse Pro+',
-      body: 'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
+      body: 'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Patrol Investigates Issues',
@@ -657,7 +657,7 @@ describe('licensePresentation', () => {
       }),
     ).toEqual({
       title: 'Current plan: Pulse Pro',
-      body: 'Pulse Pro is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
+      body: 'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: [
         'Patrol Investigates Issues',
@@ -903,15 +903,14 @@ describe('licensePresentation', () => {
         },
         {
           title: 'Pulse Pro plan',
-          body: 'Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
+          body: 'Patrol investigates issues, applies safe fixes, and verifies the result, plus 90-day metric history and team controls.',
           highlights: [
             'Everything in Relay',
-            'Choose Patrol mode',
-            'Patrol investigates issues',
-            'Patrol handles safe fixes',
+            'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
+            'Patrol investigates issues and explains the root cause',
+            'Patrol applies safe fixes and verifies the result',
             '90-day metric history',
-            'RBAC and audit logging',
-            'Agent profiles · PDF/CSV reports',
+            'Team controls: RBAC, audit logging, reporting, and agent profiles',
           ],
         },
       ],
@@ -931,15 +930,14 @@ describe('licensePresentation', () => {
       cards: [
         {
           title: 'Pulse Pro plan',
-          body: 'Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
+          body: 'Patrol investigates issues, applies safe fixes, and verifies the result, plus 90-day metric history and team controls.',
           highlights: [
             'Everything in Relay',
-            'Choose Patrol mode',
-            'Patrol investigates issues',
-            'Patrol handles safe fixes',
+            'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
+            'Patrol investigates issues and explains the root cause',
+            'Patrol applies safe fixes and verifies the result',
             '90-day metric history',
-            'RBAC and audit logging',
-            'Agent profiles · PDF/CSV reports',
+            'Team controls: RBAC, audit logging, reporting, and agent profiles',
           ],
         },
       ],
@@ -1018,7 +1016,7 @@ describe('licensePresentation', () => {
         { label: 'Remote access, pairing, and push', statusLabel: 'Active' },
         { label: '90-day metric history', statusLabel: 'Active' },
         { label: 'Patrol investigation and remediation', statusLabel: 'Active' },
-        { label: 'Team and admin controls', statusLabel: 'Active' },
+        { label: 'Team controls', statusLabel: 'Active' },
       ],
     });
 
@@ -1036,7 +1034,7 @@ describe('licensePresentation', () => {
       ['Remote access, pairing, and push', 'Partial'],
       ['90-day metric history', 'Partial'],
       ['Patrol investigation and remediation', 'Partial'],
-      ['Team and admin controls', 'Needs attention'],
+      ['Team controls', 'Needs attention'],
     ]);
     expect(partialProStatus?.items).toContainEqual({
       label: 'Patrol investigation and remediation',
@@ -1046,11 +1044,11 @@ describe('licensePresentation', () => {
         'Some Patrol capability is available, but investigation or remediation may not be fully enabled yet.',
     });
     expect(partialProStatus?.items).toContainEqual({
-      label: 'Team and admin controls',
+      label: 'Team controls',
       state: 'missing',
       statusLabel: 'Needs attention',
       detail:
-        'Team/admin controls are not available yet. Refresh the plan or open recovery before relying on this Pro install.',
+        'Team controls are not available yet. Refresh the plan or open recovery before relying on this Pro install.',
     });
     expect(partialProStatus?.items.map((item) => item.detail).join(' ')).not.toContain(
       'admin tools',
@@ -1093,7 +1091,7 @@ describe('licensePresentation', () => {
       ['Remote access, pairing, and push', 'Active'],
       ['90-day metric history', 'Active'],
       ['Patrol investigation and remediation', 'Active'],
-      ['Team and admin controls', 'Active'],
+      ['Team controls', 'Active'],
     ];
     const expectOnlyCapabilityItems = (
       status?: ReturnType<typeof getSelfHostedPlanStatusPresentation>,

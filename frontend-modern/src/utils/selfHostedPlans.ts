@@ -84,7 +84,7 @@ export function getSelfHostedPlanEntitlementSummary(
     case 'relay':
       return `${planLabel} is active on this instance. It includes remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.`;
     case 'pro':
-      return `${planLabel} is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.`;
+      return `${planLabel} is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.`;
   }
 }
 
@@ -150,20 +150,19 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     price: '$79/year',
     subline: 'or $8.99/month',
     metricHistoryDays: 90,
-    billingExtrasSummary: 'Patrol modes, history, and admin controls',
+    billingExtrasSummary: 'Patrol modes, history, and team controls',
     entitlementSummary: getSelfHostedPlanEntitlementSummary('pro'),
     entitlementHighlights: getTierEntitlementHighlights('pro', 90),
     includedExtras: getTierIncludedExtras('pro'),
     comparisonSummary:
-      'Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
+      'Patrol investigates issues, applies safe fixes, and verifies the result, plus 90-day metric history and team controls.',
     highlights: [
       'Everything in Relay',
-      'Choose Patrol mode',
-      'Patrol investigates issues',
-      'Patrol handles safe fixes',
+      'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
+      'Patrol investigates issues and explains the root cause',
+      'Patrol applies safe fixes and verifies the result',
       '90-day metric history',
-      'RBAC and audit logging',
-      'Agent profiles · PDF/CSV reports',
+      'Team controls: RBAC, audit logging, reporting, and agent profiles',
     ],
   },
 ] as const;

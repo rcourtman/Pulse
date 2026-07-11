@@ -126,13 +126,13 @@ describe('selfHostedPlans', () => {
       /yourlab\.pulserelay\.pro|custom\s+(?:url|subdomain|domain)/i,
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.billingExtrasSummary).toBe(
-      'Patrol modes, history, and admin controls',
+      'Patrol modes, history, and team controls',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementSummary).toContain(
-      'Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
+      'Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).toBe(
-      'Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
+      'Patrol investigates issues, applies safe fixes, and verifies the result, plus 90-day metric history and team controls.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).not.toContain('how much control');
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementHighlights).toEqual([
@@ -172,7 +172,7 @@ describe('selfHostedPlans', () => {
       getSelfHostedPlanEntitlementSummary('pro'),
     );
     expect(getSelfHostedPlanEntitlementSummary('pro', 'Legacy Pulse Pro+')).toBe(
-      'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
+      'Legacy Pulse Pro+ is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
     );
 
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementHighlights).toEqual(
@@ -216,7 +216,7 @@ describe('selfHostedPlans', () => {
         historyDays: 14,
         extras: 'Remote web access, pairing, and push',
       },
-      { tier: 'pro', historyDays: 90, extras: 'Patrol modes, history, and admin controls' },
+      { tier: 'pro', historyDays: 90, extras: 'Patrol modes, history, and team controls' },
     ]);
     expect(SELF_HOSTED_FEATURE_ROWS.find((row) => row.key === 'history')).toEqual({
       key: 'history',

@@ -924,14 +924,14 @@ export const getSelfHostedPlanStatusPresentation = (
       }),
       buildCapabilityStatusItem({
         capabilities,
-        label: 'Team and admin controls',
+        label: 'Team controls',
         requiredCapabilities: ['rbac', 'audit_logging', 'advanced_reporting', 'agent_profiles'],
         activeDetail:
           'RBAC, audit logging, reporting, and agent profiles are available for governed operations.',
         partialDetail:
-          'Some team/admin capabilities are available. Refresh the plan or open recovery if any admin controls stay unavailable.',
+          'Some team controls are available. Refresh the plan or open recovery if any of them stay unavailable.',
         missingDetail:
-          'Team/admin controls are not available yet. Refresh the plan or open recovery before relying on this Pro install.',
+          'Team controls are not available yet. Refresh the plan or open recovery before relying on this Pro install.',
       }),
     );
   }

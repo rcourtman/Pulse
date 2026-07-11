@@ -310,12 +310,19 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Remote web access via Relay')).toBeInTheDocument();
     expect(screen.getByText('Pulse Mobile pairing')).toBeInTheDocument();
     expect(screen.getByText('Push notifications')).toBeInTheDocument();
-    expect(screen.getByText('Choose Patrol mode')).toBeInTheDocument();
-    expect(screen.getByText('Patrol investigates issues')).toBeInTheDocument();
-    expect(screen.getByText('Patrol handles safe fixes')).toBeInTheDocument();
+    expect(
+      screen.getByText('Patrol modes: Ask first, Safe auto-fix, or Autopilot'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Patrol investigates issues and explains the root cause'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Patrol applies safe fixes and verifies the result'),
+    ).toBeInTheDocument();
     expect(screen.getByText('90-day metric history')).toBeInTheDocument();
-    expect(screen.getByText('RBAC and audit logging')).toBeInTheDocument();
-    expect(screen.getByText('Agent profiles · PDF/CSV reports')).toBeInTheDocument();
+    expect(
+      screen.getByText('Team controls: RBAC, audit logging, reporting, and agent profiles'),
+    ).toBeInTheDocument();
 
     expect(screen.queryByText(/unlimited/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/trial/i)).not.toBeInTheDocument();
@@ -825,7 +832,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Pulse Pro is active on this instance. It includes Patrol modes, 90-day metric history, RBAC, audit logs, reports, and agent profiles.',
+        'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Primary capabilities')).toBeInTheDocument();
@@ -851,7 +858,7 @@ describe('ProLicensePanel', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Patrol investigation and remediation')).toBeInTheDocument();
-    expect(screen.getByText('Team and admin controls')).toBeInTheDocument();
+    expect(screen.getByText('Team controls')).toBeInTheDocument();
     expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(4);
     expect(
       screen.queryByText(new RegExp(['optional', 'activation'].join(' '), 'i')),
@@ -863,7 +870,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Needs attention')).not.toBeInTheDocument();
     expect(screen.queryByText('Available plans')).not.toBeInTheDocument();
     expect(screen.getByText('90 days')).toBeInTheDocument();
-    expect(screen.getByText('Patrol modes, history, and admin controls')).toBeInTheDocument();
+    expect(screen.getByText('Patrol modes, history, and team controls')).toBeInTheDocument();
     expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();

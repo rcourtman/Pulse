@@ -22,7 +22,7 @@ describe('commercialBillingModel', () => {
     expect(model.summary).toEqual([
       { label: 'Core Monitoring', value: 'Included' },
       { label: 'Metric History', value: '90 days' },
-      { label: 'Included Extras', value: 'Patrol modes, history, and admin controls' },
+      { label: 'Included Extras', value: 'Patrol modes, history, and team controls' },
     ]);
     expect(model.details.map((item) => item.label)).toEqual([
       'Tier',
