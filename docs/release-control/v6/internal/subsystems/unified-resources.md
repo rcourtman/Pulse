@@ -1357,8 +1357,24 @@ AI-only summary payloads, or page-local heuristics.
     must not mint host canonical IDs from snapshot-content-dependent
     identity subsets without consulting the pins, and pin writes stay on
     the durable store-backed registry (ephemeral per-request registries
-    consult, never write). Regression coverage:
-    `internal/unifiedresources/canonical_id_pins_test.go`.
+    consult, never write). Pinned hostnames preserve the full dotted name
+    (`NormalizeFullHostname`): distinct machines that share a short
+    hostname (`cloud.rnd-lax1` vs `cloud.gce-or1`) must keep distinct
+    pins, distinct pin-index buckets, and distinct presentation host rows.
+    Short-hostname normalization (`NormalizeHostname`) is a matching-only
+    convenience: pin lookups and the presentation host coalescer may pair
+    a short name with its own FQDN (`web01` vs `web01.lan`), but only
+    through an unambiguous bucket whose pinned hostname is
+    short/FQDN-equivalent (`HostnamesEquivalent`) to the incoming one;
+    they must never rewrite a persisted hostname down to its short form
+    or cross-match two different FQDNs. Pin rows persisted before this
+    rule hold the collapsed short name and heal in place on the host's
+    next pin persist, and `ResourceIdentityPin.EraIDs` derives both full-
+    and short-hostname eras so journal rows recorded under short-hostname
+    IDs stay readable. Regression coverage:
+    `internal/unifiedresources/canonical_id_pins_test.go` and
+    `TestStandaloneDottedHostnameAgentsStayDistinct` in
+    `internal/unifiedresources/registry_test.go`.
 26. Keep action-audit origin metadata broker-owned. `ActionAuditRecord`
     carries an optional `Origin *ActionOrigin`
     (`surface`/`findingId`/`investigationId`/`proposalId`), persisted in

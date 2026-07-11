@@ -4501,6 +4501,96 @@ func TestMergedHostCanonicalIDStableAcrossRestartsAndIngestOrders(t *testing.T) 
 	}
 }
 
+// The end-to-end #1559 scenario: multiple standalone agents with dotted
+// hostnames (cloud.rnd-lax1, cloud.gce-or1, cloud.dmi-lax1) must mint
+// distinct canonical resources, persist full dotted hostnames in their
+// identity pins instead of collapsing them all to "cloud", and boot-window
+// records that only know the hostname must resolve to the right machine
+// instead of the first pinned one.
+func TestStandaloneDottedHostnameAgentsStayDistinct(t *testing.T) {
+	store := NewMemoryStore()
+
+	hosts := []struct {
+		hostname  string
+		machineID string
+	}{
+		{"cloud.rnd-lax1", "machine-rnd"},
+		{"cloud.gce-or1", "machine-gce"},
+		{"cloud.dmi-lax1", "machine-dmi"},
+	}
+
+	agentResource := func(hostname, machineID string) Resource {
+		return Resource{
+			Type:   ResourceTypeAgent,
+			Name:   hostname,
+			Status: StatusOnline,
+			Agent:  &AgentData{AgentID: machineID, Hostname: hostname, MachineID: machineID},
+		}
+	}
+
+	steady := NewRegistry(store)
+	idByHostname := make(map[string]string, len(hosts))
+	for _, host := range hosts {
+		identity := ResourceIdentity{MachineID: host.machineID, Hostnames: []string{host.hostname}}
+		id := steady.ingest(SourceAgent, host.machineID, agentResource(host.hostname, host.machineID), identity)
+		if id == "" {
+			t.Fatalf("agent ingest for %q returned no ID", host.hostname)
+		}
+		for hostname, existingID := range idByHostname {
+			if existingID == id {
+				t.Fatalf("hosts %q and %q collapsed to canonical ID %q", hostname, host.hostname, id)
+			}
+		}
+		idByHostname[host.hostname] = id
+	}
+	if got := len(steady.List()); got != len(hosts) {
+		t.Fatalf("expected %d distinct resources, got %d", len(hosts), got)
+	}
+	steady.PersistIdentityPins()
+
+	pins, err := store.ListResourceIdentityPins()
+	if err != nil {
+		t.Fatalf("ListResourceIdentityPins: %v", err)
+	}
+	pinnedHostnames := make(map[string]struct{}, len(pins))
+	for _, pin := range pins {
+		pinnedHostnames[pin.Hostname] = struct{}{}
+	}
+	for _, host := range hosts {
+		if _, ok := pinnedHostnames[host.hostname]; !ok {
+			t.Fatalf("expected pinned primary hostname %q, got %v", host.hostname, pinnedHostnames)
+		}
+	}
+
+	// Boot window: runtime records that only know the hostname (no machine
+	// ID yet) arrive before the agents. Each must complete from its own pin
+	// and land on its own canonical ID.
+	boot := NewRegistry(store)
+	for _, host := range hosts {
+		record := Resource{
+			Type:   ResourceTypeAgent,
+			Name:   host.hostname,
+			Status: StatusOnline,
+			Docker: &DockerData{HostSourceID: "docker:" + host.hostname, Hostname: host.hostname},
+		}
+		identity := ResourceIdentity{Hostnames: []string{host.hostname}}
+		id := boot.ingest(SourceDocker, "docker:"+host.hostname, record, identity)
+		if want := idByHostname[host.hostname]; id != want {
+			t.Fatalf("boot-window record for %q resolved %q, want its own canonical ID %q", host.hostname, id, want)
+		}
+	}
+	for _, host := range hosts {
+		identity := ResourceIdentity{MachineID: host.machineID, Hostnames: []string{host.hostname}}
+		id := boot.ingest(SourceAgent, host.machineID, agentResource(host.hostname, host.machineID), identity)
+		if want := idByHostname[host.hostname]; id != want {
+			t.Fatalf("agent ingest for %q resolved %q, want %q", host.hostname, id, want)
+		}
+	}
+	if got := len(boot.List()); got != len(hosts) {
+		t.Fatalf("expected %d merged resources after boot-window ingest, got %d", len(hosts), got)
+	}
+}
+
 // A synthesized placeholder (e.g. an offline PVE node for an instance that
 // has never completed a poll) carries a zero LastSeen. Ingest must preserve
 // that zero instead of fabricating a fresh sighting, and the per-source
