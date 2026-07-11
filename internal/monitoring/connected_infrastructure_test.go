@@ -354,3 +354,49 @@ func TestBuildConnectedInfrastructure_IgnoresChildPlatformResources(t *testing.T
 		t.Fatalf("expected child platform resources to stay out of connected infrastructure, got %#v", items)
 	}
 }
+
+func TestBuildConnectedInfrastructure_ResolvesLegacyAgentUpgradePlatform(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	cases := []struct {
+		name     string
+		platform string
+		want     string
+	}{
+		// Legacy v5 agents report gopsutil's host.Info().Platform verbatim
+		// instead of a canonical token (refs #1555).
+		{"legacy windows caption", "microsoft windows 11 pro", "windows"},
+		{"canonical windows", "windows", "windows"},
+		{"darwin", "darwin", "macos"},
+		{"freebsd caption", "FreeBSD 14.1-RELEASE", "freebsd"},
+		{"linux distro", "ubuntu", "linux"},
+		{"empty", "", "linux"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			items := buildConnectedInfrastructure([]unifiedresources.Resource{
+				{
+					ID:       "host-resource",
+					Name:     "Host",
+					LastSeen: now,
+					Status:   unifiedresources.StatusOnline,
+					Agent: &unifiedresources.AgentData{
+						AgentID:      "host-agent",
+						AgentVersion: "5.1.36",
+						Hostname:     "host.local",
+						Platform:     tc.platform,
+					},
+					Identity: unifiedresources.ResourceIdentity{
+						Hostnames: []string{"host.local"},
+					},
+				},
+			}, models.StateSnapshot{})
+
+			if len(items) != 1 {
+				t.Fatalf("expected 1 connected infrastructure item, got %d", len(items))
+			}
+			if items[0].UpgradePlatform != tc.want {
+				t.Fatalf("expected upgrade platform %q for reported platform %q, got %q", tc.want, tc.platform, items[0].UpgradePlatform)
+			}
+		})
+	}
+}

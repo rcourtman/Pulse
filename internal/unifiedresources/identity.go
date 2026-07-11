@@ -6,10 +6,14 @@ import (
 	"strings"
 )
 
-// NormalizeHostname lowercases and strips domain suffixes.
+// NormalizeHostname lowercases a hostname and strips domain suffixes,
+// returning the short (first-label) name. Use it only for equivalence-style
+// matching where "web01" and "web01.lan" should land in the same bucket;
+// never for persisted or display identity keys, where distinct dotted
+// hostnames (cloud.rnd-lax1 vs cloud.gce-or1) must stay distinct — use
+// NormalizeFullHostname for those.
 func NormalizeHostname(hostname string) string {
-	host := strings.TrimSpace(strings.ToLower(hostname))
-	host = strings.TrimSuffix(host, ".")
+	host := NormalizeFullHostname(hostname)
 	if host == "" {
 		return ""
 	}
@@ -17,6 +21,15 @@ func NormalizeHostname(hostname string) string {
 		return host[:idx]
 	}
 	return host
+}
+
+// NormalizeFullHostname lowercases and trims a hostname while preserving the
+// full dotted name. This is the persisted-identity normalizer: only case,
+// surrounding whitespace, and a trailing root dot are dropped, so distinct
+// machines that share a short name keep distinct identity keys.
+func NormalizeFullHostname(hostname string) string {
+	host := strings.TrimSpace(strings.ToLower(hostname))
+	return strings.TrimSuffix(host, ".")
 }
 
 // NormalizeMAC normalizes a MAC address to lower-case colon format.

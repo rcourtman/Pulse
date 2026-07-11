@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -912,7 +913,7 @@ func hostFromContinuityEntry(entry config.HostContinuityEntry) models.Host {
 		AgentVersion:      strings.TrimSpace(entry.AgentVersion),
 		MachineID:         strings.TrimSpace(entry.MachineID),
 		TokenID:           strings.TrimSpace(entry.TokenID),
-		Platform:          strings.TrimSpace(entry.Platform),
+		Platform:          platformsupport.NormalizeAgentReportedPlatform(entry.Platform),
 		IsLegacy:          entry.IsLegacy,
 		LinkedNodeID:      strings.TrimSpace(entry.LinkedNodeID),
 		LinkedVMID:        strings.TrimSpace(entry.LinkedVMID),
@@ -1959,7 +1960,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		ID:                identifier,
 		Hostname:          hostname,
 		DisplayName:       displayName,
-		Platform:          strings.TrimSpace(strings.ToLower(report.Host.Platform)),
+		Platform:          platformsupport.NormalizeAgentReportedPlatform(report.Host.Platform),
 		OSName:            strings.TrimSpace(report.Host.OSName),
 		OSVersion:         strings.TrimSpace(report.Host.OSVersion),
 		KernelVersion:     strings.TrimSpace(report.Host.KernelVersion),

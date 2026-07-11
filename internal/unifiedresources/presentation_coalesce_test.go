@@ -181,6 +181,67 @@ func TestCoalescePresentationHostResourcesRedirectsProxmoxChildrenToAgentBackedP
 	}
 }
 
+// The #1559 shape: distinct standalone machines whose dotted hostnames share
+// a short name (cloud.rnd-lax1 vs cloud.gce-or1) must not coalesce, while a
+// short name still pairs with its own FQDN.
+func TestCoalescePresentationHostResourcesKeepsDottedHostnameSiblingsApart(t *testing.T) {
+	now := time.Date(2026, 7, 11, 10, 30, 0, 0, time.UTC)
+	agentHost := func(id, hostname string, lastSeen time.Time) Resource {
+		return Resource{
+			ID:       id,
+			Type:     ResourceTypeAgent,
+			Name:     hostname,
+			Status:   StatusOnline,
+			LastSeen: lastSeen,
+			Sources:  []DataSource{SourceAgent},
+			Identity: ResourceIdentity{MachineID: "machine-" + id, Hostnames: []string{hostname}},
+			Agent:    &AgentData{AgentID: "machine-" + id, Hostname: hostname},
+		}
+	}
+	dockerHost := func(id, hostname string, lastSeen time.Time) Resource {
+		return Resource{
+			ID:       id,
+			Type:     ResourceTypeAgent,
+			Name:     hostname,
+			Status:   StatusOnline,
+			LastSeen: lastSeen,
+			Sources:  []DataSource{SourceDocker},
+			Identity: ResourceIdentity{Hostnames: []string{hostname}},
+			Docker:   &DockerData{HostSourceID: id, Hostname: hostname},
+		}
+	}
+
+	resources := []Resource{
+		agentHost("agent-rnd", "cloud.rnd-lax1", now),
+		dockerHost("docker-gce", "cloud.gce-or1", now.Add(time.Second)),
+		dockerHost("docker-rnd", "cloud.rnd-lax1", now.Add(2*time.Second)),
+	}
+
+	coalesced := CoalescePresentationHostResources(resources)
+	if len(coalesced) != 2 {
+		t.Fatalf("expected the two cloud.rnd-lax1 views to merge and cloud.gce-or1 to stay apart, got %d: %#v", len(coalesced), coalesced)
+	}
+	for _, resource := range coalesced {
+		if resource.ID == "agent-rnd" {
+			if resource.Docker == nil || resource.Docker.HostSourceID != "docker-rnd" {
+				t.Fatalf("expected agent-rnd to absorb its own docker view, got %+v", resource.Docker)
+			}
+		}
+		if resource.ID == "docker-gce" && resource.Agent != nil {
+			t.Fatalf("cloud.gce-or1 must not absorb another machine's agent view, got %+v", resource.Agent)
+		}
+	}
+
+	// Short name and its own FQDN still coalesce.
+	fqdnPair := []Resource{
+		agentHost("agent-web", "web01.lan", now),
+		dockerHost("docker-web", "web01", now.Add(time.Second)),
+	}
+	if merged := CoalescePresentationHostResources(fqdnPair); len(merged) != 1 {
+		t.Fatalf("expected short/FQDN views of the same host to coalesce, got %d: %#v", len(merged), merged)
+	}
+}
+
 func TestCoalescePresentationHostResourcesDoesNotMergeRuntimeOnlyNameCollision(t *testing.T) {
 	now := time.Date(2026, 5, 22, 10, 30, 0, 0, time.UTC)
 	resources := []Resource{

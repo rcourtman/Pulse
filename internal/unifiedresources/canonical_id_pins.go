@@ -13,20 +13,30 @@ type identityPinIndex struct {
 	byCanonicalID map[string]ResourceIdentityPin
 	byMachineID   map[string]ResourceIdentityPin
 	byDMIUUID     map[string]ResourceIdentityPin
-	byClusterHost map[string]ResourceIdentityPin
-	// byHostname holds pins per normalized hostname. Hostnames are not
-	// unique across machines, so lookups through this map require the
+	// byClusterHost buckets pins per cluster + full hostname, and
+	// byClusterShortHost per cluster + short hostname; byHostname and
+	// byShortHostname are the cluster-less equivalents. Full-hostname hits
+	// are authoritative; short buckets only resolve when they are
+	// unambiguous AND the pinned hostname is short/FQDN-equivalent to the
+	// incoming one, so distinct dotted hostnames that share a short name
+	// (cloud.rnd-lax1 vs cloud.gce-or1) never cross-match. Hostnames are
+	// not unique across machines, so every bucket lookup requires the
 	// bucket to be unambiguous.
-	byHostname map[string][]ResourceIdentityPin
+	byClusterHost      map[string][]ResourceIdentityPin
+	byClusterShortHost map[string][]ResourceIdentityPin
+	byHostname         map[string][]ResourceIdentityPin
+	byShortHostname    map[string][]ResourceIdentityPin
 }
 
 func newIdentityPinIndex(pins []ResourceIdentityPin) *identityPinIndex {
 	index := &identityPinIndex{
-		byCanonicalID: make(map[string]ResourceIdentityPin, len(pins)),
-		byMachineID:   make(map[string]ResourceIdentityPin),
-		byDMIUUID:     make(map[string]ResourceIdentityPin),
-		byClusterHost: make(map[string]ResourceIdentityPin),
-		byHostname:    make(map[string][]ResourceIdentityPin),
+		byCanonicalID:      make(map[string]ResourceIdentityPin, len(pins)),
+		byMachineID:        make(map[string]ResourceIdentityPin),
+		byDMIUUID:          make(map[string]ResourceIdentityPin),
+		byClusterHost:      make(map[string][]ResourceIdentityPin),
+		byClusterShortHost: make(map[string][]ResourceIdentityPin),
+		byHostname:         make(map[string][]ResourceIdentityPin),
+		byShortHostname:    make(map[string][]ResourceIdentityPin),
 	}
 	for _, pin := range pins {
 		pin = pin.normalized()
@@ -40,18 +50,24 @@ func newIdentityPinIndex(pins []ResourceIdentityPin) *identityPinIndex {
 		if pin.DMIUUID != "" {
 			index.byDMIUUID[pin.DMIUUID] = pin
 		}
-		if pin.ClusterName != "" && pin.Hostname != "" {
-			index.byClusterHost[clusterHostPinKey(pin.ClusterName, pin.Hostname)] = pin
+		if pin.Hostname == "" {
+			continue
 		}
-		if pin.Hostname != "" {
-			index.byHostname[pin.Hostname] = append(index.byHostname[pin.Hostname], pin)
+		shortHostname := NormalizeHostname(pin.Hostname)
+		if pin.ClusterName != "" {
+			fullKey := clusterHostPinKey(pin.ClusterName, pin.Hostname)
+			index.byClusterHost[fullKey] = append(index.byClusterHost[fullKey], pin)
+			shortKey := clusterHostPinKey(pin.ClusterName, shortHostname)
+			index.byClusterShortHost[shortKey] = append(index.byClusterShortHost[shortKey], pin)
 		}
+		index.byHostname[pin.Hostname] = append(index.byHostname[pin.Hostname], pin)
+		index.byShortHostname[shortHostname] = append(index.byShortHostname[shortHostname], pin)
 	}
 	return index
 }
 
 func clusterHostPinKey(clusterName, hostname string) string {
-	return strings.ToLower(strings.TrimSpace(clusterName)) + "\x00" + NormalizeHostname(hostname)
+	return strings.ToLower(strings.TrimSpace(clusterName)) + "\x00" + NormalizeFullHostname(hostname)
 }
 
 // find resolves the pin for an incoming identity, strongest key first. A pin
@@ -76,21 +92,45 @@ func (index *identityPinIndex) find(identity ResourceIdentity) (ResourceIdentity
 	}
 	clusterName := strings.TrimSpace(identity.ClusterName)
 	for _, hostname := range identity.Hostnames {
-		normalized := NormalizeHostname(hostname)
-		if normalized == "" {
+		fullHostname := NormalizeFullHostname(hostname)
+		if fullHostname == "" {
 			continue
 		}
+		shortHostname := NormalizeHostname(fullHostname)
 		if clusterName != "" {
-			if pin, ok := index.byClusterHost[clusterHostPinKey(clusterName, normalized)]; ok && pinCompatible(pin, machineID, dmiUUID) {
+			if pin, ok := resolvePinBucket(index.byClusterHost[clusterHostPinKey(clusterName, fullHostname)], fullHostname, machineID, dmiUUID); ok {
+				return pin, true
+			}
+			if pin, ok := resolvePinBucket(index.byClusterShortHost[clusterHostPinKey(clusterName, shortHostname)], fullHostname, machineID, dmiUUID); ok {
 				return pin, true
 			}
 		}
-		bucket := index.byHostname[normalized]
-		if len(bucket) == 1 && pinCompatible(bucket[0], machineID, dmiUUID) {
-			return bucket[0], true
+		if pin, ok := resolvePinBucket(index.byHostname[fullHostname], fullHostname, machineID, dmiUUID); ok {
+			return pin, true
+		}
+		if pin, ok := resolvePinBucket(index.byShortHostname[shortHostname], fullHostname, machineID, dmiUUID); ok {
+			return pin, true
 		}
 	}
 	return ResourceIdentityPin{}, false
+}
+
+// resolvePinBucket resolves a hostname bucket lookup. The bucket must be
+// unambiguous (exactly one pin), the pinned hostname must be the incoming one
+// or its short/FQDN equivalent (two distinct FQDNs sharing a short name never
+// match), and the incoming strong keys must not contradict the pin.
+func resolvePinBucket(bucket []ResourceIdentityPin, hostname, machineID, dmiUUID string) (ResourceIdentityPin, bool) {
+	if len(bucket) != 1 {
+		return ResourceIdentityPin{}, false
+	}
+	pin := bucket[0]
+	if pin.Hostname != hostname && !HostnamesEquivalent(pin.Hostname, hostname) {
+		return ResourceIdentityPin{}, false
+	}
+	if !pinCompatible(pin, machineID, dmiUUID) {
+		return ResourceIdentityPin{}, false
+	}
+	return pin, true
 }
 
 // pinCompatible reports whether an incoming identity's strong keys are

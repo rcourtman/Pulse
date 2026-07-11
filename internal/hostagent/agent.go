@@ -1187,16 +1187,11 @@ func remoteDurationSetting(settings map[string]interface{}, key string) (time.Du
 }
 
 func normalisePlatform(platform string) string {
-	platform = strings.ToLower(strings.TrimSpace(platform))
-	switch platform {
-	case "darwin":
-		return "macos"
-	default:
-		if runtimePlatform := platformsupport.RuntimePlatformForHostIdentityToken(platform); runtimePlatform != "" {
-			return runtimePlatform
-		}
-		return platform
+	normalized := platformsupport.NormalizeAgentReportedPlatform(platform)
+	if runtimePlatform := platformsupport.RuntimePlatformForHostIdentityToken(normalized); runtimePlatform != "" {
+		return runtimePlatform
 	}
+	return normalized
 }
 
 func normalizePulseURL(rawURL string) (string, error) {

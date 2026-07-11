@@ -4,6 +4,7 @@ import {
   buildPowerShellInstallScriptBootstrap,
   buildWindowsAgentInstallCommand,
   powerShellQuote,
+  resolveAgentCommandPlatform,
 } from '@/utils/agentInstallCommand';
 import {
   TOKEN_PLACEHOLDER,
@@ -83,20 +84,8 @@ export const useInfrastructureOperationsState = (
     if (address && !address.includes('://')) return address;
     return connection.name?.trim() || '';
   };
-  const getConnectionUpgradePlatform = (connection: Connection): AgentPlatform => {
-    const platform = connection.agentIdentity?.platform?.trim().toLowerCase();
-    switch (platform) {
-      case 'windows':
-        return 'windows';
-      case 'darwin':
-      case 'macos':
-        return 'macos';
-      case 'freebsd':
-        return 'freebsd';
-      default:
-        return 'linux';
-    }
-  };
+  const getConnectionUpgradePlatform = (connection: Connection): AgentPlatform =>
+    resolveAgentCommandPlatform(connection.agentIdentity?.platform);
 
   const getUninstallCommand = (row?: UnifiedAgentRow) => {
     const url = installState.selectedAgentUrl();
