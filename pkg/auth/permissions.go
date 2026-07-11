@@ -2,10 +2,13 @@ package auth
 
 // Standard Actions
 const (
-	ActionRead   = "read"
-	ActionWrite  = "write"
-	ActionDelete = "delete"
-	ActionAdmin  = "admin"
+	ActionRead    = "read"
+	ActionWrite   = "write"
+	ActionDelete  = "delete"
+	ActionAdmin   = "admin"
+	ActionPlan    = "plan"
+	ActionApprove = "approve"
+	ActionExecute = "execute"
 )
 
 // Standard Resources
@@ -17,4 +20,5 @@ const (
 	ResourceLicense   = "license"
 	ResourceAI        = "ai"
 	ResourceDiscovery = "discovery"
+	ResourceActions   = "actions"
 )

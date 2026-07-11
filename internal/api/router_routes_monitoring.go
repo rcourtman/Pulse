@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func (r *Router) registerMonitoringResourceRoutes(
@@ -136,26 +137,26 @@ func (r *Router) registerMonitoringResourceRoutes(
 			r.agentEventBroadcaster.HandleAgentEvents,
 		))))
 	}
-	r.mux.HandleFunc("POST /api/actions/plan", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.withExternalAgentCapabilityActivity(
+	r.mux.HandleFunc("POST /api/actions/plan", RequireAuth(r.config, RequireAnyScope([]string{config.ScopeActionsPlan, config.ScopeAIExecute}, requireActionCapability(r.authorizer, auth.ActionPlan, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.PlanActionCapabilityName,
 		r.resourceHandlers.HandlePlanAction,
-	))))
+	)))))
 	r.mux.HandleFunc("GET /api/actions/pending", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRoutePendingActions,
-		r.resourceHandlers.HandleListPendingActions,
+		requireActionCapability(r.authorizer, auth.ActionApprove, r.resourceHandlers.HandleListPendingActions),
 	)))
 	r.mux.HandleFunc("GET /api/actions", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteActionsList,
-		r.resourceHandlers.HandleListActions,
+		requireActionCapability(r.authorizer, auth.ActionApprove, r.resourceHandlers.HandleListActions),
 	)))
 	r.mux.HandleFunc("GET /api/actions/{id}", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteActionDetail,
-		r.resourceHandlers.HandleGetAction,
+		requireActionCapability(r.authorizer, auth.ActionApprove, r.resourceHandlers.HandleGetAction),
 	)))
 	r.mux.HandleFunc("POST /api/actions/{id}/decision", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteActionDecision, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.DecideActionCapabilityName,
-		r.resourceHandlers.HandleDecideAction,
+		requireActionCapability(r.authorizer, auth.ActionApprove, r.resourceHandlers.HandleDecideAction),
 	))))
 	r.mux.HandleFunc("POST /api/actions/{id}/execute", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteActionExecute, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.ExecuteActionCapabilityName,
-		r.resourceHandlers.HandleExecuteAction,
+		requireActionCapability(r.authorizer, auth.ActionExecute, r.resourceHandlers.HandleExecuteAction),
 	))))
 	// Guest metadata routes
 	r.mux.HandleFunc("/api/guests/metadata", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, guestMetadataHandler.HandleGetMetadata)))

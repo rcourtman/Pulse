@@ -154,6 +154,21 @@ admission records a stable refusal without invoking executor or network code.
     pre-protected-state fetch, route preload, organization probe, or commercial
     posture request just to resolve display identity.
 17. `internal/api/slo.go` shared with `api-contracts`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
+
+Governed action decisions preserve SQLite and MemoryStore parity through one
+shared pure append command. Every accepted approval advances a monotonic
+decision revision and compares the complete prior approval prefix before
+mutation; SQLite performs the state, revision, identity, and prior-prefix CAS
+atomically, while MemoryStore applies the same command under its store lock.
+Contention across independent SQLite handles is bounded to CAS failure, reload,
+replay/conflict/quorum re-evaluation, and retry, so a stale writer cannot erase
+another actor's approval. Decision events are uniquely indexed by action and
+decision revision, true lifecycle transitions retain their partial
+action/state uniqueness, and a completing approval writes its decision fact
+plus state transition in one transaction. Schema migration retains historical
+events, reopen preserves decision revision ordering, and no action-decision
+change may globally weaken the Task 03 lifecycle-state idempotency invariant.
+
 ## Extension Points
 
 1. Add performance budgets through SLO or contract tests

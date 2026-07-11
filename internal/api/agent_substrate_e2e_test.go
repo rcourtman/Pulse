@@ -626,10 +626,10 @@ func TestAgentSubstrate_ActionEndpointsEmitAgentStableEnvelope(t *testing.T) {
 	for _, c := range manifest.Capabilities {
 		byName[c.Name] = c
 	}
-	for _, want := range []string{
-		agentcapabilities.PlanActionCapabilityName,
-		agentcapabilities.DecideActionCapabilityName,
-		agentcapabilities.ExecuteActionCapabilityName,
+	for want, wantScope := range map[string]string{
+		agentcapabilities.PlanActionCapabilityName:    config.ScopeActionsPlan,
+		agentcapabilities.DecideActionCapabilityName:  config.ScopeActionsApprove,
+		agentcapabilities.ExecuteActionCapabilityName: config.ScopeActionsExecute,
 	} {
 		cap, ok := byName[want]
 		if !ok {
@@ -638,8 +638,8 @@ func TestAgentSubstrate_ActionEndpointsEmitAgentStableEnvelope(t *testing.T) {
 		if cap.Category != "action" {
 			t.Errorf("%s: category = %q, want \"action\"", want, cap.Category)
 		}
-		if cap.Scope != config.ScopeAIExecute {
-			t.Errorf("%s: scope = %q, want %q", want, cap.Scope, config.ScopeAIExecute)
+		if cap.Scope != wantScope {
+			t.Errorf("%s: scope = %q, want %q", want, cap.Scope, wantScope)
 		}
 		if len(cap.ErrorCodes) == 0 {
 			t.Errorf("%s: must declare at least one stable errorCode", want)

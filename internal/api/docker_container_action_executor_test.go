@@ -70,7 +70,7 @@ func dockerActionReadinessByName(readinesses []unified.ResourceActionReadiness, 
 
 func TestDockerContainerActionExecutorDispatchesPodmanRestartAndVerification(t *testing.T) {
 	now := time.Now().UTC()
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -115,7 +115,7 @@ func TestDockerContainerActionExecutorResolvesCommandAgentByDockerHostname(t *te
 	resource := dockerContainerActionResource("app-container:api", "docker", "running", now)
 	resource.Docker.AgentID = "docker-source-1"
 	resource.Docker.Hostname = "tower"
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot:  models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{resource},
@@ -165,7 +165,7 @@ func TestDockerContainerActionExecutorFailsWhenCapabilityNoLongerAdvertised(t *t
 	now := time.Now().UTC()
 	resource := dockerContainerActionResource("app-container:api", "docker", "running", now)
 	resource.Capabilities = nil
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot:  models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{resource},
@@ -185,7 +185,7 @@ func TestDockerContainerActionExecutorFailsWhenCapabilityNoLongerAdvertised(t *t
 func TestDockerContainerActionExecutorAvailabilityRequiresConnectedAgent(t *testing.T) {
 	now := time.Now().UTC()
 	resource := dockerContainerActionResource("app-container:api", "docker", "running", now)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot:  models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{resource},
@@ -210,7 +210,7 @@ func TestDockerContainerActionExecutorAvailabilityRequiresConnectedAgent(t *test
 
 func TestHandlePlanActionRejectsDisconnectedDockerContainerAgent(t *testing.T) {
 	now := time.Now().UTC()
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -229,7 +229,7 @@ func TestHandlePlanActionRejectsDisconnectedDockerContainerAgent(t *testing.T) {
 		"reason":"operator requested restart",
 		"requestedBy":"operator"
 	}`))
-	h.HandlePlanAction(rec, req)
+	h.HandlePlanAction(rec, actionHandlerTestRequest(req, ""))
 
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("plan status = %d, want %d, body=%s", rec.Code, http.StatusConflict, rec.Body.String())
@@ -254,7 +254,7 @@ func TestHandlePlanActionRejectsDisconnectedDockerContainerAgent(t *testing.T) {
 
 func TestResourceResponsesFilterDisconnectedDockerLifecycleCapabilities(t *testing.T) {
 	now := time.Now().UTC()
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -307,7 +307,7 @@ func TestResourceResponsesFilterDisconnectedDockerLifecycleCapabilities(t *testi
 
 func TestHandleExecuteActionRejectsNeverAutoRemediateBeforeExecutor(t *testing.T) {
 	now := time.Date(2026, 5, 4, 14, 0, 0, 0, time.UTC)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -342,7 +342,7 @@ func TestHandleExecuteActionRejectsNeverAutoRemediateBeforeExecutor(t *testing.T
 		"reason":"Recover after confirmed outage",
 		"requestedBy":"agent:oncall-helper"
 	}`))
-	h.HandlePlanAction(planRec, planReq)
+	h.HandlePlanAction(planRec, actionHandlerTestRequest(planReq, ""))
 	if planRec.Code != http.StatusOK {
 		t.Fatalf("plan status = %d, body=%s", planRec.Code, planRec.Body.String())
 	}
@@ -355,7 +355,7 @@ func TestHandleExecuteActionRejectsNeverAutoRemediateBeforeExecutor(t *testing.T
 	decisionReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/decision", bytes.NewBufferString(`{"outcome":"approved"}`))
 	decisionReq.SetPathValue("id", plan.ActionID)
 	decisionReq = decisionReq.WithContext(auth.WithUser(decisionReq.Context(), "operator@example.com"))
-	h.HandleDecideAction(decisionRec, decisionReq)
+	h.HandleDecideAction(decisionRec, actionHandlerTestRequest(decisionReq, ""))
 	if decisionRec.Code != http.StatusOK {
 		t.Fatalf("decision status = %d, body=%s", decisionRec.Code, decisionRec.Body.String())
 	}
@@ -377,7 +377,7 @@ func TestHandleExecuteActionRejectsNeverAutoRemediateBeforeExecutor(t *testing.T
 	executeReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/execute", bytes.NewBufferString(`{}`))
 	executeReq.SetPathValue("id", plan.ActionID)
 	executeReq = executeReq.WithContext(auth.WithUser(executeReq.Context(), "operator@example.com"))
-	h.HandleExecuteAction(executeRec, executeReq)
+	h.HandleExecuteAction(executeRec, actionHandlerTestRequest(executeReq, ""))
 	if executeRec.Code != http.StatusConflict {
 		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
 	}

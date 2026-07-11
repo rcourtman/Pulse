@@ -488,6 +488,9 @@ func (r *Router) setupRoutes() {
 	r.unifiedAgentHandlers = NewUnifiedAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
 	r.kubernetesAgentHandlers.SetRecoveryIngestor(r.recoveryHandlers)
 	r.resourceHandlers = NewResourceHandlers(r.config)
+	actionOrgChecker := NewAuthorizationChecker(NewMultiTenantOrganizationLoader(r.multiTenant))
+	actionAuth := actionAuthority{authorizer: r.authorizer, orgChecker: actionOrgChecker}
+	r.resourceHandlers.SetActionAuthorizers(actionAuth, actionAuth)
 	r.maintenanceSentinel = r.buildMaintenanceVerificationSentinel()
 	r.maintenanceVerificationHandlers = NewMaintenanceVerificationHandlers(r.resourceHandlers, r.maintenanceSentinel)
 	if r.maintenanceSentinel != nil {

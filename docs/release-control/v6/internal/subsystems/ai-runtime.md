@@ -5762,3 +5762,13 @@ Enterprise command-remediation records are readable historical imports only.
 Production code contains no command or rollback execution algorithm; exported
 approve/execute/rollback interfaces and HTTP endpoints are permanently inert
 even when a command executor is injected.
+
+Action planning and approval attribution are now server-owned across Assistant,
+Patrol, and MCP projections. Trusted brokers use explicit service/policy actor
+contexts; public `requestedBy` content cannot become audit authority. The agent
+manifest advertises the granular `actions:plan`, `actions:approve`, and
+`actions:execute` scopes while the server alone owns the bounded legacy-scope
+compatibility window. AI-facing method labels, model assertions, and local
+biometric claims never satisfy an MFA floor. Until the core step-up verifier
+accepts action-bound cryptographic evidence, the honest runtime outcome is
+step-up unavailable, not MFA approved.

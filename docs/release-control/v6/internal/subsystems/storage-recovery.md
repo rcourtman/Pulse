@@ -2031,6 +2031,15 @@ fields and nullable mode/kind metadata before presenting canonical item labels,
 while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
+
+The adjacent unified action store migration now adds a durable action decision
+revision plus typed lifecycle-event kind, decision revision, and bound decision
+JSON. Migration retains duplicate historical state rows as typed legacy facts,
+restores partial uniqueness for true `(action,state)` transitions, and adds
+unique `(action,decisionRevision)` decision identity. Audit update, decision
+fact, and any resulting approved/rejected transition commit or roll back
+together across restart; storage/recovery code must not introduce a parallel
+approval or recovery journal for this authority.
 Storage and recovery may depend on the adjacent Patrol-control status
 projection staying content-free, including its Patrol control starter count,
 completed/resolved loop counts, `patrolControlValueState`, legacy

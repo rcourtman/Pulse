@@ -110,6 +110,19 @@ later automatic-policy revocation. Emergency stop blocks admission before
 `executing`; cancellation after that boundary is best effort and is not
 rollback proof.
 
+Governed action admission also treats requester and decision identity as
+server-owned lifecycle authority. The authenticated session or owner-bound API
+token supplies the immutable `ActionActor`, and the captured
+`ApprovalRequirement` is bound into the request, plan identity, and plan hash.
+Each accepted approval increments a durable decision revision through an exact
+prior-prefix CAS, appends one typed decision fact, and atomically appends the
+approved or rejected transition only when state changes. Exact replay appends
+no event, while conflicting replay and legacy nonterminal records without actor
+or requirement bindings fail closed as replan-required. MFA remains unavailable
+and fail-closed unless the lifecycle boundary verifies action-bound
+cryptographic step-up evidence through its configured verifier; session,
+API-token, relay, and local-biometric labels alone are never MFA proof.
+
 Assistant transport scopes do not grant agent command authority. `ai:chat`
 and `relay:mobile:access` remain conversation/read/session scopes; an
 interactive infrastructure invocation must carry server-bound `ai:execute`

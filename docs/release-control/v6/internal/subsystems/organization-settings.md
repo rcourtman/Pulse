@@ -339,3 +339,13 @@ token fallback only when no session exists. Mobile proof must render Overview,
 Access, Sharing, and Billing with populated multitenant fixtures at supported
 phone widths; hosted Billing Admin requires a real hosted-mode capability
 runtime and expanded-row proof rather than being counted through a redirect.
+
+Governed actions now bind the authenticated actor to the request organization
+and re-evaluate current membership plus granular plan/approve/execute RBAC at
+the lifecycle decision and execution boundaries. No caller-supplied requester,
+browser scope shortcut, or detached token can substitute for current tenant
+authority. This Phase B1 slice defines the canonical per-action requirement and
+supports quorum/separation semantics with durable decision CAS, but it does not
+claim provider/MSP delegation, provider inheritance, tenant policy-default UI,
+distributed budgets, or multi-actor UI; those remain governed L20 residuals
+rather than organization-settings-local policy models.

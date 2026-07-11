@@ -49,6 +49,13 @@ type Planner struct {
 }
 
 func (p Planner) Plan(req unified.ActionRequest, resource unified.Resource) (unified.ActionPlan, error) {
+	return p.PlanWithRequirement(req, resource, unified.ApprovalRequirement{})
+}
+
+// PlanWithRequirement lets trusted policy resolution strengthen the
+// capability-owned floor while keeping the resulting requirement inside the
+// deterministic action identity and plan hash.
+func (p Planner) PlanWithRequirement(req unified.ActionRequest, resource unified.Resource, requested unified.ApprovalRequirement) (unified.ActionPlan, error) {
 	req = normalizeRequest(req)
 	if err := validateRequest(req); err != nil {
 		return unified.ActionPlan{}, err
@@ -73,25 +80,38 @@ func (p Planner) Plan(req unified.ActionRequest, resource unified.Resource) (uni
 	plannedAt := p.now()
 	ttl := p.ttl()
 	policy := normalizeApprovalPolicy(capability.MinimumApprovalLevel)
+	requirement := requested
+	if requirement.Version == 0 {
+		requirement = unified.ApprovalRequirementForFloor(policy)
+	} else {
+		requirement = unified.NormalizeApprovalRequirement(requirement, policy)
+	}
+	if err := unified.ValidateApprovalRequirement(requirement, policy); err != nil {
+		return unified.ActionPlan{}, &ValidationError{Field: "approvalRequirement", Message: err.Error()}
+	}
 	requiresApproval := policy == unified.ApprovalAdmin || policy == unified.ApprovalMultiFactor
+	if requirement.Floor == unified.ApprovalAdmin || requirement.Floor == unified.ApprovalMultiFactor {
+		requiresApproval = true
+	}
 	resourceVersion := ResourceVersion(resource)
 	policyVersion := PolicyVersion(capability)
-	actionID := actionID(req, resourceVersion, policyVersion)
+	actionID := actionID(req, requirement, resourceVersion, policyVersion)
 
 	plan := unified.ActionPlan{
 		ActionID:             actionID,
 		RequestID:            req.RequestID,
 		Allowed:              true,
 		RequiresApproval:     requiresApproval,
-		ApprovalPolicy:       policy,
+		ApprovalPolicy:       requirement.Floor,
+		ApprovalRequirement:  requirement,
 		PredictedBlastRadius: predictedBlastRadius(resource),
 		RollbackAvailable:    false,
-		Message:              planMessage(resource, capability, policy),
+		Message:              planMessage(resource, capability, requirement.Floor),
 		PlannedAt:            plannedAt,
 		ExpiresAt:            plannedAt.Add(ttl),
 		ResourceVersion:      resourceVersion,
 		PolicyVersion:        policyVersion,
-		Preflight:            buildPreflight(resource, capability, req, actionID, policy, plannedAt),
+		Preflight:            buildPreflight(resource, capability, req, actionID, requirement.Floor, plannedAt),
 	}
 	plan.PlanHash = planHash(req, plan)
 	plan.Preflight = unified.NormalizeActionPreflight(plan.Preflight, req, plan)
@@ -187,7 +207,8 @@ func normalizeRequest(req unified.ActionRequest) unified.ActionRequest {
 	req.ResourceID = unified.CanonicalResourceID(req.ResourceID)
 	req.CapabilityName = strings.TrimSpace(req.CapabilityName)
 	req.Reason = strings.TrimSpace(req.Reason)
-	req.RequestedBy = strings.TrimSpace(req.RequestedBy)
+	req.Actor = unified.NormalizeActionActor(req.Actor)
+	req.RequestedBy = req.Actor.SubjectID
 	if req.Params == nil {
 		req.Params = map[string]any{}
 	}
@@ -207,8 +228,8 @@ func validateRequest(req unified.ActionRequest) error {
 	if req.Reason == "" {
 		return &ValidationError{Field: "reason", Message: "reason is required"}
 	}
-	if req.RequestedBy == "" {
-		return &ValidationError{Field: "requestedBy", Message: "requester is required"}
+	if err := unified.ValidateActionActor(req.Actor); err != nil {
+		return &ValidationError{Field: "actor", Message: err.Error()}
 	}
 	return nil
 }
@@ -410,23 +431,25 @@ func normalizeApprovalPolicy(level unified.ActionApprovalLevel) unified.ActionAp
 	}
 }
 
-func actionID(req unified.ActionRequest, resourceVersion string, policyVersion string) string {
+func actionID(req unified.ActionRequest, requirement unified.ApprovalRequirement, resourceVersion string, policyVersion string) string {
 	payload := struct {
-		RequestID       string         `json:"requestId"`
-		ResourceID      string         `json:"resourceId"`
-		CapabilityName  string         `json:"capabilityName"`
-		Params          map[string]any `json:"params"`
-		Reason          string         `json:"reason"`
-		RequestedBy     string         `json:"requestedBy"`
-		ResourceVersion string         `json:"resourceVersion"`
-		PolicyVersion   string         `json:"policyVersion"`
+		RequestID       string                      `json:"requestId"`
+		ResourceID      string                      `json:"resourceId"`
+		CapabilityName  string                      `json:"capabilityName"`
+		Params          map[string]any              `json:"params"`
+		Reason          string                      `json:"reason"`
+		Actor           unified.ActionActor         `json:"actor"`
+		Requirement     unified.ApprovalRequirement `json:"approvalRequirement"`
+		ResourceVersion string                      `json:"resourceVersion"`
+		PolicyVersion   string                      `json:"policyVersion"`
 	}{
 		RequestID:       req.RequestID,
 		ResourceID:      req.ResourceID,
 		CapabilityName:  req.CapabilityName,
 		Params:          req.Params,
 		Reason:          req.Reason,
-		RequestedBy:     req.RequestedBy,
+		Actor:           req.Actor,
+		Requirement:     requirement,
 		ResourceVersion: resourceVersion,
 		PolicyVersion:   policyVersion,
 	}
@@ -440,6 +463,7 @@ func planHash(req unified.ActionRequest, plan unified.ActionPlan) string {
 		Allowed              bool                        `json:"allowed"`
 		RequiresApproval     bool                        `json:"requiresApproval"`
 		ApprovalPolicy       unified.ActionApprovalLevel `json:"approvalPolicy"`
+		ApprovalRequirement  unified.ApprovalRequirement `json:"approvalRequirement"`
 		PredictedBlastRadius []string                    `json:"predictedBlastRadius"`
 		RollbackAvailable    bool                        `json:"rollbackAvailable"`
 		ResourceVersion      string                      `json:"resourceVersion"`
@@ -450,6 +474,7 @@ func planHash(req unified.ActionRequest, plan unified.ActionPlan) string {
 		Allowed:              plan.Allowed,
 		RequiresApproval:     plan.RequiresApproval,
 		ApprovalPolicy:       plan.ApprovalPolicy,
+		ApprovalRequirement:  plan.ApprovalRequirement,
 		PredictedBlastRadius: append([]string(nil), plan.PredictedBlastRadius...),
 		RollbackAvailable:    plan.RollbackAvailable,
 		ResourceVersion:      plan.ResourceVersion,

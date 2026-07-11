@@ -18,6 +18,48 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
+func configureActionHandlerTestAuthority(h *ResourceHandlers) {
+	h.SetActionAuthorizers(
+		actionlifecycle.DecisionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionDecision) error { return nil }),
+		actionlifecycle.ExecutionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionActor) error { return nil }),
+	)
+}
+
+func newActionTestResourceHandlers(t *testing.T, cfg *config.Config) *ResourceHandlers {
+	t.Helper()
+	h := NewResourceHandlers(cfg)
+	configureActionHandlerTestAuthority(h)
+	return h
+}
+
+func actionHandlerTestRequest(req *http.Request, subject string) *http.Request {
+	if strings.TrimSpace(subject) == "" {
+		subject = strings.TrimSpace(auth.GetUser(req.Context()))
+	}
+	if subject == "" {
+		subject = "operator@example.com"
+	}
+	actor := unified.ActionActor{SubjectID: subject, Kind: unified.ActionActorUser, CredentialID: "session:test", OrgID: "default"}
+	ctx := auth.WithUser(req.Context(), subject)
+	ctx = withTrustedActionActor(ctx, actor)
+	return req.WithContext(ctx)
+}
+
+func boundActionTestRequest(requestID, resourceID, capability, reason, subject string) unified.ActionRequest {
+	actor := unified.ActionActor{SubjectID: subject, Kind: unified.ActionActorService, CredentialID: "service:test-requester", OrgID: "default"}
+	return unified.ActionRequest{RequestID: requestID, ResourceID: resourceID, CapabilityName: capability, Reason: reason, RequestedBy: subject, Actor: actor}
+}
+
+func boundActionTestApproval(actionID, planHash, subject string, at time.Time) unified.ActionApprovalRecord {
+	return boundActionTestDecisionApproval(actionID, planHash, subject, unified.OutcomeApproved, at)
+}
+
+func boundActionTestDecisionApproval(actionID, planHash, subject string, outcome unified.ApprovalOutcome, at time.Time) unified.ActionApprovalRecord {
+	actor := unified.ActionActor{SubjectID: subject, Kind: unified.ActionActorUser, CredentialID: "session:test", OrgID: "default"}
+	evidence := unified.ApprovalEvidence{Version: 1, Method: unified.MethodSession, Actor: actor, OrgID: "default", ActionID: actionID, PlanHash: planHash, Outcome: outcome, IssuedAt: at}
+	return unified.ActionApprovalRecord{Actor: subject, ActorBinding: actor, Method: unified.MethodSession, Timestamp: at, Outcome: outcome, Evidence: &evidence}
+}
+
 type stubActionExecutor struct {
 	result   *unified.ExecutionResult
 	err      error
@@ -31,9 +73,9 @@ func (s *stubActionExecutor) ExecuteAction(_ context.Context, record unified.Act
 	return s.result, s.err
 }
 
-func TestHandlePlanActionReturnsCanonicalPlan(t *testing.T) {
+func TestHandlePlanActionBindsActorAndPlanHashToAuthenticatedOrg(t *testing.T) {
 	now := time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -79,7 +121,7 @@ func TestHandlePlanActionReturnsCanonicalPlan(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/actions/plan", body)
-	h.HandlePlanAction(rec, req)
+	h.HandlePlanAction(rec, actionHandlerTestRequest(req, ""))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
@@ -104,6 +146,9 @@ func TestHandlePlanActionReturnsCanonicalPlan(t *testing.T) {
 	if plan.ActionID == "" || !strings.HasPrefix(plan.PlanHash, "sha256:") {
 		t.Fatalf("missing action identity/hash: actionID=%q planHash=%q", plan.ActionID, plan.PlanHash)
 	}
+	if plan.ApprovalRequirement.Version != unified.ActionApprovalRequirementVersion {
+		t.Fatalf("ApprovalRequirement = %#v, want canonical version", plan.ApprovalRequirement)
+	}
 	if plan.Preflight == nil || plan.Preflight.Target != "vm:42" {
 		t.Fatalf("Preflight = %#v, want target vm:42", plan.Preflight)
 	}
@@ -112,9 +157,9 @@ func TestHandlePlanActionReturnsCanonicalPlan(t *testing.T) {
 	}
 }
 
-func TestHandlePlanActionPersistsAuditAndLifecycle(t *testing.T) {
+func TestHandlePlanActionRejectsOrIgnoresPublicRequestedByAndStampsAuthenticatedActor(t *testing.T) {
 	now := time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -154,7 +199,7 @@ func TestHandlePlanActionPersistsAuditAndLifecycle(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/actions/plan", body())
-	h.HandlePlanAction(rec, req)
+	h.HandlePlanAction(rec, actionHandlerTestRequest(req, ""))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
@@ -178,7 +223,7 @@ func TestHandlePlanActionPersistsAuditAndLifecycle(t *testing.T) {
 	if audit.ID != plan.ActionID || audit.State != unified.ActionStatePending {
 		t.Fatalf("audit identity/state = %q/%q, want %q/%q", audit.ID, audit.State, plan.ActionID, unified.ActionStatePending)
 	}
-	if audit.Request.RequestID != "agent-run-123" || audit.Request.RequestedBy != "agent:oncall-helper" {
+	if audit.Request.RequestID != "agent-run-123" || audit.Request.RequestedBy != "operator@example.com" || audit.Request.Actor.SubjectID != "operator@example.com" || audit.Request.Actor.OrgID != "default" {
 		t.Fatalf("audit request was not preserved: %#v", audit.Request)
 	}
 	if audit.Plan.PlanHash != plan.PlanHash || audit.Plan.Preflight == nil {
@@ -192,7 +237,7 @@ func TestHandlePlanActionPersistsAuditAndLifecycle(t *testing.T) {
 	seenStates := map[unified.ActionState]bool{}
 	for _, event := range events {
 		seenStates[event.State] = true
-		if event.Actor != "agent:oncall-helper" {
+		if event.Actor != "operator@example.com" {
 			t.Fatalf("event actor = %q, want requester", event.Actor)
 		}
 	}
@@ -202,7 +247,7 @@ func TestHandlePlanActionPersistsAuditAndLifecycle(t *testing.T) {
 
 	retryRec := httptest.NewRecorder()
 	retryReq := httptest.NewRequest(http.MethodPost, "/api/actions/plan", body())
-	h.HandlePlanAction(retryRec, retryReq)
+	h.HandlePlanAction(retryRec, actionHandlerTestRequest(retryReq, ""))
 	if retryRec.Code != http.StatusOK {
 		t.Fatalf("retry status = %d, body=%s", retryRec.Code, retryRec.Body.String())
 	}
@@ -216,7 +261,7 @@ func TestHandlePlanActionPersistsAuditAndLifecycle(t *testing.T) {
 }
 
 func TestHandleListPendingActionsReturnsOnlyCanonicalDecisionQueue(t *testing.T) {
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	store, err := h.getStore("default")
 	if err != nil {
 		t.Fatalf("get store: %v", err)
@@ -259,7 +304,7 @@ func TestHandleListPendingActionsReturnsOnlyCanonicalDecisionQueue(t *testing.T)
 }
 
 func TestHandleGetActionAndInboxAreTenantScoped(t *testing.T) {
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	now := time.Now().UTC()
 	store, err := h.getStore("org-a")
 	if err != nil {
@@ -312,7 +357,7 @@ func TestHandleGetActionAndInboxAreTenantScoped(t *testing.T) {
 }
 
 func TestHandleListActionsRejectsUnknownViewAndUnsafeLimit(t *testing.T) {
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	for _, target := range []string{"/api/actions?view=unknown", "/api/actions?limit=501", "/api/actions?limit=-1"} {
 		rec := httptest.NewRecorder()
 		h.HandleListActions(rec, httptest.NewRequest(http.MethodGet, target, nil))
@@ -324,7 +369,7 @@ func TestHandleListActionsRejectsUnknownViewAndUnsafeLimit(t *testing.T) {
 
 func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
 	now := time.Date(2026, 5, 4, 14, 0, 0, 0, time.UTC)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -361,7 +406,7 @@ func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
 		"reason":"Recover after confirmed outage",
 		"requestedBy":"agent:oncall-helper"
 	}`))
-	h.HandlePlanAction(planRec, planReq)
+	h.HandlePlanAction(planRec, actionHandlerTestRequest(planReq, ""))
 	if planRec.Code != http.StatusOK {
 		t.Fatalf("plan status = %d, body=%s", planRec.Code, planRec.Body.String())
 	}
@@ -377,7 +422,7 @@ func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
 	}`))
 	decisionReq.SetPathValue("id", plan.ActionID)
 	decisionReq = decisionReq.WithContext(auth.WithUser(decisionReq.Context(), "operator@example.com"))
-	h.HandleDecideAction(decisionRec, decisionReq)
+	h.HandleDecideAction(decisionRec, actionHandlerTestRequest(decisionReq, ""))
 	if decisionRec.Code != http.StatusOK {
 		t.Fatalf("decision status = %d, body=%s", decisionRec.Code, decisionRec.Body.String())
 	}
@@ -389,7 +434,7 @@ func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
 	if decision.ActionID != plan.ActionID || decision.State != unified.ActionStateApproved {
 		t.Fatalf("decision identity/state = %q/%q, want %q/%q", decision.ActionID, decision.State, plan.ActionID, unified.ActionStateApproved)
 	}
-	if decision.Approval.Actor != "operator@example.com" || decision.Approval.Method != unified.MethodAPI || decision.Approval.Outcome != unified.OutcomeApproved {
+	if decision.Approval.Actor != "operator@example.com" || decision.Approval.Method != unified.MethodSession || decision.Approval.Outcome != unified.OutcomeApproved {
 		t.Fatalf("decision approval = %#v", decision.Approval)
 	}
 	if decision.Audit.Result != nil {
@@ -418,8 +463,25 @@ func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
 			t.Fatalf("approval must not create execution event: %#v", event)
 		}
 	}
-	if len(events) != 3 || !seen[unified.ActionStatePlanned] || !seen[unified.ActionStatePending] || !seen[unified.ActionStateApproved] {
+	if len(events) != 4 || !seen[unified.ActionStatePlanned] || !seen[unified.ActionStatePending] || !seen[unified.ActionStateApproved] {
 		t.Fatalf("events = %#v, want planned, pending_approval, approved", events)
+	}
+
+	exactRetryRec := httptest.NewRecorder()
+	exactRetryReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/decision", bytes.NewBufferString(`{
+		"outcome":"approved",
+		"reason":"inside maintenance window"
+	}`))
+	exactRetryReq.SetPathValue("id", plan.ActionID)
+	exactRetryReq = exactRetryReq.WithContext(auth.WithUser(exactRetryReq.Context(), "operator@example.com"))
+	h.HandleDecideAction(exactRetryRec, actionHandlerTestRequest(exactRetryReq, ""))
+	if exactRetryRec.Code != http.StatusOK {
+		t.Fatalf("exact retry status = %d, body=%s", exactRetryRec.Code, exactRetryRec.Body.String())
+	}
+	audit, _, _ = store.GetActionAudit(plan.ActionID)
+	events, _ = store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
+	if len(audit.Approvals) != 1 || len(events) != 4 {
+		t.Fatalf("exact retry duplicated state: approvals=%d events=%d", len(audit.Approvals), len(events))
 	}
 
 	retryRec := httptest.NewRecorder()
@@ -429,7 +491,7 @@ func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
 	}`))
 	retryReq.SetPathValue("id", plan.ActionID)
 	retryReq = retryReq.WithContext(auth.WithUser(retryReq.Context(), "second-operator@example.com"))
-	h.HandleDecideAction(retryRec, retryReq)
+	h.HandleDecideAction(retryRec, actionHandlerTestRequest(retryReq, ""))
 	if retryRec.Code != http.StatusConflict {
 		t.Fatalf("retry decision status = %d, body=%s", retryRec.Code, retryRec.Body.String())
 	}
@@ -440,7 +502,7 @@ func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
 
 func TestHandleExecuteActionRunsApprovedPlanThroughExecutor(t *testing.T) {
 	now := time.Date(2026, 5, 4, 14, 0, 0, 0, time.UTC)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -483,7 +545,7 @@ func TestHandleExecuteActionRunsApprovedPlanThroughExecutor(t *testing.T) {
 		"reason":"Recover after confirmed outage",
 		"requestedBy":"agent:oncall-helper"
 	}`))
-	h.HandlePlanAction(planRec, planReq)
+	h.HandlePlanAction(planRec, actionHandlerTestRequest(planReq, ""))
 	if planRec.Code != http.StatusOK {
 		t.Fatalf("plan status = %d, body=%s", planRec.Code, planRec.Body.String())
 	}
@@ -499,7 +561,7 @@ func TestHandleExecuteActionRunsApprovedPlanThroughExecutor(t *testing.T) {
 	}`))
 	decisionReq.SetPathValue("id", plan.ActionID)
 	decisionReq = decisionReq.WithContext(auth.WithUser(decisionReq.Context(), "operator@example.com"))
-	h.HandleDecideAction(decisionRec, decisionReq)
+	h.HandleDecideAction(decisionRec, actionHandlerTestRequest(decisionReq, ""))
 	if decisionRec.Code != http.StatusOK {
 		t.Fatalf("decision status = %d, body=%s", decisionRec.Code, decisionRec.Body.String())
 	}
@@ -510,7 +572,7 @@ func TestHandleExecuteActionRunsApprovedPlanThroughExecutor(t *testing.T) {
 	}`))
 	executeReq.SetPathValue("id", plan.ActionID)
 	executeReq = executeReq.WithContext(auth.WithUser(executeReq.Context(), "operator@example.com"))
-	h.HandleExecuteAction(executeRec, executeReq)
+	h.HandleExecuteAction(executeRec, actionHandlerTestRequest(executeReq, ""))
 	if executeRec.Code != http.StatusOK {
 		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
 	}
@@ -556,7 +618,7 @@ func TestHandleExecuteActionRunsApprovedPlanThroughExecutor(t *testing.T) {
 	for _, event := range events {
 		seen[event.State] = true
 	}
-	if len(events) != 5 ||
+	if len(events) != 6 ||
 		!seen[unified.ActionStatePlanned] ||
 		!seen[unified.ActionStatePending] ||
 		!seen[unified.ActionStateApproved] ||
@@ -594,7 +656,7 @@ func TestHandleExecuteActionRejectsStalePlanBeforeExecutor(t *testing.T) {
 		resources: []unified.Resource{resource},
 		freshness: now,
 	}
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(provider)
 	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "should not run"}}
 	h.SetActionExecutor(executor)
@@ -612,7 +674,7 @@ func TestHandleExecuteActionRejectsStalePlanBeforeExecutor(t *testing.T) {
 		"reason":"Recover after confirmed outage",
 		"requestedBy":"agent:oncall-helper"
 	}`))
-	h.HandlePlanAction(planRec, planReq)
+	h.HandlePlanAction(planRec, actionHandlerTestRequest(planReq, ""))
 	if planRec.Code != http.StatusOK {
 		t.Fatalf("plan status = %d, body=%s", planRec.Code, planRec.Body.String())
 	}
@@ -628,7 +690,7 @@ func TestHandleExecuteActionRejectsStalePlanBeforeExecutor(t *testing.T) {
 	}`))
 	decisionReq.SetPathValue("id", plan.ActionID)
 	decisionReq = decisionReq.WithContext(auth.WithUser(decisionReq.Context(), "operator@example.com"))
-	h.HandleDecideAction(decisionRec, decisionReq)
+	h.HandleDecideAction(decisionRec, actionHandlerTestRequest(decisionReq, ""))
 	if decisionRec.Code != http.StatusOK {
 		t.Fatalf("decision status = %d, body=%s", decisionRec.Code, decisionRec.Body.String())
 	}
@@ -663,7 +725,7 @@ func TestHandleExecuteActionRejectsStalePlanBeforeExecutor(t *testing.T) {
 	executeReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/execute", bytes.NewBufferString(`{}`))
 	executeReq.SetPathValue("id", plan.ActionID)
 	executeReq = executeReq.WithContext(auth.WithUser(executeReq.Context(), "operator@example.com"))
-	h.HandleExecuteAction(executeRec, executeReq)
+	h.HandleExecuteAction(executeRec, actionHandlerTestRequest(executeReq, ""))
 	if executeRec.Code != http.StatusConflict {
 		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
 	}
@@ -707,7 +769,7 @@ func TestHandleExecuteActionRejectsStalePlanBeforeExecutor(t *testing.T) {
 
 func TestHandleExecuteActionWithoutExecutorLeavesApprovedAuditUnchanged(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	store, err := h.getStore("default")
 	if err != nil {
 		t.Fatalf("get store: %v", err)
@@ -717,34 +779,21 @@ func TestHandleExecuteActionWithoutExecutorLeavesApprovedAuditUnchanged(t *testi
 		CreatedAt: now.Add(-time.Minute),
 		UpdatedAt: now,
 		State:     unified.ActionStateApproved,
-		Request: unified.ActionRequest{
-			RequestID:      "req-no-executor",
-			ResourceID:     "vm:42",
-			CapabilityName: "restart",
-			Reason:         "Recover after confirmed outage",
-			RequestedBy:    "agent:oncall-helper",
-		},
+		Request:   boundActionTestRequest("req-no-executor", "vm:42", "restart", "Recover after confirmed outage", "agent:oncall-helper"),
 		Plan: unified.ActionPlan{
-			ActionID:         "act_no_executor",
-			RequestID:        "req-no-executor",
-			Allowed:          true,
-			RequiresApproval: true,
-			ApprovalPolicy:   unified.ApprovalAdmin,
-			PlannedAt:        now.Add(-time.Minute),
-			ExpiresAt:        now.Add(5 * time.Minute),
-			ResourceVersion:  "resource:sha256:test",
-			PolicyVersion:    "policy:sha256:test",
-			PlanHash:         "sha256:test",
+			ActionID:            "act_no_executor",
+			RequestID:           "req-no-executor",
+			Allowed:             true,
+			RequiresApproval:    true,
+			ApprovalPolicy:      unified.ApprovalAdmin,
+			ApprovalRequirement: unified.ApprovalRequirementForFloor(unified.ApprovalAdmin),
+			PlannedAt:           now.Add(-time.Minute),
+			ExpiresAt:           now.Add(5 * time.Minute),
+			ResourceVersion:     "resource:sha256:test",
+			PolicyVersion:       "policy:sha256:test",
+			PlanHash:            "sha256:test",
 		},
-		Approvals: []unified.ActionApprovalRecord{
-			{
-				Actor:     "operator@example.com",
-				Method:    unified.MethodAPI,
-				Timestamp: now,
-				Outcome:   unified.OutcomeApproved,
-				Reason:    "approved for proof",
-			},
-		},
+		Approvals: []unified.ActionApprovalRecord{boundActionTestApproval("act_no_executor", "sha256:test", "operator@example.com", now)},
 	}
 	if err := store.RecordActionAudit(record); err != nil {
 		t.Fatalf("RecordActionAudit: %v", err)
@@ -754,7 +803,7 @@ func TestHandleExecuteActionWithoutExecutorLeavesApprovedAuditUnchanged(t *testi
 	executeReq := httptest.NewRequest(http.MethodPost, "/api/actions/act_no_executor/execute", bytes.NewBufferString(`{}`))
 	executeReq.SetPathValue("id", "act_no_executor")
 	executeReq = executeReq.WithContext(auth.WithUser(executeReq.Context(), "operator@example.com"))
-	h.HandleExecuteAction(executeRec, executeReq)
+	h.HandleExecuteAction(executeRec, actionHandlerTestRequest(executeReq, ""))
 	if executeRec.Code != http.StatusNotImplemented {
 		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
 	}
@@ -780,7 +829,7 @@ func TestHandleExecuteActionWithoutExecutorLeavesApprovedAuditUnchanged(t *testi
 
 func TestHandleExecuteActionRejectsDryRunOnlyPlan(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "should not run"}}
 	h.SetActionExecutor(executor)
 	published := make(chan unified.ActionAuditRecord, 1)
@@ -797,23 +846,18 @@ func TestHandleExecuteActionRejectsDryRunOnlyPlan(t *testing.T) {
 		CreatedAt: now.Add(-time.Minute),
 		UpdatedAt: now,
 		State:     unified.ActionStatePlanned,
-		Request: unified.ActionRequest{
-			RequestID:      "req-dry-run-only",
-			ResourceID:     "vm:42",
-			CapabilityName: "restart",
-			Reason:         "Validate restart path without execution",
-			RequestedBy:    "agent:oncall-helper",
-		},
+		Request:   boundActionTestRequest("req-dry-run-only", "vm:42", "restart", "Validate restart path without execution", "agent:oncall-helper"),
 		Plan: unified.ActionPlan{
-			ActionID:        "act_dry_run_only",
-			RequestID:       "req-dry-run-only",
-			Allowed:         true,
-			ApprovalPolicy:  unified.ApprovalDryRun,
-			PlannedAt:       now.Add(-time.Minute),
-			ExpiresAt:       now.Add(5 * time.Minute),
-			ResourceVersion: "resource:sha256:test",
-			PolicyVersion:   "policy:sha256:test",
-			PlanHash:        "sha256:test",
+			ActionID:            "act_dry_run_only",
+			RequestID:           "req-dry-run-only",
+			Allowed:             true,
+			ApprovalPolicy:      unified.ApprovalDryRun,
+			ApprovalRequirement: unified.ApprovalRequirementForFloor(unified.ApprovalDryRun),
+			PlannedAt:           now.Add(-time.Minute),
+			ExpiresAt:           now.Add(5 * time.Minute),
+			ResourceVersion:     "resource:sha256:test",
+			PolicyVersion:       "policy:sha256:test",
+			PlanHash:            "sha256:test",
 		},
 	}
 	if err := store.RecordActionAudit(record); err != nil {
@@ -824,7 +868,7 @@ func TestHandleExecuteActionRejectsDryRunOnlyPlan(t *testing.T) {
 	executeReq := httptest.NewRequest(http.MethodPost, "/api/actions/act_dry_run_only/execute", bytes.NewBufferString(`{}`))
 	executeReq.SetPathValue("id", "act_dry_run_only")
 	executeReq = executeReq.WithContext(auth.WithUser(executeReq.Context(), "operator@example.com"))
-	h.HandleExecuteAction(executeRec, executeReq)
+	h.HandleExecuteAction(executeRec, actionHandlerTestRequest(executeReq, ""))
 	if executeRec.Code != http.StatusConflict {
 		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
 	}
@@ -861,7 +905,7 @@ func TestHandleExecuteActionRejectsDryRunOnlyPlan(t *testing.T) {
 
 func TestHandleExecuteActionMaterializesExplicitExpiredState(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "should not run"}}
 	h.SetActionExecutor(executor)
 	published := make(chan unified.ActionAuditRecord, 1)
@@ -878,34 +922,21 @@ func TestHandleExecuteActionMaterializesExplicitExpiredState(t *testing.T) {
 		CreatedAt: now.Add(-10 * time.Minute),
 		UpdatedAt: now.Add(-6 * time.Minute),
 		State:     unified.ActionStateApproved,
-		Request: unified.ActionRequest{
-			RequestID:      "req-expired",
-			ResourceID:     "vm:42",
-			CapabilityName: "restart",
-			Reason:         "Recover after confirmed outage",
-			RequestedBy:    "agent:oncall-helper",
-		},
+		Request:   boundActionTestRequest("req-expired", "vm:42", "restart", "Recover after confirmed outage", "agent:oncall-helper"),
 		Plan: unified.ActionPlan{
-			ActionID:         "act_expired",
-			RequestID:        "req-expired",
-			Allowed:          true,
-			RequiresApproval: true,
-			ApprovalPolicy:   unified.ApprovalAdmin,
-			PlannedAt:        now.Add(-10 * time.Minute),
-			ExpiresAt:        now.Add(-5 * time.Minute),
-			ResourceVersion:  "resource:sha256:test",
-			PolicyVersion:    "policy:sha256:test",
-			PlanHash:         "sha256:test",
+			ActionID:            "act_expired",
+			RequestID:           "req-expired",
+			Allowed:             true,
+			RequiresApproval:    true,
+			ApprovalPolicy:      unified.ApprovalAdmin,
+			ApprovalRequirement: unified.ApprovalRequirementForFloor(unified.ApprovalAdmin),
+			PlannedAt:           now.Add(-10 * time.Minute),
+			ExpiresAt:           now.Add(-5 * time.Minute),
+			ResourceVersion:     "resource:sha256:test",
+			PolicyVersion:       "policy:sha256:test",
+			PlanHash:            "sha256:test",
 		},
-		Approvals: []unified.ActionApprovalRecord{
-			{
-				Actor:     "operator@example.com",
-				Method:    unified.MethodAPI,
-				Timestamp: now.Add(-6 * time.Minute),
-				Outcome:   unified.OutcomeApproved,
-				Reason:    "approved before expiry",
-			},
-		},
+		Approvals: []unified.ActionApprovalRecord{boundActionTestApproval("act_expired", "sha256:test", "operator@example.com", now.Add(-6*time.Minute))},
 	}
 	if err := store.RecordActionAudit(record); err != nil {
 		t.Fatalf("RecordActionAudit: %v", err)
@@ -915,7 +946,7 @@ func TestHandleExecuteActionMaterializesExplicitExpiredState(t *testing.T) {
 	executeReq := httptest.NewRequest(http.MethodPost, "/api/actions/act_expired/execute", bytes.NewBufferString(`{}`))
 	executeReq.SetPathValue("id", "act_expired")
 	executeReq = executeReq.WithContext(auth.WithUser(executeReq.Context(), "operator@example.com"))
-	h.HandleExecuteAction(executeRec, executeReq)
+	h.HandleExecuteAction(executeRec, actionHandlerTestRequest(executeReq, ""))
 	if executeRec.Code != http.StatusConflict {
 		t.Fatalf("execute status = %d, body=%s", executeRec.Code, executeRec.Body.String())
 	}
@@ -989,7 +1020,7 @@ func TestPersistActionPlanAuditRejectsOrphanLifecycleState(t *testing.T) {
 
 func TestHandlePlanActionRejectsMissingCapability(t *testing.T) {
 	now := time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -1006,7 +1037,7 @@ func TestHandlePlanActionRejectsMissingCapability(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/actions/plan", body)
-	h.HandlePlanAction(rec, req)
+	h.HandlePlanAction(rec, actionHandlerTestRequest(req, ""))
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d, body=%s", rec.Code, http.StatusNotFound, rec.Body.String())

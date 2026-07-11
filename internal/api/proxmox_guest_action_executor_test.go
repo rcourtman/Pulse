@@ -18,7 +18,7 @@ import (
 
 func TestProxmoxGuestActionExecutorDispatchesVMShutdownAndVerification(t *testing.T) {
 	now := time.Now().UTC()
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -62,7 +62,7 @@ func TestProxmoxGuestActionExecutorDispatchesVMShutdownAndVerification(t *testin
 
 func TestProxmoxGuestActionExecutorDispatchesLXCStartAndVerification(t *testing.T) {
 	now := time.Now().UTC()
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -94,7 +94,7 @@ func TestProxmoxGuestActionExecutorResolvesCommandAgentByNodeHostname(t *testing
 	now := time.Now().UTC()
 	resource := proxmoxGuestActionResource("vm:160", unified.ResourceTypeVM, "running", now)
 	resource.Proxmox.LinkedAgentID = "stale-agent"
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot:  models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{resource},
@@ -139,7 +139,7 @@ func TestProxmoxGuestActionExecutorResolvesCommandAgentByNodeHostname(t *testing
 
 func TestProxmoxGuestActionExecutorVerificationFailureFailsAction(t *testing.T) {
 	now := time.Now().UTC()
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -170,7 +170,7 @@ func TestProxmoxGuestActionExecutorVerificationFailureFailsAction(t *testing.T) 
 
 func TestHandlePlanActionRejectsDisconnectedProxmoxNodeCommandAgent(t *testing.T) {
 	now := time.Now().UTC()
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -192,7 +192,7 @@ func TestHandlePlanActionRejectsDisconnectedProxmoxNodeCommandAgent(t *testing.T
 		"reason":"operator requested reboot",
 		"requestedBy":"operator"
 	}`))
-	h.HandlePlanAction(rec, req)
+	h.HandlePlanAction(rec, actionHandlerTestRequest(req, ""))
 
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("plan status = %d, want %d, body=%s", rec.Code, http.StatusConflict, rec.Body.String())
@@ -217,7 +217,7 @@ func TestHandlePlanActionRejectsDisconnectedProxmoxNodeCommandAgent(t *testing.T
 
 func TestResourceResponsesFilterDisconnectedProxmoxLifecycleCapabilities(t *testing.T) {
 	now := time.Now().UTC()
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{

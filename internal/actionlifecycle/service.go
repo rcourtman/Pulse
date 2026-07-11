@@ -73,10 +73,13 @@ type Store interface {
 // dependencies are resolved per call so late-bound wiring (executors and
 // publishers set after construction) stays current.
 type Service struct {
-	Registry      func(orgID string) (*unified.ResourceRegistry, error)
-	Store         func(orgID string) (Store, error)
-	Executor      Executor
-	EmergencyStop func(orgID string) (bool, error)
+	Registry            func(orgID string) (*unified.ResourceRegistry, error)
+	Store               func(orgID string) (Store, error)
+	Executor            Executor
+	EmergencyStop       func(orgID string) (bool, error)
+	DecisionAuthorizer  DecisionAuthorizer
+	ExecutionAuthorizer ExecutionAuthorizer
+	StepUpVerifier      StepUpVerifier
 	// OnActionCompleted receives every terminal (completed/failed) audit
 	// record, including refused-before-dispatch failures, so SSE bridges
 	// and reconcilers observe the full lifecycle regardless of transport.
@@ -139,17 +142,64 @@ func (s *Service) WithPolicyMutation(write func() error) error {
 // PlanOptions carries broker-owned planning metadata that must never be
 // accepted from a public transport request body.
 type PlanOptions struct {
+	// Actor is trusted server context. Public transports derive it from the
+	// authenticated request and internal brokers stamp their fixed identity.
+	Actor unified.ActionActor
+	// ApprovalRequirement is an optional trusted, policy-resolved
+	// strengthening of the capability floor. Public transports cannot set it.
+	ApprovalRequirement *unified.ApprovalRequirement
 	// Origin identifies the internal proposing surface and its
 	// correlation IDs. Nil for operator/API-initiated plans.
 	Origin *unified.ActionOrigin
 }
 
+type DecisionAuthorizer interface {
+	AuthorizeDecision(ctx context.Context, orgID string, record unified.ActionAuditRecord, decision unified.ActionDecision) error
+}
+
+type DecisionAuthorizerFunc func(context.Context, string, unified.ActionAuditRecord, unified.ActionDecision) error
+
+func (f DecisionAuthorizerFunc) AuthorizeDecision(ctx context.Context, orgID string, record unified.ActionAuditRecord, decision unified.ActionDecision) error {
+	return f(ctx, orgID, record, decision)
+}
+
+type ExecutionAuthorizer interface {
+	AuthorizeExecution(ctx context.Context, orgID string, record unified.ActionAuditRecord, actor unified.ActionActor) error
+}
+
+type ExecutionAuthorizerFunc func(context.Context, string, unified.ActionAuditRecord, unified.ActionActor) error
+
+func (f ExecutionAuthorizerFunc) AuthorizeExecution(ctx context.Context, orgID string, record unified.ActionAuditRecord, actor unified.ActionActor) error {
+	return f(ctx, orgID, record, actor)
+}
+
+// StepUpVerifier verifies and atomically consumes a cryptographic challenge.
+// No default verifier exists: MFA approvals fail closed until a durable
+// server-owned verifier is installed.
+type StepUpVerifier interface {
+	VerifyAndConsume(ctx context.Context, record unified.ActionAuditRecord, decision unified.ActionDecision) error
+}
+
+type StepUpVerifierFunc func(context.Context, unified.ActionAuditRecord, unified.ActionDecision) error
+
+func (f StepUpVerifierFunc) VerifyAndConsume(ctx context.Context, record unified.ActionAuditRecord, decision unified.ActionDecision) error {
+	return f(ctx, record, decision)
+}
+
 // Sentinel errors for dependency failures. Callers map these to their
 // transport's unavailability semantics.
 var (
-	ErrRegistryUnavailable = errors.New("resource registry unavailable")
-	ErrStoreUnavailable    = errors.New("action audit store unavailable")
-	ErrExecutorUnavailable = errors.New("no action executor is configured")
+	ErrRegistryUnavailable               = errors.New("resource registry unavailable")
+	ErrStoreUnavailable                  = errors.New("action audit store unavailable")
+	ErrExecutorUnavailable               = errors.New("no action executor is configured")
+	ErrDecisionAuthorizationUnavailable  = errors.New("action decision authorization unavailable")
+	ErrExecutionAuthorizationUnavailable = errors.New("action execution authorization unavailable")
+	ErrActionAuthorizationDenied         = errors.New("action authorization denied")
+	ErrApprovalEvidenceInvalid           = errors.New("approval evidence is not bound to this actor, organization, action, plan, and outcome")
+	ErrApprovalStepUpUnavailable         = errors.New("cryptographic step-up approval is unavailable")
+	ErrApprovalActorNotHuman             = errors.New("detached or service actors cannot satisfy human approval")
+	ErrApprovalSeparationRequired        = errors.New("requester cannot approve this action")
+	ErrDecisionReplayConflict            = errors.New("action decision replay conflicts with the persisted decision")
 )
 
 // ResourceNotFoundError reports that the requested resource is not present
@@ -283,14 +333,24 @@ func NormalizeRequest(req unified.ActionRequest) unified.ActionRequest {
 // availability check, and persists the plan-stage audit trail. Approval
 // requirements come from the capability's declared policy, never from the
 // caller.
-func (s *Service) Plan(ctx context.Context, orgID string, req unified.ActionRequest) (unified.ActionPlan, error) {
-	return s.PlanWithOptions(ctx, orgID, req, PlanOptions{})
+func (s *Service) Plan(ctx context.Context, orgID string, req unified.ActionRequest, actor unified.ActionActor) (unified.ActionPlan, error) {
+	return s.PlanWithOptions(ctx, orgID, req, PlanOptions{Actor: actor})
 }
 
 // PlanWithOptions is Plan plus broker-owned metadata. In-process proposing
 // surfaces use it to stamp the action's origin; the HTTP adapter always
 // calls plain Plan so a public request can never claim a first-party origin.
 func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified.ActionRequest, opts PlanOptions) (unified.ActionPlan, error) {
+	orgID = strings.TrimSpace(orgID)
+	opts.Actor = unified.NormalizeActionActor(opts.Actor)
+	if err := unified.ValidateActionActor(opts.Actor); err != nil {
+		return unified.ActionPlan{}, &actionplanner.ValidationError{Field: "actor", Message: err.Error()}
+	}
+	if opts.Actor.OrgID != orgID {
+		return unified.ActionPlan{}, &actionplanner.ValidationError{Field: "actor.orgId", Message: "actor organization does not match request organization"}
+	}
+	req.Actor = opts.Actor
+	req.RequestedBy = opts.Actor.SubjectID
 	req.ResourceID = unified.CanonicalResourceID(req.ResourceID)
 	if req.ResourceID == "" {
 		return unified.ActionPlan{}, &actionplanner.ValidationError{Field: "resourceId", Message: "resource id is required"}
@@ -305,7 +365,13 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 		return unified.ActionPlan{}, &ResourceNotFoundError{ResourceID: req.ResourceID}
 	}
 
-	plan, err := (actionplanner.Planner{}).Plan(req, *resource)
+	planner := actionplanner.Planner{}
+	var plan unified.ActionPlan
+	if opts.ApprovalRequirement != nil {
+		plan, err = planner.PlanWithRequirement(req, *resource, *opts.ApprovalRequirement)
+	} else {
+		plan, err = planner.Plan(req, *resource)
+	}
 	if err != nil {
 		if errors.Is(err, actionplanner.ErrCapabilityNotFound) {
 			return unified.ActionPlan{}, &CapabilityNotFoundError{
@@ -519,12 +585,10 @@ func PlannedActionState(plan unified.ActionPlan) unified.ActionState {
 	return unified.ActionStatePlanned
 }
 
-// Decide applies an approval outcome to a pending action. The caller
-// supplies the approval's actor, method, outcome, and reason; the service
-// stamps the decision time when unset and persists the resulting state
-// transition and lifecycle event atomically through the store contract.
-func (s *Service) Decide(ctx context.Context, orgID, actionID string, approval unified.ActionApprovalRecord) (unified.ActionAuditRecord, error) {
-	_ = ctx
+// Decide is the single human decision boundary. Trusted adapters provide a
+// server-derived actor and evidence binding; authorization and approval-floor
+// enforcement happen here before the append-only decision is persisted.
+func (s *Service) Decide(ctx context.Context, orgID, actionID string, decision unified.ActionDecision) (unified.ActionAuditRecord, error) {
 	actionID = strings.TrimSpace(actionID)
 	if actionID == "" {
 		return unified.ActionAuditRecord{}, &ActionNotFoundError{ActionID: actionID}
@@ -547,12 +611,38 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, approval u
 	if record.State == unified.ActionStateExpired {
 		return record, unified.ErrActionPlanExpired
 	}
+	decision.Actor = unified.NormalizeActionActor(decision.Actor)
+	decision.Reason = strings.TrimSpace(decision.Reason)
+	decision.Evidence.Actor = unified.NormalizeActionActor(decision.Evidence.Actor)
+	if exact, conflict := decisionReplay(record, decision); exact {
+		return record, nil
+	} else if conflict {
+		return unified.ActionAuditRecord{}, ErrDecisionReplayConflict
+	}
+	if err := unified.ValidateHumanActionBinding(record, orgID); err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if err := validateDecisionBinding(record, orgID, decision); err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if s.DecisionAuthorizer == nil {
+		return unified.ActionAuditRecord{}, ErrDecisionAuthorizationUnavailable
+	}
+	if err := s.DecisionAuthorizer.AuthorizeDecision(ctx, orgID, record, decision); err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if err := s.validateApprovalFloor(ctx, record, decision, true); err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	approval := unified.ActionApprovalRecord{
+		Actor:        decision.Actor.SubjectID,
+		ActorBinding: decision.Actor,
+		Method:       decision.Evidence.Method,
+		Outcome:      decision.Outcome,
+		Reason:       decision.Reason,
+		Evidence:     &decision.Evidence,
+	}
 	if record.State != unified.ActionStatePending {
-		for _, existing := range record.Approvals {
-			if existing.Outcome == approval.Outcome {
-				return record, nil
-			}
-		}
 		return unified.ActionAuditRecord{}, unified.ErrActionNotPending
 	}
 
@@ -560,26 +650,151 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, approval u
 	if approval.Timestamp.IsZero() {
 		approval.Timestamp = now
 	}
-	updated, event, err := unified.ApplyActionDecision(record, approval, now)
-	if err != nil {
-		return unified.ActionAuditRecord{}, err
-	}
-	if err := store.RecordActionDecision(updated, event); err != nil {
-		if errors.Is(err, unified.ErrActionNotPending) {
-			current, found, queryErr := store.GetActionAudit(actionID)
-			if queryErr == nil && found {
-				for _, existing := range current.Approvals {
-					if existing.Outcome == approval.Outcome {
-						return current, nil
-					}
-				}
-			}
+	for attempt := 0; attempt < 16; attempt++ {
+		updated, event, err := unified.ApplyActionDecision(record, approval, now)
+		if err != nil {
 			return unified.ActionAuditRecord{}, err
 		}
-		return unified.ActionAuditRecord{}, &PersistError{Op: "action decision", Err: err}
+		if err := store.RecordActionDecision(updated, event); err != nil {
+			if errors.Is(err, unified.ErrActionDecisionRevisionConflict) {
+				current, found, queryErr := store.GetActionAudit(actionID)
+				if queryErr != nil {
+					return unified.ActionAuditRecord{}, &QueryError{Op: "action decision retry", Err: queryErr}
+				}
+				if !found {
+					return unified.ActionAuditRecord{}, &ActionNotFoundError{ActionID: actionID}
+				}
+				if exact, conflict := decisionReplay(current, decision); exact {
+					return current, nil
+				} else if conflict {
+					return unified.ActionAuditRecord{}, ErrDecisionReplayConflict
+				}
+				if current.State != unified.ActionStatePending {
+					return unified.ActionAuditRecord{}, unified.ErrActionNotPending
+				}
+				if err := unified.ValidateHumanActionBinding(current, orgID); err != nil {
+					return unified.ActionAuditRecord{}, err
+				}
+				if err := validateDecisionBinding(current, orgID, decision); err != nil {
+					return unified.ActionAuditRecord{}, err
+				}
+				if err := s.DecisionAuthorizer.AuthorizeDecision(ctx, orgID, current, decision); err != nil {
+					return unified.ActionAuditRecord{}, err
+				}
+				if err := s.validateApprovalFloor(ctx, current, decision, false); err != nil {
+					return unified.ActionAuditRecord{}, err
+				}
+				record = current
+				continue
+			}
+			if errors.Is(err, unified.ErrActionNotPending) {
+				current, found, queryErr := store.GetActionAudit(actionID)
+				if queryErr == nil && found {
+					if exact, conflict := decisionReplay(current, decision); exact {
+						return current, nil
+					} else if conflict {
+						return unified.ActionAuditRecord{}, ErrDecisionReplayConflict
+					}
+				}
+				return unified.ActionAuditRecord{}, err
+			}
+			return unified.ActionAuditRecord{}, &PersistError{Op: "action decision", Err: err}
+		}
+		s.publishTransition(orgID, updated)
+		return updated, nil
 	}
-	s.publishTransition(orgID, updated)
-	return updated, nil
+	return unified.ActionAuditRecord{}, &PersistError{Op: "action decision", Err: unified.ErrActionDecisionRevisionConflict}
+}
+
+func decisionReplay(record unified.ActionAuditRecord, decision unified.ActionDecision) (exact, conflict bool) {
+	for _, approval := range record.Approvals {
+		actor := unified.NormalizeActionActor(approval.ActorBinding)
+		if !unified.ActionActorsEqual(actor, decision.Actor) {
+			continue
+		}
+		if approval.Outcome != decision.Outcome || strings.TrimSpace(approval.Reason) != strings.TrimSpace(decision.Reason) || approval.Evidence == nil {
+			return false, true
+		}
+		persisted := *approval.Evidence
+		persisted.Actor = unified.NormalizeActionActor(persisted.Actor)
+		requested := decision.Evidence
+		requested.Actor = unified.NormalizeActionActor(requested.Actor)
+		if decisionEvidenceReplayEqual(persisted, requested) {
+			return true, false
+		}
+		return false, true
+	}
+	return false, false
+}
+
+func decisionEvidenceReplayEqual(persisted, requested unified.ApprovalEvidence) bool {
+	if persisted.Version != requested.Version || persisted.Method != requested.Method ||
+		!unified.ActionActorsEqual(persisted.Actor, requested.Actor) || persisted.OrgID != requested.OrgID ||
+		persisted.ActionID != requested.ActionID || persisted.PlanHash != requested.PlanHash || persisted.Outcome != requested.Outcome {
+		return false
+	}
+	switch persisted.Method {
+	case unified.MethodWebAuthnUV, unified.MethodDeviceKeyUV:
+		return strings.TrimSpace(persisted.ChallengeID) != "" && persisted.ChallengeID == requested.ChallengeID
+	case unified.MethodSession, unified.MethodAPIToken:
+		return true
+	default:
+		return false
+	}
+}
+
+func validateDecisionBinding(record unified.ActionAuditRecord, orgID string, decision unified.ActionDecision) error {
+	if err := unified.ValidateActionActor(decision.Actor); err != nil ||
+		(decision.Actor.Kind != unified.ActionActorUser && decision.Actor.Kind != unified.ActionActorAPIToken) ||
+		decision.Actor.OrgID != strings.TrimSpace(orgID) {
+		return ErrApprovalActorNotHuman
+	}
+	requirement := unified.NormalizeApprovalRequirement(record.Plan.ApprovalRequirement, record.Plan.ApprovalPolicy)
+	if requirement.DisallowRequester && strings.EqualFold(decision.Actor.SubjectID, record.Request.Actor.SubjectID) {
+		return ErrApprovalSeparationRequired
+	}
+	evidence := decision.Evidence
+	evidence.Actor = unified.NormalizeActionActor(evidence.Actor)
+	if evidence.Version != 1 || !unified.ActionActorsEqual(evidence.Actor, decision.Actor) || evidence.OrgID != strings.TrimSpace(orgID) ||
+		evidence.ActionID != record.ID || evidence.PlanHash != record.Plan.PlanHash || evidence.Outcome != decision.Outcome || evidence.IssuedAt.IsZero() {
+		return ErrApprovalEvidenceInvalid
+	}
+	return nil
+}
+
+func (s *Service) validateApprovalFloor(ctx context.Context, record unified.ActionAuditRecord, decision unified.ActionDecision, consumeStepUp bool) error {
+	if decision.Outcome == unified.OutcomeRejected {
+		return nil
+	}
+	requirement := unified.NormalizeApprovalRequirement(record.Plan.ApprovalRequirement, record.Plan.ApprovalPolicy)
+	switch requirement.Floor {
+	case unified.ApprovalDryRun:
+		return unified.ErrActionDryRunOnly
+	case unified.ApprovalMultiFactor:
+		if decision.Actor.Kind == unified.ActionActorAPIToken {
+			return ErrApprovalStepUpUnavailable
+		}
+		if decision.Evidence.Method != unified.MethodWebAuthnUV && decision.Evidence.Method != unified.MethodDeviceKeyUV {
+			return ErrApprovalStepUpUnavailable
+		}
+		if strings.TrimSpace(decision.Evidence.ChallengeID) == "" || decision.Evidence.ExpiresAt.IsZero() || !s.now().Before(decision.Evidence.ExpiresAt) {
+			return ErrApprovalEvidenceInvalid
+		}
+		if s.StepUpVerifier == nil {
+			return ErrApprovalStepUpUnavailable
+		}
+		if !consumeStepUp {
+			return nil
+		}
+		return s.StepUpVerifier.VerifyAndConsume(ctx, record, decision)
+	case unified.ApprovalAdmin, unified.ApprovalNone:
+		if decision.Evidence.Method != unified.MethodSession && decision.Evidence.Method != unified.MethodAPIToken {
+			return ErrApprovalEvidenceInvalid
+		}
+		return nil
+	default:
+		return unified.ErrActionReplanRequired
+	}
 }
 
 // Execute runs an approved action to a terminal audit state. Every refusal
@@ -588,7 +803,7 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, approval u
 // locks are all persisted as refused executions (never silently dropped)
 // and published to the completion hook. There is no bypass that reaches
 // the executor without passing every gate.
-func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason string) (unified.ActionAuditRecord, error) {
+func (s *Service) Execute(ctx context.Context, orgID, actionID string, actor unified.ActionActor, reason string) (unified.ActionAuditRecord, error) {
 	actionID = strings.TrimSpace(actionID)
 	if actionID == "" {
 		return unified.ActionAuditRecord{}, &ActionNotFoundError{ActionID: actionID}
@@ -604,8 +819,24 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 	if !ok {
 		return unified.ActionAuditRecord{}, &ActionNotFoundError{ActionID: actionID}
 	}
+	actor = unified.NormalizeActionActor(actor)
+	if err := unified.ValidateActionActor(actor); err != nil ||
+		(actor.Kind != unified.ActionActorUser && actor.Kind != unified.ActionActorAPIToken) ||
+		actor.OrgID != strings.TrimSpace(orgID) {
+		return unified.ActionAuditRecord{}, ErrApprovalActorNotHuman
+	}
+	if err := unified.ValidateHumanActionBinding(record, orgID); err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if s.ExecutionAuthorizer == nil {
+		return unified.ActionAuditRecord{}, ErrExecutionAuthorizationUnavailable
+	}
+	if err := s.ExecutionAuthorizer.AuthorizeExecution(ctx, orgID, record, actor); err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	actorID := actor.SubjectID
 	if record.State == unified.ActionStateExecuting {
-		return s.dispatchCommitted(ctx, orgID, store, record, actor)
+		return s.dispatchCommitted(ctx, orgID, store, record, actorID)
 	}
 	if record.State == unified.ActionStateCompleted || record.State == unified.ActionStateFailed {
 		return record, nil
@@ -623,7 +854,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 		if stopErr != nil {
 			return unified.ActionAuditRecord{}, &PolicyCheckError{Err: stopErr}
 		}
-		failed, persistErr := RecordRefusedExecution(store, record, actor, now, unified.ErrActionEmergencyStop)
+		failed, persistErr := RecordRefusedExecution(store, record, actorID, now, unified.ErrActionEmergencyStop)
 		if persistErr != nil {
 			return unified.ActionAuditRecord{}, &PersistError{Op: "emergency-stop refusal", Err: persistErr}
 		}
@@ -633,7 +864,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 	}
 	if err := unified.ValidateActionExecutionStart(record, now); err != nil {
 		if unified.IsPermanentActionExecutionRefusal(err) {
-			failed, persistErr := RecordRefusedExecution(store, record, actor, now, err)
+			failed, persistErr := RecordRefusedExecution(store, record, actorID, now, err)
 			if persistErr != nil {
 				return unified.ActionAuditRecord{}, &PersistError{Op: "refused action execution", Err: persistErr}
 			}
@@ -648,7 +879,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 	}
 	if err := s.ValidatePlanFresh(orgID, record); err != nil {
 		if errors.Is(err, unified.ErrActionPlanDrift) {
-			failed, persistErr := RecordRefusedExecution(store, record, actor, now, err)
+			failed, persistErr := RecordRefusedExecution(store, record, actorID, now, err)
 			if persistErr != nil {
 				return unified.ActionAuditRecord{}, &PersistError{Op: "refused action execution", Err: persistErr}
 			}
@@ -660,7 +891,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 	}
 	if err := validateExecutionPolicy(store, record); err != nil {
 		if unified.IsPermanentActionExecutionRefusal(err) {
-			failed, persistErr := RecordRefusedExecution(store, record, actor, now, err)
+			failed, persistErr := RecordRefusedExecution(store, record, actorID, now, err)
 			if persistErr != nil {
 				return unified.ActionAuditRecord{}, &PersistError{Op: "refused action execution", Err: persistErr}
 			}
@@ -671,7 +902,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 		return unified.ActionAuditRecord{}, &PolicyCheckError{Err: err}
 	}
 
-	started, startEvent, err := unified.BeginActionExecution(record, actor, now)
+	started, startEvent, err := unified.BeginActionExecution(record, actorID, now)
 	if err != nil {
 		return unified.ActionAuditRecord{}, err
 	}
@@ -687,7 +918,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 			current, found, queryErr := store.GetActionAudit(actionID)
 			if queryErr == nil && found {
 				if current.State == unified.ActionStateExecuting {
-					return s.dispatchCommitted(ctx, orgID, store, current, actor)
+					return s.dispatchCommitted(ctx, orgID, store, current, actorID)
 				}
 				return current, nil
 			}
@@ -695,7 +926,7 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 		return unified.ActionAuditRecord{}, &PersistError{Op: "action execution start", Err: err}
 	}
 	s.publishTransition(orgID, started)
-	return s.dispatchCommitted(ctx, orgID, store, started, actor)
+	return s.dispatchCommitted(ctx, orgID, store, started, actorID)
 }
 
 // ExecuteUnderPolicy is the only automatic dispatch boundary. It revalidates

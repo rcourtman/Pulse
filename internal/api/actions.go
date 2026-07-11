@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
@@ -31,6 +32,16 @@ type ActionAvailabilityChecker = actionlifecycle.AvailabilityChecker
 type actionDecisionRequest struct {
 	Outcome unified.ApprovalOutcome `json:"outcome"`
 	Reason  string                  `json:"reason,omitempty"`
+}
+
+type publicActionPlanRequest struct {
+	RequestID      string         `json:"requestId"`
+	ResourceID     string         `json:"resourceId"`
+	CapabilityName string         `json:"capabilityName"`
+	Params         map[string]any `json:"params,omitempty"`
+	Reason         string         `json:"reason"`
+	// RequestedBy is accepted only for boundary compatibility and ignored.
+	RequestedBy string `json:"requestedBy,omitempty"`
 }
 
 type actionDecisionResponse struct {
@@ -73,11 +84,13 @@ func (h *ResourceHandlers) ActionLifecycle() *actionlifecycle.Service {
 		Store: func(orgID string) (actionlifecycle.Store, error) {
 			return h.getStore(orgID)
 		},
-		Executor:           h.actionExecutor,
-		OnActionCompleted:  h.actionCompleted,
-		OnActionTransition: h.actionTransition,
-		PolicyAdmission:    h.policyAdmission,
-		EmergencyStop:      h.actionEmergencyStop,
+		Executor:            h.actionExecutor,
+		OnActionCompleted:   h.actionCompleted,
+		OnActionTransition:  h.actionTransition,
+		PolicyAdmission:     h.policyAdmission,
+		EmergencyStop:       h.actionEmergencyStop,
+		DecisionAuthorizer:  h.actionDecisionAuthorizer,
+		ExecutionAuthorizer: h.actionExecutionAuthorizer,
 	}
 }
 
@@ -87,10 +100,10 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var req unified.ActionRequest
+	var publicReq publicActionPlanRequest
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxActionPlanRequestBytes))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
+	if err := decoder.Decode(&publicReq); err != nil {
 		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionRequest, "Invalid action planning request", map[string]string{
 			"body": "request body must be a valid ActionRequest JSON object",
 		})
@@ -103,7 +116,20 @@ func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	plan, err := h.ActionLifecycle().Plan(r.Context(), GetOrgID(r.Context()), req)
+	orgID := GetOrgID(r.Context())
+	actor, err := actionActorForRequest(h.cfg, r, orgID)
+	if err != nil {
+		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeActionActorUnavailable, "Authenticated action actor is unavailable")
+		return
+	}
+	req := unified.ActionRequest{
+		RequestID:      publicReq.RequestID,
+		ResourceID:     publicReq.ResourceID,
+		CapabilityName: publicReq.CapabilityName,
+		Params:         publicReq.Params,
+		Reason:         publicReq.Reason,
+	}
+	plan, err := h.ActionLifecycle().Plan(r.Context(), orgID, req, actor)
 	if err != nil {
 		writeActionPlanError(w, err)
 		return
@@ -278,13 +304,31 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	approval := unified.ActionApprovalRecord{
-		Actor:   actionDecisionActor(h, r),
-		Method:  unified.MethodAPI,
-		Outcome: decision.Outcome,
-		Reason:  decision.Reason,
+	orgID := GetOrgID(r.Context())
+	actor, err := actionActorForRequest(h.cfg, r, orgID)
+	if err != nil {
+		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeActionActorUnavailable, "Authenticated action actor is unavailable")
+		return
 	}
-	updated, err := h.ActionLifecycle().Decide(r.Context(), GetOrgID(r.Context()), actionID, approval)
+	lifecycle := h.ActionLifecycle()
+	record, found, err := lifecycle.Get(orgID, actionID)
+	if err != nil {
+		writeActionLifecycleReadError(w, err, func() {
+			writeJSONError(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit")
+		})
+		return
+	}
+	if !found {
+		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{"actionId": actionID})
+		return
+	}
+	canonicalDecision := unified.ActionDecision{
+		Actor:    actor,
+		Outcome:  decision.Outcome,
+		Reason:   decision.Reason,
+		Evidence: approvalEvidenceForRequest(actor, record, decision.Outcome, time.Now().UTC()),
+	}
+	updated, err := lifecycle.Decide(r.Context(), orgID, actionID, canonicalDecision)
 	if err != nil {
 		writeActionLifecycleReadError(w, err, func() {
 			var persist *actionlifecycle.PersistError
@@ -297,7 +341,7 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	responseApproval := approval
+	responseApproval := unified.ActionApprovalRecord{}
 	if len(updated.Approvals) > 0 {
 		responseApproval = updated.Approvals[len(updated.Approvals)-1]
 	}
@@ -346,7 +390,13 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 	}
 	execution.Reason = strings.TrimSpace(execution.Reason)
 
-	completed, err := h.ActionLifecycle().Execute(r.Context(), GetOrgID(r.Context()), actionID, actionDecisionActor(h, r), execution.Reason)
+	orgID := GetOrgID(r.Context())
+	actor, err := actionActorForRequest(h.cfg, r, orgID)
+	if err != nil {
+		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeActionActorUnavailable, "Authenticated action actor is unavailable")
+		return
+	}
+	completed, err := h.ActionLifecycle().Execute(r.Context(), orgID, actionID, actor, execution.Reason)
 	if err != nil {
 		writeActionLifecycleReadError(w, err, func() {
 			writeActionExecuteError(w, err)
@@ -403,18 +453,6 @@ func writeActionExecuteError(w http.ResponseWriter, err error) {
 	}
 }
 
-func actionDecisionActor(h *ResourceHandlers, r *http.Request) string {
-	if h != nil {
-		if actor := strings.TrimSpace(getAuthUsername(h.cfg, r)); actor != "" {
-			return actor
-		}
-	}
-	if actor := strings.TrimSpace(getUserID(r)); actor != "" {
-		return actor
-	}
-	return "api:authenticated"
-}
-
 func writeActionDecisionApplyError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, unified.ErrInvalidApprovalOutcome):
@@ -425,6 +463,16 @@ func writeActionDecisionApplyError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionNotPending, "Action is not pending approval")
 	case errors.Is(err, unified.ErrActionPlanExpired):
 		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanExpired, "Action plan has expired")
+	case errors.Is(err, actionlifecycle.ErrActionAuthorizationDenied), errors.Is(err, actionlifecycle.ErrApprovalActorNotHuman):
+		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeActionApprovalForbidden, "Current actor is not authorized to decide this action")
+	case errors.Is(err, actionlifecycle.ErrApprovalStepUpUnavailable):
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionStepUpUnavailable, "This action requires server-verified cryptographic step-up approval")
+	case errors.Is(err, actionlifecycle.ErrApprovalEvidenceInvalid), errors.Is(err, actionlifecycle.ErrDecisionReplayConflict), errors.Is(err, unified.ErrDuplicateApprovalActor):
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionDecisionConflict, "Action decision conflicts with the authoritative approval record")
+	case errors.Is(err, actionlifecycle.ErrApprovalSeparationRequired):
+		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeActionSeparationRequired, "Requester cannot approve this action")
+	case errors.Is(err, unified.ErrActionReplanRequired):
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionReplanRequired, "Action authority is outdated; re-plan before deciding")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "action_decision_failed", sanitizeErrorForClient(err, "Action decision failed"))
 	}
@@ -439,7 +487,7 @@ func writeActionExecutionApplyError(w http.ResponseWriter, err error) {
 	case errors.Is(err, unified.ErrActionExecutionFinal):
 		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionExecutionFinal, "Action execution is already final")
 	case errors.Is(err, unified.ErrActionNotExecuting):
-		writeJSONError(w, http.StatusConflict, "action_not_executing", "Action is not executing")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionNotExecuting, "Action is not executing")
 	case errors.Is(err, unified.ErrActionPlanExpired):
 		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanExpired, "Action plan has expired")
 	case errors.Is(err, unified.ErrActionDryRunOnly):
@@ -448,6 +496,10 @@ func writeActionExecutionApplyError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanDrift, "Action plan no longer matches the current resource contract; re-plan before executing")
 	case errors.Is(err, unified.ErrResourceRemediationLocked):
 		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeResourceRemediationLocked, "Resource is operator-locked against automated remediation")
+	case errors.Is(err, actionlifecycle.ErrActionAuthorizationDenied), errors.Is(err, actionlifecycle.ErrApprovalActorNotHuman):
+		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeActionExecutionForbidden, "Current actor is not authorized to execute this action")
+	case errors.Is(err, unified.ErrActionReplanRequired):
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionReplanRequired, "Action authority is outdated; re-plan before executing")
 	default:
 		writeJSONError(w, http.StatusInternalServerError, "action_execution_failed", sanitizeErrorForClient(err, "Action execution failed"))
 	}

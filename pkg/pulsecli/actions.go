@@ -146,7 +146,7 @@ func newActionsCmd(deps *ActionsDeps) *cobra.Command {
 	planCmd.Flags().StringVar(&opts.ResourceID, "resource-id", "", "canonical unified resource id")
 	planCmd.Flags().StringVar(&opts.CapabilityName, "capability", "", "resource capability name to plan")
 	planCmd.Flags().StringVar(&opts.Reason, "reason", "", "audit reason for the requested action")
-	planCmd.Flags().StringVar(&opts.RequestedBy, "requested-by", "", "requester identity, for example agent:oncall-helper")
+	planCmd.Flags().StringVar(&opts.RequestedBy, "requested-by", "", "deprecated compatibility label; server derives requester identity from authentication")
 	planCmd.Flags().StringVar(&opts.ParamsJSON, "params-json", "", "JSON object merged into request params")
 	planCmd.Flags().StringArrayVar(&opts.Params, "param", nil, "request param as key=value; repeatable, values parse as JSON when possible")
 
@@ -286,7 +286,17 @@ func runActionPlan(cmd *cobra.Command, deps *ActionsDeps, opts actionPlanOptions
 		return err
 	}
 
-	body, err := json.Marshal(actionReq)
+	body, err := json.Marshal(struct {
+		RequestID      string         `json:"requestId"`
+		ResourceID     string         `json:"resourceId"`
+		CapabilityName string         `json:"capabilityName"`
+		Params         map[string]any `json:"params,omitempty"`
+		Reason         string         `json:"reason"`
+		RequestedBy    string         `json:"requestedBy,omitempty"`
+	}{
+		RequestID: actionReq.RequestID, ResourceID: actionReq.ResourceID, CapabilityName: actionReq.CapabilityName,
+		Params: actionReq.Params, Reason: actionReq.Reason, RequestedBy: actionReq.RequestedBy,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to encode action request: %w", err)
 	}
@@ -709,7 +719,6 @@ func validateCLIActionRequest(req unified.ActionRequest) error {
 		{field: "resourceId", value: req.ResourceID, flag: "--resource-id"},
 		{field: "capabilityName", value: req.CapabilityName, flag: "--capability"},
 		{field: "reason", value: req.Reason, flag: "--reason"},
-		{field: "requestedBy", value: req.RequestedBy, flag: "--requested-by"},
 	}
 	for _, item := range required {
 		if item.value == "" {

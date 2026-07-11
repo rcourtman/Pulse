@@ -169,7 +169,7 @@ func (s *SQLiteResourceStore) RecordActionExpiry(record ActionAuditRecord, event
 	if record.State != ActionStateExpired || event.State != ActionStateExpired || event.ActionID != record.ID {
 		return errors.New("action expiry must persist matching expired state")
 	}
-	return s.recordActionTransition(record, event, []ActionState{ActionStatePlanned, ActionStatePending, ActionStateApproved}, ErrActionExecutionFinal)
+	return s.recordActionTransition(record, event, nil, []ActionState{ActionStatePlanned, ActionStatePending, ActionStateApproved}, ErrActionExecutionFinal, nil)
 }
 
 func (s *SQLiteResourceStore) GetActionDispatchAttempt(actionID string) (ActionDispatchAttempt, bool, error) {
@@ -491,7 +491,7 @@ func (s *SQLiteResourceStore) ExpireActionAudits(now time.Time, limit int) ([]Ac
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := s.db.Query(`SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json FROM action_audits WHERE state IN (?, ?, ?) ORDER BY updated_at ASC LIMIT ?`, ActionStatePlanned, ActionStatePending, ActionStateApproved, limit)
+	rows, err := s.db.Query(`SELECT id, action_id, request_id, created_at, updated_at, state, decision_revision, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json FROM action_audits WHERE state IN (?, ?, ?) ORDER BY updated_at ASC LIMIT ?`, ActionStatePlanned, ActionStatePending, ActionStateApproved, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -541,7 +541,7 @@ func (s *SQLiteResourceStore) GetActionAuditsByStates(states []ActionState, limi
 		args = append(args, string(state))
 	}
 	args = append(args, limit)
-	rows, err := s.db.Query(`SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json FROM action_audits WHERE state IN (`+strings.Join(marks, ",")+`) ORDER BY updated_at DESC, created_at DESC LIMIT ?`, args...)
+	rows, err := s.db.Query(`SELECT id, action_id, request_id, created_at, updated_at, state, decision_revision, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json FROM action_audits WHERE state IN (`+strings.Join(marks, ",")+`) ORDER BY updated_at DESC, created_at DESC LIMIT ?`, args...)
 	if err != nil {
 		return nil, err
 	}

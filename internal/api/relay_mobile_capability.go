@@ -14,6 +14,7 @@ type relayMobileRuntimeRouteSpec struct {
 	method        string
 	path          string
 	requiredScope string
+	legacyScope   string
 }
 
 const (
@@ -147,31 +148,36 @@ var relayMobileRuntimeRouteSpecs = map[relayMobileRuntimeRouteID]relayMobileRunt
 		id:            relayMobileRoutePendingActions,
 		method:        http.MethodGet,
 		path:          "/api/actions/pending",
-		requiredScope: config.ScopeAIExecute,
+		requiredScope: config.ScopeActionsApprove,
+		legacyScope:   config.ScopeAIExecute,
 	},
 	relayMobileRouteActionsList: {
 		id:            relayMobileRouteActionsList,
 		method:        http.MethodGet,
 		path:          "/api/actions",
-		requiredScope: config.ScopeAIExecute,
+		requiredScope: config.ScopeActionsApprove,
+		legacyScope:   config.ScopeAIExecute,
 	},
 	relayMobileRouteActionDetail: {
 		id:            relayMobileRouteActionDetail,
 		method:        http.MethodGet,
 		path:          "/api/actions/{action_id}",
-		requiredScope: config.ScopeAIExecute,
+		requiredScope: config.ScopeActionsApprove,
+		legacyScope:   config.ScopeAIExecute,
 	},
 	relayMobileRouteActionDecision: {
 		id:            relayMobileRouteActionDecision,
 		method:        http.MethodPost,
 		path:          "/api/actions/{action_id}/decision",
-		requiredScope: config.ScopeAIExecute,
+		requiredScope: config.ScopeActionsApprove,
+		legacyScope:   config.ScopeAIExecute,
 	},
 	relayMobileRouteActionExecute: {
 		id:            relayMobileRouteActionExecute,
 		method:        http.MethodPost,
 		path:          "/api/actions/{action_id}/execute",
-		requiredScope: config.ScopeAIExecute,
+		requiredScope: config.ScopeActionsExecute,
+		legacyScope:   config.ScopeAIExecute,
 	},
 	relayMobileRouteChatSend: {
 		id:            relayMobileRouteChatSend,
@@ -234,7 +240,11 @@ func relayMobileRuntimeRouteSpecFor(routeID relayMobileRuntimeRouteID) relayMobi
 }
 
 func (spec relayMobileRuntimeRouteSpec) compatibleScopes() []string {
-	return []string{config.ScopeRelayMobileAccess, spec.requiredScope}
+	scopes := []string{config.ScopeRelayMobileAccess, spec.requiredScope}
+	if spec.legacyScope != "" && spec.legacyScope != spec.requiredScope {
+		scopes = append(scopes, spec.legacyScope)
+	}
+	return scopes
 }
 
 func requireRelayMobileRuntimeRoute(routeID relayMobileRuntimeRouteID, handler http.HandlerFunc) http.HandlerFunc {

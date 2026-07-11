@@ -31,7 +31,118 @@ type ActionRequest struct {
 	CapabilityName string         `json:"capabilityName"`
 	Params         map[string]any `json:"params,omitempty"`
 	Reason         string         `json:"reason"`
-	RequestedBy    string         `json:"requestedBy"` // e.g., "agent:oncall-helper"
+	// RequestedBy remains on the wire for compatibility and presentation, but
+	// canonical planning derives it from Actor.SubjectID. Public callers never
+	// own this value.
+	RequestedBy string      `json:"requestedBy"`
+	Actor       ActionActor `json:"actor"`
+}
+
+// ActionActor is the immutable server-owned identity bound to a governed
+// action. SubjectID is the durable principal; CredentialID identifies the
+// authenticated credential without persisting a secret.
+type ActionActor struct {
+	SubjectID    string          `json:"subjectId"`
+	Kind         ActionActorKind `json:"kind"`
+	CredentialID string          `json:"credentialId"`
+	OrgID        string          `json:"orgId"`
+}
+
+type ActionActorKind string
+
+const (
+	ActionActorUser     ActionActorKind = "user"
+	ActionActorAPIToken ActionActorKind = "api_token"
+	ActionActorService  ActionActorKind = "service"
+	ActionActorPolicy   ActionActorKind = "policy"
+)
+
+func NormalizeActionActor(actor ActionActor) ActionActor {
+	actor.SubjectID = strings.TrimSpace(actor.SubjectID)
+	actor.CredentialID = strings.TrimSpace(actor.CredentialID)
+	actor.OrgID = strings.TrimSpace(actor.OrgID)
+	return actor
+}
+
+func ValidateActionActor(actor ActionActor) error {
+	actor = NormalizeActionActor(actor)
+	if actor.SubjectID == "" || actor.CredentialID == "" || actor.OrgID == "" {
+		return errors.New("action actor subject, credential, and organization are required")
+	}
+	switch actor.Kind {
+	case ActionActorUser, ActionActorAPIToken, ActionActorService, ActionActorPolicy:
+		return nil
+	default:
+		return fmt.Errorf("unsupported action actor kind %q", actor.Kind)
+	}
+}
+
+func ActionActorsEqual(left, right ActionActor) bool {
+	left = NormalizeActionActor(left)
+	right = NormalizeActionActor(right)
+	return left == right
+}
+
+const ActionApprovalRequirementVersion = 1
+
+// ApprovalRequirement is the capability-owned approval floor captured at
+// planning time. Tenant policy may strengthen this structure in a future
+// resolver, but it must never lower Floor.
+type ApprovalRequirement struct {
+	Version           int                 `json:"version"`
+	Floor             ActionApprovalLevel `json:"floor"`
+	Quorum            int                 `json:"quorum"`
+	DisallowRequester bool                `json:"disallowRequester"`
+}
+
+func ApprovalRequirementForFloor(floor ActionApprovalLevel) ApprovalRequirement {
+	return ApprovalRequirement{
+		Version: ActionApprovalRequirementVersion,
+		Floor:   floor,
+		Quorum:  1,
+	}
+}
+
+func NormalizeApprovalRequirement(requirement ApprovalRequirement, legacyFloor ActionApprovalLevel) ApprovalRequirement {
+	if requirement.Floor == "" {
+		requirement.Floor = legacyFloor
+	}
+	if requirement.Quorum < 1 {
+		requirement.Quorum = 1
+	}
+	return requirement
+}
+
+func ValidateApprovalRequirement(requirement ApprovalRequirement, capabilityFloor ActionApprovalLevel) error {
+	requirement = NormalizeApprovalRequirement(requirement, capabilityFloor)
+	if requirement.Version != ActionApprovalRequirementVersion || requirement.Quorum < 1 {
+		return errors.New("approval requirement version and quorum are invalid")
+	}
+	if capabilityFloor == ApprovalDryRun {
+		if requirement.Floor != ApprovalDryRun {
+			return errors.New("dry-run-only capability floor cannot be lowered")
+		}
+		return nil
+	}
+	if requirement.Floor == ApprovalDryRun {
+		return nil
+	}
+	rank := func(level ActionApprovalLevel) int {
+		switch level {
+		case ApprovalNone:
+			return 0
+		case ApprovalAdmin:
+			return 1
+		case ApprovalMultiFactor:
+			return 2
+		default:
+			return -1
+		}
+	}
+	if rank(requirement.Floor) < rank(capabilityFloor) || rank(requirement.Floor) < 0 {
+		return errors.New("approval requirement cannot lower the capability floor")
+	}
+	return nil
 }
 
 // ApprovalOutcome represents the decision on a requested capability.
@@ -50,15 +161,47 @@ const (
 	MethodAPI          ApprovalMethod = "api"
 	MethodMFAChallenge ApprovalMethod = "mfa_challenge"
 	MethodPolicy       ApprovalMethod = "policy"
+	MethodSession      ApprovalMethod = "session"
+	MethodAPIToken     ApprovalMethod = "api_token"
+	MethodWebAuthnUV   ApprovalMethod = "webauthn_uv"
+	MethodDeviceKeyUV  ApprovalMethod = "device_key_uv"
 )
+
+// ApprovalEvidence is the server-checked decision binding. Cryptographic
+// methods are never trusted from this structure alone: actionlifecycle calls
+// its installed verifier to validate and atomically consume the challenge.
+type ApprovalEvidence struct {
+	Version     int             `json:"version"`
+	Method      ApprovalMethod  `json:"method"`
+	Actor       ActionActor     `json:"actor"`
+	OrgID       string          `json:"orgId"`
+	ActionID    string          `json:"actionId"`
+	PlanHash    string          `json:"planHash"`
+	Outcome     ApprovalOutcome `json:"outcome"`
+	ChallengeID string          `json:"challengeId,omitempty"`
+	IssuedAt    time.Time       `json:"issuedAt"`
+	ExpiresAt   time.Time       `json:"expiresAt,omitempty"`
+}
+
+// ActionDecision is the transport-independent input to the canonical human
+// decision boundary. Actor and Evidence are supplied by a trusted adapter,
+// never decoded as public identity authority.
+type ActionDecision struct {
+	Actor    ActionActor      `json:"actor"`
+	Outcome  ApprovalOutcome  `json:"outcome"`
+	Reason   string           `json:"reason,omitempty"`
+	Evidence ApprovalEvidence `json:"evidence"`
+}
 
 // ActionApprovalRecord captures a specific approval or rejection event.
 type ActionApprovalRecord struct {
-	Actor     string          `json:"actor"`     // Who approved/rejected it
-	Method    ApprovalMethod  `json:"method"`    // e.g. "ui", "api", "mfa_challenge"
-	Timestamp time.Time       `json:"timestamp"` // When the decision was made
-	Outcome   ApprovalOutcome `json:"outcome"`   // "approved" or "rejected"
-	Reason    string          `json:"reason,omitempty"`
+	Actor        string            `json:"actor"`     // Who approved/rejected it
+	Method       ApprovalMethod    `json:"method"`    // e.g. "ui", "api", "mfa_challenge"
+	Timestamp    time.Time         `json:"timestamp"` // When the decision was made
+	Outcome      ApprovalOutcome   `json:"outcome"`   // "approved" or "rejected"
+	Reason       string            `json:"reason,omitempty"`
+	ActorBinding ActionActor       `json:"actorBinding,omitempty"`
+	Evidence     *ApprovalEvidence `json:"evidence,omitempty"`
 	// PolicyLease is present only for a server-owned policy authorization.
 	// Human decisions never carry this field. Policy approval and execution
 	// admission are persisted atomically, so the lease cannot become reusable.
@@ -144,6 +287,7 @@ type ActionPlan struct {
 	Allowed              bool                `json:"allowed"`
 	RequiresApproval     bool                `json:"requiresApproval"`
 	ApprovalPolicy       ActionApprovalLevel `json:"approvalPolicy"`
+	ApprovalRequirement  ApprovalRequirement `json:"approvalRequirement"`
 	PredictedBlastRadius []string            `json:"predictedBlastRadius,omitempty"` // Correlated related resources
 	RollbackAvailable    bool                `json:"rollbackAvailable"`
 	Message              string              `json:"message,omitempty"`
@@ -307,6 +451,7 @@ type ActionAuditRecord struct {
 	CreatedAt           time.Time                 `json:"createdAt"`
 	UpdatedAt           time.Time                 `json:"updatedAt"`
 	State               ActionState               `json:"state"`
+	DecisionRevision    uint64                    `json:"decisionRevision"`
 	Request             ActionRequest             `json:"request"`
 	Plan                ActionPlan                `json:"plan"`
 	Origin              *ActionOrigin             `json:"origin,omitempty"`
@@ -346,13 +491,26 @@ func NormalizeActionOrigin(origin *ActionOrigin) *ActionOrigin {
 	return &normalized
 }
 
-// ActionLifecycleEvent represents an append-only state transition in an action's life.
+type ActionLifecycleEventKind string
+
+const (
+	ActionLifecycleEventTransition ActionLifecycleEventKind = "transition"
+	ActionLifecycleEventDecision   ActionLifecycleEventKind = "decision"
+	ActionLifecycleEventLegacy     ActionLifecycleEventKind = "legacy"
+)
+
+// ActionLifecycleEvent is an append-only action audit fact. State transitions
+// remain unique by action/state; human decisions are independently unique by
+// action/decision revision and carry their complete server-bound approval.
 type ActionLifecycleEvent struct {
-	ActionID  string      `json:"actionId"`
-	Timestamp time.Time   `json:"timestamp"`
-	State     ActionState `json:"state"`
-	Actor     string      `json:"actor,omitempty"`
-	Message   string      `json:"message,omitempty"`
+	ActionID         string                   `json:"actionId"`
+	Timestamp        time.Time                `json:"timestamp"`
+	State            ActionState              `json:"state"`
+	Kind             ActionLifecycleEventKind `json:"kind"`
+	DecisionRevision uint64                   `json:"decisionRevision,omitempty"`
+	Decision         *ActionApprovalRecord    `json:"decision,omitempty"`
+	Actor            string                   `json:"actor,omitempty"`
+	Message          string                   `json:"message,omitempty"`
 }
 
 // ActionEngine defines the enforced runtime loop for capabilities.
@@ -389,10 +547,13 @@ var (
 	ErrInvalidApprovalOutcome           = errors.New("invalid approval outcome")
 	ErrActionAuditAlreadyExists         = errors.New("action audit already exists")
 	ErrActionIdentityConflict           = errors.New("action audit identity conflicts with the persisted record")
+	ErrActionDecisionRevisionConflict   = errors.New("action decision revision conflicts with the persisted record")
 	ErrActionPolicyAuthorizationInvalid = errors.New("policy_authorization_invalid")
 	ErrActionPolicyAuthorizationExpired = errors.New("policy_authorization_expired")
 	ErrActionPolicyAuthorizationRevoked = errors.New("policy_authorization_revoked")
 	ErrActionEmergencyStop              = errors.New("action_emergency_stop")
+	ErrActionReplanRequired             = errors.New("action_replan_required")
+	ErrDuplicateApprovalActor           = errors.New("duplicate approval actor")
 )
 
 // BeginPolicyActionExecution atomically composes the policy approval and
@@ -461,6 +622,10 @@ func ApplyActionDecision(record ActionAuditRecord, approval ActionApprovalRecord
 	} else {
 		now = now.UTC()
 	}
+	approval.ActorBinding = NormalizeActionActor(approval.ActorBinding)
+	if approval.ActorBinding.SubjectID != "" {
+		approval.Actor = approval.ActorBinding.SubjectID
+	}
 	approval.Actor = strings.TrimSpace(approval.Actor)
 	approval.Reason = strings.TrimSpace(approval.Reason)
 	if approval.Method == "" {
@@ -472,12 +637,31 @@ func ApplyActionDecision(record ActionAuditRecord, approval ActionApprovalRecord
 		approval.Timestamp = approval.Timestamp.UTC()
 	}
 
+	for _, existing := range record.Approvals {
+		if approval.Actor != "" && strings.EqualFold(strings.TrimSpace(existing.Actor), approval.Actor) {
+			return ActionAuditRecord{}, ActionLifecycleEvent{}, ErrDuplicateApprovalActor
+		}
+	}
+
 	var nextState ActionState
 	var message string
 	switch approval.Outcome {
 	case OutcomeApproved:
-		nextState = ActionStateApproved
-		message = "Action approved. Execution remains pending a separate execution contract."
+		requirement := NormalizeApprovalRequirement(record.Plan.ApprovalRequirement, record.Plan.ApprovalPolicy)
+		approvedActors := map[string]struct{}{}
+		for _, existing := range record.Approvals {
+			if existing.Outcome == OutcomeApproved && strings.TrimSpace(existing.Actor) != "" {
+				approvedActors[strings.ToLower(strings.TrimSpace(existing.Actor))] = struct{}{}
+			}
+		}
+		approvedActors[strings.ToLower(approval.Actor)] = struct{}{}
+		if len(approvedActors) < requirement.Quorum {
+			nextState = ActionStatePending
+			message = fmt.Sprintf("Approval recorded; %d of %d distinct approvals collected.", len(approvedActors), requirement.Quorum)
+		} else {
+			nextState = ActionStateApproved
+			message = "Action approved. Execution remains pending a separate execution contract."
+		}
 	case OutcomeRejected:
 		nextState = ActionStateRejected
 		message = "Action rejected before execution."
@@ -494,22 +678,174 @@ func ApplyActionDecision(record ActionAuditRecord, approval ActionApprovalRecord
 	record.State = nextState
 	record.UpdatedAt = approval.Timestamp
 	record.Approvals = append(record.Approvals, approval)
+	record.DecisionRevision++
 	normalized, err := NormalizeActionAuditRecord(record)
 	if err != nil {
 		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
 	}
 	event := ActionLifecycleEvent{
-		ActionID:  normalized.ID,
-		Timestamp: approval.Timestamp,
-		State:     nextState,
-		Actor:     approval.Actor,
-		Message:   message,
+		ActionID:         normalized.ID,
+		Timestamp:        approval.Timestamp,
+		State:            nextState,
+		Kind:             ActionLifecycleEventDecision,
+		DecisionRevision: normalized.DecisionRevision,
+		Decision:         &approval,
+		Actor:            approval.Actor,
+		Message:          message,
 	}
 	normalizedEvent, err := NormalizeActionLifecycleEvent(event)
 	if err != nil {
 		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
 	}
 	return normalized, normalizedEvent, nil
+}
+
+// ActionDecisionAppendCommand is the canonical pure store command for one
+// append-only human decision. Both persistence implementations validate and
+// execute this same command before applying their atomic CAS mechanics.
+type ActionDecisionAppendCommand struct {
+	Record          ActionAuditRecord
+	DecisionEvent   ActionLifecycleEvent
+	TransitionEvent *ActionLifecycleEvent
+}
+
+// PrepareActionDecisionAppend validates an append against the authoritative
+// current audit and derives the optional lifecycle transition. It validates
+// captured evidence structure and policy-floor compatibility, but deliberately
+// does not perform cryptographic verification or current membership/RBAC.
+func PrepareActionDecisionAppend(current, proposed ActionAuditRecord, event ActionLifecycleEvent) (ActionDecisionAppendCommand, error) {
+	current, err := NormalizeActionAuditRecord(current)
+	if err != nil {
+		return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+	}
+	proposed, err = NormalizeActionAuditRecord(proposed)
+	if err != nil {
+		return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+	}
+	event, err = NormalizeActionLifecycleEvent(event)
+	if err != nil {
+		return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+	}
+	if current.State != ActionStatePending || !ActionAuditIdentityMatches(current, proposed) ||
+		current.DecisionRevision != uint64(len(current.Approvals)) ||
+		proposed.DecisionRevision != current.DecisionRevision+1 ||
+		len(proposed.Approvals) != len(current.Approvals)+1 ||
+		proposed.DecisionRevision != uint64(len(proposed.Approvals)) || event.Decision == nil ||
+		event.ActionID != proposed.ID || event.State != proposed.State || event.DecisionRevision != proposed.DecisionRevision {
+		return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+	}
+	for index := range current.Approvals {
+		if !canonicalActionIdentityJSONEqual(current.Approvals[index], proposed.Approvals[index]) {
+			return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+		}
+	}
+	if err := ValidateActionActor(proposed.Request.Actor); err != nil {
+		return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+	}
+	requirement := NormalizeApprovalRequirement(proposed.Plan.ApprovalRequirement, proposed.Plan.ApprovalPolicy)
+	if err := ValidateApprovalRequirement(requirement, proposed.Plan.ApprovalPolicy); err != nil {
+		return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+	}
+	approvedActors := map[string]struct{}{}
+	seenSubjects := map[string]struct{}{}
+	for index := range proposed.Approvals {
+		approval := proposed.Approvals[index]
+		approval.ActorBinding = NormalizeActionActor(approval.ActorBinding)
+		if err := ValidateActionActor(approval.ActorBinding); err != nil ||
+			(approval.ActorBinding.Kind != ActionActorUser && approval.ActorBinding.Kind != ActionActorAPIToken) ||
+			approval.Actor != approval.ActorBinding.SubjectID || approval.Evidence == nil || approval.Timestamp.IsZero() {
+			return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+		}
+		subjectKey := strings.ToLower(approval.ActorBinding.SubjectID)
+		if _, duplicate := seenSubjects[subjectKey]; duplicate {
+			return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+		}
+		seenSubjects[subjectKey] = struct{}{}
+		if requirement.DisallowRequester && strings.EqualFold(approval.ActorBinding.SubjectID, proposed.Request.Actor.SubjectID) {
+			return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+		}
+		evidence := *approval.Evidence
+		evidence.Actor = NormalizeActionActor(evidence.Actor)
+		if evidence.Version != 1 || evidence.IssuedAt.IsZero() ||
+			!ActionActorsEqual(evidence.Actor, approval.ActorBinding) || evidence.OrgID != proposed.Request.Actor.OrgID ||
+			evidence.ActionID != proposed.ID || evidence.PlanHash != proposed.Plan.PlanHash ||
+			evidence.Outcome != approval.Outcome || evidence.Method != approval.Method ||
+			evidence.IssuedAt.After(approval.Timestamp) ||
+			(!evidence.ExpiresAt.IsZero() && (evidence.ExpiresAt.Before(evidence.IssuedAt) || approval.Timestamp.After(evidence.ExpiresAt))) {
+			return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+		}
+		switch approval.Method {
+		case MethodSession:
+			if approval.ActorBinding.Kind != ActionActorUser || strings.TrimSpace(evidence.ChallengeID) != "" {
+				return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+			}
+		case MethodAPIToken:
+			if approval.ActorBinding.Kind != ActionActorAPIToken || strings.TrimSpace(evidence.ChallengeID) != "" {
+				return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+			}
+		case MethodWebAuthnUV, MethodDeviceKeyUV:
+			if approval.ActorBinding.Kind != ActionActorUser || strings.TrimSpace(evidence.ChallengeID) == "" || evidence.ExpiresAt.IsZero() || !evidence.ExpiresAt.After(evidence.IssuedAt) {
+				return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+			}
+		default:
+			return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+		}
+		if approval.Outcome == OutcomeApproved {
+			switch requirement.Floor {
+			case ApprovalDryRun:
+				return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+			case ApprovalMultiFactor:
+				if approval.Method != MethodWebAuthnUV && approval.Method != MethodDeviceKeyUV {
+					return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+				}
+			case ApprovalAdmin, ApprovalNone:
+				if approval.Method != MethodSession && approval.Method != MethodAPIToken {
+					return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+				}
+			default:
+				return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+			}
+		}
+		if index < len(proposed.Approvals)-1 && approval.Outcome != OutcomeApproved {
+			return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+		}
+		if approval.Outcome == OutcomeApproved {
+			approvedActors[subjectKey] = struct{}{}
+		}
+	}
+	last := proposed.Approvals[len(proposed.Approvals)-1]
+	if !canonicalActionIdentityJSONEqual(last, *event.Decision) || event.Actor != last.Actor || !event.Timestamp.Equal(last.Timestamp) {
+		return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+	}
+	derivedState := ActionStateRejected
+	expectedMessage := "Action rejected before execution."
+	if last.Outcome == OutcomeApproved {
+		if len(approvedActors) < requirement.Quorum {
+			derivedState = ActionStatePending
+			expectedMessage = fmt.Sprintf("Approval recorded; %d of %d distinct approvals collected.", len(approvedActors), requirement.Quorum)
+		} else {
+			derivedState = ActionStateApproved
+			expectedMessage = "Action approved. Execution remains pending a separate execution contract."
+		}
+	} else if last.Outcome != OutcomeRejected {
+		return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+	}
+	if proposed.State != derivedState || event.State != derivedState || event.Message != expectedMessage {
+		return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+	}
+	command := ActionDecisionAppendCommand{Record: proposed, DecisionEvent: event}
+	if derivedState != ActionStatePending {
+		transition := event
+		transition.Kind = ActionLifecycleEventTransition
+		transition.DecisionRevision = 0
+		transition.Decision = nil
+		transition, err = NormalizeActionLifecycleEvent(transition)
+		if err != nil {
+			return ActionDecisionAppendCommand{}, ErrActionDecisionRevisionConflict
+		}
+		command.TransitionEvent = &transition
+	}
+	return command, nil
 }
 
 // ExpireAction materializes plan expiry as an explicit monotonic lifecycle
@@ -704,6 +1040,8 @@ func permanentActionExecutionRefusalMessage(reason error) (string, bool) {
 		return "policy_authorization_revoked: automatic authority changed before dispatch", true
 	case errors.Is(reason, ErrActionEmergencyStop):
 		return "action_emergency_stop: action dispatch is stopped by the operator", true
+	case errors.Is(reason, ErrActionReplanRequired):
+		return "action_replan_required: legacy action authority is unbound; re-plan before deciding or executing", true
 	default:
 		return "", false
 	}
@@ -744,6 +1082,46 @@ func ValidateActionExecutionStart(record ActionAuditRecord, now time.Time) error
 	}
 }
 
+// ValidateHumanActionBinding rejects legacy nonterminal records that predate
+// the immutable actor/requirement contract. Terminal history remains readable,
+// while pending or approved work must be re-planned under current authority.
+func ValidateHumanActionBinding(record ActionAuditRecord, orgID string) error {
+	record.Request.Actor = NormalizeActionActor(record.Request.Actor)
+	requirement := NormalizeApprovalRequirement(record.Plan.ApprovalRequirement, record.Plan.ApprovalPolicy)
+	if ValidateActionActor(record.Request.Actor) != nil || record.Request.Actor.OrgID != strings.TrimSpace(orgID) ||
+		requirement.Version != ActionApprovalRequirementVersion || requirement.Floor != record.Plan.ApprovalPolicy {
+		return ErrActionReplanRequired
+	}
+	if record.Plan.RequiresApproval && (record.State == ActionStateApproved || record.State == ActionStateExecuting) {
+		actors := map[string]struct{}{}
+		for _, approval := range record.Approvals {
+			if approval.Outcome != OutcomeApproved || approval.Evidence == nil {
+				continue
+			}
+			actor := NormalizeActionActor(approval.ActorBinding)
+			evidence := *approval.Evidence
+			evidence.Actor = NormalizeActionActor(evidence.Actor)
+			if ValidateActionActor(actor) != nil || !ActionActorsEqual(actor, evidence.Actor) ||
+				evidence.Version != 1 || evidence.OrgID != strings.TrimSpace(orgID) || evidence.ActionID != record.ID ||
+				evidence.PlanHash != record.Plan.PlanHash || evidence.Outcome != OutcomeApproved || evidence.IssuedAt.IsZero() {
+				continue
+			}
+			if requirement.Floor == ApprovalMultiFactor {
+				if evidence.Method != MethodWebAuthnUV && evidence.Method != MethodDeviceKeyUV {
+					continue
+				}
+			} else if evidence.Method != MethodSession && evidence.Method != MethodAPIToken {
+				continue
+			}
+			actors[strings.ToLower(actor.SubjectID)] = struct{}{}
+		}
+		if len(actors) < requirement.Quorum {
+			return ErrActionReplanRequired
+		}
+	}
+	return nil
+}
+
 // NormalizeActionAuditRecord applies the canonical action-governance floor
 // before a record is persisted. It keeps older callers usable by filling safe
 // deterministic defaults, but rejects records that cannot identify the action,
@@ -757,6 +1135,12 @@ func NormalizeActionAuditRecord(record ActionAuditRecord) (ActionAuditRecord, er
 	}
 	record.Approvals = append([]ActionApprovalRecord(nil), record.Approvals...)
 	for i := range record.Approvals {
+		record.Approvals[i].ActorBinding = NormalizeActionActor(record.Approvals[i].ActorBinding)
+		if record.Approvals[i].Evidence != nil {
+			evidence := *record.Approvals[i].Evidence
+			evidence.Actor = NormalizeActionActor(evidence.Actor)
+			record.Approvals[i].Evidence = &evidence
+		}
 		if record.Approvals[i].PolicyLease != nil {
 			lease := *record.Approvals[i].PolicyLease
 			lease.CapabilityNames = append([]string(nil), lease.CapabilityNames...)
@@ -804,6 +1188,10 @@ func NormalizeActionAuditRecord(record ActionAuditRecord) (ActionAuditRecord, er
 	record.Request.CapabilityName = strings.TrimSpace(record.Request.CapabilityName)
 	record.Request.Reason = strings.TrimSpace(record.Request.Reason)
 	record.Request.RequestedBy = strings.TrimSpace(record.Request.RequestedBy)
+	record.Request.Actor = NormalizeActionActor(record.Request.Actor)
+	if record.Request.Actor.SubjectID != "" {
+		record.Request.RequestedBy = record.Request.Actor.SubjectID
+	}
 	record.Origin = NormalizeActionOrigin(record.Origin)
 	if record.Request.ResourceID == "" {
 		return ActionAuditRecord{}, fmt.Errorf("action request resource id required")
@@ -842,6 +1230,10 @@ func NormalizeActionAuditRecord(record ActionAuditRecord) (ActionAuditRecord, er
 		} else {
 			record.Plan.ApprovalPolicy = ApprovalNone
 		}
+	}
+	record.Plan.ApprovalRequirement = NormalizeApprovalRequirement(record.Plan.ApprovalRequirement, record.Plan.ApprovalPolicy)
+	if record.Plan.ApprovalRequirement.Version != 0 && record.Plan.ApprovalRequirement.Version != ActionApprovalRequirementVersion {
+		return ActionAuditRecord{}, fmt.Errorf("unsupported approval requirement version %d", record.Plan.ApprovalRequirement.Version)
 	}
 	record.Plan.Preflight = NormalizeActionPreflight(record.Plan.Preflight, record.Request, record.Plan)
 
@@ -897,6 +1289,44 @@ func NormalizeActionLifecycleEvent(event ActionLifecycleEvent) (ActionLifecycleE
 	}
 	event.Actor = strings.TrimSpace(event.Actor)
 	event.Message = strings.TrimSpace(event.Message)
+	if event.Kind == "" {
+		if event.DecisionRevision > 0 || event.Decision != nil {
+			event.Kind = ActionLifecycleEventDecision
+		} else {
+			event.Kind = ActionLifecycleEventTransition
+		}
+	}
+	switch event.Kind {
+	case ActionLifecycleEventTransition:
+		if event.DecisionRevision != 0 || event.Decision != nil {
+			return ActionLifecycleEvent{}, fmt.Errorf("state transition event cannot carry decision identity")
+		}
+	case ActionLifecycleEventDecision:
+		if event.DecisionRevision == 0 || event.Decision == nil {
+			return ActionLifecycleEvent{}, fmt.Errorf("decision event revision and approval are required")
+		}
+		decision := *event.Decision
+		decision.ActorBinding = NormalizeActionActor(decision.ActorBinding)
+		decision.Actor = strings.TrimSpace(decision.Actor)
+		decision.Reason = strings.TrimSpace(decision.Reason)
+		if decision.Actor == "" || decision.Actor != decision.ActorBinding.SubjectID || decision.Evidence == nil ||
+			decision.Outcome == "" || decision.Method == "" || decision.Timestamp.IsZero() {
+			return ActionLifecycleEvent{}, fmt.Errorf("decision event approval binding is incomplete")
+		}
+		decision.Timestamp = decision.Timestamp.UTC()
+		evidence := *decision.Evidence
+		evidence.Actor = NormalizeActionActor(evidence.Actor)
+		if !ActionActorsEqual(evidence.Actor, decision.ActorBinding) || evidence.ActionID != event.ActionID ||
+			evidence.Outcome != decision.Outcome || evidence.Method != decision.Method {
+			return ActionLifecycleEvent{}, fmt.Errorf("decision event evidence binding does not match approval")
+		}
+		decision.Evidence = &evidence
+		event.Decision = &decision
+		event.Actor = decision.Actor
+		event.Timestamp = decision.Timestamp
+	default:
+		return ActionLifecycleEvent{}, fmt.Errorf("unsupported action lifecycle event kind %q", event.Kind)
+	}
 	return event, nil
 }
 

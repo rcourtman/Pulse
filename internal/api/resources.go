@@ -23,21 +23,23 @@ import (
 
 // ResourceHandlers provides HTTP handlers for the unified resource API.
 type ResourceHandlers struct {
-	cfg                 *config.Config
-	storeMu             sync.Mutex
-	stores              map[string]unified.ResourceStore
-	cacheMu             sync.Mutex
-	registryCache       map[string]registryCacheEntry
-	supplementalMu      sync.RWMutex
-	supplementalRecords map[unified.DataSource]SupplementalRecordsProvider
-	stateProvider       SnapshotProvider
-	tenantStateProvider TenantStateProvider
-	actionExecutor      ActionExecutor
-	actionCompleted     func(unified.ActionAuditRecord)
-	actionTransition    func(orgID string, record unified.ActionAuditRecord)
-	policyAdmission     *actionlifecycle.PolicyAdmissionCoordinator
-	actionEmergencyStop func(orgID string) (bool, error)
-	discoveryReadiness  ResourceDiscoveryReadinessProvider
+	cfg                       *config.Config
+	storeMu                   sync.Mutex
+	stores                    map[string]unified.ResourceStore
+	cacheMu                   sync.Mutex
+	registryCache             map[string]registryCacheEntry
+	supplementalMu            sync.RWMutex
+	supplementalRecords       map[unified.DataSource]SupplementalRecordsProvider
+	stateProvider             SnapshotProvider
+	tenantStateProvider       TenantStateProvider
+	actionExecutor            ActionExecutor
+	actionCompleted           func(unified.ActionAuditRecord)
+	actionTransition          func(orgID string, record unified.ActionAuditRecord)
+	policyAdmission           *actionlifecycle.PolicyAdmissionCoordinator
+	actionEmergencyStop       func(orgID string) (bool, error)
+	actionDecisionAuthorizer  actionlifecycle.DecisionAuthorizer
+	actionExecutionAuthorizer actionlifecycle.ExecutionAuthorizer
+	discoveryReadiness        ResourceDiscoveryReadinessProvider
 }
 
 // ResourceDiscoveryReadinessProvider projects service-discovery state onto a
@@ -109,6 +111,11 @@ func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor) {
 
 func (h *ResourceHandlers) SetActionEmergencyStopChecker(checker func(orgID string) (bool, error)) {
 	h.actionEmergencyStop = checker
+}
+
+func (h *ResourceHandlers) SetActionAuthorizers(decision actionlifecycle.DecisionAuthorizer, execution actionlifecycle.ExecutionAuthorizer) {
+	h.actionDecisionAuthorizer = decision
+	h.actionExecutionAuthorizer = execution
 }
 
 // SetActionCompletedPublisher configures the terminal action notification hook

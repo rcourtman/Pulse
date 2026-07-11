@@ -12379,7 +12379,7 @@ func TestContractResourceFiltersAcceptNativeDockerAndKubernetesInventory(t *test
 
 func TestContract_TenantResourcesDoNotFallbackToRawSnapshotSeeding(t *testing.T) {
 	now := time.Date(2026, 3, 17, 9, 0, 0, 0, time.UTC)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{
 		Hosts: []models.Host{{ID: "host-default", Hostname: "default", Status: "online", LastSeen: now}},
 	}})
@@ -12408,7 +12408,7 @@ func TestContract_TenantResourcesDoNotFallbackToRawSnapshotSeeding(t *testing.T)
 
 func TestContract_ResourceListPolicyMetadata(t *testing.T) {
 	now := time.Date(2026, 3, 17, 10, 0, 0, 0, time.UTC)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unifiedresources.Resource{
@@ -12492,7 +12492,7 @@ func TestContract_ResourceListPolicyMetadata(t *testing.T) {
 
 func TestContract_ProxmoxWorkloadDiscoveryTargetUsesLinkedNodeAgent(t *testing.T) {
 	now := time.Date(2026, 6, 4, 20, 0, 0, 0, time.UTC)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unifiedresources.Resource{
@@ -12553,7 +12553,7 @@ func TestContract_ProxmoxWorkloadDiscoveryTargetUsesLinkedNodeAgent(t *testing.T
 
 func TestContract_ResourceListUsesDeterministicNameTieBreakers(t *testing.T) {
 	now := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unifiedresources.Resource{
@@ -12596,7 +12596,7 @@ func TestContract_ResourceListUsesDeterministicNameTieBreakers(t *testing.T) {
 
 func TestContract_ResourceListAcceptsBrowserEncodedTypeCSV(t *testing.T) {
 	now := time.Date(2026, 4, 12, 0, 0, 0, 0, time.UTC)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unifiedresources.Resource{
@@ -12671,7 +12671,7 @@ func TestContract_StateAndResourceListShareCanonicalMockResourceContract(t *test
 		monitor:     monitor,
 		persistence: config.NewConfigPersistence(dataPath),
 	}
-	handlers := NewResourceHandlers(cfg)
+	handlers := newActionTestResourceHandlers(t, cfg)
 	handlers.SetStateProvider(monitor)
 
 	stateReq := httptest.NewRequest(http.MethodGet, "/api/state", nil)
@@ -13719,6 +13719,7 @@ func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
 		Params:         map[string]any{"mode": "graceful"},
 		Reason:         "Recover after confirmed outage",
 		RequestedBy:    "agent:oncall-helper",
+		Actor:          unifiedresources.ActionActor{SubjectID: "agent:oncall-helper", Kind: unifiedresources.ActionActorService, CredentialID: "service:contract", OrgID: "default"},
 	}
 
 	plan, err := (actionplanner.Planner{Now: func() time.Time { return now }}).Plan(req, resource)
@@ -13731,11 +13732,12 @@ func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
 	}
 
 	const want = `{
-		"actionId":"act_8f428171be2762cec97fd4546a291d5f",
+		"actionId":"act_4ccd0282616d29d9c1751617eaee44c7",
 		"requestId":"agent-run-123",
 		"allowed":true,
 		"requiresApproval":true,
 		"approvalPolicy":"admin",
+		"approvalRequirement":{"version":1,"floor":"admin","quorum":1,"disallowRequester":false},
 		"predictedBlastRadius":["vm:42","node-1"],
 		"rollbackAvailable":false,
 		"message":"Plan created for restart on web-42. Execution requires admin approval and is not performed by this endpoint.",
@@ -13743,7 +13745,7 @@ func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
 		"expiresAt":"2026-05-03T10:05:00Z",
 		"resourceVersion":"resource:sha256:54fb6f0264f42e0f2724e513",
 		"policyVersion":"policy:sha256:0bce3cd2df181ace685598eb",
-		"planHash":"sha256:69631faa9da67496a8b5953de2bc2dceb7b2aab5b582be3d1536e5d67683791b",
+		"planHash":"sha256:216bf02a80fa947125afcb54241e4972d79144da45ff57f5360fbca9a1623ca8",
 		"preflight":{
 			"target":"vm:42",
 			"currentState":"web-42 is warning",
@@ -13758,7 +13760,7 @@ func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
 			],
 			"verificationSteps":[
 				"Refresh the resource and confirm the expected state after execution.",
-				"Review /api/audit/actions/act_8f428171be2762cec97fd4546a291d5f/events for lifecycle evidence."
+				"Review /api/audit/actions/act_4ccd0282616d29d9c1751617eaee44c7/events for lifecycle evidence."
 			],
 			"generatedAt":"2026-05-03T10:00:00Z"
 		}
@@ -13797,6 +13799,7 @@ func TestContract_ActionPlanAuditLifecycleSnapshot(t *testing.T) {
 		Params:         map[string]any{"mode": "graceful"},
 		Reason:         "Recover after confirmed outage",
 		RequestedBy:    "agent:oncall-helper",
+		Actor:          unifiedresources.ActionActor{SubjectID: "agent:oncall-helper", Kind: unifiedresources.ActionActorService, CredentialID: "service:contract", OrgID: "default"},
 	}
 	plan, err := (actionplanner.Planner{Now: func() time.Time { return now }}).Plan(req, resource)
 	if err != nil {
@@ -13863,13 +13866,13 @@ func TestContract_ActionPlanAuditLifecycleSnapshot(t *testing.T) {
 	}
 	const want = `{
 		"audit":{
-			"id":"act_7eed41cdc58507f340151d2497707eca",
+			"id":"act_a0f4a22a14c32c635a2ecc3cddea25a1",
 			"state":"pending_approval",
 			"resourceId":"vm:42",
 			"requestId":"agent-run-123",
 			"requestedBy":"agent:oncall-helper",
 			"approvalPolicy":"admin",
-			"planHash":"sha256:f60417e39f967eb0803af0a3f2e2abd70f20d8a77a09c2e36976bdda34b6dbaf",
+			"planHash":"sha256:1473ff97f7a51c6956d40eca1d8e710db1c0abd008b2ab429d3071b81f387fde",
 			"preflightSummary":"No provider-supported dry run is advertised for this capability."
 		},
 		"events":[
@@ -13891,6 +13894,8 @@ func TestContract_ActionPlanAuditLifecycleSnapshot(t *testing.T) {
 func TestContract_ActionDecisionJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 5, 4, 15, 0, 0, 0, time.UTC)
 	plannedAt := now.Add(-time.Minute)
+	requestActor := unifiedresources.ActionActor{SubjectID: "agent:oncall-helper", Kind: unifiedresources.ActionActorService, CredentialID: "service:contract", OrgID: "default"}
+	decisionActor := unifiedresources.ActionActor{SubjectID: "operator@example.com", Kind: unifiedresources.ActionActorUser, CredentialID: "session:contract", OrgID: "default"}
 	record := unifiedresources.ActionAuditRecord{
 		ID:        "act_decision_contract",
 		CreatedAt: plannedAt,
@@ -13902,19 +13907,21 @@ func TestContract_ActionDecisionJSONSnapshot(t *testing.T) {
 			CapabilityName: "restart",
 			Reason:         "Recover after confirmed outage",
 			RequestedBy:    "agent:oncall-helper",
+			Actor:          requestActor,
 		},
 		Plan: unifiedresources.ActionPlan{
-			ActionID:          "act_decision_contract",
-			RequestID:         "agent-run-approve",
-			Allowed:           true,
-			RequiresApproval:  true,
-			ApprovalPolicy:    unifiedresources.ApprovalAdmin,
-			RollbackAvailable: false,
-			PlannedAt:         plannedAt,
-			ExpiresAt:         now.Add(4 * time.Minute),
-			ResourceVersion:   "resource:sha256:contract",
-			PolicyVersion:     "policy:sha256:contract",
-			PlanHash:          "sha256:contract",
+			ActionID:            "act_decision_contract",
+			RequestID:           "agent-run-approve",
+			Allowed:             true,
+			RequiresApproval:    true,
+			ApprovalPolicy:      unifiedresources.ApprovalAdmin,
+			ApprovalRequirement: unifiedresources.ApprovalRequirementForFloor(unifiedresources.ApprovalAdmin),
+			RollbackAvailable:   false,
+			PlannedAt:           plannedAt,
+			ExpiresAt:           now.Add(4 * time.Minute),
+			ResourceVersion:     "resource:sha256:contract",
+			PolicyVersion:       "policy:sha256:contract",
+			PlanHash:            "sha256:contract",
 			Preflight: &unifiedresources.ActionPreflight{
 				Target:          "vm:42",
 				CurrentState:    "web-42 is warning",
@@ -13933,10 +13940,10 @@ func TestContract_ActionDecisionJSONSnapshot(t *testing.T) {
 		},
 	}
 
+	evidence := unifiedresources.ApprovalEvidence{Version: 1, Method: unifiedresources.MethodSession, Actor: decisionActor, OrgID: "default", ActionID: record.ID, PlanHash: record.Plan.PlanHash, Outcome: unifiedresources.OutcomeApproved, IssuedAt: now}
 	updated, event, err := unifiedresources.ApplyActionDecision(record, unifiedresources.ActionApprovalRecord{
-		Actor:   "operator@example.com",
-		Outcome: unifiedresources.OutcomeApproved,
-		Reason:  "inside maintenance window",
+		Actor: "operator@example.com", ActorBinding: decisionActor, Method: unifiedresources.MethodSession,
+		Outcome: unifiedresources.OutcomeApproved, Reason: "inside maintenance window", Evidence: &evidence,
 	}, now)
 	if err != nil {
 		t.Fatalf("apply action decision: %v", err)
@@ -13980,22 +13987,26 @@ func TestContract_ActionDecisionJSONSnapshot(t *testing.T) {
 			"state":"approved",
 			"approval":{
 				"actor":"operator@example.com",
-				"method":"api",
+				"method":"session",
 				"timestamp":"2026-05-04T15:00:00Z",
 				"outcome":"approved",
-				"reason":"inside maintenance window"
+				"reason":"inside maintenance window",
+				"actorBinding":{"subjectId":"operator@example.com","kind":"user","credentialId":"session:contract","orgId":"default"},
+				"evidence":{"version":1,"method":"session","actor":{"subjectId":"operator@example.com","kind":"user","credentialId":"session:contract","orgId":"default"},"orgId":"default","actionId":"act_decision_contract","planHash":"sha256:contract","outcome":"approved","issuedAt":"2026-05-04T15:00:00Z","expiresAt":"0001-01-01T00:00:00Z"}
 			},
 			"audit":{
 				"id":"act_decision_contract",
 				"createdAt":"2026-05-04T14:59:00Z",
 				"updatedAt":"2026-05-04T15:00:00Z",
 				"state":"approved",
+				"decisionRevision":1,
 				"request":{
 					"requestId":"agent-run-approve",
 					"resourceId":"vm:42",
 					"capabilityName":"restart",
 					"reason":"Recover after confirmed outage",
-					"requestedBy":"agent:oncall-helper"
+					"requestedBy":"agent:oncall-helper",
+					"actor":{"subjectId":"agent:oncall-helper","kind":"service","credentialId":"service:contract","orgId":"default"}
 				},
 				"plan":{
 					"actionId":"act_decision_contract",
@@ -14003,6 +14014,7 @@ func TestContract_ActionDecisionJSONSnapshot(t *testing.T) {
 					"allowed":true,
 					"requiresApproval":true,
 					"approvalPolicy":"admin",
+					"approvalRequirement":{"version":1,"floor":"admin","quorum":1,"disallowRequester":false},
 					"rollbackAvailable":false,
 					"plannedAt":"2026-05-04T14:59:00Z",
 					"expiresAt":"2026-05-04T15:04:00Z",
@@ -14028,10 +14040,12 @@ func TestContract_ActionDecisionJSONSnapshot(t *testing.T) {
 				"approvals":[
 					{
 						"actor":"operator@example.com",
-						"method":"api",
+						"method":"session",
 						"timestamp":"2026-05-04T15:00:00Z",
 						"outcome":"approved",
-						"reason":"inside maintenance window"
+						"reason":"inside maintenance window",
+						"actorBinding":{"subjectId":"operator@example.com","kind":"user","credentialId":"session:contract","orgId":"default"},
+						"evidence":{"version":1,"method":"session","actor":{"subjectId":"operator@example.com","kind":"user","credentialId":"session:contract","orgId":"default"},"orgId":"default","actionId":"act_decision_contract","planHash":"sha256:contract","outcome":"approved","issuedAt":"2026-05-04T15:00:00Z","expiresAt":"0001-01-01T00:00:00Z"}
 					}
 				],
 				"verificationOutcome":{
@@ -14044,7 +14058,7 @@ func TestContract_ActionDecisionJSONSnapshot(t *testing.T) {
 			"state":"approved",
 			"actor":"operator@example.com",
 			"message":"Action approved. Execution remains pending a separate execution contract.",
-			"method":"api",
+			"method":"session",
 			"outcome":"approved",
 			"policy":"admin"
 		}
@@ -14057,30 +14071,36 @@ func TestContract_ActionExecutionJSONSnapshot(t *testing.T) {
 	completedAt := startedAt.Add(30 * time.Second)
 	plannedAt := startedAt.Add(-2 * time.Minute)
 	approvedAt := startedAt.Add(-time.Minute)
+	requestActor := unifiedresources.ActionActor{SubjectID: "agent:oncall-helper", Kind: unifiedresources.ActionActorService, CredentialID: "service:contract", OrgID: "default"}
+	approvalActor := unifiedresources.ActionActor{SubjectID: "operator@example.com", Kind: unifiedresources.ActionActorUser, CredentialID: "session:contract", OrgID: "default"}
+	approvalEvidence := unifiedresources.ApprovalEvidence{Version: 1, Method: unifiedresources.MethodSession, Actor: approvalActor, OrgID: "default", ActionID: "act_execution_contract", PlanHash: "sha256:contract", Outcome: unifiedresources.OutcomeApproved, IssuedAt: approvedAt}
 	record := unifiedresources.ActionAuditRecord{
-		ID:        "act_execution_contract",
-		CreatedAt: plannedAt,
-		UpdatedAt: approvedAt,
-		State:     unifiedresources.ActionStateApproved,
+		ID:               "act_execution_contract",
+		CreatedAt:        plannedAt,
+		UpdatedAt:        approvedAt,
+		State:            unifiedresources.ActionStateApproved,
+		DecisionRevision: 1,
 		Request: unifiedresources.ActionRequest{
 			RequestID:      "agent-run-execute",
 			ResourceID:     "vm:42",
 			CapabilityName: "restart",
 			Reason:         "Recover after confirmed outage",
 			RequestedBy:    "agent:oncall-helper",
+			Actor:          requestActor,
 		},
 		Plan: unifiedresources.ActionPlan{
-			ActionID:          "act_execution_contract",
-			RequestID:         "agent-run-execute",
-			Allowed:           true,
-			RequiresApproval:  true,
-			ApprovalPolicy:    unifiedresources.ApprovalAdmin,
-			RollbackAvailable: false,
-			PlannedAt:         plannedAt,
-			ExpiresAt:         startedAt.Add(3 * time.Minute),
-			ResourceVersion:   "resource:sha256:contract",
-			PolicyVersion:     "policy:sha256:contract",
-			PlanHash:          "sha256:contract",
+			ActionID:            "act_execution_contract",
+			RequestID:           "agent-run-execute",
+			Allowed:             true,
+			RequiresApproval:    true,
+			ApprovalPolicy:      unifiedresources.ApprovalAdmin,
+			ApprovalRequirement: unifiedresources.ApprovalRequirementForFloor(unifiedresources.ApprovalAdmin),
+			RollbackAvailable:   false,
+			PlannedAt:           plannedAt,
+			ExpiresAt:           startedAt.Add(3 * time.Minute),
+			ResourceVersion:     "resource:sha256:contract",
+			PolicyVersion:       "policy:sha256:contract",
+			PlanHash:            "sha256:contract",
 			Preflight: &unifiedresources.ActionPreflight{
 				Target:          "vm:42",
 				CurrentState:    "web-42 is warning",
@@ -14099,11 +14119,13 @@ func TestContract_ActionExecutionJSONSnapshot(t *testing.T) {
 		},
 		Approvals: []unifiedresources.ActionApprovalRecord{
 			{
-				Actor:     "operator@example.com",
-				Method:    unifiedresources.MethodAPI,
-				Timestamp: approvedAt,
-				Outcome:   unifiedresources.OutcomeApproved,
-				Reason:    "inside maintenance window",
+				Actor:        "operator@example.com",
+				ActorBinding: approvalActor,
+				Method:       unifiedresources.MethodSession,
+				Timestamp:    approvedAt,
+				Outcome:      unifiedresources.OutcomeApproved,
+				Reason:       "inside maintenance window",
+				Evidence:     &approvalEvidence,
 			},
 		},
 	}
@@ -14166,12 +14188,14 @@ func TestContract_ActionExecutionJSONSnapshot(t *testing.T) {
 				"createdAt":"2026-05-04T15:28:00Z",
 				"updatedAt":"2026-05-04T15:30:30Z",
 				"state":"completed",
+				"decisionRevision":1,
 				"request":{
 					"requestId":"agent-run-execute",
 					"resourceId":"vm:42",
 					"capabilityName":"restart",
 					"reason":"Recover after confirmed outage",
-					"requestedBy":"agent:oncall-helper"
+					"requestedBy":"agent:oncall-helper",
+					"actor":{"subjectId":"agent:oncall-helper","kind":"service","credentialId":"service:contract","orgId":"default"}
 				},
 				"plan":{
 					"actionId":"act_execution_contract",
@@ -14179,6 +14203,7 @@ func TestContract_ActionExecutionJSONSnapshot(t *testing.T) {
 					"allowed":true,
 					"requiresApproval":true,
 					"approvalPolicy":"admin",
+					"approvalRequirement":{"version":1,"floor":"admin","quorum":1,"disallowRequester":false},
 					"rollbackAvailable":false,
 					"plannedAt":"2026-05-04T15:28:00Z",
 					"expiresAt":"2026-05-04T15:33:00Z",
@@ -14204,10 +14229,12 @@ func TestContract_ActionExecutionJSONSnapshot(t *testing.T) {
 				"approvals":[
 					{
 						"actor":"operator@example.com",
-						"method":"api",
+						"method":"session",
 						"timestamp":"2026-05-04T15:29:00Z",
 						"outcome":"approved",
-						"reason":"inside maintenance window"
+						"reason":"inside maintenance window",
+						"actorBinding":{"subjectId":"operator@example.com","kind":"user","credentialId":"session:contract","orgId":"default"},
+						"evidence":{"version":1,"method":"session","actor":{"subjectId":"operator@example.com","kind":"user","credentialId":"session:contract","orgId":"default"},"orgId":"default","actionId":"act_execution_contract","planHash":"sha256:contract","outcome":"approved","issuedAt":"2026-05-04T15:29:00Z","expiresAt":"0001-01-01T00:00:00Z"}
 					}
 				],
 				"result":{
@@ -14239,7 +14266,7 @@ func TestContract_ActionExecutionJSONSnapshot(t *testing.T) {
 
 func TestContract_ActionDryRunOnlyExecutionErrorJSONSnapshot(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	store, err := h.getStore("default")
 	if err != nil {
 		t.Fatalf("get store: %v", err)
@@ -14256,19 +14283,21 @@ func TestContract_ActionDryRunOnlyExecutionErrorJSONSnapshot(t *testing.T) {
 			CapabilityName: "restart",
 			Reason:         "Inspect possible restart remediation",
 			RequestedBy:    "agent:oncall-helper",
+			Actor:          unifiedresources.ActionActor{SubjectID: "agent:oncall-helper", Kind: unifiedresources.ActionActorUser, CredentialID: "session:contract", OrgID: "default"},
 		},
 		Plan: unifiedresources.ActionPlan{
-			ActionID:          "act_dry_run_contract",
-			RequestID:         "agent-run-dry-run",
-			Allowed:           true,
-			RequiresApproval:  false,
-			ApprovalPolicy:    unifiedresources.ApprovalDryRun,
-			RollbackAvailable: false,
-			PlannedAt:         now.Add(-time.Minute),
-			ExpiresAt:         now.Add(4 * time.Minute),
-			ResourceVersion:   "resource:sha256:dry-run-contract",
-			PolicyVersion:     "policy:sha256:dry-run-contract",
-			PlanHash:          "sha256:dry-run-contract",
+			ActionID:            "act_dry_run_contract",
+			RequestID:           "agent-run-dry-run",
+			Allowed:             true,
+			RequiresApproval:    false,
+			ApprovalPolicy:      unifiedresources.ApprovalDryRun,
+			ApprovalRequirement: unifiedresources.ApprovalRequirementForFloor(unifiedresources.ApprovalDryRun),
+			RollbackAvailable:   false,
+			PlannedAt:           now.Add(-time.Minute),
+			ExpiresAt:           now.Add(4 * time.Minute),
+			ResourceVersion:     "resource:sha256:dry-run-contract",
+			PolicyVersion:       "policy:sha256:dry-run-contract",
+			PlanHash:            "sha256:dry-run-contract",
 			Preflight: &unifiedresources.ActionPreflight{
 				Target:          "vm:42",
 				CurrentState:    "web-42 is warning",
@@ -14292,7 +14321,7 @@ func TestContract_ActionDryRunOnlyExecutionErrorJSONSnapshot(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/actions/act_dry_run_contract/execute", bytes.NewBufferString(`{}`))
 	req.SetPathValue("id", "act_dry_run_contract")
 	rec := httptest.NewRecorder()
-	h.HandleExecuteAction(rec, req)
+	h.HandleExecuteAction(rec, actionHandlerTestRequest(req, ""))
 
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusConflict, rec.Body.String())
@@ -14357,7 +14386,7 @@ func TestContract_APIActionExecutionRevalidatesPlanFreshness(t *testing.T) {
 		"if unified.IsPermanentActionExecutionRefusal(err)",
 		"if err := s.ValidatePlanFresh(orgID, record); err != nil",
 		"errors.Is(err, unified.ErrActionPlanDrift)",
-		"RecordRefusedExecution(store, record, actor, now, err)",
+		"RecordRefusedExecution(store, record, actorID, now, err)",
 		"unified.RefuseActionExecution(record, reason, actor, now)",
 	} {
 		if !strings.Contains(src, snippet) {
@@ -14365,7 +14394,7 @@ func TestContract_APIActionExecutionRevalidatesPlanFreshness(t *testing.T) {
 		}
 	}
 	if strings.Index(src, "if err := s.ValidatePlanFresh(orgID, record); err != nil") >
-		strings.Index(src, "started, startEvent, err := unified.BeginActionExecution(record, actor, now)") {
+		strings.Index(src, "started, startEvent, err := unified.BeginActionExecution(record, actorID, now)") {
 		t.Fatal("Execute must validate plan freshness before entering executing state or calling the executor")
 	}
 
@@ -14406,7 +14435,7 @@ func TestContract_ExecuteActionCapabilityDeclaresPlanExpired(t *testing.T) {
 
 func TestContract_ResourceTimelineEndpointsIncludeRelatedChanges(t *testing.T) {
 	now := time.Date(2026, 4, 25, 22, 15, 0, 0, time.UTC)
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unifiedresources.Resource{
@@ -14526,29 +14555,32 @@ func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 	}{
 		Audits: []unifiedresources.ActionAuditRecord{
 			{
-				ID:        "action-1",
-				CreatedAt: now,
-				UpdatedAt: now,
-				State:     unifiedresources.ActionStateCompleted,
+				ID:               "action-1",
+				CreatedAt:        now,
+				UpdatedAt:        now,
+				State:            unifiedresources.ActionStateCompleted,
+				DecisionRevision: 1,
 				Request: unifiedresources.ActionRequest{
 					RequestID:      "req-1",
 					ResourceID:     "vm:42",
 					CapabilityName: "restart",
 					Reason:         "maintenance",
 					RequestedBy:    "agent:ops",
+					Actor:          unifiedresources.ActionActor{SubjectID: "agent:ops", Kind: unifiedresources.ActionActorService, CredentialID: "service:contract", OrgID: "default"},
 				},
 				Plan: unifiedresources.ActionPlan{
-					ActionID:          "action-1",
-					RequestID:         "req-1",
-					Allowed:           true,
-					RequiresApproval:  false,
-					ApprovalPolicy:    unifiedresources.ApprovalNone,
-					RollbackAvailable: false,
-					PlannedAt:         now,
-					ExpiresAt:         now.Add(5 * time.Minute),
-					ResourceVersion:   "rv-1",
-					PolicyVersion:     "pv-1",
-					PlanHash:          "hash-1",
+					ActionID:            "action-1",
+					RequestID:           "req-1",
+					Allowed:             true,
+					RequiresApproval:    false,
+					ApprovalPolicy:      unifiedresources.ApprovalNone,
+					ApprovalRequirement: unifiedresources.ApprovalRequirementForFloor(unifiedresources.ApprovalNone),
+					RollbackAvailable:   false,
+					PlannedAt:           now,
+					ExpiresAt:           now.Add(5 * time.Minute),
+					ResourceVersion:     "rv-1",
+					PolicyVersion:       "pv-1",
+					PlanHash:            "hash-1",
 					Preflight: &unifiedresources.ActionPreflight{
 						Target:            "vm:42",
 						CurrentState:      "online",
@@ -14562,11 +14594,12 @@ func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 				},
 				Approvals: []unifiedresources.ActionApprovalRecord{
 					{
-						Actor:     "admin@example.com",
-						Method:    unifiedresources.MethodUI,
-						Timestamp: now.Add(time.Minute),
-						Outcome:   unifiedresources.OutcomeApproved,
-						Reason:    "approved",
+						Actor:        "admin@example.com",
+						ActorBinding: unifiedresources.ActionActor{SubjectID: "admin@example.com", Kind: unifiedresources.ActionActorUser, CredentialID: "session:contract", OrgID: "default"},
+						Method:       unifiedresources.MethodUI,
+						Timestamp:    now.Add(time.Minute),
+						Outcome:      unifiedresources.OutcomeApproved,
+						Reason:       "approved",
 					},
 				},
 				Result: &unifiedresources.ExecutionResult{
@@ -14594,12 +14627,14 @@ func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 				"createdAt":"2026-03-18T16:00:00Z",
 				"updatedAt":"2026-03-18T16:00:00Z",
 				"state":"completed",
+				"decisionRevision":1,
 				"request":{
 					"requestId":"req-1",
 					"resourceId":"vm:42",
 					"capabilityName":"restart",
 					"reason":"maintenance",
-					"requestedBy":"agent:ops"
+					"requestedBy":"agent:ops",
+					"actor":{"subjectId":"agent:ops","kind":"service","credentialId":"service:contract","orgId":"default"}
 				},
 				"plan":{
 					"actionId":"action-1",
@@ -14607,6 +14642,7 @@ func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 					"allowed":true,
 					"requiresApproval":false,
 					"approvalPolicy":"none",
+					"approvalRequirement":{"version":1,"floor":"none","quorum":1,"disallowRequester":false},
 					"rollbackAvailable":false,
 					"plannedAt":"2026-03-18T16:00:00Z",
 					"expiresAt":"2026-03-18T16:05:00Z",
@@ -14630,7 +14666,8 @@ func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 						"method":"ui",
 						"timestamp":"2026-03-18T16:01:00Z",
 						"outcome":"approved",
-						"reason":"approved"
+						"reason":"approved",
+						"actorBinding":{"subjectId":"admin@example.com","kind":"user","credentialId":"session:contract","orgId":"default"}
 					}
 				],
 				"result":{
@@ -14662,6 +14699,7 @@ func TestContract_UnifiedActionLifecycleEventsJSONSnapshot(t *testing.T) {
 				ActionID:  "action-1",
 				Timestamp: now,
 				State:     unifiedresources.ActionStatePlanned,
+				Kind:      unifiedresources.ActionLifecycleEventTransition,
 				Actor:     "system",
 				Message:   "planned",
 			},
@@ -14681,6 +14719,7 @@ func TestContract_UnifiedActionLifecycleEventsJSONSnapshot(t *testing.T) {
 				"actionId":"action-1",
 				"timestamp":"2026-03-18T16:00:00Z",
 				"state":"planned",
+				"kind":"transition",
 				"actor":"system",
 				"message":"planned"
 			}
@@ -16555,6 +16594,9 @@ func TestContract_AgentCapabilitiesRequiredScopeSummaryUsesManifestScopes(t *tes
 		authpkg.ScopeSettingsRead,
 		authpkg.ScopeSettingsWrite,
 		authpkg.ScopeAIExecute,
+		authpkg.ScopeActionsPlan,
+		authpkg.ScopeActionsApprove,
+		authpkg.ScopeActionsExecute,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("canonical agent capability scopes = %v, want %v", got, want)
@@ -19719,16 +19761,24 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"AgentErrCodeInvalidActionRequest":       agentcapabilities.AgentErrCodeInvalidActionRequest,
 		"AgentErrCodeCapabilityNotFound":         agentcapabilities.AgentErrCodeCapabilityNotFound,
 		"AgentErrCodeActionExecutionUnavailable": agentcapabilities.AgentErrCodeActionExecutionUnavailable,
+		"AgentErrCodeActionActorUnavailable":     agentcapabilities.AgentErrCodeActionActorUnavailable,
 		"AgentErrCodeMissingID":                  agentcapabilities.AgentErrCodeMissingID,
 		"AgentErrCodeInvalidID":                  agentcapabilities.AgentErrCodeInvalidID,
 		"AgentErrCodeInvalidActionDecision":      agentcapabilities.AgentErrCodeInvalidActionDecision,
 		"AgentErrCodeActionNotFound":             agentcapabilities.AgentErrCodeActionNotFound,
 		"AgentErrCodeActionNotPending":           agentcapabilities.AgentErrCodeActionNotPending,
 		"AgentErrCodeActionPlanExpired":          agentcapabilities.AgentErrCodeActionPlanExpired,
+		"AgentErrCodeActionApprovalForbidden":    agentcapabilities.AgentErrCodeActionApprovalForbidden,
+		"AgentErrCodeActionStepUpUnavailable":    agentcapabilities.AgentErrCodeActionStepUpUnavailable,
+		"AgentErrCodeActionDecisionConflict":     agentcapabilities.AgentErrCodeActionDecisionConflict,
+		"AgentErrCodeActionSeparationRequired":   agentcapabilities.AgentErrCodeActionSeparationRequired,
+		"AgentErrCodeActionReplanRequired":       agentcapabilities.AgentErrCodeActionReplanRequired,
 		"AgentErrCodeInvalidActionExecution":     agentcapabilities.AgentErrCodeInvalidActionExecution,
 		"AgentErrCodeActionNotApproved":          agentcapabilities.AgentErrCodeActionNotApproved,
 		"AgentErrCodeActionAlreadyExecuting":     agentcapabilities.AgentErrCodeActionAlreadyExecuting,
 		"AgentErrCodeActionExecutionFinal":       agentcapabilities.AgentErrCodeActionExecutionFinal,
+		"AgentErrCodeActionExecutionForbidden":   agentcapabilities.AgentErrCodeActionExecutionForbidden,
+		"AgentErrCodeActionNotExecuting":         agentcapabilities.AgentErrCodeActionNotExecuting,
 		"AgentErrCodeActionDryRunOnly":           agentcapabilities.AgentErrCodeActionDryRunOnly,
 		"AgentErrCodeActionPlanDrift":            agentcapabilities.AgentErrCodeActionPlanDrift,
 		"AgentErrCodeResourceRemediationLocked":  agentcapabilities.AgentErrCodeResourceRemediationLocked,
@@ -20172,7 +20222,7 @@ func TestContract_FindingsResourceOperatorStateProviderIsWired(t *testing.T) {
 // through body manipulation, defeating per-resource scoping.
 func TestContract_ResourceOperatorStateUrlCanonicalIDWinsOverBody(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
-	h := NewResourceHandlers(cfg)
+	h := newActionTestResourceHandlers(t, cfg)
 
 	body := []byte(`{"canonicalId":"vm:999","intentionallyOffline":true}`)
 	rec := httptest.NewRecorder()

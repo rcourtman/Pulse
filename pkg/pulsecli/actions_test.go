@@ -122,6 +122,53 @@ func TestActionsPlanCommandRequiresToken(t *testing.T) {
 	}
 }
 
+func TestActionsPlanCommandAllowsOmittedRequestedByCompatibilityLabel(t *testing.T) {
+	var received map[string]json.RawMessage
+	var receivedAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedAuth = r.Header.Get("Authorization")
+		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(unified.ActionPlan{
+			ActionID: "act_optional", RequestID: "req-optional", Allowed: true,
+			PlannedAt: time.Date(2026, 5, 3, 12, 0, 0, 0, time.UTC),
+			ExpiresAt: time.Date(2026, 5, 3, 12, 5, 0, 0, time.UTC), PlanHash: "sha256:optional",
+		})
+	}))
+	defer server.Close()
+
+	cmd := newTestActionsRootCommand(map[string]string{
+		"PULSE_API_TOKEN": "test-token",
+		"PULSE_API_URL":   server.URL,
+	})
+	cmd.SetArgs([]string{
+		"actions", "plan",
+		"--request-id", "req-optional",
+		"--resource-id", "vm:42",
+		"--capability", "restart",
+		"--reason", "Recover",
+	})
+	cmd.SetOut(io.Discard)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute actions plan without requested-by: %v", err)
+	}
+	if receivedAuth != "Bearer test-token" {
+		t.Fatalf("Authorization = %q", receivedAuth)
+	}
+	if _, present := received["requestedBy"]; present {
+		t.Fatalf("optional compatibility label unexpectedly emitted: %s", received["requestedBy"])
+	}
+	planCmd, _, err := cmd.Find([]string{"actions", "plan"})
+	if err != nil {
+		t.Fatalf("find actions plan command: %v", err)
+	}
+	flag := planCmd.Flags().Lookup("requested-by")
+	if flag == nil || !strings.Contains(flag.Usage, "deprecated compatibility label") || !strings.Contains(flag.Usage, "server derives requester identity") {
+		t.Fatalf("requested-by flag does not document non-authoritative compatibility semantics: %#v", flag)
+	}
+}
+
 func TestActionsDecideCommandPostsApprovalDecision(t *testing.T) {
 	now := time.Date(2026, 5, 4, 14, 30, 0, 0, time.UTC)
 	var receivedAuth string
@@ -590,9 +637,17 @@ func TestActionsEventsCommandRequiresActionID(t *testing.T) {
 
 func TestActionsPlanCommandUsesRequestFileFromStdin(t *testing.T) {
 	var received unified.ActionRequest
+	var receivedBody map[string]json.RawMessage
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request: %v", err)
+		}
+		if err := json.Unmarshal(body, &received); err != nil {
 			t.Fatalf("decode request: %v", err)
+		}
+		if err := json.Unmarshal(body, &receivedBody); err != nil {
+			t.Fatalf("decode raw request: %v", err)
 		}
 		_ = json.NewEncoder(w).Encode(unified.ActionPlan{
 			ActionID:        "act_stdin",
@@ -618,7 +673,13 @@ func TestActionsPlanCommandUsesRequestFileFromStdin(t *testing.T) {
 		"resourceId": "vm:42",
 		"capabilityName": "restart",
 		"reason": "Recover",
-		"requestedBy": "agent:file"
+		"requestedBy": "agent:file",
+		"actor": {
+			"subjectId": "forged-user",
+			"kind": "user",
+			"credentialId": "session:forged",
+			"orgId": "other-org"
+		}
 	}`))
 	cmd.SetOut(io.Discard)
 
@@ -627,6 +688,9 @@ func TestActionsPlanCommandUsesRequestFileFromStdin(t *testing.T) {
 	}
 	if received.RequestID != "req-file" || received.RequestedBy != "agent:file" {
 		t.Fatalf("received request = %+v", received)
+	}
+	if _, present := receivedBody["actor"]; present || received.Actor.SubjectID != "" {
+		t.Fatalf("server-owned actor leaked from request-file input: body=%s actor=%+v", receivedBody["actor"], received.Actor)
 	}
 }
 

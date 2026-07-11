@@ -58,7 +58,7 @@ func TestNormalizeRequiredScopesUseAuthOrderAndDeduplicate(t *testing.T) {
 
 func TestRequiredCapabilityScopeListReflectsCanonicalManifest(t *testing.T) {
 	got := RequiredCapabilityScopeList(CanonicalManifest().Capabilities)
-	want := "monitoring:read, monitoring:write, settings:read, settings:write, ai:execute"
+	want := "monitoring:read, monitoring:write, settings:read, settings:write, ai:execute, actions:plan, actions:approve, actions:execute"
 	if got != want {
 		t.Fatalf("RequiredCapabilityScopeList(CanonicalManifest) = %q, want %q", got, want)
 	}

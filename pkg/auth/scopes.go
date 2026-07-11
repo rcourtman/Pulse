@@ -20,6 +20,9 @@ const (
 	ScopeRelayMobileAccess = "relay:mobile:access"
 	ScopeAgentExec         = "agent:exec"
 	ScopeAgentEnroll       = "agent:enroll"
+	ScopeActionsPlan       = "actions:plan"
+	ScopeActionsApprove    = "actions:approve"
+	ScopeActionsExecute    = "actions:execute"
 )
 
 // AllKnownScopes enumerates canonical scopes, excluding the wildcard sentinel.
@@ -41,4 +44,7 @@ var AllKnownScopes = []string{
 	ScopeRelayMobileAccess,
 	ScopeAgentExec,
 	ScopeAgentEnroll,
+	ScopeActionsPlan,
+	ScopeActionsApprove,
+	ScopeActionsExecute,
 }

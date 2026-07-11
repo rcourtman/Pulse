@@ -923,6 +923,7 @@ func TestHandleAgentResourceContext_RecentActionsCarryRefusalTokens(t *testing.T
 			CapabilityName: "pulse_control",
 			Reason:         "restart workload",
 			RequestedBy:    "pulse_patrol",
+			Actor:          unified.ActionActor{SubjectID: "pulse_patrol", Kind: unified.ActionActorService, CredentialID: "service:test", OrgID: "default"},
 			Params:         map[string]any{"command": "systemctl restart workload"},
 		},
 		Plan: plan,
@@ -2488,23 +2489,23 @@ func TestHandleAgentOperationsLoopStatus_UsesDecisionLifecycleEvidenceForOlderPl
 			CapabilityName: "restart_service",
 			Params:         map[string]any{"command": "systemctl restart nginx"},
 			RequestedBy:    "pulse_patrol",
+			Actor:          unified.ActionActor{SubjectID: "pulse_patrol", Kind: unified.ActionActorService, CredentialID: "service:test", OrgID: "default"},
 		},
 		Plan: unified.ActionPlan{
-			ActionID:         "act-rejected",
-			RequestID:        "req-rejected",
-			PlannedAt:        old,
-			ExpiresAt:        now.Add(time.Hour),
-			RequiresApproval: true,
+			ActionID:            "act-rejected",
+			RequestID:           "req-rejected",
+			PlannedAt:           old,
+			ExpiresAt:           now.Add(time.Hour),
+			RequiresApproval:    true,
+			ApprovalPolicy:      unified.ApprovalAdmin,
+			ApprovalRequirement: unified.ApprovalRequirementForFloor(unified.ApprovalAdmin),
+			PlanHash:            "sha256:act-rejected",
 		},
 	}
 	if err := store.RecordActionAudit(record); err != nil {
 		t.Fatalf("RecordActionAudit: %v", err)
 	}
-	rejected, event, err := unified.ApplyActionDecision(record, unified.ActionApprovalRecord{
-		Actor:   "operator@example.com",
-		Method:  unified.MethodUI,
-		Outcome: unified.OutcomeRejected,
-	}, now)
+	rejected, event, err := unified.ApplyActionDecision(record, boundActionTestDecisionApproval(record.ID, record.Plan.PlanHash, "operator@example.com", unified.OutcomeRejected, now), now)
 	if err != nil {
 		t.Fatalf("ApplyActionDecision: %v", err)
 	}
@@ -2592,23 +2593,23 @@ func TestHandleAgentOperationsLoopStatus_ApprovedDecisionStillNeedsVerifiedOutco
 			CapabilityName: "restart_service",
 			Params:         map[string]any{"command": "systemctl restart nginx"},
 			RequestedBy:    "pulse_patrol",
+			Actor:          unified.ActionActor{SubjectID: "pulse_patrol", Kind: unified.ActionActorService, CredentialID: "service:test", OrgID: "default"},
 		},
 		Plan: unified.ActionPlan{
-			ActionID:         "act-approved",
-			RequestID:        "req-approved",
-			PlannedAt:        now.Add(-10 * time.Minute),
-			ExpiresAt:        now.Add(time.Hour),
-			RequiresApproval: true,
+			ActionID:            "act-approved",
+			RequestID:           "req-approved",
+			PlannedAt:           now.Add(-10 * time.Minute),
+			ExpiresAt:           now.Add(time.Hour),
+			RequiresApproval:    true,
+			ApprovalPolicy:      unified.ApprovalAdmin,
+			ApprovalRequirement: unified.ApprovalRequirementForFloor(unified.ApprovalAdmin),
+			PlanHash:            "sha256:act-approved",
 		},
 	}
 	if err := store.RecordActionAudit(record); err != nil {
 		t.Fatalf("RecordActionAudit: %v", err)
 	}
-	approved, event, err := unified.ApplyActionDecision(record, unified.ActionApprovalRecord{
-		Actor:   "operator@example.com",
-		Method:  unified.MethodUI,
-		Outcome: unified.OutcomeApproved,
-	}, now)
+	approved, event, err := unified.ApplyActionDecision(record, boundActionTestDecisionApproval(record.ID, record.Plan.PlanHash, "operator@example.com", unified.OutcomeApproved, now), now)
 	if err != nil {
 		t.Fatalf("ApplyActionDecision: %v", err)
 	}

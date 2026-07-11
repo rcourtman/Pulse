@@ -144,3 +144,13 @@ Patrol approval pushes use `decide_action` with a canonical action id; terminal
 pushes distinguish verified, unverified, verification-failed, and
 execution-failed outcomes. Relay must not revive `/api/ai/approvals` as a live
 mutation route or claim that executor completion alone verified the change.
+
+The action routes in the relay-mobile inventory now name the granular approval
+and execution scopes. `relay:mobile:access` and `ai:execute` remain explicitly
+enumerated compatibility scopes only for this bounded migration window; the
+central lifecycle authority still requires a current durable token owner,
+matching organization and credential, current RBAC capability, and action/plan
+binding. Detached relay/service tokens fail closed. A mobile-local biometric
+label is not server-verifiable MFA evidence, so device-key enrollment and
+cryptographic mobile step-up remain a later governed slice and relay must not
+claim that local biometric success satisfied the core MFA floor.

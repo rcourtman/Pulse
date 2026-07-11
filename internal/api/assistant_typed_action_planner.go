@@ -11,7 +11,8 @@ type assistantTypedActionPlanner struct {
 }
 
 func (p assistantTypedActionPlanner) PlanTypedAction(ctx context.Context, orgID string, req unified.ActionRequest) (*unified.ActionPlan, error) {
-	plan, err := p.resources.ActionLifecycle().Plan(ctx, orgID, req)
+	actor := unified.ActionActor{SubjectID: "pulse_assistant", Kind: unified.ActionActorService, CredentialID: "service:assistant", OrgID: orgID}
+	plan, err := p.resources.ActionLifecycle().Plan(ctx, orgID, req, actor)
 	if err != nil {
 		return nil, err
 	}

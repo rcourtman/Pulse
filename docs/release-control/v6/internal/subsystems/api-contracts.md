@@ -7366,3 +7366,28 @@ exact residual unowned by `registry.json` is
 `pulse-enterprise/internal/aiautofix/remediation_handlers.go`. Their contract is
 enforced by enterprise inertness/static tests and remains a Task 12 governance
 input rather than being hidden behind an invalid cross-repo registry path.
+
+Task 08 Phase B1 makes action authority server-owned. Public plan payloads may
+retain `requestedBy` as a compatibility field, but it has no authority: the API
+stamps the authenticated session or durable owner-bound API-token actor and
+organization, and trusted in-process brokers must supply an explicit server
+actor. Actor binding and the versioned approval requirement are immutable plan
+identity and plan-hash inputs. Decisions and execution recheck current tenant
+membership, RBAC capability, token ownership, credential identity, and the
+explicit `actions:plan`, `actions:approve`, or `actions:execute` scope. The
+bounded migration window admits only the enumerated `ai:execute` and
+relay-mobile compatibility scopes. Exact decision retries return authoritative
+state without consuming step-up evidence or appending events; conflicting
+retries fail closed.
+
+Human decisions use a durable monotonic `decisionRevision` CAS. Every accepted
+approval atomically appends one revision-keyed decision fact containing the
+bound approval/evidence; a decision that changes state also appends exactly one
+approved or rejected lifecycle transition in the same transaction. Quorum-
+pending decisions append no transition. Memory and SQLite stores share these
+semantics, including append-only approval-prefix checks, unique decision
+revisions, unique true state transitions, crash rollback, and reload/reapply on
+CAS loss. Legacy nonterminal records without canonical actor/approval binding
+are replan-required. MFA is not implemented by labels: until a server verifier
+can validate and consume action-bound cryptographic evidence, MFA-required
+decisions remain unavailable and no API or product surface may claim otherwise.

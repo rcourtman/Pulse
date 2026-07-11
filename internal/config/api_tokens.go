@@ -30,6 +30,9 @@ const (
 	ScopeRelayMobileAccess = auth.ScopeRelayMobileAccess
 	ScopeAgentExec         = auth.ScopeAgentExec
 	ScopeAgentEnroll       = auth.ScopeAgentEnroll
+	ScopeActionsPlan       = auth.ScopeActionsPlan
+	ScopeActionsApprove    = auth.ScopeActionsApprove
+	ScopeActionsExecute    = auth.ScopeActionsExecute
 )
 
 // AllKnownScopes enumerates scopes recognized by the backend (excluding the wildcard sentinel).

@@ -456,6 +456,7 @@ func (s *SQLiteResourceStore) initSchema() error {
 		created_at DATETIME NOT NULL,
 		updated_at DATETIME NOT NULL,
 		state TEXT NOT NULL,
+		decision_revision INTEGER NOT NULL DEFAULT 0,
 		request_json TEXT NOT NULL,
 		plan_json TEXT NOT NULL,
 		approvals_json TEXT,
@@ -470,6 +471,9 @@ func (s *SQLiteResourceStore) initSchema() error {
 		action_id TEXT NOT NULL,
 		timestamp DATETIME NOT NULL,
 		state TEXT NOT NULL,
+		kind TEXT NOT NULL DEFAULT 'transition',
+		decision_revision INTEGER NOT NULL DEFAULT 0,
+		decision_json TEXT,
 		actor TEXT,
 		message TEXT
 	);
@@ -626,8 +630,8 @@ func (s *SQLiteResourceStore) migrateResourceIdentitiesSchema() error {
 	return nil
 }
 
-// migrateActionAuditsSchema adds the verification_outcome_json and
-// origin_json columns to older action_audits tables so the
+// migrateActionAuditsSchema adds decision/verification/origin columns to
+// older action_audits tables so the
 // VerificationOutcome and broker-owned Origin fields on ActionAuditRecord
 // persist across restarts. Records written before the migration read back
 // with the default unknown status / nil origin via the normalizer.
@@ -644,6 +648,11 @@ func (s *SQLiteResourceStore) migrateActionAuditsSchema() error {
 	if _, ok := columns["origin_json"]; !ok {
 		if _, err := s.db.Exec("ALTER TABLE action_audits ADD COLUMN origin_json TEXT"); err != nil {
 			return fmt.Errorf("add action_audits.origin_json column: %w", err)
+		}
+	}
+	if _, ok := columns["decision_revision"]; !ok {
+		if _, err := s.db.Exec("ALTER TABLE action_audits ADD COLUMN decision_revision INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return fmt.Errorf("add action_audits.decision_revision column: %w", err)
 		}
 	}
 	if _, err := s.db.Exec(`
@@ -663,19 +672,50 @@ func (s *SQLiteResourceStore) migrateActionAuditsSchema() error {
 }
 
 func (s *SQLiteResourceStore) migrateActionLifecycleEventsSchema() error {
+	columns, err := s.tableColumns("action_lifecycle_events")
+	if err != nil {
+		return err
+	}
+	if _, ok := columns["kind"]; !ok {
+		if _, err := s.db.Exec("ALTER TABLE action_lifecycle_events ADD COLUMN kind TEXT NOT NULL DEFAULT 'transition'"); err != nil {
+			return fmt.Errorf("add action_lifecycle_events.kind column: %w", err)
+		}
+	}
+	if _, ok := columns["decision_revision"]; !ok {
+		if _, err := s.db.Exec("ALTER TABLE action_lifecycle_events ADD COLUMN decision_revision INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return fmt.Errorf("add action_lifecycle_events.decision_revision column: %w", err)
+		}
+	}
+	if _, ok := columns["decision_json"]; !ok {
+		if _, err := s.db.Exec("ALTER TABLE action_lifecycle_events ADD COLUMN decision_json TEXT"); err != nil {
+			return fmt.Errorf("add action_lifecycle_events.decision_json column: %w", err)
+		}
+	}
+	if _, err := s.db.Exec(`DROP INDEX IF EXISTS idx_action_lifecycle_events_action_state_unique`); err != nil {
+		return fmt.Errorf("replace action lifecycle state index: %w", err)
+	}
 	if _, err := s.db.Exec(`
-		DELETE FROM action_lifecycle_events
-		WHERE id NOT IN (
-			SELECT MIN(id) FROM action_lifecycle_events GROUP BY action_id, state
+		UPDATE action_lifecycle_events SET kind = 'legacy'
+		WHERE id IN (
+			SELECT id FROM (
+				SELECT id, ROW_NUMBER() OVER (PARTITION BY action_id, state ORDER BY id) AS occurrence
+				FROM action_lifecycle_events WHERE kind = 'transition'
+			) WHERE occurrence > 1
 		)
 	`); err != nil {
-		return fmt.Errorf("deduplicate action lifecycle state events: %w", err)
+		return fmt.Errorf("preserve duplicate historical lifecycle events as legacy facts: %w", err)
 	}
 	if _, err := s.db.Exec(`
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_action_lifecycle_events_action_state_unique
-		ON action_lifecycle_events(action_id, state)
+		ON action_lifecycle_events(action_id, state) WHERE kind = 'transition'
 	`); err != nil {
 		return fmt.Errorf("create unique action lifecycle state index: %w", err)
+	}
+	if _, err := s.db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_action_lifecycle_events_action_decision_revision_unique
+		ON action_lifecycle_events(action_id, decision_revision) WHERE kind = 'decision'
+	`); err != nil {
+		return fmt.Errorf("create unique action decision revision index: %w", err)
 	}
 	return nil
 }
@@ -1796,7 +1836,7 @@ func actionAuditSQLArgs(record ActionAuditRecord) ([]any, error) {
 		originJSON = string(encoded)
 	}
 
-	return []any{record.ID, record.ID, CanonicalResourceID(record.Request.ResourceID), record.Request.RequestID, record.CreatedAt, record.UpdatedAt, string(record.State), string(requestJSON), string(planJSON), string(approvalsJSON), string(resultJSON), string(verificationOutcomeJSON), originJSON}, nil
+	return []any{record.ID, record.ID, CanonicalResourceID(record.Request.ResourceID), record.Request.RequestID, record.CreatedAt, record.UpdatedAt, string(record.State), record.DecisionRevision, string(requestJSON), string(planJSON), string(approvalsJSON), string(resultJSON), string(verificationOutcomeJSON), originJSON}, nil
 }
 
 func insertActionAuditSQL(exec sqlExecutor, record ActionAuditRecord) (bool, error) {
@@ -1805,8 +1845,8 @@ func insertActionAuditSQL(exec sqlExecutor, record ActionAuditRecord) (bool, err
 		return false, err
 	}
 	result, err := exec.Exec(`
-		INSERT INTO action_audits (id, action_id, canonical_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO action_audits (id, action_id, canonical_id, request_id, created_at, updated_at, state, decision_revision, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO NOTHING
 	`, args...)
 	if err != nil {
@@ -1831,10 +1871,10 @@ func updateActionAuditSQL(exec sqlExecutor, record ActionAuditRecord, expectedSt
 		placeholders[i] = "?"
 		setArgs = append(setArgs, string(state))
 	}
-	setArgs = append(setArgs, args[7], args[8], firstNonNilString(args[12]))
+	setArgs = append(setArgs, args[8], args[9], firstNonNilString(args[13]))
 	result, err := exec.Exec(`
 		UPDATE action_audits SET
-			action_id=?, canonical_id=?, request_id=?, created_at=?, updated_at=?, state=?,
+			action_id=?, canonical_id=?, request_id=?, created_at=?, updated_at=?, state=?, decision_revision=?,
 			request_json=?, plan_json=?, approvals_json=?, result_json=?, verification_outcome_json=?, origin_json=?
 		WHERE id=? AND state IN (`+strings.Join(placeholders, ",")+`)
 		  AND request_json=? AND plan_json=? AND COALESCE(origin_json, '')=?
@@ -1845,6 +1885,41 @@ func updateActionAuditSQL(exec sqlExecutor, record ActionAuditRecord, expectedSt
 	rows, err := result.RowsAffected()
 	if err != nil {
 		return false, fmt.Errorf("read updated action audit rows: %w", err)
+	}
+	return rows == 1, nil
+}
+
+func updateActionDecisionSQL(exec sqlExecutor, record ActionAuditRecord, expectedRevision uint64) (bool, error) {
+	if len(record.Approvals) == 0 {
+		return false, ErrActionDecisionRevisionConflict
+	}
+	args, err := actionAuditSQLArgs(record)
+	if err != nil {
+		return false, err
+	}
+	var expectedApprovals []ActionApprovalRecord
+	if len(record.Approvals) > 1 {
+		expectedApprovals = record.Approvals[:len(record.Approvals)-1]
+	}
+	expectedApprovalsJSON, err := json.Marshal(expectedApprovals)
+	if err != nil {
+		return false, fmt.Errorf("marshal expected action approvals: %w", err)
+	}
+	setArgs := append([]any(nil), args[1:]...)
+	setArgs = append(setArgs, record.ID, string(ActionStatePending), expectedRevision, string(expectedApprovalsJSON), args[8], args[9], firstNonNilString(args[13]))
+	result, err := exec.Exec(`
+		UPDATE action_audits SET
+			action_id=?, canonical_id=?, request_id=?, created_at=?, updated_at=?, state=?, decision_revision=?,
+			request_json=?, plan_json=?, approvals_json=?, result_json=?, verification_outcome_json=?, origin_json=?
+		WHERE id=? AND state=? AND decision_revision=? AND approvals_json=?
+		  AND request_json=? AND plan_json=? AND COALESCE(origin_json, '')=?
+	`, setArgs...)
+	if err != nil {
+		return false, fmt.Errorf("update action decision: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("read updated action decision rows: %w", err)
 	}
 	return rows == 1, nil
 }
@@ -1960,7 +2035,7 @@ func scanActionAuditRecord(scanner actionAuditScanner) (ActionAuditRecord, error
 	var stateStr string
 	var actionID, requestID string
 	var requestJSON, planJSON, approvalsJSON, resultJSON, verificationOutcomeJSON, originJSON sql.NullString
-	if err := scanner.Scan(&record.ID, &actionID, &requestID, &record.CreatedAt, &record.UpdatedAt, &stateStr, &requestJSON, &planJSON, &approvalsJSON, &resultJSON, &verificationOutcomeJSON, &originJSON); err != nil {
+	if err := scanner.Scan(&record.ID, &actionID, &requestID, &record.CreatedAt, &record.UpdatedAt, &stateStr, &record.DecisionRevision, &requestJSON, &planJSON, &approvalsJSON, &resultJSON, &verificationOutcomeJSON, &originJSON); err != nil {
 		return ActionAuditRecord{}, err
 	}
 
@@ -2049,7 +2124,7 @@ func (s *SQLiteResourceStore) GetLatestActionAuditByOrigin(surface, investigatio
 		return ActionAuditRecord{}, false, nil
 	}
 	row := s.db.QueryRow(`
-		SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
+		SELECT id, action_id, request_id, created_at, updated_at, state, decision_revision, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
 		FROM action_audits
 		WHERE json_valid(origin_json)
 		  AND json_extract(origin_json, '$.surface') = ?
@@ -2072,7 +2147,7 @@ func (s *SQLiteResourceStore) GetPendingActionAudits(limit int) ([]ActionAuditRe
 		limit = 100
 	}
 	rows, err := s.db.Query(`
-		SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
+		SELECT id, action_id, request_id, created_at, updated_at, state, decision_revision, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
 		FROM action_audits
 		WHERE state = ?
 		ORDER BY updated_at ASC, created_at ASC
@@ -2098,7 +2173,7 @@ func (s *SQLiteResourceStore) GetPendingActionAudits(limit int) ([]ActionAuditRe
 
 func (s *SQLiteResourceStore) GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error) {
 	query := `
-		SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
+		SELECT id, action_id, request_id, created_at, updated_at, state, decision_revision, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
 		FROM action_audits`
 
 	args := []any{}
@@ -2140,10 +2215,18 @@ func (s *SQLiteResourceStore) GetActionAudits(canonicalID string, since time.Tim
 }
 
 func recordActionLifecycleEventSQL(exec sqlExecutor, event ActionLifecycleEvent) error {
+	var decisionJSON any
+	if event.Decision != nil {
+		encoded, err := json.Marshal(event.Decision)
+		if err != nil {
+			return fmt.Errorf("marshal action decision event: %w", err)
+		}
+		decisionJSON = string(encoded)
+	}
 	_, err := exec.Exec(`
-		INSERT INTO action_lifecycle_events (action_id, timestamp, state, actor, message)
-		VALUES (?, ?, ?, ?, ?)
-	`, event.ActionID, event.Timestamp, string(event.State), event.Actor, event.Message)
+		INSERT INTO action_lifecycle_events (action_id, timestamp, state, kind, decision_revision, decision_json, actor, message)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, event.ActionID, event.Timestamp, string(event.State), string(event.Kind), event.DecisionRevision, decisionJSON, event.Actor, event.Message)
 	if err != nil {
 		return fmt.Errorf("insert action lifecycle event: %w", err)
 	}
@@ -2169,7 +2252,7 @@ func actionTransitionConflict(current ActionAuditRecord, desired ActionAuditReco
 	}
 }
 
-func (s *SQLiteResourceStore) recordActionTransition(record ActionAuditRecord, event ActionLifecycleEvent, expectedStates []ActionState, fallback error) error {
+func (s *SQLiteResourceStore) recordActionTransition(record ActionAuditRecord, event ActionLifecycleEvent, resultingTransition *ActionLifecycleEvent, expectedStates []ActionState, fallback error, expectedDecisionRevision *uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	tx, err := s.db.Begin()
@@ -2182,7 +2265,12 @@ func (s *SQLiteResourceStore) recordActionTransition(record ActionAuditRecord, e
 			_ = tx.Rollback()
 		}
 	}()
-	updated, err := updateActionAuditSQL(tx, record, expectedStates...)
+	var updated bool
+	if expectedDecisionRevision != nil {
+		updated, err = updateActionDecisionSQL(tx, record, *expectedDecisionRevision)
+	} else {
+		updated, err = updateActionAuditSQL(tx, record, expectedStates...)
+	}
 	if err != nil {
 		return err
 	}
@@ -2194,10 +2282,18 @@ func (s *SQLiteResourceStore) recordActionTransition(record ActionAuditRecord, e
 		if !found {
 			return fmt.Errorf("action audit %q not found", record.ID)
 		}
+		if expectedDecisionRevision != nil && current.State == ActionStatePending && ActionAuditIdentityMatches(current, record) {
+			return ErrActionDecisionRevisionConflict
+		}
 		return actionTransitionConflict(current, record, fallback)
 	}
 	if err := recordActionLifecycleEventSQL(tx, event); err != nil {
 		return err
+	}
+	if resultingTransition != nil {
+		if err := recordActionLifecycleEventSQL(tx, *resultingTransition); err != nil {
+			return err
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit action transition transaction: %w", err)
@@ -2218,8 +2314,22 @@ func (s *SQLiteResourceStore) RecordActionDecision(record ActionAuditRecord, eve
 	if normalizedEvent.ActionID != normalizedRecord.ID {
 		return fmt.Errorf("action decision event id %q does not match action audit id %q", normalizedEvent.ActionID, normalizedRecord.ID)
 	}
-
-	return s.recordActionTransition(normalizedRecord, normalizedEvent, []ActionState{ActionStatePending}, ErrActionNotPending)
+	if normalizedEvent.Kind != ActionLifecycleEventDecision || normalizedEvent.DecisionRevision != normalizedRecord.DecisionRevision {
+		return fmt.Errorf("action decision event revision does not match action audit revision")
+	}
+	current, found, err := s.getActionAudit(normalizedRecord.ID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("action audit %q not found", normalizedRecord.ID)
+	}
+	command, err := PrepareActionDecisionAppend(current, normalizedRecord, normalizedEvent)
+	if err != nil {
+		return err
+	}
+	expectedRevision := command.Record.DecisionRevision - 1
+	return s.recordActionTransition(command.Record, command.DecisionEvent, command.TransitionEvent, []ActionState{ActionStatePending}, ErrActionNotPending, &expectedRevision)
 }
 
 func (s *SQLiteResourceStore) RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error {
@@ -2251,7 +2361,7 @@ func (s *SQLiteResourceStore) RecordActionExecutionStart(record ActionAuditRecor
 	if normalizedRecord.Plan.Allowed && !normalizedRecord.Plan.RequiresApproval {
 		expected = append(expected, ActionStatePlanned)
 	}
-	return s.recordActionTransition(normalizedRecord, normalizedEvent, expected, ErrActionNotApproved)
+	return s.recordActionTransition(normalizedRecord, normalizedEvent, nil, expected, ErrActionNotApproved, nil)
 }
 
 // RecordActionPolicyExecutionStart is the single automatic-admission CAS. It
@@ -2338,7 +2448,7 @@ func (s *SQLiteResourceStore) RecordActionExecutionResult(record ActionAuditReco
 	// output before persisting; see RecordActionAudit for the contract.
 	normalizedRecord = RedactAuditRecord(normalizedRecord)
 
-	return s.recordActionTransition(normalizedRecord, normalizedEvent, []ActionState{ActionStateExecuting}, ErrActionNotExecuting)
+	return s.recordActionTransition(normalizedRecord, normalizedEvent, nil, []ActionState{ActionStateExecuting}, ErrActionNotExecuting, nil)
 }
 
 func (s *SQLiteResourceStore) RecordActionExecutionRefusal(record ActionAuditRecord, event ActionLifecycleEvent) error {
@@ -2354,7 +2464,7 @@ func (s *SQLiteResourceStore) RecordActionExecutionRefusal(record ActionAuditRec
 		return fmt.Errorf("action execution refusal must persist matching failed state")
 	}
 	normalizedRecord = RedactAuditRecord(normalizedRecord)
-	return s.recordActionTransition(normalizedRecord, normalizedEvent, []ActionState{ActionStatePlanned, ActionStatePending, ActionStateApproved}, ErrActionExecutionFinal)
+	return s.recordActionTransition(normalizedRecord, normalizedEvent, nil, []ActionState{ActionStatePlanned, ActionStatePending, ActionStateApproved}, ErrActionExecutionFinal, nil)
 }
 
 func (s *SQLiteResourceStore) getActionAudit(actionID string) (ActionAuditRecord, bool, error) {
@@ -2371,7 +2481,7 @@ func getActionAuditFrom(queryer actionAuditQueryRower, actionID string) (ActionA
 		return ActionAuditRecord{}, false, nil
 	}
 	row := queryer.QueryRow(`
-		SELECT id, action_id, request_id, created_at, updated_at, state, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
+		SELECT id, action_id, request_id, created_at, updated_at, state, decision_revision, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
 		FROM action_audits
 		WHERE id = ?
 	`, actionID)
@@ -2400,7 +2510,7 @@ func (s *SQLiteResourceStore) RecordActionLifecycleEvent(event ActionLifecycleEv
 
 func (s *SQLiteResourceStore) GetActionLifecycleEvents(actionID string, since time.Time, limit int) ([]ActionLifecycleEvent, error) {
 	query := `
-		SELECT action_id, timestamp, state, actor, message
+		SELECT action_id, timestamp, state, kind, decision_revision, decision_json, actor, message
 		FROM action_lifecycle_events`
 
 	args := []any{}
@@ -2415,7 +2525,7 @@ func (s *SQLiteResourceStore) GetActionLifecycleEvents(actionID string, since ti
 		args = append(args, since)
 	}
 	query += `
-		ORDER BY timestamp DESC`
+	ORDER BY timestamp DESC, decision_revision DESC, id DESC`
 	if limit > 0 {
 		query += ` LIMIT ?`
 		args = append(args, limit)
@@ -2431,10 +2541,20 @@ func (s *SQLiteResourceStore) GetActionLifecycleEvents(actionID string, since ti
 	for rows.Next() {
 		var event ActionLifecycleEvent
 		var stateStr string
-		if err := rows.Scan(&event.ActionID, &event.Timestamp, &stateStr, &event.Actor, &event.Message); err != nil {
+		var kind string
+		var decisionJSON sql.NullString
+		if err := rows.Scan(&event.ActionID, &event.Timestamp, &stateStr, &kind, &event.DecisionRevision, &decisionJSON, &event.Actor, &event.Message); err != nil {
 			return nil, fmt.Errorf("scan action lifecycle row: %w", err)
 		}
 		event.State = ActionState(stateStr)
+		event.Kind = ActionLifecycleEventKind(kind)
+		if decisionJSON.Valid && decisionJSON.String != "" && decisionJSON.String != "null" {
+			var decision ActionApprovalRecord
+			if err := json.Unmarshal([]byte(decisionJSON.String), &decision); err != nil {
+				return nil, fmt.Errorf("unmarshal action decision event: %w", err)
+			}
+			event.Decision = &decision
+		}
 		events = append(events, event)
 	}
 	if err := rows.Err(); err != nil {
@@ -3293,28 +3413,33 @@ func (m *MemoryStore) RecordActionDecision(record ActionAuditRecord, event Actio
 	if normalizedEvent.ActionID != normalizedRecord.ID {
 		return fmt.Errorf("action decision event id %q does not match action audit id %q", normalizedEvent.ActionID, normalizedRecord.ID)
 	}
-
+	if normalizedEvent.Kind != ActionLifecycleEventDecision || normalizedEvent.DecisionRevision != normalizedRecord.DecisionRevision {
+		return fmt.Errorf("action decision event revision does not match action audit revision")
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	replaced := false
 	for i := range m.actionAudits {
 		if m.actionAudits[i].ID == normalizedRecord.ID {
-			if m.actionAudits[i].State != ActionStatePending {
-				return actionTransitionConflict(m.actionAudits[i], normalizedRecord, ErrActionNotPending)
+			command, err := PrepareActionDecisionAppend(m.actionAudits[i], normalizedRecord, normalizedEvent)
+			if err != nil {
+				return err
 			}
-			if !ActionAuditIdentityMatches(m.actionAudits[i], normalizedRecord) {
-				return ErrActionIdentityConflict
+			if command.TransitionEvent != nil {
+				for _, existing := range m.actionLifecycleEvents {
+					if existing.ActionID == command.TransitionEvent.ActionID && existing.Kind == ActionLifecycleEventTransition && existing.State == command.TransitionEvent.State {
+						return fmt.Errorf("action lifecycle state %q already recorded for %q", command.TransitionEvent.State, command.TransitionEvent.ActionID)
+					}
+				}
 			}
-			m.actionAudits[i] = normalizedRecord
-			replaced = true
-			break
+			m.actionAudits[i] = command.Record
+			m.actionLifecycleEvents = append(m.actionLifecycleEvents, command.DecisionEvent)
+			if command.TransitionEvent != nil {
+				m.actionLifecycleEvents = append(m.actionLifecycleEvents, *command.TransitionEvent)
+			}
+			return nil
 		}
 	}
-	if !replaced {
-		return fmt.Errorf("action audit %q not found", normalizedRecord.ID)
-	}
-	m.actionLifecycleEvents = append(m.actionLifecycleEvents, normalizedEvent)
-	return nil
+	return fmt.Errorf("action audit %q not found", normalizedRecord.ID)
 }
 
 func (m *MemoryStore) RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error {
@@ -3510,8 +3635,14 @@ func (m *MemoryStore) RecordActionLifecycleEvent(event ActionLifecycleEvent) err
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, existing := range m.actionLifecycleEvents {
-		if existing.ActionID == event.ActionID && existing.State == event.State {
+		if existing.ActionID != event.ActionID {
+			continue
+		}
+		if event.Kind == ActionLifecycleEventTransition && existing.Kind == ActionLifecycleEventTransition && existing.State == event.State {
 			return fmt.Errorf("action lifecycle state %q already recorded for %q", event.State, event.ActionID)
+		}
+		if event.Kind == ActionLifecycleEventDecision && existing.Kind == ActionLifecycleEventDecision && existing.DecisionRevision == event.DecisionRevision {
+			return fmt.Errorf("action decision revision %d already recorded for %q", event.DecisionRevision, event.ActionID)
 		}
 	}
 	m.actionLifecycleEvents = append(m.actionLifecycleEvents, event)

@@ -1688,6 +1688,18 @@ through the canonical resource model, but unified-resource consumers must not
 reintroduce removed workload aliases or feature-local resource-type shims just
 to satisfy one table, drawer, or badge surface.
 
+The canonical action resource contract now owns immutable `ActionActor` and
+versioned `ApprovalRequirement` bindings. Actor subject/kind/credential/org and
+requirement floor/quorum/separation are part of deterministic action identity
+and plan hashing. Human approvals are append-only under a durable monotonic
+`decisionRevision`: SQLite and MemoryStore compare pending state, revision, and
+the complete prior approval prefix before accepting the next decision. Each
+accepted revision persists a typed decision event with the bound approval and
+evidence; approved/rejected state changes persist a separate unique transition
+atomically, while pending quorum decisions do not fabricate a state change.
+Legacy nonterminal approvals without these bindings are readable but fail
+closed as replan-required.
+
 Action audits are the durable source of truth for Patrol action continuity.
 The store exposes optional `ActionAuditOriginReader` and
 `PendingActionAuditReader` capabilities; origin lookup is scoped by org and

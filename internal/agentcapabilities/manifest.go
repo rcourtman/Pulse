@@ -593,6 +593,9 @@ const (
 	agentCapabilityScopeSettingsRead    = auth.ScopeSettingsRead
 	agentCapabilityScopeSettingsWrite   = auth.ScopeSettingsWrite
 	agentCapabilityScopeAIExecute       = auth.ScopeAIExecute
+	agentCapabilityScopeActionsPlan     = auth.ScopeActionsPlan
+	agentCapabilityScopeActionsApprove  = auth.ScopeActionsApprove
+	agentCapabilityScopeActionsExecute  = auth.ScopeActionsExecute
 )
 
 var (
@@ -604,6 +607,7 @@ var (
 	}
 	agentCapabilityPlanActionErrorCodes = []string{
 		AgentErrCodeInvalidActionRequest,
+		AgentErrCodeActionActorUnavailable,
 		AgentErrCodeResourceNotFound,
 		AgentErrCodeCapabilityNotFound,
 		AgentErrCodeActionExecutionUnavailable,
@@ -615,6 +619,12 @@ var (
 		AgentErrCodeActionNotFound,
 		AgentErrCodeActionNotPending,
 		AgentErrCodeActionPlanExpired,
+		AgentErrCodeActionActorUnavailable,
+		AgentErrCodeActionApprovalForbidden,
+		AgentErrCodeActionStepUpUnavailable,
+		AgentErrCodeActionDecisionConflict,
+		AgentErrCodeActionSeparationRequired,
+		AgentErrCodeActionReplanRequired,
 	}
 	agentCapabilityExecuteActionErrorCodes = []string{
 		AgentErrCodeMissingID,
@@ -629,6 +639,10 @@ var (
 		AgentErrCodeActionPlanDrift,
 		AgentErrCodeResourceRemediationLocked,
 		AgentErrCodeActionExecutorUnavailable,
+		AgentErrCodeActionActorUnavailable,
+		AgentErrCodeActionExecutionForbidden,
+		AgentErrCodeActionNotExecuting,
+		AgentErrCodeActionReplanRequired,
 	}
 )
 
@@ -1022,7 +1036,7 @@ var canonicalManifest = Manifest{
 			Category:         "action",
 			Method:           http.MethodPost,
 			Path:             PlanActionCapabilityPath,
-			Scope:            agentCapabilityScopeAIExecute,
+			Scope:            agentCapabilityScopeActionsPlan,
 			ActionMode:       agentCapabilityActionModeWrite,
 			ApprovalPolicy:   agentCapabilityApprovalPolicyActionPlan,
 			RequestBodyShape: "ActionRequest",
@@ -1034,11 +1048,11 @@ var canonicalManifest = Manifest{
 		{
 			Name:             DecideActionCapabilityName,
 			Title:            "Decide action",
-			Description:      "Record an approval decision (approved or rejected) on a previously planned action. The actor is taken from the authenticated identity; an explicit reason can be passed in the body. Idempotent on the persisted decision: re-deciding a non-pending action surfaces the action_not_pending stable code so agents can branch on the conflict rather than retrying blindly.",
+			Description:      "Record an approval decision (approved or rejected) on a previously planned action. The actor is taken from the authenticated identity; an explicit reason can be passed in the body. An exact retry returns the authoritative persisted decision without adding an approval or lifecycle event; a conflicting retry fails closed.",
 			Category:         "action",
 			Method:           http.MethodPost,
 			Path:             ActionDecisionCapabilityPath,
-			Scope:            agentCapabilityScopeAIExecute,
+			Scope:            agentCapabilityScopeActionsApprove,
 			ActionMode:       agentCapabilityActionModeWrite,
 			ApprovalPolicy:   agentCapabilityApprovalPolicyActionPlan,
 			RequestBodyShape: "{ outcome: \"approved\"|\"rejected\", reason?: string }",
@@ -1054,7 +1068,7 @@ var canonicalManifest = Manifest{
 			Category:         "action",
 			Method:           http.MethodPost,
 			Path:             ActionExecutionCapabilityPath,
-			Scope:            agentCapabilityScopeAIExecute,
+			Scope:            agentCapabilityScopeActionsExecute,
 			ActionMode:       agentCapabilityActionModeWrite,
 			ApprovalPolicy:   agentCapabilityApprovalPolicyActionPlan,
 			RequestBodyShape: "{ reason?: string }",

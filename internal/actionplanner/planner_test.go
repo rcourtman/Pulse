@@ -48,6 +48,7 @@ func TestPlannerBuildsDeterministicGovernedPlan(t *testing.T) {
 		Params:         map[string]any{"mode": "graceful"},
 		Reason:         "Recover after confirmed outage",
 		RequestedBy:    "agent:oncall-helper",
+		Actor:          unified.ActionActor{SubjectID: "agent:oncall-helper", Kind: unified.ActionActorService, CredentialID: "service:test", OrgID: "default"},
 	}
 
 	planner := Planner{Now: func() time.Time { return now }}
@@ -120,6 +121,7 @@ func TestPlannerBuildsDryRunOnlyPlanWithoutExecutionApproval(t *testing.T) {
 		CapabilityName: "restart",
 		Reason:         "Validate restart path without execution",
 		RequestedBy:    "agent:oncall-helper",
+		Actor:          unified.ActionActor{SubjectID: "agent:oncall-helper", Kind: unified.ActionActorService, CredentialID: "service:test", OrgID: "default"},
 	}
 
 	plan, err := (Planner{Now: func() time.Time { return now }}).Plan(req, resource)
@@ -155,6 +157,7 @@ func TestPlannerRejectsUndeclaredParams(t *testing.T) {
 		Params:         map[string]any{"force": true},
 		Reason:         "Recover after confirmed outage",
 		RequestedBy:    "agent:oncall-helper",
+		Actor:          unified.ActionActor{SubjectID: "agent:oncall-helper", Kind: unified.ActionActorService, CredentialID: "service:test", OrgID: "default"},
 	}
 
 	_, err := Planner{}.Plan(req, resource)
@@ -219,6 +222,7 @@ func TestPlannerReturnsCapabilityNotFound(t *testing.T) {
 		CapabilityName: "restart",
 		Reason:         "Recover after confirmed outage",
 		RequestedBy:    "agent:oncall-helper",
+		Actor:          unified.ActionActor{SubjectID: "agent:oncall-helper", Kind: unified.ActionActorService, CredentialID: "service:test", OrgID: "default"},
 	}
 
 	_, err := Planner{}.Plan(req, resource)
@@ -244,6 +248,7 @@ func TestPlannerIdentityChangesWhenAutoAuthorizationEligibilityChanges(t *testin
 		CapabilityName: "restart",
 		Reason:         "recover service",
 		RequestedBy:    "pulse_patrol",
+		Actor:          unified.ActionActor{SubjectID: "pulse_patrol", Kind: unified.ActionActorService, CredentialID: "service:test", OrgID: "default"},
 	}
 	withoutEligibility, err := (Planner{}).Plan(req, resource)
 	if err != nil {

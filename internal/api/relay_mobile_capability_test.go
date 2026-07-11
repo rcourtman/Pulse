@@ -20,14 +20,21 @@ func TestRelayMobileRuntimeRouteInventory(t *testing.T) {
 		seenIDs[spec.id] = struct{}{}
 
 		scopes := spec.compatibleScopes()
-		if len(scopes) != 2 {
-			t.Fatalf("compatible scopes for %q = %d, want 2", spec.id, len(scopes))
+		wantLen := 2
+		if spec.legacyScope != "" && spec.legacyScope != spec.requiredScope {
+			wantLen++
+		}
+		if len(scopes) != wantLen {
+			t.Fatalf("compatible scopes for %q = %d, want %d", spec.id, len(scopes), wantLen)
 		}
 		if scopes[0] != config.ScopeRelayMobileAccess {
 			t.Fatalf("compatible scopes for %q start with %q, want %q", spec.id, scopes[0], config.ScopeRelayMobileAccess)
 		}
 		if scopes[1] != spec.requiredScope {
-			t.Fatalf("compatible scopes for %q end with %q, want %q", spec.id, scopes[1], spec.requiredScope)
+			t.Fatalf("compatible scopes for %q primary scope = %q, want %q", spec.id, scopes[1], spec.requiredScope)
+		}
+		if wantLen == 3 && scopes[2] != spec.legacyScope {
+			t.Fatalf("compatible scopes for %q legacy scope = %q, want %q", spec.id, scopes[2], spec.legacyScope)
 		}
 
 		route := fmt.Sprintf("%s %s => %s", spec.method, spec.path, spec.requiredScope)
@@ -51,11 +58,11 @@ func TestRelayMobileRuntimeRouteInventory(t *testing.T) {
 		"GET /api/ai/approvals => ai:execute",
 		"POST /api/ai/approvals/{approval_id}/approve => ai:execute",
 		"POST /api/ai/approvals/{approval_id}/deny => ai:execute",
-		"GET /api/actions/pending => ai:execute",
-		"GET /api/actions => ai:execute",
-		"GET /api/actions/{action_id} => ai:execute",
-		"POST /api/actions/{action_id}/decision => ai:execute",
-		"POST /api/actions/{action_id}/execute => ai:execute",
+		"GET /api/actions/pending => actions:approve",
+		"GET /api/actions => actions:approve",
+		"GET /api/actions/{action_id} => actions:approve",
+		"POST /api/actions/{action_id}/decision => actions:approve",
+		"POST /api/actions/{action_id}/execute => actions:execute",
 		"POST /api/ai/chat => ai:chat",
 		"GET /api/ai/sessions => ai:chat",
 		"POST /api/ai/sessions => ai:chat",

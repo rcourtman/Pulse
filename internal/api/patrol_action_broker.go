@@ -137,6 +137,12 @@ func (b *patrolActionBroker) Submit(ctx context.Context, proposal aicontracts.Ac
 		Reason:         proposal.Reason,
 		RequestedBy:    patrolActionBrokerActor,
 	}, actionlifecycle.PlanOptions{
+		Actor: unified.ActionActor{
+			SubjectID:    patrolActionBrokerActor,
+			Kind:         unified.ActionActorService,
+			CredentialID: "service:patrol-action-broker",
+			OrgID:        b.orgID,
+		},
 		Origin: &unified.ActionOrigin{
 			Surface:         patrolActionOriginSurface,
 			FindingID:       proposal.FindingID,

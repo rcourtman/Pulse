@@ -15,10 +15,11 @@ import (
 
 func atomicLifecycleTestRecord(id string, state ActionState) ActionAuditRecord {
 	now := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	actor := ActionActor{SubjectID: "agent:test", Kind: ActionActorService, CredentialID: "service:test", OrgID: "default"}
 	return ActionAuditRecord{
 		ID: id, CreatedAt: now, UpdatedAt: now, State: state,
-		Request: ActionRequest{RequestID: "req-" + id, ResourceID: "vm:42", CapabilityName: "restart", Reason: "atomic lifecycle proof", RequestedBy: "agent:test"},
-		Plan:    ActionPlan{ActionID: id, RequestID: "req-" + id, Allowed: true, RequiresApproval: state == ActionStatePending, ApprovalPolicy: ApprovalAdmin, PlannedAt: now, ExpiresAt: now.Add(time.Hour), ResourceVersion: "resource:sha256:test", PolicyVersion: "policy:sha256:test", PlanHash: "sha256:" + id},
+		Request: ActionRequest{RequestID: "req-" + id, ResourceID: "vm:42", CapabilityName: "restart", Reason: "atomic lifecycle proof", RequestedBy: "agent:test", Actor: actor},
+		Plan:    ActionPlan{ActionID: id, RequestID: "req-" + id, Allowed: true, RequiresApproval: state == ActionStatePending, ApprovalPolicy: ApprovalAdmin, ApprovalRequirement: ApprovalRequirementForFloor(ApprovalAdmin), PlannedAt: now, ExpiresAt: now.Add(time.Hour), ResourceVersion: "resource:sha256:test", PolicyVersion: "policy:sha256:test", PlanHash: "sha256:" + id},
 		Origin:  &ActionOrigin{Surface: "patrol", FindingID: "finding-1", InvestigationID: "inv-1", ProposalID: "proposal-1"},
 	}
 }
@@ -77,7 +78,7 @@ func TestMemoryStoreActionTransitionsAreMonotonic(t *testing.T) {
 	if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
 		t.Fatal(err)
 	}
-	approved, event, err := ApplyActionDecision(record, ActionApprovalRecord{Actor: "operator", Method: MethodAPI, Outcome: OutcomeApproved}, record.CreatedAt.Add(time.Minute))
+	approved, event, err := ApplyActionDecision(record, testBoundActionApproval(record, "operator", MethodSession, OutcomeApproved, "", record.CreatedAt.Add(time.Minute)), record.CreatedAt.Add(time.Minute))
 	if err != nil || store.RecordActionDecision(approved, event) != nil {
 		t.Fatalf("approve: %v", err)
 	}
@@ -89,7 +90,7 @@ func TestMemoryStoreActionTransitionsAreMonotonic(t *testing.T) {
 	if err != nil || store.RecordActionExecutionResult(completed, doneEvent) != nil {
 		t.Fatalf("complete: %v", err)
 	}
-	if err := store.RecordActionDecision(approved, event); !errors.Is(err, ErrActionExecutionFinal) {
+	if err := store.RecordActionDecision(approved, event); !errors.Is(err, ErrActionDecisionRevisionConflict) {
 		t.Fatalf("terminal rewind error=%v", err)
 	}
 }
@@ -205,8 +206,8 @@ func TestSQLiteStoreActionTransitionCASAcrossTwoInstances(t *testing.T) {
 	if _, _, err := first.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
 		t.Fatal(err)
 	}
-	approved, approvedEvent, _ := ApplyActionDecision(record, ActionApprovalRecord{Actor: "one", Outcome: OutcomeApproved}, record.CreatedAt.Add(time.Minute))
-	rejected, rejectedEvent, _ := ApplyActionDecision(record, ActionApprovalRecord{Actor: "two", Outcome: OutcomeRejected}, record.CreatedAt.Add(time.Minute))
+	approved, approvedEvent, _ := ApplyActionDecision(record, testBoundActionApproval(record, "one", MethodSession, OutcomeApproved, "", record.CreatedAt.Add(time.Minute)), record.CreatedAt.Add(time.Minute))
+	rejected, rejectedEvent, _ := ApplyActionDecision(record, testBoundActionApproval(record, "two", MethodSession, OutcomeRejected, "", record.CreatedAt.Add(time.Minute)), record.CreatedAt.Add(time.Minute))
 	start := make(chan struct{})
 	errs := make(chan error, 2)
 	go func() { <-start; errs <- first.RecordActionDecision(approved, approvedEvent) }()
@@ -273,22 +274,49 @@ func TestSQLiteStoreCreateActionAuditRollsBackWhenInitialEventInsertFails(t *tes
 	}
 }
 
-func TestSQLiteStoreActionTransitionRollsBackWhenEventInsertFails(t *testing.T) {
+func TestSQLiteStoreActionDecisionRollsBackWhenDecisionEventInsertFails(t *testing.T) {
 	store := newTestStore(t)
 	record := atomicLifecycleTestRecord("act_transition_rollback", ActionStatePending)
 	if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.db.Exec(`CREATE TRIGGER fail_transition_event BEFORE INSERT ON action_lifecycle_events BEGIN SELECT RAISE(ABORT, 'forced event failure'); END`); err != nil {
+	if _, err := store.db.Exec(`CREATE TRIGGER fail_decision_event BEFORE INSERT ON action_lifecycle_events WHEN NEW.kind = 'decision' BEGIN SELECT RAISE(ABORT, 'forced decision event failure'); END`); err != nil {
 		t.Fatal(err)
 	}
-	approved, event, _ := ApplyActionDecision(record, ActionApprovalRecord{Actor: "operator", Outcome: OutcomeApproved}, record.CreatedAt.Add(time.Minute))
+	approved, event, _ := ApplyActionDecision(record, testBoundActionApproval(record, "operator", MethodSession, OutcomeApproved, "", record.CreatedAt.Add(time.Minute)), record.CreatedAt.Add(time.Minute))
 	if err := store.RecordActionDecision(approved, event); err == nil {
 		t.Fatal("expected transition failure")
 	}
 	current, found, err := store.GetActionAudit(record.ID)
-	if err != nil || !found || current.State != ActionStatePending {
+	if err != nil || !found || current.State != ActionStatePending || current.DecisionRevision != 0 || len(current.Approvals) != 0 {
 		t.Fatalf("current=%#v found=%v err=%v", current, found, err)
+	}
+	events, _ := store.GetActionLifecycleEvents(record.ID, time.Time{}, 20)
+	if len(events) != 2 {
+		t.Fatalf("decision-event failure leaked events: %#v", events)
+	}
+}
+
+func TestSQLiteStoreActionDecisionRollsBackWhenResultingTransitionInsertFails(t *testing.T) {
+	store := newTestStore(t)
+	record := atomicLifecycleTestRecord("act_transition_rollback", ActionStatePending)
+	if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.Exec(`CREATE TRIGGER fail_resulting_transition BEFORE INSERT ON action_lifecycle_events WHEN NEW.kind = 'transition' AND NEW.state = 'approved' BEGIN SELECT RAISE(ABORT, 'forced transition event failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	approved, event, _ := ApplyActionDecision(record, testBoundActionApproval(record, "operator", MethodSession, OutcomeApproved, "", record.CreatedAt.Add(time.Minute)), record.CreatedAt.Add(time.Minute))
+	if err := store.RecordActionDecision(approved, event); err == nil {
+		t.Fatal("expected resulting transition failure")
+	}
+	current, found, err := store.GetActionAudit(record.ID)
+	if err != nil || !found || current.State != ActionStatePending || current.DecisionRevision != 0 || len(current.Approvals) != 0 {
+		t.Fatalf("current=%#v found=%v err=%v", current, found, err)
+	}
+	events, _ := store.GetActionLifecycleEvents(record.ID, time.Time{}, 20)
+	if len(events) != 2 {
+		t.Fatalf("transition-event failure leaked events: %#v", events)
 	}
 }
 
@@ -355,7 +383,7 @@ func TestSQLiteStoreRestartDoesNotReadmitExecutingAction(t *testing.T) {
 	}
 }
 
-func TestSQLiteActionLifecycleMigrationDeduplicatesStateEvents(t *testing.T) {
+func TestSQLiteActionLifecycleMigrationRetainsHistoricalDuplicatesAndRestoresTransitionUniqueness(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "resources", "unified_resources.db")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -382,11 +410,19 @@ func TestSQLiteActionLifecycleMigrationDeduplicatesStateEvents(t *testing.T) {
 	}
 	defer store.Close()
 	events, err := store.GetActionLifecycleEvents("act_event_dedupe", time.Time{}, 10)
-	if err != nil || len(events) != 1 {
+	if err != nil || len(events) != 2 {
 		t.Fatalf("events=%#v err=%v", events, err)
 	}
-	if err := store.RecordActionLifecycleEvent(events[0]); err == nil {
-		t.Fatal("duplicate state event should be rejected after migration")
+	kinds := map[ActionLifecycleEventKind]int{}
+	for _, event := range events {
+		kinds[event.Kind]++
+	}
+	if kinds[ActionLifecycleEventTransition] != 1 || kinds[ActionLifecycleEventLegacy] != 1 {
+		t.Fatalf("migrated historical event kinds=%v, want one transition and one retained legacy fact", kinds)
+	}
+	duplicateTransition := ActionLifecycleEvent{ActionID: "act_event_dedupe", Timestamp: time.Now().UTC(), State: ActionStatePlanned}
+	if err := store.RecordActionLifecycleEvent(duplicateTransition); err == nil {
+		t.Fatal("duplicate planned transition should remain rejected after migration")
 	}
 }
 
@@ -1882,6 +1918,7 @@ func TestActionAuditRecord_RoundTripLegacyResultVerificationRedactsSQLiteReads(t
 			ResourceID:     "vm:legacy-verification",
 			CapabilityName: "restart",
 			RequestedBy:    "agent:test",
+			Actor:          ActionActor{SubjectID: "agent:test", Kind: ActionActorService, CredentialID: "service:test", OrgID: "default"},
 		},
 		Plan: ActionPlan{
 			ActionID:  "action-legacy-verification",
@@ -2104,12 +2141,14 @@ func TestActionAudit_GetActionAuditByID(t *testing.T) {
 			RequestedBy:    "agent:test",
 		},
 		Plan: ActionPlan{
-			ActionID:        "act_lookup",
-			RequestID:       "req-lookup",
-			ExpiresAt:       now.Add(5 * time.Minute),
-			ResourceVersion: "resource:sha256:test",
-			PolicyVersion:   "policy:sha256:test",
-			PlanHash:        "sha256:test",
+			ActionID:            "act_lookup",
+			RequestID:           "req-lookup",
+			ExpiresAt:           now.Add(5 * time.Minute),
+			ResourceVersion:     "resource:sha256:test",
+			PolicyVersion:       "policy:sha256:test",
+			PlanHash:            "sha256:test",
+			ApprovalPolicy:      ApprovalAdmin,
+			ApprovalRequirement: ApprovalRequirementForFloor(ApprovalAdmin),
 		},
 	}
 	if err := store.RecordActionAudit(record); err != nil {
@@ -2146,24 +2185,28 @@ func TestRecordActionDecision_UpdatesAuditAndAppendsLifecycle(t *testing.T) {
 			CapabilityName: "restart",
 			Reason:         "decision proof",
 			RequestedBy:    "agent:test",
+			Actor:          ActionActor{SubjectID: "agent:test", Kind: ActionActorService, CredentialID: "service:test", OrgID: "default"},
 		},
 		Plan: ActionPlan{
-			ActionID:        "act_decision",
-			RequestID:       "req-decision",
-			ExpiresAt:       now.Add(5 * time.Minute),
-			ResourceVersion: "resource:sha256:test",
-			PolicyVersion:   "policy:sha256:test",
-			PlanHash:        "sha256:test",
+			ActionID:            "act_decision",
+			RequestID:           "req-decision",
+			ExpiresAt:           now.Add(5 * time.Minute),
+			ResourceVersion:     "resource:sha256:test",
+			PolicyVersion:       "policy:sha256:test",
+			PlanHash:            "sha256:test",
+			ApprovalPolicy:      ApprovalAdmin,
+			ApprovalRequirement: ApprovalRequirementForFloor(ApprovalAdmin),
 		},
 	}
 	if err := store.RecordActionAudit(record); err != nil {
 		t.Fatalf("RecordActionAudit: %v", err)
 	}
-	updated, event, err := ApplyActionDecision(record, ActionApprovalRecord{
-		Actor:   "operator@example.com",
-		Outcome: OutcomeApproved,
-		Reason:  "approved for proof",
-	}, now)
+	approvalFor := func(subject string, outcome ApprovalOutcome, reason string, at time.Time) ActionApprovalRecord {
+		actor := ActionActor{SubjectID: subject, Kind: ActionActorUser, CredentialID: "session:" + subject, OrgID: "default"}
+		evidence := ApprovalEvidence{Version: 1, Method: MethodSession, Actor: actor, OrgID: "default", ActionID: record.ID, PlanHash: record.Plan.PlanHash, Outcome: outcome, IssuedAt: at}
+		return ActionApprovalRecord{Actor: subject, ActorBinding: actor, Method: MethodSession, Timestamp: at, Outcome: outcome, Reason: reason, Evidence: &evidence}
+	}
+	updated, event, err := ApplyActionDecision(record, approvalFor("operator@example.com", OutcomeApproved, "approved for proof", now), now)
 	if err != nil {
 		t.Fatalf("ApplyActionDecision: %v", err)
 	}
@@ -2182,20 +2225,17 @@ func TestRecordActionDecision_UpdatesAuditAndAppendsLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetActionLifecycleEvents: %v", err)
 	}
-	if len(events) != 1 || events[0].State != ActionStateApproved || events[0].Actor != "operator@example.com" {
+	if len(events) != 2 || events[0].State != ActionStateApproved || events[0].Actor != "operator@example.com" ||
+		events[0].Kind != ActionLifecycleEventDecision || events[1].Kind != ActionLifecycleEventTransition {
 		t.Fatalf("decision events = %#v", events)
 	}
 
-	staleUpdate, staleEvent, err := ApplyActionDecision(record, ActionApprovalRecord{
-		Actor:   "second-operator@example.com",
-		Outcome: OutcomeRejected,
-		Reason:  "late rejection",
-	}, now.Add(time.Second))
+	staleUpdate, staleEvent, err := ApplyActionDecision(record, approvalFor("second-operator@example.com", OutcomeRejected, "late rejection", now.Add(time.Second)), now.Add(time.Second))
 	if err != nil {
 		t.Fatalf("ApplyActionDecision stale: %v", err)
 	}
-	if err := store.RecordActionDecision(staleUpdate, staleEvent); !errors.Is(err, ErrActionNotPending) {
-		t.Fatalf("stale RecordActionDecision error = %v, want %v", err, ErrActionNotPending)
+	if err := store.RecordActionDecision(staleUpdate, staleEvent); !errors.Is(err, ErrActionDecisionRevisionConflict) {
+		t.Fatalf("stale RecordActionDecision error = %v, want %v", err, ErrActionDecisionRevisionConflict)
 	}
 }
 

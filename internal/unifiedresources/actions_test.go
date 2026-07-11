@@ -7,6 +7,18 @@ import (
 	"time"
 )
 
+func testBoundActionApproval(record ActionAuditRecord, subject string, method ApprovalMethod, outcome ApprovalOutcome, reason string, at time.Time) ActionApprovalRecord {
+	kind := ActionActorUser
+	credential := "session:" + subject
+	if method == MethodPolicy {
+		kind = ActionActorPolicy
+		credential = "policy:test"
+	}
+	actor := ActionActor{SubjectID: subject, Kind: kind, CredentialID: credential, OrgID: "default"}
+	evidence := ApprovalEvidence{Version: 1, Method: method, Actor: actor, OrgID: "default", ActionID: record.ID, PlanHash: record.Plan.PlanHash, Outcome: outcome, IssuedAt: at}
+	return ActionApprovalRecord{Actor: subject, ActorBinding: actor, Method: method, Timestamp: at, Outcome: outcome, Reason: reason, Evidence: &evidence}
+}
+
 func TestNormalizeActionAuditRecordPopulatesGovernedPlanPreflight(t *testing.T) {
 	now := time.Date(2026, 4, 25, 22, 30, 0, 0, time.UTC)
 	record, err := NormalizeActionAuditRecord(ActionAuditRecord{
@@ -144,33 +156,31 @@ func TestApplyActionDecisionApprovesPendingActionWithoutExecution(t *testing.T) 
 			CapabilityName: "restart",
 			Reason:         "recover service",
 			RequestedBy:    "agent:oncall-helper",
+			Actor:          ActionActor{SubjectID: "agent:oncall-helper", Kind: ActionActorService, CredentialID: "service:test", OrgID: "default"},
 		},
 		Plan: ActionPlan{
-			ActionID:         "act_test",
-			RequestID:        "req-1",
-			Allowed:          true,
-			RequiresApproval: true,
-			ApprovalPolicy:   ApprovalAdmin,
-			PlannedAt:        now.Add(-time.Minute),
-			ExpiresAt:        now.Add(time.Minute),
-			ResourceVersion:  "resource:sha256:test",
-			PolicyVersion:    "policy:sha256:test",
-			PlanHash:         "sha256:test",
+			ActionID:            "act_test",
+			RequestID:           "req-1",
+			Allowed:             true,
+			RequiresApproval:    true,
+			ApprovalPolicy:      ApprovalAdmin,
+			ApprovalRequirement: ApprovalRequirementForFloor(ApprovalAdmin),
+			PlannedAt:           now.Add(-time.Minute),
+			ExpiresAt:           now.Add(time.Minute),
+			ResourceVersion:     "resource:sha256:test",
+			PolicyVersion:       "policy:sha256:test",
+			PlanHash:            "sha256:test",
 		},
 	}
 
-	updated, event, err := ApplyActionDecision(record, ActionApprovalRecord{
-		Actor:   "operator@example.com",
-		Outcome: OutcomeApproved,
-		Reason:  "inside maintenance window",
-	}, now)
+	updated, event, err := ApplyActionDecision(record, testBoundActionApproval(record, "operator@example.com", MethodSession, OutcomeApproved, "inside maintenance window", now), now)
 	if err != nil {
 		t.Fatalf("ApplyActionDecision: %v", err)
 	}
 	if updated.State != ActionStateApproved || updated.Result != nil {
 		t.Fatalf("updated action = %#v, want approved without execution result", updated)
 	}
-	if len(updated.Approvals) != 1 || updated.Approvals[0].Method != MethodAPI || updated.Approvals[0].Actor != "operator@example.com" {
+	if len(updated.Approvals) != 1 || updated.Approvals[0].Method != MethodSession || updated.Approvals[0].Actor != "operator@example.com" {
 		t.Fatalf("approval record = %#v", updated.Approvals)
 	}
 	if event.ActionID != "act_test" || event.State != ActionStateApproved || !strings.Contains(event.Message, "Execution remains pending") {

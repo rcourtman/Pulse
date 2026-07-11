@@ -1314,3 +1314,16 @@ effective tenant Patrol mode that admits the eligibility class, and an absent
 Never-auto-remediate lock. Missing or unknown state denies automatic execution.
 The policy actor/method are server-stamped and cannot be supplied by the model,
 enterprise orchestrator, browser, relay, or action-proposal payload.
+
+The same server-derived boundary now applies to every public governed action.
+Session actors are credential-bound and remain subject to current organization
+membership and RBAC; browser-session scope bypass does not bypass those checks.
+API-token actors must prove a current durable human owner, matching credential
+and organization, current owner membership/role, and an explicitly enumerated
+action or compatibility scope. Detached/service tokens cannot approve or
+execute as humans, and owner-bound tokens can satisfy only authenticated/admin
+floors, never cryptographic step-up. Ordinary session, API-token, mobile-local-
+biometric, or UI method labels are not MFA evidence. MFA-required actions fail
+closed unless the core verifier validates and single-use consumes evidence
+bound to the actor, credential, organization, action, plan, outcome, and
+challenge.

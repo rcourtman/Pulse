@@ -42,7 +42,7 @@ func TestRecordExternalAgentCapabilityActivityUsesCapabilityScope(t *testing.T) 
 	}
 
 	actionReq := httptest.NewRequest(http.MethodPost, "/api/actions/plan", nil)
-	attachAPITokenRecord(actionReq, &config.APITokenRecord{Scopes: []string{config.ScopeAIExecute}})
+	attachAPITokenRecord(actionReq, &config.APITokenRecord{Scopes: []string{config.ScopeActionsPlan}})
 	router.recordExternalAgentCapabilityActivity(actionReq, agentcapabilities.PlanActionCapabilityName)
 
 	history, err = persistence.LoadExternalAgentActivityHistory()

@@ -127,7 +127,7 @@ func newPatrolBrokerTestHandlers(t *testing.T, minimumApproval unified.ActionApp
 func newPatrolBrokerTestHandlersWithEligibility(t *testing.T, minimumApproval unified.ActionApprovalLevel, eligibility unified.ActionAutoAuthorizationClass) (*ResourceHandlers, *stubActionExecutor) {
 	t.Helper()
 	now := time.Now().UTC()
-	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
 		resources: []unified.Resource{
@@ -565,7 +565,7 @@ func TestPatrolTypedActionJourneyDetectPlanApproveExecuteVerifyAndReconcile(t *t
 	decisionReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+disposition.ActionID+"/decision", bytes.NewBufferString(`{"outcome":"approved","reason":"maintenance window"}`))
 	decisionReq.SetPathValue("id", disposition.ActionID)
 	decisionReq = decisionReq.WithContext(auth.WithUser(decisionReq.Context(), "operator@example.com"))
-	resources.HandleDecideAction(decisionRec, decisionReq)
+	resources.HandleDecideAction(decisionRec, actionHandlerTestRequest(decisionReq, ""))
 	if decisionRec.Code != http.StatusOK {
 		t.Fatalf("decision status = %d body=%s", decisionRec.Code, decisionRec.Body.String())
 	}
@@ -574,7 +574,7 @@ func TestPatrolTypedActionJourneyDetectPlanApproveExecuteVerifyAndReconcile(t *t
 	executionReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+disposition.ActionID+"/execute", bytes.NewBufferString(`{"reason":"approved maintenance window"}`))
 	executionReq.SetPathValue("id", disposition.ActionID)
 	executionReq = executionReq.WithContext(auth.WithUser(executionReq.Context(), "operator@example.com"))
-	resources.HandleExecuteAction(executionRec, executionReq)
+	resources.HandleExecuteAction(executionRec, actionHandlerTestRequest(executionReq, ""))
 	if executionRec.Code != http.StatusOK {
 		t.Fatalf("execution status = %d body=%s", executionRec.Code, executionRec.Body.String())
 	}

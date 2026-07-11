@@ -223,9 +223,9 @@ func TestAgentCapabilitiesManifest_ScopesMatchAPIAuthConstants(t *testing.T) {
 		agentcapabilities.SnoozeFindingCapabilityName:      config.ScopeAIExecute,
 		agentcapabilities.DismissFindingCapabilityName:     config.ScopeAIExecute,
 		agentcapabilities.ResolveFindingCapabilityName:     config.ScopeAIExecute,
-		agentcapabilities.PlanActionCapabilityName:         config.ScopeAIExecute,
-		agentcapabilities.DecideActionCapabilityName:       config.ScopeAIExecute,
-		agentcapabilities.ExecuteActionCapabilityName:      config.ScopeAIExecute,
+		agentcapabilities.PlanActionCapabilityName:         config.ScopeActionsPlan,
+		agentcapabilities.DecideActionCapabilityName:       config.ScopeActionsApprove,
+		agentcapabilities.ExecuteActionCapabilityName:      config.ScopeActionsExecute,
 	}
 
 	manifest := agentcapabilities.CanonicalManifest()

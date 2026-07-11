@@ -692,13 +692,13 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"agentcapabilities.AgentErrCodeActionExecutorUnavailable",
 		},
 		filepath.Join("..", "api", "resources.go"): {
-			"actionExecutor      ActionExecutor",
-			"actionCompleted     func(unified.ActionAuditRecord)",
-			"actionTransition    func(orgID string, record unified.ActionAuditRecord)",
+			"actionExecutor            ActionExecutor",
+			"actionCompleted           func(unified.ActionAuditRecord)",
+			"actionTransition          func(orgID string, record unified.ActionAuditRecord)",
 			"func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor)",
 			"func (h *ResourceHandlers) SetActionCompletedPublisher(",
 			"func (h *ResourceHandlers) SetActionTransitionPublisher(",
-			"policyAdmission     *actionlifecycle.PolicyAdmissionCoordinator",
+			"policyAdmission           *actionlifecycle.PolicyAdmissionCoordinator",
 			"func (h *ResourceHandlers) applyActionAvailability(ctx context.Context, resources []unified.Resource)",
 			"resources[i].ActionReadiness = readinesses",
 		},
@@ -713,7 +713,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 		},
 		filepath.Join("..", "api", "router_routes_monitoring.go"): {
 			`"POST /api/actions/{id}/execute"`,
-			"RequireScope(config.ScopeAIExecute, r.withExternalAgentCapabilityActivity(",
+			"requireActionCapability(r.authorizer, auth.ActionExecute",
 			"r.resourceHandlers.HandleExecuteAction",
 		},
 	}

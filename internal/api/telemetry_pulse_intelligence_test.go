@@ -165,11 +165,8 @@ func TestGetPulseIntelligenceActionTelemetry_CountsApprovedLifecycleAttemptsInsi
 	if err := store.RecordActionAudit(oldRejected); err != nil {
 		t.Fatalf("RecordActionAudit(oldRejected): %v", err)
 	}
-	rejected, rejectedEvent, err := unifiedresources.ApplyActionDecision(oldRejected, unifiedresources.ActionApprovalRecord{
-		Outcome: unifiedresources.OutcomeRejected,
-		Method:  unifiedresources.MethodAPI,
-		Actor:   "operator",
-	}, now.Add(-10*time.Minute))
+	rejectedAt := now.Add(-10 * time.Minute)
+	rejected, rejectedEvent, err := unifiedresources.ApplyActionDecision(oldRejected, boundActionTestDecisionApproval(oldRejected.ID, oldRejected.Plan.PlanHash, "operator", unifiedresources.OutcomeRejected, rejectedAt), rejectedAt)
 	if err != nil {
 		t.Fatalf("ApplyActionDecision(oldRejected): %v", err)
 	}
@@ -252,6 +249,10 @@ func pulseTelemetryActionRecord(
 	requiresApproval bool,
 	approvals []unifiedresources.ActionApprovalRecord,
 ) unifiedresources.ActionAuditRecord {
+	approvalPolicy := unifiedresources.ApprovalNone
+	if requiresApproval {
+		approvalPolicy = unifiedresources.ApprovalAdmin
+	}
 	return unifiedresources.ActionAuditRecord{
 		ID:        id,
 		CreatedAt: createdAt,
@@ -263,14 +264,18 @@ func pulseTelemetryActionRecord(
 			CapabilityName: "pulse_exec",
 			Reason:         "test",
 			RequestedBy:    "pulse_assistant",
+			Actor:          unifiedresources.ActionActor{SubjectID: "pulse_assistant", Kind: unifiedresources.ActionActorService, CredentialID: "service:test", OrgID: "default"},
 		},
 		Plan: unifiedresources.ActionPlan{
-			ActionID:         id,
-			RequestID:        "req-" + id,
-			Allowed:          true,
-			RequiresApproval: requiresApproval,
-			PlannedAt:        createdAt,
-			ExpiresAt:        createdAt.Add(time.Hour),
+			ActionID:            id,
+			RequestID:           "req-" + id,
+			Allowed:             true,
+			RequiresApproval:    requiresApproval,
+			ApprovalPolicy:      approvalPolicy,
+			ApprovalRequirement: unifiedresources.ApprovalRequirementForFloor(approvalPolicy),
+			PlannedAt:           createdAt,
+			ExpiresAt:           createdAt.Add(time.Hour),
+			PlanHash:            "sha256:" + id,
 		},
 		Approvals: approvals,
 	}

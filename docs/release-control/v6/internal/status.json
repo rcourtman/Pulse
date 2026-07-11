@@ -4212,7 +4212,7 @@
             "./internal/actionlifecycle",
             "./internal/api",
             "-run",
-            "TestMemoryStoreCreateActionAuditConcurrentReturnsCurrent|TestSQLiteStoreCreateActionAuditConcurrentAcrossTwoInstances|TestSQLiteStoreActionTransitionCASAcrossTwoInstances|TestSQLiteStoreConcurrentExecutionStartAcrossTwoInstancesHasOneWinner|TestSQLiteStoreCreateActionAuditRollsBackWhenInitialEventInsertFails|TestSQLiteStoreActionTransitionRollsBackWhenEventInsertFails|TestSQLiteStoreLifecycleRestartPreservesMonotonicState|TestSQLiteStoreRestartDoesNotReadmitExecutingAction|TestConcurrentPlanReplayCannotRewindTerminalActionMemoryStore|TestConcurrentPlanReplayCannotRewindTerminalActionSQLiteStore|TestConcurrentExecuteAdmitsExecutorExactlyOnceMemoryStore|TestConcurrentExecuteAdmitsExecutorExactlyOnceSQLiteStore|TestPlanReplayRejectsConflictingOriginForDeterministicActionID|TestPatrolActionBrokerBarrierReplayAdmitsExecutorExactlyOnce|TestPatrolActionBrokerTerminalReplayPreservesAuditAndEvents|TestPatrolActionReconciliationHydratesTerminalAuditAfterRestart|TestPatrolActionReconciliationCannotRegressFromOutOfOrderCallback",
+            "TestMemoryStoreCreateActionAuditConcurrentReturnsCurrent|TestSQLiteStoreCreateActionAuditConcurrentAcrossTwoInstances|TestSQLiteStoreActionTransitionCASAcrossTwoInstances|TestSQLiteStoreConcurrentExecutionStartAcrossTwoInstancesHasOneWinner|TestSQLiteStoreCreateActionAuditRollsBackWhenInitialEventInsertFails|TestSQLiteStoreActionDecisionRollsBackWhenDecisionEventInsertFails|TestSQLiteStoreActionDecisionRollsBackWhenResultingTransitionInsertFails|TestSQLiteStoreLifecycleRestartPreservesMonotonicState|TestSQLiteStoreRestartDoesNotReadmitExecutingAction|TestConcurrentPlanReplayCannotRewindTerminalActionMemoryStore|TestConcurrentPlanReplayCannotRewindTerminalActionSQLiteStore|TestConcurrentExecuteAdmitsExecutorExactlyOnceMemoryStore|TestConcurrentExecuteAdmitsExecutorExactlyOnceSQLiteStore|TestPlanReplayRejectsConflictingOriginForDeterministicActionID|TestPatrolActionBrokerBarrierReplayAdmitsExecutorExactlyOnce|TestPatrolActionBrokerTerminalReplayPreservesAuditAndEvents|TestPatrolActionReconciliationHydratesTerminalAuditAfterRestart|TestPatrolActionReconciliationCannotRegressFromOutOfOrderCallback",
             "-count=1"
           ]
         }
@@ -4250,6 +4250,95 @@
           "path": "internal/unifiedresources/store_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
+        }
+      ]
+    },
+    {
+      "id": "RA37",
+      "summary": "Governed-action actor and approval strength are server-owned: requester attribution is derived from authenticated authority, current tenant/RBAC/token scope is rechecked at decision and execution, approvals are revision-CAS append-only facts, and no surface may claim MFA without server-verified action-bound cryptographic evidence.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6",
+        "L7",
+        "L13",
+        "L14",
+        "L20"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "organization-settings",
+        "relay-runtime",
+        "security-privacy",
+        "unified-resources"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "ra37-server-owned-action-authority",
+          "run": [
+            "go",
+            "test",
+            "./internal/actionplanner",
+            "./internal/actionlifecycle",
+            "./internal/unifiedresources",
+            "./internal/api",
+            "-run",
+            "TestHandlePlanActionBindsActorAndPlanHashToAuthenticatedOrg|TestHandlePlanActionRejectsOrIgnoresPublicRequestedByAndStampsAuthenticatedActor|TestHandleDecideActionRejectsViewerSessionDespiteSessionScopeBypass|TestHandleDecideActionRejectsDetachedTokenAsHumanApprover|TestHandleDecideActionRejectsOwnerBoundTokenAfterRoleRevocation|TestHandleExecuteActionRejectsCrossOrgAuditLookup|TestHandleExecuteActionRejectsExecutorWithoutCurrentCapability|TestActionAuthorityAllowsOwnerBoundTokenWithCanonicalApproveAndExecuteScopes|TestActionAuthorityRejectsOwnerBoundTokenWithoutApplicableScope|TestActionAuthorityLegacyCompatibilityScopesAreExactlyEnumerated|TestDecideRejectsMFAPolicyWithAPIMethodOnly|TestDecideRejectsUnsignedOrTamperedStepUpEvidence|TestDecideRejectsEvidenceForDifferentActorOrgActionPlanOrOutcome|TestDecideRejectsExpiredOrReplayedChallenge|TestConcurrentDistinctApprovalsRetainQuorumMemoryStore|TestConcurrentDistinctApprovalsRetainQuorumAcrossSQLiteHandles|TestDecisionEventIdentityAndTransitionUniquenessMemoryStore|TestDecisionEventIdentityAndTransitionUniquenessSQLiteStore|TestRejectedDecisionPersistsDecisionAndRejectedTransitionAtomically|TestSQLiteReopenPreservesDecisionEventRevisionOrdering|TestSQLiteActionLifecycleMigrationRetainsHistoricalDuplicatesAndRestoresTransitionUniqueness|TestSQLiteStoreActionDecisionRollsBackWhenDecisionEventInsertFails|TestSQLiteStoreActionDecisionRollsBackWhenResultingTransitionInsertFails",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/actionlifecycle/actor_approval_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/actionlifecycle/service.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/action_authority.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/action_authority_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/actions.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/actions.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/auth/scopes.go",
+          "kind": "file"
         }
       ]
     }
@@ -5809,7 +5898,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. Three policy-authorized verticals are live. Docker/Podman restart is capability-owned low-risk eligible. Agent-managed APT host updates are capability-owned elevated eligible and cross a closed typed host_update protocol with no command, package-selection, removal, or reboot authority; the agent owns metadata refresh, preflight simulation, guarded installation, and post-install simulation, while the audit records verified, failed, or honestly inconclusive outcomes plus reboot-required state. Agent-managed package-cache cleanup is capability-owned low-risk eligible and crosses a separate fingerprint-bound host_storage_cleanup protocol with no command, path, package selector, installed-package removal, or reboot authority; it is available only for meaningful reclaimable bytes on the actual pressured cache filesystem, and the audit verifies the bytes reclaimed. All three require explicit per-resource capability allowlists and optional recurring timezone windows, remain bounded by tenant Patrol mode and full-mode unlock, recheck policy/readiness before decision and dispatch, and record server-owned policy approval plus terminal verification in the same audit trail. Never-auto-remediate, missing/unknown policy, unsupported capabilities, stale/error/empty package or cleanup inventories, cleared storage pressure, dry-run/MFA floors, closed windows, and mode downgrades all fail closed. Action continuity is audit-authoritative and now has a Phase B1 durable transport foundation: execution admission atomically creates the deterministic dispatch attempt/outbox, a one-shot pre-send CAS prevents concurrent duplicate sends, expired pre-send claims safely requeue, post-send uncertainty remains receipt-pending for query-only reconciliation, explicit expiry is durable, and canonical detail plus pending/settled reads are tenant-scoped. Generic transport errors cannot fabricate receipts or terminal truth, legacy executing rows without attempts remain inert, callbacks trigger org-scoped re-reads, investigation reads recover missed transitions by trusted origin, desktop and mobile decisions use the canonical /api/actions routes, terminal verification maps honestly onto Patrol findings and push outcomes, and legacy command-shaped history remains inert. Remaining post-RC hardening includes Task 10-owned terminal execution/verification/evidence/compensation truth before Task 07 Phase B2 compensation and verification-attempt recovery, mobile/relay inbox and push-dedup consumption, broader tenant defaults/inheritance and automation rate budgets, richer dry-run providers, multi-actor approvals, additional package-manager and bounded cleanup providers beyond APT, separately governed reboot orchestration, and a real-lab detect-plan-execute-verify-rollback journey proof.",
+        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. Three policy-authorized verticals are live. Docker/Podman restart is capability-owned low-risk eligible. Agent-managed APT host updates are capability-owned elevated eligible and cross a closed typed host_update protocol with no command, package-selection, removal, or reboot authority; the agent owns metadata refresh, preflight simulation, guarded installation, and post-install simulation, while the audit records verified, failed, or honestly inconclusive outcomes plus reboot-required state. Agent-managed package-cache cleanup is capability-owned low-risk eligible and crosses a separate fingerprint-bound host_storage_cleanup protocol with no command, path, package selector, installed-package removal, or reboot authority; it is available only for meaningful reclaimable bytes on the actual pressured cache filesystem, and the audit verifies the bytes reclaimed. All three require explicit per-resource capability allowlists and optional recurring timezone windows, remain bounded by tenant Patrol mode and full-mode unlock, recheck policy/readiness before decision and dispatch, and record server-owned policy approval plus terminal verification in the same audit trail. Never-auto-remediate, missing/unknown policy, unsupported capabilities, stale/error/empty package or cleanup inventories, cleared storage pressure, dry-run/MFA floors, closed windows, and mode downgrades all fail closed. Action continuity is audit-authoritative and now has a Phase B1 durable transport foundation: execution admission atomically creates the deterministic dispatch attempt/outbox, a one-shot pre-send CAS prevents concurrent duplicate sends, expired pre-send claims safely requeue, post-send uncertainty remains receipt-pending for query-only reconciliation, explicit expiry is durable, and canonical detail plus pending/settled reads are tenant-scoped. Generic transport errors cannot fabricate receipts or terminal truth, legacy executing rows without attempts remain inert, callbacks trigger org-scoped re-reads, investigation reads recover missed transitions by trusted origin, desktop and mobile decisions use the canonical /api/actions routes, terminal verification maps honestly onto Patrol findings and push outcomes, and legacy command-shaped history remains inert. Task 08 Phase B1 also makes requester and decision authority server-owned, binds actor and approval requirement into plan identity, rechecks current tenant/RBAC/token scope, and records multi-actor approvals through revision-CAS append-only decision facts plus atomic lifecycle transitions. MFA-required decisions remain explicitly unavailable until a core verifier validates and consumes action-bound cryptographic evidence; labels and local biometrics are not MFA. Remaining post-RC hardening includes Task 10-owned terminal execution/verification/evidence/compensation truth before Task 07 Phase B2 compensation and verification-attempt recovery, mobile/relay inbox and push-dedup consumption, broader tenant defaults/inheritance and automation rate budgets, richer dry-run providers, multi-actor UI and MSP delegation/inheritance, device-key/WebAuthn enrollment and verifier integration, additional package-manager and bounded cleanup providers beyond APT, separately governed reboot orchestration, and a real-lab detect-plan-execute-verify-rollback journey proof.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -5930,6 +6019,12 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/actionlifecycle/actor_approval_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/actionlifecycle/service.go",
           "kind": "file"
         },
@@ -5973,6 +6068,22 @@
         {
           "repo": "pulse",
           "path": "internal/ai/tools/action_audit.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/action_authority.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/action_authority_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/actions.go",
           "kind": "file"
         },
         {

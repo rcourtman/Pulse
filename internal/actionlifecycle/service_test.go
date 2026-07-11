@@ -3,6 +3,7 @@ package actionlifecycle
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -61,10 +62,50 @@ func serviceForStore(t *testing.T, store unified.ResourceStore, resource unified
 	registry := unified.NewRegistry(store)
 	registry.IngestResources([]unified.Resource{resource})
 	return &Service{
-		Registry: func(string) (*unified.ResourceRegistry, error) { return registry, nil },
-		Store:    func(string) (Store, error) { return store, nil },
-		Executor: executor,
+		Registry:            func(string) (*unified.ResourceRegistry, error) { return registry, nil },
+		Store:               func(string) (Store, error) { return store, nil },
+		Executor:            executor,
+		DecisionAuthorizer:  DecisionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionDecision) error { return nil }),
+		ExecutionAuthorizer: ExecutionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionActor) error { return nil }),
 	}
+}
+
+func testActionActor(subject, orgID string) unified.ActionActor {
+	if strings.TrimSpace(subject) == "" {
+		subject = "operator"
+	}
+	return unified.ActionActor{SubjectID: subject, Kind: unified.ActionActorUser, CredentialID: "session:test", OrgID: orgID}
+}
+
+func testActionDecision(t *testing.T, service *Service, orgID, actionID string, approval unified.ActionApprovalRecord) unified.ActionDecision {
+	t.Helper()
+	record, found, _ := service.Get(orgID, actionID)
+	planHash := "sha256:test"
+	if found {
+		planHash = record.Plan.PlanHash
+	}
+	actor := testActionActor(approval.Actor, orgID)
+	return unified.ActionDecision{
+		Actor:   actor,
+		Outcome: approval.Outcome,
+		Reason:  approval.Reason,
+		Evidence: unified.ApprovalEvidence{
+			Version: 1, Method: unified.MethodSession, Actor: actor, OrgID: orgID,
+			ActionID: actionID, PlanHash: planHash, Outcome: approval.Outcome, IssuedAt: time.Now().UTC(),
+		},
+	}
+}
+
+func testBoundLifecycleApproval(record unified.ActionAuditRecord, subject string, method unified.ApprovalMethod, outcome unified.ApprovalOutcome, at time.Time) unified.ActionApprovalRecord {
+	kind := unified.ActionActorUser
+	credential := "session:test"
+	if method == unified.MethodPolicy {
+		kind = unified.ActionActorPolicy
+		credential = "policy:test"
+	}
+	actor := unified.ActionActor{SubjectID: subject, Kind: kind, CredentialID: credential, OrgID: "default"}
+	evidence := unified.ApprovalEvidence{Version: 1, Method: method, Actor: actor, OrgID: "default", ActionID: record.ID, PlanHash: record.Plan.PlanHash, Outcome: outcome, IssuedAt: at}
+	return unified.ActionApprovalRecord{Actor: subject, ActorBinding: actor, Method: method, Timestamp: at, Outcome: outcome, Evidence: &evidence}
 }
 
 func runConcurrentPlanReplayCannotRewindTerminalAction(t *testing.T, store unified.ResourceStore) {
@@ -72,17 +113,20 @@ func runConcurrentPlanReplayCannotRewindTerminalAction(t *testing.T, store unifi
 	delayed := &delayedCreateStore{ResourceStore: store, secondArrived: make(chan struct{}), releaseSecond: make(chan struct{})}
 	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
 	service := serviceForStore(t, delayed, testResource(time.Now().UTC(), unified.ApprovalAdmin), executor)
-	firstPlan, err := service.Plan(context.Background(), "default", restartRequest())
+	firstPlan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	secondResult := make(chan error, 1)
-	go func() { _, err := service.Plan(context.Background(), "default", restartRequest()); secondResult <- err }()
+	go func() {
+		_, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+		secondResult <- err
+	}()
 	<-delayed.secondArrived
-	if _, err := service.Decide(context.Background(), "default", firstPlan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved}); err != nil {
+	if _, err := service.Decide(context.Background(), "default", firstPlan.ActionID, testActionDecision(t, service, "default", firstPlan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved})); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Execute(context.Background(), "default", firstPlan.ActionID, "operator", "proof"); err != nil {
+	if _, err := service.Execute(context.Background(), "default", firstPlan.ActionID, testActionActor("operator", "default"), "proof"); err != nil {
 		t.Fatal(err)
 	}
 	close(delayed.releaseSecond)
@@ -115,17 +159,17 @@ func runConcurrentExecuteAdmitsExecutorExactlyOnce(t *testing.T, store unified.R
 	t.Helper()
 	executor := &blockingExecutor{entered: make(chan struct{}), release: make(chan struct{})}
 	service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
-	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	first := make(chan error, 1)
 	go func() {
-		_, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", "first")
+		_, err := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), "first")
 		first <- err
 	}()
 	<-executor.entered
-	secondRecord, secondErr := service.Execute(context.Background(), "default", plan.ActionID, "operator", "second")
+	secondRecord, secondErr := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), "second")
 	if secondErr != nil {
 		t.Fatalf("duplicate Execute: %v", secondErr)
 	}
@@ -159,17 +203,17 @@ func runConcurrentDuplicateExecuteAtClaimBoundaryCallsExecutorOnce(t *testing.T,
 	blocked := &claimBoundaryStore{ResourceStore: store, entered: make(chan struct{}), release: make(chan struct{})}
 	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
 	service := serviceForStore(t, blocked, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
-	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	first := make(chan error, 1)
 	go func() {
-		_, executeErr := service.Execute(context.Background(), "default", plan.ActionID, "operator", "first")
+		_, executeErr := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), "first")
 		first <- executeErr
 	}()
 	<-blocked.entered
-	second, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", "duplicate")
+	second, err := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), "duplicate")
 	if err != nil || second.State != unified.ActionStateExecuting {
 		t.Fatalf("duplicate=%#v err=%v", second, err)
 	}
@@ -201,7 +245,7 @@ func TestPlanReplayReturnsAuthoritativeApprovedExecutingAndTerminalRecords(t *te
 		t.Run(string(state), func(t *testing.T) {
 			store := unified.NewMemoryStore()
 			service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalAdmin), &stubExecutor{})
-			plan, err := service.Plan(context.Background(), "default", restartRequest())
+			plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -210,7 +254,8 @@ func TestPlanReplayReturnsAuthoritativeApprovedExecutingAndTerminalRecords(t *te
 			if state == unified.ActionStateRejected {
 				decisionOutcome = unified.OutcomeRejected
 			}
-			decided, decisionEvent, err := unified.ApplyActionDecision(record, unified.ActionApprovalRecord{Actor: "operator", Outcome: decisionOutcome}, time.Now().UTC())
+			decisionAt := time.Now().UTC()
+			decided, decisionEvent, err := unified.ApplyActionDecision(record, testBoundLifecycleApproval(record, "operator", unified.MethodSession, decisionOutcome, decisionAt), decisionAt)
 			if err != nil || store.RecordActionDecision(decided, decisionEvent) != nil {
 				t.Fatalf("decision: %v", err)
 			}
@@ -227,7 +272,7 @@ func TestPlanReplayReturnsAuthoritativeApprovedExecutingAndTerminalRecords(t *te
 					}
 				}
 			}
-			returned, err := service.Plan(context.Background(), "default", restartRequest())
+			returned, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -245,7 +290,7 @@ func TestPlanReplayReturnsAuthoritativeApprovedExecutingAndTerminalRecords(t *te
 func TestPlanReplayRejectsConflictingOriginForDeterministicActionID(t *testing.T) {
 	store := unified.NewMemoryStore()
 	service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalAdmin), &stubExecutor{})
-	first := PlanOptions{Origin: &unified.ActionOrigin{Surface: "patrol", FindingID: "finding-1", InvestigationID: "inv-1", ProposalID: "proposal-1"}}
+	first := PlanOptions{Actor: testActionActor("requester", "default"), Origin: &unified.ActionOrigin{Surface: "patrol", FindingID: "finding-1", InvestigationID: "inv-1", ProposalID: "proposal-1"}}
 	if _, err := service.PlanWithOptions(context.Background(), "default", restartRequest(), first); err != nil {
 		t.Fatal(err)
 	}
@@ -262,11 +307,11 @@ func TestExecutePublishesPersistedExecutingTransition(t *testing.T) {
 	service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
 	var states []unified.ActionState
 	service.OnActionTransition = func(_ string, record unified.ActionAuditRecord) { states = append(states, record.State) }
-	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", ""); err != nil {
+	if _, err := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), ""); err != nil {
 		t.Fatal(err)
 	}
 	want := []unified.ActionState{unified.ActionStatePlanned, unified.ActionStateExecuting, unified.ActionStateCompleted}
@@ -288,7 +333,7 @@ func TestExecuteAfterSQLiteRestartDoesNotReadmitExecutingAction(t *testing.T) {
 	}
 	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
 	service := serviceForStore(t, first, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
-	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +349,7 @@ func TestExecuteAfterSQLiteRestartDoesNotReadmitExecutingAction(t *testing.T) {
 	}
 	defer second.Close()
 	service = serviceForStore(t, second, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
-	current, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", "retry")
+	current, err := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), "retry")
 	if err != nil || current.State != unified.ActionStateExecuting || executor.calls != 0 {
 		t.Fatalf("current=%#v err=%v calls=%d", current, err, executor.calls)
 	}
@@ -314,11 +359,11 @@ func TestExecuteTimeoutAfterSendWaitsForCorrelatedLateResponseWithoutResend(t *t
 	store := unified.NewMemoryStore()
 	executor := &reconcilingExecutor{executeErr: context.DeadlineExceeded, result: &unified.ExecutionResult{Success: true}}
 	service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
-	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	current, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", "timeout proof")
+	current, err := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), "timeout proof")
 	if !errors.Is(err, context.DeadlineExceeded) || current.State != unified.ActionStateExecuting {
 		t.Fatalf("current=%#v err=%v", current, err)
 	}
@@ -330,12 +375,12 @@ func TestExecuteTimeoutAfterSendWaitsForCorrelatedLateResponseWithoutResend(t *t
 		t.Fatalf("receipt found=%v err=%v", found, err)
 	}
 	// Duplicate execute is a query-only resume and cannot call ExecuteAction.
-	current, err = service.Execute(context.Background(), "default", plan.ActionID, "operator", "duplicate resume")
+	current, err = service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), "duplicate resume")
 	if err != nil || current.State != unified.ActionStateExecuting || executor.executeCalls != 1 || executor.reconcileCalls != 1 {
 		t.Fatalf("current=%#v err=%v execute=%d reconcile=%d", current, err, executor.executeCalls, executor.reconcileCalls)
 	}
 	executor.found = true
-	current, err = service.Execute(context.Background(), "default", plan.ActionID, "operator", "late response")
+	current, err = service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), "late response")
 	if err != nil || current.State != unified.ActionStateCompleted || executor.executeCalls != 1 || executor.reconcileCalls != 2 {
 		t.Fatalf("current=%#v err=%v execute=%d reconcile=%d", current, err, executor.executeCalls, executor.reconcileCalls)
 	}
@@ -353,11 +398,11 @@ func TestSQLiteRestartRecoveryReconcilesReceiptPendingWithoutResend(t *testing.T
 	}
 	executor := &reconcilingExecutor{executeErr: context.DeadlineExceeded, result: &unified.ExecutionResult{Success: true}}
 	service := serviceForStore(t, first, testResource(now, unified.ApprovalNone), executor)
-	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", "before restart"); !errors.Is(err, context.DeadlineExceeded) {
+	if _, err := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), "before restart"); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Execute error=%v", err)
 	}
 	if err := first.Close(); err != nil {
@@ -377,7 +422,7 @@ func TestSQLiteRestartRecoveryReconcilesReceiptPendingWithoutResend(t *testing.T
 	if executor.executeCalls != 1 || executor.reconcileCalls != 1 {
 		t.Fatalf("execute=%d reconcile=%d", executor.executeCalls, executor.reconcileCalls)
 	}
-	current, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", "duplicate after recovery")
+	current, err := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), "duplicate after recovery")
 	if err != nil || current.State != unified.ActionStateCompleted || executor.executeCalls != 1 {
 		t.Fatalf("current=%#v err=%v execute=%d", current, err, executor.executeCalls)
 	}
@@ -388,7 +433,7 @@ func TestActionDetailAndInboxMaterializeExplicitExpiry(t *testing.T) {
 	store := unified.NewMemoryStore()
 	service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), &stubExecutor{})
 	service.Now = func() time.Time { return now }
-	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +453,7 @@ func TestActionDetailAndInboxMaterializeExplicitExpiry(t *testing.T) {
 	if err != nil || len(settled) != 1 || settled[0].State != unified.ActionStateExpired {
 		t.Fatalf("settled=%#v err=%v", settled, err)
 	}
-	if _, err := service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Outcome: unified.OutcomeApproved}); !errors.Is(err, unified.ErrActionPlanExpired) {
+	if _, err := service.Decide(context.Background(), "default", plan.ActionID, testActionDecision(t, service, "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Outcome: unified.OutcomeApproved})); !errors.Is(err, unified.ErrActionPlanExpired) {
 		t.Fatalf("Decide error=%v", err)
 	}
 }
@@ -432,7 +477,7 @@ func runPolicyAdmissionCommitsAtomically(t *testing.T, store unified.ResourceSto
 	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
 	service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), executor)
 	service.Now = func() time.Time { return now }
-	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -541,7 +586,7 @@ func runPolicyBarrierRevocations(t *testing.T, storeFactory func(t *testing.T) u
 			executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
 			service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), executor)
 			service.Now = func() time.Time { return now }
-			plan, err := service.Plan(context.Background(), "default", restartRequest())
+			plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -586,14 +631,14 @@ func runHumanApprovalSurvivesPolicyRevocation(t *testing.T, store unified.Resour
 	now := time.Now().UTC()
 	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
 	service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), executor)
-	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved}); err != nil {
+	if _, err = service.Decide(context.Background(), "default", plan.ActionID, testActionDecision(t, service, "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved})); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = service.Execute(context.Background(), "default", plan.ActionID, "operator", ""); err != nil || executor.calls != 1 {
+	if _, err = service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), ""); err != nil || executor.calls != 1 {
 		t.Fatalf("err=%v calls=%d", err, executor.calls)
 	}
 }
@@ -616,19 +661,19 @@ func runEmergencyStopBlocksHumanAndPolicy(t *testing.T, store unified.ResourceSt
 	service.EmergencyStop = func(string) (bool, error) { return true, nil }
 	human := restartRequest()
 	human.RequestID = "human-stop"
-	plan, err := service.Plan(context.Background(), "default", human)
+	plan, err := service.Plan(context.Background(), "default", human, testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved}); err != nil {
+	if _, err = service.Decide(context.Background(), "default", plan.ActionID, testActionDecision(t, service, "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved})); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = service.Execute(context.Background(), "default", plan.ActionID, "operator", ""); !errors.Is(err, unified.ErrActionEmergencyStop) {
+	if _, err = service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), ""); !errors.Is(err, unified.ErrActionEmergencyStop) {
 		t.Fatalf("human error=%v", err)
 	}
 	policy := restartRequest()
 	policy.RequestID = "policy-stop"
-	policyPlan, err := service.Plan(context.Background(), "default", policy)
+	policyPlan, err := service.Plan(context.Background(), "default", policy, testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -660,13 +705,20 @@ func TestLegacyPolicyApprovalWithoutLeaseFailsClosedAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	service := serviceForStore(t, first, testResource(now, unified.ApprovalAdmin), &stubExecutor{})
-	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	request := restartRequest()
+	request.Actor = testActionActor("requester", "default")
+	request.RequestedBy = request.Actor.SubjectID
+	plan, err := (actionplanner.Planner{Now: func() time.Time { return now }}).Plan(request, testResource(now, unified.ApprovalAdmin))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "pulse_patrol_policy", Method: unified.MethodPolicy, Outcome: unified.OutcomeApproved}); err != nil {
-		t.Fatal(err)
+	legacyApproved := unified.ActionAuditRecord{
+		ID: plan.ActionID, CreatedAt: now, UpdatedAt: now, State: unified.ActionStateApproved,
+		Request: request, Plan: plan,
+		Approvals: []unified.ActionApprovalRecord{{Actor: "pulse_patrol_policy", Method: unified.MethodPolicy, Timestamp: now, Outcome: unified.OutcomeApproved}},
+	}
+	if err := first.RecordActionAudit(legacyApproved); err != nil {
+		t.Fatalf("legacy audit: %v", err)
 	}
 	if err = first.Close(); err != nil {
 		t.Fatal(err)
@@ -677,7 +729,7 @@ func TestLegacyPolicyApprovalWithoutLeaseFailsClosedAfterRestart(t *testing.T) {
 	}
 	defer second.Close()
 	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
-	service = serviceForStore(t, second, testResource(now, unified.ApprovalAdmin), executor)
+	service := serviceForStore(t, second, testResource(now, unified.ApprovalAdmin), executor)
 	failed, err := service.ExecuteUnderPolicy(context.Background(), "default", plan.ActionID, "pulse_patrol_policy", func(_ context.Context, record unified.ActionAuditRecord, at time.Time) (unified.ActionPolicyAuthorizationLease, string, error) {
 		return policyTestLease(record, at), "policy", nil
 	})
@@ -694,7 +746,7 @@ func TestQueuedPolicyActionRevalidatesAfterSQLiteRestart(t *testing.T) {
 	}
 	now := time.Now().UTC()
 	service := serviceForStore(t, first, testResource(now, unified.ApprovalAdmin), &stubExecutor{})
-	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -813,7 +865,9 @@ func newServiceEnv(t *testing.T, resource unified.Resource) *serviceEnv {
 			}
 			return env.store, nil
 		},
-		Executor: env.executor,
+		Executor:            env.executor,
+		DecisionAuthorizer:  DecisionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionDecision) error { return nil }),
+		ExecutionAuthorizer: ExecutionAuthorizerFunc(func(context.Context, string, unified.ActionAuditRecord, unified.ActionActor) error { return nil }),
 		OnActionCompleted: func(record unified.ActionAuditRecord) {
 			env.completed = append(env.completed, record)
 		},
@@ -836,7 +890,7 @@ func TestPlanPersistsPendingAuditAndLifecycle(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
 
-	plan, err := env.service.Plan(context.Background(), "default", restartRequest())
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
@@ -860,7 +914,7 @@ func TestPlanPersistsPendingAuditAndLifecycle(t *testing.T) {
 	}
 
 	// Idempotent replan must not duplicate lifecycle events.
-	if _, err := env.service.Plan(context.Background(), "default", restartRequest()); err != nil {
+	if _, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default")); err != nil {
 		t.Fatalf("replan: %v", err)
 	}
 	events, err = env.store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
@@ -879,13 +933,13 @@ func TestPlanFailsClosedOnUnknownResourceAndCapability(t *testing.T) {
 	missing := restartRequest()
 	missing.ResourceID = "vm:404"
 	var notFound *ResourceNotFoundError
-	if _, err := env.service.Plan(context.Background(), "default", missing); !errors.As(err, &notFound) {
+	if _, err := env.service.Plan(context.Background(), "default", missing, testActionActor("requester", "default")); !errors.As(err, &notFound) {
 		t.Fatalf("unknown resource error = %v, want ResourceNotFoundError", err)
 	}
 
 	unknownCap := restartRequest()
 	unknownCap.CapabilityName = "detonate"
-	_, err := env.service.Plan(context.Background(), "default", unknownCap)
+	_, err := env.service.Plan(context.Background(), "default", unknownCap, testActionActor("requester", "default"))
 	var capErr *CapabilityNotFoundError
 	if !errors.As(err, &capErr) || !errors.Is(err, actionplanner.ErrCapabilityNotFound) {
 		t.Fatalf("unknown capability error = %v, want CapabilityNotFoundError wrapping ErrCapabilityNotFound", err)
@@ -897,7 +951,7 @@ func TestPlanFailsClosedOnUnknownResourceAndCapability(t *testing.T) {
 	empty := restartRequest()
 	empty.ResourceID = "  "
 	var validation *actionplanner.ValidationError
-	if _, err := env.service.Plan(context.Background(), "default", empty); !errors.As(err, &validation) {
+	if _, err := env.service.Plan(context.Background(), "default", empty, testActionActor("requester", "default")); !errors.As(err, &validation) {
 		t.Fatalf("empty resource id error = %v, want ValidationError", err)
 	}
 
@@ -920,7 +974,7 @@ func TestPlanAvailabilityRefusalPersistsNothing(t *testing.T) {
 		Reason:     "no connected command agent",
 	}
 
-	_, err := env.service.Plan(context.Background(), "default", restartRequest())
+	_, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	var refused *AvailabilityRefusedError
 	if !errors.As(err, &refused) {
 		t.Fatalf("error = %v, want AvailabilityRefusedError", err)
@@ -941,17 +995,18 @@ func TestDecideApprovesPendingAction(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
 
-	plan, err := env.service.Plan(context.Background(), "default", restartRequest())
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
 
-	updated, err := env.service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{
+	updated, err := env.service.Decide(context.Background(), "default", plan.ActionID, testActionDecision(t, env.service, "default", plan.ActionID, unified.ActionApprovalRecord{
 		Actor:   "operator@example.com",
 		Method:  unified.MethodAPI,
 		Outcome: unified.OutcomeApproved,
 		Reason:  "confirmed outage",
-	})
+	}))
+
 	if err != nil {
 		t.Fatalf("Decide: %v", err)
 	}
@@ -963,9 +1018,9 @@ func TestDecideApprovesPendingAction(t *testing.T) {
 	}
 
 	var notFound *ActionNotFoundError
-	if _, err := env.service.Decide(context.Background(), "default", "act_missing", unified.ActionApprovalRecord{
+	if _, err := env.service.Decide(context.Background(), "default", "act_missing", testActionDecision(t, env.service, "default", "act_missing", unified.ActionApprovalRecord{
 		Actor: "operator@example.com", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved,
-	}); !errors.As(err, &notFound) {
+	})); !errors.As(err, &notFound) {
 		t.Fatalf("unknown action error = %v, want ActionNotFoundError", err)
 	}
 }
@@ -974,17 +1029,17 @@ func TestExecuteRunsApprovedActionToTerminalAudit(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
 
-	plan, err := env.service.Plan(context.Background(), "default", restartRequest())
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
-	if _, err := env.service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{
+	if _, err := env.service.Decide(context.Background(), "default", plan.ActionID, testActionDecision(t, env.service, "default", plan.ActionID, unified.ActionApprovalRecord{
 		Actor: "operator@example.com", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved,
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("Decide: %v", err)
 	}
 
-	completed, err := env.service.Execute(context.Background(), "default", plan.ActionID, "operator@example.com", "approved restart")
+	completed, err := env.service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator@example.com", "default"), "approved restart")
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -1011,11 +1066,11 @@ func TestExecuteRefusesUnapprovedActionWithoutDispatch(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
 
-	plan, err := env.service.Plan(context.Background(), "default", restartRequest())
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
-	if _, err := env.service.Execute(context.Background(), "default", plan.ActionID, "operator@example.com", ""); !errors.Is(err, unified.ErrActionNotApproved) {
+	if _, err := env.service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator@example.com", "default"), ""); !errors.Is(err, unified.ErrActionNotApproved) {
 		t.Fatalf("error = %v, want ErrActionNotApproved", err)
 	}
 	if env.executor.calls != 0 {
@@ -1027,7 +1082,7 @@ func TestExecuteRefusesRemediationLockedResource(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalNone))
 
-	plan, err := env.service.Plan(context.Background(), "default", restartRequest())
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
@@ -1038,7 +1093,7 @@ func TestExecuteRefusesRemediationLockedResource(t *testing.T) {
 		t.Fatalf("SetResourceOperatorState: %v", err)
 	}
 
-	failed, err := env.service.Execute(context.Background(), "default", plan.ActionID, "agent:test", "")
+	failed, err := env.service.Execute(context.Background(), "default", plan.ActionID, testActionActor("agent:test", "default"), "")
 	if !errors.Is(err, unified.ErrResourceRemediationLocked) {
 		t.Fatalf("error = %v, want ErrResourceRemediationLocked", err)
 	}
@@ -1057,7 +1112,7 @@ func TestExecuteRefusesDriftedPlan(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalNone))
 
-	plan, err := env.service.Plan(context.Background(), "default", restartRequest())
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
@@ -1068,7 +1123,7 @@ func TestExecuteRefusesDriftedPlan(t *testing.T) {
 	env.registry = unified.NewRegistry(env.store)
 	env.registry.IngestResources([]unified.Resource{drifted})
 
-	failed, err := env.service.Execute(context.Background(), "default", plan.ActionID, "agent:test", "")
+	failed, err := env.service.Execute(context.Background(), "default", plan.ActionID, testActionActor("agent:test", "default"), "")
 	if !errors.Is(err, unified.ErrActionPlanDrift) {
 		t.Fatalf("error = %v, want ErrActionPlanDrift", err)
 	}
@@ -1084,12 +1139,12 @@ func TestExecuteFailsClosedWithoutExecutor(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalNone))
 
-	plan, err := env.service.Plan(context.Background(), "default", restartRequest())
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
 	env.service.Executor = nil
-	if _, err := env.service.Execute(context.Background(), "default", plan.ActionID, "agent:test", ""); !errors.Is(err, ErrExecutorUnavailable) {
+	if _, err := env.service.Execute(context.Background(), "default", plan.ActionID, testActionActor("agent:test", "default"), ""); !errors.Is(err, ErrExecutorUnavailable) {
 		t.Fatalf("error = %v, want ErrExecutorUnavailable", err)
 	}
 }
@@ -1099,13 +1154,13 @@ func TestLifecycleFailsClosedWithoutStore(t *testing.T) {
 	env := newServiceEnv(t, testResource(now, unified.ApprovalNone))
 	env.service.Store = func(string) (Store, error) { return nil, errors.New("db offline") }
 
-	if _, err := env.service.Plan(context.Background(), "default", restartRequest()); !errors.Is(err, ErrStoreUnavailable) {
+	if _, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default")); !errors.Is(err, ErrStoreUnavailable) {
 		t.Fatalf("Plan error = %v, want ErrStoreUnavailable", err)
 	}
-	if _, err := env.service.Decide(context.Background(), "default", "act_x", unified.ActionApprovalRecord{Outcome: unified.OutcomeApproved}); !errors.Is(err, ErrStoreUnavailable) {
+	if _, err := env.service.Decide(context.Background(), "default", "act_x", testActionDecision(t, env.service, "default", "act_x", unified.ActionApprovalRecord{Outcome: unified.OutcomeApproved})); !errors.Is(err, ErrStoreUnavailable) {
 		t.Fatalf("Decide error = %v, want ErrStoreUnavailable", err)
 	}
-	if _, err := env.service.Execute(context.Background(), "default", "act_x", "agent:test", ""); !errors.Is(err, ErrStoreUnavailable) {
+	if _, err := env.service.Execute(context.Background(), "default", "act_x", testActionActor("agent:test", "default"), ""); !errors.Is(err, ErrStoreUnavailable) {
 		t.Fatalf("Execute error = %v, want ErrStoreUnavailable", err)
 	}
 }
@@ -1138,7 +1193,7 @@ func TestPlanWithOptionsPersistsOriginAcrossLifecycle(t *testing.T) {
 		InvestigationID: "inv-9",
 		ProposalID:      "prop-9",
 	}
-	plan, err := env.service.PlanWithOptions(context.Background(), "default", restartRequest(), PlanOptions{Origin: origin})
+	plan, err := env.service.PlanWithOptions(context.Background(), "default", restartRequest(), PlanOptions{Actor: testActionActor("requester", "default"), Origin: origin})
 	if err != nil {
 		t.Fatalf("PlanWithOptions: %v", err)
 	}
@@ -1154,9 +1209,10 @@ func TestPlanWithOptionsPersistsOriginAcrossLifecycle(t *testing.T) {
 	// Origin must survive the decision transition: the decision persists
 	// the record loaded from the store, so the broker-owned metadata
 	// stays reconcilable at approval time.
-	updated, err := env.service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{
+	updated, err := env.service.Decide(context.Background(), "default", plan.ActionID, testActionDecision(t, env.service, "default", plan.ActionID, unified.ActionApprovalRecord{
 		Actor: "operator@example.com", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved,
-	})
+	}))
+
 	if err != nil {
 		t.Fatalf("Decide: %v", err)
 	}
@@ -1167,7 +1223,7 @@ func TestPlanWithOptionsPersistsOriginAcrossLifecycle(t *testing.T) {
 	// Plain Plan must never stamp an origin.
 	plain := restartRequest()
 	plain.RequestID = "req-plain"
-	plainPlan, err := env.service.Plan(context.Background(), "default", plain)
+	plainPlan, err := env.service.Plan(context.Background(), "default", plain, testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
@@ -1190,16 +1246,16 @@ func TestOnActionTransitionFiresAfterEachPersistedState(t *testing.T) {
 		transitionOrgs = append(transitionOrgs, orgID)
 	}
 
-	plan, err := env.service.Plan(context.Background(), "default", restartRequest())
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
-	if _, err := env.service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{
+	if _, err := env.service.Decide(context.Background(), "default", plan.ActionID, testActionDecision(t, env.service, "default", plan.ActionID, unified.ActionApprovalRecord{
 		Actor: "operator@example.com", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved,
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("Decide: %v", err)
 	}
-	if _, err := env.service.Execute(context.Background(), "default", plan.ActionID, "operator@example.com", ""); err != nil {
+	if _, err := env.service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator@example.com", "default"), ""); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 
@@ -1225,7 +1281,7 @@ func TestOnActionTransitionFiresForPersistedRefusals(t *testing.T) {
 		transitions = append(transitions, record.State)
 	}
 
-	plan, err := env.service.Plan(context.Background(), "default", restartRequest())
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}
@@ -1235,7 +1291,7 @@ func TestOnActionTransitionFiresForPersistedRefusals(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("SetResourceOperatorState: %v", err)
 	}
-	if _, err := env.service.Execute(context.Background(), "default", plan.ActionID, "agent:test", ""); !errors.Is(err, unified.ErrResourceRemediationLocked) {
+	if _, err := env.service.Execute(context.Background(), "default", plan.ActionID, testActionActor("agent:test", "default"), ""); !errors.Is(err, unified.ErrResourceRemediationLocked) {
 		t.Fatalf("error = %v, want ErrResourceRemediationLocked", err)
 	}
 
