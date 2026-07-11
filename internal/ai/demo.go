@@ -307,11 +307,11 @@ func (p *PatrolService) backfillDemoRunHistory(template PatrolRunRecord, now tim
 // pins a set of deliberate anomalies (an offline Docker edge host, a degraded
 // PBS instance, unhealthy containers), which gives the surface a stable core
 // of findings across cycles.
-func synthesizeDemoPatrolFindings(state patrolRuntimeState, now time.Time) []*Finding {
+func synthesizeDemoPatrolFindings(snap patrolRuntimeState, now time.Time) []*Finding {
 	var findings []*Finding
 
 	// Offline Docker host: the demo scenario keeps one edge host offline.
-	for _, host := range state.DockerHosts {
+	for _, host := range snap.DockerHosts {
 		if !strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
 			continue
 		}
@@ -343,8 +343,8 @@ func synthesizeDemoPatrolFindings(state patrolRuntimeState, now time.Time) []*Fi
 
 	// Highest-utilization storage pool, quoting its actual numbers.
 	var topStorage *models.Storage
-	for i := range state.Storage {
-		s := &state.Storage[i]
+	for i := range snap.Storage {
+		s := &snap.Storage[i]
 		if s.Total <= 0 || !s.Enabled || strings.EqualFold(strings.TrimSpace(s.Status), "offline") {
 			continue
 		}
@@ -386,7 +386,7 @@ func synthesizeDemoPatrolFindings(state patrolRuntimeState, now time.Time) []*Fi
 	}
 
 	// Degraded backup server: the demo scenario keeps one PBS instance degraded.
-	for _, pbs := range state.PBSInstances {
+	for _, pbs := range snap.PBSInstances {
 		statusBad := !strings.EqualFold(strings.TrimSpace(pbs.Status), "online")
 		healthBad := pbs.ConnectionHealth != "" && !strings.EqualFold(strings.TrimSpace(pbs.ConnectionHealth), "healthy")
 		if !statusBad && !healthBad {
@@ -418,7 +418,7 @@ func synthesizeDemoPatrolFindings(state patrolRuntimeState, now time.Time) []*Fi
 
 	// Unhealthy or restart-looping containers on online Docker hosts.
 	containerFindings := 0
-	for _, host := range state.DockerHosts {
+	for _, host := range snap.DockerHosts {
 		if strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
 			continue
 		}
@@ -470,7 +470,7 @@ func synthesizeDemoPatrolFindings(state patrolRuntimeState, now time.Time) []*Fi
 	}
 
 	// Degraded mail gateway: the demo scenario keeps one PMG instance degraded.
-	for _, pmg := range state.PMGInstances {
+	for _, pmg := range snap.PMGInstances {
 		if strings.EqualFold(strings.TrimSpace(pmg.Status), "online") {
 			continue
 		}
@@ -512,12 +512,12 @@ func synthesizeDemoPatrolFindings(state patrolRuntimeState, now time.Time) []*Fi
 			topGuest = &guestRef{id: id, name: name, node: node, kind: kind, usage: mem.Usage, used: mem.Used, total: mem.Total}
 		}
 	}
-	for i := range state.VMs {
-		vm := &state.VMs[i]
+	for i := range snap.VMs {
+		vm := &snap.VMs[i]
 		consider(vm.ID, vm.Name, vm.Node, "VM", vm.Status, vm.Memory)
 	}
-	for i := range state.Containers {
-		ct := &state.Containers[i]
+	for i := range snap.Containers {
+		ct := &snap.Containers[i]
 		consider(ct.ID, ct.Name, ct.Node, "Container", ct.Status, ct.Memory)
 	}
 	if topGuest != nil && topGuest.usage >= 85 {
