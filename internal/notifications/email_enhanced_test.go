@@ -350,7 +350,7 @@ func TestBuildMultipartEmailMessage_EncodesMultipartBodies(t *testing.T) {
 	textBody := "Text line 1\nBcc: attacker@example.com\n.\n--pretend-boundary"
 	htmlBody := "<p>Hello</p>\nContent-Type: text/plain\n.\n--pretend-boundary"
 
-	msg, err := buildMultipartEmailMessage(addresses, "Alert Subject", htmlBody, textBody, time.Unix(1711711711, 1234).UTC())
+	msg, err := buildMultipartEmailMessage(addresses, "Alert Subject", htmlBody, textBody, "", time.Unix(1711711711, 1234).UTC())
 	if err != nil {
 		t.Fatalf("buildMultipartEmailMessage() error = %v", err)
 	}
@@ -443,6 +443,7 @@ func TestBuildMultipartEmailMessageWithAttachments_EncodesReportAttachment(t *te
 		"<p>Attached</p>",
 		"Attached",
 		[]EmailAttachment{attachment},
+		"",
 		time.Unix(1711711711, 1234).UTC(),
 	)
 	if err != nil {
@@ -460,6 +461,85 @@ func TestBuildMultipartEmailMessageWithAttachments_EncodesReportAttachment(t *te
 		if !strings.Contains(raw, want) {
 			t.Fatalf("attachment message missing %q in:\n%s", want, raw)
 		}
+	}
+}
+
+func TestAlertThreadMessageID_DeterministicPerIncident(t *testing.T) {
+	start := time.Unix(1711711711, 1234).UTC()
+
+	first := alertThreadMessageID("alert-1", start)
+	second := alertThreadMessageID("alert-1", start)
+	if first != second {
+		t.Fatalf("same incident produced different thread IDs: %q vs %q", first, second)
+	}
+	if !strings.HasPrefix(first, "<pulse-alert-") || !strings.HasSuffix(first, "@pulse-monitoring>") {
+		t.Fatalf("thread ID %q is not an RFC 5322 message ID in the pulse-monitoring domain", first)
+	}
+
+	if other := alertThreadMessageID("alert-2", start); other == first {
+		t.Fatalf("different alert IDs produced the same thread ID %q", first)
+	}
+	if refired := alertThreadMessageID("alert-1", start.Add(time.Hour)); refired == first {
+		t.Fatalf("re-fired incident (new start time) produced the same thread ID %q", first)
+	}
+}
+
+func TestBuildMultipartEmailMessage_ThreadingHeaders(t *testing.T) {
+	addresses := resolvedEmailAddresses{
+		from: &mail.Address{Address: "sender@example.com"},
+		to:   []*mail.Address{{Address: "recipient@example.com"}},
+	}
+	threadID := alertThreadMessageID("alert-1", time.Unix(1711711711, 0).UTC())
+
+	msg, err := buildMultipartEmailMessage(addresses, "Alert", "<p>hi</p>", "hi", threadID, time.Unix(1711711711, 1234).UTC())
+	if err != nil {
+		t.Fatalf("buildMultipartEmailMessage() error = %v", err)
+	}
+	parsed, err := mail.ReadMessage(bytes.NewReader(msg))
+	if err != nil {
+		t.Fatalf("mail.ReadMessage() error = %v", err)
+	}
+	if got := parsed.Header.Get("In-Reply-To"); got != threadID {
+		t.Fatalf("In-Reply-To = %q, want %q", got, threadID)
+	}
+	if got := parsed.Header.Get("References"); got != threadID {
+		t.Fatalf("References = %q, want %q", got, threadID)
+	}
+	if got := parsed.Header.Get("Message-ID"); got == threadID {
+		t.Fatalf("Message-ID must stay unique per send, got the thread ID %q", got)
+	}
+
+	plain, err := buildMultipartEmailMessage(addresses, "Alert", "<p>hi</p>", "hi", "", time.Unix(1711711711, 1234).UTC())
+	if err != nil {
+		t.Fatalf("buildMultipartEmailMessage() error = %v", err)
+	}
+	raw := string(plain)
+	if strings.Contains(raw, "In-Reply-To:") || strings.Contains(raw, "References:") {
+		t.Fatalf("unthreaded message must not carry threading headers:\n%s", raw)
+	}
+}
+
+func TestBuildMultipartEmailMessageWithAttachments_ThreadingHeaders(t *testing.T) {
+	addresses := resolvedEmailAddresses{
+		from: &mail.Address{Address: "sender@example.com"},
+		to:   []*mail.Address{{Address: "recipient@example.com"}},
+	}
+	threadID := alertThreadMessageID("alert-1", time.Unix(1711711711, 0).UTC())
+	attachment := EmailAttachment{Filename: "report.pdf", ContentType: "application/pdf", Data: []byte("%PDF-1.7\n")}
+
+	msg, err := buildMultipartEmailMessageWithAttachments(addresses, "Alert", "<p>hi</p>", "hi", []EmailAttachment{attachment}, threadID, time.Unix(1711711711, 1234).UTC())
+	if err != nil {
+		t.Fatalf("buildMultipartEmailMessageWithAttachments() error = %v", err)
+	}
+	parsed, err := mail.ReadMessage(bytes.NewReader(msg))
+	if err != nil {
+		t.Fatalf("mail.ReadMessage() error = %v", err)
+	}
+	if got := parsed.Header.Get("In-Reply-To"); got != threadID {
+		t.Fatalf("In-Reply-To = %q, want %q", got, threadID)
+	}
+	if got := parsed.Header.Get("References"); got != threadID {
+		t.Fatalf("References = %q, want %q", got, threadID)
 	}
 }
 

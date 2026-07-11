@@ -1482,6 +1482,17 @@ func (n *NotificationManager) logNotificationJobError(job notificationDeliveryJo
 	logger.Msg(message)
 }
 
+// alertListThreadID returns the incident thread ID when the email covers
+// exactly one alert. Grouped emails don't thread: firing and resolved
+// batches rarely contain the same alert set, so a group-level reference
+// would attach messages to the wrong thread more often than the right one.
+func alertListThreadID(alertList []*alerts.Alert) string {
+	if len(alertList) != 1 || alertList[0] == nil {
+		return ""
+	}
+	return alertThreadMessageID(alertList[0].ID, alertList[0].StartTime)
+}
+
 // sendGroupedEmail sends a grouped email notification
 func (n *NotificationManager) sendGroupedEmail(config EmailConfig, alertList []*alerts.Alert) error {
 
@@ -1492,7 +1503,7 @@ func (n *NotificationManager) sendGroupedEmail(config EmailConfig, alertList []*
 	subject, htmlBody, textBody := EmailTemplate(alertList, false)
 
 	// Send using HTML-aware method
-	return n.sendHTMLEmailWithError(subject, htmlBody, textBody, config)
+	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID(alertList), config)
 }
 
 func (n *NotificationManager) sendResolvedEmail(config EmailConfig, alertList []*alerts.Alert, resolvedAt time.Time) error {
@@ -1505,7 +1516,7 @@ func (n *NotificationManager) sendResolvedEmail(config EmailConfig, alertList []
 		return fmt.Errorf("failed to build resolved email content")
 	}
 
-	return n.sendHTMLEmailWithError(subject, htmlBody, textBody, config)
+	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID(alertList), config)
 }
 
 func (n *NotificationManager) sendGroupedApprise(config AppriseConfig, alertList []*alerts.Alert) error {
@@ -1870,7 +1881,7 @@ func (n *NotificationManager) sendResolvedApprise(config AppriseConfig, alertLis
 // sendEmail sends an email notification
 func (n *NotificationManager) sendSingleEmailWithError(alert *alerts.Alert, config EmailConfig) error {
 	subject, htmlBody, textBody := EmailTemplate([]*alerts.Alert{alert}, true)
-	return n.sendHTMLEmailWithError(subject, htmlBody, textBody, config)
+	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, alertListThreadID([]*alerts.Alert{alert}), config)
 }
 
 func (n *NotificationManager) sendEmail(alert *alerts.Alert) {
@@ -1980,6 +1991,12 @@ func (n *NotificationManager) emailDeliveryManager(config EmailConfig) (*Enhance
 
 // sendHTMLEmailWithError sends an HTML email with multipart content and returns any error
 func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody string, config EmailConfig) error {
+	return n.sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, "", config)
+}
+
+// sendThreadedHTMLEmailWithError is sendHTMLEmailWithError plus an optional
+// incident thread ID (see alertThreadMessageID).
+func (n *NotificationManager) sendThreadedHTMLEmailWithError(subject, htmlBody, textBody, threadID string, config EmailConfig) error {
 	config = normalizeEmailConfig(config)
 
 	recipients := effectiveEmailRecipients(config)
@@ -1999,7 +2016,7 @@ func (n *NotificationManager) sendHTMLEmailWithError(subject, htmlBody, textBody
 		Bool("startTLS", manager.config.StartTLS).
 		Msg("attempting to send email via SMTP with enhanced support")
 
-	err := manager.SendEmailWithRetry(subject, htmlBody, textBody)
+	err := manager.SendEmailThreaded(subject, htmlBody, textBody, threadID)
 
 	if err != nil {
 		log.Error().

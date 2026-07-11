@@ -177,6 +177,17 @@ cannot treat raw config strings as header fragments or `RCPT TO` input.
 That same SMTP boundary also owns MIME-safe body construction. Text and HTML
 payloads must be emitted through canonical multipart writers with encoded body
 parts instead of being concatenated directly into handcrafted message bodies.
+That same SMTP boundary also owns email threading identity. An email that
+covers exactly one alert occurrence must carry In-Reply-To and References
+headers set to a deterministic incident thread ID derived from the alert ID
+plus firing start time, so mail clients thread the firing, re-notification,
+and resolved messages of one incident together. The per-send Message-ID must
+stay unique: re-notified incidents emit multiple emails, and providers that
+de-duplicate on Message-ID would silently drop repeats, so incident identity
+may ride only in the threading headers. Grouped emails covering multiple
+alerts must not carry a group-level thread identity, because firing and
+resolved batches are not guaranteed to contain the same alert set and a
+group-level reference would attach messages to the wrong thread.
 Scheduled report delivery uses that same enhanced email boundary. Report
 attachments must be emitted as MIME attachment parts by
 `internal/notifications/email_enhanced.go`, and oversized-report fallback copy

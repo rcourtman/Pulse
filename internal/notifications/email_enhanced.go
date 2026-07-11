@@ -2,8 +2,10 @@ package notifications
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -188,7 +190,32 @@ func writeMultipartBodyPart(writer *multipart.Writer, contentType, body string) 
 	return nil
 }
 
-func buildMultipartEmailMessage(addresses resolvedEmailAddresses, subject, htmlBody, textBody string, now time.Time) ([]byte, error) {
+// alertThreadMessageID derives a deterministic RFC 5322 message ID for an
+// alert incident (alert ID + firing start time). Emails about the incident
+// carry it in In-Reply-To/References so clients thread the firing,
+// re-notification, and resolved messages together. It is never used as a
+// Message-ID: re-notified incidents send multiple emails, and providers that
+// de-duplicate on Message-ID would silently drop the repeats.
+func alertThreadMessageID(alertID string, startTime time.Time) string {
+	sum := sha256.Sum256([]byte(alertID + "|" + strconv.FormatInt(startTime.UnixNano(), 10)))
+	return fmt.Sprintf("<pulse-alert-%s@pulse-monitoring>", hex.EncodeToString(sum[:12]))
+}
+
+func writeEmailThreadingHeaders(message *bytes.Buffer, threadID string) error {
+	threadID = sanitizeEmailHeaderValue(threadID)
+	if threadID == "" {
+		return nil
+	}
+	if _, err := fmt.Fprintf(message, "In-Reply-To: %s\r\n", threadID); err != nil {
+		return fmt.Errorf("write in-reply-to header: %w", err)
+	}
+	if _, err := fmt.Fprintf(message, "References: %s\r\n", threadID); err != nil {
+		return fmt.Errorf("write references header: %w", err)
+	}
+	return nil
+}
+
+func buildMultipartEmailMessage(addresses resolvedEmailAddresses, subject, htmlBody, textBody, threadID string, now time.Time) ([]byte, error) {
 	var message bytes.Buffer
 	var body bytes.Buffer
 
@@ -213,6 +240,9 @@ func buildMultipartEmailMessage(addresses resolvedEmailAddresses, subject, htmlB
 	}
 	if _, err := fmt.Fprintf(&message, "Message-ID: <%d@pulse-monitoring>\r\n", now.UnixNano()); err != nil {
 		return nil, fmt.Errorf("write message-id header: %w", err)
+	}
+	if err := writeEmailThreadingHeaders(&message, threadID); err != nil {
+		return nil, err
 	}
 	if _, err := message.WriteString("MIME-Version: 1.0\r\n"); err != nil {
 		return nil, fmt.Errorf("write mime-version header: %w", err)
@@ -241,9 +271,9 @@ func buildMultipartEmailMessage(addresses resolvedEmailAddresses, subject, htmlB
 	return message.Bytes(), nil
 }
 
-func buildMultipartEmailMessageWithAttachments(addresses resolvedEmailAddresses, subject, htmlBody, textBody string, attachments []EmailAttachment, now time.Time) ([]byte, error) {
+func buildMultipartEmailMessageWithAttachments(addresses resolvedEmailAddresses, subject, htmlBody, textBody string, attachments []EmailAttachment, threadID string, now time.Time) ([]byte, error) {
 	if len(attachments) == 0 {
-		return buildMultipartEmailMessage(addresses, subject, htmlBody, textBody, now)
+		return buildMultipartEmailMessage(addresses, subject, htmlBody, textBody, threadID, now)
 	}
 
 	var message bytes.Buffer
@@ -269,6 +299,9 @@ func buildMultipartEmailMessageWithAttachments(addresses resolvedEmailAddresses,
 	}
 	if _, err := fmt.Fprintf(&message, "Message-ID: <%d@pulse-monitoring>\r\n", now.UnixNano()); err != nil {
 		return nil, fmt.Errorf("write message-id header: %w", err)
+	}
+	if err := writeEmailThreadingHeaders(&message, threadID); err != nil {
+		return nil, err
 	}
 	if _, err := message.WriteString("MIME-Version: 1.0\r\n"); err != nil {
 		return nil, fmt.Errorf("write mime-version header: %w", err)
@@ -446,10 +479,20 @@ func NewEnhancedEmailManager(config EmailProviderConfig) *EnhancedEmailManager {
 // Total attempts = MaxRetries * MaxAttempts (e.g., 3 * 3 = 9 SMTP calls for a single notification)
 // This ensures delivery even during transient failures at either layer.
 func (e *EnhancedEmailManager) SendEmailWithRetry(subject, htmlBody, textBody string) error {
-	return e.SendEmailWithAttachments(subject, htmlBody, textBody, nil)
+	return e.sendEmailWithOptions(subject, htmlBody, textBody, nil, "")
+}
+
+// SendEmailThreaded is SendEmailWithRetry plus an incident thread ID emitted
+// as In-Reply-To/References so clients thread the incident's emails together.
+func (e *EnhancedEmailManager) SendEmailThreaded(subject, htmlBody, textBody, threadID string) error {
+	return e.sendEmailWithOptions(subject, htmlBody, textBody, nil, threadID)
 }
 
 func (e *EnhancedEmailManager) SendEmailWithAttachments(subject, htmlBody, textBody string, attachments []EmailAttachment) error {
+	return e.sendEmailWithOptions(subject, htmlBody, textBody, attachments, "")
+}
+
+func (e *EnhancedEmailManager) sendEmailWithOptions(subject, htmlBody, textBody string, attachments []EmailAttachment, threadID string) error {
 	var lastErr error
 
 	for attempt := 0; attempt <= e.config.MaxRetries; attempt++ {
@@ -469,7 +512,7 @@ func (e *EnhancedEmailManager) SendEmailWithAttachments(subject, htmlBody, textB
 		}
 
 		// Try to send
-		err := e.sendEmailOnceWithAttachments(subject, htmlBody, textBody, attachments)
+		err := e.sendEmailOnceWithOptions(subject, htmlBody, textBody, attachments, threadID)
 		if err == nil {
 			if attempt > 0 {
 				log.Info().
@@ -516,16 +559,16 @@ func (e *EnhancedEmailManager) checkRateLimit() error {
 
 // sendEmailOnce sends a single email.
 func (e *EnhancedEmailManager) sendEmailOnce(subject, htmlBody, textBody string) error {
-	return e.sendEmailOnceWithAttachments(subject, htmlBody, textBody, nil)
+	return e.sendEmailOnceWithOptions(subject, htmlBody, textBody, nil, "")
 }
 
-func (e *EnhancedEmailManager) sendEmailOnceWithAttachments(subject, htmlBody, textBody string, attachments []EmailAttachment) error {
+func (e *EnhancedEmailManager) sendEmailOnceWithOptions(subject, htmlBody, textBody string, attachments []EmailAttachment, threadID string) error {
 	addresses, err := e.resolveEmailAddresses()
 	if err != nil {
 		return err
 	}
 
-	msg, err := buildMultipartEmailMessageWithAttachments(addresses, subject, htmlBody, textBody, attachments, time.Now())
+	msg, err := buildMultipartEmailMessageWithAttachments(addresses, subject, htmlBody, textBody, attachments, threadID, time.Now())
 	if err != nil {
 		return err
 	}

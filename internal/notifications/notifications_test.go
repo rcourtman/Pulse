@@ -17,6 +17,29 @@ import (
 
 const legacySnakeAlertIdentifierField = "alert_id"
 
+func TestAlertListThreadID(t *testing.T) {
+	start := time.Unix(1711711711, 0).UTC()
+	alert := &alerts.Alert{ID: "alert-1", StartTime: start}
+
+	// Firing and resolved emails for the same incident derive the same
+	// thread ID, which is what makes clients thread them together.
+	got := alertListThreadID([]*alerts.Alert{alert})
+	if want := alertThreadMessageID("alert-1", start); got != want {
+		t.Fatalf("single-alert thread ID = %q, want %q", got, want)
+	}
+
+	if got := alertListThreadID(nil); got != "" {
+		t.Fatalf("empty list thread ID = %q, want empty", got)
+	}
+	if got := alertListThreadID([]*alerts.Alert{nil}); got != "" {
+		t.Fatalf("nil alert thread ID = %q, want empty", got)
+	}
+	grouped := []*alerts.Alert{alert, {ID: "alert-2", StartTime: start}}
+	if got := alertListThreadID(grouped); got != "" {
+		t.Fatalf("grouped email thread ID = %q, want empty (groups do not thread)", got)
+	}
+}
+
 func flushPending(n *NotificationManager) {
 	n.mu.Lock()
 	if n.queue != nil {
