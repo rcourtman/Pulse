@@ -1348,7 +1348,12 @@ AI-only summary payloads, or page-local heuristics.
     / `ListResourceIdentityPins`, written diff-aware after monitor-adapter
     rebuilds) and completes weak incoming identities from those pins
     before matching and ID derivation
-    (`internal/unifiedresources/canonical_id_pins.go`). Change-journal
+    (`internal/unifiedresources/canonical_id_pins.go`). Persisted primary
+    hostnames preserve their normalized dotted form. The pin index resolves
+    that exact primary hostname first and exposes the historical short-name
+    form only as an ambiguity-safe compatibility alias; two dotted hostnames
+    that share a first label must never resolve through that shared alias.
+    Change-journal
     reads (`GetRecentChanges*` / `CountRecentChanges*`) must expand a
     canonical ID to the era set recomputable from its pinned identity keys
     (`ResourceIdentityPin.EraIDs`) so journal rows recorded under an

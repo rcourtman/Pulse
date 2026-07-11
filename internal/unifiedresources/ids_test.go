@@ -79,6 +79,19 @@ func TestResourceIdentityPinEraIDs(t *testing.T) {
 	}
 }
 
+func TestResourceIdentityPinPreservesDottedPrimaryHostname(t *testing.T) {
+	pin := ResourceIdentityPin{
+		CanonicalID:  "agent-custom",
+		ResourceType: ResourceTypeAgent,
+		MachineID:    "machine-1",
+		Hostname:     "Cloud.Rnd-Lax1.",
+	}.normalized()
+
+	if pin.Hostname != "cloud.rnd-lax1" {
+		t.Fatalf("normalized pin hostname = %q, want %q", pin.Hostname, "cloud.rnd-lax1")
+	}
+}
+
 func TestResourceIdentityPinEraIDsSkipsWeakOnlyKeys(t *testing.T) {
 	pin := ResourceIdentityPin{
 		CanonicalID:  "agent-custom",
