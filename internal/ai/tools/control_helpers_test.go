@@ -122,7 +122,7 @@ func TestConsumeApprovalWithValidation_AllowsMatchingOrg(t *testing.T) {
 
 	stored, found := store.GetApproval("app-2")
 	require.True(t, found)
-	assert.True(t, stored.Consumed)
+	assert.False(t, stored.Consumed, "validation must not consume before the agentexec authorization boundary")
 }
 
 func TestFormattingHelpers(t *testing.T) {

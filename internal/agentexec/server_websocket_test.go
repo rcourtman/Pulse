@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -364,6 +365,13 @@ func TestHandleWebSocket_AgentPingRespondsWithPong(t *testing.T) {
 
 func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 	s := NewServer(allowAllTestTokens)
+	callerGrant := &CommandApprovalGrant{Signature: "caller-supplied"}
+	s.SetCommandAuthorizationVerifier(func(req CommandAuthorizationRequest) error {
+		if req.ApprovalID != "approval-1" || req.OrgID != "org-1" || req.ActionID != "action-1" {
+			return fmt.Errorf("authorization mismatch: %+v", req)
+		}
+		return nil
+	})
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -408,6 +416,10 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 				agentErr <- fmt.Errorf("missing approval grant")
 				return
 			}
+			if payload.ApprovalGrant.Signature == callerGrant.Signature {
+				agentErr <- fmt.Errorf("caller-supplied approval grant was forwarded")
+				return
+			}
 			if err := VerifyCommandApprovalGrant("any", "a1", payload, time.Now()); err != nil {
 				agentErr <- err
 				return
@@ -431,12 +443,15 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	result, err := s.ExecuteCommand(ctx, "a1", ExecuteCommandPayload{
-		RequestID:  "req1",
-		Command:    "echo ok",
-		ApprovalID: "approval-1",
-		Timeout:    1,
-	})
+	payload := ExecuteCommandPayload{
+		RequestID:     "req1",
+		Command:       "echo ok",
+		ApprovalID:    "approval-1",
+		ApprovalGrant: callerGrant,
+		Timeout:       1,
+	}
+	payload.BindCommandAuthorization("org-1", "action-1")
+	result, err := s.ExecuteCommand(ctx, "a1", payload)
 	if err != nil {
 		t.Fatalf("ExecuteCommand: %v", err)
 	}
@@ -452,6 +467,55 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 
 	if err := <-agentErr; err != nil {
 		t.Fatalf("agent error: %v", err)
+	}
+}
+
+func TestExecuteCommand_InvalidApprovalAuthorizationNeverMintsOrDispatches(t *testing.T) {
+	cases := []struct {
+		name string
+		err  string
+	}{
+		{name: "nonexistent", err: "approval not found"},
+		{name: "wrong-org", err: "approval belongs to another org"},
+		{name: "expired", err: "approval expired"},
+		{name: "consumed", err: "approval already consumed"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewServer(allowAllTestTokens)
+			s.SetCommandAuthorizationVerifier(func(CommandAuthorizationRequest) error { return errors.New(tc.err) })
+			grantCalls := 0
+			s.newCommandApprovalGrant = func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error) {
+				grantCalls++
+				return nil, errors.New("grant must not be minted")
+			}
+			ts := newWSServer(t, s)
+			defer ts.Close()
+
+			conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+			if err != nil {
+				t.Fatalf("Dial: %v", err)
+			}
+			defer conn.Close()
+			wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+				AgentID: "a1", Hostname: "host1", Version: "1.2.3", Platform: "linux", Token: "any",
+			}))
+			_ = wsReadRegisteredPayload(t, conn)
+
+			payload := ExecuteCommandPayload{
+				RequestID: "req-invalid", Command: "echo rejected", ApprovalID: "approval-invalid", Timeout: 1,
+			}
+			payload.BindCommandAuthorization("org-1", "action-1")
+			if _, err := s.ExecuteCommand(context.Background(), "a1", payload); err == nil || !strings.Contains(err.Error(), tc.err) {
+				t.Fatalf("ExecuteCommand error = %v, want %q", err, tc.err)
+			}
+			if grantCalls != 0 {
+				t.Fatalf("signed grant calls = %d, want 0", grantCalls)
+			}
+			if _, err := wsReadRawMessageWithTimeout(conn, 100*time.Millisecond); err == nil {
+				t.Fatal("unexpected WebSocket dispatch for rejected approval")
+			}
+		})
 	}
 }
 

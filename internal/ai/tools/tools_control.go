@@ -318,6 +318,10 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 	command, _ := args["command"].(string)
 	targetHost, _ := args["target_host"].(string)
 	approvalID := agentcapabilities.ApprovalArgument(args)
+	auditResourceID := strings.TrimSpace(targetHost)
+	if e.isAutonomous {
+		return NewErrorResult(fmt.Errorf("raw command execution is unavailable in autonomous model sessions; use a typed governed action proposal")), nil
+	}
 
 	if command == "" {
 		return NewErrorResult(fmt.Errorf("command is required")), nil
@@ -339,6 +343,9 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 				Str("command", command).
 				Str("validation_error", validation.ErrorMsg).
 				Msg("[Control] Target resource not in resolved context - may indicate model hallucination")
+		}
+		if validation.Resource != nil && strings.TrimSpace(validation.Resource.GetResourceID()) != "" {
+			auditResourceID = strings.TrimSpace(validation.Resource.GetResourceID())
 		}
 
 		// Validate routing context - block if targeting a host node when child resources exist
@@ -391,21 +398,15 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 	approvalTargetType, approvalTargetID, approvalTargetName := approvalTargetForCommand(targetHost, routing)
 
 	// Check if this is a pre-approved execution with command hash validation.
-	// This validates the approval matches this exact command+target and marks it as consumed.
+	// Final single-use consumption is owned by agentexec immediately before
+	// grant signing and WebSocket dispatch.
 	preApproved := consumeApprovalWithValidation(args, e.orgID, command, approvalTargetType, approvalTargetID)
 
-	// Skip approval checks if pre-approved or in autonomous mode.
-	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
+	if !preApproved && e.controlLevel == ControlLevelControlled {
 		approvalID := e.createApprovalRecord(command, approvalTargetType, approvalTargetID, approvalTargetName, "Control level requires approval")
 		return NewTextResult(formatApprovalNeeded(command, "Control level requires approval", approvalID)), nil
 	}
-	if e.isAutonomous {
-		log.Debug().
-			Str("command", command).
-			Bool("read_only", safety.IsReadOnlyCommand(command)).
-			Msg("Auto-approving command for autonomous investigation")
-	}
-	if !preApproved && decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
+	if !preApproved && decision == agentexec.PolicyRequireApproval {
 		approvalID := e.createApprovalRecord(command, approvalTargetType, approvalTargetID, approvalTargetName, "Security policy requires approval")
 		return NewTextResult(formatApprovalNeeded(command, "Security policy requires approval", approvalID)), nil
 	}
@@ -425,6 +426,9 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		ctx,
 		"pulse_control",
 		func() string {
+			if auditResourceID != "" {
+				return auditResourceID
+			}
 			if targetHost != "" {
 				return targetHost
 			}
@@ -1832,9 +1836,10 @@ func isPreApproved(args map[string]interface{}) bool {
 	return false
 }
 
-// consumeApprovalWithValidation validates and consumes an approval for a specific command.
-// It verifies the command hash matches the approval and marks it as consumed (single-use).
-// Returns true if the approval is valid and was consumed, false otherwise.
+// consumeApprovalWithValidation validates that an approved, org-bound record
+// exists for this exact command and target. Final single-use consumption now
+// happens inside agentexec immediately before grant minting and WebSocket
+// dispatch, so no caller can turn a merely nonempty ID into authority.
 func consumeApprovalWithValidation(args map[string]interface{}, orgID, command, targetType, targetID string) bool {
 	approvalID := agentcapabilities.ApprovalArgument(args)
 	if approvalID == "" {
@@ -1861,12 +1866,21 @@ func consumeApprovalWithValidation(args map[string]interface{}, orgID, command, 
 		return false
 	}
 
-	_, err := store.ConsumeApproval(approvalID, command, targetType, targetID)
-	if err != nil {
-		log.Warn().Err(err).Str("approval_id", approvalID).Msg("failed to consume approval")
+	if req.Status != approval.StatusApproved || req.Consumed || time.Now().After(req.ExpiresAt) {
+		log.Warn().Str("approval_id", approvalID).Str("status", string(req.Status)).Bool("consumed", req.Consumed).Time("expires_at", req.ExpiresAt).Msg("approval is not dispatchable")
 		return false
 	}
-
+	actualHash := approval.ComputeCommandHash(command, targetType, targetID)
+	approvedHash := func() string {
+		if strings.TrimSpace(req.CommandHash) != "" {
+			return req.CommandHash
+		}
+		return approval.ComputeCommandHash(req.Command, req.TargetType, req.TargetID)
+	}()
+	if actualHash != approvedHash {
+		log.Warn().Str("approval_id", approvalID).Msg("approval command or target does not match dispatch")
+		return false
+	}
 	return true
 }
 

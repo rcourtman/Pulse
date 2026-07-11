@@ -218,6 +218,10 @@ regression protection.
    restore path must write the URL once with `replace` and must not force row
    filtering through a separate page-local state channel.
 4. Keep shared auth gating in `internal/api/router.go` cheap and local: pre-auth quick-setup and recovery routing may short-circuit on loopback/session/token checks, but they must not trigger chart, metrics, or broad persistence fan-out on the protected request hot path.
+   Agent command authorization is likewise a dispatch-time point lookup and
+   atomic approval consume, not a route-wide scan or request-hot-path fan-out;
+   grant signing and WebSocket writes happen only after that bounded verifier
+   succeeds.
    Scheduled-report background worker registration is allowed in router startup,
    but it must stay outside protected request handling. Due-schedule scans may
    enumerate tenant organization IDs and load each workspace schedule store, but

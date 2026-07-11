@@ -59,19 +59,33 @@ var hostStorageCleanupFingerprintPattern = regexp.MustCompile(`^sha256:[a-f0-9]{
 
 // Server manages WebSocket connections from agents
 type Server struct {
-	mu                         sync.RWMutex
-	agents                     map[string]*agentConn                           // agentID -> connection
-	pendingReqs                map[string]chan CommandResultPayload            // scoped request key -> response channel
-	pendingHostStorageCleanups map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
-	pendingHostUpdates         map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
-	deploySubs                 map[string]chan DeployProgressPayload           // deploySubKey(agentID, jobID) -> progress subscriber
-	validateToken              func(token string, agentID string, hostname string) bool
-	commandPolicy              *CommandPolicy
-	ipConnCounts               map[string]int
-	maxConnsPerIP              int
-	shutdown                   chan struct{}
-	shutdownOnce               sync.Once
-	pingInterval               time.Duration
+	mu                           sync.RWMutex
+	agents                       map[string]*agentConn                           // agentID -> connection
+	pendingReqs                  map[string]chan CommandResultPayload            // scoped request key -> response channel
+	pendingHostStorageCleanups   map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
+	pendingHostUpdates           map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
+	deploySubs                   map[string]chan DeployProgressPayload           // deploySubKey(agentID, jobID) -> progress subscriber
+	validateToken                func(token string, agentID string, hostname string) bool
+	commandPolicy                *CommandPolicy
+	ipConnCounts                 map[string]int
+	maxConnsPerIP                int
+	shutdown                     chan struct{}
+	shutdownOnce                 sync.Once
+	pingInterval                 time.Duration
+	commandAuthorizationVerifier func(CommandAuthorizationRequest) error
+	newCommandApprovalGrant      func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error)
+}
+
+// CommandAuthorizationRequest is the complete server-side approval scope
+// verified and consumed immediately before an approval grant is signed.
+type CommandAuthorizationRequest struct {
+	ApprovalID string
+	OrgID      string
+	ActionID   string
+	AgentID    string
+	Command    string
+	TargetType string
+	TargetID   string
 }
 
 type agentConn struct {
@@ -121,7 +135,17 @@ func NewServer(validateToken func(token string, agentID string, hostname string)
 		maxConnsPerIP:              defaultMaxWebSocketConnectionsPerIP,
 		shutdown:                   make(chan struct{}),
 		pingInterval:               defaultPingInterval,
+		newCommandApprovalGrant:    NewCommandApprovalGrant,
 	}
+}
+
+// SetCommandAuthorizationVerifier installs the server-owned authorization
+// consumer used for approval-gated arbitrary commands.
+func (s *Server) SetCommandAuthorizationVerifier(verifier func(CommandAuthorizationRequest) error) {
+	if s == nil {
+		return
+	}
+	s.commandAuthorizationVerifier = verifier
 }
 
 func (s *Server) isShuttingDown() bool {
@@ -215,6 +239,12 @@ func (s *Server) authorizeCommandPayload(cmd ExecuteCommandPayload) error {
 		}
 		if cmd.ApprovalID == "" {
 			return fmt.Errorf("command requires approval")
+		}
+		if cmd.authorization == nil || strings.TrimSpace(cmd.authorization.ActionID) == "" {
+			return fmt.Errorf("command requires server-owned approval authorization")
+		}
+		if s.commandAuthorizationVerifier == nil {
+			return fmt.Errorf("command approval authorization verifier is unavailable")
 		}
 	}
 
@@ -1067,8 +1097,27 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	if err := s.authorizeCommandPayload(cmd); err != nil {
 		return nil, err
 	}
-	if !cmd.Trusted && s.commandPolicy != nil && s.commandPolicy.Evaluate(cmd.Command) == PolicyRequireApproval && cmd.ApprovalGrant == nil && len(ac.approvalGrantKey) > 0 {
-		grant, grantErr := NewCommandApprovalGrant(ac.approvalGrantKey, agentID, cmd, time.Now(), DefaultApprovalGrantTTL)
+	requiresApproval := !cmd.Trusted && s.commandPolicy != nil && s.commandPolicy.Evaluate(cmd.Command) == PolicyRequireApproval
+	if requiresApproval {
+		if len(ac.approvalGrantKey) == 0 {
+			return nil, fmt.Errorf("command approval grant signer is unavailable")
+		}
+		auth := cmd.authorization
+		if err := s.commandAuthorizationVerifier(CommandAuthorizationRequest{
+			ApprovalID: cmd.ApprovalID,
+			OrgID:      auth.OrgID,
+			ActionID:   auth.ActionID,
+			AgentID:    agentID,
+			Command:    cmd.Command,
+			TargetType: cmd.TargetType,
+			TargetID:   cmd.TargetID,
+		}); err != nil {
+			return nil, fmt.Errorf("command approval authorization rejected: %w", err)
+		}
+
+		// Approval grants are an internal transport credential. Never accept a
+		// caller-supplied grant, even if it happens to be structurally valid.
+		grant, grantErr := s.newCommandApprovalGrant(ac.approvalGrantKey, agentID, cmd, time.Now(), DefaultApprovalGrantTTL)
 		if grantErr != nil {
 			return nil, fmt.Errorf("failed to issue approval grant: %w", grantErr)
 		}

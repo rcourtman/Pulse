@@ -1168,6 +1168,11 @@ recovery scope, or a storage/recovery-owned secret source.
     liveness context unless a separate storage/recovery-owned relationship ties
     it to backup or restore evidence.
 33. Keep infrastructure summary chart bucketing and short response caching presentation-only on the adjacent shared API boundary. When `internal/api/router.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets or serves a cached summary payload for repeated operator-facing summary-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
+    The same router may wire the adjacent server-owned agent command
+    authorization verifier, but storage/recovery must not treat an approval id,
+    signed command grant, or command result as restore authorization or
+    recovery evidence; that authority remains action-governance and
+    agent-lifecycle owned.
 34. Keep workload chart downsampling and short response caching presentation-only on that same adjacent shared API boundary. When `internal/api/router.go` caps mixed-cadence workload history into equal-time buckets or serves a cached workload-summary payload for repeated operator-facing workload-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
     The same adjacent chart boundary now covers compact storage capacity
     transport. `internal/api/router.go` may batch only the canonical `used`

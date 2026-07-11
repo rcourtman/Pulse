@@ -4199,9 +4199,16 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Approval request not found", http.StatusNotFound)
 		return
 	}
-	if _, err := store.ConsumeApproval(req.ApprovalID, req.Command, approvalTargetType, approvalTargetID); err != nil {
-		log.Error().Err(err).Str("approval_id", req.ApprovalID).Msg("Failed to consume approval")
-		http.Error(w, "Failed to consume approval", http.StatusConflict)
+	if approvalReq.Plan == nil || strings.TrimSpace(approvalReq.Plan.ActionID) == "" {
+		http.Error(w, "Approval authorization is incomplete", http.StatusConflict)
+		return
+	}
+	approvedHash := strings.TrimSpace(approvalReq.CommandHash)
+	if approvedHash == "" {
+		approvedHash = approval.ComputeCommandHash(approvalReq.Command, approvalReq.TargetType, approvalReq.TargetID)
+	}
+	if approvedHash != approval.ComputeCommandHash(req.Command, approvalTargetType, approvalTargetID) {
+		http.Error(w, "Approval command does not match", http.StatusConflict)
 		return
 	}
 
@@ -4226,6 +4233,8 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		RunOnHost:  req.RunOnHost,
 		VMID:       req.VMID,
 		TargetHost: strings.ToLower(strings.TrimSpace(req.TargetHost)),
+		OrgID:      orgID,
+		ActionID:   approvalReq.Plan.ActionID,
 	})
 
 	if err != nil {

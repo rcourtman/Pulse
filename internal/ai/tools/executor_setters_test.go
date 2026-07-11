@@ -337,7 +337,10 @@ func TestToolRegistryExecuteNormalizesSharedToolCallParams(t *testing.T) {
 	var gotArgsLenBeforeMutation int
 	registry.RegisterExtension(RegisteredTool{
 		Invocation: StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
-		Definition: Tool{Name: "test_tool"},
+		Definition: Tool{Name: "test_tool", InputSchema: InputSchema{Properties: map[string]PropertySchema{
+			"resource_id": {Type: "string"},
+			"body":        {Type: "object"},
+		}}},
 		Handler: func(ctx context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			gotArgs = args
 			gotArgsLenBeforeMutation = len(args)

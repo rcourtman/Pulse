@@ -2576,12 +2576,14 @@ Always execute the commands rather than telling the user how to do it.`
 					continue
 				}
 
-				if req.RequireCommandApproval || (!isAuto && policyDecision == agentexec.PolicyRequireApproval) {
+				if req.RequireCommandApproval || isAuto || policyDecision == agentexec.PolicyRequireApproval {
 					needsApproval = true
 					anyNeedsApproval = true
 					approvalReason = "Security policy requires approval"
 					if req.RequireCommandApproval {
 						approvalReason = "This handoff requires operator approval before command execution"
+					} else if isAuto {
+						approvalReason = "Autonomous model sessions cannot dispatch raw commands; operator approval is required"
 					}
 					approvalID = createRunCommandApprovalRecord(
 						approvalOrgID,
@@ -3132,13 +3134,16 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			execution.Output = formatPolicyBlockedToolResult(command, "This command is blocked by security policy")
 			return execution.Output, execution
 		}
-		if req.RequireCommandApproval || (decision == agentexec.PolicyRequireApproval && !s.isAutonomousForRequest(req)) {
+		isAuto := s.isAutonomousForRequest(req)
+		if req.RequireCommandApproval || isAuto || decision == agentexec.PolicyRequireApproval {
 			s.mu.RLock()
 			approvalOrgID := s.orgID
 			s.mu.RUnlock()
 			approvalReason := "Security policy requires approval"
 			if req.RequireCommandApproval {
 				approvalReason = "This handoff requires operator approval before command execution"
+			} else if isAuto {
+				approvalReason = "Autonomous model sessions cannot dispatch raw commands; operator approval is required"
 			}
 			approvalID := createRunCommandApprovalRecord(
 				approvalOrgID,
@@ -3794,6 +3799,10 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 }
 
 func (s *Service) executeOnAgentWithApproval(ctx context.Context, req ExecuteRequest, command, approvalID string) (string, error) {
+	return s.executeOnAgentWithAuthorization(ctx, req, command, approvalID, "", "")
+}
+
+func (s *Service) executeOnAgentWithAuthorization(ctx context.Context, req ExecuteRequest, command, approvalID, orgID, actionID string) (string, error) {
 	if s.agentServer == nil {
 		return "", fmt.Errorf("agent server not available")
 	}
@@ -3872,6 +3881,9 @@ func (s *Service) executeOnAgentWithApproval(ctx context.Context, req ExecuteReq
 		TargetID:   targetID,
 		Timeout:    300, // 5 minutes - commands like du, backups, etc. can take a while
 	}
+	if strings.TrimSpace(approvalID) != "" {
+		cmd.BindCommandAuthorization(orgID, actionID)
+	}
 
 	result, err := s.agentServer.ExecuteCommand(ctx, agentID, cmd)
 	if err != nil {
@@ -3906,6 +3918,8 @@ type RunCommandRequest struct {
 	RunOnHost  bool   `json:"run_on_host"` // If true, run on host instead of target
 	VMID       string `json:"vmid,omitempty"`
 	TargetHost string `json:"target_host,omitempty"` // Explicit host for routing
+	OrgID      string `json:"-"`
+	ActionID   string `json:"-"`
 }
 
 // RunCommandResponse represents the result of running a command
@@ -3948,7 +3962,7 @@ func (s *Service) RunCommand(ctx context.Context, req RunCommandRequest) (*RunCo
 			Msg("RunCommand using explicit target_host for routing")
 	}
 
-	output, err := s.executeOnAgentWithApproval(ctx, execReq, req.Command, req.ApprovalID)
+	output, err := s.executeOnAgentWithAuthorization(ctx, execReq, req.Command, req.ApprovalID, req.OrgID, req.ActionID)
 	if err != nil {
 		return &RunCommandResponse{
 			Success: false,

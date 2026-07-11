@@ -2676,7 +2676,7 @@ func TestHandleRunCommand_RequiresApprovalID(t *testing.T) {
 	}
 }
 
-func TestHandleRunCommand_ConsumesApproval(t *testing.T) {
+func TestHandleRunCommand_DefersConsumptionUntilAgentDispatch(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
@@ -2695,6 +2695,7 @@ func TestHandleRunCommand_ConsumesApproval(t *testing.T) {
 		Command:    "uptime",
 		TargetType: "vm",
 		TargetID:   "vm-101",
+		Plan:       &unifiedresources.ActionPlan{ActionID: "action-1", RequestID: "approval-1", Allowed: true, RequiresApproval: true},
 	}
 	require.NoError(t, store.CreateApproval(appReq))
 	_, err = store.Approve(appReq.ID, "tester")
@@ -2709,7 +2710,7 @@ func TestHandleRunCommand_ConsumesApproval(t *testing.T) {
 
 	stored, found := store.GetApproval(appReq.ID)
 	require.True(t, found)
-	require.True(t, stored.Consumed)
+	require.False(t, stored.Consumed)
 }
 
 func TestHandleRunCommand_RejectsCommandMismatch(t *testing.T) {
@@ -2731,6 +2732,7 @@ func TestHandleRunCommand_RejectsCommandMismatch(t *testing.T) {
 		Command:    "uptime",
 		TargetType: "vm",
 		TargetID:   "vm-101",
+		Plan:       &unifiedresources.ActionPlan{ActionID: "action-2", RequestID: "approval-2", Allowed: true, RequiresApproval: true},
 	}
 	require.NoError(t, store.CreateApproval(appReq))
 	_, err = store.Approve(appReq.ID, "tester")

@@ -327,8 +327,12 @@ the `white_label` branding entitlement.
     `RequireAuth` and scope checks, resource-policy redaction pass, or
     read-only Agent-context boundary. Router glue may connect providers, but
     it must not become an alternate command path, raw provider-command path,
-    config path, environment path, or secret-bearing metadata path. The Patrol
-    action-broker and proposal-catalog factory glue wired here is bound by the
+    config path, environment path, or secret-bearing metadata path.
+    The command-authorization bridge wired by `internal/api/router.go` preserves
+    that rule: public chat and relay input cannot serialize its org/action
+    authorization context, and invalid approvals fail before signing or agent
+    dispatch rather than falling through to a route-local trust shortcut.
+    The Patrol action-broker and proposal-catalog factory glue wired here is bound by the
     same rule: it may connect the investigation orchestrator to the tenant-bound
     action lifecycle, but it exposes only typed-proposal capture and gives the
     orchestrator no autonomy control, command execution, or command-shaped

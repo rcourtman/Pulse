@@ -579,6 +579,11 @@ func ParseProviderToolInput(raw string) (map[string]interface{}, bool) {
 	if err := json.Unmarshal([]byte(raw), &input); err != nil || input == nil {
 		return nil, false
 	}
+	for name := range input {
+		if IsInternalToolArgument(name) {
+			return nil, false
+		}
+	}
 	return input, true
 }
 
@@ -732,8 +737,9 @@ func StrictObjectInputSchema(required []string, properties map[string]any) json.
 func ProviderInputSchema(schema InputSchema) map[string]interface{} {
 	schema = schema.NormalizeCollections()
 	projected := map[string]interface{}{
-		"type":       "object",
-		"properties": ProviderPropertySchemas(schema.Properties),
+		"type":                 "object",
+		"properties":           ProviderPropertySchemas(schema.Properties),
+		"additionalProperties": false,
 	}
 
 	if len(schema.Required) > 0 {
@@ -741,6 +747,29 @@ func ProviderInputSchema(schema InputSchema) map[string]interface{} {
 	}
 
 	return projected
+}
+
+// ValidateDeclaredToolArguments rejects provider/adapter arguments that are
+// not part of the registered tool schema. Internal runtime metadata is
+// validated at the provider parse boundary and remains admissible here only so
+// the server can replay an operator-approved call without widening the public
+// schema.
+func ValidateDeclaredToolArguments(schema InputSchema, args map[string]any) error {
+	schema = schema.NormalizeCollections()
+	for name := range args {
+		if IsInternalToolArgument(name) {
+			continue
+		}
+		if _, declared := schema.Properties[name]; !declared {
+			return fmt.Errorf("undeclared tool argument %q", name)
+		}
+	}
+	for _, name := range schema.Required {
+		if _, present := args[name]; !present {
+			return fmt.Errorf("required tool argument %q is missing", name)
+		}
+	}
+	return nil
 }
 
 // ProviderInputSchemaFromRaw projects a manifest-authored JSON Schema into the

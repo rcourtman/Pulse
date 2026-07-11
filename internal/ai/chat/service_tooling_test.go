@@ -563,11 +563,22 @@ func TestToolsForExecutionMode_PatrolScopeUsesConfigNotPrompt(t *testing.T) {
 	}
 }
 
+func testRunCommandToolDefinition() tools.Tool {
+	return tools.Tool{
+		Name: agentcapabilities.PulseRunCommandToolName,
+		InputSchema: tools.InputSchema{Properties: map[string]tools.PropertySchema{
+			"command":     {Type: "string"},
+			"run_on_host": {Type: "boolean"},
+			"target_host": {Type: "string"},
+		}},
+	}
+}
+
 func TestExecuteCommand_SuccessAndExitCode(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
 		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
-		Definition: tools.Tool{Name: agentcapabilities.PulseRunCommandToolName},
+		Definition: testRunCommandToolDefinition(),
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewTextResult("Command failed (exit code 7): boom"), nil
 		},
@@ -591,7 +602,7 @@ func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
 		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
-		Definition: tools.Tool{Name: agentcapabilities.PulseRunCommandToolName},
+		Definition: testRunCommandToolDefinition(),
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewErrorResult(context.Canceled), nil
 		},
@@ -609,7 +620,7 @@ func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 	approvalExec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	approvalExec.RegisterTool(tools.RegisteredTool{
 		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
-		Definition: tools.Tool{Name: agentcapabilities.PulseRunCommandToolName},
+		Definition: testRunCommandToolDefinition(),
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewTextResult("APPROVAL_REQUIRED: requires approval"), nil
 		},
@@ -626,7 +637,7 @@ func TestExecuteCommandUsesSharedResultTextProjection(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
 		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
-		Definition: tools.Tool{Name: agentcapabilities.PulseRunCommandToolName},
+		Definition: testRunCommandToolDefinition(),
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.CallToolResult{
 				Content: []tools.Content{

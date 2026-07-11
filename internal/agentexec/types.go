@@ -3,6 +3,7 @@ package agentexec
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -108,6 +109,26 @@ type ExecuteCommandPayload struct {
 	// This field must only be set by trusted internal call sites — never
 	// from a deserialised HTTP body or any user-driven path.
 	Trusted bool `json:"trusted,omitempty"`
+
+	authorization *commandAuthorizationContext
+}
+
+type commandAuthorizationContext struct {
+	OrgID    string
+	ActionID string
+}
+
+// BindCommandAuthorization attaches server-owned approval scope to a command.
+// The scope is deliberately not serializable, so provider arguments, HTTP
+// payloads, relay callers, and agent wire messages cannot manufacture it.
+func (p *ExecuteCommandPayload) BindCommandAuthorization(orgID, actionID string) {
+	if p == nil {
+		return
+	}
+	p.authorization = &commandAuthorizationContext{
+		OrgID:    strings.TrimSpace(orgID),
+		ActionID: strings.TrimSpace(actionID),
+	}
 }
 
 // ReadFilePayload is sent by server to request file content

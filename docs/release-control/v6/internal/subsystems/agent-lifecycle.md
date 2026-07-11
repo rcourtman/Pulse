@@ -1276,6 +1276,12 @@ the intentionally sparse public response.
    Approval-gated command execution must expose stable rejection reasons for
    invalid approval grants so fleet operators can distinguish missing, expired,
    mismatched, and signature-invalid grants through agent metrics.
+   The server must not mint that grant from a nonempty approval id alone.
+   `internal/agentexec` accepts approval-gated arbitrary commands only with a
+   non-serializable server-owned authorization context and a verifier that
+   consumes an org/action/command/target-bound approval before signing. A
+   missing, wrong-org, wrong-action, expired, or already-consumed approval
+   stops before grant minting and before any WebSocket command frame.
 10. Preserve canonical token-lifecycle reads in shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows do not revoke a displayed relay pairing token after `lastUsedAt` proves that an already paired device is actively depending on that credential.
 11. Preserve backend-owned Pulse Mobile relay runtime credential minting in those same shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows reuse the canonical mobile token route instead of reintroducing wildcard or browser-authored runtime token bundles.
 12. Preserve the dedicated backend-owned `relay:mobile:access` capability and its governed backward-compatible route inventory plus the shared helper call sites around it, so lifecycle-adjacent setup and install flows do not widen the mobile device credential back into general AI chat/execute scope ownership.

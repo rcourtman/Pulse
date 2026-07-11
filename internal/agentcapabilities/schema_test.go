@@ -70,6 +70,9 @@ func TestProviderInputSchemaProjectsStructuredToolSchema(t *testing.T) {
 	if projected["type"] != "object" {
 		t.Fatalf("projected type = %v, want object", projected["type"])
 	}
+	if projected["additionalProperties"] != false {
+		t.Fatalf("provider schema additionalProperties = %v, want false", projected["additionalProperties"])
+	}
 
 	props, ok := projected["properties"].(map[string]interface{})
 	if !ok {
@@ -102,6 +105,33 @@ func TestProviderInputSchemaProjectsStructuredToolSchema(t *testing.T) {
 
 	if !reflect.DeepEqual(projected["required"], []string{"mode"}) {
 		t.Fatalf("projected required = %#v, want mode", projected["required"])
+	}
+}
+
+func TestParseProviderToolInputRejectsInternalApprovalMetadata(t *testing.T) {
+	if input, ok := ParseProviderToolInput(`{"command":"uptime","_approval_id":"fabricated"}`); ok || input != nil {
+		t.Fatalf("provider input with internal metadata = %#v, ok=%v; want rejected", input, ok)
+	}
+}
+
+func TestValidateDeclaredToolArgumentsRejectsUnknownProviderProperties(t *testing.T) {
+	schema := InputSchema{
+		Type: "object",
+		Properties: map[string]PropertySchema{
+			"command": {Type: "string"},
+		},
+		Required: []string{"command"},
+	}
+	if err := ValidateDeclaredToolArguments(schema, map[string]any{
+		"command": "uptime",
+		"trusted": true,
+	}); err == nil || !strings.Contains(err.Error(), "undeclared tool argument") {
+		t.Fatalf("unknown provider argument error = %v, want undeclared tool argument", err)
+	}
+	if err := ValidateDeclaredToolArguments(schema, WithApprovalArgument(map[string]any{
+		"command": "uptime",
+	}, "server-owned")); err != nil {
+		t.Fatalf("server-owned internal approval metadata must remain valid: %v", err)
 	}
 }
 

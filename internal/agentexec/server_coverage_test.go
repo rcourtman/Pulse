@@ -519,10 +519,10 @@ func TestExecuteCommandTimeoutAndCancel(t *testing.T) {
 	s.mu.Unlock()
 
 	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
-		RequestID:  "r-timeout",
-		Command:    "echo ok",
-		ApprovalID: "approval-1",
-		Timeout:    1,
+		RequestID: "r-timeout",
+		Command:   "echo ok",
+		Trusted:   true,
+		Timeout:   1,
 	})
 	if err == nil || !strings.Contains(err.Error(), "timed out") {
 		t.Fatalf("expected timeout error, got %v", err)
@@ -531,10 +531,10 @@ func TestExecuteCommandTimeoutAndCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err = s.ExecuteCommand(ctx, "a1", ExecuteCommandPayload{
-		RequestID:  "r-cancel",
-		Command:    "echo ok",
-		ApprovalID: "approval-1",
-		Timeout:    1,
+		RequestID: "r-cancel",
+		Command:   "echo ok",
+		Trusted:   true,
+		Timeout:   1,
 	})
 	if err == nil {
 		t.Fatalf("expected cancel error")
@@ -569,9 +569,9 @@ func TestExecuteCommandDefaultTimeout(t *testing.T) {
 	}()
 
 	result, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
-		RequestID:  "r-default",
-		Command:    "echo ok",
-		ApprovalID: "approval-1",
+		RequestID: "r-default",
+		Command:   "echo ok",
+		Trusted:   true,
 	})
 	if err != nil || result == nil || !result.Success {
 		t.Fatalf("expected success, got result=%v err=%v", result, err)
@@ -750,7 +750,7 @@ func TestExecuteCommandAndReadFileReturnShutdownError(t *testing.T) {
 
 		errCh := make(chan error, 1)
 		go func() {
-			_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r-shutdown", Command: "echo test", ApprovalID: "approval-1", Timeout: 60})
+			_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r-shutdown", Command: "echo test", Trusted: true, Timeout: 60})
 			errCh <- err
 		}()
 

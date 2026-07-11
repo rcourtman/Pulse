@@ -1185,7 +1185,7 @@ func TestHandleChat_PreservesCanonicalMentionTypes(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestHandleChat_PassesAutonomousModeOverride(t *testing.T) {
+func TestHandleChat_CannotElevateAutonomousModePerRequest(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
@@ -1202,7 +1202,7 @@ func TestHandleChat_PassesAutonomousModeOverride(t *testing.T) {
 			}
 		})
 
-	body := `{"prompt":"summarize dashboard","autonomous_mode":false}`
+	body := `{"prompt":"run a command","autonomous_mode":true}`
 	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -1214,14 +1214,14 @@ func TestHandleChat_PassesAutonomousModeOverride(t *testing.T) {
 func TestChatAutonomousModeForFindingHandoffRequiresApprovalForProductHandoffs(t *testing.T) {
 	requestedAutonomous := true
 	requestedManual := false
-	if got := chatAutonomousModeForFindingHandoff(&requestedAutonomous, "", "", nil, nil, chat.HandoffMetadata{}); got != &requestedAutonomous {
-		t.Fatalf("plain chat should pass requested autonomous mode through, got %#v", got)
+	if got := chatAutonomousModeForFindingHandoff(&requestedAutonomous, "", "", nil, nil, chat.HandoffMetadata{}); got == nil || *got {
+		t.Fatalf("plain chat must not accept requested autonomous authority, got %#v", got)
 	}
-	if got := chatAutonomousModeForFindingHandoff(&requestedManual, "", "", nil, nil, chat.HandoffMetadata{}); got != &requestedManual {
-		t.Fatalf("plain chat should pass requested manual mode through, got %#v", got)
+	if got := chatAutonomousModeForFindingHandoff(&requestedManual, "", "", nil, nil, chat.HandoffMetadata{}); got == nil || *got {
+		t.Fatalf("plain chat should remain approval-gated, got %#v", got)
 	}
-	if got := chatAutonomousModeForFindingHandoff(nil, "", "", nil, nil, chat.HandoffMetadata{}); got != nil {
-		t.Fatalf("plain chat with no override should preserve nil autonomous mode, got %#v", got)
+	if got := chatAutonomousModeForFindingHandoff(nil, "", "", nil, nil, chat.HandoffMetadata{}); got == nil || *got {
+		t.Fatalf("plain chat with no override should be explicitly approval-gated, got %#v", got)
 	}
 
 	cases := []struct {

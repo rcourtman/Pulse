@@ -400,7 +400,6 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 	if !exists {
 		return agentcapabilities.NewUnknownToolResult(name), nil
 	}
-
 	// Invocation-level policy enforcement, before the handler runs.
 	// The classification fails closed (missing/unknown discriminators
 	// count as infrastructure writes), so a fabricated or hidden enum
@@ -424,6 +423,9 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 		if !agentcapabilities.ControlLevelAllowsControlTools(e.controlLevel) {
 			return agentcapabilities.NewControlToolsDisabledToolResult(), nil
 		}
+	}
+	if err := agentcapabilities.ValidateDeclaredToolArguments(tool.Definition.InputSchema, args); err != nil {
+		return agentcapabilities.NewInvalidToolCallParamsResult(err), nil
 	}
 
 	result, err := tool.Handler(ctx, e, args)

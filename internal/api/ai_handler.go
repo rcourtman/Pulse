@@ -1004,7 +1004,6 @@ type ChatRequest struct {
 	HandoffResources []chat.HandoffResource `json:"handoff_resources,omitempty"`
 	HandoffActions   []chat.HandoffAction   `json:"handoff_actions,omitempty"`
 	HandoffMetadata  chat.HandoffMetadata   `json:"handoff_metadata,omitempty"`
-	AutonomousMode   *bool                  `json:"autonomous_mode,omitempty"`
 }
 
 type AssistantWorkflowPromptRenderRequest struct {
@@ -1033,9 +1032,11 @@ const (
 )
 
 func chatAutonomousModeForScopedHandoff(requested *bool, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction, handoffMetadata chat.HandoffMetadata) *bool {
-	if strings.TrimSpace(handoffContext) == "" && len(handoffResources) == 0 && len(handoffActions) == 0 && chat.NormalizeHandoffMetadata(handoffMetadata) == (chat.HandoffMetadata{}) {
-		return requested
-	}
+	_ = requested
+	_ = handoffContext
+	_ = handoffResources
+	_ = handoffActions
+	_ = handoffMetadata
 	return chatApprovalRequiredAutonomousMode()
 }
 
@@ -2694,7 +2695,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		HandoffResources:     handoffResources,
 		HandoffActions:       handoffActions,
 		HandoffMetadata:      handoffMetadata,
-		AutonomousMode:       chatAutonomousModeForFindingHandoff(req.AutonomousMode, findingID, handoffContext, handoffResources, handoffActions, handoffMetadata),
+		AutonomousMode:       chatAutonomousModeForFindingHandoff(nil, findingID, handoffContext, handoffResources, handoffActions, handoffMetadata),
 		SuppressSessionEvent: true,
 	}, func(event chat.StreamEvent) {
 		if event.Type == "done" {

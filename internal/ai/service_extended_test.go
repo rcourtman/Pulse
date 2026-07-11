@@ -2171,18 +2171,15 @@ func TestService_ExecuteStream_PolicyBlock(t *testing.T) {
 	}
 }
 
-func TestService_ExecuteStream_ResultTruncation(t *testing.T) {
+func TestService_ExecuteStream_AutonomousRawCommandRequiresApproval(t *testing.T) {
 	tmpDir := t.TempDir()
 	persistence := config.NewConfigPersistence(tmpDir)
+	dispatches := 0
 	svc := NewService(persistence, &mockAgentServer{
-		agents: []agentexec.ConnectedAgent{
-			{AgentID: "agent-1", Hostname: "agent-1"},
-		},
-		executeFunc: func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
-			return &agentexec.CommandResultPayload{
-				Success: true,
-				Stdout:  strings.Repeat("long output ", 1000),
-			}, nil
+		agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "agent-1"}},
+		executeFunc: func(context.Context, string, agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+			dispatches++
+			return &agentexec.CommandResultPayload{Success: true}, nil
 		},
 	})
 	svc.cfg = &config.AIConfig{Enabled: true, ControlLevel: config.ControlLevelAutonomous, Model: "anthropic:test"}
@@ -2191,35 +2188,33 @@ func TestService_ExecuteStream_ResultTruncation(t *testing.T) {
 	mock := &mockProvider{
 		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
 			iteration++
-			if iteration == 1 {
-				return &providers.ChatResponse{
-					ToolCalls: []providers.ToolCall{
-						{ID: "call-1", Name: "run_command", Input: map[string]interface{}{"command": "large-cmd", "target_host": "agent-1"}},
-					},
-					StopReason: "tool_use",
-				}, nil
-			}
-			// Check if the previous tool result was truncated in the request messages
-			for _, msg := range req.Messages {
-				if msg.Role == "user" && msg.ToolResult != nil {
-					if strings.Contains(msg.ToolResult.Content, "[TRUNCATED: 4000 characters cut.") &&
-						!strings.Contains(msg.ToolResult.Content, "bytes omitted") {
-						return &providers.ChatResponse{Content: "Verified truncation", StopReason: "end_turn"}, nil
-					}
-				}
-			}
-			return &providers.ChatResponse{Content: "Not truncated", StopReason: "end_turn"}, nil
+			return &providers.ChatResponse{
+				ToolCalls: []providers.ToolCall{{ID: "call-1", Name: "run_command", Input: map[string]interface{}{
+					"command": "touch /tmp/autonomous-raw-command", "target_host": "agent-1",
+				}}},
+				StopReason: "tool_use",
+			}, nil
 		},
 	}
 	svc.provider = mock
 
-	resp, err := svc.ExecuteStream(context.Background(), ExecuteRequest{TargetType: "agent"}, func(StreamEvent) {})
+	approvalEvents := 0
+	_, err := svc.ExecuteStream(context.Background(), ExecuteRequest{TargetType: "agent"}, func(event StreamEvent) {
+		if event.Type == "approval_needed" {
+			approvalEvents++
+		}
+	})
 	if err != nil {
 		t.Fatalf("ExecuteStream failed: %v", err)
 	}
-
-	if resp.Content != "Verified truncation" {
-		t.Errorf("Expected 'Verified truncation', got %s", resp.Content)
+	if dispatches != 0 {
+		t.Fatalf("agent dispatches = %d, want 0", dispatches)
+	}
+	if iteration != 1 {
+		t.Fatalf("provider iterations = %d, want 1", iteration)
+	}
+	if approvalEvents != 1 {
+		t.Fatalf("approval events = %d, want 1", approvalEvents)
 	}
 }
 

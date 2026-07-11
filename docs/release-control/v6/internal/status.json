@@ -3964,6 +3964,21 @@
       "release_gate_ids": [],
       "proof_commands": [
         {
+          "id": "ra35-chat-authority-boundary",
+          "run": [
+            "go",
+            "test",
+            "./internal/agentcapabilities",
+            "./internal/agentexec",
+            "./internal/ai",
+            "./internal/ai/tools",
+            "./internal/api",
+            "-run",
+            "TestParseProviderToolInputRejectsInternalApprovalMetadata|TestValidateDeclaredToolArgumentsRejectsUnknownProviderProperties|TestExecuteCommand_RoundTripViaWebSocket|TestExecuteCommand_InvalidApprovalAuthorizationNeverMintsOrDispatches|TestService_ExecuteStream_AutonomousRawCommandRequiresApproval|TestPulseToolExecutor_ExecuteRunCommand|TestHandleChat_CannotElevateAutonomousModePerRequest|TestVerifyAndConsumeCommandAuthorization",
+            "-count=1"
+          ]
+        },
+        {
           "id": "ra35-typed-host-storage-cleanup-vertical",
           "run": [
             "go",
@@ -4016,12 +4031,37 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "internal/agentcapabilities/schema.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentcapabilities/schema_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentexec/server.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentexec/server_websocket_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/agentexec/types.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "internal/ai/chat/service_investigation.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/tools/control_run_command_test.go",
           "kind": "file"
         },
         {
@@ -4042,6 +4082,16 @@
         {
           "repo": "pulse",
           "path": "internal/ai/tools/tools_propose.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/agent_command_authorization.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/agent_command_authorization_test.go",
           "kind": "file"
         },
         {

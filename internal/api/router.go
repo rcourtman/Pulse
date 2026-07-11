@@ -631,6 +631,7 @@ func (r *Router) setupRoutes() {
 
 	// Agent execution server for AI tool use
 	r.agentExecServer = agentexec.NewServer(r.validateAgentExecToken)
+	r.agentExecServer.SetCommandAuthorizationVerifier(verifyAndConsumeCommandAuthorization)
 	if r.resourceHandlers != nil {
 		r.resourceHandlers.SetActionExecutor(newRoutedActionExecutor(
 			r.resourceHandlers,

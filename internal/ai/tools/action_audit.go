@@ -171,6 +171,9 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 	}
 
 	payload.ApprovalID = strings.TrimSpace(approvalID)
+	if approvalReq != nil && approvalReq.Plan != nil {
+		payload.BindCommandAuthorization(e.orgID, approvalReq.Plan.ActionID)
+	}
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, payload)
 	finalMessage := "command completed"
 	executionResult := &unifiedresources.ExecutionResult{Success: true}
