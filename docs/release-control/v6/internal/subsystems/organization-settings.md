@@ -349,3 +349,11 @@ supports quorum/separation semantics with durable decision CAS, but it does not
 claim provider/MSP delegation, provider inheritance, tenant policy-default UI,
 distributed budgets, or multi-actor UI; those remain governed L20 residuals
 rather than organization-settings-local policy models.
+
+Patrol Autopilot acknowledgement is tenant-bound backend authority, not an
+organization-settings-local consent flag. The persisted actor organization,
+activation organization, and evaluated request organization must match; a
+self-digesting foreign revocation or activation cannot be attributed to or
+activate the victim tenant. Each tenant's atomic AI config owns its history,
+while provider/MSP inheritance, delegated acknowledgement, tenant-default UI,
+and multi-actor administration remain explicit residual product work.

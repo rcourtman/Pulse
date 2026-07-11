@@ -2740,6 +2740,8 @@ func TestProxyAuthNonAdminDeniedAdminEndpoints(t *testing.T) {
 		{method: http.MethodPost, path: "/api/ai/remediation/rollback", body: `{}`},
 		{method: http.MethodPost, path: "/api/ai/patrol/run", body: `{}`},
 		{method: http.MethodGet, path: "/api/ai/patrol/autonomy", body: ""},
+		{method: http.MethodPost, path: "/api/ai/patrol/autonomy/acknowledgements", body: `{}`},
+		{method: http.MethodDelete, path: "/api/ai/patrol/autonomy/acknowledgements/ack-test", body: `{}`},
 		{method: http.MethodPost, path: "/api/ai/cost/reset", body: `{}`},
 		{method: http.MethodGet, path: "/api/ai/cost/export", body: ""},
 		{method: http.MethodPost, path: "/api/ai/oauth/start", body: `{}`},

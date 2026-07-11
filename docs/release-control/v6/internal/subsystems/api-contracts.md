@@ -7407,3 +7407,22 @@ enums. Malformed stored V2 fails closed across events, context, findings,
 telemetry, dispositions, and relay wording. Producer migration remains Task 05;
 receipt/verification-attempt recovery remains Task 07; browser presentation
 remains Task 11; final-SHA certification remains Task 12.
+
+### Patrol Autopilot acknowledgement API
+
+`POST /api/ai/patrol/autonomy/acknowledgements` creates immutable
+server-stamped acknowledgement evidence and
+`DELETE /api/ai/patrol/autonomy/acknowledgements/{id}` appends an exact,
+actor-and-reason-bound revocation. Public JSON may supply only the
+acknowledgement idempotency ID or revocation reason; actor, credential,
+organization, version, scope, limits, timestamps, and digest are server-owned,
+and API tokens cannot acknowledge or activate human Autopilot consent.
+
+`PUT /api/ai/patrol/autonomy` requires an eligible acknowledgement ID for full
+mode and commits requested mode plus activation atomically. A bare legacy
+`full_mode_unlocked: true` is compatibility data and cannot authorize. `GET`
+returns requested mode, server-owned effective mode, derived compatibility
+boolean, the current expected versioned contract, and the selected record's
+version/status metadata without rewriting historical evidence. Stable failure codes distinguish
+missing, stale, wrong-organization, wrong-actor, expired, revoked, malformed,
+conflicting, and unavailable-store evidence.

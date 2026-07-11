@@ -2091,6 +2091,23 @@ func (c *ConfigPersistence) SaveAIConfig(settings AIConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	var previous AIConfig
+	if existingData, readErr := c.fs.ReadFile(c.aiFile); readErr == nil {
+		if c.crypto != nil {
+			if decrypted, decryptErr := c.crypto.Decrypt(existingData); decryptErr == nil {
+				existingData = decrypted
+			}
+		}
+		if unmarshalErr := json.Unmarshal(existingData, &previous); unmarshalErr != nil {
+			return fmt.Errorf("load existing ai config for patrol autopilot history validation: %w", unmarshalErr)
+		}
+	} else if !os.IsNotExist(readErr) {
+		return fmt.Errorf("load existing ai config for patrol autopilot history validation: %w", readErr)
+	}
+	if err := validatePatrolAutopilotHistoryRewrite(previous, settings); err != nil {
+		return err
+	}
+
 	settings.NormalizePatrolEventTriggerSettings()
 	settings.NormalizeQuickstartModelAliases()
 	ollamaKeepAlive, err := NormalizeOllamaKeepAlive(settings.OllamaKeepAlive)

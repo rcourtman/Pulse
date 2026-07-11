@@ -4335,3 +4335,14 @@ not a verified postcondition, and an independently verified label is valid only
 when the canonical evidence identifies a distinct trust domain. Agent-side
 producer migration and UI wording are downstream governed work, not permission
 to add an agent-local truth model.
+
+### Autopilot activation is not action approval
+
+The server-owned Patrol Autopilot acknowledgement authorizes only the effective
+tenant Patrol mode. It does not approve an action, weaken capability policy,
+satisfy an MFA floor, manufacture dispatch authority, or alter agent receipt
+and result semantics. Every resulting action still enters the canonical
+Task 08 actor/RBAC/approval boundary, Task 07 dispatch contract, and Task 10
+two-axis result contract. API tokens are ineligible for the human Autopilot
+acknowledgement even where an owner-bound token remains compatible with an
+authenticated action capability.

@@ -1,3 +1,4 @@
+import copy
 import os
 import subprocess
 import tempfile
@@ -41,6 +42,99 @@ class RegistryAuditTest(unittest.TestCase):
         args = parse_args(["--check", "--staged"])
         self.assertTrue(args.check)
         self.assertTrue(args.staged)
+
+    def test_patrol_autopilot_registry_uses_dedicated_proof_and_rejects_drift(self) -> None:
+        registry = registry_audit.load_registry_payload()
+        rules = {rule["id"]: rule for rule in registry["subsystems"]}
+
+        ai_policies = {
+            policy["id"]: policy for policy in rules["ai-runtime"]["verification"]["path_policies"]
+        }
+        self.assertIn(
+            "internal/api/patrol_autopilot_test.go",
+            ai_policies["ai-api-surface"]["exact_files"],
+        )
+        self.assertEqual(
+            ai_policies["ai-runtime-config"]["match_files"],
+            [
+                "internal/config/ai.go",
+                "internal/config/patrol_autopilot_persistence.go",
+            ],
+        )
+        self.assertIn(
+            "internal/config/patrol_autopilot_persistence_test.go",
+            ai_policies["ai-runtime-config"]["exact_files"],
+        )
+
+        api_policy = next(
+            policy
+            for policy in rules["api-contracts"]["verification"]["path_policies"]
+            if policy["id"] == "backend-payload-contracts"
+        )
+        self.assertIn("internal/api/patrol_autopilot_test.go", api_policy["exact_files"])
+
+        patrol_policy = next(
+            policy
+            for policy in rules["unified-resources"]["verification"]["path_policies"]
+            if policy["id"] == "patrol-autopilot-runtime"
+        )
+        self.assertEqual(
+            patrol_policy["match_files"],
+            ["internal/unifiedresources/patrol_autopilot.go"],
+        )
+        self.assertEqual(
+            patrol_policy["exact_files"],
+            ["internal/unifiedresources/patrol_autopilot_test.go"],
+        )
+
+        payload = {
+            "version": 13,
+            "shared_ownerships": [],
+            "subsystems": [
+                {
+                    "id": "unified-resources",
+                    "lane": "L13",
+                    "contract": "docs/release-control/v6/internal/subsystems/unified-resources.md",
+                    "owned_prefixes": ["internal/unifiedresources/"],
+                    "owned_files": [],
+                    "verification": {
+                        "allow_same_subsystem_tests": False,
+                        "test_prefixes": [],
+                        "exact_files": [],
+                        "require_explicit_path_policy_coverage": True,
+                        "path_policies": [copy.deepcopy(patrol_policy)],
+                    },
+                }
+            ],
+        }
+        tracked = {
+            "docs/release-control/v6/internal/subsystems/unified-resources.md",
+            "internal/unifiedresources/patrol_autopilot.go",
+            "internal/unifiedresources/patrol_autopilot_test.go",
+        }
+        report = audit_registry_payload(payload, tracked_files=tracked, status_lane_ids={"L13"})
+        self.assertEqual(report["errors"], [])
+
+        missing_proof = audit_registry_payload(
+            payload,
+            tracked_files=tracked - {"internal/unifiedresources/patrol_autopilot_test.go"},
+            status_lane_ids={"L13"},
+        )
+        self.assertIn(
+            "internal/unifiedresources/patrol_autopilot_test.go",
+            "\n".join(missing_proof["errors"]),
+        )
+
+        drifted = copy.deepcopy(payload)
+        drifted["subsystems"][0]["verification"]["path_policies"][0]["match_files"] = [
+            "internal/unifiedresources/other.go"
+        ]
+        drifted_report = audit_registry_payload(
+            drifted,
+            tracked_files=tracked | {"internal/unifiedresources/other.go"},
+            status_lane_ids={"L13"},
+        )
+        self.assertIn("patrol_autopilot.go", "\n".join(drifted_report["errors"]))
 
     def test_tracked_workspace_files_uses_linked_worktree_as_canonical_local_repo(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

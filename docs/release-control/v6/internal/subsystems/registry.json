@@ -1527,11 +1527,12 @@
         "frontend-modern/src/utils/aiCostPresentation.ts",
         "frontend-modern/src/utils/aiProviderHealthPresentation.ts",
         "frontend-modern/src/utils/aiProviderPresentation.ts",
-        "internal/api/ai_handler.go",
-        "internal/api/ai_handlers.go",
-        "internal/api/ai_intelligence_handlers.go",
-        "internal/config/ai.go",
-        "pkg/aicontracts/action_broker.go",
+      "internal/api/ai_handler.go",
+      "internal/api/ai_handlers.go",
+      "internal/api/ai_intelligence_handlers.go",
+      "internal/config/ai.go",
+      "internal/config/patrol_autopilot_persistence.go",
+      "pkg/aicontracts/action_broker.go",
         "pkg/aicontracts/fix_execution.go",
         "pkg/aicontracts/investigation.go",
         "pkg/aicontracts/orchestrator_deps.go",
@@ -1611,7 +1612,8 @@
             "exact_files": [
               "internal/api/ai_handler_test.go",
               "internal/api/ai_handlers_test.go",
-              "internal/api/ai_intelligence_handlers_test.go"
+              "internal/api/ai_intelligence_handlers_test.go",
+              "internal/api/patrol_autopilot_test.go"
             ]
           },
           {
@@ -1771,12 +1773,14 @@
             "label": "AI runtime config proof",
             "match_prefixes": [],
             "match_files": [
-              "internal/config/ai.go"
+              "internal/config/ai.go",
+              "internal/config/patrol_autopilot_persistence.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "internal/config/ai_config_test.go"
+              "internal/config/ai_config_test.go",
+              "internal/config/patrol_autopilot_persistence_test.go"
             ]
           },
           {
@@ -2412,7 +2416,8 @@
             ],
             "exact_files": [
               "frontend-modern/src/types/api.ts",
-              "internal/api/contract_test.go"
+              "internal/api/contract_test.go",
+              "internal/api/patrol_autopilot_test.go"
             ]
           },
           {
@@ -6559,6 +6564,19 @@
               "internal/unifiedresources/resource_operator_state_policy_test.go",
               "internal/unifiedresources/snapshot_source_filter_test.go",
               "internal/unifiedresources/store_test.go"
+            ]
+          },
+          {
+            "id": "patrol-autopilot-runtime",
+            "label": "Patrol Autopilot authority runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/unifiedresources/patrol_autopilot.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/unifiedresources/patrol_autopilot_test.go"
             ]
           },
           {

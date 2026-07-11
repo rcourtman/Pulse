@@ -1875,3 +1875,17 @@ lookup, polling loop, provider call, or evidence fetch. Canonical evidence and
 reference counts, text, and identity fields remain bounded by the
 unified-resource-owned `ActionResultV2` contract, so event publication cannot
 turn terminal action evidence into an unbounded payload or hot-path query.
+
+### Patrol Autopilot config mutation cost and serialization
+
+Acknowledgement creation, revocation, and activation reuse the Task 04
+in-process policy-mutation coordinator and perform one load, pure validation,
+and atomic `SaveAIConfig` replacement. Existing acknowledgement and revocation
+history is compared as an exact immutable prefix, so stale writers cannot
+replace prior authority facts. Activation and requested mode are committed in
+the same write; runtime publication occurs before releasing the same mutation
+boundary. Exact retries do not append evidence or rewrite timestamps.
+
+This is a per-tenant, single-process serialized config boundary, not a claim of
+distributed multi-writer CAS. Provider-wide inheritance, distributed budgets,
+and cross-process policy mutation remain outside this backend prerequisite.

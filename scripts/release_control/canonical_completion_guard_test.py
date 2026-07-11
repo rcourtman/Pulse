@@ -1022,6 +1022,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "frontend-modern/src/types/api.ts",
                         "internal/api/contract_test.go",
+                        "internal/api/patrol_autopilot_test.go",
                     ],
                 }
             ],
@@ -2181,6 +2182,62 @@ None yet.
             ["frontend-modern/src/api/__tests__/alerts.test.ts"],
         )
         self.assertEqual(matches, ["frontend-modern/src/api/__tests__/alerts.test.ts"])
+
+    def test_patrol_autopilot_runtime_accepts_only_dedicated_verification(self):
+        rules = {rule["id"]: rule for rule in load_subsystem_rules()}
+        cases = [
+            (
+                "ai-runtime",
+                "internal/api/ai_handlers.go",
+                "ai-api-surface",
+                "internal/api/patrol_autopilot_test.go",
+            ),
+            (
+                "api-contracts",
+                "internal/api/ai_handlers.go",
+                "backend-payload-contracts",
+                "internal/api/patrol_autopilot_test.go",
+            ),
+            (
+                "ai-runtime",
+                "internal/config/ai.go",
+                "ai-runtime-config",
+                "internal/config/patrol_autopilot_persistence_test.go",
+            ),
+            (
+                "ai-runtime",
+                "internal/config/patrol_autopilot_persistence.go",
+                "ai-runtime-config",
+                "internal/config/patrol_autopilot_persistence_test.go",
+            ),
+            (
+                "unified-resources",
+                "internal/unifiedresources/patrol_autopilot.go",
+                "patrol-autopilot-runtime",
+                "internal/unifiedresources/patrol_autopilot_test.go",
+            ),
+        ]
+
+        for subsystem_id, runtime_path, requirement_id, proof_path in cases:
+            with self.subTest(subsystem=subsystem_id, runtime=runtime_path):
+                rule = rules[subsystem_id]
+                requirement = next(
+                    requirement
+                    for requirement in build_verification_requirements(rule, [runtime_path])
+                    if requirement["id"] == requirement_id
+                )
+                self.assertEqual(
+                    staged_verification_files_for_requirement(
+                        rule,
+                        requirement,
+                        [proof_path],
+                    ),
+                    [proof_path],
+                )
+                self.assertEqual(
+                    staged_verification_files_for_requirement(rule, requirement, []),
+                    [],
+                )
 
     def test_explicit_coverage_gap_uses_registry_path_policy_requirement(self):
         synthetic_rule = {

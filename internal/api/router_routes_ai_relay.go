@@ -165,12 +165,14 @@ func (r *Router) registerAIRelayRoutesGroup() {
 
 	// Patrol Autonomy - GET stays in core; PUT is extension-gated for premium
 	// modes while the free adapter persists findings-only monitor settings.
+	r.mux.HandleFunc("/api/ai/patrol/autonomy/acknowledgements", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleCreatePatrolAutopilotAcknowledgement)))
+	r.mux.HandleFunc("/api/ai/patrol/autonomy/acknowledgements/", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.aiSettingsHandler.HandleRevokePatrolAutopilotAcknowledgement)))
 	r.mux.HandleFunc("/api/ai/patrol/autonomy", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, func(w http.ResponseWriter, req *http.Request) {
 		switch req.Method {
 		case http.MethodGet:
 			r.aiSettingsHandler.HandleGetPatrolAutonomy(w, req)
 		case http.MethodPut:
-			r.aiAutoFixEndpoints.HandleUpdatePatrolAutonomy(w, req)
+			r.aiSettingsHandler.GatePatrolAutonomyUpdate(r.aiAutoFixEndpoints.HandleUpdatePatrolAutonomy)(w, req)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -841,11 +843,7 @@ func (p *patrolConfigAdapter) GetPatrolFullModeUnlocked() bool {
 	if p.svc == nil {
 		return false
 	}
-	cfg := p.svc.GetConfig()
-	if cfg == nil {
-		return false
-	}
-	return cfg.PatrolFullModeUnlocked
+	return p.svc.GetEffectivePatrolAutonomyLevel() == config.PatrolAutonomyFull
 }
 
 func (p *patrolConfigAdapter) GetPatrolAutonomyLevel() string {
@@ -873,33 +871,52 @@ type patrolConfigUpdateAdapter struct {
 var _ aicontracts.PatrolConfigUpdater = (*patrolConfigUpdateAdapter)(nil)
 
 func (u *patrolConfigUpdateAdapter) SaveAutonomySettings(ctx context.Context, level string, unlocked bool, budget, timeoutSec int) error {
-	svc := u.handler.GetAIService(ctx)
-	if svc == nil {
-		return fmt.Errorf("AI service not available")
+	_ = unlocked // legacy extension input is compatibility data, never authority.
+	if ctx == nil {
+		ctx = u.ctx
 	}
-	cfg := svc.GetConfig()
-	if cfg == nil {
-		return fmt.Errorf("AI config not available")
+	if u == nil || u.handler == nil || !config.IsValidPatrolAutonomyLevel(level) {
+		return fmt.Errorf("invalid Patrol autonomy update")
 	}
-	write := func() error {
-		cfg.PatrolFullModeUnlocked = unlocked
+	return u.handler.mutatePatrolAutopilotConfig(ctx, func(cfg *config.AIConfig, policy unifiedresources.PatrolAutopilotServerPolicy) (bool, error) {
+		changed := cfg.PatrolAutonomyLevel != level || cfg.PatrolInvestigationBudget != budget || cfg.PatrolInvestigationTimeoutSec != timeoutSec
+		if level == config.PatrolAutonomyFull {
+			activationRequest, ok := patrolAutopilotActivationFromContext(ctx)
+			if !ok {
+				return false, &unifiedresources.PatrolAutopilotContractError{Code: unifiedresources.PatrolAutopilotStatusAcknowledgementRequired}
+			}
+			binding, bindingChanged, err := unifiedresources.BindPatrolAutopilotActivation(
+				cfg.PatrolAutopilotAcknowledgements,
+				cfg.PatrolAutopilotRevocations,
+				cfg.PatrolAutopilotActivation,
+				activationRequest.AcknowledgementID,
+				activationRequest.Actor,
+				policy,
+			)
+			if err != nil {
+				return false, err
+			}
+			changed = changed || bindingChanged || !cfg.PatrolFullModeUnlocked
+			cfg.PatrolAutopilotActivation = &binding
+			cfg.PatrolFullModeUnlocked = true
+		} else {
+			changed = changed || cfg.PatrolAutopilotActivation != nil || cfg.PatrolFullModeUnlocked
+			cfg.PatrolAutopilotActivation = nil
+			cfg.PatrolFullModeUnlocked = false
+		}
 		cfg.PatrolAutonomyLevel = level
 		cfg.PatrolInvestigationBudget = budget
 		cfg.PatrolInvestigationTimeoutSec = timeoutSec
-		return u.handler.getPersistence(ctx).SaveAIConfig(*cfg)
-	}
-	if u.resources != nil {
-		return u.resources.ActionLifecycle().WithPolicyMutation(write)
-	}
-	return write()
+		return changed, nil
+	})
 }
 
 func (u *patrolConfigUpdateAdapter) ReloadConfig(ctx context.Context) error {
-	svc := u.handler.GetAIService(ctx)
-	if svc == nil {
-		return fmt.Errorf("AI service not available")
-	}
-	return svc.LoadConfig()
+	// SaveAutonomySettings publishes the persisted autonomy fields while the
+	// Task 04 policy-mutation lock is still held. A second reload would split
+	// activation/revocation from the runtime boundary and is intentionally a
+	// no-op for this adapter.
+	return nil
 }
 
 // ---------------------------------------------------------------------------

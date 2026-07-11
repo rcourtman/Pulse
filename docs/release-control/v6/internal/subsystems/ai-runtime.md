@@ -5781,3 +5781,24 @@ Legacy investigation outcome strings remain projections for compatibility and
 must be derived from canonical truth rather than reconstructed locally. The
 typed disposition retains the serialized canonical two-axis result so the
 legacy single outcome is never the sole durable/read-model truth.
+
+### Server-owned Patrol Autopilot activation
+
+Patrol full mode is now an effective server decision, not the stored
+`patrol_full_mode_unlocked` compatibility boolean. The runtime evaluates a
+versioned acknowledgement and activation bound to one human actor credential
+and organization; missing, stale, expired, revoked, malformed, cross-tenant,
+or API-token evidence falls back to approval mode. Acknowledgement creation is
+separate from activation, lower modes clear activation without rewriting
+history, and version rotation or revocation takes effect before new Patrol
+admission through the existing Task 04 policy-mutation coordinator. The API
+handler and every tenant AI service share the same injected server clock and
+current-version provider, so a newly supported contract cannot activate at the
+API boundary while remaining stale in the runtime that enforces Patrol mode.
+
+The accepted limits promise only policy allowlisting, emergency-stop and
+approval-floor enforcement, reconciliation when supported, disclosed evidence
+class, and honest inconclusive outcomes. They do not promise independent
+verification, and execution success remains separate from outcome truth.
+Task 11 still owns the explicit acknowledgement UX and browser/device proof;
+Task 12 still owns final certification.

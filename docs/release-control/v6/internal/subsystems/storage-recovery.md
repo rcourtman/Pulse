@@ -2032,6 +2032,24 @@ while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
 
+### Patrol Autopilot config recovery
+
+The tenant AI config is the durable owner for immutable Patrol Autopilot
+acknowledgements and revocations plus the current activation. Every initial
+save and rewrite invokes the shared unified-resource validator before mutation,
+then enforces exact immutable history prefixes. Requested full mode and its
+activation are committed through one atomic config-file replacement. Reopen derives
+effective mode from current evidence, so a legacy boolean, stale version,
+revocation, malformed binding, or failed write recovers below full without
+deleting historical evidence. Separate tenant config files may reuse a client
+idempotency ID without sharing authority records.
+
+Version rotation never reinterprets old history through today's scope or
+limits. Each historical record remains valid against its own static registry
+entry, while activation requires a newly issued acknowledgement ID under the
+current supported version. Valid V1 bytes therefore survive V2 issuance,
+activation, reopen, and unrelated later config saves unchanged.
+
 Storage and recovery consumers of action events and resource history inherit
 the unified-resource-owned `ActionResultV2`. They must preserve execution,
 verification, evidence class, and nested compensation independently and must

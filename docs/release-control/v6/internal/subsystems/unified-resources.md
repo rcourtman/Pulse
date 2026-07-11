@@ -1688,6 +1688,24 @@ through the canonical resource model, but unified-resource consumers must not
 reintroduce removed workload aliases or feature-local resource-type shims just
 to satisfy one table, drawer, or badge surface.
 
+### Patrol Autopilot authority evidence
+
+`internal/unifiedresources/patrol_autopilot.go` owns the versioned immutable
+acknowledgement, revocation, activation, accepted-scope/limits, digest, status,
+and evaluation contracts. A static server-owned registry binds every supported
+acknowledgement version to its exact immutable scope, limits, and optional
+lifetime; the current version provider is separate from that historical
+registry. One pure stored-evidence validator checks each record against its own
+registered version, canonical IDs, human actor and organization binding,
+coherent times, digests, activation binding, and unique same-acknowledgement
+revocation before any config mutation. Runtime evaluation uses the current
+registry entry and fails closed; a malformed foreign revocation cannot become
+a valid revocation attributed to the victim organization.
+
+This authority evidence does not replace the governed action lifecycle,
+approval strength, dispatch continuity, or `ActionResultV2`. It only controls
+whether requested Patrol full mode is effective.
+
 ### Canonical action-result truth
 
 `internal/unifiedresources/action_result_v2.go` is the sole schema authority

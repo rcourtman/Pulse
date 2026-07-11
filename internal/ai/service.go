@@ -240,6 +240,7 @@ type Service struct {
 	unifiedResourceProvider  UnifiedResourceProvider
 	resourceExportStore      unifiedresources.ResourceStore
 	resourceExportStoreOrgID string
+	patrolAutopilotPolicy    func() unifiedresources.PatrolAutopilotServerPolicy
 	patrolService            *PatrolService        // Background AI monitoring service
 	metadataProvider         MetadataProvider      // Enables AI to update resource URLs
 	incidentStore            *memory.IncidentStore // Alert-scoped investigation memory; not the canonical durable resource history
@@ -1013,7 +1014,63 @@ func (s *Service) GetEffectivePatrolAutonomyLevel() string {
 	if !s.HasLicenseFeature(FeatureAIAutoFix) {
 		return config.PatrolAutonomyMonitor
 	}
-	return cfg.GetPatrolAutonomyLevel()
+	s.mu.RLock()
+	orgID := s.orgID
+	policyProvider := s.patrolAutopilotPolicy
+	s.mu.RUnlock()
+	policy := unifiedresources.CurrentPatrolAutopilotServerPolicy(time.Now().UTC())
+	if policyProvider != nil {
+		policy = policyProvider()
+	}
+	level, _ := cfg.GetEffectivePatrolAutonomyWithPolicy(orgID, policy)
+	return level
+}
+
+// SetPatrolAutopilotServerPolicyProvider keeps runtime admission on the same
+// server-owned clock and current-version source as the API boundary.
+func (s *Service) SetPatrolAutopilotServerPolicyProvider(provider func() unifiedresources.PatrolAutopilotServerPolicy) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.patrolAutopilotPolicy = provider
+}
+
+// ApplyPatrolAutonomyConfig publishes an already-persisted autonomy mutation
+// without rebuilding provider clients. Callers must persist first and invoke
+// this while holding the policy-mutation coordinator so revocation and runtime
+// admission observe one ordered boundary.
+func (s *Service) ApplyPatrolAutonomyConfig(cfg *config.AIConfig) error {
+	if s == nil || cfg == nil {
+		return fmt.Errorf("Pulse Patrol config is unavailable")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cfg == nil {
+		s.cfg = config.NewDefaultAIConfig()
+	}
+	s.cfg.PatrolAutonomyLevel = cfg.PatrolAutonomyLevel
+	s.cfg.PatrolFullModeUnlocked = cfg.PatrolFullModeUnlocked
+	s.cfg.PatrolInvestigationBudget = cfg.PatrolInvestigationBudget
+	s.cfg.PatrolInvestigationTimeoutSec = cfg.PatrolInvestigationTimeoutSec
+	s.cfg.PatrolAutopilotAcknowledgements = clonePatrolAutopilotAcknowledgements(cfg.PatrolAutopilotAcknowledgements)
+	s.cfg.PatrolAutopilotRevocations = append([]unifiedresources.PatrolAutopilotRevocation(nil), cfg.PatrolAutopilotRevocations...)
+	if cfg.PatrolAutopilotActivation == nil {
+		s.cfg.PatrolAutopilotActivation = nil
+	} else {
+		activation := *cfg.PatrolAutopilotActivation
+		s.cfg.PatrolAutopilotActivation = &activation
+	}
+	return nil
+}
+
+func clonePatrolAutopilotAcknowledgements(records []unifiedresources.PatrolAutopilotAcknowledgement) []unifiedresources.PatrolAutopilotAcknowledgement {
+	cloned := append([]unifiedresources.PatrolAutopilotAcknowledgement(nil), records...)
+	for index := range cloned {
+		cloned[index].AcceptedScope = append([]string(nil), cloned[index].AcceptedScope...)
+	}
+	return cloned
 }
 
 func (s *Service) getEffectivePatrolInterval(cfg *config.AIConfig) time.Duration {
@@ -1841,6 +1898,12 @@ func (s *Service) GetConfig() *config.AIConfig {
 		return nil
 	}
 	cfg := *s.cfg
+	cfg.PatrolAutopilotAcknowledgements = clonePatrolAutopilotAcknowledgements(s.cfg.PatrolAutopilotAcknowledgements)
+	cfg.PatrolAutopilotRevocations = append([]unifiedresources.PatrolAutopilotRevocation(nil), s.cfg.PatrolAutopilotRevocations...)
+	if s.cfg.PatrolAutopilotActivation != nil {
+		activation := *s.cfg.PatrolAutopilotActivation
+		cfg.PatrolAutopilotActivation = &activation
+	}
 	return &cfg
 }
 

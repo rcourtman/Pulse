@@ -4430,6 +4430,75 @@
           "evidence_tier": "test-proof"
         }
       ]
+    },
+    {
+      "id": "RA39",
+      "summary": "Patrol Autopilot activation is server-owned: a static per-version contract registry preserves immutable historical scope and limits while effective full mode requires a current-version human acknowledgement bound to organization, actor, credential, and an atomic activation; rotation requires new evidence, and legacy booleans, stale or malformed evidence, cross-tenant records, API tokens, and revoked acknowledgements fail closed without rewriting authority history.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6",
+        "L10",
+        "L13",
+        "L14",
+        "L15",
+        "L16",
+        "L20"
+      ],
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "ai-runtime",
+        "api-contracts",
+        "organization-settings",
+        "patrol-intelligence",
+        "performance-and-scalability",
+        "security-privacy",
+        "storage-recovery",
+        "unified-resources"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "ra39-server-owned-patrol-autopilot-activation",
+          "run": [
+            "go",
+            "test",
+            "./internal/unifiedresources",
+            "./internal/config",
+            "./internal/ai",
+            "./internal/api",
+            "-run",
+            "TestPatrolAutopilot|TestEvaluatePatrolAutopilot|TestAIConfigPatrolAutopilot|TestServicePatrolAutopilotPolicyProviderControlsRuntimeVersion|TestGetPatrolSystemPrompt_ModeSwitch|TestRouterRouteInventory|TestProtectedAPIRoutesRejectUnauthenticatedRequests",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/api/patrol_autopilot_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/patrol_autopilot_persistence_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/patrol_autopilot.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/patrol_autopilot_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -5987,7 +6056,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. Three policy-authorized verticals are live. Docker/Podman restart is capability-owned low-risk eligible. Agent-managed APT host updates are capability-owned elevated eligible and cross a closed typed host_update protocol with no command, package-selection, removal, or reboot authority; the agent owns metadata refresh, preflight simulation, guarded installation, and post-install simulation, while the audit records verified, failed, or honestly inconclusive outcomes plus reboot-required state. Agent-managed package-cache cleanup is capability-owned low-risk eligible and crosses a separate fingerprint-bound host_storage_cleanup protocol with no command, path, package selector, installed-package removal, or reboot authority; it is available only for meaningful reclaimable bytes on the actual pressured cache filesystem, and the audit verifies the bytes reclaimed. All three require explicit per-resource capability allowlists and optional recurring timezone windows, remain bounded by tenant Patrol mode and full-mode unlock, recheck policy/readiness before decision and dispatch, and record server-owned policy approval plus terminal verification in the same audit trail. Never-auto-remediate, missing/unknown policy, unsupported capabilities, stale/error/empty package or cleanup inventories, cleared storage pressure, dry-run/MFA floors, closed windows, and mode downgrades all fail closed. Action continuity is audit-authoritative and now has a Phase B1 durable transport foundation: execution admission atomically creates the deterministic dispatch attempt/outbox, a one-shot pre-send CAS prevents concurrent duplicate sends, expired pre-send claims safely requeue, post-send uncertainty remains receipt-pending for query-only reconciliation, explicit expiry is durable, and canonical detail plus pending/settled reads are tenant-scoped. Generic transport errors cannot fabricate receipts or terminal truth, legacy executing rows without attempts remain inert, callbacks trigger org-scoped re-reads, investigation reads recover missed transitions by trusted origin, desktop and mobile decisions use the canonical /api/actions routes, terminal verification maps honestly onto Patrol findings and push outcomes, and legacy command-shaped history remains inert. Task 08 Phase B1 also makes requester and decision authority server-owned, binds actor and approval requirement into plan identity, rechecks current tenant/RBAC/token scope, and records multi-actor approvals through revision-CAS append-only decision facts plus atomic lifecycle transitions. MFA-required decisions remain explicitly unavailable until a core verifier validates and consumes action-bound cryptographic evidence; labels and local biometrics are not MFA. Task 10 Phase B1 now owns one versioned ActionResultV2 with separate execution and verification axes, bounded trust-domain evidence, fail-closed redaction and stable digesting, nested compensation truth, durable Memory/SQLite compatibility persistence, executor tuple enforcement, and non-collapsing event, finding, context, telemetry, and relay projections. M4, M6, and claim 19 remain open pending Task 05 producer migration, Task 07 recovery, Tasks 06/09 workflow lab observations, Task 11 browser presentation, and Task 12 certification against the final SHA. Remaining post-RC hardening also includes mobile/relay inbox and push-dedup consumption, broader tenant defaults/inheritance and automation rate budgets, richer dry-run providers, multi-actor UI and MSP delegation/inheritance, device-key/WebAuthn enrollment and verifier integration, additional package-manager and bounded cleanup providers beyond APT, separately governed reboot orchestration, and a real-lab detect-plan-execute-verify-rollback journey proof.",
+        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. Three policy-authorized verticals are live. Docker/Podman restart is capability-owned low-risk eligible. Agent-managed APT host updates are capability-owned elevated eligible and cross a closed typed host_update protocol with no command, package-selection, removal, or reboot authority; the agent owns metadata refresh, preflight simulation, guarded installation, and post-install simulation, while the audit records verified, failed, or honestly inconclusive outcomes plus reboot-required state. Agent-managed package-cache cleanup is capability-owned low-risk eligible and crosses a separate fingerprint-bound host_storage_cleanup protocol with no command, path, package selector, installed-package removal, or reboot authority; it is available only for meaningful reclaimable bytes on the actual pressured cache filesystem, and the audit verifies the bytes reclaimed. All three require explicit per-resource capability allowlists and optional recurring timezone windows, remain bounded by tenant Patrol mode and full-mode unlock, recheck policy/readiness before decision and dispatch, and record server-owned policy approval plus terminal verification in the same audit trail. Never-auto-remediate, missing/unknown policy, unsupported capabilities, stale/error/empty package or cleanup inventories, cleared storage pressure, dry-run/MFA floors, closed windows, and mode downgrades all fail closed. Action continuity is audit-authoritative and now has a Phase B1 durable transport foundation: execution admission atomically creates the deterministic dispatch attempt/outbox, a one-shot pre-send CAS prevents concurrent duplicate sends, expired pre-send claims safely requeue, post-send uncertainty remains receipt-pending for query-only reconciliation, explicit expiry is durable, and canonical detail plus pending/settled reads are tenant-scoped. Generic transport errors cannot fabricate receipts or terminal truth, legacy executing rows without attempts remain inert, callbacks trigger org-scoped re-reads, investigation reads recover missed transitions by trusted origin, desktop and mobile decisions use the canonical /api/actions routes, terminal verification maps honestly onto Patrol findings and push outcomes, and legacy command-shaped history remains inert. Task 08 Phase B1 also makes requester and decision authority server-owned, binds actor and approval requirement into plan identity, rechecks current tenant/RBAC/token scope, and records multi-actor approvals through revision-CAS append-only decision facts plus atomic lifecycle transitions. MFA-required decisions remain explicitly unavailable until a core verifier validates and consumes action-bound cryptographic evidence; labels and local biometrics are not MFA. Task 08 Phase B2 now makes Patrol Autopilot acknowledgement and activation server-owned: immutable human actor, credential, organization, current version, accepted limits, timestamps, and digest are persisted as append-only config evidence; effective full mode requires the exact current activation and falls back safely for legacy booleans, stale, revoked, expired, malformed, API-token, or cross-tenant evidence. This backend prerequisite does not close M7; Task 11 still owns explicit acknowledgement UX and browser/device proof, and Task 12 owns final certification. Task 10 Phase B1 now owns one versioned ActionResultV2 with separate execution and verification axes, bounded trust-domain evidence, fail-closed redaction and stable digesting, nested compensation truth, durable Memory/SQLite compatibility persistence, executor tuple enforcement, and non-collapsing event, finding, context, telemetry, and relay projections. M4, M6, and claim 19 remain open pending Task 05 producer migration, Task 07 recovery, Tasks 06/09 workflow lab observations, Task 11 browser presentation, and Task 12 certification against the final SHA. Remaining post-RC hardening also includes mobile/relay inbox and push-dedup consumption, broader tenant defaults/inheritance and automation rate budgets, richer dry-run providers, multi-actor UI and MSP delegation/inheritance, device-key/WebAuthn enrollment and verifier integration, additional package-manager and bounded cleanup providers beyond APT, separately governed reboot orchestration, and a real-lab detect-plan-execute-verify-rollback journey proof.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -6234,6 +6303,18 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/patrol_autopilot_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/patrol_autopilot_persistence_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/hostagent/package_updates.go",
           "kind": "file"
         },
@@ -6288,6 +6369,17 @@
         {
           "repo": "pulse",
           "path": "internal/unifiedresources/adapters_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/patrol_autopilot.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/patrol_autopilot_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         },

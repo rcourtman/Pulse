@@ -1037,11 +1037,6 @@ func (p *PatrolService) getPatrolSystemPrompt() string {
 	autonomyLevel := config.PatrolAutonomyMonitor
 	if p != nil && p.aiService != nil {
 		autonomyLevel = p.aiService.GetEffectivePatrolAutonomyLevel()
-		if cfg := p.aiService.GetConfig(); cfg != nil &&
-			autonomyLevel == config.PatrolAutonomyFull &&
-			!cfg.PatrolFullModeUnlocked {
-			autonomyLevel = config.PatrolAutonomyAssisted
-		}
 	}
 
 	basePrompt := `You are Pulse Patrol, an autonomous infrastructure analysis agent. Your job is to find issues that simple threshold-based alerts CANNOT catch — trends, capacity risks, misconfigurations, reliability gaps, and cross-resource correlations.

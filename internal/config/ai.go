@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // AuthMethod represents how Anthropic authentication is performed
@@ -104,11 +105,14 @@ type AIConfig struct {
 	ProtectedGuests []string `json:"protected_guests,omitempty"` // VMIDs or names that AI cannot control
 
 	// Patrol Autonomy settings - controls automatic investigation and remediation of findings
-	PatrolAutonomyLevel           string `json:"patrol_autonomy_level,omitempty"`            // "monitor", "approval", "assisted", "full"
-	PatrolFullModeUnlocked        bool   `json:"patrol_full_mode_unlocked"`                  // User has acknowledged Full mode risks (required to use "full")
-	PatrolActionEmergencyStop     bool   `json:"patrol_action_emergency_stop"`               // Blocks new human and policy action admission; does not imply rollback
-	PatrolInvestigationBudget     int    `json:"patrol_investigation_budget,omitempty"`      // Max turns per investigation (default: 15)
-	PatrolInvestigationTimeoutSec int    `json:"patrol_investigation_timeout_sec,omitempty"` // Max seconds per investigation (default: 300)
+	PatrolAutonomyLevel             string                                            `json:"patrol_autonomy_level,omitempty"` // "monitor", "approval", "assisted", "full"
+	PatrolFullModeUnlocked          bool                                              `json:"patrol_full_mode_unlocked"`       // Legacy wire/storage compatibility only; never authority for effective full mode.
+	PatrolAutopilotAcknowledgements []unifiedresources.PatrolAutopilotAcknowledgement `json:"patrol_autopilot_acknowledgements,omitempty"`
+	PatrolAutopilotRevocations      []unifiedresources.PatrolAutopilotRevocation      `json:"patrol_autopilot_revocations,omitempty"`
+	PatrolAutopilotActivation       *unifiedresources.PatrolAutopilotActivation       `json:"patrol_autopilot_activation,omitempty"`
+	PatrolActionEmergencyStop       bool                                              `json:"patrol_action_emergency_stop"`               // Blocks new human and policy action admission; does not imply rollback
+	PatrolInvestigationBudget       int                                               `json:"patrol_investigation_budget,omitempty"`      // Max turns per investigation (default: 15)
+	PatrolInvestigationTimeoutSec   int                                               `json:"patrol_investigation_timeout_sec,omitempty"` // Max seconds per investigation (default: 300)
 
 	// Discovery settings - controls automatic infrastructure discovery
 	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // Enable infrastructure discovery
@@ -862,6 +866,41 @@ func (c *AIConfig) GetPatrolAutonomyLevel() string {
 	default:
 		return PatrolAutonomyMonitor
 	}
+}
+
+// GetEffectivePatrolAutonomy evaluates the requested Patrol mode against the
+// server-owned Autopilot acknowledgement and activation evidence. The legacy
+// PatrolFullModeUnlocked boolean is intentionally passed only so the evaluator
+// can report that it was ignored; it can never authorize full mode.
+func (c *AIConfig) GetEffectivePatrolAutonomy(orgID string, now time.Time) (string, unifiedresources.PatrolAutopilotStatus) {
+	return c.GetEffectivePatrolAutonomyWithPolicy(orgID, unifiedresources.CurrentPatrolAutopilotServerPolicy(now))
+}
+
+func (c *AIConfig) GetEffectivePatrolAutonomyWithPolicy(orgID string, policy unifiedresources.PatrolAutopilotServerPolicy) (string, unifiedresources.PatrolAutopilotStatus) {
+	if c == nil {
+		contract, _ := unifiedresources.PatrolAutopilotContractForVersion(policy.CurrentVersion)
+		return PatrolAutonomyMonitor, unifiedresources.PatrolAutopilotStatus{
+			Code:           unifiedresources.PatrolAutopilotStatusAcknowledgementRequired,
+			CurrentVersion: policy.CurrentVersion,
+			AcceptedScope:  contract.AcceptedScope,
+			AcceptedLimits: contract.AcceptedLimits,
+		}
+	}
+	return unifiedresources.EvaluatePatrolAutopilot(
+		c.GetPatrolAutonomyLevel(),
+		PatrolAutonomyApproval,
+		strings.TrimSpace(orgID),
+		c.PatrolFullModeUnlocked,
+		c.PatrolAutopilotAcknowledgements,
+		c.PatrolAutopilotRevocations,
+		c.PatrolAutopilotActivation,
+		policy,
+	)
+}
+
+func (c *AIConfig) IsPatrolFullModeActive(orgID string, now time.Time) bool {
+	level, status := c.GetEffectivePatrolAutonomy(orgID, now)
+	return level == PatrolAutonomyFull && status.Active
 }
 
 // GetPatrolInvestigationBudget returns the max turns per investigation

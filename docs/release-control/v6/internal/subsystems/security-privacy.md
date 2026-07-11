@@ -1338,3 +1338,18 @@ secret-bearing text do not enter `ActionResultV2` projections. Stable bounded
 refusal reason codes such as `resource_remediation_locked:` and `plan_drift:`
 may remain visible so authorized consumers can branch without receiving raw
 provider output.
+
+### Patrol Autopilot acknowledgement authority
+
+Autopilot acknowledgement and activation stamp the authenticated human session
+as an immutable `ActionActor` binding with organization and credential. Public
+actor, organization, version, scope, limits, time, and digest fields are
+rejected; owner-bound and detached API tokens are both ineligible. Cross-org,
+wrong-credential, tampered, stale, expired, revoked, or conflicting evidence
+fails closed and cannot change effective full mode. The legacy unlock boolean
+is retained only for wire/storage compatibility and is never treated as user
+acknowledgement.
+
+This is not an MFA implementation. No acknowledgement label or local browser
+state may satisfy an action MFA floor without the existing server-verified,
+action-bound cryptographic step-up contract.

@@ -686,9 +686,10 @@ func (r *Router) setupRoutes() {
 				if cfg == nil {
 					return PatrolActionPolicySnapshot{}, nil
 				}
+				effectiveAutonomyLevel := svc.GetEffectivePatrolAutonomyLevel()
 				return PatrolActionPolicySnapshot{
-					EffectiveAutonomyLevel: svc.GetEffectivePatrolAutonomyLevel(),
-					FullModeUnlocked:       cfg.PatrolFullModeUnlocked,
+					EffectiveAutonomyLevel: effectiveAutonomyLevel,
+					FullModeUnlocked:       effectiveAutonomyLevel == config.PatrolAutonomyFull,
 					EmergencyStop:          cfg.PatrolActionEmergencyStop,
 				}, nil
 			})

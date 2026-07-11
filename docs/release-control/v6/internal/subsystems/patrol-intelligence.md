@@ -1974,3 +1974,13 @@ verified; contradicted verification maps to verification failure; and
 not-attempted or inconclusive verification remains verification unknown. A
 successful execution never overwrites contradictory verification. Task 11
 still owns browser wording and proof for the distinct terminal states.
+
+Patrol now consumes the server-derived effective Autopilot mode. Requested
+`full` is admitted only with a current persisted human acknowledgement and
+exact activation for the same actor credential and organization; legacy
+booleans, revocation, expiry, version rotation, and malformed evidence fall
+back to approval mode before policy-authorized action submission. The accepted
+limits explicitly allow inconclusive verification and never turn execution
+success into outcome truth. Task 11 still owns acknowledgement presentation,
+cancel/no-submit browser proof, and device coverage; M7 remains open until that
+work and Task 12 certification are complete.
