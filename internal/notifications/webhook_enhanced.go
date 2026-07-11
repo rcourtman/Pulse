@@ -167,7 +167,7 @@ func (n *NotificationManager) prepareEnhancedWebhookExecution(webhook EnhancedWe
 	webhook.WebhookConfig = canonical
 
 	if webhook.Service == "ntfy" && strings.TrimSpace(webhook.PayloadTemplate) != "" {
-		tmpl, err := template.New("enhanced-webhook-ntfy").Parse(webhook.PayloadTemplate)
+		tmpl, err := template.New("enhanced-webhook-ntfy").Funcs(templateFuncMap()).Parse(webhook.PayloadTemplate)
 		if err != nil {
 			return webhook, nil, fmt.Errorf("parse ntfy payload template: %w", err)
 		}
