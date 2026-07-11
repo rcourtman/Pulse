@@ -1322,6 +1322,23 @@ describe('AIChatAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/sessions');
   });
 
+  it('preserves the system flag on Pulse-owned background sessions', async () => {
+    // patrol-main / investigation-* sessions arrive with system: true so the
+    // Assistant quick-resume list can keep forensic Patrol logs out of the
+    // resumable-chat offers.
+    const patrolSession = {
+      id: 'patrol-main',
+      title: '# Deterministic Triage Results Scanned 70 resources',
+      created_at: '2026-07-11T06:00:00Z',
+      updated_at: '2026-07-11T06:05:00Z',
+      message_count: 200,
+      system: true,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce([patrolSession]);
+
+    await expect(AIChatAPI.listSessions()).resolves.toEqual([patrolSession]);
+  });
+
   it('passes session search and limit as query parameters', async () => {
     apiFetchJSONMock.mockResolvedValueOnce([]);
 

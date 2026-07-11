@@ -662,3 +662,33 @@ func TestGenerateTitle(t *testing.T) {
 		assert.Equal(t, tt.expected, generateTitle(tt.input))
 	}
 }
+
+func TestSessionListMarksSystemSessions(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+
+	_, err = store.EnsureSession("patrol-main")
+	require.NoError(t, err)
+	userSession, err := store.Create()
+	require.NoError(t, err)
+
+	sessions, err := store.List()
+	require.NoError(t, err)
+	require.Len(t, sessions, 2)
+
+	byID := make(map[string]Session, len(sessions))
+	for _, s := range sessions {
+		byID[s.ID] = s
+	}
+	assert.True(t, byID["patrol-main"].System, "patrol-main must be marked system so clients keep it out of resumable chat lists")
+	assert.False(t, byID[userSession.ID].System, "user sessions must not be marked system")
+}
+
+func TestIsSystemSessionID(t *testing.T) {
+	assert.True(t, IsSystemSessionID("patrol-main"))
+	assert.True(t, IsSystemSessionID("patrol-eval"))
+	assert.True(t, IsSystemSessionID("investigation-abc123"))
+	assert.False(t, IsSystemSessionID("patrol-adjacent-user-session"))
+	assert.False(t, IsSystemSessionID(""))
+	assert.False(t, IsSystemSessionID("my-chat"))
+}

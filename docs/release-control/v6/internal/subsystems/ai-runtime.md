@@ -2474,6 +2474,17 @@ query...`, and `Reading storage...` before streamed tool arguments are
    (missing, corrupt, or stale entries only cost a re-parse, never a wrong
    summary, and dotfiles are never listed as sessions). `writeSession` and
    `Delete` keep the cache and index coherent on every mutation.
+   Pulse-owned background sessions are not resumable chats. The session store
+   owns the well-known background session IDs (`patrol-main`, `patrol-eval`,
+   `investigation-*`) through `chat.IsSystemSessionID` and marks their
+   summaries `system: true` in every `Session` projection. The Assistant
+   empty-state quick-resume list (`selectQuickResumeSessions` in
+   `frontend-modern/src/components/AI/Chat/recentSessionsModel.ts`) must
+   exclude system sessions — a Patrol detection log titled with the raw triage
+   seed is forensic material, not a conversation to resume — while the
+   drawer-owned session picker and the Settings sessions panel keep listing
+   them for inspection. The canonical Patrol forensic surface remains the
+   `PatrolRunRecord` history at `/api/ai/patrol/runs`.
    Assistant session navigation must provide a searchable history path in the
    drawer-owned picker, using the canonical `/api/ai/sessions` contract rather
    than a separate recent-chat store. Search is applied before result limiting

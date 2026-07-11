@@ -20,7 +20,18 @@ type Session struct {
 	UpdatedAt      time.Time              `json:"updated_at"`
 	MessageCount   int                    `json:"message_count,omitempty"`
 	CanRedo        bool                   `json:"can_redo,omitempty"`
+	System         bool                   `json:"system,omitempty"`
 	HandoffSummary *SessionHandoffSummary `json:"handoff_summary,omitempty"`
+}
+
+// IsSystemSessionID reports whether a session ID belongs to a Pulse-owned
+// background run (Patrol detection, Patrol eval, or a Patrol investigation)
+// rather than a user conversation. These sessions are forensic logs: they
+// stay listable and inspectable, but clients should not offer them as
+// resumable chats.
+func IsSystemSessionID(id string) bool {
+	id = strings.TrimSpace(id)
+	return id == "patrol-main" || id == "patrol-eval" || strings.HasPrefix(id, "investigation-")
 }
 
 // SessionTurnUndoResult is returned when the chat runtime removes the latest

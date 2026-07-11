@@ -15,6 +15,8 @@ export interface ChatSession {
   updated_at: string;
   message_count: number;
   can_redo?: boolean;
+  /** Pulse-owned background run (Patrol detection/eval/investigation), not a resumable user chat. */
+  system?: boolean;
   handoff_summary?: ChatSessionHandoffSummary;
 }
 

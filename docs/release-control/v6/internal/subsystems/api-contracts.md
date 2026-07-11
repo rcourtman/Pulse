@@ -1288,7 +1288,14 @@ payload shape change when the portal presents compact client rows.
     state. `GET /api/ai/sessions` and other `ChatSession` projections may
     expose only the boolean `can_redo` hint alongside safe title/timestamp,
     count, and handoff-summary fields so the drawer can re-enable redo after a
-    reload without reading the redo stack itself. Browser clients must use the
+    reload without reading the redo stack itself. The projection also carries
+    a boolean `system` flag for Pulse-owned background sessions (Patrol
+    detection `patrol-main`, `patrol-eval`, and `investigation-*` runs),
+    derived server-side from the well-known session IDs via
+    `chat.IsSystemSessionID`; browser clients must not re-derive that
+    ownership from ID string patterns, and must keep system sessions out of
+    resumable-chat offers (quick-resume) while leaving them listable for
+    inspection. Browser clients must use the
     shared `AIChatAPI.undoLastTurn(sessionId)` and
     `AIChatAPI.redoLastTurn(sessionId)` helpers so path encoding and response
     shape stay canonical.
