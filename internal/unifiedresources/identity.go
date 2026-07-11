@@ -29,7 +29,7 @@ func NormalizeHostname(hostname string) string {
 // machines that share a short name keep distinct identity keys.
 func NormalizeFullHostname(hostname string) string {
 	host := strings.TrimSpace(strings.ToLower(hostname))
-	return strings.TrimSuffix(host, ".")
+	return strings.TrimRight(host, ".")
 }
 
 // NormalizeMAC normalizes a MAC address to lower-case colon format.

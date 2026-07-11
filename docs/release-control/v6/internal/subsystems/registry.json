@@ -6602,6 +6602,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/unifiedresources/canonical_id_pins_test.go",
               "internal/unifiedresources/code_standards_test.go",
               "internal/unifiedresources/kubernetes_registry_test.go",
               "internal/unifiedresources/metrics_targets_test.go",

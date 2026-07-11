@@ -19,6 +19,21 @@ func TestNormalizeHostname(t *testing.T) {
 	}
 }
 
+func TestNormalizeFullHostnamePreservesDottedNames(t *testing.T) {
+	cases := map[string]string{
+		"PVE1.Homelab.LAN": "pve1.homelab.lan",
+		"pve1.local":       "pve1.local",
+		"pve1":             "pve1",
+		"pve1.":            "pve1",
+		"pve1...":          "pve1",
+	}
+	for input, want := range cases {
+		if got := NormalizeFullHostname(input); got != want {
+			t.Fatalf("NormalizeFullHostname(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestMachineIDMatchMerges(t *testing.T) {
 	store := NewMemoryStore()
 	registry := NewRegistry(store)
