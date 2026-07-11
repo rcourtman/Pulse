@@ -194,10 +194,6 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 			"pods":        {Kind: ToolCallKindRead, Mutation: MutationNone},
 			"deployments": {Kind: ToolCallKindRead, Mutation: MutationNone},
 			"logs":        {Kind: ToolCallKindRead, Mutation: MutationNone},
-			"scale":       {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
-			"restart":     {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
-			"delete_pod":  {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
-			"exec":        {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
 		},
 	},
 	PulseDockerToolName: {
@@ -212,8 +208,6 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 			// is read for workflow purposes too (write would drive the
 			// FSM into verification for a non-mutating refresh).
 			"check_updates": {Kind: ToolCallKindRead, Mutation: MutationNone},
-			"control":       {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
-			"update":        {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
 		},
 	},
 	PulseKnowledgeToolName: {

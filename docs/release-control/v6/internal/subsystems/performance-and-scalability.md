@@ -789,6 +789,13 @@ shell clickable behind another overlay.
 
 ## Current State
 
+### Canonical mutation-plane dependency
+
+Router wiring now exposes only typed action planning for model-originated
+infrastructure changes. The mutation registry audits run in governance CI and
+must remain bounded to static construction/catalog scans; they introduce no
+request-path enumeration or per-request registry traversal.
+
 The router's shared browser-cookie writer is request-local security policy. It
 must not add per-request persistence reads, network work, or background fan-out;
 all login and CSRF call sites consume the already-derived in-memory policy.

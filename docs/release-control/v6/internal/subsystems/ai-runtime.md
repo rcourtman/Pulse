@@ -5733,3 +5733,27 @@ eligibility, or a Patrol mode below the capability's class leave the action
 pending rather than converting a valid proposal into an investigation failure.
 An idempotent resubmission returns the existing action disposition and must not
 execute a terminal action twice.
+
+### Canonical mutation registry boundary
+
+Assistant infrastructure mutations are classified by the generated
+`internal/mutationregistry` registry before handler execution. The only active
+model-originated mutation is `pulse_control type=resource`, which submits a
+typed capability request to the shared action-lifecycle planner and never
+contacts infrastructure directly. Retired tool names and compatibility aliases
+cannot be registered or shadowed by extensions. Docker update/control,
+Kubernetes scale/restart/delete, arbitrary exec, raw command, and file writes
+are omitted from offered schemas and denied if fabricated.
+
+The registry audits enumerate actual registered tool discriminator values and
+bind mechanically discovered API, job, and transport candidates to one registry
+disposition. Transport lifecycle entries must name non-transport lifecycle
+authority and committed authority before delivery. Task 07 owns durable
+delivery/reconnect and Task 10 owns terminal truth/compensation; incomplete
+Docker, Kubernetes/native-provider, delivery, and rollback paths remain
+`retired_denied`, not parallel executors.
+
+Enterprise command-remediation records are readable historical imports only.
+Production code contains no command or rollback execution algorithm; exported
+approve/execute/rollback interfaces and HTTP endpoints are permanently inert
+even when a command executor is injected.

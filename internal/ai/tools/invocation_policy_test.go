@@ -65,14 +65,13 @@ func TestKubernetesScaleClassifiesWriteAndNeverInvokesUnderReadOnly(t *testing.T
 	exec := newInvocationPolicyExecutor(t)
 	exec.SetControlLevel(ControlLevelReadOnly)
 	text := executeBlockedText(t, exec, "pulse_kubernetes", map[string]interface{}{"type": "scale"})
-	assert.Equal(t, agentcapabilities.ControlToolsDisabledMessage, text)
+	assert.Contains(t, text, "retired and denied")
 
 	// Deny-mutations policy blocks even with an autonomous control level.
 	exec.SetControlLevel(ControlLevelAutonomous)
 	exec.SetDenyInfrastructureMutations(true)
 	text = executeBlockedText(t, exec, "pulse_kubernetes", map[string]interface{}{"type": "scale"})
-	assert.Contains(t, text, "Invocation blocked")
-	assert.Contains(t, text, "infrastructure")
+	assert.Contains(t, text, "retired and denied")
 }
 
 func TestDockerUpdateQueuesNothingAtReadOnly(t *testing.T) {
@@ -83,7 +82,7 @@ func TestDockerUpdateQueuesNothingAtReadOnly(t *testing.T) {
 	text := executeBlockedText(t, exec, "pulse_docker", map[string]interface{}{
 		"action": "update", "container": "nginx", "host": "tower",
 	})
-	assert.Equal(t, agentcapabilities.ControlToolsDisabledMessage, text)
+	assert.Contains(t, text, "retired and denied")
 	updates.AssertNotCalled(t, "UpdateContainer")
 	updates.AssertNotCalled(t, "IsUpdateActionsEnabled")
 }
@@ -98,7 +97,7 @@ func TestAutonomousDenyMutationsCannotMutateDocker(t *testing.T) {
 	text := executeBlockedText(t, exec, "pulse_docker", map[string]interface{}{
 		"action": "update", "container": "nginx", "host": "tower",
 	})
-	assert.Contains(t, text, "Invocation blocked")
+	assert.Contains(t, text, "retired and denied")
 	updates.AssertNotCalled(t, "UpdateContainer")
 
 	// Read subactions remain available under the same policy.
@@ -122,6 +121,45 @@ func TestFabricatedEnumValuesFailClosedAtRuntime(t *testing.T) {
 	// A missing required discriminator fails closed the same way.
 	text = executeBlockedText(t, exec, "pulse_kubernetes", nil)
 	assert.Contains(t, text, "Invocation blocked")
+}
+
+func TestRetiredMutationProfileMatrixDeniesBeforeHandlers(t *testing.T) {
+	profiles := []struct {
+		name       string
+		level      ControlLevel
+		profile    ExecutionProfile
+		autonomous bool
+	}{
+		{name: "interactive-read-only", level: ControlLevelReadOnly, profile: ProfileInteractiveAssistant},
+		{name: "interactive-controlled", level: ControlLevelControlled, profile: ProfileInteractiveAssistant},
+		{name: "interactive-autonomous", level: ControlLevelAutonomous, profile: ProfileInteractiveAssistant, autonomous: true},
+		{name: "patrol-detection", level: ControlLevelAutonomous, profile: ProfilePatrolDetection},
+		{name: "patrol-investigation", level: ControlLevelAutonomous, profile: ProfilePatrolInvestigation},
+	}
+	calls := []struct {
+		tool string
+		args map[string]interface{}
+	}{
+		{tool: agentcapabilities.PulseControlToolName, args: map[string]interface{}{"type": "command", "command": "touch /tmp/x"}},
+		{tool: agentcapabilities.PulseControlToolName, args: map[string]interface{}{"type": "guest", "guest_id": "101", "action": "stop"}},
+		{tool: agentcapabilities.PulseDockerToolName, args: map[string]interface{}{"action": "control", "operation": "restart", "container": "web"}},
+		{tool: agentcapabilities.PulseDockerToolName, args: map[string]interface{}{"action": "update", "container": "web"}},
+		{tool: agentcapabilities.PulseKubernetesToolName, args: map[string]interface{}{"type": "scale", "deployment": "web"}},
+		{tool: agentcapabilities.PulseKubernetesToolName, args: map[string]interface{}{"type": "exec", "pod": "web", "command": "touch /tmp/x"}},
+		{tool: agentcapabilities.PulseFileEditToolName, args: map[string]interface{}{"action": "write", "path": "/tmp/x"}},
+	}
+	for _, posture := range profiles {
+		t.Run(posture.name, func(t *testing.T) {
+			exec := newInvocationPolicyExecutor(t)
+			exec.SetControlLevel(posture.level)
+			exec.SetAutonomousMode(posture.autonomous)
+			exec.ApplyExecutionProfile(posture.profile)
+			for _, call := range calls {
+				text := executeBlockedText(t, exec, call.tool, call.args)
+				assert.Contains(t, text, "retired and denied", "%s %+v", call.tool, call.args)
+			}
+		})
+	}
 }
 
 func TestProjectionAndRuntimeEnforcementAgree(t *testing.T) {
@@ -396,7 +434,7 @@ func TestPatrolDetectionProfileEnforcesAllowlistedPulseState(t *testing.T) {
 	text := executeBlockedText(t, exec, "pulse_docker", map[string]interface{}{
 		"action": "update", "container": "nginx", "host": "tower",
 	})
-	assert.Contains(t, text, "Invocation blocked")
+	assert.Contains(t, text, "retired and denied")
 
 	// Pulse-state mutations outside the finding allowlist are blocked
 	// before the handler: detection must not dismiss alerts or write
@@ -437,7 +475,7 @@ func TestPatrolInvestigationProfileIsStructurallyReadOnly(t *testing.T) {
 
 	// No infrastructure mutations.
 	text := executeBlockedText(t, exec, "pulse_kubernetes", map[string]interface{}{"type": "scale"})
-	assert.Contains(t, text, "Invocation blocked")
+	assert.Contains(t, text, "retired and denied")
 	// No Pulse-state mutations either - not even the Patrol finding tools.
 	text = executeBlockedText(t, exec, "patrol_report_finding", map[string]interface{}{})
 	assert.Contains(t, text, "Invocation blocked")

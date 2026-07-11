@@ -1691,6 +1691,13 @@ must not treat starter
 
 ## Current State
 
+### Canonical mutation-plane dependency
+
+Infrastructure rollback is a declared lifecycle property, not executable model
+or legacy remediation text. Task 10 owns compensation/truth representation;
+until that contract is complete, affected Docker, Kubernetes, and native
+provider mutations remain fail-closed denied.
+
 Storage and recovery consumers inherit create-once action identity, monotonic
 terminal state, and exactly-one executor admission from the shared lifecycle.
 They must not retry an `executing` action as a new dispatch after restart;

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mutationregistry"
 )
 
 // ToolActionMode describes the state-changing capability of a registered tool.
@@ -200,6 +201,9 @@ func (r *ToolRegistry) RegisterExtension(tool RegisteredTool) {
 
 	tool.Definition = tool.Definition.NormalizeCollections()
 	name := tool.Definition.Name
+	if _, retiredAlias := mutationregistry.LookupModelInvocation(name, nil); retiredAlias {
+		panic(fmt.Sprintf("tool %q is a retired mutation alias and cannot be registered as an extension", name))
+	}
 	if _, isCanonical := agentcapabilities.InvocationDescriptorFor(name); isCanonical {
 		panic(fmt.Sprintf("tool %q is a canonical Pulse tool and cannot be registered as an extension", name))
 	}
@@ -396,6 +400,9 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 	}
 	name = params.Name
 	args = params.Arguments
+	if mutation, classified := mutationregistry.LookupModelInvocation(name, args); classified && mutation.Disposition == mutationregistry.DispositionRetiredDenied {
+		return NewErrorResult(fmt.Errorf("mutation %s is retired and denied; use an advertised typed resource action", mutation.ID)), nil
+	}
 
 	r.mu.RLock()
 	tool, exists := r.tools[name]

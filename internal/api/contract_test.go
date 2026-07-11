@@ -17354,7 +17354,6 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`return ProviderToolNames(AssistantNativeProviderTools())`,
 		`Name:        PulseQuestionToolName`,
 		`InputSchema: PulseQuestionProviderInputSchema(),`,
-		`Name:        LegacyAssistantRunCommandToolName`,
 		`Name:        LegacyAssistantFetchURLToolName`,
 		`Name:        LegacyAssistantSetResourceURLToolName`,
 		`type PulseQuestionToolType string`,
@@ -19680,24 +19679,25 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 	// don't need the specific token. Whitelisted here so the
 	// emit/declare audit doesn't false-positive on them.
 	internalOnlyCodes := map[string]bool{
-		"action_audit_unavailable":        true,
-		"action_audit_persist_failed":     true,
-		"action_plan_failed":              true,
-		"action_plan_encode_failed":       true,
-		"action_audit_query_failed":       true,
-		"action_decision_persist_failed":  true,
-		"action_decision_encode_failed":   true,
-		"action_decision_failed":          true,
-		"action_execution_persist_failed": true,
-		"action_execution_encode_failed":  true,
-		"action_execution_failed":         true,
-		"action_queue_unavailable":        true,
-		"action_queue_query_failed":       true,
-		"action_queue_encode_failed":      true,
-		"action_not_executing":            true,
-		"action_policy_validation_failed": true,
-		"action_plan_validation_failed":   true,
-		"resource_registry_unavailable":   true,
+		"action_audit_unavailable":                      true,
+		"action_audit_persist_failed":                   true,
+		"action_plan_failed":                            true,
+		"action_plan_encode_failed":                     true,
+		"action_audit_query_failed":                     true,
+		"action_decision_persist_failed":                true,
+		"action_decision_encode_failed":                 true,
+		"action_decision_failed":                        true,
+		"action_execution_persist_failed":               true,
+		"action_execution_encode_failed":                true,
+		"action_execution_failed":                       true,
+		"action_queue_unavailable":                      true,
+		"action_queue_query_failed":                     true,
+		"action_queue_encode_failed":                    true,
+		"action_not_executing":                          true,
+		"action_policy_validation_failed":               true,
+		"action_plan_validation_failed":                 true,
+		"resource_registry_unavailable":                 true,
+		agentcapabilities.AgentErrCodeRawCommandRetired: true,
 	}
 
 	agentErrorConstantValues := map[string]string{
@@ -19728,6 +19728,7 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"AgentErrCodeActionQueueUnavailable":     agentcapabilities.AgentErrCodeActionQueueUnavailable,
 		"AgentErrCodeActionQueueQueryFailed":     agentcapabilities.AgentErrCodeActionQueueQueryFailed,
 		"AgentErrCodeActionQueueEncodeFailed":    agentcapabilities.AgentErrCodeActionQueueEncodeFailed,
+		"AgentErrCodeRawCommandRetired":          agentcapabilities.AgentErrCodeRawCommandRetired,
 	}
 
 	// Extract every emitted shared code from writeJSONError /

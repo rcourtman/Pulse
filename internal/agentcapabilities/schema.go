@@ -232,10 +232,8 @@ func NewPulseQuestionProviderTool() ProviderTool {
 }
 
 const (
-	// LegacyAssistantRunCommandToolName is the compatibility alias still used by
-	// the older native Assistant service. New registry-backed chat uses
-	// pulse_control with type=command, but the alias vocabulary remains shared so
-	// provider schemas, execution, and approval handling cannot drift.
+	// LegacyAssistantRunCommandToolName is retained only to recognize and deny
+	// old persisted/provider calls. It is never projected to a model.
 	LegacyAssistantRunCommandToolName = "run_command"
 	// LegacyAssistantFetchURLToolName is the compatibility alias for the older
 	// native Assistant URL fetch helper.
@@ -259,35 +257,9 @@ const (
 // schema copies.
 func LegacyAssistantUtilityProviderTools() []ProviderTool {
 	return ProjectProviderTools([]Tool{
-		legacyAssistantRunCommandTool(),
 		legacyAssistantFetchURLTool(),
 		legacyAssistantSetResourceURLTool(),
 	})
-}
-
-func legacyAssistantRunCommandTool() Tool {
-	return Tool{
-		Name:        LegacyAssistantRunCommandToolName,
-		Description: "Execute a shell command. By default runs on the current target (container/VM), but set run_on_host=true for Proxmox host commands. IMPORTANT: For targets on different nodes, specify target_host to route to the correct PVE node.",
-		InputSchema: InputSchema{
-			Type: "object",
-			Properties: map[string]PropertySchema{
-				LegacyAssistantCommandArgumentName: {
-					Type:        "string",
-					Description: "The shell command to execute (e.g., 'ps aux --sort=-%mem | head -20')",
-				},
-				LegacyAssistantRunOnHostArgumentName: {
-					Type:        "boolean",
-					Description: "If true, run on the Proxmox/Docker host instead of inside the container/VM. Use for pct/qm commands like 'pct resize 101 rootfs +10G'. When true, you should also set target_host.",
-				},
-				LegacyAssistantTargetHostArgumentName: {
-					Type:        "string",
-					Description: "Optional hostname of the specific host/node to run the command on. Use this to explicitly route pct/qm/docker commands to the correct host node or Docker host. Check the 'node' or 'Host Node' field in the target's context.",
-				},
-			},
-			Required: []string{LegacyAssistantCommandArgumentName},
-		},
-	}
 }
 
 func legacyAssistantFetchURLTool() Tool {

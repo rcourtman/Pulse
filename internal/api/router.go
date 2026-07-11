@@ -2744,6 +2744,13 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if r.resourceHandlers != nil {
+		if plannerConsumer, ok := service.(interface {
+			SetTypedActionPlanner(chat.AssistantTypedActionPlanner)
+		}); ok {
+			plannerConsumer.SetTypedActionPlanner(assistantTypedActionPlanner{resources: r.resourceHandlers})
+		}
+	}
 	orgID := strings.TrimSpace(GetOrgID(ctx))
 	if orgID == "" {
 		orgID = "default"

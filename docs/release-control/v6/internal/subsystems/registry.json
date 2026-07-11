@@ -1506,7 +1506,8 @@
         "cmd/pulse-mcp/",
         "frontend-modern/src/components/AI/Chat/",
         "internal/agentcapabilities/",
-        "internal/ai/"
+        "internal/ai/",
+        "internal/mutationregistry/"
       ],
       "owned_files": [
         "cmd/pulse-mcp/main.go",
@@ -1543,6 +1544,21 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "canonical-mutation-registry",
+            "label": "closed canonical mutation registry and runtime candidate audit proof",
+            "match_prefixes": [
+              "internal/mutationregistry/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": true,
+            "test_prefixes": [
+              "internal/mutationregistry/"
+            ],
+            "exact_files": [
+              "internal/ai/tools/mutation_registry_audit_test.go"
+            ]
+          },
           {
             "id": "pulse-mcp-adapter",
             "label": "Pulse MCP adapter proof",

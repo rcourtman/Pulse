@@ -4149,6 +4149,8 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	writeJSONError(w, http.StatusGone, agentcapabilities.AgentErrCodeRawCommandRetired, "Raw command execution is retired. Use an advertised typed resource action.")
+	return
 
 	// Require authentication
 	if !CheckAuth(h.getConfig(r.Context()), w, r) {

@@ -3096,11 +3096,12 @@ func (s *Service) legacyAssistantInvocationPolicy() aitools.InvocationPolicy {
 		level = aitools.ControlLevel(cfg.GetControlLevel())
 	}
 	return aitools.InvocationPolicy{
-		ControlLevel:          level,
-		HasExecuteAuthority:   true,
-		ExecuteAuthorityBound: true,
-		PulseStateAllowlist:   map[string]bool{},
-		Profile:               aitools.ProfileInteractiveAssistant,
+		ControlLevel:                level,
+		HasExecuteAuthority:         true,
+		ExecuteAuthorityBound:       true,
+		DenyInfrastructureMutations: true,
+		PulseStateAllowlist:         map[string]bool{},
+		Profile:                     aitools.ProfileInteractiveAssistant,
 	}
 }
 

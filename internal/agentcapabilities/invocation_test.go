@@ -118,10 +118,10 @@ func TestInvocationDescriptorForReturnsIsolatedCopies(t *testing.T) {
 	if !ok {
 		t.Fatal("docker descriptor missing")
 	}
-	first.Cases["update"] = InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone}
+	first.Cases["updates"] = InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure}
 
 	second, _ := InvocationDescriptorFor(PulseDockerToolName)
-	if got := second.Cases["update"]; got.Mutation != MutationInfrastructure {
+	if got := second.Cases["updates"]; got.Mutation != MutationNone {
 		t.Fatalf("mutating a returned descriptor leaked into the canonical table: %#v", got)
 	}
 

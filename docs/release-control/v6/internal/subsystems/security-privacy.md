@@ -464,6 +464,13 @@ the `white_label` branding entitlement.
 
 ## Current State
 
+### Canonical mutation-plane dependency
+
+Raw command, file-write, arbitrary pod-exec, and legacy remediation authority
+are retired before handler or transport execution. Extension aliases cannot
+shadow retired names, and transport delivery must name committed lifecycle
+authority rather than accepting model-supplied command or rollback text.
+
 Unified Agent Pulse transports share one fail-closed TLS policy across host,
 Docker/Podman, Kubernetes, remote configuration, commands, and self-update.
 Custom CA bundles and SHA-256 leaf-certificate pins are runtime trust inputs,

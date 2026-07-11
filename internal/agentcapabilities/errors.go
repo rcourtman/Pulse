@@ -32,6 +32,7 @@ const (
 	AgentErrCodeActionQueueUnavailable     = "action_queue_unavailable"
 	AgentErrCodeActionQueueQueryFailed     = "action_queue_query_failed"
 	AgentErrCodeActionQueueEncodeFailed    = "action_queue_encode_failed"
+	AgentErrCodeRawCommandRetired          = "raw_command_retired"
 )
 
 // ErrorEnvelope is the stable failure shape emitted by Pulse Intelligence

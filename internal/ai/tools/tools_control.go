@@ -23,14 +23,14 @@ func (e *PulseToolExecutor) registerControlTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseControlToolName,
-			Description: `WRITE operations: control canonical resources that explicitly advertise shared Pulse actions (for example Proxmox guests and supported app-containers) or execute state-modifying commands. Some canonical resources are read-only and will reject pulse_control even when their type is vm or system-container. Read-only and Docker-only workflows are exposed through their own governed tools.`,
+			Description: `Plan one typed action for a canonical resource that explicitly advertises the requested capability. The plan is persisted on Pulse's shared action lifecycle; this tool never executes commands or contacts infrastructure directly.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"type": {
 						Type:        "string",
-						Description: "Control type: guest, resource, or command",
-						Enum:        []string{"guest", "resource", "command"},
+						Description: "Canonical control type. Only resource is supported.",
+						Enum:        []string{"resource"},
 					},
 					"guest_id": {
 						Type:        "string",
@@ -42,8 +42,8 @@ func (e *PulseToolExecutor) registerControlTools() {
 					},
 					"action": {
 						Type:        "string",
-						Description: "For guest/resource: start, stop, shutdown, restart, delete (availability depends on the resolved resource's shared action set)",
-						Enum:        []string{"start", "stop", "shutdown", "restart", "delete"},
+						Description: "Advertised resource capability name, such as start, stop, shutdown, reboot, or restart",
+						Enum:        []string{"start", "stop", "shutdown", "reboot", "restart"},
 					},
 					"command": {
 						Type:        "string",
@@ -73,7 +73,7 @@ func (e *PulseToolExecutor) registerControlTools() {
 			ActionMode:      ToolActionWrite,
 			ApprovalPolicy:  ToolApprovalActionPlan,
 			ApprovalSummary: "hidden in read-only mode; approval required in controlled mode",
-			Summary:         "Runs shared Pulse control actions; control only resources that explicitly support shared Pulse actions.",
+			Summary:         "Plans shared Pulse resource actions; approval and execution stay on the canonical action lifecycle.",
 		},
 	})
 }
@@ -82,14 +82,10 @@ func (e *PulseToolExecutor) registerControlTools() {
 func (e *PulseToolExecutor) executeControl(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	controlType, _ := args["type"].(string)
 	switch controlType {
-	case "guest":
-		return e.executeControlGuest(ctx, args)
 	case "resource":
 		return e.executeControlResource(ctx, args)
-	case "command":
-		return e.executeRunCommand(ctx, args)
 	default:
-		return NewErrorResult(fmt.Errorf("unknown type: %s. Use: guest, resource, command", controlType)), nil
+		return NewErrorResult(fmt.Errorf("control type %q is retired and denied; use type=resource with an advertised capability", controlType)), nil
 	}
 }
 
@@ -98,8 +94,6 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 	resourceRef = strings.TrimSpace(resourceRef)
 	action, _ := args["action"].(string)
 	action = strings.TrimSpace(action)
-	approvalID := agentcapabilities.ApprovalArgument(args)
-
 	if resourceRef == "" {
 		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
 	}
@@ -121,41 +115,34 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 		return NewErrorResult(errors.New(validation.ErrorMsg)), nil
 	}
 
-	resolved := validation.Resource
-	switch resolved.GetKind() {
-	case "vm", "system-container":
-		guestArgs := map[string]interface{}{
-			"guest_id": resolvedResourceControlIdentity(resolved, resourceRef),
-			"action":   action,
-		}
-		if force, ok := args["force"].(bool); ok {
-			guestArgs["force"] = force
-		}
-		if approvalID != "" {
-			agentcapabilities.WithApprovalArgument(guestArgs, approvalID)
-		}
-		return e.executeControlGuest(ctx, guestArgs)
-
-	case "app-container":
-		switch strings.ToLower(strings.TrimSpace(resolved.GetAdapter())) {
-		case "docker":
-			dockerArgs := map[string]interface{}{
-				"container": resolvedResourceControlIdentity(resolved, resourceRef),
-				"host":      strings.TrimSpace(resolved.GetTargetHost()),
-				"operation": action,
-			}
-			if approvalID != "" {
-				agentcapabilities.WithApprovalArgument(dockerArgs, approvalID)
-			}
-			return e.executeDockerControl(ctx, dockerArgs)
-		case "truenas":
-			return e.executeNativeAppContainerControl(ctx, resolved, action, approvalID)
-		default:
-			return NewErrorResult(fmt.Errorf("resource '%s' uses unsupported control adapter %q", resourceRef, resolved.GetAdapter())), nil
-		}
+	if e.typedActionPlanner == nil {
+		return NewErrorResult(fmt.Errorf("canonical action planning is unavailable")), nil
 	}
-
-	return NewErrorResult(fmt.Errorf("resource '%s' of kind %q is not controllable through pulse_control type=resource", resourceRef, resolved.GetKind())), nil
+	resourceID := unifiedresources.CanonicalResourceID(validation.Resource.GetResourceID())
+	if resourceID == "" {
+		return NewErrorResult(fmt.Errorf("resource %q has no canonical resource id", resourceRef)), nil
+	}
+	plan, err := e.typedActionPlanner.PlanTypedAction(ctx, e.orgID, unifiedresources.ActionRequest{
+		RequestID:      uuid.NewString(),
+		ResourceID:     resourceID,
+		CapabilityName: action,
+		Reason:         fmt.Sprintf("Assistant proposed %s for %s", action, resourceID),
+		RequestedBy:    "pulse_assistant",
+	})
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+	return NewJSONResult(map[string]interface{}{
+		"planned":           true,
+		"action_id":         plan.ActionID,
+		"resource_id":       resourceID,
+		"capability":        action,
+		"requires_approval": plan.RequiresApproval,
+		"approval_policy":   plan.ApprovalPolicy,
+		"plan_hash":         plan.PlanHash,
+		"expires_at":        plan.ExpiresAt,
+		"message":           "Typed action planned. Approval and execution remain on the canonical action lifecycle.",
+	}), nil
 }
 
 func (e *PulseToolExecutor) executeNativeAppContainerControl(ctx context.Context, resource ResolvedResourceInfo, action string, approvalID string) (CallToolResult, error) {

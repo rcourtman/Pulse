@@ -327,8 +327,8 @@ func TestProjectPulseAssistantProviderToolsUsesSurfaceAffordances(t *testing.T) 
 
 func TestLegacyAssistantUtilityProviderToolsOwnCompatibilitySchemas(t *testing.T) {
 	tools := LegacyAssistantUtilityProviderTools()
-	if len(tools) != 3 {
-		t.Fatalf("legacy Assistant utility tools = %+v, want three compatibility tools", tools)
+	if len(tools) != 2 {
+		t.Fatalf("legacy Assistant utility tools = %+v, want two non-command compatibility tools", tools)
 	}
 
 	byName := map[string]ProviderTool{}
@@ -336,19 +336,8 @@ func TestLegacyAssistantUtilityProviderToolsOwnCompatibilitySchemas(t *testing.T
 		byName[tool.Name] = tool
 	}
 
-	runCommand := byName[LegacyAssistantRunCommandToolName]
-	if !reflect.DeepEqual(runCommand.InputSchema["required"], []string{LegacyAssistantCommandArgumentName}) {
-		t.Fatalf("run_command required = %#v, want command", runCommand.InputSchema["required"])
-	}
-	runProps := runCommand.InputSchema["properties"].(map[string]interface{})
-	for _, field := range []string{
-		LegacyAssistantCommandArgumentName,
-		LegacyAssistantRunOnHostArgumentName,
-		LegacyAssistantTargetHostArgumentName,
-	} {
-		if _, ok := runProps[field]; !ok {
-			t.Fatalf("run_command schema missing %q: %#v", field, runProps)
-		}
+	if _, ok := byName[LegacyAssistantRunCommandToolName]; ok {
+		t.Fatal("retired run_command alias must not be projected to providers")
 	}
 
 	fetchURL := byName[LegacyAssistantFetchURLToolName]

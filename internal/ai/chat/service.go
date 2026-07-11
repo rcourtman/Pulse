@@ -64,6 +64,7 @@ type (
 	KnowledgeStoreProvider              = tools.KnowledgeStoreProvider
 	AssistantDiscoveryProvider          = tools.DiscoveryProvider
 	AssistantUnifiedResourceProvider    = tools.UnifiedResourceProvider
+	AssistantTypedActionPlanner         = tools.TypedActionPlanner
 )
 
 // Config holds service configuration
@@ -3517,6 +3518,17 @@ func (s *Service) SetUnifiedResourceProvider(provider AssistantUnifiedResourcePr
 	s.unifiedResourceProvider = provider
 	if s.executor != nil {
 		s.executor.SetUnifiedResourceProvider(provider)
+	}
+}
+
+// SetTypedActionPlanner routes model-proposed resource actions into the
+// shared lifecycle planner. Approval and execution remain on canonical action
+// surfaces.
+func (s *Service) SetTypedActionPlanner(planner AssistantTypedActionPlanner) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.executor != nil {
+		s.executor.SetTypedActionPlanner(planner)
 	}
 }
 

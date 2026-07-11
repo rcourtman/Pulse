@@ -343,22 +343,7 @@ func (h *DockerAgentHandlers) HandleDeleteHost(w http.ResponseWriter, r *http.Re
 	}
 
 	if !force && strings.EqualFold(priorHost.Status, "online") {
-		command, err := h.getMonitor(r.Context()).QueueDockerHostStop(agentID)
-		if err != nil {
-			writeErrorResponse(w, http.StatusBadRequest, "docker_command_failed", err.Error(), nil)
-			return
-		}
-
-		h.broadcastState(r.Context())
-
-		if err := utils.WriteJSONResponse(w, map[string]any{
-			"success": true,
-			"agentId": agentID,
-			"command": command,
-			"message": "Stop command queued",
-		}); err != nil {
-			log.Error().Err(err).Msg("Failed to serialize docker host stop command response")
-		}
+		writeErrorResponse(w, http.StatusGone, "docker_runtime_stop_retired", "Remote Docker runtime stop is unavailable until it is routed through the canonical action lifecycle.", nil)
 		return
 	}
 
@@ -547,35 +532,7 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 		return
 	}
 
-	// Check if Docker update actions are disabled server-wide
-	if h.config != nil && h.config.DisableDockerUpdateActions {
-		writeErrorResponse(w, http.StatusForbidden, "docker_updates_disabled",
-			"Docker container updates are disabled by server configuration. Set PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=false or disable in Settings to enable.", nil)
-		return
-	}
-
-	// Queue the update command
-	commandStatus, err := h.getMonitor(r.Context()).QueueDockerContainerUpdateCommand(agentID, req.ContainerID, req.ContainerName)
-	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "update_command_failed", err.Error(), nil)
-		return
-	}
-
-	h.broadcastState(r.Context())
-
-	if err := utils.WriteJSONResponse(w, map[string]any{
-		"success":   true,
-		"commandId": commandStatus.ID,
-		"agentId":   agentID,
-		"container": map[string]string{
-			"id":   req.ContainerID,
-			"name": req.ContainerName,
-		},
-		"message": "Container update command queued",
-		"note":    "The update will be executed on the next agent report cycle",
-	}); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize container update response")
-	}
+	writeErrorResponse(w, http.StatusGone, "docker_update_retired", "Docker container updates are unavailable until typed lifecycle delivery and compensation are implemented.", nil)
 }
 
 // HandleUpdateAll triggers an update for all containers with updates available on a Docker / Podman host.
@@ -592,30 +549,7 @@ func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Check if Docker update actions are disabled server-wide
-	if h.config != nil && h.config.DisableDockerUpdateActions {
-		writeErrorResponse(w, http.StatusForbidden, "docker_updates_disabled",
-			"Docker container updates are disabled by server configuration. Set PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=false or disable in Settings to enable.", nil)
-		return
-	}
-
-	commandStatus, err := h.getMonitor(r.Context()).QueueDockerUpdateAllCommand(agentID)
-	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "update_all_command_failed", err.Error(), nil)
-		return
-	}
-
-	h.broadcastState(r.Context())
-
-	if err := utils.WriteJSONResponse(w, map[string]any{
-		"success":   true,
-		"commandId": commandStatus.ID,
-		"agentId":   agentID,
-		"message":   "Update all containers command queued",
-		"note":      "The update will be executed on the next agent report cycle",
-	}); err != nil {
-		log.Error().Err(err).Msg("Failed to serialize update all response")
-	}
+	writeErrorResponse(w, http.StatusGone, "docker_update_all_retired", "Bulk Docker updates are unavailable until typed lifecycle delivery and compensation are implemented.", nil)
 }
 
 // HandleCheckUpdates triggers an immediate update check for all containers on a Docker / Podman host.

@@ -94,11 +94,8 @@ func TestPulseToolExecutor_ExecuteControlGuest(t *testing.T) {
 		"action":   "stop",
 	})
 	assert.NoError(t, err)
-	resp := mustParseJSONMapControl(t, result.Content[0].Text)
-	assert.Equal(t, true, resp["success"])
-	if v, ok := resp["verification"].(map[string]interface{}); ok {
-		assert.Equal(t, true, v["ok"])
-	}
+	assert.Contains(t, result.Content[0].Text, "retired and denied")
+	agentSrv.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestPulseToolExecutor_ExecuteControlDocker(t *testing.T) {
@@ -149,9 +146,6 @@ func TestPulseToolExecutor_ExecuteControlDocker(t *testing.T) {
 		"operation": "restart",
 	})
 	assert.NoError(t, err)
-	resp := mustParseJSONMapControl(t, result.Content[0].Text)
-	assert.Equal(t, true, resp["success"])
-	if v, ok := resp["verification"].(map[string]interface{}); ok {
-		assert.Equal(t, true, v["ok"])
-	}
+	assert.Contains(t, result.Content[0].Text, "retired and denied")
+	agentSrv.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
 }

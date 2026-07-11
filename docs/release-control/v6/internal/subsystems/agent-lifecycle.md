@@ -1748,6 +1748,14 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Canonical mutation-plane dependency
+
+Agent deployment remains an explicit Pulse-administrative exception in the
+closed mutation registry. Agent command transports do not originate authority:
+typed host update/storage cleanup and executor-owned resource commands may run
+only after committed action-lifecycle authority, while raw model command and
+unowned delivery paths remain denied.
+
 Agent dispatch begins only after the canonical action store wins and commits
 the transition to `executing`. Concurrent replay, another SQLite connection,
 or a process restart cannot obtain a second executor admission for that action.

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -71,13 +70,13 @@ func TestPulseToolExecutor_ListTools_PulseControlDescriptionStaysCapabilityBound
 		if tool.Name != "pulse_control" {
 			continue
 		}
-		if !strings.Contains(tool.Description, "explicitly advertise shared Pulse actions") {
+		if !strings.Contains(tool.Description, "explicitly advertises the requested capability") {
 			t.Fatalf("expected pulse_control description to stay capability-bounded, got %q", tool.Description)
 		}
-		if !strings.Contains(tool.Description, "read-only") {
-			t.Fatalf("expected pulse_control description to warn about read-only resources, got %q", tool.Description)
+		if !strings.Contains(tool.Description, "never executes commands") {
+			t.Fatalf("expected pulse_control description to name the command-free boundary, got %q", tool.Description)
 		}
-		if action := tool.InputSchema.Properties["action"].Description; !strings.Contains(action, "resolved resource's shared action set") {
+		if action := tool.InputSchema.Properties["action"].Description; !strings.Contains(action, "Advertised resource capability") {
 			t.Fatalf("expected pulse_control action schema to describe shared action gating, got %q", action)
 		}
 		return
@@ -109,6 +108,16 @@ func TestExecuteControlResource_TrueNASAppUsesNativeActionProvider(t *testing.T)
 		ReadState:                  provider.ResourceRegistry,
 		AppContainerActionProvider: actionProvider,
 		ActionAuditStore:           store,
+		TypedActionPlanner: typedActionPlannerFunc(func(_ context.Context, _ string, req unifiedresources.ActionRequest) (*unifiedresources.ActionPlan, error) {
+			return &unifiedresources.ActionPlan{
+				ActionID:         "action-1",
+				RequestID:        req.RequestID,
+				Allowed:          true,
+				RequiresApproval: true,
+				ApprovalPolicy:   unifiedresources.ApprovalAdmin,
+				PlanHash:         "hash-1",
+			}, nil
+		}),
 	})
 	executor.SetResolvedContext(resolved)
 
@@ -135,35 +144,17 @@ func TestExecuteControlResource_TrueNASAppUsesNativeActionProvider(t *testing.T)
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &payload); err != nil {
 		t.Fatalf("decode result payload: %v", err)
 	}
-	if payload["platform"] != "truenas" {
-		t.Fatalf("expected truenas platform, got %+v", payload)
-	}
-	if payload["action"] != "restart" || payload["status"] != "running" {
-		t.Fatalf("unexpected action payload: %+v", payload)
+	if payload["action_id"] != "action-1" || payload["capability"] != "restart" {
+		t.Fatalf("expected canonical action plan, got %+v", payload)
 	}
 
-	if len(actionProvider.calls) != 1 {
-		t.Fatalf("expected one native app action call, got %+v", actionProvider.calls)
+	if len(actionProvider.calls) != 0 {
+		t.Fatalf("model planning must not call the native provider, got %+v", actionProvider.calls)
 	}
-	call := actionProvider.calls[0]
-	if call.OrgID != "default" || call.ProviderUID != "nextcloud" || call.Host != "truenas-main" || call.Action != "restart" {
-		t.Fatalf("unexpected native app action request: %+v", call)
-	}
+}
 
-	audits, err := store.GetActionAudits("", time.Time{}, 10)
-	if err != nil {
-		t.Fatalf("GetActionAudits() error = %v", err)
-	}
-	if len(audits) != 1 {
-		t.Fatalf("expected one action audit, got %+v", audits)
-	}
-	if audits[0].Request.CapabilityName != "pulse_control" {
-		t.Fatalf("unexpected capability name: %+v", audits[0].Request)
-	}
-	if got := audits[0].Request.Params["action"]; got != "restart" {
-		t.Fatalf("expected audited action restart, got %+v", audits[0].Request.Params)
-	}
-	if got := audits[0].Request.Params["platform"]; got != "truenas" {
-		t.Fatalf("expected audited platform truenas, got %+v", audits[0].Request.Params)
-	}
+type typedActionPlannerFunc func(context.Context, string, unifiedresources.ActionRequest) (*unifiedresources.ActionPlan, error)
+
+func (f typedActionPlannerFunc) PlanTypedAction(ctx context.Context, orgID string, req unifiedresources.ActionRequest) (*unifiedresources.ActionPlan, error) {
+	return f(ctx, orgID, req)
 }

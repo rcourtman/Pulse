@@ -2592,8 +2592,8 @@ func TestHandleRunCommand_InvalidBody(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	if rec.Code != http.StatusGone {
+		t.Fatalf("expected status %d, got %d", http.StatusGone, rec.Code)
 	}
 }
 
@@ -2677,8 +2677,8 @@ func TestHandleRunCommand_RequiresApprovalID(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	if rec.Code != http.StatusGone {
+		t.Fatalf("expected status %d, got %d", http.StatusGone, rec.Code)
 	}
 }
 
@@ -2712,7 +2712,8 @@ func TestHandleRunCommand_DefersConsumptionUntilAgentDispatch(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
-	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+	require.Equal(t, http.StatusGone, rec.Code, "body=%s", rec.Body.String())
+	require.Contains(t, rec.Body.String(), agentcapabilities.AgentErrCodeRawCommandRetired)
 
 	stored, found := store.GetApproval(appReq.ID)
 	require.True(t, found)
@@ -2749,7 +2750,7 @@ func TestHandleRunCommand_RejectsCommandMismatch(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
-	require.Equal(t, http.StatusConflict, rec.Code)
+	require.Equal(t, http.StatusGone, rec.Code)
 
 	stored, found := store.GetApproval(appReq.ID)
 	require.True(t, found)
@@ -2785,8 +2786,8 @@ func TestHandleRunCommand_RejectsUnsupportedTargetType(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
-	require.Equal(t, http.StatusBadRequest, rec.Code)
-	require.Contains(t, rec.Body.String(), "unsupported target_type")
+	require.Equal(t, http.StatusGone, rec.Code)
+	require.Contains(t, rec.Body.String(), agentcapabilities.AgentErrCodeRawCommandRetired)
 
 	stored, found := store.GetApproval(appReq.ID)
 	require.True(t, found)
@@ -2827,7 +2828,7 @@ func TestHandleRunCommand_RejectsCrossOrgApproval(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
-	require.Equal(t, http.StatusNotFound, rec.Code)
+	require.Equal(t, http.StatusGone, rec.Code)
 	stored, found := store.GetApproval(appReq.ID)
 	require.True(t, found)
 	require.False(t, stored.Consumed)

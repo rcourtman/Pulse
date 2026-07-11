@@ -7536,7 +7536,7 @@
     },
     {
       "id": "action-governance-auditability-post-rc-hardening",
-      "summary": "Track broader action-governance hardening beyond the current canonical action-audit and resource-scoped action-history floor, including richer provider dry-runs, enterprise policy execution, multi-actor or MFA approval chains, and deeper safe-execution contracts for future controlled operations.",
+      "summary": "Track governed residuals behind the closed canonical mutation registry: Task 07 owns durable delivery/reconnect before Docker update, Docker runtime stop, Kubernetes scale/restart/delete, or native-provider transport can activate; Task 10 owns terminal truth, verification, compensation, and rollback representation; Task 12 owns the final L1/governance verdict and administrative-exception review. Raw model command, file write, arbitrary pod exec, legacy run_command, /api/ai/run-command, and enterprise command remediation are retired with no replacement or executable historical authority.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-04-25",

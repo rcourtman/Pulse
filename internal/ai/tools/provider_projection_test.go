@@ -36,10 +36,13 @@ func TestPulseToolExecutorAssistantProviderToolsUsesRuntimeAvailability(t *testi
 	projected := exec.AssistantProviderTools(agentcapabilities.AssistantProviderToolOptions{IncludeQuestionTool: true})
 	names := providerToolNameSet(projected)
 
-	for _, name := range []string{agentcapabilities.PulseQueryToolName, agentcapabilities.PulseReadToolName, agentcapabilities.PulseControlToolName, agentcapabilities.PulseFileEditToolName, agentcapabilities.PulseQuestionToolName} {
+	for _, name := range []string{agentcapabilities.PulseQueryToolName, agentcapabilities.PulseReadToolName, agentcapabilities.PulseControlToolName, agentcapabilities.PulseQuestionToolName} {
 		if !names[name] {
 			t.Fatalf("AssistantProviderTools did not expose available tool %s; names=%v", name, names)
 		}
+	}
+	if names[agentcapabilities.PulseFileEditToolName] {
+		t.Fatal("AssistantProviderTools exposed retired file mutation tool")
 	}
 	for _, name := range []string{agentcapabilities.PulseDiscoveryToolName, agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName} {
 		if names[name] {

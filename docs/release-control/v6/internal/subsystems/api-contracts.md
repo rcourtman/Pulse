@@ -7314,3 +7314,35 @@ and execution-result writes are conditional state transitions whose event and
 record update commit together. Only the successful execution-start CAS winner
 may call the executor; a concurrent or post-restart duplicate returns the
 current executing or terminal record without another admission.
+
+### Canonical mutation plane
+
+`internal/mutationregistry/manifest.json` is the generated closed registry for
+runtime-reachable customer-infrastructure mutations and explicit Pulse
+administrative exceptions. Every entry declares origin, resource/capability,
+disposition, lifecycle executor (when executable), approval floor, delivery,
+verification, rollback, and residual owner. Infrastructure execution is valid
+only through `internal/actionlifecycle`; retired entries fail before transport.
+
+Executable audits derive candidates from the constructed Assistant tool
+registry and its schema discriminators, registered infrastructure HTTP route
+namespaces, Patrol broker registration, and actual agent/Docker transport
+constant catalogs. Unknown candidates, duplicate alias classification, retired
+alias extension shadowing, and transport without prior durable lifecycle
+authority fail `go test ./...` CI. The HTTP scanner's governed limitation is
+exact: it covers `/api/actions/`, `/api/agents/docker/`, `/api/updates/`,
+`/api/ai/remediation/`, and `/api/ai/run-command`; general settings and metadata
+CRUD are not claimed as customer-infrastructure mutation enumeration.
+
+Raw command/file write/arbitrary pod exec, direct Docker update/control, and
+enterprise command remediation are retired compatibility surfaces. Enterprise
+`remediation.json` remains readable history, but approve, execute, and rollback
+return `command_remediation_retired`/`ErrLegacyRemediationRetired` before any
+injected executor. Task 07 owns durable delivery/reconnect, Task 10 owns truth
+and compensation, and Task 12 owns the final governance verdict.
+The Pulse registry cannot assign ownership to sibling-repository paths; the
+exact residual unowned by `registry.json` is
+`pulse-enterprise/internal/remediation/engine.go` and
+`pulse-enterprise/internal/aiautofix/remediation_handlers.go`. Their contract is
+enforced by enterprise inertness/static tests and remains a Task 12 governance
+input rather than being hidden behind an invalid cross-repo registry path.

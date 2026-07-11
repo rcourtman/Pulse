@@ -40,14 +40,14 @@ func (e *PulseToolExecutor) registerKubernetesTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseKubernetesToolName,
-			Description: `Query and control Kubernetes clusters, nodes, pods, and deployments. Query: clusters, nodes, pods, deployments. Control: scale, restart, delete_pod, exec, logs.`,
+			Description: `Read Kubernetes clusters, nodes, pods, deployments, and bounded logs. Workload mutations remain unavailable until typed capability, durable delivery, and compensation contracts are complete.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"type": {
 						Type:        "string",
 						Description: "Operation type",
-						Enum:        []string{"clusters", "nodes", "pods", "deployments", "scale", "restart", "delete_pod", "exec", "logs"},
+						Enum:        []string{"clusters", "nodes", "pods", "deployments", "logs"},
 					},
 					"cluster": {
 						Type:        "string",
@@ -101,10 +101,9 @@ func (e *PulseToolExecutor) registerKubernetesTools() {
 			return exec.executeKubernetes(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:      ToolActionMixed,
-			ApprovalPolicy:  ToolApprovalActionPlan,
-			ApprovalSummary: "read/list/log actions are safe; scale, restart, delete, and exec subactions require approval in controlled mode",
-			Summary:         "Reads Kubernetes topology and runs governed workload-control subactions.",
+			ActionMode:     ToolActionRead,
+			ApprovalPolicy: ToolApprovalScopeOnly,
+			Summary:        "Reads Kubernetes topology and bounded logs; workload mutations are denied.",
 		},
 	})
 }
@@ -121,19 +120,10 @@ func (e *PulseToolExecutor) executeKubernetes(ctx context.Context, args map[stri
 		return e.executeGetKubernetesPods(ctx, args)
 	case "deployments":
 		return e.executeGetKubernetesDeployments(ctx, args)
-	// Control operations
-	case "scale":
-		return e.executeKubernetesScale(ctx, args)
-	case "restart":
-		return e.executeKubernetesRestart(ctx, args)
-	case "delete_pod":
-		return e.executeKubernetesDeletePod(ctx, args)
-	case "exec":
-		return e.executeKubernetesExec(ctx, args)
 	case "logs":
 		return e.executeKubernetesLogs(ctx, args)
 	default:
-		return NewErrorResult(fmt.Errorf("unknown type: %s. Use: clusters, nodes, pods, deployments, scale, restart, delete_pod, exec, logs", resourceType)), nil
+		return NewErrorResult(fmt.Errorf("Kubernetes operation %q is unavailable; only clusters, nodes, pods, deployments, and logs are supported", resourceType)), nil
 	}
 }
 

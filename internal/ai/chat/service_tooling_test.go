@@ -296,8 +296,11 @@ func TestToolsForExecutionMode_AutonomousNonPatrolExposesGovernedTools(t *testin
 	if !set["pulse_storage"] {
 		t.Fatalf("expected storage tool to be exposed without prompt keyword routing")
 	}
-	if !set["pulse_control"] || !set["pulse_file_edit"] || !set["pulse_docker"] {
-		t.Fatalf("expected autonomous non-patrol mode to expose governed write tools")
+	if !set["pulse_control"] || !set["pulse_docker"] {
+		t.Fatalf("expected autonomous non-patrol mode to expose typed planning and read tools")
+	}
+	if set["pulse_file_edit"] {
+		t.Fatal("retired file mutation tool must not be exposed")
 	}
 	if set[pulseQuestionToolName] {
 		t.Fatalf("expected autonomous mode to exclude the interactive clarification tool")
@@ -321,7 +324,7 @@ func TestBuildSystemPrompt_DoesNotClaimGenericVMControl(t *testing.T) {
 	if !strings.Contains(prompt, "Not every VM or container supports control") {
 		t.Fatalf("expected system prompt to call out read-only resource platforms, got %q", prompt)
 	}
-	if !strings.Contains(prompt, "control only resources that explicitly support shared Pulse actions") {
+	if !strings.Contains(prompt, "Plans shared Pulse resource actions; approval and execution stay on the canonical action lifecycle") {
 		t.Fatalf("expected system prompt to describe capability-bound pulse_control usage, got %q", prompt)
 	}
 	if !strings.Contains(prompt, "## AVAILABLE TOOL GOVERNANCE") {
@@ -584,38 +587,19 @@ func testRunCommandToolDefinition() tools.Tool {
 
 func TestExecuteCommand_SuccessAndExitCode(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
-	exec.RegisterTool(tools.RegisteredTool{
-		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
-		Definition: testRunCommandToolDefinition(),
-		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
-			return tools.NewTextResult("Command failed (exit code 7): boom"), nil
-		},
-	})
-
 	svc := &Service{executor: exec}
 
 	output, code, err := svc.ExecuteCommand(context.Background(), "uptime", "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil || code != 1 {
+		t.Fatalf("expected retired command error with exit code 1, got output=%q code=%d err=%v", output, code, err)
 	}
-	if code != 7 {
-		t.Fatalf("expected exit code 7, got %d", code)
-	}
-	if !strings.Contains(output, "Command failed") {
-		t.Fatalf("expected command output, got: %s", output)
+	if !strings.Contains(output, "retired and denied") {
+		t.Fatalf("expected retirement output, got: %s", output)
 	}
 }
 
 func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
-	exec.RegisterTool(tools.RegisteredTool{
-		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
-		Definition: testRunCommandToolDefinition(),
-		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
-			return tools.NewErrorResult(context.Canceled), nil
-		},
-	})
-
 	svc := &Service{executor: exec}
 
 	_, code, err := svc.ExecuteCommand(context.Background(), "uptime", "")
@@ -623,51 +607,17 @@ func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 		t.Fatalf("expected error with exit code 1")
 	}
 
-	// Registry entries are append-only, so the approval scenario uses a
-	// fresh executor instead of swapping the handler in place.
-	approvalExec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
-	approvalExec.RegisterTool(tools.RegisteredTool{
-		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
-		Definition: testRunCommandToolDefinition(),
-		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
-			return tools.NewTextResult("APPROVAL_REQUIRED: requires approval"), nil
-		},
-	})
-	svc = &Service{executor: approvalExec}
-
-	_, _, err = svc.ExecuteCommand(context.Background(), "uptime", "")
-	if err == nil {
-		t.Fatalf("expected approval error")
-	}
 }
 
 func TestExecuteCommandUsesSharedResultTextProjection(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
-	exec.RegisterTool(tools.RegisteredTool{
-		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
-		Definition: testRunCommandToolDefinition(),
-		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
-			return tools.CallToolResult{
-				Content: []tools.Content{
-					{Type: "text", Text: "stdout"},
-					{Type: "resource", URI: "file://ignored"},
-					{Type: "text"},
-					{Type: "text", Text: "stderr"},
-				},
-			}, nil
-		},
-	})
-
 	svc := &Service{executor: exec}
 	output, code, err := svc.ExecuteCommand(context.Background(), "uptime", "")
-	if err != nil {
-		t.Fatalf("ExecuteCommand: %v", err)
+	if err == nil || code != 1 {
+		t.Fatalf("expected retired command denial, output=%q code=%d err=%v", output, code, err)
 	}
-	if code != 0 {
-		t.Fatalf("exit code = %d, want 0", code)
-	}
-	if output != "stdout\nstderr" {
-		t.Fatalf("output = %q, want shared result text projection", output)
+	if !strings.Contains(output, "retired and denied") {
+		t.Fatalf("output = %q, want retirement response", output)
 	}
 }
 

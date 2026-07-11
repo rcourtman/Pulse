@@ -243,6 +243,13 @@ type AppContainerActionProvider interface {
 	ExecuteAction(ctx context.Context, req AppContainerActionRequest) (*AppContainerActionResult, error)
 }
 
+// TypedActionPlanner is the only model-facing infrastructure mutation seam.
+// It can persist a canonical lifecycle plan but exposes no executor or
+// transport authority to the model tool runtime.
+type TypedActionPlanner interface {
+	PlanTypedAction(ctx context.Context, orgID string, req unifiedresources.ActionRequest) (*unifiedresources.ActionPlan, error)
+}
+
 // AppContainerReadRequest describes a canonical read-only diagnostic request
 // against an API-backed app-container resource.
 type AppContainerReadRequest struct {
@@ -472,6 +479,7 @@ type ExecutorConfig struct {
 	AppContainerActionProvider AppContainerActionProvider
 	AppContainerReadProvider   AppContainerReadProvider
 	ActionAuditStore           unifiedresources.ResourceStore
+	TypedActionPlanner         TypedActionPlanner
 	// Optional typed read access to current infrastructure state.
 	// When provided, tool handlers should prefer this over models.StateSnapshot iteration.
 	ReadState unifiedresources.ReadState
@@ -539,6 +547,7 @@ type PulseToolExecutor struct {
 	appContainerActionProvider AppContainerActionProvider
 	appContainerReadProvider   AppContainerReadProvider
 	actionAuditStore           unifiedresources.ResourceStore
+	typedActionPlanner         TypedActionPlanner
 	// onActionCompleted fires after a terminal-state action audit
 	// (Completed or Failed, including refused-before-dispatch
 	// failures) is persisted. Wired by the API layer through the
@@ -655,6 +664,7 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		appContainerActionProvider: cfg.AppContainerActionProvider,
 		appContainerReadProvider:   cfg.AppContainerReadProvider,
 		actionAuditStore:           cfg.ActionAuditStore,
+		typedActionPlanner:         cfg.TypedActionPlanner,
 		readState:                  cfg.ReadState,
 		controlLevel:               cfg.ControlLevel,
 		protectedGuests:            cfg.ProtectedGuests,
@@ -731,6 +741,7 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 		appContainerActionProvider:  e.appContainerActionProvider,
 		appContainerReadProvider:    e.appContainerReadProvider,
 		actionAuditStore:            e.actionAuditStore,
+		typedActionPlanner:          e.typedActionPlanner,
 		readState:                   e.readState,
 		controlLevel:                e.controlLevel,
 		protectedGuests:             append([]string(nil), e.protectedGuests...),
@@ -955,6 +966,11 @@ func (e *PulseToolExecutor) SetActionAuditStore(store unifiedresources.ResourceS
 	e.actionAuditStore = store
 }
 
+// SetTypedActionPlanner installs the canonical lifecycle planning boundary.
+func (e *PulseToolExecutor) SetTypedActionPlanner(planner TypedActionPlanner) {
+	e.typedActionPlanner = planner
+}
+
 // SetOnActionCompleted installs a fire-and-forget callback that runs
 // after every terminal-state action audit is persisted (Completed or
 // Failed, including refused-before-dispatch failures with stable
@@ -1130,7 +1146,7 @@ func (e *PulseToolExecutor) registerTools() {
 	// pulse_storage - pools, config, backups, snapshots, ceph, replication, pbs_jobs, raid, disk_health, resource_disks
 	e.registerStorageTools()
 
-	// pulse_docker - control, updates, check_updates, update, services, tasks, swarm
+	// pulse_docker - read-only updates/check/services/tasks/swarm state
 	e.registerDockerTools()
 
 	// pulse_kubernetes - clusters, nodes, pods, deployments
@@ -1143,12 +1159,8 @@ func (e *PulseToolExecutor) registerTools() {
 	// This is ALWAYS classified as ToolKindRead and never triggers VERIFYING
 	e.registerReadTools()
 
-	// pulse_control - guest control, run commands (requires control permission)
-	// NOTE: For read-only command execution, use pulse_read instead
+	// pulse_control - plan typed resource capabilities only
 	e.registerControlTools()
-
-	// pulse_file_edit - read, append, write files (requires control permission)
-	e.registerFileTools()
 
 	// pulse_discovery - get, run, list discoveries
 	e.registerDiscoveryTools()

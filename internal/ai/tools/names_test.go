@@ -22,7 +22,6 @@ func TestKnownToolNamesIncludesRegisteredTools(t *testing.T) {
 		agentcapabilities.PulseDockerToolName,
 		agentcapabilities.PulseKubernetesToolName,
 		agentcapabilities.PulseAlertsToolName,
-		agentcapabilities.PulseFileEditToolName,
 		agentcapabilities.PulseKnowledgeToolName,
 		agentcapabilities.PulsePMGToolName,
 		agentcapabilities.PulseQuestionToolName,
@@ -34,6 +33,12 @@ func TestKnownToolNamesIncludesRegisteredTools(t *testing.T) {
 		if !IsKnownToolName(name) {
 			t.Errorf("IsKnownToolName(%q) = false, want true", name)
 		}
+	}
+}
+
+func TestRetiredFileMutationToolIsNotKnown(t *testing.T) {
+	if IsKnownToolName(agentcapabilities.PulseFileEditToolName) {
+		t.Fatal("retired file mutation tool must not remain in the provider catalog")
 	}
 }
 
