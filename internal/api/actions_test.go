@@ -886,7 +886,7 @@ func TestHandleExecuteActionRejectsExpiredPlanAsFailedAudit(t *testing.T) {
 	}
 }
 
-func TestPersistActionPlanAuditFillsMissingLifecycleState(t *testing.T) {
+func TestPersistActionPlanAuditRejectsOrphanLifecycleState(t *testing.T) {
 	now := time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC)
 	store := unified.NewMemoryStore()
 	req := unified.ActionRequest{
@@ -918,30 +918,11 @@ func TestPersistActionPlanAuditFillsMissingLifecycleState(t *testing.T) {
 		t.Fatalf("seed lifecycle event: %v", err)
 	}
 
-	if err := actionlifecycle.PersistPlanAudit(store, req, plan); err != nil {
-		t.Fatalf("persistActionPlanAudit: %v", err)
+	if err := actionlifecycle.PersistPlanAudit(store, req, plan); err == nil {
+		t.Fatal("orphan lifecycle state must make atomic plan creation fail")
 	}
-	events, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
-	if err != nil {
-		t.Fatalf("GetActionLifecycleEvents: %v", err)
-	}
-	seenStates := map[unified.ActionState]bool{}
-	for _, event := range events {
-		seenStates[event.State] = true
-	}
-	if len(events) != 2 || !seenStates[unified.ActionStatePlanned] || !seenStates[unified.ActionStatePending] {
-		t.Fatalf("events = %#v, want one planned and one pending event", events)
-	}
-
-	if err := actionlifecycle.PersistPlanAudit(store, req, plan); err != nil {
-		t.Fatalf("persistActionPlanAudit retry: %v", err)
-	}
-	events, err = store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
-	if err != nil {
-		t.Fatalf("GetActionLifecycleEvents retry: %v", err)
-	}
-	if len(events) != 2 {
-		t.Fatalf("retry duplicated lifecycle events: %#v", events)
+	if _, found, err := store.GetActionAudit(plan.ActionID); err != nil || found {
+		t.Fatalf("atomic creation left audit behind: found=%v err=%v", found, err)
 	}
 }
 

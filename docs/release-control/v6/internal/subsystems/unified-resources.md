@@ -2883,9 +2883,15 @@ That same shared store now also persists append-only action lifecycle, action
 audit, and export audit records, giving the control-plane verbs a durable home
 next to the resource timeline instead of leaving those records isolated in
 memory-only models.
-The in-memory store mirrors the durable audit contract by upserting action
-audits on action ID, so tests and runtime callers observe the same current
-record state that SQLite persists for the control-plane execution trail.
+The in-memory store mirrors the durable audit contract through atomic
+create-or-return-current action identity and monotonic typed transitions; it
+must never replace an existing action record merely because an ID collides.
+SQLite uses insert-on-conflict-do-nothing for creation and conditional state
+updates for transitions, with the lifecycle event committed in the same
+transaction. Both stores treat rejected, completed, and failed states as
+absorbing and admit exactly one successful transition to executing. Lifecycle
+events are unique per action and state, with migration deduplication for rows
+written before this invariant became database-enforced.
 It also mirrors the durable decision contract: approval/rejection writes must
 target an existing pending action and must fail rather than creating a
 decision-only record or overwriting an already decided action.

@@ -223,7 +223,7 @@ func (s *testInvestigationStore) CountFixed() int             { return 0 }
 func (s *testInvestigationStore) Cleanup(_ time.Duration) int { return 0 }
 func (s *testInvestigationStore) EnforceSizeLimit(_ int) int  { return 0 }
 
-func TestReconcilePatrolActionTransitionUsesAuthoritativeAudit(t *testing.T) {
+func TestPatrolActionReconciliationCannotRegressFromOutOfOrderCallback(t *testing.T) {
 	investigations := newTestInvestigationStore()
 	investigation := investigations.Create("finding-1", "session-1")
 	audits := unifiedresources.NewMemoryStore()
@@ -234,15 +234,12 @@ func TestReconcilePatrolActionTransitionUsesAuthoritativeAudit(t *testing.T) {
 		Plan:    unifiedresources.ActionPlan{ActionID: "act-1", RequestID: "proposal-1", Allowed: true, RequiresApproval: true},
 		Origin:  &unifiedresources.ActionOrigin{Surface: patrolActionOriginSurface, FindingID: "finding-1", InvestigationID: investigation.ID, ProposalID: "proposal-1"},
 	}
-	if err := audits.RecordActionAudit(pending); err != nil {
-		t.Fatalf("RecordActionAudit(pending): %v", err)
-	}
 	completed := pending
 	completed.State = unifiedresources.ActionStateCompleted
 	completed.UpdatedAt = now.Add(time.Second)
 	completed.VerificationOutcome = unifiedresources.VerificationOutcome{Status: unifiedresources.VerificationVerified}
-	if err := audits.RecordActionAudit(completed); err != nil {
-		t.Fatalf("RecordActionAudit(completed): %v", err)
+	if _, _, err := audits.CreateActionAudit(completed, nil); err != nil {
+		t.Fatalf("CreateActionAudit(completed): %v", err)
 	}
 
 	handler := &AISettingsHandler{
@@ -260,19 +257,31 @@ func TestReconcilePatrolActionTransitionUsesAuthoritativeAudit(t *testing.T) {
 	}
 }
 
-func TestHydratePatrolInvestigationActionRepairsMissedCallbackByOrigin(t *testing.T) {
+func TestPatrolActionReconciliationHydratesTerminalAuditAfterRestart(t *testing.T) {
 	investigations := newTestInvestigationStore()
 	investigation := investigations.Create("finding-1", "session-1")
-	audits := unifiedresources.NewMemoryStore()
+	dir := t.TempDir()
+	audits, err := unifiedresources.NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
 	record := unifiedresources.ActionAuditRecord{
 		ID: "act-missed", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), State: unifiedresources.ActionStateRejected,
 		Request: unifiedresources.ActionRequest{RequestID: "proposal-1", ResourceID: "vm:42", CapabilityName: "restart", RequestedBy: "pulse_patrol"},
 		Plan:    unifiedresources.ActionPlan{ActionID: "act-missed", RequestID: "proposal-1", Allowed: true, RequiresApproval: true},
 		Origin:  &unifiedresources.ActionOrigin{Surface: patrolActionOriginSurface, FindingID: "finding-1", InvestigationID: investigation.ID, ProposalID: "proposal-1"},
 	}
-	if err := audits.RecordActionAudit(record); err != nil {
-		t.Fatalf("RecordActionAudit: %v", err)
+	if _, _, err := audits.CreateActionAudit(record, nil); err != nil {
+		t.Fatalf("CreateActionAudit: %v", err)
 	}
+	if err := audits.Close(); err != nil {
+		t.Fatal(err)
+	}
+	audits, err = unifiedresources.NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer audits.Close()
 	handler := &AISettingsHandler{
 		investigationStores:   map[string]aicontracts.InvestigationStore{"default": investigations},
 		resourceStoreProvider: func(string) (unifiedresources.ResourceStore, error) { return audits, nil },

@@ -69,6 +69,19 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
+func TestProductionActionLifecycleDoesNotUseRecordActionAuditAsUpsert(t *testing.T) {
+	paths := []string{"../actionlifecycle/service.go", "../ai/tools/action_audit.go", "../api/patrol_action_broker.go"}
+	for _, path := range paths {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if strings.Contains(string(src), ".RecordActionAudit(") {
+			t.Errorf("%s must use CreateActionAudit or a typed CAS transition", path)
+		}
+	}
+}
+
 // readConsumerGoFiles returns the contents of all non-test .go files in the
 // specified directory (relative to the repo internal/ root).
 func readConsumerGoFiles(t *testing.T, relDir string) map[string]string {

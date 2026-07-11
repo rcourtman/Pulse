@@ -1738,6 +1738,13 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+Agent dispatch begins only after the canonical action store wins and commits
+the transition to `executing`. Concurrent replay, another SQLite connection,
+or a process restart cannot obtain a second executor admission for that action.
+This contract intentionally does not claim exactly-once infrastructure effects
+after a crash; durable attempt recovery and downstream effect reconciliation
+remain the action-continuity layer's responsibility.
+
 Deploy fan-out concurrency is one shared protocol contract in
 `internal/agentexec`: server request normalization and host-agent semaphore
 allocation both cap `max_parallel` at the same bound, including payloads that

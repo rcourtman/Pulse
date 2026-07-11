@@ -61,6 +61,38 @@ import (
 	tmock "github.com/stretchr/testify/mock"
 )
 
+func TestContract_ActionLifecycleReplayIsCreateOnceAndMonotonic(t *testing.T) {
+	service, err := os.ReadFile("../actionlifecycle/service.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := os.ReadFile("../unifiedresources/store.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(service), "CreateActionAudit(record, events)") {
+		t.Fatal("planning must atomically create the audit and initial events")
+	}
+	for _, required := range []string{"ON CONFLICT(id) DO NOTHING", "updateActionAuditSQL", "idx_action_lifecycle_events_action_state_unique"} {
+		if !strings.Contains(string(store), required) {
+			t.Errorf("store missing %q", required)
+		}
+	}
+}
+
+func TestContract_ActionExecutorAdmissionRequiresExecutingCASWinner(t *testing.T) {
+	service, err := os.ReadFile("../actionlifecycle/service.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(service)
+	start := strings.Index(src, "store.RecordActionExecutionStart(started, startEvent)")
+	dispatch := strings.Index(src, "s.Executor.ExecuteAction(ctx, started)")
+	if start < 0 || dispatch < 0 || start > dispatch {
+		t.Fatal("executor dispatch must occur only after the executing-state CAS")
+	}
+}
+
 type resourceContractSnapshot struct {
 	ID   string
 	Name string
@@ -15802,14 +15834,11 @@ func TestContract_ExecutorPostCompletionCallback(t *testing.T) {
 	if !strings.Contains(auditSrc, "go cb(record)") {
 		t.Error("post-completion callback must run on its own goroutine to keep the dispatch hot path off any consumer's slowness")
 	}
-	// Pin that all four terminal sites call publishActionCompleted.
+	// Pin the terminal persistence sites and the shared completion publisher.
 	terminalSites := []string{
-		`e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, "plan drift refused")
-			e.publishActionCompleted(record)`,
-		`e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, remediationLockLifecycleMessage(refusal))` +
-			"\n\t" + `e.publishActionCompleted(record)`,
-		`e.recordActionLifecycle(record.ID, record.State, actor, message)
-		e.publishActionCompleted(record)`,
+		`persistFailedActionAudit(e.actionAuditStore, record, requestedBy, "plan drift refused")`,
+		`e.actionAuditStore.RecordActionExecutionResult(completed, event)`,
+		`persistFailedActionAudit(e.actionAuditStore, record, requestedBy, remediationLockLifecycleMessage(refusal))`,
 	}
 	for _, site := range terminalSites {
 		if !strings.Contains(auditSrc, site) {

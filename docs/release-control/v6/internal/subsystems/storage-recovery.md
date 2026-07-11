@@ -1682,6 +1682,12 @@ must not treat starter
 
 ## Current State
 
+Storage and recovery consumers inherit create-once action identity, monotonic
+terminal state, and exactly-one executor admission from the shared lifecycle.
+They must not retry an `executing` action as a new dispatch after restart;
+recovery must resolve the existing attempt through the separately governed
+continuity contract.
+
 Unified Agent lifecycle fields added to the shared host and connections API are
 adjacent monitoring/API state only. Applied config fingerprints, updater
 status, and Host, Docker/Podman, or Kubernetes module readiness do not become

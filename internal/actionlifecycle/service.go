@@ -35,11 +35,12 @@ type AvailabilityChecker interface {
 // structural subset of unified.ResourceStore so the canonical store
 // satisfies it without adaptation.
 type Store interface {
-	RecordActionAudit(record unified.ActionAuditRecord) error
+	CreateActionAudit(record unified.ActionAuditRecord, initialEvents []unified.ActionLifecycleEvent) (unified.ActionAuditRecord, bool, error)
 	GetActionAudit(actionID string) (unified.ActionAuditRecord, bool, error)
 	RecordActionDecision(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
 	RecordActionExecutionStart(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
 	RecordActionExecutionResult(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
+	RecordActionExecutionRefusal(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
 	RecordActionLifecycleEvent(event unified.ActionLifecycleEvent) error
 	GetActionLifecycleEvents(actionID string, since time.Time, limit int) ([]unified.ActionLifecycleEvent, error)
 	GetResourceOperatorState(canonicalID string) (unified.ResourceOperatorState, bool, error)
@@ -264,17 +265,12 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 	if err != nil {
 		return unified.ActionPlan{}, err
 	}
-	if existing, found, queryErr := store.GetActionAudit(plan.ActionID); queryErr != nil {
-		return unified.ActionPlan{}, &QueryError{Op: "idempotent action audit", Err: queryErr}
-	} else if found {
-		// Replayed proposals must never rewind an approved, executing, or
-		// terminal action back to its initial plan state. The deterministic
-		// action id already binds request, resource, and capability policy.
-		return existing.Plan, nil
-	}
-	record, err := persistPlanAudit(store, req, plan, opts.Origin)
+	record, created, err := persistPlanAudit(store, req, plan, opts.Origin)
 	if err != nil {
 		return unified.ActionPlan{}, &PersistError{Op: "action plan audit", Err: err}
+	}
+	if !created {
+		return record.Plan, nil
 	}
 	s.publishTransition(orgID, record)
 	return plan, nil
@@ -334,11 +330,11 @@ func (s *Service) Capabilities(ctx context.Context, orgID, resourceID string) ([
 // initial lifecycle events, deduplicating states that were already
 // recorded for the same action ID (idempotent replans).
 func PersistPlanAudit(store Store, req unified.ActionRequest, plan unified.ActionPlan) error {
-	_, err := persistPlanAudit(store, req, plan, nil)
+	_, _, err := persistPlanAudit(store, req, plan, nil)
 	return err
 }
 
-func persistPlanAudit(store Store, req unified.ActionRequest, plan unified.ActionPlan, origin *unified.ActionOrigin) (unified.ActionAuditRecord, error) {
+func persistPlanAudit(store Store, req unified.ActionRequest, plan unified.ActionPlan, origin *unified.ActionOrigin) (unified.ActionAuditRecord, bool, error) {
 	state := PlannedActionState(plan)
 	record := unified.ActionAuditRecord{
 		ID:        plan.ActionID,
@@ -349,42 +345,25 @@ func persistPlanAudit(store Store, req unified.ActionRequest, plan unified.Actio
 		Plan:      plan,
 		Origin:    unified.NormalizeActionOrigin(origin),
 	}
-	if err := store.RecordActionAudit(record); err != nil {
-		return unified.ActionAuditRecord{}, err
-	}
-
-	existingEvents, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 100)
-	if err != nil {
-		return unified.ActionAuditRecord{}, err
-	}
-	seenStates := map[unified.ActionState]bool{}
-	for _, event := range existingEvents {
-		seenStates[event.State] = true
-	}
-
-	if !seenStates[unified.ActionStatePlanned] {
-		if err := store.RecordActionLifecycleEvent(unified.ActionLifecycleEvent{
+	events := []unified.ActionLifecycleEvent{
+		{
 			ActionID:  plan.ActionID,
 			Timestamp: plan.PlannedAt,
 			State:     unified.ActionStatePlanned,
 			Actor:     req.RequestedBy,
 			Message:   "Action plan created.",
-		}); err != nil {
-			return unified.ActionAuditRecord{}, err
-		}
+		},
 	}
-	if state != unified.ActionStatePlanned && !seenStates[state] {
-		if err := store.RecordActionLifecycleEvent(unified.ActionLifecycleEvent{
+	if state != unified.ActionStatePlanned {
+		events = append(events, unified.ActionLifecycleEvent{
 			ActionID:  plan.ActionID,
 			Timestamp: plan.PlannedAt,
 			State:     state,
 			Actor:     req.RequestedBy,
 			Message:   "Action is waiting for approval before execution.",
-		}); err != nil {
-			return unified.ActionAuditRecord{}, err
-		}
+		})
 	}
-	return record, nil
+	return store.CreateActionAudit(record, events)
 }
 
 // PlannedActionState is the initial audit state for a fresh plan: pending
@@ -417,6 +396,14 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, approval u
 	if !ok {
 		return unified.ActionAuditRecord{}, &ActionNotFoundError{ActionID: actionID}
 	}
+	if record.State != unified.ActionStatePending {
+		for _, existing := range record.Approvals {
+			if existing.Outcome == approval.Outcome {
+				return record, nil
+			}
+		}
+		return unified.ActionAuditRecord{}, unified.ErrActionNotPending
+	}
 
 	now := s.now()
 	if approval.Timestamp.IsZero() {
@@ -428,6 +415,14 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, approval u
 	}
 	if err := store.RecordActionDecision(updated, event); err != nil {
 		if errors.Is(err, unified.ErrActionNotPending) {
+			current, found, queryErr := store.GetActionAudit(actionID)
+			if queryErr == nil && found {
+				for _, existing := range current.Approvals {
+					if existing.Outcome == approval.Outcome {
+						return current, nil
+					}
+				}
+			}
 			return unified.ActionAuditRecord{}, err
 		}
 		return unified.ActionAuditRecord{}, &PersistError{Op: "action decision", Err: err}
@@ -457,6 +452,9 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 	}
 	if !ok {
 		return unified.ActionAuditRecord{}, &ActionNotFoundError{ActionID: actionID}
+	}
+	if record.State == unified.ActionStateExecuting || record.State == unified.ActionStateCompleted || record.State == unified.ActionStateFailed {
+		return record, nil
 	}
 
 	now := s.now()
@@ -508,8 +506,15 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 		startEvent.Message = "Action execution started: " + reason
 	}
 	if err := store.RecordActionExecutionStart(started, startEvent); err != nil {
+		if errors.Is(err, unified.ErrActionAlreadyExecuting) || errors.Is(err, unified.ErrActionExecutionFinal) {
+			current, found, queryErr := store.GetActionAudit(actionID)
+			if queryErr == nil && found {
+				return current, nil
+			}
+		}
 		return unified.ActionAuditRecord{}, &PersistError{Op: "action execution start", Err: err}
 	}
+	s.publishTransition(orgID, started)
 
 	result, execErr := s.Executor.ExecuteAction(ctx, started)
 	if execErr != nil {
@@ -597,10 +602,7 @@ func RecordRefusedExecution(store Store, record unified.ActionAuditRecord, actor
 	if store == nil {
 		return unified.ActionAuditRecord{}, errors.New("action audit store unavailable")
 	}
-	if err := store.RecordActionAudit(failed); err != nil {
-		return unified.ActionAuditRecord{}, err
-	}
-	if err := store.RecordActionLifecycleEvent(event); err != nil {
+	if err := store.RecordActionExecutionRefusal(failed, event); err != nil {
 		return unified.ActionAuditRecord{}, err
 	}
 	return failed, nil

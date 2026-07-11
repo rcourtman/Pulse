@@ -4135,6 +4135,85 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA36",
+      "summary": "Deterministic governed-action replay is create-once and monotonic: concurrent identical proposals return the authoritative current audit, terminal states cannot rewind, record and lifecycle events commit atomically, and exactly one successful transition to executing may admit the executor.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6",
+        "L13",
+        "L20"
+      ],
+      "subsystem_ids": [
+        "api-contracts",
+        "unified-resources"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "ra36-action-lifecycle-contract",
+          "run": [
+            "go",
+            "test",
+            "./internal/unifiedresources",
+            "./internal/api",
+            "-run",
+            "TestProductionActionLifecycleDoesNotUseRecordActionAuditAsUpsert|TestContract_ActionLifecycleReplayIsCreateOnceAndMonotonic|TestContract_ActionExecutorAdmissionRequiresExecutingCASWinner",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "ra36-atomic-action-lifecycle",
+          "run": [
+            "go",
+            "test",
+            "./internal/unifiedresources",
+            "./internal/actionlifecycle",
+            "./internal/api",
+            "-run",
+            "TestMemoryStoreCreateActionAuditConcurrentReturnsCurrent|TestSQLiteStoreCreateActionAuditConcurrentAcrossTwoInstances|TestSQLiteStoreActionTransitionCASAcrossTwoInstances|TestSQLiteStoreConcurrentExecutionStartAcrossTwoInstancesHasOneWinner|TestSQLiteStoreCreateActionAuditRollsBackWhenInitialEventInsertFails|TestSQLiteStoreActionTransitionRollsBackWhenEventInsertFails|TestSQLiteStoreLifecycleRestartPreservesMonotonicState|TestSQLiteStoreRestartDoesNotReadmitExecutingAction|TestConcurrentPlanReplayCannotRewindTerminalActionMemoryStore|TestConcurrentPlanReplayCannotRewindTerminalActionSQLiteStore|TestConcurrentExecuteAdmitsExecutorExactlyOnceMemoryStore|TestConcurrentExecuteAdmitsExecutorExactlyOnceSQLiteStore|TestPlanReplayRejectsConflictingOriginForDeterministicActionID|TestPatrolActionBrokerBarrierReplayAdmitsExecutorExactlyOnce|TestPatrolActionBrokerTerminalReplayPreservesAuditAndEvents|TestPatrolActionReconciliationHydratesTerminalAuditAfterRestart|TestPatrolActionReconciliationCannotRegressFromOutOfOrderCallback",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/actionlifecycle/service.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/actionlifecycle/service_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/patrol_action_broker_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/actions.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {

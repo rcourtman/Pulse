@@ -7297,3 +7297,12 @@ action path. `ActionPlanInfo` carries canonical preflight detail across the
 broker boundary. Transition publication is org-scoped, persistence precedes
 publication, and API reconciliation treats the callback payload only as an id
 to re-read from the action lifecycle store.
+Planning uses atomic `CreateActionAudit` with its initial lifecycle events; it
+does not perform a separate existence read followed by an upsert. Identical
+replay returns the authoritative current plan and disposition, while a
+deterministic action-ID collision with different stable request, plan hash, or
+broker-owned origin fails without a write. Decision, refusal, execution-start,
+and execution-result writes are conditional state transitions whose event and
+record update commit together. Only the successful execution-start CAS winner
+may call the executor; a concurrent or post-restart duplicate returns the
+current executing or terminal record without another admission.

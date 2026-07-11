@@ -3,12 +3,255 @@ package actionlifecycle
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+type delayedCreateStore struct {
+	unified.ResourceStore
+	calls         atomic.Int32
+	secondArrived chan struct{}
+	releaseSecond chan struct{}
+}
+
+func (s *delayedCreateStore) CreateActionAudit(record unified.ActionAuditRecord, events []unified.ActionLifecycleEvent) (unified.ActionAuditRecord, bool, error) {
+	if s.calls.Add(1) == 2 {
+		close(s.secondArrived)
+		<-s.releaseSecond
+	}
+	return s.ResourceStore.CreateActionAudit(record, events)
+}
+
+type blockingExecutor struct {
+	calls   atomic.Int32
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (e *blockingExecutor) ExecuteAction(_ context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
+	if e.calls.Add(1) == 1 {
+		close(e.entered)
+	}
+	<-e.release
+	return &unified.ExecutionResult{Success: true, Output: record.ID}, nil
+}
+
+func serviceForStore(t *testing.T, store unified.ResourceStore, resource unified.Resource, executor Executor) *Service {
+	t.Helper()
+	registry := unified.NewRegistry(store)
+	registry.IngestResources([]unified.Resource{resource})
+	return &Service{
+		Registry: func(string) (*unified.ResourceRegistry, error) { return registry, nil },
+		Store:    func(string) (Store, error) { return store, nil },
+		Executor: executor,
+	}
+}
+
+func runConcurrentPlanReplayCannotRewindTerminalAction(t *testing.T, store unified.ResourceStore) {
+	t.Helper()
+	delayed := &delayedCreateStore{ResourceStore: store, secondArrived: make(chan struct{}), releaseSecond: make(chan struct{})}
+	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
+	service := serviceForStore(t, delayed, testResource(time.Now().UTC(), unified.ApprovalAdmin), executor)
+	firstPlan, err := service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondResult := make(chan error, 1)
+	go func() { _, err := service.Plan(context.Background(), "default", restartRequest()); secondResult <- err }()
+	<-delayed.secondArrived
+	if _, err := service.Decide(context.Background(), "default", firstPlan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Execute(context.Background(), "default", firstPlan.ActionID, "operator", "proof"); err != nil {
+		t.Fatal(err)
+	}
+	close(delayed.releaseSecond)
+	if err := <-secondResult; err != nil {
+		t.Fatal(err)
+	}
+	current, found, err := store.GetActionAudit(firstPlan.ActionID)
+	if err != nil || !found || current.State != unified.ActionStateCompleted {
+		t.Fatalf("current=%#v found=%v err=%v", current, found, err)
+	}
+	if executor.calls != 1 {
+		t.Fatalf("executor calls=%d, want 1", executor.calls)
+	}
+}
+
+func TestConcurrentPlanReplayCannotRewindTerminalActionMemoryStore(t *testing.T) {
+	runConcurrentPlanReplayCannotRewindTerminalAction(t, unified.NewMemoryStore())
+}
+
+func TestConcurrentPlanReplayCannotRewindTerminalActionSQLiteStore(t *testing.T) {
+	store, err := unified.NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	runConcurrentPlanReplayCannotRewindTerminalAction(t, store)
+}
+
+func runConcurrentExecuteAdmitsExecutorExactlyOnce(t *testing.T, store unified.ResourceStore) {
+	t.Helper()
+	executor := &blockingExecutor{entered: make(chan struct{}), release: make(chan struct{})}
+	service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
+	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := make(chan error, 1)
+	go func() {
+		_, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", "first")
+		first <- err
+	}()
+	<-executor.entered
+	secondRecord, secondErr := service.Execute(context.Background(), "default", plan.ActionID, "operator", "second")
+	if secondErr != nil {
+		t.Fatalf("duplicate Execute: %v", secondErr)
+	}
+	if secondRecord.State != unified.ActionStateExecuting {
+		t.Fatalf("duplicate state=%q", secondRecord.State)
+	}
+	close(executor.release)
+	if err := <-first; err != nil {
+		t.Fatal(err)
+	}
+	if executor.calls.Load() != 1 {
+		t.Fatalf("executor calls=%d, want 1", executor.calls.Load())
+	}
+}
+
+func TestConcurrentExecuteAdmitsExecutorExactlyOnceMemoryStore(t *testing.T) {
+	runConcurrentExecuteAdmitsExecutorExactlyOnce(t, unified.NewMemoryStore())
+}
+
+func TestConcurrentExecuteAdmitsExecutorExactlyOnceSQLiteStore(t *testing.T) {
+	store, err := unified.NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	runConcurrentExecuteAdmitsExecutorExactlyOnce(t, store)
+}
+
+func TestPlanReplayReturnsAuthoritativeApprovedExecutingAndTerminalRecords(t *testing.T) {
+	states := []unified.ActionState{unified.ActionStateApproved, unified.ActionStateExecuting, unified.ActionStateRejected, unified.ActionStateCompleted, unified.ActionStateFailed}
+	for _, state := range states {
+		t.Run(string(state), func(t *testing.T) {
+			store := unified.NewMemoryStore()
+			service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalAdmin), &stubExecutor{})
+			plan, err := service.Plan(context.Background(), "default", restartRequest())
+			if err != nil {
+				t.Fatal(err)
+			}
+			record, _, _ := store.GetActionAudit(plan.ActionID)
+			decisionOutcome := unified.OutcomeApproved
+			if state == unified.ActionStateRejected {
+				decisionOutcome = unified.OutcomeRejected
+			}
+			decided, decisionEvent, err := unified.ApplyActionDecision(record, unified.ActionApprovalRecord{Actor: "operator", Outcome: decisionOutcome}, time.Now().UTC())
+			if err != nil || store.RecordActionDecision(decided, decisionEvent) != nil {
+				t.Fatalf("decision: %v", err)
+			}
+			if state != unified.ActionStateApproved && state != unified.ActionStateRejected {
+				started, startEvent, err := unified.BeginActionExecution(decided, "operator", time.Now().UTC())
+				if err != nil || store.RecordActionExecutionStart(started, startEvent) != nil {
+					t.Fatalf("start: %v", err)
+				}
+				if state == unified.ActionStateCompleted || state == unified.ActionStateFailed {
+					result := &unified.ExecutionResult{Success: state == unified.ActionStateCompleted}
+					completed, doneEvent, err := unified.CompleteActionExecution(started, result, "operator", time.Now().UTC())
+					if err != nil || store.RecordActionExecutionResult(completed, doneEvent) != nil {
+						t.Fatalf("complete: %v", err)
+					}
+				}
+			}
+			returned, err := service.Plan(context.Background(), "default", restartRequest())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if returned.ActionID != plan.ActionID {
+				t.Fatalf("action id=%q", returned.ActionID)
+			}
+			current, _, _ := store.GetActionAudit(plan.ActionID)
+			if current.State != state {
+				t.Fatalf("state=%q want=%q", current.State, state)
+			}
+		})
+	}
+}
+
+func TestPlanReplayRejectsConflictingOriginForDeterministicActionID(t *testing.T) {
+	store := unified.NewMemoryStore()
+	service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalAdmin), &stubExecutor{})
+	first := PlanOptions{Origin: &unified.ActionOrigin{Surface: "patrol", FindingID: "finding-1", InvestigationID: "inv-1", ProposalID: "proposal-1"}}
+	if _, err := service.PlanWithOptions(context.Background(), "default", restartRequest(), first); err != nil {
+		t.Fatal(err)
+	}
+	conflict := first
+	conflict.Origin = &unified.ActionOrigin{Surface: "patrol", FindingID: "finding-2", InvestigationID: "inv-2", ProposalID: "proposal-1"}
+	if _, err := service.PlanWithOptions(context.Background(), "default", restartRequest(), conflict); !errors.Is(err, unified.ErrActionIdentityConflict) {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestExecutePublishesPersistedExecutingTransition(t *testing.T) {
+	store := unified.NewMemoryStore()
+	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
+	service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
+	var states []unified.ActionState
+	service.OnActionTransition = func(_ string, record unified.ActionAuditRecord) { states = append(states, record.State) }
+	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", ""); err != nil {
+		t.Fatal(err)
+	}
+	want := []unified.ActionState{unified.ActionStatePlanned, unified.ActionStateExecuting, unified.ActionStateCompleted}
+	if len(states) != len(want) {
+		t.Fatalf("states=%v", states)
+	}
+	for i := range want {
+		if states[i] != want[i] {
+			t.Fatalf("states=%v want=%v", states, want)
+		}
+	}
+}
+
+func TestExecuteAfterSQLiteRestartDoesNotReadmitExecutingAction(t *testing.T) {
+	dir := t.TempDir()
+	first, err := unified.NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
+	service := serviceForStore(t, first, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
+	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, _, _ := first.GetActionAudit(plan.ActionID)
+	started, event, _ := unified.BeginActionExecution(record, "operator", time.Now().UTC())
+	if err := first.RecordActionExecutionStart(started, event); err != nil {
+		t.Fatal(err)
+	}
+	first.Close()
+	second, err := unified.NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	service = serviceForStore(t, second, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
+	current, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", "retry")
+	if err != nil || current.State != unified.ActionStateExecuting || executor.calls != 0 {
+		t.Fatalf("current=%#v err=%v calls=%d", current, err, executor.calls)
+	}
+}
 
 type stubExecutor struct {
 	result    *unified.ExecutionResult
@@ -474,7 +717,7 @@ func TestOnActionTransitionFiresAfterEachPersistedState(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 
-	want := []unified.ActionState{unified.ActionStatePending, unified.ActionStateApproved, unified.ActionStateCompleted}
+	want := []unified.ActionState{unified.ActionStatePending, unified.ActionStateApproved, unified.ActionStateExecuting, unified.ActionStateCompleted}
 	if len(transitions) != len(want) {
 		t.Fatalf("transitions = %v, want %v", transitions, want)
 	}

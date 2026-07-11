@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,6 +17,107 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
+
+type barrierPatrolExecutor struct {
+	calls   atomic.Int32
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (e *barrierPatrolExecutor) ExecuteAction(_ context.Context, _ unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
+	if e.calls.Add(1) == 1 {
+		close(e.entered)
+	}
+	<-e.release
+	return &unified.ExecutionResult{Success: true}, nil
+}
+
+func configurePatrolAutoAuthorization(t *testing.T, h *ResourceHandlers) {
+	t.Helper()
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetResourceOperatorState(unified.ResourceOperatorState{CanonicalID: "vm:42", AutoRemediationPolicy: unified.AutoRemediationPolicy{Enabled: true, CapabilityNames: []string{"restart"}}, SetAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPatrolActionBrokerBarrierReplayAdmitsExecutorExactlyOnce(t *testing.T) {
+	h, _ := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	executor := &barrierPatrolExecutor{entered: make(chan struct{}), release: make(chan struct{})}
+	h.SetActionExecutor(executor)
+	configurePatrolAutoAuthorization(t, h)
+	broker := NewPatrolActionBroker("default", h, func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+		return PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "assisted"}, nil
+	})
+	first := make(chan error, 1)
+	go func() { _, err := broker.Submit(context.Background(), patrolTestProposal()); first <- err }()
+	<-executor.entered
+	secondDisposition, secondErr := broker.Submit(context.Background(), patrolTestProposal())
+	if secondErr != nil {
+		t.Fatalf("second Submit: %v", secondErr)
+	}
+	if secondDisposition.State != string(unified.ActionStateExecuting) {
+		t.Fatalf("second state=%q", secondDisposition.State)
+	}
+	close(executor.release)
+	if err := <-first; err != nil {
+		t.Fatal(err)
+	}
+	if executor.calls.Load() != 1 {
+		t.Fatalf("executor calls=%d, want 1", executor.calls.Load())
+	}
+}
+
+func TestPatrolActionBrokerReplayDuringExecutionReturnsCurrentDisposition(t *testing.T) {
+	TestPatrolActionBrokerBarrierReplayAdmitsExecutorExactlyOnce(t)
+}
+
+func TestPatrolActionBrokerTerminalReplayPreservesAuditAndEvents(t *testing.T) {
+	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	configurePatrolAutoAuthorization(t, h)
+	broker := NewPatrolActionBroker("default", h, func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+		return PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "assisted"}, nil
+	})
+	first, err := broker.Submit(context.Background(), patrolTestProposal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, _ := h.getStore("default")
+	before, err := store.GetActionLifecycleEvents(first.ActionID, time.Time{}, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := broker.Submit(context.Background(), patrolTestProposal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := store.GetActionLifecycleEvents(first.ActionID, time.Time{}, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.State != string(unified.ActionStateCompleted) || len(after) != len(before) || executor.calls != 1 {
+		t.Fatalf("second=%#v events=%d/%d calls=%d", second, len(before), len(after), executor.calls)
+	}
+}
+
+func TestPatrolActionBrokerConflictingOriginReplayFailsWithoutDispatch(t *testing.T) {
+	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	broker := NewPatrolActionBroker("default", h)
+	if _, err := broker.Submit(context.Background(), patrolTestProposal()); err != nil {
+		t.Fatal(err)
+	}
+	conflict := patrolTestProposal()
+	conflict.FindingID = "finding-2"
+	conflict.InvestigationID = "inv-2"
+	if _, err := broker.Submit(context.Background(), conflict); !errors.Is(err, unified.ErrActionIdentityConflict) {
+		t.Fatalf("error=%v", err)
+	}
+	if executor.calls != 0 {
+		t.Fatalf("executor calls=%d", executor.calls)
+	}
+}
 
 func newPatrolBrokerTestHandlers(t *testing.T, minimumApproval unified.ActionApprovalLevel) (*ResourceHandlers, *stubActionExecutor) {
 	return newPatrolBrokerTestHandlersWithEligibility(t, minimumApproval, unified.AutoAuthorizeLowRisk)

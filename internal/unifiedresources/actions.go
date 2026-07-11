@@ -1,6 +1,8 @@
 package unifiedresources
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -321,7 +323,32 @@ var (
 	ErrActionDryRunOnly          = errors.New("action plan is dry-run only")
 	ErrActionExecutionRefusal    = errors.New("action execution refusal is not a permanent terminal refusal")
 	ErrInvalidApprovalOutcome    = errors.New("invalid approval outcome")
+	ErrActionAuditAlreadyExists  = errors.New("action audit already exists")
+	ErrActionIdentityConflict    = errors.New("action audit identity conflicts with the persisted record")
 )
+
+// ActionAuditIdentityMatches reports whether a replay addresses the same
+// immutable governed action. Lifecycle state, timestamps, approvals, results,
+// and verification are deliberately excluded because the persisted record is
+// authoritative for those mutable fields.
+func ActionAuditIdentityMatches(existing, replay ActionAuditRecord) bool {
+	existing, existingErr := NormalizeActionAuditRecord(existing)
+	replay, replayErr := NormalizeActionAuditRecord(replay)
+	if existingErr != nil || replayErr != nil {
+		return false
+	}
+	return existing.ID == replay.ID &&
+		existing.Plan.ActionID == replay.Plan.ActionID &&
+		existing.Plan.PlanHash == replay.Plan.PlanHash &&
+		canonicalActionIdentityJSONEqual(existing.Request, replay.Request) &&
+		canonicalActionIdentityJSONEqual(existing.Origin, replay.Origin)
+}
+
+func canonicalActionIdentityJSONEqual(left, right any) bool {
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
+}
 
 // ApplyActionDecision records an explicit approval or rejection against a
 // pending governed action without starting execution. Execution remains a
@@ -577,6 +604,13 @@ func ValidateActionExecutionStart(record ActionAuditRecord, now time.Time) error
 // deterministic defaults, but rejects records that cannot identify the action,
 // state, resource, capability, or requester.
 func NormalizeActionAuditRecord(record ActionAuditRecord) (ActionAuditRecord, error) {
+	if record.Plan.Preflight != nil {
+		preflight := *record.Plan.Preflight
+		preflight.SafetyChecks = append([]string(nil), record.Plan.Preflight.SafetyChecks...)
+		preflight.VerificationSteps = append([]string(nil), record.Plan.Preflight.VerificationSteps...)
+		record.Plan.Preflight = &preflight
+	}
+	record.Approvals = append([]ActionApprovalRecord(nil), record.Approvals...)
 	record.ID = strings.TrimSpace(record.ID)
 	record.Plan.ActionID = strings.TrimSpace(record.Plan.ActionID)
 	if record.ID == "" {

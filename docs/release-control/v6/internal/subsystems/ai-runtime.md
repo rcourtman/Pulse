@@ -3518,6 +3518,13 @@ query...`, and `Reading storage...` before streamed tool arguments are
 
 ## Current State
 
+Assistant compatibility audit writers no longer use whole-record action-audit
+replacement. Fresh approval and direct-action records use atomic creation with
+their initial events, while decisions, refusals, execution starts, and results
+use the same typed CAS transitions as the canonical action lifecycle. This
+keeps legacy boundary producers from reopening the state-rewind path while
+their mutation-plane consolidation remains separately governed.
+
 AI provider model-cache identity must never expose reusable credential material
 or deterministic unkeyed credential hashes. `internal/ai/service.go` derives
 cache-only credential identities with a process-local random HMAC key, so an

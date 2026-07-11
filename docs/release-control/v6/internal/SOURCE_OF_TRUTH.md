@@ -213,6 +213,14 @@ The retained foundation is therefore the hidden backend layer: canonical
 resources and relationships, standardized agent-emitted resource/signal/change
 envelopes, policy metadata and routing hooks, governed action and approval
 boundaries with auditability, and first-class fleet governance.
+Governed action identity is create-once and lifecycle state is monotonic. A
+deterministic replay returns the authoritative persisted record; it cannot
+replace approvals, execution results, verification, origin, or terminal state.
+Only the store-level compare-and-swap winner that persists the `executing`
+transition and its event may admit the executor. This is an exactly-one
+admission guarantee, not permission to claim exactly-once external effects
+after a process crash; durable effect recovery remains a separately governed
+continuity obligation.
 
 ## Evergreen Readiness Assertions
 
