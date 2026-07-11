@@ -16,10 +16,11 @@ export const markRouteStateDeliberateScroll = (now = Date.now()): void => {
   );
 };
 
-const isSamePathnameNavigation = (currentPath: string, targetPath: string): boolean => {
-  const base = window.location.origin;
-  return new URL(currentPath, base).pathname === new URL(targetPath, base).pathname;
-};
+const resolvePathname = (path: string): string =>
+  new URL(path, window.location.origin).pathname;
+
+const isSamePathnameNavigation = (currentPath: string, targetPath: string): boolean =>
+  resolvePathname(currentPath) === resolvePathname(targetPath);
 
 const shouldRestorePreservedScrollValue = (current: number, restore: number): boolean => {
   if (Math.abs(current - restore) <= ROUTE_STATE_SCROLL_RESTORE_DIVERGENCE_PX) {
@@ -34,6 +35,7 @@ export const createRouteStateNavigateScheduler = (
 ) => {
   let pendingHandle: number | null = null;
   let pendingPath: string | null = null;
+  let pendingSchedulingPathname: string | null = null;
   let scrollRestoreTimeoutHandles: number[] = [];
   let scrollRestoreFrameHandles: number[] = [];
 
@@ -75,19 +77,31 @@ export const createRouteStateNavigateScheduler = (
 
   const schedule = (nextPath: string) => {
     pendingPath = nextPath;
+    pendingSchedulingPathname = resolvePathname(readCurrentPath());
     if (pendingHandle !== null) return;
 
     pendingHandle = window.setTimeout(() => {
       pendingHandle = null;
       if (typeof window === 'undefined') {
         pendingPath = null;
+        pendingSchedulingPathname = null;
         return;
       }
       const target = pendingPath;
+      const schedulingPathname = pendingSchedulingPathname;
       pendingPath = null;
+      pendingSchedulingPathname = null;
       if (!target) return;
       const currentPath = readCurrentPath();
       if (currentPath === target) return;
+      // Route-state rewrites only manage the query string of the surface that
+      // scheduled them. If the pathname changed between scheduling and firing
+      // (the user clicked to another section while this rewrite was pending),
+      // the scheduling surface no longer owns the URL — replaying the stale
+      // target would swallow the user's navigation, so drop it instead.
+      if (schedulingPathname !== null && resolvePathname(currentPath) !== schedulingPathname) {
+        return;
+      }
 
       const restoreScroll = isSamePathnameNavigation(currentPath, target)
         ? { x: window.scrollX, y: window.scrollY }
@@ -143,6 +157,7 @@ export const createRouteStateNavigateScheduler = (
       pendingHandle = null;
     }
     pendingPath = null;
+    pendingSchedulingPathname = null;
   };
 
   return { cleanup, schedule };

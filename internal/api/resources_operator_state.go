@@ -116,7 +116,12 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 			SetAt: time.Now().UTC(),
 			SetBy: getUserID(r),
 		}
-		persisted, err := unified.SetResourceOperatorStateWithMaintenanceLifecycle(store, state)
+		var persisted unified.ResourceOperatorState
+		err := h.ActionLifecycle().WithPolicyMutation(func() error {
+			var writeErr error
+			persisted, writeErr = unified.SetResourceOperatorStateWithMaintenanceLifecycle(store, state)
+			return writeErr
+		})
 		if err != nil {
 			if errors.Is(err, unified.ErrResourceOperatorStateInvalid) {
 				writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeOperatorStateInvalid, err.Error())
@@ -130,7 +135,9 @@ func (h *ResourceHandlers) HandleResourceOperatorState(w http.ResponseWriter, r 
 	case http.MethodDelete:
 		observedAt := time.Now().UTC()
 		actor := getUserID(r)
-		if err := unified.ClearResourceOperatorStateWithMaintenanceLifecycle(store, resourceID, observedAt, actor); err != nil {
+		if err := h.ActionLifecycle().WithPolicyMutation(func() error {
+			return unified.ClearResourceOperatorStateWithMaintenanceLifecycle(store, resourceID, observedAt, actor)
+		}); err != nil {
 			http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 			return
 		}

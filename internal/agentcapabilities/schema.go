@@ -232,10 +232,8 @@ func NewPulseQuestionProviderTool() ProviderTool {
 }
 
 const (
-	// LegacyAssistantRunCommandToolName is the compatibility alias still used by
-	// the older native Assistant service. New registry-backed chat uses
-	// pulse_control with type=command, but the alias vocabulary remains shared so
-	// provider schemas, execution, and approval handling cannot drift.
+	// LegacyAssistantRunCommandToolName is retained only to recognize and deny
+	// old persisted/provider calls. It is never projected to a model.
 	LegacyAssistantRunCommandToolName = "run_command"
 	// LegacyAssistantFetchURLToolName is the compatibility alias for the older
 	// native Assistant URL fetch helper.
@@ -259,35 +257,9 @@ const (
 // schema copies.
 func LegacyAssistantUtilityProviderTools() []ProviderTool {
 	return ProjectProviderTools([]Tool{
-		legacyAssistantRunCommandTool(),
 		legacyAssistantFetchURLTool(),
 		legacyAssistantSetResourceURLTool(),
 	})
-}
-
-func legacyAssistantRunCommandTool() Tool {
-	return Tool{
-		Name:        LegacyAssistantRunCommandToolName,
-		Description: "Execute a shell command. By default runs on the current target (container/VM), but set run_on_host=true for Proxmox host commands. IMPORTANT: For targets on different nodes, specify target_host to route to the correct PVE node.",
-		InputSchema: InputSchema{
-			Type: "object",
-			Properties: map[string]PropertySchema{
-				LegacyAssistantCommandArgumentName: {
-					Type:        "string",
-					Description: "The shell command to execute (e.g., 'ps aux --sort=-%mem | head -20')",
-				},
-				LegacyAssistantRunOnHostArgumentName: {
-					Type:        "boolean",
-					Description: "If true, run on the Proxmox/Docker host instead of inside the container/VM. Use for pct/qm commands like 'pct resize 101 rootfs +10G'. When true, you should also set target_host.",
-				},
-				LegacyAssistantTargetHostArgumentName: {
-					Type:        "string",
-					Description: "Optional hostname of the specific host/node to run the command on. Use this to explicitly route pct/qm/docker commands to the correct host node or Docker host. Check the 'node' or 'Host Node' field in the target's context.",
-				},
-			},
-			Required: []string{LegacyAssistantCommandArgumentName},
-		},
-	}
 }
 
 func legacyAssistantFetchURLTool() Tool {
@@ -579,6 +551,11 @@ func ParseProviderToolInput(raw string) (map[string]interface{}, bool) {
 	if err := json.Unmarshal([]byte(raw), &input); err != nil || input == nil {
 		return nil, false
 	}
+	for name := range input {
+		if IsInternalToolArgument(name) {
+			return nil, false
+		}
+	}
 	return input, true
 }
 
@@ -732,8 +709,9 @@ func StrictObjectInputSchema(required []string, properties map[string]any) json.
 func ProviderInputSchema(schema InputSchema) map[string]interface{} {
 	schema = schema.NormalizeCollections()
 	projected := map[string]interface{}{
-		"type":       "object",
-		"properties": ProviderPropertySchemas(schema.Properties),
+		"type":                 "object",
+		"properties":           ProviderPropertySchemas(schema.Properties),
+		"additionalProperties": false,
 	}
 
 	if len(schema.Required) > 0 {
@@ -741,6 +719,29 @@ func ProviderInputSchema(schema InputSchema) map[string]interface{} {
 	}
 
 	return projected
+}
+
+// ValidateDeclaredToolArguments rejects provider/adapter arguments that are
+// not part of the registered tool schema. Internal runtime metadata is
+// validated at the provider parse boundary and remains admissible here only so
+// the server can replay an operator-approved call without widening the public
+// schema.
+func ValidateDeclaredToolArguments(schema InputSchema, args map[string]any) error {
+	schema = schema.NormalizeCollections()
+	for name := range args {
+		if IsInternalToolArgument(name) {
+			continue
+		}
+		if _, declared := schema.Properties[name]; !declared {
+			return fmt.Errorf("undeclared tool argument %q", name)
+		}
+	}
+	for _, name := range schema.Required {
+		if _, present := args[name]; !present {
+			return fmt.Errorf("required tool argument %q is missing", name)
+		}
+	}
+	return nil
 }
 
 // ProviderInputSchemaFromRaw projects a manifest-authored JSON Schema into the

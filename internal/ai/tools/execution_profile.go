@@ -88,7 +88,10 @@ func (e *PulseToolExecutor) ApplyExecutionProfile(profile ExecutionProfile) {
 		e.pulseStateAllowlist = map[string]bool{}
 	default:
 		e.denyInfrastructureMutations = false
-		e.pulseStateAllowlist = nil
+		// Interactive Assistant is conversation/read/session authority.
+		// Finding and knowledge lifecycle writes remain explicit product/API
+		// operations and are never model-invokable.
+		e.pulseStateAllowlist = map[string]bool{}
 	}
 }
 

@@ -407,6 +407,17 @@ TLS floor in the dynamic config.
    signature verification depends on `ssh-keygen` from `openssh-client` and
    must not fail on a minimal supported host solely because that package was
    absent before installation started.
+   The server systemd unit that root `install.sh` writes
+   (`install_systemd_service`) hardens with `NoNewPrivileges=true`, which
+   strips setuid and file capabilities from every child the server executes.
+   ICMP availability probes exec the system `ping` binary, so the same
+   hardening block must also grant `AmbientCapabilities=CAP_NET_RAW` with a
+   matching `CapabilityBoundingSet=CAP_NET_RAW`; dropping either regresses
+   ICMP availability checks to permanent failure on every systemd install
+   (discussion #1554). `scripts/installtests/root_install_sh_test.go`
+   (`TestRootInstallServiceGrantsIcmpProbeCapability`) pins the pairing, and
+   `docs/CONFIGURATION.md` documents the `systemctl edit` override for units
+   written before the grant existed.
    The top-level `install.sh` asset published on GitHub Releases must be the
    root Pulse SERVER installer (the LXC / systemd / Proxmox VE installer that
    accepts `--version vX.Y.Z`, `--rc`, `--stable`, and friends). The rendered

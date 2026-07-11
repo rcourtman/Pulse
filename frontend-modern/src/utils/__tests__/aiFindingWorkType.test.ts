@@ -182,7 +182,7 @@ describe('getPatrolFindingRowScaffold', () => {
       id: 'workflow',
       label: 'Safe workflow',
       value:
-        'Review evidence first; no change runs until the proposed fix is approved, then Patrol verifies the outcome.',
+        'Review evidence first; no change runs until the typed action is approved, then Patrol verifies the outcome.',
     });
     expect(
       getPatrolFindingRowScaffold(
@@ -196,7 +196,7 @@ describe('getPatrolFindingRowScaffold', () => {
     ).toContainEqual({
       id: 'verification',
       label: 'Verification',
-      value: 'Waiting for approval before any fix runs.',
+      value: 'Waiting for the governed action record before any change runs.',
     });
   });
 

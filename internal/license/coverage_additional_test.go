@@ -78,8 +78,8 @@ func TestGetFeatureDisplayNameCoversKnownFeaturesAndFallback(t *testing.T) {
 		want    string
 	}{
 		{feature: FeatureAIPatrol, want: "Pulse Patrol (Background Health Checks)"},
-		{feature: FeatureAIAlerts, want: "Patrol Investigates Issues"},
-		{feature: FeatureAIAutoFix, want: "Patrol Handles Safe Fixes"},
+		{feature: FeatureAIAlerts, want: "Patrol Investigates Issues and Explains the Root Cause"},
+		{feature: FeatureAIAutoFix, want: "Patrol Applies Safe Fixes and Verifies the Result"},
 		{feature: FeatureKubernetesAI, want: "Kubernetes AI Analysis (Compatibility)"},
 		{feature: FeatureUpdateAlerts, want: "Update Alerts (Container/Package Updates)"},
 		{feature: FeatureRBAC, want: "Role-Based Access Control (RBAC)"},

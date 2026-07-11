@@ -3657,10 +3657,16 @@ func (rr *ResourceRegistry) canonicalIDFromIdentity(resourceType ResourceType, i
 		stable = "machine:" + strings.TrimSpace(identity.MachineID)
 	case identity.DMIUUID != "":
 		stable = "dmi:" + strings.TrimSpace(identity.DMIUUID)
+	// Hostname-derived keys hash the full dotted name: distinct machines that
+	// share a short name (cloud.rnd-lax1 vs cloud.gce-or1, or two FQDN Swarm
+	// members without machine IDs) must mint distinct canonical IDs. IDs
+	// minted under the historical short-hostname derivation stay readable
+	// through ResourceIdentityPin.EraIDs (journal reads) and succeed their
+	// operator-owned rows via canonical-ID succession at pin persist.
 	case identity.ClusterName != "" && len(identity.Hostnames) > 0:
-		stable = fmt.Sprintf("cluster:%s:%s", identity.ClusterName, NormalizeHostname(identity.Hostnames[0]))
+		stable = fmt.Sprintf("cluster:%s:%s", identity.ClusterName, NormalizeFullHostname(identity.Hostnames[0]))
 	case len(identity.Hostnames) > 0:
-		stable = "hostname:" + NormalizeHostname(identity.Hostnames[0])
+		stable = "hostname:" + NormalizeFullHostname(identity.Hostnames[0])
 	case len(identity.IPAddresses) > 0:
 		stable = "ip:" + NormalizeIP(identity.IPAddresses[0])
 	default:

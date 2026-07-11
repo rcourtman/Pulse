@@ -199,6 +199,11 @@ func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) 
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	policyMutationCalls := 0
+	handler.SetPolicyMutationCoordinator(func(write func() error) error {
+		policyMutationCalls++
+		return write()
+	})
 
 	body := `{"autonomy_level":"monitor","full_mode_unlocked":true,"investigation_budget":2,"investigation_timeout_sec":30}`
 	req := newLoopbackRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(body))
@@ -223,6 +228,7 @@ func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) 
 	require.False(t, saved.PatrolFullModeUnlocked)
 	require.Equal(t, 5, saved.PatrolInvestigationBudget)
 	require.Equal(t, 60, saved.PatrolInvestigationTimeoutSec)
+	require.Equal(t, 1, policyMutationCalls)
 
 	premiumBody := `{"autonomy_level":"approval","investigation_budget":10,"investigation_timeout_sec":120}`
 	premiumReq := newLoopbackRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(premiumBody))
@@ -2586,8 +2592,8 @@ func TestHandleRunCommand_InvalidBody(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	if rec.Code != http.StatusGone {
+		t.Fatalf("expected status %d, got %d", http.StatusGone, rec.Code)
 	}
 }
 
@@ -2671,12 +2677,12 @@ func TestHandleRunCommand_RequiresApprovalID(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	if rec.Code != http.StatusGone {
+		t.Fatalf("expected status %d, got %d", http.StatusGone, rec.Code)
 	}
 }
 
-func TestHandleRunCommand_ConsumesApproval(t *testing.T) {
+func TestHandleRunCommand_DefersConsumptionUntilAgentDispatch(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
@@ -2695,6 +2701,7 @@ func TestHandleRunCommand_ConsumesApproval(t *testing.T) {
 		Command:    "uptime",
 		TargetType: "vm",
 		TargetID:   "vm-101",
+		Plan:       &unifiedresources.ActionPlan{ActionID: "action-1", RequestID: "approval-1", Allowed: true, RequiresApproval: true},
 	}
 	require.NoError(t, store.CreateApproval(appReq))
 	_, err = store.Approve(appReq.ID, "tester")
@@ -2705,11 +2712,12 @@ func TestHandleRunCommand_ConsumesApproval(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
-	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+	require.Equal(t, http.StatusGone, rec.Code, "body=%s", rec.Body.String())
+	require.Contains(t, rec.Body.String(), agentcapabilities.AgentErrCodeRawCommandRetired)
 
 	stored, found := store.GetApproval(appReq.ID)
 	require.True(t, found)
-	require.True(t, stored.Consumed)
+	require.False(t, stored.Consumed)
 }
 
 func TestHandleRunCommand_RejectsCommandMismatch(t *testing.T) {
@@ -2731,6 +2739,7 @@ func TestHandleRunCommand_RejectsCommandMismatch(t *testing.T) {
 		Command:    "uptime",
 		TargetType: "vm",
 		TargetID:   "vm-101",
+		Plan:       &unifiedresources.ActionPlan{ActionID: "action-2", RequestID: "approval-2", Allowed: true, RequiresApproval: true},
 	}
 	require.NoError(t, store.CreateApproval(appReq))
 	_, err = store.Approve(appReq.ID, "tester")
@@ -2741,7 +2750,7 @@ func TestHandleRunCommand_RejectsCommandMismatch(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
-	require.Equal(t, http.StatusConflict, rec.Code)
+	require.Equal(t, http.StatusGone, rec.Code)
 
 	stored, found := store.GetApproval(appReq.ID)
 	require.True(t, found)
@@ -2777,8 +2786,8 @@ func TestHandleRunCommand_RejectsUnsupportedTargetType(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
-	require.Equal(t, http.StatusBadRequest, rec.Code)
-	require.Contains(t, rec.Body.String(), "unsupported target_type")
+	require.Equal(t, http.StatusGone, rec.Code)
+	require.Contains(t, rec.Body.String(), agentcapabilities.AgentErrCodeRawCommandRetired)
 
 	stored, found := store.GetApproval(appReq.ID)
 	require.True(t, found)
@@ -2819,7 +2828,7 @@ func TestHandleRunCommand_RejectsCrossOrgApproval(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
-	require.Equal(t, http.StatusNotFound, rec.Code)
+	require.Equal(t, http.StatusGone, rec.Code)
 	stored, found := store.GetApproval(appReq.ID)
 	require.True(t, found)
 	require.False(t, stored.Consumed)

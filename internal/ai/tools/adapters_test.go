@@ -2,6 +2,7 @@ package tools
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -540,8 +541,8 @@ func TestUpdatesToolAdapter(t *testing.T) {
 	runner.updateErr = nil
 	runner.updateStatus = models.DockerHostCommandStatus{ID: "cmd2", Type: "update", Status: "queued"}
 	status, err = adapter.UpdateContainer("host1", "c1", "nginx")
-	if err != nil || status.ID != "cmd2" {
-		t.Fatalf("unexpected update status: %+v err=%v", status, err)
+	if err == nil || !strings.Contains(err.Error(), "retired") || status.ID != "" {
+		t.Fatalf("expected retired update denial: %+v err=%v", status, err)
 	}
 
 	if _, ok := adapter.GetCommandStatus("cmd2"); ok {

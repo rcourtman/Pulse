@@ -424,11 +424,11 @@ describe('APITokenManager', () => {
     expect(screen.getByText('AI')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pulse Assistant chat' })).toHaveAttribute(
       'title',
-      'Use interactive Pulse Assistant sessions, models, and knowledge endpoints.',
+      'Use interactive Pulse Assistant sessions, models, and read knowledge.',
     );
     expect(screen.getByRole('button', { name: 'Pulse Intelligence actions' })).toHaveAttribute(
       'title',
-      'Use governed Patrol actions for plans, approvals, policy-allowed fixes, verification, and history.',
+      'Use governed Patrol actions for plans, approvals, policy-allowed fixes, verification, history, and knowledge changes.',
     );
     expect(screen.getByText('Security')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Audit logs (read)' })).toBeInTheDocument();

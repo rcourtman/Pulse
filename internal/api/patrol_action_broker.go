@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -26,6 +28,8 @@ const patrolActionPolicyActor = "pulse_patrol_policy"
 type PatrolActionPolicySnapshot struct {
 	EffectiveAutonomyLevel string
 	FullModeUnlocked       bool
+	EmergencyStop          bool
+	PolicyVersion          string
 }
 
 type PatrolActionPolicyProvider func(ctx context.Context, orgID string) (PatrolActionPolicySnapshot, error)
@@ -155,27 +159,10 @@ func (b *patrolActionBroker) Submit(ctx context.Context, proposal aicontracts.Ac
 		return dispositionFromRecord(record), nil
 	}
 
-	if allowed, reason, policyErr := b.autoAuthorizationDecision(ctx, proposal); policyErr == nil && allowed {
-		// Re-evaluate immediately before the decision+dispatch sequence so a
-		// resource lock, scope removal, or tenant-mode downgrade cannot leave
-		// behind a reusable policy approval. A failed recheck leaves the plan in
-		// its ordinary pending/planned state.
-		stillAllowed, _, policyErr := b.autoAuthorizationDecision(ctx, proposal)
-		if policyErr != nil || !stillAllowed {
-			return dispositionFromRecord(record), nil
-		}
-		if record.State == unified.ActionStatePending {
-			record, err = b.lifecycle().Decide(ctx, b.orgID, plan.ActionID, unified.ActionApprovalRecord{
-				Actor:   patrolActionPolicyActor,
-				Method:  unified.MethodPolicy,
-				Outcome: unified.OutcomeApproved,
-				Reason:  reason,
-			})
-			if err != nil {
-				return aicontracts.ActionDisposition{}, err
-			}
-		}
-		record, err = b.lifecycle().Execute(ctx, b.orgID, plan.ActionID, patrolActionPolicyActor, reason)
+	if allowed, _, policyErr := b.autoAuthorizationDecision(ctx, proposal); policyErr == nil && allowed {
+		record, err = b.lifecycle().ExecuteUnderPolicy(ctx, b.orgID, plan.ActionID, patrolActionPolicyActor, func(ctx context.Context, current unified.ActionAuditRecord, now time.Time) (unified.ActionPolicyAuthorizationLease, string, error) {
+			return b.policyAuthorizationLease(ctx, proposal, current, now)
+		})
 		if err != nil {
 			if record.State == unified.ActionStateFailed {
 				return dispositionFromRecord(record), nil
@@ -185,6 +172,71 @@ func (b *patrolActionBroker) Submit(ctx context.Context, proposal aicontracts.Ac
 	}
 
 	return dispositionFromRecord(record), nil
+}
+
+func (b *patrolActionBroker) policyAuthorizationLease(ctx context.Context, proposal aicontracts.ActionProposal, record unified.ActionAuditRecord, now time.Time) (unified.ActionPolicyAuthorizationLease, string, error) {
+	allowed, reason, err := b.autoAuthorizationDecisionAt(ctx, proposal, now)
+	if err != nil {
+		return unified.ActionPolicyAuthorizationLease{}, "", err
+	}
+	if !allowed {
+		return unified.ActionPolicyAuthorizationLease{}, "", unified.ErrActionPolicyAuthorizationRevoked
+	}
+	snapshot, err := b.policy(ctx, b.orgID)
+	if err != nil {
+		return unified.ActionPolicyAuthorizationLease{}, "", err
+	}
+	capabilities, err := b.lifecycle().Capabilities(ctx, b.orgID, proposal.ResourceID)
+	if err != nil {
+		return unified.ActionPolicyAuthorizationLease{}, "", err
+	}
+	var capability unified.ResourceCapability
+	foundCapability := false
+	for _, candidate := range capabilities {
+		if strings.TrimSpace(candidate.Name) == proposal.CapabilityName {
+			capability = candidate
+			foundCapability = true
+			break
+		}
+	}
+	if !foundCapability {
+		return unified.ActionPolicyAuthorizationLease{}, "", unified.ErrActionPolicyAuthorizationRevoked
+	}
+	state, found, err := b.lifecycle().ResourceOperatorState(b.orgID, proposal.ResourceID)
+	if err != nil || !found {
+		if err != nil {
+			return unified.ActionPolicyAuthorizationLease{}, "", err
+		}
+		return unified.ActionPolicyAuthorizationLease{}, "", unified.ErrActionPolicyAuthorizationInvalid
+	}
+	tenantVersion := strings.TrimSpace(snapshot.PolicyVersion)
+	if tenantVersion == "" {
+		tenantVersion = policySnapshotVersion(snapshot)
+	}
+	resourcePayload, _ := json.Marshal(unified.NormalizeResourceOperatorState(state))
+	resourceSum := sha256.Sum256(resourcePayload)
+	expiresAt := record.Plan.ExpiresAt
+	if expiresAt.IsZero() || expiresAt.After(now.Add(time.Minute)) {
+		expiresAt = now.Add(time.Minute)
+	}
+	lease := unified.ActionPolicyAuthorizationLease{
+		Version: 1, OrgID: b.orgID, ActionID: record.ID, ResourceID: proposal.ResourceID, CapabilityName: proposal.CapabilityName,
+		PlanHash: record.Plan.PlanHash, CapabilityPolicyVersion: record.Plan.PolicyVersion,
+		AutoAuthorization: unified.NormalizeActionAutoAuthorizationClass(capability.AutoAuthorization), ApprovalPolicy: capability.MinimumApprovalLevel,
+		TenantPolicyVersion: tenantVersion, EffectiveAutonomyLevel: strings.TrimSpace(snapshot.EffectiveAutonomyLevel), LicenseAllowsAutoFix: true,
+		FullModeUnlocked: snapshot.FullModeUnlocked, EmergencyStop: snapshot.EmergencyStop,
+		ResourcePolicyVersion: fmt.Sprintf("resource-policy:sha256:%x", resourceSum[:12]), CapabilityNames: append([]string(nil), state.AutoRemediationPolicy.CapabilityNames...),
+		Window: state.AutoRemediationPolicy.Window, NeverAutoRemediate: state.NeverAutoRemediate, IssuedAt: now.UTC(), ExpiresAt: expiresAt.UTC(),
+	}
+	lease.Digest = unified.ActionPolicyAuthorizationDigest(lease)
+	return lease, reason, nil
+}
+
+func policySnapshotVersion(snapshot PatrolActionPolicySnapshot) string {
+	snapshot.PolicyVersion = ""
+	payload, _ := json.Marshal(snapshot)
+	sum := sha256.Sum256(payload)
+	return fmt.Sprintf("tenant-policy:sha256:%x", sum[:12])
 }
 
 func dispositionFromRecord(record unified.ActionAuditRecord) aicontracts.ActionDisposition {
@@ -197,12 +249,19 @@ func dispositionFromRecord(record unified.ActionAuditRecord) aicontracts.ActionD
 }
 
 func (b *patrolActionBroker) autoAuthorizationDecision(ctx context.Context, proposal aicontracts.ActionProposal) (bool, string, error) {
+	return b.autoAuthorizationDecisionAt(ctx, proposal, b.currentTime())
+}
+
+func (b *patrolActionBroker) autoAuthorizationDecisionAt(ctx context.Context, proposal aicontracts.ActionProposal, now time.Time) (bool, string, error) {
 	if b.policy == nil {
 		return false, "", nil
 	}
 	snapshot, err := b.policy(ctx, b.orgID)
 	if err != nil {
 		return false, "", err
+	}
+	if snapshot.EmergencyStop {
+		return false, "", nil
 	}
 	capabilities, err := b.lifecycle().Capabilities(ctx, b.orgID, proposal.ResourceID)
 	if err != nil {
@@ -238,7 +297,7 @@ func (b *patrolActionBroker) autoAuthorizationDecision(ctx context.Context, prop
 	if err != nil {
 		return false, "", err
 	}
-	if !found || !state.AllowsAutoRemediationAt(proposal.CapabilityName, b.currentTime()) {
+	if !found || !state.AllowsAutoRemediationAt(proposal.CapabilityName, now) {
 		return false, "", nil
 	}
 	return true, fmt.Sprintf("Patrol %s policy authorized %s capability %s for resource %s", snapshot.EffectiveAutonomyLevel, class, proposal.CapabilityName, proposal.ResourceID), nil

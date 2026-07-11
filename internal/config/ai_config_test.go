@@ -68,6 +68,25 @@ func TestAIConfigControlLevelsUseSharedAgentCapabilityVocabulary(t *testing.T) {
 	}
 }
 
+func TestAIConfigPatrolActionEmergencyStopPersistsExplicitly(t *testing.T) {
+	cfg := NewDefaultAIConfig()
+	if cfg.PatrolActionEmergencyStop {
+		t.Fatal("emergency stop must default to false")
+	}
+	cfg.PatrolActionEmergencyStop = true
+	payload, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded AIConfig
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if !decoded.PatrolActionEmergencyStop {
+		t.Fatal("emergency stop was not preserved")
+	}
+}
+
 func TestAIConfig_IsConfigured(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1286,5 +1305,25 @@ func TestAIConfig_GetRequestTimeout(t *testing.T) {
 				t.Errorf("expected %v, got %v", tt.expected, duration)
 			}
 		})
+	}
+}
+
+func TestAIConfig_GetDiscoveryModelFallbackChain(t *testing.T) {
+	// Discovery is high-fan-out background work: it follows the operator's
+	// background-work (Patrol) model before the shared default so scheduled
+	// context refreshes never silently burn a premium shared model.
+	cfg := AIConfig{Model: "gemini:gemini-flash-latest"}
+	if got := cfg.GetDiscoveryModel(); got != "gemini:gemini-flash-latest" {
+		t.Fatalf("with only the shared default set, GetDiscoveryModel() = %q, want the shared default", got)
+	}
+
+	cfg.PatrolModel = "gemini:gemini-2.5-flash-lite"
+	if got := cfg.GetDiscoveryModel(); got != "gemini:gemini-2.5-flash-lite" {
+		t.Fatalf("with a Patrol override set, GetDiscoveryModel() = %q, want the Patrol model", got)
+	}
+
+	cfg.DiscoveryModel = "ollama:qwen3:8b"
+	if got := cfg.GetDiscoveryModel(); got != "ollama:qwen3:8b" {
+		t.Fatalf("with an explicit discovery override set, GetDiscoveryModel() = %q, want the discovery override", got)
 	}
 }

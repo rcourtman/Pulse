@@ -72,6 +72,13 @@ controls as normal product settings.
 
 ## Shared Boundaries
 
+API token scope copy must match runtime authority. `ai:chat` covers Assistant
+conversation, model selection, sessions, and knowledge reads only. Knowledge
+save/delete/import/clear and explicit governed action approval/execution
+require `ai:execute`; relay-mobile chat access does not inherit it. Browser
+sessions retain their authenticated product permissions, while token requests
+with missing, unknown, or unrelated scopes fail closed.
+
 1. `frontend-modern/src/api/security.ts` shared with `api-contracts`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `frontend-primitives`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    Its Docker / Podman token wording must come from
@@ -327,18 +334,36 @@ the `white_label` branding entitlement.
     `RequireAuth` and scope checks, resource-policy redaction pass, or
     read-only Agent-context boundary. Router glue may connect providers, but
     it must not become an alternate command path, raw provider-command path,
-    config path, environment path, or secret-bearing metadata path. The Patrol
-    action-broker and proposal-catalog factory glue wired here is bound by the
+    config path, environment path, or secret-bearing metadata path.
+    The command-authorization bridge wired by `internal/api/router.go` preserves
+    that rule: public chat and relay input cannot serialize its org/action
+    authorization context, and invalid approvals fail before signing or agent
+    dispatch rather than falling through to a route-local trust shortcut.
+    The Patrol action-broker and proposal-catalog factory glue wired here is bound by the
     same rule: it may connect the investigation orchestrator to the tenant-bound
     action lifecycle, but it exposes only typed-proposal capture and gives the
     orchestrator no autonomy control, command execution, or command-shaped
     approval path.
+    Automatic action authority is a versioned, one-use admission lease rather
+    than a reusable approval. Tenant mode/license/unlock, capability safety and
+    approval floor, resource allowlist/window/Never state, plan hashes, and the
+    action emergency stop are revalidated under one admission coordinator and
+    committed with `executing`. Missing or unreadable policy denies dispatch.
+    Human approval remains separate, but `NeverAutoRemediate`, plan drift, and
+    emergency stop are universal. Emergency stop after `executing` is only
+    best-effort cancellation and must never be described as rollback.
     The typed host-update executor wired here is likewise not generic command
     authority. It may dispatch only the closed `install_os_updates` operation,
     bound to the server-observed package inventory fingerprint and canonical
     action approval. Package names, versions, raw APT output, and agent error
     text must not enter model context or action results; reboot remains a
     reported fact rather than an authorized operation.
+    The typed storage-cleanup executor is equally closed: only
+    `clean_package_cache` may cross the boundary, bound to the server-observed
+    fingerprint and canonical approval. The model and API never supply a path,
+    command, package selector, or deletion rule. Cache entry names,
+    fingerprint, raw APT output, and agent error text remain out of model
+    context and terminal action output.
     Router glue may also pass monitor-owned source freshness thresholds into
     unified-resource adapters, but those thresholds are operational cadence
     metadata only. They must not disclose credentials, command output, raw
@@ -438,6 +463,13 @@ the `white_label` branding entitlement.
     `docker inspect`, environment, mount, file, command, or process collection.
 
 ## Current State
+
+### Canonical mutation-plane dependency
+
+Raw command, file-write, arbitrary pod-exec, and legacy remediation authority
+are retired before handler or transport execution. Extension aliases cannot
+shadow retired names, and transport delivery must name committed lifecycle
+authority rather than accepting model-supplied command or rollback text.
 
 Unified Agent Pulse transports share one fail-closed TLS policy across host,
 Docker/Podman, Kubernetes, remote configuration, commands, and self-update.

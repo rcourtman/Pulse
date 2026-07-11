@@ -149,13 +149,21 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 	// If the original alert would have been suppressed during quiet hours,
 	// the recovery notification is also suppressed to avoid noise.
 	if m.notificationMgr != nil {
-		m.notificationMgr.CancelAlert(alertID)
+		firingNeverDelivered := m.notificationMgr.CancelAlert(alertID)
 		if m.notificationMgr.GetNotifyOnResolve() {
 			if resolvedAlert == nil {
 				resolvedAlert = m.alertManager.GetResolvedAlert(alertID)
 			}
 			if resolvedAlert != nil && resolvedAlert.Alert != nil {
-				if m.alertManager.ShouldSuppressResolvedNotification(resolvedAlert.Alert) {
+				if firingNeverDelivered {
+					// The firing notification was still in the grouping window
+					// or waiting in the queue (e.g. quiet-hours replay) when the
+					// alert resolved, and CancelAlert just cancelled it. A
+					// recovery for an alert the user never saw fire is noise.
+					log.Info().
+						Str("alertID", alertID).
+						Msg("Resolved notification suppressed because the firing notification was cancelled before delivery")
+				} else if m.alertManager.ShouldSuppressResolvedNotification(resolvedAlert.Alert) {
 					log.Info().
 						Str("alertID", alertID).
 						Msg("Resolved notification suppressed during quiet hours")

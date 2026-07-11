@@ -4217,6 +4217,10 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=$INSTALL_DIR $CONFIG_DIR
+# ICMP availability probes exec the system ping binary; NoNewPrivileges strips
+# its setuid/file capabilities, so grant CAP_NET_RAW ambiently instead (#1554).
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
 
 [Install]
 WantedBy=multi-user.target

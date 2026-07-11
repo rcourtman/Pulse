@@ -48,7 +48,11 @@ type ResourceIdentityPin struct {
 	MachineID    string
 	DMIUUID      string
 	ClusterName  string
-	// Hostname is the normalized primary hostname (NormalizePrimaryHostname).
+	// Hostname is the normalized full hostname (NormalizeFullHostname).
+	// Dotted hostnames are preserved so distinct machines that share a short
+	// name (cloud.rnd-lax1 vs cloud.gce-or1) keep distinct pins. Rows written
+	// before the fix for #1559 hold the collapsed short name; they heal in
+	// place on the host's next pin persist.
 	Hostname string
 }
 
@@ -58,7 +62,7 @@ func (p ResourceIdentityPin) normalized() ResourceIdentityPin {
 	p.MachineID = strings.TrimSpace(p.MachineID)
 	p.DMIUUID = strings.TrimSpace(p.DMIUUID)
 	p.ClusterName = strings.TrimSpace(p.ClusterName)
-	p.Hostname = NormalizePrimaryHostname(p.Hostname)
+	p.Hostname = NormalizeFullHostname(p.Hostname)
 	return p
 }
 
@@ -73,7 +77,7 @@ func (p ResourceIdentityPin) hasStrongKey() bool {
 // journal eras without rewriting history.
 func (p ResourceIdentityPin) EraIDs() []string {
 	p = p.normalized()
-	ids := make([]string, 0, 5)
+	ids := make([]string, 0, 7)
 	if p.CanonicalID != "" {
 		ids = append(ids, p.CanonicalID)
 	}
@@ -84,15 +88,14 @@ func (p ResourceIdentityPin) EraIDs() []string {
 		ids = append(ids, buildHashID(p.ResourceType, "dmi:"+p.DMIUUID))
 	}
 	if p.Hostname != "" {
-		if p.ClusterName != "" {
-			ids = append(ids, buildHashID(p.ResourceType, fmt.Sprintf("cluster:%s:%s", p.ClusterName, p.Hostname)))
-		}
-		ids = append(ids, buildHashID(p.ResourceType, "hostname:"+p.Hostname))
-		if short := NormalizeHostname(p.Hostname); short != "" && short != p.Hostname {
+		// The historical chooseNewID ladder hashed the short hostname; the
+		// pin now preserves the full dotted name, so derive eras for both so
+		// journal rows written under short-hostname IDs stay readable.
+		for _, hostname := range uniqueTrimmed(p.Hostname, NormalizeHostname(p.Hostname)) {
 			if p.ClusterName != "" {
-				ids = append(ids, buildHashID(p.ResourceType, fmt.Sprintf("cluster:%s:%s", p.ClusterName, short)))
+				ids = append(ids, buildHashID(p.ResourceType, fmt.Sprintf("cluster:%s:%s", p.ClusterName, hostname)))
 			}
-			ids = append(ids, buildHashID(p.ResourceType, "hostname:"+short))
+			ids = append(ids, buildHashID(p.ResourceType, "hostname:"+hostname))
 		}
 	}
 	return uniqueTrimmed(ids...)

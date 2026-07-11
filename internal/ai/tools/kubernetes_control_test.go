@@ -650,7 +650,7 @@ func TestExecuteKubernetesExec(t *testing.T) {
 		mockAgent.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
 	})
 
-	t.Run("MatchingApprovedIDBypassesAndConsumes", func(t *testing.T) {
+	t.Run("MatchingApprovedIDCarriesAuthorizationToAgentBoundary", func(t *testing.T) {
 		store, err := approval.NewStore(approval.StoreConfig{
 			DataDir:            t.TempDir(),
 			DisablePersistence: true,
@@ -699,14 +699,16 @@ func TestExecuteKubernetesExec(t *testing.T) {
 		assert.NotContains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
 		mockAgent.AssertExpectations(t)
 
-		// Approval is single-use; second attempt should not bypass.
+		// The mock agent boundary does not consume. Production agentexec consumes
+		// atomically before grant minting and dispatch; that replay behavior is
+		// covered by the agentexec/API authorization tests.
 		result, err = exec.executeKubernetesExec(ctx, agentcapabilities.WithApprovalArgument(map[string]interface{}{
 			"cluster": "cluster-1",
 			"pod":     "nginx-pod",
 			"command": "cat /etc/nginx/nginx.conf",
 		}, "approval-2"))
 		require.NoError(t, err)
-		assert.Contains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
+		assert.NotContains(t, result.Content[0].Text, "APPROVAL_REQUIRED")
 	})
 }
 

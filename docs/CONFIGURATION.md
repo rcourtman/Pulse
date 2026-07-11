@@ -455,6 +455,35 @@ Example API payload for simple ping monitoring:
 Pulse stores and returns that target as `protocol: "icmp"` so dashboards,
 alerts, and resource projections keep one canonical protocol value.
 
+### ICMP probe privileges
+
+ICMP probes run the system `ping` binary, which needs the `CAP_NET_RAW`
+capability. The systemd unit written by the installer hardens the service
+with `NoNewPrivileges=true`, which strips ping's setuid bit and file
+capabilities, so the unit also grants the capability directly with
+`AmbientCapabilities=CAP_NET_RAW`. Units written by older versions of the
+installer lack that line, and ICMP probes fail with
+`icmp probe failed: ping: socktype: SOCK_RAW ... missing cap_net_raw+p capability`.
+
+To fix an existing install, either re-run the install script (it rewrites
+the unit) or add the capability as an override:
+
+```bash
+systemctl edit pulse   # pulse-backend on ProxmoxVE community-script installs
+```
+
+```ini
+[Service]
+AmbientCapabilities=CAP_NET_RAW
+```
+
+Then `systemctl daemon-reload && systemctl restart pulse`.
+
+Docker installs are unaffected: Docker's default capability set includes
+`NET_RAW`. If you run the container with `--cap-drop=ALL`, add
+`--cap-add=NET_RAW` to keep ICMP probes working. TCP and HTTP/HTTPS probes
+need no special privileges.
+
 ---
 
 ## 🔒 HTTPS / TLS

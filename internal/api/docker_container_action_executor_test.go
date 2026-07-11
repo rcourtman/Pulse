@@ -83,7 +83,7 @@ func TestDockerContainerActionExecutorDispatchesPodmanRestartAndVerification(t *
 	}}
 	executor := newDockerContainerActionExecutor(h, agents)
 
-	result, err := executor.ExecuteAction(context.Background(), dockerContainerActionRecord("act_container", "app-container:api", "restart"))
+	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_container"), dockerContainerActionRecord("act_container", "app-container:api", "restart"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
@@ -98,6 +98,9 @@ func TestDockerContainerActionExecutorDispatchesPodmanRestartAndVerification(t *
 	}
 	if agents.calls[0].ApprovalID != "act_container" || !agents.calls[0].Trusted {
 		t.Fatalf("dispatch approval/trust = %q/%v", agents.calls[0].ApprovalID, agents.calls[0].Trusted)
+	}
+	if agents.calls[0].RequestID != "act_container.dispatch.1" {
+		t.Fatalf("dispatch request identity = %q", agents.calls[0].RequestID)
 	}
 	if got := agents.calls[1].Command; got != "podman inspect -f '{{.State.Status}} {{.State.Running}}' 'container-123'" {
 		t.Fatalf("verification command = %q", got)
@@ -141,7 +144,7 @@ func TestDockerContainerActionExecutorResolvesCommandAgentByDockerHostname(t *te
 		t.Fatalf("CheckActionAvailable readiness = %#v, want available through hostname-resolved command agent", readiness)
 	}
 
-	result, err := executor.ExecuteAction(context.Background(), dockerContainerActionRecord("act_container", "app-container:api", "restart"))
+	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_container"), dockerContainerActionRecord("act_container", "app-container:api", "restart"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
@@ -170,7 +173,7 @@ func TestDockerContainerActionExecutorFailsWhenCapabilityNoLongerAdvertised(t *t
 	agents := &fakeDockerActionAgentCommander{}
 	executor := newDockerContainerActionExecutor(h, agents)
 
-	result, err := executor.ExecuteAction(context.Background(), dockerContainerActionRecord("act_container", "app-container:api", "restart"))
+	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_container"), dockerContainerActionRecord("act_container", "app-container:api", "restart"))
 	if err == nil || !strings.Contains(err.Error(), "does not currently advertise restart capability") {
 		t.Fatalf("ExecuteAction err = %v, result = %#v", err, result)
 	}

@@ -3,6 +3,7 @@ import {
   buildUnixAgentInstallCommand,
   buildWindowsAgentInstallCommand,
   normalizeInstallerBaseUrl,
+  resolveAgentCommandPlatform,
   resolveInstallerBaseUrl,
 } from '../agentInstallCommand';
 
@@ -228,5 +229,31 @@ describe('agentInstallCommand', () => {
     expect(command).not.toContain('-Insecure $true');
     expect(command).not.toContain('-PreflightOnly $true');
     expect(command).not.toContain('$env:PULSE_TOKEN=');
+  });
+});
+
+describe('resolveAgentCommandPlatform', () => {
+  it('maps legacy gopsutil Windows captions to windows (refs #1555)', () => {
+    expect(resolveAgentCommandPlatform('microsoft windows 11 pro')).toBe('windows');
+    expect(resolveAgentCommandPlatform('Microsoft Windows Server 2022 Standard')).toBe('windows');
+    expect(resolveAgentCommandPlatform('windows')).toBe('windows');
+  });
+
+  it('maps macOS variants to macos', () => {
+    expect(resolveAgentCommandPlatform('darwin')).toBe('macos');
+    expect(resolveAgentCommandPlatform('macos')).toBe('macos');
+    expect(resolveAgentCommandPlatform('Mac OS X')).toBe('macos');
+  });
+
+  it('maps FreeBSD variants to freebsd', () => {
+    expect(resolveAgentCommandPlatform('freebsd')).toBe('freebsd');
+    expect(resolveAgentCommandPlatform('FreeBSD 14.1-RELEASE')).toBe('freebsd');
+  });
+
+  it('defaults Linux distros and unknown values to linux', () => {
+    expect(resolveAgentCommandPlatform('ubuntu')).toBe('linux');
+    expect(resolveAgentCommandPlatform('')).toBe('linux');
+    expect(resolveAgentCommandPlatform(undefined)).toBe('linux');
+    expect(resolveAgentCommandPlatform(null)).toBe('linux');
   });
 });

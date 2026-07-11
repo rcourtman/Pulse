@@ -194,10 +194,6 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 			"pods":        {Kind: ToolCallKindRead, Mutation: MutationNone},
 			"deployments": {Kind: ToolCallKindRead, Mutation: MutationNone},
 			"logs":        {Kind: ToolCallKindRead, Mutation: MutationNone},
-			"scale":       {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
-			"restart":     {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
-			"delete_pod":  {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
-			"exec":        {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
 		},
 	},
 	PulseDockerToolName: {
@@ -212,8 +208,6 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 			// is read for workflow purposes too (write would drive the
 			// FSM into verification for a non-mutating refresh).
 			"check_updates": {Kind: ToolCallKindRead, Mutation: MutationNone},
-			"control":       {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
-			"update":        {Kind: ToolCallKindWrite, Mutation: MutationInfrastructure},
 		},
 	},
 	PulseKnowledgeToolName: {
@@ -272,6 +266,23 @@ func ClassifyRegisteredInvocation(toolName string, args map[string]interface{}) 
 		return FailClosedInvocationClass()
 	}
 	return descriptor.Classify(args)
+}
+
+// ClassifyLegacyAssistantInvocation classifies the compatibility aliases used
+// by /api/ai/execute. Keeping this mapping here lets its provider projection
+// and runtime boundary consume the same closed mutation vocabulary as the
+// registry-backed Assistant. Unknown aliases fail closed.
+func ClassifyLegacyAssistantInvocation(toolName string) InvocationClass {
+	switch strings.TrimSpace(toolName) {
+	case LegacyAssistantFetchURLToolName:
+		return InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone}
+	case LegacyAssistantRunCommandToolName:
+		return InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure}
+	case LegacyAssistantSetResourceURLToolName, ResolveFindingCapabilityName, DismissFindingCapabilityName:
+		return InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationPulseState}
+	default:
+		return FailClosedInvocationClass()
+	}
 }
 
 // RedactedProposalParamsMarker replaces proposal parameter values in every

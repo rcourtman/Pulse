@@ -1189,6 +1189,7 @@ payload shape change when the portal presents compact client rows.
 47. `internal/agentcapabilities/projection.go` shared with `ai-runtime`: the agent capability external-tool projection helper, normalized manifest-owned surface tool contract resolution and tools-affordance gating, manifest-owned resource-context route and argument vocabulary, operator-state capability and route vocabulary, finding workflow capability and lifecycle argument vocabulary including resolution and dismissal notes, governed action capability, route, and argument vocabulary, manifest-owned tool title and outputSchema projection, structured Pulse capability _meta, and shared tool behavior hints are both the canonical API manifest projection contract and the AI runtime adapter projection for Pulse Assistant and MCP-facing agent tools, with MCP annotation and metadata wire names confined to adapter-edge aliases.
 48. `internal/agentcapabilities/provider_tool_artifacts.go` shared with `ai-runtime`: the provider tool-call artifact detector and streaming tool-name prefix splitter are both the Assistant stream-sanitization boundary and the shared external-adapter leak guard for provider-native tool-call markup that escaped the structured channel.
 49. `internal/agentcapabilities/schema.go` shared with `ai-runtime`: the agent capability input schema contract is both the canonical API manifest schema envelope and the AI runtime structured tool-schema, governance-aware provider-projection with neutral behavior hints and Pulse governance metadata, offered-tool governance extraction for Assistant prompt policy, manifest-affordance-gated Assistant provider-surface composition, manifest raw-schema to Assistant provider-schema projection for capability tools, legacy native Assistant utility provider aliases and schemas, provider-call normalization, provider-result context projection, Assistant-native interaction provider-tool declaration, and live Assistant execution-normalization contract for Pulse Assistant and MCP-facing agent tools.
+    Provider-facing schemas are closed objects, provider-originated internal approval fields and undeclared properties fail closed, and `/api/ai/chat` does not expose request-owned autonomous authority. `internal/api/agent_command_authorization.go` is the server-owned bridge from an approved interactive action to agentexec: it validates org and action identity and atomically consumes the exact command/target approval immediately before grant signing and WebSocket dispatch.
 50. `internal/agentcapabilities/scopes.go` shared with `ai-runtime`: the manifest-derived required-scope summary is both the canonical API/agent token guidance contract and the AI runtime adapter startup/onboarding contract for Assistant-compatible external-agent surfaces.
 51. `internal/agentcapabilities/sse.go` shared with `ai-runtime`: the Pulse Intelligence SSE subscription transport and record parser are both the canonical API event-stream consumption contract and the AI runtime adapter push bridge contract for MCP and reference agent clients.
 52. `internal/agentcapabilities/surface_contract.go` shared with `ai-runtime`: the Pulse Intelligence operator-surface affordance contract, shared surface-affordance, surface-tool identity, Assistant surface tool filtering, normalized external surface tool resolver, surface lookup, affordance labels, and manifest-published external-adapter surface tool allowlist projection are both the canonical API manifest surface model and the AI runtime prompt and onboarding guardrail for Assistant and MCP-facing surfaces.
@@ -1288,7 +1289,14 @@ payload shape change when the portal presents compact client rows.
     state. `GET /api/ai/sessions` and other `ChatSession` projections may
     expose only the boolean `can_redo` hint alongside safe title/timestamp,
     count, and handoff-summary fields so the drawer can re-enable redo after a
-    reload without reading the redo stack itself. Browser clients must use the
+    reload without reading the redo stack itself. The projection also carries
+    a boolean `system` flag for Pulse-owned background sessions (Patrol
+    detection `patrol-main`, `patrol-eval`, and `investigation-*` runs),
+    derived server-side from the well-known session IDs via
+    `chat.IsSystemSessionID`; browser clients must not re-derive that
+    ownership from ID string patterns, and must keep system sessions out of
+    resumable-chat offers (quick-resume) while leaving them listable for
+    inspection. Browser clients must use the
     shared `AIChatAPI.undoLastTurn(sessionId)` and
     `AIChatAPI.redoLastTurn(sessionId)` helpers so path encoding and response
     shape stay canonical.
@@ -1649,7 +1657,7 @@ payload shape change when the portal presents compact client rows.
     persisted host continuity, so a server restart or v6 upgrade does not change
     the explanatory grouping model before the live
     inventory rebuild catches up. Genuinely new host identities must still return
-    the canonical monitored-system blocked payload.
+    the canonical monitored-system blocked payload. Independently, Assistant scope is server-bound: `ai:chat` authorizes conversation, reads, sessions, and knowledge reads only; durable knowledge changes and explicit governed approval/execution require `ai:execute`, relay-mobile chat does not inherit it, trusted proposal correlation identity is server-authored, and unknown/internal model fields fail closed before capture or store access.
 
 ## Extension Points
 
@@ -1852,11 +1860,19 @@ a new API state machine, queue contract, or verification-accounting field.
    optional recurring window, `NeverAutoRemediate`, and the tenant's effective
    Patrol mode all allow it. Assisted mode admits only `low_risk`; unlocked full
    mode may also admit `elevated`; monitor, approval, dry-run-only, MFA, missing,
-   and unknown policy fail closed to the pending disposition. Core re-reads the
-   policy immediately before execution and records the decision as actor
-   `pulse_patrol_policy` with approval method `policy`; the canonical lifecycle
-   still owns locks, drift validation, execution, verification, publication,
-   and replay safety. Proposals
+   and unknown policy fail closed. Automatic admission is lifecycle-owned:
+   `ExecuteUnderPolicy` re-reads the complete tenant, capability, resource,
+   window, unlock, license, and emergency-stop posture under the shared policy
+   admission coordinator, binds it to a typed versioned lease, then persists
+   the `pulse_patrol_policy` / `policy` approval and `executing` transition in
+   one store CAS transaction. No reusable policy-approved state exists.
+   Missing, malformed, stale, unreadable, or revoked policy records a stable
+   refused-before-dispatch failure with no executor call. Human approval stays
+   a distinct path: automatic-mode, allowlist, and recurring-window changes do
+   not revoke a human decision, while plan drift, `NeverAutoRemediate`, and the
+   action emergency stop remain universal. The executing transition is the
+   admission linearization point; a later emergency stop is best-effort
+   cancellation and never claims rollback. Proposals
    that populate a capability parameter declared `IsSensitive` are refused
    with `ErrSensitiveParamsRequireOperator` before any audit persistence,
    so secret material never enters model output, investigation stores, or
@@ -1945,6 +1961,18 @@ a new API state machine, queue contract, or verification-accounting field.
    agent-authored inventory fingerprint into the typed request; refresh-time
    fingerprint drift refuses before installation and requires a new plan, so a
    stale package index cannot silently widen the approved mutation.
+   Agent-managed package-cache cleanup is the third complete typed action
+   vertical. `clean_package_cache` is admin-floor and low-risk-policy eligible,
+   accepts no model parameters, and is advertised only when the canonical
+   cache filesystem is under pressure and the fresh agent-authored cache
+   posture reports meaningful reclaimable bytes. Dispatch uses only
+   `ExecuteHostStorageCleanup` with the closed `host_storage_cleanup` envelope
+   and injects the observed fingerprint; command text, paths, packages, and
+   arbitrary arguments never cross the API. The agent owns the sole
+   `apt-get clean` mutation and read-after-write cache scan. The terminal audit
+   records before/after/reclaimed byte counts and distinguishes verified,
+   failed, and honestly inconclusive outcomes; inconsistent or unbounded byte
+   evidence fails closed.
    Resource payloads may expose the same executor-owned unavailable state as
    `actionReadiness[]` entries with stable `name`, `available`, `reasonCode`,
    and `reason` fields so browser and agent clients can explain disabled
@@ -3449,6 +3477,10 @@ agent-authored error text remain outside model context, so a private package
 name or repository detail cannot leak merely because Patrol investigates a
 host. Those facts are observation only; capability authority continues to come
 from the typed resource catalog and action lifecycle.
+Package-cache cleanup context follows the same privacy boundary: the model may
+see cleanup readiness, reclaimable byte count, and the containing filesystem's
+usage percentage. The cache fingerprint, fixed target path, entry names, raw
+APT output, and agent error text remain outside model context.
 
 `aicontracts.Finding` (the shape Patrol hands the investigation
 orchestrator) carries optional `OperatorContext` and
@@ -7260,8 +7292,11 @@ when no session cookie exists, the same request may retain the API-token
 fallback for scoped read access. This prevents first-run token persistence from
 silently converting session administration calls into rejected token calls.
 
-The canonical pending-action surface is `GET /api/actions/pending`; decisions
-and execution remain `POST /api/actions/{id}/decision` and
+The canonical decision queue remains `GET /api/actions/pending`. Durable inbox
+consumers use `GET /api/actions?view=pending|settled`, while
+`GET /api/actions/{id}` returns the authoritative audit, lifecycle events,
+dispatch attempt, and correlated receipt. Decisions and execution remain
+`POST /api/actions/{id}/decision` and
 `POST /api/actions/{id}/execute`. All three routes are in the relay-mobile
 inventory and router allowlist, and queue failures use the shared
 `agentcapabilities` vocabulary. Pending rows are oldest-first and expose the
@@ -7273,3 +7308,61 @@ action path. `ActionPlanInfo` carries canonical preflight detail across the
 broker boundary. Transition publication is org-scoped, persistence precedes
 publication, and API reconciliation treats the callback payload only as an id
 to re-read from the action lifecycle store.
+Planning uses atomic `CreateActionAudit` with its initial lifecycle events; it
+does not perform a separate existence read followed by an upsert. Identical
+replay returns the authoritative current plan and disposition, while a
+deterministic action-ID collision with different stable request, plan hash, or
+broker-owned origin fails without a write. Decision, expiry, refusal,
+execution-admission, and execution-result writes are conditional state
+transitions. Admission commits the executing record, event, deterministic
+dispatch attempt, and outbox together. Only a call-unique lease owner that
+crosses the one-shot `MarkActionDispatchStarted` CAS may reach a transport, and
+the request carries both action and attempt identity. A crash before that
+boundary safely reclaims the same attempt; a timeout, disconnect, cancellation,
+or crash afterward remains `executing`/`receipt_pending` and can only use the
+callable reconciliation path by attempt ID. Generic executor errors never
+synthesize receipts or terminal results. Exact duplicate decisions, executes,
+receipts, and resumes return authoritative current state; conflicting, forged,
+late, and out-of-order transitions cannot regress state or resend transport.
+A correlated response carrying today's existing result shape commits its
+receipt and terminal audit/event atomically, eliminating the
+receipt-recorded/result-lost crash window without extending Task 10's schema.
+Legacy executing rows without an attempt remain readable but inert.
+
+This Task 07 Phase B1 contract intentionally stops at transport continuity.
+Task 10 remains sole schema owner for execution, verification, evidence, and
+compensation truth. Compensation and verification-attempt recovery, plus
+mobile and relay inbox/push-dedup consumption, remain Phase B2 work after Task
+10; no mobile or relay-local workaround may compensate for a missing core API.
+
+### Canonical mutation plane
+
+`internal/mutationregistry/manifest.json` is the generated closed registry for
+runtime-reachable customer-infrastructure mutations and explicit Pulse
+administrative exceptions. Every entry declares origin, resource/capability,
+disposition, lifecycle executor (when executable), approval floor, delivery,
+verification, rollback, and residual owner. Infrastructure execution is valid
+only through `internal/actionlifecycle`; retired entries fail before transport.
+
+Executable audits derive candidates from the constructed Assistant tool
+registry and its schema discriminators, registered infrastructure HTTP route
+namespaces, Patrol broker registration, and actual agent/Docker transport
+constant catalogs. Unknown candidates, duplicate alias classification, retired
+alias extension shadowing, and transport without prior durable lifecycle
+authority fail `go test ./...` CI. The HTTP scanner's governed limitation is
+exact: it covers `/api/actions/`, `/api/agents/docker/`, `/api/updates/`,
+`/api/ai/remediation/`, and `/api/ai/run-command`; general settings and metadata
+CRUD are not claimed as customer-infrastructure mutation enumeration.
+
+Raw command/file write/arbitrary pod exec, direct Docker update/control, and
+enterprise command remediation are retired compatibility surfaces. Enterprise
+`remediation.json` remains readable history, but approve, execute, and rollback
+return `command_remediation_retired`/`ErrLegacyRemediationRetired` before any
+injected executor. Task 07 owns durable delivery/reconnect, Task 10 owns truth
+and compensation, and Task 12 owns the final governance verdict.
+The Pulse registry cannot assign ownership to sibling-repository paths; the
+exact residual unowned by `registry.json` is
+`pulse-enterprise/internal/remediation/engine.go` and
+`pulse-enterprise/internal/aiautofix/remediation_handlers.go`. Their contract is
+enforced by enterprise inertness/static tests and remains a Task 12 governance
+input rather than being hidden behind an invalid cross-repo registry path.

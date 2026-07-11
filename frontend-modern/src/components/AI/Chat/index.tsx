@@ -165,6 +165,7 @@ import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
 import { SlashCommandAutocomplete } from './SlashCommandAutocomplete';
 import { getAssistantActiveTurnStatus } from './activeTurnStatus';
+import { selectQuickResumeSessions } from './recentSessionsModel';
 import {
   createPacedWorkflowStatus,
   replaceLatestWorkflowStatusEventForDisplay,
@@ -4844,9 +4845,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               chat.cancelQueuedFollowUp(id);
               focusComposer();
             }}
-            recentSessions={sessions()
-              .filter((s) => s.id !== chat.sessionId() && s.message_count > 0)
-              .slice(0, 3)}
+            recentSessions={selectQuickResumeSessions(sessions(), chat.sessionId())}
             onLoadSession={handleLoadSession}
           />
 

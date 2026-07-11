@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -30,6 +31,10 @@ func (e dockerContainerActionExecutor) ActionHandlerNames() []string {
 }
 
 func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
+	attempt, ok := actionlifecycle.DispatchAttemptFromContext(ctx)
+	if !ok || attempt.ActionID != record.ID {
+		return nil, fmt.Errorf("committed action dispatch authority is required")
+	}
 	record, err := unified.NormalizeActionAuditRecord(record)
 	if err != nil {
 		return nil, err
@@ -58,7 +63,7 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 
 	command := fmt.Sprintf("%s %s %s", runtime, operation, shellQuote(containerRef))
 	result, err := e.agents.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-		RequestID:  record.ID,
+		RequestID:  attempt.ID,
 		Command:    command,
 		ApprovalID: record.ID,
 		TargetType: "agent",

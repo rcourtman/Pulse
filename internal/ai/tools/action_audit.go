@@ -141,8 +141,9 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 				Success:      false,
 				ErrorMessage: fmt.Sprintf("plan_drift: %s", driftErr.Error()),
 			}
-			e.recordActionAudit(record)
-			e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, "plan drift refused")
+			if err := persistFailedActionAudit(e.actionAuditStore, record, requestedBy, "plan drift refused"); err != nil {
+				log.Warn().Err(err).Str("action_id", record.ID).Msg("failed to persist plan-drift refusal")
+			}
 			e.publishActionCompleted(record)
 			return nil, driftErr
 		}
@@ -171,6 +172,9 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 	}
 
 	payload.ApprovalID = strings.TrimSpace(approvalID)
+	if approvalReq != nil && approvalReq.Plan != nil {
+		payload.BindCommandAuthorization(e.orgID, approvalReq.Plan.ActionID)
+	}
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, payload)
 	finalMessage := "command completed"
 	executionResult := &unifiedresources.ExecutionResult{Success: true}
@@ -377,7 +381,12 @@ func (e *PulseToolExecutor) recordActionExecutionStart(record unifiedresources.A
 			return record, err
 		}
 	} else if e != nil && e.actionAuditStore != nil {
-		if err := e.actionAuditStore.RecordActionAudit(record); err != nil {
+		plannedEvent := unifiedresources.ActionLifecycleEvent{
+			ActionID: record.ID, Timestamp: now, State: unifiedresources.ActionStatePlanned,
+			Actor: actor, Message: strings.TrimSpace(record.Request.Reason),
+		}
+		current, _, err := e.actionAuditStore.CreateActionAudit(record, []unifiedresources.ActionLifecycleEvent{plannedEvent})
+		if err != nil {
 			log.Warn().
 				Err(err).
 				Str("action_id", record.ID).
@@ -385,21 +394,7 @@ func (e *PulseToolExecutor) recordActionExecutionStart(record unifiedresources.A
 				Msg("failed to persist planned action audit")
 			return record, err
 		}
-		event := unifiedresources.ActionLifecycleEvent{
-			ActionID:  record.ID,
-			Timestamp: now,
-			State:     unifiedresources.ActionStatePlanned,
-			Actor:     actor,
-			Message:   strings.TrimSpace(record.Request.Reason),
-		}
-		if err := e.actionAuditStore.RecordActionLifecycleEvent(event); err != nil {
-			log.Warn().
-				Err(err).
-				Str("action_id", record.ID).
-				Str("state", string(unifiedresources.ActionStatePlanned)).
-				Msg("failed to persist planned action lifecycle event")
-			return record, err
-		}
+		record = current
 	}
 
 	started, event, err := unifiedresources.BeginActionExecution(record, actor, now)
@@ -440,21 +435,23 @@ func (e *PulseToolExecutor) recordActionExecutionRefusal(record unifiedresources
 		e.publishActionCompleted(failed)
 		return failed, reason
 	}
-	if err := e.actionAuditStore.RecordActionAudit(failed); err != nil {
+	_, found, queryErr := e.actionAuditStore.GetActionAudit(failed.ID)
+	if queryErr != nil {
+		return record, queryErr
+	}
+	var persistErr error
+	if found {
+		persistErr = e.actionAuditStore.RecordActionExecutionRefusal(failed, event)
+	} else {
+		_, _, persistErr = e.actionAuditStore.CreateActionAudit(failed, []unifiedresources.ActionLifecycleEvent{event})
+	}
+	if persistErr != nil {
 		log.Warn().
-			Err(err).
+			Err(persistErr).
 			Str("action_id", failed.ID).
 			Str("state", string(failed.State)).
 			Msg("failed to persist action execution refusal")
-		return record, err
-	}
-	if err := e.actionAuditStore.RecordActionLifecycleEvent(event); err != nil {
-		log.Warn().
-			Err(err).
-			Str("action_id", failed.ID).
-			Str("state", string(failed.State)).
-			Msg("failed to persist action execution refusal lifecycle event")
-		return record, err
+		return record, persistErr
 	}
 	e.publishActionCompleted(failed)
 	return failed, reason
@@ -481,11 +478,13 @@ func (e *PulseToolExecutor) ensureApprovalDecisionBeforeExecution(record unified
 		return record, err
 	}
 	if !ok {
-		if err := e.actionAuditStore.RecordActionAudit(record); err != nil {
+		decisionEvent := unifiedresources.ActionLifecycleEvent{ActionID: record.ID, Timestamp: now, State: record.State, Actor: actor, Message: "Action approval was recorded before execution."}
+		current, _, err := e.actionAuditStore.CreateActionAudit(record, []unifiedresources.ActionLifecycleEvent{decisionEvent})
+		if err != nil {
 			log.Warn().Err(err).Str("action_id", record.ID).Msg("failed to persist approved action audit before execution")
 			return record, err
 		}
-		return record, nil
+		return current, nil
 	}
 	if current.State != unifiedresources.ActionStatePending {
 		return current, nil
@@ -549,9 +548,7 @@ func (e *PulseToolExecutor) recordActionExecutionResult(record unifiedresources.
 		} else {
 			record.State = unifiedresources.ActionStateFailed
 		}
-		e.recordActionAudit(record)
-		e.recordActionLifecycle(record.ID, record.State, actor, message)
-		e.publishActionCompleted(record)
+		log.Warn().Str("action_id", record.ID).Msg("refusing to persist a synthetic terminal action result after transition normalization failed")
 		return record
 	}
 	if strings.TrimSpace(message) != "" {
@@ -570,19 +567,6 @@ func (e *PulseToolExecutor) recordActionExecutionResult(record unifiedresources.
 	}
 	e.publishActionCompleted(completed)
 	return completed
-}
-
-func (e *PulseToolExecutor) recordActionAudit(record unifiedresources.ActionAuditRecord) {
-	if e == nil || e.actionAuditStore == nil {
-		return
-	}
-	if err := e.actionAuditStore.RecordActionAudit(record); err != nil {
-		log.Warn().
-			Err(err).
-			Str("action_id", record.ID).
-			Str("resource_id", record.Request.ResourceID).
-			Msg("failed to persist action audit")
-	}
 }
 
 // publishActionCompleted dispatches the executor's post-completion
@@ -607,26 +591,6 @@ func (e *PulseToolExecutor) publishActionCompleted(record unifiedresources.Actio
 		return
 	}
 	go cb(record)
-}
-
-func (e *PulseToolExecutor) recordActionLifecycle(actionID string, state unifiedresources.ActionState, actor, message string) {
-	if e == nil || e.actionAuditStore == nil || strings.TrimSpace(actionID) == "" {
-		return
-	}
-	event := unifiedresources.ActionLifecycleEvent{
-		ActionID:  actionID,
-		Timestamp: time.Now().UTC(),
-		State:     state,
-		Actor:     actor,
-		Message:   message,
-	}
-	if err := e.actionAuditStore.RecordActionLifecycleEvent(event); err != nil {
-		log.Warn().
-			Err(err).
-			Str("action_id", actionID).
-			Str("state", string(state)).
-			Msg("failed to persist action lifecycle event")
-	}
 }
 
 // RecordApprovalDecision updates the unified action audit for an approval that
@@ -657,8 +621,10 @@ func RecordApprovalDecision(store unifiedresources.ResourceStore, approvalID str
 	if recordApprovalDecisionAtomically(store, req.ID, record, actor) {
 		return
 	}
-	recordActionAudit(store, record)
-	recordActionLifecycle(store, req.Plan.ActionID, state, actor, message)
+	event := unifiedresources.ActionLifecycleEvent{ActionID: req.Plan.ActionID, Timestamp: time.Now().UTC(), State: state, Actor: actor, Message: message}
+	if _, _, err := store.CreateActionAudit(record, []unifiedresources.ActionLifecycleEvent{event}); err != nil {
+		log.Warn().Err(err).Str("action_id", record.ID).Msg("failed to create action audit for approval decision")
+	}
 }
 
 func (e *PulseToolExecutor) recordApprovalDecisionAtomically(approvalID string, record unifiedresources.ActionAuditRecord, actor string) bool {
@@ -711,39 +677,6 @@ func recordApprovalDecisionAtomically(store unifiedresources.ResourceStore, appr
 		return false
 	}
 	return true
-}
-
-func recordActionAudit(store unifiedresources.ResourceStore, record unifiedresources.ActionAuditRecord) {
-	if store == nil {
-		return
-	}
-	if err := store.RecordActionAudit(record); err != nil {
-		log.Warn().
-			Err(err).
-			Str("action_id", record.ID).
-			Str("resource_id", record.Request.ResourceID).
-			Msg("failed to persist action audit")
-	}
-}
-
-func recordActionLifecycle(store unifiedresources.ResourceStore, actionID string, state unifiedresources.ActionState, actor, message string) {
-	if store == nil || strings.TrimSpace(actionID) == "" {
-		return
-	}
-	event := unifiedresources.ActionLifecycleEvent{
-		ActionID:  actionID,
-		Timestamp: time.Now().UTC(),
-		State:     state,
-		Actor:     actor,
-		Message:   message,
-	}
-	if err := store.RecordActionLifecycleEvent(event); err != nil {
-		log.Warn().
-			Err(err).
-			Str("action_id", actionID).
-			Str("state", string(state)).
-			Msg("failed to persist action lifecycle event")
-	}
 }
 
 func (e *PulseToolExecutor) recordPendingApprovalAction(req *approval.ApprovalRequest) {
@@ -818,12 +751,13 @@ func RecordPendingApprovalAction(store unifiedresources.ResourceStore, req *appr
 	}
 	actor := approval.RequesterForRequest(req)
 	record := actionAuditRecordFromApproval(req, unifiedresources.ActionStatePending, actor)
-	if err := store.RecordActionAudit(record); err != nil {
-		log.Warn().Err(err).Str("action_id", record.ID).Msg("failed to persist pending approval action")
-		return
+	events := []unifiedresources.ActionLifecycleEvent{
+		{ActionID: req.Plan.ActionID, State: unifiedresources.ActionStatePlanned, Timestamp: record.CreatedAt, Actor: actor, Message: strings.TrimSpace(req.Context)},
+		{ActionID: req.Plan.ActionID, State: unifiedresources.ActionStatePending, Timestamp: record.CreatedAt, Actor: actor, Message: "waiting for approval"},
 	}
-	recordApprovalLifecycle(store, req.Plan.ActionID, unifiedresources.ActionStatePlanned, actor, strings.TrimSpace(req.Context))
-	recordApprovalLifecycle(store, req.Plan.ActionID, unifiedresources.ActionStatePending, actor, "waiting for approval")
+	if _, _, err := store.CreateActionAudit(record, events); err != nil {
+		log.Warn().Err(err).Str("action_id", record.ID).Msg("failed to persist pending approval action")
+	}
 }
 
 func recordApprovalLifecycle(store unifiedresources.ResourceStore, actionID string, state unifiedresources.ActionState, actor, message string) {
@@ -1175,10 +1109,32 @@ func (e *PulseToolExecutor) refuseDispatchForRemediationLock(record unifiedresou
 		ErrorMessage: remediationLockRefusalMessage(refusal),
 	}
 	record.Result = result
-	e.recordActionAudit(record)
-	e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, remediationLockLifecycleMessage(refusal))
+	if err := persistFailedActionAudit(e.actionAuditStore, record, requestedBy, remediationLockLifecycleMessage(refusal)); err != nil {
+		log.Warn().Err(err).Str("action_id", record.ID).Msg("failed to persist remediation-lock refusal")
+	}
 	e.publishActionCompleted(record)
 	return result
+}
+
+func persistFailedActionAudit(store unifiedresources.ResourceStore, record unifiedresources.ActionAuditRecord, actor, message string) error {
+	if store == nil {
+		return nil
+	}
+	event := unifiedresources.ActionLifecycleEvent{ActionID: record.ID, Timestamp: record.UpdatedAt, State: unifiedresources.ActionStateFailed, Actor: actor, Message: message}
+	current, found, err := store.GetActionAudit(record.ID)
+	if err != nil {
+		return err
+	}
+	if found {
+		current.State = unifiedresources.ActionStateFailed
+		current.UpdatedAt = record.UpdatedAt
+		current.Result = record.Result
+		current.Verification = record.Verification
+		current.VerificationOutcome = record.VerificationOutcome
+		return store.RecordActionExecutionRefusal(current, event)
+	}
+	_, _, err = store.CreateActionAudit(record, []unifiedresources.ActionLifecycleEvent{event})
+	return err
 }
 
 func remediationLockRefusalMessage(refusal error) string {

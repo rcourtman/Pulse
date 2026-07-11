@@ -53,14 +53,14 @@ func (e *PulseToolExecutor) registerDockerTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseDockerToolName,
-			Description: `Manage Docker containers, updates, and Swarm services. Actions: control, updates, check_updates, update, services, tasks, swarm.`,
+			Description: `Read Docker update posture and Swarm state. Container control is planned through pulse_control using a canonical resource capability. Container updates remain unavailable until durable delivery and compensation contracts are complete.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"action": {
 						Type:        "string",
 						Description: "Docker action to perform",
-						Enum:        []string{"control", "updates", "check_updates", "update", "services", "tasks", "swarm"},
+						Enum:        []string{"updates", "check_updates", "services", "tasks", "swarm"},
 					},
 					"container": {
 						Type:        "string",
@@ -91,10 +91,9 @@ func (e *PulseToolExecutor) registerDockerTools() {
 			return exec.executeDocker(ctx, args)
 		},
 		Governance: ToolGovernance{
-			ActionMode:      ToolActionMixed,
-			ApprovalPolicy:  ToolApprovalActionPlan,
-			ApprovalSummary: "read/list actions are safe; control and update subactions require approval in controlled mode",
-			Summary:         "Lists Docker state and performs governed Docker control/update subactions.",
+			ActionMode:     ToolActionRead,
+			ApprovalPolicy: ToolApprovalScopeOnly,
+			Summary:        "Reads Docker state; mutations use typed resource actions or remain denied.",
 		},
 	})
 }
@@ -103,14 +102,10 @@ func (e *PulseToolExecutor) registerDockerTools() {
 func (e *PulseToolExecutor) executeDocker(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	action, _ := args["action"].(string)
 	switch action {
-	case "control":
-		return e.executeDockerControl(ctx, args)
 	case "updates":
 		return e.executeListDockerUpdates(ctx, args)
 	case "check_updates":
 		return e.executeCheckDockerUpdates(ctx, args)
-	case "update":
-		return e.executeUpdateDockerContainer(ctx, args)
 	case "services":
 		return e.executeListDockerServices(ctx, args)
 	case "tasks":
@@ -118,7 +113,7 @@ func (e *PulseToolExecutor) executeDocker(ctx context.Context, args map[string]i
 	case "swarm":
 		return e.executeGetSwarmStatus(ctx, args)
 	default:
-		return NewErrorResult(fmt.Errorf("unknown action: %s. Use: control, updates, check_updates, update, services, tasks, swarm", action)), nil
+		return NewErrorResult(fmt.Errorf("Docker action %q is unavailable; use read actions or pulse_control type=resource for advertised lifecycle capabilities", action)), nil
 	}
 }
 

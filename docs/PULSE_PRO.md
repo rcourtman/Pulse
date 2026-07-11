@@ -140,8 +140,8 @@ This matrix is derived from the canonical table in `docs/architecture/ENTITLEMEN
 |---|---|---|:---:|:---:|:---:|:---:|---|
 | `FeatureAIPatrol` | `ai_patrol` | Pulse Patrol (Background Health Checks) | Y | Y | Y | Y | Patrol itself is available on Community with your own provider or local model. Higher-autonomy outcomes and fix execution are separately gated. |
 | `FeatureRelay` | `relay` | Remote Access (Mobile Relay) | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings and onboarding endpoints. |
-| `FeatureAIAlerts` | `ai_alerts` | Patrol Investigates Issues | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
-| `FeatureAIAutoFix` | `ai_autofix` | Patrol Handles Safe Fixes | N | N | Y | Y | Required for governed fix execution and automatic Patrol actions. |
+| `FeatureAIAlerts` | `ai_alerts` | Patrol Investigates Issues and Explains the Root Cause | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
+| `FeatureAIAutoFix` | `ai_autofix` | Patrol Applies Safe Fixes and Verifies the Result | N | N | Y | Y | Required for governed fix execution and automatic Patrol actions. |
 | `FeatureKubernetesAI` | `kubernetes_ai` | Kubernetes AI Analysis (Compatibility) | N | N | Y | Y | Legacy compatibility gate for `/api/ai/kubernetes/analyze`; not a primary marketed v6 Pro plan pillar. |
 | `FeatureAgentProfiles` | `agent_profiles` | Centralized Agent Profiles | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., agent_profiles, ...)`. |
 | `FeatureUpdateAlerts` | `update_alerts` | Update Alerts (Container/Package Updates) | Y | Y | Y | Y | Included in Community tier per `TierFeatures[TierFree]`. |

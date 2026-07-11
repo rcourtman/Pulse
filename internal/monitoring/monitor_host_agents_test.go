@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -3442,5 +3443,54 @@ func TestApplyHostReportMapsReclaimableMemoryCache(t *testing.T) {
 	}
 	if got, want := host.Memory.Cache, int64(10<<30); got != want {
 		t.Fatalf("clamped memory cache = %d, want %d", got, want)
+	}
+}
+
+func TestApplyHostReportNormalizesLegacyAgentPlatformAcceptedIngestProof(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	now := time.Now().UTC()
+	cases := []struct {
+		name     string
+		platform string
+		want     string
+	}{
+		// Legacy v5 agents report gopsutil's host.Info().Platform verbatim,
+		// e.g. "microsoft windows 11 pro" on Windows (refs #1555).
+		{"legacy windows caption", "microsoft windows 11 pro", "windows"},
+		{"darwin", "darwin", "macos"},
+		{"linux distro preserved", "Ubuntu", "ubuntu"},
+	}
+	for index, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			report := agentshost.Report{
+				Agent: agentshost.AgentInfo{
+					ID:              fmt.Sprintf("agent-platform-%d", index),
+					Version:         "5.1.36",
+					IntervalSeconds: 30,
+				},
+				Host: agentshost.HostInfo{
+					ID:       fmt.Sprintf("machine-platform-%d", index),
+					Hostname: fmt.Sprintf("host-platform-%d", index),
+					Platform: tc.platform,
+				},
+				Timestamp: now,
+			}
+
+			host, err := monitor.ApplyHostReport(report, &config.APITokenRecord{ID: fmt.Sprintf("token-platform-%d", index), Name: "Platform Token"})
+			if err != nil {
+				t.Fatalf("ApplyHostReport: %v", err)
+			}
+			if host.Platform != tc.want {
+				t.Fatalf("expected ingested platform %q for reported %q, got %q", tc.want, tc.platform, host.Platform)
+			}
+		})
 	}
 }

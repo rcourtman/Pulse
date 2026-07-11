@@ -935,6 +935,19 @@ def canonical_block_for_device(device):
     return name
 
 
+def is_non_rotational_block_device(device):
+    # Positively confirmed SSD via sysfs; anything uncertain returns False so
+    # the caller keeps the conservative standby guard.
+    block = canonical_block_for_device(device)
+    if not block:
+        return False
+    try:
+        with open("/sys/block/%%s/queue/rotational" %% block) as handle:
+            return handle.read().strip() == "0"
+    except Exception:
+        return False
+
+
 def inferred_smart_device_types(device):
     name = os.path.basename(str(device or "").strip()).lower()
     if re.fullmatch(r"(sd|hd)[a-z]+", name or ""):
@@ -1184,7 +1197,15 @@ def collect_smart():
             args = [path]
             if attempt_type:
                 args.extend(["-d", attempt_type])
-            args.extend(["-n", "standby,3", "-i", "-A", "-H", "--json=o", attempt_device])
+            # The standby guard avoids spinning up sleeping rotational disks.
+            # SSDs have nothing to spin up, and some SATA SSDs answer CHECK
+            # POWER MODE with a bogus standby state that permanently hides
+            # their SMART data (#1516), so confirmed SSDs are probed without
+            # it. Multiplexed members keep the guard: the shared /dev path's
+            # rotational flag describes the array, not the member.
+            if is_multiplexed_device_type(attempt_type) or not is_non_rotational_block_device(attempt_device):
+                args.extend(["-n", "standby,3"])
+            args.extend(["-i", "-A", "-H", "--json=o", attempt_device])
 
             result = run_command(args)
             if not result or not result.stdout.strip():

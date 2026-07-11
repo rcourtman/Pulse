@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -40,6 +41,10 @@ func (e proxmoxGuestActionExecutor) ActionHandlerNames() []string {
 }
 
 func (e proxmoxGuestActionExecutor) ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
+	attempt, ok := actionlifecycle.DispatchAttemptFromContext(ctx)
+	if !ok || attempt.ActionID != record.ID {
+		return nil, fmt.Errorf("committed action dispatch authority is required")
+	}
 	record, err := unified.NormalizeActionAuditRecord(record)
 	if err != nil {
 		return nil, err
@@ -61,7 +66,7 @@ func (e proxmoxGuestActionExecutor) ExecuteAction(ctx context.Context, record un
 
 	command := proxmoxGuestLifecycleCommand(kind, operation, vmid)
 	result, err := e.agents.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-		RequestID:  record.ID,
+		RequestID:  attempt.ID,
 		Command:    command,
 		ApprovalID: record.ID,
 		TargetType: "agent",

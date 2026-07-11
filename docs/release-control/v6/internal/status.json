@@ -3964,6 +3964,47 @@
       "release_gate_ids": [],
       "proof_commands": [
         {
+          "id": "ra35-chat-authority-boundary",
+          "run": [
+            "go",
+            "test",
+            "./internal/agentcapabilities",
+            "./internal/agentexec",
+            "./internal/ai",
+            "./internal/ai/tools",
+            "./internal/api",
+            "-run",
+            "TestParseProviderToolInputRejectsInternalApprovalMetadata|TestValidateDeclaredToolArgumentsRejectsUnknownProviderProperties|TestExecuteCommand_RoundTripViaWebSocket|TestExecuteCommand_InvalidApprovalAuthorizationNeverMintsOrDispatches|TestService_ExecuteStream_AutonomousRawCommandRequiresApproval|TestPulseToolExecutor_ExecuteRunCommand|TestHandleChat_CannotElevateAutonomousModePerRequest|TestVerifyAndConsumeCommandAuthorization",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "ra35-dispatch-time-policy-revocation",
+          "run": [
+            "go",
+            "test",
+            "./internal/actionlifecycle",
+            "./internal/api",
+            "-run",
+            "TestExecuteUnderPolicyBarrierRevocationsMemoryStore|TestExecuteUnderPolicyBarrierRevocationsSQLite|TestPolicyAdmissionCommitsApprovalAndExecutingAtomicallyMemoryStore|TestPolicyAdmissionCommitsApprovalAndExecutingAtomicallySQLite|TestHumanApprovalSurvivesAutomaticPolicyRevocationMemoryStore|TestHumanApprovalSurvivesAutomaticPolicyRevocationSQLite|TestEmergencyStopBlocksHumanAndPolicyAdmissionMemoryStore|TestEmergencyStopBlocksHumanAndPolicyAdmissionSQLite|TestLegacyPolicyApprovalWithoutLeaseFailsClosedAfterRestart|TestQueuedPolicyActionRevalidatesAfterSQLiteRestart|TestPatrolActionBrokerDispatchTimePolicyRevocation",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "ra35-typed-host-storage-cleanup-vertical",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "./internal/agentexec",
+            "./internal/hostagent",
+            "./internal/unifiedresources",
+            "-run",
+            "TestPatrolFullModeRunsStorageCleanupThroughCanonicalLifecycle|TestExecuteHostStorageCleanupRoundTripUsesPathAndCommandFreeEnvelope|TestStorageCleanupManagerApplyUsesClosedAPTCatalogAndVerifiesBytes|TestStorageCleanupManagerRefusesFingerprintDriftBeforeMutation|TestHostStorageCleanupTargetDiskUsesLongestContainingMount",
+            "-count=1"
+          ]
+        },
+        {
           "id": "ra35-typed-host-update-vertical",
           "run": [
             "go",
@@ -4002,12 +4043,48 @@
       "evidence": [
         {
           "repo": "pulse",
+          "path": "internal/actionlifecycle/service.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/actionlifecycle/service_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentcapabilities/schema.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentcapabilities/schema_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentexec/server.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agentexec/server_websocket_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/agentexec/types.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "internal/ai/chat/service_investigation.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/tools/control_run_command_test.go",
           "kind": "file"
         },
         {
@@ -4032,6 +4109,21 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/agent_command_authorization.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/agent_command_authorization_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/host_storage_cleanup_action_executor.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/host_update_action_executor.go",
           "kind": "file"
         },
@@ -4042,7 +4134,27 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/patrol_action_broker_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/hostagent/package_updates.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/hostagent/storage_cleanup.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/actions.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store.go",
           "kind": "file"
         },
         {
@@ -4059,6 +4171,85 @@
           "repo": "pulse",
           "path": "pkg/aicontracts/orchestrator_deps.go",
           "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA36",
+      "summary": "Deterministic governed-action replay is create-once and monotonic: concurrent identical proposals return the authoritative current audit, terminal states cannot rewind, record and lifecycle events commit atomically, and exactly one successful transition to executing may admit the executor.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6",
+        "L13",
+        "L20"
+      ],
+      "subsystem_ids": [
+        "api-contracts",
+        "unified-resources"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "ra36-action-lifecycle-contract",
+          "run": [
+            "go",
+            "test",
+            "./internal/unifiedresources",
+            "./internal/api",
+            "-run",
+            "TestProductionActionLifecycleDoesNotUseRecordActionAuditAsUpsert|TestContract_ActionLifecycleReplayIsCreateOnceAndMonotonic|TestContract_ActionExecutorAdmissionRequiresExecutingCASWinner",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "ra36-atomic-action-lifecycle",
+          "run": [
+            "go",
+            "test",
+            "./internal/unifiedresources",
+            "./internal/actionlifecycle",
+            "./internal/api",
+            "-run",
+            "TestMemoryStoreCreateActionAuditConcurrentReturnsCurrent|TestSQLiteStoreCreateActionAuditConcurrentAcrossTwoInstances|TestSQLiteStoreActionTransitionCASAcrossTwoInstances|TestSQLiteStoreConcurrentExecutionStartAcrossTwoInstancesHasOneWinner|TestSQLiteStoreCreateActionAuditRollsBackWhenInitialEventInsertFails|TestSQLiteStoreActionTransitionRollsBackWhenEventInsertFails|TestSQLiteStoreLifecycleRestartPreservesMonotonicState|TestSQLiteStoreRestartDoesNotReadmitExecutingAction|TestConcurrentPlanReplayCannotRewindTerminalActionMemoryStore|TestConcurrentPlanReplayCannotRewindTerminalActionSQLiteStore|TestConcurrentExecuteAdmitsExecutorExactlyOnceMemoryStore|TestConcurrentExecuteAdmitsExecutorExactlyOnceSQLiteStore|TestPlanReplayRejectsConflictingOriginForDeterministicActionID|TestPatrolActionBrokerBarrierReplayAdmitsExecutorExactlyOnce|TestPatrolActionBrokerTerminalReplayPreservesAuditAndEvents|TestPatrolActionReconciliationHydratesTerminalAuditAfterRestart|TestPatrolActionReconciliationCannotRegressFromOutOfOrderCallback",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/actionlifecycle/service.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/actionlifecycle/service_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/patrol_action_broker_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/actions.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         }
       ]
     }
@@ -5618,7 +5809,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. Two policy-authorized verticals are live. Docker/Podman restart is capability-owned low-risk eligible. Agent-managed APT host updates are capability-owned elevated eligible and cross a closed typed host_update protocol with no command, package-selection, removal, or reboot authority; the agent owns metadata refresh, preflight simulation, guarded installation, and post-install simulation, while the audit records verified, failed, or honestly inconclusive outcomes plus reboot-required state. Both require explicit per-resource capability allowlists and optional recurring timezone windows, remain bounded by tenant Patrol mode and full-mode unlock, recheck policy/readiness before decision and dispatch, and record server-owned policy approval plus terminal verification in the same audit trail. Never-auto-remediate, missing/unknown policy, unsupported capabilities, stale/error/empty package inventories, dry-run/MFA floors, closed windows, and mode downgrades all fail closed. Action continuity is audit-authoritative: idempotent proposal replay cannot rewind or double-execute a terminal action, callbacks trigger org-scoped re-reads, investigation reads recover missed transitions by trusted origin, desktop and mobile decisions use the canonical /api/actions routes, terminal verification maps honestly onto Patrol findings and push outcomes, and legacy command-shaped history remains inert. Remaining post-RC hardening: broader tenant defaults/inheritance and automation rate budgets, storage pressure as the third complete workflow, richer dry-run providers, multi-actor approvals, additional package-manager providers beyond APT, separately governed reboot orchestration, and a real-lab detect-plan-execute-verify-rollback journey proof.",
+        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. Three policy-authorized verticals are live. Docker/Podman restart is capability-owned low-risk eligible. Agent-managed APT host updates are capability-owned elevated eligible and cross a closed typed host_update protocol with no command, package-selection, removal, or reboot authority; the agent owns metadata refresh, preflight simulation, guarded installation, and post-install simulation, while the audit records verified, failed, or honestly inconclusive outcomes plus reboot-required state. Agent-managed package-cache cleanup is capability-owned low-risk eligible and crosses a separate fingerprint-bound host_storage_cleanup protocol with no command, path, package selector, installed-package removal, or reboot authority; it is available only for meaningful reclaimable bytes on the actual pressured cache filesystem, and the audit verifies the bytes reclaimed. All three require explicit per-resource capability allowlists and optional recurring timezone windows, remain bounded by tenant Patrol mode and full-mode unlock, recheck policy/readiness before decision and dispatch, and record server-owned policy approval plus terminal verification in the same audit trail. Never-auto-remediate, missing/unknown policy, unsupported capabilities, stale/error/empty package or cleanup inventories, cleared storage pressure, dry-run/MFA floors, closed windows, and mode downgrades all fail closed. Action continuity is audit-authoritative and now has a Phase B1 durable transport foundation: execution admission atomically creates the deterministic dispatch attempt/outbox, a one-shot pre-send CAS prevents concurrent duplicate sends, expired pre-send claims safely requeue, post-send uncertainty remains receipt-pending for query-only reconciliation, explicit expiry is durable, and canonical detail plus pending/settled reads are tenant-scoped. Generic transport errors cannot fabricate receipts or terminal truth, legacy executing rows without attempts remain inert, callbacks trigger org-scoped re-reads, investigation reads recover missed transitions by trusted origin, desktop and mobile decisions use the canonical /api/actions routes, terminal verification maps honestly onto Patrol findings and push outcomes, and legacy command-shaped history remains inert. Remaining post-RC hardening includes Task 10-owned terminal execution/verification/evidence/compensation truth before Task 07 Phase B2 compensation and verification-attempt recovery, mobile/relay inbox and push-dedup consumption, broader tenant defaults/inheritance and automation rate budgets, richer dry-run providers, multi-actor approvals, additional package-manager and bounded cleanup providers beyond APT, separately governed reboot orchestration, and a real-lab detect-plan-execute-verify-rollback journey proof.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -5739,6 +5930,16 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/actionlifecycle/service.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/actionlifecycle/service_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/agentcontext/resource_context_sections.go",
           "kind": "file"
         },
@@ -5796,6 +5997,17 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/host_storage_cleanup_action_executor.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/host_storage_cleanup_action_executor_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/host_update_action_executor.go",
           "kind": "file"
         },
@@ -5828,6 +6040,33 @@
         {
           "repo": "pulse",
           "path": "internal/hostagent/package_updates_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/hostagent/storage_cleanup.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/hostagent/storage_cleanup_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/action_dispatch.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/action_dispatch_store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/action_dispatch_store_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         },
@@ -7324,7 +7563,7 @@
     },
     {
       "id": "action-governance-auditability-post-rc-hardening",
-      "summary": "Track broader action-governance hardening beyond the current canonical action-audit and resource-scoped action-history floor, including richer provider dry-runs, enterprise policy execution, multi-actor or MFA approval chains, and deeper safe-execution contracts for future controlled operations.",
+      "summary": "Task 07 Phase B1 has landed the core durable delivery/reconnect foundation: transactional action admission plus deterministic attempt/outbox, one-shot pre-send CAS, receipt correlation, explicit expiry, query-only restart reconciliation, and tenant-scoped detail/pending/settled APIs. Phase B2 remains planned after Task 10, which solely owns terminal execution, verification, evidence, compensation, and rollback truth; B2 then owns compensation/verification-attempt recovery plus mobile/relay inbox and push-dedup consumption, with no local workaround for absent core APIs. Task 12 owns the final L1/governance verdict and administrative-exception review. Raw model command, file write, arbitrary pod exec, legacy run_command, /api/ai/run-command, and enterprise command remediation remain retired with no replacement or executable historical authority.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-04-25",

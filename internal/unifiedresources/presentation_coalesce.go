@@ -41,7 +41,7 @@ func coalescePresentationHostResourcesOnce(
 	}
 
 	coalesced := make([]Resource, 0, len(resources))
-	indexByHostKey := make(map[string]int, len(resources))
+	indexesByHostKey := make(map[string][]int, len(resources))
 	parentRedirects := make(map[string]string)
 	for _, resource := range resources {
 		resource.Type = CanonicalResourceType(resource.Type)
@@ -51,26 +51,33 @@ func coalescePresentationHostResourcesOnce(
 			continue
 		}
 
-		existingIndex, ok := indexByHostKey[hostKey]
-		if !ok {
-			indexByHostKey[hostKey] = len(coalesced)
-			coalesced = append(coalesced, resource)
-			continue
+		// The host key is the short hostname, so distinct machines with
+		// dotted hostnames (cloud.rnd-lax1 vs cloud.gce-or1) share a bucket;
+		// the hostname-compatibility check keeps them from merging while a
+		// short name still pairs with its own FQDN (web01 vs web01.lan).
+		merged := false
+		for _, existingIndex := range indexesByHostKey[hostKey] {
+			existing := coalesced[existingIndex]
+			if excluded != nil && excluded(existing, resource) {
+				continue
+			}
+			if !presentationHostnamesCompatible(existing, resource) {
+				continue
+			}
+			if !shouldMergePresentationHostResources(existing, resource) {
+				continue
+			}
+			mergedResource := mergePresentationHostResources(existing, resource)
+			coalesced[existingIndex] = mergedResource
+			addPresentationParentRedirect(parentRedirects, existing.ID, mergedResource.ID)
+			addPresentationParentRedirect(parentRedirects, resource.ID, mergedResource.ID)
+			merged = true
+			break
 		}
-
-		existing := coalesced[existingIndex]
-		if excluded != nil && excluded(existing, resource) {
+		if !merged {
+			indexesByHostKey[hostKey] = append(indexesByHostKey[hostKey], len(coalesced))
 			coalesced = append(coalesced, resource)
-			continue
 		}
-		if !shouldMergePresentationHostResources(existing, resource) {
-			coalesced = append(coalesced, resource)
-			continue
-		}
-		merged := mergePresentationHostResources(existing, resource)
-		coalesced[existingIndex] = merged
-		addPresentationParentRedirect(parentRedirects, existing.ID, merged.ID)
-		addPresentationParentRedirect(parentRedirects, resource.ID, merged.ID)
 	}
 
 	applyPresentationParentRedirects(coalesced, parentRedirects)
@@ -134,6 +141,16 @@ func presentationHostMergeKey(resource Resource) string {
 		return ""
 	}
 
+	for _, candidate := range presentationHostnameCandidates(resource) {
+		normalized := NormalizeHostname(candidate)
+		if normalized != "" {
+			return "agent:" + normalized
+		}
+	}
+	return ""
+}
+
+func presentationHostnameCandidates(resource Resource) []string {
 	candidates := []string{}
 	if resource.Canonical != nil {
 		candidates = append(candidates, resource.Canonical.PlatformID, resource.Canonical.Hostname)
@@ -146,14 +163,30 @@ func presentationHostMergeKey(resource Resource) string {
 		candidates = append(candidates, resource.Proxmox.NodeName)
 	}
 	candidates = append(candidates, resource.Name)
+	return candidates
+}
 
-	for _, candidate := range candidates {
-		normalized := NormalizeHostname(candidate)
-		if normalized != "" {
-			return "agent:" + normalized
+// presentationHostnamesCompatible reports whether two host views may describe
+// the same machine. Sharing a short hostname is not enough: distinct dotted
+// hostnames (cloud.rnd-lax1 vs cloud.gce-or1) belong to distinct machines,
+// while a short name still pairs with its own FQDN (web01 vs web01.lan).
+func presentationHostnamesCompatible(left, right Resource) bool {
+	for _, leftName := range presentationHostnameCandidates(left) {
+		leftFull := NormalizeFullHostname(leftName)
+		if leftFull == "" {
+			continue
+		}
+		for _, rightName := range presentationHostnameCandidates(right) {
+			rightFull := NormalizeFullHostname(rightName)
+			if rightFull == "" {
+				continue
+			}
+			if leftFull == rightFull || HostnamesEquivalent(leftFull, rightFull) {
+				return true
+			}
 		}
 	}
-	return ""
+	return false
 }
 
 func shouldMergePresentationHostResources(left, right Resource) bool {

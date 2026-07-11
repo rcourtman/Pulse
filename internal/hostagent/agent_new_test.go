@@ -1206,3 +1206,26 @@ func TestExecuteCommandPayload_TrustedBypassesAgentApprovalGate(t *testing.T) {
 		t.Fatalf("toAgentExecPayload dropped Trusted field; round-trip must preserve it")
 	}
 }
+
+func TestNormalisePlatformCanonicalisesReportedCaptions(t *testing.T) {
+	cases := []struct {
+		name     string
+		platform string
+		want     string
+	}{
+		// gopsutil reports the descriptive OS caption on Windows, not a
+		// canonical token (refs #1555).
+		{"windows caption", "Microsoft Windows 11 Pro", "windows"},
+		{"darwin", "darwin", "macos"},
+		{"freebsd caption", "FreeBSD 14.1-RELEASE", "freebsd"},
+		{"linux distro preserved", "ubuntu", "ubuntu"},
+		{"unraid maps to linux runtime", "unraid", "linux"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := normalisePlatform(tc.platform); got != tc.want {
+				t.Fatalf("normalisePlatform(%q) = %q, want %q", tc.platform, got, tc.want)
+			}
+		})
+	}
+}

@@ -131,8 +131,8 @@ export const SELF_HOSTED_FEATURE_CATALOG: readonly GeneratedSelfHostedFeatureCat
   },
   {
     "key": "ai_alerts",
-    "displayName": "Patrol Investigates Issues",
-    "comparisonName": "Patrol Investigates Issues",
+    "displayName": "Patrol Investigates Issues and Explains the Root Cause",
+    "comparisonName": "Patrol Investigates Issues and Explains the Root Cause",
     "showInComparisonTable": true,
     "displayableInSelfHostedPlan": true,
     "roles": {
@@ -148,8 +148,8 @@ export const SELF_HOSTED_FEATURE_CATALOG: readonly GeneratedSelfHostedFeatureCat
   },
   {
     "key": "ai_autofix",
-    "displayName": "Patrol Handles Safe Fixes",
-    "comparisonName": "Patrol Handles Safe Fixes",
+    "displayName": "Patrol Applies Safe Fixes and Verifies the Result",
+    "comparisonName": "Patrol Applies Safe Fixes and Verifies the Result",
     "showInComparisonTable": true,
     "displayableInSelfHostedPlan": true,
     "roles": {

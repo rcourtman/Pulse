@@ -74,8 +74,8 @@ func TestDockerAgentHandlers_HandleDockerHostActions_DeleteRoute(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/api/agents/docker/runtimes/"+hostID, nil)
 	rec := httptest.NewRecorder()
 	handler.HandleDockerHostActions(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("delete status = %d, want 200", rec.Code)
+	if rec.Code != http.StatusGone {
+		t.Fatalf("delete status = %d, want 410", rec.Code)
 	}
 }
 

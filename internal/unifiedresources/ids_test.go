@@ -52,6 +52,8 @@ func TestResourceIdentityPinEraIDs(t *testing.T) {
 	}
 
 	got := pin.EraIDs()
+	// The pin preserves the full dotted hostname, and eras cover both the
+	// full name and the short name the historical derivation hashed.
 	want := []string{
 		buildHashID(ResourceTypeAgent, "machine:machine-1"),
 		buildHashID(ResourceTypeAgent, "dmi:dmi-1"),

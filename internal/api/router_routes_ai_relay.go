@@ -51,13 +51,13 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	r.mux.HandleFunc("/api/ai/investigate-alert", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiAlertAnalysisEndpoints.HandleInvestigateAlert)))
 
 	r.mux.HandleFunc("/api/ai/run-command", RequireAdmin(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleRunCommand)))
-	// SECURITY: AI Knowledge endpoints require ai:chat scope to prevent arbitrary guest data access
+	// Knowledge reads belong to ai:chat; durable mutations require ai:execute.
 	r.mux.HandleFunc("/api/ai/knowledge", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleGetGuestKnowledge)))
-	r.mux.HandleFunc("/api/ai/knowledge/save", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleSaveGuestNote)))
-	r.mux.HandleFunc("/api/ai/knowledge/delete", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleDeleteGuestNote)))
+	r.mux.HandleFunc("/api/ai/knowledge/save", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleSaveGuestNote)))
+	r.mux.HandleFunc("/api/ai/knowledge/delete", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleDeleteGuestNote)))
 	r.mux.HandleFunc("/api/ai/knowledge/export", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleExportGuestKnowledge)))
-	r.mux.HandleFunc("/api/ai/knowledge/import", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleImportGuestKnowledge)))
-	r.mux.HandleFunc("/api/ai/knowledge/clear", RequireAuth(r.config, RequireScope(config.ScopeAIChat, r.aiSettingsHandler.HandleClearGuestKnowledge)))
+	r.mux.HandleFunc("/api/ai/knowledge/import", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleImportGuestKnowledge)))
+	r.mux.HandleFunc("/api/ai/knowledge/clear", RequireAuth(r.config, RequireScope(config.ScopeAIExecute, r.aiSettingsHandler.HandleClearGuestKnowledge)))
 	// SECURITY: Debug context leaks system prompt and infra details - require settings:read scope
 	r.mux.HandleFunc("/api/ai/debug/context", RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.aiSettingsHandler.HandleDebugContext)))
 	// SECURITY: Connected agents list could reveal fleet topology - require ai:execute scope
@@ -352,7 +352,7 @@ func newAIAutoFixHandlerDeps(r *Router) extensions.AIAutoFixHandlerDeps {
 			if svc == nil {
 				return nil
 			}
-			return &patrolConfigUpdateAdapter{handler: h, ctx: req.Context()}
+			return &patrolConfigUpdateAdapter{handler: h, ctx: req.Context(), resources: r.resourceHandlers}
 		},
 		GetRemediationEngine: func(orgID string) aicontracts.RemediationEngine {
 			return h.GetRemediationEngineForOrg(orgID)
@@ -865,8 +865,9 @@ func (p *patrolConfigAdapter) IsValidPatrolAutonomyLevel(level string) bool {
 
 // patrolConfigUpdateAdapter implements aicontracts.PatrolConfigUpdater.
 type patrolConfigUpdateAdapter struct {
-	handler *AISettingsHandler
-	ctx     context.Context
+	handler   *AISettingsHandler
+	ctx       context.Context
+	resources *ResourceHandlers
 }
 
 var _ aicontracts.PatrolConfigUpdater = (*patrolConfigUpdateAdapter)(nil)
@@ -880,11 +881,17 @@ func (u *patrolConfigUpdateAdapter) SaveAutonomySettings(ctx context.Context, le
 	if cfg == nil {
 		return fmt.Errorf("AI config not available")
 	}
-	cfg.PatrolFullModeUnlocked = unlocked
-	cfg.PatrolAutonomyLevel = level
-	cfg.PatrolInvestigationBudget = budget
-	cfg.PatrolInvestigationTimeoutSec = timeoutSec
-	return u.handler.getPersistence(ctx).SaveAIConfig(*cfg)
+	write := func() error {
+		cfg.PatrolFullModeUnlocked = unlocked
+		cfg.PatrolAutonomyLevel = level
+		cfg.PatrolInvestigationBudget = budget
+		cfg.PatrolInvestigationTimeoutSec = timeoutSec
+		return u.handler.getPersistence(ctx).SaveAIConfig(*cfg)
+	}
+	if u.resources != nil {
+		return u.resources.ActionLifecycle().WithPolicyMutation(write)
+	}
+	return write()
 }
 
 func (u *patrolConfigUpdateAdapter) ReloadConfig(ctx context.Context) error {

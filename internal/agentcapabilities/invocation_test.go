@@ -118,10 +118,10 @@ func TestInvocationDescriptorForReturnsIsolatedCopies(t *testing.T) {
 	if !ok {
 		t.Fatal("docker descriptor missing")
 	}
-	first.Cases["update"] = InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone}
+	first.Cases["updates"] = InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure}
 
 	second, _ := InvocationDescriptorFor(PulseDockerToolName)
-	if got := second.Cases["update"]; got.Mutation != MutationInfrastructure {
+	if got := second.Cases["updates"]; got.Mutation != MutationNone {
 		t.Fatalf("mutating a returned descriptor leaked into the canonical table: %#v", got)
 	}
 
@@ -167,5 +167,21 @@ func TestRestrictedExposureVocabulary(t *testing.T) {
 	})
 	if projected["params"] != RedactedProposalParamsMarker {
 		t.Fatalf("projector must redact params, got %#v", projected["params"])
+	}
+}
+
+func TestLegacyAssistantAliasesUseClosedInvocationClassification(t *testing.T) {
+	tests := map[string]MutationTarget{
+		LegacyAssistantFetchURLToolName:       MutationNone,
+		LegacyAssistantRunCommandToolName:     MutationInfrastructure,
+		LegacyAssistantSetResourceURLToolName: MutationPulseState,
+		ResolveFindingCapabilityName:          MutationPulseState,
+		DismissFindingCapabilityName:          MutationPulseState,
+		"unknown_alias":                       MutationInfrastructure,
+	}
+	for name, want := range tests {
+		if got := ClassifyLegacyAssistantInvocation(name); got.Mutation != want {
+			t.Fatalf("%s mutation = %q, want %q", name, got.Mutation, want)
+		}
 	}
 }

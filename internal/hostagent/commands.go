@@ -105,6 +105,7 @@ type CommandClient struct {
 	deploySSHUser      string
 	commandPolicy      *agentexec.CommandPolicy
 	packageUpdates     *packageUpdateManager
+	storageCleanup     *storageCleanupManager
 	sshKnownHosts      sshknownhosts.Manager
 	sshKnownHostsOnce  sync.Once
 	sshKnownHostsErr   error
@@ -137,6 +138,7 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 		deploySSHUser:      cfg.DeploySSHUser,
 		commandPolicy:      agentexec.DefaultPolicy(),
 		packageUpdates:     cfg.packageUpdates,
+		storageCleanup:     cfg.storageCleanup,
 		logger:             logger,
 		done:               make(chan struct{}),
 	}
@@ -157,19 +159,21 @@ func (c *CommandClient) stopChan() <-chan struct{} {
 type messageType string
 
 const (
-	msgTypeAgentRegister    messageType = "agent_register"
-	msgTypeAgentPing        messageType = "agent_ping"
-	msgTypeCommandResult    messageType = "command_result"
-	msgTypeRegistered       messageType = "registered"
-	msgTypePong             messageType = "pong"
-	msgTypeExecuteCmd       messageType = "execute_command"
-	msgTypeReadFile         messageType = "read_file"
-	msgTypeHostUpdate       messageType = "host_update"
-	msgTypeHostUpdateResult messageType = "host_update_result"
-	msgTypeDeployPreflight  messageType = "deploy_preflight"
-	msgTypeDeployInstall    messageType = "deploy_install"
-	msgTypeDeployCancel     messageType = "deploy_cancel"
-	msgTypeDeployProgress   messageType = "deploy_progress"
+	msgTypeAgentRegister            messageType = "agent_register"
+	msgTypeAgentPing                messageType = "agent_ping"
+	msgTypeCommandResult            messageType = "command_result"
+	msgTypeRegistered               messageType = "registered"
+	msgTypePong                     messageType = "pong"
+	msgTypeExecuteCmd               messageType = "execute_command"
+	msgTypeReadFile                 messageType = "read_file"
+	msgTypeHostStorageCleanup       messageType = "host_storage_cleanup"
+	msgTypeHostStorageCleanupResult messageType = "host_storage_cleanup_result"
+	msgTypeHostUpdate               messageType = "host_update"
+	msgTypeHostUpdateResult         messageType = "host_update_result"
+	msgTypeDeployPreflight          messageType = "deploy_preflight"
+	msgTypeDeployInstall            messageType = "deploy_install"
+	msgTypeDeployCancel             messageType = "deploy_cancel"
+	msgTypeDeployProgress           messageType = "deploy_progress"
 )
 
 type wsMessage struct {
@@ -532,6 +536,14 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 			}
 			go c.handleHostUpdate(ctx, conn, payload)
 
+		case msgTypeHostStorageCleanup:
+			var payload agentexec.HostStorageCleanupPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				c.logger.Error().Err(err).Msg("Failed to parse host_storage_cleanup payload")
+				continue
+			}
+			go c.handleHostStorageCleanup(ctx, conn, payload)
+
 		case msgTypeDeployPreflight:
 			var payload deployPreflightPayload
 			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
@@ -596,6 +608,43 @@ func (c *CommandClient) handleHostUpdate(ctx context.Context, conn *websocket.Co
 	c.connMu.Unlock()
 	if err != nil {
 		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to send host update result")
+	}
+}
+
+func (c *CommandClient) handleHostStorageCleanup(ctx context.Context, conn *websocket.Conn, payload agentexec.HostStorageCleanupPayload) {
+	timeout := time.Duration(payload.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
+	cleanupCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	result := agentexec.HostStorageCleanupResultPayload{
+		RequestID:    strings.TrimSpace(payload.RequestID),
+		Verification: agentexec.HostStorageCleanupVerificationInconclusive,
+	}
+	if c.storageCleanup == nil {
+		result.Error = "host storage cleanup service is unavailable"
+	} else {
+		result = c.storageCleanup.Apply(cleanupCtx, payload)
+	}
+
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to marshal host storage cleanup result")
+		return
+	}
+	msg := wsMessage{
+		Type:      msgTypeHostStorageCleanupResult,
+		ID:        payload.RequestID,
+		Timestamp: time.Now(),
+		Payload:   encoded,
+	}
+	c.connMu.Lock()
+	err = conn.WriteJSON(msg)
+	c.connMu.Unlock()
+	if err != nil {
+		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to send host storage cleanup result")
 	}
 }
 

@@ -20,7 +20,18 @@ type Session struct {
 	UpdatedAt      time.Time              `json:"updated_at"`
 	MessageCount   int                    `json:"message_count,omitempty"`
 	CanRedo        bool                   `json:"can_redo,omitempty"`
+	System         bool                   `json:"system,omitempty"`
 	HandoffSummary *SessionHandoffSummary `json:"handoff_summary,omitempty"`
+}
+
+// IsSystemSessionID reports whether a session ID belongs to a Pulse-owned
+// background run (Patrol detection, Patrol eval, or a Patrol investigation)
+// rather than a user conversation. These sessions are forensic logs: they
+// stay listable and inspectable, but clients should not offer them as
+// resumable chats.
+func IsSystemSessionID(id string) bool {
+	id = strings.TrimSpace(id)
+	return id == "patrol-main" || id == "patrol-eval" || strings.HasPrefix(id, "investigation-")
 }
 
 // SessionTurnUndoResult is returned when the chat runtime removes the latest
@@ -293,6 +304,9 @@ type ExecuteRequest struct {
 	HandoffMetadata  HandoffMetadata     `json:"handoff_metadata,omitempty"`  // Browser-safe identity for restoring saved product handoffs.
 	MaxTurns         int                 `json:"max_turns,omitempty"`         // Override max agentic turns (0 = use default)
 	AutonomousMode   *bool               `json:"autonomous_mode,omitempty"`   // Per-request autonomous override (nil = use service default)
+	// HasExecuteAuthority is injected by the authenticated server boundary.
+	// It is never accepted from provider/model JSON.
+	HasExecuteAuthority bool `json:"-"`
 
 	// SuppressSessionEvent is set by HTTP streaming callers that have already
 	// emitted the browser-visible session event before expensive handoff or

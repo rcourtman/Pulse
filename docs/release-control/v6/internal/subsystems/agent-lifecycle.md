@@ -100,6 +100,23 @@ that binary, not separate customer-facing agent products.
 
 ## Shared Boundaries
 
+Automatic Patrol action admission wired through `internal/api/` is API/action-
+lifecycle authority, not agent enrollment or command authority. Agent command
+transport may run only after the lifecycle-owned policy lease has been
+revalidated and the policy approval plus `executing` transition have committed
+atomically; a policy-approved intermediate state is never reusable by an agent.
+Human approvals remain separate lifecycle evidence and are not invalidated by
+later automatic-policy revocation. Emergency stop blocks admission before
+`executing`; cancellation after that boundary is best effort and is not
+rollback proof.
+
+Assistant transport scopes do not grant agent command authority. `ai:chat`
+and `relay:mobile:access` remain conversation/read/session scopes; an
+interactive infrastructure invocation must carry server-bound `ai:execute`
+authority and still satisfy the separate agent execution/token-binding and
+control-level gates. Unknown or absent request scope never falls back to agent
+execution permission.
+
 Commercial v5-to-v6 migration retry state may pass through `internal/api/`
 handlers that agent-lifecycle also references, but the ownership remains
 API/cloud-paid. Agent lifecycle surfaces may observe paid-migration posture for
@@ -257,7 +274,7 @@ update, profile rollout, command reachability, or fleet-control authority.
     completed lifecycle registration.
 22. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 23. `internal/kubernetesagent/agent.go` shared with `monitoring`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
-24. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host package-update posture.
+24. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
 25. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
     The Windows installer must support a non-mutating download preflight that
     can run before Administrator-only install work, must accept token-file
@@ -423,6 +440,16 @@ so Pulse must re-plan against the widened or changed set. A reboot-required
 marker is reported as state, never acted upon by this capability. Generic
 agent command execution, Patrol prose, lifecycle UI, and external agents must
 not reconstruct or bypass this typed operation.
+Host storage-pressure cleanup is a second closed agent operation. The report
+may expose only the bounded `apt-package-cache` provider, its reclaimable byte
+count, freshness, and a SHA-256 fingerprint; cache entry names and paths remain
+agent-local. Execution crosses `host_storage_cleanup` with the exact
+`clean_package_cache` operation and expected fingerprint only. The agent owns
+the fixed `/var/cache/apt/archives` scan, bounded entry/byte limits, and sole
+`apt-get clean` command. Fingerprint drift, unsupported providers, empty cache,
+inspection failure, command failure, and unconfirmed reclaimed bytes all fail
+closed. The envelope has no command, path, package selector, arbitrary
+argument, installed-package removal, or reboot authority.
 Proxmox VM and LXC lifecycle affordances follow the same adjacent boundary:
 lifecycle and fleet surfaces may consume backend-advertised `start`,
 `shutdown`, `reboot`, and `stop` capabilities and typed `actionReadiness`, but
@@ -1266,6 +1293,12 @@ the intentionally sparse public response.
    Approval-gated command execution must expose stable rejection reasons for
    invalid approval grants so fleet operators can distinguish missing, expired,
    mismatched, and signature-invalid grants through agent metrics.
+   The server must not mint that grant from a nonempty approval id alone.
+   `internal/agentexec` accepts approval-gated arbitrary commands only with a
+   non-serializable server-owned authorization context and a verifier that
+   consumes an org/action/command/target-bound approval before signing. A
+   missing, wrong-org, wrong-action, expired, or already-consumed approval
+   stops before grant minting and before any WebSocket command frame.
 10. Preserve canonical token-lifecycle reads in shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows do not revoke a displayed relay pairing token after `lastUsedAt` proves that an already paired device is actively depending on that credential.
 11. Preserve backend-owned Pulse Mobile relay runtime credential minting in those same shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows reuse the canonical mobile token route instead of reintroducing wildcard or browser-authored runtime token bundles.
 12. Preserve the dedicated backend-owned `relay:mobile:access` capability and its governed backward-compatible route inventory plus the shared helper call sites around it, so lifecycle-adjacent setup and install flows do not widen the mobile device credential back into general AI chat/execute scope ownership.
@@ -1714,6 +1747,21 @@ Agent` secondary handoff against the live setup wizard instead of relying
     answer must keep requiring HTTPS/WSS.
 
 ## Current State
+
+### Canonical mutation-plane dependency
+
+Agent deployment remains an explicit Pulse-administrative exception in the
+closed mutation registry. Agent command transports do not originate authority:
+typed host update/storage cleanup and executor-owned resource commands may run
+only after committed action-lifecycle authority, while raw model command and
+unowned delivery paths remain denied.
+
+Agent dispatch begins only after the canonical action store wins and commits
+the transition to `executing`. Concurrent replay, another SQLite connection,
+or a process restart cannot obtain a second executor admission for that action.
+This contract intentionally does not claim exactly-once infrastructure effects
+after a crash; durable attempt recovery and downstream effect reconciliation
+remain the action-continuity layer's responsibility.
 
 Deploy fan-out concurrency is one shared protocol contract in
 `internal/agentexec`: server request normalization and host-agent semaphore
@@ -2400,6 +2448,13 @@ and export audit reads alongside the enterprise audit surface. That read path
 belongs to the API and unified-resource contracts, not to lifecycle ownership,
 so the agent-install and registration lane stays focused on fleet continuity
 instead of adopting execution-history persistence as a side effect.
+Agent-backed action transports may receive a mutation only after the canonical
+lifecycle commits a durable dispatch attempt and crosses its one-shot pre-send
+boundary. The transport `request_id` is that attempt identity while the action
+or approval field remains the canonical action identity. Timeouts and late
+agent responses do not authorize lifecycle-local retry: restart recovery must
+reconcile the persisted attempt without resending, and transport receipt state
+must not be interpreted as Task 10 execution or verification truth.
 That shared audit-read path also now requires the dedicated `audit:read`
 token scope instead of inheriting broader `settings:read` access, so
 lifecycle-adjacent install and registration surfaces cannot regain enterprise

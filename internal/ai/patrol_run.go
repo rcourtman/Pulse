@@ -291,6 +291,14 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	breaker := p.circuitBreaker
 	p.mu.RUnlock()
 
+	// Demo/mock mode simulates patrol passes without a provider. Checked live
+	// (not from the boot-time config snapshot) because release demo instances
+	// enable mock fixtures only after the license sync authorizes them.
+	if IsDemoMode() {
+		p.runDemoPatrolCycle(trigger)
+		return
+	}
+
 	if !cfg.Enabled {
 		return
 	}
@@ -700,6 +708,12 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	cfg := p.config
 	breaker := p.circuitBreaker
 	p.mu.RUnlock()
+
+	// Demo instances simulate scheduled patrol passes only; event-driven
+	// scoped runs would hit the real provider path.
+	if IsDemoMode() {
+		return
+	}
 
 	if !cfg.Enabled {
 		return

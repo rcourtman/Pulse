@@ -520,7 +520,7 @@ describe('getSelfHostedCurrentPlanPresentation - trial branch', () => {
         upgrade_reasons: [],
         runtime: { build: 'community', label: 'Pulse Community runtime' },
       },
-      displayableCapabilities: ['Patrol Handles Safe Fixes'],
+      displayableCapabilities: ['Patrol Applies Safe Fixes and Verifies the Result'],
     });
     expect(result.title).toBe('Current plan: Pulse Pro Trial');
     expect(result.body).toContain('trial entitlement is active');
@@ -581,7 +581,7 @@ describe('getSelfHostedCurrentPlanPresentation - is_lifetime branch', () => {
         upgrade_reasons: [],
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
-      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Handles Safe Fixes'],
+      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Applies Safe Fixes and Verifies the Result'],
     });
     expect(result.supplementalBadges).toContain('Grandfathered lifetime');
     expect(result.supplementalSummary).toContain(
@@ -602,7 +602,7 @@ describe('getSelfHostedCurrentPlanPresentation - grace + grandfathered branch', 
         upgrade_reasons: [],
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
-      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Handles Safe Fixes'],
+      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Applies Safe Fixes and Verifies the Result'],
     });
     expect(result.supplementalBadges).toContain('Grandfathered price');
   });
@@ -655,7 +655,7 @@ describe('getSelfHostedCurrentPlanPresentation - getPatrolControlAction branches
         upgrade_reasons: [],
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
-      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Handles Safe Fixes'],
+      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Applies Safe Fixes and Verifies the Result'],
       patrolOperatorStatus: {
         patrolControlOperationsLoopStarterCount: 1,
         patrolControlCompletedOperationsLoopCount: 1,
@@ -811,7 +811,7 @@ describe('getSelfHostedActivationSuccessPresentation - purchase + runtime mismat
         upgrade_reasons: [],
         runtime: { build: 'community', label: 'Pulse Community runtime' },
       },
-      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Handles Safe Fixes'],
+      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Applies Safe Fixes and Verifies the Result'],
       source: 'purchase',
     });
     expect(result).not.toBeNull();
@@ -883,8 +883,8 @@ describe('getSelfHostedActivationSuccessPresentation - highlights dedup', () => 
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
       displayableCapabilities: [
-        'Patrol Investigates Issues',
-        'Patrol Handles Safe Fixes',
+        'Patrol Investigates Issues and Explains the Root Cause',
+        'Patrol Applies Safe Fixes and Verifies the Result',
         '90-day metric history',
       ],
       source: 'manual',
@@ -892,7 +892,7 @@ describe('getSelfHostedActivationSuccessPresentation - highlights dedup', () => 
     expect(result).not.toBeNull();
     const highlights = result?.highlights ?? [];
     expect(highlights.length).toBe(new Set(highlights).size);
-    expect(highlights).toContain('Patrol Investigates Issues');
+    expect(highlights).toContain('Patrol Investigates Issues and Explains the Root Cause');
     expect(highlights).toContain('Role-Based Access Control (RBAC)');
   });
 });

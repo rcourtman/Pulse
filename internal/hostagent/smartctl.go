@@ -1213,8 +1213,32 @@ func smartctlArgs(device, deviceType string) []string {
 	if deviceType != "" {
 		args = append(args, "-d", deviceType)
 	}
-	args = append(args, "-n", "standby,"+strconv.Itoa(smartctlStandbyExitStatus), "-i", "-A", "-H", "--json=o", device)
+	// The standby guard exists to avoid spinning up sleeping rotational disks.
+	// An SSD has nothing to spin up, and some SATA SSDs answer the guard's
+	// CHECK POWER MODE with a bogus standby state that permanently hides their
+	// SMART data (#1516), so confirmed non-rotational devices are probed
+	// without it. Multiplexed controller members keep the guard: the shared
+	// /dev path's rotational flag describes the array device, not the member.
+	if isMultiplexedDeviceType(deviceType) || !linuxNonRotationalBlockDevice(device) {
+		args = append(args, "-n", "standby,"+strconv.Itoa(smartctlStandbyExitStatus))
+	}
+	args = append(args, "-i", "-A", "-H", "--json=o", device)
 	return args
+}
+
+// linuxNonRotationalBlockDevice reports whether the canonical block device
+// behind path is positively confirmed non-rotational (SSD) via sysfs. Any
+// uncertainty — non-Linux, unresolvable device, unreadable sysfs — returns
+// false so the caller keeps the conservative standby guard.
+func linuxNonRotationalBlockDevice(device string) bool {
+	if runtimeGOOS != "linux" {
+		return false
+	}
+	block := canonicalBlockDeviceForScanPath(device)
+	if block == "" {
+		return false
+	}
+	return readTrimmedFile(filepath.Join("/sys/block", block, "queue", "rotational")) == "0"
 }
 
 func smartctlArgsWithLog(args []string, logPage string) []string {

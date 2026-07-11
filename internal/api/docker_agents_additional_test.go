@@ -273,7 +273,7 @@ func TestDockerAgentHandlers_HandleSetCustomDisplayName(t *testing.T) {
 	}
 }
 
-func TestDockerAgentHandlers_HandleContainerUpdate(t *testing.T) {
+func TestDockerAgentHandlers_HandleContainerUpdate_Retired(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, &config.Config{DataPath: t.TempDir()})
 	hostID := seedDockerHost(t, monitor)
 
@@ -287,8 +287,8 @@ func TestDockerAgentHandlers_HandleContainerUpdate(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handler.HandleContainerUpdate(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusGone {
+		t.Fatalf("status = %d, want 410: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -326,8 +326,8 @@ func TestDockerAgentHandlers_HandleContainerUpdate_Disabled(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handler.HandleContainerUpdate(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403", rec.Code)
+	if rec.Code != http.StatusGone {
+		t.Fatalf("status = %d, want 410", rec.Code)
 	}
 }
 
@@ -362,11 +362,11 @@ func TestDockerAgentHandlers_HandleContainerUpdate_BlockedBySecurityPosture(t *t
 	rec := httptest.NewRecorder()
 
 	handler.HandleContainerUpdate(rec, req)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusGone {
+		t.Fatalf("status = %d, want 410: %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "authorization plugins") {
-		t.Fatalf("expected authorization plugin block reason, got %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "docker_update_retired") {
+		t.Fatalf("expected stable retirement response, got %s", rec.Body.String())
 	}
 }
 
@@ -425,12 +425,12 @@ func TestDockerAgentHandlers_HandleUpdateAll(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handler.HandleUpdateAll(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusGone {
+		t.Fatalf("status = %d, want 410: %s", rec.Code, rec.Body.String())
 	}
 
-	if !strings.Contains(rec.Body.String(), "Update all containers") {
-		t.Fatalf("expected update-all message")
+	if !strings.Contains(rec.Body.String(), "docker_update_all_retired") {
+		t.Fatalf("expected stable update-all retirement response")
 	}
 }
 
@@ -443,8 +443,8 @@ func TestDockerAgentHandlers_HandleUpdateAll_Disabled(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	handler.HandleUpdateAll(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403", rec.Code)
+	if rec.Code != http.StatusGone {
+		t.Fatalf("status = %d, want 410", rec.Code)
 	}
 }
 
@@ -488,10 +488,10 @@ func TestDockerAgentHandlers_HandleUpdateAll_BlockedBySecurityPosture(t *testing
 	rec := httptest.NewRecorder()
 
 	handler.HandleUpdateAll(rec, req)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusGone {
+		t.Fatalf("status = %d, want 410: %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "authorization plugins") {
-		t.Fatalf("expected authorization plugin block reason, got %s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "docker_update_all_retired") {
+		t.Fatalf("expected stable retirement response, got %s", rec.Body.String())
 	}
 }

@@ -517,6 +517,20 @@ func addAgentDataFacts(facts *[]Fact, resource unified.Resource, observedAt *tim
 		addAgentContextFact(facts, "OS update inventory", inventoryState, agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, updatesObservedAt)
 		addAgentContextFact(facts, "Reboot required", fmt.Sprintf("%t", updates.RebootRequired), agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, updatesObservedAt)
 	}
+	if cleanup := resource.Agent.StorageCleanup; cleanup != nil {
+		cleanupObservedAt := timePtrIfSet(cleanup.CheckedAt)
+		cleanupState := "ready"
+		if !cleanup.Supported {
+			cleanupState = "unsupported"
+		} else if strings.TrimSpace(cleanup.Error) != "" {
+			cleanupState = "error"
+		}
+		addAgentContextFact(facts, "Package cache cleanup", cleanupState, agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, cleanupObservedAt)
+		addAgentContextFact(facts, "Reclaimable package cache", fmt.Sprintf("%d bytes", cleanup.ReclaimableBytes), agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, cleanupObservedAt)
+		if disk, ok := unified.HostStorageCleanupTargetDisk(resource.Agent.Disks); ok {
+			addAgentContextFact(facts, "Package cache filesystem usage", fmt.Sprintf("%.1f%%", disk.Usage), agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, observedAt)
+		}
+	}
 }
 
 func addProxmoxFacts(facts *[]Fact, resource unified.Resource, observedAt *time.Time) {

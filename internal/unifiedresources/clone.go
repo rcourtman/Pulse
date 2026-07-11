@@ -197,7 +197,26 @@ func cloneAgentData(in *AgentData) *AgentData {
 	out.DiskIO = cloneHostDiskIOMetaSlice(in.DiskIO)
 	out.Ceph = cloneHostCephMeta(in.Ceph)
 	out.StorageRisk = cloneStorageRisk(in.StorageRisk)
+	out.PackageUpdates = cloneAgentPackageUpdateMeta(in.PackageUpdates)
+	out.StorageCleanup = cloneAgentStorageCleanupMeta(in.StorageCleanup)
 	out.DiskExclude = cloneStringSlice(in.DiskExclude)
+	return &out
+}
+
+func cloneAgentPackageUpdateMeta(in *AgentPackageUpdateMeta) *AgentPackageUpdateMeta {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.Packages = append([]AgentPackageUpdate(nil), in.Packages...)
+	return &out
+}
+
+func cloneAgentStorageCleanupMeta(in *AgentStorageCleanupMeta) *AgentStorageCleanupMeta {
+	if in == nil {
+		return nil
+	}
+	out := *in
 	return &out
 }
 

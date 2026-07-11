@@ -17,6 +17,29 @@ import (
 
 const legacySnakeAlertIdentifierField = "alert_id"
 
+func TestAlertListThreadID(t *testing.T) {
+	start := time.Unix(1711711711, 0).UTC()
+	alert := &alerts.Alert{ID: "alert-1", StartTime: start}
+
+	// Firing and resolved emails for the same incident derive the same
+	// thread ID, which is what makes clients thread them together.
+	got := alertListThreadID([]*alerts.Alert{alert})
+	if want := alertThreadMessageID("alert-1", start); got != want {
+		t.Fatalf("single-alert thread ID = %q, want %q", got, want)
+	}
+
+	if got := alertListThreadID(nil); got != "" {
+		t.Fatalf("empty list thread ID = %q, want empty", got)
+	}
+	if got := alertListThreadID([]*alerts.Alert{nil}); got != "" {
+		t.Fatalf("nil alert thread ID = %q, want empty", got)
+	}
+	grouped := []*alerts.Alert{alert, {ID: "alert-2", StartTime: start}}
+	if got := alertListThreadID(grouped); got != "" {
+		t.Fatalf("grouped email thread ID = %q, want empty (groups do not thread)", got)
+	}
+}
+
 func flushPending(n *NotificationManager) {
 	n.mu.Lock()
 	if n.queue != nil {
@@ -556,7 +579,9 @@ func TestCancelAlertClearsCooldownAndQueueWithoutPendingGroup(t *testing.T) {
 		queue:         queue,
 	}
 
-	nm.CancelAlert(alert.ID)
+	if nm.CancelAlert(alert.ID) {
+		t.Fatal("expected CancelAlert to report the firing as delivered because a delivery record exists")
+	}
 
 	nm.mu.RLock()
 	_, hasCooldownRecord := nm.lastNotified[alert.ID]
@@ -571,6 +596,68 @@ func TestCancelAlertClearsCooldownAndQueueWithoutPendingGroup(t *testing.T) {
 	}
 	if status != string(QueueStatusCancelled) {
 		t.Fatalf("expected queued firing notification to be cancelled, got %q", status)
+	}
+}
+
+func TestCancelAlertReportsUndeliveredQueuedFiring(t *testing.T) {
+	queue, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
+	defer func() { _ = queue.Stop() }()
+
+	alert := &alerts.Alert{
+		ID:        "alert-undelivered-firing",
+		Type:      "cpu",
+		Level:     alerts.AlertLevelWarning,
+		StartTime: time.Now().Add(-time.Minute),
+	}
+	// Far-future NextRetryAt keeps the background processor from delivering
+	// the firing notification before CancelAlert runs.
+	futureRetry := time.Now().Add(time.Hour)
+	if err := queue.Enqueue(&QueuedNotification{
+		Type:        "webhook",
+		Status:      QueueStatusPending,
+		Alerts:      []*alerts.Alert{alert},
+		Config:      json.RawMessage(`{"enabled":true,"url":"https://hooks.example.test/pulse"}`),
+		MaxAttempts: 3,
+		NextRetryAt: &futureRetry,
+	}); err != nil {
+		t.Fatalf("failed to enqueue notification: %v", err)
+	}
+
+	nm := &NotificationManager{
+		pendingAlerts: []*alerts.Alert{},
+		queue:         queue,
+	}
+
+	if !nm.CancelAlert(alert.ID) {
+		t.Fatal("expected CancelAlert to report the queued firing notification was never delivered")
+	}
+
+	var status string
+	if err := queue.db.QueryRow(`SELECT status FROM notification_queue WHERE type = ?`, "webhook").Scan(&status); err != nil {
+		t.Fatalf("failed to read queued notification status: %v", err)
+	}
+	if status != string(QueueStatusCancelled) {
+		t.Fatalf("expected queued firing notification to be cancelled, got %q", status)
+	}
+}
+
+func TestCancelAlertNothingPendingReportsDelivered(t *testing.T) {
+	queue, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
+	defer func() { _ = queue.Stop() }()
+
+	nm := &NotificationManager{
+		pendingAlerts: []*alerts.Alert{},
+		queue:         queue,
+	}
+
+	if nm.CancelAlert("alert-with-nothing-in-flight") {
+		t.Fatal("expected CancelAlert to leave the recovery decision to the notification policy when nothing was cancelled")
 	}
 }
 
@@ -595,7 +682,9 @@ func TestCancelAlertRemovesPending(t *testing.T) {
 	nm.SendAlert(alertA)
 	nm.SendAlert(alertB)
 
-	nm.CancelAlert(alertA.ID)
+	if !nm.CancelAlert(alertA.ID) {
+		t.Fatal("expected CancelAlert to report the firing was never delivered while still in the grouping window")
+	}
 
 	nm.mu.RLock()
 	remaining := make([]string, 0, len(nm.pendingAlerts))

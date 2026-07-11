@@ -30,6 +30,25 @@ contracts. The subsystem also owns AI orchestration, runtime cost control,
 shared AI transport surfaces, and browser-visible Assistant transcript actions
 that define what visible operator/model text can leave the transcript without
 exposing hidden provider/tool metadata.
+
+Interactive Assistant invocation authority is fail-closed and request-local.
+The `read_only` presentation means no model-invokable durable Pulse-state or
+infrastructure mutation is projected or executable. An `ai:chat` token grants
+conversation, read, and session access only; it cannot write knowledge, change
+finding state, approve, or execute. Infrastructure mutation additionally
+requires explicit `ai:execute` authority and a control level that permits it.
+Provider projection and registry execution consume the same invocation-aware
+policy. Detection may write only through its explicit finding report/resolve
+allowlist; investigation is domain-read-only and may emit at most one
+side-effect-free typed proposal whose correlation identity is server-authored.
+Unknown profiles, actions, aliases, origins, scopes, and mutation
+classifications fail closed.
+
+Discovery `run` currently persists read-derived evidence in the discovery
+cache. That cache write is not an H1 finding/knowledge/infrastructure mutation
+exception and remains a separately governed residual under
+`lane-followup:agent-native-continuous-discovery-findings` until discovery's
+canonical persistence boundary is resolved.
 App-shell Patrol chrome may expose only content-free current-work pressure, such
 as an open-work count on the stable `Patrol` tab, from Patrol-owned findings and
 approval read models. It must not rename the destination, create a second
@@ -280,6 +299,7 @@ call when building tool-result turns.
 21. `internal/agentcapabilities/projection.go` shared with `api-contracts`: the agent capability external-tool projection helper, normalized manifest-owned surface tool contract resolution and tools-affordance gating, manifest-owned resource-context route and argument vocabulary, operator-state capability and route vocabulary, finding workflow capability and lifecycle argument vocabulary including resolution and dismissal notes, governed action capability, route, and argument vocabulary, manifest-owned tool title and outputSchema projection, structured Pulse capability _meta, and shared tool behavior hints are both the canonical API manifest projection contract and the AI runtime adapter projection for Pulse Assistant and MCP-facing agent tools, with MCP annotation and metadata wire names confined to adapter-edge aliases.
 22. `internal/agentcapabilities/provider_tool_artifacts.go` shared with `api-contracts`: the provider tool-call artifact detector and streaming tool-name prefix splitter are both the Assistant stream-sanitization boundary and the shared external-adapter leak guard for provider-native tool-call markup that escaped the structured channel.
 23. `internal/agentcapabilities/schema.go` shared with `api-contracts`: the agent capability input schema contract is both the canonical API manifest schema envelope and the AI runtime structured tool-schema, governance-aware provider-projection with neutral behavior hints and Pulse governance metadata, offered-tool governance extraction for Assistant prompt policy, manifest-affordance-gated Assistant provider-surface composition, manifest raw-schema to Assistant provider-schema projection for capability tools, legacy native Assistant utility provider aliases and schemas, provider-call normalization, provider-result context projection, Assistant-native interaction provider-tool declaration, and live Assistant execution-normalization contract for Pulse Assistant and MCP-facing agent tools.
+    Provider projection is closed by default (`additionalProperties:false`), provider-emitted internal approval metadata is rejected before registry execution, and the registry rejects undeclared public arguments before a handler runs. Interactive approved replays may carry only the non-serializable server-attached approval field. Public Assistant chat always installs an approval-gated request posture; caller JSON cannot promote the service to autonomous infrastructure authority, and autonomous model sessions cannot enter either the canonical or legacy raw-command executor.
 24. `internal/agentcapabilities/scopes.go` shared with `api-contracts`: the manifest-derived required-scope summary is both the canonical API/agent token guidance contract and the AI runtime adapter startup/onboarding contract for Assistant-compatible external-agent surfaces.
 25. `internal/agentcapabilities/sse.go` shared with `api-contracts`: the Pulse Intelligence SSE subscription transport and record parser are both the canonical API event-stream consumption contract and the AI runtime adapter push bridge contract for MCP and reference agent clients.
 26. `internal/agentcapabilities/surface_contract.go` shared with `api-contracts`: the Pulse Intelligence operator-surface affordance contract, shared surface-affordance, surface-tool identity, Assistant surface tool filtering, normalized external surface tool resolver, surface lookup, affordance labels, and manifest-published external-adapter surface tool allowlist projection are both the canonical API manifest surface model and the AI runtime prompt and onboarding guardrail for Assistant and MCP-facing surfaces.
@@ -871,7 +891,12 @@ wire contract is owned by the Pulse Intelligence agent surface once the route
 is advertised there. The exported `agentcapabilities.AgentErrCode*` constants
 are the source of those values for both manifest declarations and
 `internal/api/` handler emissions; local string literals in either layer are
-contract drift. Manifest `scope` values are auth-owned vocabulary from
+contract drift.
+`GET /api/actions` and `GET /api/actions/{id}` use that same shared vocabulary
+for invalid view/limit and internal list/detail failures even though those
+relay-mobile continuity reads are not separate Assistant tools; their codes
+must not drift into handler-local literals or imply Task 10 terminal truth.
+Manifest `scope` values are auth-owned vocabulary from
 `pkg/auth` and must be declared through manifest-local aliases to those
 constants, not repeated as string literals, so MCP tools and direct HTTP agents
 advertise the same scopes the API authorization layer enforces. Patrol finding
@@ -1141,6 +1166,21 @@ deriving an older display status from `workflowStatusHistory`.
    and `internal/ai/providers/ollama.go` is the only layer that turns it into
    the Ollama `keep_alive` request field. An empty configured value means
    Pulse omits `keep_alive` so the Ollama server default applies.
+   Per-surface model fallback chains are owned by the `Get*Model()` getters in
+   `internal/config/ai.go` and follow the operator's intent split between
+   interactive and background work. Interactive chat resolves
+   `ChatModel -> Model`. Background bulk work — Patrol, auto-fix, and
+   service-context discovery — resolves through the Patrol tier:
+   `PatrolModel -> Model` for Patrol itself, `AutoFixModel -> PatrolModel ->
+   Model` for auto-fix, and `DiscoveryModel -> PatrolModel -> Model` for
+   discovery. Discovery is high-fan-out (one model call per container or
+   service per refresh), so it must NOT fall back straight to the shared
+   default model past a configured Patrol override: an operator who selected
+   a cheap Patrol model has declared their background-work model, and
+   scheduled context refreshes silently burning the shared (often premium)
+   model with no chat activity is the bug this chain prevents. Settings copy
+   that describes the shared default model must state this chain rather than
+   claiming the shared default governs discovery unconditionally.
    Cloud context privacy is a FIXED posture, not a user setting. Pulse is a
    self-hosted homelab/SMB tool: when the operator points the Assistant at a cloud
    model they have accepted that their (non-secret) infrastructure detail reaches
@@ -2459,6 +2499,17 @@ query...`, and `Reading storage...` before streamed tool arguments are
    (missing, corrupt, or stale entries only cost a re-parse, never a wrong
    summary, and dotfiles are never listed as sessions). `writeSession` and
    `Delete` keep the cache and index coherent on every mutation.
+   Pulse-owned background sessions are not resumable chats. The session store
+   owns the well-known background session IDs (`patrol-main`, `patrol-eval`,
+   `investigation-*`) through `chat.IsSystemSessionID` and marks their
+   summaries `system: true` in every `Session` projection. The Assistant
+   empty-state quick-resume list (`selectQuickResumeSessions` in
+   `frontend-modern/src/components/AI/Chat/recentSessionsModel.ts`) must
+   exclude system sessions — a Patrol detection log titled with the raw triage
+   seed is forensic material, not a conversation to resume — while the
+   drawer-owned session picker and the Settings sessions panel keep listing
+   them for inspection. The canonical Patrol forensic surface remains the
+   `PatrolRunRecord` history at `/api/ai/patrol/runs`.
    Assistant session navigation must provide a searchable history path in the
    drawer-owned picker, using the canonical `/api/ai/sessions` contract rather
    than a separate recent-chat store. Search is applied before result limiting
@@ -3471,6 +3522,13 @@ query...`, and `Reading storage...` before streamed tool arguments are
     named by their source rather than as generic dashboard briefs.
 
 ## Current State
+
+Assistant compatibility audit writers no longer use whole-record action-audit
+replacement. Fresh approval and direct-action records use atomic creation with
+their initial events, while decisions, refusals, execution starts, and results
+use the same typed CAS transitions as the canonical action lifecycle. This
+keeps legacy boundary producers from reopening the state-rewind path while
+their mutation-plane consolidation remains separately governed.
 
 AI provider model-cache identity must never expose reusable credential material
 or deterministic unkeyed credential hashes. `internal/ai/service.go` derives
@@ -4571,6 +4629,14 @@ capability eligibility, persisted per-resource allowlist/window, remediation
 lock, and the canonical lifecycle. Enterprise receives the resulting pending
 or terminal disposition, including honest verification status, but never an
 authorization primitive. `OrchestratorDeps.ActionBroker` carries the seam and is
+Policy-authorized submission enters `actionlifecycle.ExecuteUnderPolicy`; the
+broker may evaluate eligibility to decide whether to attempt automatic
+admission, but it cannot persist approval or call an executor itself. The
+lifecycle re-evaluates the full policy under the shared admission coordinator
+and atomically persists the typed authorization lease, policy approval, and
+executing transition. Revocation before that transition produces zero dispatch
+and no policy approval. Human approvals remain semantically separate.
+`OrchestratorDeps.ActionBroker` carries the seam and is
 now REQUIRED: the enterprise factory disables the orchestrator when it is
 absent rather than falling back. The command-execution side doors are
 gone. `OrchestratorChatService` exposes only investigation-specific
@@ -5672,3 +5738,27 @@ eligibility, or a Patrol mode below the capability's class leave the action
 pending rather than converting a valid proposal into an investigation failure.
 An idempotent resubmission returns the existing action disposition and must not
 execute a terminal action twice.
+
+### Canonical mutation registry boundary
+
+Assistant infrastructure mutations are classified by the generated
+`internal/mutationregistry` registry before handler execution. The only active
+model-originated mutation is `pulse_control type=resource`, which submits a
+typed capability request to the shared action-lifecycle planner and never
+contacts infrastructure directly. Retired tool names and compatibility aliases
+cannot be registered or shadowed by extensions. Docker update/control,
+Kubernetes scale/restart/delete, arbitrary exec, raw command, and file writes
+are omitted from offered schemas and denied if fabricated.
+
+The registry audits enumerate actual registered tool discriminator values and
+bind mechanically discovered API, job, and transport candidates to one registry
+disposition. Transport lifecycle entries must name non-transport lifecycle
+authority and committed authority before delivery. Task 07 owns durable
+delivery/reconnect and Task 10 owns terminal truth/compensation; incomplete
+Docker, Kubernetes/native-provider, delivery, and rollback paths remain
+`retired_denied`, not parallel executors.
+
+Enterprise command-remediation records are readable historical imports only.
+Production code contains no command or rollback execution algorithm; exported
+approve/execute/rollback interfaces and HTTP endpoints are permanently inert
+even when a command executor is injected.

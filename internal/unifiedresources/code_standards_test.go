@@ -69,6 +69,19 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
+func TestProductionActionLifecycleDoesNotUseRecordActionAuditAsUpsert(t *testing.T) {
+	paths := []string{"../actionlifecycle/service.go", "../ai/tools/action_audit.go", "../api/patrol_action_broker.go"}
+	for _, path := range paths {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if strings.Contains(string(src), ".RecordActionAudit(") {
+			t.Errorf("%s must use CreateActionAudit or a typed CAS transition", path)
+		}
+	}
+}
+
 // readConsumerGoFiles returns the contents of all non-test .go files in the
 // specified directory (relative to the repo internal/ root).
 func readConsumerGoFiles(t *testing.T, relDir string) map[string]string {
@@ -598,7 +611,9 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			// target resource. Pin it here so the broker contract stays
 			// honest: per-resource lock refusal cannot silently turn into
 			// another error kind that callers fail to detect.
-			"ErrResourceRemediationLocked = errors.New(",
+			"ErrResourceRemediationLocked",
+			"type ActionPolicyAuthorizationLease struct",
+			"func BeginPolicyActionExecution(",
 			// ActionVerificationResult is the canonical post-execution
 			// read-after-write outcome carrier. The broker writes it onto
 			// ExecutionResult.Verification; pinning the type here keeps the
@@ -609,8 +624,10 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 		},
 		filepath.Join(".", "store.go"): {
 			"RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",
+			"RecordActionPolicyExecutionStart(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent) error",
 			"RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error",
 			"func (s *SQLiteResourceStore) RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",
+			"func (s *SQLiteResourceStore) RecordActionPolicyExecutionStart(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent) error",
 			"func (s *SQLiteResourceStore) RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error",
 			// Audit-log secret redaction must run at every persistence
 			// boundary so operator-authored reasons and command output do
@@ -648,6 +665,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"type AvailabilityChecker interface",
 			"CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness",
 			"func (s *Service) ValidatePlanFresh(orgID string, record unified.ActionAuditRecord) error",
+			"func (s *Service) ExecuteUnderPolicy(",
 			"func RecordRefusedExecution(store Store, record unified.ActionAuditRecord",
 			"func (s *Service) publishCompleted(record unified.ActionAuditRecord)",
 			// The persisted-state transition hook is org-scoped so
@@ -656,8 +674,10 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			// publishes only after the corresponding store write.
 			"OnActionTransition func(orgID string, record unified.ActionAuditRecord)",
 			"func (s *Service) publishTransition(orgID string, record unified.ActionAuditRecord)",
-			"store.RecordActionExecutionStart(started, startEvent)",
-			"store.RecordActionExecutionResult(completed, doneEvent)",
+			"store.RecordActionExecutionAdmission(started, startEvent, attempt)",
+			"store.MarkActionDispatchStarted(attempt.ID, owner, s.now())",
+			"s.Executor.ExecuteAction(withDispatchAttempt(ctx, attempt), record)",
+			"store.RecordActionDispatchCompletion(receipt, completed, doneEvent)",
 		},
 		filepath.Join("..", "api", "actions.go"): {
 			// The REST layer is a thin adapter over the shared lifecycle
@@ -678,6 +698,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor)",
 			"func (h *ResourceHandlers) SetActionCompletedPublisher(",
 			"func (h *ResourceHandlers) SetActionTransitionPublisher(",
+			"policyAdmission     *actionlifecycle.PolicyAdmissionCoordinator",
 			"func (h *ResourceHandlers) applyActionAvailability(ctx context.Context, resources []unified.Resource)",
 			"resources[i].ActionReadiness = readinesses",
 		},
@@ -688,6 +709,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 		},
 		filepath.Join("..", "api", "router.go"): {
 			"r.resourceHandlers.SetActionCompletedPublisher(r.agentEventBroadcaster.PublishActionCompletedRecord)",
+			"SetActionEmergencyStopChecker",
 		},
 		filepath.Join("..", "api", "router_routes_monitoring.go"): {
 			`"POST /api/actions/{id}/execute"`,
@@ -1496,7 +1518,7 @@ func TestResourceParentBySourceStateRemainsInternal(t *testing.T) {
 	}
 }
 
-func TestHostPackageUpdatePostureRemainsAgentScoped(t *testing.T) {
+func TestHostMaintenancePostureRemainsAgentScoped(t *testing.T) {
 	agentType := reflect.TypeOf(AgentData{})
 	field, ok := agentType.FieldByName("PackageUpdates")
 	if !ok {
@@ -1508,10 +1530,23 @@ func TestHostPackageUpdatePostureRemainsAgentScoped(t *testing.T) {
 	if field.Type != reflect.TypeOf((*AgentPackageUpdateMeta)(nil)) {
 		t.Fatalf("expected typed package-update metadata, got %v", field.Type)
 	}
+	cleanupField, ok := agentType.FieldByName("StorageCleanup")
+	if !ok {
+		t.Fatal("expected AgentData.StorageCleanup field")
+	}
+	if got := cleanupField.Tag.Get("json"); got != "storageCleanup,omitempty" {
+		t.Fatalf("expected storage-cleanup posture to use the agent-scoped wire key, got %q", got)
+	}
+	if cleanupField.Type != reflect.TypeOf((*AgentStorageCleanupMeta)(nil)) {
+		t.Fatalf("expected typed storage-cleanup metadata, got %v", cleanupField.Type)
+	}
 
 	resourceType := reflect.TypeOf(Resource{})
 	if _, ok := resourceType.FieldByName("PackageUpdates"); ok {
 		t.Fatal("package-update posture must not become an unscoped top-level Resource field")
+	}
+	if _, ok := resourceType.FieldByName("StorageCleanup"); ok {
+		t.Fatal("storage-cleanup posture must not become an unscoped top-level Resource field")
 	}
 }
 

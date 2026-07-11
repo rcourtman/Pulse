@@ -185,6 +185,16 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 			Error:          host.PackageUpdates.Error,
 		}
 	}
+	if host.StorageCleanup != nil {
+		agent.StorageCleanup = &AgentStorageCleanupMeta{
+			Supported:        host.StorageCleanup.Supported,
+			Provider:         host.StorageCleanup.Provider,
+			Fingerprint:      host.StorageCleanup.Fingerprint,
+			ReclaimableBytes: host.StorageCleanup.ReclaimableBytes,
+			CheckedAt:        host.StorageCleanup.CheckedAt,
+			Error:            host.StorageCleanup.Error,
+		}
+	}
 
 	// Surface agent staleness so a row that stays online via another source
 	// (e.g. a Proxmox node still reachable over the PVE API) does not present a
@@ -487,13 +497,23 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		Temperature:  agent.Temperature,
 		Agent:        agent,
 		Tags:         host.Tags,
-		Capabilities: hostPackageUpdateCapabilities(host),
+		Capabilities: hostActionCapabilities(host),
 	}
 
 	return resource, identity
 }
 
 const hostPackageUpdateHandler = "host.package_updates"
+
+const hostStorageCleanupHandler = "host.storage_cleanup"
+
+func hostActionCapabilities(host models.Host) []ResourceCapability {
+	capabilities := hostPackageUpdateCapabilities(host)
+	if capability, ok := hostStorageCleanupCapability(host); ok {
+		capabilities = append(capabilities, capability)
+	}
+	return capabilities
+}
 
 func hostPackageUpdateCapabilities(host models.Host) []ResourceCapability {
 	status := host.PackageUpdates
@@ -509,6 +529,25 @@ func hostPackageUpdateCapabilities(host models.Host) []ResourceCapability {
 		Platform:             "linux",
 		InternalHandler:      hostPackageUpdateHandler,
 	}}
+}
+
+func hostStorageCleanupCapability(host models.Host) (ResourceCapability, bool) {
+	status := host.StorageCleanup
+	if !host.CommandsEnabled || status == nil || !status.Supported || strings.TrimSpace(status.Provider) != "apt-package-cache" || strings.TrimSpace(status.Fingerprint) == "" || status.ReclaimableBytes < HostStorageCleanupMinReclaimableBytes || strings.TrimSpace(status.Error) != "" || status.CheckedAt.IsZero() || time.Since(status.CheckedAt.UTC()) > HostStorageCleanupFreshness {
+		return ResourceCapability{}, false
+	}
+	if _, ok := HostStorageCleanupPressureDisk(convertDisks(host.Disks)); !ok {
+		return ResourceCapability{}, false
+	}
+	return ResourceCapability{
+		Name:                 "clean_package_cache",
+		Type:                 CapabilityTypeCommon,
+		Description:          "Reclaim the agent-managed APT package cache without selecting paths, removing installed packages, or rebooting the host.",
+		MinimumApprovalLevel: ApprovalAdmin,
+		AutoAuthorization:    AutoAuthorizeLowRisk,
+		Platform:             "linux",
+		InternalHandler:      hostStorageCleanupHandler,
+	}, true
 }
 
 func hostThermalStateToMeta(in *models.HostThermalState) *HostThermalState {

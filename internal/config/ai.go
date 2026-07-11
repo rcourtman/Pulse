@@ -106,6 +106,7 @@ type AIConfig struct {
 	// Patrol Autonomy settings - controls automatic investigation and remediation of findings
 	PatrolAutonomyLevel           string `json:"patrol_autonomy_level,omitempty"`            // "monitor", "approval", "assisted", "full"
 	PatrolFullModeUnlocked        bool   `json:"patrol_full_mode_unlocked"`                  // User has acknowledged Full mode risks (required to use "full")
+	PatrolActionEmergencyStop     bool   `json:"patrol_action_emergency_stop"`               // Blocks new human and policy action admission; does not imply rollback
 	PatrolInvestigationBudget     int    `json:"patrol_investigation_budget,omitempty"`      // Max turns per investigation (default: 15)
 	PatrolInvestigationTimeoutSec int    `json:"patrol_investigation_timeout_sec,omitempty"` // Max seconds per investigation (default: 300)
 
@@ -625,13 +626,14 @@ func (c *AIConfig) GetPatrolModel() string {
 }
 
 // GetDiscoveryModel returns the model for infrastructure discovery
-// Falls back to the main model since discovery needs to use the same provider
+// Falls back to PatrolModel, then to the main Model if DiscoveryModel is not set
+// Discovery is high-fan-out background work (one call per container/service),
+// so it belongs on the operator's background-work model, not the shared default
 func (c *AIConfig) GetDiscoveryModel() string {
 	if c.DiscoveryModel != "" {
 		return NormalizeQuickstartModelString(c.DiscoveryModel)
 	}
-	// Fall back to the main model to ensure we use the same provider
-	return c.GetModel()
+	return c.GetPatrolModel()
 }
 
 // GetAutoFixModel returns the model for automatic remediation actions

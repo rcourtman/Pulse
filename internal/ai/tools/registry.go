@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mutationregistry"
 )
 
 // ToolActionMode describes the state-changing capability of a registered tool.
@@ -95,11 +96,15 @@ func NewToolRegistry() *ToolRegistry {
 // projection and runtime execution so the offered schema and the
 // enforcement boundary can never disagree.
 type InvocationPolicy struct {
-	ControlLevel                ControlLevel
+	ControlLevel ControlLevel
+	// Execute authority is bound at authenticated transport boundaries.
+	// Unbound policies are reserved for trusted internal/test callers;
+	// external request paths must always bind an explicit true/false value.
+	HasExecuteAuthority         bool
+	ExecuteAuthorityBound       bool
 	DenyInfrastructureMutations bool
 	// PulseStateAllowlist restricts pulse-state mutations to the named
-	// tools when non-nil (an empty map denies all pulse-state
-	// mutations). Nil leaves pulse-state mutations unrestricted. An
+	// tools. Nil and an empty map both deny all pulse-state mutations. An
 	// allowlist rather than a boolean: Patrol detection must record and
 	// resolve findings without also being able to dismiss alerts or
 	// write knowledge.
@@ -129,6 +134,9 @@ func clonePulseStateAllowlist(allowlist map[string]bool) map[string]bool {
 // independent of registration validation, so a class that somehow
 // bypasses Validate still cannot execute.
 func (p InvocationPolicy) Allows(toolName string, class agentcapabilities.InvocationClass) bool {
+	if !p.Profile.Valid() || !class.Valid() {
+		return false
+	}
 	// patrol_propose_action is investigation-profile-only: a fabricated
 	// call under any other posture is rejected here, before the handler,
 	// and the same check keeps it out of every other profile's projected
@@ -140,12 +148,9 @@ func (p InvocationPolicy) Allows(toolName string, class agentcapabilities.Invoca
 	case agentcapabilities.MutationNone:
 		return true
 	case agentcapabilities.MutationPulseState:
-		if p.PulseStateAllowlist == nil {
-			return true
-		}
 		return p.PulseStateAllowlist[toolName]
 	case agentcapabilities.MutationInfrastructure:
-		if p.DenyInfrastructureMutations {
+		if p.Profile != ProfileInteractiveAssistant || (p.ExecuteAuthorityBound && !p.HasExecuteAuthority) || p.DenyInfrastructureMutations {
 			return false
 		}
 		return agentcapabilities.ControlLevelAllowsControlTools(p.ControlLevel)
@@ -196,6 +201,9 @@ func (r *ToolRegistry) RegisterExtension(tool RegisteredTool) {
 
 	tool.Definition = tool.Definition.NormalizeCollections()
 	name := tool.Definition.Name
+	if _, retiredAlias := mutationregistry.LookupModelInvocation(name, nil); retiredAlias {
+		panic(fmt.Sprintf("tool %q is a retired mutation alias and cannot be registered as an extension", name))
+	}
 	if _, isCanonical := agentcapabilities.InvocationDescriptorFor(name); isCanonical {
 		panic(fmt.Sprintf("tool %q is a canonical Pulse tool and cannot be registered as an extension", name))
 	}
@@ -392,6 +400,9 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 	}
 	name = params.Name
 	args = params.Arguments
+	if mutation, classified := mutationregistry.LookupModelInvocation(name, args); classified && mutation.Disposition == mutationregistry.DispositionRetiredDenied {
+		return NewErrorResult(fmt.Errorf("mutation %s is retired and denied; use an advertised typed resource action", mutation.ID)), nil
+	}
 
 	r.mu.RLock()
 	tool, exists := r.tools[name]
@@ -400,7 +411,6 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 	if !exists {
 		return agentcapabilities.NewUnknownToolResult(name), nil
 	}
-
 	// Invocation-level policy enforcement, before the handler runs.
 	// The classification fails closed (missing/unknown discriminators
 	// count as infrastructure writes), so a fabricated or hidden enum
@@ -411,7 +421,9 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 	}
 	policy := e.invocationPolicy()
 	if !policy.Allows(name, class) {
-		if class.Mutation == agentcapabilities.MutationInfrastructure && !policy.DenyInfrastructureMutations {
+		if class.Mutation == agentcapabilities.MutationInfrastructure &&
+			!policy.DenyInfrastructureMutations &&
+			!agentcapabilities.ControlLevelAllowsControlTools(policy.ControlLevel) {
 			// Refused purely by control level: keep the actionable
 			// operator guidance for enabling control tools.
 			return agentcapabilities.NewControlToolsDisabledToolResult(), nil
@@ -423,6 +435,16 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 	if tool.RequireControl {
 		if !agentcapabilities.ControlLevelAllowsControlTools(e.controlLevel) {
 			return agentcapabilities.NewControlToolsDisabledToolResult(), nil
+		}
+	}
+	if err := agentcapabilities.ValidateDeclaredToolArguments(tool.Definition.InputSchema, args); err != nil {
+		return agentcapabilities.NewInvalidToolCallParamsResult(err), nil
+	}
+	if name == agentcapabilities.PatrolProposeActionToolName {
+		for key := range args {
+			if agentcapabilities.IsInternalToolArgument(key) {
+				return agentcapabilities.NewInvalidToolCallParamsResult(fmt.Errorf("argument %q is server-internal and cannot be model-authored", key)), nil
+			}
 		}
 	}
 

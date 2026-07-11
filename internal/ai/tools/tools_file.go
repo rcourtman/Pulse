@@ -83,7 +83,7 @@ Examples:
 			},
 		},
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
-			return exec.executeFileEdit(ctx, args)
+			return NewErrorResult(fmt.Errorf("model-authored file mutation is retired and denied")), nil
 		},
 		RequireControl: true,
 		Governance: ToolGovernance{

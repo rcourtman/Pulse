@@ -23,6 +23,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+	pulsauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -30,6 +31,29 @@ import (
 
 type MockAIService struct {
 	mock.Mock
+}
+
+type assistantScopeToken map[string]bool
+
+func (t assistantScopeToken) HasScope(scope string) bool { return t[scope] }
+
+func TestAssistantExecuteAuthorityTokenMatrix(t *testing.T) {
+	tests := []struct {
+		name string
+		ctx  context.Context
+		want bool
+	}{
+		{name: "browser session", ctx: context.Background(), want: true},
+		{name: "chat token", ctx: pulsauth.WithAPIToken(context.Background(), assistantScopeToken{config.ScopeAIChat: true}), want: false},
+		{name: "relay token", ctx: pulsauth.WithAPIToken(context.Background(), assistantScopeToken{config.ScopeRelayMobileAccess: true}), want: false},
+		{name: "execute token", ctx: pulsauth.WithAPIToken(context.Background(), assistantScopeToken{config.ScopeAIChat: true, config.ScopeAIExecute: true}), want: true},
+		{name: "unknown scope", ctx: pulsauth.WithAPIToken(context.Background(), assistantScopeToken{"ai:unknown": true}), want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, assistantExecuteAuthority(tt.ctx))
+		})
+	}
 }
 
 type syncingMockAIService struct {
@@ -1185,7 +1209,7 @@ func TestHandleChat_PreservesCanonicalMentionTypes(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
-func TestHandleChat_PassesAutonomousModeOverride(t *testing.T) {
+func TestHandleChat_CannotElevateAutonomousModePerRequest(t *testing.T) {
 	cfg := &config.Config{}
 	h := newTestAIHandler(cfg, nil, nil)
 	mockSvc := new(MockAIService)
@@ -1202,7 +1226,7 @@ func TestHandleChat_PassesAutonomousModeOverride(t *testing.T) {
 			}
 		})
 
-	body := `{"prompt":"summarize dashboard","autonomous_mode":false}`
+	body := `{"prompt":"run a command","autonomous_mode":true}`
 	req := httptest.NewRequest("POST", "/api/ai/chat", strings.NewReader(body))
 	w := httptest.NewRecorder()
 
@@ -1214,14 +1238,14 @@ func TestHandleChat_PassesAutonomousModeOverride(t *testing.T) {
 func TestChatAutonomousModeForFindingHandoffRequiresApprovalForProductHandoffs(t *testing.T) {
 	requestedAutonomous := true
 	requestedManual := false
-	if got := chatAutonomousModeForFindingHandoff(&requestedAutonomous, "", "", nil, nil, chat.HandoffMetadata{}); got != &requestedAutonomous {
-		t.Fatalf("plain chat should pass requested autonomous mode through, got %#v", got)
+	if got := chatAutonomousModeForFindingHandoff(&requestedAutonomous, "", "", nil, nil, chat.HandoffMetadata{}); got == nil || *got {
+		t.Fatalf("plain chat must not accept requested autonomous authority, got %#v", got)
 	}
-	if got := chatAutonomousModeForFindingHandoff(&requestedManual, "", "", nil, nil, chat.HandoffMetadata{}); got != &requestedManual {
-		t.Fatalf("plain chat should pass requested manual mode through, got %#v", got)
+	if got := chatAutonomousModeForFindingHandoff(&requestedManual, "", "", nil, nil, chat.HandoffMetadata{}); got == nil || *got {
+		t.Fatalf("plain chat should remain approval-gated, got %#v", got)
 	}
-	if got := chatAutonomousModeForFindingHandoff(nil, "", "", nil, nil, chat.HandoffMetadata{}); got != nil {
-		t.Fatalf("plain chat with no override should preserve nil autonomous mode, got %#v", got)
+	if got := chatAutonomousModeForFindingHandoff(nil, "", "", nil, nil, chat.HandoffMetadata{}); got == nil || *got {
+		t.Fatalf("plain chat with no override should be explicitly approval-gated, got %#v", got)
 	}
 
 	cases := []struct {

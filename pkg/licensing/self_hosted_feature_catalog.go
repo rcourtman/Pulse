@@ -147,8 +147,8 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 	},
 	FeatureAIAlerts: {
 		Key:                   FeatureAIAlerts,
-		DisplayName:           "Patrol Investigates Issues",
-		ComparisonName:        "Patrol Investigates Issues",
+		DisplayName:           "Patrol Investigates Issues and Explains the Root Cause",
+		ComparisonName:        "Patrol Investigates Issues and Explains the Root Cause",
 		ShowInComparisonTable: true,
 		DisplayableInPlanUI:   true,
 		SelfHostedRoles: SelfHostedFeatureRoles{
@@ -161,8 +161,8 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 	},
 	FeatureAIAutoFix: {
 		Key:                   FeatureAIAutoFix,
-		DisplayName:           "Patrol Handles Safe Fixes",
-		ComparisonName:        "Patrol Handles Safe Fixes",
+		DisplayName:           "Patrol Applies Safe Fixes and Verifies the Result",
+		ComparisonName:        "Patrol Applies Safe Fixes and Verifies the Result",
 		ShowInComparisonTable: true,
 		DisplayableInPlanUI:   true,
 		SelfHostedRoles: SelfHostedFeatureRoles{
@@ -170,7 +170,7 @@ var featureMetadataCatalog = map[string]FeatureMetadata{
 			Relay:     SelfHostedFeatureRoleHidden,
 			Pro:       SelfHostedFeatureRolePrimaryPillar,
 		},
-		UpgradeReason:   "Upgrade to Pro so Patrol can investigate issues, handle safe fixes within Patrol mode, and verify the outcome.",
+		UpgradeReason:   "Upgrade to Pro so Patrol can investigate issues, apply safe fixes within Patrol mode, and verify the result.",
 		UpgradePriority: 3,
 	},
 	FeatureKubernetesAI: {

@@ -61,6 +61,8 @@ temperature, capacity, health, and identity enrichment.
 24. `internal/unifiedresources/relationships.go`
 25. `internal/unifiedresources/privacy.go`
 26. `internal/unifiedresources/actions.go`
+26a. `internal/unifiedresources/action_dispatch.go`
+26b. `internal/unifiedresources/action_dispatch_store.go`
 27. `internal/unifiedresources/audit_redaction.go`
 28. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`
 29. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
@@ -654,6 +656,15 @@ container inventory table.
    stale, erroneous, empty, unsupported, or its owning agent is disconnected;
    reboot-required state remains descriptive and does not imply a reboot
    capability.
+   Agent-managed hosts may advertise `clean_package_cache` only when typed
+   commands are enabled, the agent reports a fresh error-free
+   `apt-package-cache` fingerprint with at least 64 MiB reclaimable, and the
+   actual longest-prefix filesystem containing the fixed cache target is at
+   least 90% used. A healthy separate `/var` mount must override pressure on
+   `/`; sibling-prefix mounts must never match. The capability is admin-floor,
+   `low_risk` auto-authorization eligible, parameter-free, and routed through
+   `host.storage_cleanup`. API consumers must reuse the canonical target-disk
+   resolver and may not infer cleanup authority from generic disk usage.
    TrueNAS app inventory enters the model as native `TrueNASData.App`
    metadata on canonical `app-container` resources. The facet is sourced from
    the TrueNAS API app inventory (`app.query` plus active workload/stat
@@ -1351,8 +1362,54 @@ AI-only summary payloads, or page-local heuristics.
     must not mint host canonical IDs from snapshot-content-dependent
     identity subsets without consulting the pins, and pin writes stay on
     the durable store-backed registry (ephemeral per-request registries
-    consult, never write). Regression coverage:
-    `internal/unifiedresources/canonical_id_pins_test.go`.
+    consult, never write). Pinned hostnames preserve the full dotted name
+    (`NormalizeFullHostname`): distinct machines that share a short
+    hostname (`cloud.rnd-lax1` vs `cloud.gce-or1`) must keep distinct
+    pins, distinct pin-index buckets, and distinct presentation host rows.
+    Short-hostname normalization (`NormalizeHostname`) is a matching-only
+    convenience: pin lookups and the presentation host coalescer may pair
+    a short name with its own FQDN (`web01` vs `web01.lan`), but only
+    through an unambiguous bucket whose pinned hostname is
+    short/FQDN-equivalent (`HostnamesEquivalent`) to the incoming one;
+    they must never rewrite a persisted hostname down to its short form
+    or cross-match two different FQDNs. Pin rows persisted before this
+    rule hold the collapsed short name and heal in place on the host's
+    next pin persist, and `ResourceIdentityPin.EraIDs` derives both full-
+    and short-hostname eras so journal rows recorded under short-hostname
+    IDs stay readable. Canonical ID derivation itself follows the same
+    rule: the hostname-derived arms of `canonicalIDFromIdentity`
+    (`cluster:<cluster>:<hostname>` and `hostname:<hostname>`) hash the
+    full dotted hostname, never the short form, so machine-keyless FQDN
+    Swarm members that share a short name (`cloud.a` vs `cloud.b` in one
+    swarm) mint distinct canonical IDs instead of collapsing into one
+    registry entry. Derivation stays a pure function of identity (pins
+    complete identities but never substitute a stored ID) because
+    store-less registries (AI tool executors, projections, mock) must
+    derive the same IDs as the durable registry from the same identity.
+    Hosts minted under the historical short-hostname derivation change
+    canonical ID once: journal continuity rides the era expansion above,
+    and operator-owned rows ride canonical-ID succession: when
+    `PersistIdentityPins` collects a pin that supersedes an earlier era's
+    pin for the same physical host (matching strong key, or a
+    machine-keyless same-cluster pin whose hostname is the new pin's
+    hostname or its collapsed short form), the store re-keys
+    `resource_operator_state` and `action_audits` rows to the successor
+    ID and drops the superseded pin row (`ApplyCanonicalIDSuccessions`
+    in `internal/unifiedresources/canonical_id_succession.go`).
+    Successions never fire while the old ID still belongs to a live
+    resource, never follow a contradicting machine key (a reinstalled
+    machine mints fresh, it does not absorb the old host's operator
+    state), and never rewrite change-journal rows. Known limitation:
+    machine-keyless hosts whose history already merged under a collapsed
+    ID cannot be retroactively split; the merged era's journal rows
+    appear in every member's timeline and the merged operator rows
+    succeed to whichever member persists first. Regression coverage:
+    `internal/unifiedresources/canonical_id_pins_test.go`,
+    `internal/unifiedresources/canonical_id_succession_test.go`, and
+    `TestStandaloneDottedHostnameAgentsStayDistinct` /
+    `TestSwarmFQDNHostsWithoutMachineIDsStayDistinct` /
+    `TestCanonicalIDSuccessionMovesOperatorState` in
+    `internal/unifiedresources/registry_test.go`.
 26. Keep action-audit origin metadata broker-owned. `ActionAuditRecord`
     carries an optional `Origin *ActionOrigin`
     (`surface`/`findingId`/`investigationId`/`proposalId`), persisted in
@@ -1476,6 +1533,16 @@ names, and lower-cases the criticality value before persistence. The
 `ClearResourceOperatorState`; both the SQLite (table
 `resource_operator_state` keyed on `canonical_id`) and Memory stores
 implement the same upsert + idempotent-clear contract. The same
+store also owns `RecordActionPolicyExecutionStart`, the automatic-admission
+CAS that moves a planned or pending action directly to `executing` while
+persisting the server-owned policy approval and typed
+`ActionPolicyAuthorizationLease` in the same transaction. Memory and SQLite
+implement identical semantics. The lease binds org/action/resource/capability,
+plan and capability-policy hashes, safety and approval floors, tenant
+mode/license/unlock version, resource allowlist/window/Never version, expiry,
+and digest. A policy approval without that lease is historical-only and cannot
+admit a nonterminal action after restart.
+The same
 store powers the agent-consumable bundled context endpoint at
 `/api/agent/resource-context/{id}` (handler in
 `internal/api/agent_resource_context.go`) — that endpoint reads
@@ -2879,9 +2946,31 @@ That same shared store now also persists append-only action lifecycle, action
 audit, and export audit records, giving the control-plane verbs a durable home
 next to the resource timeline instead of leaving those records isolated in
 memory-only models.
-The in-memory store mirrors the durable audit contract by upserting action
-audits on action ID, so tests and runtime callers observe the same current
-record state that SQLite persists for the control-plane execution trail.
+The in-memory store mirrors the durable audit contract through atomic
+create-or-return-current action identity and monotonic typed transitions; it
+must never replace an existing action record merely because an ID collides.
+SQLite uses insert-on-conflict-do-nothing for creation and conditional state
+updates for transitions, with the lifecycle event committed in the same
+transaction. Both stores treat rejected, explicitly expired, completed, and failed states as
+absorbing and admit exactly one successful transition to executing. Lifecycle
+events are unique per action and state, with migration deduplication for rows
+written before this invariant became database-enforced.
+Execution admission commits the audit transition and lifecycle event with one
+deterministic `ActionDispatchAttempt` and its outbox row in the same
+transaction. Transport states are deliberately limited to `queued`, `claimed`,
+`receipt_pending`, and `receipt_recorded`; they do not encode Task 10 execution,
+verification, evidence, or compensation truth. An expired claim before
+`MarkActionDispatchStarted` requeues the same attempt. That one-shot CAS is the
+sole pre-send linearization point, increments `dispatchCount`, and removes the
+outbox row. Once reached, restart recovery may accept only a correlated receipt
+or query a transport reconciler by attempt ID; it cannot claim or send again.
+When a correlated response includes the existing `ExecutionResult`, SQLite and
+MemoryStore commit the receipt, `receipt_recorded` attempt, terminal audit, and
+lifecycle event atomically. Standalone callbacks without a result remain
+transport-only receipts and do not invent terminal truth.
+Queued, claimed, forged, conflicting, duplicate, late, and out-of-order receipt
+handling is monotonic and tenant-scoped, and the in-memory store mirrors the
+SQLite crash-boundary behavior.
 It also mirrors the durable decision contract: approval/rejection writes must
 target an existing pending action and must fail rather than creating a
 decision-only record or overwriting an already decided action.

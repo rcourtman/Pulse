@@ -213,6 +213,21 @@ The retained foundation is therefore the hidden backend layer: canonical
 resources and relationships, standardized agent-emitted resource/signal/change
 envelopes, policy metadata and routing hooks, governed action and approval
 boundaries with auditability, and first-class fleet governance.
+Governed action identity is create-once and lifecycle state is monotonic. A
+deterministic replay returns the authoritative persisted record; it cannot
+replace approvals, execution results, verification, origin, or terminal state.
+Only the store-level compare-and-swap winner that atomically persists the
+`executing` transition, lifecycle event, create-once dispatch-attempt identity,
+and outbox row may admit transport. Claiming the outbox is not permission to
+send: `MarkActionDispatchStarted` is the durable pre-send linearization point.
+An expired pre-send claim requeues the same attempt; after that point recovery
+may only reconcile the attempt or accept an authenticated correlated receipt,
+never blindly resend. A correlated response that carries today's execution
+result commits its receipt with the terminal audit and event atomically, so a
+crash cannot preserve the receipt while losing the accompanying result. This is
+durable transport admission and continuity, not
+permission to infer execution, verification, evidence, or compensation truth;
+Task 10 remains the sole owner of those terminal semantics.
 
 ## Evergreen Readiness Assertions
 

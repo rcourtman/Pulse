@@ -84,6 +84,7 @@ type Config struct {
 	runCommandClientFn   func(*CommandClient, context.Context) error
 	updatedFromVersionFn func() string
 	packageUpdates       *packageUpdateManager
+	storageCleanup       *storageCleanupManager
 }
 
 // Agent is responsible for collecting host metrics and shipping them to Pulse.
@@ -119,6 +120,7 @@ type Agent struct {
 	newCommandClient       func(Config, string, string, string, string) *CommandClient
 	runCommandClient       func(*CommandClient, context.Context) error
 	packageUpdates         *packageUpdateManager
+	storageCleanup         *storageCleanupManager
 
 	// lastAuthFailureLog throttles the actionable 401 error so a permanently
 	// rejected token does not spam the log every report interval. Only touched
@@ -319,6 +321,11 @@ func New(cfg Config) (*Agent, error) {
 		packageUpdates = newPackageUpdateManager(platform)
 	}
 	cfg.packageUpdates = packageUpdates
+	storageCleanup := cfg.storageCleanup
+	if storageCleanup == nil {
+		storageCleanup = newStorageCleanupManager(platform)
+	}
+	cfg.storageCleanup = storageCleanup
 
 	agent := &Agent{
 		cfg:                 cfg,
@@ -346,6 +353,7 @@ func New(cfg Config) (*Agent, error) {
 		newCommandClient:    newCommandClientFn,
 		runCommandClient:    runCommandClientFn,
 		packageUpdates:      packageUpdates,
+		storageCleanup:      storageCleanup,
 	}
 
 	// Create command client for AI command execution (only if enabled)
@@ -839,6 +847,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	packageUpdateCtx, cancelPackageUpdates := context.WithTimeout(ctx, 20*time.Second)
 	packageUpdates := a.currentPackageUpdateStatus(packageUpdateCtx)
 	cancelPackageUpdates()
+	storageCleanup := a.currentStorageCleanupStatus()
 
 	// Carry updated_from on the first freshly built v6 report only. If that
 	// report is buffered, the buffered copy still retains the field for retry.
@@ -877,6 +886,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			LoadAverage:    append([]float64(nil), snapshot.LoadAverage...),
 			ReportIP:       runtimeConfig.reportIP,
 			PackageUpdates: packageUpdates,
+			StorageCleanup: storageCleanup,
 		},
 		Metrics: agentshost.Metrics{
 			CPUUsagePercent: snapshot.CPUUsagePercent,
@@ -919,6 +929,21 @@ func (a *Agent) currentPackageUpdateStatus(ctx context.Context) *agentshost.Pack
 		CheckedAt:      snapshot.CheckedAt,
 		RebootRequired: snapshot.RebootRequired,
 		Error:          snapshot.Error,
+	}
+}
+
+func (a *Agent) currentStorageCleanupStatus() *agentshost.StorageCleanupStatus {
+	if a == nil || a.storageCleanup == nil {
+		return nil
+	}
+	snapshot := a.storageCleanup.Snapshot(false)
+	return &agentshost.StorageCleanupStatus{
+		Supported:        snapshot.Supported,
+		Provider:         snapshot.Provider,
+		Fingerprint:      snapshot.Fingerprint,
+		ReclaimableBytes: snapshot.ReclaimableBytes,
+		CheckedAt:        snapshot.CheckedAt,
+		Error:            snapshot.Error,
 	}
 }
 
@@ -1162,16 +1187,11 @@ func remoteDurationSetting(settings map[string]interface{}, key string) (time.Du
 }
 
 func normalisePlatform(platform string) string {
-	platform = strings.ToLower(strings.TrimSpace(platform))
-	switch platform {
-	case "darwin":
-		return "macos"
-	default:
-		if runtimePlatform := platformsupport.RuntimePlatformForHostIdentityToken(platform); runtimePlatform != "" {
-			return runtimePlatform
-		}
-		return platform
+	normalized := platformsupport.NormalizeAgentReportedPlatform(platform)
+	if runtimePlatform := platformsupport.RuntimePlatformForHostIdentityToken(normalized); runtimePlatform != "" {
+		return runtimePlatform
 	}
+	return normalized
 }
 
 func normalizePulseURL(rawURL string) (string, error) {

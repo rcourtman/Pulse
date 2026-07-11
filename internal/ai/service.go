@@ -30,6 +30,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelboundary"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	aitools "github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
@@ -1032,6 +1033,11 @@ func (s *Service) getEffectivePatrolInterval(cfg *config.AIConfig) time.Duration
 func (s *Service) patrolConfigFromAIConfig(cfg *config.AIConfig) PatrolConfig {
 	patrolCfg := DefaultPatrolConfig()
 	if cfg == nil {
+		if IsDemoMode() {
+			// Demo runtimes simulate patrol without provider settings.
+			patrolCfg.Enabled = true
+			return patrolCfg
+		}
 		patrolCfg.Enabled = false
 		patrolCfg.RuntimeBlockedReason = "Pulse Intelligence settings could not be loaded from persistence."
 		patrolCfg.RuntimeBlockedCause = PatrolFailureCauseSettingsPersistence
@@ -1044,6 +1050,12 @@ func (s *Service) patrolConfigFromAIConfig(cfg *config.AIConfig) PatrolConfig {
 	patrolCfg.AnalyzeGuests = cfg.PatrolAnalyzeGuests
 	patrolCfg.AnalyzeDocker = cfg.PatrolAnalyzeDocker
 	patrolCfg.AnalyzeStorage = cfg.PatrolAnalyzeStorage
+	if IsDemoMode() {
+		// Demo/mock runtimes simulate patrol runs without a provider; never
+		// carry a readiness blocker into the demo loop.
+		patrolCfg.Enabled = true
+		return patrolCfg
+	}
 	if patrolCfg.Enabled {
 		if readiness := EvaluatePatrolConfigReadiness(cfg); !readiness.Ready {
 			patrolCfg.RuntimeBlockedReason = readiness.Summary
@@ -1121,8 +1133,16 @@ func (s *Service) StartPatrol(ctx context.Context) {
 	}
 
 	if cfg == nil || !cfg.IsPatrolEnabled() {
-		log.Debug().Msg("AI Patrol not enabled")
-		return
+		// Demo runtimes still start the loop: the release demo instance boots
+		// with mock fixtures off until the license sync authorizes them, and
+		// each tick re-checks IsDemoMode() live, so the loop self-heals into
+		// simulated patrol cycles once fixtures enable. Requires a loaded
+		// config because the setup below dereferences it.
+		if cfg == nil || !IsDemoRuntimeIntended() {
+			log.Debug().Msg("AI Patrol not enabled")
+			return
+		}
+		log.Info().Msg("AI Patrol: starting loop for demo runtime despite disabled config")
 	}
 
 	// Check license for Patrol fix actions (Pro only) - Patrol itself is free with BYOK
@@ -1144,6 +1164,11 @@ func (s *Service) StartPatrol(ctx context.Context) {
 		log.Info().
 			Str("env", DevDisableBackgroundAIEnv).
 			Msg("Pulse dev background AI disabled; Patrol scheduler and alert-triggered AI are not started")
+		// The dev guard protects provider quota; a simulated demo cycle costs
+		// nothing, so mock-mode dev still gets a populated patrol surface.
+		if IsDemoMode() {
+			patrol.startDemoPatrolWarmup()
+		}
 		return
 	}
 
@@ -1165,9 +1190,10 @@ func (s *Service) StartPatrol(ctx context.Context) {
 			Msg("Alert-triggered AI analysis configured")
 	}
 
-	// In demo/mock mode, inject realistic AI findings for showcasing
+	// In demo/mock mode, populate the patrol surface promptly with a
+	// simulated cycle instead of waiting for the first scheduled tick.
 	if IsDemoMode() {
-		patrol.InjectDemoFindings()
+		patrol.startDemoPatrolWarmup()
 	}
 }
 
@@ -2489,6 +2515,17 @@ Always execute the commands rather than telling the user how to do it.`
 		anyNeedsApproval := false
 		for _, tc := range resp.ToolCalls {
 			toolInput := s.getToolInputDisplay(tc)
+			class := agentcapabilities.ClassifyLegacyAssistantInvocation(tc.Name)
+			if !s.legacyAssistantInvocationPolicy().Allows(tc.Name, class) {
+				result := agentcapabilities.ToolResultText(agentcapabilities.NewInvocationBlockedToolResult(tc.Name, class))
+				execution := ToolExecution{Name: tc.Name, Input: toolInput, Output: result, Success: false}
+				toolExecutions = append(toolExecutions, execution)
+				callback(StreamEvent{Type: "tool_start", Data: ToolStartData{Name: tc.Name, Input: toolInput}})
+				callback(StreamEvent{Type: "tool_end", Data: ToolEndData{Name: tc.Name, Input: toolInput, Output: result, Success: false}})
+				projection := newLegacyServiceProviderToolResultContextProjection(tc.ID, result, true)
+				messages = append(messages, providers.Message{Role: "user", ToolResult: &projection.Model})
+				continue
+			}
 
 			// Check if this command needs approval
 			needsApproval := false
@@ -2551,12 +2588,14 @@ Always execute the commands rather than telling the user how to do it.`
 					continue
 				}
 
-				if req.RequireCommandApproval || (!isAuto && policyDecision == agentexec.PolicyRequireApproval) {
+				if req.RequireCommandApproval || isAuto || policyDecision == agentexec.PolicyRequireApproval {
 					needsApproval = true
 					anyNeedsApproval = true
 					approvalReason = "Security policy requires approval"
 					if req.RequireCommandApproval {
 						approvalReason = "This handoff requires operator approval before command execution"
+					} else if isAuto {
+						approvalReason = "Autonomous model sessions cannot dispatch raw commands; operator approval is required"
 					}
 					approvalID = createRunCommandApprovalRecord(
 						approvalOrgID,
@@ -3048,9 +3087,27 @@ func (s *Service) hasAgentForTarget(req ExecuteRequest) bool {
 }
 
 // getTools returns the available tools for AI
+func (s *Service) legacyAssistantInvocationPolicy() aitools.InvocationPolicy {
+	s.mu.RLock()
+	cfg := s.cfg
+	s.mu.RUnlock()
+	level := aitools.ControlLevelReadOnly
+	if cfg != nil {
+		level = aitools.ControlLevel(cfg.GetControlLevel())
+	}
+	return aitools.InvocationPolicy{
+		ControlLevel:                level,
+		HasExecuteAuthority:         true,
+		ExecuteAuthorityBound:       true,
+		DenyInfrastructureMutations: true,
+		PulseStateAllowlist:         map[string]bool{},
+		Profile:                     aitools.ProfileInteractiveAssistant,
+	}
+}
+
 func (s *Service) getTools() []providers.Tool {
-	tools := append([]providers.Tool{}, agentcapabilities.LegacyAssistantUtilityProviderTools()...)
-	tools = append(tools,
+	candidates := append([]providers.Tool{}, agentcapabilities.LegacyAssistantUtilityProviderTools()...)
+	candidates = append(candidates,
 		providers.Tool{
 			Name:        agentcapabilities.ResolveFindingCapabilityName,
 			Description: "Mark an AI patrol finding as resolved after successfully fixing the issue. Use the finding ID shown in your Patrol Finding Context section. Call this after verifying the fix worked - do NOT ask the user for the finding ID.",
@@ -3065,14 +3122,21 @@ func (s *Service) getTools() []providers.Tool {
 
 	// Add web search tool for Anthropic provider
 	if s.provider != nil && s.provider.Name() == "anthropic" {
-		tools = append(tools, providers.Tool{
+		candidates = append(candidates, providers.Tool{
 			Type:    "web_search_20250305",
 			Name:    "web_search",
 			MaxUses: 3, // Limit searches per request to control costs
 		})
 	}
 
-	return tools
+	policy := s.legacyAssistantInvocationPolicy()
+	available := make([]providers.Tool, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.Name == "web_search" || policy.Allows(candidate.Name, agentcapabilities.ClassifyLegacyAssistantInvocation(candidate.Name)) {
+			available = append(available, candidate)
+		}
+	}
+	return available
 }
 
 // executeTool executes a tool call and returns the result
@@ -3080,6 +3144,11 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 	execution := ToolExecution{
 		Name:    tc.Name,
 		Success: false,
+	}
+	class := agentcapabilities.ClassifyLegacyAssistantInvocation(tc.Name)
+	if !s.legacyAssistantInvocationPolicy().Allows(tc.Name, class) {
+		execution.Output = agentcapabilities.ToolResultText(agentcapabilities.NewInvocationBlockedToolResult(tc.Name, class))
+		return execution.Output, execution
 	}
 
 	switch tc.Name {
@@ -3107,13 +3176,16 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 			execution.Output = formatPolicyBlockedToolResult(command, "This command is blocked by security policy")
 			return execution.Output, execution
 		}
-		if req.RequireCommandApproval || (decision == agentexec.PolicyRequireApproval && !s.isAutonomousForRequest(req)) {
+		isAuto := s.isAutonomousForRequest(req)
+		if req.RequireCommandApproval || isAuto || decision == agentexec.PolicyRequireApproval {
 			s.mu.RLock()
 			approvalOrgID := s.orgID
 			s.mu.RUnlock()
 			approvalReason := "Security policy requires approval"
 			if req.RequireCommandApproval {
 				approvalReason = "This handoff requires operator approval before command execution"
+			} else if isAuto {
+				approvalReason = "Autonomous model sessions cannot dispatch raw commands; operator approval is required"
 			}
 			approvalID := createRunCommandApprovalRecord(
 				approvalOrgID,
@@ -3769,6 +3841,10 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 }
 
 func (s *Service) executeOnAgentWithApproval(ctx context.Context, req ExecuteRequest, command, approvalID string) (string, error) {
+	return s.executeOnAgentWithAuthorization(ctx, req, command, approvalID, "", "")
+}
+
+func (s *Service) executeOnAgentWithAuthorization(ctx context.Context, req ExecuteRequest, command, approvalID, orgID, actionID string) (string, error) {
 	if s.agentServer == nil {
 		return "", fmt.Errorf("agent server not available")
 	}
@@ -3847,6 +3923,9 @@ func (s *Service) executeOnAgentWithApproval(ctx context.Context, req ExecuteReq
 		TargetID:   targetID,
 		Timeout:    300, // 5 minutes - commands like du, backups, etc. can take a while
 	}
+	if strings.TrimSpace(approvalID) != "" {
+		cmd.BindCommandAuthorization(orgID, actionID)
+	}
 
 	result, err := s.agentServer.ExecuteCommand(ctx, agentID, cmd)
 	if err != nil {
@@ -3881,6 +3960,8 @@ type RunCommandRequest struct {
 	RunOnHost  bool   `json:"run_on_host"` // If true, run on host instead of target
 	VMID       string `json:"vmid,omitempty"`
 	TargetHost string `json:"target_host,omitempty"` // Explicit host for routing
+	OrgID      string `json:"-"`
+	ActionID   string `json:"-"`
 }
 
 // RunCommandResponse represents the result of running a command
@@ -3923,7 +4004,7 @@ func (s *Service) RunCommand(ctx context.Context, req RunCommandRequest) (*RunCo
 			Msg("RunCommand using explicit target_host for routing")
 	}
 
-	output, err := s.executeOnAgentWithApproval(ctx, execReq, req.Command, req.ApprovalID)
+	output, err := s.executeOnAgentWithAuthorization(ctx, execReq, req.Command, req.ApprovalID, req.OrgID, req.ActionID)
 	if err != nil {
 		return &RunCommandResponse{
 			Success: false,

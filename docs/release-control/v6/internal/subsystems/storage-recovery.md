@@ -56,6 +56,22 @@ state.
 
 ## Shared Boundaries
 
+The Patrol action broker and shared policy-writer wiring under `internal/api/`
+remain API/action-lifecycle authority even when the target is storage-related.
+Automatic admission requires a fresh, resource-bound policy lease and an
+atomic approval-plus-`executing` transition; missing, unreadable, malformed,
+or revoked policy fails closed before any backup, restore, SMART, or other
+storage executor/network call. Human approval remains distinct evidence.
+Emergency stop after `executing` is best-effort cancellation, never recovery
+or rollback proof.
+
+Assistant access to recovery points and storage evidence is read-side context.
+`ai:chat`, relay-mobile chat, and the `read_only` control level cannot project
+or execute storage/infrastructure mutation, finding lifecycle changes, or
+knowledge persistence. Any future storage action must cross the explicit
+`ai:execute` plus governed action-plan boundary; it must not be introduced as
+a recovery-provider read helper or compatibility alias.
+
 1. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `unified-resources`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
 2. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `unified-resources`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
 3. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `api-contracts`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
@@ -391,6 +407,13 @@ fingerprint-bound `install_os_updates` operation after canonical lifecycle
 approval. Storage/recovery consumers may observe its redacted audit outcome and
 reboot-required fact as context, but must not treat package installation as
 storage maintenance, recovery evidence, or a storage-owned mutation path.
+The API-owned `internal/api/host_storage_cleanup_action_executor.go` is a
+narrow exception only in product purpose, not ownership: it may reclaim the
+fixed APT package cache through the canonical action lifecycle when the cache's
+actual filesystem is pressured. Storage/recovery consumers may observe its
+redacted byte outcome as operational context, but package-cache deletion is
+not backup pruning, restore evidence, arbitrary path cleanup, or a
+storage-owned executor.
 Storage and recovery surfaces may consume Discovery context from the shared
 API boundary when it helps explain protected workloads or storage-adjacent
 services, including mock-mode config/data/log path examples. That context is
@@ -1161,6 +1184,11 @@ recovery scope, or a storage/recovery-owned secret source.
     liveness context unless a separate storage/recovery-owned relationship ties
     it to backup or restore evidence.
 33. Keep infrastructure summary chart bucketing and short response caching presentation-only on the adjacent shared API boundary. When `internal/api/router.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets or serves a cached summary payload for repeated operator-facing summary-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
+    The same router may wire the adjacent server-owned agent command
+    authorization verifier, but storage/recovery must not treat an approval id,
+    signed command grant, or command result as restore authorization or
+    recovery evidence; that authority remains action-governance and
+    agent-lifecycle owned.
 34. Keep workload chart downsampling and short response caching presentation-only on that same adjacent shared API boundary. When `internal/api/router.go` caps mixed-cadence workload history into equal-time buckets or serves a cached workload-summary payload for repeated operator-facing workload-card requests, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples, cached timestamps, or cache hits as recovery freshness windows, backup cadence, or restore evidence.
     The same adjacent chart boundary now covers compact storage capacity
     transport. `internal/api/router.go` may batch only the canonical `used`
@@ -1662,6 +1690,25 @@ must not treat starter
     a panic after the archive import succeeds.
 
 ## Current State
+
+### Canonical mutation-plane dependency
+
+Infrastructure rollback is a declared lifecycle property, not executable model
+or legacy remediation text. Task 10 owns compensation/truth representation;
+until that contract is complete, affected Docker, Kubernetes, and native
+provider mutations remain fail-closed denied.
+
+Storage and recovery consumers inherit create-once action identity, monotonic
+terminal state, and exactly-one executor admission from the shared lifecycle.
+They must not retry an `executing` action as a new dispatch after restart;
+recovery must resolve the existing attempt through the separately governed
+continuity contract.
+The shared store materializes that continuity as a transactional dispatch
+attempt/outbox and a one-shot pre-send `MarkActionDispatchStarted` boundary.
+Storage and recovery consumers may observe action detail, pending/settled
+projections, and correlated receipt state, but may not infer restore,
+verification, rollback, or compensation truth from those transport-only fields
+or create a local retry path when the core attempt is `receipt_pending`.
 
 Unified Agent lifecycle fields added to the shared host and connections API are
 adjacent monitoring/API state only. Applied config fingerprints, updater

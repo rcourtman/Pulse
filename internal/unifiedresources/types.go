@@ -774,6 +774,12 @@ type AgentMemoryMeta struct {
 
 const HostPackageUpdateFreshness = 45 * time.Minute
 
+const (
+	HostStorageCleanupFreshness           = 45 * time.Minute
+	HostStoragePressureThreshold          = 90.0
+	HostStorageCleanupMinReclaimableBytes = int64(64 * 1024 * 1024)
+)
+
 type AgentPackageUpdateMeta struct {
 	Supported      bool                 `json:"supported"`
 	Manager        string               `json:"manager,omitempty"`
@@ -791,6 +797,15 @@ type AgentPackageUpdate struct {
 	AvailableVersion string `json:"availableVersion,omitempty"`
 }
 
+type AgentStorageCleanupMeta struct {
+	Supported        bool      `json:"supported"`
+	Provider         string    `json:"provider,omitempty"`
+	Fingerprint      string    `json:"fingerprint,omitempty"`
+	ReclaimableBytes int64     `json:"reclaimableBytes"`
+	CheckedAt        time.Time `json:"checkedAt,omitempty"`
+	Error            string    `json:"error,omitempty"`
+}
+
 // AgentData contains host agent-specific data.
 type AgentData struct {
 	AgentID      string `json:"agentId,omitempty"`
@@ -805,48 +820,49 @@ type AgentData struct {
 	// multi-source row (for example a Proxmox node also polled over the PVE
 	// API) this differs from the row's LastSeen, which reflects the freshest
 	// source rather than the agent.
-	LastReportAt          *time.Time              `json:"lastReportAt,omitempty"`
-	Hostname              string                  `json:"hostname,omitempty"`
-	MachineID             string                  `json:"machineId,omitempty"`
-	TokenID               string                  `json:"tokenId,omitempty"`
-	TokenName             string                  `json:"tokenName,omitempty"`
-	TokenHint             string                  `json:"tokenHint,omitempty"`
-	TokenLastUsedAt       *time.Time              `json:"tokenLastUsedAt,omitempty"`
-	Platform              string                  `json:"platform,omitempty"`
-	HostProfile           string                  `json:"hostProfile,omitempty"`
-	OSName                string                  `json:"osName,omitempty"`
-	OSVersion             string                  `json:"osVersion,omitempty"`
-	KernelVersion         string                  `json:"kernelVersion,omitempty"`
-	Architecture          string                  `json:"architecture,omitempty"`
-	CPUCount              int                     `json:"cpuCount,omitempty"`
-	LoadAverage           []float64               `json:"loadAverage,omitempty"`
-	UptimeSeconds         int64                   `json:"uptimeSeconds,omitempty"`
-	IntervalSeconds       int                     `json:"intervalSeconds,omitempty"`
-	Temperature           *float64                `json:"temperature,omitempty"` // Max CPU temp in Celsius
-	NetworkInterfaces     []NetworkInterface      `json:"networkInterfaces,omitempty"`
-	Disks                 []DiskInfo              `json:"disks,omitempty"`
-	Memory                *AgentMemoryMeta        `json:"memory,omitempty"`
-	Sensors               *HostSensorMeta         `json:"sensors,omitempty"`
-	RAID                  []HostRAIDMeta          `json:"raid,omitempty"`
-	Unraid                *HostUnraidMeta         `json:"unraid,omitempty"`
-	DiskIO                []HostDiskIOMeta        `json:"diskIo,omitempty"`
-	Ceph                  *HostCephMeta           `json:"ceph,omitempty"`
-	StorageRisk           *StorageRisk            `json:"storageRisk,omitempty"`
-	StorageRiskSummary    string                  `json:"storageRiskSummary,omitempty"`
-	StoragePostureSummary string                  `json:"storagePostureSummary,omitempty"`
-	ProtectionReduced     bool                    `json:"protectionReduced,omitempty"`
-	ProtectionSummary     string                  `json:"protectionSummary,omitempty"`
-	RebuildInProgress     bool                    `json:"rebuildInProgress,omitempty"`
-	RebuildSummary        string                  `json:"rebuildSummary,omitempty"`
-	CommandsEnabled       bool                    `json:"commandsEnabled,omitempty"`
-	PackageUpdates        *AgentPackageUpdateMeta `json:"packageUpdates,omitempty"`
-	ReportIP              string                  `json:"reportIp,omitempty"`
-	DiskExclude           []string                `json:"diskExclude,omitempty"`
-	IsLegacy              bool                    `json:"isLegacy,omitempty"`
-	NetInRate             float64                 `json:"netInRate,omitempty"`
-	NetOutRate            float64                 `json:"netOutRate,omitempty"`
-	DiskReadRate          float64                 `json:"diskReadRate,omitempty"`
-	DiskWriteRate         float64                 `json:"diskWriteRate,omitempty"`
+	LastReportAt          *time.Time               `json:"lastReportAt,omitempty"`
+	Hostname              string                   `json:"hostname,omitempty"`
+	MachineID             string                   `json:"machineId,omitempty"`
+	TokenID               string                   `json:"tokenId,omitempty"`
+	TokenName             string                   `json:"tokenName,omitempty"`
+	TokenHint             string                   `json:"tokenHint,omitempty"`
+	TokenLastUsedAt       *time.Time               `json:"tokenLastUsedAt,omitempty"`
+	Platform              string                   `json:"platform,omitempty"`
+	HostProfile           string                   `json:"hostProfile,omitempty"`
+	OSName                string                   `json:"osName,omitempty"`
+	OSVersion             string                   `json:"osVersion,omitempty"`
+	KernelVersion         string                   `json:"kernelVersion,omitempty"`
+	Architecture          string                   `json:"architecture,omitempty"`
+	CPUCount              int                      `json:"cpuCount,omitempty"`
+	LoadAverage           []float64                `json:"loadAverage,omitempty"`
+	UptimeSeconds         int64                    `json:"uptimeSeconds,omitempty"`
+	IntervalSeconds       int                      `json:"intervalSeconds,omitempty"`
+	Temperature           *float64                 `json:"temperature,omitempty"` // Max CPU temp in Celsius
+	NetworkInterfaces     []NetworkInterface       `json:"networkInterfaces,omitempty"`
+	Disks                 []DiskInfo               `json:"disks,omitempty"`
+	Memory                *AgentMemoryMeta         `json:"memory,omitempty"`
+	Sensors               *HostSensorMeta          `json:"sensors,omitempty"`
+	RAID                  []HostRAIDMeta           `json:"raid,omitempty"`
+	Unraid                *HostUnraidMeta          `json:"unraid,omitempty"`
+	DiskIO                []HostDiskIOMeta         `json:"diskIo,omitempty"`
+	Ceph                  *HostCephMeta            `json:"ceph,omitempty"`
+	StorageRisk           *StorageRisk             `json:"storageRisk,omitempty"`
+	StorageRiskSummary    string                   `json:"storageRiskSummary,omitempty"`
+	StoragePostureSummary string                   `json:"storagePostureSummary,omitempty"`
+	ProtectionReduced     bool                     `json:"protectionReduced,omitempty"`
+	ProtectionSummary     string                   `json:"protectionSummary,omitempty"`
+	RebuildInProgress     bool                     `json:"rebuildInProgress,omitempty"`
+	RebuildSummary        string                   `json:"rebuildSummary,omitempty"`
+	CommandsEnabled       bool                     `json:"commandsEnabled,omitempty"`
+	PackageUpdates        *AgentPackageUpdateMeta  `json:"packageUpdates,omitempty"`
+	StorageCleanup        *AgentStorageCleanupMeta `json:"storageCleanup,omitempty"`
+	ReportIP              string                   `json:"reportIp,omitempty"`
+	DiskExclude           []string                 `json:"diskExclude,omitempty"`
+	IsLegacy              bool                     `json:"isLegacy,omitempty"`
+	NetInRate             float64                  `json:"netInRate,omitempty"`
+	NetOutRate            float64                  `json:"netOutRate,omitempty"`
+	DiskReadRate          float64                  `json:"diskReadRate,omitempty"`
+	DiskWriteRate         float64                  `json:"diskWriteRate,omitempty"`
 	// Internal link hints to proxmox resources.
 	LinkedNodeID      string `json:"-"`
 	LinkedVMID        string `json:"-"`

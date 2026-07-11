@@ -292,3 +292,46 @@ func TestProposalValidationUsesCanonicalPlannerRules(t *testing.T) {
 		t.Fatalf("outcome error = %v, want ErrProposalAttemptsFailed", err)
 	}
 }
+
+func TestProposeActionSchemaExposesOnlyModelAuthoredFields(t *testing.T) {
+	exec := NewPulseToolExecutor(ExecutorConfig{})
+	exec.ApplyExecutionProfile(ProfilePatrolInvestigation)
+	exec.SetProposalCapture(NewProposalCapture(ProposalIdentity{}, testProposalCatalog()))
+
+	for _, tool := range exec.registry.ListTools(exec.invocationPolicy()) {
+		if tool.Name != agentcapabilities.PatrolProposeActionToolName {
+			continue
+		}
+		assert.ElementsMatch(t,
+			[]string{"resource_id", "capability_name", "params", "reason"},
+			mapKeys(tool.InputSchema.Properties),
+		)
+		return
+	}
+	t.Fatal("patrol_propose_action missing from investigation projection")
+}
+
+func TestProposeActionRejectsUnknownAndInternalFieldsBeforeCapture(t *testing.T) {
+	capture := NewProposalCapture(ProposalIdentity{FindingID: "trusted-f", InvestigationID: "trusted-i"}, testProposalCatalog())
+	exec := newInvestigationExecutor(t, capture)
+
+	for _, field := range []string{"finding_id", "investigation_id", agentcapabilities.ApprovalArgumentKey} {
+		args := proposeArgs()
+		args[field] = "model-authored"
+		result := executePropose(t, exec, "call-"+field, args)
+		assert.Contains(t, result.Content[0].Text, "invalid tools/call params")
+	}
+
+	proposal, failed, err := capture.Outcome()
+	require.NoError(t, err)
+	assert.Nil(t, proposal)
+	assert.Zero(t, failed, "schema rejection must occur before the proposal handler records an attempt")
+}
+
+func mapKeys[V any](values map[string]V) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	return keys
+}

@@ -4501,6 +4501,96 @@ func TestMergedHostCanonicalIDStableAcrossRestartsAndIngestOrders(t *testing.T) 
 	}
 }
 
+// The end-to-end #1559 scenario: multiple standalone agents with dotted
+// hostnames (cloud.rnd-lax1, cloud.gce-or1, cloud.dmi-lax1) must mint
+// distinct canonical resources, persist full dotted hostnames in their
+// identity pins instead of collapsing them all to "cloud", and boot-window
+// records that only know the hostname must resolve to the right machine
+// instead of the first pinned one.
+func TestStandaloneDottedHostnameAgentsStayDistinct(t *testing.T) {
+	store := NewMemoryStore()
+
+	hosts := []struct {
+		hostname  string
+		machineID string
+	}{
+		{"cloud.rnd-lax1", "machine-rnd"},
+		{"cloud.gce-or1", "machine-gce"},
+		{"cloud.dmi-lax1", "machine-dmi"},
+	}
+
+	agentResource := func(hostname, machineID string) Resource {
+		return Resource{
+			Type:   ResourceTypeAgent,
+			Name:   hostname,
+			Status: StatusOnline,
+			Agent:  &AgentData{AgentID: machineID, Hostname: hostname, MachineID: machineID},
+		}
+	}
+
+	steady := NewRegistry(store)
+	idByHostname := make(map[string]string, len(hosts))
+	for _, host := range hosts {
+		identity := ResourceIdentity{MachineID: host.machineID, Hostnames: []string{host.hostname}}
+		id := steady.ingest(SourceAgent, host.machineID, agentResource(host.hostname, host.machineID), identity)
+		if id == "" {
+			t.Fatalf("agent ingest for %q returned no ID", host.hostname)
+		}
+		for hostname, existingID := range idByHostname {
+			if existingID == id {
+				t.Fatalf("hosts %q and %q collapsed to canonical ID %q", hostname, host.hostname, id)
+			}
+		}
+		idByHostname[host.hostname] = id
+	}
+	if got := len(steady.List()); got != len(hosts) {
+		t.Fatalf("expected %d distinct resources, got %d", len(hosts), got)
+	}
+	steady.PersistIdentityPins()
+
+	pins, err := store.ListResourceIdentityPins()
+	if err != nil {
+		t.Fatalf("ListResourceIdentityPins: %v", err)
+	}
+	pinnedHostnames := make(map[string]struct{}, len(pins))
+	for _, pin := range pins {
+		pinnedHostnames[pin.Hostname] = struct{}{}
+	}
+	for _, host := range hosts {
+		if _, ok := pinnedHostnames[host.hostname]; !ok {
+			t.Fatalf("expected pinned primary hostname %q, got %v", host.hostname, pinnedHostnames)
+		}
+	}
+
+	// Boot window: runtime records that only know the hostname (no machine
+	// ID yet) arrive before the agents. Each must complete from its own pin
+	// and land on its own canonical ID.
+	boot := NewRegistry(store)
+	for _, host := range hosts {
+		record := Resource{
+			Type:   ResourceTypeAgent,
+			Name:   host.hostname,
+			Status: StatusOnline,
+			Docker: &DockerData{HostSourceID: "docker:" + host.hostname, Hostname: host.hostname},
+		}
+		identity := ResourceIdentity{Hostnames: []string{host.hostname}}
+		id := boot.ingest(SourceDocker, "docker:"+host.hostname, record, identity)
+		if want := idByHostname[host.hostname]; id != want {
+			t.Fatalf("boot-window record for %q resolved %q, want its own canonical ID %q", host.hostname, id, want)
+		}
+	}
+	for _, host := range hosts {
+		identity := ResourceIdentity{MachineID: host.machineID, Hostnames: []string{host.hostname}}
+		id := boot.ingest(SourceAgent, host.machineID, agentResource(host.hostname, host.machineID), identity)
+		if want := idByHostname[host.hostname]; id != want {
+			t.Fatalf("agent ingest for %q resolved %q, want %q", host.hostname, id, want)
+		}
+	}
+	if got := len(boot.List()); got != len(hosts) {
+		t.Fatalf("expected %d merged resources after boot-window ingest, got %d", len(hosts), got)
+	}
+}
+
 // A synthesized placeholder (e.g. an offline PVE node for an instance that
 // has never completed a poll) carries a zero LastSeen. Ingest must preserve
 // that zero instead of fabricating a fresh sighting, and the per-source
@@ -4829,5 +4919,185 @@ func TestResourceRegistryUsesConfiguredProxmoxStaleThresholds(t *testing.T) {
 	}
 	if status := clonedVMs[0].SourceStatus[SourceProxmox]; status.Status != "online" {
 		t.Fatalf("cloned SourceStatus[proxmox] = %+v, want online", status)
+	}
+}
+
+// Two Docker Swarm members with FQDN hostnames and no machine keys
+// (containerized agents without /etc/machine-id) must mint distinct
+// cluster-scoped canonical IDs. The historical derivation hashed the short
+// hostname, so cloud.a and cloud.b both derived cluster:<swarm>:cloud and
+// fully merged in the registry (sibling of #1559).
+func TestSwarmFQDNHostsWithoutMachineIDsStayDistinct(t *testing.T) {
+	store := NewMemoryStore()
+	registry := NewRegistry(store)
+
+	swarmHostIdentity := func(hostname string) ResourceIdentity {
+		return ResourceIdentity{
+			ClusterName: "prod-swarm",
+			Hostnames:   []string{hostname, "prod-swarm:" + hostname},
+		}
+	}
+	swarmHostResource := func(hostname string) Resource {
+		return Resource{
+			Type:   ResourceTypeAgent,
+			Name:   hostname,
+			Status: StatusOnline,
+			Docker: &DockerData{HostSourceID: "docker:" + hostname, Hostname: hostname},
+		}
+	}
+
+	idA := registry.ingest(SourceDocker, "docker:cloud.a", swarmHostResource("cloud.a"), swarmHostIdentity("cloud.a"))
+	idB := registry.ingest(SourceDocker, "docker:cloud.b", swarmHostResource("cloud.b"), swarmHostIdentity("cloud.b"))
+	if idA == "" || idB == "" {
+		t.Fatalf("swarm host ingest returned empty IDs: %q, %q", idA, idB)
+	}
+	if idA == idB {
+		t.Fatalf("swarm members cloud.a and cloud.b collapsed to canonical ID %q", idA)
+	}
+	if got := len(registry.List()); got != 2 {
+		t.Fatalf("expected 2 distinct swarm host resources, got %d", got)
+	}
+
+	// Journal rows recorded under the collapsed short-hostname era must stay
+	// part of the timeline read through the new full-hostname ID.
+	shortEraID := buildHashID(ResourceTypeAgent, "cluster:prod-swarm:cloud")
+	if shortEraID == idA || shortEraID == idB {
+		t.Fatalf("full-hostname derivation still matches the short era ID %q", shortEraID)
+	}
+	if err := store.RecordChange(ResourceChange{
+		ID:         "change-short-era",
+		ResourceID: shortEraID,
+		ObservedAt: time.Now().Add(-time.Hour),
+		Kind:       ChangeStateTransition,
+	}); err != nil {
+		t.Fatalf("RecordChange: %v", err)
+	}
+	registry.PersistIdentityPins()
+	changes, err := store.GetRecentChanges(idA, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	found := false
+	for _, change := range changes {
+		if change.ID == "change-short-era" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("short-era journal row missing from timeline of %q; got %d changes", idA, len(changes))
+	}
+}
+
+// A machine-keyless swarm host whose canonical ID was minted under the
+// collapsed short-hostname derivation must carry its operator-owned rows to
+// the full-hostname ID: the superseded pin row goes, operator state
+// (never-auto-remediate) is re-keyed, and the new pin preserves the full
+// dotted hostname.
+func TestCanonicalIDSuccessionMovesOperatorState(t *testing.T) {
+	store := NewMemoryStore()
+	shortEraID := buildHashID(ResourceTypeAgent, "cluster:prod-swarm:cloud")
+	if err := store.UpsertResourceIdentityPins([]ResourceIdentityPin{{
+		CanonicalID:  shortEraID,
+		ResourceType: ResourceTypeAgent,
+		ClusterName:  "prod-swarm",
+		Hostname:     "cloud",
+	}}); err != nil {
+		t.Fatalf("seed identity pin: %v", err)
+	}
+	if err := store.SetResourceOperatorState(ResourceOperatorState{
+		CanonicalID:        shortEraID,
+		NeverAutoRemediate: true,
+	}); err != nil {
+		t.Fatalf("seed operator state: %v", err)
+	}
+
+	registry := NewRegistry(store)
+	identity := ResourceIdentity{
+		ClusterName: "prod-swarm",
+		Hostnames:   []string{"cloud.a", "prod-swarm:cloud.a"},
+	}
+	resource := Resource{
+		Type:   ResourceTypeAgent,
+		Name:   "cloud.a",
+		Status: StatusOnline,
+		Docker: &DockerData{HostSourceID: "docker:cloud.a", Hostname: "cloud.a"},
+	}
+	newID := registry.ingest(SourceDocker, "docker:cloud.a", resource, identity)
+	if newID == "" || newID == shortEraID {
+		t.Fatalf("expected a fresh full-hostname canonical ID, got %q (short era %q)", newID, shortEraID)
+	}
+	registry.PersistIdentityPins()
+
+	if _, found, err := store.GetResourceOperatorState(shortEraID); err != nil || found {
+		t.Fatalf("operator state still keyed by superseded ID (found=%v, err=%v)", found, err)
+	}
+	state, found, err := store.GetResourceOperatorState(newID)
+	if err != nil || !found {
+		t.Fatalf("operator state missing under successor ID (found=%v, err=%v)", found, err)
+	}
+	if !state.NeverAutoRemediate {
+		t.Fatalf("never-auto-remediate flag lost across canonical ID succession")
+	}
+
+	pins, err := store.ListResourceIdentityPins()
+	if err != nil {
+		t.Fatalf("ListResourceIdentityPins: %v", err)
+	}
+	byID := make(map[string]ResourceIdentityPin, len(pins))
+	for _, pin := range pins {
+		byID[pin.CanonicalID] = pin
+	}
+	if _, stale := byID[shortEraID]; stale {
+		t.Fatalf("superseded short-era pin row still present")
+	}
+	successor, ok := byID[newID]
+	if !ok {
+		t.Fatalf("successor pin missing; pins: %+v", pins)
+	}
+	if successor.Hostname != "cloud.a" {
+		t.Fatalf("successor pin hostname = %q, want full dotted cloud.a", successor.Hostname)
+	}
+}
+
+// A genuinely short-named host that is alive in the registry owns its
+// canonical ID; an FQDN sibling sharing the short name must not steal its
+// operator rows through succession.
+func TestCanonicalIDSuccessionSkipsLiveShortNamedHost(t *testing.T) {
+	store := NewMemoryStore()
+	registry := NewRegistry(store)
+
+	ingestSwarmHost := func(hostname string) string {
+		return registry.ingest(SourceDocker, "docker:"+hostname, Resource{
+			Type:   ResourceTypeAgent,
+			Name:   hostname,
+			Status: StatusOnline,
+			Docker: &DockerData{HostSourceID: "docker:" + hostname, Hostname: hostname},
+		}, ResourceIdentity{
+			ClusterName: "prod-swarm",
+			Hostnames:   []string{hostname, "prod-swarm:" + hostname},
+		})
+	}
+
+	shortID := ingestSwarmHost("cloud")
+	registry.PersistIdentityPins()
+	if err := store.SetResourceOperatorState(ResourceOperatorState{
+		CanonicalID:        shortID,
+		NeverAutoRemediate: true,
+	}); err != nil {
+		t.Fatalf("seed operator state: %v", err)
+	}
+
+	fqdnID := ingestSwarmHost("cloud.a")
+	if fqdnID == shortID {
+		t.Fatalf("cloud and cloud.a collapsed to canonical ID %q", fqdnID)
+	}
+	registry.PersistIdentityPins()
+
+	state, found, err := store.GetResourceOperatorState(shortID)
+	if err != nil || !found || !state.NeverAutoRemediate {
+		t.Fatalf("live short-named host lost its operator state (found=%v, err=%v)", found, err)
+	}
+	if _, stolen, _ := store.GetResourceOperatorState(fqdnID); stolen {
+		t.Fatalf("FQDN sibling stole the live short-named host's operator state")
 	}
 }

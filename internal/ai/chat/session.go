@@ -424,6 +424,7 @@ func sessionSummaryFromData(data sessionData) Session {
 		UpdatedAt:      data.UpdatedAt,
 		MessageCount:   len(data.Messages),
 		CanRedo:        len(data.TurnRedoStack) > 0,
+		System:         IsSystemSessionID(data.ID),
 		HandoffSummary: modelContextHandoffSummary(data.ModelContext),
 	}
 }
@@ -449,6 +450,7 @@ func sessionSummaryFromListData(data sessionListData) Session {
 		UpdatedAt:      data.UpdatedAt,
 		MessageCount:   len(data.Messages),
 		CanRedo:        len(data.TurnRedoStack) > 0,
+		System:         IsSystemSessionID(data.ID),
 		HandoffSummary: modelContextHandoffSummary(data.ModelContext),
 	}
 }

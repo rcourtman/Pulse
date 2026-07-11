@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -535,17 +536,11 @@ func connectedInfrastructureUninstallAgentID(resource unifiedresources.Resource)
 }
 
 func connectedInfrastructureUpgradePlatform(resource unifiedresources.Resource) string {
+	platform := ""
 	if resource.Agent != nil {
-		switch strings.ToLower(strings.TrimSpace(resource.Agent.Platform)) {
-		case "windows":
-			return "windows"
-		case "darwin", "macos", "mac":
-			return "macos"
-		case "freebsd":
-			return "freebsd"
-		}
+		platform = resource.Agent.Platform
 	}
-	return "linux"
+	return platformsupport.AgentCommandPlatform(platform)
 }
 
 func connectedInfrastructureAgentSurface(

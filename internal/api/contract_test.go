@@ -61,6 +61,40 @@ import (
 	tmock "github.com/stretchr/testify/mock"
 )
 
+func TestContract_ActionLifecycleReplayIsCreateOnceAndMonotonic(t *testing.T) {
+	service, err := os.ReadFile("../actionlifecycle/service.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := os.ReadFile("../unifiedresources/store.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(service), "CreateActionAudit(record, events)") {
+		t.Fatal("planning must atomically create the audit and initial events")
+	}
+	for _, required := range []string{"ON CONFLICT(id) DO NOTHING", "updateActionAuditSQL", "idx_action_lifecycle_events_action_state_unique"} {
+		if !strings.Contains(string(store), required) {
+			t.Errorf("store missing %q", required)
+		}
+	}
+}
+
+func TestContract_ActionExecutorAdmissionRequiresDurableAttemptAndSendCAS(t *testing.T) {
+	service, err := os.ReadFile("../actionlifecycle/service.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(service)
+	admission := strings.Index(src, "store.RecordActionExecutionAdmission(started, startEvent, attempt)")
+	policyAdmission := strings.Index(src, "store.RecordActionPolicyExecutionAdmission(started, approvedEvent, startEvent, attempt)")
+	started := strings.Index(src, "store.MarkActionDispatchStarted(attempt.ID, owner, s.now())")
+	dispatch := strings.Index(src, "s.Executor.ExecuteAction(withDispatchAttempt(ctx, attempt), record)")
+	if admission < 0 || policyAdmission < 0 || started < 0 || dispatch < 0 || admission > started || started > dispatch {
+		t.Fatal("executor dispatch must follow atomic attempt admission and the one-shot pre-send CAS")
+	}
+}
+
 type resourceContractSnapshot struct {
 	ID   string
 	Name string
@@ -542,7 +576,7 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"func chatAutonomousModeForFindingHandoff(requested *bool, findingID, handoffContext string, handoffResources []chat.HandoffResource, handoffActions []chat.HandoffAction, handoffMetadata chat.HandoffMetadata) *bool",
 		`if strings.TrimSpace(findingID) != ""`,
 		"chatApprovalRequiredAutonomousMode()",
-		"AutonomousMode:       chatAutonomousModeForFindingHandoff(req.AutonomousMode, findingID, handoffContext, handoffResources, handoffActions, handoffMetadata)",
+		"AutonomousMode:       chatAutonomousModeForFindingHandoff(nil, findingID, handoffContext, handoffResources, handoffActions, handoffMetadata)",
 		`appendChatContextLine(&b, "Finding Status", unifiedFindingChatStatus(f, time.Now()))`,
 		`appendChatContextLine(&b, "Finding Detected At", f.DetectedAt.Format(time.RFC3339))`,
 		`appendChatContextLine(&b, "Finding Last Seen At", f.LastSeenAt.Format(time.RFC3339))`,
@@ -7244,7 +7278,7 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 			{"key":"push_notifications","reason":"Get Relay so important alerts reach you immediately on mobile instead of waiting for you to reopen Pulse.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=push_notifications"},
 			{"key":"relay","reason":"Get Relay so Pulse stays reachable securely from anywhere instead of only on the local dashboard.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=relay"},
 			{"key":"long_term_metrics","reason":"Get Relay for 14 days of history, or Pro for 90 days, so you can see what changed before and after an incident.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=long_term_metrics"},
-			{"key":"ai_autofix","reason":"Upgrade to Pro so Patrol can investigate issues, handle safe fixes within Patrol mode, and verify the outcome.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_autofix"},
+			{"key":"ai_autofix","reason":"Upgrade to Pro so Patrol can investigate issues, apply safe fixes within Patrol mode, and verify the result.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_autofix"},
 			{"key":"ai_alerts","reason":"Upgrade to Pro so Patrol can investigate issues instead of handing you a stack of symptoms.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_alerts"},
 			{"key":"rbac","reason":"Upgrade to Pro when more than one operator needs safe access boundaries around infrastructure changes.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=rbac"},
 			{"key":"agent_profiles","reason":"Upgrade to Pro to standardize agent behavior across systems without reconfiguring every install by hand.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=agent_profiles"},
@@ -15802,14 +15836,11 @@ func TestContract_ExecutorPostCompletionCallback(t *testing.T) {
 	if !strings.Contains(auditSrc, "go cb(record)") {
 		t.Error("post-completion callback must run on its own goroutine to keep the dispatch hot path off any consumer's slowness")
 	}
-	// Pin that all four terminal sites call publishActionCompleted.
+	// Pin the terminal persistence sites and the shared completion publisher.
 	terminalSites := []string{
-		`e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, "plan drift refused")
-			e.publishActionCompleted(record)`,
-		`e.recordActionLifecycle(record.ID, unifiedresources.ActionStateFailed, requestedBy, remediationLockLifecycleMessage(refusal))` +
-			"\n\t" + `e.publishActionCompleted(record)`,
-		`e.recordActionLifecycle(record.ID, record.State, actor, message)
-		e.publishActionCompleted(record)`,
+		`persistFailedActionAudit(e.actionAuditStore, record, requestedBy, "plan drift refused")`,
+		`e.actionAuditStore.RecordActionExecutionResult(completed, event)`,
+		`persistFailedActionAudit(e.actionAuditStore, record, requestedBy, remediationLockLifecycleMessage(refusal))`,
 	}
 	for _, site := range terminalSites {
 		if !strings.Contains(auditSrc, site) {
@@ -15985,7 +16016,8 @@ func TestContract_PulseIntelligenceSurfaceToolProjectionKeepsAssistantAndMCPDist
 	}
 	chatService := string(chatServiceSource)
 	for _, required := range []string{
-		`func (s *Service) AssistantSurfaceToolContract(_ context.Context) agentcapabilities.SurfaceToolContract`,
+		`func (s *Service) AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract`,
+		`executor.SetExecuteAuthority(executeAuthorityFromContext(ctx))`,
 		`executor.AssistantSurfaceToolContract(agentcapabilities.AssistantProviderToolOptions{`,
 		`IncludeQuestionTool: !s.isAutonomousModeEnabled(),`,
 	} {
@@ -17324,7 +17356,6 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		`return ProviderToolNames(AssistantNativeProviderTools())`,
 		`Name:        PulseQuestionToolName`,
 		`InputSchema: PulseQuestionProviderInputSchema(),`,
-		`Name:        LegacyAssistantRunCommandToolName`,
 		`Name:        LegacyAssistantFetchURLToolName`,
 		`Name:        LegacyAssistantSetResourceURLToolName`,
 		`type PulseQuestionToolType string`,
@@ -18585,7 +18616,7 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		// consumes the same descriptor the projection filters with.
 		`class = tool.Invocation.Classify(args)`,
 		`if !policy.Allows(name, class) {`,
-		`if class.Mutation == agentcapabilities.MutationInfrastructure && !policy.DenyInfrastructureMutations {`,
+		`!agentcapabilities.ControlLevelAllowsControlTools(policy.ControlLevel)`,
 		`agentcapabilities.NewInvocationBlockedToolResult(name, class)`,
 		`descriptor.Validate(name, discriminatorEnum(tool.Definition, descriptor.Discriminator))`,
 		`func projectToolForPolicy(tool RegisteredTool, policy InvocationPolicy) (RegisteredTool, bool)`,
@@ -19650,24 +19681,31 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 	// don't need the specific token. Whitelisted here so the
 	// emit/declare audit doesn't false-positive on them.
 	internalOnlyCodes := map[string]bool{
-		"action_audit_unavailable":        true,
-		"action_audit_persist_failed":     true,
-		"action_plan_failed":              true,
-		"action_plan_encode_failed":       true,
-		"action_audit_query_failed":       true,
-		"action_decision_persist_failed":  true,
-		"action_decision_encode_failed":   true,
-		"action_decision_failed":          true,
-		"action_execution_persist_failed": true,
-		"action_execution_encode_failed":  true,
-		"action_execution_failed":         true,
-		"action_queue_unavailable":        true,
-		"action_queue_query_failed":       true,
-		"action_queue_encode_failed":      true,
-		"action_not_executing":            true,
-		"action_policy_validation_failed": true,
-		"action_plan_validation_failed":   true,
-		"resource_registry_unavailable":   true,
+		"action_audit_unavailable":                             true,
+		"action_audit_persist_failed":                          true,
+		"action_plan_failed":                                   true,
+		"action_plan_encode_failed":                            true,
+		"action_audit_query_failed":                            true,
+		"action_decision_persist_failed":                       true,
+		"action_decision_encode_failed":                        true,
+		"action_decision_failed":                               true,
+		"action_execution_persist_failed":                      true,
+		"action_execution_encode_failed":                       true,
+		"action_execution_failed":                              true,
+		"action_queue_unavailable":                             true,
+		"action_queue_query_failed":                            true,
+		"action_queue_encode_failed":                           true,
+		agentcapabilities.AgentErrCodeInvalidActionListLimit:   true,
+		agentcapabilities.AgentErrCodeInvalidActionListView:    true,
+		agentcapabilities.AgentErrCodeActionListFailed:         true,
+		agentcapabilities.AgentErrCodeActionListEncodeFailed:   true,
+		agentcapabilities.AgentErrCodeActionDetailFailed:       true,
+		agentcapabilities.AgentErrCodeActionDetailEncodeFailed: true,
+		"action_not_executing":                                 true,
+		"action_policy_validation_failed":                      true,
+		"action_plan_validation_failed":                        true,
+		"resource_registry_unavailable":                        true,
+		agentcapabilities.AgentErrCodeRawCommandRetired:        true,
 	}
 
 	agentErrorConstantValues := map[string]string{
@@ -19698,6 +19736,13 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"AgentErrCodeActionQueueUnavailable":     agentcapabilities.AgentErrCodeActionQueueUnavailable,
 		"AgentErrCodeActionQueueQueryFailed":     agentcapabilities.AgentErrCodeActionQueueQueryFailed,
 		"AgentErrCodeActionQueueEncodeFailed":    agentcapabilities.AgentErrCodeActionQueueEncodeFailed,
+		"AgentErrCodeInvalidActionListLimit":     agentcapabilities.AgentErrCodeInvalidActionListLimit,
+		"AgentErrCodeInvalidActionListView":      agentcapabilities.AgentErrCodeInvalidActionListView,
+		"AgentErrCodeActionListFailed":           agentcapabilities.AgentErrCodeActionListFailed,
+		"AgentErrCodeActionListEncodeFailed":     agentcapabilities.AgentErrCodeActionListEncodeFailed,
+		"AgentErrCodeActionDetailFailed":         agentcapabilities.AgentErrCodeActionDetailFailed,
+		"AgentErrCodeActionDetailEncodeFailed":   agentcapabilities.AgentErrCodeActionDetailEncodeFailed,
+		"AgentErrCodeRawCommandRetired":          agentcapabilities.AgentErrCodeRawCommandRetired,
 	}
 
 	// Extract every emitted shared code from writeJSONError /
@@ -19881,6 +19926,7 @@ func TestContract_ProxmoxLifecycleActionsResolveNodeCommandAgentAndVerifyState(t
 		"newRoutedActionExecutor(",
 		"newDockerContainerActionExecutor(r.resourceHandlers, r.agentExecServer)",
 		"newProxmoxGuestActionExecutor(r.resourceHandlers, r.agentExecServer)",
+		"newHostStorageCleanupActionExecutor(r.resourceHandlers, r.agentExecServer)",
 		"newHostUpdateActionExecutor(r.resourceHandlers, r.agentExecServer)",
 	} {
 		if !strings.Contains(routerSrc, snippet) {
@@ -19930,6 +19976,57 @@ func TestContract_HostUpdatesUseTypedFingerprintBoundAgentOperation(t *testing.T
 	} {
 		if !strings.Contains(runtimeSrc, snippet) {
 			t.Fatalf("host update runtime missing fail-closed command-catalog invariant %q", snippet)
+		}
+	}
+}
+
+func TestContract_HostStorageCleanupIsTypedFingerprintBoundAndPathFree(t *testing.T) {
+	executorSource, err := os.ReadFile("host_storage_cleanup_action_executor.go")
+	if err != nil {
+		t.Fatalf("read host storage cleanup executor: %v", err)
+	}
+	agentTypesSource, err := os.ReadFile("../agentexec/types.go")
+	if err != nil {
+		t.Fatalf("read agentexec types: %v", err)
+	}
+	agentRuntimeSource, err := os.ReadFile("../hostagent/storage_cleanup.go")
+	if err != nil {
+		t.Fatalf("read storage cleanup runtime: %v", err)
+	}
+
+	executorSrc := string(executorSource)
+	typesSrc := string(agentTypesSource)
+	runtimeSrc := string(agentRuntimeSource)
+	for _, snippet := range []string{
+		"ExecuteHostStorageCleanup(ctx context.Context, agentID string, req agentexec.HostStorageCleanupPayload)",
+		"resource.Agent.StorageCleanup.Fingerprint",
+		"agentexec.HostStorageCleanupOperationPackageCache",
+		"unified.HostStorageCleanupPressureDisk(resource.Agent.Disks)",
+	} {
+		if !strings.Contains(executorSrc, snippet) {
+			t.Fatalf("host storage cleanup executor missing invariant %q", snippet)
+		}
+	}
+	for _, snippet := range []string{
+		"ExpectedFingerprint string `json:\"expected_fingerprint\"`",
+		"const HostStorageCleanupOperationPackageCache = \"clean_package_cache\"",
+	} {
+		if !strings.Contains(typesSrc, snippet) {
+			t.Fatalf("host storage cleanup wire contract missing %q", snippet)
+		}
+	}
+	for _, forbidden := range []string{"Command string", "Path string", "Packages []"} {
+		if strings.Contains(typesSrc[strings.Index(typesSrc, "type HostStorageCleanupPayload struct"):strings.Index(typesSrc, "type HostStorageCleanupSnapshot struct")], forbidden) {
+			t.Fatalf("host storage cleanup payload exposes forbidden authority %q", forbidden)
+		}
+	}
+	for _, snippet := range []string{
+		"if before.Fingerprint != strings.TrimSpace(req.ExpectedFingerprint)",
+		"\"apt-get\", \"clean\"",
+		"if result.ReclaimedBytes <= 0",
+	} {
+		if !strings.Contains(runtimeSrc, snippet) {
+			t.Fatalf("host storage cleanup runtime missing fail-closed invariant %q", snippet)
 		}
 	}
 }
@@ -20555,9 +20652,10 @@ func TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned(t *testing.T) 
 	}
 	for _, required := range []string{
 		"autoAuthorizationDecision",
+		"policyAuthorizationLease",
 		"AutoAuthorizeLowRisk",
 		"AllowsAutoRemediationAt",
-		"MethodPolicy",
+		"ExecuteUnderPolicy",
 		"pulse_patrol_policy",
 	} {
 		if !strings.Contains(src, required) {

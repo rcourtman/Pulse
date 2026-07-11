@@ -13,6 +13,383 @@ import (
 	"time"
 )
 
+func atomicLifecycleTestRecord(id string, state ActionState) ActionAuditRecord {
+	now := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	return ActionAuditRecord{
+		ID: id, CreatedAt: now, UpdatedAt: now, State: state,
+		Request: ActionRequest{RequestID: "req-" + id, ResourceID: "vm:42", CapabilityName: "restart", Reason: "atomic lifecycle proof", RequestedBy: "agent:test"},
+		Plan:    ActionPlan{ActionID: id, RequestID: "req-" + id, Allowed: true, RequiresApproval: state == ActionStatePending, ApprovalPolicy: ApprovalAdmin, PlannedAt: now, ExpiresAt: now.Add(time.Hour), ResourceVersion: "resource:sha256:test", PolicyVersion: "policy:sha256:test", PlanHash: "sha256:" + id},
+		Origin:  &ActionOrigin{Surface: "patrol", FindingID: "finding-1", InvestigationID: "inv-1", ProposalID: "proposal-1"},
+	}
+}
+
+func atomicLifecycleInitialEvents(record ActionAuditRecord) []ActionLifecycleEvent {
+	events := []ActionLifecycleEvent{{ActionID: record.ID, Timestamp: record.CreatedAt, State: ActionStatePlanned, Actor: record.Request.RequestedBy, Message: "Action plan created."}}
+	if record.State == ActionStatePending {
+		events = append(events, ActionLifecycleEvent{ActionID: record.ID, Timestamp: record.CreatedAt, State: ActionStatePending, Actor: record.Request.RequestedBy, Message: "Action is waiting for approval before execution."})
+	}
+	return events
+}
+
+func TestMemoryStoreCreateActionAuditConcurrentReturnsCurrent(t *testing.T) {
+	store := NewMemoryStore()
+	record := atomicLifecycleTestRecord("act_memory_create", ActionStatePending)
+	start := make(chan struct{})
+	type result struct {
+		current ActionAuditRecord
+		created bool
+		err     error
+	}
+	results := make(chan result, 2)
+	for range 2 {
+		go func() {
+			<-start
+			current, created, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record))
+			results <- result{current: current, created: created, err: err}
+		}()
+	}
+	close(start)
+	createdCount := 0
+	for range 2 {
+		got := <-results
+		if got.err != nil {
+			t.Fatalf("CreateActionAudit: %v", got.err)
+		}
+		if got.created {
+			createdCount++
+		}
+		if got.current.State != ActionStatePending {
+			t.Fatalf("current state = %q", got.current.State)
+		}
+	}
+	if createdCount != 1 {
+		t.Fatalf("created count = %d, want 1", createdCount)
+	}
+	events, err := store.GetActionLifecycleEvents(record.ID, time.Time{}, 10)
+	if err != nil || len(events) != 2 {
+		t.Fatalf("events=%#v err=%v", events, err)
+	}
+}
+
+func TestMemoryStoreActionTransitionsAreMonotonic(t *testing.T) {
+	store := NewMemoryStore()
+	record := atomicLifecycleTestRecord("act_memory_terminal", ActionStatePending)
+	if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+		t.Fatal(err)
+	}
+	approved, event, err := ApplyActionDecision(record, ActionApprovalRecord{Actor: "operator", Method: MethodAPI, Outcome: OutcomeApproved}, record.CreatedAt.Add(time.Minute))
+	if err != nil || store.RecordActionDecision(approved, event) != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	started, startEvent, err := BeginActionExecution(approved, "operator", record.CreatedAt.Add(2*time.Minute))
+	if err != nil || store.RecordActionExecutionStart(started, startEvent) != nil {
+		t.Fatalf("start: %v", err)
+	}
+	completed, doneEvent, err := CompleteActionExecution(started, &ExecutionResult{Success: true}, "operator", record.CreatedAt.Add(3*time.Minute))
+	if err != nil || store.RecordActionExecutionResult(completed, doneEvent) != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	if err := store.RecordActionDecision(approved, event); !errors.Is(err, ErrActionExecutionFinal) {
+		t.Fatalf("terminal rewind error=%v", err)
+	}
+}
+
+func TestMemoryStorePolicyExecutionStartRequiresAuthorizationLease(t *testing.T) {
+	store := NewMemoryStore()
+	record := atomicLifecycleTestRecord("act_memory_policy_lease", ActionStatePlanned)
+	record.Plan.RequiresApproval = false
+	if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+		t.Fatal(err)
+	}
+	record.State = ActionStateExecuting
+	record.Approvals = []ActionApprovalRecord{{Actor: "pulse_patrol_policy", Method: MethodPolicy, Outcome: OutcomeApproved}}
+	approval := ActionLifecycleEvent{ActionID: record.ID, Timestamp: record.CreatedAt.Add(time.Minute), State: ActionStateApproved, Actor: "pulse_patrol_policy", Message: "Policy authorization approved action."}
+	executing := ActionLifecycleEvent{ActionID: record.ID, Timestamp: record.CreatedAt.Add(time.Minute), State: ActionStateExecuting, Actor: "pulse_patrol_policy", Message: "Action execution started."}
+	if err := store.RecordActionPolicyExecutionStart(record, approval, executing); !errors.Is(err, ErrActionPolicyAuthorizationInvalid) {
+		t.Fatalf("error = %v, want ErrActionPolicyAuthorizationInvalid", err)
+	}
+	current, found, err := store.GetActionAudit(record.ID)
+	if err != nil || !found {
+		t.Fatalf("GetActionAudit found=%v err=%v", found, err)
+	}
+	if current.State != ActionStatePlanned || len(current.Approvals) != 0 {
+		t.Fatalf("failed admission mutated audit: state=%q approvals=%d", current.State, len(current.Approvals))
+	}
+}
+
+func TestMemoryStoreConcurrentExecutionStartHasOneCASWinner(t *testing.T) {
+	store := NewMemoryStore()
+	record := atomicLifecycleTestRecord("act_memory_execute", ActionStatePlanned)
+	record.Plan.RequiresApproval = false
+	record.Plan.ApprovalPolicy = ApprovalNone
+	if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+		t.Fatal(err)
+	}
+	started, event, err := BeginActionExecution(record, "operator", record.CreatedAt.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() { <-start; errs <- store.RecordActionExecutionStart(started, event) }()
+	}
+	close(start)
+	successes := 0
+	for range 2 {
+		if err := <-errs; err == nil {
+			successes++
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("execution CAS winners = %d, want 1", successes)
+	}
+}
+
+func TestSQLiteStoreCreateActionAuditConcurrentAcrossTwoInstances(t *testing.T) {
+	dir := t.TempDir()
+	first, err := NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	second, err := NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	record := atomicLifecycleTestRecord("act_sqlite_create", ActionStatePending)
+	start := make(chan struct{})
+	created := make(chan bool, 2)
+	errs := make(chan error, 2)
+	for _, store := range []*SQLiteResourceStore{first, second} {
+		go func(s *SQLiteResourceStore) {
+			<-start
+			_, ok, err := s.CreateActionAudit(record, atomicLifecycleInitialEvents(record))
+			created <- ok
+			errs <- err
+		}(store)
+	}
+	close(start)
+	createdCount := 0
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+		if <-created {
+			createdCount++
+		}
+	}
+	if createdCount != 1 {
+		t.Fatalf("created count=%d, want 1", createdCount)
+	}
+	events, err := first.GetActionLifecycleEvents(record.ID, time.Time{}, 10)
+	if err != nil || len(events) != 2 {
+		t.Fatalf("events=%#v err=%v", events, err)
+	}
+}
+
+func TestSQLiteStoreActionTransitionCASAcrossTwoInstances(t *testing.T) {
+	dir := t.TempDir()
+	first, err := NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	second, err := NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	record := atomicLifecycleTestRecord("act_sqlite_decide", ActionStatePending)
+	if _, _, err := first.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+		t.Fatal(err)
+	}
+	approved, approvedEvent, _ := ApplyActionDecision(record, ActionApprovalRecord{Actor: "one", Outcome: OutcomeApproved}, record.CreatedAt.Add(time.Minute))
+	rejected, rejectedEvent, _ := ApplyActionDecision(record, ActionApprovalRecord{Actor: "two", Outcome: OutcomeRejected}, record.CreatedAt.Add(time.Minute))
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	go func() { <-start; errs <- first.RecordActionDecision(approved, approvedEvent) }()
+	go func() { <-start; errs <- second.RecordActionDecision(rejected, rejectedEvent) }()
+	close(start)
+	successes := 0
+	for range 2 {
+		if err := <-errs; err == nil {
+			successes++
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("decision CAS winners=%d, want 1", successes)
+	}
+}
+
+func TestSQLiteStoreConcurrentExecutionStartAcrossTwoInstancesHasOneWinner(t *testing.T) {
+	dir := t.TempDir()
+	first, err := NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer first.Close()
+	second, err := NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	record := atomicLifecycleTestRecord("act_sqlite_execute", ActionStatePlanned)
+	record.Plan.RequiresApproval = false
+	record.Plan.ApprovalPolicy = ApprovalNone
+	if _, _, err := first.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+		t.Fatal(err)
+	}
+	started, event, _ := BeginActionExecution(record, "operator", record.CreatedAt.Add(time.Minute))
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	for _, store := range []*SQLiteResourceStore{first, second} {
+		go func(s *SQLiteResourceStore) { <-start; errs <- s.RecordActionExecutionStart(started, event) }(store)
+	}
+	close(start)
+	successes := 0
+	for range 2 {
+		if err := <-errs; err == nil {
+			successes++
+		}
+	}
+	if successes != 1 {
+		t.Fatalf("execution CAS winners=%d, want 1", successes)
+	}
+}
+
+func TestSQLiteStoreCreateActionAuditRollsBackWhenInitialEventInsertFails(t *testing.T) {
+	store := newTestStore(t)
+	if _, err := store.db.Exec(`CREATE TRIGGER fail_initial_event BEFORE INSERT ON action_lifecycle_events BEGIN SELECT RAISE(ABORT, 'forced event failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	record := atomicLifecycleTestRecord("act_create_rollback", ActionStatePending)
+	if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err == nil {
+		t.Fatal("expected creation failure")
+	}
+	if _, found, err := store.GetActionAudit(record.ID); err != nil || found {
+		t.Fatalf("found=%v err=%v", found, err)
+	}
+}
+
+func TestSQLiteStoreActionTransitionRollsBackWhenEventInsertFails(t *testing.T) {
+	store := newTestStore(t)
+	record := atomicLifecycleTestRecord("act_transition_rollback", ActionStatePending)
+	if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.db.Exec(`CREATE TRIGGER fail_transition_event BEFORE INSERT ON action_lifecycle_events BEGIN SELECT RAISE(ABORT, 'forced event failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	approved, event, _ := ApplyActionDecision(record, ActionApprovalRecord{Actor: "operator", Outcome: OutcomeApproved}, record.CreatedAt.Add(time.Minute))
+	if err := store.RecordActionDecision(approved, event); err == nil {
+		t.Fatal("expected transition failure")
+	}
+	current, found, err := store.GetActionAudit(record.ID)
+	if err != nil || !found || current.State != ActionStatePending {
+		t.Fatalf("current=%#v found=%v err=%v", current, found, err)
+	}
+}
+
+func TestSQLiteStoreLifecycleRestartPreservesMonotonicState(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := atomicLifecycleTestRecord("act_restart_terminal", ActionStatePlanned)
+	record.Plan.RequiresApproval = false
+	record.Plan.ApprovalPolicy = ApprovalNone
+	if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+		t.Fatal(err)
+	}
+	started, startEvent, _ := BeginActionExecution(record, "operator", record.CreatedAt.Add(time.Minute))
+	if err := store.RecordActionExecutionStart(started, startEvent); err != nil {
+		t.Fatal(err)
+	}
+	completed, doneEvent, _ := CompleteActionExecution(started, &ExecutionResult{Success: true}, "operator", record.CreatedAt.Add(2*time.Minute))
+	if err := store.RecordActionExecutionResult(completed, doneEvent); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	current, created, err := reopened.CreateActionAudit(record, atomicLifecycleInitialEvents(record))
+	if err != nil || created || current.State != ActionStateCompleted {
+		t.Fatalf("current=%#v created=%v err=%v", current, created, err)
+	}
+}
+
+func TestSQLiteStoreRestartDoesNotReadmitExecutingAction(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := atomicLifecycleTestRecord("act_restart_executing", ActionStatePlanned)
+	record.Plan.RequiresApproval = false
+	record.Plan.ApprovalPolicy = ApprovalNone
+	if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+		t.Fatal(err)
+	}
+	started, event, _ := BeginActionExecution(record, "operator", record.CreatedAt.Add(time.Minute))
+	if err := store.RecordActionExecutionStart(started, event); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	if err := reopened.RecordActionExecutionStart(started, event); !errors.Is(err, ErrActionAlreadyExecuting) {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+func TestSQLiteActionLifecycleMigrationDeduplicatesStateEvents(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "resources", "unified_resources.db")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE action_lifecycle_events (id INTEGER PRIMARY KEY AUTOINCREMENT, action_id TEXT NOT NULL, timestamp DATETIME NOT NULL, state TEXT NOT NULL, actor TEXT, message TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := db.Exec(`INSERT INTO action_lifecycle_events (action_id, timestamp, state, actor, message) VALUES (?, ?, ?, '', '')`, "act_event_dedupe", time.Now().UTC(), string(ActionStatePlanned)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	events, err := store.GetActionLifecycleEvents("act_event_dedupe", time.Time{}, 10)
+	if err != nil || len(events) != 1 {
+		t.Fatalf("events=%#v err=%v", events, err)
+	}
+	if err := store.RecordActionLifecycleEvent(events[0]); err == nil {
+		t.Fatal("duplicate state event should be rejected after migration")
+	}
+}
+
 func TestSanitizeOrgID_AllowsSafeChars(t *testing.T) {
 	in := "Acme_Org-123"
 	if got := sanitizeOrgID(in); got != in {
@@ -408,6 +785,22 @@ func TestNewSQLiteResourceStore_InitializesCanonicalAuditSchemas(t *testing.T) {
 			name:    "action_lifecycle_events",
 			columns: []string{"id", "action_id", "timestamp", "state", "actor", "message"},
 			indexes: []string{"idx_action_lifecycle_events_action"},
+		},
+		{
+			name: "action_dispatch_attempts",
+			columns: []string{
+				"attempt_id", "action_id", "state", "created_at", "updated_at",
+				"lease_owner", "lease_expires_at", "dispatch_count",
+			},
+			indexes: []string{"idx_action_dispatch_attempts_state_updated"},
+		},
+		{
+			name:    "action_dispatch_outbox",
+			columns: []string{"attempt_id", "action_id", "available_at"},
+		},
+		{
+			name:    "action_dispatch_receipts",
+			columns: []string{"attempt_id", "action_id", "transport_request_id", "received_at"},
 		},
 		{
 			name:    "export_audits",
@@ -1652,7 +2045,7 @@ func TestActionAuditRecord_RoundTripMalformedUnrunVerificationScrubsSQLiteRead(t
 	}
 }
 
-func TestMemoryStore_RecordActionAudit_UpsertsByID(t *testing.T) {
+func TestMemoryStore_RecordActionAudit_IsInsertOnly(t *testing.T) {
 	store := NewMemoryStore()
 	now := time.Date(2026, 3, 18, 13, 30, 0, 0, time.UTC)
 
@@ -1676,8 +2069,8 @@ func TestMemoryStore_RecordActionAudit_UpsertsByID(t *testing.T) {
 	if err := store.RecordActionAudit(first); err != nil {
 		t.Fatalf("RecordActionAudit(first): %v", err)
 	}
-	if err := store.RecordActionAudit(second); err != nil {
-		t.Fatalf("RecordActionAudit(second): %v", err)
+	if err := store.RecordActionAudit(second); !errors.Is(err, ErrActionAuditAlreadyExists) {
+		t.Fatalf("RecordActionAudit(second) error = %v, want ErrActionAuditAlreadyExists", err)
 	}
 
 	results, err := store.GetActionAudits("vm:301", now.Add(-time.Hour), 10)
@@ -1687,11 +2080,11 @@ func TestMemoryStore_RecordActionAudit_UpsertsByID(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("expected 1 action audit after upsert, got %d", len(results))
 	}
-	if results[0].State != ActionStateCompleted {
-		t.Fatalf("expected latest action state to win, got %q", results[0].State)
+	if results[0].State != ActionStatePlanned {
+		t.Fatalf("insert-only audit state = %q, want planned", results[0].State)
 	}
-	if results[0].Result == nil || results[0].Result.Output != "done" {
-		t.Fatalf("expected latest action result to win, got %+v", results[0].Result)
+	if results[0].Result != nil {
+		t.Fatalf("duplicate insert rewrote result: %+v", results[0].Result)
 	}
 }
 
@@ -1879,8 +2272,8 @@ func TestRecordActionExecutionStartAndResult_UpdatesAuditAndAppendsLifecycle(t *
 	if !ok || got.State != ActionStateCompleted || got.Result == nil || got.Result.Output != "done" {
 		t.Fatalf("completed audit = %#v, %v", got, ok)
 	}
-	if err := store.RecordActionExecutionResult(completed, doneEvent); !errors.Is(err, ErrActionNotExecuting) {
-		t.Fatalf("stale RecordActionExecutionResult error = %v, want %v", err, ErrActionNotExecuting)
+	if err := store.RecordActionExecutionResult(completed, doneEvent); !errors.Is(err, ErrActionExecutionFinal) {
+		t.Fatalf("stale RecordActionExecutionResult error = %v, want %v", err, ErrActionExecutionFinal)
 	}
 
 	events, err := store.GetActionLifecycleEvents("act_execution", time.Time{}, 10)

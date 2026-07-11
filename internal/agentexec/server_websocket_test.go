@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -364,6 +365,13 @@ func TestHandleWebSocket_AgentPingRespondsWithPong(t *testing.T) {
 
 func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 	s := NewServer(allowAllTestTokens)
+	callerGrant := &CommandApprovalGrant{Signature: "caller-supplied"}
+	s.SetCommandAuthorizationVerifier(func(req CommandAuthorizationRequest) error {
+		if req.ApprovalID != "approval-1" || req.OrgID != "org-1" || req.ActionID != "action-1" {
+			return fmt.Errorf("authorization mismatch: %+v", req)
+		}
+		return nil
+	})
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -408,6 +416,10 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 				agentErr <- fmt.Errorf("missing approval grant")
 				return
 			}
+			if payload.ApprovalGrant.Signature == callerGrant.Signature {
+				agentErr <- fmt.Errorf("caller-supplied approval grant was forwarded")
+				return
+			}
 			if err := VerifyCommandApprovalGrant("any", "a1", payload, time.Now()); err != nil {
 				agentErr <- err
 				return
@@ -431,12 +443,15 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	result, err := s.ExecuteCommand(ctx, "a1", ExecuteCommandPayload{
-		RequestID:  "req1",
-		Command:    "echo ok",
-		ApprovalID: "approval-1",
-		Timeout:    1,
-	})
+	payload := ExecuteCommandPayload{
+		RequestID:     "req1",
+		Command:       "echo ok",
+		ApprovalID:    "approval-1",
+		ApprovalGrant: callerGrant,
+		Timeout:       1,
+	}
+	payload.BindCommandAuthorization("org-1", "action-1")
+	result, err := s.ExecuteCommand(ctx, "a1", payload)
 	if err != nil {
 		t.Fatalf("ExecuteCommand: %v", err)
 	}
@@ -452,6 +467,55 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 
 	if err := <-agentErr; err != nil {
 		t.Fatalf("agent error: %v", err)
+	}
+}
+
+func TestExecuteCommand_InvalidApprovalAuthorizationNeverMintsOrDispatches(t *testing.T) {
+	cases := []struct {
+		name string
+		err  string
+	}{
+		{name: "nonexistent", err: "approval not found"},
+		{name: "wrong-org", err: "approval belongs to another org"},
+		{name: "expired", err: "approval expired"},
+		{name: "consumed", err: "approval already consumed"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewServer(allowAllTestTokens)
+			s.SetCommandAuthorizationVerifier(func(CommandAuthorizationRequest) error { return errors.New(tc.err) })
+			grantCalls := 0
+			s.newCommandApprovalGrant = func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error) {
+				grantCalls++
+				return nil, errors.New("grant must not be minted")
+			}
+			ts := newWSServer(t, s)
+			defer ts.Close()
+
+			conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+			if err != nil {
+				t.Fatalf("Dial: %v", err)
+			}
+			defer conn.Close()
+			wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+				AgentID: "a1", Hostname: "host1", Version: "1.2.3", Platform: "linux", Token: "any",
+			}))
+			_ = wsReadRegisteredPayload(t, conn)
+
+			payload := ExecuteCommandPayload{
+				RequestID: "req-invalid", Command: "echo rejected", ApprovalID: "approval-invalid", Timeout: 1,
+			}
+			payload.BindCommandAuthorization("org-1", "action-1")
+			if _, err := s.ExecuteCommand(context.Background(), "a1", payload); err == nil || !strings.Contains(err.Error(), tc.err) {
+				t.Fatalf("ExecuteCommand error = %v, want %q", err, tc.err)
+			}
+			if grantCalls != 0 {
+				t.Fatalf("signed grant calls = %d, want 0", grantCalls)
+			}
+			if _, err := wsReadRawMessageWithTimeout(conn, 100*time.Millisecond); err == nil {
+				t.Fatal("unexpected WebSocket dispatch for rejected approval")
+			}
+		})
 	}
 }
 
@@ -550,6 +614,103 @@ func TestValidateHostUpdateResultRejectsUnprovenVerifiedClaim(t *testing.T) {
 	}
 	if err := validateHostUpdateResultPayload(&result); err == nil {
 		t.Fatal("verified result with pending packages must fail closed")
+	}
+}
+
+func TestExecuteHostStorageCleanupRoundTripUsesPathAndCommandFreeEnvelope(t *testing.T) {
+	fingerprint := "sha256:" + strings.Repeat("a", 64)
+	afterFingerprint := "sha256:" + strings.Repeat("b", 64)
+	s := NewServer(allowAllTestTokens)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID: "host-agent-cleanup", Hostname: "host1", Version: "6.0.6", Platform: "linux", Token: "any",
+	}))
+	_ = wsReadRegisteredPayload(t, conn)
+
+	agentErr := make(chan error, 1)
+	go func() {
+		msg, err := wsReadRawMessageWithTimeout(conn, 2*time.Second)
+		if err != nil {
+			agentErr <- err
+			return
+		}
+		if msg.Type != MsgTypeHostStorageCleanup || msg.Payload == nil {
+			agentErr <- fmt.Errorf("message = %#v, want typed host storage cleanup", msg)
+			return
+		}
+		for _, forbidden := range []string{`"command"`, `"path"`, `"packages"`} {
+			if bytes.Contains(*msg.Payload, []byte(forbidden)) {
+				agentErr <- fmt.Errorf("storage cleanup request exposed forbidden authority %s: %s", forbidden, string(*msg.Payload))
+				return
+			}
+		}
+		var payload HostStorageCleanupPayload
+		if err := json.Unmarshal(*msg.Payload, &payload); err != nil {
+			agentErr <- err
+			return
+		}
+		if payload.ActionID != "action-cleanup" || payload.Operation != HostStorageCleanupOperationPackageCache {
+			agentErr <- fmt.Errorf("payload = %#v", payload)
+			return
+		}
+		response := HostStorageCleanupResultPayload{
+			RequestID:      payload.RequestID,
+			Success:        true,
+			Before:         HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: fingerprint, ReclaimableBytes: 500},
+			After:          HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: afterFingerprint, ReclaimableBytes: 20},
+			ReclaimedBytes: 480,
+			Verification:   HostStorageCleanupVerificationVerified,
+		}
+		if err := conn.WriteJSON(mustNewMessage(t, MsgTypeHostStorageCleanupResult, payload.RequestID, response)); err != nil {
+			agentErr <- err
+			return
+		}
+		agentErr <- nil
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	result, err := s.ExecuteHostStorageCleanup(ctx, "host-agent-cleanup", HostStorageCleanupPayload{
+		RequestID: "cleanup-1", ActionID: "action-cleanup", Operation: HostStorageCleanupOperationPackageCache, ExpectedFingerprint: fingerprint, Timeout: 1,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteHostStorageCleanup: %v", err)
+	}
+	if result == nil || !result.Success || result.Verification != HostStorageCleanupVerificationVerified || result.ReclaimedBytes != 480 {
+		t.Fatalf("result = %#v", result)
+	}
+	if err := <-agentErr; err != nil {
+		t.Fatalf("agent: %v", err)
+	}
+}
+
+func TestValidateHostStorageCleanupRejectsOpenEndedOrUnprovenClaims(t *testing.T) {
+	fingerprint := "sha256:" + strings.Repeat("a", 64)
+	for _, req := range []HostStorageCleanupPayload{
+		{RequestID: "r1", ActionID: "a1", Operation: "delete_path", ExpectedFingerprint: fingerprint},
+		{RequestID: "r1", Operation: HostStorageCleanupOperationPackageCache, ExpectedFingerprint: fingerprint},
+		{RequestID: "r1", ActionID: "a1", Operation: HostStorageCleanupOperationPackageCache, ExpectedFingerprint: "bad"},
+		{RequestID: "r1", ActionID: "a1", Operation: HostStorageCleanupOperationPackageCache, ExpectedFingerprint: fingerprint, Timeout: 901},
+	} {
+		copy := req
+		if err := validateHostStorageCleanupPayload(&copy); err == nil {
+			t.Fatalf("validateHostStorageCleanupPayload(%#v) succeeded", req)
+		}
+	}
+	result := HostStorageCleanupResultPayload{
+		RequestID: "r1", Success: true, Verification: HostStorageCleanupVerificationVerified,
+		Before: HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: fingerprint, ReclaimableBytes: 500},
+		After:  HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: fingerprint, ReclaimableBytes: 500},
+	}
+	if err := validateHostStorageCleanupResultPayload(&result); err == nil {
+		t.Fatal("verified result without reclaimed bytes must fail closed")
 	}
 }
 

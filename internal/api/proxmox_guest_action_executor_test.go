@@ -31,7 +31,7 @@ func TestProxmoxGuestActionExecutorDispatchesVMShutdownAndVerification(t *testin
 	}}
 	executor := newProxmoxGuestActionExecutor(h, agents)
 
-	result, err := executor.ExecuteAction(context.Background(), proxmoxGuestActionRecord("act_vm", "vm:160", "shutdown"))
+	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_vm"), proxmoxGuestActionRecord("act_vm", "vm:160", "shutdown"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
@@ -46,6 +46,9 @@ func TestProxmoxGuestActionExecutorDispatchesVMShutdownAndVerification(t *testin
 	}
 	if agents.calls[0].ApprovalID != "act_vm" || !agents.calls[0].Trusted || agents.calls[0].Timeout != 180 {
 		t.Fatalf("dispatch approval/trust/timeout = %q/%v/%d", agents.calls[0].ApprovalID, agents.calls[0].Trusted, agents.calls[0].Timeout)
+	}
+	if agents.calls[0].RequestID != "act_vm.dispatch.1" {
+		t.Fatalf("dispatch request identity = %q", agents.calls[0].RequestID)
 	}
 	if got := agents.calls[1].Command; got != "qm status 160" {
 		t.Fatalf("verification command = %q", got)
@@ -72,7 +75,7 @@ func TestProxmoxGuestActionExecutorDispatchesLXCStartAndVerification(t *testing.
 	}}
 	executor := newProxmoxGuestActionExecutor(h, agents)
 
-	result, err := executor.ExecuteAction(context.Background(), proxmoxGuestActionRecord("act_ct", "system-container:101", "start"))
+	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_ct"), proxmoxGuestActionRecord("act_ct", "system-container:101", "start"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
@@ -120,7 +123,7 @@ func TestProxmoxGuestActionExecutorResolvesCommandAgentByNodeHostname(t *testing
 		t.Fatalf("CheckActionAvailable readiness = %#v, want available through node hostname fallback", readiness)
 	}
 
-	result, err := executor.ExecuteAction(context.Background(), proxmoxGuestActionRecord("act_vm", "vm:160", "reboot"))
+	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_vm"), proxmoxGuestActionRecord("act_vm", "vm:160", "reboot"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
@@ -153,7 +156,7 @@ func TestProxmoxGuestActionExecutorVerificationFailureFailsAction(t *testing.T) 
 	}}
 	executor := newProxmoxGuestActionExecutor(h, agents)
 
-	result, err := executor.ExecuteAction(context.Background(), proxmoxGuestActionRecord("act_vm", "vm:160", "shutdown"))
+	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_vm"), proxmoxGuestActionRecord("act_vm", "vm:160", "shutdown"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}

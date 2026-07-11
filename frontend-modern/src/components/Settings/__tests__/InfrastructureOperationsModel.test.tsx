@@ -5,6 +5,7 @@ import infrastructureInstallerSectionSource from '../InfrastructureInstallerSect
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import useInfrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
 import useInfrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
+import { resolveAgentCommandPlatform } from '@/utils/agentInstallCommand';
 import {
   INSTALL_PROFILE_OPTIONS,
   getCapabilityManagementPath,
@@ -418,6 +419,20 @@ describe('infrastructure operations model', () => {
     expect(unixUpgradeSource).not.toContain('command += ` --token ${shellQuoteArg(token)}`;');
     expect(unixUpgradeSource).not.toContain('--agent-id');
     expect(unixUpgradeSource).not.toContain('--hostname');
+  });
+
+  it('resolves connection upgrade platforms through the shared caption-tolerant resolver', async () => {
+    const operationsStateSource = await import('../useInfrastructureOperationsState?raw').then(
+      (mod) => (mod as { default: string }).default,
+    );
+    // Legacy agents report gopsutil OS captions ("microsoft windows 11 pro"),
+    // so the hook must route through resolveAgentCommandPlatform instead of
+    // exact-matching platform tokens locally (refs #1555).
+    expect(operationsStateSource).toContain(
+      'resolveAgentCommandPlatform(connection.agentIdentity?.platform)',
+    );
+    expect(resolveAgentCommandPlatform('microsoft windows 11 pro')).toBe('windows');
+    expect(resolveAgentCommandPlatform('linux')).toBe('linux');
   });
 
   it('keeps discovered-node filtering anchored to canonical represented-host dedupe', async () => {

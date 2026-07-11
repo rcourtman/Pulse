@@ -664,6 +664,46 @@ func TestPrepareEnhancedWebhookExecution_NtfyPreservesPlainTextPayload(t *testin
 	assert.Equal(t, "Alert for vm-101 on pve-01", string(payload))
 }
 
+func TestPrepareEnhancedWebhookExecution_NtfyRendersBuiltinPresetTemplate(t *testing.T) {
+	nm := NewNotificationManager("http://pulse.local")
+
+	var preset *WebhookTemplate
+	for i := range GetWebhookTemplates() {
+		tmpl := GetWebhookTemplates()[i]
+		if tmpl.Service == "ntfy" {
+			preset = &tmpl
+			break
+		}
+	}
+	require.NotNil(t, preset, "built-in ntfy webhook template missing")
+
+	webhook := EnhancedWebhookConfig{
+		WebhookConfig: WebhookConfig{
+			Name: "ntfy Preset Test",
+			URL:  "https://example.com/topic",
+		},
+		Service:         "ntfy",
+		PayloadTemplate: preset.PayloadTemplate,
+	}
+
+	alert := &alerts.Alert{
+		ID:           "alert-123",
+		Type:         "cpu",
+		Level:        "warning",
+		ResourceName: "vm-101",
+		Node:         "pve-01",
+		Message:      "CPU usage above threshold",
+		Value:        92.5,
+		Threshold:    90,
+	}
+
+	prepared, payload, err := nm.prepareEnhancedWebhookExecution(webhook, alert)
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com/topic", prepared.URL)
+	assert.Contains(t, string(payload), "WARNING: vm-101 on pve-01")
+	assert.Contains(t, string(payload), "- Type: Cpu")
+}
+
 func TestBuildEnhancedWebhookTestConfig_UsesServiceTemplateOwnership(t *testing.T) {
 	basic := WebhookConfig{
 		Name: "Discord test",

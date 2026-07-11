@@ -22,7 +22,7 @@ func TestFileTools_Registry(t *testing.T) {
 			break
 		}
 	}
-	assert.True(t, found)
+	assert.False(t, found, "retired model file mutation tool must not be registered")
 }
 
 func TestExecuteFileEdit_Validation(t *testing.T) {

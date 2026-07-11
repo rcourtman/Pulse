@@ -152,16 +152,25 @@ func (r *Router) buildSecurityStatusAuthSnapshot(req *http.Request) securityStat
 	if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
 		username := strings.TrimSpace(GetSessionUsername(cookie.Value))
 		snapshotReq := attachUserContext(req, username)
-		configuredAdmin := ""
-		if r.config != nil {
-			configuredAdmin = strings.TrimSpace(r.config.AuthUser)
+		// Same privilege rule as ensureAdminSession: the configured admin
+		// identity, an RBAC admin grant (SSO group role mappings), or an SSO
+		// session on an instance with no local admin. Org-scoped sessions keep
+		// their own management rules.
+		sessionIsAdmin := false
+		orgScoped := false
+		if org := GetOrganization(req.Context()); org != nil {
+			orgID := strings.TrimSpace(org.ID)
+			orgScoped = orgID != "" && orgID != "default"
+		}
+		if !orgScoped {
+			sessionIsAdmin = sessionUserCarriesAdminPrivileges(r.config, username)
 		}
 		return securityStatusAuthSnapshot{
 			request:        snapshotReq,
 			authenticated:  true,
 			authMethod:     "session",
 			username:       username,
-			sessionIsAdmin: configuredAdmin != "" && strings.EqualFold(username, configuredAdmin),
+			sessionIsAdmin: sessionIsAdmin,
 		}
 	}
 

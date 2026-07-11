@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
@@ -34,6 +35,8 @@ type ResourceHandlers struct {
 	actionExecutor      ActionExecutor
 	actionCompleted     func(unified.ActionAuditRecord)
 	actionTransition    func(orgID string, record unified.ActionAuditRecord)
+	policyAdmission     *actionlifecycle.PolicyAdmissionCoordinator
+	actionEmergencyStop func(orgID string) (bool, error)
 	discoveryReadiness  ResourceDiscoveryReadinessProvider
 }
 
@@ -85,6 +88,7 @@ func NewResourceHandlers(cfg *config.Config) *ResourceHandlers {
 		stores:              make(map[string]unified.ResourceStore),
 		registryCache:       make(map[string]registryCacheEntry),
 		supplementalRecords: make(map[unified.DataSource]SupplementalRecordsProvider),
+		policyAdmission:     &actionlifecycle.PolicyAdmissionCoordinator{},
 	}
 }
 
@@ -101,6 +105,10 @@ func (h *ResourceHandlers) SetTenantStateProvider(provider TenantStateProvider) 
 // SetActionExecutor configures the API-owned action execution driver.
 func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor) {
 	h.actionExecutor = executor
+}
+
+func (h *ResourceHandlers) SetActionEmergencyStopChecker(checker func(orgID string) (bool, error)) {
+	h.actionEmergencyStop = checker
 }
 
 // SetActionCompletedPublisher configures the terminal action notification hook

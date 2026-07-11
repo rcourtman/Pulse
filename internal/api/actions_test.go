@@ -258,6 +258,70 @@ func TestHandleListPendingActionsReturnsOnlyCanonicalDecisionQueue(t *testing.T)
 	}
 }
 
+func TestHandleGetActionAndInboxAreTenantScoped(t *testing.T) {
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	now := time.Now().UTC()
+	store, err := h.getStore("org-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := unified.ActionAuditRecord{
+		ID: "act-org-a", CreatedAt: now, UpdatedAt: now, State: unified.ActionStatePending,
+		Request: unified.ActionRequest{RequestID: "req-org-a", ResourceID: "vm:42", CapabilityName: "restart", RequestedBy: "operator"},
+		Plan:    unified.ActionPlan{ActionID: "act-org-a", RequestID: "req-org-a", Allowed: true, RequiresApproval: true, ApprovalPolicy: unified.ApprovalAdmin, PlannedAt: now, ExpiresAt: now.Add(time.Hour), ResourceVersion: "v1", PolicyVersion: "p1", PlanHash: "sha256:org-a"},
+	}
+	if _, _, err := store.CreateActionAudit(record, []unified.ActionLifecycleEvent{{ActionID: record.ID, Timestamp: now, State: unified.ActionStatePending, Actor: "operator", Message: "Pending approval."}}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, orgID := range []string{"org-b", "default"} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/actions/act-org-a", nil)
+		req.SetPathValue("id", "act-org-a")
+		req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+		h.HandleGetAction(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("cross-org detail status for %s=%d body=%s", orgID, rec.Code, rec.Body.String())
+		}
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/actions/act-org-a", nil)
+	req.SetPathValue("id", "act-org-a")
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-a"))
+	h.HandleGetAction(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("owner detail status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var detail actionlifecycle.ActionDetail
+	if err := json.Unmarshal(rec.Body.Bytes(), &detail); err != nil || detail.Audit.ID != record.ID {
+		t.Fatalf("detail=%#v err=%v", detail, err)
+	}
+
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/actions?view=pending", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-b"))
+	h.HandleListActions(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("cross-org list status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var inbox actionInboxResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &inbox); err != nil || inbox.Count != 0 {
+		t.Fatalf("cross-org inbox=%#v err=%v", inbox, err)
+	}
+}
+
+func TestHandleListActionsRejectsUnknownViewAndUnsafeLimit(t *testing.T) {
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	for _, target := range []string{"/api/actions?view=unknown", "/api/actions?limit=501", "/api/actions?limit=-1"} {
+		rec := httptest.NewRecorder()
+		h.HandleListActions(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("target=%s status=%d body=%s", target, rec.Code, rec.Body.String())
+		}
+	}
+}
+
 func TestHandleDecideActionApprovesPendingPlanWithoutExecution(t *testing.T) {
 	now := time.Date(2026, 5, 4, 14, 0, 0, 0, time.UTC)
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
@@ -795,7 +859,7 @@ func TestHandleExecuteActionRejectsDryRunOnlyPlan(t *testing.T) {
 	}
 }
 
-func TestHandleExecuteActionRejectsExpiredPlanAsFailedAudit(t *testing.T) {
+func TestHandleExecuteActionMaterializesExplicitExpiredState(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
 	executor := &stubActionExecutor{result: &unified.ExecutionResult{Success: true, Output: "should not run"}}
@@ -866,27 +930,24 @@ func TestHandleExecuteActionRejectsExpiredPlanAsFailedAudit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetActionAudit: %v", err)
 	}
-	if !ok || got.State != unified.ActionStateFailed || got.Result == nil || got.Result.Success || !strings.HasPrefix(got.Result.ErrorMessage, "action_plan_expired:") {
+	if !ok || got.State != unified.ActionStateExpired || got.Result != nil {
 		t.Fatalf("expired-plan audit = %#v, ok=%v", got, ok)
 	}
 	select {
 	case eventRecord := <-published:
-		if eventRecord.ID != "act_expired" || eventRecord.State != unified.ActionStateFailed {
-			t.Fatalf("published expired-plan completion = %#v", eventRecord)
-		}
+		t.Fatalf("expiry must not publish fabricated completion truth: %#v", eventRecord)
 	default:
-		t.Fatal("expected expired-plan refusal to publish a terminal action completion event")
 	}
 	events, err := store.GetActionLifecycleEvents("act_expired", time.Time{}, 10)
 	if err != nil {
 		t.Fatalf("GetActionLifecycleEvents: %v", err)
 	}
-	if len(events) != 1 || events[0].State != unified.ActionStateFailed || !strings.HasPrefix(events[0].Message, "action_plan_expired:") {
-		t.Fatalf("expected one failed expired-plan lifecycle event, got %#v", events)
+	if len(events) != 1 || events[0].State != unified.ActionStateExpired || events[0].Message != "Action plan expired before dispatch." {
+		t.Fatalf("expected one explicit expiry lifecycle event, got %#v", events)
 	}
 }
 
-func TestPersistActionPlanAuditFillsMissingLifecycleState(t *testing.T) {
+func TestPersistActionPlanAuditRejectsOrphanLifecycleState(t *testing.T) {
 	now := time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC)
 	store := unified.NewMemoryStore()
 	req := unified.ActionRequest{
@@ -918,30 +979,11 @@ func TestPersistActionPlanAuditFillsMissingLifecycleState(t *testing.T) {
 		t.Fatalf("seed lifecycle event: %v", err)
 	}
 
-	if err := actionlifecycle.PersistPlanAudit(store, req, plan); err != nil {
-		t.Fatalf("persistActionPlanAudit: %v", err)
+	if err := actionlifecycle.PersistPlanAudit(store, req, plan); err == nil {
+		t.Fatal("orphan lifecycle state must make atomic plan creation fail")
 	}
-	events, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
-	if err != nil {
-		t.Fatalf("GetActionLifecycleEvents: %v", err)
-	}
-	seenStates := map[unified.ActionState]bool{}
-	for _, event := range events {
-		seenStates[event.State] = true
-	}
-	if len(events) != 2 || !seenStates[unified.ActionStatePlanned] || !seenStates[unified.ActionStatePending] {
-		t.Fatalf("events = %#v, want one planned and one pending event", events)
-	}
-
-	if err := actionlifecycle.PersistPlanAudit(store, req, plan); err != nil {
-		t.Fatalf("persistActionPlanAudit retry: %v", err)
-	}
-	events, err = store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
-	if err != nil {
-		t.Fatalf("GetActionLifecycleEvents retry: %v", err)
-	}
-	if len(events) != 2 {
-		t.Fatalf("retry duplicated lifecycle events: %#v", events)
+	if _, found, err := store.GetActionAudit(plan.ActionID); err != nil || found {
+		t.Fatalf("atomic creation left audit behind: found=%v err=%v", found, err)
 	}
 }
 

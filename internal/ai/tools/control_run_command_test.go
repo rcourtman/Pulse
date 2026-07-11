@@ -41,6 +41,65 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 		assert.Contains(t, result.Content[0].Text, "command is required")
 	})
 
+	t.Run("AutonomousRejectsRawCommandBeforeDispatch", func(t *testing.T) {
+		agentSrv := &mockAgentServer{agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "tower"}}}
+		exec := NewPulseToolExecutor(ExecutorConfig{
+			AgentServer:  agentSrv,
+			ControlLevel: ControlLevelAutonomous,
+		})
+		exec.SetAutonomousMode(true)
+
+		result, err := exec.executeRunCommand(ctx, agentcapabilities.WithApprovalArgument(map[string]interface{}{
+			"command":     "touch /tmp/authority-boundary-bypass",
+			"target_host": "tower",
+		}, "fabricated"))
+		require.NoError(t, err)
+		require.True(t, result.IsError)
+		assert.Contains(t, result.Content[0].Text, "raw command execution is unavailable in autonomous model sessions")
+		agentSrv.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("NeverAutoRemediateUsesCanonicalIdentityBehindHostAlias", func(t *testing.T) {
+		store, err := approval.NewStore(approval.StoreConfig{DataDir: t.TempDir(), DisablePersistence: true})
+		require.NoError(t, err)
+		previous := approval.GetStore()
+		approval.SetStore(store)
+		t.Cleanup(func() { approval.SetStore(previous) })
+
+		const canonicalID = "agent:agent-1"
+		const command = "systemctl restart workload"
+		planHash := approvalPlanHash(
+			"action-alias", "approval-alias", "pulse_control", canonicalID,
+			command, "agent", "", `run command "systemctl restart workload" on tower`,
+		)
+		approvalReq := &approval.ApprovalRequest{
+			ID: "approval-alias", OrgID: "org-1", Command: command, TargetType: "agent", TargetID: "agent-1",
+			Plan: &unifiedresources.ActionPlan{ActionID: "action-alias", RequestID: "approval-alias", Allowed: true, RequiresApproval: true, ApprovalPolicy: unifiedresources.ApprovalAdmin, PlanHash: planHash},
+		}
+		require.NoError(t, store.CreateApproval(approvalReq))
+		_, err = store.Approve("approval-alias", "operator@example.com")
+		require.NoError(t, err)
+
+		actionStore := unifiedresources.NewMemoryStore()
+		require.NoError(t, actionStore.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+			CanonicalID: canonicalID, NeverAutoRemediate: true,
+		}))
+		agentSrv := &mockAgentServer{agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "tower.example.com"}}}
+		exec := NewPulseToolExecutor(ExecutorConfig{AgentServer: agentSrv, ControlLevel: ControlLevelControlled, ActionAuditStore: actionStore})
+		exec.SetOrgID("org-1")
+		exec.SetResolvedContext(&mockResolvedContext{aliases: map[string]ResolvedResourceInfo{
+			"tower": &mockResource{resourceID: canonicalID, resourceType: "agent", targetHost: "tower.example.com", agentID: "agent-1", kind: "agent", aliases: []string{"tower"}},
+		}})
+
+		result, err := exec.executeRunCommand(ctx, agentcapabilities.WithApprovalArgument(map[string]interface{}{
+			"command": command, "target_host": "tower",
+		}, "approval-alias"))
+		require.NoError(t, err)
+		require.True(t, result.IsError)
+		assert.Contains(t, result.Content[0].Text, unifiedresources.ErrResourceRemediationLocked.Error())
+		agentSrv.AssertNotCalled(t, "ExecuteCommand", mock.Anything, mock.Anything, mock.Anything)
+	})
+
 	t.Run("PolicyBlocked", func(t *testing.T) {
 		policy := &mockCommandPolicy{}
 		policy.On("Evaluate", "rm -rf /").Return(agentexec.PolicyBlock).Once()
@@ -231,7 +290,7 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 
 		consumed, found := store.GetApproval("approval-1")
 		require.True(t, found)
-		assert.True(t, consumed.Consumed)
+		assert.False(t, consumed.Consumed, "mock agent servers do not own the final authorization-consumption boundary")
 
 		audits, err := actionStore.GetActionAudits("", time.Time{}, 10)
 		require.NoError(t, err)

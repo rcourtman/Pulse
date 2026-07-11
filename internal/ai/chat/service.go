@@ -64,6 +64,7 @@ type (
 	KnowledgeStoreProvider              = tools.KnowledgeStoreProvider
 	AssistantDiscoveryProvider          = tools.DiscoveryProvider
 	AssistantUnifiedResourceProvider    = tools.UnifiedResourceProvider
+	AssistantTypedActionPlanner         = tools.TypedActionPlanner
 )
 
 // Config holds service configuration
@@ -844,6 +845,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		effectiveExecutor.SetControlLevel(effectiveControlLevel)
 		effectiveExecutor.SetAutonomousMode(autonomousMode)
 		effectiveExecutor.ApplyExecutionProfile(tools.ProfileInteractiveAssistant)
+		effectiveExecutor.SetExecuteAuthority(req.HasExecuteAuthority)
 		effectiveExecutor.SetResolvedContext(resolvedCtx)
 	}
 	filteredTools := s.toolsForExecutor(effectiveExecutor, autonomousMode)
@@ -3008,6 +3010,7 @@ func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []strin
 	effectiveExecutor.SetControlLevel(effectiveControlLevel)
 	effectiveExecutor.SetAutonomousMode(autonomousMode)
 	effectiveExecutor.ApplyExecutionProfile(tools.ProfileInteractiveAssistant)
+	effectiveExecutor.SetExecuteAuthority(executeAuthorityFromContext(ctx))
 	availableTools := s.toolsForExecutor(effectiveExecutor, autonomousMode)
 	names := make([]string, 0, len(availableTools))
 	for _, tool := range availableTools {
@@ -3024,10 +3027,18 @@ func (s *Service) ListAvailableTools(ctx context.Context, prompt string) []strin
 // AssistantSurfaceToolContract returns the live native Assistant surface tool
 // summary for the current runtime mode. It keeps API/UI consumers on the
 // executor-owned projection instead of rebuilding tool buckets from names.
-func (s *Service) AssistantSurfaceToolContract(_ context.Context) agentcapabilities.SurfaceToolContract {
+func (s *Service) AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract {
 	s.mu.RLock()
 	executor := s.executor
+	effectiveControlLevel := s.effectiveControlLevelLocked()
 	s.mu.RUnlock()
+	if executor == nil {
+		return agentcapabilities.SurfaceToolContract{}
+	}
+	executor = executor.Clone()
+	executor.SetControlLevel(effectiveControlLevel)
+	executor.ApplyExecutionProfile(tools.ProfileInteractiveAssistant)
+	executor.SetExecuteAuthority(executeAuthorityFromContext(ctx))
 
 	return executor.AssistantSurfaceToolContract(agentcapabilities.AssistantProviderToolOptions{
 		IncludeQuestionTool: !s.isAutonomousModeEnabled(),
@@ -3507,6 +3518,17 @@ func (s *Service) SetUnifiedResourceProvider(provider AssistantUnifiedResourcePr
 	s.unifiedResourceProvider = provider
 	if s.executor != nil {
 		s.executor.SetUnifiedResourceProvider(provider)
+	}
+}
+
+// SetTypedActionPlanner routes model-proposed resource actions into the
+// shared lifecycle planner. Approval and execution remain on canonical action
+// surfaces.
+func (s *Service) SetTypedActionPlanner(planner AssistantTypedActionPlanner) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.executor != nil {
+		s.executor.SetTypedActionPlanner(planner)
 	}
 }
 

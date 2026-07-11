@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockmode"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
 
@@ -15,279 +16,573 @@ func IsDemoMode() bool {
 	return mockmode.IsEnabled()
 }
 
-// InjectDemoFindings populates the patrol service with realistic mock findings
-// This is used for demo instances to showcase AI features without actual AI API calls
-func (p *PatrolService) InjectDemoFindings() {
-	if p == nil || p.findings == nil {
-		return
-	}
+// Demo provider identity reported by readiness and preflight surfaces while
+// mock mode simulates Patrol. Matches the model name GenerateDemoAIResponse
+// reports for assistant chat.
+const (
+	DemoPatrolProvider = "demo"
+	DemoPatrolModel    = "demo-model"
+)
 
-	log.Info().Msg("demo mode: Injecting mock AI patrol findings")
-
-	now := time.Now()
-
-	// Create realistic demo findings
-	demoFindings := []*Finding{
-		{
-			ID:           "demo-storage-critical",
-			Key:          "storage:local-zfs:capacity",
-			Severity:     FindingSeverityCritical,
-			Category:     FindingCategoryCapacity,
-			Title:        "ZFS pool 'local-zfs' is 94% full",
-			Description:  "Storage pool local-zfs on pve1 has only 47GB remaining out of 750GB. At current growth rate, pool will be full in approximately 5 days.",
-			ResourceID:   "storage/pve1/local-zfs",
-			ResourceName: "local-zfs",
-			ResourceType: "storage",
-			Node:         "pve1",
-			Recommendation: `**Immediate actions:**
-1. Identify large files: ` + "`zfs list -o name,used,refer -t all | sort -k2 -h | tail -20`" + `
-2. Check for orphaned VM disks: ` + "`pvesm list local-zfs | grep -v 'vm-'`" + `
-3. Remove old snapshots: ` + "`zfs list -t snapshot -o name,used | sort -k2 -h`" + `
-
-**Long-term:**
-- Add additional storage or migrate VMs to other pools
-- Enable ZFS compression if not already enabled`,
-			DetectedAt:  now.Add(-2 * time.Hour),
-			LastSeenAt:  now.Add(-5 * time.Minute),
-			TimesRaised: 3,
-			Source:      "patrol",
-		},
-		{
-			ID:           "demo-memory-warning",
-			Key:          "guest:vm-102:memory",
-			Severity:     FindingSeverityWarning,
-			Category:     FindingCategoryPerformance,
-			Title:        "VM 'jellyfin' memory usage at 91%",
-			Description:  "jellyfin (VM 102) on pve2 is consistently using 14.5GB of its 16GB allocated memory. Swapping may occur under load, degrading performance.",
-			ResourceID:   "qemu/102",
-			ResourceName: "jellyfin",
-			ResourceType: "qemu",
-			Node:         "pve2",
-			Recommendation: `**Options to consider:**
-1. Increase VM memory allocation to 20GB if host has capacity
-2. Check for memory leaks in Jellyfin: restart the service
-3. Limit transcoding to reduce memory pressure
-4. Review Jellyfin cache settings in the dashboard`,
-			DetectedAt:  now.Add(-6 * time.Hour),
-			LastSeenAt:  now.Add(-10 * time.Minute),
-			TimesRaised: 5,
-			Source:      "patrol",
-		},
-		{
-			ID:           "demo-backup-warning",
-			Key:          "guest:vm-105:backup",
-			Severity:     FindingSeverityWarning,
-			Category:     FindingCategoryBackup,
-			Title:        "Container 'postgres' hasn't been backed up in 8 days",
-			Description:  "The postgres container (CT 105) last successful backup was 8 days ago. Your backup schedule targets daily backups.",
-			ResourceID:   "lxc/105",
-			ResourceName: "postgres",
-			ResourceType: "system-container",
-			Node:         "pve1",
-			Recommendation: `**Investigate:**
-1. Check PBS backup job status: ` + "`pvesh get /nodes/pve1/tasks --typefilter vzdump`" + `
-2. Verify PBS datastore connectivity
-3. Check for backup job errors in the Proxmox datacenter backup view
-
-**Manual backup:**
-` + "`vzdump 105 --storage pbs --mode snapshot`",
-			DetectedAt:  now.Add(-24 * time.Hour),
-			LastSeenAt:  now.Add(-15 * time.Minute),
-			TimesRaised: 2,
-			Source:      "patrol",
-		},
-		{
-			ID:           "demo-cpu-warning",
-			Key:          "node:pve3:cpu",
-			Severity:     FindingSeverityWarning,
-			Category:     FindingCategoryPerformance,
-			Title:        "Node 'pve3' sustained high CPU (87%)",
-			Description:  "Node pve3 has maintained CPU usage above 85% for the past 2 hours. This may indicate over-provisioning or a runaway process.",
-			ResourceID:   "node/pve3",
-			ResourceName: "pve3",
-			ResourceType: "node",
-			Node:         "pve3",
-			Recommendation: `**Diagnose:**
-1. Check top processes: ` + "`ssh pve3 'top -bn1 | head -20'`" + `
-2. Identify VM CPU usage: ` + "`pvesh get /nodes/pve3/qemu --output-format json | jq '.[] | {name, cpu}'`" + `
-
-**Consider:**
-- Live-migrate a VM to another node: ` + "`qm migrate <vmid> pve1 --online`" + `
-- Set CPU limits on high-usage VMs`,
-			DetectedAt:  now.Add(-2 * time.Hour),
-			LastSeenAt:  now.Add(-8 * time.Minute),
-			TimesRaised: 4,
-			Source:      "patrol",
-		},
-		{
-			ID:           "demo-docker-warning",
-			Key:          "docker:portainer:container-restart",
-			Severity:     FindingSeverityWarning,
-			Category:     FindingCategoryReliability,
-			Title:        "Docker container 'uptime-kuma' restarting frequently",
-			Description:  "The uptime-kuma container on docker-host-1 has restarted 7 times in the past 24 hours. This may indicate configuration issues or resource constraints.",
-			ResourceID:   "docker/docker-host-1/uptime-kuma",
-			ResourceName: "uptime-kuma",
-			ResourceType: "app-container",
-			Node:         "docker-host-1",
-			Recommendation: `**Check logs:**
-` + "`docker logs uptime-kuma --tail 100`" + `
-
-**Common causes:**
-- OOM kills: check ` + "`docker stats uptime-kuma`" + `
-- Configuration errors in environment variables
-- Database corruption (check data volume)`,
-			DetectedAt:  now.Add(-12 * time.Hour),
-			LastSeenAt:  now.Add(-20 * time.Minute),
-			TimesRaised: 3,
-			Source:      "patrol",
-		},
-		{
-			ID:           "demo-update-safety-warning",
-			Key:          UpdateSafetyFindingPrefix + ":docker-host-1/homeassistant",
-			Severity:     FindingSeverityWarning,
-			Category:     FindingCategoryReliability,
-			Title:        "Container \"homeassistant\" image updated",
-			Description:  "Image digest changed. Container homeassistant was updated to a new image and has restarted 2 times in the verification window.",
-			ResourceID:   "docker-host-1/homeassistant",
-			ResourceName: "homeassistant",
-			ResourceType: "app-container",
-			Node:         "docker-host-1",
-			Evidence:     "prior_digest=sha256:abc123def456 new_digest=sha256:789xyz012uvw restart_count=2",
-			DetectedAt:   now.Add(-3 * time.Minute),
-			LastSeenAt:   now.Add(-1 * time.Minute),
-			TimesRaised:  2,
-			Source:       updateSafetySource,
-		},
-		{
-			ID:           "demo-pdm-alert-node-offline",
-			Key:          PDMAlertFindingPrefix + ":datacenter-a/node/pve-edge-01",
-			Severity:     FindingSeverityWarning,
-			Category:     FindingCategoryReliability,
-			Title:        "PDM: node \"pve-edge-01\" is offline",
-			Description:  "Proxmox Datacenter Manager reports node \"pve-edge-01\" in remote \"datacenter-a\" is offline.",
-			ResourceID:   "datacenter-a/node/pve-edge-01",
-			ResourceName: "pve-edge-01",
-			ResourceType: "node",
-			Node:         "datacenter-a",
-			Evidence:     "status=offline remote=datacenter-a",
-			DetectedAt:   now.Add(-8 * time.Minute),
-			LastSeenAt:   now.Add(-2 * time.Minute),
-			TimesRaised:  1,
-			Source:       pdmAlertSourceLabel,
-		},
-	}
-
-	// Add findings to the store
-	for _, f := range demoFindings {
-		p.findings.Add(f)
-	}
-
-	// Also add some demo patrol run history
-	p.injectDemoRunHistory()
-
-	log.Info().Int("findings_count", len(demoFindings)).Msg("demo mode: Mock findings injected")
+// IsDemoRuntimeIntended reports whether this process is meant to serve demo
+// fixtures even when they are not enabled yet. Release demo instances boot
+// with mock fixtures off until the license sync validates the demo_fixtures
+// entitlement, so boot-time lifecycle decisions (whether to start the patrol
+// loop at all) must look at operator intent, not the current gate state.
+func IsDemoRuntimeIntended() bool {
+	return IsDemoMode() || mockmode.IsRequestedFromEnv()
 }
 
-// injectDemoRunHistory adds realistic patrol run history for the demo
-func (p *PatrolService) injectDemoRunHistory() {
-	if p.runHistoryStore == nil {
-		return
+const demoFindingIDPrefix = "demo-"
+
+// isDemoFindingID reports whether a finding was synthesized by the demo
+// patrol cycle. Real findings use hex hash IDs, so the prefix cannot collide.
+func isDemoFindingID(id string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(id)), demoFindingIDPrefix)
+}
+
+// runDemoPatrolCycle executes one simulated patrol pass for demo/mock mode.
+// It never contacts a provider: findings are synthesized from the current
+// mock infrastructure state so every finding points at a resource the demo
+// actually shows, then a matching run record is appended to check history.
+// Repeated cycles refresh the same finding IDs (heartbeat semantics) and
+// auto-resolve demo findings whose underlying mock condition went away.
+// Returns true once a cycle has been recorded; false when it could not run
+// yet (mock disabled again, another run in flight, or mock state not
+// generated yet).
+func (p *PatrolService) runDemoPatrolCycle(trigger TriggerReason) bool {
+	if p == nil || p.findings == nil || p.runHistoryStore == nil {
+		return false
 	}
+	if !IsDemoMode() {
+		return false
+	}
+	if !p.tryStartRun("full") {
+		return false
+	}
+	defer p.endRun()
+
+	p.mu.Lock()
+	// Mock mode can enable after the boot-time config snapshot was taken
+	// (release demo instances authorize fixtures via the license sync).
+	// Repair the snapshot so status surfaces report an active patrol instead
+	// of the pre-demo disabled/blocked state.
+	p.config.Enabled = true
+	p.config.RuntimeBlockedReason = ""
+	p.config.RuntimeBlockedCause = PatrolFailureCauseNone
+	cfg := p.config
+	p.mu.Unlock()
+	p.clearBlockedReason()
 
 	now := time.Now()
+	state := p.currentPatrolRuntimeState()
+	findings := synthesizeDemoPatrolFindings(state, now)
 
-	// Clear existing history first to avoid duplicates on restart
-	// (Assuming we can't easily clear, we'll just generate new IDs based on time to be idempotent-ish)
+	counts := patrolRuntimeCountResources(state)
+	nodesChecked, guestsChecked, dockerChecked, storageChecked := 0, 0, 0, 0
+	hostsChecked, trueNASChecked, pbsChecked, pmgChecked, kubernetesChecked := 0, 0, 0, 0, 0
+	if cfg.AnalyzeNodes {
+		nodesChecked = counts.nodes
+	}
+	if cfg.AnalyzeGuests {
+		guestsChecked = counts.guests
+	}
+	if cfg.AnalyzeDocker {
+		dockerChecked = counts.docker
+	}
+	if cfg.AnalyzeStorage {
+		storageChecked = counts.storage
+	}
+	if cfg.AnalyzeHosts {
+		hostsChecked = counts.hosts
+		trueNASChecked = counts.truenas
+	}
+	if cfg.AnalyzePBS {
+		pbsChecked = counts.pbs
+	}
+	if cfg.AnalyzePMG {
+		pmgChecked = counts.pmg
+	}
+	if cfg.AnalyzeKubernetes {
+		kubernetesChecked = counts.kubernetes
+	}
+	resourceCount := nodesChecked + guestsChecked + dockerChecked + storageChecked +
+		hostsChecked + trueNASChecked + pbsChecked + pmgChecked + kubernetesChecked
 
-	// Create a realistic schedule: every 6 hours for the last 3 days
-	var demoRuns []PatrolRunRecord
+	if resourceCount == 0 && len(findings) == 0 {
+		// Mock state has not been generated yet (early boot). The warmup
+		// retry or the next scheduled cycle will populate the surface once
+		// state exists.
+		log.Debug().Msg("demo patrol: no mock state available yet, skipping cycle")
+		return false
+	}
 
-	// 1. Most recent run (just happened)
-	demoRuns = append(demoRuns, PatrolRunRecord{
-		ID:               fmt.Sprintf("demo-run-%d", now.Unix()),
-		Source:           PatrolRunSourceDemo,
-		StartedAt:        now.Add(-15 * time.Minute),
-		CompletedAt:      now.Add(-14*time.Minute + 15*time.Second),
-		Duration:         75 * time.Second,
-		Type:             "patrol",
-		ResourcesChecked: 47,
-		NodesChecked:     5,
-		GuestsChecked:    32,
-		DockerChecked:    8,
-		StorageChecked:   6,
-		NewFindings:      0,
-		ExistingFindings: 5,
-		ResolvedFindings: 0,
-		FindingsSummary:  "2 critical, 3 warnings",
-		FindingIDs:       []string{"demo-storage-critical", "9e1eb083b7109506", "demo-memory-warning", "demo-backup-warning", "demo-cpu-warning"},
-		Status:           "issues_found",
-		InputTokens:      4250,
-		OutputTokens:     890,
-	})
-
-	// 2. Scheduled runs (every 6 hours)
-	for i := 1; i <= 12; i++ {
-		offset := time.Duration(i*6) * time.Hour
-		startTime := now.Add(-offset)
-
-		// Vary the duration slightly
-		duration := time.Duration(40+(i%30)) * time.Second
-
-		// Outcomes vary over time
-		var summary string
-		var status string
-		var newFindings, existingFindings, resolvedFindings int
-		var findingIDs []string
-
-		if i <= 4 { // Last 24h - steady state of issues
-			summary = "2 critical, 3 warnings"
-			status = "issues_found"
-			existingFindings = 5
-			findingIDs = []string{"demo-storage-critical", "9e1eb083b7109506", "demo-memory-warning", "demo-backup-warning", "demo-cpu-warning"}
-		} else if i == 5 { // 30h ago - one issue appeared
-			summary = "1 new critical, 3 warnings"
-			status = "issues_found"
-			newFindings = 1
-			existingFindings = 3
-			findingIDs = []string{"demo-storage-critical", "demo-memory-warning", "demo-backup-warning", "demo-cpu-warning"}
-		} else if i <= 10 { // 2-3 days ago - fewer issues
-			summary = "3 warnings"
-			status = "issues_found"
-			existingFindings = 3
-			findingIDs = []string{"demo-memory-warning", "demo-backup-warning", "demo-cpu-warning"}
-		} else { // > 3 days ago - clean state
-			summary = "No issues found"
-			status = "healthy"
-			resolvedFindings = 1
+	// Demo findings are deliberately not persisted, so a restart re-adds
+	// them as store-new. Findings already attested by prior demo run records
+	// still count as existing: the history says they were open before.
+	knownIDs := make(map[string]bool)
+	for _, run := range p.runHistoryStore.GetAll() {
+		if !isDemoPatrolRunRecord(run) {
+			continue
 		}
+		for _, id := range run.FindingIDs {
+			knownIDs[id] = true
+		}
+	}
 
-		demoRuns = append(demoRuns, PatrolRunRecord{
-			ID:               fmt.Sprintf("demo-run-%d", startTime.Unix()),
-			Source:           PatrolRunSourceDemo,
-			StartedAt:        startTime,
-			CompletedAt:      startTime.Add(duration),
-			Duration:         duration,
-			Type:             "patrol",
-			ResourcesChecked: 47,
-			NodesChecked:     5,
-			GuestsChecked:    32,
-			DockerChecked:    8,
-			StorageChecked:   6,
-			NewFindings:      newFindings,
-			ExistingFindings: existingFindings,
-			ResolvedFindings: resolvedFindings,
-			FindingsSummary:  summary,
-			FindingIDs:       findingIDs,
-			Status:           status,
-			InputTokens:      4000 + (i * 10),
-			OutputTokens:     500 + (i * 5),
+	newCount, existingCount := 0, 0
+	currentIDs := make(map[string]bool, len(findings))
+	findingIDs := make([]string, 0, len(findings))
+	for _, f := range findings {
+		currentIDs[f.ID] = true
+		if p.findings.Add(f) && !knownIDs[f.ID] {
+			newCount++
+		} else {
+			existingCount++
+		}
+		findingIDs = append(findingIDs, f.ID)
+	}
+
+	// Auto-resolve demo findings whose mock condition no longer holds.
+	resolvedCount := 0
+	for _, active := range p.findings.GetActive(FindingSeverityInfo) {
+		if active == nil || !isDemoFindingID(active.ID) || currentIDs[active.ID] {
+			continue
+		}
+		if p.findings.Resolve(active.ID, true) {
+			resolvedCount++
+		}
+	}
+
+	// A simulated pass stands in for a healthy provider-backed run: clear any
+	// stale "Provider analysis error" finding left by real runs that failed
+	// before mock mode enabled.
+	p.resolvePatrolRuntimeFailureFinding("demo_patrol_cycle")
+
+	summary := p.findings.GetSummary()
+	findingsSummaryStr := "All healthy"
+	status := "healthy"
+	if summary.Critical+summary.Warning > 0 {
+		parts := []string{}
+		if summary.Critical > 0 {
+			parts = append(parts, fmt.Sprintf("%d critical", summary.Critical))
+		}
+		if summary.Warning > 0 {
+			parts = append(parts, fmt.Sprintf("%d warning", summary.Warning))
+		}
+		findingsSummaryStr = joinParts(parts)
+		if summary.Critical > 0 {
+			status = "critical"
+		} else {
+			status = "issues_found"
+		}
+	}
+
+	// Presentational duration and token counts: deterministic, scaled to the
+	// size of the mock fleet so the history reads like a real analysis pass.
+	duration := time.Duration(35+resourceCount%40) * time.Second
+	record := PatrolRunRecord{
+		ID:                fmt.Sprintf("demo-run-%d", now.UnixNano()),
+		Source:            PatrolRunSourceDemo,
+		StartedAt:         now.Add(-duration),
+		CompletedAt:       now,
+		Duration:          duration,
+		DurationMs:        duration.Milliseconds(),
+		Type:              "patrol",
+		TriggerReason:     string(trigger),
+		ResourcesChecked:  resourceCount,
+		NodesChecked:      nodesChecked,
+		GuestsChecked:     guestsChecked,
+		DockerChecked:     dockerChecked,
+		StorageChecked:    storageChecked,
+		HostsChecked:      hostsChecked,
+		TrueNASChecked:    trueNASChecked,
+		PBSChecked:        pbsChecked,
+		PMGChecked:        pmgChecked,
+		KubernetesChecked: kubernetesChecked,
+		NewFindings:       newCount,
+		ExistingFindings:  existingCount,
+		ResolvedFindings:  resolvedCount,
+		FindingsSummary:   findingsSummaryStr,
+		FindingIDs:        findingIDs,
+		Status:            status,
+		InputTokens:       1200 + 42*resourceCount,
+		OutputTokens:      380 + 60*len(findings),
+		AIAnalysis: fmt.Sprintf(
+			"Reviewed %d resources across %d nodes, %d guests, %d Docker hosts, and %d storage pools. %s.",
+			resourceCount, nodesChecked, guestsChecked, dockerChecked, storageChecked, findingsSummaryStr),
+	}
+
+	if p.backfillDemoRunHistory(record, now) {
+		// The seeded history attests these findings first appeared earlier,
+		// so the current run reports them as still open, not newly found.
+		record.ExistingFindings += record.NewFindings
+		record.NewFindings = 0
+	}
+	p.runHistoryStore.Add(record)
+
+	p.mu.Lock()
+	p.lastActivity = now
+	p.lastFullPatrol = now
+	p.lastDuration = duration
+	p.resourcesChecked = resourceCount
+	p.errorCount = 0
+	p.mu.Unlock()
+
+	log.Info().
+		Int("resources", resourceCount).
+		Int("findings", len(findings)).
+		Int("new", newCount).
+		Int("resolved", resolvedCount).
+		Str("trigger", string(trigger)).
+		Msg("demo patrol: completed simulated patrol cycle")
+	return true
+}
+
+// startDemoPatrolWarmup runs the first simulated patrol cycle once mock state
+// is available. Mock fixtures generate concurrently with startup, so an
+// immediate cycle can race an empty snapshot; retry briefly instead of
+// waiting for the next scheduled tick, which the dev quota guard may never
+// start.
+func (p *PatrolService) startDemoPatrolWarmup() {
+	if p == nil {
+		return
+	}
+	go func() {
+		for attempt := 0; attempt < 24; attempt++ {
+			if p.runDemoPatrolCycle(TriggerReasonStartup) {
+				return
+			}
+			time.Sleep(5 * time.Second)
+		}
+	}()
+}
+
+// backfillDemoRunHistory seeds plausible past check history the first time a
+// demo cycle runs, so the run history panel is not empty on a fresh demo
+// instance. No-op once any demo record exists. Returns true when it seeded.
+func (p *PatrolService) backfillDemoRunHistory(template PatrolRunRecord, now time.Time) bool {
+	for _, run := range p.runHistoryStore.GetAll() {
+		if isDemoPatrolRunRecord(run) {
+			return false
+		}
+	}
+
+	// Oldest first: the store prepends, so adding in reverse keeps newest on top.
+	for i := 10; i >= 1; i-- {
+		start := now.Add(-time.Duration(i*6) * time.Hour)
+		duration := time.Duration(38+(i*7)%31) * time.Second
+		rec := template
+		rec.ID = fmt.Sprintf("demo-run-%d", start.UnixNano())
+		rec.StartedAt = start
+		rec.CompletedAt = start.Add(duration)
+		rec.Duration = duration
+		rec.DurationMs = duration.Milliseconds()
+		rec.TriggerReason = string(TriggerReasonScheduled)
+		rec.NewFindings = 0
+		rec.ResolvedFindings = 0
+		rec.ExistingFindings = len(template.FindingIDs)
+		rec.AIAnalysis = ""
+		switch {
+		case i >= 8:
+			// The oldest runs predate the current issues.
+			rec.ExistingFindings = 0
+			rec.FindingIDs = nil
+			rec.FindingsSummary = "All healthy"
+			rec.Status = "healthy"
+		case i == 7:
+			// The run where the current issues first appeared.
+			rec.NewFindings = len(template.FindingIDs)
+			rec.ExistingFindings = 0
+		}
+		p.runHistoryStore.Add(rec)
+	}
+	return true
+}
+
+// synthesizeDemoPatrolFindings derives demo findings from the live mock
+// state. Every finding references a resource that exists in the demo dataset
+// and quotes its actual observed values, so the patrol surface stays
+// consistent with what the rest of the demo UI shows. The demo scenario data
+// pins a set of deliberate anomalies (an offline Docker edge host, a degraded
+// PBS instance, unhealthy containers), which gives the surface a stable core
+// of findings across cycles.
+func synthesizeDemoPatrolFindings(snap patrolRuntimeState, now time.Time) []*Finding {
+	var findings []*Finding
+
+	// Offline Docker host: the demo scenario keeps one edge host offline.
+	for _, host := range snap.DockerHosts {
+		if !strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
+			continue
+		}
+		name := demoDockerHostDisplayName(host)
+		findings = append(findings, &Finding{
+			ID:           demoFindingID("docker-host-offline", host.Hostname),
+			Key:          fmt.Sprintf("docker:%s:offline", host.Hostname),
+			Severity:     FindingSeverityCritical,
+			Category:     FindingCategoryReliability,
+			ResourceID:   host.ID,
+			ResourceName: name,
+			ResourceType: "docker-host",
+			Node:         host.Hostname,
+			Title:        fmt.Sprintf("Docker host %q is offline", name),
+			Description: fmt.Sprintf(
+				"The Pulse agent on %s has stopped reporting. %d containers on this host are unmonitored until the agent reconnects.",
+				name, len(host.Containers)),
+			Impact: "Workloads on this host may be down, and Pulse cannot see them while the agent is offline.",
+			Recommendation: "Confirm the machine has power and network connectivity, then check the agent with " +
+				"systemctl status pulse-agent and the Docker daemon with systemctl status docker. " +
+				"Recent agent logs (journalctl -u pulse-agent) usually show why reporting stopped.",
+			Evidence:   fmt.Sprintf("status=offline containers=%d last_seen=%s", len(host.Containers), host.LastSeen.UTC().Format(time.RFC3339)),
+			DetectedAt: now.Add(-95 * time.Minute),
+			LastSeenAt: now,
+			Source:     "patrol",
+		})
+		break
+	}
+
+	// Highest-utilization storage pool, quoting its actual numbers.
+	var topStorage *models.Storage
+	for i := range snap.Storage {
+		s := &snap.Storage[i]
+		if s.Total <= 0 || !s.Enabled || strings.EqualFold(strings.TrimSpace(s.Status), "offline") {
+			continue
+		}
+		if topStorage == nil || s.Usage > topStorage.Usage {
+			topStorage = s
+		}
+	}
+	if topStorage != nil && topStorage.Usage >= 60 {
+		severity := FindingSeverityWarning
+		urgency := "Growth at this level is worth reviewing before it becomes urgent."
+		if topStorage.Usage >= 85 {
+			severity = FindingSeverityCritical
+			urgency = "New snapshots, backups, and guest disk growth are at risk once the pool fills."
+		}
+		location := topStorage.Node
+		if topStorage.Shared || location == "" {
+			location = "the cluster"
+		}
+		findings = append(findings, &Finding{
+			ID:           demoFindingID("storage-capacity", topStorage.ID),
+			Key:          fmt.Sprintf("storage:%s:capacity", topStorage.Name),
+			Severity:     severity,
+			Category:     FindingCategoryCapacity,
+			ResourceID:   topStorage.ID,
+			ResourceName: topStorage.Name,
+			ResourceType: "storage",
+			Node:         topStorage.Node,
+			Title:        fmt.Sprintf("Storage %q is %.0f%% full", topStorage.Name, topStorage.Usage),
+			Description: fmt.Sprintf(
+				"Storage %s on %s has %s free of %s. It is the fullest pool in this environment. %s",
+				topStorage.Name, location, formatDemoBytes(topStorage.Free), formatDemoBytes(topStorage.Total), urgency),
+			Recommendation: "Review the largest guest disks and stale snapshots on this pool and reclaim what is no longer needed. " +
+				"Longer term, plan an expansion or migrate guests to a less utilized pool.",
+			Evidence:   fmt.Sprintf("usage=%.1f%% used=%s total=%s", topStorage.Usage, formatDemoBytes(topStorage.Used), formatDemoBytes(topStorage.Total)),
+			DetectedAt: now.Add(-26 * time.Hour),
+			LastSeenAt: now,
+			Source:     "patrol",
 		})
 	}
 
-	for _, run := range demoRuns {
-		p.runHistoryStore.Add(run)
+	// Degraded backup server: the demo scenario keeps one PBS instance degraded.
+	for _, pbs := range snap.PBSInstances {
+		statusBad := !strings.EqualFold(strings.TrimSpace(pbs.Status), "online")
+		healthBad := pbs.ConnectionHealth != "" && !strings.EqualFold(strings.TrimSpace(pbs.ConnectionHealth), "healthy")
+		if !statusBad && !healthBad {
+			continue
+		}
+		findings = append(findings, &Finding{
+			ID:           demoFindingID("pbs-degraded", pbs.Name),
+			Key:          fmt.Sprintf("pbs:%s:connection", pbs.Name),
+			Severity:     FindingSeverityWarning,
+			Category:     FindingCategoryBackup,
+			ResourceID:   pbs.ID,
+			ResourceName: pbs.Name,
+			ResourceType: "pbs",
+			Node:         pbs.Name,
+			Title:        fmt.Sprintf("Backup server %q connection is degraded", pbs.Name),
+			Description: fmt.Sprintf(
+				"Pulse is reaching backup server %s intermittently. New backup and verify jobs cannot be confirmed while the connection is degraded.",
+				pbs.Name),
+			Impact: "If backups stop landing here, restore points age silently until the connection recovers.",
+			Recommendation: "Check the PBS service and datastore status on the server, confirm the network path from the " +
+				"Proxmox nodes, and review the most recent backup task logs for timeouts.",
+			Evidence:   fmt.Sprintf("status=%s connection=%s", pbs.Status, pbs.ConnectionHealth),
+			DetectedAt: now.Add(-7 * time.Hour),
+			LastSeenAt: now,
+			Source:     "patrol",
+		})
+		break
 	}
+
+	// Unhealthy or restart-looping containers on online Docker hosts.
+	containerFindings := 0
+	for _, host := range snap.DockerHosts {
+		if strings.EqualFold(strings.TrimSpace(host.Status), "offline") {
+			continue
+		}
+		hostName := demoDockerHostDisplayName(host)
+		for i := range host.Containers {
+			c := host.Containers[i]
+			unhealthy := strings.EqualFold(strings.TrimSpace(c.Health), "unhealthy")
+			flapping := c.RestartCount >= 3 && strings.EqualFold(strings.TrimSpace(c.State), "running")
+			if !unhealthy && !flapping {
+				continue
+			}
+			title := fmt.Sprintf("Container %q is failing its health check", c.Name)
+			description := fmt.Sprintf(
+				"Container %s on %s reports an unhealthy status from its Docker health check.",
+				c.Name, hostName)
+			if !unhealthy {
+				title = fmt.Sprintf("Container %q is restarting repeatedly", c.Name)
+				description = fmt.Sprintf(
+					"Container %s on %s has restarted %d times. Frequent restarts usually point at a crash loop or resource limits.",
+					c.Name, hostName, c.RestartCount)
+			}
+			findings = append(findings, &Finding{
+				ID:           demoFindingID("docker-container", host.Hostname+"-"+c.Name),
+				Key:          fmt.Sprintf("docker:%s/%s:health", host.Hostname, c.Name),
+				Severity:     FindingSeverityWarning,
+				Category:     FindingCategoryReliability,
+				ResourceID:   c.ID,
+				ResourceName: c.Name,
+				ResourceType: "app-container",
+				Node:         host.Hostname,
+				Title:        title,
+				Description:  description,
+				Recommendation: fmt.Sprintf(
+					"Check recent logs with docker logs %s --tail 100, inspect the health check definition with docker inspect, "+
+						"and watch docker stats for memory pressure.", c.Name),
+				Evidence:   fmt.Sprintf("health=%s state=%s restarts=%d image=%s", c.Health, c.State, c.RestartCount, c.Image),
+				DetectedAt: now.Add(-4 * time.Hour),
+				LastSeenAt: now,
+				Source:     "patrol",
+			})
+			containerFindings++
+			if containerFindings >= 2 {
+				break
+			}
+		}
+		if containerFindings >= 2 {
+			break
+		}
+	}
+
+	// Degraded mail gateway: the demo scenario keeps one PMG instance degraded.
+	for _, pmg := range snap.PMGInstances {
+		if strings.EqualFold(strings.TrimSpace(pmg.Status), "online") {
+			continue
+		}
+		findings = append(findings, &Finding{
+			ID:           demoFindingID("pmg-degraded", pmg.Name),
+			Key:          fmt.Sprintf("pmg:%s:connection", pmg.Name),
+			Severity:     FindingSeverityWarning,
+			Category:     FindingCategoryReliability,
+			ResourceID:   pmg.ID,
+			ResourceName: pmg.Name,
+			ResourceType: "pmg",
+			Node:         pmg.Name,
+			Title:        fmt.Sprintf("Mail gateway %q is degraded", pmg.Name),
+			Description: fmt.Sprintf(
+				"Mail gateway %s is responding intermittently. Mail flow statistics and quarantine data may be stale until it recovers.",
+				pmg.Name),
+			Recommendation: "Confirm the PMG services are running on the host, check connectivity from Pulse to the " +
+				"PMG API endpoint, and review the PMG task log for postfix or clamav errors.",
+			Evidence:   fmt.Sprintf("status=%s", pmg.Status),
+			DetectedAt: now.Add(-3 * time.Hour),
+			LastSeenAt: now,
+			Source:     "patrol",
+		})
+		break
+	}
+
+	// Highest-memory running guest, only when genuinely high.
+	type guestRef struct {
+		id, name, node, kind string
+		usage                float64
+		used, total          int64
+	}
+	var topGuest *guestRef
+	consider := func(id, name, node, kind string, status string, mem models.Memory) {
+		if !strings.EqualFold(strings.TrimSpace(status), "running") || mem.Total <= 0 {
+			return
+		}
+		if topGuest == nil || mem.Usage > topGuest.usage {
+			topGuest = &guestRef{id: id, name: name, node: node, kind: kind, usage: mem.Usage, used: mem.Used, total: mem.Total}
+		}
+	}
+	for i := range snap.VMs {
+		vm := &snap.VMs[i]
+		consider(vm.ID, vm.Name, vm.Node, "VM", vm.Status, vm.Memory)
+	}
+	for i := range snap.Containers {
+		ct := &snap.Containers[i]
+		consider(ct.ID, ct.Name, ct.Node, "Container", ct.Status, ct.Memory)
+	}
+	if topGuest != nil && topGuest.usage >= 85 {
+		findings = append(findings, &Finding{
+			ID:           demoFindingID("guest-memory", topGuest.id),
+			Key:          fmt.Sprintf("guest:%s:memory", topGuest.id),
+			Severity:     FindingSeverityWarning,
+			Category:     FindingCategoryPerformance,
+			ResourceID:   topGuest.id,
+			ResourceName: topGuest.name,
+			ResourceType: strings.ToLower(topGuest.kind),
+			Node:         topGuest.node,
+			Title:        fmt.Sprintf("%s %q memory usage at %.0f%%", topGuest.kind, topGuest.name, topGuest.usage),
+			Description: fmt.Sprintf(
+				"%s %s on %s is using %s of its %s allocation. Sustained usage at this level risks swapping and degraded performance under load.",
+				topGuest.kind, topGuest.name, topGuest.node, formatDemoBytes(topGuest.used), formatDemoBytes(topGuest.total)),
+			Recommendation: "Increase the memory allocation if the host has capacity, or check the workload for a leak " +
+				"and review application cache settings to reduce steady-state usage.",
+			Evidence:   fmt.Sprintf("memory=%.1f%% used=%s total=%s", topGuest.usage, formatDemoBytes(topGuest.used), formatDemoBytes(topGuest.total)),
+			DetectedAt: now.Add(-5 * time.Hour),
+			LastSeenAt: now,
+			Source:     "patrol",
+		})
+	}
+
+	return findings
+}
+
+func demoFindingID(kind, key string) string {
+	return demoFindingIDPrefix + kind + "-" + demoSlug(key)
+}
+
+func demoSlug(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('-')
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func demoDockerHostDisplayName(host models.DockerHost) string {
+	if name := strings.TrimSpace(host.CustomDisplayName); name != "" {
+		return name
+	}
+	if name := strings.TrimSpace(host.DisplayName); name != "" {
+		return name
+	}
+	return strings.TrimSpace(host.Hostname)
+}
+
+func formatDemoBytes(bytes int64) string {
+	const gib = float64(1 << 30)
+	value := float64(bytes) / gib
+	if value >= 1024 {
+		return fmt.Sprintf("%.1f TiB", value/1024)
+	}
+	if value >= 10 {
+		return fmt.Sprintf("%.0f GiB", value)
+	}
+	return fmt.Sprintf("%.1f GiB", value)
 }
 
 // GenerateDemoAIResponse returns a realistic mock AI response for demo mode

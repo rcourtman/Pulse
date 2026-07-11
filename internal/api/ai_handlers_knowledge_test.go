@@ -1329,14 +1329,14 @@ func TestKnowledgeEndpoints_RequireAuth(t *testing.T) {
 	}
 }
 
-func TestKnowledgeEndpoints_RequireAIChatScope(t *testing.T) {
+func TestKnowledgeEndpoints_RequireReadOrExecuteScope(t *testing.T) {
 	t.Setenv("ALLOW_ADMIN_BYPASS", "")
 	t.Setenv("PULSE_DEV", "")
 	t.Setenv("NODE_ENV", "")
 	resetAdminBypassState()
 	t.Cleanup(resetAdminBypassState)
 
-	// Create a token with monitoring:read scope (NOT ai:chat)
+	// Create a token with monitoring:read scope (neither ai:chat nor ai:execute).
 	rawToken := "knowledge-scope-test-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
@@ -1347,13 +1347,14 @@ func TestKnowledgeEndpoints_RequireAIChatScope(t *testing.T) {
 		method string
 		path   string
 		body   string
+		scope  string
 	}{
-		{http.MethodGet, "/api/ai/knowledge?guest_id=vm-1", ""},
-		{http.MethodPost, "/api/ai/knowledge/save", `{}`},
-		{http.MethodPost, "/api/ai/knowledge/delete", `{}`},
-		{http.MethodGet, "/api/ai/knowledge/export?guest_id=vm-1", ""},
-		{http.MethodPost, "/api/ai/knowledge/import", `{}`},
-		{http.MethodPost, "/api/ai/knowledge/clear", `{}`},
+		{http.MethodGet, "/api/ai/knowledge?guest_id=vm-1", "", config.ScopeAIChat},
+		{http.MethodPost, "/api/ai/knowledge/save", `{}`, config.ScopeAIExecute},
+		{http.MethodPost, "/api/ai/knowledge/delete", `{}`, config.ScopeAIExecute},
+		{http.MethodGet, "/api/ai/knowledge/export?guest_id=vm-1", "", config.ScopeAIChat},
+		{http.MethodPost, "/api/ai/knowledge/import", `{}`, config.ScopeAIExecute},
+		{http.MethodPost, "/api/ai/knowledge/clear", `{}`, config.ScopeAIExecute},
 	}
 
 	for _, ep := range endpoints {
@@ -1371,9 +1372,35 @@ func TestKnowledgeEndpoints_RequireAIChatScope(t *testing.T) {
 			if rec.Code != http.StatusForbidden {
 				t.Fatalf("expected %d for wrong scope, got %d: %s", http.StatusForbidden, rec.Code, rec.Body.String())
 			}
-			if !strings.Contains(rec.Body.String(), config.ScopeAIChat) {
-				t.Fatalf("expected error to mention %q scope, got %q", config.ScopeAIChat, rec.Body.String())
+			if !strings.Contains(rec.Body.String(), ep.scope) {
+				t.Fatalf("expected error to mention %q scope, got %q", ep.scope, rec.Body.String())
 			}
 		})
+	}
+}
+
+func TestAIChatScopeCannotWriteKnowledge(t *testing.T) {
+	rawToken := "knowledge-chat-only-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	t.Cleanup(router.shutdownBackgroundWorkers)
+
+	for _, endpoint := range []string{
+		"/api/ai/knowledge/save",
+		"/api/ai/knowledge/delete",
+		"/api/ai/knowledge/import",
+		"/api/ai/knowledge/clear",
+	} {
+		req := httptest.NewRequest(http.MethodPost, endpoint, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected ai:chat-only token to be forbidden on %s, got %d: %s", endpoint, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), config.ScopeAIExecute) {
+			t.Fatalf("expected %s to require %q, got %q", endpoint, config.ScopeAIExecute, rec.Body.String())
+		}
 	}
 }

@@ -12,6 +12,13 @@ func TestAIConfig_DiscoveryAndControl(t *testing.T) {
 		t.Fatalf("default discovery model should fall back to GetModel(), got %q", got)
 	}
 
+	// A Patrol override is the operator's background-work model; discovery
+	// follows it before the shared default.
+	cfg.PatrolModel = "custom:patrol"
+	if got := cfg.GetDiscoveryModel(); got != "custom:patrol" {
+		t.Fatalf("discovery model should fall back to the Patrol model, got %q", got)
+	}
+
 	cfg.DiscoveryModel = "custom:discovery"
 	if got := cfg.GetDiscoveryModel(); got != "custom:discovery" {
 		t.Fatalf("custom discovery model = %q", got)

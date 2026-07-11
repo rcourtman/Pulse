@@ -36,6 +36,31 @@ func TestServiceCommercialLogsUseSafeRemediationCopy(t *testing.T) {
 	}
 }
 
+func TestLegacyAssistantReadOnlyProjectionAndRuntimeAgree(t *testing.T) {
+	svc := &Service{cfg: &config.AIConfig{ControlLevel: config.ControlLevelReadOnly}}
+	projected := map[string]bool{}
+	for _, tool := range svc.getTools() {
+		projected[tool.Name] = true
+	}
+	if !projected[agentcapabilities.LegacyAssistantFetchURLToolName] {
+		t.Fatal("read-only legacy projection must retain fetch_url")
+	}
+	for _, name := range []string{
+		agentcapabilities.LegacyAssistantRunCommandToolName,
+		agentcapabilities.LegacyAssistantSetResourceURLToolName,
+		agentcapabilities.ResolveFindingCapabilityName,
+		agentcapabilities.DismissFindingCapabilityName,
+	} {
+		if projected[name] {
+			t.Fatalf("read-only legacy projection exposed mutating alias %q", name)
+		}
+		result, execution := svc.executeTool(context.Background(), ExecuteRequest{}, providers.ToolCall{Name: name})
+		if execution.Success || !strings.Contains(result, "Invocation blocked") {
+			t.Fatalf("read-only legacy runtime did not block %q: success=%v result=%q", name, execution.Success, result)
+		}
+	}
+}
+
 func TestService_GetToolInputDisplay(t *testing.T) {
 	svc := NewService(nil, nil)
 
@@ -110,7 +135,7 @@ func TestService_GetToolInputDisplay(t *testing.T) {
 
 func TestService_GetTools(t *testing.T) {
 	svc := NewService(nil, nil)
-	svc.cfg = &config.AIConfig{Enabled: true}
+	svc.cfg = &config.AIConfig{Enabled: true, ControlLevel: config.ControlLevelControlled}
 
 	tools := svc.getTools()
 	if len(tools) == 0 {
@@ -132,6 +157,7 @@ func TestService_GetTools(t *testing.T) {
 
 func TestService_GetToolsUsesSharedLegacyUtilitySchemas(t *testing.T) {
 	svc := NewService(nil, nil)
+	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelControlled}
 	tools := svc.getTools()
 	byName := map[string]providers.Tool{}
 	for _, tool := range tools {
@@ -139,6 +165,12 @@ func TestService_GetToolsUsesSharedLegacyUtilitySchemas(t *testing.T) {
 	}
 
 	for _, shared := range agentcapabilities.LegacyAssistantUtilityProviderTools() {
+		if shared.Name == agentcapabilities.LegacyAssistantSetResourceURLToolName {
+			if _, ok := byName[shared.Name]; ok {
+				t.Fatalf("legacy Assistant projection exposed Pulse-state mutation %s", shared.Name)
+			}
+			continue
+		}
 		assistantTool, ok := byName[shared.Name]
 		if !ok {
 			t.Fatalf("legacy Assistant tools missing %s", shared.Name)
@@ -163,8 +195,9 @@ func TestService_GetToolsUsesSharedLegacyUtilitySchemas(t *testing.T) {
 	}
 }
 
-func TestService_GetToolsUsesManifestFindingLifecycleSchemas(t *testing.T) {
+func TestService_GetToolsExcludesFindingLifecycleMutations(t *testing.T) {
 	svc := NewService(nil, nil)
+	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelControlled}
 	tools := svc.getTools()
 	byName := map[string]providers.Tool{}
 	for _, tool := range tools {
@@ -175,25 +208,9 @@ func TestService_GetToolsUsesManifestFindingLifecycleSchemas(t *testing.T) {
 		agentcapabilities.ResolveFindingCapabilityName,
 		agentcapabilities.DismissFindingCapabilityName,
 	} {
-		assistantTool, ok := byName[name]
-		if !ok {
-			t.Fatalf("legacy Assistant tools missing %s", name)
+		if _, ok := byName[name]; ok {
+			t.Fatalf("legacy Assistant projection exposed finding lifecycle mutation %s", name)
 		}
-		capability, ok := agentcapabilities.FindCapability(agentcapabilities.CanonicalManifest().Capabilities, name)
-		if !ok {
-			t.Fatalf("canonical manifest missing %s", name)
-		}
-		manifestSchema := agentcapabilities.ProviderInputSchemaFromRaw(agentcapabilities.ToolInputSchema(capability))
-		if !providerSchemaRequiredEqual(assistantTool.InputSchema, manifestSchema) {
-			t.Fatalf("%s Assistant provider schema required = %#v, want manifest required %#v",
-				name, assistantTool.InputSchema["required"], manifestSchema["required"])
-		}
-	}
-	if providerSchemaRequiredContains(byName[agentcapabilities.ResolveFindingCapabilityName].InputSchema, agentcapabilities.ResolutionNoteArgumentName) {
-		t.Fatalf("%s must not require optional %s", agentcapabilities.ResolveFindingCapabilityName, agentcapabilities.ResolutionNoteArgumentName)
-	}
-	if providerSchemaRequiredContains(byName[agentcapabilities.DismissFindingCapabilityName].InputSchema, agentcapabilities.NoteArgumentName) {
-		t.Fatalf("%s must not require optional note", agentcapabilities.DismissFindingCapabilityName)
 	}
 }
 
@@ -804,6 +821,7 @@ func TestService_ExecuteTool_RunCommand(t *testing.T) {
 		},
 	}
 	svc := NewService(nil, mockAgentServer)
+	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelControlled}
 
 	// Mock policy
 	mockPolicy := &mockPolicy{
@@ -841,7 +859,7 @@ func TestService_ExecuteTool_RunCommand(t *testing.T) {
 
 	// 3. Approval required (non-autonomous)
 	mockPolicy.decision = agentexec.PolicyRequireApproval
-	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelReadOnly}
+	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelControlled}
 	result, exec = svc.executeTool(ctx, req, tc)
 	if !exec.Success {
 		t.Errorf("Expected success (not an error to need approval), got: %s", result)
@@ -877,7 +895,7 @@ func TestService_ExecuteTool_RunCommand(t *testing.T) {
 	}
 }
 
-func TestService_ExecuteTool_SetResourceURL(t *testing.T) {
+func TestService_ExecuteTool_SetResourceURLBlockedBeforeStore(t *testing.T) {
 	svc := NewService(nil, nil)
 
 	// Mock metadata provider
@@ -897,11 +915,11 @@ func TestService_ExecuteTool_SetResourceURL(t *testing.T) {
 	req := ExecuteRequest{}
 
 	result, exec := svc.executeTool(ctx, req, tc)
-	if !exec.Success {
-		t.Errorf("Expected success, got failure: %s", result)
+	if exec.Success || !strings.Contains(result, "Invocation blocked") {
+		t.Fatalf("expected direct metadata mutation to be blocked, got success=%v result=%q", exec.Success, result)
 	}
-	if mockMeta.lastGuestID != "instance-101" || mockMeta.lastGuestURL != "http://example.com:8080" {
-		t.Errorf("Metadata provider not called correctly: %+v", mockMeta)
+	if mockMeta.lastGuestID != "" || mockMeta.lastGuestURL != "" {
+		t.Fatalf("metadata provider was called despite policy block: %+v", mockMeta)
 	}
 }
 
@@ -1120,7 +1138,7 @@ func TestService_TestConnection_Extended(t *testing.T) {
 
 }
 
-func TestService_ExecuteTool_ResolveFinding(t *testing.T) {
+func TestService_ExecuteTool_ResolveFindingBlockedBeforeStore(t *testing.T) {
 	tmpDir := t.TempDir()
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, nil)
@@ -1157,65 +1175,15 @@ func TestService_ExecuteTool_ResolveFinding(t *testing.T) {
 	}
 
 	result, exec := svc.executeTool(ctx, req, tc)
-	if !exec.Success {
-		t.Errorf("Expected success, got failure: %s", result)
+	if exec.Success || !strings.Contains(result, "Invocation blocked") {
+		t.Fatalf("expected direct finding resolution to be blocked, got success=%v result=%q", exec.Success, result)
 	}
-	if !strings.Contains(result, "Finding resolved!") {
-		t.Errorf("Expected 'Finding resolved!' in result, got: %s", result)
-	}
-
-	// 2. Missing finding_id (should use from request context)
-	req2 := ExecuteRequest{FindingID: "test-finding-1"}
-	tc2 := providers.ToolCall{
-		Name: agentcapabilities.ResolveFindingCapabilityName,
-		Input: map[string]interface{}{
-			agentcapabilities.ResolutionNoteArgumentName: "Fixed it",
-		},
-	}
-	_, exec2 := svc.executeTool(ctx, req2, tc2)
-	// Finding already resolved, so this will fail
-	if exec2.Success {
-		t.Error("Expected failure for already resolved finding")
-	}
-
-	// 3. Missing resolution_note is allowed by the shared Pulse Intelligence manifest
-	findingWithoutNote := &Finding{
-		ID:           "new-finding",
-		Severity:     FindingSeverityWarning,
-		ResourceID:   "vm-101",
-		ResourceName: "test-vm-2",
-		Title:        "Recovered CPU",
-	}
-	patrol.GetFindings().Add(findingWithoutNote)
-	tc3 := providers.ToolCall{
-		Name: agentcapabilities.ResolveFindingCapabilityName,
-		Input: map[string]interface{}{
-			agentcapabilities.FindingIDArgumentName: "new-finding",
-		},
-	}
-	result3, exec3 := svc.executeTool(ctx, ExecuteRequest{}, tc3)
-	if !exec3.Success {
-		t.Errorf("Expected success without resolution_note, got failure: %s", result3)
-	}
-	if strings.Contains(result3, "resolution_note is required") {
-		t.Errorf("Unexpected resolution_note error: %s", result3)
-	}
-
-	// 4. Missing both
-	tc4 := providers.ToolCall{
-		Name:  agentcapabilities.ResolveFindingCapabilityName,
-		Input: map[string]interface{}{},
-	}
-	result4, exec4 := svc.executeTool(ctx, ExecuteRequest{}, tc4)
-	if exec4.Success {
-		t.Error("Expected failure for missing finding_id")
-	}
-	if !strings.Contains(result4, "finding_id is required") {
-		t.Errorf("Expected finding_id error, got: %s", result4)
+	if got := patrol.GetFindings().Get("test-finding-1"); got == nil || got.ResolvedAt != nil {
+		t.Fatalf("finding store changed despite policy block: %+v", got)
 	}
 }
 
-func TestService_ExecuteTool_SetResourceURL_EdgeCases(t *testing.T) {
+func TestService_ExecuteTool_SetResourceURLFailsClosedBeforeValidation(t *testing.T) {
 	svc := NewService(nil, nil)
 	mockMeta := &mockMetadataProvider{}
 	svc.metadataProvider = mockMeta
@@ -1234,41 +1202,11 @@ func TestService_ExecuteTool_SetResourceURL_EdgeCases(t *testing.T) {
 	if exec.Success {
 		t.Error("Expected failure for missing resource_type")
 	}
-	if !strings.Contains(result, "resource_type is required") {
-		t.Errorf("Expected resource_type error, got: %s", result)
+	if !strings.Contains(result, "Invocation blocked") {
+		t.Errorf("expected policy block before argument validation, got: %s", result)
 	}
-
-	// 2. Missing resource_id but present in request context
-	tc2 := providers.ToolCall{
-		Name: "set_resource_url",
-		Input: map[string]interface{}{
-			"resource_type": "vm",
-			"url":           "http://example.com:8080",
-		},
-	}
-	req := ExecuteRequest{TargetID: "vm-from-context"}
-	result2, exec2 := svc.executeTool(ctx, req, tc2)
-	if !exec2.Success {
-		t.Errorf("Expected success when resource_id from context, got: %s", result2)
-	}
-	if mockMeta.lastGuestID != "vm-from-context" {
-		t.Errorf("Expected resource_id from context, got: %s", mockMeta.lastGuestID)
-	}
-
-	// 3. Missing resource_id completely
-	tc3 := providers.ToolCall{
-		Name: "set_resource_url",
-		Input: map[string]interface{}{
-			"resource_type": "vm",
-			"url":           "http://example.com",
-		},
-	}
-	result3, exec3 := svc.executeTool(ctx, ExecuteRequest{}, tc3)
-	if exec3.Success {
-		t.Error("Expected failure for missing resource_id")
-	}
-	if !strings.Contains(result3, "resource_id is required") {
-		t.Errorf("Expected resource_id error, got: %s", result3)
+	if mockMeta.lastGuestID != "" || mockMeta.lastGuestURL != "" {
+		t.Fatalf("metadata provider was called despite policy block: %+v", mockMeta)
 	}
 }
 
@@ -1286,8 +1224,8 @@ func TestService_ExecuteTool_UnknownTool(t *testing.T) {
 	if exec.Success {
 		t.Error("Expected failure for unknown tool")
 	}
-	if !strings.Contains(result, "Unknown tool") {
-		t.Errorf("Expected 'Unknown tool' error, got: %s", result)
+	if !strings.Contains(result, "Invocation blocked") {
+		t.Errorf("expected unknown alias to fail closed, got: %s", result)
 	}
 }
 
@@ -1319,6 +1257,7 @@ func TestService_ExecuteTool_RunCommand_WithTargetHost(t *testing.T) {
 		agents: []agentexec.ConnectedAgent{mockAgent},
 	}
 	svc := NewService(nil, mockServer)
+	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelControlled}
 	svc.policy = &mockPolicy{decision: agentexec.PolicyAllow}
 	canonicalStore := unifiedresources.NewMemoryStore()
 	svc.resourceExportStore = canonicalStore
@@ -2171,18 +2110,15 @@ func TestService_ExecuteStream_PolicyBlock(t *testing.T) {
 	}
 }
 
-func TestService_ExecuteStream_ResultTruncation(t *testing.T) {
+func TestService_ExecuteStream_AutonomousRawCommandRequiresApproval(t *testing.T) {
 	tmpDir := t.TempDir()
 	persistence := config.NewConfigPersistence(tmpDir)
+	dispatches := 0
 	svc := NewService(persistence, &mockAgentServer{
-		agents: []agentexec.ConnectedAgent{
-			{AgentID: "agent-1", Hostname: "agent-1"},
-		},
-		executeFunc: func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
-			return &agentexec.CommandResultPayload{
-				Success: true,
-				Stdout:  strings.Repeat("long output ", 1000),
-			}, nil
+		agents: []agentexec.ConnectedAgent{{AgentID: "agent-1", Hostname: "agent-1"}},
+		executeFunc: func(context.Context, string, agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+			dispatches++
+			return &agentexec.CommandResultPayload{Success: true}, nil
 		},
 	})
 	svc.cfg = &config.AIConfig{Enabled: true, ControlLevel: config.ControlLevelAutonomous, Model: "anthropic:test"}
@@ -2191,35 +2127,33 @@ func TestService_ExecuteStream_ResultTruncation(t *testing.T) {
 	mock := &mockProvider{
 		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
 			iteration++
-			if iteration == 1 {
-				return &providers.ChatResponse{
-					ToolCalls: []providers.ToolCall{
-						{ID: "call-1", Name: "run_command", Input: map[string]interface{}{"command": "large-cmd", "target_host": "agent-1"}},
-					},
-					StopReason: "tool_use",
-				}, nil
-			}
-			// Check if the previous tool result was truncated in the request messages
-			for _, msg := range req.Messages {
-				if msg.Role == "user" && msg.ToolResult != nil {
-					if strings.Contains(msg.ToolResult.Content, "[TRUNCATED: 4000 characters cut.") &&
-						!strings.Contains(msg.ToolResult.Content, "bytes omitted") {
-						return &providers.ChatResponse{Content: "Verified truncation", StopReason: "end_turn"}, nil
-					}
-				}
-			}
-			return &providers.ChatResponse{Content: "Not truncated", StopReason: "end_turn"}, nil
+			return &providers.ChatResponse{
+				ToolCalls: []providers.ToolCall{{ID: "call-1", Name: "run_command", Input: map[string]interface{}{
+					"command": "touch /tmp/autonomous-raw-command", "target_host": "agent-1",
+				}}},
+				StopReason: "tool_use",
+			}, nil
 		},
 	}
 	svc.provider = mock
 
-	resp, err := svc.ExecuteStream(context.Background(), ExecuteRequest{TargetType: "agent"}, func(StreamEvent) {})
+	approvalEvents := 0
+	_, err := svc.ExecuteStream(context.Background(), ExecuteRequest{TargetType: "agent"}, func(event StreamEvent) {
+		if event.Type == "approval_needed" {
+			approvalEvents++
+		}
+	})
 	if err != nil {
 		t.Fatalf("ExecuteStream failed: %v", err)
 	}
-
-	if resp.Content != "Verified truncation" {
-		t.Errorf("Expected 'Verified truncation', got %s", resp.Content)
+	if dispatches != 0 {
+		t.Fatalf("agent dispatches = %d, want 0", dispatches)
+	}
+	if iteration != 1 {
+		t.Fatalf("provider iterations = %d, want 1", iteration)
+	}
+	if approvalEvents != 1 {
+		t.Fatalf("approval events = %d, want 1", approvalEvents)
 	}
 }
 
@@ -3248,7 +3182,7 @@ func TestService_FindingContextCommandRouting(t *testing.T) {
 	tmpDir := t.TempDir()
 	persistence := config.NewConfigPersistence(tmpDir)
 	svc := NewService(persistence, mockAgentServer)
-	svc.cfg = &config.AIConfig{Enabled: true}
+	svc.cfg = &config.AIConfig{Enabled: true, ControlLevel: config.ControlLevelControlled}
 	svc.limits = executionLimits{
 		chatSlots:   make(chan struct{}, 10),
 		patrolSlots: make(chan struct{}, 10),

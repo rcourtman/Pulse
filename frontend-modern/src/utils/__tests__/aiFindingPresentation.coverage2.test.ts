@@ -644,12 +644,12 @@ describe('getFindingPatrolWorkflowPresentation', () => {
     expect(result?.stage).toBe('recorded');
   });
 
-  it('returns the approval stage with "Review fix" for fix_queued without a live approval', () => {
+  it('returns the approval stage with "Recover action" for fix_queued without a live approval', () => {
     const result = getFindingPatrolWorkflowPresentation(
       makeFinding({ id: 'f1', source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationOutcome: 'fix_queued' }),
     );
     expect(result?.stage).toBe('approval');
-    expect(result?.label).toBe('Review fix');
+    expect(result?.label).toBe('Recover action');
   });
 
   it('returns the verification stage for fix_executed', () => {
@@ -740,7 +740,7 @@ describe('getPatrolFindingVerificationSummary (via getPatrolFindingRowScaffold)'
 
   it('reports waiting-for-approval for fix_queued', () => {
     expect(verificationValue({ investigationOutcome: 'fix_queued' })).toBe(
-      'Waiting for approval before any fix runs.',
+      'Waiting for the governed action record before any change runs.',
     );
   });
 
@@ -853,15 +853,15 @@ describe('getPatrolFindingWorkflowSummary (via getPatrolFindingRowScaffold)', ()
     expect(
       workflowValue({ id: 'f1' }, [liveApproval('f1')]),
     ).toBe(
-      'Review evidence first; no change runs until the proposed fix is approved, then Patrol verifies the outcome.',
+      'Review evidence first; no change runs until the typed action is approved, then Patrol verifies the outcome.',
     );
   });
 
-  it('returns the recover-queued-fix message for fix_queued without a live approval (Review fix stage)', () => {
+  it('returns the recover-queued-fix message for fix_queued without a live approval (Recover action stage)', () => {
     expect(
       workflowValue({ investigationOutcome: 'fix_queued' }),
     ).toBe(
-      'Recover the queued fix before any action can run, then verify the outcome after a decision.',
+      'Recover the queued action before any change can run, then verify the outcome after a decision.',
     );
   });
 

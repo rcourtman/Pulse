@@ -52,6 +52,8 @@ func TestRelayMobileRuntimeRouteInventory(t *testing.T) {
 		"POST /api/ai/approvals/{approval_id}/approve => ai:execute",
 		"POST /api/ai/approvals/{approval_id}/deny => ai:execute",
 		"GET /api/actions/pending => ai:execute",
+		"GET /api/actions => ai:execute",
+		"GET /api/actions/{action_id} => ai:execute",
 		"POST /api/actions/{action_id}/decision => ai:execute",
 		"POST /api/actions/{action_id}/execute => ai:execute",
 		"POST /api/ai/chat => ai:chat",

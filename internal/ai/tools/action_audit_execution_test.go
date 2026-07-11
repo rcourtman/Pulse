@@ -568,7 +568,7 @@ func TestExecuteCommandWithAuditRefusesPayloadDriftAgainstApprovedPlan(t *testin
 	// WARN logs. Operators reviewing the action audit trail need to see
 	// "Pulse caught this drift attempt" recorded as a Failed action with
 	// a plan_drift error message.
-	audits, err := actionStore.GetActionAudits("agent-1", time.Time{}, 10)
+	audits, err := actionStore.GetActionAudits("agent:agent-1", time.Time{}, 10)
 	if err != nil {
 		t.Fatalf("GetActionAudits: %v", err)
 	}
@@ -1251,7 +1251,7 @@ func TestExecuteCommandWithAuditRefusesWhenResourceIsRemediationLocked(t *testin
 	// Refusal must be observable in the audit history with the canonical
 	// `resource_remediation_locked:` ErrorMessage prefix so audit-UI
 	// filters and alert rules can branch on the stable token.
-	audits, err := actionStore.GetActionAudits("agent-locked", time.Time{}, 10)
+	audits, err := actionStore.GetActionAudits("agent:agent-locked", time.Time{}, 10)
 	if err != nil {
 		t.Fatalf("GetActionAudits: %v", err)
 	}

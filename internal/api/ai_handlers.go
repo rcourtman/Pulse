@@ -65,6 +65,7 @@ type AISettingsHandler struct {
 	resourceStoreProvider   func(orgID string) (unifiedresources.ResourceStore, error)
 	actionBrokerFactory     func(orgID string) aicontracts.OrchestratorActionBroker
 	proposalCatalogFactory  func(orgID string) tools.ProposalCatalog
+	policyMutation          func(func() error) error
 	metadataProvider        ai.MetadataProvider
 	patrolThresholdProvider ai.ThresholdProvider
 	metricsHistoryProvider  ai.MetricsHistoryProvider
@@ -133,6 +134,12 @@ func (h *AISettingsHandler) SetResourceStoreProvider(provider func(orgID string)
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.resourceStoreProvider = provider
+}
+
+func (h *AISettingsHandler) SetPolicyMutationCoordinator(coordinator func(func() error) error) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.policyMutation = coordinator
 }
 
 // SetActionBrokerFactory installs the per-org typed action proposal broker
@@ -4142,6 +4149,8 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	writeJSONError(w, http.StatusGone, agentcapabilities.AgentErrCodeRawCommandRetired, "Raw command execution is retired. Use an advertised typed resource action.")
+	return
 
 	// Require authentication
 	if !CheckAuth(h.getConfig(r.Context()), w, r) {
@@ -4199,9 +4208,16 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Approval request not found", http.StatusNotFound)
 		return
 	}
-	if _, err := store.ConsumeApproval(req.ApprovalID, req.Command, approvalTargetType, approvalTargetID); err != nil {
-		log.Error().Err(err).Str("approval_id", req.ApprovalID).Msg("Failed to consume approval")
-		http.Error(w, "Failed to consume approval", http.StatusConflict)
+	if approvalReq.Plan == nil || strings.TrimSpace(approvalReq.Plan.ActionID) == "" {
+		http.Error(w, "Approval authorization is incomplete", http.StatusConflict)
+		return
+	}
+	approvedHash := strings.TrimSpace(approvalReq.CommandHash)
+	if approvedHash == "" {
+		approvedHash = approval.ComputeCommandHash(approvalReq.Command, approvalReq.TargetType, approvalReq.TargetID)
+	}
+	if approvedHash != approval.ComputeCommandHash(req.Command, approvalTargetType, approvalTargetID) {
+		http.Error(w, "Approval command does not match", http.StatusConflict)
 		return
 	}
 
@@ -4226,6 +4242,8 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		RunOnHost:  req.RunOnHost,
 		VMID:       req.VMID,
 		TargetHost: strings.ToLower(strings.TrimSpace(req.TargetHost)),
+		OrgID:      orgID,
+		ActionID:   approvalReq.Plan.ActionID,
 	})
 
 	if err != nil {
@@ -5128,6 +5146,18 @@ func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService 
 		return summarizePatrolReadiness("", "", checks)
 	}
 	addCheck("service", patrolReadinessReady, ai.PatrolFailureCauseNone, "Patrol service", "Pulse Patrol service is available.", "")
+
+	if ai.IsDemoMode() {
+		// Demo/mock runtimes simulate Patrol's provider path end to end, so
+		// the provider-dependent checks report a simulated pass instead of
+		// steering visitors into provider setup.
+		addCheck("settings", patrolReadinessReady, ai.PatrolFailureCauseNone, "Settings persistence", "Demo mode uses the built-in demo dataset.", "")
+		addCheck("enabled", patrolReadinessReady, ai.PatrolFailureCauseNone, "Assistant enabled", "Demo mode simulates Pulse Assistant; no provider key is required.", "")
+		addCheck("provider", patrolReadinessReady, ai.PatrolFailureCauseNone, "Provider configured", "Demo mode uses the simulated demo provider.", "")
+		addCheck("model", patrolReadinessReady, ai.PatrolFailureCauseNone, "Patrol model", "Demo mode uses the simulated demo model.", "")
+		addCheck("tools", patrolReadinessReady, ai.PatrolFailureCauseNone, "Patrol tools", "Demo mode simulates Patrol's tool-backed analysis.", "")
+		return summarizePatrolReadiness(ai.DemoPatrolProvider, ai.DemoPatrolModel, checks)
+	}
 
 	cfg, err := h.loadAIConfig(ctx)
 	if err != nil || cfg == nil {
@@ -7633,17 +7663,28 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomyMonitorOnly(w http.Respons
 	// monitor-only save.
 	effectiveUnlocked := false
 
-	cfg.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
-	cfg.PatrolFullModeUnlocked = effectiveUnlocked
-	cfg.PatrolInvestigationBudget = req.InvestigationBudget
-	cfg.PatrolInvestigationTimeoutSec = req.InvestigationTimeoutSec
-
 	persistence := h.getPersistence(r.Context())
 	if persistence == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_configured", "Pulse Patrol not configured", nil)
 		return
 	}
-	if err := persistence.SaveAIConfig(*cfg); err != nil {
+	write := func() error {
+		cfg.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
+		cfg.PatrolFullModeUnlocked = effectiveUnlocked
+		cfg.PatrolInvestigationBudget = req.InvestigationBudget
+		cfg.PatrolInvestigationTimeoutSec = req.InvestigationTimeoutSec
+		return persistence.SaveAIConfig(*cfg)
+	}
+	h.stateMu.RLock()
+	coordinator := h.policyMutation
+	h.stateMu.RUnlock()
+	var saveErr error
+	if coordinator != nil {
+		saveErr = coordinator(write)
+	} else {
+		saveErr = write()
+	}
+	if saveErr != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save Pulse Patrol autonomy settings", nil)
 		return
 	}

@@ -631,11 +631,13 @@ func (r *Router) setupRoutes() {
 
 	// Agent execution server for AI tool use
 	r.agentExecServer = agentexec.NewServer(r.validateAgentExecToken)
+	r.agentExecServer.SetCommandAuthorizationVerifier(verifyAndConsumeCommandAuthorization)
 	if r.resourceHandlers != nil {
 		r.resourceHandlers.SetActionExecutor(newRoutedActionExecutor(
 			r.resourceHandlers,
 			newDockerContainerActionExecutor(r.resourceHandlers, r.agentExecServer),
 			newProxmoxGuestActionExecutor(r.resourceHandlers, r.agentExecServer),
+			newHostStorageCleanupActionExecutor(r.resourceHandlers, r.agentExecServer),
 			newHostUpdateActionExecutor(r.resourceHandlers, r.agentExecServer),
 		))
 	}
@@ -658,7 +660,16 @@ func (r *Router) setupRoutes() {
 	// AI settings endpoints
 	r.aiSettingsHandler = NewAISettingsHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
 	if r.resourceHandlers != nil {
+		r.resourceHandlers.SetActionEmergencyStopChecker(func(orgID string) (bool, error) {
+			orgCtx := context.WithValue(context.Background(), OrgIDContextKey, approval.NormalizeOrgID(orgID))
+			svc := r.aiSettingsHandler.GetAIService(orgCtx)
+			if svc == nil || svc.GetConfig() == nil {
+				return true, nil
+			}
+			return svc.GetConfig().PatrolActionEmergencyStop, nil
+		})
 		r.aiSettingsHandler.SetResourceStoreProvider(r.resourceHandlers.getStore)
+		r.aiSettingsHandler.SetPolicyMutationCoordinator(r.resourceHandlers.ActionLifecycle().WithPolicyMutation)
 		r.resourceHandlers.SetActionTransitionPublisher(r.aiSettingsHandler.ReconcilePatrolActionTransition)
 		resourceHandlers := r.resourceHandlers
 		r.aiSettingsHandler.SetActionBrokerFactory(func(orgID string) aicontracts.OrchestratorActionBroker {
@@ -675,6 +686,7 @@ func (r *Router) setupRoutes() {
 				return PatrolActionPolicySnapshot{
 					EffectiveAutonomyLevel: svc.GetEffectivePatrolAutonomyLevel(),
 					FullModeUnlocked:       cfg.PatrolFullModeUnlocked,
+					EmergencyStop:          cfg.PatrolActionEmergencyStop,
 				}, nil
 			})
 		})
@@ -1348,6 +1360,9 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 	}
 	if r.unifiedAgentHandlers != nil {
 		r.unifiedAgentHandlers.SetMonitor(m)
+	}
+	if r.kubernetesAgentHandlers != nil {
+		r.kubernetesAgentHandlers.SetMonitor(m)
 	}
 	if r.systemSettingsHandler != nil {
 		r.systemSettingsHandler.SetMonitor(m)
@@ -2731,6 +2746,13 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if r.resourceHandlers != nil {
+		if plannerConsumer, ok := service.(interface {
+			SetTypedActionPlanner(chat.AssistantTypedActionPlanner)
+		}); ok {
+			plannerConsumer.SetTypedActionPlanner(assistantTypedActionPlanner{resources: r.resourceHandlers})
+		}
 	}
 	orgID := strings.TrimSpace(GetOrgID(ctx))
 	if orgID == "" {

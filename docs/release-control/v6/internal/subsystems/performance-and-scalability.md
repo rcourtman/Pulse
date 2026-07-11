@@ -18,6 +18,12 @@
 Own measurable performance budgets, query-plan guarantees, and hot-path
 regression protection.
 
+Dispatch-time Patrol authorization uses one bounded policy snapshot and one
+storage CAS on the execution hot path. Policy writers serialize against that
+admission coordinator; the broker must not add policy-history scans, resource
+registry walks after admission, or network probes before the executor. Failed
+admission records a stable refusal without invoking executor or network code.
+
 ## Canonical Files
 
 1. `pkg/metrics/store.go`
@@ -218,6 +224,10 @@ regression protection.
    restore path must write the URL once with `replace` and must not force row
    filtering through a separate page-local state channel.
 4. Keep shared auth gating in `internal/api/router.go` cheap and local: pre-auth quick-setup and recovery routing may short-circuit on loopback/session/token checks, but they must not trigger chart, metrics, or broad persistence fan-out on the protected request hot path.
+   Agent command authorization is likewise a dispatch-time point lookup and
+   atomic approval consume, not a route-wide scan or request-hot-path fan-out;
+   grant signing and WebSocket writes happen only after that bounded verifier
+   succeeds.
    Scheduled-report background worker registration is allowed in router startup,
    but it must stay outside protected request handling. Due-schedule scans may
    enumerate tenant organization IDs and load each workspace schedule store, but
@@ -358,6 +368,13 @@ regression protection.
    must remain inside the selected action and agent command paths. Generic
    request admission must not probe agents, refresh package indexes, enumerate
    pending packages, or wait for update completion.
+   Package-cache cleanup follows the same rule: router construction may
+   register the typed executor once, while cache inspection, fingerprint
+   comparison, `apt-get clean`, and post-cleanup measurement remain agent/action
+   work. Generic request admission must not walk cache directories, inspect
+   mounts, or wait for cleanup; the agent scan is entry/byte bounded and the
+   unified-resource mount lookup is an in-memory pass over already-reported
+   disks.
    The Patrol action-broker and proposal-catalog factories are wired the same
    bounded way: `internal/api/router.go` installs the per-org factory closures
    on the AI settings handler once at startup, and each broker or catalog is
@@ -771,6 +788,13 @@ shell clickable behind another overlay.
    external network calls to protected settings or chat request paths.
 
 ## Current State
+
+### Canonical mutation-plane dependency
+
+Router wiring now exposes only typed action planning for model-originated
+infrastructure changes. The mutation registry audits run in governance CI and
+must remain bounded to static construction/catalog scans; they introduce no
+request-path enumeration or per-request registry traversal.
 
 The router's shared browser-cookie writer is request-local security policy. It
 must not add per-request persistence reads, network work, or background fan-out;

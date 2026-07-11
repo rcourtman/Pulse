@@ -4,6 +4,29 @@ export const powerShellQuote = (value: string) =>
 
 export const normalizeInstallerBaseUrl = (baseUrl: string) => baseUrl.replace(/\/+$/, '');
 
+export type AgentCommandPlatform = 'linux' | 'macos' | 'freebsd' | 'windows';
+
+// Legacy agents report gopsutil's host.Info().Platform verbatim — a
+// descriptive OS caption such as "microsoft windows 11 pro" — so matching
+// must tolerate captions, not just exact tokens (refs #1555). Mirrors the
+// backend's platformsupport.AgentCommandPlatform; unmatched values are Linux
+// distro names, for which the shell installer is correct.
+export const resolveAgentCommandPlatform = (platform?: string | null): AgentCommandPlatform => {
+  const normalized = platform?.trim().toLowerCase() ?? '';
+  if (normalized.includes('windows')) return 'windows';
+  if (
+    normalized === 'darwin' ||
+    normalized === 'mac' ||
+    normalized === 'macos' ||
+    normalized.includes('mac os') ||
+    normalized.includes('os x')
+  ) {
+    return 'macos';
+  }
+  if (normalized.includes('freebsd')) return 'freebsd';
+  return 'linux';
+};
+
 export const resolveInstallerBaseUrl = (customBaseUrl: string, fallbackBaseUrl: string) => {
   const normalizedCustomBaseUrl = normalizeInstallerBaseUrl(customBaseUrl.trim());
   if (normalizedCustomBaseUrl) {

@@ -1754,23 +1754,31 @@ func TestService_ExecuteStream_RequestAutonomousOverrideClampsToolExecutor(t *te
 
 	approvalRequiredMode := false
 	approvalSeen := false
+	retirementSeen := false
 	err = svc.ExecuteStream(ctx, ExecuteRequest{
-		SessionID:      "sess-request-override",
-		Prompt:         "check disk space",
-		AutonomousMode: &approvalRequiredMode,
-		MaxTurns:       2,
+		SessionID:           "sess-request-override",
+		Prompt:              "check disk space",
+		AutonomousMode:      &approvalRequiredMode,
+		HasExecuteAuthority: true,
+		MaxTurns:            2,
 	}, func(event StreamEvent) {
 		if event.Type == "approval_needed" {
 			approvalSeen = true
 			cancel()
 		}
+		if event.Type == "tool_end" {
+			retirementSeen = true
+		}
 	})
 
-	if err == nil || !strings.Contains(err.Error(), "context canceled") {
-		t.Fatalf("expected request to stop while waiting for approval, got %v", err)
+	if err != nil {
+		t.Fatalf("expected retired command call to return a tool denial, got %v", err)
 	}
-	if !approvalSeen {
-		t.Fatal("expected approval_needed event from request-local approval mode")
+	if approvalSeen {
+		t.Fatal("retired raw command must not create an approval")
+	}
+	if !retirementSeen {
+		t.Fatal("expected retired raw command result")
 	}
 	if got := agentServer.calls.Load(); got != 0 {
 		t.Fatalf("expected command not to execute before approval, got %d executions", got)

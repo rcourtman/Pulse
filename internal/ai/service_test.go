@@ -1174,6 +1174,7 @@ func TestService_RunCommand(t *testing.T) {
 
 func TestService_ExecuteTool(t *testing.T) {
 	svc := NewService(nil, nil)
+	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelControlled}
 	ctx := context.Background()
 	req := ExecuteRequest{Prompt: "test"}
 	tc := providers.ToolCall{

@@ -23,14 +23,14 @@ func (e *PulseToolExecutor) registerControlTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseControlToolName,
-			Description: `WRITE operations: control canonical resources that explicitly advertise shared Pulse actions (for example Proxmox guests and supported app-containers) or execute state-modifying commands. Some canonical resources are read-only and will reject pulse_control even when their type is vm or system-container. Read-only and Docker-only workflows are exposed through their own governed tools.`,
+			Description: `Plan one typed action for a canonical resource that explicitly advertises the requested capability. The plan is persisted on Pulse's shared action lifecycle; this tool never executes commands or contacts infrastructure directly.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"type": {
 						Type:        "string",
-						Description: "Control type: guest, resource, or command",
-						Enum:        []string{"guest", "resource", "command"},
+						Description: "Canonical control type. Only resource is supported.",
+						Enum:        []string{"resource"},
 					},
 					"guest_id": {
 						Type:        "string",
@@ -42,8 +42,8 @@ func (e *PulseToolExecutor) registerControlTools() {
 					},
 					"action": {
 						Type:        "string",
-						Description: "For guest/resource: start, stop, shutdown, restart, delete (availability depends on the resolved resource's shared action set)",
-						Enum:        []string{"start", "stop", "shutdown", "restart", "delete"},
+						Description: "Advertised resource capability name, such as start, stop, shutdown, reboot, or restart",
+						Enum:        []string{"start", "stop", "shutdown", "reboot", "restart"},
 					},
 					"command": {
 						Type:        "string",
@@ -73,7 +73,7 @@ func (e *PulseToolExecutor) registerControlTools() {
 			ActionMode:      ToolActionWrite,
 			ApprovalPolicy:  ToolApprovalActionPlan,
 			ApprovalSummary: "hidden in read-only mode; approval required in controlled mode",
-			Summary:         "Runs shared Pulse control actions; control only resources that explicitly support shared Pulse actions.",
+			Summary:         "Plans shared Pulse resource actions; approval and execution stay on the canonical action lifecycle.",
 		},
 	})
 }
@@ -82,14 +82,10 @@ func (e *PulseToolExecutor) registerControlTools() {
 func (e *PulseToolExecutor) executeControl(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	controlType, _ := args["type"].(string)
 	switch controlType {
-	case "guest":
-		return e.executeControlGuest(ctx, args)
 	case "resource":
 		return e.executeControlResource(ctx, args)
-	case "command":
-		return e.executeRunCommand(ctx, args)
 	default:
-		return NewErrorResult(fmt.Errorf("unknown type: %s. Use: guest, resource, command", controlType)), nil
+		return NewErrorResult(fmt.Errorf("control type %q is retired and denied; use type=resource with an advertised capability", controlType)), nil
 	}
 }
 
@@ -98,8 +94,6 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 	resourceRef = strings.TrimSpace(resourceRef)
 	action, _ := args["action"].(string)
 	action = strings.TrimSpace(action)
-	approvalID := agentcapabilities.ApprovalArgument(args)
-
 	if resourceRef == "" {
 		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
 	}
@@ -121,41 +115,34 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 		return NewErrorResult(errors.New(validation.ErrorMsg)), nil
 	}
 
-	resolved := validation.Resource
-	switch resolved.GetKind() {
-	case "vm", "system-container":
-		guestArgs := map[string]interface{}{
-			"guest_id": resolvedResourceControlIdentity(resolved, resourceRef),
-			"action":   action,
-		}
-		if force, ok := args["force"].(bool); ok {
-			guestArgs["force"] = force
-		}
-		if approvalID != "" {
-			agentcapabilities.WithApprovalArgument(guestArgs, approvalID)
-		}
-		return e.executeControlGuest(ctx, guestArgs)
-
-	case "app-container":
-		switch strings.ToLower(strings.TrimSpace(resolved.GetAdapter())) {
-		case "docker":
-			dockerArgs := map[string]interface{}{
-				"container": resolvedResourceControlIdentity(resolved, resourceRef),
-				"host":      strings.TrimSpace(resolved.GetTargetHost()),
-				"operation": action,
-			}
-			if approvalID != "" {
-				agentcapabilities.WithApprovalArgument(dockerArgs, approvalID)
-			}
-			return e.executeDockerControl(ctx, dockerArgs)
-		case "truenas":
-			return e.executeNativeAppContainerControl(ctx, resolved, action, approvalID)
-		default:
-			return NewErrorResult(fmt.Errorf("resource '%s' uses unsupported control adapter %q", resourceRef, resolved.GetAdapter())), nil
-		}
+	if e.typedActionPlanner == nil {
+		return NewErrorResult(fmt.Errorf("canonical action planning is unavailable")), nil
 	}
-
-	return NewErrorResult(fmt.Errorf("resource '%s' of kind %q is not controllable through pulse_control type=resource", resourceRef, resolved.GetKind())), nil
+	resourceID := unifiedresources.CanonicalResourceID(validation.Resource.GetResourceID())
+	if resourceID == "" {
+		return NewErrorResult(fmt.Errorf("resource %q has no canonical resource id", resourceRef)), nil
+	}
+	plan, err := e.typedActionPlanner.PlanTypedAction(ctx, e.orgID, unifiedresources.ActionRequest{
+		RequestID:      uuid.NewString(),
+		ResourceID:     resourceID,
+		CapabilityName: action,
+		Reason:         fmt.Sprintf("Assistant proposed %s for %s", action, resourceID),
+		RequestedBy:    "pulse_assistant",
+	})
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+	return NewJSONResult(map[string]interface{}{
+		"planned":           true,
+		"action_id":         plan.ActionID,
+		"resource_id":       resourceID,
+		"capability":        action,
+		"requires_approval": plan.RequiresApproval,
+		"approval_policy":   plan.ApprovalPolicy,
+		"plan_hash":         plan.PlanHash,
+		"expires_at":        plan.ExpiresAt,
+		"message":           "Typed action planned. Approval and execution remain on the canonical action lifecycle.",
+	}), nil
 }
 
 func (e *PulseToolExecutor) executeNativeAppContainerControl(ctx context.Context, resource ResolvedResourceInfo, action string, approvalID string) (CallToolResult, error) {
@@ -318,6 +305,10 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 	command, _ := args["command"].(string)
 	targetHost, _ := args["target_host"].(string)
 	approvalID := agentcapabilities.ApprovalArgument(args)
+	auditResourceID := strings.TrimSpace(targetHost)
+	if e.isAutonomous {
+		return NewErrorResult(fmt.Errorf("raw command execution is unavailable in autonomous model sessions; use a typed governed action proposal")), nil
+	}
 
 	if command == "" {
 		return NewErrorResult(fmt.Errorf("command is required")), nil
@@ -339,6 +330,9 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 				Str("command", command).
 				Str("validation_error", validation.ErrorMsg).
 				Msg("[Control] Target resource not in resolved context - may indicate model hallucination")
+		}
+		if validation.Resource != nil && strings.TrimSpace(validation.Resource.GetResourceID()) != "" {
+			auditResourceID = strings.TrimSpace(validation.Resource.GetResourceID())
 		}
 
 		// Validate routing context - block if targeting a host node when child resources exist
@@ -391,21 +385,15 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 	approvalTargetType, approvalTargetID, approvalTargetName := approvalTargetForCommand(targetHost, routing)
 
 	// Check if this is a pre-approved execution with command hash validation.
-	// This validates the approval matches this exact command+target and marks it as consumed.
+	// Final single-use consumption is owned by agentexec immediately before
+	// grant signing and WebSocket dispatch.
 	preApproved := consumeApprovalWithValidation(args, e.orgID, command, approvalTargetType, approvalTargetID)
 
-	// Skip approval checks if pre-approved or in autonomous mode.
-	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
+	if !preApproved && e.controlLevel == ControlLevelControlled {
 		approvalID := e.createApprovalRecord(command, approvalTargetType, approvalTargetID, approvalTargetName, "Control level requires approval")
 		return NewTextResult(formatApprovalNeeded(command, "Control level requires approval", approvalID)), nil
 	}
-	if e.isAutonomous {
-		log.Debug().
-			Str("command", command).
-			Bool("read_only", safety.IsReadOnlyCommand(command)).
-			Msg("Auto-approving command for autonomous investigation")
-	}
-	if !preApproved && decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
+	if !preApproved && decision == agentexec.PolicyRequireApproval {
 		approvalID := e.createApprovalRecord(command, approvalTargetType, approvalTargetID, approvalTargetName, "Security policy requires approval")
 		return NewTextResult(formatApprovalNeeded(command, "Security policy requires approval", approvalID)), nil
 	}
@@ -425,6 +413,9 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 		ctx,
 		"pulse_control",
 		func() string {
+			if auditResourceID != "" {
+				return auditResourceID
+			}
 			if targetHost != "" {
 				return targetHost
 			}
@@ -1832,9 +1823,10 @@ func isPreApproved(args map[string]interface{}) bool {
 	return false
 }
 
-// consumeApprovalWithValidation validates and consumes an approval for a specific command.
-// It verifies the command hash matches the approval and marks it as consumed (single-use).
-// Returns true if the approval is valid and was consumed, false otherwise.
+// consumeApprovalWithValidation validates that an approved, org-bound record
+// exists for this exact command and target. Final single-use consumption now
+// happens inside agentexec immediately before grant minting and WebSocket
+// dispatch, so no caller can turn a merely nonempty ID into authority.
 func consumeApprovalWithValidation(args map[string]interface{}, orgID, command, targetType, targetID string) bool {
 	approvalID := agentcapabilities.ApprovalArgument(args)
 	if approvalID == "" {
@@ -1861,12 +1853,21 @@ func consumeApprovalWithValidation(args map[string]interface{}, orgID, command, 
 		return false
 	}
 
-	_, err := store.ConsumeApproval(approvalID, command, targetType, targetID)
-	if err != nil {
-		log.Warn().Err(err).Str("approval_id", approvalID).Msg("failed to consume approval")
+	if req.Status != approval.StatusApproved || req.Consumed || time.Now().After(req.ExpiresAt) {
+		log.Warn().Str("approval_id", approvalID).Str("status", string(req.Status)).Bool("consumed", req.Consumed).Time("expires_at", req.ExpiresAt).Msg("approval is not dispatchable")
 		return false
 	}
-
+	actualHash := approval.ComputeCommandHash(command, targetType, targetID)
+	approvedHash := func() string {
+		if strings.TrimSpace(req.CommandHash) != "" {
+			return req.CommandHash
+		}
+		return approval.ComputeCommandHash(req.Command, req.TargetType, req.TargetID)
+	}()
+	if actualHash != approvedHash {
+		log.Warn().Str("approval_id", approvalID).Msg("approval command or target does not match dispatch")
+		return false
+	}
 	return true
 }
 

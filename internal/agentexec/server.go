@@ -55,21 +55,37 @@ const (
 
 var safeTargetIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 var hostUpdateInventoryHashPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+var hostStorageCleanupFingerprintPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 
 // Server manages WebSocket connections from agents
 type Server struct {
-	mu                 sync.RWMutex
-	agents             map[string]*agentConn                   // agentID -> connection
-	pendingReqs        map[string]chan CommandResultPayload    // scoped request key -> response channel
-	pendingHostUpdates map[string]chan HostUpdateResultPayload // scoped request key -> typed host-update response
-	deploySubs         map[string]chan DeployProgressPayload   // deploySubKey(agentID, jobID) -> progress subscriber
-	validateToken      func(token string, agentID string, hostname string) bool
-	commandPolicy      *CommandPolicy
-	ipConnCounts       map[string]int
-	maxConnsPerIP      int
-	shutdown           chan struct{}
-	shutdownOnce       sync.Once
-	pingInterval       time.Duration
+	mu                           sync.RWMutex
+	agents                       map[string]*agentConn                           // agentID -> connection
+	pendingReqs                  map[string]chan CommandResultPayload            // scoped request key -> response channel
+	pendingHostStorageCleanups   map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
+	pendingHostUpdates           map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
+	deploySubs                   map[string]chan DeployProgressPayload           // deploySubKey(agentID, jobID) -> progress subscriber
+	validateToken                func(token string, agentID string, hostname string) bool
+	commandPolicy                *CommandPolicy
+	ipConnCounts                 map[string]int
+	maxConnsPerIP                int
+	shutdown                     chan struct{}
+	shutdownOnce                 sync.Once
+	pingInterval                 time.Duration
+	commandAuthorizationVerifier func(CommandAuthorizationRequest) error
+	newCommandApprovalGrant      func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error)
+}
+
+// CommandAuthorizationRequest is the complete server-side approval scope
+// verified and consumed immediately before an approval grant is signed.
+type CommandAuthorizationRequest struct {
+	ApprovalID string
+	OrgID      string
+	ActionID   string
+	AgentID    string
+	Command    string
+	TargetType string
+	TargetID   string
 }
 
 type agentConn struct {
@@ -108,17 +124,28 @@ func NewServer(validateToken func(token string, agentID string, hostname string)
 	}
 
 	return &Server{
-		agents:             make(map[string]*agentConn),
-		pendingReqs:        make(map[string]chan CommandResultPayload),
-		pendingHostUpdates: make(map[string]chan HostUpdateResultPayload),
-		deploySubs:         make(map[string]chan DeployProgressPayload),
-		validateToken:      validateToken,
-		commandPolicy:      DefaultPolicy(),
-		ipConnCounts:       make(map[string]int),
-		maxConnsPerIP:      defaultMaxWebSocketConnectionsPerIP,
-		shutdown:           make(chan struct{}),
-		pingInterval:       defaultPingInterval,
+		agents:                     make(map[string]*agentConn),
+		pendingReqs:                make(map[string]chan CommandResultPayload),
+		pendingHostStorageCleanups: make(map[string]chan HostStorageCleanupResultPayload),
+		pendingHostUpdates:         make(map[string]chan HostUpdateResultPayload),
+		deploySubs:                 make(map[string]chan DeployProgressPayload),
+		validateToken:              validateToken,
+		commandPolicy:              DefaultPolicy(),
+		ipConnCounts:               make(map[string]int),
+		maxConnsPerIP:              defaultMaxWebSocketConnectionsPerIP,
+		shutdown:                   make(chan struct{}),
+		pingInterval:               defaultPingInterval,
+		newCommandApprovalGrant:    NewCommandApprovalGrant,
 	}
+}
+
+// SetCommandAuthorizationVerifier installs the server-owned authorization
+// consumer used for approval-gated arbitrary commands.
+func (s *Server) SetCommandAuthorizationVerifier(verifier func(CommandAuthorizationRequest) error) {
+	if s == nil {
+		return
+	}
+	s.commandAuthorizationVerifier = verifier
 }
 
 func (s *Server) isShuttingDown() bool {
@@ -212,6 +239,12 @@ func (s *Server) authorizeCommandPayload(cmd ExecuteCommandPayload) error {
 		}
 		if cmd.ApprovalID == "" {
 			return fmt.Errorf("command requires approval")
+		}
+		if cmd.authorization == nil || strings.TrimSpace(cmd.authorization.ActionID) == "" {
+			return fmt.Errorf("command requires server-owned approval authorization")
+		}
+		if s.commandAuthorizationVerifier == nil {
+			return fmt.Errorf("command approval authorization verifier is unavailable")
 		}
 	}
 
@@ -320,6 +353,73 @@ func validateHostUpdateResultPayload(result *HostUpdateResultPayload) error {
 	}
 	if len(result.Error) > 1024 {
 		return fmt.Errorf("host update error exceeds bounded limit")
+	}
+	return nil
+}
+
+func validateHostStorageCleanupPayload(req *HostStorageCleanupPayload) error {
+	if req == nil {
+		return fmt.Errorf("host storage cleanup payload is required")
+	}
+	req.RequestID = strings.TrimSpace(req.RequestID)
+	req.ActionID = strings.TrimSpace(req.ActionID)
+	req.Operation = strings.TrimSpace(req.Operation)
+	req.ExpectedFingerprint = strings.TrimSpace(req.ExpectedFingerprint)
+	if req.RequestID == "" || len(req.RequestID) > maxRequestIDLength {
+		return fmt.Errorf("invalid request id")
+	}
+	if req.ActionID == "" || len(req.ActionID) > maxRequestIDLength {
+		return fmt.Errorf("invalid action id")
+	}
+	if req.Operation != HostStorageCleanupOperationPackageCache {
+		return fmt.Errorf("unsupported host storage cleanup operation %q", req.Operation)
+	}
+	if !hostStorageCleanupFingerprintPattern.MatchString(req.ExpectedFingerprint) {
+		return fmt.Errorf("expected cleanup fingerprint is required and must be sha256")
+	}
+	if req.Timeout < 0 || req.Timeout > 900 {
+		return fmt.Errorf("host storage cleanup timeout must be between 0 and 900 seconds")
+	}
+	if req.Timeout == 0 {
+		req.Timeout = 300
+	}
+	return nil
+}
+
+func validateHostStorageCleanupResultPayload(result *HostStorageCleanupResultPayload) error {
+	if result == nil {
+		return fmt.Errorf("host storage cleanup result is required")
+	}
+	result.RequestID = strings.TrimSpace(result.RequestID)
+	result.Verification = strings.TrimSpace(result.Verification)
+	if result.RequestID == "" || len(result.RequestID) > maxRequestIDLength {
+		return fmt.Errorf("invalid request id")
+	}
+	if result.Before.ReclaimableBytes < 0 || result.After.ReclaimableBytes < 0 || result.ReclaimedBytes < 0 {
+		return fmt.Errorf("storage cleanup byte counts cannot be negative")
+	}
+	if result.Before.ReclaimableBytes > HostStorageCleanupMaxReportedBytes || result.After.ReclaimableBytes > HostStorageCleanupMaxReportedBytes || result.ReclaimedBytes > HostStorageCleanupMaxReportedBytes {
+		return fmt.Errorf("storage cleanup byte counts exceed bounded limit")
+	}
+	for _, fingerprint := range []string{result.Before.Fingerprint, result.After.Fingerprint} {
+		if fingerprint != "" && !hostStorageCleanupFingerprintPattern.MatchString(fingerprint) {
+			return fmt.Errorf("invalid storage cleanup fingerprint")
+		}
+	}
+	switch result.Verification {
+	case HostStorageCleanupVerificationVerified:
+		if !result.Success || !result.After.Supported || result.After.Provider != "apt-package-cache" || result.After.Error != "" || result.After.Fingerprint == "" {
+			return fmt.Errorf("verified storage cleanup lacks a valid postcondition")
+		}
+		if result.Before.ReclaimableBytes <= 0 || result.ReclaimedBytes <= 0 || result.After.ReclaimableBytes >= result.Before.ReclaimableBytes || result.ReclaimedBytes != result.Before.ReclaimableBytes-result.After.ReclaimableBytes {
+			return fmt.Errorf("verified storage cleanup did not reclaim reported bytes")
+		}
+	case HostStorageCleanupVerificationFailed, HostStorageCleanupVerificationInconclusive:
+	default:
+		return fmt.Errorf("unsupported host storage cleanup verification %q", result.Verification)
+	}
+	if len(result.Error) > 1024 {
+		return fmt.Errorf("host storage cleanup error exceeds bounded limit")
 	}
 	return nil
 }
@@ -757,6 +857,36 @@ func (s *Server) readLoop(ac *agentConn) {
 				}
 			}
 
+		case MsgTypeHostStorageCleanupResult:
+			var result HostStorageCleanupResultPayload
+			if err := msg.DecodePayload(&result); err != nil {
+				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to parse host storage cleanup result")
+				continue
+			}
+			requestID := strings.TrimSpace(result.RequestID)
+			if requestID == "" || len(requestID) > maxRequestIDLength {
+				log.Warn().Str("agent_id", ac.agent.AgentID).Msg("Dropping host storage cleanup result with invalid request id")
+				continue
+			}
+			if err := validateHostStorageCleanupResultPayload(&result); err != nil {
+				log.Warn().Err(err).Str("agent_id", ac.agent.AgentID).Str("request_id", requestID).Msg("Replacing invalid host storage cleanup result with a safe failure")
+				result = HostStorageCleanupResultPayload{
+					RequestID:    requestID,
+					Verification: HostStorageCleanupVerificationInconclusive,
+					Error:        "agent returned invalid host storage cleanup evidence",
+				}
+			}
+			s.mu.RLock()
+			ch, ok := s.pendingHostStorageCleanups[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
+			s.mu.RUnlock()
+			if ok {
+				select {
+				case ch <- result:
+				default:
+					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Host storage cleanup result channel full, dropping")
+				}
+			}
+
 		case MsgTypeDeployProgress:
 			var progress DeployProgressPayload
 			if err := msg.DecodePayload(&progress); err != nil {
@@ -967,8 +1097,27 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	if err := s.authorizeCommandPayload(cmd); err != nil {
 		return nil, err
 	}
-	if !cmd.Trusted && s.commandPolicy != nil && s.commandPolicy.Evaluate(cmd.Command) == PolicyRequireApproval && cmd.ApprovalGrant == nil && len(ac.approvalGrantKey) > 0 {
-		grant, grantErr := NewCommandApprovalGrant(ac.approvalGrantKey, agentID, cmd, time.Now(), DefaultApprovalGrantTTL)
+	requiresApproval := !cmd.Trusted && s.commandPolicy != nil && s.commandPolicy.Evaluate(cmd.Command) == PolicyRequireApproval
+	if requiresApproval {
+		if len(ac.approvalGrantKey) == 0 {
+			return nil, fmt.Errorf("command approval grant signer is unavailable")
+		}
+		auth := cmd.authorization
+		if err := s.commandAuthorizationVerifier(CommandAuthorizationRequest{
+			ApprovalID: cmd.ApprovalID,
+			OrgID:      auth.OrgID,
+			ActionID:   auth.ActionID,
+			AgentID:    agentID,
+			Command:    cmd.Command,
+			TargetType: cmd.TargetType,
+			TargetID:   cmd.TargetID,
+		}); err != nil {
+			return nil, fmt.Errorf("command approval authorization rejected: %w", err)
+		}
+
+		// Approval grants are an internal transport credential. Never accept a
+		// caller-supplied grant, even if it happens to be structurally valid.
+		grant, grantErr := s.newCommandApprovalGrant(ac.approvalGrantKey, agentID, cmd, time.Now(), DefaultApprovalGrantTTL)
 		if grantErr != nil {
 			return nil, fmt.Errorf("failed to issue approval grant: %w", grantErr)
 		}
@@ -1112,6 +1261,71 @@ func (s *Server) ExecuteHostUpdate(ctx context.Context, agentID string, req Host
 		return &result, nil
 	case <-timer.C:
 		return nil, fmt.Errorf("host update timed out after %s", time.Duration(req.Timeout)*time.Second)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-s.shutdown:
+		return nil, errServerShuttingDown
+	}
+}
+
+// ExecuteHostStorageCleanup dispatches the closed package-cache cleanup
+// operation. No command text, path, package selector, or removal policy crosses
+// the server/agent boundary.
+func (s *Server) ExecuteHostStorageCleanup(ctx context.Context, agentID string, req HostStorageCleanupPayload) (*HostStorageCleanupResultPayload, error) {
+	if s == nil {
+		return nil, fmt.Errorf("agent execution server is unavailable")
+	}
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, fmt.Errorf("agent id is required")
+	}
+	if strings.TrimSpace(req.RequestID) == "" {
+		req.RequestID = uuid.New().String()
+	}
+	if err := validateHostStorageCleanupPayload(&req); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	ac, ok := s.agents[agentID]
+	s.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("agent %s not connected", agentID)
+	}
+
+	respCh := make(chan HostStorageCleanupResultPayload, 1)
+	reqKey := pendingRequestKey(agentID, req.RequestID)
+	s.mu.Lock()
+	if _, exists := s.pendingHostStorageCleanups[reqKey]; exists {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("host storage cleanup request %q is already pending", req.RequestID)
+	}
+	s.pendingHostStorageCleanups[reqKey] = respCh
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.pendingHostStorageCleanups, reqKey)
+		s.mu.Unlock()
+	}()
+
+	msg, err := NewMessage(MsgTypeHostStorageCleanup, req.RequestID, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode host storage cleanup request: %w", err)
+	}
+	ac.writeMu.Lock()
+	err = s.sendMessage(ac.conn, msg)
+	ac.writeMu.Unlock()
+	if err != nil {
+		return nil, fmt.Errorf("failed to send host storage cleanup request: %w", err)
+	}
+
+	timer := time.NewTimer(time.Duration(req.Timeout) * time.Second)
+	defer timer.Stop()
+	select {
+	case result := <-respCh:
+		return &result, nil
+	case <-timer.C:
+		return nil, fmt.Errorf("host storage cleanup timed out after %s", time.Duration(req.Timeout)*time.Second)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-s.shutdown:

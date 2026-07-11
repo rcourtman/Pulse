@@ -833,21 +833,7 @@ func (a *UpdatesToolAdapter) TriggerUpdateCheck(hostID string) (DockerCommandSta
 
 // UpdateContainer implements UpdatesProvider
 func (a *UpdatesToolAdapter) UpdateContainer(hostID, containerID, containerName string) (DockerCommandStatus, error) {
-	if a.commands == nil {
-		return DockerCommandStatus{}, fmt.Errorf("monitor not available")
-	}
-
-	cmdStatus, err := a.commands.QueueDockerContainerUpdateCommand(hostID, containerID, containerName)
-	if err != nil {
-		return DockerCommandStatus{}, err
-	}
-
-	return DockerCommandStatus{
-		ID:      cmdStatus.ID,
-		Type:    cmdStatus.Type,
-		Status:  cmdStatus.Status,
-		Message: cmdStatus.Message,
-	}, nil
+	return DockerCommandStatus{}, fmt.Errorf("Docker container updates are retired until canonical lifecycle delivery and compensation are available")
 }
 
 // GetCommandStatus implements UpdatesProvider

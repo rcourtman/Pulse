@@ -13,20 +13,30 @@ type identityPinIndex struct {
 	byCanonicalID map[string]ResourceIdentityPin
 	byMachineID   map[string]ResourceIdentityPin
 	byDMIUUID     map[string]ResourceIdentityPin
-	byClusterHost map[string][]ResourceIdentityPin
-	// Hostname indexes carry the preserved primary hostname plus its historical
-	// short-name alias. Hostnames are not unique across machines, so lookups
-	// through either index require the selected bucket to be unambiguous.
-	byHostname map[string][]ResourceIdentityPin
+	// byClusterHost buckets pins per cluster + full hostname, and
+	// byClusterShortHost per cluster + short hostname; byHostname and
+	// byShortHostname are the cluster-less equivalents. Full-hostname hits
+	// are authoritative; short buckets only resolve when they are
+	// unambiguous AND the pinned hostname is short/FQDN-equivalent to the
+	// incoming one, so distinct dotted hostnames that share a short name
+	// (cloud.rnd-lax1 vs cloud.gce-or1) never cross-match. Hostnames are
+	// not unique across machines, so every bucket lookup requires the
+	// bucket to be unambiguous.
+	byClusterHost      map[string][]ResourceIdentityPin
+	byClusterShortHost map[string][]ResourceIdentityPin
+	byHostname         map[string][]ResourceIdentityPin
+	byShortHostname    map[string][]ResourceIdentityPin
 }
 
 func newIdentityPinIndex(pins []ResourceIdentityPin) *identityPinIndex {
 	index := &identityPinIndex{
-		byCanonicalID: make(map[string]ResourceIdentityPin, len(pins)),
-		byMachineID:   make(map[string]ResourceIdentityPin),
-		byDMIUUID:     make(map[string]ResourceIdentityPin),
-		byClusterHost: make(map[string][]ResourceIdentityPin),
-		byHostname:    make(map[string][]ResourceIdentityPin),
+		byCanonicalID:      make(map[string]ResourceIdentityPin, len(pins)),
+		byMachineID:        make(map[string]ResourceIdentityPin),
+		byDMIUUID:          make(map[string]ResourceIdentityPin),
+		byClusterHost:      make(map[string][]ResourceIdentityPin),
+		byClusterShortHost: make(map[string][]ResourceIdentityPin),
+		byHostname:         make(map[string][]ResourceIdentityPin),
+		byShortHostname:    make(map[string][]ResourceIdentityPin),
 	}
 	for _, pin := range pins {
 		pin = pin.normalized()
@@ -40,35 +50,24 @@ func newIdentityPinIndex(pins []ResourceIdentityPin) *identityPinIndex {
 		if pin.DMIUUID != "" {
 			index.byDMIUUID[pin.DMIUUID] = pin
 		}
-		for _, hostnameKey := range identityPinHostnameKeys(pin.Hostname) {
-			if pin.ClusterName != "" {
-				key := clusterHostPinKey(pin.ClusterName, hostnameKey)
-				index.byClusterHost[key] = append(index.byClusterHost[key], pin)
-			}
-			index.byHostname[hostnameKey] = append(index.byHostname[hostnameKey], pin)
+		if pin.Hostname == "" {
+			continue
 		}
+		shortHostname := NormalizeHostname(pin.Hostname)
+		if pin.ClusterName != "" {
+			fullKey := clusterHostPinKey(pin.ClusterName, pin.Hostname)
+			index.byClusterHost[fullKey] = append(index.byClusterHost[fullKey], pin)
+			shortKey := clusterHostPinKey(pin.ClusterName, shortHostname)
+			index.byClusterShortHost[shortKey] = append(index.byClusterShortHost[shortKey], pin)
+		}
+		index.byHostname[pin.Hostname] = append(index.byHostname[pin.Hostname], pin)
+		index.byShortHostname[shortHostname] = append(index.byShortHostname[shortHostname], pin)
 	}
 	return index
 }
 
 func clusterHostPinKey(clusterName, hostname string) string {
-	return strings.ToLower(strings.TrimSpace(clusterName)) + "\x00" + NormalizePrimaryHostname(hostname)
-}
-
-// identityPinHostnameKeys returns the exact persisted hostname first, followed
-// by the historical short-name alias when the two differ. Lookup walks keys in
-// this order so distinct dotted names remain distinct while legacy short-name
-// pins can still recover an identity when that alias is unambiguous.
-func identityPinHostnameKeys(hostname string) []string {
-	primary := NormalizePrimaryHostname(hostname)
-	if primary == "" {
-		return nil
-	}
-	short := NormalizeHostname(primary)
-	if short == "" || short == primary {
-		return []string{primary}
-	}
-	return []string{primary, short}
+	return strings.ToLower(strings.TrimSpace(clusterName)) + "\x00" + NormalizeFullHostname(hostname)
 }
 
 // find resolves the pin for an incoming identity, strongest key first. A pin
@@ -93,20 +92,45 @@ func (index *identityPinIndex) find(identity ResourceIdentity) (ResourceIdentity
 	}
 	clusterName := strings.TrimSpace(identity.ClusterName)
 	for _, hostname := range identity.Hostnames {
-		for _, hostnameKey := range identityPinHostnameKeys(hostname) {
-			if clusterName != "" {
-				bucket := index.byClusterHost[clusterHostPinKey(clusterName, hostnameKey)]
-				if len(bucket) == 1 && pinCompatible(bucket[0], machineID, dmiUUID) {
-					return bucket[0], true
-				}
+		fullHostname := NormalizeFullHostname(hostname)
+		if fullHostname == "" {
+			continue
+		}
+		shortHostname := NormalizeHostname(fullHostname)
+		if clusterName != "" {
+			if pin, ok := resolvePinBucket(index.byClusterHost[clusterHostPinKey(clusterName, fullHostname)], fullHostname, machineID, dmiUUID); ok {
+				return pin, true
 			}
-			bucket := index.byHostname[hostnameKey]
-			if len(bucket) == 1 && pinCompatible(bucket[0], machineID, dmiUUID) {
-				return bucket[0], true
+			if pin, ok := resolvePinBucket(index.byClusterShortHost[clusterHostPinKey(clusterName, shortHostname)], fullHostname, machineID, dmiUUID); ok {
+				return pin, true
 			}
+		}
+		if pin, ok := resolvePinBucket(index.byHostname[fullHostname], fullHostname, machineID, dmiUUID); ok {
+			return pin, true
+		}
+		if pin, ok := resolvePinBucket(index.byShortHostname[shortHostname], fullHostname, machineID, dmiUUID); ok {
+			return pin, true
 		}
 	}
 	return ResourceIdentityPin{}, false
+}
+
+// resolvePinBucket resolves a hostname bucket lookup. The bucket must be
+// unambiguous (exactly one pin), the pinned hostname must be the incoming one
+// or its short/FQDN equivalent (two distinct FQDNs sharing a short name never
+// match), and the incoming strong keys must not contradict the pin.
+func resolvePinBucket(bucket []ResourceIdentityPin, hostname, machineID, dmiUUID string) (ResourceIdentityPin, bool) {
+	if len(bucket) != 1 {
+		return ResourceIdentityPin{}, false
+	}
+	pin := bucket[0]
+	if pin.Hostname != hostname && !HostnamesEquivalent(pin.Hostname, hostname) {
+		return ResourceIdentityPin{}, false
+	}
+	if !pinCompatible(pin, machineID, dmiUUID) {
+		return ResourceIdentityPin{}, false
+	}
+	return pin, true
 }
 
 // pinCompatible reports whether an incoming identity's strong keys are
@@ -162,11 +186,81 @@ func (rr *ResourceRegistry) completeIdentityFromPins(resourceType ResourceType, 
 	return identity
 }
 
+// successionsFor reports the pinned canonical IDs the given (new or changed)
+// pin supersedes: pins for the same physical host whose canonical ID was
+// minted in an earlier era of the chooseNewID ladder. Same-machine proof is a
+// matching strong key; a machine-keyless pin in the same cluster whose
+// hostname is the incoming pin's hostname or its collapsed short form is the
+// same host re-derived after the short→full hostname derivation fix. A
+// machine-keyless old pin claimed by a machine-keyed incoming pin is the
+// common "agent gained /etc/machine-id" upgrade. Rows with a contradicting
+// machine key (host reinstalled, cluster slot re-occupied by a different
+// machine) never succeed: the new machine must mint fresh, not absorb the
+// old host's operator state.
+func (index *identityPinIndex) successionsFor(pin ResourceIdentityPin) []CanonicalIDSuccession {
+	if index == nil {
+		return nil
+	}
+	pin = pin.normalized()
+	if pin.CanonicalID == "" {
+		return nil
+	}
+	var successions []CanonicalIDSuccession
+	seen := make(map[string]struct{})
+	consider := func(old ResourceIdentityPin) {
+		if old.CanonicalID == "" || old.CanonicalID == pin.CanonicalID {
+			return
+		}
+		if _, dup := seen[old.CanonicalID]; dup {
+			return
+		}
+		seen[old.CanonicalID] = struct{}{}
+		successions = append(successions, CanonicalIDSuccession{
+			OldCanonicalID: old.CanonicalID,
+			NewCanonicalID: pin.CanonicalID,
+		})
+	}
+	if pin.MachineID != "" {
+		if old, ok := index.byMachineID[pin.MachineID]; ok {
+			consider(old)
+		}
+	}
+	if pin.DMIUUID != "" {
+		if old, ok := index.byDMIUUID[pin.DMIUUID]; ok {
+			consider(old)
+		}
+	}
+	if pin.ClusterName != "" && pin.Hostname != "" {
+		shortHostname := NormalizeHostname(pin.Hostname)
+		for _, old := range index.byClusterShortHost[clusterHostPinKey(pin.ClusterName, shortHostname)] {
+			if old.MachineID != "" || old.DMIUUID != "" {
+				// Machine-keyed rows only succeed through their own keys.
+				continue
+			}
+			if old.Hostname != pin.Hostname && old.Hostname != shortHostname {
+				// A different FQDN sharing the short name is a different host.
+				continue
+			}
+			consider(old)
+		}
+	}
+	return successions
+}
+
 // PersistIdentityPins writes the identity pins for the registry's current
 // host resources into the resource store. Only new or changed pins are
 // written, so steady-state rebuild ticks cost no writes. Call this after a
 // rebuild on the durable store-backed registry; ephemeral per-request
 // registries consult pins but do not write them.
+//
+// When a new pin supersedes an earlier era's pin for the same physical host
+// (see successionsFor), the store re-keys the host's operator-owned rows to
+// the new canonical ID before the pin write, so operator intent
+// (never-auto-remediate, maintenance windows) and action-audit history
+// survive the era change. Successions are skipped while the old canonical ID
+// still belongs to a live resource: a genuinely short-named host must not
+// have its rows stolen by an FQDN sibling. Change-journal rows are never
+// rewritten; EraIDs merges those at read time.
 func (rr *ResourceRegistry) PersistIdentityPins() {
 	if rr.store == nil {
 		return
@@ -174,6 +268,7 @@ func (rr *ResourceRegistry) PersistIdentityPins() {
 
 	rr.mu.RLock()
 	var pins []ResourceIdentityPin
+	var successions []CanonicalIDSuccession
 	for _, resource := range rr.resources {
 		pin, ok := identityPinForResource(resource)
 		if !ok {
@@ -183,11 +278,24 @@ func (rr *ResourceRegistry) PersistIdentityPins() {
 			continue
 		}
 		pins = append(pins, pin)
+		for _, succession := range rr.identityPins.successionsFor(pin) {
+			if _, live := rr.resources[succession.OldCanonicalID]; live {
+				continue
+			}
+			successions = append(successions, succession)
+		}
 	}
 	rr.mu.RUnlock()
 
 	if len(pins) == 0 {
 		return
+	}
+	if len(successions) > 0 {
+		if successor, ok := rr.store.(canonicalIDSuccessor); ok {
+			if err := successor.ApplyCanonicalIDSuccessions(successions); err != nil {
+				log.Printf("unifiedresources: failed to apply canonical ID successions: %v", err)
+			}
+		}
 	}
 	if err := rr.store.UpsertResourceIdentityPins(pins); err != nil {
 		log.Printf("unifiedresources: failed to persist identity pins: %v", err)
