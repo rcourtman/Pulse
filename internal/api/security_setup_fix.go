@@ -149,11 +149,19 @@ func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Req
 
 		// Org-scoped tenant sessions preserve canonical org management
 		// privileges for settings-bound routes.
+		orgScoped := false
 		if org := GetOrganization(req.Context()); org != nil {
 			orgID := strings.TrimSpace(org.ID)
-			if orgID != "" && orgID != "default" && org.CanUserIDManage(sessionUser) {
-				return true
+			if orgID != "" && orgID != "default" {
+				orgScoped = true
+				if org.CanUserIDManage(sessionUser) {
+					return true
+				}
 			}
+		}
+
+		if !orgScoped && sessionUserCarriesAdminPrivileges(cfg, sessionUser) {
+			return true
 		}
 
 		if configuredAdmin == "" || !strings.EqualFold(sessionUser, configuredAdmin) {
@@ -166,6 +174,54 @@ func ensureAdminSession(cfg *config.Config, w http.ResponseWriter, req *http.Req
 		}
 	}
 	return true
+}
+
+// sessionUserCarriesAdminPrivileges reports whether a non-org-scoped session
+// username carries instance admin privileges: the configured local admin
+// identity, an RBAC assignment granting the admin action (how SSO group role
+// mappings make an SSO user an admin, #1533/#1535), or any SSO principal when
+// the instance has no local admin configured at all — the v5 OIDC-only
+// pattern, where SSO sessions are the only administrators the instance has.
+func sessionUserCarriesAdminPrivileges(cfg *config.Config, sessionUser string) bool {
+	sessionUser = strings.TrimSpace(sessionUser)
+	if sessionUser == "" {
+		return false
+	}
+	configuredAdmin := ""
+	if cfg != nil {
+		configuredAdmin = strings.TrimSpace(cfg.AuthUser)
+	}
+	if configuredAdmin != "" && strings.EqualFold(sessionUser, configuredAdmin) {
+		return true
+	}
+	if sessionUserHasRBACAdminGrant(sessionUser) {
+		return true
+	}
+	return configuredAdmin == "" && strings.HasPrefix(sessionUser, "sso:")
+}
+
+// sessionUserHasRBACAdminGrant reports whether the user's effective RBAC
+// permissions include an allow of the admin action on all resources — the
+// shape of the built-in Administrator role that SSO group role mappings
+// assign. A missing manager or empty assignment simply reports false.
+func sessionUserHasRBACAdminGrant(username string) bool {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return false
+	}
+	manager := internalauth.GetManager()
+	if manager == nil {
+		return false
+	}
+	for _, perm := range manager.GetUserPermissions(username) {
+		if strings.EqualFold(perm.Effect, internalauth.EffectDeny) {
+			continue
+		}
+		if perm.Action == "admin" && perm.Resource == "*" {
+			return true
+		}
+	}
+	return false
 }
 
 func ensureSettingsScope(cfg *config.Config, w http.ResponseWriter, req *http.Request, scope string) bool {
