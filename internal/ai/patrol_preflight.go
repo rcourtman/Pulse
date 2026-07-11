@@ -116,6 +116,19 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 
 	result := PatrolPreflightResult{}
 
+	if IsDemoMode() {
+		result.Success = true
+		result.Provider = DemoPatrolProvider
+		result.Model = DemoPatrolModel
+		result.ToolCallObserved = true
+		result.Cause = PatrolFailureCauseNone
+		result.Title = "Pulse Patrol: Preflight succeeded"
+		result.Summary = "Demo mode simulates Patrol's tool-call check; no provider was contacted"
+		result.DurationMs = time.Since(started).Milliseconds()
+		s.recordPatrolPreflight(result, time.Now())
+		return result
+	}
+
 	if cfg == nil {
 		result.Cause = PatrolFailureCauseSettingsPersistence
 		result.Title = "Pulse Patrol: Pulse Intelligence settings unavailable"

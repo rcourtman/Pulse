@@ -11,6 +11,12 @@ func findingsToRecords(findings map[string]*Finding) map[string]*config.AIFindin
 	// Convert from Finding to AIFindingRecord
 	records := make(map[string]*config.AIFindingRecord, len(findings))
 	for id, f := range findings {
+		if isDemoFindingID(id) {
+			// Demo findings regenerate from mock state on every demo patrol
+			// cycle; persisting them would leak fixtures into a real
+			// install's ai_findings.json when mock mode is later disabled.
+			continue
+		}
 		lifecycle := make([]struct {
 			At       time.Time         `json:"at"`
 			Type     string            `json:"type"`

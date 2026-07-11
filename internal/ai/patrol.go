@@ -252,13 +252,18 @@ func isDemoPatrolRunRecord(record PatrolRunRecord) bool {
 }
 
 func filterPatrolRunRecordsForRuntimeEvidence(records []PatrolRunRecord) []PatrolRunRecord {
-	if IsDemoMode() || len(records) == 0 {
+	if len(records) == 0 {
 		return records
 	}
 
+	// Symmetric evidence filtering: real runtimes hide demo records, and demo
+	// runtimes hide real records. Runs recorded against the pre-demo real
+	// runtime (typically provider errors from before mock fixtures enabled)
+	// are meaningless against the mock dataset.
+	demoMode := IsDemoMode()
 	filtered := make([]PatrolRunRecord, 0, len(records))
 	for _, record := range records {
-		if isDemoPatrolRunRecord(record) {
+		if isDemoPatrolRunRecord(record) != demoMode {
 			continue
 		}
 		filtered = append(filtered, record)

@@ -5129,6 +5129,18 @@ func (h *AISettingsHandler) buildPatrolReadiness(ctx context.Context, aiService 
 	}
 	addCheck("service", patrolReadinessReady, ai.PatrolFailureCauseNone, "Patrol service", "Pulse Patrol service is available.", "")
 
+	if ai.IsDemoMode() {
+		// Demo/mock runtimes simulate Patrol's provider path end to end, so
+		// the provider-dependent checks report a simulated pass instead of
+		// steering visitors into provider setup.
+		addCheck("settings", patrolReadinessReady, ai.PatrolFailureCauseNone, "Settings persistence", "Demo mode uses the built-in demo dataset.", "")
+		addCheck("enabled", patrolReadinessReady, ai.PatrolFailureCauseNone, "Assistant enabled", "Demo mode simulates Pulse Assistant; no provider key is required.", "")
+		addCheck("provider", patrolReadinessReady, ai.PatrolFailureCauseNone, "Provider configured", "Demo mode uses the simulated demo provider.", "")
+		addCheck("model", patrolReadinessReady, ai.PatrolFailureCauseNone, "Patrol model", "Demo mode uses the simulated demo model.", "")
+		addCheck("tools", patrolReadinessReady, ai.PatrolFailureCauseNone, "Patrol tools", "Demo mode simulates Patrol's tool-backed analysis.", "")
+		return summarizePatrolReadiness(ai.DemoPatrolProvider, ai.DemoPatrolModel, checks)
+	}
+
 	cfg, err := h.loadAIConfig(ctx)
 	if err != nil || cfg == nil {
 		addCheck("settings", patrolReadinessNotReady, ai.PatrolFailureCauseSettingsPersistence, "Settings persistence", "Pulse Intelligence settings could not be loaded from persistence.", "open_provider_settings")

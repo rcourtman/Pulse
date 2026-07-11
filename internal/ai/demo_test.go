@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockruntime"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 func TestIsDemoMode(t *testing.T) {
@@ -23,31 +24,205 @@ func TestIsDemoMode(t *testing.T) {
 	}
 }
 
-func TestPatrolService_InjectDemoFindings(t *testing.T) {
-	service := NewPatrolService(nil, nil)
+type demoSnapshotProvider struct {
+	snapshot models.StateSnapshot
+}
+
+func (p demoSnapshotProvider) ReadSnapshot() models.StateSnapshot {
+	return p.snapshot
+}
+
+func demoTestSnapshot(now time.Time) models.StateSnapshot {
+	snapshot := models.EmptyStateSnapshot()
+	snapshot.Nodes = []models.Node{
+		{ID: "node/pve1", Name: "pve1", Status: "online", Uptime: 86400, CPU: 0.42},
+	}
+	snapshot.VMs = []models.VM{
+		{ID: "vm/101", VMID: 101, Name: "media-server", Node: "pve1", Status: "running",
+			Memory: models.Memory{Total: 16 << 30, Used: 15 << 30, Usage: 93.75}},
+	}
+	snapshot.Storage = []models.Storage{
+		{ID: "pve1-local-zfs", Name: "local-zfs", Node: "pve1", Status: "available",
+			Enabled: true, Active: true, Total: 750 << 30, Used: 700 << 30, Free: 50 << 30, Usage: 93.3},
+	}
+	snapshot.DockerHosts = []models.DockerHost{
+		{ID: "docker/edge-01", Hostname: "edge-01", DisplayName: "Edge 01", Status: "offline",
+			LastSeen: now.Add(-2 * time.Hour),
+			Containers: []models.DockerContainer{
+				{ID: "docker/edge-01/portal", Name: "portal", State: "exited"},
+			}},
+		{ID: "docker/core-01", Hostname: "core-01", DisplayName: "Core 01", Status: "online",
+			LastSeen: now,
+			Containers: []models.DockerContainer{
+				{ID: "docker/core-01/uptime-kuma", Name: "uptime-kuma", State: "running",
+					Health: "unhealthy", RestartCount: 4, Image: "louislam/uptime-kuma:1"},
+			}},
+	}
+	snapshot.PBSInstances = []models.PBSInstance{
+		{ID: "pbs/dr-vault", Name: "dr-vault", Status: "degraded", ConnectionHealth: "degraded"},
+	}
+	return snapshot
+}
+
+func TestPatrolService_RunDemoPatrolCycle_SynthesizesFromMockState(t *testing.T) {
+	original := mockruntime.IsEnabled()
+	t.Cleanup(func() { mockruntime.SetEnabled(original) })
+	mockruntime.SetEnabled(true)
+
+	now := time.Now()
+	service := NewPatrolService(nil, demoSnapshotProvider{snapshot: demoTestSnapshot(now)})
 	if service.findings == nil || service.runHistoryStore == nil {
 		t.Fatal("expected findings and run history to be initialized")
 	}
 
-	service.InjectDemoFindings()
+	service.runDemoPatrolCycle(TriggerReasonStartup)
 
-	findings := service.findings.GetAll(nil)
-	if len(findings) != 7 {
-		t.Fatalf("expected 7 demo findings, got %d", len(findings))
+	findings := service.findings.GetActive(FindingSeverityInfo)
+	if len(findings) < 4 {
+		t.Fatalf("expected at least 4 demo findings (offline host, storage, pbs, container), got %d", len(findings))
 	}
-	if service.runHistoryStore.Count() != 13 {
-		t.Fatalf("expected 13 demo run history entries, got %d", service.runHistoryStore.Count())
+	byID := map[string]*Finding{}
+	for _, f := range findings {
+		if !isDemoFindingID(f.ID) {
+			t.Fatalf("expected only demo finding IDs, got %q", f.ID)
+		}
+		byID[f.ID] = f
+	}
+	offline := byID["demo-docker-host-offline-edge-01"]
+	if offline == nil {
+		t.Fatalf("expected offline docker host finding, got IDs %v", keysOfDemoFindings(byID))
+	}
+	if offline.Severity != FindingSeverityCritical {
+		t.Fatalf("expected offline host finding to be critical, got %s", offline.Severity)
+	}
+	storage := byID["demo-storage-capacity-pve1-local-zfs"]
+	if storage == nil {
+		t.Fatalf("expected storage capacity finding, got IDs %v", keysOfDemoFindings(byID))
+	}
+	if storage.Severity != FindingSeverityCritical {
+		t.Fatalf("expected 93%% full storage finding to be critical, got %s", storage.Severity)
+	}
+	if !strings.Contains(storage.Title, "93%") {
+		t.Fatalf("expected storage title to quote the observed usage, got %q", storage.Title)
+	}
+
+	// Run history: backfill plus the current run.
+	if service.runHistoryStore.Count() != 11 {
+		t.Fatalf("expected 10 backfill entries plus the current run, got %d", service.runHistoryStore.Count())
+	}
+	runs := service.GetRunHistory(1)
+	if len(runs) != 1 || runs[0].Source != PatrolRunSourceDemo {
+		t.Fatalf("expected newest run to be the demo run, got %+v", runs)
+	}
+	if runs[0].Status != "critical" {
+		t.Fatalf("expected run status critical with a critical finding active, got %q", runs[0].Status)
+	}
+	if runs[0].ResourcesChecked == 0 {
+		t.Fatalf("expected run to report resources checked, got %+v", runs[0])
+	}
+
+	// Second cycle refreshes instead of duplicating.
+	service.runDemoPatrolCycle(TriggerReasonScheduled)
+	refreshed := service.findings.GetActive(FindingSeverityInfo)
+	if len(refreshed) != len(findings) {
+		t.Fatalf("expected second cycle to refresh findings, got %d then %d", len(findings), len(refreshed))
+	}
+	if service.runHistoryStore.Count() != 12 {
+		t.Fatalf("expected exactly one additional run record on second cycle, got %d", service.runHistoryStore.Count())
 	}
 }
 
-func TestPatrolService_InjectDemoFindings_NoStore(t *testing.T) {
-	service := &PatrolService{}
-	service.InjectDemoFindings()
+func keysOfDemoFindings(m map[string]*Finding) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
-func TestPatrolService_InjectDemoRunHistory_NoStore(t *testing.T) {
+func TestPatrolService_RunDemoPatrolCycle_ResolvesStaleDemoFindings(t *testing.T) {
+	original := mockruntime.IsEnabled()
+	t.Cleanup(func() { mockruntime.SetEnabled(original) })
+	mockruntime.SetEnabled(true)
+
+	now := time.Now()
+	snapshot := demoTestSnapshot(now)
+	service := NewPatrolService(nil, demoSnapshotProvider{snapshot: snapshot})
+	service.runDemoPatrolCycle(TriggerReasonStartup)
+
+	// Mock condition clears: the edge host comes back online.
+	healed := demoTestSnapshot(now)
+	healed.DockerHosts[0].Status = "online"
+	service.SetStateProvider(demoSnapshotProvider{snapshot: healed})
+	service.runDemoPatrolCycle(TriggerReasonScheduled)
+
+	offline := service.findings.Get("demo-docker-host-offline-edge-01")
+	if offline == nil {
+		t.Fatal("expected offline host finding to still exist")
+	}
+	if !offline.IsResolved() {
+		t.Fatal("expected offline host finding to auto-resolve once the mock condition cleared")
+	}
+}
+
+func TestPatrolService_RunDemoPatrolCycle_ResolvesRuntimeFailureFinding(t *testing.T) {
+	original := mockruntime.IsEnabled()
+	t.Cleanup(func() { mockruntime.SetEnabled(original) })
+	mockruntime.SetEnabled(true)
+
+	now := time.Now()
+	service := NewPatrolService(nil, demoSnapshotProvider{snapshot: demoTestSnapshot(now)})
+
+	// A real run failed before mock mode enabled and left the meta-finding.
+	failure := patrolRuntimeFailure{
+		Cause:       PatrolFailureCauseProviderConnection,
+		Title:       "Pulse Patrol: Provider analysis error",
+		Description: "Pulse Patrol reached the configured provider, but the provider did not complete the Patrol analysis request.",
+	}
+	stale := newPatrolRuntimeFailureFinding(failure, now.Add(-time.Hour))
+	service.findings.Add(stale)
+
+	service.runDemoPatrolCycle(TriggerReasonScheduled)
+
+	refreshed := service.findings.Get(stale.ID)
+	if refreshed == nil {
+		t.Fatal("expected runtime failure finding to still exist")
+	}
+	if !refreshed.IsResolved() {
+		t.Fatal("expected demo cycle to auto-resolve the stale provider error finding")
+	}
+}
+
+func TestPatrolService_RunDemoPatrolCycle_NoStore(t *testing.T) {
 	service := &PatrolService{}
-	service.injectDemoRunHistory()
+	service.runDemoPatrolCycle(TriggerReasonStartup)
+}
+
+func TestPatrolService_RunDemoPatrolCycle_EmptyStateSkipsRecording(t *testing.T) {
+	original := mockruntime.IsEnabled()
+	t.Cleanup(func() { mockruntime.SetEnabled(original) })
+	mockruntime.SetEnabled(true)
+
+	service := NewPatrolService(nil, demoSnapshotProvider{snapshot: models.EmptyStateSnapshot()})
+	service.runDemoPatrolCycle(TriggerReasonStartup)
+
+	if count := service.runHistoryStore.Count(); count != 0 {
+		t.Fatalf("expected no run records for an empty mock state, got %d", count)
+	}
+}
+
+func TestDemoFindingsExcludedFromPersistence(t *testing.T) {
+	findings := map[string]*Finding{
+		"demo-storage-capacity-pve1-local-zfs": {ID: "demo-storage-capacity-pve1-local-zfs"},
+		"abc123def456":                         {ID: "abc123def456"},
+	}
+	records := findingsToRecords(findings)
+	if _, ok := records["demo-storage-capacity-pve1-local-zfs"]; ok {
+		t.Fatal("expected demo finding to be excluded from persistence records")
+	}
+	if _, ok := records["abc123def456"]; !ok {
+		t.Fatal("expected real finding to be persisted")
+	}
 }
 
 func TestPatrolRunHistoryFiltersDemoEvidenceOutsideDemoMode(t *testing.T) {

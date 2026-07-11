@@ -47,6 +47,10 @@ type PatrolConfigReadiness struct {
 }
 
 func EvaluatePatrolConfigReadiness(cfg *config.AIConfig) PatrolConfigReadiness {
+	if IsDemoMode() {
+		return patrolConfigReadiness(DemoPatrolProvider, DemoPatrolModel, PatrolReadinessReady, PatrolFailureCauseNone,
+			"Demo mode: Patrol analysis is simulated against the demo dataset, so no provider is required.")
+	}
 	if cfg == nil {
 		return patrolConfigReadiness("", "", PatrolReadinessNotReady, PatrolFailureCauseSettingsPersistence, "Pulse Intelligence settings could not be loaded from persistence.")
 	}

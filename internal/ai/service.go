@@ -1032,6 +1032,11 @@ func (s *Service) getEffectivePatrolInterval(cfg *config.AIConfig) time.Duration
 func (s *Service) patrolConfigFromAIConfig(cfg *config.AIConfig) PatrolConfig {
 	patrolCfg := DefaultPatrolConfig()
 	if cfg == nil {
+		if IsDemoMode() {
+			// Demo runtimes simulate patrol without provider settings.
+			patrolCfg.Enabled = true
+			return patrolCfg
+		}
 		patrolCfg.Enabled = false
 		patrolCfg.RuntimeBlockedReason = "Pulse Intelligence settings could not be loaded from persistence."
 		patrolCfg.RuntimeBlockedCause = PatrolFailureCauseSettingsPersistence
@@ -1044,6 +1049,12 @@ func (s *Service) patrolConfigFromAIConfig(cfg *config.AIConfig) PatrolConfig {
 	patrolCfg.AnalyzeGuests = cfg.PatrolAnalyzeGuests
 	patrolCfg.AnalyzeDocker = cfg.PatrolAnalyzeDocker
 	patrolCfg.AnalyzeStorage = cfg.PatrolAnalyzeStorage
+	if IsDemoMode() {
+		// Demo/mock runtimes simulate patrol runs without a provider; never
+		// carry a readiness blocker into the demo loop.
+		patrolCfg.Enabled = true
+		return patrolCfg
+	}
 	if patrolCfg.Enabled {
 		if readiness := EvaluatePatrolConfigReadiness(cfg); !readiness.Ready {
 			patrolCfg.RuntimeBlockedReason = readiness.Summary
@@ -1121,8 +1132,16 @@ func (s *Service) StartPatrol(ctx context.Context) {
 	}
 
 	if cfg == nil || !cfg.IsPatrolEnabled() {
-		log.Debug().Msg("AI Patrol not enabled")
-		return
+		// Demo runtimes still start the loop: the release demo instance boots
+		// with mock fixtures off until the license sync authorizes them, and
+		// each tick re-checks IsDemoMode() live, so the loop self-heals into
+		// simulated patrol cycles once fixtures enable. Requires a loaded
+		// config because the setup below dereferences it.
+		if cfg == nil || !IsDemoRuntimeIntended() {
+			log.Debug().Msg("AI Patrol not enabled")
+			return
+		}
+		log.Info().Msg("AI Patrol: starting loop for demo runtime despite disabled config")
 	}
 
 	// Check license for Patrol fix actions (Pro only) - Patrol itself is free with BYOK
@@ -1144,6 +1163,11 @@ func (s *Service) StartPatrol(ctx context.Context) {
 		log.Info().
 			Str("env", DevDisableBackgroundAIEnv).
 			Msg("Pulse dev background AI disabled; Patrol scheduler and alert-triggered AI are not started")
+		// The dev guard protects provider quota; a simulated demo cycle costs
+		// nothing, so mock-mode dev still gets a populated patrol surface.
+		if IsDemoMode() {
+			patrol.startDemoPatrolWarmup()
+		}
 		return
 	}
 
@@ -1165,9 +1189,10 @@ func (s *Service) StartPatrol(ctx context.Context) {
 			Msg("Alert-triggered AI analysis configured")
 	}
 
-	// In demo/mock mode, inject realistic AI findings for showcasing
+	// In demo/mock mode, populate the patrol surface promptly with a
+	// simulated cycle instead of waiting for the first scheduled tick.
 	if IsDemoMode() {
-		patrol.InjectDemoFindings()
+		patrol.startDemoPatrolWarmup()
 	}
 }
 
