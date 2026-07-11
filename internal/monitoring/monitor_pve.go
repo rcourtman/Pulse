@@ -870,8 +870,14 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 	go func(inst string, pveClient PVEClientInterface, nodeList []proxmox.Node, nodeStatus map[string]string, modelNodesCopy []models.Node) {
 		defer recoverFromPanic(fmt.Sprintf("pollPhysicalDisks-%s", inst))
 
-		// Use a generous timeout for disk polling
+		// Use a generous timeout for disk polling. Each node gets its own
+		// attempt window below, so the overall budget scales to the polling
+		// interval: one slow node must not consume the whole instance budget,
+		// and staying inside the interval means polls can never overlap.
 		diskTimeout := 60 * time.Second
+		if pollingInterval > diskTimeout {
+			diskTimeout = pollingInterval
+		}
 		// Use monitor lifecycle context so shutdown can interrupt detached async polling.
 		parentCtx := m.getRuntimeContext()
 		if parentCtx == nil {
@@ -907,12 +913,21 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 		for _, h := range hosts {
 			hostByID[h.ID] = h
 		}
+		// Also map node name → linked host agent SMART inventory so a node whose
+		// Proxmox disk query fails can still populate its physical disks from
+		// the agent's smartctl view (#1516).
+		smartByNode := make(map[string][]models.HostDiskSMART)
 		for _, n := range nodesFromState {
 			if n.LinkedAgentID == "" || n.Instance != inst {
 				continue
 			}
-			if linkedHost, ok := hostByID[n.LinkedAgentID]; ok && len(linkedHost.DiskExclude) > 0 {
-				diskExcludeByNode[n.Name] = linkedHost.DiskExclude
+			if linkedHost, ok := hostByID[n.LinkedAgentID]; ok {
+				if len(linkedHost.DiskExclude) > 0 {
+					diskExcludeByNode[n.Name] = linkedHost.DiskExclude
+				}
+				if len(linkedHost.Sensors.SMART) > 0 {
+					smartByNode[n.Name] = linkedHost.Sensors.SMART
+				}
 			}
 		}
 
@@ -920,14 +935,16 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 		polledNodes := make(map[string]bool) // Track which nodes we successfully polled
 		zfsPoolingEnabled := zfsMonitoringEnabledFromEnv()
 
+	nodeLoop:
 		for _, node := range nodeList {
-			// Check if context timed out
+			// Check if context timed out. Break instead of returning so the
+			// nodes already polled still land in state.
 			select {
 			case <-diskCtx.Done():
 				log.Debug().
 					Str("instance", inst).
-					Msg("Physical disk polling timed out - preserving existing data")
-				return
+					Msg("Physical disk polling timed out - saving partial results")
+				break nodeLoop
 			default:
 			}
 
@@ -937,9 +954,13 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 				continue
 			}
 
+			// Each node gets its own attempt window so one slow node cannot
+			// starve the rest of the cluster's disk poll.
+			nodeCtx, nodeCancel := context.WithTimeout(diskCtx, 60*time.Second)
+
 			// Get disk list for this node
 			log.Debug().Str("node", node.Node).Msg("getting disk list for node")
-			disks, err := pveClient.GetDisks(diskCtx, node.Node)
+			disks, err := pveClient.GetDisks(nodeCtx, node.Node)
 			if err != nil {
 				// Check if it's a permission error or if the endpoint doesn't exist
 				errStr := err.Error()
@@ -958,6 +979,20 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 						Err(err).
 						Msg("Failed to get disk list")
 				}
+				// The Proxmox query failed, but a linked host agent sees the
+				// same disks via smartctl. Wide nodes (dozens of disks) can
+				// exceed the API window PVE itself allows for disks/list, so
+				// without this fallback their Physical Disks view empties
+				// permanently (#1516).
+				if fallback := physicalDisksFromHostAgentSMART(inst, node.Node, smartByNode[node.Node]); len(fallback) > 0 {
+					polledNodes[node.Node] = true
+					allDisks = append(allDisks, fallback...)
+					log.Info().
+						Str("node", node.Node).
+						Int("diskCount", len(fallback)).
+						Msg("Proxmox disk query failed - using linked host agent SMART inventory for physical disks")
+				}
+				nodeCancel()
 				continue
 			}
 
@@ -969,7 +1004,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			// non-fatal; we simply leave StorageGroup empty.
 			var poolAssignment *diskPoolAssignment
 			if zfsPoolingEnabled {
-				if pools, pErr := pveClient.GetZFSPoolsWithDetails(diskCtx, node.Node); pErr == nil {
+				if pools, pErr := pveClient.GetZFSPoolsWithDetails(nodeCtx, node.Node); pErr == nil {
 					poolAssignment = buildDiskPoolAssignment(pools)
 				} else {
 					log.Debug().
@@ -978,6 +1013,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 						Msg("Could not fetch ZFS pool details for disk→pool mapping; StorageGroup will be empty")
 				}
 			}
+			nodeCancel()
 
 			// Record each disk; alert evaluation happens after host-agent SMART merges
 			// so the canonical disk view includes post-merge health/wearout data.
@@ -1062,6 +1098,52 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			Msg("Updating physical disks in state")
 		m.state.UpdatePhysicalDisks(inst, allDisks)
 	}(instanceName, client, nodes, nodeEffectiveStatus, modelNodes)
+}
+
+// physicalDisksFromHostAgentSMART builds PhysicalDisk entries for a node from
+// its linked host agent's SMART inventory. This is the fallback when the
+// Proxmox disks/list query fails: PVE probes SMART per disk inside that call,
+// so a node with dozens of disks can exceed the API window and the view would
+// otherwise empty even though the agent on the node sees every disk (#1516).
+// Only what the agent actually reports is carried over; nothing is fabricated.
+func physicalDisksFromHostAgentSMART(inst, nodeName string, smartEntries []models.HostDiskSMART) []models.PhysicalDisk {
+	if len(smartEntries) == 0 {
+		return nil
+	}
+	now := time.Now()
+	disks := make([]models.PhysicalDisk, 0, len(smartEntries))
+	for _, smart := range smartEntries {
+		device := strings.TrimSpace(smart.Device)
+		if device == "" {
+			continue
+		}
+		devPath := device
+		if !strings.HasPrefix(devPath, "/dev/") {
+			devPath = "/dev/" + devPath
+		}
+		health := strings.TrimSpace(smart.Health)
+		if health == "" {
+			health = "UNKNOWN"
+		}
+		disks = append(disks, models.PhysicalDisk{
+			ID:              fmt.Sprintf("%s-%s-%s", inst, nodeName, strings.ReplaceAll(devPath, "/", "-")),
+			Node:            nodeName,
+			Instance:        inst,
+			DevPath:         devPath,
+			Model:           strings.TrimSpace(smart.Model),
+			Serial:          strings.TrimSpace(smart.Serial),
+			WWN:             strings.TrimSpace(smart.WWN),
+			Type:            strings.TrimSpace(smart.Type),
+			Size:            smart.SizeBytes,
+			Health:          health,
+			Wearout:         deriveWearoutFromSMARTAttributes(smart.Attributes),
+			Temperature:     smart.Temperature,
+			StorageGroup:    strings.TrimSpace(smart.Pool),
+			SmartAttributes: smartAttributesCopy(smart.Attributes),
+			LastChecked:     now,
+		})
+	}
+	return disks
 }
 
 func proxmoxDiskFromPhysicalDisk(disk models.PhysicalDisk) proxmox.Disk {
