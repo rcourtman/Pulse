@@ -293,12 +293,13 @@ type ActionPlan struct {
 	Message              string              `json:"message,omitempty"`
 
 	// Stale-plan protection
-	PlannedAt       time.Time        `json:"plannedAt"`
-	ExpiresAt       time.Time        `json:"expiresAt"`
-	ResourceVersion string           `json:"resourceVersion"` // Hash of the resource state at planning time
-	PolicyVersion   string           `json:"policyVersion"`   // Version of the capability/policy when planned
-	PlanHash        string           `json:"planHash"`        // Hash verifying params and resource state haven't drifted
-	Preflight       *ActionPreflight `json:"preflight,omitempty"`
+	PlannedAt       time.Time                      `json:"plannedAt"`
+	ExpiresAt       time.Time                      `json:"expiresAt"`
+	ResourceVersion string                         `json:"resourceVersion"` // Hash of the resource state at planning time
+	PolicyVersion   string                         `json:"policyVersion"`   // Version of the capability/policy when planned
+	PolicyDecision  ActionPolicyDecisionProvenance `json:"policyDecision"`
+	PlanHash        string                         `json:"planHash"` // Hash verifying params and resource state haven't drifted
+	Preflight       *ActionPreflight               `json:"preflight,omitempty"`
 }
 
 // ExecutionResult captures the output of the native capability driver.
@@ -1145,6 +1146,10 @@ func ValidateHumanActionBinding(record ActionAuditRecord, orgID string) error {
 // deterministic defaults, but rejects records that cannot identify the action,
 // state, resource, capability, or requester.
 func NormalizeActionAuditRecord(record ActionAuditRecord) (ActionAuditRecord, error) {
+	record.Plan.PolicyDecision.Authorities = append([]ActionPolicyAuthorityFactor(nil), record.Plan.PolicyDecision.Authorities...)
+	for i := range record.Plan.PolicyDecision.Authorities {
+		record.Plan.PolicyDecision.Authorities[i].ReasonCodes = append([]ActionPolicyReasonCode(nil), record.Plan.PolicyDecision.Authorities[i].ReasonCodes...)
+	}
 	if record.Plan.Preflight != nil {
 		preflight := *record.Plan.Preflight
 		preflight.SafetyChecks = append([]string(nil), record.Plan.Preflight.SafetyChecks...)
@@ -1252,6 +1257,12 @@ func NormalizeActionAuditRecord(record ActionAuditRecord) (ActionAuditRecord, er
 	record.Plan.ApprovalRequirement = NormalizeApprovalRequirement(record.Plan.ApprovalRequirement, record.Plan.ApprovalPolicy)
 	if record.Plan.ApprovalRequirement.Version != 0 && record.Plan.ApprovalRequirement.Version != ActionApprovalRequirementVersion {
 		return ActionAuditRecord{}, fmt.Errorf("unsupported approval requirement version %d", record.Plan.ApprovalRequirement.Version)
+	}
+	if record.Plan.PolicyDecision.Version == 0 && record.Plan.PolicyDecision.Status == "" {
+		record.Plan.PolicyDecision = LegacyUnknownActionPolicyDecision()
+	}
+	if err := ValidateActionPlanPolicyDecision(record.Plan, record.Request); err != nil {
+		return ActionAuditRecord{}, fmt.Errorf("invalid action policy decision: %w", err)
 	}
 	record.Plan.Preflight = NormalizeActionPreflight(record.Plan.Preflight, record.Request, record.Plan)
 

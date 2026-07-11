@@ -1315,6 +1315,16 @@ Never-auto-remediate lock. Missing or unknown state denies automatic execution.
 The policy actor/method are server-stamped and cannot be supplied by the model,
 enterprise orchestrator, browser, relay, or action-proposal payload.
 
+Plan-time policy provenance follows the same trust boundary. The server owns
+the version, authority kinds, source identities/revisions, scope, approval
+result, and bounded reason vocabulary. Public payloads cannot provide the
+object, and compatibility adapters must strictly reject malformed canonical
+JSON rather than interpreting it as legacy. Cross-organization, duplicated,
+contradictory, unsupported, and unbounded provenance cannot enter Memory or
+SQLite audit truth. The field named `planningAllowed` is deliberately not an
+execution grant; only current RBAC/scope checks and Task 04 dispatch policy can
+authorize control.
+
 The same server-derived boundary now applies to every public governed action.
 Session actors are credential-bound and remain subject to current organization
 membership and RBAC; browser-session scope bypass does not bypass those checks.

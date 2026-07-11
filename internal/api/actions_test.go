@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -149,11 +151,57 @@ func TestHandlePlanActionBindsActorAndPlanHashToAuthenticatedOrg(t *testing.T) {
 	if plan.ApprovalRequirement.Version != unified.ActionApprovalRequirementVersion {
 		t.Fatalf("ApprovalRequirement = %#v, want canonical version", plan.ApprovalRequirement)
 	}
+	if plan.PolicyDecision.Version != unified.ActionPolicyDecisionVersion || len(plan.PolicyDecision.Authorities) != 1 || plan.PolicyDecision.Authorities[0].Kind != unified.ActionPolicyAuthorityCapability {
+		t.Fatalf("public/manual plan provenance = %#v, want capability authority only", plan.PolicyDecision)
+	}
 	if plan.Preflight == nil || plan.Preflight.Target != "vm:42" {
 		t.Fatalf("Preflight = %#v, want target vm:42", plan.Preflight)
 	}
 	if len(plan.PredictedBlastRadius) != 2 || plan.PredictedBlastRadius[0] != "vm:42" || plan.PredictedBlastRadius[1] != "node-1" {
 		t.Fatalf("PredictedBlastRadius = %#v", plan.PredictedBlastRadius)
+	}
+}
+
+func TestHandlePlanActionRejectsClientSuppliedPolicyProvenance(t *testing.T) {
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	body := bytes.NewBufferString(`{"requestId":"req-1","resourceId":"vm:42","capabilityName":"restart","reason":"recover","policyDecision":{"version":1}}`)
+	rec := httptest.NewRecorder()
+	h.HandlePlanAction(rec, actionHandlerTestRequest(httptest.NewRequest(http.MethodPost, "/api/actions/plan", body), ""))
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_action_request") {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestApprovalPlanInfoRejectsMalformedCanonicalPolicyDecision(t *testing.T) {
+	for name, payload := range map[string]json.RawMessage{
+		"unknown_field":   []byte(`{"version":1,"unknown":true}`),
+		"trailing_value":  []byte(`{"version":0,"status":"legacy_unknown"}{}`),
+		"partial_current": []byte(`{"version":1,"status":"resolved"}`),
+		"null":            []byte(`null`),
+		"empty_object":    []byte(`{}`),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := approvalPlanInfoToRequest(&aicontracts.ActionPlanInfo{PolicyDecision: payload}); err == nil {
+				t.Fatal("malformed provenance downgraded to legacy truth")
+			}
+		})
+	}
+	requirement := unified.ApprovalRequirementForFloor(unified.ApprovalAdmin)
+	provenance, err := unified.BuildActionPolicyDecisionProvenance("act-1", unified.ActionPolicyDecisionScope{OrgID: "default", ResourceID: "vm:42", CapabilityName: "restart"}, []unified.ActionPolicyAuthorityFactor{{Kind: unified.ActionPolicyAuthorityCapability, SourceID: "capability-registry:restart", Revision: "policy:sha256:0123456789abcdef01234567", Status: unified.ActionPolicyAuthorityConsulted, ApprovalFloor: unified.ApprovalAdmin, ReasonCodes: []unified.ActionPolicyReasonCode{unified.PolicyReasonCapabilityApprovalAdmin, unified.PolicyReasonCapabilityAutoNever}}}, requirement, true, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(provenance)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := approvalPlanInfoToRequest(&aicontracts.ActionPlanInfo{ActionID: "act-other", Allowed: true, RequiresApproval: true, ApprovalPolicy: string(unified.ApprovalAdmin), PolicyDecision: payload}); err == nil {
+		t.Fatal("cross-plan canonical provenance was accepted")
+	}
+	canonicalPlan := &unified.ActionPlan{ActionID: "act-1", Allowed: true, RequiresApproval: true, ApprovalPolicy: unified.ApprovalAdmin, ApprovalRequirement: requirement, PolicyDecision: provenance}
+	converted, err := approvalPlanInfoToRequest(approvalPlanRequestToInfo(canonicalPlan))
+	if err != nil || converted == nil || !reflect.DeepEqual(converted.PolicyDecision, provenance) || converted.ApprovalRequirement != requirement {
+		t.Fatalf("canonical provenance relay round trip: plan=%#v err=%v", converted, err)
 	}
 }
 
@@ -257,6 +305,21 @@ func TestHandlePlanActionRejectsOrIgnoresPublicRequestedByAndStampsAuthenticated
 	}
 	if len(events) != 2 {
 		t.Fatalf("retry duplicated lifecycle events: %#v", events)
+	}
+
+	listRec := httptest.NewRecorder()
+	h.HandleListActions(listRec, httptest.NewRequest(http.MethodGet, "/api/actions?view=pending", nil))
+	var inbox actionInboxResponse
+	if listRec.Code != http.StatusOK || json.Unmarshal(listRec.Body.Bytes(), &inbox) != nil || len(inbox.Actions) != 1 || !reflect.DeepEqual(inbox.Actions[0].Plan.PolicyDecision, plan.PolicyDecision) {
+		t.Fatalf("list provenance mismatch: status=%d body=%s", listRec.Code, listRec.Body.String())
+	}
+	detailRec := httptest.NewRecorder()
+	detailReq := httptest.NewRequest(http.MethodGet, "/api/actions/"+plan.ActionID, nil)
+	detailReq.SetPathValue("id", plan.ActionID)
+	h.HandleGetAction(detailRec, detailReq)
+	var detail actionlifecycle.ActionDetail
+	if detailRec.Code != http.StatusOK || json.Unmarshal(detailRec.Body.Bytes(), &detail) != nil || !reflect.DeepEqual(detail.Audit.Plan.PolicyDecision, plan.PolicyDecision) {
+		t.Fatalf("detail provenance mismatch: status=%d body=%s", detailRec.Code, detailRec.Body.String())
 	}
 }
 

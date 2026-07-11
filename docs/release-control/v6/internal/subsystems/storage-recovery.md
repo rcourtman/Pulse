@@ -65,6 +65,13 @@ storage executor/network call. Human approval remains distinct evidence.
 Emergency stop after `executing` is best-effort cancellation, never recovery
 or rollback proof.
 
+Action audit recovery preserves the canonical plan-time `policyDecision`
+object inside the existing immutable plan JSON. SQLite reopen and MemoryStore
+round-trip retain exact authority order, source revision, scope, reason codes,
+approval requirement, and digest; absent historical fields read as explicit
+`legacy_unknown`. Recovery must never synthesize policy authorities or treat
+the descriptive snapshot as reusable dispatch authorization.
+
 Assistant access to recovery points and storage evidence is read-side context.
 `ai:chat`, relay-mobile chat, and the `read_only` control level cannot project
 or execute storage/infrastructure mutation, finding lifecycle changes, or

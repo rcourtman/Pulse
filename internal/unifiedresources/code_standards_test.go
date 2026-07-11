@@ -121,6 +121,93 @@ func TestProductionActionLifecycleDoesNotUseRecordActionAuditAsUpsert(t *testing
 	}
 }
 
+func TestActionPolicyDecisionProvenanceHasOneOwnerAndNoPublicAuthorityField(t *testing.T) {
+	declaration := regexp.MustCompile(`(?m)^type\s+ActionPolicyDecisionProvenance\b`)
+	found := []string{}
+	for _, root := range []string{"..", "../../pkg"} {
+		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			source, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if declaration.Match(source) {
+				found = append(found, filepath.ToSlash(path))
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(found) != 1 || !strings.HasSuffix(found[0], "unifiedresources/action_policy_provenance.go") {
+		t.Fatalf("policy decision provenance owners=%v", found)
+	}
+	apiSource, err := os.ReadFile("../api/actions.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestStart := strings.Index(string(apiSource), "type publicActionPlanRequest struct")
+	if requestStart < 0 {
+		t.Fatal("public action planning request type is missing")
+	}
+	requestEnd := strings.Index(string(apiSource)[requestStart:], "\n}")
+	if requestEnd < 0 || strings.Contains(string(apiSource)[requestStart:requestStart+requestEnd], "PolicyDecision") {
+		t.Fatal("public action planning request must not accept policy provenance")
+	}
+	lifecycleSource, err := os.ReadFile("../actionlifecycle/service.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(lifecycleSource), "PolicyFactors []unified.ActionPolicyAuthorityFactor") {
+		t.Fatal("trusted broker policy provenance must enter only through PlanOptions")
+	}
+}
+
+func TestCanonicalActionPlanConstructionCannotBypassPolicyProvenancePlanner(t *testing.T) {
+	allowed := map[string]bool{
+		"../actionplanner/planner.go": true,
+		// Boundary-only compatibility conversions and retired command-shaped
+		// audit history remain readable but are not canonical action producers.
+		"../api/router_routes_ai_relay.go": true,
+		"../ai/tools/action_audit.go":      true,
+	}
+	pattern := regexp.MustCompile(`(?s)\bActionPlan\s*\{\s*[A-Za-z_][A-Za-z0-9_]*\s*:`)
+	err := filepath.Walk("..", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		source, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if pattern.Match(source) && !allowed[filepath.ToSlash(path)] {
+			t.Errorf("%s constructs ActionPlan outside the canonical planner or named compatibility boundary", filepath.ToSlash(path))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path := range allowed {
+		source, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !pattern.Match(source) {
+			t.Fatalf("expected ActionPlan construction in %s", path)
+		}
+	}
+}
+
 // readConsumerGoFiles returns the contents of all non-test .go files in the
 // specified directory (relative to the repo internal/ root).
 func readConsumerGoFiles(t *testing.T, relDir string) map[string]string {

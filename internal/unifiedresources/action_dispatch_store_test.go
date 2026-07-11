@@ -33,6 +33,23 @@ func admitDispatchTestAction(t *testing.T, store ResourceStore, id string, now t
 	return attempt
 }
 
+func TestMemoryStoreActionStateQueryDeepCopiesPolicyProvenance(t *testing.T) {
+	store := NewMemoryStore()
+	record := policyProvenanceTestRecord(t, "act_state_policy_copy")
+	if _, created, err := store.CreateActionAudit(record, policyProvenanceInitialEvents(record)); err != nil || !created {
+		t.Fatalf("CreateActionAudit: created=%v err=%v", created, err)
+	}
+	first, err := store.GetActionAuditsByStates([]ActionState{ActionStatePending}, 10)
+	if err != nil || len(first) != 1 {
+		t.Fatalf("first=%#v err=%v", first, err)
+	}
+	first[0].Plan.PolicyDecision.Authorities[0].ReasonCodes[0] = PolicyReasonCapabilityApprovalMFA
+	second, err := store.GetActionAuditsByStates([]ActionState{ActionStatePending}, 10)
+	if err != nil || len(second) != 1 || second[0].Plan.PolicyDecision.Authorities[0].ReasonCodes[0] != PolicyReasonCapabilityApprovalAdmin {
+		t.Fatalf("state query shared mutable provenance: second=%#v err=%v", second, err)
+	}
+}
+
 func runActionDispatchCrashBoundaries(t *testing.T, store ResourceStore) {
 	t.Helper()
 	now := time.Date(2026, 7, 11, 14, 0, 0, 0, time.UTC)

@@ -13745,7 +13745,26 @@ func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
 		"expiresAt":"2026-05-03T10:05:00Z",
 		"resourceVersion":"resource:sha256:54fb6f0264f42e0f2724e513",
 		"policyVersion":"policy:sha256:0bce3cd2df181ace685598eb",
-		"planHash":"sha256:216bf02a80fa947125afcb54241e4972d79144da45ff57f5360fbca9a1623ca8",
+		"policyDecision":{
+			"version":1,
+			"status":"resolved",
+			"decisionId":"policy-decision:sha256:2a7de3214fdc8e7c083f5cddfcc5ecc26558b81d0818505d0e60e01deb2d6b08",
+			"actionId":"act_4ccd0282616d29d9c1751617eaee44c7",
+			"scope":{"orgId":"default","resourceId":"vm:42","capabilityName":"restart"},
+			"authorities":[{
+				"kind":"capability_registry",
+				"sourceId":"capability-registry:restart",
+				"revision":"policy:sha256:0bce3cd2df181ace685598eb",
+				"status":"consulted",
+				"scope":{"orgId":"default","resourceId":"vm:42","capabilityName":"restart"},
+				"approvalFloor":"admin",
+				"reasonCodes":["capability_approval_admin","capability_auto_never"]
+			}],
+			"approvalRequirement":{"version":1,"floor":"admin","quorum":1,"disallowRequester":false},
+			"planningAllowed":true,
+			"requiresApproval":true
+		},
+		"planHash":"sha256:8e3686b062d158148a433e9d3fcd367388923992a44f4aa4d9730658a036f092",
 		"preflight":{
 			"target":"vm:42",
 			"currentState":"web-42 is warning",
@@ -13872,7 +13891,7 @@ func TestContract_ActionPlanAuditLifecycleSnapshot(t *testing.T) {
 			"requestId":"agent-run-123",
 			"requestedBy":"agent:oncall-helper",
 			"approvalPolicy":"admin",
-			"planHash":"sha256:1473ff97f7a51c6956d40eca1d8e710db1c0abd008b2ab429d3071b81f387fde",
+			"planHash":"sha256:24cb991bf81b5f106e1875478dc5f6a879cf29858829b052a80a05b3109daa8e",
 			"preflightSummary":"No provider-supported dry run is advertised for this capability."
 		},
 		"events":[
@@ -14020,6 +14039,7 @@ func TestContract_ActionDecisionJSONSnapshot(t *testing.T) {
 					"expiresAt":"2026-05-04T15:04:00Z",
 					"resourceVersion":"resource:sha256:contract",
 					"policyVersion":"policy:sha256:contract",
+					"policyDecision":{"version":0,"status":"legacy_unknown","scope":{"orgId":"","resourceId":"","capabilityName":""},"authorities":null,"approvalRequirement":{"version":0,"floor":"","quorum":0,"disallowRequester":false},"planningAllowed":false,"requiresApproval":false},
 					"planHash":"sha256:contract",
 					"preflight":{
 						"target":"vm:42",
@@ -14215,6 +14235,7 @@ func TestContract_ActionExecutionJSONSnapshot(t *testing.T) {
 					"expiresAt":"2026-05-04T15:33:00Z",
 					"resourceVersion":"resource:sha256:contract",
 					"policyVersion":"policy:sha256:contract",
+					"policyDecision":{"version":0,"status":"legacy_unknown","scope":{"orgId":"","resourceId":"","capabilityName":""},"authorities":null,"approvalRequirement":{"version":0,"floor":"","quorum":0,"disallowRequester":false},"planningAllowed":false,"requiresApproval":false},
 					"planHash":"sha256:contract",
 					"preflight":{
 						"target":"vm:42",
@@ -14660,6 +14681,7 @@ func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 					"expiresAt":"2026-03-18T16:05:00Z",
 					"resourceVersion":"rv-1",
 					"policyVersion":"pv-1",
+					"policyDecision":{"version":0,"status":"legacy_unknown","scope":{"orgId":"","resourceId":"","capabilityName":""},"authorities":null,"approvalRequirement":{"version":0,"floor":"","quorum":0,"disallowRequester":false},"planningAllowed":false,"requiresApproval":false},
 					"planHash":"hash-1",
 					"preflight":{
 						"target":"vm:42",
@@ -20713,6 +20735,8 @@ func TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned(t *testing.T) 
 	}
 	for _, required := range []string{
 		"autoAuthorizationDecision",
+		"evaluatePatrolActionPolicy",
+		"loadPatrolActionPolicyInputs",
 		"policyAuthorizationLease",
 		"AutoAuthorizeLowRisk",
 		"AllowsAutoRemediationAt",
@@ -20722,6 +20746,9 @@ func TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned(t *testing.T) 
 		if !strings.Contains(src, required) {
 			t.Fatalf("patrol_action_broker.go must keep core policy authorization guard %q", required)
 		}
+	}
+	if strings.Count(src, "evaluatePatrolActionPolicy(") < 4 {
+		t.Fatal("planning, direct evaluation, and dispatch lease must share one Patrol policy evaluator")
 	}
 	// Enterprise/model code still cannot dispatch directly. Core may call
 	// only the canonical lifecycle decision/execute methods after policy.

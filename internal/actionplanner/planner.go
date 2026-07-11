@@ -49,13 +49,21 @@ type Planner struct {
 }
 
 func (p Planner) Plan(req unified.ActionRequest, resource unified.Resource) (unified.ActionPlan, error) {
-	return p.PlanWithRequirement(req, resource, unified.ApprovalRequirement{})
+	return p.PlanWithPolicyFactors(req, resource, unified.ApprovalRequirement{}, nil)
 }
 
 // PlanWithRequirement lets trusted policy resolution strengthen the
 // capability-owned floor while keeping the resulting requirement inside the
 // deterministic action identity and plan hash.
 func (p Planner) PlanWithRequirement(req unified.ActionRequest, resource unified.Resource, requested unified.ApprovalRequirement) (unified.ActionPlan, error) {
+	return p.PlanWithPolicyFactors(req, resource, requested, nil)
+}
+
+// PlanWithPolicyFactors captures trusted server-side tenant and resource
+// authorities alongside the capability registry decision. Additional factors
+// are descriptive plan-time evidence; execution authorization still requires
+// the lifecycle's current-policy admission contract.
+func (p Planner) PlanWithPolicyFactors(req unified.ActionRequest, resource unified.Resource, requested unified.ApprovalRequirement, additional []unified.ActionPolicyAuthorityFactor) (unified.ActionPlan, error) {
 	req = normalizeRequest(req)
 	if err := validateRequest(req); err != nil {
 		return unified.ActionPlan{}, err
@@ -95,7 +103,20 @@ func (p Planner) PlanWithRequirement(req unified.ActionRequest, resource unified
 	}
 	resourceVersion := ResourceVersion(resource)
 	policyVersion := PolicyVersion(capability)
+	scope := unified.NormalizeActionPolicyDecisionScope(unified.ActionPolicyDecisionScope{
+		OrgID: req.Actor.OrgID, ResourceID: req.ResourceID, CapabilityName: req.CapabilityName,
+	})
+	authorities := []unified.ActionPolicyAuthorityFactor{capabilityPolicyFactor(capability, policyVersion, scope)}
+	for _, factor := range additional {
+		factor.Scope = scope
+		factor.ReasonCodes = append([]unified.ActionPolicyReasonCode(nil), factor.ReasonCodes...)
+		authorities = append(authorities, factor)
+	}
 	actionID := actionID(req, requirement, resourceVersion, policyVersion)
+	policyDecision, err := unified.BuildActionPolicyDecisionProvenance(actionID, scope, authorities, requirement, true, requiresApproval)
+	if err != nil {
+		return unified.ActionPlan{}, &ValidationError{Field: "policyDecision", Message: err.Error()}
+	}
 
 	plan := unified.ActionPlan{
 		ActionID:             actionID,
@@ -111,12 +132,41 @@ func (p Planner) PlanWithRequirement(req unified.ActionRequest, resource unified
 		ExpiresAt:            plannedAt.Add(ttl),
 		ResourceVersion:      resourceVersion,
 		PolicyVersion:        policyVersion,
+		PolicyDecision:       policyDecision,
 		Preflight:            buildPreflight(resource, capability, req, actionID, requirement.Floor, plannedAt),
 	}
 	plan.PlanHash = planHash(req, plan)
 	plan.Preflight = unified.NormalizeActionPreflight(plan.Preflight, req, plan)
 
 	return plan, nil
+}
+
+func capabilityPolicyFactor(capability unified.ResourceCapability, revision string, scope unified.ActionPolicyDecisionScope) unified.ActionPolicyAuthorityFactor {
+	floor := normalizeApprovalPolicy(capability.MinimumApprovalLevel)
+	reasons := []unified.ActionPolicyReasonCode{}
+	switch floor {
+	case unified.ApprovalNone:
+		reasons = append(reasons, unified.PolicyReasonCapabilityApprovalNone)
+	case unified.ApprovalAdmin:
+		reasons = append(reasons, unified.PolicyReasonCapabilityApprovalAdmin)
+	case unified.ApprovalMultiFactor:
+		reasons = append(reasons, unified.PolicyReasonCapabilityApprovalMFA)
+	case unified.ApprovalDryRun:
+		reasons = append(reasons, unified.PolicyReasonCapabilityDryRun)
+	}
+	switch unified.NormalizeActionAutoAuthorizationClass(capability.AutoAuthorization) {
+	case unified.AutoAuthorizeLowRisk:
+		reasons = append(reasons, unified.PolicyReasonCapabilityAutoLowRisk)
+	case unified.AutoAuthorizeElevated:
+		reasons = append(reasons, unified.PolicyReasonCapabilityAutoElevated)
+	default:
+		reasons = append(reasons, unified.PolicyReasonCapabilityAutoNever)
+	}
+	return unified.ActionPolicyAuthorityFactor{
+		Kind: unified.ActionPolicyAuthorityCapability, SourceID: "capability-registry:" + strings.TrimSpace(capability.Name),
+		Revision: revision, Status: unified.ActionPolicyAuthorityConsulted, Scope: scope,
+		ApprovalFloor: floor, ReasonCodes: reasons,
+	}
 }
 
 func ResourceVersion(resource unified.Resource) string {
@@ -458,16 +508,17 @@ func actionID(req unified.ActionRequest, requirement unified.ApprovalRequirement
 
 func planHash(req unified.ActionRequest, plan unified.ActionPlan) string {
 	payload := struct {
-		ActionID             string                      `json:"actionId"`
-		Request              unified.ActionRequest       `json:"request"`
-		Allowed              bool                        `json:"allowed"`
-		RequiresApproval     bool                        `json:"requiresApproval"`
-		ApprovalPolicy       unified.ActionApprovalLevel `json:"approvalPolicy"`
-		ApprovalRequirement  unified.ApprovalRequirement `json:"approvalRequirement"`
-		PredictedBlastRadius []string                    `json:"predictedBlastRadius"`
-		RollbackAvailable    bool                        `json:"rollbackAvailable"`
-		ResourceVersion      string                      `json:"resourceVersion"`
-		PolicyVersion        string                      `json:"policyVersion"`
+		ActionID             string                                 `json:"actionId"`
+		Request              unified.ActionRequest                  `json:"request"`
+		Allowed              bool                                   `json:"allowed"`
+		RequiresApproval     bool                                   `json:"requiresApproval"`
+		ApprovalPolicy       unified.ActionApprovalLevel            `json:"approvalPolicy"`
+		ApprovalRequirement  unified.ApprovalRequirement            `json:"approvalRequirement"`
+		PredictedBlastRadius []string                               `json:"predictedBlastRadius"`
+		RollbackAvailable    bool                                   `json:"rollbackAvailable"`
+		ResourceVersion      string                                 `json:"resourceVersion"`
+		PolicyVersion        string                                 `json:"policyVersion"`
+		PolicyDecision       unified.ActionPolicyDecisionProvenance `json:"policyDecision"`
 	}{
 		ActionID:             plan.ActionID,
 		Request:              req,
@@ -479,6 +530,7 @@ func planHash(req unified.ActionRequest, plan unified.ActionPlan) string {
 		RollbackAvailable:    plan.RollbackAvailable,
 		ResourceVersion:      plan.ResourceVersion,
 		PolicyVersion:        plan.PolicyVersion,
+		PolicyDecision:       plan.PolicyDecision,
 	}
 	return "sha256:" + hashJSON(payload, 32)
 }

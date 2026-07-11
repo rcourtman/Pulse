@@ -812,7 +812,7 @@ func (m *MemoryStore) GetActionAuditsByStates(states []ActionState, limit int) (
 	var out []ActionAuditRecord
 	for i := len(m.actionAudits) - 1; i >= 0; i-- {
 		if set[m.actionAudits[i].State] {
-			out = append(out, m.actionAudits[i])
+			out = append(out, cloneActionAuditRecordForRead(m.actionAudits[i]))
 			if limit > 0 && len(out) >= limit {
 				break
 			}

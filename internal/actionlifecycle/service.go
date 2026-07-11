@@ -151,6 +151,9 @@ type PlanOptions struct {
 	// Origin identifies the internal proposing surface and its
 	// correlation IDs. Nil for operator/API-initiated plans.
 	Origin *unified.ActionOrigin
+	// PolicyFactors are trusted, bounded plan-time authorities consulted by
+	// an internal broker in addition to the capability registry.
+	PolicyFactors []unified.ActionPolicyAuthorityFactor
 }
 
 type DecisionAuthorizer interface {
@@ -367,8 +370,12 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 
 	planner := actionplanner.Planner{}
 	var plan unified.ActionPlan
-	if opts.ApprovalRequirement != nil {
-		plan, err = planner.PlanWithRequirement(req, *resource, *opts.ApprovalRequirement)
+	if opts.ApprovalRequirement != nil || len(opts.PolicyFactors) > 0 {
+		requirement := unified.ApprovalRequirement{}
+		if opts.ApprovalRequirement != nil {
+			requirement = *opts.ApprovalRequirement
+		}
+		plan, err = planner.PlanWithPolicyFactors(req, *resource, requirement, opts.PolicyFactors)
 	} else {
 		plan, err = planner.Plan(req, *resource)
 	}
@@ -1216,9 +1223,13 @@ func (s *Service) ValidatePlanFresh(orgID string, record unified.ActionAuditReco
 	if !ok || resource == nil {
 		return fmt.Errorf("%w: resource %q is no longer present", unified.ErrActionPlanDrift, normalized.Request.ResourceID)
 	}
+	additionalFactors := append([]unified.ActionPolicyAuthorityFactor(nil), normalized.Plan.PolicyDecision.Authorities...)
+	if len(additionalFactors) > 0 && additionalFactors[0].Kind == unified.ActionPolicyAuthorityCapability {
+		additionalFactors = additionalFactors[1:]
+	}
 	currentPlan, err := (actionplanner.Planner{Now: func() time.Time {
 		return normalized.Plan.PlannedAt
-	}}).Plan(normalized.Request, *resource)
+	}}).PlanWithPolicyFactors(normalized.Request, *resource, normalized.Plan.ApprovalRequirement, additionalFactors)
 	if err != nil {
 		return fmt.Errorf("%w: %v", unified.ErrActionPlanDrift, err)
 	}

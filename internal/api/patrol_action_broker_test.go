@@ -103,6 +103,51 @@ func TestPatrolActionBrokerTerminalReplayPreservesAuditAndEvents(t *testing.T) {
 	}
 }
 
+func TestPatrolActionBrokerSnapshotsTenantResourceAndCapabilityPolicyAtPlanTime(t *testing.T) {
+	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := unified.ResourceOperatorState{CanonicalID: "vm:42", NeverAutoRemediate: true, AutoRemediationPolicy: unified.AutoRemediationPolicy{Enabled: true, CapabilityNames: []string{"restart"}}, SetAt: time.Date(2026, 7, 11, 20, 0, 0, 0, time.UTC)}
+	if err := store.SetResourceOperatorState(state); err != nil {
+		t.Fatal(err)
+	}
+	broker := NewPatrolActionBroker("default", h, func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+		return PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "monitor", EmergencyStop: true}, nil
+	})
+	disposition, err := broker.Submit(context.Background(), patrolTestProposal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, found, err := store.GetActionAudit(disposition.ActionID)
+	if err != nil || !found {
+		t.Fatalf("record: found=%v err=%v", found, err)
+	}
+	provenance := record.Plan.PolicyDecision
+	if provenance.Version != unified.ActionPolicyDecisionVersion || len(provenance.Authorities) != 3 {
+		t.Fatalf("provenance=%#v", provenance)
+	}
+	if provenance.Authorities[0].Kind != unified.ActionPolicyAuthorityCapability || provenance.Authorities[1].Kind != unified.ActionPolicyAuthorityTenant || provenance.Authorities[2].Kind != unified.ActionPolicyAuthorityResource {
+		t.Fatalf("authority order=%#v", provenance.Authorities)
+	}
+	if !containsPolicyReason(provenance.Authorities[1].ReasonCodes, unified.PolicyReasonTenantEmergencyStop) || !containsPolicyReason(provenance.Authorities[1].ReasonCodes, unified.PolicyReasonTenantModeMonitor) || !containsPolicyReason(provenance.Authorities[2].ReasonCodes, unified.PolicyReasonResourceNeverAuto) {
+		t.Fatalf("policy reasons=%#v", provenance.Authorities)
+	}
+	if executor.calls != 0 {
+		t.Fatalf("descriptive provenance authorized dispatch: calls=%d", executor.calls)
+	}
+}
+
+func containsPolicyReason(reasons []unified.ActionPolicyReasonCode, target unified.ActionPolicyReasonCode) bool {
+	for _, reason := range reasons {
+		if reason == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestPatrolActionBrokerConflictingOriginReplayFailsWithoutDispatch(t *testing.T) {
 	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
 	broker := NewPatrolActionBroker("default", h)

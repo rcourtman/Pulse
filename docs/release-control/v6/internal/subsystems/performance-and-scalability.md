@@ -400,6 +400,14 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    autonomy/full-unlock posture only during proposal submission. Router setup
    and unrelated protected requests must not enumerate tenants, load provider
    catalogs, scan resource policy, or execute action planning eagerly.
+   Plan-time policy provenance adds one bounded capability lookup plus the
+   already-scoped tenant/resource reads on Patrol submission only. One shared
+   pure evaluator derives both the descriptive factors and automatic
+   eligibility; dispatch re-fetches current inputs and invokes that evaluator
+   once before atomically persisting its lease. The provenance object is capped
+   at three ordered authorities and eight reason codes per authority. It rides
+   the existing `plan_json` audit blob, so Memory/SQLite parity and reopen need
+   no side table or unbounded query fan-out.
    Proxmox VM/LXC lifecycle execution follows that same routed-executor budget:
    router setup may register the Proxmox executor alongside Docker / Podman,
    but it must not resolve guests, probe node agents, call `qm` / `pct`, poll

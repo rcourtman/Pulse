@@ -72,6 +72,25 @@ func TestMemoryStoreCreateActionAuditConcurrentReturnsCurrent(t *testing.T) {
 	}
 }
 
+func TestMemoryStoreActionAuditReadsDeepCopyPolicyProvenance(t *testing.T) {
+	store := NewMemoryStore()
+	record := policyProvenanceTestRecord(t, "act_memory_policy_copy")
+	created, ok, err := store.CreateActionAudit(record, policyProvenanceInitialEvents(record))
+	if err != nil || !ok {
+		t.Fatalf("CreateActionAudit: created=%v err=%v", ok, err)
+	}
+	created.Plan.PolicyDecision.Authorities[0].ReasonCodes[0] = PolicyReasonCapabilityApprovalMFA
+	got, found, err := store.GetActionAudit(record.ID)
+	if err != nil || !found || !reflect.DeepEqual(got.Plan.PolicyDecision, record.Plan.PolicyDecision) {
+		t.Fatalf("GetActionAudit shared mutable provenance: found=%v err=%v provenance=%#v", found, err, got.Plan.PolicyDecision)
+	}
+	got.Plan.PolicyDecision.Authorities[0].ReasonCodes[0] = PolicyReasonCapabilityApprovalMFA
+	pending, err := store.GetPendingActionAudits(10)
+	if err != nil || len(pending) != 1 || !reflect.DeepEqual(pending[0].Plan.PolicyDecision, record.Plan.PolicyDecision) {
+		t.Fatalf("GetPendingActionAudits shared mutable provenance: audits=%#v err=%v", pending, err)
+	}
+}
+
 func TestMemoryStoreActionTransitionsAreMonotonic(t *testing.T) {
 	store := NewMemoryStore()
 	record := atomicLifecycleTestRecord("act_memory_terminal", ActionStatePending)

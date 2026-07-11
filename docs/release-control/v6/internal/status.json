@@ -4499,6 +4499,108 @@
           "evidence_tier": "test-proof"
         }
       ]
+    },
+    {
+      "id": "RA40",
+      "summary": "Pending governed actions expose one server-authored, versioned policy-decision provenance object: bounded capability and applicable tenant/resource authorities, source revisions, scope, approval requirement, and stable reason codes are immutable plan-hash inputs and durable audit/API evidence, while dispatch still requires a fresh Task 04 authorization lease and current-policy recheck.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6",
+        "L10",
+        "L13",
+        "L14",
+        "L15",
+        "L16",
+        "L20"
+      ],
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "ai-runtime",
+        "api-contracts",
+        "patrol-intelligence",
+        "performance-and-scalability",
+        "security-privacy",
+        "storage-recovery",
+        "unified-resources"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "ra40-server-authored-action-policy-provenance",
+          "run": [
+            "go",
+            "test",
+            "./internal/unifiedresources",
+            "./internal/actionplanner",
+            "./internal/actionlifecycle",
+            "./internal/api",
+            "-run",
+            "TestActionPolicyDecision|TestMemoryStoreActionAuditReadsDeepCopyPolicyProvenance|TestMemoryStoreActionStateQueryDeepCopiesPolicyProvenance|TestActionPolicyDecisionProvenanceHasOneOwner|TestCanonicalActionPlanConstructionCannotBypassPolicyProvenancePlanner|TestPlannerPolicyDecisionChangesPlanHashWithoutReusingExecutionAuthority|TestActionPolicyProvenanceParticipatesInFreshnessWithoutAuthorizingDispatch|TestHandlePlanActionBindsActorAndPlanHashToAuthenticatedOrg|TestHandlePlanActionRejectsClientSuppliedPolicyProvenance|TestApprovalPlanInfoRejectsMalformedCanonicalPolicyDecision|TestPatrolActionBrokerSnapshotsTenantResourceAndCapabilityPolicyAtPlanTime|TestPatrolActionBrokerDispatchTimePolicyRevocation|TestContract_ActionPlanJSONSnapshot|TestContract_ActionPlanAuditLifecycleSnapshot|TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/actionlifecycle/service_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/actionplanner/planner_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/actions_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/patrol_action_broker_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/action_dispatch_store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/action_dispatch_store_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/action_policy_provenance.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/action_policy_provenance_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {

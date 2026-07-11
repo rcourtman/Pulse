@@ -5773,6 +5773,16 @@ biometric claims never satisfy an MFA floor. Until the core step-up verifier
 accepts action-bound cryptographic evidence, the honest runtime outcome is
 step-up unavailable, not MFA approved.
 
+Patrol action proposals persist the exact bounded policy authorities consulted
+at planning time through the canonical unified-resource `policyDecision`
+object. Capability, tenant Patrol, and resource operator factors retain typed
+source revisions and reason codes; unavailable and absent sources remain
+explicit rather than becoming human-authored labels. Planning and dispatch
+call one shared pure Patrol evaluator over separately fetched current inputs.
+The plan snapshot is descriptive context for Task 11 and is never passed back
+as automatic authority; Task 04 dispatch admission still re-fetches policy and
+issues the only executable lease.
+
 AI and Patrol projections consume `unifiedresources.ActionResultV2`; they do
 not own action-result enums. Finding reconciliation maps confirmed,
 contradicted, and inconclusive verification independently from execution, and

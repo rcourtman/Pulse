@@ -3310,7 +3310,7 @@ func (m *MemoryStore) CreateActionAudit(record ActionAuditRecord, initialEvents 
 	defer m.mu.Unlock()
 	for i := range m.actionAudits {
 		if m.actionAudits[i].ID == record.ID {
-			current := m.actionAudits[i]
+			current := cloneActionAuditRecordForRead(m.actionAudits[i])
 			if !ActionAuditIdentityMatches(current, record) {
 				return current, false, ErrActionIdentityConflict
 			}
@@ -3324,9 +3324,9 @@ func (m *MemoryStore) CreateActionAudit(record ActionAuditRecord, initialEvents 
 			}
 		}
 	}
-	m.actionAudits = append(m.actionAudits, record)
+	m.actionAudits = append(m.actionAudits, cloneActionAuditRecordForRead(record))
 	m.actionLifecycleEvents = append(m.actionLifecycleEvents, events...)
-	return record, true, nil
+	return cloneActionAuditRecordForRead(record), true, nil
 }
 
 func (m *MemoryStore) RecordActionAudit(record ActionAuditRecord) error {
@@ -3349,7 +3349,7 @@ func (m *MemoryStore) GetActionAudit(actionID string) (ActionAuditRecord, bool, 
 	}
 	for i := len(m.actionAudits) - 1; i >= 0; i-- {
 		if m.actionAudits[i].ID == actionID {
-			return m.actionAudits[i], true, nil
+			return cloneActionAuditRecordForRead(m.actionAudits[i]), true, nil
 		}
 	}
 	return ActionAuditRecord{}, false, nil
@@ -3374,7 +3374,10 @@ func (m *MemoryStore) GetLatestActionAuditByOrigin(surface, investigationID stri
 			found = true
 		}
 	}
-	return latest, found, nil
+	if !found {
+		return ActionAuditRecord{}, false, nil
+	}
+	return cloneActionAuditRecordForRead(latest), true, nil
 }
 
 func (m *MemoryStore) GetPendingActionAudits(limit int) ([]ActionAuditRecord, error) {
@@ -3386,7 +3389,7 @@ func (m *MemoryStore) GetPendingActionAudits(limit int) ([]ActionAuditRecord, er
 	out := make([]ActionAuditRecord, 0)
 	for _, record := range m.actionAudits {
 		if record.State == ActionStatePending {
-			out = append(out, record)
+			out = append(out, cloneActionAuditRecordForRead(record))
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -3399,6 +3402,10 @@ func (m *MemoryStore) GetPendingActionAudits(limit int) ([]ActionAuditRecord, er
 		out = out[:limit]
 	}
 	return out, nil
+}
+
+func cloneActionAuditRecordForRead(record ActionAuditRecord) ActionAuditRecord {
+	return redactActionAuditRecordFromStore(record)
 }
 
 func (m *MemoryStore) RecordActionDecision(record ActionAuditRecord, event ActionLifecycleEvent) error {
@@ -3617,7 +3624,7 @@ func (m *MemoryStore) GetActionAudits(canonicalID string, since time.Time, limit
 		if !since.IsZero() && record.CreatedAt.Before(since) {
 			continue
 		}
-		out = append(out, record)
+		out = append(out, cloneActionAuditRecordForRead(record))
 		if limit > 0 && len(out) >= limit {
 			break
 		}

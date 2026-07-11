@@ -82,6 +82,9 @@ func TestPlannerBuildsDeterministicGovernedPlan(t *testing.T) {
 	if !plan.ExpiresAt.Equal(now.Add(DefaultPlanTTL)) {
 		t.Fatalf("ExpiresAt = %s, want %s", plan.ExpiresAt, now.Add(DefaultPlanTTL))
 	}
+	if plan.PolicyDecision.Version != unified.ActionPolicyDecisionVersion || plan.PolicyDecision.Status != unified.ActionPolicyDecisionResolved || len(plan.PolicyDecision.Authorities) != 1 || plan.PolicyDecision.Authorities[0].Kind != unified.ActionPolicyAuthorityCapability {
+		t.Fatalf("direct plan must record only its consulted capability authority: %#v", plan.PolicyDecision)
+	}
 	if len(plan.PredictedBlastRadius) != 3 ||
 		plan.PredictedBlastRadius[0] != "vm:42" ||
 		plan.PredictedBlastRadius[1] != "agent:node-1" ||
@@ -96,6 +99,29 @@ func TestPlannerBuildsDeterministicGovernedPlan(t *testing.T) {
 	}
 	if plan.Preflight.DryRunAvailable {
 		t.Fatalf("DryRunAvailable = true, want false without provider dry-run contract")
+	}
+}
+
+func TestPlannerPolicyDecisionChangesPlanHashWithoutReusingExecutionAuthority(t *testing.T) {
+	now := time.Date(2026, 7, 11, 20, 30, 0, 0, time.UTC)
+	resource := unified.Resource{ID: "vm:42", Type: unified.ResourceTypeVM, Name: "web", Status: unified.StatusOnline, Capabilities: []unified.ResourceCapability{{Name: "restart", MinimumApprovalLevel: unified.ApprovalAdmin}}}
+	req := unified.ActionRequest{RequestID: "proposal-1", ResourceID: "vm:42", CapabilityName: "restart", Reason: "recover", Actor: unified.ActionActor{SubjectID: "pulse_patrol", Kind: unified.ActionActorService, CredentialID: "service:patrol", OrgID: "default"}}
+	factor := unified.ActionPolicyAuthorityFactor{Kind: unified.ActionPolicyAuthorityTenant, SourceID: "patrol-tenant-policy", Revision: "tenant-policy:sha256:0123456789abcdef01234567", Status: unified.ActionPolicyAuthorityConsulted, ReasonCodes: []unified.ActionPolicyReasonCode{unified.PolicyReasonTenantModeAssisted, unified.PolicyReasonTenantFullLocked}}
+	planner := Planner{Now: func() time.Time { return now }}
+	first, err := planner.PlanWithPolicyFactors(req, resource, unified.ApprovalRequirement{}, []unified.ActionPolicyAuthorityFactor{factor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	factor.Revision = "tenant-policy:sha256:1123456789abcdef01234567"
+	second, err := planner.PlanWithPolicyFactors(req, resource, unified.ApprovalRequirement{}, []unified.ActionPolicyAuthorityFactor{factor})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ActionID != second.ActionID {
+		t.Fatalf("descriptive tenant snapshot must not replace request identity: %q != %q", first.ActionID, second.ActionID)
+	}
+	if first.PlanHash == second.PlanHash || first.PolicyDecision.DecisionID == second.PolicyDecision.DecisionID {
+		t.Fatalf("policy provenance revision must change plan hash and decision digest")
 	}
 }
 

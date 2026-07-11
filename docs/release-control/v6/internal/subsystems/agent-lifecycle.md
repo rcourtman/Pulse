@@ -114,6 +114,16 @@ Governed action admission also treats requester and decision identity as
 server-owned lifecycle authority. The authenticated session or owner-bound API
 token supplies the immutable `ActionActor`, and the captured
 `ApprovalRequirement` is bound into the request, plan identity, and plan hash.
+
+The plan also carries the unified-resource-owned, versioned
+`ActionPolicyDecisionProvenance`. It binds the bounded policy authorities
+actually consulted, their source revisions and scope, the resulting approval
+requirement, and stable reason codes into the plan hash and immutable audit.
+This is descriptive plan-time evidence for pending-action consumers, not a
+decision or dispatch token. Lifecycle freshness may detect provenance drift,
+but execution still requires current actor/RBAC/scope checks and the Task 04
+authorization lease. Legacy rows without provenance remain explicit
+`legacy_unknown` and cannot resume nonterminal authority by implication.
 Each accepted approval increments a durable decision revision through an exact
 prior-prefix CAS, appends one typed decision fact, and atomically appends the
 approved or rejected transition only when state changes. Exact replay appends

@@ -1,8 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -490,6 +493,10 @@ func (a *approvalStoreAdapter) CreateApproval(info *aicontracts.ApprovalInfo) er
 	if store == nil {
 		return fmt.Errorf("approval store not initialized")
 	}
+	plan, err := approvalPlanInfoToRequest(info.Plan)
+	if err != nil {
+		return err
+	}
 	req := &approval.ApprovalRequest{
 		OrgID:             info.OrgID,
 		ToolID:            info.ToolID,
@@ -500,7 +507,7 @@ func (a *approvalStoreAdapter) CreateApproval(info *aicontracts.ApprovalInfo) er
 		Context:           info.Context,
 		RequestedBy:       info.RequestedBy,
 		RiskLevel:         approval.RiskLevel(info.RiskLevel),
-		Plan:              approvalPlanInfoToRequest(info.Plan),
+		Plan:              plan,
 		ContextConfidence: contextConfidenceInfoToRequest(info.ContextConfidence),
 		Preflight:         preflightInfoToRequest(info.Preflight),
 	}
@@ -572,6 +579,7 @@ func approvalPlanRequestToInfo(plan *unifiedresources.ActionPlan) *aicontracts.A
 	if plan == nil {
 		return nil
 	}
+	policyDecision, _ := json.Marshal(plan.PolicyDecision)
 	return &aicontracts.ActionPlanInfo{
 		ActionID:             plan.ActionID,
 		RequestID:            plan.RequestID,
@@ -585,21 +593,42 @@ func approvalPlanRequestToInfo(plan *unifiedresources.ActionPlan) *aicontracts.A
 		ExpiresAt:            plan.ExpiresAt,
 		ResourceVersion:      plan.ResourceVersion,
 		PolicyVersion:        plan.PolicyVersion,
+		PolicyDecision:       policyDecision,
 		PlanHash:             plan.PlanHash,
 		Preflight:            preflightRequestToInfo(plan.Preflight),
 	}
 }
 
-func approvalPlanInfoToRequest(plan *aicontracts.ActionPlanInfo) *unifiedresources.ActionPlan {
+func approvalPlanInfoToRequest(plan *aicontracts.ActionPlanInfo) (*unifiedresources.ActionPlan, error) {
 	if plan == nil {
-		return nil
+		return nil, nil
 	}
-	return &unifiedresources.ActionPlan{
+	policyDecision := unifiedresources.LegacyUnknownActionPolicyDecision()
+	if len(plan.PolicyDecision) > 0 {
+		policyDecision = unifiedresources.ActionPolicyDecisionProvenance{}
+		decoder := json.NewDecoder(bytes.NewReader(plan.PolicyDecision))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&policyDecision); err != nil {
+			return nil, fmt.Errorf("invalid canonical action policy decision: %w", err)
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			return nil, fmt.Errorf("invalid canonical action policy decision: trailing content")
+		}
+		if policyDecision.Version == 0 {
+			if policyDecision.Status != unifiedresources.ActionPolicyDecisionLegacyUnknown || !unifiedresources.IsLegacyUnknownActionPolicyDecision(policyDecision) {
+				return nil, fmt.Errorf("invalid canonical action policy decision: unsupported legacy status")
+			}
+		} else if err := unifiedresources.ValidateActionPolicyDecisionProvenance(policyDecision); err != nil {
+			return nil, fmt.Errorf("invalid canonical action policy decision: %w", err)
+		}
+	}
+	converted := &unifiedresources.ActionPlan{
 		ActionID:             plan.ActionID,
 		RequestID:            plan.RequestID,
 		Allowed:              plan.Allowed,
 		RequiresApproval:     plan.RequiresApproval,
 		ApprovalPolicy:       unifiedresources.ActionApprovalLevel(plan.ApprovalPolicy),
+		ApprovalRequirement:  policyDecision.ApprovalRequirement,
 		PredictedBlastRadius: append([]string(nil), plan.PredictedBlastRadius...),
 		RollbackAvailable:    plan.RollbackAvailable,
 		Message:              plan.Message,
@@ -607,9 +636,16 @@ func approvalPlanInfoToRequest(plan *aicontracts.ActionPlanInfo) *unifiedresourc
 		ExpiresAt:            plan.ExpiresAt,
 		ResourceVersion:      plan.ResourceVersion,
 		PolicyVersion:        plan.PolicyVersion,
+		PolicyDecision:       policyDecision,
 		PlanHash:             plan.PlanHash,
 		Preflight:            preflightInfoToRequest(plan.Preflight),
 	}
+	if policyDecision.Version != 0 && (policyDecision.ActionID != converted.ActionID ||
+		policyDecision.PlanningAllowed != converted.Allowed || policyDecision.RequiresApproval != converted.RequiresApproval ||
+		policyDecision.ApprovalRequirement.Floor != converted.ApprovalPolicy) {
+		return nil, fmt.Errorf("invalid canonical action policy decision: plan binding mismatch")
+	}
+	return converted, nil
 }
 
 func contextConfidenceRequestToInfo(conf *approval.ContextConfidence) *aicontracts.ContextConfidenceInfo {

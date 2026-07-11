@@ -970,6 +970,14 @@ requires an explicit capability allowlist, and may collect an optional daily
 time/timezone window. Patrol mode remains the tenant-wide upper bound: a
 resource opt-in cannot widen Watch only or Ask first, admit elevated work in
 Safe auto-fix, bypass the full-mode unlock, or override Never auto-remediate.
+Pending Patrol actions snapshot the bounded capability, tenant Patrol, and
+resource operator authorities actually consulted at planning into the
+server-authored action `policyDecision`. Its typed reason codes and revisions
+are explanatory evidence for Task 11, including unavailable, missing,
+emergency-stop, mode, allowlist, Never, and window posture. Planning and
+dispatch share one pure evaluator, but dispatch re-fetches current inputs and
+persists a separate authorization lease; the snapshot cannot authorize an
+automatic action or suppress current-policy revocation.
 Commercial, runtime, and documentation copy that describes this same decision
 must also use those visible labels and the umbrella name `Patrol mode`, not
 the retired `Only watch`, `Fix safe issues`, `Full control`, or generic

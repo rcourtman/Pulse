@@ -1741,6 +1741,20 @@ atomically, while pending quorum decisions do not fabricate a state change.
 Legacy nonterminal approvals without these bindings are readable but fail
 closed as replan-required.
 
+`internal/unifiedresources/action_policy_provenance.go` is the sole schema
+authority for plan-time action policy provenance. Every new canonical plan
+captures the capability-registry authority and may add only the ordered,
+bounded tenant Patrol and resource-operator authorities actually consulted by
+a trusted broker. Version, stable source identity/revision, organization,
+resource, capability, resulting approval requirement, and closed reason codes
+are digested and included in `planHash`; malformed, duplicate, cross-scope,
+contradictory, unsupported, or unbounded facts fail before audit persistence.
+`planningAllowed` means only that a typed plan could be created. It is not an
+authorization result and cannot replace the fresh Task 04 dispatch lease or
+current-policy recheck. Legacy rows without the field remain readable only as
+`legacy_unknown`; normalization never invents historical policy authorities.
+Memory and SQLite preserve the same object through replay and reopen.
+
 Action audits are the durable source of truth for Patrol action continuity.
 The store exposes optional `ActionAuditOriginReader` and
 `PendingActionAuditReader` capabilities; origin lookup is scoped by org and

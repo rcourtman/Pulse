@@ -6580,6 +6580,19 @@
             ]
           },
           {
+            "id": "action-policy-decision-provenance-runtime",
+            "label": "server-authored action policy decision provenance proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/unifiedresources/action_policy_provenance.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/unifiedresources/action_policy_provenance_test.go"
+            ]
+          },
+          {
             "id": "unified-resource-runtime-support",
             "label": "unified resource runtime support proof",
             "match_prefixes": [

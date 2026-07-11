@@ -7308,6 +7308,14 @@ action path. `ActionPlanInfo` carries canonical preflight detail across the
 broker boundary. Transition publication is org-scoped, persistence precedes
 publication, and API reconciliation treats the callback payload only as an id
 to re-read from the action lifecycle store.
+The same plan and audit projection carries the unified-resource-owned
+`policyDecision` object unchanged through plan responses, action list/detail,
+audit, and Patrol action-reference boundaries. Public plan requests cannot
+supply it. The compatibility relay adapter transports the canonical JSON
+without a second enum model and rejects unknown fields, malformed/trailing
+content, partial current-version objects, and fabricated legacy authority
+instead of silently downgrading them. `planningAllowed` is structural plan
+admission only; clients must never present it as execution authorization.
 Planning uses atomic `CreateActionAudit` with its initial lifecycle events; it
 does not perform a separate existence read followed by an upsert. Identical
 replay returns the authoritative current plan and disposition, while a
@@ -7379,6 +7387,14 @@ bounded migration window admits only the enumerated `ai:execute` and
 relay-mobile compatibility scopes. Exact decision retries return authoritative
 state without consuming step-up evidence or appending events; conflicting
 retries fail closed.
+
+Task 08 Phase B3 adds immutable plan-time policy provenance without changing
+that authority boundary. Manual/API/Assistant plans record only the capability
+registry they actually consulted. Patrol plans additionally snapshot the
+current tenant and resource factors through the same pure evaluator used by
+dispatch revalidation. A later policy change may make the descriptive plan
+snapshot stale or revoke dispatch, but the stored snapshot itself is never
+reused as a lease.
 
 Human decisions use a durable monotonic `decisionRevision` CAS. Every accepted
 approval atomically appends one revision-keyed decision fact containing the

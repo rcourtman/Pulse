@@ -1300,3 +1300,32 @@ func TestOnActionTransitionFiresForPersistedRefusals(t *testing.T) {
 		t.Fatalf("transitions = %v, want %v", transitions, want)
 	}
 }
+
+func TestActionPolicyProvenanceParticipatesInFreshnessWithoutAuthorizingDispatch(t *testing.T) {
+	now := time.Date(2026, 7, 11, 21, 0, 0, 0, time.UTC)
+	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
+	factor := unified.ActionPolicyAuthorityFactor{
+		Kind: unified.ActionPolicyAuthorityTenant, SourceID: "patrol-tenant-policy",
+		Revision: "tenant-policy:sha256:0123456789abcdef01234567", Status: unified.ActionPolicyAuthorityConsulted,
+		ReasonCodes: []unified.ActionPolicyReasonCode{unified.PolicyReasonTenantModeAssisted, unified.PolicyReasonTenantFullLocked},
+	}
+	plan, err := env.service.PlanWithOptions(context.Background(), "default", restartRequest(), PlanOptions{Actor: testActionActor("requester", "default"), PolicyFactors: []unified.ActionPolicyAuthorityFactor{factor}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, found, err := env.service.Get("default", plan.ActionID)
+	if err != nil || !found {
+		t.Fatalf("Get: found=%v err=%v", found, err)
+	}
+	if err := env.service.ValidatePlanFresh("default", record); err != nil {
+		t.Fatalf("captured descriptive snapshot should replan deterministically: %v", err)
+	}
+	record.Plan.PolicyDecision.Authorities[1].Revision = "tenant-policy:sha256:1123456789abcdef01234567"
+	record.Plan.PolicyDecision.DecisionID = unified.ActionPolicyDecisionDigest(record.Plan.PolicyDecision)
+	if err := env.service.ValidatePlanFresh("default", record); !errors.Is(err, unified.ErrActionPlanDrift) {
+		t.Fatalf("provenance drift error=%v", err)
+	}
+	if _, _, _, err := unified.BeginPolicyActionExecution(record, unified.ActionApprovalRecord{Actor: "pulse_patrol_policy", Method: unified.MethodPolicy, Outcome: unified.OutcomeApproved, Timestamp: now}, unified.ActionPolicyAuthorizationLease{}, now); !errors.Is(err, unified.ErrActionPolicyAuthorizationInvalid) {
+		t.Fatalf("descriptive provenance authorized dispatch: %v", err)
+	}
+}
