@@ -1279,3 +1279,32 @@ func TestRootInstallScriptSourceGuardSurvivesPipedExecution(t *testing.T) {
 		t.Fatalf("source guard did not fall through to the installer body when piped:\n%s", got)
 	}
 }
+
+func TestRootInstallServiceGrantsIcmpProbeCapability(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`NoNewPrivileges=true`,
+		`AmbientCapabilities=CAP_NET_RAW`,
+		`CapabilityBoundingSet=CAP_NET_RAW`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing systemd ICMP capability grant: %s", needle)
+		}
+	}
+
+	// The capability grant must live in the same hardening block that sets
+	// NoNewPrivileges, so every unit the installer writes gets both.
+	hardening := script[strings.Index(script, "# Security hardening"):]
+	if end := strings.Index(hardening, "[Install]"); end >= 0 {
+		hardening = hardening[:end]
+	}
+	if !strings.Contains(hardening, "AmbientCapabilities=CAP_NET_RAW") {
+		t.Fatal("AmbientCapabilities=CAP_NET_RAW is not in the unit's security hardening block")
+	}
+}
