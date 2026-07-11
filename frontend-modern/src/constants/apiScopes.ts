@@ -40,14 +40,14 @@ export const API_SCOPE_OPTIONS: APIScopeOption[] = [
   {
     value: AI_CHAT_SCOPE,
     label: 'Pulse Assistant chat',
-    description: 'Use interactive Pulse Assistant sessions, models, and knowledge endpoints.',
+    description: 'Use interactive Pulse Assistant sessions, models, and read knowledge.',
     group: 'AI',
   },
   {
     value: AI_EXECUTE_SCOPE,
     label: 'Pulse Intelligence actions',
     description:
-      'Use governed Patrol actions for plans, approvals, policy-allowed fixes, verification, and history.',
+      'Use governed Patrol actions for plans, approvals, policy-allowed fixes, verification, history, and knowledge changes.',
     group: 'AI',
   },
   {

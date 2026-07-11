@@ -274,6 +274,23 @@ func ClassifyRegisteredInvocation(toolName string, args map[string]interface{}) 
 	return descriptor.Classify(args)
 }
 
+// ClassifyLegacyAssistantInvocation classifies the compatibility aliases used
+// by /api/ai/execute. Keeping this mapping here lets its provider projection
+// and runtime boundary consume the same closed mutation vocabulary as the
+// registry-backed Assistant. Unknown aliases fail closed.
+func ClassifyLegacyAssistantInvocation(toolName string) InvocationClass {
+	switch strings.TrimSpace(toolName) {
+	case LegacyAssistantFetchURLToolName:
+		return InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone}
+	case LegacyAssistantRunCommandToolName:
+		return InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationInfrastructure}
+	case LegacyAssistantSetResourceURLToolName, ResolveFindingCapabilityName, DismissFindingCapabilityName:
+		return InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationPulseState}
+	default:
+		return FailClosedInvocationClass()
+	}
+}
+
 // RedactedProposalParamsMarker replaces proposal parameter values in every
 // durable or user-visible exposure of a patrol_propose_action call.
 const RedactedProposalParamsMarker = "[redacted-proposal-params]"

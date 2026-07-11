@@ -263,6 +263,14 @@ func TestAssistantSurfaceToolContractUsesRuntimeAssistantProjection(t *testing.T
 	if len(interactive.CapabilityNames) != 0 {
 		t.Fatalf("Assistant surface must not expose MCP capability names: %#v", interactive.CapabilityNames)
 	}
+	if stringSliceContains(interactive.ToolNames, agentcapabilities.PulseControlToolName) {
+		t.Fatalf("chat-only surface exposed infrastructure control: %#v", interactive.ToolNames)
+	}
+
+	executeAuthorized := svc.AssistantSurfaceToolContract(WithExecuteAuthority(context.Background(), true))
+	if !stringSliceContains(executeAuthorized.ToolNames, agentcapabilities.PulseControlToolName) {
+		t.Fatalf("execute-authorized controlled surface missing governed infrastructure control: %#v", executeAuthorized.ToolNames)
+	}
 
 	svc.SetAutonomousMode(true)
 	autonomous := svc.AssistantSurfaceToolContract(context.Background())
@@ -577,7 +585,7 @@ func testRunCommandToolDefinition() tools.Tool {
 func TestExecuteCommand_SuccessAndExitCode(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
-		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
 		Definition: testRunCommandToolDefinition(),
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewTextResult("Command failed (exit code 7): boom"), nil
@@ -601,7 +609,7 @@ func TestExecuteCommand_SuccessAndExitCode(t *testing.T) {
 func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
-		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
 		Definition: testRunCommandToolDefinition(),
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewErrorResult(context.Canceled), nil
@@ -619,7 +627,7 @@ func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 	// fresh executor instead of swapping the handler in place.
 	approvalExec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	approvalExec.RegisterTool(tools.RegisteredTool{
-		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
 		Definition: testRunCommandToolDefinition(),
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.NewTextResult("APPROVAL_REQUIRED: requires approval"), nil
@@ -636,7 +644,7 @@ func TestExecuteCommand_ErrorAndApprovalPaths(t *testing.T) {
 func TestExecuteCommandUsesSharedResultTextProjection(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
-		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
 		Definition: testRunCommandToolDefinition(),
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.CallToolResult{
@@ -669,7 +677,7 @@ func TestExecuteAssistantTool_ErrorsAndSuccess(t *testing.T) {
 	newService := func(handler func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error)) *Service {
 		exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 		exec.RegisterTool(tools.RegisteredTool{
-			Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+			Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
 			Definition: tools.Tool{Name: "test_tool"},
 			Handler:    handler,
 		})
@@ -702,7 +710,7 @@ func TestExecuteAssistantTool_ErrorsAndSuccess(t *testing.T) {
 func TestExecuteAssistantToolUsesSharedResultTextProjection(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	exec.RegisterTool(tools.RegisteredTool{
-		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+		Invocation: tools.StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
 		Definition: tools.Tool{Name: "test_tool"},
 		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
 			return tools.CallToolResult{

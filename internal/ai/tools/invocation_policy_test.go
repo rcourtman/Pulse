@@ -3,12 +3,41 @@ package tools
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
+
+type mutationCountingFindingsManager struct {
+	resolveCalls int
+	dismissCalls int
+}
+
+func (m *mutationCountingFindingsManager) ResolveFinding(string, string) error {
+	m.resolveCalls++
+	return nil
+}
+
+func (m *mutationCountingFindingsManager) DismissFinding(string, string, string) error {
+	m.dismissCalls++
+	return nil
+}
+
+type mutationCountingKnowledgeStore struct {
+	saveCalls int
+}
+
+func (m *mutationCountingKnowledgeStore) SaveNote(string, string, string) error {
+	m.saveCalls++
+	return nil
+}
+
+func (m *mutationCountingKnowledgeStore) GetKnowledge(string, string) []KnowledgeEntry {
+	return nil
+}
 
 // The invocation-policy regression proofs: the registry blocks
 // infrastructure-mutating invocations before any handler runs, the offered
@@ -131,6 +160,103 @@ func TestProjectionAndRuntimeEnforcementAgree(t *testing.T) {
 	assert.NotContains(t, byName["pulse_kubernetes"], "scale")
 	assert.NotContains(t, byName["pulse_kubernetes"], "exec")
 	assert.Contains(t, byName["pulse_kubernetes"], "pods")
+	assert.NotContains(t, byName[agentcapabilities.PulseAlertsToolName], "resolve")
+	assert.NotContains(t, byName[agentcapabilities.PulseAlertsToolName], "dismiss")
+	assert.Contains(t, byName[agentcapabilities.PulseAlertsToolName], "list")
+	assert.NotContains(t, byName[agentcapabilities.PulseKnowledgeToolName], "remember")
+	assert.Contains(t, byName[agentcapabilities.PulseKnowledgeToolName], "recall")
+}
+
+func TestReadOnlyProjectionExcludesPulseStateMutations(t *testing.T) {
+	exec := newInvocationPolicyExecutor(t)
+	exec.SetControlLevel(ControlLevelReadOnly)
+	exec.ApplyExecutionProfile(ProfileInteractiveAssistant)
+
+	projected := map[string][]string{}
+	for _, tool := range exec.registry.ListTools(exec.invocationPolicy()) {
+		descriptor, ok := agentcapabilities.InvocationDescriptorFor(tool.Name)
+		if !ok || descriptor.Discriminator == "" {
+			continue
+		}
+		projected[tool.Name] = tool.InputSchema.Properties[descriptor.Discriminator].Enum
+	}
+
+	assert.Equal(t, []string{"list", "findings", "resolved"}, projected[agentcapabilities.PulseAlertsToolName])
+	assert.Equal(t, []string{"recall", "incidents", "correlate"}, projected[agentcapabilities.PulseKnowledgeToolName])
+}
+
+func TestReadOnlyRuntimeBlocksPulseStateBeforeHandlers(t *testing.T) {
+	findings := &mutationCountingFindingsManager{}
+	knowledge := &mutationCountingKnowledgeStore{}
+	exec := NewPulseToolExecutor(ExecutorConfig{
+		FindingsManager:        findings,
+		KnowledgeStoreProvider: knowledge,
+	})
+	exec.SetControlLevel(ControlLevelReadOnly)
+	exec.ApplyExecutionProfile(ProfileInteractiveAssistant)
+
+	for _, call := range []struct {
+		name string
+		args map[string]interface{}
+	}{
+		{name: agentcapabilities.PulseAlertsToolName, args: map[string]interface{}{"action": "resolve", "finding_id": "f-1"}},
+		{name: agentcapabilities.PulseAlertsToolName, args: map[string]interface{}{"action": "dismiss", "finding_id": "f-1", "reason": "not_an_issue"}},
+		{name: agentcapabilities.PulseKnowledgeToolName, args: map[string]interface{}{"action": "remember", "resource_id": "vm:42", "note": "persist me"}},
+	} {
+		text := executeBlockedText(t, exec, call.name, call.args)
+		assert.Contains(t, text, "Invocation blocked")
+	}
+
+	assert.Zero(t, findings.resolveCalls)
+	assert.Zero(t, findings.dismissCalls)
+	assert.Zero(t, knowledge.saveCalls)
+
+	// A read remains executable under the same policy.
+	result, err := exec.registry.Execute(context.Background(), exec, agentcapabilities.PulseKnowledgeToolName, map[string]interface{}{
+		"action": "incidents", "resource_id": "vm:42", "timestamp": time.Now().UTC().Format(time.RFC3339),
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Content)
+	assert.NotContains(t, result.Content[0].Text, "Invocation blocked")
+}
+
+func TestChatOnlyAuthorityBlocksInfrastructureBeforeHandler(t *testing.T) {
+	exec := newInvocationPolicyExecutor(t)
+	exec.SetControlLevel(ControlLevelControlled)
+	exec.ApplyExecutionProfile(ProfileInteractiveAssistant)
+	exec.SetExecuteAuthority(false)
+
+	for _, tool := range exec.registry.ListTools(exec.invocationPolicy()) {
+		if tool.Name == agentcapabilities.PulseControlToolName {
+			t.Fatal("chat-only authority projected pulse_control")
+		}
+	}
+	result, err := exec.registry.Execute(context.Background(), exec, agentcapabilities.PulseControlToolName, map[string]interface{}{
+		"action": "restart",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, agentcapabilities.ToolResultText(result), "Invocation blocked")
+
+	// Execute authority may expose governed infrastructure operations, but it
+	// never re-enables direct Assistant finding/knowledge writes.
+	exec.SetExecuteAuthority(true)
+	projected := exec.registry.ListTools(exec.invocationPolicy())
+	assert.True(t, hasToolNamed(projected, agentcapabilities.PulseControlToolName))
+	for _, tool := range projected {
+		if tool.Name == agentcapabilities.PulseAlertsToolName {
+			assert.NotContains(t, tool.InputSchema.Properties["action"].Enum, "resolve")
+			assert.NotContains(t, tool.InputSchema.Properties["action"].Enum, "dismiss")
+		}
+	}
+}
+
+func hasToolNamed(tools []Tool, name string) bool {
+	for _, tool := range tools {
+		if tool.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func TestExecutorClonesKeepRequestPoliciesIsolated(t *testing.T) {

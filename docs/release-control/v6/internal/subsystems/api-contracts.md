@@ -1657,7 +1657,7 @@ payload shape change when the portal presents compact client rows.
     persisted host continuity, so a server restart or v6 upgrade does not change
     the explanatory grouping model before the live
     inventory rebuild catches up. Genuinely new host identities must still return
-    the canonical monitored-system blocked payload.
+    the canonical monitored-system blocked payload. Independently, Assistant scope is server-bound: `ai:chat` authorizes conversation, reads, sessions, and knowledge reads only; durable knowledge changes and explicit governed approval/execution require `ai:execute`, relay-mobile chat does not inherit it, trusted proposal correlation identity is server-authored, and unknown/internal model fields fail closed before capture or store access.
 
 ## Extension Points
 

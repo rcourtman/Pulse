@@ -30,6 +30,25 @@ contracts. The subsystem also owns AI orchestration, runtime cost control,
 shared AI transport surfaces, and browser-visible Assistant transcript actions
 that define what visible operator/model text can leave the transcript without
 exposing hidden provider/tool metadata.
+
+Interactive Assistant invocation authority is fail-closed and request-local.
+The `read_only` presentation means no model-invokable durable Pulse-state or
+infrastructure mutation is projected or executable. An `ai:chat` token grants
+conversation, read, and session access only; it cannot write knowledge, change
+finding state, approve, or execute. Infrastructure mutation additionally
+requires explicit `ai:execute` authority and a control level that permits it.
+Provider projection and registry execution consume the same invocation-aware
+policy. Detection may write only through its explicit finding report/resolve
+allowlist; investigation is domain-read-only and may emit at most one
+side-effect-free typed proposal whose correlation identity is server-authored.
+Unknown profiles, actions, aliases, origins, scopes, and mutation
+classifications fail closed.
+
+Discovery `run` currently persists read-derived evidence in the discovery
+cache. That cache write is not an H1 finding/knowledge/infrastructure mutation
+exception and remains a separately governed residual under
+`lane-followup:agent-native-continuous-discovery-findings` until discovery's
+canonical persistence boundary is resolved.
 App-shell Patrol chrome may expose only content-free current-work pressure, such
 as an open-work count on the stable `Patrol` tab, from Patrol-owned findings and
 approval read models. It must not rename the destination, create a second

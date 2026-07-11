@@ -30,6 +30,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelboundary"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	aitools "github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
@@ -2514,6 +2515,17 @@ Always execute the commands rather than telling the user how to do it.`
 		anyNeedsApproval := false
 		for _, tc := range resp.ToolCalls {
 			toolInput := s.getToolInputDisplay(tc)
+			class := agentcapabilities.ClassifyLegacyAssistantInvocation(tc.Name)
+			if !s.legacyAssistantInvocationPolicy().Allows(tc.Name, class) {
+				result := agentcapabilities.ToolResultText(agentcapabilities.NewInvocationBlockedToolResult(tc.Name, class))
+				execution := ToolExecution{Name: tc.Name, Input: toolInput, Output: result, Success: false}
+				toolExecutions = append(toolExecutions, execution)
+				callback(StreamEvent{Type: "tool_start", Data: ToolStartData{Name: tc.Name, Input: toolInput}})
+				callback(StreamEvent{Type: "tool_end", Data: ToolEndData{Name: tc.Name, Input: toolInput, Output: result, Success: false}})
+				projection := newLegacyServiceProviderToolResultContextProjection(tc.ID, result, true)
+				messages = append(messages, providers.Message{Role: "user", ToolResult: &projection.Model})
+				continue
+			}
 
 			// Check if this command needs approval
 			needsApproval := false
@@ -3075,9 +3087,26 @@ func (s *Service) hasAgentForTarget(req ExecuteRequest) bool {
 }
 
 // getTools returns the available tools for AI
+func (s *Service) legacyAssistantInvocationPolicy() aitools.InvocationPolicy {
+	s.mu.RLock()
+	cfg := s.cfg
+	s.mu.RUnlock()
+	level := aitools.ControlLevelReadOnly
+	if cfg != nil {
+		level = aitools.ControlLevel(cfg.GetControlLevel())
+	}
+	return aitools.InvocationPolicy{
+		ControlLevel:          level,
+		HasExecuteAuthority:   true,
+		ExecuteAuthorityBound: true,
+		PulseStateAllowlist:   map[string]bool{},
+		Profile:               aitools.ProfileInteractiveAssistant,
+	}
+}
+
 func (s *Service) getTools() []providers.Tool {
-	tools := append([]providers.Tool{}, agentcapabilities.LegacyAssistantUtilityProviderTools()...)
-	tools = append(tools,
+	candidates := append([]providers.Tool{}, agentcapabilities.LegacyAssistantUtilityProviderTools()...)
+	candidates = append(candidates,
 		providers.Tool{
 			Name:        agentcapabilities.ResolveFindingCapabilityName,
 			Description: "Mark an AI patrol finding as resolved after successfully fixing the issue. Use the finding ID shown in your Patrol Finding Context section. Call this after verifying the fix worked - do NOT ask the user for the finding ID.",
@@ -3092,14 +3121,21 @@ func (s *Service) getTools() []providers.Tool {
 
 	// Add web search tool for Anthropic provider
 	if s.provider != nil && s.provider.Name() == "anthropic" {
-		tools = append(tools, providers.Tool{
+		candidates = append(candidates, providers.Tool{
 			Type:    "web_search_20250305",
 			Name:    "web_search",
 			MaxUses: 3, // Limit searches per request to control costs
 		})
 	}
 
-	return tools
+	policy := s.legacyAssistantInvocationPolicy()
+	available := make([]providers.Tool, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.Name == "web_search" || policy.Allows(candidate.Name, agentcapabilities.ClassifyLegacyAssistantInvocation(candidate.Name)) {
+			available = append(available, candidate)
+		}
+	}
+	return available
 }
 
 // executeTool executes a tool call and returns the result
@@ -3107,6 +3143,11 @@ func (s *Service) executeTool(ctx context.Context, req ExecuteRequest, tc provid
 	execution := ToolExecution{
 		Name:    tc.Name,
 		Success: false,
+	}
+	class := agentcapabilities.ClassifyLegacyAssistantInvocation(tc.Name)
+	if !s.legacyAssistantInvocationPolicy().Allows(tc.Name, class) {
+		execution.Output = agentcapabilities.ToolResultText(agentcapabilities.NewInvocationBlockedToolResult(tc.Name, class))
+		return execution.Output, execution
 	}
 
 	switch tc.Name {

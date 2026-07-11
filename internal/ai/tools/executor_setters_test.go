@@ -233,7 +233,7 @@ func TestToolRegistry_ListToolsReturnsIndependentDefinitions(t *testing.T) {
 		"mode": {Type: "string", Enum: enum},
 	}
 	registry.RegisterExtension(RegisteredTool{
-		Invocation: StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+		Invocation: StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
 		Definition: Tool{
 			Name: "read",
 			InputSchema: InputSchema{
@@ -309,7 +309,7 @@ func TestToolGovernanceUsesSharedAgentCapabilityShape(t *testing.T) {
 func TestToolRegistry_ExecuteControlToolReadOnlyUsesAssistantAndPatrolGuidance(t *testing.T) {
 	registry := NewToolRegistry()
 	registry.RegisterExtension(RegisteredTool{
-		Invocation:     StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+		Invocation:     StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationInfrastructure),
 		Definition:     Tool{Name: "control"},
 		RequireControl: true,
 		Handler: func(ctx context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
@@ -336,7 +336,7 @@ func TestToolRegistryExecuteNormalizesSharedToolCallParams(t *testing.T) {
 	var gotArgs map[string]interface{}
 	var gotArgsLenBeforeMutation int
 	registry.RegisterExtension(RegisteredTool{
-		Invocation: StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+		Invocation: StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
 		Definition: Tool{Name: "test_tool", InputSchema: InputSchema{Properties: map[string]PropertySchema{
 			"resource_id": {Type: "string"},
 			"body":        {Type: "object"},
@@ -372,7 +372,7 @@ func TestToolRegistryExecuteNormalizesSharedToolCallParams(t *testing.T) {
 	assert.Contains(t, interpreted.Text, "invalid tools/call params: tool name is required")
 
 	registry.RegisterExtension(RegisteredTool{
-		Invocation: StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+		Invocation: StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
 		Definition: Tool{Name: "empty_args"},
 		Handler: func(ctx context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			gotArgs = args
@@ -391,14 +391,14 @@ func TestToolRegistryExecuteNormalizesSharedToolResult(t *testing.T) {
 	registry := NewToolRegistry()
 	handlerContent := []Content{{Type: "text", Text: "ok"}}
 	registry.RegisterExtension(RegisteredTool{
-		Invocation: StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+		Invocation: StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
 		Definition: Tool{Name: "read"},
 		Handler: func(ctx context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return CallToolResult{Content: handlerContent}, nil
 		},
 	})
 	registry.RegisterExtension(RegisteredTool{
-		Invocation: StaticInvocation(agentcapabilities.ToolCallKindWrite, agentcapabilities.MutationPulseState),
+		Invocation: StaticInvocation(agentcapabilities.ToolCallKindRead, agentcapabilities.MutationNone),
 		Definition: Tool{Name: "empty"},
 		Handler: func(ctx context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return CallToolResult{}, nil

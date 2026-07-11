@@ -100,6 +100,13 @@ that binary, not separate customer-facing agent products.
 
 ## Shared Boundaries
 
+Assistant transport scopes do not grant agent command authority. `ai:chat`
+and `relay:mobile:access` remain conversation/read/session scopes; an
+interactive infrastructure invocation must carry server-bound `ai:execute`
+authority and still satisfy the separate agent execution/token-binding and
+control-level gates. Unknown or absent request scope never falls back to agent
+execution permission.
+
 Commercial v5-to-v6 migration retry state may pass through `internal/api/`
 handlers that agent-lifecycle also references, but the ownership remains
 API/cloud-paid. Agent lifecycle surfaces may observe paid-migration posture for

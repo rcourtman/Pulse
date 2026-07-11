@@ -169,3 +169,19 @@ func TestRestrictedExposureVocabulary(t *testing.T) {
 		t.Fatalf("projector must redact params, got %#v", projected["params"])
 	}
 }
+
+func TestLegacyAssistantAliasesUseClosedInvocationClassification(t *testing.T) {
+	tests := map[string]MutationTarget{
+		LegacyAssistantFetchURLToolName:       MutationNone,
+		LegacyAssistantRunCommandToolName:     MutationInfrastructure,
+		LegacyAssistantSetResourceURLToolName: MutationPulseState,
+		ResolveFindingCapabilityName:          MutationPulseState,
+		DismissFindingCapabilityName:          MutationPulseState,
+		"unknown_alias":                       MutationInfrastructure,
+	}
+	for name, want := range tests {
+		if got := ClassifyLegacyAssistantInvocation(name); got.Mutation != want {
+			t.Fatalf("%s mutation = %q, want %q", name, got.Mutation, want)
+		}
+	}
+}

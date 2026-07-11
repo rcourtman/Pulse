@@ -15985,7 +15985,8 @@ func TestContract_PulseIntelligenceSurfaceToolProjectionKeepsAssistantAndMCPDist
 	}
 	chatService := string(chatServiceSource)
 	for _, required := range []string{
-		`func (s *Service) AssistantSurfaceToolContract(_ context.Context) agentcapabilities.SurfaceToolContract`,
+		`func (s *Service) AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract`,
+		`executor.SetExecuteAuthority(executeAuthorityFromContext(ctx))`,
 		`executor.AssistantSurfaceToolContract(agentcapabilities.AssistantProviderToolOptions{`,
 		`IncludeQuestionTool: !s.isAutonomousModeEnabled(),`,
 	} {
@@ -18585,7 +18586,7 @@ func TestContract_PulseMCPAdapterProjectsAgentCapabilitiesManifest(t *testing.T)
 		// consumes the same descriptor the projection filters with.
 		`class = tool.Invocation.Classify(args)`,
 		`if !policy.Allows(name, class) {`,
-		`if class.Mutation == agentcapabilities.MutationInfrastructure && !policy.DenyInfrastructureMutations {`,
+		`!agentcapabilities.ControlLevelAllowsControlTools(policy.ControlLevel)`,
 		`agentcapabilities.NewInvocationBlockedToolResult(name, class)`,
 		`descriptor.Validate(name, discriminatorEnum(tool.Definition, descriptor.Discriminator))`,
 		`func projectToolForPolicy(tool RegisteredTool, policy InvocationPolicy) (RegisteredTool, bool)`,

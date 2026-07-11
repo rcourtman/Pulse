@@ -72,6 +72,13 @@ controls as normal product settings.
 
 ## Shared Boundaries
 
+API token scope copy must match runtime authority. `ai:chat` covers Assistant
+conversation, model selection, sessions, and knowledge reads only. Knowledge
+save/delete/import/clear and explicit governed action approval/execution
+require `ai:execute`; relay-mobile chat access does not inherit it. Browser
+sessions retain their authenticated product permissions, while token requests
+with missing, unknown, or unrelated scopes fail closed.
+
 1. `frontend-modern/src/api/security.ts` shared with `api-contracts`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/components/Settings/APIAccessPanel.tsx` shared with `frontend-primitives`: the API Access settings intro is both a security/privacy token-management trust surface and a canonical settings-shell presentation boundary.
    Its Docker / Podman token wording must come from

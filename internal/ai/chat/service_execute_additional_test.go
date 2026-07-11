@@ -1755,10 +1755,11 @@ func TestService_ExecuteStream_RequestAutonomousOverrideClampsToolExecutor(t *te
 	approvalRequiredMode := false
 	approvalSeen := false
 	err = svc.ExecuteStream(ctx, ExecuteRequest{
-		SessionID:      "sess-request-override",
-		Prompt:         "check disk space",
-		AutonomousMode: &approvalRequiredMode,
-		MaxTurns:       2,
+		SessionID:           "sess-request-override",
+		Prompt:              "check disk space",
+		AutonomousMode:      &approvalRequiredMode,
+		HasExecuteAuthority: true,
+		MaxTurns:            2,
 	}, func(event StreamEvent) {
 		if event.Type == "approval_needed" {
 			approvalSeen = true

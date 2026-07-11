@@ -3280,11 +3280,7 @@ func TestAIChatEndpointsRequireAIChatScope(t *testing.T) {
 		{method: http.MethodGet, path: "/api/ai/sessions/session-1", body: ""},
 		{method: http.MethodGet, path: "/api/ai/question/q-1", body: ""},
 		{method: http.MethodGet, path: "/api/ai/knowledge", body: ""},
-		{method: http.MethodPost, path: "/api/ai/knowledge/save", body: `{}`},
-		{method: http.MethodPost, path: "/api/ai/knowledge/delete", body: `{}`},
 		{method: http.MethodGet, path: "/api/ai/knowledge/export", body: ""},
-		{method: http.MethodPost, path: "/api/ai/knowledge/import", body: `{}`},
-		{method: http.MethodPost, path: "/api/ai/knowledge/clear", body: `{}`},
 	}
 
 	for _, tc := range paths {
@@ -3297,6 +3293,28 @@ func TestAIChatEndpointsRequireAIChatScope(t *testing.T) {
 		}
 		if !strings.Contains(rec.Body.String(), config.ScopeAIChat) {
 			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAIChat, rec.Body.String())
+		}
+	}
+}
+
+func TestAIKnowledgeMutationEndpointsRequireAIExecuteScope(t *testing.T) {
+	rawToken := "ai-chat-only-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	for _, path := range []string{
+		"/api/ai/knowledge/save",
+		"/api/ai/knowledge/delete",
+		"/api/ai/knowledge/import",
+		"/api/ai/knowledge/clear",
+	} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		req.Header.Set("X-API-Token", rawToken)
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), config.ScopeAIExecute) {
+			t.Fatalf("expected %s to require %q, got %d: %s", path, config.ScopeAIExecute, rec.Code, rec.Body.String())
 		}
 	}
 }

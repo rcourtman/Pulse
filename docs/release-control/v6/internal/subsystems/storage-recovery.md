@@ -56,6 +56,13 @@ state.
 
 ## Shared Boundaries
 
+Assistant access to recovery points and storage evidence is read-side context.
+`ai:chat`, relay-mobile chat, and the `read_only` control level cannot project
+or execute storage/infrastructure mutation, finding lifecycle changes, or
+knowledge persistence. Any future storage action must cross the explicit
+`ai:execute` plus governed action-plan boundary; it must not be introduced as
+a recovery-provider read helper or compatibility alias.
+
 1. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `unified-resources`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
 2. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `unified-resources`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
 3. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `api-contracts`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).

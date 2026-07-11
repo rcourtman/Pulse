@@ -559,6 +559,11 @@ type PulseToolExecutor struct {
 	targetID     string
 	isAutonomous bool
 	orgID        string
+	// hasExecuteAuthority is request-local transport authority. Control
+	// settings describe operator policy; they never grant a chat-only token
+	// permission to execute infrastructure mutations.
+	hasExecuteAuthority   bool
+	executeAuthorityBound bool
 	// denyInfrastructureMutations is the request-local execution
 	// restriction for non-interactive read-only workloads (e.g. Patrol
 	// investigations): every infrastructure-mutating invocation is
@@ -568,8 +573,7 @@ type PulseToolExecutor struct {
 	// interactive questions and grants no mutation authority.
 	denyInfrastructureMutations bool
 	// pulseStateAllowlist restricts pulse-state mutations to the named
-	// tools when non-nil (empty map = deny all). Nil means the default
-	// posture: pulse-state mutations are not restricted by profile.
+	// tools. Nil and an empty map both deny all.
 	pulseStateAllowlist map[string]bool
 	// executionProfile is the core-owned request posture; see
 	// execution_profile.go.
@@ -734,6 +738,8 @@ func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
 		targetID:                    e.targetID,
 		isAutonomous:                e.isAutonomous,
 		orgID:                       e.orgID,
+		hasExecuteAuthority:         e.hasExecuteAuthority,
+		executeAuthorityBound:       e.executeAuthorityBound,
 		denyInfrastructureMutations: e.denyInfrastructureMutations,
 		pulseStateAllowlist:         clonePulseStateAllowlist(e.pulseStateAllowlist),
 		executionProfile:            e.executionProfile,
@@ -814,6 +820,14 @@ func (e *PulseToolExecutor) SetOrgID(orgID string) {
 // SetControlLevel updates the control level
 func (e *PulseToolExecutor) SetControlLevel(level ControlLevel) {
 	e.controlLevel = level
+}
+
+// SetExecuteAuthority binds the current request's explicit ai:execute
+// authority to this executor clone. It is deliberately not serialized and
+// defaults false.
+func (e *PulseToolExecutor) SetExecuteAuthority(allowed bool) {
+	e.hasExecuteAuthority = allowed
+	e.executeAuthorityBound = true
 }
 
 // SetProtectedGuests updates the protected guests list
@@ -1000,6 +1014,8 @@ func (e *PulseToolExecutor) GetResolvedContext() ResolvedContextProvider {
 func (e *PulseToolExecutor) invocationPolicy() InvocationPolicy {
 	return InvocationPolicy{
 		ControlLevel:                e.controlLevel,
+		HasExecuteAuthority:         e.hasExecuteAuthority,
+		ExecuteAuthorityBound:       e.executeAuthorityBound,
 		DenyInfrastructureMutations: e.denyInfrastructureMutations,
 		PulseStateAllowlist:         clonePulseStateAllowlist(e.pulseStateAllowlist),
 		Profile:                     e.executionProfile,

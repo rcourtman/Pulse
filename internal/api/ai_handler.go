@@ -29,6 +29,7 @@ import (
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+	pulsauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 	"github.com/rs/zerolog/log"
 )
@@ -84,6 +85,11 @@ type AIService interface {
 	SetAppContainerReadProvider(provider chat.AssistantAppContainerReadProvider)
 	UpdateControlSettings(cfg *config.AIConfig)
 	GetBaseURL() string
+}
+
+func assistantExecuteAuthority(ctx context.Context) bool {
+	token := pulsauth.GetAPIToken(ctx)
+	return token == nil || token.HasScope(config.ScopeAIExecute)
 }
 
 type aiServiceRuntimeConfigReader interface {
@@ -2417,7 +2423,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Auth already handled by RequireAuth wrapper - no need to check again
 
-	ctx := r.Context()
+	ctx := chat.WithExecuteAuthority(r.Context(), assistantExecuteAuthority(r.Context()))
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return
@@ -2696,6 +2702,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		HandoffActions:       handoffActions,
 		HandoffMetadata:      handoffMetadata,
 		AutonomousMode:       chatAutonomousModeForFindingHandoff(nil, findingID, handoffContext, handoffResources, handoffActions, handoffMetadata),
+		HasExecuteAuthority:  assistantExecuteAuthority(ctx),
 		SuppressSessionEvent: true,
 	}, func(event chat.StreamEvent) {
 		if event.Type == "done" {
@@ -2985,7 +2992,7 @@ func (h *AIHandler) HandleAssistantSurfaceTools(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	ctx := r.Context()
+	ctx := chat.WithExecuteAuthority(r.Context(), assistantExecuteAuthority(r.Context()))
 	if !h.IsRunning(ctx) {
 		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
 		return

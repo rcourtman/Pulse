@@ -95,11 +95,15 @@ func NewToolRegistry() *ToolRegistry {
 // projection and runtime execution so the offered schema and the
 // enforcement boundary can never disagree.
 type InvocationPolicy struct {
-	ControlLevel                ControlLevel
+	ControlLevel ControlLevel
+	// Execute authority is bound at authenticated transport boundaries.
+	// Unbound policies are reserved for trusted internal/test callers;
+	// external request paths must always bind an explicit true/false value.
+	HasExecuteAuthority         bool
+	ExecuteAuthorityBound       bool
 	DenyInfrastructureMutations bool
 	// PulseStateAllowlist restricts pulse-state mutations to the named
-	// tools when non-nil (an empty map denies all pulse-state
-	// mutations). Nil leaves pulse-state mutations unrestricted. An
+	// tools. Nil and an empty map both deny all pulse-state mutations. An
 	// allowlist rather than a boolean: Patrol detection must record and
 	// resolve findings without also being able to dismiss alerts or
 	// write knowledge.
@@ -129,6 +133,9 @@ func clonePulseStateAllowlist(allowlist map[string]bool) map[string]bool {
 // independent of registration validation, so a class that somehow
 // bypasses Validate still cannot execute.
 func (p InvocationPolicy) Allows(toolName string, class agentcapabilities.InvocationClass) bool {
+	if !p.Profile.Valid() || !class.Valid() {
+		return false
+	}
 	// patrol_propose_action is investigation-profile-only: a fabricated
 	// call under any other posture is rejected here, before the handler,
 	// and the same check keeps it out of every other profile's projected
@@ -140,12 +147,9 @@ func (p InvocationPolicy) Allows(toolName string, class agentcapabilities.Invoca
 	case agentcapabilities.MutationNone:
 		return true
 	case agentcapabilities.MutationPulseState:
-		if p.PulseStateAllowlist == nil {
-			return true
-		}
 		return p.PulseStateAllowlist[toolName]
 	case agentcapabilities.MutationInfrastructure:
-		if p.DenyInfrastructureMutations {
+		if p.Profile != ProfileInteractiveAssistant || (p.ExecuteAuthorityBound && !p.HasExecuteAuthority) || p.DenyInfrastructureMutations {
 			return false
 		}
 		return agentcapabilities.ControlLevelAllowsControlTools(p.ControlLevel)
@@ -410,7 +414,9 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 	}
 	policy := e.invocationPolicy()
 	if !policy.Allows(name, class) {
-		if class.Mutation == agentcapabilities.MutationInfrastructure && !policy.DenyInfrastructureMutations {
+		if class.Mutation == agentcapabilities.MutationInfrastructure &&
+			!policy.DenyInfrastructureMutations &&
+			!agentcapabilities.ControlLevelAllowsControlTools(policy.ControlLevel) {
 			// Refused purely by control level: keep the actionable
 			// operator guidance for enabling control tools.
 			return agentcapabilities.NewControlToolsDisabledToolResult(), nil
@@ -426,6 +432,13 @@ func (r *ToolRegistry) Execute(ctx context.Context, e *PulseToolExecutor, name s
 	}
 	if err := agentcapabilities.ValidateDeclaredToolArguments(tool.Definition.InputSchema, args); err != nil {
 		return agentcapabilities.NewInvalidToolCallParamsResult(err), nil
+	}
+	if name == agentcapabilities.PatrolProposeActionToolName {
+		for key := range args {
+			if agentcapabilities.IsInternalToolArgument(key) {
+				return agentcapabilities.NewInvalidToolCallParamsResult(fmt.Errorf("argument %q is server-internal and cannot be model-authored", key)), nil
+			}
+		}
 	}
 
 	result, err := tool.Handler(ctx, e, args)
