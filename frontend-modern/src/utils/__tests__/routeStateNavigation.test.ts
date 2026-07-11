@@ -104,6 +104,37 @@ describe('routeStateNavigation', () => {
     expect(readPendingAppShellRestoreTop()).toBe(55);
   });
 
+  it('drops a pending rewrite after the user navigates to a different pathname (#1557)', () => {
+    const navigate = vi.fn();
+    let currentPath = '/proxmox/storage';
+    const scheduler = createRouteStateNavigateScheduler(navigate, () => currentPath);
+
+    // The storage surface schedules its query write-back, then the user
+    // clicks the Overview section tab before the setTimeout(0) fires.
+    scheduler.schedule('/proxmox/storage?source=proxmox-pve');
+    currentPath = '/proxmox/overview';
+    vi.runAllTimers();
+
+    expect(navigate).not.toHaveBeenCalled();
+    scheduler.cleanup();
+  });
+
+  it('re-anchors a coalesced rewrite to the pathname of the latest schedule call', () => {
+    const navigate = vi.fn();
+    let currentPath = '/proxmox/backups';
+    const scheduler = createRouteStateNavigateScheduler(navigate, () => currentPath);
+
+    scheduler.schedule('/proxmox/backups?node=pve1');
+    // A second schedule arrives after navigation; the pending rewrite must be
+    // judged against the pathname that scheduled it last, not the first one.
+    currentPath = '/proxmox/overview';
+    scheduler.schedule('/proxmox/overview?type=vm');
+    vi.runAllTimers();
+
+    expect(navigate).toHaveBeenCalledWith('/proxmox/overview?type=vm', ROUTE_STATE_REPLACE_OPTIONS);
+    scheduler.cleanup();
+  });
+
   it('skips redundant navigations to the current path', () => {
     const navigate = vi.fn();
     const scheduler = createRouteStateNavigateScheduler(navigate, () => '/proxmox/backups?rollupId=abc');
