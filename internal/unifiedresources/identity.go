@@ -24,7 +24,7 @@ func NormalizeHostname(hostname string) string {
 // fully-qualified or dotted agent hostnames to their first label.
 func NormalizePrimaryHostname(hostname string) string {
 	host := strings.TrimSpace(strings.ToLower(hostname))
-	return strings.TrimSuffix(host, ".")
+	return strings.TrimRight(host, ".")
 }
 
 // NormalizeMAC normalizes a MAC address to lower-case colon format.

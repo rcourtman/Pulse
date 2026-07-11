@@ -25,6 +25,7 @@ func TestNormalizePrimaryHostnamePreservesDottedNames(t *testing.T) {
 		"pve1.local":       "pve1.local",
 		"pve1":             "pve1",
 		"pve1.":            "pve1",
+		"pve1...":          "pve1",
 	}
 	for input, want := range cases {
 		if got := NormalizePrimaryHostname(input); got != want {
