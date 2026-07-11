@@ -1371,9 +1371,39 @@ AI-only summary payloads, or page-local heuristics.
     rule hold the collapsed short name and heal in place on the host's
     next pin persist, and `ResourceIdentityPin.EraIDs` derives both full-
     and short-hostname eras so journal rows recorded under short-hostname
-    IDs stay readable. Regression coverage:
-    `internal/unifiedresources/canonical_id_pins_test.go` and
-    `TestStandaloneDottedHostnameAgentsStayDistinct` in
+    IDs stay readable. Canonical ID derivation itself follows the same
+    rule: the hostname-derived arms of `canonicalIDFromIdentity`
+    (`cluster:<cluster>:<hostname>` and `hostname:<hostname>`) hash the
+    full dotted hostname, never the short form, so machine-keyless FQDN
+    Swarm members that share a short name (`cloud.a` vs `cloud.b` in one
+    swarm) mint distinct canonical IDs instead of collapsing into one
+    registry entry. Derivation stays a pure function of identity (pins
+    complete identities but never substitute a stored ID) because
+    store-less registries (AI tool executors, projections, mock) must
+    derive the same IDs as the durable registry from the same identity.
+    Hosts minted under the historical short-hostname derivation change
+    canonical ID once: journal continuity rides the era expansion above,
+    and operator-owned rows ride canonical-ID succession: when
+    `PersistIdentityPins` collects a pin that supersedes an earlier era's
+    pin for the same physical host (matching strong key, or a
+    machine-keyless same-cluster pin whose hostname is the new pin's
+    hostname or its collapsed short form), the store re-keys
+    `resource_operator_state` and `action_audits` rows to the successor
+    ID and drops the superseded pin row (`ApplyCanonicalIDSuccessions`
+    in `internal/unifiedresources/canonical_id_succession.go`).
+    Successions never fire while the old ID still belongs to a live
+    resource, never follow a contradicting machine key (a reinstalled
+    machine mints fresh, it does not absorb the old host's operator
+    state), and never rewrite change-journal rows. Known limitation:
+    machine-keyless hosts whose history already merged under a collapsed
+    ID cannot be retroactively split; the merged era's journal rows
+    appear in every member's timeline and the merged operator rows
+    succeed to whichever member persists first. Regression coverage:
+    `internal/unifiedresources/canonical_id_pins_test.go`,
+    `internal/unifiedresources/canonical_id_succession_test.go`, and
+    `TestStandaloneDottedHostnameAgentsStayDistinct` /
+    `TestSwarmFQDNHostsWithoutMachineIDsStayDistinct` /
+    `TestCanonicalIDSuccessionMovesOperatorState` in
     `internal/unifiedresources/registry_test.go`.
 26. Keep action-audit origin metadata broker-owned. `ActionAuditRecord`
     carries an optional `Origin *ActionOrigin`

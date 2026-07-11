@@ -186,11 +186,81 @@ func (rr *ResourceRegistry) completeIdentityFromPins(resourceType ResourceType, 
 	return identity
 }
 
+// successionsFor reports the pinned canonical IDs the given (new or changed)
+// pin supersedes: pins for the same physical host whose canonical ID was
+// minted in an earlier era of the chooseNewID ladder. Same-machine proof is a
+// matching strong key; a machine-keyless pin in the same cluster whose
+// hostname is the incoming pin's hostname or its collapsed short form is the
+// same host re-derived after the short→full hostname derivation fix. A
+// machine-keyless old pin claimed by a machine-keyed incoming pin is the
+// common "agent gained /etc/machine-id" upgrade. Rows with a contradicting
+// machine key (host reinstalled, cluster slot re-occupied by a different
+// machine) never succeed: the new machine must mint fresh, not absorb the
+// old host's operator state.
+func (index *identityPinIndex) successionsFor(pin ResourceIdentityPin) []CanonicalIDSuccession {
+	if index == nil {
+		return nil
+	}
+	pin = pin.normalized()
+	if pin.CanonicalID == "" {
+		return nil
+	}
+	var successions []CanonicalIDSuccession
+	seen := make(map[string]struct{})
+	consider := func(old ResourceIdentityPin) {
+		if old.CanonicalID == "" || old.CanonicalID == pin.CanonicalID {
+			return
+		}
+		if _, dup := seen[old.CanonicalID]; dup {
+			return
+		}
+		seen[old.CanonicalID] = struct{}{}
+		successions = append(successions, CanonicalIDSuccession{
+			OldCanonicalID: old.CanonicalID,
+			NewCanonicalID: pin.CanonicalID,
+		})
+	}
+	if pin.MachineID != "" {
+		if old, ok := index.byMachineID[pin.MachineID]; ok {
+			consider(old)
+		}
+	}
+	if pin.DMIUUID != "" {
+		if old, ok := index.byDMIUUID[pin.DMIUUID]; ok {
+			consider(old)
+		}
+	}
+	if pin.ClusterName != "" && pin.Hostname != "" {
+		shortHostname := NormalizeHostname(pin.Hostname)
+		for _, old := range index.byClusterShortHost[clusterHostPinKey(pin.ClusterName, shortHostname)] {
+			if old.MachineID != "" || old.DMIUUID != "" {
+				// Machine-keyed rows only succeed through their own keys.
+				continue
+			}
+			if old.Hostname != pin.Hostname && old.Hostname != shortHostname {
+				// A different FQDN sharing the short name is a different host.
+				continue
+			}
+			consider(old)
+		}
+	}
+	return successions
+}
+
 // PersistIdentityPins writes the identity pins for the registry's current
 // host resources into the resource store. Only new or changed pins are
 // written, so steady-state rebuild ticks cost no writes. Call this after a
 // rebuild on the durable store-backed registry; ephemeral per-request
 // registries consult pins but do not write them.
+//
+// When a new pin supersedes an earlier era's pin for the same physical host
+// (see successionsFor), the store re-keys the host's operator-owned rows to
+// the new canonical ID before the pin write, so operator intent
+// (never-auto-remediate, maintenance windows) and action-audit history
+// survive the era change. Successions are skipped while the old canonical ID
+// still belongs to a live resource: a genuinely short-named host must not
+// have its rows stolen by an FQDN sibling. Change-journal rows are never
+// rewritten; EraIDs merges those at read time.
 func (rr *ResourceRegistry) PersistIdentityPins() {
 	if rr.store == nil {
 		return
@@ -198,6 +268,7 @@ func (rr *ResourceRegistry) PersistIdentityPins() {
 
 	rr.mu.RLock()
 	var pins []ResourceIdentityPin
+	var successions []CanonicalIDSuccession
 	for _, resource := range rr.resources {
 		pin, ok := identityPinForResource(resource)
 		if !ok {
@@ -207,11 +278,24 @@ func (rr *ResourceRegistry) PersistIdentityPins() {
 			continue
 		}
 		pins = append(pins, pin)
+		for _, succession := range rr.identityPins.successionsFor(pin) {
+			if _, live := rr.resources[succession.OldCanonicalID]; live {
+				continue
+			}
+			successions = append(successions, succession)
+		}
 	}
 	rr.mu.RUnlock()
 
 	if len(pins) == 0 {
 		return
+	}
+	if len(successions) > 0 {
+		if successor, ok := rr.store.(canonicalIDSuccessor); ok {
+			if err := successor.ApplyCanonicalIDSuccessions(successions); err != nil {
+				log.Printf("unifiedresources: failed to apply canonical ID successions: %v", err)
+			}
+		}
 	}
 	if err := rr.store.UpsertResourceIdentityPins(pins); err != nil {
 		log.Printf("unifiedresources: failed to persist identity pins: %v", err)
