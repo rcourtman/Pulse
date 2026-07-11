@@ -132,11 +132,11 @@
     color: var(--color-text-base);
   }
 
-  /* Hide scrollbars during transitions to prevent flicker */
-  html {
-    overflow-y: scroll;
-    scroll-behavior: smooth;
-  }
+  /* The document root never scrolls: the app shell is h-screen with
+     overflow hidden and .app-scroll-shell owns vertical scrolling.
+     Forcing a root scrollbar here would reserve a dead gutter at the
+     right viewport edge and shift every fixed right-anchored element
+     (e.g. the Assistant launcher tab) off the true screen edge. */
 }
 
 @layer components {

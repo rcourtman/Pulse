@@ -1,4 +1,5 @@
 import { For, Show, Suspense, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import type { JSX } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import BellIcon from 'lucide-solid/icons/bell';
@@ -976,15 +977,20 @@ export function AppLayout(props: AppLayoutProps) {
           !dialogStackHasBlockingDialog()
         }
       >
-        <button
-          type="button"
-          onClick={() => aiChatStore.open(assistantPageContext().context)}
-          class={AI_CHAT_LAUNCHER_BUTTON_CLASS}
-          title={assistantPageContext().title}
-          aria-label={assistantPageContext().ariaLabel}
-        >
-          <SparklesIcon class="h-5 w-5 flex-shrink-0" />
-        </button>
+        {/* Portaled out of .app-scroll-shell: as a descendant the scroll
+            container's own scrollbar hit-tests above the tab's right edge,
+            leaving the screen-edge click zone dead. */}
+        <Portal>
+          <button
+            type="button"
+            onClick={() => aiChatStore.open(assistantPageContext().context)}
+            class={AI_CHAT_LAUNCHER_BUTTON_CLASS}
+            title={assistantPageContext().title}
+            aria-label={assistantPageContext().ariaLabel}
+          >
+            <SparklesIcon class="h-5 w-5 flex-shrink-0" />
+          </button>
+        </Portal>
       </Show>
     </div>
   );
