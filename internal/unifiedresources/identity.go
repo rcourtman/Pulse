@@ -19,6 +19,14 @@ func NormalizeHostname(hostname string) string {
 	return host
 }
 
+// NormalizePrimaryHostname lowercases hostnames for display/persistence while
+// preserving dotted names. Unlike NormalizeHostname, it does not collapse
+// fully-qualified or dotted agent hostnames to their first label.
+func NormalizePrimaryHostname(hostname string) string {
+	host := strings.TrimSpace(strings.ToLower(hostname))
+	return strings.TrimSuffix(host, ".")
+}
+
 // NormalizeMAC normalizes a MAC address to lower-case colon format.
 func NormalizeMAC(mac string) string {
 	mac = strings.TrimSpace(mac)

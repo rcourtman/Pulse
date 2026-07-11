@@ -48,7 +48,7 @@ type ResourceIdentityPin struct {
 	MachineID    string
 	DMIUUID      string
 	ClusterName  string
-	// Hostname is the normalized primary hostname (NormalizeHostname).
+	// Hostname is the normalized primary hostname (NormalizePrimaryHostname).
 	Hostname string
 }
 
@@ -58,7 +58,7 @@ func (p ResourceIdentityPin) normalized() ResourceIdentityPin {
 	p.MachineID = strings.TrimSpace(p.MachineID)
 	p.DMIUUID = strings.TrimSpace(p.DMIUUID)
 	p.ClusterName = strings.TrimSpace(p.ClusterName)
-	p.Hostname = NormalizeHostname(p.Hostname)
+	p.Hostname = NormalizePrimaryHostname(p.Hostname)
 	return p
 }
 
@@ -88,6 +88,12 @@ func (p ResourceIdentityPin) EraIDs() []string {
 			ids = append(ids, buildHashID(p.ResourceType, fmt.Sprintf("cluster:%s:%s", p.ClusterName, p.Hostname)))
 		}
 		ids = append(ids, buildHashID(p.ResourceType, "hostname:"+p.Hostname))
+		if short := NormalizeHostname(p.Hostname); short != "" && short != p.Hostname {
+			if p.ClusterName != "" {
+				ids = append(ids, buildHashID(p.ResourceType, fmt.Sprintf("cluster:%s:%s", p.ClusterName, short)))
+			}
+			ids = append(ids, buildHashID(p.ResourceType, "hostname:"+short))
+		}
 	}
 	return uniqueTrimmed(ids...)
 }

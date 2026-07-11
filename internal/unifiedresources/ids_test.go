@@ -55,6 +55,8 @@ func TestResourceIdentityPinEraIDs(t *testing.T) {
 	want := []string{
 		buildHashID(ResourceTypeAgent, "machine:machine-1"),
 		buildHashID(ResourceTypeAgent, "dmi:dmi-1"),
+		buildHashID(ResourceTypeAgent, "cluster:homelab:delly.lan"),
+		buildHashID(ResourceTypeAgent, "hostname:delly.lan"),
 		buildHashID(ResourceTypeAgent, "cluster:homelab:delly"),
 		buildHashID(ResourceTypeAgent, "hostname:delly"),
 	}
@@ -72,6 +74,19 @@ func TestResourceIdentityPinEraIDs(t *testing.T) {
 		if !found {
 			t.Fatalf("expected era set to include %q, got %v", id, got)
 		}
+	}
+}
+
+func TestResourceIdentityPinPreservesDottedPrimaryHostname(t *testing.T) {
+	pin := ResourceIdentityPin{
+		CanonicalID:  "agent-custom",
+		ResourceType: ResourceTypeAgent,
+		MachineID:    "machine-1",
+		Hostname:     "Cloud.Rnd-Lax1.",
+	}.normalized()
+
+	if pin.Hostname != "cloud.rnd-lax1" {
+		t.Fatalf("normalized pin hostname = %q, want %q", pin.Hostname, "cloud.rnd-lax1")
 	}
 }
 
