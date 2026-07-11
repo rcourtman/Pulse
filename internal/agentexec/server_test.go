@@ -2,11 +2,25 @@ package agentexec
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestHostStorageCleanupPayloadIsClosedAndSelectorFree(t *testing.T) {
+	typeOf := reflect.TypeOf(HostStorageCleanupPayload{})
+	want := []string{"RequestID", "ActionID", "Operation", "ExpectedFingerprint", "Timeout"}
+	if typeOf.NumField() != len(want) {
+		t.Fatalf("host storage cleanup payload fields = %d, want %d", typeOf.NumField(), len(want))
+	}
+	for i, name := range want {
+		if field := typeOf.Field(i); field.Name != name {
+			t.Fatalf("field %d = %s, want %s", i, field.Name, name)
+		}
+	}
+}
 
 func allowAllTestTokens(string, string, string) bool { return true }
 

@@ -1496,7 +1496,7 @@ func TestResourceParentBySourceStateRemainsInternal(t *testing.T) {
 	}
 }
 
-func TestHostPackageUpdatePostureRemainsAgentScoped(t *testing.T) {
+func TestHostMaintenancePostureRemainsAgentScoped(t *testing.T) {
 	agentType := reflect.TypeOf(AgentData{})
 	field, ok := agentType.FieldByName("PackageUpdates")
 	if !ok {
@@ -1508,10 +1508,23 @@ func TestHostPackageUpdatePostureRemainsAgentScoped(t *testing.T) {
 	if field.Type != reflect.TypeOf((*AgentPackageUpdateMeta)(nil)) {
 		t.Fatalf("expected typed package-update metadata, got %v", field.Type)
 	}
+	cleanupField, ok := agentType.FieldByName("StorageCleanup")
+	if !ok {
+		t.Fatal("expected AgentData.StorageCleanup field")
+	}
+	if got := cleanupField.Tag.Get("json"); got != "storageCleanup,omitempty" {
+		t.Fatalf("expected storage-cleanup posture to use the agent-scoped wire key, got %q", got)
+	}
+	if cleanupField.Type != reflect.TypeOf((*AgentStorageCleanupMeta)(nil)) {
+		t.Fatalf("expected typed storage-cleanup metadata, got %v", cleanupField.Type)
+	}
 
 	resourceType := reflect.TypeOf(Resource{})
 	if _, ok := resourceType.FieldByName("PackageUpdates"); ok {
 		t.Fatal("package-update posture must not become an unscoped top-level Resource field")
+	}
+	if _, ok := resourceType.FieldByName("StorageCleanup"); ok {
+		t.Fatal("storage-cleanup posture must not become an unscoped top-level Resource field")
 	}
 }
 

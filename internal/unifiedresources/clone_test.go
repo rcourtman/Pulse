@@ -438,6 +438,8 @@ func TestCloneAgentData_DeepIsolation(t *testing.T) {
 		RAID: []HostRAIDMeta{
 			{Device: "/dev/md0", Level: "raid1", Risk: &StorageRisk{Level: storagehealth.RiskHealthy}},
 		},
+		PackageUpdates: &AgentPackageUpdateMeta{Packages: []AgentPackageUpdate{{Name: "openssl"}}},
+		StorageCleanup: &AgentStorageCleanupMeta{Provider: "apt-package-cache", ReclaimableBytes: 512},
 	}
 	cloned := cloneAgentData(original)
 
@@ -454,6 +456,11 @@ func TestCloneAgentData_DeepIsolation(t *testing.T) {
 	cloned.RAID[0].Risk.Level = storagehealth.RiskCritical
 	if original.RAID[0].Risk.Level == storagehealth.RiskCritical {
 		t.Error("mutating cloned RAID risk should not affect original")
+	}
+	cloned.PackageUpdates.Packages[0].Name = "mutated"
+	cloned.StorageCleanup.Provider = "mutated"
+	if original.PackageUpdates.Packages[0].Name != "openssl" || original.StorageCleanup.Provider != "apt-package-cache" {
+		t.Fatal("mutating cloned agent maintenance posture should not affect original")
 	}
 }
 

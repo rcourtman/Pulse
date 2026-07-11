@@ -11,20 +11,22 @@ type MessageType string
 
 const (
 	// Agent -> Server messages
-	MsgTypeAgentRegister    MessageType = "agent_register"
-	MsgTypeAgentPing        MessageType = "agent_ping"
-	MsgTypeCommandResult    MessageType = "command_result"
-	MsgTypeHostUpdateResult MessageType = "host_update_result"
+	MsgTypeAgentRegister            MessageType = "agent_register"
+	MsgTypeAgentPing                MessageType = "agent_ping"
+	MsgTypeCommandResult            MessageType = "command_result"
+	MsgTypeHostStorageCleanupResult MessageType = "host_storage_cleanup_result"
+	MsgTypeHostUpdateResult         MessageType = "host_update_result"
 
 	// Server -> Agent messages
-	MsgTypeRegistered      MessageType = "registered"
-	MsgTypePong            MessageType = "pong"
-	MsgTypeExecuteCmd      MessageType = "execute_command"
-	MsgTypeReadFile        MessageType = "read_file"
-	MsgTypeHostUpdate      MessageType = "host_update"
-	MsgTypeDeployPreflight MessageType = "deploy_preflight"
-	MsgTypeDeployInstall   MessageType = "deploy_install"
-	MsgTypeDeployCancelJob MessageType = "deploy_cancel"
+	MsgTypeRegistered         MessageType = "registered"
+	MsgTypePong               MessageType = "pong"
+	MsgTypeExecuteCmd         MessageType = "execute_command"
+	MsgTypeHostStorageCleanup MessageType = "host_storage_cleanup"
+	MsgTypeReadFile           MessageType = "read_file"
+	MsgTypeHostUpdate         MessageType = "host_update"
+	MsgTypeDeployPreflight    MessageType = "deploy_preflight"
+	MsgTypeDeployInstall      MessageType = "deploy_install"
+	MsgTypeDeployCancelJob    MessageType = "deploy_cancel"
 
 	// Agent -> Server messages (deploy)
 	MsgTypeDeployProgress MessageType = "deploy_progress"
@@ -176,6 +178,49 @@ type HostUpdateResultPayload struct {
 	Verification string                    `json:"verification"`
 	Error        string                    `json:"error,omitempty"`
 	Duration     int64                     `json:"duration_ms"`
+}
+
+const HostStorageCleanupOperationPackageCache = "clean_package_cache"
+
+const HostStorageCleanupMaxReportedBytes int64 = 1 << 60
+
+// HostStorageCleanupPayload is the closed storage-pressure operation sent to
+// a Unified Agent. The model cannot select paths or commands: the agent owns
+// the single APT package-cache target and command catalog.
+type HostStorageCleanupPayload struct {
+	RequestID           string `json:"request_id"`
+	ActionID            string `json:"action_id"`
+	Operation           string `json:"operation"`
+	ExpectedFingerprint string `json:"expected_fingerprint"`
+	Timeout             int    `json:"timeout,omitempty"`
+}
+
+type HostStorageCleanupSnapshot struct {
+	Supported        bool      `json:"supported"`
+	Provider         string    `json:"provider,omitempty"`
+	Fingerprint      string    `json:"fingerprint,omitempty"`
+	ReclaimableBytes int64     `json:"reclaimable_bytes"`
+	CheckedAt        time.Time `json:"checked_at,omitempty"`
+	Error            string    `json:"error,omitempty"`
+}
+
+const (
+	HostStorageCleanupVerificationVerified     = "verified"
+	HostStorageCleanupVerificationFailed       = "failed"
+	HostStorageCleanupVerificationInconclusive = "inconclusive"
+)
+
+// HostStorageCleanupResultPayload separates mutation success from the
+// read-after-write observation of reclaimed cache bytes.
+type HostStorageCleanupResultPayload struct {
+	RequestID      string                     `json:"request_id"`
+	Success        bool                       `json:"success"`
+	Before         HostStorageCleanupSnapshot `json:"before"`
+	After          HostStorageCleanupSnapshot `json:"after"`
+	ReclaimedBytes int64                      `json:"reclaimed_bytes"`
+	Verification   string                     `json:"verification"`
+	Error          string                     `json:"error,omitempty"`
+	Duration       int64                      `json:"duration_ms"`
 }
 
 // ConnectedAgent represents an agent connected via WebSocket

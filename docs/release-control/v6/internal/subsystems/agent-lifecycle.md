@@ -257,7 +257,7 @@ update, profile rollout, command reachability, or fleet-control authority.
     completed lifecycle registration.
 22. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 23. `internal/kubernetesagent/agent.go` shared with `monitoring`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
-24. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host package-update posture.
+24. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture.
 25. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
     The Windows installer must support a non-mutating download preflight that
     can run before Administrator-only install work, must accept token-file
@@ -423,6 +423,16 @@ so Pulse must re-plan against the widened or changed set. A reboot-required
 marker is reported as state, never acted upon by this capability. Generic
 agent command execution, Patrol prose, lifecycle UI, and external agents must
 not reconstruct or bypass this typed operation.
+Host storage-pressure cleanup is a second closed agent operation. The report
+may expose only the bounded `apt-package-cache` provider, its reclaimable byte
+count, freshness, and a SHA-256 fingerprint; cache entry names and paths remain
+agent-local. Execution crosses `host_storage_cleanup` with the exact
+`clean_package_cache` operation and expected fingerprint only. The agent owns
+the fixed `/var/cache/apt/archives` scan, bounded entry/byte limits, and sole
+`apt-get clean` command. Fingerprint drift, unsupported providers, empty cache,
+inspection failure, command failure, and unconfirmed reclaimed bytes all fail
+closed. The envelope has no command, path, package selector, arbitrary
+argument, installed-package removal, or reboot authority.
 Proxmox VM and LXC lifecycle affordances follow the same adjacent boundary:
 lifecycle and fleet surfaces may consume backend-advertised `start`,
 `shutdown`, `reboot`, and `stop` capabilities and typed `actionReadiness`, but

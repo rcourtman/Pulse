@@ -391,6 +391,13 @@ fingerprint-bound `install_os_updates` operation after canonical lifecycle
 approval. Storage/recovery consumers may observe its redacted audit outcome and
 reboot-required fact as context, but must not treat package installation as
 storage maintenance, recovery evidence, or a storage-owned mutation path.
+The API-owned `internal/api/host_storage_cleanup_action_executor.go` is a
+narrow exception only in product purpose, not ownership: it may reclaim the
+fixed APT package cache through the canonical action lifecycle when the cache's
+actual filesystem is pressured. Storage/recovery consumers may observe its
+redacted byte outcome as operational context, but package-cache deletion is
+not backup pruning, restore evidence, arbitrary path cleanup, or a
+storage-owned executor.
 Storage and recovery surfaces may consume Discovery context from the shared
 API boundary when it helps explain protected workloads or storage-adjacent
 services, including mock-mode config/data/log path examples. That context is

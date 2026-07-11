@@ -26,3 +26,14 @@ func TestConvertHostPackageUpdateStatusPreservesTypedInventoryWithoutAliasing(t 
 		t.Fatalf("converted package state aliases report input: %#v", got.Packages)
 	}
 }
+
+func TestConvertHostStorageCleanupStatusUsesServerReceiptFreshness(t *testing.T) {
+	now := time.Now().UTC()
+	input := &agentshost.StorageCleanupStatus{
+		Supported: true, Provider: " apt-package-cache ", Fingerprint: " sha256:" + strings.Repeat("b", 64) + " ", ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: now.Add(48 * time.Hour), Error: " ",
+	}
+	got := convertHostStorageCleanupStatus(input, now)
+	if got == nil || !got.Supported || got.Provider != "apt-package-cache" || got.Fingerprint != "sha256:"+strings.Repeat("b", 64) || got.ReclaimableBytes != 512*1024*1024 || !got.CheckedAt.Equal(now) || got.Error != "" {
+		t.Fatalf("status = %#v", got)
+	}
+}

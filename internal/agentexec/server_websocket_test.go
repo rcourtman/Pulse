@@ -553,6 +553,103 @@ func TestValidateHostUpdateResultRejectsUnprovenVerifiedClaim(t *testing.T) {
 	}
 }
 
+func TestExecuteHostStorageCleanupRoundTripUsesPathAndCommandFreeEnvelope(t *testing.T) {
+	fingerprint := "sha256:" + strings.Repeat("a", 64)
+	afterFingerprint := "sha256:" + strings.Repeat("b", 64)
+	s := NewServer(allowAllTestTokens)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID: "host-agent-cleanup", Hostname: "host1", Version: "6.0.6", Platform: "linux", Token: "any",
+	}))
+	_ = wsReadRegisteredPayload(t, conn)
+
+	agentErr := make(chan error, 1)
+	go func() {
+		msg, err := wsReadRawMessageWithTimeout(conn, 2*time.Second)
+		if err != nil {
+			agentErr <- err
+			return
+		}
+		if msg.Type != MsgTypeHostStorageCleanup || msg.Payload == nil {
+			agentErr <- fmt.Errorf("message = %#v, want typed host storage cleanup", msg)
+			return
+		}
+		for _, forbidden := range []string{`"command"`, `"path"`, `"packages"`} {
+			if bytes.Contains(*msg.Payload, []byte(forbidden)) {
+				agentErr <- fmt.Errorf("storage cleanup request exposed forbidden authority %s: %s", forbidden, string(*msg.Payload))
+				return
+			}
+		}
+		var payload HostStorageCleanupPayload
+		if err := json.Unmarshal(*msg.Payload, &payload); err != nil {
+			agentErr <- err
+			return
+		}
+		if payload.ActionID != "action-cleanup" || payload.Operation != HostStorageCleanupOperationPackageCache {
+			agentErr <- fmt.Errorf("payload = %#v", payload)
+			return
+		}
+		response := HostStorageCleanupResultPayload{
+			RequestID:      payload.RequestID,
+			Success:        true,
+			Before:         HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: fingerprint, ReclaimableBytes: 500},
+			After:          HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: afterFingerprint, ReclaimableBytes: 20},
+			ReclaimedBytes: 480,
+			Verification:   HostStorageCleanupVerificationVerified,
+		}
+		if err := conn.WriteJSON(mustNewMessage(t, MsgTypeHostStorageCleanupResult, payload.RequestID, response)); err != nil {
+			agentErr <- err
+			return
+		}
+		agentErr <- nil
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	result, err := s.ExecuteHostStorageCleanup(ctx, "host-agent-cleanup", HostStorageCleanupPayload{
+		RequestID: "cleanup-1", ActionID: "action-cleanup", Operation: HostStorageCleanupOperationPackageCache, ExpectedFingerprint: fingerprint, Timeout: 1,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteHostStorageCleanup: %v", err)
+	}
+	if result == nil || !result.Success || result.Verification != HostStorageCleanupVerificationVerified || result.ReclaimedBytes != 480 {
+		t.Fatalf("result = %#v", result)
+	}
+	if err := <-agentErr; err != nil {
+		t.Fatalf("agent: %v", err)
+	}
+}
+
+func TestValidateHostStorageCleanupRejectsOpenEndedOrUnprovenClaims(t *testing.T) {
+	fingerprint := "sha256:" + strings.Repeat("a", 64)
+	for _, req := range []HostStorageCleanupPayload{
+		{RequestID: "r1", ActionID: "a1", Operation: "delete_path", ExpectedFingerprint: fingerprint},
+		{RequestID: "r1", Operation: HostStorageCleanupOperationPackageCache, ExpectedFingerprint: fingerprint},
+		{RequestID: "r1", ActionID: "a1", Operation: HostStorageCleanupOperationPackageCache, ExpectedFingerprint: "bad"},
+		{RequestID: "r1", ActionID: "a1", Operation: HostStorageCleanupOperationPackageCache, ExpectedFingerprint: fingerprint, Timeout: 901},
+	} {
+		copy := req
+		if err := validateHostStorageCleanupPayload(&copy); err == nil {
+			t.Fatalf("validateHostStorageCleanupPayload(%#v) succeeded", req)
+		}
+	}
+	result := HostStorageCleanupResultPayload{
+		RequestID: "r1", Success: true, Verification: HostStorageCleanupVerificationVerified,
+		Before: HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: fingerprint, ReclaimableBytes: 500},
+		After:  HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: fingerprint, ReclaimableBytes: 500},
+	}
+	if err := validateHostStorageCleanupResultPayload(&result); err == nil {
+		t.Fatal("verified result without reclaimed bytes must fail closed")
+	}
+}
+
 func TestHandleWebSocket_ReconnectSameAgentIDClosesOldConnection(t *testing.T) {
 	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)

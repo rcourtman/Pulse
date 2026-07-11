@@ -44,7 +44,7 @@ function createResource(overrides: Partial<Resource> = {}): Resource {
 }
 
 describe('Resource Type Guards', () => {
-  it('keeps host package-update posture scoped to agent metadata', () => {
+  it('keeps host maintenance posture scoped to agent metadata', () => {
     const resource = createResource({
       type: 'agent',
       agent: {
@@ -56,13 +56,24 @@ describe('Resource Type Guards', () => {
           checkedAt: '2026-07-11T00:00:00Z',
           rebootRequired: false,
         },
+        storageCleanup: {
+          supported: true,
+          provider: 'apt-package-cache',
+          fingerprint: `sha256:${'b'.repeat(64)}`,
+          reclaimableBytes: 536_870_912,
+          checkedAt: '2026-07-11T00:00:00Z',
+        },
       },
     });
 
     expect(resource.agent?.packageUpdates).toEqual(
       expect.objectContaining({ manager: 'apt', pendingCount: 2 }),
     );
+    expect(resource.agent?.storageCleanup).toEqual(
+      expect.objectContaining({ provider: 'apt-package-cache', reclaimableBytes: 536_870_912 }),
+    );
     expect(resource).not.toHaveProperty('packageUpdates');
+    expect(resource).not.toHaveProperty('storageCleanup');
   });
 
   it('keeps platform types aligned with the governed platform manifest projection', () => {

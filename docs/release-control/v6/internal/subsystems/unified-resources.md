@@ -654,6 +654,15 @@ container inventory table.
    stale, erroneous, empty, unsupported, or its owning agent is disconnected;
    reboot-required state remains descriptive and does not imply a reboot
    capability.
+   Agent-managed hosts may advertise `clean_package_cache` only when typed
+   commands are enabled, the agent reports a fresh error-free
+   `apt-package-cache` fingerprint with at least 64 MiB reclaimable, and the
+   actual longest-prefix filesystem containing the fixed cache target is at
+   least 90% used. A healthy separate `/var` mount must override pressure on
+   `/`; sibling-prefix mounts must never match. The capability is admin-floor,
+   `low_risk` auto-authorization eligible, parameter-free, and routed through
+   `host.storage_cleanup`. API consumers must reuse the canonical target-disk
+   resolver and may not infer cleanup authority from generic disk usage.
    TrueNAS app inventory enters the model as native `TrueNASData.App`
    metadata on canonical `app-container` resources. The facet is sourced from
    the TrueNAS API app inventory (`app.query` plus active workload/stat

@@ -302,6 +302,7 @@ func TestCloneHost_MapIsolation(t *testing.T) {
 			Supported: true,
 			Packages:  []HostPackageUpdate{{Name: "openssl"}},
 		},
+		StorageCleanup: &HostStorageCleanupStatus{Provider: "apt-package-cache", ReclaimableBytes: 512},
 	}
 	dst := cloneHost(src)
 	dst.Tags = append(dst.Tags, "new:val")
@@ -309,6 +310,7 @@ func TestCloneHost_MapIsolation(t *testing.T) {
 	dst.Sensors.ThermalState.LimitsPercent["cpu_speed_limit"] = 80
 	*dst.Sensors.ThermalState.ThermalWarningLevel = 1
 	dst.PackageUpdates.Packages[0].Name = "mutated"
+	dst.StorageCleanup.Provider = "mutated"
 	if len(src.Tags) != 1 {
 		t.Error("clone tags should be independent")
 	}
@@ -323,6 +325,9 @@ func TestCloneHost_MapIsolation(t *testing.T) {
 	}
 	if src.PackageUpdates.Packages[0].Name != "openssl" {
 		t.Error("clone package update inventory should be independent")
+	}
+	if src.StorageCleanup.Provider != "apt-package-cache" {
+		t.Error("clone storage cleanup posture should be independent")
 	}
 }
 

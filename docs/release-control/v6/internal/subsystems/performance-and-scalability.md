@@ -358,6 +358,13 @@ regression protection.
    must remain inside the selected action and agent command paths. Generic
    request admission must not probe agents, refresh package indexes, enumerate
    pending packages, or wait for update completion.
+   Package-cache cleanup follows the same rule: router construction may
+   register the typed executor once, while cache inspection, fingerprint
+   comparison, `apt-get clean`, and post-cleanup measurement remain agent/action
+   work. Generic request admission must not walk cache directories, inspect
+   mounts, or wait for cleanup; the agent scan is entry/byte bounded and the
+   unified-resource mount lookup is an in-memory pass over already-reported
+   disks.
    The Patrol action-broker and proposal-catalog factories are wired the same
    bounded way: `internal/api/router.go` installs the per-org factory closures
    on the AI settings handler once at startup, and each broker or catalog is

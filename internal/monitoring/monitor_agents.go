@@ -1997,6 +1997,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		AgentUpdate:     agentUpdate,
 		AgentModules:    convertAgentModuleStatuses(report.Agent.Modules),
 		PackageUpdates:  convertHostPackageUpdateStatus(report.Host.PackageUpdates, observedAt),
+		StorageCleanup:  convertHostStorageCleanupStatus(report.Host.StorageCleanup, observedAt),
 		IsLegacy:        isLegacyAgent(report.Agent.Type),
 	}
 
@@ -2232,6 +2233,20 @@ func convertHostPackageUpdateStatus(status *agentshost.PackageUpdateStatus, obse
 		CheckedAt:      observedAt.UTC(),
 		RebootRequired: status.RebootRequired,
 		Error:          strings.TrimSpace(status.Error),
+	}
+}
+
+func convertHostStorageCleanupStatus(status *agentshost.StorageCleanupStatus, observedAt time.Time) *models.HostStorageCleanupStatus {
+	if status == nil {
+		return nil
+	}
+	return &models.HostStorageCleanupStatus{
+		Supported:        status.Supported,
+		Provider:         strings.TrimSpace(status.Provider),
+		Fingerprint:      strings.TrimSpace(status.Fingerprint),
+		ReclaimableBytes: status.ReclaimableBytes,
+		CheckedAt:        observedAt.UTC(),
+		Error:            strings.TrimSpace(status.Error),
 	}
 }
 

@@ -512,6 +512,7 @@ func (h Host) ToFrontend() HostFrontend {
 		AgentUpdate:     cloneAgentUpdateStatus(h.AgentUpdate),
 		AgentModules:    cloneAgentModuleStatuses(h.AgentModules),
 		PackageUpdates:  cloneHostPackageUpdateStatus(h.PackageUpdates),
+		StorageCleanup:  cloneHostStorageCleanupStatus(h.StorageCleanup),
 		IsLegacy:        h.IsLegacy,
 		LinkedNodeID:    h.LinkedNodeID,
 	}

@@ -42,9 +42,13 @@ func TestBuildResourceContextSectionsAppliesRedactionTrustAndFreshness(t *testin
 	}
 	resource.Agent = &unified.AgentData{
 		Hostname: "prod-node", Platform: "linux", OSName: "Debian", OSVersion: "12", CommandsEnabled: true,
+		Disks: []unified.DiskInfo{{Mountpoint: "/", Usage: 95}},
 		PackageUpdates: &unified.AgentPackageUpdateMeta{
 			Supported: true, Manager: "apt", PendingCount: 4, CheckedAt: observedAt, RebootRequired: true,
 			Packages: []unified.AgentPackageUpdate{{Name: "private-customer-package", InstalledVersion: "1", AvailableVersion: "2"}},
+		},
+		StorageCleanup: &unified.AgentStorageCleanupMeta{
+			Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:private-cleanup-fingerprint", ReclaimableBytes: 536870912, CheckedAt: observedAt,
 		},
 	}
 	resource.Docker = &unified.DockerData{
@@ -116,12 +120,24 @@ func TestBuildResourceContextSectionsAppliesRedactionTrustAndFreshness(t *testin
 	if got := requireFact(t, runtime, "Reboot required").Value; got != "true" {
 		t.Fatalf("reboot required = %q, want true", got)
 	}
+	if got := requireFact(t, runtime, "Package cache cleanup").Value; got != "ready" {
+		t.Fatalf("package cache cleanup = %q, want ready", got)
+	}
+	if got := requireFact(t, runtime, "Reclaimable package cache").Value; got != "536870912 bytes" {
+		t.Fatalf("reclaimable package cache = %q", got)
+	}
+	if got := requireFact(t, runtime, "Package cache filesystem usage").Value; got != "95.0%" {
+		t.Fatalf("package cache filesystem usage = %q", got)
+	}
 	encodedSections, err := json.Marshal(sections)
 	if err != nil {
 		t.Fatalf("marshal sections: %v", err)
 	}
 	if strings.Contains(string(encodedSections), "private-customer-package") {
 		t.Fatalf("resource context exposed package identifiers: %s", encodedSections)
+	}
+	if strings.Contains(string(encodedSections), "private-cleanup-fingerprint") || strings.Contains(string(encodedSections), "/var/cache/apt/archives") {
+		t.Fatalf("resource context exposed cleanup fingerprint or fixed agent path: %s", encodedSections)
 	}
 	for _, label := range []string{"Discovery agent", "Discovery resource", "Discovery hostname", "Proxmox node", "Proxmox VMID", "Image", "Storage path"} {
 		fact := requireFact(t, runtime, label)

@@ -1945,6 +1945,18 @@ a new API state machine, queue contract, or verification-accounting field.
    agent-authored inventory fingerprint into the typed request; refresh-time
    fingerprint drift refuses before installation and requires a new plan, so a
    stale package index cannot silently widen the approved mutation.
+   Agent-managed package-cache cleanup is the third complete typed action
+   vertical. `clean_package_cache` is admin-floor and low-risk-policy eligible,
+   accepts no model parameters, and is advertised only when the canonical
+   cache filesystem is under pressure and the fresh agent-authored cache
+   posture reports meaningful reclaimable bytes. Dispatch uses only
+   `ExecuteHostStorageCleanup` with the closed `host_storage_cleanup` envelope
+   and injects the observed fingerprint; command text, paths, packages, and
+   arbitrary arguments never cross the API. The agent owns the sole
+   `apt-get clean` mutation and read-after-write cache scan. The terminal audit
+   records before/after/reclaimed byte counts and distinguishes verified,
+   failed, and honestly inconclusive outcomes; inconsistent or unbounded byte
+   evidence fails closed.
    Resource payloads may expose the same executor-owned unavailable state as
    `actionReadiness[]` entries with stable `name`, `available`, `reasonCode`,
    and `reason` fields so browser and agent clients can explain disabled
@@ -3449,6 +3461,10 @@ agent-authored error text remain outside model context, so a private package
 name or repository detail cannot leak merely because Patrol investigates a
 host. Those facts are observation only; capability authority continues to come
 from the typed resource catalog and action lifecycle.
+Package-cache cleanup context follows the same privacy boundary: the model may
+see cleanup readiness, reclaimable byte count, and the containing filesystem's
+usage percentage. The cache fingerprint, fixed target path, entry names, raw
+APT output, and agent error text remain outside model context.
 
 `aicontracts.Finding` (the shape Patrol hands the investigation
 orchestrator) carries optional `OperatorContext` and

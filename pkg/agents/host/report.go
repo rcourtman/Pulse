@@ -79,21 +79,22 @@ type UpdateStatus struct {
 
 // HostInfo contains platform and identification details about the monitored host.
 type HostInfo struct {
-	ID             string               `json:"id,omitempty"`
-	Hostname       string               `json:"hostname"`
-	DisplayName    string               `json:"displayName,omitempty"`
-	MachineID      string               `json:"machineId,omitempty"`
-	Platform       string               `json:"platform,omitempty"`
-	OSName         string               `json:"osName,omitempty"`
-	OSVersion      string               `json:"osVersion,omitempty"`
-	KernelVersion  string               `json:"kernelVersion,omitempty"`
-	Architecture   string               `json:"architecture,omitempty"`
-	CPUModel       string               `json:"cpuModel,omitempty"`
-	CPUCount       int                  `json:"cpuCount,omitempty"`
-	UptimeSeconds  int64                `json:"uptimeSeconds,omitempty"`
-	LoadAverage    []float64            `json:"loadAverage,omitempty"`
-	ReportIP       string               `json:"reportIp,omitempty"` // User-specified IP for multi-NIC systems
-	PackageUpdates *PackageUpdateStatus `json:"packageUpdates,omitempty"`
+	ID             string                `json:"id,omitempty"`
+	Hostname       string                `json:"hostname"`
+	DisplayName    string                `json:"displayName,omitempty"`
+	MachineID      string                `json:"machineId,omitempty"`
+	Platform       string                `json:"platform,omitempty"`
+	OSName         string                `json:"osName,omitempty"`
+	OSVersion      string                `json:"osVersion,omitempty"`
+	KernelVersion  string                `json:"kernelVersion,omitempty"`
+	Architecture   string                `json:"architecture,omitempty"`
+	CPUModel       string                `json:"cpuModel,omitempty"`
+	CPUCount       int                   `json:"cpuCount,omitempty"`
+	UptimeSeconds  int64                 `json:"uptimeSeconds,omitempty"`
+	LoadAverage    []float64             `json:"loadAverage,omitempty"`
+	ReportIP       string                `json:"reportIp,omitempty"` // User-specified IP for multi-NIC systems
+	PackageUpdates *PackageUpdateStatus  `json:"packageUpdates,omitempty"`
+	StorageCleanup *StorageCleanupStatus `json:"storageCleanup,omitempty"`
 }
 
 // PackageUpdateStatus is the agent-authored, read-only package posture for
@@ -116,6 +117,18 @@ type PackageUpdate struct {
 	Name             string `json:"name"`
 	InstalledVersion string `json:"installedVersion,omitempty"`
 	AvailableVersion string `json:"availableVersion,omitempty"`
+}
+
+// StorageCleanupStatus is the agent-authored read-only posture for the
+// bounded package-cache cleanup provider. Paths and cache entry names never
+// leave the agent; the fingerprint binds a later typed cleanup request.
+type StorageCleanupStatus struct {
+	Supported        bool      `json:"supported"`
+	Provider         string    `json:"provider,omitempty"`
+	Fingerprint      string    `json:"fingerprint,omitempty"`
+	ReclaimableBytes int64     `json:"reclaimableBytes"`
+	CheckedAt        time.Time `json:"checkedAt,omitempty"`
+	Error            string    `json:"error,omitempty"`
 }
 
 // Metrics encapsulates primary resource metrics for a host.

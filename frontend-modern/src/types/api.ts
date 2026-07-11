@@ -463,6 +463,7 @@ export interface Agent {
   agentUpdate?: AgentUpdateStatus;
   agentModules?: AgentModuleStatus[];
   packageUpdates?: HostPackageUpdateStatus;
+  storageCleanup?: HostStorageCleanupStatus;
   tokenId?: string;
   tokenName?: string;
   tokenHint?: string;
@@ -492,6 +493,15 @@ export interface HostPackageUpdate {
   name: string;
   installedVersion?: string;
   availableVersion?: string;
+}
+
+export interface HostStorageCleanupStatus {
+  supported: boolean;
+  provider?: string;
+  fingerprint?: string;
+  reclaimableBytes: number;
+  checkedAt?: string;
+  error?: string;
 }
 
 export interface AgentConfigFingerprint {

@@ -120,6 +120,70 @@ func TestResourceFromHostDoesNotAdvertiseUnsupportedOrCommandDisabledPackageUpda
 	}
 }
 
+func TestResourceFromHostAdvertisesPressureBoundPackageCacheCleanup(t *testing.T) {
+	now := time.Now().UTC()
+	host := models.Host{
+		ID: "agent-cleanup", Hostname: "host-cleanup", Platform: "linux", Status: "online", LastSeen: now, CommandsEnabled: true,
+		Disks: []models.Disk{{Mountpoint: "/", Usage: 95}},
+		StorageCleanup: &models.HostStorageCleanupStatus{
+			Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("c", 64), ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: now,
+		},
+	}
+
+	resource, _ := resourceFromHost(host)
+	if resource.Agent == nil || resource.Agent.StorageCleanup == nil || resource.Agent.StorageCleanup.ReclaimableBytes != 512*1024*1024 {
+		t.Fatalf("storage cleanup projection = %#v", resource.Agent)
+	}
+	if len(resource.Capabilities) != 1 {
+		t.Fatalf("capabilities = %#v", resource.Capabilities)
+	}
+	capability := resource.Capabilities[0]
+	if capability.Name != "clean_package_cache" || capability.MinimumApprovalLevel != ApprovalAdmin || capability.AutoAuthorization != AutoAuthorizeLowRisk || capability.InternalHandler != "host.storage_cleanup" {
+		t.Fatalf("capability = %#v", capability)
+	}
+	if len(capability.Params) != 0 {
+		t.Fatalf("storage cleanup capability must not accept paths or selectors: %#v", capability.Params)
+	}
+}
+
+func TestResourceFromHostStorageCleanupUsesActualCacheFilesystemAndFailsClosed(t *testing.T) {
+	now := time.Now().UTC()
+	base := models.Host{
+		ID: "agent-cleanup", Hostname: "host-cleanup", Platform: "linux", Status: "online", LastSeen: now, CommandsEnabled: true,
+		Disks: []models.Disk{{Mountpoint: "/", Usage: 95}},
+		StorageCleanup: &models.HostStorageCleanupStatus{
+			Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("c", 64), ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: now,
+		},
+	}
+	mutations := []func(*models.Host){
+		func(host *models.Host) { host.CommandsEnabled = false },
+		func(host *models.Host) { host.StorageCleanup.Supported = false },
+		func(host *models.Host) { host.StorageCleanup.Provider = "arbitrary-path" },
+		func(host *models.Host) { host.StorageCleanup.Fingerprint = "" },
+		func(host *models.Host) {
+			host.StorageCleanup.ReclaimableBytes = HostStorageCleanupMinReclaimableBytes - 1
+		},
+		func(host *models.Host) {
+			host.StorageCleanup.CheckedAt = now.Add(-HostStorageCleanupFreshness - time.Minute)
+		},
+		func(host *models.Host) { host.StorageCleanup.Error = "inspection failed" },
+		func(host *models.Host) { host.Disks[0].Usage = HostStoragePressureThreshold - 1 },
+		func(host *models.Host) { host.Disks = append(host.Disks, models.Disk{Mountpoint: "/var", Usage: 50}) },
+		func(host *models.Host) { host.StorageCleanup = nil },
+	}
+	for i, mutate := range mutations {
+		host := base
+		host.Disks = append([]models.Disk(nil), base.Disks...)
+		status := *base.StorageCleanup
+		host.StorageCleanup = &status
+		mutate(&host)
+		resource, _ := resourceFromHost(host)
+		if len(resource.Capabilities) != 0 {
+			t.Fatalf("case %d advertised capabilities %#v", i, resource.Capabilities)
+		}
+	}
+}
+
 func TestResourceFromDockerContainerAdvertisesLifecycleCapabilities(t *testing.T) {
 	now := time.Now().UTC()
 	host := models.DockerHost{

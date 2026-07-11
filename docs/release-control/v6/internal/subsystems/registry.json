@@ -966,7 +966,7 @@
     },
     {
       "path": "pkg/agents/host/report.go",
-      "rationale": "the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host package-update posture",
+      "rationale": "the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host maintenance posture",
       "subsystems": [
         "agent-lifecycle",
         "monitoring"
@@ -1226,8 +1226,10 @@
               "internal/hostagent/command_client_test.go",
               "internal/hostagent/commands_deploy_test.go",
               "internal/hostagent/commands_host_update_test.go",
+              "internal/hostagent/commands_storage_cleanup_test.go",
               "internal/hostagent/package_updates_test.go",
-              "internal/hostagent/send_report_test.go"
+              "internal/hostagent/send_report_test.go",
+              "internal/hostagent/storage_cleanup_test.go"
             ]
           },
           {
@@ -4708,8 +4710,8 @@
             ]
           },
           {
-            "id": "docker-runtime-report-model",
-            "label": "docker runtime report model proof",
+            "id": "runtime-report-model",
+            "label": "runtime report model proof",
             "match_prefixes": [],
             "match_files": [
               "internal/models/converters.go",
@@ -6192,6 +6194,7 @@
             "match_prefixes": [],
             "match_files": [
               "internal/unifiedresources/adapters.go",
+              "internal/unifiedresources/host_storage_cleanup.go",
               "internal/unifiedresources/monitor_adapter.go",
               "internal/unifiedresources/read_state.go",
               "internal/unifiedresources/views.go"
@@ -6202,6 +6205,7 @@
               "frontend-modern/src/stores/__tests__/websocket-unified.test.ts",
               "internal/unifiedresources/adapter_coverage_test.go",
               "internal/unifiedresources/adapters_test.go",
+              "internal/unifiedresources/host_storage_cleanup_test.go",
               "internal/unifiedresources/monitor_adapter_read_state_test.go",
               "internal/unifiedresources/views_test.go"
             ]

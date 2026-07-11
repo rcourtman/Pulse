@@ -19881,6 +19881,7 @@ func TestContract_ProxmoxLifecycleActionsResolveNodeCommandAgentAndVerifyState(t
 		"newRoutedActionExecutor(",
 		"newDockerContainerActionExecutor(r.resourceHandlers, r.agentExecServer)",
 		"newProxmoxGuestActionExecutor(r.resourceHandlers, r.agentExecServer)",
+		"newHostStorageCleanupActionExecutor(r.resourceHandlers, r.agentExecServer)",
 		"newHostUpdateActionExecutor(r.resourceHandlers, r.agentExecServer)",
 	} {
 		if !strings.Contains(routerSrc, snippet) {
@@ -19930,6 +19931,57 @@ func TestContract_HostUpdatesUseTypedFingerprintBoundAgentOperation(t *testing.T
 	} {
 		if !strings.Contains(runtimeSrc, snippet) {
 			t.Fatalf("host update runtime missing fail-closed command-catalog invariant %q", snippet)
+		}
+	}
+}
+
+func TestContract_HostStorageCleanupIsTypedFingerprintBoundAndPathFree(t *testing.T) {
+	executorSource, err := os.ReadFile("host_storage_cleanup_action_executor.go")
+	if err != nil {
+		t.Fatalf("read host storage cleanup executor: %v", err)
+	}
+	agentTypesSource, err := os.ReadFile("../agentexec/types.go")
+	if err != nil {
+		t.Fatalf("read agentexec types: %v", err)
+	}
+	agentRuntimeSource, err := os.ReadFile("../hostagent/storage_cleanup.go")
+	if err != nil {
+		t.Fatalf("read storage cleanup runtime: %v", err)
+	}
+
+	executorSrc := string(executorSource)
+	typesSrc := string(agentTypesSource)
+	runtimeSrc := string(agentRuntimeSource)
+	for _, snippet := range []string{
+		"ExecuteHostStorageCleanup(ctx context.Context, agentID string, req agentexec.HostStorageCleanupPayload)",
+		"resource.Agent.StorageCleanup.Fingerprint",
+		"agentexec.HostStorageCleanupOperationPackageCache",
+		"unified.HostStorageCleanupPressureDisk(resource.Agent.Disks)",
+	} {
+		if !strings.Contains(executorSrc, snippet) {
+			t.Fatalf("host storage cleanup executor missing invariant %q", snippet)
+		}
+	}
+	for _, snippet := range []string{
+		"ExpectedFingerprint string `json:\"expected_fingerprint\"`",
+		"const HostStorageCleanupOperationPackageCache = \"clean_package_cache\"",
+	} {
+		if !strings.Contains(typesSrc, snippet) {
+			t.Fatalf("host storage cleanup wire contract missing %q", snippet)
+		}
+	}
+	for _, forbidden := range []string{"Command string", "Path string", "Packages []"} {
+		if strings.Contains(typesSrc[strings.Index(typesSrc, "type HostStorageCleanupPayload struct"):strings.Index(typesSrc, "type HostStorageCleanupSnapshot struct")], forbidden) {
+			t.Fatalf("host storage cleanup payload exposes forbidden authority %q", forbidden)
+		}
+	}
+	for _, snippet := range []string{
+		"if before.Fingerprint != strings.TrimSpace(req.ExpectedFingerprint)",
+		"\"apt-get\", \"clean\"",
+		"if result.ReclaimedBytes <= 0",
+	} {
+		if !strings.Contains(runtimeSrc, snippet) {
+			t.Fatalf("host storage cleanup runtime missing fail-closed invariant %q", snippet)
 		}
 	}
 }

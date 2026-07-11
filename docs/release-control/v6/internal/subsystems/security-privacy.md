@@ -339,6 +339,12 @@ the `white_label` branding entitlement.
     action approval. Package names, versions, raw APT output, and agent error
     text must not enter model context or action results; reboot remains a
     reported fact rather than an authorized operation.
+    The typed storage-cleanup executor is equally closed: only
+    `clean_package_cache` may cross the boundary, bound to the server-observed
+    fingerprint and canonical approval. The model and API never supply a path,
+    command, package selector, or deletion rule. Cache entry names,
+    fingerprint, raw APT output, and agent error text remain out of model
+    context and terminal action output.
     Router glue may also pass monitor-owned source freshness thresholds into
     unified-resource adapters, but those thresholds are operational cadence
     metadata only. They must not disclose credentials, command output, raw

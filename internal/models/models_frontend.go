@@ -725,6 +725,7 @@ type HostFrontend struct {
 	AgentUpdate       *AgentUpdateStatus         `json:"agentUpdate,omitempty"`
 	AgentModules      []AgentModuleStatus        `json:"agentModules,omitempty"`
 	PackageUpdates    *HostPackageUpdateStatus   `json:"packageUpdates,omitempty"`
+	StorageCleanup    *HostStorageCleanupStatus  `json:"storageCleanup,omitempty"`
 	IsLegacy          bool                       `json:"isLegacy,omitempty"`     // True if using legacy agent protocol
 	LinkedNodeID      string                     `json:"linkedNodeId,omitempty"` // ID of linked PVE node (if running on a node)
 }
