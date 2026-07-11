@@ -148,13 +148,18 @@ func patrolOutcomeForActionAudit(audit unifiedresources.ActionAuditRecord) aicon
 		return aicontracts.OutcomeFixQueued
 	case unifiedresources.ActionStateRejected:
 		return aicontracts.OutcomeFixRejected
-	case unifiedresources.ActionStateFailed:
-		return aicontracts.OutcomeFixFailed
-	case unifiedresources.ActionStateCompleted:
-		switch unifiedresources.NormalizeVerificationOutcome(audit.VerificationOutcome).Status {
-		case unifiedresources.VerificationVerified:
+	case unifiedresources.ActionStateFailed, unifiedresources.ActionStateCompleted:
+		truth := unifiedresources.CanonicalActionResultV2(audit)
+		if truth.Execution.Status == unifiedresources.ActionExecutionFailed || truth.Execution.Status == unifiedresources.ActionExecutionNotRun {
+			return aicontracts.OutcomeFixFailed
+		}
+		if truth.Execution.Status != unifiedresources.ActionExecutionSucceeded {
+			return aicontracts.OutcomeFixVerificationUnknown
+		}
+		switch truth.Verification.Status {
+		case unifiedresources.ActionVerificationConfirmed:
 			return aicontracts.OutcomeFixVerified
-		case unifiedresources.VerificationFailed:
+		case unifiedresources.ActionVerificationContradicted:
 			return aicontracts.OutcomeFixVerificationFailed
 		default:
 			return aicontracts.OutcomeFixVerificationUnknown

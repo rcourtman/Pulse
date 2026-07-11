@@ -127,6 +127,7 @@ type AgentEventActionCompletedPayload struct {
 	State           string                           `json:"state"`
 	Success         bool                             `json:"success"`
 	ErrorMessage    string                           `json:"errorMessage,omitempty"`
+	ActionResultV2  *unifiedresources.ActionResultV2 `json:"actionResultV2,omitempty"`
 	Verification    *AgentResourceActionVerification `json:"verification,omitempty"`
 	RequestedBy     string                           `json:"requestedBy,omitempty"`
 	CompletedAt     time.Time                        `json:"completedAt"`
@@ -373,10 +374,11 @@ func (b *AgentEventBroadcaster) PublishActionCompletedRecord(record unifiedresou
 	if cmd, ok := record.Request.Params["command"].(string); ok {
 		payload.Command = cmd
 	}
-	if record.Result != nil {
-		payload.Success = record.Result.Success
-		payload.ErrorMessage = record.Result.ErrorMessage
-	}
+	canonical := unifiedresources.CanonicalActionResultV2(record)
+	payload.ActionResultV2 = &canonical
+	legacy := unifiedresources.LegacyActionResultProjection(record)
+	payload.Success = legacy.Success
+	payload.ErrorMessage = legacy.ErrorMessage
 	if v := projectAgentResourceVerification(unifiedresources.CanonicalActionVerification(record)); v != nil {
 		payload.Verification = v
 	}

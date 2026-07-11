@@ -115,11 +115,10 @@ func TestGetPulseIntelligenceActionTelemetry_CountsApprovedLifecycleAttemptsInsi
 	if err := store.RecordActionExecutionStart(started, startEvent); err != nil {
 		t.Fatalf("RecordActionExecutionStart(currentApproved): %v", err)
 	}
-	completed, doneEvent, err := unifiedresources.CompleteActionExecution(started, &unifiedresources.ExecutionResult{Success: true}, "operator", now.Add(-80*time.Minute))
+	completed, doneEvent, err := unifiedresources.CompleteActionExecution(started, &unifiedresources.ExecutionResult{Success: true, Verification: &unifiedresources.ActionVerificationResult{Ran: true, Success: true, RanAt: now.Add(-80 * time.Minute)}}, "operator", now.Add(-80*time.Minute))
 	if err != nil {
 		t.Fatalf("CompleteActionExecution(currentApproved): %v", err)
 	}
-	completed.VerificationOutcome = unifiedresources.VerificationOutcome{Status: unifiedresources.VerificationVerified}
 	if err := store.RecordActionExecutionResult(completed, doneEvent); err != nil {
 		t.Fatalf("RecordActionExecutionResult(currentApproved): %v", err)
 	}

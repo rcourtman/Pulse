@@ -7391,3 +7391,19 @@ CAS loss. Legacy nonterminal records without canonical actor/approval binding
 are replan-required. MFA is not implemented by labels: until a server verifier
 can validate and consume action-bound cryptographic evidence, MFA-required
 decisions remain unavailable and no API or product surface may claim otherwise.
+
+Action completion now carries the unified-resource-owned `ActionResultV2`
+through canonical completion events and agent resource context while retaining
+legacy fields for one compatibility window. Lifecycle executors may return a
+result or an error, never both. `nil,nil` is persisted as an inconclusive
+executor contract violation. A post-dispatch timeout or disconnect preserves
+the Task 07 durable receipt-pending attempt for reconciliation and is never
+converted into execution failure or success. Patrol reconciliation and Pulse
+Intelligence telemetry derive verification from the V2 verification axis and
+do not infer it from audit terminal state. Patrol `ActionDisposition` carries
+the canonical result as a neutral serialized V2 envelope alongside a derived
+legacy verification string; `pkg/aicontracts` declares no competing truth
+enums. Malformed stored V2 fails closed across events, context, findings,
+telemetry, dispositions, and relay wording. Producer migration remains Task 05;
+receipt/verification-attempt recovery remains Task 07; browser presentation
+remains Task 11; final-SHA certification remains Task 12.

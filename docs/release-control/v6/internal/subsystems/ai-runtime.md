@@ -5772,3 +5772,12 @@ compatibility window. AI-facing method labels, model assertions, and local
 biometric claims never satisfy an MFA floor. Until the core step-up verifier
 accepts action-bound cryptographic evidence, the honest runtime outcome is
 step-up unavailable, not MFA approved.
+
+AI and Patrol projections consume `unifiedresources.ActionResultV2`; they do
+not own action-result enums. Finding reconciliation maps confirmed,
+contradicted, and inconclusive verification independently from execution, and
+therefore cannot treat terminal audit state as proof of the postcondition.
+Legacy investigation outcome strings remain projections for compatibility and
+must be derived from canonical truth rather than reconstructed locally. The
+typed disposition retains the serialized canonical two-axis result so the
+legacy single outcome is never the sole durable/read-model truth.

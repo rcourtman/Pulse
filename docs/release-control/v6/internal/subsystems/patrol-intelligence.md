@@ -1967,3 +1967,10 @@ and offers an Assistant handoff. Collapsed-row attention state must consult the
 same investigation action reference, so it cannot claim there is no approval
 while the expanded panel has one. Browser proof must exercise pending,
 terminal-verified, and legacy-history states rather than judging only source.
+
+Backend Patrol finding reconciliation now reads `ActionResultV2`: execution
+failed or known-not-run maps to fix failure; confirmed verification maps to
+verified; contradicted verification maps to verification failure; and
+not-attempted or inconclusive verification remains verification unknown. A
+successful execution never overwrites contradictory verification. Task 11
+still owns browser wording and proof for the distinct terminal states.

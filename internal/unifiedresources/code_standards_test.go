@@ -69,6 +69,45 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
+func TestActionTruthTypesStayUnifiedResourceOwned(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	roots := []string{"internal/api", "internal/ai", "internal/agentexec", "internal/hostagent", "internal/dockeragent", "internal/relay", "internal/workflow", "internal/workflows"}
+	forbidden := []*regexp.Regexp{
+		regexp.MustCompile(`(?m)^type\s+ActionExecutionStatus\b`),
+		regexp.MustCompile(`(?m)^type\s+ActionVerificationStatus\b`),
+		regexp.MustCompile(`(?m)^type\s+ActionEvidenceClass\b`),
+		regexp.MustCompile(`(?m)^type\s+ActionCompensationStatus\b`),
+		regexp.MustCompile(`(?m)^type\s+ActionResultV2\b`),
+	}
+	for _, root := range roots {
+		path := filepath.Join(repoRoot, root)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			continue
+		}
+		err := filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			source, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for _, pattern := range forbidden {
+				if pattern.Match(source) {
+					t.Errorf("%s declares workflow-local action truth; use unifiedresources.ActionResultV2", filepath.ToSlash(path))
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("scan %s: %v", path, err)
+		}
+	}
+}
+
 func TestProductionActionLifecycleDoesNotUseRecordActionAuditAsUpsert(t *testing.T) {
 	paths := []string{"../actionlifecycle/service.go", "../ai/tools/action_audit.go", "../api/patrol_action_broker.go"}
 	for _, path := range paths {
@@ -620,7 +659,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			// shape stable across refactors so frontend audit surfaces and
 			// any other consumers can rely on it.
 			"type ActionVerificationResult struct",
-			"Verification *ActionVerificationResult `json:\"verification,omitempty\"`",
+			"Verification   *ActionVerificationResult `json:\"verification,omitempty\"`",
 		},
 		filepath.Join(".", "store.go"): {
 			"RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",

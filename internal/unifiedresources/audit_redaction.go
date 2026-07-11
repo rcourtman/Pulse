@@ -98,7 +98,86 @@ func redactActionExecutionResult(result *ExecutionResult) *ExecutionResult {
 	redacted.Output = RedactAuditText(redacted.Output)
 	redacted.ErrorMessage = RedactAuditText(redacted.ErrorMessage)
 	redacted.Verification = redactActionVerificationResult(redacted.Verification)
+	if redacted.ActionResultV2 != nil {
+		canonical := cloneActionResultV2(*redacted.ActionResultV2)
+		clearActionEvidenceDigests(canonical.Verification.Evidence)
+		clearActionEvidenceDigests(canonical.Compensation.Evidence)
+		if canonical.Compensation.Verification != nil {
+			clearActionEvidenceDigests(canonical.Compensation.Verification.Evidence)
+		}
+		if normalized, err := NormalizeActionResultV2(canonical); err == nil {
+			redacted.ActionResultV2 = &normalized
+		} else {
+			fallback := redactionContractViolationResult()
+			redacted.ActionResultV2 = &fallback
+		}
+	}
 	return &redacted
+}
+
+func cloneActionResultV2(result ActionResultV2) ActionResultV2 {
+	result.Verification.Evidence = cloneActionEvidence(result.Verification.Evidence)
+	result.Compensation.Evidence = cloneActionEvidence(result.Compensation.Evidence)
+	if result.Compensation.StartedAt != nil {
+		startedAt := *result.Compensation.StartedAt
+		result.Compensation.StartedAt = &startedAt
+	}
+	if result.Compensation.CompletedAt != nil {
+		completedAt := *result.Compensation.CompletedAt
+		result.Compensation.CompletedAt = &completedAt
+	}
+	if result.Compensation.Execution != nil {
+		execution := *result.Compensation.Execution
+		result.Compensation.Execution = &execution
+	}
+	if result.Compensation.Verification != nil {
+		verification := *result.Compensation.Verification
+		verification.Evidence = cloneActionEvidence(verification.Evidence)
+		result.Compensation.Verification = &verification
+	}
+	if result.Compensation.RestoredState != nil {
+		restored := *result.Compensation.RestoredState
+		result.Compensation.RestoredState = &restored
+	}
+	return result
+}
+
+func cloneActionEvidence(evidence []ActionEvidence) []ActionEvidence {
+	if evidence == nil {
+		return nil
+	}
+	cloned := make([]ActionEvidence, len(evidence))
+	copy(cloned, evidence)
+	for i := range cloned {
+		cloned[i].Refs = append([]ActionEvidenceRef(nil), evidence[i].Refs...)
+	}
+	return cloned
+}
+
+func clearActionEvidenceDigests(evidence []ActionEvidence) {
+	for i := range evidence {
+		evidence[i].Digest = ""
+	}
+}
+
+func redactionContractViolationResult() ActionResultV2 {
+	fallback := ActionResultV2{
+		Version: ActionResultV2Version,
+		Execution: ActionExecutionTruth{
+			Status: ActionExecutionInconclusive, ReasonCode: "redaction_contract_violation",
+			Summary: "Action result was rejected by the audit redaction contract.",
+		},
+		Verification: ActionVerificationTruth{
+			Status: ActionVerificationInconclusive, EvidenceClass: ActionEvidenceNone,
+			ReasonCode: "redaction_contract_violation",
+		},
+		Compensation: ActionCompensationTruth{Support: ActionCompensationUnavailable, Status: ActionCompensationNotAvailable},
+	}
+	normalized, err := NormalizeActionResultV2(fallback)
+	if err != nil {
+		panic("canonical redaction fallback is invalid: " + err.Error())
+	}
+	return normalized
 }
 
 // RedactAuditRecord returns a copy of the input ActionAuditRecord with

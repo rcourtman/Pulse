@@ -237,6 +237,7 @@ func TestPatrolActionReconciliationCannotRegressFromOutOfOrderCallback(t *testin
 	completed := pending
 	completed.State = unifiedresources.ActionStateCompleted
 	completed.UpdatedAt = now.Add(time.Second)
+	completed.Result = &unifiedresources.ExecutionResult{Success: true}
 	completed.VerificationOutcome = unifiedresources.VerificationOutcome{Status: unifiedresources.VerificationVerified}
 	if _, _, err := audits.CreateActionAudit(completed, nil); err != nil {
 		t.Fatalf("CreateActionAudit(completed): %v", err)

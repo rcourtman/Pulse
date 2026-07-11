@@ -1688,6 +1688,29 @@ through the canonical resource model, but unified-resource consumers must not
 reintroduce removed workload aliases or feature-local resource-type shims just
 to satisfy one table, drawer, or badge surface.
 
+### Canonical action-result truth
+
+`internal/unifiedresources/action_result_v2.go` is the sole schema authority
+for terminal action truth. `ActionResultV2` versions execution, verification,
+evidence trust, and nested compensation as independent facts. Independent
+verification requires durable bounded evidence from a trust domain distinct
+from the executor; evidence identifies observer kind as well as observer and
+trust domain, and an agent readback remains agent-attested. Nil executor
+results, legacy completed rows without results, timeouts with unknown effect,
+and malformed evidence remain explicitly inconclusive. Legacy `Success` and
+`VerificationOutcome` fields are derived compatibility projections only.
+Canonical evidence is bounded before redaction and digested as SHA-256 over
+the canonical redacted envelope. Redaction deep-copies nested evidence and
+fails closed to `redaction_contract_violation`; it never preserves invalid or
+unredacted input. A present but malformed stored V2 also fails closed to
+`result_v2_invalid`; legacy booleans can never override it. Compensation truth
+never rewrites the primary result and carries declared trigger, durable
+attempt/step identity, timing, nested execution and verification, and restored
+state digest identity for downstream recovery without implementing recovery.
+Workflow, API, AI, agent, Docker, host-agent, and relay packages must not
+declare competing truth enums. Generated wire mirrors remain a bounded later
+presentation concern, not a second source of semantics.
+
 The canonical action resource contract now owns immutable `ActionActor` and
 versioned `ApprovalRequirement` bindings. Actor subject/kind/credential/org and
 requirement floor/quorum/separation are part of deterministic action identity

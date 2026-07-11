@@ -1327,3 +1327,14 @@ biometric, or UI method labels are not MFA evidence. MFA-required actions fail
 closed unless the core verifier validates and single-use consumes evidence
 bound to the actor, credential, organization, action, plan, outcome, and
 challenge.
+
+Action completion and resource-context projections expose only normalized and
+redacted canonical evidence plus legacy compatibility fields derived from that
+truth. A present but malformed `ActionResultV2` fails closed to bounded
+inconclusive truth; it cannot fall back to legacy success or verified labels.
+Independent verification requires durable evidence from a trust domain
+distinct from the executor. Raw commands, provider stderr, credentials, and
+secret-bearing text do not enter `ActionResultV2` projections. Stable bounded
+refusal reason codes such as `resource_remediation_locked:` and `plan_drift:`
+may remain visible so authorized consumers can branch without receiving raw
+provider output.

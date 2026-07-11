@@ -1867,3 +1867,11 @@ Publication remains an O(1) wakeup keyed by org and action id; reconciliation
 and read-time recovery use indexed action-audit lookups rather than scanning
 findings or audit history. SQLite keeps dedicated state and valid-origin JSON
 indexes for pending queues and missed-callback hydration.
+
+The `action.completed` projection reads the already-loaded
+`ActionAuditRecord` and derives canonical `ActionResultV2` plus the bounded
+legacy compatibility fields in process. Projection adds no action-store
+lookup, polling loop, provider call, or evidence fetch. Canonical evidence and
+reference counts, text, and identity fields remain bounded by the
+unified-resource-owned `ActionResultV2` contract, so event publication cannot
+turn terminal action evidence into an unbounded payload or hot-path query.

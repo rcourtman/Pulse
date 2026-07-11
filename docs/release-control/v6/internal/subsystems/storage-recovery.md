@@ -2032,6 +2032,13 @@ while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
 
+Storage and recovery consumers of action events and resource history inherit
+the unified-resource-owned `ActionResultV2`. They must preserve execution,
+verification, evidence class, and nested compensation independently and must
+not turn a successful mutation plus contradicted readback into generic failure
+or success. Task 10 defines the schema only; restart compensation recovery and
+workflow rollback algorithms remain with their declared downstream owners.
+
 The adjacent unified action store migration now adds a durable action decision
 revision plus typed lifecycle-event kind, decision revision, and bound decision
 JSON. Migration retains duplicate historical state rows as typed legacy facts,

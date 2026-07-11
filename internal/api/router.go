@@ -3186,10 +3186,11 @@ func projectAgentActionCompletedPayload(record unifiedresources.ActionAuditRecor
 	if cmd, ok := record.Request.Params["command"].(string); ok {
 		payload.Command = cmd
 	}
-	if record.Result != nil {
-		payload.Success = record.Result.Success
-		payload.ErrorMessage = record.Result.ErrorMessage
-	}
+	canonical := unifiedresources.CanonicalActionResultV2(record)
+	payload.ActionResultV2 = &canonical
+	legacy := unifiedresources.LegacyActionResultProjection(record)
+	payload.Success = legacy.Success
+	payload.ErrorMessage = legacy.ErrorMessage
 	if v := projectAgentResourceVerification(unifiedresources.CanonicalActionVerification(record)); v != nil {
 		payload.Verification = v
 	}

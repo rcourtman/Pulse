@@ -14181,7 +14181,13 @@ func TestContract_ActionExecutionJSONSnapshot(t *testing.T) {
 			"state":"completed",
 			"result":{
 				"success":true,
-				"output":"restart dispatched"
+				"output":"restart dispatched",
+				"actionResultV2":{
+					"version":2,
+					"execution":{"status":"succeeded","summary":"restart dispatched"},
+					"verification":{"status":"not_attempted","evidenceClass":"none"},
+					"compensation":{"support":"unavailable","status":"not_available"}
+				}
 			},
 			"audit":{
 				"id":"act_execution_contract",
@@ -14239,7 +14245,13 @@ func TestContract_ActionExecutionJSONSnapshot(t *testing.T) {
 				],
 				"result":{
 					"success":true,
-					"output":"restart dispatched"
+					"output":"restart dispatched",
+					"actionResultV2":{
+						"version":2,
+						"execution":{"status":"succeeded","summary":"restart dispatched"},
+						"verification":{"status":"not_attempted","evidenceClass":"none"},
+						"compensation":{"support":"unavailable","status":"not_available"}
+					}
 				},
 				"verificationOutcome":{
 					"status":"unknown"
@@ -19592,10 +19604,9 @@ func TestContract_PulseIntelligenceApprovedSuccessTelemetryRequiresVerifiedOutco
 		`if record.State != unifiedresources.ActionStateCompleted`,
 		`return pulseIntelligenceActionVerifiedOutcome(record)`,
 		`func pulseIntelligenceActionVerifiedOutcome(record unifiedresources.ActionAuditRecord) bool`,
-		`outcome := unifiedresources.NormalizeVerificationOutcome(record.VerificationOutcome)`,
-		`outcome.Status == unifiedresources.VerificationVerified`,
-		`verification := unifiedresources.CanonicalActionVerification(record)`,
-		`return verification != nil && verification.Ran && verification.Success`,
+		`truth := unifiedresources.CanonicalActionResultV2(record)`,
+		`truth.Execution.Status == unifiedresources.ActionExecutionSucceeded`,
+		`truth.Verification.Status == unifiedresources.ActionVerificationConfirmed`,
 	} {
 		if !strings.Contains(telemetrySrc, fragment) {
 			t.Errorf("Pulse Intelligence approved-success telemetry must require verified outcome proof; missing %s", fragment)

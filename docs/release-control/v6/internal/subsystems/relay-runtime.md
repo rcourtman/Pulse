@@ -154,3 +154,14 @@ binding. Detached relay/service tokens fail closed. A mobile-local biometric
 label is not server-verifiable MFA evidence, so device-key enrollment and
 cryptographic mobile step-up remain a later governed slice and relay must not
 claim that local biometric success satisfied the core MFA floor.
+
+The canonical relay notification projection accepts `ActionResultV2` and uses
+wording that names execution separately from verification: not run, execution
+failed, execution inconclusive, executed and confirmed, executed but
+contradicted, verification not attempted, or verification inconclusive.
+Every canonical notification states both execution and verification even when
+one axis is failed, not run, or inconclusive, and confirmed/contradicted copy
+names agent-attested versus independent evidence.
+Legacy status-string notification input remains a compatibility boundary; new
+workflow producers must not use it as a competing truth model. Task 11 owns
+client presentation and Task 12 owns final-SHA certification.

@@ -4341,6 +4341,95 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA38",
+      "summary": "Canonical terminal action truth preserves execution and verification as independent axes: no terminal consumer may collapse one into the other, no nil or unknown-effect executor tuple may infer success, and no result may claim independent verification without bounded durable evidence from a distinct trust domain.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6",
+        "L7",
+        "L13",
+        "L15",
+        "L16",
+        "L20"
+      ],
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "ai-runtime",
+        "api-contracts",
+        "patrol-intelligence",
+        "relay-runtime",
+        "storage-recovery",
+        "unified-resources"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "ra38-action-result-truth-and-persistence",
+          "run": [
+            "go",
+            "test",
+            "./internal/unifiedresources",
+            "-run",
+            "TestNormalizeActionResultTruthMatrix48|TestValidateActionResultEvidenceClassMatrix|TestActionResultLegacyProjectionMatrix48|TestCompleteActionExecutionRequiresExplicitResult|TestKnownPreDispatchRefusalIsNotRunAndNotVerified|TestLegacyTimeoutAndDisconnectMigrateInconclusive|TestMalformedStoredActionResultV2FailsClosed|TestActionResultV2MemoryStoreRoundTrip|TestActionResultV2SQLiteRoundTrip|TestActionResultV2SurvivesSQLiteReopen|TestCompensationFailureSurvivesSQLiteReopen|TestCompensationSucceededRestoredStateSurvivesSQLiteReopen|TestMalformedActionResultV2PersistsFailClosed|TestLegacyCompletedNilResultMigratesInconclusive|TestLegacyMissingVerificationMigratesNotAttempted|TestActionEvidenceCanonicalDigestStable|TestActionEvidenceCanonicalDigestChangesWithRetainedSemanticFields|TestActionEvidenceRedactionPreservesTruthAndCanonicalDigest|TestActionEvidenceRejectsUnboundedPayload|TestActionEvidenceBoundsApplyBeforeSecretRedaction|TestActionResultRedactionDeepCopiesAndRecomputesDigest|TestActionResultRedactionFailsClosedOnMalformedEvidence|TestCompensationNeverRewritesPrimaryResult|TestCompensationSucceededRequiresRestorationVerification|TestCompensationStateShapeValidationMatrix|TestActionTruthTypesStayUnifiedResourceOwned",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "ra38-executor-and-terminal-consumer-projections",
+          "run": [
+            "go",
+            "test",
+            "./internal/actionlifecycle",
+            "./internal/api",
+            "./internal/relay",
+            "./pkg/aicontracts",
+            "-run",
+            "TestExecutorTupleNilNilPersistsInconclusiveContractViolation|TestExecutorTupleResultAndErrorIsContractViolation|TestExecutorTuplePostDispatchErrorPreservesReceiptPending|TestActionResultV2EventFindingContextTelemetryProjectionMatrix|TestActionResultV2JSONContractSnapshot|TestMalformedStoredActionResultV2CannotProjectSuccessOrVerification|TestPatrolActionBrokerTerminalReplayPreservesAuditAndEvents|TestPatrolActionReconciliationHydratesTerminalAuditAfterRestart|TestPatrolActionReconciliationCannotRegressFromOutOfOrderCallback|TestCanonicalActionOutcomeNotificationMatrix|TestActionBrokerPolicyMetadataCarriesNoAuthorizationMethod",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/actionlifecycle/service_action_result_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/action_result_v2_contract_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/relay/push_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/action_result_store_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/action_result_v2.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/action_result_v2_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -5898,7 +5987,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. Three policy-authorized verticals are live. Docker/Podman restart is capability-owned low-risk eligible. Agent-managed APT host updates are capability-owned elevated eligible and cross a closed typed host_update protocol with no command, package-selection, removal, or reboot authority; the agent owns metadata refresh, preflight simulation, guarded installation, and post-install simulation, while the audit records verified, failed, or honestly inconclusive outcomes plus reboot-required state. Agent-managed package-cache cleanup is capability-owned low-risk eligible and crosses a separate fingerprint-bound host_storage_cleanup protocol with no command, path, package selector, installed-package removal, or reboot authority; it is available only for meaningful reclaimable bytes on the actual pressured cache filesystem, and the audit verifies the bytes reclaimed. All three require explicit per-resource capability allowlists and optional recurring timezone windows, remain bounded by tenant Patrol mode and full-mode unlock, recheck policy/readiness before decision and dispatch, and record server-owned policy approval plus terminal verification in the same audit trail. Never-auto-remediate, missing/unknown policy, unsupported capabilities, stale/error/empty package or cleanup inventories, cleared storage pressure, dry-run/MFA floors, closed windows, and mode downgrades all fail closed. Action continuity is audit-authoritative and now has a Phase B1 durable transport foundation: execution admission atomically creates the deterministic dispatch attempt/outbox, a one-shot pre-send CAS prevents concurrent duplicate sends, expired pre-send claims safely requeue, post-send uncertainty remains receipt-pending for query-only reconciliation, explicit expiry is durable, and canonical detail plus pending/settled reads are tenant-scoped. Generic transport errors cannot fabricate receipts or terminal truth, legacy executing rows without attempts remain inert, callbacks trigger org-scoped re-reads, investigation reads recover missed transitions by trusted origin, desktop and mobile decisions use the canonical /api/actions routes, terminal verification maps honestly onto Patrol findings and push outcomes, and legacy command-shaped history remains inert. Task 08 Phase B1 also makes requester and decision authority server-owned, binds actor and approval requirement into plan identity, rechecks current tenant/RBAC/token scope, and records multi-actor approvals through revision-CAS append-only decision facts plus atomic lifecycle transitions. MFA-required decisions remain explicitly unavailable until a core verifier validates and consumes action-bound cryptographic evidence; labels and local biometrics are not MFA. Remaining post-RC hardening includes Task 10-owned terminal execution/verification/evidence/compensation truth before Task 07 Phase B2 compensation and verification-attempt recovery, mobile/relay inbox and push-dedup consumption, broader tenant defaults/inheritance and automation rate budgets, richer dry-run providers, multi-actor UI and MSP delegation/inheritance, device-key/WebAuthn enrollment and verifier integration, additional package-manager and bounded cleanup providers beyond APT, separately governed reboot orchestration, and a real-lab detect-plan-execute-verify-rollback journey proof.",
+        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. Three policy-authorized verticals are live. Docker/Podman restart is capability-owned low-risk eligible. Agent-managed APT host updates are capability-owned elevated eligible and cross a closed typed host_update protocol with no command, package-selection, removal, or reboot authority; the agent owns metadata refresh, preflight simulation, guarded installation, and post-install simulation, while the audit records verified, failed, or honestly inconclusive outcomes plus reboot-required state. Agent-managed package-cache cleanup is capability-owned low-risk eligible and crosses a separate fingerprint-bound host_storage_cleanup protocol with no command, path, package selector, installed-package removal, or reboot authority; it is available only for meaningful reclaimable bytes on the actual pressured cache filesystem, and the audit verifies the bytes reclaimed. All three require explicit per-resource capability allowlists and optional recurring timezone windows, remain bounded by tenant Patrol mode and full-mode unlock, recheck policy/readiness before decision and dispatch, and record server-owned policy approval plus terminal verification in the same audit trail. Never-auto-remediate, missing/unknown policy, unsupported capabilities, stale/error/empty package or cleanup inventories, cleared storage pressure, dry-run/MFA floors, closed windows, and mode downgrades all fail closed. Action continuity is audit-authoritative and now has a Phase B1 durable transport foundation: execution admission atomically creates the deterministic dispatch attempt/outbox, a one-shot pre-send CAS prevents concurrent duplicate sends, expired pre-send claims safely requeue, post-send uncertainty remains receipt-pending for query-only reconciliation, explicit expiry is durable, and canonical detail plus pending/settled reads are tenant-scoped. Generic transport errors cannot fabricate receipts or terminal truth, legacy executing rows without attempts remain inert, callbacks trigger org-scoped re-reads, investigation reads recover missed transitions by trusted origin, desktop and mobile decisions use the canonical /api/actions routes, terminal verification maps honestly onto Patrol findings and push outcomes, and legacy command-shaped history remains inert. Task 08 Phase B1 also makes requester and decision authority server-owned, binds actor and approval requirement into plan identity, rechecks current tenant/RBAC/token scope, and records multi-actor approvals through revision-CAS append-only decision facts plus atomic lifecycle transitions. MFA-required decisions remain explicitly unavailable until a core verifier validates and consumes action-bound cryptographic evidence; labels and local biometrics are not MFA. Task 10 Phase B1 now owns one versioned ActionResultV2 with separate execution and verification axes, bounded trust-domain evidence, fail-closed redaction and stable digesting, nested compensation truth, durable Memory/SQLite compatibility persistence, executor tuple enforcement, and non-collapsing event, finding, context, telemetry, and relay projections. M4, M6, and claim 19 remain open pending Task 05 producer migration, Task 07 recovery, Tasks 06/09 workflow lab observations, Task 11 browser presentation, and Task 12 certification against the final SHA. Remaining post-RC hardening also includes mobile/relay inbox and push-dedup consumption, broader tenant defaults/inheritance and automation rate budgets, richer dry-run providers, multi-actor UI and MSP delegation/inheritance, device-key/WebAuthn enrollment and verifier integration, additional package-manager and bounded cleanup providers beyond APT, separately governed reboot orchestration, and a real-lab detect-plan-execute-verify-rollback journey proof.",
         "tracking": [
           {
             "kind": "lane-followup",

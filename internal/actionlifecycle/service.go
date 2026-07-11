@@ -1088,6 +1088,9 @@ func (s *Service) dispatchCommitted(ctx context.Context, orgID string, store Sto
 	}
 	result, execErr := s.Executor.ExecuteAction(withDispatchAttempt(ctx, attempt), record)
 	if execErr != nil {
+		if result != nil {
+			return record, fmt.Errorf("%w: executor returned both result and error", unified.ErrExecutorResultContract)
+		}
 		// A timeout, disconnect, cancellation, or generic executor error is not
 		// proof that the transport answered. Preserve receipt_pending so a
 		// reconciler can query by attempt ID without resending.
@@ -1105,7 +1108,13 @@ func (s *Service) reconcileCommitted(ctx context.Context, orgID string, store St
 		return record, nil
 	}
 	result, receipt, found, err := reconciler.ReconcileActionDispatch(ctx, record, attempt)
-	if err != nil || !found {
+	if err != nil {
+		if result != nil {
+			return record, fmt.Errorf("%w: reconciler returned both result and error", unified.ErrExecutorResultContract)
+		}
+		return record, err
+	}
+	if !found {
 		return record, err
 	}
 	if receipt.AttemptID == "" {

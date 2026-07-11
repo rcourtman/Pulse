@@ -279,6 +279,7 @@ func TestActionBrokerPolicyMetadataCarriesNoAuthorizationMethod(t *testing.T) {
 	dispositionPayload, err := json.Marshal(ActionDisposition{
 		ActionID:           "act-1",
 		State:              "completed",
+		ActionResultV2:     json.RawMessage(`{"version":2,"execution":{"status":"succeeded"},"verification":{"status":"confirmed","evidenceClass":"independent"},"compensation":{"support":"unavailable","status":"not_available"}}`),
 		VerificationStatus: "verified",
 	})
 	if err != nil {
@@ -286,6 +287,9 @@ func TestActionBrokerPolicyMetadataCarriesNoAuthorizationMethod(t *testing.T) {
 	}
 	if !strings.Contains(string(dispositionPayload), `"verification_status":"verified"`) {
 		t.Fatalf("disposition must carry terminal verification: %s", dispositionPayload)
+	}
+	if !strings.Contains(string(dispositionPayload), `"action_result_v2":{"version":2`) {
+		t.Fatalf("disposition must carry canonical two-axis result: %s", dispositionPayload)
 	}
 	for _, forbidden := range []string{"authorize", "approve", "execute"} {
 		if strings.Contains(string(catalogPayload), forbidden) || strings.Contains(string(dispositionPayload), forbidden) {

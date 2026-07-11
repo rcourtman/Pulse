@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 // Notification type constants
@@ -178,5 +180,47 @@ func NewActionOutcomeNotification(findingID, title, verificationStatus string) P
 		Body:       truncate(body, maxPushBodyLen),
 		ActionType: PushActionViewFixResult,
 		ActionID:   findingID,
+	}
+}
+
+// NewCanonicalActionOutcomeNotification projects both canonical truth axes
+// without calling unknown execution or verification a success or failure.
+func NewCanonicalActionOutcomeNotification(findingID, title string, result unifiedresources.ActionResultV2) PushNotificationPayload {
+	execution := "Execution outcome is inconclusive"
+	priority := PushPriorityNormal
+	switch result.Execution.Status {
+	case unifiedresources.ActionExecutionNotRun:
+		execution = "Execution was not run"
+		priority = PushPriorityHigh
+	case unifiedresources.ActionExecutionFailed:
+		execution = "Execution failed"
+		priority = PushPriorityHigh
+	case unifiedresources.ActionExecutionSucceeded:
+		execution = "Execution succeeded"
+	}
+	verification := "verification was inconclusive"
+	source := ""
+	switch result.Verification.EvidenceClass {
+	case unifiedresources.ActionEvidenceAgentAttested:
+		source = " with agent-attested evidence"
+	case unifiedresources.ActionEvidenceIndependent:
+		source = " with independent evidence"
+	}
+	switch result.Verification.Status {
+	case unifiedresources.ActionVerificationNotAttempted:
+		verification = "verification was not attempted"
+	case unifiedresources.ActionVerificationConfirmed:
+		verification = "verification confirmed the expected result" + source
+	case unifiedresources.ActionVerificationContradicted:
+		verification = "verification contradicted the expected result" + source
+		priority = PushPriorityHigh
+	case unifiedresources.ActionVerificationInconclusive:
+		verification = "verification was inconclusive" + source
+	}
+	body := execution + "; " + verification
+	return PushNotificationPayload{
+		Type: PushTypeFixCompleted, Priority: priority,
+		Title: truncate(sanitizeTitle(title), maxPushTitleLen), Body: truncate(body, maxPushBodyLen),
+		ActionType: PushActionViewFixResult, ActionID: findingID,
 	}
 }

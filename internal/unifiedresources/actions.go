@@ -303,10 +303,11 @@ type ActionPlan struct {
 
 // ExecutionResult captures the output of the native capability driver.
 type ExecutionResult struct {
-	Success      bool                      `json:"success"`
-	Output       string                    `json:"output,omitempty"`
-	ErrorMessage string                    `json:"errorMessage,omitempty"`
-	Verification *ActionVerificationResult `json:"verification,omitempty"`
+	Success        bool                      `json:"success"`
+	Output         string                    `json:"output,omitempty"`
+	ErrorMessage   string                    `json:"errorMessage,omitempty"`
+	Verification   *ActionVerificationResult `json:"verification,omitempty"`
+	ActionResultV2 *ActionResultV2           `json:"actionResultV2,omitempty"`
 }
 
 // ActionVerificationResult records the outcome of a post-execution
@@ -389,9 +390,10 @@ func VerificationOutcomeFromExecutionResult(result *ExecutionResult) Verificatio
 	if result == nil || !result.Success || result.Verification == nil {
 		return VerificationOutcome{Status: VerificationUnknown}
 	}
+	note := strings.TrimSpace(result.Verification.Note)
 	verification := NormalizeActionVerificationResult(result.Verification)
 	if verification == nil || !verification.Ran {
-		return VerificationOutcome{Status: VerificationUnverified, EvidenceSummary: strings.TrimSpace(verification.Note)}
+		return VerificationOutcome{Status: VerificationUnverified, EvidenceSummary: note}
 	}
 	if verification.Success {
 		return VerificationOutcome{Status: VerificationVerified, EvidenceSummary: strings.TrimSpace(verification.Note)}
@@ -417,9 +419,9 @@ func NormalizeActionVerificationResult(result *ActionVerificationResult) *Action
 	if !normalized.Ran {
 		normalized.Command = ""
 		normalized.Output = ""
+		normalized.Note = ""
 		normalized.Success = false
 		normalized.RanAt = time.Time{}
-		normalized.Note = ""
 	}
 	return &normalized
 }
@@ -436,6 +438,20 @@ func cloneActionVerificationResult(result *ActionVerificationResult) *ActionVeri
 // an audit record, falling back to legacy result.verification records while
 // older persisted rows are still being read.
 func CanonicalActionVerification(record ActionAuditRecord) *ActionVerificationResult {
+	if record.Result != nil && record.Result.ActionResultV2 != nil {
+		canonical := CanonicalActionResultV2(record)
+		projected := LegacyActionVerificationFromV2(canonical)
+		if projected == nil || !projected.Ran {
+			return NormalizeActionVerificationResult(projected)
+		}
+		for _, candidate := range []*ActionVerificationResult{record.Verification, record.Result.Verification} {
+			compatibility := NormalizeActionVerificationResult(candidate)
+			if compatibility != nil && compatibility.Ran && compatibility.Success == projected.Success {
+				return compatibility
+			}
+		}
+		return NormalizeActionVerificationResult(projected)
+	}
 	if result := NormalizeActionVerificationResult(record.Verification); result != nil {
 		return result
 	}
@@ -937,10 +953,16 @@ func CompleteActionExecution(record ActionAuditRecord, result *ExecutionResult, 
 		actor = "api:authenticated"
 	}
 	if result == nil {
-		result = &ExecutionResult{Success: true}
+		result = ExecutorContractViolationResult("executor_nil_result", "Executor returned no result.", record.Plan.RollbackAvailable)
 	}
 	result.Output = strings.TrimSpace(result.Output)
 	result.ErrorMessage = strings.TrimSpace(result.ErrorMessage)
+	canonical := CanonicalActionResultV2(ActionAuditRecord{ID: record.ID, UpdatedAt: now, Plan: record.Plan, Result: result, VerificationOutcome: VerificationOutcomeFromExecutionResult(result)})
+	var err error
+	result, record.VerificationOutcome, err = ApplyActionResultV2(result, canonical)
+	if err != nil {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
+	}
 
 	nextState := ActionStateCompleted
 	message := "Action execution completed."
@@ -955,7 +977,6 @@ func CompleteActionExecution(record ActionAuditRecord, result *ExecutionResult, 
 	record.State = nextState
 	record.UpdatedAt = now
 	record.Result = result
-	record.VerificationOutcome = VerificationOutcomeFromExecutionResult(result)
 	normalized, err := NormalizeActionAuditRecord(record)
 	if err != nil {
 		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
@@ -993,10 +1014,7 @@ func RefuseActionExecution(record ActionAuditRecord, reason error, actor string,
 
 	record.State = ActionStateFailed
 	record.UpdatedAt = now
-	record.Result = &ExecutionResult{
-		Success:      false,
-		ErrorMessage: message,
-	}
+	record.Result = KnownNoEffectResult("pre_dispatch_refused", message, record.Plan.RollbackAvailable)
 	normalized, err := NormalizeActionAuditRecord(record)
 	if err != nil {
 		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
@@ -1241,7 +1259,12 @@ func NormalizeActionAuditRecord(record ActionAuditRecord) (ActionAuditRecord, er
 		result := *record.Result
 		result.Output = strings.TrimSpace(result.Output)
 		result.ErrorMessage = strings.TrimSpace(result.ErrorMessage)
+		if result.Verification == nil {
+			result.Verification = cloneActionVerificationResult(record.Verification)
+		}
+		canonical := CanonicalActionResultV2(ActionAuditRecord{ID: record.ID, UpdatedAt: record.UpdatedAt, Plan: record.Plan, Result: &result, VerificationOutcome: record.VerificationOutcome})
 		result.Verification = NormalizeActionVerificationResult(result.Verification)
+		result.ActionResultV2 = &canonical
 		record.Result = &result
 	}
 	record.Verification = NormalizeActionVerificationResult(record.Verification)
@@ -1252,6 +1275,14 @@ func NormalizeActionAuditRecord(record ActionAuditRecord) (ActionAuditRecord, er
 		record.Result.Verification = cloneActionVerificationResult(record.Verification)
 	}
 	record.VerificationOutcome = NormalizeVerificationOutcome(record.VerificationOutcome)
+	if record.Result != nil {
+		result, legacy, err := ApplyActionResultV2(record.Result, CanonicalActionResultV2(record))
+		if err != nil {
+			return ActionAuditRecord{}, err
+		}
+		record.Result = result
+		record.VerificationOutcome = legacy
+	}
 
 	for i := range record.Approvals {
 		record.Approvals[i].Actor = strings.TrimSpace(record.Approvals[i].Actor)

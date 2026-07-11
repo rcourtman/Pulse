@@ -1,9 +1,46 @@
 package relay
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+func TestCanonicalActionOutcomeNotificationMatrix(t *testing.T) {
+	executions := []unifiedresources.ActionExecutionStatus{unifiedresources.ActionExecutionNotRun, unifiedresources.ActionExecutionSucceeded, unifiedresources.ActionExecutionFailed, unifiedresources.ActionExecutionInconclusive}
+	verificationClasses := map[unifiedresources.ActionVerificationStatus][]unifiedresources.ActionEvidenceClass{
+		unifiedresources.ActionVerificationNotAttempted: {unifiedresources.ActionEvidenceNone},
+		unifiedresources.ActionVerificationConfirmed:    {unifiedresources.ActionEvidenceAgentAttested, unifiedresources.ActionEvidenceIndependent},
+		unifiedresources.ActionVerificationContradicted: {unifiedresources.ActionEvidenceAgentAttested, unifiedresources.ActionEvidenceIndependent},
+		unifiedresources.ActionVerificationInconclusive: {unifiedresources.ActionEvidenceNone, unifiedresources.ActionEvidenceAgentAttested, unifiedresources.ActionEvidenceIndependent},
+	}
+	cases := 0
+	for _, execution := range executions {
+		for verification, classes := range verificationClasses {
+			for _, class := range classes {
+				cases++
+				t.Run(fmt.Sprintf("%s/%s/%s", execution, verification, class), func(t *testing.T) {
+					result := unifiedresources.ActionResultV2{Execution: unifiedresources.ActionExecutionTruth{Status: execution}, Verification: unifiedresources.ActionVerificationTruth{Status: verification, EvidenceClass: class}}
+					got := NewCanonicalActionOutcomeNotification("finding-1", "Action", result)
+					if !strings.Contains(got.Body, "Execution ") || !strings.Contains(got.Body, "verification ") {
+						t.Fatalf("notification collapsed an axis: %#v", got)
+					}
+					if class == unifiedresources.ActionEvidenceAgentAttested && !strings.Contains(got.Body, "agent-attested") {
+						t.Fatalf("agent evidence source omitted: %#v", got)
+					}
+					if class == unifiedresources.ActionEvidenceIndependent && !strings.Contains(got.Body, "independent") {
+						t.Fatalf("independent evidence source omitted: %#v", got)
+					}
+				})
+			}
+		}
+	}
+	if cases != 32 {
+		t.Fatalf("legal notification cases=%d, want 32", cases)
+	}
+}
 
 func TestNewPatrolFindingNotification(t *testing.T) {
 	t.Run("warning finding", func(t *testing.T) {

@@ -72,6 +72,7 @@ type AgentResourceActionSummary struct {
 	State           string                           `json:"state"`
 	Success         bool                             `json:"success"`
 	ErrorMessage    string                           `json:"errorMessage,omitempty"`
+	ActionResultV2  *unified.ActionResultV2          `json:"actionResultV2,omitempty"`
 	Verification    *AgentResourceActionVerification `json:"verification,omitempty"`
 	RequestedBy     string                           `json:"requestedBy,omitempty"`
 	CreatedAt       time.Time                        `json:"createdAt"`
@@ -1354,8 +1355,12 @@ func projectAgentResourceActions(
 		if cmd, ok := audit.Request.Params["command"].(string); ok {
 			summary.Command = cmd
 		}
-		if audit.Result != nil {
-			summary.Success = audit.Result.Success
+		canonical := unified.CanonicalActionResultV2(audit)
+		summary.ActionResultV2 = &canonical
+		legacy := unified.LegacyActionResultProjection(audit)
+		summary.Success = legacy.Success
+		summary.ErrorMessage = legacy.ErrorMessage
+		if audit.Result != nil && (strings.HasPrefix(audit.Result.ErrorMessage, "resource_remediation_locked:") || strings.HasPrefix(audit.Result.ErrorMessage, "plan_drift:")) {
 			summary.ErrorMessage = audit.Result.ErrorMessage
 		}
 		if v := projectAgentResourceVerification(unified.CanonicalActionVerification(audit)); v != nil {

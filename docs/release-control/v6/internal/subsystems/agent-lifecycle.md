@@ -4327,3 +4327,11 @@ The preview copy affordances must use the shared accessible action-button
 primitive, carry localized names for the exact value being copied, and retain
 a 40-pixel mobile touch floor. The setup surface must not reintroduce raw,
 unlabelled icon buttons or a phone-only copy-control fork.
+
+Agent-facing action completion events and resource-context history now expose
+the canonical `ActionResultV2` alongside bounded legacy projections. Consumers
+must branch on execution and verification separately: a completed transport is
+not a verified postcondition, and an independently verified label is valid only
+when the canonical evidence identifies a distinct trust domain. Agent-side
+producer migration and UI wording are downstream governed work, not permission
+to add an agent-local truth model.

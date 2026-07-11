@@ -246,10 +246,14 @@ func policySnapshotVersion(snapshot PatrolActionPolicySnapshot) string {
 }
 
 func dispositionFromRecord(record unified.ActionAuditRecord) aicontracts.ActionDisposition {
+	canonical := unified.CanonicalActionResultV2(record)
+	resultJSON, _ := json.Marshal(canonical)
+	_, legacyVerification, _ := unified.ApplyActionResultV2(nil, canonical)
 	return aicontracts.ActionDisposition{
 		ActionID:           record.ID,
 		State:              string(record.State),
-		VerificationStatus: string(record.VerificationOutcome.Status),
+		ActionResultV2:     resultJSON,
+		VerificationStatus: string(legacyVerification.Status),
 		Plan:               *approvalPlanRequestToInfo(&record.Plan),
 	}
 }

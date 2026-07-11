@@ -232,12 +232,8 @@ func pulseIntelligenceActionVerifiedOutcome(record unifiedresources.ActionAuditR
 	if !pulseIntelligenceActionWasApproved(record) {
 		return false
 	}
-	outcome := unifiedresources.NormalizeVerificationOutcome(record.VerificationOutcome)
-	if outcome.Status == unifiedresources.VerificationVerified {
-		return true
-	}
-	verification := unifiedresources.CanonicalActionVerification(record)
-	return verification != nil && verification.Ran && verification.Success
+	truth := unifiedresources.CanonicalActionResultV2(record)
+	return truth.Execution.Status == unifiedresources.ActionExecutionSucceeded && truth.Verification.Status == unifiedresources.ActionVerificationConfirmed
 }
 
 func pulseIntelligenceActionLifecycleIndicatesAttempt(event unifiedresources.ActionLifecycleEvent) bool {

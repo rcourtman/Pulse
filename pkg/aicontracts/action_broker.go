@@ -2,6 +2,7 @@ package aicontracts
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 )
 
@@ -72,10 +73,11 @@ type ActionCapabilityParamInfo struct {
 // the existing safe ActionPlanInfo projection shared with approval
 // surfaces (see fix_execution.go).
 type ActionDisposition struct {
-	ActionID           string         `json:"action_id"`
-	State              string         `json:"state"`
-	VerificationStatus string         `json:"verification_status,omitempty"`
-	Plan               ActionPlanInfo `json:"plan"`
+	ActionID           string          `json:"action_id"`
+	State              string          `json:"state"`
+	ActionResultV2     json.RawMessage `json:"action_result_v2,omitempty"`
+	VerificationStatus string          `json:"verification_status,omitempty"`
+	Plan               ActionPlanInfo  `json:"plan"`
 }
 
 // ActionReference links an investigation to its canonical action lifecycle
