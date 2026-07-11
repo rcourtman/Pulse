@@ -68,6 +68,25 @@ func TestAIConfigControlLevelsUseSharedAgentCapabilityVocabulary(t *testing.T) {
 	}
 }
 
+func TestAIConfigPatrolActionEmergencyStopPersistsExplicitly(t *testing.T) {
+	cfg := NewDefaultAIConfig()
+	if cfg.PatrolActionEmergencyStop {
+		t.Fatal("emergency stop must default to false")
+	}
+	cfg.PatrolActionEmergencyStop = true
+	payload, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded AIConfig
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if !decoded.PatrolActionEmergencyStop {
+		t.Fatal("emergency stop was not preserved")
+	}
+}
+
 func TestAIConfig_IsConfigured(t *testing.T) {
 	tests := []struct {
 		name     string

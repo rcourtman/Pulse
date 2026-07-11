@@ -56,6 +56,15 @@ state.
 
 ## Shared Boundaries
 
+The Patrol action broker and shared policy-writer wiring under `internal/api/`
+remain API/action-lifecycle authority even when the target is storage-related.
+Automatic admission requires a fresh, resource-bound policy lease and an
+atomic approval-plus-`executing` transition; missing, unreadable, malformed,
+or revoked policy fails closed before any backup, restore, SMART, or other
+storage executor/network call. Human approval remains distinct evidence.
+Emergency stop after `executing` is best-effort cancellation, never recovery
+or rollback proof.
+
 Assistant access to recovery points and storage evidence is read-side context.
 `ai:chat`, relay-mobile chat, and the `read_only` control level cannot project
 or execute storage/infrastructure mutation, finding lifecycle changes, or

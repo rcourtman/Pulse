@@ -253,6 +253,309 @@ func TestExecuteAfterSQLiteRestartDoesNotReadmitExecutingAction(t *testing.T) {
 	}
 }
 
+func policyTestLease(record unified.ActionAuditRecord, now time.Time) unified.ActionPolicyAuthorizationLease {
+	lease := unified.ActionPolicyAuthorizationLease{
+		Version: 1, OrgID: "default", ActionID: record.ID, ResourceID: record.Request.ResourceID,
+		CapabilityName: record.Request.CapabilityName, PlanHash: record.Plan.PlanHash,
+		CapabilityPolicyVersion: record.Plan.PolicyVersion, AutoAuthorization: unified.AutoAuthorizeLowRisk,
+		ApprovalPolicy: record.Plan.ApprovalPolicy, TenantPolicyVersion: "tenant:v1",
+		EffectiveAutonomyLevel: "assisted", LicenseAllowsAutoFix: true,
+		ResourcePolicyVersion: "resource:v1", CapabilityNames: []string{"restart"},
+		IssuedAt: now, ExpiresAt: now.Add(time.Minute),
+	}
+	lease.Digest = unified.ActionPolicyAuthorizationDigest(lease)
+	return lease
+}
+
+func runPolicyAdmissionCommitsAtomically(t *testing.T, store unified.ResourceStore) {
+	now := time.Now().UTC()
+	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
+	service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), executor)
+	service.Now = func() time.Time { return now }
+	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed, err := service.ExecuteUnderPolicy(context.Background(), "default", plan.ActionID, "pulse_patrol_policy", func(_ context.Context, record unified.ActionAuditRecord, at time.Time) (unified.ActionPolicyAuthorizationLease, string, error) {
+		return policyTestLease(record, at), "bounded policy", nil
+	})
+	if err != nil || completed.State != unified.ActionStateCompleted || executor.calls != 1 {
+		t.Fatalf("completed=%#v err=%v calls=%d", completed, err, executor.calls)
+	}
+	if len(completed.Approvals) != 1 || completed.Approvals[0].Method != unified.MethodPolicy || completed.Approvals[0].PolicyLease == nil {
+		t.Fatalf("approvals=%#v", completed.Approvals)
+	}
+	events, err := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seenApproved, seenExecuting := false, false
+	for _, event := range events {
+		seenApproved = seenApproved || event.State == unified.ActionStateApproved
+		seenExecuting = seenExecuting || event.State == unified.ActionStateExecuting
+	}
+	if !seenApproved || !seenExecuting {
+		t.Fatalf("events=%#v", events)
+	}
+}
+
+func TestPolicyAdmissionCommitsApprovalAndExecutingAtomicallyMemoryStore(t *testing.T) {
+	runPolicyAdmissionCommitsAtomically(t, unified.NewMemoryStore())
+}
+func TestPolicyAdmissionCommitsApprovalAndExecutingAtomicallySQLite(t *testing.T) {
+	store, err := unified.NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	runPolicyAdmissionCommitsAtomically(t, store)
+}
+
+func runPolicyBarrierRevocations(t *testing.T, storeFactory func(t *testing.T) unified.ResourceStore) {
+	cases := []struct {
+		name   string
+		mutate func(*unified.ActionPolicyAuthorizationLease) error
+	}{
+		{"policy_row_deleted", func(*unified.ActionPolicyAuthorizationLease) error {
+			return unified.ErrActionPolicyAuthorizationInvalid
+		}},
+		{"policy_disabled", func(*unified.ActionPolicyAuthorizationLease) error {
+			return unified.ErrActionPolicyAuthorizationRevoked
+		}},
+		{"capability_removed_from_allowlist", func(*unified.ActionPolicyAuthorizationLease) error {
+			return unified.ErrActionPolicyAuthorizationRevoked
+		}},
+		{"recurring_window_closed", func(*unified.ActionPolicyAuthorizationLease) error {
+			return unified.ErrActionPolicyAuthorizationRevoked
+		}},
+		{"mode_downgraded_to_approval", func(*unified.ActionPolicyAuthorizationLease) error {
+			return unified.ErrActionPolicyAuthorizationRevoked
+		}},
+		{"mode_downgraded_to_monitor", func(*unified.ActionPolicyAuthorizationLease) error {
+			return unified.ErrActionPolicyAuthorizationRevoked
+		}},
+		{"full_mode_unlock_removed", func(*unified.ActionPolicyAuthorizationLease) error {
+			return unified.ErrActionPolicyAuthorizationRevoked
+		}},
+		{"license_removes_effective_mode", func(lease *unified.ActionPolicyAuthorizationLease) error {
+			lease.LicenseAllowsAutoFix = false
+			lease.Digest = unified.ActionPolicyAuthorizationDigest(*lease)
+			return nil
+		}},
+		{"capability_removed", func(*unified.ActionPolicyAuthorizationLease) error { return unified.ErrActionPlanDrift }},
+		{"safety_class_changed_to_never", func(*unified.ActionPolicyAuthorizationLease) error {
+			return unified.ErrActionPolicyAuthorizationRevoked
+		}},
+		{"approval_floor_changed_to_dry_run", func(*unified.ActionPolicyAuthorizationLease) error {
+			return unified.ErrActionPolicyAuthorizationRevoked
+		}},
+		{"approval_floor_changed_to_mfa", func(*unified.ActionPolicyAuthorizationLease) error {
+			return unified.ErrActionPolicyAuthorizationRevoked
+		}},
+		{"never_auto_remediate_enabled", func(*unified.ActionPolicyAuthorizationLease) error { return unified.ErrResourceRemediationLocked }},
+		{"emergency_stop_enabled", func(lease *unified.ActionPolicyAuthorizationLease) error {
+			lease.EmergencyStop = true
+			lease.Digest = unified.ActionPolicyAuthorizationDigest(*lease)
+			return nil
+		}},
+		{"policy_store_unreadable", func(*unified.ActionPolicyAuthorizationLease) error { return errors.New("policy store unavailable") }},
+		{"lease_wrong_org", func(lease *unified.ActionPolicyAuthorizationLease) error {
+			lease.OrgID = "other"
+			lease.Digest = unified.ActionPolicyAuthorizationDigest(*lease)
+			return nil
+		}},
+		{"lease_expired", func(lease *unified.ActionPolicyAuthorizationLease) error {
+			lease.ExpiresAt = lease.IssuedAt
+			lease.Digest = unified.ActionPolicyAuthorizationDigest(*lease)
+			return nil
+		}},
+		{"lease_digest_tampered", func(lease *unified.ActionPolicyAuthorizationLease) error {
+			lease.Digest = "sha256:tampered"
+			return nil
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := storeFactory(t)
+			now := time.Now().UTC()
+			executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
+			service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), executor)
+			service.Now = func() time.Time { return now }
+			plan, err := service.Plan(context.Background(), "default", restartRequest())
+			if err != nil {
+				t.Fatal(err)
+			}
+			failed, err := service.ExecuteUnderPolicy(context.Background(), "default", plan.ActionID, "pulse_patrol_policy", func(_ context.Context, record unified.ActionAuditRecord, at time.Time) (unified.ActionPolicyAuthorizationLease, string, error) {
+				lease := policyTestLease(record, at)
+				if mutationErr := tc.mutate(&lease); mutationErr != nil {
+					return unified.ActionPolicyAuthorizationLease{}, "", mutationErr
+				}
+				return lease, "policy", nil
+			})
+			if err == nil || failed.State != unified.ActionStateFailed || executor.calls != 0 {
+				t.Fatalf("failed=%#v err=%v calls=%d", failed, err, executor.calls)
+			}
+			if len(failed.Approvals) != 0 {
+				t.Fatalf("policy approval persisted: %#v", failed.Approvals)
+			}
+			events, _ := store.GetActionLifecycleEvents(plan.ActionID, time.Time{}, 20)
+			for _, event := range events {
+				if event.State == unified.ActionStateExecuting {
+					t.Fatalf("executing event persisted: %#v", events)
+				}
+			}
+		})
+	}
+}
+
+func TestExecuteUnderPolicyBarrierRevocationsMemoryStore(t *testing.T) {
+	runPolicyBarrierRevocations(t, func(*testing.T) unified.ResourceStore { return unified.NewMemoryStore() })
+}
+func TestExecuteUnderPolicyBarrierRevocationsSQLite(t *testing.T) {
+	runPolicyBarrierRevocations(t, func(t *testing.T) unified.ResourceStore {
+		store, err := unified.NewSQLiteResourceStore(t.TempDir(), "default")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = store.Close() })
+		return store
+	})
+}
+
+func runHumanApprovalSurvivesPolicyRevocation(t *testing.T, store unified.ResourceStore) {
+	now := time.Now().UTC()
+	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
+	service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), executor)
+	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Execute(context.Background(), "default", plan.ActionID, "operator", ""); err != nil || executor.calls != 1 {
+		t.Fatalf("err=%v calls=%d", err, executor.calls)
+	}
+}
+func TestHumanApprovalSurvivesAutomaticPolicyRevocationMemoryStore(t *testing.T) {
+	runHumanApprovalSurvivesPolicyRevocation(t, unified.NewMemoryStore())
+}
+func TestHumanApprovalSurvivesAutomaticPolicyRevocationSQLite(t *testing.T) {
+	store, err := unified.NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	runHumanApprovalSurvivesPolicyRevocation(t, store)
+}
+
+func runEmergencyStopBlocksHumanAndPolicy(t *testing.T, store unified.ResourceStore) {
+	now := time.Now().UTC()
+	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
+	service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), executor)
+	service.EmergencyStop = func(string) (bool, error) { return true, nil }
+	human := restartRequest()
+	human.RequestID = "human-stop"
+	plan, err := service.Plan(context.Background(), "default", human)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Method: unified.MethodAPI, Outcome: unified.OutcomeApproved}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Execute(context.Background(), "default", plan.ActionID, "operator", ""); !errors.Is(err, unified.ErrActionEmergencyStop) {
+		t.Fatalf("human error=%v", err)
+	}
+	policy := restartRequest()
+	policy.RequestID = "policy-stop"
+	policyPlan, err := service.Plan(context.Background(), "default", policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.ExecuteUnderPolicy(context.Background(), "default", policyPlan.ActionID, "pulse_patrol_policy", func(_ context.Context, record unified.ActionAuditRecord, at time.Time) (unified.ActionPolicyAuthorizationLease, string, error) {
+		return policyTestLease(record, at), "policy", nil
+	}); !errors.Is(err, unified.ErrActionEmergencyStop) {
+		t.Fatalf("policy error=%v", err)
+	}
+	if executor.calls != 0 {
+		t.Fatalf("executor calls=%d", executor.calls)
+	}
+}
+func TestEmergencyStopBlocksHumanAndPolicyAdmissionMemoryStore(t *testing.T) {
+	runEmergencyStopBlocksHumanAndPolicy(t, unified.NewMemoryStore())
+}
+func TestEmergencyStopBlocksHumanAndPolicyAdmissionSQLite(t *testing.T) {
+	store, err := unified.NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	runEmergencyStopBlocksHumanAndPolicy(t, store)
+}
+
+func TestLegacyPolicyApprovalWithoutLeaseFailsClosedAfterRestart(t *testing.T) {
+	dir := t.TempDir()
+	first, err := unified.NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	service := serviceForStore(t, first, testResource(now, unified.ApprovalAdmin), &stubExecutor{})
+	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "pulse_patrol_policy", Method: unified.MethodPolicy, Outcome: unified.OutcomeApproved}); err != nil {
+		t.Fatal(err)
+	}
+	if err = first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	second, err := unified.NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
+	service = serviceForStore(t, second, testResource(now, unified.ApprovalAdmin), executor)
+	failed, err := service.ExecuteUnderPolicy(context.Background(), "default", plan.ActionID, "pulse_patrol_policy", func(_ context.Context, record unified.ActionAuditRecord, at time.Time) (unified.ActionPolicyAuthorizationLease, string, error) {
+		return policyTestLease(record, at), "policy", nil
+	})
+	if !errors.Is(err, unified.ErrActionPolicyAuthorizationInvalid) || failed.State != unified.ActionStateFailed || executor.calls != 0 {
+		t.Fatalf("failed=%#v err=%v calls=%d", failed, err, executor.calls)
+	}
+}
+
+func TestQueuedPolicyActionRevalidatesAfterSQLiteRestart(t *testing.T) {
+	dir := t.TempDir()
+	first, err := unified.NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	service := serviceForStore(t, first, testResource(now, unified.ApprovalAdmin), &stubExecutor{})
+	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	second, err := unified.NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
+	service = serviceForStore(t, second, testResource(now, unified.ApprovalAdmin), executor)
+	failed, err := service.ExecuteUnderPolicy(context.Background(), "default", plan.ActionID, "pulse_patrol_policy", func(context.Context, unified.ActionAuditRecord, time.Time) (unified.ActionPolicyAuthorizationLease, string, error) {
+		return unified.ActionPolicyAuthorizationLease{}, "", unified.ErrActionPolicyAuthorizationRevoked
+	})
+	if !errors.Is(err, unified.ErrActionPolicyAuthorizationRevoked) || failed.State != unified.ActionStateFailed || executor.calls != 0 {
+		t.Fatalf("failed=%#v err=%v calls=%d", failed, err, executor.calls)
+	}
+}
+
 type stubExecutor struct {
 	result    *unified.ExecutionResult
 	err       error

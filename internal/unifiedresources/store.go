@@ -47,6 +47,7 @@ type ResourceStore interface {
 	GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error)
 	RecordActionDecision(record ActionAuditRecord, event ActionLifecycleEvent) error
 	RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error
+	RecordActionPolicyExecutionStart(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent) error
 	RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error
 	RecordActionExecutionRefusal(record ActionAuditRecord, event ActionLifecycleEvent) error
 	RecordActionLifecycleEvent(event ActionLifecycleEvent) error
@@ -2214,6 +2215,68 @@ func (s *SQLiteResourceStore) RecordActionExecutionStart(record ActionAuditRecor
 	return s.recordActionTransition(normalizedRecord, normalizedEvent, expected, ErrActionNotApproved)
 }
 
+// RecordActionPolicyExecutionStart is the single automatic-admission CAS. It
+// persists the server-owned policy approval and executing transition together,
+// so no reusable approved policy state can escape the transaction.
+func (s *SQLiteResourceStore) RecordActionPolicyExecutionStart(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent) error {
+	record, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return err
+	}
+	approvalEvent, err = NormalizeActionLifecycleEvent(approvalEvent)
+	if err != nil {
+		return err
+	}
+	executionEvent, err = NormalizeActionLifecycleEvent(executionEvent)
+	if err != nil {
+		return err
+	}
+	if record.State != ActionStateExecuting || approvalEvent.State != ActionStateApproved || executionEvent.State != ActionStateExecuting || approvalEvent.ActionID != record.ID || executionEvent.ActionID != record.ID {
+		return errors.New("policy admission must persist matching approved and executing events")
+	}
+	if len(record.Approvals) == 0 || record.Approvals[len(record.Approvals)-1].Method != MethodPolicy || record.Approvals[len(record.Approvals)-1].PolicyLease == nil {
+		return ErrActionPolicyAuthorizationInvalid
+	}
+	record = RedactAuditRecord(record)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin policy admission transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	updated, err := updateActionAuditSQL(tx, record, ActionStatePlanned, ActionStatePending)
+	if err != nil {
+		return err
+	}
+	if !updated {
+		current, found, queryErr := getActionAuditFrom(tx, record.ID)
+		if queryErr != nil {
+			return queryErr
+		}
+		if !found {
+			return fmt.Errorf("action audit %q not found", record.ID)
+		}
+		return actionTransitionConflict(current, record, ErrActionNotApproved)
+	}
+	if err := recordActionLifecycleEventSQL(tx, approvalEvent); err != nil {
+		return err
+	}
+	if err := recordActionLifecycleEventSQL(tx, executionEvent); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit policy admission transaction: %w", err)
+	}
+	committed = true
+	return nil
+}
+
 func (s *SQLiteResourceStore) RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error {
 	normalizedRecord, err := NormalizeActionAuditRecord(record)
 	if err != nil {
@@ -3251,6 +3314,46 @@ func (m *MemoryStore) RecordActionExecutionStart(record ActionAuditRecord, event
 	}
 	m.actionLifecycleEvents = append(m.actionLifecycleEvents, normalizedEvent)
 	return nil
+}
+
+func (m *MemoryStore) RecordActionPolicyExecutionStart(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent) error {
+	record, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return err
+	}
+	approvalEvent, err = NormalizeActionLifecycleEvent(approvalEvent)
+	if err != nil {
+		return err
+	}
+	executionEvent, err = NormalizeActionLifecycleEvent(executionEvent)
+	if err != nil {
+		return err
+	}
+	if record.State != ActionStateExecuting || approvalEvent.State != ActionStateApproved || executionEvent.State != ActionStateExecuting || approvalEvent.ActionID != record.ID || executionEvent.ActionID != record.ID {
+		return errors.New("policy admission must persist matching approved and executing events")
+	}
+	if len(record.Approvals) == 0 || record.Approvals[len(record.Approvals)-1].Method != MethodPolicy || record.Approvals[len(record.Approvals)-1].PolicyLease == nil {
+		return ErrActionPolicyAuthorizationInvalid
+	}
+	record = RedactAuditRecord(record)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := range m.actionAudits {
+		if m.actionAudits[i].ID != record.ID {
+			continue
+		}
+		current := m.actionAudits[i]
+		if !ActionAuditIdentityMatches(current, record) {
+			return ErrActionIdentityConflict
+		}
+		if current.State != ActionStatePlanned && current.State != ActionStatePending {
+			return actionTransitionConflict(current, record, ErrActionNotApproved)
+		}
+		m.actionAudits[i] = record
+		m.actionLifecycleEvents = append(m.actionLifecycleEvents, approvalEvent, executionEvent)
+		return nil
+	}
+	return fmt.Errorf("action audit %q not found", record.ID)
 }
 
 func (m *MemoryStore) RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error {

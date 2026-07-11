@@ -94,6 +94,29 @@ func TestMemoryStoreActionTransitionsAreMonotonic(t *testing.T) {
 	}
 }
 
+func TestMemoryStorePolicyExecutionStartRequiresAuthorizationLease(t *testing.T) {
+	store := NewMemoryStore()
+	record := atomicLifecycleTestRecord("act_memory_policy_lease", ActionStatePlanned)
+	record.Plan.RequiresApproval = false
+	if _, _, err := store.CreateActionAudit(record, atomicLifecycleInitialEvents(record)); err != nil {
+		t.Fatal(err)
+	}
+	record.State = ActionStateExecuting
+	record.Approvals = []ActionApprovalRecord{{Actor: "pulse_patrol_policy", Method: MethodPolicy, Outcome: OutcomeApproved}}
+	approval := ActionLifecycleEvent{ActionID: record.ID, Timestamp: record.CreatedAt.Add(time.Minute), State: ActionStateApproved, Actor: "pulse_patrol_policy", Message: "Policy authorization approved action."}
+	executing := ActionLifecycleEvent{ActionID: record.ID, Timestamp: record.CreatedAt.Add(time.Minute), State: ActionStateExecuting, Actor: "pulse_patrol_policy", Message: "Action execution started."}
+	if err := store.RecordActionPolicyExecutionStart(record, approval, executing); !errors.Is(err, ErrActionPolicyAuthorizationInvalid) {
+		t.Fatalf("error = %v, want ErrActionPolicyAuthorizationInvalid", err)
+	}
+	current, found, err := store.GetActionAudit(record.ID)
+	if err != nil || !found {
+		t.Fatalf("GetActionAudit found=%v err=%v", found, err)
+	}
+	if current.State != ActionStatePlanned || len(current.Approvals) != 0 {
+		t.Fatalf("failed admission mutated audit: state=%q approvals=%d", current.State, len(current.Approvals))
+	}
+}
+
 func TestMemoryStoreConcurrentExecutionStartHasOneCASWinner(t *testing.T) {
 	store := NewMemoryStore()
 	record := atomicLifecycleTestRecord("act_memory_execute", ActionStatePlanned)

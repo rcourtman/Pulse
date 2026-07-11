@@ -100,6 +100,16 @@ that binary, not separate customer-facing agent products.
 
 ## Shared Boundaries
 
+Automatic Patrol action admission wired through `internal/api/` is API/action-
+lifecycle authority, not agent enrollment or command authority. Agent command
+transport may run only after the lifecycle-owned policy lease has been
+revalidated and the policy approval plus `executing` transition have committed
+atomically; a policy-approved intermediate state is never reusable by an agent.
+Human approvals remain separate lifecycle evidence and are not invalidated by
+later automatic-policy revocation. Emergency stop blocks admission before
+`executing`; cancellation after that boundary is best effort and is not
+rollback proof.
+
 Assistant transport scopes do not grant agent command authority. `ai:chat`
 and `relay:mobile:access` remain conversation/read/session scopes; an
 interactive infrastructure invocation must carry server-bound `ai:execute`

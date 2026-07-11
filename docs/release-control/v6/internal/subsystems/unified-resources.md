@@ -1480,6 +1480,16 @@ names, and lower-cases the criticality value before persistence. The
 `ClearResourceOperatorState`; both the SQLite (table
 `resource_operator_state` keyed on `canonical_id`) and Memory stores
 implement the same upsert + idempotent-clear contract. The same
+store also owns `RecordActionPolicyExecutionStart`, the automatic-admission
+CAS that moves a planned or pending action directly to `executing` while
+persisting the server-owned policy approval and typed
+`ActionPolicyAuthorizationLease` in the same transaction. Memory and SQLite
+implement identical semantics. The lease binds org/action/resource/capability,
+plan and capability-policy hashes, safety and approval floors, tenant
+mode/license/unlock version, resource allowlist/window/Never version, expiry,
+and digest. A policy approval without that lease is historical-only and cannot
+admit a nonterminal action after restart.
+The same
 store powers the agent-consumable bundled context endpoint at
 `/api/agent/resource-context/{id}` (handler in
 `internal/api/agent_resource_context.go`) — that endpoint reads

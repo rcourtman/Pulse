@@ -660,7 +660,16 @@ func (r *Router) setupRoutes() {
 	// AI settings endpoints
 	r.aiSettingsHandler = NewAISettingsHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
 	if r.resourceHandlers != nil {
+		r.resourceHandlers.SetActionEmergencyStopChecker(func(orgID string) (bool, error) {
+			orgCtx := context.WithValue(context.Background(), OrgIDContextKey, approval.NormalizeOrgID(orgID))
+			svc := r.aiSettingsHandler.GetAIService(orgCtx)
+			if svc == nil || svc.GetConfig() == nil {
+				return true, nil
+			}
+			return svc.GetConfig().PatrolActionEmergencyStop, nil
+		})
 		r.aiSettingsHandler.SetResourceStoreProvider(r.resourceHandlers.getStore)
+		r.aiSettingsHandler.SetPolicyMutationCoordinator(r.resourceHandlers.ActionLifecycle().WithPolicyMutation)
 		r.resourceHandlers.SetActionTransitionPublisher(r.aiSettingsHandler.ReconcilePatrolActionTransition)
 		resourceHandlers := r.resourceHandlers
 		r.aiSettingsHandler.SetActionBrokerFactory(func(orgID string) aicontracts.OrchestratorActionBroker {
@@ -677,6 +686,7 @@ func (r *Router) setupRoutes() {
 				return PatrolActionPolicySnapshot{
 					EffectiveAutonomyLevel: svc.GetEffectivePatrolAutonomyLevel(),
 					FullModeUnlocked:       cfg.PatrolFullModeUnlocked,
+					EmergencyStop:          cfg.PatrolActionEmergencyStop,
 				}, nil
 			})
 		})

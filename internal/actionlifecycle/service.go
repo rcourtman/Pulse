@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
@@ -39,6 +40,7 @@ type Store interface {
 	GetActionAudit(actionID string) (unified.ActionAuditRecord, bool, error)
 	RecordActionDecision(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
 	RecordActionExecutionStart(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
+	RecordActionPolicyExecutionStart(record unified.ActionAuditRecord, approvalEvent, executionEvent unified.ActionLifecycleEvent) error
 	RecordActionExecutionResult(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
 	RecordActionExecutionRefusal(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
 	RecordActionLifecycleEvent(event unified.ActionLifecycleEvent) error
@@ -50,9 +52,10 @@ type Store interface {
 // dependencies are resolved per call so late-bound wiring (executors and
 // publishers set after construction) stays current.
 type Service struct {
-	Registry func(orgID string) (*unified.ResourceRegistry, error)
-	Store    func(orgID string) (Store, error)
-	Executor Executor
+	Registry      func(orgID string) (*unified.ResourceRegistry, error)
+	Store         func(orgID string) (Store, error)
+	Executor      Executor
+	EmergencyStop func(orgID string) (bool, error)
 	// OnActionCompleted receives every terminal (completed/failed) audit
 	// record, including refused-before-dispatch failures, so SSE bridges
 	// and reconcilers observe the full lifecycle regardless of transport.
@@ -68,6 +71,32 @@ type Service struct {
 	// records additionally flow through OnActionCompleted after this hook.
 	OnActionTransition func(orgID string, record unified.ActionAuditRecord)
 	Now                func() time.Time
+	PolicyAdmission    *PolicyAdmissionCoordinator
+}
+
+type PolicyAdmissionCoordinator struct{ mu sync.RWMutex }
+
+func (s *Service) admissionCoordinator() *PolicyAdmissionCoordinator {
+	if s.PolicyAdmission == nil {
+		s.PolicyAdmission = &PolicyAdmissionCoordinator{}
+	}
+	return s.PolicyAdmission
+}
+
+// PolicyAuthorizer resolves complete, current automatic authority while the
+// lifecycle holds the admission read lock.
+type PolicyAuthorizer func(ctx context.Context, record unified.ActionAuditRecord, now time.Time) (unified.ActionPolicyAuthorizationLease, string, error)
+
+// WithPolicyMutation serializes a policy write against automatic admission.
+// Writers must persist their change before returning.
+func (s *Service) WithPolicyMutation(write func() error) error {
+	if s == nil || write == nil {
+		return errors.New("policy mutation unavailable")
+	}
+	coordinator := s.admissionCoordinator()
+	coordinator.mu.Lock()
+	defer coordinator.mu.Unlock()
+	return write()
 }
 
 // PlanOptions carries broker-owned planning metadata that must never be
@@ -458,6 +487,18 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 	}
 
 	now := s.now()
+	if stopped, stopErr := s.emergencyStopped(orgID); stopErr != nil || stopped {
+		if stopErr != nil {
+			return unified.ActionAuditRecord{}, &PolicyCheckError{Err: stopErr}
+		}
+		failed, persistErr := RecordRefusedExecution(store, record, actor, now, unified.ErrActionEmergencyStop)
+		if persistErr != nil {
+			return unified.ActionAuditRecord{}, &PersistError{Op: "emergency-stop refusal", Err: persistErr}
+		}
+		s.publishTransition(orgID, failed)
+		s.publishCompleted(failed)
+		return failed, unified.ErrActionEmergencyStop
+	}
 	if err := unified.ValidateActionExecutionStart(record, now); err != nil {
 		if unified.IsPermanentActionExecutionRefusal(err) {
 			failed, persistErr := RecordRefusedExecution(store, record, actor, now, err)
@@ -530,6 +571,134 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 	s.publishTransition(orgID, completed)
 	s.publishCompleted(completed)
 	return completed, nil
+}
+
+// ExecuteUnderPolicy is the only automatic dispatch boundary. It revalidates
+// the complete policy under the admission lock and commits policy approval and
+// executing atomically before the executor can be called.
+func (s *Service) ExecuteUnderPolicy(ctx context.Context, orgID, actionID, actor string, authorize PolicyAuthorizer) (unified.ActionAuditRecord, error) {
+	coordinator := s.admissionCoordinator()
+	coordinator.mu.RLock()
+	started, store, admitted, admissionErr := s.beginPolicyExecution(ctx, orgID, actionID, actor, authorize)
+	coordinator.mu.RUnlock()
+	if !admitted {
+		return started, admissionErr
+	}
+	// The executing transition is the authorization linearization point.
+	// Later emergency-stop changes may request best-effort cancellation but
+	// cannot claim that an external mutation was rolled back.
+	result, execErr := s.Executor.ExecuteAction(ctx, started)
+	if execErr != nil {
+		result = &unified.ExecutionResult{Success: false, ErrorMessage: execErr.Error()}
+	}
+	completed, doneEvent, err := unified.CompleteActionExecution(started, result, actor, s.now())
+	if err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if err := store.RecordActionExecutionResult(completed, doneEvent); err != nil {
+		return unified.ActionAuditRecord{}, &PersistError{Op: "action execution result", Err: err}
+	}
+	s.publishTransition(orgID, completed)
+	s.publishCompleted(completed)
+	return completed, nil
+}
+
+func (s *Service) beginPolicyExecution(ctx context.Context, orgID, actionID, actor string, authorize PolicyAuthorizer) (unified.ActionAuditRecord, Store, bool, error) {
+	actionID = strings.TrimSpace(actionID)
+	store, err := s.store(orgID)
+	if err != nil {
+		return unified.ActionAuditRecord{}, nil, false, err
+	}
+	record, found, err := store.GetActionAudit(actionID)
+	if err != nil {
+		return unified.ActionAuditRecord{}, store, false, &QueryError{Op: "action audit", Err: err}
+	}
+	if !found {
+		return unified.ActionAuditRecord{}, store, false, &ActionNotFoundError{ActionID: actionID}
+	}
+	if record.State == unified.ActionStateExecuting || record.State == unified.ActionStateCompleted || record.State == unified.ActionStateFailed {
+		return record, store, false, nil
+	}
+	now := s.now()
+	if record.State == unified.ActionStateApproved {
+		for _, approval := range record.Approvals {
+			if approval.Method == unified.MethodPolicy && approval.PolicyLease == nil {
+				failed, refuseErr := s.refusePolicyAdmission(store, orgID, record, actor, now, unified.ErrActionPolicyAuthorizationInvalid)
+				return failed, store, false, refuseErr
+			}
+		}
+	}
+	if stopped, stopErr := s.emergencyStopped(orgID); stopErr != nil || stopped {
+		reason := error(unified.ErrActionEmergencyStop)
+		if stopErr != nil {
+			reason = fmt.Errorf("%w: %v", unified.ErrActionPolicyAuthorizationInvalid, stopErr)
+		}
+		failed, refuseErr := s.refusePolicyAdmission(store, orgID, record, actor, now, reason)
+		return failed, store, false, refuseErr
+	}
+	if s.Executor == nil {
+		return unified.ActionAuditRecord{}, store, false, ErrExecutorUnavailable
+	}
+	if err := s.ValidatePlanFresh(orgID, record); err != nil {
+		failed, refuseErr := s.refusePolicyAdmission(store, orgID, record, actor, now, fmt.Errorf("%w: %v", unified.ErrActionPlanDrift, err))
+		return failed, store, false, refuseErr
+	}
+	if err := validateExecutionPolicy(store, record); err != nil {
+		if !unified.IsPermanentActionExecutionRefusal(err) {
+			err = fmt.Errorf("%w: %v", unified.ErrActionPolicyAuthorizationInvalid, err)
+		}
+		failed, refuseErr := s.refusePolicyAdmission(store, orgID, record, actor, now, err)
+		return failed, store, false, refuseErr
+	}
+	if authorize == nil {
+		failed, refuseErr := s.refusePolicyAdmission(store, orgID, record, actor, now, unified.ErrActionPolicyAuthorizationInvalid)
+		return failed, store, false, refuseErr
+	}
+	lease, reason, err := authorize(ctx, record, now)
+	if err != nil {
+		if !errors.Is(err, unified.ErrActionPolicyAuthorizationExpired) && !errors.Is(err, unified.ErrActionPolicyAuthorizationRevoked) {
+			err = fmt.Errorf("%w: %v", unified.ErrActionPolicyAuthorizationInvalid, err)
+		}
+		failed, refuseErr := s.refusePolicyAdmission(store, orgID, record, actor, now, err)
+		return failed, store, false, refuseErr
+	}
+	if strings.TrimSpace(lease.OrgID) != strings.TrimSpace(orgID) || lease.ApprovalPolicy != record.Plan.ApprovalPolicy || lease.AutoAuthorization == unified.AutoAuthorizeNever || lease.ApprovalPolicy == unified.ApprovalDryRun || lease.ApprovalPolicy == unified.ApprovalMultiFactor {
+		failed, refuseErr := s.refusePolicyAdmission(store, orgID, record, actor, now, unified.ErrActionPolicyAuthorizationInvalid)
+		return failed, store, false, refuseErr
+	}
+	started, approvedEvent, startEvent, err := unified.BeginPolicyActionExecution(record, unified.ActionApprovalRecord{Actor: actor, Reason: reason}, lease, now)
+	if err != nil {
+		failed, refuseErr := s.refusePolicyAdmission(store, orgID, record, actor, now, err)
+		return failed, store, false, refuseErr
+	}
+	if err := store.RecordActionPolicyExecutionStart(started, approvedEvent, startEvent); err != nil {
+		if errors.Is(err, unified.ErrActionAlreadyExecuting) || errors.Is(err, unified.ErrActionExecutionFinal) {
+			current, ok, queryErr := store.GetActionAudit(actionID)
+			if queryErr == nil && ok {
+				return current, store, false, nil
+			}
+		}
+		return unified.ActionAuditRecord{}, store, false, &PersistError{Op: "policy action execution start", Err: err}
+	}
+	s.publishTransition(orgID, started)
+	return started, store, true, nil
+}
+
+func (s *Service) emergencyStopped(orgID string) (bool, error) {
+	if s == nil || s.EmergencyStop == nil {
+		return false, nil
+	}
+	return s.EmergencyStop(orgID)
+}
+
+func (s *Service) refusePolicyAdmission(store Store, orgID string, record unified.ActionAuditRecord, actor string, now time.Time, reason error) (unified.ActionAuditRecord, error) {
+	failed, persistErr := RecordRefusedExecution(store, record, actor, now, reason)
+	if persistErr != nil {
+		return unified.ActionAuditRecord{}, &PersistError{Op: "policy admission refusal", Err: persistErr}
+	}
+	s.publishTransition(orgID, failed)
+	s.publishCompleted(failed)
+	return failed, reason
 }
 
 // ValidatePlanFresh replans the persisted request against the live

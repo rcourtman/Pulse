@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -430,7 +431,7 @@ func TestPatrolActionBrokerAutonomyModeIsAnUpperBound(t *testing.T) {
 	}
 }
 
-func TestPatrolActionBrokerRevokedPolicyCannotLeaveReusableApproval(t *testing.T) {
+func TestPatrolActionBrokerDispatchTimePolicyRevocation(t *testing.T) {
 	h, executor := newPatrolBrokerTestHandlers(t, unified.ApprovalAdmin)
 	store, err := h.getStore("default")
 	if err != nil {
@@ -459,14 +460,14 @@ func TestPatrolActionBrokerRevokedPolicyCannotLeaveReusableApproval(t *testing.T
 	if err != nil {
 		t.Fatalf("Submit: %v", err)
 	}
-	if disposition.State != string(unified.ActionStatePending) || executor.calls != 0 {
+	if disposition.State != string(unified.ActionStateFailed) || executor.calls != 0 {
 		t.Fatalf("revoked disposition=%#v calls=%d", disposition, executor.calls)
 	}
 	record, found, err := store.GetActionAudit(disposition.ActionID)
 	if err != nil || !found {
 		t.Fatalf("GetActionAudit: found=%v err=%v", found, err)
 	}
-	if len(record.Approvals) != 0 || record.Result != nil {
+	if len(record.Approvals) != 0 || record.Result == nil || !strings.HasPrefix(record.Result.ErrorMessage, "policy_authorization_revoked:") {
 		t.Fatalf("revoked policy left reusable authority: approvals=%#v result=%#v", record.Approvals, record.Result)
 	}
 }

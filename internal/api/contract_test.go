@@ -20637,9 +20637,10 @@ func TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned(t *testing.T) 
 	}
 	for _, required := range []string{
 		"autoAuthorizationDecision",
+		"policyAuthorizationLease",
 		"AutoAuthorizeLowRisk",
 		"AllowsAutoRemediationAt",
-		"MethodPolicy",
+		"ExecuteUnderPolicy",
 		"pulse_patrol_policy",
 	} {
 		if !strings.Contains(src, required) {

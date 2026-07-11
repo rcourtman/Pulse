@@ -4624,6 +4624,14 @@ capability eligibility, persisted per-resource allowlist/window, remediation
 lock, and the canonical lifecycle. Enterprise receives the resulting pending
 or terminal disposition, including honest verification status, but never an
 authorization primitive. `OrchestratorDeps.ActionBroker` carries the seam and is
+Policy-authorized submission enters `actionlifecycle.ExecuteUnderPolicy`; the
+broker may evaluate eligibility to decide whether to attempt automatic
+admission, but it cannot persist approval or call an executor itself. The
+lifecycle re-evaluates the full policy under the shared admission coordinator
+and atomically persists the typed authorization lease, policy approval, and
+executing transition. Revocation before that transition produces zero dispatch
+and no policy approval. Human approvals remain semantically separate.
+`OrchestratorDeps.ActionBroker` carries the seam and is
 now REQUIRED: the enterprise factory disables the orchestrator when it is
 absent rather than falling back. The command-execution side doors are
 gone. `OrchestratorChatService` exposes only investigation-specific

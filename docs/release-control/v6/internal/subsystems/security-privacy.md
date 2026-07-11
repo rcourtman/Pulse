@@ -344,6 +344,14 @@ the `white_label` branding entitlement.
     action lifecycle, but it exposes only typed-proposal capture and gives the
     orchestrator no autonomy control, command execution, or command-shaped
     approval path.
+    Automatic action authority is a versioned, one-use admission lease rather
+    than a reusable approval. Tenant mode/license/unlock, capability safety and
+    approval floor, resource allowlist/window/Never state, plan hashes, and the
+    action emergency stop are revalidated under one admission coordinator and
+    committed with `executing`. Missing or unreadable policy denies dispatch.
+    Human approval remains separate, but `NeverAutoRemediate`, plan drift, and
+    emergency stop are universal. Emergency stop after `executing` is only
+    best-effort cancellation and must never be described as rollback.
     The typed host-update executor wired here is likewise not generic command
     authority. It may dispatch only the closed `install_os_updates` operation,
     bound to the server-observed package inventory fingerprint and canonical

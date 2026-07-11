@@ -69,6 +69,8 @@ func (h *ResourceHandlers) ActionLifecycle() *actionlifecycle.Service {
 		Executor:           h.actionExecutor,
 		OnActionCompleted:  h.actionCompleted,
 		OnActionTransition: h.actionTransition,
+		PolicyAdmission:    h.policyAdmission,
+		EmergencyStop:      h.actionEmergencyStop,
 	}
 }
 

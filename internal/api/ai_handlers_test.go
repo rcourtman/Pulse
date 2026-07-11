@@ -199,6 +199,11 @@ func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) 
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	policyMutationCalls := 0
+	handler.SetPolicyMutationCoordinator(func(write func() error) error {
+		policyMutationCalls++
+		return write()
+	})
 
 	body := `{"autonomy_level":"monitor","full_mode_unlocked":true,"investigation_budget":2,"investigation_timeout_sec":30}`
 	req := newLoopbackRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(body))
@@ -223,6 +228,7 @@ func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) 
 	require.False(t, saved.PatrolFullModeUnlocked)
 	require.Equal(t, 5, saved.PatrolInvestigationBudget)
 	require.Equal(t, 60, saved.PatrolInvestigationTimeoutSec)
+	require.Equal(t, 1, policyMutationCalls)
 
 	premiumBody := `{"autonomy_level":"approval","investigation_budget":10,"investigation_timeout_sec":120}`
 	premiumReq := newLoopbackRequest(http.MethodPut, "/api/ai/patrol/autonomy", strings.NewReader(premiumBody))

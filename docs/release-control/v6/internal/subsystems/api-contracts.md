@@ -1860,11 +1860,19 @@ a new API state machine, queue contract, or verification-accounting field.
    optional recurring window, `NeverAutoRemediate`, and the tenant's effective
    Patrol mode all allow it. Assisted mode admits only `low_risk`; unlocked full
    mode may also admit `elevated`; monitor, approval, dry-run-only, MFA, missing,
-   and unknown policy fail closed to the pending disposition. Core re-reads the
-   policy immediately before execution and records the decision as actor
-   `pulse_patrol_policy` with approval method `policy`; the canonical lifecycle
-   still owns locks, drift validation, execution, verification, publication,
-   and replay safety. Proposals
+   and unknown policy fail closed. Automatic admission is lifecycle-owned:
+   `ExecuteUnderPolicy` re-reads the complete tenant, capability, resource,
+   window, unlock, license, and emergency-stop posture under the shared policy
+   admission coordinator, binds it to a typed versioned lease, then persists
+   the `pulse_patrol_policy` / `policy` approval and `executing` transition in
+   one store CAS transaction. No reusable policy-approved state exists.
+   Missing, malformed, stale, unreadable, or revoked policy records a stable
+   refused-before-dispatch failure with no executor call. Human approval stays
+   a distinct path: automatic-mode, allowlist, and recurring-window changes do
+   not revoke a human decision, while plan drift, `NeverAutoRemediate`, and the
+   action emergency stop remain universal. The executing transition is the
+   admission linearization point; a later emergency stop is best-effort
+   cancellation and never claims rollback. Proposals
    that populate a capability parameter declared `IsSensitive` are refused
    with `ErrSensitiveParamsRequireOperator` before any audit persistence,
    so secret material never enters model output, investigation stores, or

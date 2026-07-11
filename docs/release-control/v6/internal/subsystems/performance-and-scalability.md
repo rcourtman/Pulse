@@ -18,6 +18,12 @@
 Own measurable performance budgets, query-plan guarantees, and hot-path
 regression protection.
 
+Dispatch-time Patrol authorization uses one bounded policy snapshot and one
+storage CAS on the execution hot path. Policy writers serialize against that
+admission coordinator; the broker must not add policy-history scans, resource
+registry walks after admission, or network probes before the executor. Failed
+admission records a stable refusal without invoking executor or network code.
+
 ## Canonical Files
 
 1. `pkg/metrics/store.go`

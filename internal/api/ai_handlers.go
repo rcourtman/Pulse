@@ -65,6 +65,7 @@ type AISettingsHandler struct {
 	resourceStoreProvider   func(orgID string) (unifiedresources.ResourceStore, error)
 	actionBrokerFactory     func(orgID string) aicontracts.OrchestratorActionBroker
 	proposalCatalogFactory  func(orgID string) tools.ProposalCatalog
+	policyMutation          func(func() error) error
 	metadataProvider        ai.MetadataProvider
 	patrolThresholdProvider ai.ThresholdProvider
 	metricsHistoryProvider  ai.MetricsHistoryProvider
@@ -133,6 +134,12 @@ func (h *AISettingsHandler) SetResourceStoreProvider(provider func(orgID string)
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.resourceStoreProvider = provider
+}
+
+func (h *AISettingsHandler) SetPolicyMutationCoordinator(coordinator func(func() error) error) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.policyMutation = coordinator
 }
 
 // SetActionBrokerFactory installs the per-org typed action proposal broker
@@ -7654,17 +7661,28 @@ func (h *AISettingsHandler) HandleUpdatePatrolAutonomyMonitorOnly(w http.Respons
 	// monitor-only save.
 	effectiveUnlocked := false
 
-	cfg.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
-	cfg.PatrolFullModeUnlocked = effectiveUnlocked
-	cfg.PatrolInvestigationBudget = req.InvestigationBudget
-	cfg.PatrolInvestigationTimeoutSec = req.InvestigationTimeoutSec
-
 	persistence := h.getPersistence(r.Context())
 	if persistence == nil {
 		writeErrorResponse(w, http.StatusServiceUnavailable, "not_configured", "Pulse Patrol not configured", nil)
 		return
 	}
-	if err := persistence.SaveAIConfig(*cfg); err != nil {
+	write := func() error {
+		cfg.PatrolAutonomyLevel = config.PatrolAutonomyMonitor
+		cfg.PatrolFullModeUnlocked = effectiveUnlocked
+		cfg.PatrolInvestigationBudget = req.InvestigationBudget
+		cfg.PatrolInvestigationTimeoutSec = req.InvestigationTimeoutSec
+		return persistence.SaveAIConfig(*cfg)
+	}
+	h.stateMu.RLock()
+	coordinator := h.policyMutation
+	h.stateMu.RUnlock()
+	var saveErr error
+	if coordinator != nil {
+		saveErr = coordinator(write)
+	} else {
+		saveErr = write()
+	}
+	if saveErr != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "save_failed", "Failed to save Pulse Patrol autonomy settings", nil)
 		return
 	}

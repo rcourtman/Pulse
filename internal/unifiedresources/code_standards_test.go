@@ -611,7 +611,9 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			// target resource. Pin it here so the broker contract stays
 			// honest: per-resource lock refusal cannot silently turn into
 			// another error kind that callers fail to detect.
-			"ErrResourceRemediationLocked = errors.New(",
+			"ErrResourceRemediationLocked",
+			"type ActionPolicyAuthorizationLease struct",
+			"func BeginPolicyActionExecution(",
 			// ActionVerificationResult is the canonical post-execution
 			// read-after-write outcome carrier. The broker writes it onto
 			// ExecutionResult.Verification; pinning the type here keeps the
@@ -622,8 +624,10 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 		},
 		filepath.Join(".", "store.go"): {
 			"RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",
+			"RecordActionPolicyExecutionStart(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent) error",
 			"RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error",
 			"func (s *SQLiteResourceStore) RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error",
+			"func (s *SQLiteResourceStore) RecordActionPolicyExecutionStart(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent) error",
 			"func (s *SQLiteResourceStore) RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error",
 			// Audit-log secret redaction must run at every persistence
 			// boundary so operator-authored reasons and command output do
@@ -661,6 +665,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"type AvailabilityChecker interface",
 			"CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness",
 			"func (s *Service) ValidatePlanFresh(orgID string, record unified.ActionAuditRecord) error",
+			"func (s *Service) ExecuteUnderPolicy(",
 			"func RecordRefusedExecution(store Store, record unified.ActionAuditRecord",
 			"func (s *Service) publishCompleted(record unified.ActionAuditRecord)",
 			// The persisted-state transition hook is org-scoped so
@@ -691,6 +696,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"func (h *ResourceHandlers) SetActionExecutor(executor ActionExecutor)",
 			"func (h *ResourceHandlers) SetActionCompletedPublisher(",
 			"func (h *ResourceHandlers) SetActionTransitionPublisher(",
+			"policyAdmission     *actionlifecycle.PolicyAdmissionCoordinator",
 			"func (h *ResourceHandlers) applyActionAvailability(ctx context.Context, resources []unified.Resource)",
 			"resources[i].ActionReadiness = readinesses",
 		},
@@ -701,6 +707,7 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 		},
 		filepath.Join("..", "api", "router.go"): {
 			"r.resourceHandlers.SetActionCompletedPublisher(r.agentEventBroadcaster.PublishActionCompletedRecord)",
+			"SetActionEmergencyStopChecker",
 		},
 		filepath.Join("..", "api", "router_routes_monitoring.go"): {
 			`"POST /api/actions/{id}/execute"`,

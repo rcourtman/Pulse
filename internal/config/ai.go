@@ -106,6 +106,7 @@ type AIConfig struct {
 	// Patrol Autonomy settings - controls automatic investigation and remediation of findings
 	PatrolAutonomyLevel           string `json:"patrol_autonomy_level,omitempty"`            // "monitor", "approval", "assisted", "full"
 	PatrolFullModeUnlocked        bool   `json:"patrol_full_mode_unlocked"`                  // User has acknowledged Full mode risks (required to use "full")
+	PatrolActionEmergencyStop     bool   `json:"patrol_action_emergency_stop"`               // Blocks new human and policy action admission; does not imply rollback
 	PatrolInvestigationBudget     int    `json:"patrol_investigation_budget,omitempty"`      // Max turns per investigation (default: 15)
 	PatrolInvestigationTimeoutSec int    `json:"patrol_investigation_timeout_sec,omitempty"` // Max seconds per investigation (default: 300)
 

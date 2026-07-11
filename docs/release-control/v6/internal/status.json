@@ -3979,6 +3979,18 @@
           ]
         },
         {
+          "id": "ra35-dispatch-time-policy-revocation",
+          "run": [
+            "go",
+            "test",
+            "./internal/actionlifecycle",
+            "./internal/api",
+            "-run",
+            "TestExecuteUnderPolicyBarrierRevocationsMemoryStore|TestExecuteUnderPolicyBarrierRevocationsSQLite|TestPolicyAdmissionCommitsApprovalAndExecutingAtomicallyMemoryStore|TestPolicyAdmissionCommitsApprovalAndExecutingAtomicallySQLite|TestHumanApprovalSurvivesAutomaticPolicyRevocationMemoryStore|TestHumanApprovalSurvivesAutomaticPolicyRevocationSQLite|TestEmergencyStopBlocksHumanAndPolicyAdmissionMemoryStore|TestEmergencyStopBlocksHumanAndPolicyAdmissionSQLite|TestLegacyPolicyApprovalWithoutLeaseFailsClosedAfterRestart|TestQueuedPolicyActionRevalidatesAfterSQLiteRestart|TestPatrolActionBrokerDispatchTimePolicyRevocation",
+            "-count=1"
+          ]
+        },
+        {
           "id": "ra35-typed-host-storage-cleanup-vertical",
           "run": [
             "go",
@@ -4029,6 +4041,16 @@
         }
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "internal/actionlifecycle/service.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/actionlifecycle/service_test.go",
+          "kind": "file"
+        },
         {
           "repo": "pulse",
           "path": "internal/agentcapabilities/schema.go",
@@ -4111,12 +4133,27 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/patrol_action_broker_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/hostagent/package_updates.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "internal/hostagent/storage_cleanup.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/actions.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store.go",
           "kind": "file"
         },
         {

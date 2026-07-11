@@ -352,7 +352,7 @@ func newAIAutoFixHandlerDeps(r *Router) extensions.AIAutoFixHandlerDeps {
 			if svc == nil {
 				return nil
 			}
-			return &patrolConfigUpdateAdapter{handler: h, ctx: req.Context()}
+			return &patrolConfigUpdateAdapter{handler: h, ctx: req.Context(), resources: r.resourceHandlers}
 		},
 		GetRemediationEngine: func(orgID string) aicontracts.RemediationEngine {
 			return h.GetRemediationEngineForOrg(orgID)
@@ -865,8 +865,9 @@ func (p *patrolConfigAdapter) IsValidPatrolAutonomyLevel(level string) bool {
 
 // patrolConfigUpdateAdapter implements aicontracts.PatrolConfigUpdater.
 type patrolConfigUpdateAdapter struct {
-	handler *AISettingsHandler
-	ctx     context.Context
+	handler   *AISettingsHandler
+	ctx       context.Context
+	resources *ResourceHandlers
 }
 
 var _ aicontracts.PatrolConfigUpdater = (*patrolConfigUpdateAdapter)(nil)
@@ -880,11 +881,17 @@ func (u *patrolConfigUpdateAdapter) SaveAutonomySettings(ctx context.Context, le
 	if cfg == nil {
 		return fmt.Errorf("AI config not available")
 	}
-	cfg.PatrolFullModeUnlocked = unlocked
-	cfg.PatrolAutonomyLevel = level
-	cfg.PatrolInvestigationBudget = budget
-	cfg.PatrolInvestigationTimeoutSec = timeoutSec
-	return u.handler.getPersistence(ctx).SaveAIConfig(*cfg)
+	write := func() error {
+		cfg.PatrolFullModeUnlocked = unlocked
+		cfg.PatrolAutonomyLevel = level
+		cfg.PatrolInvestigationBudget = budget
+		cfg.PatrolInvestigationTimeoutSec = timeoutSec
+		return u.handler.getPersistence(ctx).SaveAIConfig(*cfg)
+	}
+	if u.resources != nil {
+		return u.resources.ActionLifecycle().WithPolicyMutation(write)
+	}
+	return write()
 }
 
 func (u *patrolConfigUpdateAdapter) ReloadConfig(ctx context.Context) error {
