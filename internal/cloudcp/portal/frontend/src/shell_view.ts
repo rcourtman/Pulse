@@ -1569,7 +1569,7 @@ function renderSupportSection(context: ShellViewContext): string {
     )
     : '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>';
   var providerOpsRow = context.bootstrap.provider_hosted_mode === true
-    ? '<div class="portal-support-simple-row"><strong>Operations guide</strong><span>Backups, upgrades, firewall baseline, and the validation checklist live in <a href="https://github.com/rcourtman/Pulse/blob/main/docs/MSP.md" target="_blank" rel="noopener">docs/MSP.md</a>.</span></div>'
+    ? '<div class="portal-support-simple-row"><strong>Operations guide</strong><span>Backups, upgrades, firewall baseline, and the validation checklist live in <a href="https://github.com/rcourtman/Pulse" target="_blank" rel="noopener">docs/MSP.md</a> in the Pulse repository.</span></div>'
     : '';
   return (
     '<section class="portal-support-panel">' +
