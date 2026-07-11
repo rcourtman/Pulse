@@ -1703,6 +1703,12 @@ terminal state, and exactly-one executor admission from the shared lifecycle.
 They must not retry an `executing` action as a new dispatch after restart;
 recovery must resolve the existing attempt through the separately governed
 continuity contract.
+The shared store materializes that continuity as a transactional dispatch
+attempt/outbox and a one-shot pre-send `MarkActionDispatchStarted` boundary.
+Storage and recovery consumers may observe action detail, pending/settled
+projections, and correlated receipt state, but may not infer restore,
+verification, rollback, or compensation truth from those transport-only fields
+or create a local retry path when the core attempt is `receipt_pending`.
 
 Unified Agent lifecycle fields added to the shared host and connections API are
 adjacent monitoring/API state only. Applied config fingerprints, updater

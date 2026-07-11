@@ -18,6 +18,7 @@ const (
 	ActionStatePending   ActionState = "pending_approval"
 	ActionStateApproved  ActionState = "approved"
 	ActionStateRejected  ActionState = "rejected"
+	ActionStateExpired   ActionState = "expired"
 	ActionStateExecuting ActionState = "executing"
 	ActionStateCompleted ActionState = "completed"
 	ActionStateFailed    ActionState = "failed"
@@ -382,6 +383,7 @@ var (
 	ErrActionAlreadyExecuting           = errors.New("action is already executing")
 	ErrActionExecutionFinal             = errors.New("action execution is already final")
 	ErrActionPlanExpired                = errors.New("action plan expired")
+	ErrActionPlanNotExpired             = errors.New("action plan has not expired")
 	ErrActionDryRunOnly                 = errors.New("action plan is dry-run only")
 	ErrActionExecutionRefusal           = errors.New("action execution refusal is not a permanent terminal refusal")
 	ErrInvalidApprovalOutcome           = errors.New("invalid approval outcome")
@@ -508,6 +510,41 @@ func ApplyActionDecision(record ActionAuditRecord, approval ActionApprovalRecord
 		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
 	}
 	return normalized, normalizedEvent, nil
+}
+
+// ExpireAction materializes plan expiry as an explicit monotonic lifecycle
+// state. Expiry is admission truth, not an execution-result classification.
+func ExpireAction(record ActionAuditRecord, actor string, now time.Time) (ActionAuditRecord, ActionLifecycleEvent, error) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	} else {
+		now = now.UTC()
+	}
+	if record.State == ActionStateExpired {
+		return record, ActionLifecycleEvent{}, nil
+	}
+	switch record.State {
+	case ActionStatePlanned, ActionStatePending, ActionStateApproved:
+	default:
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, ErrActionExecutionFinal
+	}
+	if record.Plan.ExpiresAt.IsZero() || now.Before(record.Plan.ExpiresAt) {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, ErrActionPlanNotExpired
+	}
+	record.State = ActionStateExpired
+	record.UpdatedAt = now
+	normalized, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
+	}
+	event, err := NormalizeActionLifecycleEvent(ActionLifecycleEvent{
+		ActionID:  normalized.ID,
+		Timestamp: now,
+		State:     ActionStateExpired,
+		Actor:     strings.TrimSpace(actor),
+		Message:   "Action plan expired before dispatch.",
+	})
+	return normalized, event, err
 }
 
 // BeginActionExecution moves an explicitly executable action into executing.
@@ -683,7 +720,7 @@ func ValidateActionExecutionStart(record ActionAuditRecord, now time.Time) error
 	switch record.State {
 	case ActionStateExecuting:
 		return ErrActionAlreadyExecuting
-	case ActionStateCompleted, ActionStateFailed:
+	case ActionStateExpired, ActionStateCompleted, ActionStateFailed:
 		return ErrActionExecutionFinal
 	}
 	if !record.Plan.ExpiresAt.IsZero() && !now.Before(record.Plan.ExpiresAt) {
@@ -700,7 +737,7 @@ func ValidateActionExecutionStart(record ActionAuditRecord, now time.Time) error
 			return nil
 		}
 		return ErrActionNotApproved
-	case ActionStatePending, ActionStateRejected:
+	case ActionStatePending, ActionStateRejected, ActionStateExpired:
 		return ErrActionNotApproved
 	default:
 		return fmt.Errorf("unsupported action state %q", record.State)
@@ -905,7 +942,7 @@ func NormalizeActionPreflight(preflight *ActionPreflight, request ActionRequest,
 
 func isValidActionState(state ActionState) bool {
 	switch state {
-	case ActionStatePlanned, ActionStatePending, ActionStateApproved, ActionStateRejected, ActionStateExecuting, ActionStateCompleted, ActionStateFailed:
+	case ActionStatePlanned, ActionStatePending, ActionStateApproved, ActionStateRejected, ActionStateExpired, ActionStateExecuting, ActionStateCompleted, ActionStateFailed:
 		return true
 	default:
 		return false

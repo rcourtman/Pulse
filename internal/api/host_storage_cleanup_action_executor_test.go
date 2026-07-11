@@ -38,7 +38,7 @@ func TestHostStorageCleanupActionExecutorDispatchesFingerprintBoundOperation(t *
 	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{hostStorageCleanupActionResource(now)}})
 	agents := verifiedHostStorageCleanupAgent()
 
-	result, err := newHostStorageCleanupActionExecutor(h, agents).ExecuteAction(context.Background(), hostStorageCleanupActionRecord("action-cleanup"))
+	result, err := newHostStorageCleanupActionExecutor(h, agents).ExecuteAction(actionDispatchTestContext(t, "action-cleanup"), hostStorageCleanupActionRecord("action-cleanup"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestHostStorageCleanupActionExecutorDoesNotExposeAgentErrorText(t *testing.
 		Error:  "private repository package path and token",
 	}}
 
-	result, err := newHostStorageCleanupActionExecutor(h, agents).ExecuteAction(context.Background(), hostStorageCleanupActionRecord("action-cleanup"))
+	result, err := newHostStorageCleanupActionExecutor(h, agents).ExecuteAction(actionDispatchTestContext(t, "action-cleanup"), hostStorageCleanupActionRecord("action-cleanup"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}

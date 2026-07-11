@@ -48,7 +48,7 @@ func TestHostUpdateActionExecutorDispatchesTypedOperationAndProjectsVerification
 	}}
 	executor := newHostUpdateActionExecutor(h, agents)
 
-	result, err := executor.ExecuteAction(context.Background(), hostUpdateActionRecord("action-host-update"))
+	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "action-host-update"), hostUpdateActionRecord("action-host-update"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
@@ -62,7 +62,7 @@ func TestHostUpdateActionExecutorDispatchesTypedOperationAndProjectsVerification
 		t.Fatalf("agent calls = %#v, agentID=%q", agents.requests, agents.agentID)
 	}
 	request := agents.requests[0]
-	if request.ActionID != "action-host-update" || request.RequestID != "action-host-update" || request.Operation != agentexec.HostUpdateOperationInstall || request.ExpectedInventoryHash != testHostPackageInventoryHash || request.Timeout != 900 {
+	if request.ActionID != "action-host-update" || request.RequestID != "action-host-update.dispatch.1" || request.Operation != agentexec.HostUpdateOperationInstall || request.ExpectedInventoryHash != testHostPackageInventoryHash || request.Timeout != 900 {
 		t.Fatalf("typed request = %#v", request)
 	}
 }
@@ -79,7 +79,7 @@ func TestHostUpdateActionExecutorReportsInconclusiveVerificationHonestly(t *test
 		Error:        "package installation completed but verification was inconclusive",
 	}}
 
-	result, err := newHostUpdateActionExecutor(h, agents).ExecuteAction(context.Background(), hostUpdateActionRecord("action-host-update"))
+	result, err := newHostUpdateActionExecutor(h, agents).ExecuteAction(actionDispatchTestContext(t, "action-host-update"), hostUpdateActionRecord("action-host-update"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}

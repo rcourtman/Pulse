@@ -2448,6 +2448,13 @@ and export audit reads alongside the enterprise audit surface. That read path
 belongs to the API and unified-resource contracts, not to lifecycle ownership,
 so the agent-install and registration lane stays focused on fleet continuity
 instead of adopting execution-history persistence as a side effect.
+Agent-backed action transports may receive a mutation only after the canonical
+lifecycle commits a durable dispatch attempt and crosses its one-shot pre-send
+boundary. The transport `request_id` is that attempt identity while the action
+or approval field remains the canonical action identity. Timeouts and late
+agent responses do not authorize lifecycle-local retry: restart recovery must
+reconcile the persisted attempt without resending, and transport receipt state
+must not be interpreted as Task 10 execution or verification truth.
 That shared audit-read path also now requires the dedicated `audit:read`
 token scope instead of inheriting broader `settings:read` access, so
 lifecycle-adjacent install and registration surfaces cannot regain enterprise

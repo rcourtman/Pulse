@@ -30,6 +30,8 @@ const (
 	relayMobileRouteApprovalApprove              relayMobileRuntimeRouteID = "approval-approve"
 	relayMobileRouteApprovalDeny                 relayMobileRuntimeRouteID = "approval-deny"
 	relayMobileRoutePendingActions               relayMobileRuntimeRouteID = "pending-actions"
+	relayMobileRouteActionsList                  relayMobileRuntimeRouteID = "actions-list"
+	relayMobileRouteActionDetail                 relayMobileRuntimeRouteID = "action-detail"
 	relayMobileRouteActionDecision               relayMobileRuntimeRouteID = "action-decision"
 	relayMobileRouteActionExecute                relayMobileRuntimeRouteID = "action-execute"
 	relayMobileRouteChatSend                     relayMobileRuntimeRouteID = "chat-send"
@@ -55,6 +57,8 @@ var relayMobileRuntimeRouteOrder = []relayMobileRuntimeRouteID{
 	relayMobileRouteApprovalApprove,
 	relayMobileRouteApprovalDeny,
 	relayMobileRoutePendingActions,
+	relayMobileRouteActionsList,
+	relayMobileRouteActionDetail,
 	relayMobileRouteActionDecision,
 	relayMobileRouteActionExecute,
 	relayMobileRouteChatSend,
@@ -143,6 +147,18 @@ var relayMobileRuntimeRouteSpecs = map[relayMobileRuntimeRouteID]relayMobileRunt
 		id:            relayMobileRoutePendingActions,
 		method:        http.MethodGet,
 		path:          "/api/actions/pending",
+		requiredScope: config.ScopeAIExecute,
+	},
+	relayMobileRouteActionsList: {
+		id:            relayMobileRouteActionsList,
+		method:        http.MethodGet,
+		path:          "/api/actions",
+		requiredScope: config.ScopeAIExecute,
+	},
+	relayMobileRouteActionDetail: {
+		id:            relayMobileRouteActionDetail,
+		method:        http.MethodGet,
+		path:          "/api/actions/{action_id}",
 		requiredScope: config.ScopeAIExecute,
 	},
 	relayMobileRouteActionDecision: {

@@ -7292,8 +7292,11 @@ when no session cookie exists, the same request may retain the API-token
 fallback for scoped read access. This prevents first-run token persistence from
 silently converting session administration calls into rejected token calls.
 
-The canonical pending-action surface is `GET /api/actions/pending`; decisions
-and execution remain `POST /api/actions/{id}/decision` and
+The canonical decision queue remains `GET /api/actions/pending`. Durable inbox
+consumers use `GET /api/actions?view=pending|settled`, while
+`GET /api/actions/{id}` returns the authoritative audit, lifecycle events,
+dispatch attempt, and correlated receipt. Decisions and execution remain
+`POST /api/actions/{id}/decision` and
 `POST /api/actions/{id}/execute`. All three routes are in the relay-mobile
 inventory and router allowlist, and queue failures use the shared
 `agentcapabilities` vocabulary. Pending rows are oldest-first and expose the
@@ -7309,11 +7312,28 @@ Planning uses atomic `CreateActionAudit` with its initial lifecycle events; it
 does not perform a separate existence read followed by an upsert. Identical
 replay returns the authoritative current plan and disposition, while a
 deterministic action-ID collision with different stable request, plan hash, or
-broker-owned origin fails without a write. Decision, refusal, execution-start,
-and execution-result writes are conditional state transitions whose event and
-record update commit together. Only the successful execution-start CAS winner
-may call the executor; a concurrent or post-restart duplicate returns the
-current executing or terminal record without another admission.
+broker-owned origin fails without a write. Decision, expiry, refusal,
+execution-admission, and execution-result writes are conditional state
+transitions. Admission commits the executing record, event, deterministic
+dispatch attempt, and outbox together. Only a call-unique lease owner that
+crosses the one-shot `MarkActionDispatchStarted` CAS may reach a transport, and
+the request carries both action and attempt identity. A crash before that
+boundary safely reclaims the same attempt; a timeout, disconnect, cancellation,
+or crash afterward remains `executing`/`receipt_pending` and can only use the
+callable reconciliation path by attempt ID. Generic executor errors never
+synthesize receipts or terminal results. Exact duplicate decisions, executes,
+receipts, and resumes return authoritative current state; conflicting, forged,
+late, and out-of-order transitions cannot regress state or resend transport.
+A correlated response carrying today's existing result shape commits its
+receipt and terminal audit/event atomically, eliminating the
+receipt-recorded/result-lost crash window without extending Task 10's schema.
+Legacy executing rows without an attempt remain readable but inert.
+
+This Task 07 Phase B1 contract intentionally stops at transport continuity.
+Task 10 remains sole schema owner for execution, verification, evidence, and
+compensation truth. Compensation and verification-attempt recovery, plus
+mobile and relay inbox/push-dedup consumption, remain Phase B2 work after Task
+10; no mobile or relay-local workaround may compensate for a missing core API.
 
 ### Canonical mutation plane
 

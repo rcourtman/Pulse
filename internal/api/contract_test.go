@@ -80,16 +80,18 @@ func TestContract_ActionLifecycleReplayIsCreateOnceAndMonotonic(t *testing.T) {
 	}
 }
 
-func TestContract_ActionExecutorAdmissionRequiresExecutingCASWinner(t *testing.T) {
+func TestContract_ActionExecutorAdmissionRequiresDurableAttemptAndSendCAS(t *testing.T) {
 	service, err := os.ReadFile("../actionlifecycle/service.go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	src := string(service)
-	start := strings.Index(src, "store.RecordActionExecutionStart(started, startEvent)")
-	dispatch := strings.Index(src, "s.Executor.ExecuteAction(ctx, started)")
-	if start < 0 || dispatch < 0 || start > dispatch {
-		t.Fatal("executor dispatch must occur only after the executing-state CAS")
+	admission := strings.Index(src, "store.RecordActionExecutionAdmission(started, startEvent, attempt)")
+	policyAdmission := strings.Index(src, "store.RecordActionPolicyExecutionAdmission(started, approvedEvent, startEvent, attempt)")
+	started := strings.Index(src, "store.MarkActionDispatchStarted(attempt.ID, owner, s.now())")
+	dispatch := strings.Index(src, "s.Executor.ExecuteAction(withDispatchAttempt(ctx, attempt), record)")
+	if admission < 0 || policyAdmission < 0 || started < 0 || dispatch < 0 || admission > started || started > dispatch {
+		t.Fatal("executor dispatch must follow atomic attempt admission and the one-shot pre-send CAS")
 	}
 }
 
@@ -19679,25 +19681,31 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 	// don't need the specific token. Whitelisted here so the
 	// emit/declare audit doesn't false-positive on them.
 	internalOnlyCodes := map[string]bool{
-		"action_audit_unavailable":                      true,
-		"action_audit_persist_failed":                   true,
-		"action_plan_failed":                            true,
-		"action_plan_encode_failed":                     true,
-		"action_audit_query_failed":                     true,
-		"action_decision_persist_failed":                true,
-		"action_decision_encode_failed":                 true,
-		"action_decision_failed":                        true,
-		"action_execution_persist_failed":               true,
-		"action_execution_encode_failed":                true,
-		"action_execution_failed":                       true,
-		"action_queue_unavailable":                      true,
-		"action_queue_query_failed":                     true,
-		"action_queue_encode_failed":                    true,
-		"action_not_executing":                          true,
-		"action_policy_validation_failed":               true,
-		"action_plan_validation_failed":                 true,
-		"resource_registry_unavailable":                 true,
-		agentcapabilities.AgentErrCodeRawCommandRetired: true,
+		"action_audit_unavailable":                             true,
+		"action_audit_persist_failed":                          true,
+		"action_plan_failed":                                   true,
+		"action_plan_encode_failed":                            true,
+		"action_audit_query_failed":                            true,
+		"action_decision_persist_failed":                       true,
+		"action_decision_encode_failed":                        true,
+		"action_decision_failed":                               true,
+		"action_execution_persist_failed":                      true,
+		"action_execution_encode_failed":                       true,
+		"action_execution_failed":                              true,
+		"action_queue_unavailable":                             true,
+		"action_queue_query_failed":                            true,
+		"action_queue_encode_failed":                           true,
+		agentcapabilities.AgentErrCodeInvalidActionListLimit:   true,
+		agentcapabilities.AgentErrCodeInvalidActionListView:    true,
+		agentcapabilities.AgentErrCodeActionListFailed:         true,
+		agentcapabilities.AgentErrCodeActionListEncodeFailed:   true,
+		agentcapabilities.AgentErrCodeActionDetailFailed:       true,
+		agentcapabilities.AgentErrCodeActionDetailEncodeFailed: true,
+		"action_not_executing":                                 true,
+		"action_policy_validation_failed":                      true,
+		"action_plan_validation_failed":                        true,
+		"resource_registry_unavailable":                        true,
+		agentcapabilities.AgentErrCodeRawCommandRetired:        true,
 	}
 
 	agentErrorConstantValues := map[string]string{
@@ -19728,6 +19736,12 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"AgentErrCodeActionQueueUnavailable":     agentcapabilities.AgentErrCodeActionQueueUnavailable,
 		"AgentErrCodeActionQueueQueryFailed":     agentcapabilities.AgentErrCodeActionQueueQueryFailed,
 		"AgentErrCodeActionQueueEncodeFailed":    agentcapabilities.AgentErrCodeActionQueueEncodeFailed,
+		"AgentErrCodeInvalidActionListLimit":     agentcapabilities.AgentErrCodeInvalidActionListLimit,
+		"AgentErrCodeInvalidActionListView":      agentcapabilities.AgentErrCodeInvalidActionListView,
+		"AgentErrCodeActionListFailed":           agentcapabilities.AgentErrCodeActionListFailed,
+		"AgentErrCodeActionListEncodeFailed":     agentcapabilities.AgentErrCodeActionListEncodeFailed,
+		"AgentErrCodeActionDetailFailed":         agentcapabilities.AgentErrCodeActionDetailFailed,
+		"AgentErrCodeActionDetailEncodeFailed":   agentcapabilities.AgentErrCodeActionDetailEncodeFailed,
 		"AgentErrCodeRawCommandRetired":          agentcapabilities.AgentErrCodeRawCommandRetired,
 	}
 

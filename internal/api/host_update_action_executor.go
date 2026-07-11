@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -60,6 +61,10 @@ func (e hostUpdateActionExecutor) CheckActionAvailable(ctx context.Context, req 
 }
 
 func (e hostUpdateActionExecutor) ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
+	attempt, ok := actionlifecycle.DispatchAttemptFromContext(ctx)
+	if !ok || attempt.ActionID != record.ID {
+		return nil, fmt.Errorf("committed action dispatch authority is required")
+	}
 	record, err := unified.NormalizeActionAuditRecord(record)
 	if err != nil {
 		return nil, err
@@ -73,7 +78,7 @@ func (e hostUpdateActionExecutor) ExecuteAction(ctx context.Context, record unif
 	}
 	agentID := strings.TrimSpace(resource.Agent.AgentID)
 	result, err := e.agents.ExecuteHostUpdate(ctx, agentID, agentexec.HostUpdatePayload{
-		RequestID:             record.ID,
+		RequestID:             attempt.ID,
 		ActionID:              record.ID,
 		Operation:             agentexec.HostUpdateOperationInstall,
 		ExpectedInventoryHash: resource.Agent.PackageUpdates.InventoryHash,

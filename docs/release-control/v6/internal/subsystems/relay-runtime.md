@@ -134,7 +134,12 @@ creating a `relay:mobile:access` token so Community installs cannot bypass
 Relay/mobile gating through direct API calls.
 
 The mobile relay capability inventory and router allowlist include the
-canonical pending-action read, action decision, and action execution routes.
+canonical pending-action read, global pending/settled action list, authoritative
+action detail, action decision, and action execution routes. These core reads
+expose the durable attempt/receipt correlation without moving inbox or push
+deduplication into Pulse core; Pulse Mobile and pulse-pro relay consumption
+remain Task 07 Phase B2 after Task 10, and no relay-local retry may compensate
+for an absent or receipt-pending core action result.
 Patrol approval pushes use `decide_action` with a canonical action id; terminal
 pushes distinguish verified, unverified, verification-failed, and
 execution-failed outcomes. Relay must not revive `/api/ai/approvals` as a live

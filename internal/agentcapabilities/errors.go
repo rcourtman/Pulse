@@ -32,6 +32,12 @@ const (
 	AgentErrCodeActionQueueUnavailable     = "action_queue_unavailable"
 	AgentErrCodeActionQueueQueryFailed     = "action_queue_query_failed"
 	AgentErrCodeActionQueueEncodeFailed    = "action_queue_encode_failed"
+	AgentErrCodeInvalidActionListLimit     = "invalid_action_list_limit"
+	AgentErrCodeInvalidActionListView      = "invalid_action_list_view"
+	AgentErrCodeActionListFailed           = "action_list_failed"
+	AgentErrCodeActionListEncodeFailed     = "action_list_encode_failed"
+	AgentErrCodeActionDetailFailed         = "action_detail_failed"
+	AgentErrCodeActionDetailEncodeFailed   = "action_detail_encode_failed"
 	AgentErrCodeRawCommandRetired          = "raw_command_retired"
 )
 

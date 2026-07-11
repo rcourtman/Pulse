@@ -787,6 +787,22 @@ func TestNewSQLiteResourceStore_InitializesCanonicalAuditSchemas(t *testing.T) {
 			indexes: []string{"idx_action_lifecycle_events_action"},
 		},
 		{
+			name: "action_dispatch_attempts",
+			columns: []string{
+				"attempt_id", "action_id", "state", "created_at", "updated_at",
+				"lease_owner", "lease_expires_at", "dispatch_count",
+			},
+			indexes: []string{"idx_action_dispatch_attempts_state_updated"},
+		},
+		{
+			name:    "action_dispatch_outbox",
+			columns: []string{"attempt_id", "action_id", "available_at"},
+		},
+		{
+			name:    "action_dispatch_receipts",
+			columns: []string{"attempt_id", "action_id", "transport_request_id", "received_at"},
+		},
+		{
 			name:    "export_audits",
 			columns: []string{"id", "timestamp", "actor", "envelope_hash", "decision", "destination", "redactions_json"},
 			indexes: []string{"idx_export_audits_timestamp"},

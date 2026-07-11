@@ -61,6 +61,8 @@ temperature, capacity, health, and identity enrichment.
 24. `internal/unifiedresources/relationships.go`
 25. `internal/unifiedresources/privacy.go`
 26. `internal/unifiedresources/actions.go`
+26a. `internal/unifiedresources/action_dispatch.go`
+26b. `internal/unifiedresources/action_dispatch_store.go`
 27. `internal/unifiedresources/audit_redaction.go`
 28. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`
 29. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
@@ -2898,10 +2900,26 @@ create-or-return-current action identity and monotonic typed transitions; it
 must never replace an existing action record merely because an ID collides.
 SQLite uses insert-on-conflict-do-nothing for creation and conditional state
 updates for transitions, with the lifecycle event committed in the same
-transaction. Both stores treat rejected, completed, and failed states as
+transaction. Both stores treat rejected, explicitly expired, completed, and failed states as
 absorbing and admit exactly one successful transition to executing. Lifecycle
 events are unique per action and state, with migration deduplication for rows
 written before this invariant became database-enforced.
+Execution admission commits the audit transition and lifecycle event with one
+deterministic `ActionDispatchAttempt` and its outbox row in the same
+transaction. Transport states are deliberately limited to `queued`, `claimed`,
+`receipt_pending`, and `receipt_recorded`; they do not encode Task 10 execution,
+verification, evidence, or compensation truth. An expired claim before
+`MarkActionDispatchStarted` requeues the same attempt. That one-shot CAS is the
+sole pre-send linearization point, increments `dispatchCount`, and removes the
+outbox row. Once reached, restart recovery may accept only a correlated receipt
+or query a transport reconciler by attempt ID; it cannot claim or send again.
+When a correlated response includes the existing `ExecutionResult`, SQLite and
+MemoryStore commit the receipt, `receipt_recorded` attempt, terminal audit, and
+lifecycle event atomically. Standalone callbacks without a result remain
+transport-only receipts and do not invent terminal truth.
+Queued, claimed, forged, conflicting, duplicate, late, and out-of-order receipt
+handling is monotonic and tenant-scoped, and the in-memory store mirrors the
+SQLite crash-boundary behavior.
 It also mirrors the durable decision contract: approval/rejection writes must
 target an existing pending action and must fail rather than creating a
 decision-only record or overwriting an already decided action.

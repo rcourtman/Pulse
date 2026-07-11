@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
@@ -53,6 +54,12 @@ type actionExecutionResponse struct {
 type pendingActionsResponse struct {
 	Actions []unified.ActionAuditRecord `json:"actions"`
 	Count   int                         `json:"count"`
+}
+
+type actionInboxResponse struct {
+	View    actionlifecycle.ActionListView `json:"view"`
+	Actions []unified.ActionAuditRecord    `json:"actions"`
+	Count   int                            `json:"count"`
 }
 
 // ActionLifecycle returns the shared transport-independent action lifecycle
@@ -116,17 +123,7 @@ func (h *ResourceHandlers) HandleListPendingActions(w http.ResponseWriter, r *ht
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	store, err := h.getStore(GetOrgID(r.Context()))
-	if err != nil || store == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "action_audit_unavailable", "Action decision queue is not available")
-		return
-	}
-	reader, ok := store.(unified.PendingActionAuditReader)
-	if !ok {
-		writeJSONError(w, http.StatusServiceUnavailable, agentcapabilities.AgentErrCodeActionQueueUnavailable, "Action decision queue is not available")
-		return
-	}
-	actions, err := reader.GetPendingActionAudits(maxPendingActionAudits)
+	actions, err := h.ActionLifecycle().DecisionQueue(GetOrgID(r.Context()), maxPendingActionAudits)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionQueueQueryFailed, "Failed to query pending actions")
 		return
@@ -137,6 +134,65 @@ func (h *ResourceHandlers) HandleListPendingActions(w http.ResponseWriter, r *ht
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(pendingActionsResponse{Actions: actions, Count: len(actions)}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionQueueEncodeFailed, "Failed to encode pending actions")
+	}
+}
+
+// HandleListActions returns the global active or settled action projection.
+func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Request) {
+	view := actionlifecycle.ActionListView(strings.TrimSpace(r.URL.Query().Get("view")))
+	if view == "" {
+		view = actionlifecycle.ActionListPending
+	}
+	limit := maxPendingActionAudits
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > 500 {
+			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListLimit, "Action list limit must be between 1 and 500")
+			return
+		}
+		limit = parsed
+	}
+	actions, err := h.ActionLifecycle().List(GetOrgID(r.Context()), view, limit)
+	if err != nil {
+		if strings.Contains(err.Error(), "unsupported action list view") {
+			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "Action list view must be pending or settled")
+			return
+		}
+		writeActionLifecycleReadError(w, err, func() {
+			writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionListFailed, "Failed to query actions")
+		})
+		return
+	}
+	if actions == nil {
+		actions = []unified.ActionAuditRecord{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: actions, Count: len(actions)}); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionListEncodeFailed, "Failed to encode actions")
+	}
+}
+
+// HandleGetAction returns authoritative lifecycle and durable dispatch detail.
+func (h *ResourceHandlers) HandleGetAction(w http.ResponseWriter, r *http.Request) {
+	actionID := strings.TrimSpace(r.PathValue("id"))
+	if actionID == "" || !validAuditEventID.MatchString(actionID) || len(actionID) > 128 {
+		writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidID, "Invalid action ID format")
+		return
+	}
+	detail, found, err := h.ActionLifecycle().Detail(GetOrgID(r.Context()), actionID)
+	if err != nil {
+		writeActionLifecycleReadError(w, err, func() {
+			writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailFailed, "Failed to query action detail")
+		})
+		return
+	}
+	if !found {
+		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{"actionId": actionID})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(detail); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailEncodeFailed, "Failed to encode action detail")
 	}
 }
 

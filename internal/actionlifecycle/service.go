@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
@@ -24,6 +25,13 @@ import (
 // canonical execution contract.
 type Executor interface {
 	ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error)
+}
+
+// DispatchReconciler queries a transport by durable attempt identity. It must
+// never send or re-send the mutation. found is true only for an authenticated,
+// correlated transport response.
+type DispatchReconciler interface {
+	ReconcileActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (result *unified.ExecutionResult, receipt unified.ActionDispatchReceipt, found bool, err error)
 }
 
 // AvailabilityChecker lets an executor contribute live readiness checks
@@ -39,12 +47,25 @@ type Store interface {
 	CreateActionAudit(record unified.ActionAuditRecord, initialEvents []unified.ActionLifecycleEvent) (unified.ActionAuditRecord, bool, error)
 	GetActionAudit(actionID string) (unified.ActionAuditRecord, bool, error)
 	RecordActionDecision(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
+	RecordActionExpiry(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
 	RecordActionExecutionStart(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
 	RecordActionPolicyExecutionStart(record unified.ActionAuditRecord, approvalEvent, executionEvent unified.ActionLifecycleEvent) error
+	RecordActionExecutionAdmission(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent, attempt unified.ActionDispatchAttempt) error
+	RecordActionPolicyExecutionAdmission(record unified.ActionAuditRecord, approvalEvent, executionEvent unified.ActionLifecycleEvent, attempt unified.ActionDispatchAttempt) error
 	RecordActionExecutionResult(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
 	RecordActionExecutionRefusal(record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
 	RecordActionLifecycleEvent(event unified.ActionLifecycleEvent) error
 	GetActionLifecycleEvents(actionID string, since time.Time, limit int) ([]unified.ActionLifecycleEvent, error)
+	GetActionDispatchAttempt(actionID string) (unified.ActionDispatchAttempt, bool, error)
+	GetActionDispatchReceipt(attemptID string) (unified.ActionDispatchReceipt, bool, error)
+	ClaimActionDispatch(actionID, owner string, now time.Time, lease time.Duration) (unified.ActionDispatchAttempt, bool, error)
+	MarkActionDispatchStarted(attemptID, owner string, now time.Time) (unified.ActionDispatchAttempt, error)
+	RecordActionDispatchReceipt(receipt unified.ActionDispatchReceipt) (unified.ActionDispatchAttempt, error)
+	RecordActionDispatchCompletion(receipt unified.ActionDispatchReceipt, record unified.ActionAuditRecord, event unified.ActionLifecycleEvent) error
+	RecoverActionDispatch(actionID string, now time.Time) (unified.ActionDispatchAttempt, bool, error)
+	ExpireActionAudits(now time.Time, limit int) ([]unified.ActionAuditRecord, error)
+	GetActionAuditsByStates(states []unified.ActionState, limit int) ([]unified.ActionAuditRecord, error)
+	GetPendingActionAudits(limit int) ([]unified.ActionAuditRecord, error)
 	GetResourceOperatorState(canonicalID string) (unified.ResourceOperatorState, bool, error)
 }
 
@@ -74,7 +95,23 @@ type Service struct {
 	PolicyAdmission    *PolicyAdmissionCoordinator
 }
 
+type ActionDetail struct {
+	Audit   unified.ActionAuditRecord      `json:"audit"`
+	Events  []unified.ActionLifecycleEvent `json:"events"`
+	Attempt *unified.ActionDispatchAttempt `json:"attempt,omitempty"`
+	Receipt *unified.ActionDispatchReceipt `json:"receipt,omitempty"`
+}
+
+type ActionListView string
+
+const (
+	ActionListPending ActionListView = "pending"
+	ActionListSettled ActionListView = "settled"
+)
+
 type PolicyAdmissionCoordinator struct{ mu sync.RWMutex }
+
+var dispatchWorkerSequence atomic.Uint64
 
 func (s *Service) admissionCoordinator() *PolicyAdmissionCoordinator {
 	if s.PolicyAdmission == nil {
@@ -315,7 +352,85 @@ func (s *Service) Get(orgID, actionID string) (unified.ActionAuditRecord, bool, 
 	if err != nil {
 		return unified.ActionAuditRecord{}, false, &QueryError{Op: "action audit", Err: err}
 	}
-	return record, found, nil
+	if !found {
+		return record, false, nil
+	}
+	record, err = s.materializeExpiry(store, orgID, record)
+	if err != nil {
+		return unified.ActionAuditRecord{}, false, err
+	}
+	return record, true, nil
+}
+
+// Detail returns the authoritative lifecycle record together with its durable
+// transport correlation. It never infers result truth from dispatch state.
+func (s *Service) Detail(orgID, actionID string) (ActionDetail, bool, error) {
+	record, found, err := s.Get(orgID, actionID)
+	if err != nil || !found {
+		return ActionDetail{}, found, err
+	}
+	store, err := s.store(orgID)
+	if err != nil {
+		return ActionDetail{}, false, err
+	}
+	events, err := store.GetActionLifecycleEvents(record.ID, time.Time{}, 500)
+	if err != nil {
+		return ActionDetail{}, false, &QueryError{Op: "action lifecycle events", Err: err}
+	}
+	detail := ActionDetail{Audit: record, Events: events}
+	if attempt, ok, queryErr := store.GetActionDispatchAttempt(record.ID); queryErr != nil {
+		return ActionDetail{}, false, &QueryError{Op: "action dispatch attempt", Err: queryErr}
+	} else if ok {
+		detail.Attempt = &attempt
+		if receipt, receiptOK, receiptErr := store.GetActionDispatchReceipt(attempt.ID); receiptErr != nil {
+			return ActionDetail{}, false, &QueryError{Op: "action dispatch receipt", Err: receiptErr}
+		} else if receiptOK {
+			detail.Receipt = &receipt
+		}
+	}
+	return detail, true, nil
+}
+
+// List returns the canonical pending or settled inbox projection.
+func (s *Service) List(orgID string, view ActionListView, limit int) ([]unified.ActionAuditRecord, error) {
+	store, err := s.store(orgID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := store.ExpireActionAudits(s.now(), 500); err != nil {
+		return nil, &PersistError{Op: "action expiry sweep", Err: err}
+	}
+	var states []unified.ActionState
+	switch view {
+	case ActionListPending:
+		states = []unified.ActionState{unified.ActionStatePlanned, unified.ActionStatePending, unified.ActionStateApproved, unified.ActionStateExecuting}
+	case ActionListSettled:
+		states = []unified.ActionState{unified.ActionStateRejected, unified.ActionStateExpired, unified.ActionStateCompleted, unified.ActionStateFailed}
+	default:
+		return nil, fmt.Errorf("unsupported action list view %q", view)
+	}
+	records, err := store.GetActionAuditsByStates(states, limit)
+	if err != nil {
+		return nil, &QueryError{Op: "action inbox", Err: err}
+	}
+	return records, nil
+}
+
+// DecisionQueue preserves the legacy oldest-first pending-approval projection
+// while sharing the canonical expiry sweep.
+func (s *Service) DecisionQueue(orgID string, limit int) ([]unified.ActionAuditRecord, error) {
+	store, err := s.store(orgID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := store.ExpireActionAudits(s.now(), 500); err != nil {
+		return nil, &PersistError{Op: "action expiry sweep", Err: err}
+	}
+	records, err := store.GetPendingActionAudits(limit)
+	if err != nil {
+		return nil, &QueryError{Op: "pending action queue", Err: err}
+	}
+	return records, nil
 }
 
 // ResourceOperatorState returns the authoritative per-resource policy used by
@@ -425,6 +540,13 @@ func (s *Service) Decide(ctx context.Context, orgID, actionID string, approval u
 	if !ok {
 		return unified.ActionAuditRecord{}, &ActionNotFoundError{ActionID: actionID}
 	}
+	record, err = s.materializeExpiry(store, orgID, record)
+	if err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if record.State == unified.ActionStateExpired {
+		return record, unified.ErrActionPlanExpired
+	}
 	if record.State != unified.ActionStatePending {
 		for _, existing := range record.Approvals {
 			if existing.Outcome == approval.Outcome {
@@ -482,11 +604,21 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 	if !ok {
 		return unified.ActionAuditRecord{}, &ActionNotFoundError{ActionID: actionID}
 	}
-	if record.State == unified.ActionStateExecuting || record.State == unified.ActionStateCompleted || record.State == unified.ActionStateFailed {
+	if record.State == unified.ActionStateExecuting {
+		return s.dispatchCommitted(ctx, orgID, store, record, actor)
+	}
+	if record.State == unified.ActionStateCompleted || record.State == unified.ActionStateFailed {
 		return record, nil
 	}
 
 	now := s.now()
+	record, err = s.materializeExpiry(store, orgID, record)
+	if err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if record.State == unified.ActionStateExpired {
+		return record, unified.ErrActionPlanExpired
+	}
 	if stopped, stopErr := s.emergencyStopped(orgID); stopErr != nil || stopped {
 		if stopErr != nil {
 			return unified.ActionAuditRecord{}, &PolicyCheckError{Err: stopErr}
@@ -546,31 +678,24 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID, actor, reason st
 	if reason != "" {
 		startEvent.Message = "Action execution started: " + reason
 	}
-	if err := store.RecordActionExecutionStart(started, startEvent); err != nil {
+	attempt, err := unified.NewActionDispatchAttempt(started.ID, now)
+	if err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if err := store.RecordActionExecutionAdmission(started, startEvent, attempt); err != nil {
 		if errors.Is(err, unified.ErrActionAlreadyExecuting) || errors.Is(err, unified.ErrActionExecutionFinal) {
 			current, found, queryErr := store.GetActionAudit(actionID)
 			if queryErr == nil && found {
+				if current.State == unified.ActionStateExecuting {
+					return s.dispatchCommitted(ctx, orgID, store, current, actor)
+				}
 				return current, nil
 			}
 		}
 		return unified.ActionAuditRecord{}, &PersistError{Op: "action execution start", Err: err}
 	}
 	s.publishTransition(orgID, started)
-
-	result, execErr := s.Executor.ExecuteAction(ctx, started)
-	if execErr != nil {
-		result = &unified.ExecutionResult{Success: false, ErrorMessage: execErr.Error()}
-	}
-	completed, doneEvent, err := unified.CompleteActionExecution(started, result, actor, s.now())
-	if err != nil {
-		return unified.ActionAuditRecord{}, err
-	}
-	if err := store.RecordActionExecutionResult(completed, doneEvent); err != nil {
-		return unified.ActionAuditRecord{}, &PersistError{Op: "action execution result", Err: err}
-	}
-	s.publishTransition(orgID, completed)
-	s.publishCompleted(completed)
-	return completed, nil
+	return s.dispatchCommitted(ctx, orgID, store, started, actor)
 }
 
 // ExecuteUnderPolicy is the only automatic dispatch boundary. It revalidates
@@ -584,23 +709,7 @@ func (s *Service) ExecuteUnderPolicy(ctx context.Context, orgID, actionID, actor
 	if !admitted {
 		return started, admissionErr
 	}
-	// The executing transition is the authorization linearization point.
-	// Later emergency-stop changes may request best-effort cancellation but
-	// cannot claim that an external mutation was rolled back.
-	result, execErr := s.Executor.ExecuteAction(ctx, started)
-	if execErr != nil {
-		result = &unified.ExecutionResult{Success: false, ErrorMessage: execErr.Error()}
-	}
-	completed, doneEvent, err := unified.CompleteActionExecution(started, result, actor, s.now())
-	if err != nil {
-		return unified.ActionAuditRecord{}, err
-	}
-	if err := store.RecordActionExecutionResult(completed, doneEvent); err != nil {
-		return unified.ActionAuditRecord{}, &PersistError{Op: "action execution result", Err: err}
-	}
-	s.publishTransition(orgID, completed)
-	s.publishCompleted(completed)
-	return completed, nil
+	return s.dispatchCommitted(ctx, orgID, store, started, actor)
 }
 
 func (s *Service) beginPolicyExecution(ctx context.Context, orgID, actionID, actor string, authorize PolicyAuthorizer) (unified.ActionAuditRecord, Store, bool, error) {
@@ -616,10 +725,20 @@ func (s *Service) beginPolicyExecution(ctx context.Context, orgID, actionID, act
 	if !found {
 		return unified.ActionAuditRecord{}, store, false, &ActionNotFoundError{ActionID: actionID}
 	}
-	if record.State == unified.ActionStateExecuting || record.State == unified.ActionStateCompleted || record.State == unified.ActionStateFailed {
+	if record.State == unified.ActionStateExecuting {
+		return record, store, true, nil
+	}
+	if record.State == unified.ActionStateCompleted || record.State == unified.ActionStateFailed {
 		return record, store, false, nil
 	}
 	now := s.now()
+	record, err = s.materializeExpiry(store, orgID, record)
+	if err != nil {
+		return unified.ActionAuditRecord{}, store, false, err
+	}
+	if record.State == unified.ActionStateExpired {
+		return record, store, false, unified.ErrActionPlanExpired
+	}
 	if record.State == unified.ActionStateApproved {
 		for _, approval := range record.Approvals {
 			if approval.Method == unified.MethodPolicy && approval.PolicyLease == nil {
@@ -671,7 +790,11 @@ func (s *Service) beginPolicyExecution(ctx context.Context, orgID, actionID, act
 		failed, refuseErr := s.refusePolicyAdmission(store, orgID, record, actor, now, err)
 		return failed, store, false, refuseErr
 	}
-	if err := store.RecordActionPolicyExecutionStart(started, approvedEvent, startEvent); err != nil {
+	attempt, err := unified.NewActionDispatchAttempt(started.ID, now)
+	if err != nil {
+		return unified.ActionAuditRecord{}, store, false, err
+	}
+	if err := store.RecordActionPolicyExecutionAdmission(started, approvedEvent, startEvent, attempt); err != nil {
 		if errors.Is(err, unified.ErrActionAlreadyExecuting) || errors.Is(err, unified.ErrActionExecutionFinal) {
 			current, ok, queryErr := store.GetActionAudit(actionID)
 			if queryErr == nil && ok {
@@ -682,6 +805,140 @@ func (s *Service) beginPolicyExecution(ctx context.Context, orgID, actionID, act
 	}
 	s.publishTransition(orgID, started)
 	return started, store, true, nil
+}
+
+func (s *Service) materializeExpiry(store Store, orgID string, record unified.ActionAuditRecord) (unified.ActionAuditRecord, error) {
+	if record.State == unified.ActionStateExpired || record.State == unified.ActionStateExecuting || record.State == unified.ActionStateCompleted || record.State == unified.ActionStateFailed || record.State == unified.ActionStateRejected {
+		return record, nil
+	}
+	now := s.now()
+	if record.Plan.ExpiresAt.IsZero() || now.Before(record.Plan.ExpiresAt) {
+		return record, nil
+	}
+	expired, event, err := unified.ExpireAction(record, "system:expiry", now)
+	if err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if err := store.RecordActionExpiry(expired, event); err != nil {
+		current, found, queryErr := store.GetActionAudit(record.ID)
+		if queryErr == nil && found {
+			return current, nil
+		}
+		return unified.ActionAuditRecord{}, &PersistError{Op: "action expiry", Err: err}
+	}
+	s.publishTransition(orgID, expired)
+	return expired, nil
+}
+
+func (s *Service) dispatchCommitted(ctx context.Context, orgID string, store Store, record unified.ActionAuditRecord, actor string) (unified.ActionAuditRecord, error) {
+	attempt, found, err := store.GetActionDispatchAttempt(record.ID)
+	if err != nil {
+		return unified.ActionAuditRecord{}, &QueryError{Op: "action dispatch attempt", Err: err}
+	}
+	if !found {
+		// Legacy executing rows predate durable dispatch authority. They must
+		// remain observable, but can never be readmitted or blindly resent.
+		return record, nil
+	}
+	if attempt.State == unified.ActionDispatchReceiptPending || attempt.State == unified.ActionDispatchReceiptRecorded {
+		return s.reconcileCommitted(ctx, orgID, store, record, attempt, actor)
+	}
+	owner := fmt.Sprintf("action-lifecycle:%s:%d", attempt.ID, dispatchWorkerSequence.Add(1))
+	attempt, claimed, err := store.ClaimActionDispatch(record.ID, owner, s.now(), 30*time.Second)
+	if err != nil {
+		return unified.ActionAuditRecord{}, &PersistError{Op: "action dispatch claim", Err: err}
+	}
+	if !claimed {
+		return record, nil
+	}
+	attempt, err = store.MarkActionDispatchStarted(attempt.ID, owner, s.now())
+	if err != nil {
+		return unified.ActionAuditRecord{}, &PersistError{Op: "action dispatch start", Err: err}
+	}
+	result, execErr := s.Executor.ExecuteAction(withDispatchAttempt(ctx, attempt), record)
+	if execErr != nil {
+		// A timeout, disconnect, cancellation, or generic executor error is not
+		// proof that the transport answered. Preserve receipt_pending so a
+		// reconciler can query by attempt ID without resending.
+		return record, execErr
+	}
+	receipt := unified.ActionDispatchReceipt{
+		AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: s.now(),
+	}
+	return s.completeCorrelatedDispatch(orgID, store, record, receipt, result, actor)
+}
+
+func (s *Service) reconcileCommitted(ctx context.Context, orgID string, store Store, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt, actor string) (unified.ActionAuditRecord, error) {
+	reconciler, ok := s.Executor.(DispatchReconciler)
+	if !ok {
+		return record, nil
+	}
+	result, receipt, found, err := reconciler.ReconcileActionDispatch(ctx, record, attempt)
+	if err != nil || !found {
+		return record, err
+	}
+	if receipt.AttemptID == "" {
+		receipt = unified.ActionDispatchReceipt{AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: s.now()}
+	}
+	if receipt.AttemptID != attempt.ID || receipt.ActionID != record.ID {
+		return unified.ActionAuditRecord{}, unified.ErrActionDispatchReceiptConflict
+	}
+	return s.completeCorrelatedDispatch(orgID, store, record, receipt, result, actor)
+}
+
+func (s *Service) completeCorrelatedDispatch(orgID string, store Store, record unified.ActionAuditRecord, receipt unified.ActionDispatchReceipt, result *unified.ExecutionResult, actor string) (unified.ActionAuditRecord, error) {
+	completed, doneEvent, err := unified.CompleteActionExecution(record, result, actor, s.now())
+	if err != nil {
+		return unified.ActionAuditRecord{}, err
+	}
+	if err := store.RecordActionDispatchCompletion(receipt, completed, doneEvent); err != nil {
+		if errors.Is(err, unified.ErrActionExecutionFinal) {
+			if current, found, queryErr := store.GetActionAudit(record.ID); queryErr == nil && found {
+				return current, nil
+			}
+		}
+		return unified.ActionAuditRecord{}, &PersistError{Op: "correlated action dispatch completion", Err: err}
+	}
+	s.publishTransition(orgID, completed)
+	s.publishCompleted(completed)
+	return completed, nil
+}
+
+// RecordDispatchReceipt persists a late authenticated callback correlation.
+// It does not infer or mutate terminal execution truth.
+func (s *Service) RecordDispatchReceipt(orgID string, receipt unified.ActionDispatchReceipt) (unified.ActionDispatchAttempt, error) {
+	store, err := s.store(orgID)
+	if err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	attempt, err := store.RecordActionDispatchReceipt(receipt)
+	if err != nil {
+		return unified.ActionDispatchAttempt{}, &PersistError{Op: "late action dispatch receipt", Err: err}
+	}
+	return attempt, nil
+}
+
+// RecoverExecutingActions drives restart recovery without blind re-execution.
+// Queued or pre-send expired claims may dispatch once; post-start attempts are
+// reconciled by durable attempt identity only.
+func (s *Service) RecoverExecutingActions(ctx context.Context, orgID, actor string, limit int) ([]unified.ActionAuditRecord, error) {
+	store, err := s.store(orgID)
+	if err != nil {
+		return nil, err
+	}
+	records, err := store.GetActionAuditsByStates([]unified.ActionState{unified.ActionStateExecuting}, limit)
+	if err != nil {
+		return nil, &QueryError{Op: "executing action recovery", Err: err}
+	}
+	recovered := make([]unified.ActionAuditRecord, 0, len(records))
+	for _, record := range records {
+		current, recoverErr := s.dispatchCommitted(ctx, orgID, store, record, actor)
+		if recoverErr != nil {
+			continue
+		}
+		recovered = append(recovered, current)
+	}
+	return recovered, nil
 }
 
 func (s *Service) emergencyStopped(orgID string) (bool, error) {

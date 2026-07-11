@@ -216,11 +216,18 @@ boundaries with auditability, and first-class fleet governance.
 Governed action identity is create-once and lifecycle state is monotonic. A
 deterministic replay returns the authoritative persisted record; it cannot
 replace approvals, execution results, verification, origin, or terminal state.
-Only the store-level compare-and-swap winner that persists the `executing`
-transition and its event may admit the executor. This is an exactly-one
-admission guarantee, not permission to claim exactly-once external effects
-after a process crash; durable effect recovery remains a separately governed
-continuity obligation.
+Only the store-level compare-and-swap winner that atomically persists the
+`executing` transition, lifecycle event, create-once dispatch-attempt identity,
+and outbox row may admit transport. Claiming the outbox is not permission to
+send: `MarkActionDispatchStarted` is the durable pre-send linearization point.
+An expired pre-send claim requeues the same attempt; after that point recovery
+may only reconcile the attempt or accept an authenticated correlated receipt,
+never blindly resend. A correlated response that carries today's execution
+result commits its receipt with the terminal audit and event atomically, so a
+crash cannot preserve the receipt while losing the accompanying result. This is
+durable transport admission and continuity, not
+permission to infer execution, verification, evidence, or compensation truth;
+Task 10 remains the sole owner of those terminal semantics.
 
 ## Evergreen Readiness Assertions
 

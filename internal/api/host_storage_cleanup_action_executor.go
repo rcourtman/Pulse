@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -60,6 +61,10 @@ func (e hostStorageCleanupActionExecutor) CheckActionAvailable(_ context.Context
 }
 
 func (e hostStorageCleanupActionExecutor) ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
+	attempt, ok := actionlifecycle.DispatchAttemptFromContext(ctx)
+	if !ok || attempt.ActionID != record.ID {
+		return nil, fmt.Errorf("committed action dispatch authority is required")
+	}
 	record, err := unified.NormalizeActionAuditRecord(record)
 	if err != nil {
 		return nil, err
@@ -72,7 +77,7 @@ func (e hostStorageCleanupActionExecutor) ExecuteAction(ctx context.Context, rec
 		return nil, err
 	}
 	result, err := e.agents.ExecuteHostStorageCleanup(ctx, strings.TrimSpace(resource.Agent.AgentID), agentexec.HostStorageCleanupPayload{
-		RequestID:           record.ID,
+		RequestID:           attempt.ID,
 		ActionID:            record.ID,
 		Operation:           agentexec.HostStorageCleanupOperationPackageCache,
 		ExpectedFingerprint: resource.Agent.StorageCleanup.Fingerprint,

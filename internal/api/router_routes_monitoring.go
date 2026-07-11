@@ -143,6 +143,12 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("GET /api/actions/pending", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRoutePendingActions,
 		r.resourceHandlers.HandleListPendingActions,
 	)))
+	r.mux.HandleFunc("GET /api/actions", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteActionsList,
+		r.resourceHandlers.HandleListActions,
+	)))
+	r.mux.HandleFunc("GET /api/actions/{id}", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteActionDetail,
+		r.resourceHandlers.HandleGetAction,
+	)))
 	r.mux.HandleFunc("POST /api/actions/{id}/decision", RequireAuth(r.config, requireRelayMobileRuntimeRoute(relayMobileRouteActionDecision, r.withExternalAgentCapabilityActivity(
 		agentcapabilities.DecideActionCapabilityName,
 		r.resourceHandlers.HandleDecideAction,

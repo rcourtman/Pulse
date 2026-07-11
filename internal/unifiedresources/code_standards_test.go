@@ -674,8 +674,10 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			// publishes only after the corresponding store write.
 			"OnActionTransition func(orgID string, record unified.ActionAuditRecord)",
 			"func (s *Service) publishTransition(orgID string, record unified.ActionAuditRecord)",
-			"store.RecordActionExecutionStart(started, startEvent)",
-			"store.RecordActionExecutionResult(completed, doneEvent)",
+			"store.RecordActionExecutionAdmission(started, startEvent, attempt)",
+			"store.MarkActionDispatchStarted(attempt.ID, owner, s.now())",
+			"s.Executor.ExecuteAction(withDispatchAttempt(ctx, attempt), record)",
+			"store.RecordActionDispatchCompletion(receipt, completed, doneEvent)",
 		},
 		filepath.Join("..", "api", "actions.go"): {
 			// The REST layer is a thin adapter over the shared lifecycle

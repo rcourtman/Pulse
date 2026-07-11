@@ -891,7 +891,12 @@ wire contract is owned by the Pulse Intelligence agent surface once the route
 is advertised there. The exported `agentcapabilities.AgentErrCode*` constants
 are the source of those values for both manifest declarations and
 `internal/api/` handler emissions; local string literals in either layer are
-contract drift. Manifest `scope` values are auth-owned vocabulary from
+contract drift.
+`GET /api/actions` and `GET /api/actions/{id}` use that same shared vocabulary
+for invalid view/limit and internal list/detail failures even though those
+relay-mobile continuity reads are not separate Assistant tools; their codes
+must not drift into handler-local literals or imply Task 10 terminal truth.
+Manifest `scope` values are auth-owned vocabulary from
 `pkg/auth` and must be declared through manifest-local aliases to those
 constants, not repeated as string literals, so MCP tools and direct HTTP agents
 advertise the same scopes the API authorization layer enforces. Patrol finding

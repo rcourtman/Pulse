@@ -32,6 +32,22 @@ type blockingExecutor struct {
 	release chan struct{}
 }
 
+type claimBoundaryStore struct {
+	unified.ResourceStore
+	entered chan struct{}
+	release chan struct{}
+	once    atomic.Bool
+}
+
+func (s *claimBoundaryStore) ClaimActionDispatch(actionID, owner string, now time.Time, lease time.Duration) (unified.ActionDispatchAttempt, bool, error) {
+	attempt, claimed, err := s.ResourceStore.ClaimActionDispatch(actionID, owner, now, lease)
+	if claimed && s.once.CompareAndSwap(false, true) {
+		close(s.entered)
+		<-s.release
+	}
+	return attempt, claimed, err
+}
+
 func (e *blockingExecutor) ExecuteAction(_ context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
 	if e.calls.Add(1) == 1 {
 		close(e.entered)
@@ -136,6 +152,47 @@ func TestConcurrentExecuteAdmitsExecutorExactlyOnceSQLiteStore(t *testing.T) {
 	}
 	defer store.Close()
 	runConcurrentExecuteAdmitsExecutorExactlyOnce(t, store)
+}
+
+func runConcurrentDuplicateExecuteAtClaimBoundaryCallsExecutorOnce(t *testing.T, store unified.ResourceStore) {
+	t.Helper()
+	blocked := &claimBoundaryStore{ResourceStore: store, entered: make(chan struct{}), release: make(chan struct{})}
+	executor := &stubExecutor{result: &unified.ExecutionResult{Success: true}}
+	service := serviceForStore(t, blocked, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
+	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := make(chan error, 1)
+	go func() {
+		_, executeErr := service.Execute(context.Background(), "default", plan.ActionID, "operator", "first")
+		first <- executeErr
+	}()
+	<-blocked.entered
+	second, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", "duplicate")
+	if err != nil || second.State != unified.ActionStateExecuting {
+		t.Fatalf("duplicate=%#v err=%v", second, err)
+	}
+	close(blocked.release)
+	if err := <-first; err != nil {
+		t.Fatal(err)
+	}
+	if executor.calls != 1 {
+		t.Fatalf("executor calls=%d, want 1", executor.calls)
+	}
+}
+
+func TestMemoryStoreConcurrentDuplicateExecuteAtClaimBoundaryCallsExecutorOnce(t *testing.T) {
+	runConcurrentDuplicateExecuteAtClaimBoundaryCallsExecutorOnce(t, unified.NewMemoryStore())
+}
+
+func TestSQLiteConcurrentDuplicateExecuteAtClaimBoundaryCallsExecutorOnce(t *testing.T) {
+	store, err := unified.NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	runConcurrentDuplicateExecuteAtClaimBoundaryCallsExecutorOnce(t, store)
 }
 
 func TestPlanReplayReturnsAuthoritativeApprovedExecutingAndTerminalRecords(t *testing.T) {
@@ -250,6 +307,109 @@ func TestExecuteAfterSQLiteRestartDoesNotReadmitExecutingAction(t *testing.T) {
 	current, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", "retry")
 	if err != nil || current.State != unified.ActionStateExecuting || executor.calls != 0 {
 		t.Fatalf("current=%#v err=%v calls=%d", current, err, executor.calls)
+	}
+}
+
+func TestExecuteTimeoutAfterSendWaitsForCorrelatedLateResponseWithoutResend(t *testing.T) {
+	store := unified.NewMemoryStore()
+	executor := &reconcilingExecutor{executeErr: context.DeadlineExceeded, result: &unified.ExecutionResult{Success: true}}
+	service := serviceForStore(t, store, testResource(time.Now().UTC(), unified.ApprovalNone), executor)
+	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", "timeout proof")
+	if !errors.Is(err, context.DeadlineExceeded) || current.State != unified.ActionStateExecuting {
+		t.Fatalf("current=%#v err=%v", current, err)
+	}
+	attempt, found, err := store.GetActionDispatchAttempt(plan.ActionID)
+	if err != nil || !found || attempt.State != unified.ActionDispatchReceiptPending || attempt.DispatchCount != 1 {
+		t.Fatalf("attempt=%#v found=%v err=%v", attempt, found, err)
+	}
+	if _, found, err := store.GetActionDispatchReceipt(attempt.ID); err != nil || found {
+		t.Fatalf("receipt found=%v err=%v", found, err)
+	}
+	// Duplicate execute is a query-only resume and cannot call ExecuteAction.
+	current, err = service.Execute(context.Background(), "default", plan.ActionID, "operator", "duplicate resume")
+	if err != nil || current.State != unified.ActionStateExecuting || executor.executeCalls != 1 || executor.reconcileCalls != 1 {
+		t.Fatalf("current=%#v err=%v execute=%d reconcile=%d", current, err, executor.executeCalls, executor.reconcileCalls)
+	}
+	executor.found = true
+	current, err = service.Execute(context.Background(), "default", plan.ActionID, "operator", "late response")
+	if err != nil || current.State != unified.ActionStateCompleted || executor.executeCalls != 1 || executor.reconcileCalls != 2 {
+		t.Fatalf("current=%#v err=%v execute=%d reconcile=%d", current, err, executor.executeCalls, executor.reconcileCalls)
+	}
+	if receipt, found, err := store.GetActionDispatchReceipt(attempt.ID); err != nil || !found || receipt.AttemptID != attempt.ID {
+		t.Fatalf("receipt=%#v found=%v err=%v", receipt, found, err)
+	}
+}
+
+func TestSQLiteRestartRecoveryReconcilesReceiptPendingWithoutResend(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now().UTC()
+	first, err := unified.NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor := &reconcilingExecutor{executeErr: context.DeadlineExceeded, result: &unified.ExecutionResult{Success: true}}
+	service := serviceForStore(t, first, testResource(now, unified.ApprovalNone), executor)
+	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", "before restart"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Execute error=%v", err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	second, err := unified.NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer second.Close()
+	executor.found = true
+	service = serviceForStore(t, second, testResource(now, unified.ApprovalNone), executor)
+	recovered, err := service.RecoverExecutingActions(context.Background(), "default", "system:restart-recovery", 100)
+	if err != nil || len(recovered) != 1 || recovered[0].State != unified.ActionStateCompleted {
+		t.Fatalf("recovered=%#v err=%v", recovered, err)
+	}
+	if executor.executeCalls != 1 || executor.reconcileCalls != 1 {
+		t.Fatalf("execute=%d reconcile=%d", executor.executeCalls, executor.reconcileCalls)
+	}
+	current, err := service.Execute(context.Background(), "default", plan.ActionID, "operator", "duplicate after recovery")
+	if err != nil || current.State != unified.ActionStateCompleted || executor.executeCalls != 1 {
+		t.Fatalf("current=%#v err=%v execute=%d", current, err, executor.executeCalls)
+	}
+}
+
+func TestActionDetailAndInboxMaterializeExplicitExpiry(t *testing.T) {
+	now := time.Date(2026, 7, 11, 14, 0, 0, 0, time.UTC)
+	store := unified.NewMemoryStore()
+	service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), &stubExecutor{})
+	service.Now = func() time.Time { return now }
+	plan, err := service.Plan(context.Background(), "default", restartRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.Now = func() time.Time { return plan.ExpiresAt.Add(time.Second) }
+	detail, found, err := service.Detail("default", plan.ActionID)
+	if err != nil || !found || detail.Audit.State != unified.ActionStateExpired {
+		t.Fatalf("detail=%#v found=%v err=%v", detail, found, err)
+	}
+	if len(detail.Events) == 0 || detail.Events[0].State != unified.ActionStateExpired {
+		t.Fatalf("events=%#v", detail.Events)
+	}
+	pending, err := service.List("default", ActionListPending, 100)
+	if err != nil || len(pending) != 0 {
+		t.Fatalf("pending=%#v err=%v", pending, err)
+	}
+	settled, err := service.List("default", ActionListSettled, 100)
+	if err != nil || len(settled) != 1 || settled[0].State != unified.ActionStateExpired {
+		t.Fatalf("settled=%#v err=%v", settled, err)
+	}
+	if _, err := service.Decide(context.Background(), "default", plan.ActionID, unified.ActionApprovalRecord{Actor: "operator", Outcome: unified.OutcomeApproved}); !errors.Is(err, unified.ErrActionPlanExpired) {
+		t.Fatalf("Decide error=%v", err)
 	}
 }
 
@@ -562,6 +722,29 @@ type stubExecutor struct {
 	calls     int
 	received  unified.ActionAuditRecord
 	readiness *unified.ResourceActionReadiness
+}
+
+type reconcilingExecutor struct {
+	executeCalls   int
+	reconcileCalls int
+	executeErr     error
+	found          bool
+	result         *unified.ExecutionResult
+}
+
+func (e *reconcilingExecutor) ExecuteAction(_ context.Context, _ unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
+	e.executeCalls++
+	return nil, e.executeErr
+}
+
+func (e *reconcilingExecutor) ReconcileActionDispatch(_ context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (*unified.ExecutionResult, unified.ActionDispatchReceipt, bool, error) {
+	e.reconcileCalls++
+	if !e.found {
+		return nil, unified.ActionDispatchReceipt{}, false, nil
+	}
+	return e.result, unified.ActionDispatchReceipt{
+		AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: time.Now().UTC(),
+	}, true, nil
 }
 
 func (s *stubExecutor) ExecuteAction(_ context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {

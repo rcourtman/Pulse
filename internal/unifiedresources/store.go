@@ -46,12 +46,25 @@ type ResourceStore interface {
 	GetActionAudit(actionID string) (ActionAuditRecord, bool, error)
 	GetActionAudits(canonicalID string, since time.Time, limit int) ([]ActionAuditRecord, error)
 	RecordActionDecision(record ActionAuditRecord, event ActionLifecycleEvent) error
+	RecordActionExpiry(record ActionAuditRecord, event ActionLifecycleEvent) error
 	RecordActionExecutionStart(record ActionAuditRecord, event ActionLifecycleEvent) error
 	RecordActionPolicyExecutionStart(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent) error
+	RecordActionExecutionAdmission(record ActionAuditRecord, event ActionLifecycleEvent, attempt ActionDispatchAttempt) error
+	RecordActionPolicyExecutionAdmission(record ActionAuditRecord, approvalEvent, executionEvent ActionLifecycleEvent, attempt ActionDispatchAttempt) error
 	RecordActionExecutionResult(record ActionAuditRecord, event ActionLifecycleEvent) error
 	RecordActionExecutionRefusal(record ActionAuditRecord, event ActionLifecycleEvent) error
 	RecordActionLifecycleEvent(event ActionLifecycleEvent) error
 	GetActionLifecycleEvents(actionID string, since time.Time, limit int) ([]ActionLifecycleEvent, error)
+	GetActionDispatchAttempt(actionID string) (ActionDispatchAttempt, bool, error)
+	GetActionDispatchReceipt(attemptID string) (ActionDispatchReceipt, bool, error)
+	ClaimActionDispatch(actionID, owner string, now time.Time, lease time.Duration) (ActionDispatchAttempt, bool, error)
+	MarkActionDispatchStarted(attemptID, owner string, now time.Time) (ActionDispatchAttempt, error)
+	RecordActionDispatchReceipt(receipt ActionDispatchReceipt) (ActionDispatchAttempt, error)
+	RecordActionDispatchCompletion(receipt ActionDispatchReceipt, record ActionAuditRecord, event ActionLifecycleEvent) error
+	RecoverActionDispatch(actionID string, now time.Time) (ActionDispatchAttempt, bool, error)
+	ExpireActionAudits(now time.Time, limit int) ([]ActionAuditRecord, error)
+	GetActionAuditsByStates(states []ActionState, limit int) ([]ActionAuditRecord, error)
+	GetPendingActionAudits(limit int) ([]ActionAuditRecord, error)
 	RecordExportAudit(record ExportAuditRecord) error
 	GetExportAudits(since time.Time, limit int) ([]ExportAuditRecord, error)
 	// Operator-set per-resource state. See ResourceOperatorState.
@@ -461,6 +474,30 @@ func (s *SQLiteResourceStore) initSchema() error {
 		message TEXT
 	);
 	CREATE INDEX IF NOT EXISTS idx_action_lifecycle_events_action ON action_lifecycle_events(action_id, timestamp DESC);
+	CREATE TABLE IF NOT EXISTS action_dispatch_attempts (
+		attempt_id TEXT PRIMARY KEY,
+		action_id TEXT NOT NULL UNIQUE,
+		state TEXT NOT NULL,
+		created_at DATETIME NOT NULL,
+		updated_at DATETIME NOT NULL,
+		lease_owner TEXT,
+		lease_expires_at DATETIME,
+		dispatch_count INTEGER NOT NULL DEFAULT 0
+	);
+	CREATE INDEX IF NOT EXISTS idx_action_dispatch_attempts_state_updated ON action_dispatch_attempts(state, updated_at);
+	CREATE TABLE IF NOT EXISTS action_dispatch_outbox (
+		attempt_id TEXT PRIMARY KEY,
+		action_id TEXT NOT NULL UNIQUE,
+		available_at DATETIME NOT NULL,
+		FOREIGN KEY(attempt_id) REFERENCES action_dispatch_attempts(attempt_id)
+	);
+	CREATE TABLE IF NOT EXISTS action_dispatch_receipts (
+		attempt_id TEXT PRIMARY KEY,
+		action_id TEXT NOT NULL UNIQUE,
+		transport_request_id TEXT NOT NULL,
+		received_at DATETIME NOT NULL,
+		FOREIGN KEY(attempt_id) REFERENCES action_dispatch_attempts(attempt_id)
+	);
 
 	CREATE TABLE IF NOT EXISTS export_audits (
 		id TEXT PRIMARY KEY,
@@ -2120,6 +2157,8 @@ func actionTransitionConflict(current ActionAuditRecord, desired ActionAuditReco
 	switch current.State {
 	case ActionStateRejected, ActionStateCompleted, ActionStateFailed:
 		return ErrActionExecutionFinal
+	case ActionStateExpired:
+		return ErrActionPlanExpired
 	case ActionStateExecuting:
 		if desired.State == ActionStateExecuting {
 			return ErrActionAlreadyExecuting
@@ -2778,23 +2817,27 @@ func (s *SQLiteResourceStore) ClearResourceOperatorStateWithMaintenanceLifecycle
 
 // MemoryStore is an in-memory implementation for tests.
 type MemoryStore struct {
-	mu                    sync.RWMutex
-	links                 []ResourceLink
-	exclusions            []ResourceExclusion
-	changes               []ResourceChange
-	actionAudits          []ActionAuditRecord
-	actionLifecycleEvents []ActionLifecycleEvent
-	exportAudits          []ExportAuditRecord
-	resourceOperatorState map[string]ResourceOperatorState
-	loopReports           map[string]LoopReport
-	identityPins          map[string]ResourceIdentityPin
+	mu                     sync.RWMutex
+	links                  []ResourceLink
+	exclusions             []ResourceExclusion
+	changes                []ResourceChange
+	actionAudits           []ActionAuditRecord
+	actionLifecycleEvents  []ActionLifecycleEvent
+	actionDispatchAttempts map[string]ActionDispatchAttempt
+	actionDispatchReceipts map[string]ActionDispatchReceipt
+	exportAudits           []ExportAuditRecord
+	resourceOperatorState  map[string]ResourceOperatorState
+	loopReports            map[string]LoopReport
+	identityPins           map[string]ResourceIdentityPin
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		resourceOperatorState: make(map[string]ResourceOperatorState),
-		loopReports:           make(map[string]LoopReport),
-		identityPins:          make(map[string]ResourceIdentityPin),
+		resourceOperatorState:  make(map[string]ResourceOperatorState),
+		loopReports:            make(map[string]LoopReport),
+		identityPins:           make(map[string]ResourceIdentityPin),
+		actionDispatchAttempts: make(map[string]ActionDispatchAttempt),
+		actionDispatchReceipts: make(map[string]ActionDispatchReceipt),
 	}
 }
 
