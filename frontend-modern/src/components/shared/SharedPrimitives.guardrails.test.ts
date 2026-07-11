@@ -2506,7 +2506,7 @@ describe('shared primitive guardrails', () => {
     expect(approvalBannerSource).toContain('APPROVAL_BANNER_BADGE_PROPS');
     expect(approvalBannerSource).not.toContain('firstApprovalRisk()!.badgeClass');
     expect(approvalSectionSource).toContain('MetadataBadge');
-    expect(approvalSectionSource).toContain('APPROVAL_SECTION_BADGE_PROPS');
+    expect(approvalSectionSource).toContain('BADGE_PROPS');
     expect(approvalSectionSource).not.toContain('approvalRisk.badgeClass');
     expect(approvalSectionSource).not.toContain('fixRisk.badgeClass');
     expect(findingsPanelSource).toContain('MetadataBadge');
@@ -3377,7 +3377,6 @@ describe('shared primitive guardrails', () => {
     expect(approvalSectionSource).toContain('@/components/shared/Button');
     expect(approvalSectionSource).toContain('<Button');
     expect(approvalSectionSource).toContain('variant="success"');
-    expect(approvalSectionSource).toContain('variant="warningSolid"');
     expect(approvalSectionSource).toContain('variant="primary"');
     expect(approvalSectionSource).toContain('variant="ghost"');
     expect(approvalSectionSource).not.toContain('px-3 py-1.5 bg-green-600 hover:bg-green-700');

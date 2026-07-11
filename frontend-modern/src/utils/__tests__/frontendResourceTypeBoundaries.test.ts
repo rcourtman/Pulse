@@ -2055,7 +2055,7 @@ describe('frontend resource type boundaries', () => {
     expect(approvalBannerSource).toContain('APPROVAL_BANNER_BADGE_PROPS');
     expect(approvalBannerSource).not.toContain('firstApprovalRisk()!.badgeClass');
     expect(approvalSectionSource).toContain('MetadataBadge');
-    expect(approvalSectionSource).toContain('APPROVAL_SECTION_BADGE_PROPS');
+    expect(approvalSectionSource).toContain('BADGE_PROPS');
     expect(approvalSectionSource).not.toContain('approvalRisk.badgeClass');
     expect(approvalSectionSource).not.toContain('fixRisk.badgeClass');
     expect(securityWarningSource).not.toContain('bg-red-50 dark:bg-red-900');

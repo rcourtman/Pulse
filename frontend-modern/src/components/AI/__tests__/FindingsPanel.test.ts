@@ -1363,7 +1363,7 @@ describe('aiFindingPresentation', () => {
         ),
       ).toMatchObject({
         stage: 'approval',
-        label: 'Review fix',
+        label: 'Recover action',
         tone: 'warning',
       });
     });
