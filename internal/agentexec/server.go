@@ -54,20 +54,22 @@ const (
 )
 
 var safeTargetIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+var hostUpdateInventoryHashPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 
 // Server manages WebSocket connections from agents
 type Server struct {
-	mu            sync.RWMutex
-	agents        map[string]*agentConn                 // agentID -> connection
-	pendingReqs   map[string]chan CommandResultPayload  // scoped request key -> response channel
-	deploySubs    map[string]chan DeployProgressPayload // deploySubKey(agentID, jobID) -> progress subscriber
-	validateToken func(token string, agentID string, hostname string) bool
-	commandPolicy *CommandPolicy
-	ipConnCounts  map[string]int
-	maxConnsPerIP int
-	shutdown      chan struct{}
-	shutdownOnce  sync.Once
-	pingInterval  time.Duration
+	mu                 sync.RWMutex
+	agents             map[string]*agentConn                   // agentID -> connection
+	pendingReqs        map[string]chan CommandResultPayload    // scoped request key -> response channel
+	pendingHostUpdates map[string]chan HostUpdateResultPayload // scoped request key -> typed host-update response
+	deploySubs         map[string]chan DeployProgressPayload   // deploySubKey(agentID, jobID) -> progress subscriber
+	validateToken      func(token string, agentID string, hostname string) bool
+	commandPolicy      *CommandPolicy
+	ipConnCounts       map[string]int
+	maxConnsPerIP      int
+	shutdown           chan struct{}
+	shutdownOnce       sync.Once
+	pingInterval       time.Duration
 }
 
 type agentConn struct {
@@ -106,15 +108,16 @@ func NewServer(validateToken func(token string, agentID string, hostname string)
 	}
 
 	return &Server{
-		agents:        make(map[string]*agentConn),
-		pendingReqs:   make(map[string]chan CommandResultPayload),
-		deploySubs:    make(map[string]chan DeployProgressPayload),
-		validateToken: validateToken,
-		commandPolicy: DefaultPolicy(),
-		ipConnCounts:  make(map[string]int),
-		maxConnsPerIP: defaultMaxWebSocketConnectionsPerIP,
-		shutdown:      make(chan struct{}),
-		pingInterval:  defaultPingInterval,
+		agents:             make(map[string]*agentConn),
+		pendingReqs:        make(map[string]chan CommandResultPayload),
+		pendingHostUpdates: make(map[string]chan HostUpdateResultPayload),
+		deploySubs:         make(map[string]chan DeployProgressPayload),
+		validateToken:      validateToken,
+		commandPolicy:      DefaultPolicy(),
+		ipConnCounts:       make(map[string]int),
+		maxConnsPerIP:      defaultMaxWebSocketConnectionsPerIP,
+		shutdown:           make(chan struct{}),
+		pingInterval:       defaultPingInterval,
 	}
 }
 
@@ -248,6 +251,76 @@ func validateReadFilePayload(req *ReadFilePayload) error {
 		return fmt.Errorf("max bytes cannot exceed %d", maxReadFileMaxBytes)
 	}
 
+	return nil
+}
+
+func validateHostUpdatePayload(req *HostUpdatePayload) error {
+	if req == nil {
+		return fmt.Errorf("host update payload is required")
+	}
+	req.RequestID = strings.TrimSpace(req.RequestID)
+	req.ActionID = strings.TrimSpace(req.ActionID)
+	req.Operation = strings.TrimSpace(req.Operation)
+	req.ExpectedInventoryHash = strings.TrimSpace(req.ExpectedInventoryHash)
+	if req.RequestID == "" {
+		return fmt.Errorf("request id is required")
+	}
+	if len(req.RequestID) > maxRequestIDLength {
+		return fmt.Errorf("request id exceeds %d characters", maxRequestIDLength)
+	}
+	if req.ActionID == "" {
+		return fmt.Errorf("action id is required")
+	}
+	if len(req.ActionID) > maxRequestIDLength {
+		return fmt.Errorf("action id exceeds %d characters", maxRequestIDLength)
+	}
+	if req.Operation != HostUpdateOperationInstall {
+		return fmt.Errorf("unsupported host update operation %q", req.Operation)
+	}
+	if !hostUpdateInventoryHashPattern.MatchString(req.ExpectedInventoryHash) {
+		return fmt.Errorf("expected inventory hash is required and must be sha256")
+	}
+	if req.Timeout < 0 || req.Timeout > 1800 {
+		return fmt.Errorf("host update timeout must be between 0 and 1800 seconds")
+	}
+	if req.Timeout == 0 {
+		req.Timeout = 900
+	}
+	return nil
+}
+
+func validateHostUpdateResultPayload(result *HostUpdateResultPayload) error {
+	if result == nil {
+		return fmt.Errorf("host update result is required")
+	}
+	result.RequestID = strings.TrimSpace(result.RequestID)
+	result.Verification = strings.TrimSpace(result.Verification)
+	if result.RequestID == "" || len(result.RequestID) > maxRequestIDLength {
+		return fmt.Errorf("invalid request id")
+	}
+	if result.Before.PendingCount < 0 || result.After.PendingCount < 0 {
+		return fmt.Errorf("pending package counts cannot be negative")
+	}
+	if len(result.Before.Packages) > 200 || len(result.After.Packages) > 200 {
+		return fmt.Errorf("package evidence exceeds bounded limit")
+	}
+	for _, hash := range []string{result.Before.InventoryHash, result.After.InventoryHash} {
+		if hash != "" && !hostUpdateInventoryHashPattern.MatchString(hash) {
+			return fmt.Errorf("invalid package inventory hash")
+		}
+	}
+	switch result.Verification {
+	case HostUpdateVerificationVerified:
+		if !result.Success || !result.After.Supported || result.After.Manager != "apt" || result.After.Error != "" || result.After.PendingCount != 0 || result.After.InventoryHash == "" {
+			return fmt.Errorf("verified host update lacks a valid zero-pending postcondition")
+		}
+	case HostUpdateVerificationFailed, HostUpdateVerificationInconclusive:
+	default:
+		return fmt.Errorf("unsupported host update verification %q", result.Verification)
+	}
+	if len(result.Error) > 1024 {
+		return fmt.Errorf("host update error exceeds bounded limit")
+	}
 	return nil
 }
 
@@ -654,6 +727,36 @@ func (s *Server) readLoop(ac *agentConn) {
 					Msg("No pending request for result")
 			}
 
+		case MsgTypeHostUpdateResult:
+			var result HostUpdateResultPayload
+			if err := msg.DecodePayload(&result); err != nil {
+				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to parse host update result")
+				continue
+			}
+			requestID := strings.TrimSpace(result.RequestID)
+			if requestID == "" || len(requestID) > maxRequestIDLength {
+				log.Warn().Str("agent_id", ac.agent.AgentID).Msg("Dropping host update result with invalid request id")
+				continue
+			}
+			if err := validateHostUpdateResultPayload(&result); err != nil {
+				log.Warn().Err(err).Str("agent_id", ac.agent.AgentID).Str("request_id", requestID).Msg("Replacing invalid host update result with a safe failure")
+				result = HostUpdateResultPayload{
+					RequestID:    requestID,
+					Verification: HostUpdateVerificationInconclusive,
+					Error:        "agent returned invalid host update evidence",
+				}
+			}
+			s.mu.RLock()
+			ch, ok := s.pendingHostUpdates[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
+			s.mu.RUnlock()
+			if ok {
+				select {
+				case ch <- result:
+				default:
+					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Host update result channel full, dropping")
+				}
+			}
+
 		case MsgTypeDeployProgress:
 			var progress DeployProgressPayload
 			if err := msg.DecodePayload(&progress); err != nil {
@@ -945,6 +1048,71 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 			Err(ctx.Err()).
 			Dur("duration", time.Since(startedAt)).
 			Msg("Agent command canceled")
+		return nil, ctx.Err()
+	case <-s.shutdown:
+		return nil, errServerShuttingDown
+	}
+}
+
+// ExecuteHostUpdate dispatches the closed typed host-package operation. Unlike
+// ExecuteCommand, no command text crosses this boundary; the agent owns the
+// package-manager catalog, preflight, mutation, and read-after-write proof.
+func (s *Server) ExecuteHostUpdate(ctx context.Context, agentID string, req HostUpdatePayload) (*HostUpdateResultPayload, error) {
+	if s == nil {
+		return nil, fmt.Errorf("agent execution server is unavailable")
+	}
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, fmt.Errorf("agent id is required")
+	}
+	if strings.TrimSpace(req.RequestID) == "" {
+		req.RequestID = uuid.New().String()
+	}
+	if err := validateHostUpdatePayload(&req); err != nil {
+		return nil, err
+	}
+
+	s.mu.RLock()
+	ac, ok := s.agents[agentID]
+	s.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("agent %s not connected", agentID)
+	}
+
+	respCh := make(chan HostUpdateResultPayload, 1)
+	reqKey := pendingRequestKey(agentID, req.RequestID)
+	s.mu.Lock()
+	if _, exists := s.pendingHostUpdates[reqKey]; exists {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("host update request %q is already pending", req.RequestID)
+	}
+	s.pendingHostUpdates[reqKey] = respCh
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.pendingHostUpdates, reqKey)
+		s.mu.Unlock()
+	}()
+
+	msg, err := NewMessage(MsgTypeHostUpdate, req.RequestID, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode host update request: %w", err)
+	}
+	ac.writeMu.Lock()
+	err = s.sendMessage(ac.conn, msg)
+	ac.writeMu.Unlock()
+	if err != nil {
+		return nil, fmt.Errorf("failed to send host update request: %w", err)
+	}
+
+	timer := time.NewTimer(time.Duration(req.Timeout) * time.Second)
+	defer timer.Stop()
+	select {
+	case result := <-respCh:
+		return &result, nil
+	case <-timer.C:
+		return nil, fmt.Errorf("host update timed out after %s", time.Duration(req.Timeout)*time.Second)
+	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-s.shutdown:
 		return nil, errServerShuttingDown

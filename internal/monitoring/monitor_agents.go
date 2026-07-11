@@ -1996,6 +1996,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		AppliedConfig:   convertAgentConfigFingerprint(report.Agent.AppliedConfig),
 		AgentUpdate:     agentUpdate,
 		AgentModules:    convertAgentModuleStatuses(report.Agent.Modules),
+		PackageUpdates:  convertHostPackageUpdateStatus(report.Host.PackageUpdates, observedAt),
 		IsLegacy:        isLegacyAgent(report.Agent.Type),
 	}
 
@@ -2208,6 +2209,30 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	m.persistHostContinuity(host, report)
 
 	return host, nil
+}
+
+func convertHostPackageUpdateStatus(status *agentshost.PackageUpdateStatus, observedAt time.Time) *models.HostPackageUpdateStatus {
+	if status == nil {
+		return nil
+	}
+	packages := make([]models.HostPackageUpdate, len(status.Packages))
+	for i, pkg := range status.Packages {
+		packages[i] = models.HostPackageUpdate{
+			Name:             strings.TrimSpace(pkg.Name),
+			InstalledVersion: strings.TrimSpace(pkg.InstalledVersion),
+			AvailableVersion: strings.TrimSpace(pkg.AvailableVersion),
+		}
+	}
+	return &models.HostPackageUpdateStatus{
+		Supported:      status.Supported,
+		Manager:        strings.TrimSpace(status.Manager),
+		InventoryHash:  strings.TrimSpace(status.InventoryHash),
+		PendingCount:   max(0, status.PendingCount),
+		Packages:       packages,
+		CheckedAt:      observedAt.UTC(),
+		RebootRequired: status.RebootRequired,
+		Error:          strings.TrimSpace(status.Error),
+	}
 }
 
 func convertAgentConfigFingerprint(value *agentshost.ConfigFingerprint) *models.AgentConfigFingerprint {

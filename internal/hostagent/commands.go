@@ -104,6 +104,7 @@ type CommandClient struct {
 	serverFingerprint  string
 	deploySSHUser      string
 	commandPolicy      *agentexec.CommandPolicy
+	packageUpdates     *packageUpdateManager
 	sshKnownHosts      sshknownhosts.Manager
 	sshKnownHostsOnce  sync.Once
 	sshKnownHostsErr   error
@@ -135,6 +136,7 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 		serverFingerprint:  cfg.ServerFingerprint,
 		deploySSHUser:      cfg.DeploySSHUser,
 		commandPolicy:      agentexec.DefaultPolicy(),
+		packageUpdates:     cfg.packageUpdates,
 		logger:             logger,
 		done:               make(chan struct{}),
 	}
@@ -155,17 +157,19 @@ func (c *CommandClient) stopChan() <-chan struct{} {
 type messageType string
 
 const (
-	msgTypeAgentRegister   messageType = "agent_register"
-	msgTypeAgentPing       messageType = "agent_ping"
-	msgTypeCommandResult   messageType = "command_result"
-	msgTypeRegistered      messageType = "registered"
-	msgTypePong            messageType = "pong"
-	msgTypeExecuteCmd      messageType = "execute_command"
-	msgTypeReadFile        messageType = "read_file"
-	msgTypeDeployPreflight messageType = "deploy_preflight"
-	msgTypeDeployInstall   messageType = "deploy_install"
-	msgTypeDeployCancel    messageType = "deploy_cancel"
-	msgTypeDeployProgress  messageType = "deploy_progress"
+	msgTypeAgentRegister    messageType = "agent_register"
+	msgTypeAgentPing        messageType = "agent_ping"
+	msgTypeCommandResult    messageType = "command_result"
+	msgTypeRegistered       messageType = "registered"
+	msgTypePong             messageType = "pong"
+	msgTypeExecuteCmd       messageType = "execute_command"
+	msgTypeReadFile         messageType = "read_file"
+	msgTypeHostUpdate       messageType = "host_update"
+	msgTypeHostUpdateResult messageType = "host_update_result"
+	msgTypeDeployPreflight  messageType = "deploy_preflight"
+	msgTypeDeployInstall    messageType = "deploy_install"
+	msgTypeDeployCancel     messageType = "deploy_cancel"
+	msgTypeDeployProgress   messageType = "deploy_progress"
 )
 
 type wsMessage struct {
@@ -520,6 +524,14 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 			}
 			go c.handleExecuteCommand(ctx, conn, payload)
 
+		case msgTypeHostUpdate:
+			var payload agentexec.HostUpdatePayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				c.logger.Error().Err(err).Msg("Failed to parse host_update payload")
+				continue
+			}
+			go c.handleHostUpdate(ctx, conn, payload)
+
 		case msgTypeDeployPreflight:
 			var payload deployPreflightPayload
 			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
@@ -547,6 +559,43 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 		default:
 			c.logger.Debug().Str("type", string(msg.Type)).Msg("Unknown message type")
 		}
+	}
+}
+
+func (c *CommandClient) handleHostUpdate(ctx context.Context, conn *websocket.Conn, payload agentexec.HostUpdatePayload) {
+	timeout := time.Duration(payload.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = 15 * time.Minute
+	}
+	updateCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	result := agentexec.HostUpdateResultPayload{
+		RequestID:    strings.TrimSpace(payload.RequestID),
+		Verification: agentexec.HostUpdateVerificationInconclusive,
+	}
+	if c.packageUpdates == nil {
+		result.Error = "host package update service is unavailable"
+	} else {
+		result = c.packageUpdates.Apply(updateCtx, payload)
+	}
+
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to marshal host update result")
+		return
+	}
+	msg := wsMessage{
+		Type:      msgTypeHostUpdateResult,
+		ID:        payload.RequestID,
+		Timestamp: time.Now(),
+		Payload:   encoded,
+	}
+	c.connMu.Lock()
+	err = conn.WriteJSON(msg)
+	c.connMu.Unlock()
+	if err != nil {
+		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to send host update result")
 	}
 }
 

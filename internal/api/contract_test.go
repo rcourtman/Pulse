@@ -19881,9 +19881,55 @@ func TestContract_ProxmoxLifecycleActionsResolveNodeCommandAgentAndVerifyState(t
 		"newRoutedActionExecutor(",
 		"newDockerContainerActionExecutor(r.resourceHandlers, r.agentExecServer)",
 		"newProxmoxGuestActionExecutor(r.resourceHandlers, r.agentExecServer)",
+		"newHostUpdateActionExecutor(r.resourceHandlers, r.agentExecServer)",
 	} {
 		if !strings.Contains(routerSrc, snippet) {
 			t.Fatalf("router must register Docker and Proxmox action executors through routed action executor; missing %q", snippet)
+		}
+	}
+}
+
+func TestContract_HostUpdatesUseTypedFingerprintBoundAgentOperation(t *testing.T) {
+	executorSource, err := os.ReadFile("host_update_action_executor.go")
+	if err != nil {
+		t.Fatalf("read host_update_action_executor.go: %v", err)
+	}
+	agentTypesSource, err := os.ReadFile("../agentexec/types.go")
+	if err != nil {
+		t.Fatalf("read agentexec types: %v", err)
+	}
+	agentRuntimeSource, err := os.ReadFile("../hostagent/package_updates.go")
+	if err != nil {
+		t.Fatalf("read package update runtime: %v", err)
+	}
+
+	executorSrc := string(executorSource)
+	typesSrc := string(agentTypesSource)
+	runtimeSrc := string(agentRuntimeSource)
+	for _, snippet := range []string{
+		"ExecuteHostUpdate(ctx context.Context, agentID string, req agentexec.HostUpdatePayload)",
+		"ExpectedInventoryHash: resource.Agent.PackageUpdates.InventoryHash",
+		"agentexec.HostUpdateOperationInstall",
+	} {
+		if !strings.Contains(executorSrc, snippet) {
+			t.Fatalf("host update executor missing typed operation invariant %q", snippet)
+		}
+	}
+	for _, snippet := range []string{
+		"ExpectedInventoryHash string `json:\"expected_inventory_hash\"`",
+		"const HostUpdateOperationInstall = \"install_os_updates\"",
+	} {
+		if !strings.Contains(typesSrc, snippet) {
+			t.Fatalf("host update wire contract missing %q", snippet)
+		}
+	}
+	for _, snippet := range []string{
+		"if before.InventoryHash != strings.TrimSpace(req.ExpectedInventoryHash)",
+		"\"--no-remove\"",
+		"\"Dpkg::Options::=--force-confold\"",
+	} {
+		if !strings.Contains(runtimeSrc, snippet) {
+			t.Fatalf("host update runtime missing fail-closed command-catalog invariant %q", snippet)
 		}
 	}
 }

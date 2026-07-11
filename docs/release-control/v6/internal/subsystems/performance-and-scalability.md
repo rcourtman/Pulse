@@ -352,6 +352,12 @@ regression protection.
    while per-action resource refresh, policy validation, agent command dispatch,
    polling verification, and audit completion must occur inside the route-local
    execute handler path.
+   Agent-managed host package updates follow the same bounded setup rule. Router
+   construction may register the typed host-update executor once, but package
+   refresh, fingerprint comparison, APT execution, and post-install verification
+   must remain inside the selected action and agent command paths. Generic
+   request admission must not probe agents, refresh package indexes, enumerate
+   pending packages, or wait for update completion.
    The Patrol action-broker and proposal-catalog factories are wired the same
    bounded way: `internal/api/router.go` installs the per-org factory closures
    on the AI settings handler once at startup, and each broker or catalog is

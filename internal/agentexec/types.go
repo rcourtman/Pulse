@@ -11,15 +11,17 @@ type MessageType string
 
 const (
 	// Agent -> Server messages
-	MsgTypeAgentRegister MessageType = "agent_register"
-	MsgTypeAgentPing     MessageType = "agent_ping"
-	MsgTypeCommandResult MessageType = "command_result"
+	MsgTypeAgentRegister    MessageType = "agent_register"
+	MsgTypeAgentPing        MessageType = "agent_ping"
+	MsgTypeCommandResult    MessageType = "command_result"
+	MsgTypeHostUpdateResult MessageType = "host_update_result"
 
 	// Server -> Agent messages
 	MsgTypeRegistered      MessageType = "registered"
 	MsgTypePong            MessageType = "pong"
 	MsgTypeExecuteCmd      MessageType = "execute_command"
 	MsgTypeReadFile        MessageType = "read_file"
+	MsgTypeHostUpdate      MessageType = "host_update"
 	MsgTypeDeployPreflight MessageType = "deploy_preflight"
 	MsgTypeDeployInstall   MessageType = "deploy_install"
 	MsgTypeDeployCancelJob MessageType = "deploy_cancel"
@@ -124,6 +126,56 @@ type CommandResultPayload struct {
 	ExitCode  int    `json:"exit_code"`
 	Error     string `json:"error,omitempty"`
 	Duration  int64  `json:"duration_ms"`
+}
+
+const HostUpdateOperationInstall = "install_os_updates"
+
+// HostUpdatePayload is the closed, typed host-package operation sent to a
+// Unified Agent. It intentionally has no command or package-name fields: the
+// agent owns the package-manager command catalog and always updates the whole
+// bounded set returned by its own preflight simulation.
+type HostUpdatePayload struct {
+	RequestID             string `json:"request_id"`
+	ActionID              string `json:"action_id"`
+	Operation             string `json:"operation"`
+	ExpectedInventoryHash string `json:"expected_inventory_hash"`
+	Timeout               int    `json:"timeout,omitempty"`
+}
+
+type HostPackageUpdate struct {
+	Name             string `json:"name"`
+	InstalledVersion string `json:"installed_version,omitempty"`
+	AvailableVersion string `json:"available_version,omitempty"`
+}
+
+type HostPackageUpdateSnapshot struct {
+	Supported      bool                `json:"supported"`
+	Manager        string              `json:"manager,omitempty"`
+	InventoryHash  string              `json:"inventory_hash,omitempty"`
+	PendingCount   int                 `json:"pending_count"`
+	Packages       []HostPackageUpdate `json:"packages,omitempty"`
+	CheckedAt      time.Time           `json:"checked_at,omitempty"`
+	RebootRequired bool                `json:"reboot_required,omitempty"`
+	Error          string              `json:"error,omitempty"`
+}
+
+const (
+	HostUpdateVerificationVerified     = "verified"
+	HostUpdateVerificationFailed       = "failed"
+	HostUpdateVerificationInconclusive = "inconclusive"
+)
+
+// HostUpdateResultPayload carries execution and read-after-write evidence
+// independently. Success means the package-manager mutation completed;
+// Verification states whether the postcondition was actually observed.
+type HostUpdateResultPayload struct {
+	RequestID    string                    `json:"request_id"`
+	Success      bool                      `json:"success"`
+	Before       HostPackageUpdateSnapshot `json:"before"`
+	After        HostPackageUpdateSnapshot `json:"after"`
+	Verification string                    `json:"verification"`
+	Error        string                    `json:"error,omitempty"`
+	Duration     int64                     `json:"duration_ms"`
 }
 
 // ConnectedAgent represents an agent connected via WebSocket

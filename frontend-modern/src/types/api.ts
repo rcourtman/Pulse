@@ -462,6 +462,7 @@ export interface Agent {
   appliedConfig?: AgentConfigFingerprint;
   agentUpdate?: AgentUpdateStatus;
   agentModules?: AgentModuleStatus[];
+  packageUpdates?: HostPackageUpdateStatus;
   tokenId?: string;
   tokenName?: string;
   tokenHint?: string;
@@ -474,6 +475,23 @@ export interface Agent {
   linkedNodeId?: string; // ID of PVE node this agent is running on
   linkedVmId?: string; // ID of VM this agent is running inside
   linkedContainerId?: string; // ID of container this agent is running inside
+}
+
+export interface HostPackageUpdateStatus {
+  supported: boolean;
+  manager?: string;
+  inventoryHash?: string;
+  pendingCount: number;
+  packages?: HostPackageUpdate[];
+  checkedAt?: string;
+  rebootRequired?: boolean;
+  error?: string;
+}
+
+export interface HostPackageUpdate {
+  name: string;
+  installedVersion?: string;
+  availableVersion?: string;
 }
 
 export interface AgentConfigFingerprint {

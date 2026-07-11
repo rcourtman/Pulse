@@ -40,6 +40,13 @@ func TestBuildResourceContextSectionsAppliesRedactionTrustAndFreshness(t *testin
 		HasDocker:       true,
 		DockerCheckedAt: &dockerCheckedAt,
 	}
+	resource.Agent = &unified.AgentData{
+		Hostname: "prod-node", Platform: "linux", OSName: "Debian", OSVersion: "12", CommandsEnabled: true,
+		PackageUpdates: &unified.AgentPackageUpdateMeta{
+			Supported: true, Manager: "apt", PendingCount: 4, CheckedAt: observedAt, RebootRequired: true,
+			Packages: []unified.AgentPackageUpdate{{Name: "private-customer-package", InstalledVersion: "1", AvailableVersion: "2"}},
+		},
+	}
 	resource.Docker = &unified.DockerData{
 		Image:          "registry.internal/finance-db:latest",
 		ContainerState: "running",
@@ -100,6 +107,22 @@ func TestBuildResourceContextSectionsAppliesRedactionTrustAndFreshness(t *testin
 	}
 
 	runtime := requireSection(t, sections, "runtime")
+	if got := requireFact(t, runtime, "Pending OS updates").Value; got != "4" {
+		t.Fatalf("pending OS updates = %q, want 4", got)
+	}
+	if got := requireFact(t, runtime, "Package manager").Value; got != "apt" {
+		t.Fatalf("package manager = %q, want apt", got)
+	}
+	if got := requireFact(t, runtime, "Reboot required").Value; got != "true" {
+		t.Fatalf("reboot required = %q, want true", got)
+	}
+	encodedSections, err := json.Marshal(sections)
+	if err != nil {
+		t.Fatalf("marshal sections: %v", err)
+	}
+	if strings.Contains(string(encodedSections), "private-customer-package") {
+		t.Fatalf("resource context exposed package identifiers: %s", encodedSections)
+	}
 	for _, label := range []string{"Discovery agent", "Discovery resource", "Discovery hostname", "Proxmox node", "Proxmox VMID", "Image", "Storage path"} {
 		fact := requireFact(t, runtime, label)
 		if fact.Value != unified.ResourcePolicyRedactedLabel || !fact.Redacted {

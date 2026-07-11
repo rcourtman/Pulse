@@ -724,6 +724,7 @@ type HostFrontend struct {
 	AppliedConfig     *AgentConfigFingerprint    `json:"appliedConfig,omitempty"`
 	AgentUpdate       *AgentUpdateStatus         `json:"agentUpdate,omitempty"`
 	AgentModules      []AgentModuleStatus        `json:"agentModules,omitempty"`
+	PackageUpdates    *HostPackageUpdateStatus   `json:"packageUpdates,omitempty"`
 	IsLegacy          bool                       `json:"isLegacy,omitempty"`     // True if using legacy agent protocol
 	LinkedNodeID      string                     `json:"linkedNodeId,omitempty"` // ID of linked PVE node (if running on a node)
 }

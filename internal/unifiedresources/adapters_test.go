@@ -67,6 +67,59 @@ func TestResourceFromProxmoxNodeUsesDisplayNameWithoutChangingRawNodeIdentity(t 
 	}
 }
 
+func TestResourceFromHostAdvertisesElevatedTypedPackageUpdateCapability(t *testing.T) {
+	now := time.Now().UTC()
+	host := models.Host{
+		ID: "agent-1", Hostname: "host-1", Platform: "linux", Status: "online", LastSeen: now, CommandsEnabled: true,
+		PackageUpdates: &models.HostPackageUpdateStatus{
+			Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("a", 64), PendingCount: 2, CheckedAt: now, RebootRequired: true,
+			Packages: []models.HostPackageUpdate{{Name: "openssl", InstalledVersion: "1.0", AvailableVersion: "1.1"}},
+		},
+	}
+
+	resource, _ := resourceFromHost(host)
+	if resource.Agent == nil || resource.Agent.PackageUpdates == nil || resource.Agent.PackageUpdates.PendingCount != 2 || !resource.Agent.PackageUpdates.RebootRequired {
+		t.Fatalf("package update projection = %#v", resource.Agent)
+	}
+	if len(resource.Capabilities) != 1 {
+		t.Fatalf("capabilities = %#v", resource.Capabilities)
+	}
+	capability := resource.Capabilities[0]
+	if capability.Name != "install_os_updates" || capability.MinimumApprovalLevel != ApprovalAdmin || capability.AutoAuthorization != AutoAuthorizeElevated || capability.InternalHandler != "host.package_updates" {
+		t.Fatalf("capability = %#v", capability)
+	}
+	if len(capability.Params) != 0 {
+		t.Fatalf("package update capability must not accept model-selected packages: %#v", capability.Params)
+	}
+
+	host.PackageUpdates.Packages[0].Name = "mutated"
+	if resource.Agent.PackageUpdates.Packages[0].Name != "openssl" {
+		t.Fatalf("resource package inventory aliases model input: %#v", resource.Agent.PackageUpdates.Packages)
+	}
+}
+
+func TestResourceFromHostDoesNotAdvertiseUnsupportedOrCommandDisabledPackageUpdates(t *testing.T) {
+	base := models.Host{
+		ID: "agent-1", Hostname: "host-1", Platform: "linux", Status: "online", LastSeen: time.Now().UTC(), CommandsEnabled: true,
+		PackageUpdates: &models.HostPackageUpdateStatus{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("a", 64), PendingCount: 1, CheckedAt: time.Now().UTC()},
+	}
+	for _, mutate := range []func(*models.Host){
+		func(host *models.Host) { host.CommandsEnabled = false },
+		func(host *models.Host) { host.PackageUpdates.Supported = false },
+		func(host *models.Host) { host.PackageUpdates.Manager = "dnf" },
+		func(host *models.Host) { host.PackageUpdates = nil },
+	} {
+		host := base
+		status := *base.PackageUpdates
+		host.PackageUpdates = &status
+		mutate(&host)
+		resource, _ := resourceFromHost(host)
+		if len(resource.Capabilities) != 0 {
+			t.Fatalf("host %#v advertised capabilities %#v", host.PackageUpdates, resource.Capabilities)
+		}
+	}
+}
+
 func TestResourceFromDockerContainerAdvertisesLifecycleCapabilities(t *testing.T) {
 	now := time.Now().UTC()
 	host := models.DockerHost{

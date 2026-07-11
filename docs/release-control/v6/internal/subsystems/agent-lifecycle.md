@@ -257,7 +257,8 @@ update, profile rollout, command reachability, or fleet-control authority.
     completed lifecycle registration.
 22. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 23. `internal/kubernetesagent/agent.go` shared with `monitoring`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
-24. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+24. `pkg/agents/host/report.go` shared with `monitoring`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host package-update posture.
+25. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
     The Windows installer must support a non-mutating download preflight that
     can run before Administrator-only install work, must accept token-file
     enrollment input, and must persist plain-HTTP/insecure runtime continuity
@@ -273,7 +274,7 @@ update, profile rollout, command reachability, or fleet-control authority.
     version replacement, logged readiness, forced-process recovery, service
     restart or OS reboot persistence, and complete uninstall cleanup through
     the reusable lifecycle harness under `scripts/installtests/`.
-25. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+26. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
     Legacy update recovery is cross-platform lifecycle continuity. Linux may
     read procfs or a systemd unit, while FreeBSD and pfSense must recover the
     same URL, token, feature, identity, and trust arguments from the live
@@ -407,6 +408,21 @@ mark its vetted container lifecycle dispatch as a trusted agent command after
 the API action has entered execution; lifecycle surfaces still consume only the
 resource payload, action readiness, and action-audit result rather than issuing
 or approving command-agent grants themselves.
+Host OS package updates follow a stricter adjacent boundary. The Unified Agent
+may report a bounded, read-only APT upgrade simulation through
+`pkg/agents/host/report.go`, but installation authority is available only via
+the closed `host_update` WebSocket operation owned by `internal/agentexec` and
+`internal/hostagent/package_updates.go`. That envelope carries an action id and
+the exact `install_os_updates` operation only: it has no command, package-name,
+reboot, removal, or arbitrary-argument field. The agent owns metadata refresh,
+preflight simulation, noninteractive `apt-get upgrade --no-remove` execution,
+and the second simulation used as read-after-write evidence. The request carries
+the agent-authored expected inventory fingerprint; if metadata refresh changes
+that inventory, the agent updates its observed state and refuses installation
+so Pulse must re-plan against the widened or changed set. A reboot-required
+marker is reported as state, never acted upon by this capability. Generic
+agent command execution, Patrol prose, lifecycle UI, and external agents must
+not reconstruct or bypass this typed operation.
 Proxmox VM and LXC lifecycle affordances follow the same adjacent boundary:
 lifecycle and fleet surfaces may consume backend-advertised `start`,
 `shutdown`, `reboot`, and `stop` capabilities and typed `actionReadiness`, but

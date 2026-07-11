@@ -338,6 +338,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "internal/monitoring/monitor_host_agents_test.go",
+                        "internal/monitoring/monitor_package_updates_test.go",
                         "internal/unifiedresources/code_standards_test.go",
                     ],
                 }
@@ -550,6 +551,8 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/hostagent/agent_new_test.go",
                         "internal/hostagent/command_client_test.go",
                         "internal/hostagent/commands_deploy_test.go",
+                        "internal/hostagent/commands_host_update_test.go",
+                        "internal/hostagent/package_updates_test.go",
                         "internal/hostagent/send_report_test.go",
                     ],
                 }

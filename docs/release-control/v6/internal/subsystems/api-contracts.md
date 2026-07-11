@@ -37,6 +37,7 @@ product API routes free of maintainer commercial analytics.
    5a. `internal/api/action_executor.go`
    5b. `internal/api/docker_container_action_executor.go`
    5c. `internal/api/proxmox_guest_action_executor.go`
+   5d. `internal/api/host_update_action_executor.go`
    6a. `internal/actionlifecycle/service.go`
 7. `internal/actionplanner/planner.go`
 8. `pkg/pulsecli/api_client.go`
@@ -1931,6 +1932,19 @@ a new API state machine, queue contract, or verification-accounting field.
    guests, stale Proxmox inventory, incomplete VMID/node metadata, unsupported
    handlers, and disconnected node command agents must fail closed through the
    same readiness and audit model.
+   Agent-managed Linux host package updates are the second complete typed
+   action vertical. `install_os_updates` is admin-floor and elevated-policy
+   eligible, has no model-selectable parameters, and is advertised only for a
+   command-enabled host whose agent reports supported APT posture. Planning
+   and dispatch recheck a fresh error-free inventory, a positive pending count,
+   the registered handler, and live agent connectivity. Execution uses only
+   `ExecuteHostUpdate` with the closed typed envelope; it must not synthesize a
+   shell command in the API. The terminal audit distinguishes package-manager
+   success from verified, failed, or inconclusive post-install simulation and
+   records reboot-required state without rebooting. The API injects the
+   agent-authored inventory fingerprint into the typed request; refresh-time
+   fingerprint drift refuses before installation and requires a new plan, so a
+   stale package index cannot silently widen the approved mutation.
    Resource payloads may expose the same executor-owned unavailable state as
    `actionReadiness[]` entries with stable `name`, `available`, `reasonCode`,
    and `reason` fields so browser and agent clients can explain disabled
@@ -3428,6 +3442,13 @@ Backend API payloads and `frontend-modern/src/types/api.ts` must preserve that
 optional map without making it a required compatibility field, and clients must
 keep it as descriptive host telemetry rather than a temperature metric,
 resource identity, alert metric, or storage/recovery signal.
+Agent resource-context sections expose host package posture only as bounded
+operational facts: package manager, pending count, inventory state, inspection
+freshness, and reboot-required state. Raw package identifiers, versions, and
+agent-authored error text remain outside model context, so a private package
+name or repository detail cannot leak merely because Patrol investigates a
+host. Those facts are observation only; capability authority continues to come
+from the typed resource catalog and action lifecycle.
 
 `aicontracts.Finding` (the shape Patrol hands the investigation
 orchestrator) carries optional `OperatorContext` and

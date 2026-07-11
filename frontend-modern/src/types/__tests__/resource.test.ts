@@ -44,6 +44,27 @@ function createResource(overrides: Partial<Resource> = {}): Resource {
 }
 
 describe('Resource Type Guards', () => {
+  it('keeps host package-update posture scoped to agent metadata', () => {
+    const resource = createResource({
+      type: 'agent',
+      agent: {
+        packageUpdates: {
+          supported: true,
+          manager: 'apt',
+          inventoryHash: `sha256:${'a'.repeat(64)}`,
+          pendingCount: 2,
+          checkedAt: '2026-07-11T00:00:00Z',
+          rebootRequired: false,
+        },
+      },
+    });
+
+    expect(resource.agent?.packageUpdates).toEqual(
+      expect.objectContaining({ manager: 'apt', pendingCount: 2 }),
+    );
+    expect(resource).not.toHaveProperty('packageUpdates');
+  });
+
   it('keeps platform types aligned with the governed platform manifest projection', () => {
     expect(PLATFORM_TYPES).toEqual([...SUPPORTED_PLATFORM_IDS, ...ADMITTED_PLATFORM_IDS]);
     for (const platform of PRESENTATION_ONLY_PLATFORM_IDS) {

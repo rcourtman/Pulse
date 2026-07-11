@@ -965,6 +965,14 @@
       ]
     },
     {
+      "path": "pkg/agents/host/report.go",
+      "rationale": "the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host package-update posture",
+      "subsystems": [
+        "agent-lifecycle",
+        "monitoring"
+      ]
+    },
+    {
       "path": "pkg/aicontracts/action_broker.go",
       "rationale": "the public typed action-proposal broker contract is both an AI runtime proposal boundary (the only sanctioned Patrol route to an infrastructure mutation) and a canonical API dependency contract over the shared action lifecycle service",
       "subsystems": [
@@ -1100,6 +1108,7 @@
         "internal/kubernetesagent/agent.go",
         "internal/remoteconfig/client.go",
         "internal/securityutil/httpurl.go",
+        "pkg/agents/host/report.go",
         "pkg/securityutil/httpurl.go",
         "scripts/install.ps1",
         "scripts/install.sh",
@@ -1205,7 +1214,9 @@
             "match_prefixes": [
               "internal/hostagent/"
             ],
-            "match_files": [],
+            "match_files": [
+              "pkg/agents/host/report.go"
+            ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
@@ -1214,6 +1225,8 @@
               "internal/hostagent/agent_new_test.go",
               "internal/hostagent/command_client_test.go",
               "internal/hostagent/commands_deploy_test.go",
+              "internal/hostagent/commands_host_update_test.go",
+              "internal/hostagent/package_updates_test.go",
               "internal/hostagent/send_report_test.go"
             ]
           },
@@ -2073,6 +2086,7 @@
         "internal/actionlifecycle/",
         "internal/actionplanner/",
         "internal/agentcapabilities/",
+        "internal/agentcontext/",
         "internal/api/"
       ],
       "owned_files": [
@@ -2128,6 +2142,19 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "agent-resource-context-sections",
+            "label": "agent resource context section proof",
+            "match_prefixes": [
+              "internal/agentcontext/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/agentcontext/resource_context_sections_test.go"
+            ]
+          },
           {
             "id": "agent-capabilities-manifest-contract",
             "label": "agent capabilities manifest contract proof",
@@ -4489,6 +4516,7 @@
         "internal/models/models_frontend.go",
         "internal/proxmoxidentity/backup_identity.go",
         "pkg/agents/docker/report.go",
+        "pkg/agents/host/report.go",
         "pkg/agents/kubernetes/report.go",
         "pkg/proxmox/ceph.go",
         "pkg/proxmox/zfs.go"
@@ -4528,12 +4556,14 @@
             "label": "monitoring host-agent ingest proof",
             "match_prefixes": [],
             "match_files": [
-              "internal/monitoring/monitor_agents.go"
+              "internal/monitoring/monitor_agents.go",
+              "pkg/agents/host/report.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "internal/monitoring/monitor_host_agents_test.go",
+              "internal/monitoring/monitor_package_updates_test.go",
               "internal/unifiedresources/code_standards_test.go"
             ]
           },
@@ -4692,8 +4722,10 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/dockeragent/swarm_coverage_test.go",
+              "internal/models/deepcopy_test.go",
               "internal/models/state_host_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
+              "internal/monitoring/monitor_package_updates_test.go",
               "internal/unifiedresources/adapter_coverage_test.go",
               "internal/unifiedresources/registry_test.go"
             ]

@@ -79,20 +79,43 @@ type UpdateStatus struct {
 
 // HostInfo contains platform and identification details about the monitored host.
 type HostInfo struct {
-	ID            string    `json:"id,omitempty"`
-	Hostname      string    `json:"hostname"`
-	DisplayName   string    `json:"displayName,omitempty"`
-	MachineID     string    `json:"machineId,omitempty"`
-	Platform      string    `json:"platform,omitempty"`
-	OSName        string    `json:"osName,omitempty"`
-	OSVersion     string    `json:"osVersion,omitempty"`
-	KernelVersion string    `json:"kernelVersion,omitempty"`
-	Architecture  string    `json:"architecture,omitempty"`
-	CPUModel      string    `json:"cpuModel,omitempty"`
-	CPUCount      int       `json:"cpuCount,omitempty"`
-	UptimeSeconds int64     `json:"uptimeSeconds,omitempty"`
-	LoadAverage   []float64 `json:"loadAverage,omitempty"`
-	ReportIP      string    `json:"reportIp,omitempty"` // User-specified IP for multi-NIC systems
+	ID             string               `json:"id,omitempty"`
+	Hostname       string               `json:"hostname"`
+	DisplayName    string               `json:"displayName,omitempty"`
+	MachineID      string               `json:"machineId,omitempty"`
+	Platform       string               `json:"platform,omitempty"`
+	OSName         string               `json:"osName,omitempty"`
+	OSVersion      string               `json:"osVersion,omitempty"`
+	KernelVersion  string               `json:"kernelVersion,omitempty"`
+	Architecture   string               `json:"architecture,omitempty"`
+	CPUModel       string               `json:"cpuModel,omitempty"`
+	CPUCount       int                  `json:"cpuCount,omitempty"`
+	UptimeSeconds  int64                `json:"uptimeSeconds,omitempty"`
+	LoadAverage    []float64            `json:"loadAverage,omitempty"`
+	ReportIP       string               `json:"reportIp,omitempty"` // User-specified IP for multi-NIC systems
+	PackageUpdates *PackageUpdateStatus `json:"packageUpdates,omitempty"`
+}
+
+// PackageUpdateStatus is the agent-authored, read-only package posture for
+// the host OS. It reports only package identifiers and versions; execution is
+// a separate typed agent operation and never accepts model-authored commands.
+type PackageUpdateStatus struct {
+	Supported      bool            `json:"supported"`
+	Manager        string          `json:"manager,omitempty"`
+	InventoryHash  string          `json:"inventoryHash,omitempty"`
+	PendingCount   int             `json:"pendingCount"`
+	Packages       []PackageUpdate `json:"packages,omitempty"`
+	CheckedAt      time.Time       `json:"checkedAt,omitempty"`
+	RebootRequired bool            `json:"rebootRequired,omitempty"`
+	Error          string          `json:"error,omitempty"`
+}
+
+// PackageUpdate identifies one package visible in the package manager's
+// bounded upgrade simulation. Values are informational and never executed.
+type PackageUpdate struct {
+	Name             string `json:"name"`
+	InstalledVersion string `json:"installedVersion,omitempty"`
+	AvailableVersion string `json:"availableVersion,omitempty"`
 }
 
 // Metrics encapsulates primary resource metrics for a host.

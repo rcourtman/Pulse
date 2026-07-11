@@ -455,6 +455,104 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 	}
 }
 
+func TestExecuteHostUpdateRoundTripUsesTypedCommandFreeEnvelope(t *testing.T) {
+	inventoryHash := "sha256:" + strings.Repeat("a", 64)
+	emptyInventoryHash := "sha256:" + strings.Repeat("b", 64)
+	s := NewServer(allowAllTestTokens)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID: "host-agent-1", Hostname: "host1", Version: "6.0.6", Platform: "linux", Token: "any",
+	}))
+	_ = wsReadRegisteredPayload(t, conn)
+
+	agentErr := make(chan error, 1)
+	go func() {
+		msg, err := wsReadRawMessageWithTimeout(conn, 2*time.Second)
+		if err != nil {
+			agentErr <- err
+			return
+		}
+		if msg.Type != MsgTypeHostUpdate || msg.Payload == nil {
+			agentErr <- fmt.Errorf("message = %#v, want typed host update", msg)
+			return
+		}
+		if bytes.Contains(*msg.Payload, []byte(`"command"`)) || bytes.Contains(*msg.Payload, []byte(`"packages"`)) {
+			agentErr <- fmt.Errorf("host update request exposed command or package authority: %s", string(*msg.Payload))
+			return
+		}
+		var payload HostUpdatePayload
+		if err := json.Unmarshal(*msg.Payload, &payload); err != nil {
+			agentErr <- err
+			return
+		}
+		if payload.ActionID != "action-1" || payload.Operation != HostUpdateOperationInstall {
+			agentErr <- fmt.Errorf("payload = %#v", payload)
+			return
+		}
+		response := HostUpdateResultPayload{
+			RequestID:    payload.RequestID,
+			Success:      true,
+			Before:       HostPackageUpdateSnapshot{Supported: true, Manager: "apt", PendingCount: 2},
+			After:        HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: emptyInventoryHash, PendingCount: 0, RebootRequired: true},
+			Verification: HostUpdateVerificationVerified,
+		}
+		if err := conn.WriteJSON(mustNewMessage(t, MsgTypeHostUpdateResult, payload.RequestID, response)); err != nil {
+			agentErr <- err
+			return
+		}
+		agentErr <- nil
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	result, err := s.ExecuteHostUpdate(ctx, "host-agent-1", HostUpdatePayload{
+		RequestID: "request-1", ActionID: "action-1", Operation: HostUpdateOperationInstall, ExpectedInventoryHash: inventoryHash, Timeout: 1,
+	})
+	if err != nil {
+		t.Fatalf("ExecuteHostUpdate: %v", err)
+	}
+	if result == nil || !result.Success || result.Verification != HostUpdateVerificationVerified || result.After.PendingCount != 0 || !result.After.RebootRequired {
+		t.Fatalf("result = %#v", result)
+	}
+	if err := <-agentErr; err != nil {
+		t.Fatalf("agent: %v", err)
+	}
+}
+
+func TestValidateHostUpdatePayloadRejectsOpenEndedAuthority(t *testing.T) {
+	for _, req := range []HostUpdatePayload{
+		{RequestID: "r1", ActionID: "a1", Operation: "run_command", ExpectedInventoryHash: "sha256:" + strings.Repeat("a", 64)},
+		{RequestID: "r1", Operation: HostUpdateOperationInstall, ExpectedInventoryHash: "sha256:" + strings.Repeat("a", 64)},
+		{RequestID: "r1", ActionID: "a1", Operation: HostUpdateOperationInstall, Timeout: 1801, ExpectedInventoryHash: "sha256:" + strings.Repeat("a", 64)},
+		{RequestID: "r1", ActionID: "a1", Operation: HostUpdateOperationInstall},
+	} {
+		copy := req
+		if err := validateHostUpdatePayload(&copy); err == nil {
+			t.Fatalf("validateHostUpdatePayload(%#v) succeeded", req)
+		}
+	}
+}
+
+func TestValidateHostUpdateResultRejectsUnprovenVerifiedClaim(t *testing.T) {
+	result := HostUpdateResultPayload{
+		RequestID: "r1", Success: true, Verification: HostUpdateVerificationVerified,
+		After: HostPackageUpdateSnapshot{
+			Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("a", 64), PendingCount: 1,
+		},
+	}
+	if err := validateHostUpdateResultPayload(&result); err == nil {
+		t.Fatal("verified result with pending packages must fail closed")
+	}
+}
+
 func TestHandleWebSocket_ReconnectSameAgentIDClosesOldConnection(t *testing.T) {
 	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)

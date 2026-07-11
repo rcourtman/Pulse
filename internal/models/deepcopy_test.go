@@ -298,12 +298,17 @@ func TestCloneHost_MapIsolation(t *testing.T) {
 				LimitsPercent:       map[string]int{"cpu_speed_limit": 100},
 			},
 		},
+		PackageUpdates: &HostPackageUpdateStatus{
+			Supported: true,
+			Packages:  []HostPackageUpdate{{Name: "openssl"}},
+		},
 	}
 	dst := cloneHost(src)
 	dst.Tags = append(dst.Tags, "new:val")
 	dst.Sensors.TemperatureCelsius["gpu"] = 65.0
 	dst.Sensors.ThermalState.LimitsPercent["cpu_speed_limit"] = 80
 	*dst.Sensors.ThermalState.ThermalWarningLevel = 1
+	dst.PackageUpdates.Packages[0].Name = "mutated"
 	if len(src.Tags) != 1 {
 		t.Error("clone tags should be independent")
 	}
@@ -315,6 +320,9 @@ func TestCloneHost_MapIsolation(t *testing.T) {
 	}
 	if *src.Sensors.ThermalState.ThermalWarningLevel != 0 {
 		t.Error("clone thermal warning pointer should be independent")
+	}
+	if src.PackageUpdates.Packages[0].Name != "openssl" {
+		t.Error("clone package update inventory should be independent")
 	}
 }
 

@@ -385,6 +385,12 @@ an action is unavailable, but must not reinterpret it as recovery degradation
 or attempt a recovery-local container command path. Typed resource
 `actionReadiness` reasons are operator explanation only in this subsystem, not
 backup freshness, restore support, or recovery action authority.
+Agent-managed host package updates follow the same boundary. The API-owned
+`internal/api/host_update_action_executor.go` may dispatch only the closed,
+fingerprint-bound `install_os_updates` operation after canonical lifecycle
+approval. Storage/recovery consumers may observe its redacted audit outcome and
+reboot-required fact as context, but must not treat package installation as
+storage maintenance, recovery evidence, or a storage-owned mutation path.
 Storage and recovery surfaces may consume Discovery context from the shared
 API boundary when it helps explain protected workloads or storage-adjacent
 services, including mock-mode config/data/log path examples. That context is

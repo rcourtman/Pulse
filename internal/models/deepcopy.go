@@ -348,6 +348,15 @@ func cloneHostCephCluster(src *HostCephCluster) *HostCephCluster {
 	return &normalized
 }
 
+func cloneHostPackageUpdateStatus(src *HostPackageUpdateStatus) *HostPackageUpdateStatus {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	dest.Packages = append([]HostPackageUpdate(nil), src.Packages...)
+	return &dest
+}
+
 func cloneHost(src Host) Host {
 	dest := src
 	dest.LoadAverage = append([]float64(nil), src.LoadAverage...)
@@ -358,6 +367,7 @@ func cloneHost(src Host) Host {
 	dest.RAID = cloneHostRAIDArrays(src.RAID)
 	dest.Unraid = cloneHostUnraidStorage(src.Unraid)
 	dest.Ceph = cloneHostCephCluster(src.Ceph)
+	dest.PackageUpdates = cloneHostPackageUpdateStatus(src.PackageUpdates)
 	dest.TokenLastUsedAt = cloneTimePtr(src.TokenLastUsedAt)
 	dest.Tags = append([]string(nil), src.Tags...)
 	dest.DiskExclude = append([]string(nil), src.DiskExclude...)

@@ -333,6 +333,12 @@ the `white_label` branding entitlement.
     action lifecycle, but it exposes only typed-proposal capture and gives the
     orchestrator no autonomy control, command execution, or command-shaped
     approval path.
+    The typed host-update executor wired here is likewise not generic command
+    authority. It may dispatch only the closed `install_os_updates` operation,
+    bound to the server-observed package inventory fingerprint and canonical
+    action approval. Package names, versions, raw APT output, and agent error
+    text must not enter model context or action results; reboot remains a
+    reported fact rather than an authorized operation.
     Router glue may also pass monitor-owned source freshness thresholds into
     unified-resource adapters, but those thresholds are operational cadence
     metadata only. They must not disclose credentials, command output, raw

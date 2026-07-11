@@ -504,6 +504,19 @@ func addAgentDataFacts(facts *[]Fact, resource unified.Resource, observedAt *tim
 	addAgentContextFact(facts, "Agent OS", strings.TrimSpace(resource.Agent.OSName+" "+resource.Agent.OSVersion), agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, observedAt)
 	addAgentContextFact(facts, "Agent version", resource.Agent.AgentVersion, agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, observedAt)
 	addAgentContextFact(facts, "Commands enabled", fmt.Sprintf("%t", resource.Agent.CommandsEnabled), agentContextSourceUnifiedResource, agentContextTrustPulseAuthored, observedAt)
+	if updates := resource.Agent.PackageUpdates; updates != nil {
+		updatesObservedAt := timePtrIfSet(updates.CheckedAt)
+		inventoryState := "ready"
+		if !updates.Supported {
+			inventoryState = "unsupported"
+		} else if strings.TrimSpace(updates.Error) != "" {
+			inventoryState = "error"
+		}
+		addAgentContextFact(facts, "Package manager", updates.Manager, agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, updatesObservedAt)
+		addAgentContextCountFact(facts, "Pending OS updates", updates.PendingCount, agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, updatesObservedAt)
+		addAgentContextFact(facts, "OS update inventory", inventoryState, agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, updatesObservedAt)
+		addAgentContextFact(facts, "Reboot required", fmt.Sprintf("%t", updates.RebootRequired), agentContextSourceUnifiedResource, agentContextTrustRuntimeObserved, updatesObservedAt)
+	}
 }
 
 func addProxmoxFacts(facts *[]Fact, resource unified.Resource, observedAt *time.Time) {

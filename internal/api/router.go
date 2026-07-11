@@ -636,6 +636,7 @@ func (r *Router) setupRoutes() {
 			r.resourceHandlers,
 			newDockerContainerActionExecutor(r.resourceHandlers, r.agentExecServer),
 			newProxmoxGuestActionExecutor(r.resourceHandlers, r.agentExecServer),
+			newHostUpdateActionExecutor(r.resourceHandlers, r.agentExecServer),
 		))
 	}
 	if r.monitor != nil {

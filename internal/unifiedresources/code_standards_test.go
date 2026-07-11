@@ -1496,6 +1496,25 @@ func TestResourceParentBySourceStateRemainsInternal(t *testing.T) {
 	}
 }
 
+func TestHostPackageUpdatePostureRemainsAgentScoped(t *testing.T) {
+	agentType := reflect.TypeOf(AgentData{})
+	field, ok := agentType.FieldByName("PackageUpdates")
+	if !ok {
+		t.Fatal("expected AgentData.PackageUpdates field")
+	}
+	if got := field.Tag.Get("json"); got != "packageUpdates,omitempty" {
+		t.Fatalf("expected package-update posture to use the agent-scoped wire key, got %q", got)
+	}
+	if field.Type != reflect.TypeOf((*AgentPackageUpdateMeta)(nil)) {
+		t.Fatalf("expected typed package-update metadata, got %v", field.Type)
+	}
+
+	resourceType := reflect.TypeOf(Resource{})
+	if _, ok := resourceType.FieldByName("PackageUpdates"); ok {
+		t.Fatal("package-update posture must not become an unscoped top-level Resource field")
+	}
+}
+
 // TestNoLegacyMigrationHintsInRuntimeCode prevents reintroducing runtime
 // messages that point removed aliases at the wrong token guidance.
 func TestNoLegacyMigrationHintsInRuntimeCode(t *testing.T) {

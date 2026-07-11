@@ -83,6 +83,7 @@ type Config struct {
 	newCommandClientFn   func(Config, string, string, string, string) *CommandClient
 	runCommandClientFn   func(*CommandClient, context.Context) error
 	updatedFromVersionFn func() string
+	packageUpdates       *packageUpdateManager
 }
 
 // Agent is responsible for collecting host metrics and shipping them to Pulse.
@@ -117,6 +118,7 @@ type Agent struct {
 	collector              SystemCollector
 	newCommandClient       func(Config, string, string, string, string) *CommandClient
 	runCommandClient       func(*CommandClient, context.Context) error
+	packageUpdates         *packageUpdateManager
 
 	// lastAuthFailureLog throttles the actionable 401 error so a permanently
 	// rejected token does not spam the log every report interval. Only touched
@@ -312,6 +314,12 @@ func New(cfg Config) (*Agent, error) {
 			Msg("Agent was auto-updated")
 	}
 
+	packageUpdates := cfg.packageUpdates
+	if packageUpdates == nil {
+		packageUpdates = newPackageUpdateManager(platform)
+	}
+	cfg.packageUpdates = packageUpdates
+
 	agent := &Agent{
 		cfg:                 cfg,
 		logger:              logger,
@@ -337,6 +345,7 @@ func New(cfg Config) (*Agent, error) {
 		collector:           collector,
 		newCommandClient:    newCommandClientFn,
 		runCommandClient:    runCommandClientFn,
+		packageUpdates:      packageUpdates,
 	}
 
 	// Create command client for AI command execution (only if enabled)
@@ -827,6 +836,10 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// would be capped by collectCtx's 10s timeout.
 	clusterSensors := a.collectClusterSensors(ctx)
 
+	packageUpdateCtx, cancelPackageUpdates := context.WithTimeout(ctx, 20*time.Second)
+	packageUpdates := a.currentPackageUpdateStatus(packageUpdateCtx)
+	cancelPackageUpdates()
+
 	// Carry updated_from on the first freshly built v6 report only. If that
 	// report is buffered, the buffered copy still retains the field for retry.
 	updatedFrom := a.updatedFrom
@@ -849,20 +862,21 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			Modules:         a.currentModuleStatus(),
 		},
 		Host: agentshost.HostInfo{
-			ID:            a.machineID,
-			Hostname:      a.hostname,
-			DisplayName:   a.displayName,
-			MachineID:     a.machineID,
-			Platform:      a.platform,
-			OSName:        a.osName,
-			OSVersion:     a.osVersion,
-			KernelVersion: a.kernelVersion,
-			Architecture:  a.architecture,
-			CPUModel:      "",
-			CPUCount:      snapshot.CPUCount,
-			UptimeSeconds: int64(uptime),
-			LoadAverage:   append([]float64(nil), snapshot.LoadAverage...),
-			ReportIP:      runtimeConfig.reportIP,
+			ID:             a.machineID,
+			Hostname:       a.hostname,
+			DisplayName:    a.displayName,
+			MachineID:      a.machineID,
+			Platform:       a.platform,
+			OSName:         a.osName,
+			OSVersion:      a.osVersion,
+			KernelVersion:  a.kernelVersion,
+			Architecture:   a.architecture,
+			CPUModel:       "",
+			CPUCount:       snapshot.CPUCount,
+			UptimeSeconds:  int64(uptime),
+			LoadAverage:    append([]float64(nil), snapshot.LoadAverage...),
+			ReportIP:       runtimeConfig.reportIP,
+			PackageUpdates: packageUpdates,
 		},
 		Metrics: agentshost.Metrics{
 			CPUUsagePercent: snapshot.CPUUsagePercent,
@@ -881,6 +895,31 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	}
 
 	return report, nil
+}
+
+func (a *Agent) currentPackageUpdateStatus(ctx context.Context) *agentshost.PackageUpdateStatus {
+	if a == nil || a.packageUpdates == nil {
+		return nil
+	}
+	snapshot := a.packageUpdates.Snapshot(ctx, false)
+	packages := make([]agentshost.PackageUpdate, len(snapshot.Packages))
+	for i, pkg := range snapshot.Packages {
+		packages[i] = agentshost.PackageUpdate{
+			Name:             pkg.Name,
+			InstalledVersion: pkg.InstalledVersion,
+			AvailableVersion: pkg.AvailableVersion,
+		}
+	}
+	return &agentshost.PackageUpdateStatus{
+		Supported:      snapshot.Supported,
+		Manager:        snapshot.Manager,
+		InventoryHash:  snapshot.InventoryHash,
+		PendingCount:   snapshot.PendingCount,
+		Packages:       packages,
+		CheckedAt:      snapshot.CheckedAt,
+		RebootRequired: snapshot.RebootRequired,
+		Error:          snapshot.Error,
+	}
 }
 
 func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error {

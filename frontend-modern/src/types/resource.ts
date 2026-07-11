@@ -11,6 +11,7 @@ import type {
   Disk,
   HostDiskIO,
   HostNetworkInterface,
+  HostPackageUpdateStatus,
   HostSensorSummary,
   HostRAIDArray,
   Memory,
@@ -618,6 +619,7 @@ export interface ResourceAgentMeta {
   rebuildInProgress?: boolean;
   rebuildSummary?: string;
   commandsEnabled?: boolean;
+  packageUpdates?: HostPackageUpdateStatus;
   tokenId?: string;
   tokenName?: string;
   tokenHint?: string;

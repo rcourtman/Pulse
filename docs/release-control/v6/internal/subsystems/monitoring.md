@@ -138,6 +138,7 @@ resource health.
 
 1. `internal/kubernetesagent/agent.go` shared with `agent-lifecycle`: the Kubernetes native agent runtime is both a monitoring inventory source and an agent lifecycle Pulse control-plane transport client.
 2. `internal/proxmoxidentity/backup_identity.go` shared with `alerts`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
+3. `pkg/agents/host/report.go` shared with `agent-lifecycle`: the Unified Agent host report is both an agent lifecycle authored-state contract and a monitoring ingest contract for host package-update posture.
 
 ## Extension Points
 
@@ -468,6 +469,14 @@ an active process from an initialized monitoring source. The Kubernetes module
 uses the shared agent TLS constructor for custom CA and leaf-fingerprint trust;
 its Pulse transport must not regress to a Kubernetes-local insecure-only TLS
 configuration.
+The same host report carries bounded OS package-update posture: supported
+manager, pending count, package/version identifiers, inspection time,
+reboot-required state, and an operator-safe inspection error. Monitoring owns
+normalization and deep-copying of that observed state, and stamps inventory
+freshness from server receipt time so a skewed agent clock cannot keep update
+authority fresh indefinitely; it does not infer
+updates from kernel strings, refresh package indexes, install packages, or
+convert the presence of an update into execution authority.
 
 HTTP availability probes consume the shared explicitly unverified,
 parseable-peer-certificate capture

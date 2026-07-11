@@ -643,6 +643,17 @@ container inventory table.
    Unified-resource consumers must not infer Proxmox lifecycle affordances from
    table row status alone or issue direct `qm` / `pct`, SSH, provider API, or
    guest-agent calls outside the governed action contract.
+   Agent-managed Linux hosts may advertise `install_os_updates` only when the
+   report carries supported APT package posture and typed command operations
+   are enabled. The capability is admin-floor, `elevated` auto-authorization
+   eligible, parameter-free, and routed through `host.package_updates`.
+   Package names and versions are observed evidence, never caller-selected
+   mutation input. The agent-authored inventory fingerprint binds execution to
+   the observed set without turning that set into caller authority. API
+   readiness must filter the capability when inventory is
+   stale, erroneous, empty, unsupported, or its owning agent is disconnected;
+   reboot-required state remains descriptive and does not imply a reboot
+   capability.
    TrueNAS app inventory enters the model as native `TrueNASData.App`
    metadata on canonical `app-container` resources. The facet is sourced from
    the TrueNAS API app inventory (`app.query` plus active workload/stat

@@ -2919,8 +2919,8 @@ class SubsystemLookupTest(unittest.TestCase):
 				{
 					"heading": "## Shared Boundaries",
 					"path": "internal/api/access_control_handlers.go",
-					"line": 1203,
-					"heading_line": 141,
+					"line": 1204,
+					"heading_line": 142,
 				}
             ],
         )
@@ -4069,6 +4069,7 @@ class SubsystemLookupTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
             [
                 "internal/monitoring/monitor_host_agents_test.go",
+                "internal/monitoring/monitor_package_updates_test.go",
                 "internal/unifiedresources/code_standards_test.go",
             ],
         )
@@ -4363,6 +4364,8 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/hostagent/agent_new_test.go",
                 "internal/hostagent/command_client_test.go",
                 "internal/hostagent/commands_deploy_test.go",
+                "internal/hostagent/commands_host_update_test.go",
+                "internal/hostagent/package_updates_test.go",
                 "internal/hostagent/send_report_test.go",
             ],
         )

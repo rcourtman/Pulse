@@ -165,6 +165,26 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 		LinkedVMID:        host.LinkedVMID,
 		LinkedContainerID: host.LinkedContainerID,
 	}
+	if host.PackageUpdates != nil {
+		packages := make([]AgentPackageUpdate, len(host.PackageUpdates.Packages))
+		for i, pkg := range host.PackageUpdates.Packages {
+			packages[i] = AgentPackageUpdate{
+				Name:             pkg.Name,
+				InstalledVersion: pkg.InstalledVersion,
+				AvailableVersion: pkg.AvailableVersion,
+			}
+		}
+		agent.PackageUpdates = &AgentPackageUpdateMeta{
+			Supported:      host.PackageUpdates.Supported,
+			Manager:        host.PackageUpdates.Manager,
+			InventoryHash:  host.PackageUpdates.InventoryHash,
+			PendingCount:   host.PackageUpdates.PendingCount,
+			Packages:       packages,
+			CheckedAt:      host.PackageUpdates.CheckedAt,
+			RebootRequired: host.PackageUpdates.RebootRequired,
+			Error:          host.PackageUpdates.Error,
+		}
+	}
 
 	// Surface agent staleness so a row that stays online via another source
 	// (e.g. a Proxmox node still reachable over the PVE API) does not present a
@@ -456,20 +476,39 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	metrics := metricsFromHost(host)
 
 	resource := Resource{
-		Type:        ResourceTypeAgent,
-		Technology:  strings.TrimSpace(platform),
-		Name:        name,
-		Status:      storageStatus(statusFromString(host.Status), agent.StorageRisk),
-		LastSeen:    host.LastSeen,
-		UpdatedAt:   time.Now().UTC(),
-		Metrics:     metrics,
-		Uptime:      host.UptimeSeconds,
-		Temperature: agent.Temperature,
-		Agent:       agent,
-		Tags:        host.Tags,
+		Type:         ResourceTypeAgent,
+		Technology:   strings.TrimSpace(platform),
+		Name:         name,
+		Status:       storageStatus(statusFromString(host.Status), agent.StorageRisk),
+		LastSeen:     host.LastSeen,
+		UpdatedAt:    time.Now().UTC(),
+		Metrics:      metrics,
+		Uptime:       host.UptimeSeconds,
+		Temperature:  agent.Temperature,
+		Agent:        agent,
+		Tags:         host.Tags,
+		Capabilities: hostPackageUpdateCapabilities(host),
 	}
 
 	return resource, identity
+}
+
+const hostPackageUpdateHandler = "host.package_updates"
+
+func hostPackageUpdateCapabilities(host models.Host) []ResourceCapability {
+	status := host.PackageUpdates
+	if !host.CommandsEnabled || status == nil || !status.Supported || strings.TrimSpace(status.Manager) != "apt" || strings.TrimSpace(status.InventoryHash) == "" || status.PendingCount <= 0 || strings.TrimSpace(status.Error) != "" || status.CheckedAt.IsZero() || time.Since(status.CheckedAt.UTC()) > HostPackageUpdateFreshness {
+		return nil
+	}
+	return []ResourceCapability{{
+		Name:                 "install_os_updates",
+		Type:                 CapabilityTypeCommon,
+		Description:          "Refresh APT metadata and install standard OS package upgrades without removing packages or rebooting the host.",
+		MinimumApprovalLevel: ApprovalAdmin,
+		AutoAuthorization:    AutoAuthorizeElevated,
+		Platform:             "linux",
+		InternalHandler:      hostPackageUpdateHandler,
+	}}
 }
 
 func hostThermalStateToMeta(in *models.HostThermalState) *HostThermalState {
