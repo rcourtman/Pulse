@@ -1033,24 +1033,28 @@ func calculateBackoff(attempt int) time.Duration {
 }
 
 // CancelByAlertIdentifiers suppresses queued firing notifications for resolved
-// alerts while preserving unrelated alerts in the same grouped queue row.
-func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string) error {
+// alerts while preserving unrelated alerts in the same grouped queue row. It
+// returns the number of matched firing-alert entries removed from rows that
+// were still waiting for delivery ('pending'). Entries in rows already
+// mid-send ('sending') are cancelled best-effort but not counted, because
+// their delivery may still complete.
+func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string) (int, error) {
 	if len(alertIdentifiers) == 0 {
-		return nil
+		return 0, nil
 	}
 
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
 
 	query := `
-		SELECT id, type, alerts
+		SELECT id, type, status, alerts
 		FROM notification_queue
 		WHERE status IN ('pending', 'sending')
 	`
 
 	rows, err := nq.db.Query(query)
 	if err != nil {
-		return fmt.Errorf("failed to query notifications for cancellation: %w", err)
+		return 0, fmt.Errorf("failed to query notifications for cancellation: %w", err)
 	}
 
 	alertIdentifierSet := make(map[string]struct{})
@@ -1062,9 +1066,9 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 	}
 	if len(alertIdentifierSet) == 0 {
 		if err := rows.Close(); err != nil {
-			return fmt.Errorf("failed to close cancellation query: %w", err)
+			return 0, fmt.Errorf("failed to close cancellation query: %w", err)
 		}
-		return nil
+		return 0, nil
 	}
 
 	type queuedAlertCancellation struct {
@@ -1075,12 +1079,14 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 	var toCancelIDs []string
 	var toRewrite []queuedAlertCancellation
 	suppressedAlertCount := 0
+	suppressedPendingAlertCount := 0
 
 	for rows.Next() {
 		var notifID string
 		var notifType string
+		var notifStatus string
 		var alertsJSON []byte
-		if err := rows.Scan(&notifID, &notifType, &alertsJSON); err != nil {
+		if err := rows.Scan(&notifID, &notifType, &notifStatus, &alertsJSON); err != nil {
 			log.Error().
 				Err(err).
 				Str("component", "notification_queue").
@@ -1121,6 +1127,9 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 		}
 
 		suppressedAlertCount += matchedAlertCount
+		if notifStatus == string(QueueStatusPending) {
+			suppressedPendingAlertCount += matchedAlertCount
+		}
 		if len(remainingAlerts) == 0 {
 			toCancelIDs = append(toCancelIDs, notifID)
 			continue
@@ -1134,7 +1143,7 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 	rowsErr := rows.Err()
 	rows.Close() // Release connection before executing updates
 	if rowsErr != nil {
-		return fmt.Errorf("error iterating notifications for cancellation: %w", rowsErr)
+		return 0, fmt.Errorf("error iterating notifications for cancellation: %w", rowsErr)
 	}
 
 	if len(toRewrite) > 0 {
@@ -1146,10 +1155,10 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 		for _, rewrite := range toRewrite {
 			alertsJSON, err := json.Marshal(rewrite.remaining)
 			if err != nil {
-				return fmt.Errorf("failed to marshal remaining alerts for %s: %w", rewrite.notificationID, err)
+				return 0, fmt.Errorf("failed to marshal remaining alerts for %s: %w", rewrite.notificationID, err)
 			}
 			if _, err := nq.db.Exec(updateAlertsQuery, string(alertsJSON), rewrite.notificationID); err != nil {
-				return fmt.Errorf("failed to rewrite queued notification %s after alert resolution: %w", rewrite.notificationID, err)
+				return 0, fmt.Errorf("failed to rewrite queued notification %s after alert resolution: %w", rewrite.notificationID, err)
 			}
 		}
 	}
@@ -1178,13 +1187,14 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 			Str("component", "notification_queue").
 			Str("action", "cancel_alert_identifiers").
 			Int("suppressedAlertCount", suppressedAlertCount).
+			Int("suppressedPendingAlertCount", suppressedPendingAlertCount).
 			Int("cancelledRows", len(toCancelIDs)).
 			Int("rewrittenRows", len(toRewrite)).
 			Strs("alertIdentifiers", alertIdentifiers).
 			Msg("suppressed resolved alerts in queued notifications")
 	}
 
-	return nil
+	return suppressedPendingAlertCount, nil
 }
 
 func queueTypeCancelableOnAlertResolution(notifType string) bool {

@@ -361,15 +361,21 @@ func TestCancelByAlertIdentifiers_EmptyInput(t *testing.T) {
 	}
 
 	// Empty slice should return nil without error
-	err = nq.CancelByAlertIdentifiers([]string{})
+	count, err := nq.CancelByAlertIdentifiers([]string{})
 	if err != nil {
 		t.Errorf("CancelByAlertIdentifiers with empty slice returned error: %v", err)
 	}
+	if count != 0 {
+		t.Errorf("CancelByAlertIdentifiers with empty slice returned count %d, want 0", count)
+	}
 
 	// Nil slice should also return nil without error
-	err = nq.CancelByAlertIdentifiers(nil)
+	count, err = nq.CancelByAlertIdentifiers(nil)
 	if err != nil {
 		t.Errorf("CancelByAlertIdentifiers with nil slice returned error: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("CancelByAlertIdentifiers with nil slice returned count %d, want 0", count)
 	}
 }
 
@@ -397,9 +403,12 @@ func TestCancelByAlertIdentifiers_NoMatchingNotifications(t *testing.T) {
 	}
 
 	// Cancel with non-matching alert ID
-	err = nq.CancelByAlertIdentifiers([]string{"alert-2"})
+	count, err := nq.CancelByAlertIdentifiers([]string{"alert-2"})
 	if err != nil {
 		t.Errorf("CancelByAlertIdentifiers returned error: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("CancelByAlertIdentifiers returned count %d, want 0", count)
 	}
 
 	// Verify the notification is still pending using GetQueueStats
@@ -535,9 +544,12 @@ func TestCancelByAlertIdentifiers_MatchingNotificationCancelled(t *testing.T) {
 	}
 
 	// Cancel with matching alert ID
-	err = nq.CancelByAlertIdentifiers([]string{"alert-1"})
+	count, err := nq.CancelByAlertIdentifiers([]string{"alert-1"})
 	if err != nil {
 		t.Errorf("CancelByAlertIdentifiers returned error: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("CancelByAlertIdentifiers returned count %d, want 1", count)
 	}
 
 	// Verify the notification is now cancelled using GetQueueStats
@@ -596,8 +608,12 @@ func TestCancelByAlertIdentifiers_PreservesResolvedNotifications(t *testing.T) {
 		}
 	}
 
-	if err := nq.CancelByAlertIdentifiers([]string{"alert-1"}); err != nil {
+	count, err := nq.CancelByAlertIdentifiers([]string{"alert-1"})
+	if err != nil {
 		t.Fatalf("CancelByAlertIdentifiers returned error: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("CancelByAlertIdentifiers returned count %d, want 1 (only the firing entry counts)", count)
 	}
 
 	var statusFiring NotificationQueueStatus
@@ -644,9 +660,12 @@ func TestCancelByAlertIdentifiers_MultipleAlertsPartialMatch(t *testing.T) {
 		t.Fatalf("Failed to enqueue: %v", err)
 	}
 
-	err = nq.CancelByAlertIdentifiers([]string{"alert-1", "alert-3"})
+	count, err := nq.CancelByAlertIdentifiers([]string{"alert-1", "alert-3"})
 	if err != nil {
 		t.Errorf("CancelByAlertIdentifiers returned error: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("CancelByAlertIdentifiers returned count %d, want 2", count)
 	}
 
 	stats, err := nq.GetQueueStats()
@@ -689,6 +708,50 @@ func TestCancelByAlertIdentifiers_MultipleAlertsPartialMatch(t *testing.T) {
 	}
 }
 
+func TestCancelByAlertIdentifiers_SendingRowsCancelledButNotCounted(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	futureRetry := time.Now().Add(1 * time.Hour)
+	notif := &QueuedNotification{
+		ID:          "notif-sending",
+		Type:        "webhook",
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
+		Alerts:      []*alerts.Alert{{ID: "alert-1"}},
+	}
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Failed to enqueue: %v", err)
+	}
+	if _, err := nq.db.Exec(`UPDATE notification_queue SET status = 'sending' WHERE id = ?`, notif.ID); err != nil {
+		t.Fatalf("Failed to mark notification as sending: %v", err)
+	}
+
+	// A mid-send row may still complete delivery, so it must not count as an
+	// undelivered firing entry even though the cancellation is still applied.
+	count, err := nq.CancelByAlertIdentifiers([]string{"alert-1"})
+	if err != nil {
+		t.Fatalf("CancelByAlertIdentifiers returned error: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("CancelByAlertIdentifiers returned count %d, want 0 for a sending row", count)
+	}
+
+	var status string
+	if err := nq.db.QueryRow(`SELECT status FROM notification_queue WHERE id = ?`, notif.ID).Scan(&status); err != nil {
+		t.Fatalf("Failed to query notification status: %v", err)
+	}
+	if status != string(QueueStatusCancelled) {
+		t.Fatalf("status = %q, want %q", status, QueueStatusCancelled)
+	}
+}
+
 func TestCancelByAlertIdentifiers_SetsCompletedAtAndClearsNextRetry(t *testing.T) {
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)
@@ -711,7 +774,7 @@ func TestCancelByAlertIdentifiers_SetsCompletedAtAndClearsNextRetry(t *testing.T
 		t.Fatalf("Failed to enqueue: %v", err)
 	}
 
-	if err := nq.CancelByAlertIdentifiers([]string{"alert-1"}); err != nil {
+	if _, err := nq.CancelByAlertIdentifiers([]string{"alert-1"}); err != nil {
 		t.Fatalf("CancelByAlertIdentifiers returned error: %v", err)
 	}
 

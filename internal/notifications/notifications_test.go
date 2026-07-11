@@ -579,7 +579,9 @@ func TestCancelAlertClearsCooldownAndQueueWithoutPendingGroup(t *testing.T) {
 		queue:         queue,
 	}
 
-	nm.CancelAlert(alert.ID)
+	if nm.CancelAlert(alert.ID) {
+		t.Fatal("expected CancelAlert to report the firing as delivered because a delivery record exists")
+	}
 
 	nm.mu.RLock()
 	_, hasCooldownRecord := nm.lastNotified[alert.ID]
@@ -594,6 +596,68 @@ func TestCancelAlertClearsCooldownAndQueueWithoutPendingGroup(t *testing.T) {
 	}
 	if status != string(QueueStatusCancelled) {
 		t.Fatalf("expected queued firing notification to be cancelled, got %q", status)
+	}
+}
+
+func TestCancelAlertReportsUndeliveredQueuedFiring(t *testing.T) {
+	queue, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
+	defer func() { _ = queue.Stop() }()
+
+	alert := &alerts.Alert{
+		ID:        "alert-undelivered-firing",
+		Type:      "cpu",
+		Level:     alerts.AlertLevelWarning,
+		StartTime: time.Now().Add(-time.Minute),
+	}
+	// Far-future NextRetryAt keeps the background processor from delivering
+	// the firing notification before CancelAlert runs.
+	futureRetry := time.Now().Add(time.Hour)
+	if err := queue.Enqueue(&QueuedNotification{
+		Type:        "webhook",
+		Status:      QueueStatusPending,
+		Alerts:      []*alerts.Alert{alert},
+		Config:      json.RawMessage(`{"enabled":true,"url":"https://hooks.example.test/pulse"}`),
+		MaxAttempts: 3,
+		NextRetryAt: &futureRetry,
+	}); err != nil {
+		t.Fatalf("failed to enqueue notification: %v", err)
+	}
+
+	nm := &NotificationManager{
+		pendingAlerts: []*alerts.Alert{},
+		queue:         queue,
+	}
+
+	if !nm.CancelAlert(alert.ID) {
+		t.Fatal("expected CancelAlert to report the queued firing notification was never delivered")
+	}
+
+	var status string
+	if err := queue.db.QueryRow(`SELECT status FROM notification_queue WHERE type = ?`, "webhook").Scan(&status); err != nil {
+		t.Fatalf("failed to read queued notification status: %v", err)
+	}
+	if status != string(QueueStatusCancelled) {
+		t.Fatalf("expected queued firing notification to be cancelled, got %q", status)
+	}
+}
+
+func TestCancelAlertNothingPendingReportsDelivered(t *testing.T) {
+	queue, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create queue: %v", err)
+	}
+	defer func() { _ = queue.Stop() }()
+
+	nm := &NotificationManager{
+		pendingAlerts: []*alerts.Alert{},
+		queue:         queue,
+	}
+
+	if nm.CancelAlert("alert-with-nothing-in-flight") {
+		t.Fatal("expected CancelAlert to leave the recovery decision to the notification policy when nothing was cancelled")
 	}
 }
 
@@ -618,7 +682,9 @@ func TestCancelAlertRemovesPending(t *testing.T) {
 	nm.SendAlert(alertA)
 	nm.SendAlert(alertB)
 
-	nm.CancelAlert(alertA.ID)
+	if !nm.CancelAlert(alertA.ID) {
+		t.Fatal("expected CancelAlert to report the firing was never delivered while still in the grouping window")
+	}
 
 	nm.mu.RLock()
 	remaining := make([]string, 0, len(nm.pendingAlerts))

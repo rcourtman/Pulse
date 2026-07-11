@@ -88,7 +88,7 @@ func TestCancelByAlertIdentifiersLogsStructuredContextOnAlertUnmarshalFailure(t 
 	}
 
 	logOutput := captureNotificationQueueLogs(t)
-	if err := nq.CancelByAlertIdentifiers([]string{"alert-1"}); err != nil {
+	if _, err := nq.CancelByAlertIdentifiers([]string{"alert-1"}); err != nil {
 		t.Fatalf("CancelByAlertIdentifiers returned error: %v", err)
 	}
 

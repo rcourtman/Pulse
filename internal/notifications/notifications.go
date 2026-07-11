@@ -1154,10 +1154,15 @@ func (n *NotificationManager) SendResolvedAlert(resolved *alerts.ResolvedAlert) 
 	}
 }
 
-// CancelAlert removes pending notifications for a resolved alert
-func (n *NotificationManager) CancelAlert(alertID string) {
+// CancelAlert removes pending notifications for a resolved alert. It reports
+// whether the alert's firing notification was cancelled before any delivery:
+// true means the user never received the firing notification (it was still in
+// the grouping window or waiting in the queue), so sending a recovery
+// notification would reference an alert that was never announced.
+func (n *NotificationManager) CancelAlert(alertID string) bool {
 	n.mu.Lock()
 	queue := n.queue
+	_, firingDelivered := n.lastNotified[alertID]
 
 	removed := 0
 	if len(n.pendingAlerts) > 0 {
@@ -1192,16 +1197,24 @@ func (n *NotificationManager) CancelAlert(alertID string) {
 	n.mu.Unlock()
 
 	// Cancel any queued notifications containing this alert
+	cancelledPending := 0
 	if queue != nil {
-		if err := queue.CancelByAlertIdentifiers([]string{alertID}); err != nil {
+		var err error
+		cancelledPending, err = queue.CancelByAlertIdentifiers([]string{alertID})
+		if err != nil {
 			log.Error().Err(err).Str("alertID", alertID).Msg("failed to cancel queued notifications")
 		}
 	}
 
+	firingNeverDelivered := !firingDelivered && (removed > 0 || cancelledPending > 0)
+
 	log.Debug().
 		Str("alertID", alertID).
 		Int("remaining", len(n.pendingAlerts)).
+		Bool("firingNeverDelivered", firingNeverDelivered).
 		Msg("removed resolved alert from pending notifications and cooldown map")
+
+	return firingNeverDelivered
 }
 
 // sendGroupedAlerts sends all pending alerts as a group

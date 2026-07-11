@@ -372,6 +372,87 @@ func TestMonitor_HandleAlertResolved_SendsRecoveryForGuestPoweredOffState(t *tes
 	}
 }
 
+func TestMonitor_HandleAlertResolved_SuppressesRecoveryWhenFiringNeverDelivered(t *testing.T) {
+	// Regression test for #1553: an alert that resolves while its firing
+	// notification is still waiting in the grouping window must not produce a
+	// recovery-only notification.
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	received := make(chan []byte, 2)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		body, _ := io.ReadAll(r.Body)
+		select {
+		case received <- body:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	notifMgr := notifications.NewNotificationManagerWithDataDir("http://pulse.example", t.TempDir())
+	if err := notifMgr.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
+		t.Fatalf("UpdateAllowedPrivateCIDRs: %v", err)
+	}
+	notifMgr.AddWebhook(notifications.WebhookConfig{
+		ID:      "test-webhook",
+		Name:    "test-webhook",
+		URL:     srv.URL,
+		Enabled: true,
+		Service: "generic",
+	})
+	notifMgr.SetNotifyOnResolve(true)
+	// Large grouping window keeps the firing notification undelivered until
+	// the alert resolves.
+	notifMgr.SetGroupingWindow(120)
+
+	alertMgr := alerts.NewManager()
+	cfg := alertMgr.GetConfig()
+	cfg.Enabled = true
+	cfg.ActivationState = alerts.ActivationActive
+	cfg.Schedule.QuietHours.Enabled = false
+	alertMgr.UpdateConfig(cfg)
+
+	m := &Monitor{
+		alertManager:    alertMgr,
+		notificationMgr: notifMgr,
+	}
+
+	vm := models.VM{
+		ID:       "vm-transient-spike",
+		Name:     "transient-spike-vm",
+		Node:     "node-1",
+		Instance: "inst-1",
+		Status:   "stopped",
+	}
+
+	// Fire the alert without wiring the async fired-callback, then hand the
+	// firing notification to the manager synchronously so it is deterministic
+	// that it sits in the grouping window when the alert resolves.
+	alertMgr.CheckGuest(vm, vm.Instance)
+	alertMgr.CheckGuest(vm, vm.Instance)
+
+	activeAlerts := alertMgr.GetActiveAlerts()
+	if len(activeAlerts) != 1 {
+		t.Fatalf("expected one active powered-off alert, got %#v", activeAlerts)
+	}
+	firing := activeAlerts[0]
+	notifMgr.SendAlert(&firing)
+
+	vm.Status = "running"
+	alertMgr.CheckGuest(vm, vm.Instance)
+	if resolved := alertMgr.GetResolvedAlert(firing.ID); resolved == nil {
+		t.Fatalf("expected alert %q to be resolved", firing.ID)
+	}
+
+	m.handleAlertResolved(firing.ID)
+
+	select {
+	case body := <-received:
+		t.Fatalf("expected no notification for a firing that never left the grouping window, got %s", string(body))
+	case <-time.After(1500 * time.Millisecond):
+	}
+}
+
 func TestMonitor_HandleAlertEscalated_QuietHoursSuppressesNotification(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 
