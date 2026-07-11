@@ -1288,3 +1288,23 @@ func TestAIConfig_GetRequestTimeout(t *testing.T) {
 		})
 	}
 }
+
+func TestAIConfig_GetDiscoveryModelFallbackChain(t *testing.T) {
+	// Discovery is high-fan-out background work: it follows the operator's
+	// background-work (Patrol) model before the shared default so scheduled
+	// context refreshes never silently burn a premium shared model.
+	cfg := AIConfig{Model: "gemini:gemini-flash-latest"}
+	if got := cfg.GetDiscoveryModel(); got != "gemini:gemini-flash-latest" {
+		t.Fatalf("with only the shared default set, GetDiscoveryModel() = %q, want the shared default", got)
+	}
+
+	cfg.PatrolModel = "gemini:gemini-2.5-flash-lite"
+	if got := cfg.GetDiscoveryModel(); got != "gemini:gemini-2.5-flash-lite" {
+		t.Fatalf("with a Patrol override set, GetDiscoveryModel() = %q, want the Patrol model", got)
+	}
+
+	cfg.DiscoveryModel = "ollama:qwen3:8b"
+	if got := cfg.GetDiscoveryModel(); got != "ollama:qwen3:8b" {
+		t.Fatalf("with an explicit discovery override set, GetDiscoveryModel() = %q, want the discovery override", got)
+	}
+}

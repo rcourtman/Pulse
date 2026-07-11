@@ -45,7 +45,8 @@ const MODEL_OVERRIDE_CONFIG: Record<
   discovery: {
     formKey: 'discoveryModel',
     label: 'Service context model',
-    description: 'Used for model-backed service identification and scheduled context refreshes.',
+    description:
+      'Used for model-backed service identification and scheduled context refreshes. Follows the Patrol model unless set.',
     ariaLabel: 'Service context model identifier',
     title: 'Select service context model',
   },
@@ -431,8 +432,8 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
           </p>
         </Show>
         <p class="text-[11px] text-muted mt-1">
-          Used by Pulse Assistant, Patrol, and Discovery unless you set a section-specific override
-          below.
+          Used by Pulse Assistant and Patrol unless you set a section-specific override. Service
+          context discovery follows the Patrol model when one is set.
         </p>
       </div>
 

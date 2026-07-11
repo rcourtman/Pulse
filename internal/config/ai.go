@@ -625,13 +625,14 @@ func (c *AIConfig) GetPatrolModel() string {
 }
 
 // GetDiscoveryModel returns the model for infrastructure discovery
-// Falls back to the main model since discovery needs to use the same provider
+// Falls back to PatrolModel, then to the main Model if DiscoveryModel is not set
+// Discovery is high-fan-out background work (one call per container/service),
+// so it belongs on the operator's background-work model, not the shared default
 func (c *AIConfig) GetDiscoveryModel() string {
 	if c.DiscoveryModel != "" {
 		return NormalizeQuickstartModelString(c.DiscoveryModel)
 	}
-	// Fall back to the main model to ensure we use the same provider
-	return c.GetModel()
+	return c.GetPatrolModel()
 }
 
 // GetAutoFixModel returns the model for automatic remediation actions

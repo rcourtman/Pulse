@@ -1141,6 +1141,21 @@ deriving an older display status from `workflowStatusHistory`.
    and `internal/ai/providers/ollama.go` is the only layer that turns it into
    the Ollama `keep_alive` request field. An empty configured value means
    Pulse omits `keep_alive` so the Ollama server default applies.
+   Per-surface model fallback chains are owned by the `Get*Model()` getters in
+   `internal/config/ai.go` and follow the operator's intent split between
+   interactive and background work. Interactive chat resolves
+   `ChatModel -> Model`. Background bulk work — Patrol, auto-fix, and
+   service-context discovery — resolves through the Patrol tier:
+   `PatrolModel -> Model` for Patrol itself, `AutoFixModel -> PatrolModel ->
+   Model` for auto-fix, and `DiscoveryModel -> PatrolModel -> Model` for
+   discovery. Discovery is high-fan-out (one model call per container or
+   service per refresh), so it must NOT fall back straight to the shared
+   default model past a configured Patrol override: an operator who selected
+   a cheap Patrol model has declared their background-work model, and
+   scheduled context refreshes silently burning the shared (often premium)
+   model with no chat activity is the bug this chain prevents. Settings copy
+   that describes the shared default model must state this chain rather than
+   claiming the shared default governs discovery unconditionally.
    Cloud context privacy is a FIXED posture, not a user setting. Pulse is a
    self-hosted homelab/SMB tool: when the operator points the Assistant at a cloud
    model they have accepted that their (non-secret) infrastructure detail reaches
