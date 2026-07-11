@@ -1361,6 +1361,9 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 	if r.unifiedAgentHandlers != nil {
 		r.unifiedAgentHandlers.SetMonitor(m)
 	}
+	if r.kubernetesAgentHandlers != nil {
+		r.kubernetesAgentHandlers.SetMonitor(m)
+	}
 	if r.systemSettingsHandler != nil {
 		r.systemSettingsHandler.SetMonitor(m)
 	}
