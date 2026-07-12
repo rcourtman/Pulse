@@ -194,7 +194,14 @@ reportReady:
 	if reportAt.IsZero() {
 		reportAt = time.Now().UTC()
 	}
-	resource := unified.HostIngestRecord(host).Resource
+	record := unified.HostIngestRecord(host)
+	registry := unified.NewRegistry(nil)
+	registry.IngestRecords(unified.SourceAgent, []unified.IngestRecord{record})
+	canonicalResources := registry.List()
+	if len(canonicalResources) != 1 {
+		t.Fatalf("production host registry projected %d resources, want 1", len(canonicalResources))
+	}
+	resource := canonicalResources[0]
 	if _, ok := resourceCapabilityByName(resource.Capabilities, hostStorageCleanupCapability); !ok {
 		t.Fatalf("production host adapter did not advertise %q: %#v", hostStorageCleanupCapability, resource.Capabilities)
 	}
