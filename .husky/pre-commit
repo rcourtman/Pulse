@@ -100,6 +100,9 @@ python3 scripts/release_control/canonical_completion_guard.py
 echo "Running status audit..."
 python3 scripts/release_control/status_audit.py --check --staged
 
+echo "Validating Pulse Intelligence release-gate schema..."
+python3 scripts/release_control/pulse_intelligence_gate.py --validate-only --matrix docs/release-control/v6/internal/pulse-intelligence-release-gate.json
+
 echo "Running registry audit..."
 python3 scripts/release_control/registry_audit.py --check --staged
 
@@ -119,6 +122,7 @@ python3 scripts/release_control/control_plane_audit_test.py
 python3 scripts/release_control/contract_audit_test.py
 python3 scripts/release_control/format_staged_go_test.py
 python3 scripts/release_control/governance_stage_guard_test.py
+python3 scripts/release_control/pulse_intelligence_gate_test.py
 python3 scripts/release_control/release_promotion_policy_support_test.py
 python3 scripts/release_control/registry_audit_test.py
 python3 scripts/release_control/readiness_assertion_guard_test.py

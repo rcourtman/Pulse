@@ -1,0 +1,206 @@
+{
+  "schema_version": 2,
+  "matrix_id": "pulse-intelligence-rg-01-rg-12",
+  "program": "pulse-intelligence",
+  "result_semantics": {
+    "PASS": "External evidence satisfies the gate at the audited Git SHA.",
+    "FAIL": "External evidence bound to the audited Git SHA records a failed proof or an invalid binding.",
+    "NOT_RUN": "No qualifying external evidence exists for the gate at the audited Git SHA."
+  },
+  "evidence_tiers": [
+    "unit",
+    "integration",
+    "browser",
+    "real-lab",
+    "physical-device",
+    "live-relay"
+  ],
+  "gates": [
+    {
+      "id": "RG-01",
+      "title": "Read-only investigation and origin isolation",
+      "owner": "task-01",
+      "required_evidence_tier": "integration",
+      "requires_triple_zero": true,
+      "allows_ancestor_provenance": false,
+      "non_mutating_proof_commands": [
+        {
+          "id": "rg-01-profile-boundary",
+          "argv": ["go", "test", "./internal/ai/tools", "-run", "TestPatrolDetectionProfileEnforcesAllowlistedPulseState|TestPatrolInvestigationProfileIsStructurallyReadOnly|TestProposeActionIsInvestigationProfileOnly", "-count=1"]
+        }
+      ],
+      "mutation_gated_commands": []
+    },
+    {
+      "id": "RG-02",
+      "title": "Canonical lifecycle admission",
+      "owner": "task-02",
+      "required_evidence_tier": "integration",
+      "requires_triple_zero": true,
+      "allows_ancestor_provenance": false,
+      "non_mutating_proof_commands": [
+        {
+          "id": "rg-02-lifecycle-admission",
+          "argv": ["go", "test", "./internal/actionlifecycle", "./internal/api", "-run", "TestPolicyAdmissionCommitsApprovalAndExecutingAtomicallyMemoryStore|TestPolicyAdmissionCommitsApprovalAndExecutingAtomicallySQLite|TestPatrolActionBrokerDispatchTimePolicyRevocation", "-count=1"]
+        }
+      ],
+      "mutation_gated_commands": []
+    },
+    {
+      "id": "RG-03",
+      "title": "Typed capability and provider contracts",
+      "owner": "task-03",
+      "required_evidence_tier": "integration",
+      "requires_triple_zero": true,
+      "allows_ancestor_provenance": false,
+      "non_mutating_proof_commands": [
+        {
+          "id": "rg-03-capability-contracts",
+          "argv": ["go", "test", "./internal/agentcapabilities", "./internal/agentexec", "-run", "Test(CanonicalManifestOwnsAgentSurface|CanonicalManifestPinsPulseIntelligenceSurfaceContract|DockerContainerLifecycleWireCarriesFactsNotActionTruth|DockerAgentWireAndRuntimeDeclareNoLocalActionTruthModel|PendingDockerOperationBindsFullIdentityAndRejectsCrossTypeReuse)", "-count=1"]
+        }
+      ],
+      "mutation_gated_commands": []
+    },
+    {
+      "id": "RG-04",
+      "title": "Policy, approval floor, and plan identity",
+      "owner": "task-04",
+      "required_evidence_tier": "integration",
+      "requires_triple_zero": true,
+      "allows_ancestor_provenance": false,
+      "non_mutating_proof_commands": [
+        {
+          "id": "rg-04-policy-plan-hash",
+          "argv": ["go", "test", "./internal/actionlifecycle", "./internal/api", "-run", "TestExecuteUnderPolicyBarrierRevocationsMemoryStore|TestExecuteUnderPolicyBarrierRevocationsSQLite|TestHumanApprovalSurvivesAutomaticPolicyRevocationMemoryStore|TestHumanApprovalSurvivesAutomaticPolicyRevocationSQLite|TestEmergencyStopBlocksHumanAndPolicyAdmissionMemoryStore|TestEmergencyStopBlocksHumanAndPolicyAdmissionSQLite", "-count=1"]
+        }
+      ],
+      "mutation_gated_commands": []
+    },
+    {
+      "id": "RG-05",
+      "title": "Closed canonical mutation registry",
+      "owner": "task-05",
+      "required_evidence_tier": "integration",
+      "requires_triple_zero": true,
+      "allows_ancestor_provenance": false,
+      "non_mutating_proof_commands": [
+        {
+          "id": "rg-05-mutation-registry",
+          "argv": ["go", "test", "./internal/mutationregistry", "./internal/ai/tools", "-run", "Test(EveryRegisteredMutationHasDisposition|InfrastructureAPIRoutesResolveToRegistry|TransportCommandCatalogsResolveToRegistry|PatrolJobRegistrationResolvesToRegistry|RuntimeCandidateAuditNegativeFixtures|ActionRouteMethodAuthorityIsExactAndLookalikesFailClosed|NonAdmittingTransportMessagesCannotCarryDispatchAuthority|UnknownTransportLookalikeFailsClosed|RegisteredModelMutationSchemasResolveToClosedRegistry|RetiredMutationAliasesCannotShadowExtensions)", "-count=1"]
+        }
+      ],
+      "mutation_gated_commands": []
+    },
+    {
+      "id": "RG-06",
+      "title": "Limited unattended autonomy release authorization",
+      "owner": "task-08",
+      "required_evidence_tier": "real-lab",
+      "requires_triple_zero": true,
+      "allows_ancestor_provenance": false,
+      "non_mutating_proof_commands": [
+        {
+          "id": "rg-06-autonomy-authority",
+          "argv": ["go", "test", "./internal/api", "./internal/actionlifecycle", "-run", "Test(PatrolFullModeRunsStorageCleanupThroughCanonicalLifecycle|PatrolFullModeRunsHostUpdateThroughCanonicalLifecycle|PatrolAutopilotAcknowledgementAPIRejectsPublicAuthorityAndAPIToken|PatrolAutopilotActivationRequiresCurrentBoundAcknowledgement|PatrolAutopilotVersionRotationAndRevocationRaceFailClosed|PatrolAutopilotStoreUnavailableDoesNotChangeModeOrFabricateEvidence|EmergencyStopBlocksHumanAndPolicyAdmissionMemoryStore|EmergencyStopBlocksHumanAndPolicyAdmissionSQLite)", "-count=1"]
+        }
+      ],
+      "mutation_gated_commands": []
+    },
+    {
+      "id": "RG-07",
+      "title": "Durable dispatch and reconnect continuity",
+      "owner": "task-07",
+      "required_evidence_tier": "integration",
+      "requires_triple_zero": true,
+      "allows_ancestor_provenance": false,
+      "non_mutating_proof_commands": [
+        {
+          "id": "rg-07-durable-delivery",
+          "argv": ["go", "test", "./internal/actionlifecycle", "./internal/api", "./internal/agentexec", "-run", "Test(SQLiteRestartRecoveryReconcilesReceiptPendingWithoutResend|SQLiteRestartRecoveryNotFoundRemainsReceiptPendingWithoutResend|AuthenticatedServerNotFoundRecoveryStaysQueryOnlyAndReceiptPending|DockerContainerActionExecutorCallbackLossReconcilesReceiptWithoutRedispatch|HostStorageCleanupReconcileDelayedTerminalReceiptPreservesAgentAttestedEvidenceWithoutResend|HostUpdateReconcileDelayedTerminalReceiptPreservesAgentAttestedEvidenceWithoutResend|LegacyAgentWithoutReceiptProtocolRemainsConnectedButTypedMutationFailsClosed)", "-count=1"]
+        }
+      ],
+      "mutation_gated_commands": []
+    },
+    {
+      "id": "RG-08",
+      "title": "Final-SHA Docker lifecycle lab and browser certification",
+      "owner": "task-06",
+      "required_evidence_tier": "real-lab",
+      "requires_triple_zero": false,
+      "allows_ancestor_provenance": true,
+      "non_mutating_proof_commands": [
+        {
+          "id": "rg-08-docker-artifact-browser",
+          "argv": ["env", "PULSE_INTELLIGENCE_LAB_ARTIFACT=<released-final-sha-artifact>", "tests/integration/node_modules/.bin/playwright", "test", "--config=tests/integration/playwright.config.ts", "tests/84-docker-restart-real-lab-artifact.spec.ts", "--project=chromium"]
+        }
+      ],
+      "mutation_gated_commands": [
+        {
+          "id": "rg-08-colima-lab-mutation",
+          "argv": ["python3", "scripts/intelligence_lab/docker_restart_colima.py", "--run-id", "<release-id>"],
+          "authorization": "EXPLICIT_RELEASE_REQUIRED"
+        }
+      ]
+    },
+    {
+      "id": "RG-09",
+      "title": "Debian and Ubuntu APT update and cleanup certification",
+      "owner": "task-09",
+      "required_evidence_tier": "real-lab",
+      "requires_triple_zero": false,
+      "allows_ancestor_provenance": false,
+      "non_mutating_proof_commands": [
+        {
+          "id": "rg-09-apt-fake-contracts",
+          "argv": ["go", "test", "./internal/api", "./internal/agentexec", "./internal/hostagent", "-run", "Test(APTUpdateDetectorProposalApprovalDispatchAuditAndFindingReconciliation|APTUpdateCallbackLossServerRestartReconcilesTerminalAuditAndFindingWithoutResend|APTCacheCleanupDetectorProposalApprovalDispatchAuditAndFindingReconciliation|APTCacheCleanupCallbackLossServerRestartReconcilesTerminalAuditAndFindingWithoutResend|PackageUpdateManagerApplyUsesClosedAPTCommandCatalogAndVerifies|PackageUpdateManagerFailsClosedWhenRefreshFails|PackageUpdateManagerRefusesRefreshTimeInventoryDriftBeforeInstall|StorageCleanupManagerApplyUsesClosedAPTCatalogAndVerifiesBytes|StorageCleanupManagerRefusesFingerprintDriftBeforeMutation)", "-count=1"]
+        }
+      ],
+      "mutation_gated_commands": []
+    },
+    {
+      "id": "RG-10",
+      "title": "Canonical execution, verification, and compensation truth",
+      "owner": "task-10",
+      "required_evidence_tier": "integration",
+      "requires_triple_zero": false,
+      "allows_ancestor_provenance": false,
+      "non_mutating_proof_commands": [
+        {
+          "id": "rg-10-action-result-v2",
+          "argv": ["go", "test", "./internal/unifiedresources", "./internal/actionlifecycle", "./internal/api", "-run", "Test(ActionResultV2MemoryStoreRoundTrip|ActionResultV2SQLiteRoundTrip|ActionResultV2SurvivesSQLiteReopen|MalformedActionResultV2PersistsFailClosed|MalformedStoredActionResultV2FailsClosed|ExecutorTuplePostDispatchErrorPreservesReceiptPending)", "-count=1"]
+        }
+      ],
+      "mutation_gated_commands": []
+    },
+    {
+      "id": "RG-11",
+      "title": "Clean Product Trust browser certification",
+      "owner": "task-11",
+      "required_evidence_tier": "browser",
+      "requires_triple_zero": true,
+      "allows_ancestor_provenance": false,
+      "non_mutating_proof_commands": [
+        {
+          "id": "rg-11-product-trust-playwright",
+          "argv": ["env", "PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173", "tests/integration/node_modules/.bin/playwright", "test", "--config=tests/integration/playwright.config.ts", "tests/78-monitor-first-patrol-workbench.spec.ts", "tests/81-actions-inbox.spec.ts", "--project=chromium", "--grep", "APT"]
+        }
+      ],
+      "mutation_gated_commands": []
+    },
+    {
+      "id": "RG-12",
+      "title": "Final-SHA physical-device, live-relay, and aggregate certification",
+      "owner": "task-12",
+      "required_evidence_tier": "live-relay",
+      "requires_triple_zero": true,
+      "allows_ancestor_provenance": false,
+      "non_mutating_proof_commands": [
+        {
+          "id": "rg-12-aggregate-verdict",
+          "argv": ["python3", "scripts/release_control/pulse_intelligence_gate.py", "--check", "--matrix", "docs/release-control/v6/internal/pulse-intelligence-release-gate.json", "--sha", "<full-release-sha>", "--evidence", "<external-evidence.json>"]
+        }
+      ],
+      "mutation_gated_commands": []
+    }
+  ]
+}

@@ -104,6 +104,12 @@ jobs:
           PULSE_REPO_ROOT_PULSE_MOBILE: ${{ github.workspace }}/repos/pulse-mobile
         run: python3 scripts/release_control/status_audit.py --check
 
+      - name: Validate Pulse Intelligence release-gate schema
+        run: python3 scripts/release_control/pulse_intelligence_gate.py --validate-only --matrix docs/release-control/v6/internal/pulse-intelligence-release-gate.json
+
+      - name: Run Pulse Intelligence release-gate unit tests
+        run: python3 scripts/release_control/pulse_intelligence_gate_test.py
+
       - name: Run control plane audit
         env:
           PULSE_REPO_ROOT_PULSE: ${{ github.workspace }}/repos/pulse

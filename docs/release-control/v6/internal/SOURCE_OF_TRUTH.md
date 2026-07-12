@@ -463,6 +463,14 @@ Assertion design rules:
     current stable demo network/SSH/browser path without mutation, and the
     publish workflow must await demo deployment plus definitive verification;
     manual SSH deployment is not an acceptable release completion path.
+23. Do not authorize limited unattended Pulse Intelligence mutation until the
+    closed `RG-01` through `RG-12` matrix reports `GO` at the exact release
+    Git SHA. `scripts/release_control/pulse_intelligence_gate.py` is a
+    read-only verdict checker: the tracked matrix contains requirements only,
+    while concrete results come from a separate external or untracked evidence
+    document bound to the audited SHA selected at runtime. The checker must
+    never execute real-lab, device, relay, or other mutation-gated commands
+    itself.
 
 ## Locked Decisions
 

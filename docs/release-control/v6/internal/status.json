@@ -3949,10 +3949,10 @@
     },
     {
       "id": "RA35",
-      "summary": "Every Patrol-initiated infrastructure mutation originates as a typed action proposal and reaches execution only through the canonical action lifecycle; unsupported proposals fail closed with no raw-command fallback.",
+      "summary": "Passed unit and integration proof shows that covered Patrol mutation candidates use typed proposals and the canonical action lifecycle, while covered unsupported and raw-command paths fail closed. This does not certify final-SHA real-lab, browser, physical-device, or live-relay behavior; the aggregate Pulse Intelligence release gate remains blocked.",
       "kind": "invariant",
-      "blocking_level": "repo-ready",
-      "proof_type": "automated",
+      "blocking_level": "release-ready",
+      "proof_type": "hybrid",
       "lane_ids": [
         "L6",
         "L20"
@@ -3961,7 +3961,9 @@
         "ai-runtime",
         "api-contracts"
       ],
-      "release_gate_ids": [],
+      "release_gate_ids": [
+        "pulse-intelligence-rg-01-rg-12"
+      ],
       "proof_commands": [
         {
           "id": "ra35-apt-product-trust-browser",
@@ -6207,7 +6209,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Action governance has a first-class governed floor AND the typed action lifecycle is now the only autonomous route for Patrol: investigations run under a core-owned, non-interactive, read-only execution profile and can only emit a side-effect-free typed action proposal (patrol_propose_action), which the shared action lifecycle plans, approves, and executes with plan hashing, remediation locks, plan-drift revalidation, and read-after-write verification. Three policy-authorized verticals are live. Docker/Podman restart is capability-owned low-risk eligible. Agent-managed APT host updates are capability-owned elevated eligible and cross a closed typed host_update protocol with no command, package-selection, removal, or reboot authority; the agent owns metadata refresh, preflight simulation, guarded installation, and post-install simulation, while the audit records verified, failed, or honestly inconclusive outcomes plus reboot-required state. Agent-managed package-cache cleanup is capability-owned low-risk eligible and crosses a separate fingerprint-bound host_storage_cleanup protocol with no command, path, package selector, installed-package removal, or reboot authority; it is available only for meaningful reclaimable bytes on the actual pressured cache filesystem, and the audit verifies the bytes reclaimed. All three require explicit per-resource capability allowlists and optional recurring timezone windows, remain bounded by tenant Patrol mode and full-mode unlock, recheck policy/readiness before decision and dispatch, and record server-owned policy approval plus terminal verification in the same audit trail. Never-auto-remediate, missing/unknown policy, unsupported capabilities, stale/error/empty package or cleanup inventories, cleared storage pressure, dry-run/MFA floors, closed windows, and mode downgrades all fail closed. Action continuity is audit-authoritative and now has a Phase B1 durable transport foundation: execution admission atomically creates the deterministic dispatch attempt/outbox, a one-shot pre-send CAS prevents concurrent duplicate sends, expired pre-send claims safely requeue, post-send uncertainty remains receipt-pending for query-only reconciliation, explicit expiry is durable, and canonical detail plus pending/settled reads are tenant-scoped. Generic transport errors cannot fabricate receipts or terminal truth, legacy executing rows without attempts remain inert, callbacks trigger org-scoped re-reads, investigation reads recover missed transitions by trusted origin, desktop and mobile decisions use the canonical /api/actions routes, terminal verification maps honestly onto Patrol findings and push outcomes, and legacy command-shaped history remains inert. Task 08 Phase B1 also makes requester and decision authority server-owned, binds actor and approval requirement into plan identity, rechecks current tenant/RBAC/token scope, and records multi-actor approvals through revision-CAS append-only decision facts plus atomic lifecycle transitions. MFA-required decisions remain explicitly unavailable until a core verifier validates and consumes action-bound cryptographic evidence; labels and local biometrics are not MFA. Task 08 Phase B2 now makes Patrol Autopilot acknowledgement and activation server-owned: immutable human actor, credential, organization, current version, accepted limits, timestamps, and digest are persisted as append-only config evidence; effective full mode requires the exact current activation and falls back safely for legacy booleans, stale, revoked, expired, malformed, API-token, or cross-tenant evidence. This backend prerequisite does not close M7; Task 11 still owns explicit acknowledgement UX and browser/device proof, and Task 12 owns final certification. Task 10 Phase B1 now owns one versioned ActionResultV2 with separate execution and verification axes, bounded trust-domain evidence, fail-closed redaction and stable digesting, nested compensation truth, durable Memory/SQLite compatibility persistence, executor tuple enforcement, and non-collapsing event, finding, context, telemetry, and relay projections. M4, M6, and claim 19 remain open pending Task 05 producer migration, Task 07 recovery, Tasks 06/09 workflow lab observations, Task 11 browser presentation, and Task 12 certification against the final SHA. Remaining post-RC hardening also includes mobile/relay inbox and push-dedup consumption, broader tenant defaults/inheritance and automation rate budgets, richer dry-run providers, multi-actor UI and MSP delegation/inheritance, device-key/WebAuthn enrollment and verifier integration, additional package-manager and bounded cleanup providers beyond APT, separately governed reboot orchestration, and a real-lab detect-plan-execute-verify-rollback journey proof.",
+        "summary": "Action governance has a first-class typed lifecycle floor backed by unit and integration evidence: covered Patrol investigations are read-only, typed proposals cross shared planning, policy, approval, plan-hash, durable-delivery, audit, verification, and ActionResultV2 contracts, and covered raw or unsupported paths fail closed. Docker restart is the only implemented typed infrastructure vertical with an ancestor-bound Colima artifact; it is not certified against the final SHA. APT update and package-cache cleanup have typed fake-backed contracts but remain operationally open until disposable Debian and Ubuntu tier-6 evidence exists. Limited unattended autonomy remains NO-GO. Current continuity and fail-closed claims apply only to the passed unit and integration profiles, not to clean Product Trust browser, physical-device, live-relay, or final-SHA real-lab behavior. Task 10 remains the sole owner of execution, verification, evidence, compensation, and rollback truth. Task 12 owns the final RG-01 through RG-12 verdict, which remains blocked by RG-06, RG-08, RG-09, RG-11, and RG-12.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -7658,6 +7660,27 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/paid-runtime-build-attribution-alerting-automatic-private-pro-release-2026-06-15.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        }
+      ]
+    },
+    {
+      "id": "pulse-intelligence-rg-01-rg-12",
+      "summary": "Require the closed RG-01 through RG-12 Pulse Intelligence matrix to reach GO at the final Git SHA. Implemented unit and integration contracts do not substitute for missing Docker final-SHA lab/browser, Debian and Ubuntu APT tier-6, clean Product Trust Playwright, physical-device, or live-relay evidence.",
+      "owner": "task-12",
+      "blocking_level": "release-ready",
+      "minimum_evidence_tier": "real-external-e2e",
+      "status": "blocked",
+      "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L6",
+        "L20"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/pulse-intelligence-release-gate.json",
           "kind": "file",
           "evidence_tier": "test-proof"
         }
