@@ -515,8 +515,8 @@ func rg06BarrierMeasured(t *testing.T, name, expectedReason string, persistence 
 	}
 	barrierBefore := rg06MeasuredState(t, persistence, store, server, containerID, finding)
 	disposition, err := submit(finding.ID, investigation.ID)
-	teardown()
 	barrierAfter := rg06MeasuredState(t, persistence, store, server, containerID, finding)
+	teardown()
 	reset()
 	after := rg06MeasuredState(t, persistence, store, server, containerID, finding)
 	if disposition.State == string(unified.ActionStateCompleted) || err == nil || !strings.Contains(strings.ToLower(errorString(err)), strings.ToLower(expectedReason)) {
