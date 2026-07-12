@@ -252,6 +252,52 @@ func TestRouteAISessions_UndoLastTurnRetryOptions(t *testing.T) {
 	mockSvc.AssertExpectations(t)
 }
 
+func TestRouteAISessions_SteerSession(t *testing.T) {
+	mockSvc := &MockAIService{}
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("SteerSession", mock.Anything, "session-1", chat.SessionSteerRequest{
+		Prompt:          "also check pve2",
+		ClientMessageID: "client-row-1",
+	}).Return(&chat.SessionSteerResult{
+		Accepted:  true,
+		SessionID: "session-1",
+	}, nil)
+
+	handler := &AIHandler{}
+	setUnexportedField(t, handler, "defaultService", mockSvc)
+
+	router := &Router{aiHandler: handler}
+	body := strings.NewReader(`{"prompt":"also check pve2","client_message_id":"client-row-1"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/steer", body)
+	rec := httptest.NewRecorder()
+
+	router.routeAISessions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"accepted":true`) {
+		t.Fatalf("expected accepted result, got %s", rec.Body.String())
+	}
+	mockSvc.AssertExpectations(t)
+}
+
+func TestRouteAISessions_SteerSessionRejectsNonPost(t *testing.T) {
+	mockSvc := &MockAIService{}
+	handler := &AIHandler{}
+	setUnexportedField(t, handler, "defaultService", mockSvc)
+
+	router := &Router{aiHandler: handler}
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/sessions/session-1/steer", nil)
+	rec := httptest.NewRecorder()
+
+	router.routeAISessions(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected status %d, got %d", http.StatusMethodNotAllowed, rec.Code)
+	}
+}
+
 func TestRouteAISessions_RedoLastTurn(t *testing.T) {
 	mockSvc := &MockAIService{}
 	mockSvc.On("IsRunning").Return(true)

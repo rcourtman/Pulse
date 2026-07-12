@@ -68,6 +68,9 @@ interface MessageItemProps {
   queuedPosition?: number;
   queuedCount?: number;
   queuedPaused?: boolean;
+  // The follow-up was accepted for mid-turn steering and will join the
+  // running response at its next step; edit/remove are no longer offered.
+  queuedSteering?: boolean;
   onEditQueued?: () => void;
   onCancelQueued?: () => void;
 }
@@ -252,6 +255,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   const isQueuedUserMessage = () => isUser() && props.message.delivery === 'queued';
   const queuedStatusLabel = createMemo(() => {
     if (!isQueuedUserMessage()) return '';
+    if (props.queuedSteering) return 'Steering the running response';
     const position = props.queuedPosition;
     const count = props.queuedCount;
     const state = props.queuedPaused ? 'Paused' : 'Queued';

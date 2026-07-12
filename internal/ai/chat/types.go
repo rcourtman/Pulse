@@ -94,7 +94,12 @@ type Message struct {
 	ToolCalls        []ToolCall  `json:"tool_calls"`
 	ToolResult       *ToolResult `json:"tool_result,omitempty"`
 	Model            string      `json:"model,omitempty"`
-	Timestamp        time.Time   `json:"timestamp"`
+	// Steered marks a user message that was injected into a running agentic
+	// loop at a turn boundary (mid-turn steering) rather than opening a new
+	// turn. Steered user messages are persisted by the end-of-run save,
+	// unlike the turn-opening user prompt which is saved before the loop.
+	Steered   bool      `json:"steered,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 func EmptyMessage() Message {
@@ -455,6 +460,33 @@ type QuestionOption struct {
 // ErrorData is the data for "error" events
 type ErrorData struct {
 	Message string `json:"message"`
+}
+
+// SteerAppliedData is the data for "steer_applied" events: a steering
+// message was injected into the running loop at a turn boundary. The
+// originating client reconciles its pending row via ClientMessageID; other
+// clients on the same session render Prompt as a new steered user row.
+type SteerAppliedData struct {
+	SessionID       string `json:"session_id,omitempty"`
+	MessageID       string `json:"message_id,omitempty"`
+	ClientMessageID string `json:"client_message_id,omitempty"`
+	Prompt          string `json:"prompt,omitempty"`
+	Turn            int    `json:"turn"`
+}
+
+// SessionSteerRequest is the payload for POST /api/ai/sessions/{id}/steer.
+type SessionSteerRequest struct {
+	Prompt          string `json:"prompt"`
+	ClientMessageID string `json:"client_message_id,omitempty"`
+}
+
+// SessionSteerResult reports whether a steering message reached a running
+// loop. accepted=false with a reason is a normal outcome (e.g. the run
+// finished first); the client falls back to the ordinary queue drain.
+type SessionSteerResult struct {
+	Accepted  bool   `json:"accepted"`
+	SessionID string `json:"session_id"`
+	Reason    string `json:"reason,omitempty"` // "no_active_run" | "system_session" | "empty_prompt" | "steer_backlog"
 }
 
 // DoneData is the data for "done" events

@@ -130,6 +130,23 @@ describe('AI chat stream event contract', () => {
     expect(aiChatEventsSource).toContain('model?: string');
   });
 
+  it('exposes mid-turn steering injections as a typed stream contract', () => {
+    const event: AIChatStreamEvent = {
+      type: 'steer_applied',
+      data: {
+        session_id: 'sess-stream',
+        message_id: 'srv-1',
+        client_message_id: 'row-1',
+        prompt: 'also check pve2',
+        turn: 2,
+      },
+    };
+
+    expect(event.data.client_message_id).toBe('row-1');
+    expect(aiChatEventsSource).toContain('export interface SteerAppliedData');
+    expect(aiChatEventsSource).toContain("type: 'steer_applied'");
+  });
+
   it('exposes the estimated cumulative session cost on done events', () => {
     const done: DoneData = {
       session_id: 'sess-stream',

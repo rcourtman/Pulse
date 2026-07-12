@@ -66,6 +66,9 @@ func (s *capturingAIService) ForkSession(ctx context.Context, sessionID string) 
 func (s *capturingAIService) UndoLastTurn(ctx context.Context, sessionID string, opts chat.SessionTurnUndoOptions) (*chat.SessionTurnUndoResult, error) {
 	return &chat.SessionTurnUndoResult{Success: true, SessionID: sessionID}, nil
 }
+func (s *capturingAIService) SteerSession(ctx context.Context, sessionID string, req chat.SessionSteerRequest) (*chat.SessionSteerResult, error) {
+	return &chat.SessionSteerResult{Accepted: false, SessionID: sessionID, Reason: "no_active_run"}, nil
+}
 func (s *capturingAIService) RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error) {
 	return &chat.SessionTurnRedoResult{Success: true, SessionID: sessionID}, nil
 }

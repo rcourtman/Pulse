@@ -339,6 +339,13 @@ the `white_label` branding entitlement.
     that rule: public chat and relay input cannot serialize its org/action
     authorization context, and invalid approvals fail before signing or agent
     dispatch rather than falling through to a route-local trust shortcut.
+    The Assistant steer sub-route (`POST /api/ai/sessions/{id}/steer`) added
+    to the session dispatch is bound by the same rule: it requires
+    `ScopeAIChat`, carries conversation text only, cannot approve or bypass
+    a pending approval, cannot change the running turn's control level,
+    autonomous mode, or model route, rejects Pulse-owned system sessions,
+    and its response discloses only `accepted` plus a coarse reason, never
+    run internals, provider state, or transcript content.
     The Patrol action-broker and proposal-catalog factory glue wired here is bound by the
     same rule: it may connect the investigation orchestrator to the tenant-bound
     action lifecycle, but it exposes only typed-proposal capture and gives the

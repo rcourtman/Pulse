@@ -1004,6 +1004,11 @@ func (r *Router) routeAISessions(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 			r.aiHandler.HandleRedoLastTurn(w, req, sessionID)
+		case "steer":
+			if !ensureScope(w, req, config.ScopeAIChat) {
+				return
+			}
+			r.aiHandler.HandleSteerSession(w, req, sessionID)
 		case "revert":
 			if !ensureScope(w, req, config.ScopeAIChat) {
 				return

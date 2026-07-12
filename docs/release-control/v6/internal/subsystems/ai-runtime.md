@@ -1340,11 +1340,30 @@ deriving an older display status from `workflowStatusHistory`.
    pattern by using its persisted explicit route contract rather than terminal
    provider/model objects.
    Follow-up sends during an active Assistant response are chat-runtime queue
-   state by default. The drawer must accept and echo the user's follow-up as a
-   queued user turn without aborting or replacing the active model stream, must
-   show an itemized composer-adjacent queue with per-follow-up edit/remove
-   controls plus clear-all, and must drain queued turns in order only after the
-   active stream becomes idle. Queued follow-ups must snapshot the effective
+   state that steers the running response by default. The drawer must accept
+   and echo the user's follow-up as a queued user turn without aborting or
+   replacing the active model stream, must show an itemized composer-adjacent
+   queue with per-follow-up edit/remove controls plus clear-all, and must
+   offer each follow-up to the running loop through
+   `POST /api/ai/sessions/{id}/steer` (mid-turn steering). A steering-accepted
+   follow-up joins the loop at its next turn boundary (the abort-check site in
+   `agentic.go executeWithTools`) as a plain user message, never mid-provider-
+   stream and never mid-tool-batch; the loop announces the injection with a
+   `steer_applied` stream event carrying the client row id so the drawer
+   settles the pending row into a delivered user turn, splices the message
+   into `resultMessages` at its true position, and persists it through the
+   end-of-run save (whose skip-user-messages rule exempts `Steered` messages).
+   Steering carries prompt text only: it cannot change the model route,
+   control level, or autonomous mode of the running turn, does not extend the
+   turn budget or reset wrap-up brakes, and is rejected for system sessions.
+   Once accepted for steering, a follow-up row loses its edit/remove
+   affordances (the text is in the loop's hands). Delivery is not guaranteed:
+   a run that finishes before a boundary discards unconsumed steers without
+   persisting them, and the drawer, which keeps the row queued until
+   `steer_applied` arrives, drains it in order after the active stream
+   becomes idle exactly as before — the pre-steering queue semantics remain
+   the fallback path, and paused queues do not steer. Queued follow-ups must
+   snapshot the effective
    model route at enqueue time so a later model/provider switch cannot silently
    reroute an already-queued user turn, and both the transcript queued-user row
    and composer-adjacent queue row must surface that snapshotted route label when

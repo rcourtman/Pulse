@@ -153,8 +153,9 @@ grant backup visibility, recovery authority, or storage health privileges; those
 remain governed by the setup-script and source-specific backup API boundaries
 below.
 Assistant chat-session history endpoints in `internal/api/ai_handler.go`
-(session list/rename/fork/summarize and turn undo/redo, including the
-retry/regenerate expected-prompt guard on `POST /api/ai/sessions/{id}/undo`)
+(session list/rename/fork/summarize, turn undo/redo including the
+retry/regenerate expected-prompt guard on `POST /api/ai/sessions/{id}/undo`,
+and mid-turn steering via `POST /api/ai/sessions/{id}/steer`)
 are ai-runtime conversation-state surfaces only. Undoing or regenerating an
 Assistant turn rewrites chat transcript history; it is never a restore
 operation, does not revert storage mutations or governed actions the original

@@ -52,6 +52,7 @@ func main() {
 		reflect.TypeOf(chat.QuestionData{}),
 		reflect.TypeOf(chat.Question{}),
 		reflect.TypeOf(chat.QuestionOption{}),
+		reflect.TypeOf(chat.SteerAppliedData{}),
 		reflect.TypeOf(chat.DoneData{}),
 		reflect.TypeOf(chat.ErrorData{}),
 	}
@@ -155,6 +156,7 @@ func chatStreamEventUnion() string {
 	// The contract test covers {question_id, questions}; the UI currently expects session_id too.
 	// Keep session_id optional for backward compatibility.
 	buf.WriteString("  | { type: 'question'; data: QuestionData & { session_id?: string } }\n")
+	buf.WriteString("  | { type: 'steer_applied'; data: SteerAppliedData }\n")
 	buf.WriteString("  | { type: 'done'; data?: DoneData }\n")
 	buf.WriteString("  | { type: 'error'; data: ErrorData };\n")
 	return buf.String()

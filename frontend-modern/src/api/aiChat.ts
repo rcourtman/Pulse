@@ -37,6 +37,12 @@ export interface ChatSessionRedoResult {
   message?: string;
 }
 
+export interface ChatSessionSteerResult {
+  accepted: boolean;
+  session_id: string;
+  reason?: string; // "no_active_run" | "system_session" | "empty_prompt" | "steer_backlog"
+}
+
 export interface ChatSessionCompactionResult {
   success: boolean;
   status: 'compacted' | 'not_needed' | 'empty' | string;
@@ -407,6 +413,24 @@ export class AIChatAPI {
     return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/redo`, {
       method: 'POST',
     }) as Promise<ChatSessionRedoResult>;
+  }
+
+  // Steer the session's running response: the message joins the in-flight
+  // agentic loop at its next turn boundary. accepted=false (e.g. the run
+  // already finished) is a normal outcome; the caller keeps the follow-up
+  // queued and it drains as an ordinary new turn.
+  static async steerSession(
+    sessionId: string,
+    request: { prompt: string; clientMessageId?: string },
+  ): Promise<ChatSessionSteerResult> {
+    return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/steer`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: request.prompt,
+        ...(request.clientMessageId ? { client_message_id: request.clientMessageId } : {}),
+      }),
+    }) as Promise<ChatSessionSteerResult>;
   }
 
   // Stream chat - the main chat interface

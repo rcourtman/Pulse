@@ -1314,6 +1314,22 @@ payload shape change when the portal presents compact client rows.
     `AIChatAPI.undoLastTurn(sessionId, { expectedPrompt })` and
     `AIChatAPI.redoLastTurn(sessionId)` helpers so path encoding, guard
     trimming, and response shape stay canonical.
+    `POST /api/ai/sessions/{id}/steer` owns the mid-turn steering API
+    contract (`chat.SessionSteerRequest` -> `chat.SessionSteerResult`). The
+    request carries `prompt` plus an optional `client_message_id`; the
+    response is immediate JSON, never a second SSE stream, and
+    `accepted:false` with a `reason` (`no_active_run`, `system_session`,
+    `empty_prompt`, `steer_backlog` when the bounded per-session steering
+    inbox is full) is a normal outcome that clients handle by keeping the
+    follow-up on the ordinary queue-drain path. Steering cannot carry model
+    route, control level, or autonomous-mode changes. Confirmation of
+    delivery arrives only on the session's existing chat stream as a
+    generated `steer_applied` event (`chat.SteerAppliedData`, in
+    `aiChatEvents.ts` and the `AIChatStreamEvent` union) echoing
+    `client_message_id`, the server message id, the prompt, and the turn
+    index; clients must treat the endpoint's `accepted:true` as inbox
+    receipt, not delivery. Browser clients must use the shared
+    `AIChatAPI.steerSession(sessionId, { prompt, clientMessageId })` helper.
     OpenCode-style file diff/revert session routes are deliberately not part
     of Pulse's supported Assistant session contract: Pulse sessions do not own
     local code-file edits, and infrastructure mutations must be reviewed

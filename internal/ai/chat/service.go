@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -265,6 +266,58 @@ func (s *Service) unregisterActiveLoop(sessionID string, loop *AgenticLoop) {
 			delete(s.questionExecutions, questionID)
 		}
 	}
+}
+
+// SteerSession routes a mid-turn steering message to the session's running
+// agentic loop for injection at the next turn boundary. accepted=false with
+// a reason is a normal outcome: the caller falls back to the ordinary
+// follow-up queue. Steering carries prompt text only — it cannot change the
+// model route, control level, or autonomous mode of the running turn.
+func (s *Service) SteerSession(ctx context.Context, sessionID string, req SessionSteerRequest) (*SessionSteerResult, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if err := validateSessionID(sessionID); err != nil {
+		return nil, err
+	}
+	result := &SessionSteerResult{SessionID: sessionID}
+	if IsSystemSessionID(sessionID) {
+		result.Reason = "system_session"
+		return result, nil
+	}
+	prompt := strings.TrimSpace(req.Prompt)
+	if prompt == "" {
+		result.Reason = "empty_prompt"
+		return result, nil
+	}
+
+	s.activeMu.RLock()
+	var loops []*AgenticLoop
+	for loop := range s.activeExecutions[sessionID] {
+		loops = append(loops, loop)
+	}
+	s.activeMu.RUnlock()
+	if len(loops) == 0 {
+		result.Reason = "no_active_run"
+		return result, nil
+	}
+
+	msg := Message{
+		ID:        uuid.New().String(),
+		Role:      "user",
+		Content:   prompt,
+		Steered:   true,
+		Timestamp: time.Now(),
+	}
+	for _, loop := range loops {
+		if err := loop.Steer(sessionID, msg, req.ClientMessageID); err != nil {
+			if errors.Is(err, errSteerBacklogFull) {
+				result.Reason = "steer_backlog"
+				return result, nil
+			}
+			return nil, err
+		}
+	}
+	result.Accepted = true
+	return result, nil
 }
 
 func assistantContextScopeForChatTurn(
@@ -996,8 +1049,9 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 	// Save result messages
 	for _, msg := range resultMessages {
-		// Skip user messages (already saved)
-		if msg.Role == "user" && msg.ToolResult == nil {
+		// Skip user messages (already saved) — except steered ones, which
+		// entered the conversation inside the loop and exist nowhere else.
+		if msg.Role == "user" && msg.ToolResult == nil && !msg.Steered {
 			continue
 		}
 		if msg.Role == "assistant" && strings.TrimSpace(msg.Model) == "" {

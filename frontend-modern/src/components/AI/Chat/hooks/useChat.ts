@@ -126,6 +126,11 @@ export interface QueuedFollowUp {
   findingId?: string;
   sendOptions?: SendMessageOptions;
   timestamp: Date;
+  // The backend accepted this follow-up for mid-turn steering: it will join
+  // the running response at its next step. The row can no longer be edited
+  // or removed (the text is already in the loop's hands); if the run ends
+  // before delivery, the backend discards it and the row drains normally.
+  steering?: boolean;
 }
 
 export interface RestoredPromptDraft {
@@ -1344,6 +1349,40 @@ export function useChat(options: UseChatOptions = {}) {
       applyStreamSessionId(extractSessionId(event.data));
     }
 
+    if (event.type === 'steer_applied') {
+      const data = (event.data ?? {}) as {
+        client_message_id?: string;
+        message_id?: string;
+        prompt?: string;
+      };
+      const clientMessageId =
+        typeof data.client_message_id === 'string' ? data.client_message_id : '';
+      const prompt = typeof data.prompt === 'string' ? data.prompt : '';
+      const queued = clientMessageId
+        ? queuedFollowUps().find((entry) => entry.messageId === clientMessageId)
+        : undefined;
+      if (queued) {
+        // Our pending row was injected into the running response: settle it
+        // into an ordinary delivered user message.
+        setQueuedFollowUps((prev) => prev.filter((entry) => entry.id !== queued.id));
+        setMessages((prev) =>
+          prev.map((msg) => (msg.id === queued.messageId ? { ...msg, delivery: undefined } : msg)),
+        );
+      } else if (prompt.trim()) {
+        // Another client steered this session; echo the injected user turn.
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: typeof data.message_id === 'string' && data.message_id ? data.message_id : generateId(),
+            role: 'user',
+            content: prompt,
+            timestamp: new Date(),
+          },
+        ]);
+      }
+      return;
+    }
+
     if (event.type === 'workflow_state') {
       const workflowStatus = extractWorkflowStatus(event.data);
       const startedModel =
@@ -1922,7 +1961,35 @@ export function useChat(options: UseChatOptions = {}) {
     logger.debug('[useChat] Queued follow-up while assistant response is streaming', {
       queuedFollowUpId: id,
     });
+    void attemptSteer(queuedFollowUp);
     return true;
+  };
+
+  // Offer a queued follow-up to the running response. Acceptance only means
+  // the backend inbox holds it — the row stays queued until steer_applied
+  // confirms injection, so an undelivered steer still drains normally.
+  const attemptSteer = async (entry: QueuedFollowUp) => {
+    const currentSessionId = sessionId().trim();
+    if (!currentSessionId) return;
+    try {
+      const result = await AIChatAPI.steerSession(currentSessionId, {
+        prompt: entry.prompt,
+        clientMessageId: entry.messageId,
+      });
+      if (!result.accepted) {
+        logger.debug('[useChat] Steer not accepted; follow-up stays queued', {
+          reason: result.reason,
+        });
+        return;
+      }
+      setQueuedFollowUps((prev) =>
+        prev.map((candidate) =>
+          candidate.id === entry.id ? { ...candidate, steering: true } : candidate,
+        ),
+      );
+    } catch (error) {
+      logger.warn('[useChat] Steering attempt failed; follow-up stays queued', error);
+    }
   };
 
   const startMessageSend = async (
@@ -2141,7 +2208,9 @@ export function useChat(options: UseChatOptions = {}) {
     const item = queuedFollowUps().find((entry) => entry.id === id);
     if (!item) return false;
     if (isLoading()) {
-      return promoteQueuedFollowUp(id);
+      const promoted = promoteQueuedFollowUp(id);
+      if (promoted && !item.steering) void attemptSteer(item);
+      return promoted;
     }
 
     setQueuedFollowUpsPaused(false);

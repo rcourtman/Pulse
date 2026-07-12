@@ -500,6 +500,14 @@ only. Lifecycle surfaces and agents must not interpret an undone or
 regenerated Assistant turn as reverting any lifecycle action, approval, or
 agent command the original turn produced; governed action history remains
 the only revert authority for infrastructure changes.
+Mid-turn steering through `POST /api/ai/sessions/{id}/steer` is likewise
+conversation input only: it adds a user message to a running Assistant loop
+at a turn boundary. A steering message grants no agent command authority,
+cannot approve, deny, or bypass a pending approval, cannot escalate the
+running turn's control level or autonomous mode, and must not be
+interpreted by lifecycle surfaces as operator authorization for any action
+the steered turn subsequently proposes; those proposals still route through
+the governed approval and action lifecycle unchanged.
 The native Assistant surface-tool inventory at
 `GET /api/ai/assistant/surface-tools` is also AI-runtime/API-contract metadata:
 lifecycle surfaces may display which Assistant tools are available, but must

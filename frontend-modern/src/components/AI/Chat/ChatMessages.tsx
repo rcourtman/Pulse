@@ -223,6 +223,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
           position: index + 1,
           count: entries.length,
           paused: Boolean(props.queuedFollowUpsPaused),
+          steering: Boolean(entry.steering),
         },
       ]),
     );
@@ -333,8 +334,9 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                 queuedPosition={queuedMeta()?.position}
                 queuedCount={queuedMeta()?.count}
                 queuedPaused={queuedMeta()?.paused}
+                queuedSteering={queuedMeta()?.steering}
                 onEditQueued={
-                  queuedMeta() && props.onEditQueuedFollowUp
+                  queuedMeta() && !queuedMeta()?.steering && props.onEditQueuedFollowUp
                     ? () => {
                         const meta = queuedMeta();
                         if (meta) props.onEditQueuedFollowUp?.(meta.id);
@@ -342,7 +344,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                     : undefined
                 }
                 onCancelQueued={
-                  queuedMeta() && props.onCancelQueuedFollowUp
+                  queuedMeta() && !queuedMeta()?.steering && props.onCancelQueuedFollowUp
                     ? () => {
                         const meta = queuedMeta();
                         if (meta) props.onCancelQueuedFollowUp?.(meta.id);

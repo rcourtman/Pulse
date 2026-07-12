@@ -11,6 +11,7 @@ vi.mock('@/api/aiChat', () => ({
     answerQuestion: vi.fn(),
     undoLastTurn: vi.fn(),
     redoLastTurn: vi.fn(),
+    steerSession: vi.fn(),
   },
 }));
 
@@ -43,6 +44,7 @@ const mockAbortSession = AIChatAPI.abortSession as ReturnType<typeof vi.fn>;
 const mockAnswerQuestion = AIChatAPI.answerQuestion as ReturnType<typeof vi.fn>;
 const mockUndoLastTurn = AIChatAPI.undoLastTurn as ReturnType<typeof vi.fn>;
 const mockRedoLastTurn = AIChatAPI.redoLastTurn as ReturnType<typeof vi.fn>;
+const mockSteerSession = AIChatAPI.steerSession as ReturnType<typeof vi.fn>;
 const mockNotifyError = notificationStore.error as ReturnType<typeof vi.fn>;
 
 type TestStreamEvent = StreamEvent | { type: string; data?: unknown };
@@ -829,6 +831,131 @@ describe('useChat', () => {
       resolveSecond();
       await new Promise((r) => setTimeout(r, 0));
       expect(chat.isLoading()).toBe(false);
+      dispose();
+    });
+
+    it('steers a follow-up into the running response when the backend accepts', async () => {
+      let fireEvent!: (e: TestStreamEvent) => void;
+      let resolveFirst!: () => void;
+      mockChat.mockImplementationOnce(
+        (_p: string, _s: string, _m: string | undefined, onEvent: (e: StreamEvent) => void) => {
+          fireEvent = onEvent as (e: TestStreamEvent) => void;
+          return new Promise<void>((resolve) => {
+            resolveFirst = resolve;
+          });
+        },
+      );
+      mockSteerSession.mockResolvedValueOnce({ accepted: true, session_id: 'sess' });
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      const first = chat.sendMessage('first');
+      await new Promise((r) => setTimeout(r, 0));
+
+      await chat.sendMessage('also check pve2');
+      await new Promise((r) => setTimeout(r, 0));
+
+      const entry = chat.queuedFollowUps()[0];
+      expect(mockSteerSession).toHaveBeenCalledWith('sess', {
+        prompt: 'also check pve2',
+        clientMessageId: entry.messageId,
+      });
+      expect(entry.steering).toBe(true);
+
+      // Backend confirms injection: the pending row settles into an
+      // ordinary delivered user message and leaves the queue.
+      fireEvent({
+        type: 'steer_applied',
+        data: {
+          client_message_id: entry.messageId,
+          message_id: 'srv-steer-1',
+          prompt: 'also check pve2',
+          turn: 1,
+        },
+      });
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(chat.queuedFollowUpCount()).toBe(0);
+      const steered = chat.messages().find((m) => m.content === 'also check pve2');
+      expect(steered?.delivery).toBeUndefined();
+
+      resolveFirst();
+      await first;
+      await new Promise((r) => setTimeout(r, 0));
+      // Nothing drains afterwards: the steered message must not re-send.
+      expect(mockChat).toHaveBeenCalledTimes(1);
+      dispose();
+    });
+
+    it('keeps the follow-up queued and drains normally when steering is not accepted', async () => {
+      let resolveFirst!: () => void;
+      let resolveSecond!: () => void;
+      mockChat
+        .mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve) => {
+              resolveFirst = resolve;
+            }),
+        )
+        .mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve) => {
+              resolveSecond = resolve;
+            }),
+        );
+      mockSteerSession.mockResolvedValueOnce({
+        accepted: false,
+        session_id: 'sess',
+        reason: 'no_active_run',
+      });
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      const first = chat.sendMessage('first');
+      await new Promise((r) => setTimeout(r, 0));
+
+      await chat.sendMessage('second');
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(chat.queuedFollowUps()[0]?.steering).toBeFalsy();
+
+      resolveFirst();
+      await first;
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockChat).toHaveBeenCalledTimes(2);
+      expect(mockChat.mock.calls[1][0]).toBe('second');
+
+      resolveSecond();
+      await new Promise((r) => setTimeout(r, 0));
+      dispose();
+    });
+
+    it("renders another client's steer as a delivered user message", async () => {
+      let fireEvent!: (e: TestStreamEvent) => void;
+      let resolveFirst!: () => void;
+      mockChat.mockImplementationOnce(
+        (_p: string, _s: string, _m: string | undefined, onEvent: (e: StreamEvent) => void) => {
+          fireEvent = onEvent as (e: TestStreamEvent) => void;
+          return new Promise<void>((resolve) => {
+            resolveFirst = resolve;
+          });
+        },
+      );
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      const first = chat.sendMessage('first');
+      await new Promise((r) => setTimeout(r, 0));
+
+      fireEvent({
+        type: 'steer_applied',
+        data: { client_message_id: 'foreign-row', message_id: 'srv-9', prompt: 'from another tab', turn: 2 },
+      });
+      await new Promise((r) => setTimeout(r, 0));
+
+      const echoed = chat.messages().find((m) => m.content === 'from another tab');
+      expect(echoed).toMatchObject({ role: 'user' });
+
+      resolveFirst();
+      await first;
       dispose();
     });
 

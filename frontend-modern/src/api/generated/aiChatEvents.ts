@@ -90,6 +90,14 @@ export interface SessionData {
   id: string;
 }
 
+export interface SteerAppliedData {
+  session_id?: string;
+  message_id?: string;
+  client_message_id?: string;
+  prompt?: string;
+  turn: number;
+}
+
 export interface ThinkingData {
   text: string;
 }
@@ -150,5 +158,6 @@ export type AIChatStreamEvent =
   | { type: 'tool_end'; data: ToolEndData }
   | { type: 'approval_needed'; data: ApprovalNeededData }
   | { type: 'question'; data: QuestionData & { session_id?: string } }
+  | { type: 'steer_applied'; data: SteerAppliedData }
   | { type: 'done'; data?: DoneData }
   | { type: 'error'; data: ErrorData };

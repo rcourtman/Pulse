@@ -498,6 +498,7 @@ type AgenticLoop struct {
 	mu             sync.Mutex
 	aborted        map[string]bool                  // sessionID -> aborted
 	pendingQs      map[string]chan []QuestionAnswer // questionID -> answer channel
+	pendingSteers  map[string][]pendingSteer        // sessionID -> steering messages awaiting the next turn boundary
 	autonomousMode bool                             // When true, don't wait for approvals (for investigations)
 	// executionProfile is the core-owned request posture (interactive
 	// Assistant, Patrol detection, Patrol investigation). It owns
@@ -537,6 +538,7 @@ func NewAgenticLoop(provider providers.StreamingProvider, executor *tools.PulseT
 		orgID:            approval.DefaultOrgID,
 		aborted:          make(map[string]bool),
 		pendingQs:        make(map[string]chan []QuestionAnswer),
+		pendingSteers:    make(map[string][]pendingSteer),
 	}
 }
 
@@ -599,6 +601,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		a.mu.Lock()
 		delete(a.aborted, sessionID)
 		a.mu.Unlock()
+		// Unconsumed steers are dropped, never persisted: the client keeps
+		// its row queued until steer_applied confirms delivery, so an
+		// undelivered steer re-sends as a normal follow-up turn.
+		a.discardPendingSteers(sessionID)
 	}()
 
 	// Convert our messages to provider format
@@ -653,6 +659,30 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		modelName := a.modelName
 		requestSanitizer := a.requestSanitizer
 		a.mu.Unlock()
+
+		// === MID-TURN STEERING: inject queued user messages at the boundary ===
+		// Steers arrive via Service.SteerSession while a turn streams or its
+		// tools run; they join the conversation here, before the next model
+		// call, so the model reads them as ordinary user turns. Each one is
+		// announced on the stream so the drawer can settle its pending row.
+		for _, steer := range a.takePendingSteers(sessionID) {
+			msg := steer.message.NormalizeCollections()
+			providerMessages = append(providerMessages, convertToProviderMessages([]Message{msg})...)
+			resultMessages = append(resultMessages, msg)
+			if data, err := json.Marshal(SteerAppliedData{
+				SessionID:       sessionID,
+				MessageID:       msg.ID,
+				ClientMessageID: steer.clientMessageID,
+				Prompt:          msg.Content,
+				Turn:            turn,
+			}); err == nil {
+				callback(StreamEvent{Type: "steer_applied", Data: data})
+			}
+			log.Info().
+				Int("turn", turn).
+				Str("session_id", sessionID).
+				Msg("[AgenticLoop] Steering message injected at turn boundary")
+		}
 
 		// Record telemetry for loop iteration
 		if metrics := GetAIMetrics(); metrics != nil {

@@ -243,6 +243,15 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    atomic approval consume, not a route-wide scan or request-hot-path fan-out;
    grant signing and WebSocket writes happen only after that bounded verifier
    succeeds.
+   Assistant mid-turn steering (`POST /api/ai/sessions/{id}/steer`, routed
+   through the session sub-route dispatch in `internal/api/router.go`) is a
+   point operation on the same terms: a map lookup of the session's active
+   loop plus an in-memory inbox append, returning immediate JSON with no
+   second SSE stream, no session-file read, and no provider work on the
+   request path. The per-session steering inbox is bounded
+   (`maxPendingSteersPerSession`), so repeated steers cannot grow service
+   memory or the running turn's prompt without limit; overflow returns
+   `steer_backlog` and the message stays on the client's queue.
    Scheduled-report background worker registration is allowed in router startup,
    but it must stay outside protected request handling. Due-schedule scans may
    enumerate tenant organization IDs and load each workspace schedule store, but

@@ -61,6 +61,7 @@ type AIService interface {
 	ForkSession(ctx context.Context, sessionID string) (*chat.Session, error)
 	UndoLastTurn(ctx context.Context, sessionID string, opts chat.SessionTurnUndoOptions) (*chat.SessionTurnUndoResult, error)
 	RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error)
+	SteerSession(ctx context.Context, sessionID string, req chat.SessionSteerRequest) (*chat.SessionSteerResult, error)
 	AnswerQuestion(ctx context.Context, questionID string, answers []chat.QuestionAnswer) error
 	AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract
 	SetAlertProvider(provider chat.AssistantAlertProvider)
@@ -3255,6 +3256,43 @@ func (h *AIHandler) HandleRedoLastTurn(w http.ResponseWriter, r *http.Request, s
 	}
 
 	result, err := svc.RedoLastTurn(ctx, sessionID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// HandleSteerSession handles POST /api/ai/sessions/{id}/steer.
+// It routes a mid-turn steering message to the session's running agentic
+// loop; accepted=false with a reason is a normal outcome and the client
+// falls back to the ordinary follow-up queue.
+func (h *AIHandler) HandleSteerSession(w http.ResponseWriter, r *http.Request, sessionID string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	ctx := r.Context()
+	if !h.IsRunning(ctx) {
+		http.Error(w, "Pulse Assistant is not running", http.StatusServiceUnavailable)
+		return
+	}
+
+	svc := h.GetService(ctx)
+	if svc == nil {
+		http.Error(w, "Pulse Assistant service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	var steerReq chat.SessionSteerRequest
+	if err := json.NewDecoder(r.Body).Decode(&steerReq); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	result, err := svc.SteerSession(ctx, sessionID, steerReq)
 	if err != nil {
 		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return

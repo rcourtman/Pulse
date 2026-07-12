@@ -1407,6 +1407,24 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('steers a running session through the steer endpoint', async () => {
+    const result = { accepted: true, session_id: 'session/root' };
+    apiFetchJSONMock.mockResolvedValueOnce(result);
+
+    await expect(
+      AIChatAPI.steerSession('session/root', {
+        prompt: 'also check pve2',
+        clientMessageId: 'row-1',
+      }),
+    ).resolves.toEqual(result);
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/sessions/session%2Froot/steer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: 'also check pve2', client_message_id: 'row-1' }),
+    });
+  });
+
   it('sends the expected-prompt guard body when undo runs for a retry', async () => {
     const undoResult = {
       success: true,

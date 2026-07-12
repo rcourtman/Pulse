@@ -1605,6 +1605,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   const editQueuedFollowUp = (id: string) => {
+    // A steering follow-up is already in the running loop's hands; its text
+    // can no longer be recalled for editing.
+    if (chat.queuedFollowUps().find((entry) => entry.id === id)?.steering) return;
     const queued = chat.takeQueuedFollowUp(id);
     if (!queued) return;
     resetPromptHistoryNavigation();
@@ -1666,6 +1669,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     id: string,
   ) => {
     if (event.defaultPrevented || event.target !== event.currentTarget) return;
+    if (chat.queuedFollowUps().find((entry) => entry.id === id)?.steering) return;
 
     if (event.key === 'Enter') {
       event.preventDefault();
@@ -5055,10 +5059,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         {(queued, index) => {
                           const preview = () => queuedFollowUpPreview(queued.prompt);
                           const routeLabel = () => queuedFollowUpRouteLabel(queued);
-                          const rowLabel = () =>
-                            routeLabel()
+                          const rowLabel = () => {
+                            if (queued.steering) {
+                              return `Steering follow-up: ${preview()}. It joins the running response at its next step.`;
+                            }
+                            return routeLabel()
                               ? `Queued follow-up: ${preview()}. Route: ${routeLabel()}. Press Enter to edit or Delete to remove.`
                               : `Queued follow-up: ${preview()}. Press Enter to edit or Delete to remove.`;
+                          };
                           return (
                             <div
                               class="flex min-h-7 items-center gap-2 rounded-md bg-white/70 px-2 py-1 text-xs text-blue-900 outline-none transition-colors focus:bg-white focus:ring-2 focus:ring-blue-500/40 dark:bg-blue-900/30 dark:text-blue-100 dark:focus:bg-blue-900/50"
@@ -5083,7 +5091,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
                             >
                               <span class="min-w-0 flex-1">
                                 <span class="block truncate">{preview()}</span>
-                                <Show when={routeLabel()}>
+                                <Show when={queued.steering}>
+                                  <span class="block truncate text-[10px] font-medium text-blue-700 dark:text-blue-200">
+                                    Steering the running response
+                                  </span>
+                                </Show>
+                                <Show when={!queued.steering && routeLabel()}>
                                   {(label) => (
                                     <span
                                       class="block truncate text-[10px] font-medium text-blue-700 dark:text-blue-200"
@@ -5094,7 +5107,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                   )}
                                 </Show>
                               </span>
-                              <Show when={chat.queuedFollowUpCount() > 1 && index() > 0}>
+                              <Show
+                                when={
+                                  chat.queuedFollowUpCount() > 1 && index() > 0 && !queued.steering
+                                }
+                              >
                                 <ActionIconButton
                                   onClick={() => sendQueuedFollowUpNext(queued.id)}
                                   tone="accentGhost"
@@ -5116,27 +5133,29 @@ export const AIChat: Component<AIChatProps> = (props) => {
                                   <SendIcon class="h-3.5 w-3.5" aria-hidden="true" />
                                 </ActionIconButton>
                               </Show>
-                              <ActionIconButton
-                                onClick={() => editQueuedFollowUp(queued.id)}
-                                tone="accentGhost"
-                                size="xs"
-                                title="Edit queued follow-up"
-                                label={`Edit queued follow-up: ${preview()}`}
-                              >
-                                <PencilIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                              </ActionIconButton>
-                              <ActionIconButton
-                                onClick={() => {
-                                  chat.cancelQueuedFollowUp(queued.id);
-                                  focusComposer();
-                                }}
-                                tone="accentGhost"
-                                size="xs"
-                                title="Remove queued follow-up"
-                                label={`Remove queued follow-up: ${preview()}`}
-                              >
-                                <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
-                              </ActionIconButton>
+                              <Show when={!queued.steering}>
+                                <ActionIconButton
+                                  onClick={() => editQueuedFollowUp(queued.id)}
+                                  tone="accentGhost"
+                                  size="xs"
+                                  title="Edit queued follow-up"
+                                  label={`Edit queued follow-up: ${preview()}`}
+                                >
+                                  <PencilIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                                </ActionIconButton>
+                                <ActionIconButton
+                                  onClick={() => {
+                                    chat.cancelQueuedFollowUp(queued.id);
+                                    focusComposer();
+                                  }}
+                                  tone="accentGhost"
+                                  size="xs"
+                                  title="Remove queued follow-up"
+                                  label={`Remove queued follow-up: ${preview()}`}
+                                >
+                                  <XIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                                </ActionIconButton>
+                              </Show>
                             </div>
                           );
                         }}
