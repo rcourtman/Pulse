@@ -5817,3 +5817,19 @@ class, and honest inconclusive outcomes. They do not promise independent
 verification, and execution success remains separate from outcome truth.
 Task 11 still owns the explicit acknowledgement UX and browser/device proof;
 Task 12 still owns final certification.
+
+### Task 09 APT finding producer (partial)
+
+`internal/ai/findings_apt_workflows.go` deterministically produces agent-managed
+APT update and pressure-gated package-cache findings. Admission requires fresh
+dual-timestamp telemetry and the exact current canonical capability/handler.
+Stale, skewed, replayed, errored, or capability-less state is unknown and must
+not resolve an active finding; only fresh authoritative clear evidence or
+explicit resource removal reconciles it. Durable disconnect/restart
+reconciliation remains open on the Task 07 generic agent-operation receipt
+continuation.
+
+This partial producer/transport slice does not close L20 or RA35, claims 16 or
+17, either APT workflow scorecard, durable disconnect/restart/late-receipt/no-
+blind-replay evidence, browser workflow evidence, or Debian/Ubuntu real-lab
+evidence. Those remain explicit continuation or certification inputs.

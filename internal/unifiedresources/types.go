@@ -787,6 +787,7 @@ type AgentPackageUpdateMeta struct {
 	PendingCount   int                  `json:"pendingCount"`
 	Packages       []AgentPackageUpdate `json:"packages,omitempty"`
 	CheckedAt      time.Time            `json:"checkedAt,omitempty"`
+	ObservedAt     time.Time            `json:"observedAt,omitempty"`
 	RebootRequired bool                 `json:"rebootRequired,omitempty"`
 	Error          string               `json:"error,omitempty"`
 }
@@ -803,6 +804,7 @@ type AgentStorageCleanupMeta struct {
 	Fingerprint      string    `json:"fingerprint,omitempty"`
 	ReclaimableBytes int64     `json:"reclaimableBytes"`
 	CheckedAt        time.Time `json:"checkedAt,omitempty"`
+	ObservedAt       time.Time `json:"observedAt,omitempty"`
 	Error            string    `json:"error,omitempty"`
 }
 

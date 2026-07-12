@@ -1710,6 +1710,13 @@ through the canonical resource model, but unified-resource consumers must not
 reintroduce removed workload aliases or feature-local resource-type shims just
 to satisfy one table, drawer, or badge surface.
 
+Task 09 owns shared APT telemetry freshness in
+`internal/unifiedresources/host_apt_telemetry.go`. Capability construction,
+finding admission, and execution readiness consume the same dual-timestamp and
+SHA-256 validation rules. A retransmitted old agent observation stays stale
+when freshly received, future/skewed clocks fail closed, and capability removal
+cannot be bypassed by duplicated telemetry predicates.
+
 ### Patrol Autopilot authority evidence
 
 `internal/unifiedresources/patrol_autopilot.go` owns the versioned immutable

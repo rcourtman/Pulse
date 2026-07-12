@@ -4356,3 +4356,19 @@ Task 08 actor/RBAC/approval boundary, Task 07 dispatch contract, and Task 10
 two-axis result contract. API tokens are ineligible for the human Autopilot
 acknowledgement even where an owner-bound token remains compatible with an
 authenticated action capability.
+
+### Task 09 typed APT transport and shared package-manager authority (partial)
+
+Host update and package-cache cleanup use one strict server/agent codec;
+unknown fields, trailing JSON, malformed identity, and open command, path,
+package, removal, or reboot authority are rejected. Pending delivery binds the
+authenticated agent, dispatch request, action, and operation. All APT
+inspection, refresh, update, and cleanup paths share one composition-root-
+injected lease; nil authority fails closed. Metadata refresh is the first
+possible external effect.
+
+This slice contains no APT-specific journal or replay store. Accepted Task 07
+has server dispatch attempts and query-only reconciliation but no reusable
+agent-side durable typed-operation receipt primitive. Disconnect, restart,
+late-receipt, and no-blind-replay proof stay open until that generic crash-safe
+contract exists and Task 09 consumes it.

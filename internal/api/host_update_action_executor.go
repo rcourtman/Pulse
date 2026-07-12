@@ -92,15 +92,8 @@ func (e hostUpdateActionExecutor) ExecuteAction(ctx context.Context, record unif
 	}
 
 	output := fmt.Sprintf("APT package updates: %d pending before, %d pending after; reboot required: %t", result.Before.PendingCount, result.After.PendingCount, result.After.RebootRequired)
-	execution := &unified.ExecutionResult{
-		Success:      result.Success,
-		Output:       output,
-		Verification: projectHostUpdateVerification(result),
-	}
-	if !result.Success {
-		execution.ErrorMessage = "host package update failed on the agent"
-	}
-	return execution, nil
+	beforeBound := result.Before.InventoryHash == resource.Agent.PackageUpdates.InventoryHash
+	return hostAPTExecutionResult(record.Request.ResourceID, agentID, agentexec.HostUpdateOperationInstall, output, result.Success, result.MutationStarted, result.Verification, beforeBound, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())
 }
 
 func (e hostUpdateActionExecutor) currentResource(ctx context.Context, resourceID string) (unified.Resource, error) {
@@ -142,7 +135,7 @@ func (e hostUpdateActionExecutor) validateResource(resource unified.Resource) er
 	if !hostPackageUpdateInventoryHashPattern.MatchString(strings.TrimSpace(status.InventoryHash)) {
 		return fmt.Errorf("host package update inventory fingerprint is invalid")
 	}
-	if status.CheckedAt.IsZero() || e.currentTime().Sub(status.CheckedAt.UTC()) > unified.HostPackageUpdateFreshness {
+	if !unified.HostPackageUpdateTelemetryFresh(status, e.currentTime()) {
 		return fmt.Errorf("host package update inventory is stale")
 	}
 	if status.PendingCount <= 0 {
@@ -160,24 +153,6 @@ func (e hostUpdateActionExecutor) currentTime() time.Time {
 		return e.now().UTC()
 	}
 	return time.Now().UTC()
-}
-
-func projectHostUpdateVerification(result *agentexec.HostUpdateResultPayload) *unified.ActionVerificationResult {
-	if result == nil {
-		return &unified.ActionVerificationResult{Ran: false, Note: "agent returned no verification evidence"}
-	}
-	note := fmt.Sprintf("pending packages %d -> %d; reboot required=%t", result.Before.PendingCount, result.After.PendingCount, result.After.RebootRequired)
-	switch strings.TrimSpace(result.Verification) {
-	case agentexec.HostUpdateVerificationVerified:
-		if !result.Success || !result.After.Supported || result.After.Manager != "apt" || result.After.PendingCount != 0 || !hostPackageUpdateInventoryHashPattern.MatchString(result.After.InventoryHash) {
-			return &unified.ActionVerificationResult{Ran: false, Note: "agent returned invalid verification evidence"}
-		}
-		return &unified.ActionVerificationResult{Ran: true, Success: true, Command: "typed:host_update/install_os_updates", Output: note, Note: note, RanAt: time.Now().UTC()}
-	case agentexec.HostUpdateVerificationFailed:
-		return &unified.ActionVerificationResult{Ran: true, Success: false, Command: "typed:host_update/install_os_updates", Output: note, Note: "post-update package inventory did not confirm the intended state", RanAt: time.Now().UTC()}
-	default:
-		return &unified.ActionVerificationResult{Ran: false, Note: "post-update package inventory was inconclusive"}
-	}
 }
 
 func hostUpdateUnavailableReasonCode(err error) string {

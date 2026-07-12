@@ -91,15 +91,8 @@ func (e hostStorageCleanupActionExecutor) ExecuteAction(ctx context.Context, rec
 	}
 
 	output := fmt.Sprintf("APT package cache: %d bytes before, %d bytes after, %d bytes reclaimed", result.Before.ReclaimableBytes, result.After.ReclaimableBytes, result.ReclaimedBytes)
-	execution := &unified.ExecutionResult{
-		Success:      result.Success,
-		Output:       output,
-		Verification: projectHostStorageCleanupVerification(result),
-	}
-	if !result.Success {
-		execution.ErrorMessage = "host package-cache cleanup failed on the agent"
-	}
-	return execution, nil
+	beforeBound := result.Before.Fingerprint == resource.Agent.StorageCleanup.Fingerprint
+	return hostAPTExecutionResult(record.Request.ResourceID, resource.Agent.AgentID, agentexec.HostStorageCleanupOperationPackageCache, output, result.Success, result.MutationStarted, result.Verification, beforeBound, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())
 }
 
 func (e hostStorageCleanupActionExecutor) currentResource(ctx context.Context, resourceID string) (unified.Resource, error) {
@@ -141,7 +134,7 @@ func (e hostStorageCleanupActionExecutor) validateResource(resource unified.Reso
 	if !hostStorageCleanupFingerprintPattern.MatchString(strings.TrimSpace(status.Fingerprint)) {
 		return fmt.Errorf("host storage cleanup fingerprint is invalid")
 	}
-	if status.CheckedAt.IsZero() || e.currentTime().Sub(status.CheckedAt.UTC()) > unified.HostStorageCleanupFreshness {
+	if !unified.HostStorageCleanupTelemetryFresh(status, e.currentTime()) {
 		return fmt.Errorf("host storage cleanup inventory is stale")
 	}
 	if status.ReclaimableBytes < unified.HostStorageCleanupMinReclaimableBytes {
@@ -162,24 +155,6 @@ func (e hostStorageCleanupActionExecutor) currentTime() time.Time {
 		return e.now().UTC()
 	}
 	return time.Now().UTC()
-}
-
-func projectHostStorageCleanupVerification(result *agentexec.HostStorageCleanupResultPayload) *unified.ActionVerificationResult {
-	if result == nil {
-		return &unified.ActionVerificationResult{Ran: false, Note: "agent returned no verification evidence"}
-	}
-	note := fmt.Sprintf("package cache bytes %d -> %d; reclaimed=%d", result.Before.ReclaimableBytes, result.After.ReclaimableBytes, result.ReclaimedBytes)
-	switch strings.TrimSpace(result.Verification) {
-	case agentexec.HostStorageCleanupVerificationVerified:
-		if !result.Success || !result.After.Supported || result.After.Provider != "apt-package-cache" || result.After.Error != "" || !hostStorageCleanupFingerprintPattern.MatchString(result.After.Fingerprint) || result.ReclaimedBytes <= 0 || result.After.ReclaimableBytes >= result.Before.ReclaimableBytes {
-			return &unified.ActionVerificationResult{Ran: false, Note: "agent returned invalid verification evidence"}
-		}
-		return &unified.ActionVerificationResult{Ran: true, Success: true, Command: "typed:host_storage_cleanup/clean_package_cache", Output: note, Note: note, RanAt: time.Now().UTC()}
-	case agentexec.HostStorageCleanupVerificationFailed:
-		return &unified.ActionVerificationResult{Ran: true, Success: false, Command: "typed:host_storage_cleanup/clean_package_cache", Output: note, Note: "post-cleanup cache inspection did not confirm reclaimed space", RanAt: time.Now().UTC()}
-	default:
-		return &unified.ActionVerificationResult{Ran: false, Note: "post-cleanup package-cache inspection was inconclusive"}
-	}
 }
 
 func hostStorageCleanupUnavailableReasonCode(err error) string {

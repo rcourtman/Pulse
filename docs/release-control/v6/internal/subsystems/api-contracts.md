@@ -7450,3 +7450,15 @@ boolean, the current expected versioned contract, and the selected record's
 version/status metadata without rewriting historical evidence. Stable failure codes distinguish
 missing, stale, wrong-organization, wrong-actor, expired, revoked, malformed,
 conflicting, and unavailable-store evidence.
+
+Task 09 APT executors consume Task 10 `ActionResultV2` without local truth
+enums. APT metadata refresh is an external package-manager effect, so refresh
+failure or cancellation is `inconclusive/possible_partial_effect`, never
+`not_run`. Readback from the mutating agent is `agent_attested`, preserves
+agent-observed and server-received timestamps, and declares compensation
+unavailable. Durable post-disconnect reconciliation remains a Task 07
+continuation dependency.
+
+This is a partial non-lab producer migration only. It does not change L20 or
+RA35 completion, claims 16/17, workflow scorecards, browser certification, or
+real Debian/Ubuntu execution status.

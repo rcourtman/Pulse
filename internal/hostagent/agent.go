@@ -317,14 +317,9 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	packageUpdates := cfg.packageUpdates
-	if packageUpdates == nil {
-		packageUpdates = newPackageUpdateManager(platform)
-	}
-	cfg.packageUpdates = packageUpdates
 	storageCleanup := cfg.storageCleanup
-	if storageCleanup == nil {
-		storageCleanup = newStorageCleanupManager(platform)
-	}
+	packageUpdates, storageCleanup = configurePackageManagers(platform, packageUpdates, storageCleanup)
+	cfg.packageUpdates = packageUpdates
 	cfg.storageCleanup = storageCleanup
 
 	agent := &Agent{
@@ -847,7 +842,9 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	packageUpdateCtx, cancelPackageUpdates := context.WithTimeout(ctx, 20*time.Second)
 	packageUpdates := a.currentPackageUpdateStatus(packageUpdateCtx)
 	cancelPackageUpdates()
-	storageCleanup := a.currentStorageCleanupStatus()
+	storageCleanupCtx, cancelStorageCleanup := context.WithTimeout(ctx, 20*time.Second)
+	storageCleanup := a.currentStorageCleanupStatus(storageCleanupCtx)
+	cancelStorageCleanup()
 
 	// Carry updated_from on the first freshly built v6 report only. If that
 	// report is buffered, the buffered copy still retains the field for retry.
@@ -932,11 +929,11 @@ func (a *Agent) currentPackageUpdateStatus(ctx context.Context) *agentshost.Pack
 	}
 }
 
-func (a *Agent) currentStorageCleanupStatus() *agentshost.StorageCleanupStatus {
+func (a *Agent) currentStorageCleanupStatus(ctx context.Context) *agentshost.StorageCleanupStatus {
 	if a == nil || a.storageCleanup == nil {
 		return nil
 	}
-	snapshot := a.storageCleanup.Snapshot(false)
+	snapshot := a.storageCleanup.Snapshot(ctx, false)
 	return &agentshost.StorageCleanupStatus{
 		Supported:        snapshot.Supported,
 		Provider:         snapshot.Provider,

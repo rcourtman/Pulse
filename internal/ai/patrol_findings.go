@@ -1296,6 +1296,9 @@ func (p *PatrolService) verifyFixDeterministically(
 
 	// State-only verifiers (no tools required).
 	fullState := p.currentPatrolRuntimeState()
+	if resolved, handled, err := verifyAPTWorkflowFinding(fullState, key, resourceID, time.Now()); handled {
+		return resolved, err
+	}
 	switch key {
 	case "backup-stale":
 		ok, err := verifyBackupFreshState(fullState, resourceID)

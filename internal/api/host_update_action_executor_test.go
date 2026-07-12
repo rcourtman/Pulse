@@ -42,8 +42,8 @@ func TestHostUpdateActionExecutorDispatchesTypedOperationAndProjectsVerification
 	agents := &fakeHostUpdateAgent{connected: true, result: &agentexec.HostUpdateResultPayload{
 		RequestID:    "action-host-update",
 		Success:      true,
-		Before:       agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3},
-		After:        agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageEmptyInventoryHash, PendingCount: 0, RebootRequired: true},
+		Before:       agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: now.Add(-time.Second)},
+		After:        agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageEmptyInventoryHash, PendingCount: 0, RebootRequired: true, CheckedAt: now},
 		Verification: agentexec.HostUpdateVerificationVerified,
 	}}
 	executor := newHostUpdateActionExecutor(h, agents)
@@ -83,7 +83,7 @@ func TestHostUpdateActionExecutorReportsInconclusiveVerificationHonestly(t *test
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
-	if result == nil || !result.Success || result.Verification == nil || result.Verification.Ran || !strings.Contains(result.Verification.Note, "inconclusive") {
+	if result == nil || !result.Success || result.Verification == nil || result.Verification.Ran || result.ActionResultV2 == nil || result.ActionResultV2.Verification.Status != unified.ActionVerificationInconclusive || result.ActionResultV2.Verification.ReasonCode != "agent_readback_inconclusive" {
 		t.Fatalf("result = %#v", result)
 	}
 }
@@ -94,8 +94,8 @@ func TestPatrolFullModeRunsHostUpdateThroughCanonicalLifecycle(t *testing.T) {
 	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{hostUpdateActionResource(now)}})
 	agents := &fakeHostUpdateAgent{connected: true, result: &agentexec.HostUpdateResultPayload{
 		RequestID: "filled-by-executor", Success: true,
-		Before:       agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3},
-		After:        agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageEmptyInventoryHash, PendingCount: 0},
+		Before:       agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: now.Add(-time.Second)},
+		After:        agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageEmptyInventoryHash, PendingCount: 0, CheckedAt: now},
 		Verification: agentexec.HostUpdateVerificationVerified,
 	}}
 	h.SetActionExecutor(newRoutedActionExecutor(h, newHostUpdateActionExecutor(h, agents)))
@@ -173,7 +173,7 @@ func hostUpdateActionResource(now time.Time) unified.Resource {
 		SourceStatus: map[unified.DataSource]unified.SourceStatus{unified.SourceAgent: {Status: "online", LastSeen: now}},
 		Agent: &unified.AgentData{
 			AgentID: "agent-1", Platform: "linux", CommandsEnabled: true,
-			PackageUpdates: &unified.AgentPackageUpdateMeta{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: now},
+			PackageUpdates: &unified.AgentPackageUpdateMeta{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: now, ObservedAt: now},
 		},
 		Capabilities: []unified.ResourceCapability{{
 			Name: hostPackageUpdateCapability, Type: unified.CapabilityTypeCommon,

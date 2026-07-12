@@ -28,12 +28,13 @@ type storageCleanupManager struct {
 	run      func(context.Context, []string, string, ...string) packageUpdateCommandResult
 	lookPath func(string) (string, error)
 	scan     func() (agentexec.HostStorageCleanupSnapshot, error)
+	lease    *packageManagerLease
 
 	mu     sync.Mutex
 	cached *agentexec.HostStorageCleanupSnapshot
 }
 
-func newStorageCleanupManager(platform string) *storageCleanupManager {
+func newStorageCleanupManager(platform string, lease *packageManagerLease) *storageCleanupManager {
 	return &storageCleanupManager{
 		platform: strings.ToLower(strings.TrimSpace(platform)),
 		now:      time.Now,
@@ -41,13 +42,19 @@ func newStorageCleanupManager(platform string) *storageCleanupManager {
 		run:      runPackageUpdateCommand,
 		lookPath: packageUpdateLookPath,
 		scan:     scanAPTPackageCache,
+		lease:    lease,
 	}
 }
 
-func (m *storageCleanupManager) Snapshot(force bool) agentexec.HostStorageCleanupSnapshot {
+func (m *storageCleanupManager) Snapshot(ctx context.Context, force bool) agentexec.HostStorageCleanupSnapshot {
 	if m == nil {
 		return agentexec.HostStorageCleanupSnapshot{}
 	}
+	release, err := m.lease.acquire(ctx)
+	if err != nil {
+		return agentexec.HostStorageCleanupSnapshot{CheckedAt: m.currentTime(), Error: "package cache inspection canceled"}
+	}
+	defer release()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.snapshotLocked(force)
@@ -86,8 +93,9 @@ func (m *storageCleanupManager) snapshotLocked(force bool) agentexec.HostStorage
 func (m *storageCleanupManager) Apply(ctx context.Context, req agentexec.HostStorageCleanupPayload) (result agentexec.HostStorageCleanupResultPayload) {
 	startedAt := time.Now()
 	result = agentexec.HostStorageCleanupResultPayload{
-		RequestID:    strings.TrimSpace(req.RequestID),
-		Verification: agentexec.HostStorageCleanupVerificationInconclusive,
+		RequestID: strings.TrimSpace(req.RequestID), ActionID: strings.TrimSpace(req.ActionID),
+		ExecutionPhase: agentexec.HostStorageCleanupPhasePreflight,
+		Verification:   agentexec.HostStorageCleanupVerificationInconclusive,
 	}
 	defer func() { result.Duration = time.Since(startedAt).Milliseconds() }()
 
@@ -95,6 +103,12 @@ func (m *storageCleanupManager) Apply(ctx context.Context, req agentexec.HostSto
 		result.Error = "unsupported typed host storage cleanup operation"
 		return result
 	}
+	release, err := m.lease.acquire(ctx)
+	if err != nil {
+		result.Error = "package manager lease unavailable"
+		return result
+	}
+	defer release()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -122,6 +136,8 @@ func (m *storageCleanupManager) Apply(ctx context.Context, req agentexec.HostSto
 		return result
 	}
 
+	result.ExecutionPhase = agentexec.HostStorageCleanupPhaseClean
+	result.MutationStarted = true
 	clean := m.run(ctx, []string{"DEBIAN_FRONTEND=noninteractive"}, "apt-get", "clean")
 	if clean.err != nil || clean.exitCode != 0 {
 		result.After = m.snapshotLocked(true)
@@ -131,6 +147,7 @@ func (m *storageCleanupManager) Apply(ctx context.Context, req agentexec.HostSto
 	}
 
 	result.Success = true
+	result.ExecutionPhase = agentexec.HostStorageCleanupPhaseVerify
 	after := m.snapshotLocked(true)
 	result.After = after
 	if after.Error != "" {
@@ -146,6 +163,7 @@ func (m *storageCleanupManager) Apply(ctx context.Context, req agentexec.HostSto
 		return result
 	}
 	result.Verification = agentexec.HostStorageCleanupVerificationVerified
+	result.ExecutionPhase = agentexec.HostStorageCleanupPhaseComplete
 	return result
 }
 

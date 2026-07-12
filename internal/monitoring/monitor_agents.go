@@ -2231,7 +2231,8 @@ func convertHostPackageUpdateStatus(status *agentshost.PackageUpdateStatus, obse
 		InventoryHash:  strings.TrimSpace(status.InventoryHash),
 		PendingCount:   max(0, status.PendingCount),
 		Packages:       packages,
-		CheckedAt:      observedAt.UTC(),
+		CheckedAt:      status.CheckedAt.UTC(),
+		ObservedAt:     observedAt.UTC(),
 		RebootRequired: status.RebootRequired,
 		Error:          strings.TrimSpace(status.Error),
 	}
@@ -2246,7 +2247,8 @@ func convertHostStorageCleanupStatus(status *agentshost.StorageCleanupStatus, ob
 		Provider:         strings.TrimSpace(status.Provider),
 		Fingerprint:      strings.TrimSpace(status.Fingerprint),
 		ReclaimableBytes: status.ReclaimableBytes,
-		CheckedAt:        observedAt.UTC(),
+		CheckedAt:        status.CheckedAt.UTC(),
+		ObservedAt:       observedAt.UTC(),
 		Error:            strings.TrimSpace(status.Error),
 	}
 }

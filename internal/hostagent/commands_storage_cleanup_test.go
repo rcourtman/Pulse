@@ -18,7 +18,7 @@ func TestCommandClientHandlesTypedHostStorageCleanup(t *testing.T) {
 	before := agentexec.HostStorageCleanupSnapshot{Fingerprint: "sha256:" + strings.Repeat("a", 64), ReclaimableBytes: 512}
 	after := agentexec.HostStorageCleanupSnapshot{Fingerprint: "sha256:" + strings.Repeat("b", 64), ReclaimableBytes: 12}
 	snapshots := []agentexec.HostStorageCleanupSnapshot{before, after}
-	manager := newStorageCleanupManager("linux")
+	manager := newStorageCleanupManager("linux", newPackageManagerLease())
 	manager.lookPath = func(string) (string, error) { return "/usr/bin/apt-get", nil }
 	manager.scan = func() (agentexec.HostStorageCleanupSnapshot, error) {
 		snapshot := snapshots[0]

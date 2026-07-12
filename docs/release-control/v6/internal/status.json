@@ -6306,6 +6306,12 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/agentexec/apt_codec_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/agentexec/server_websocket_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
@@ -6324,6 +6330,12 @@
           "repo": "pulse",
           "path": "internal/ai/approval/store_test.go",
           "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/findings_apt_workflows_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         },
         {
           "repo": "pulse",
@@ -6365,6 +6377,12 @@
           "repo": "pulse",
           "path": "internal/api/contract_test.go",
           "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/host_apt_action_result_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         },
         {
           "repo": "pulse",
@@ -6412,6 +6430,12 @@
         {
           "repo": "pulse",
           "path": "internal/config/patrol_autopilot_persistence_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/hostagent/package_manager_lease_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         },

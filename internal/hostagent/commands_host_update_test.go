@@ -16,7 +16,7 @@ import (
 )
 
 func TestCommandClientHandlesTypedHostUpdateWithoutExecuteCommand(t *testing.T) {
-	manager := newPackageUpdateManager("linux")
+	manager := newPackageUpdateManager("linux", newPackageManagerLease())
 	manager.lookPath = func(string) (string, error) { return "/usr/bin/apt-get", nil }
 	manager.stat = func(string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 	simulations := 0

@@ -65,6 +65,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
@@ -1667,12 +1668,81 @@ func TestHostMaintenancePostureRemainsAgentScoped(t *testing.T) {
 		t.Fatalf("expected typed storage-cleanup metadata, got %v", cleanupField.Type)
 	}
 
+	for _, tc := range []struct {
+		name   string
+		typeOf reflect.Type
+	}{
+		{name: "package updates", typeOf: reflect.TypeOf(AgentPackageUpdateMeta{})},
+		{name: "storage cleanup", typeOf: reflect.TypeOf(AgentStorageCleanupMeta{})},
+	} {
+		checkedAt, ok := tc.typeOf.FieldByName("CheckedAt")
+		if !ok || checkedAt.Type != reflect.TypeOf(time.Time{}) || checkedAt.Tag.Get("json") != "checkedAt,omitempty" {
+			t.Fatalf("%s CheckedAt contract = %#v", tc.name, checkedAt)
+		}
+		observedAt, ok := tc.typeOf.FieldByName("ObservedAt")
+		if !ok || observedAt.Type != reflect.TypeOf(time.Time{}) || observedAt.Tag.Get("json") != "observedAt,omitempty" {
+			t.Fatalf("%s ObservedAt contract = %#v", tc.name, observedAt)
+		}
+	}
+
 	resourceType := reflect.TypeOf(Resource{})
 	if _, ok := resourceType.FieldByName("PackageUpdates"); ok {
 		t.Fatal("package-update posture must not become an unscoped top-level Resource field")
 	}
 	if _, ok := resourceType.FieldByName("StorageCleanup"); ok {
 		t.Fatal("storage-cleanup posture must not become an unscoped top-level Resource field")
+	}
+}
+
+func TestHostAPTTelemetryTruthStaysUnifiedResourceOwned(t *testing.T) {
+	ownerSource, err := os.ReadFile("host_apt_telemetry.go")
+	if err != nil {
+		t.Fatalf("read canonical host APT telemetry owner: %v", err)
+	}
+	for _, required := range []string{
+		"func ValidHostAPTDigest(value string) bool",
+		"func HostPackageUpdateTelemetryFresh(status *AgentPackageUpdateMeta, now time.Time) bool",
+		"func HostStorageCleanupTelemetryFresh(status *AgentStorageCleanupMeta, now time.Time) bool",
+	} {
+		if !strings.Contains(string(ownerSource), required) {
+			t.Fatalf("unifiedresources must own host APT telemetry truth: missing %q", required)
+		}
+	}
+
+	workflowFiles := []string{
+		filepath.Join("..", "ai", "findings_apt_workflows.go"),
+		filepath.Join("..", "api", "host_update_action_executor.go"),
+		filepath.Join("..", "api", "host_storage_cleanup_action_executor.go"),
+	}
+	forbiddenDeclarations := []*regexp.Regexp{
+		regexp.MustCompile(`(?m)^type\s+AgentPackageUpdateMeta\b`),
+		regexp.MustCompile(`(?m)^type\s+AgentStorageCleanupMeta\b`),
+		regexp.MustCompile(`(?m)^func\s+\w*(?:TelemetryFresh|APTDigest)\b`),
+	}
+	for _, path := range workflowFiles {
+		source, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read host APT workflow %s: %v", path, err)
+		}
+		for _, forbidden := range forbiddenDeclarations {
+			if forbidden.Match(source) {
+				t.Fatalf("host APT workflow %s duplicates unified-resource telemetry truth with %s", path, forbidden)
+			}
+		}
+	}
+
+	findingSource, err := os.ReadFile(filepath.Join("..", "ai", "findings_apt_workflows.go"))
+	if err != nil {
+		t.Fatalf("read host APT finding producer: %v", err)
+	}
+	for _, required := range []string{
+		"unifiedresources.ValidHostAPTDigest",
+		"unifiedresources.HostPackageUpdateTelemetryFresh",
+		"unifiedresources.HostStorageCleanupTelemetryFresh",
+	} {
+		if !strings.Contains(string(findingSource), required) {
+			t.Fatalf("host APT finding producer must consume canonical telemetry truth: missing %q", required)
+		}
 	}
 }
 

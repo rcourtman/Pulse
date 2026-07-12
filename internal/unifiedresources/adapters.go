@@ -181,6 +181,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 			PendingCount:   host.PackageUpdates.PendingCount,
 			Packages:       packages,
 			CheckedAt:      host.PackageUpdates.CheckedAt,
+			ObservedAt:     host.PackageUpdates.ObservedAt,
 			RebootRequired: host.PackageUpdates.RebootRequired,
 			Error:          host.PackageUpdates.Error,
 		}
@@ -192,6 +193,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 			Fingerprint:      host.StorageCleanup.Fingerprint,
 			ReclaimableBytes: host.StorageCleanup.ReclaimableBytes,
 			CheckedAt:        host.StorageCleanup.CheckedAt,
+			ObservedAt:       host.StorageCleanup.ObservedAt,
 			Error:            host.StorageCleanup.Error,
 		}
 	}
@@ -517,7 +519,9 @@ func hostActionCapabilities(host models.Host) []ResourceCapability {
 
 func hostPackageUpdateCapabilities(host models.Host) []ResourceCapability {
 	status := host.PackageUpdates
-	if !host.CommandsEnabled || status == nil || !status.Supported || strings.TrimSpace(status.Manager) != "apt" || strings.TrimSpace(status.InventoryHash) == "" || status.PendingCount <= 0 || strings.TrimSpace(status.Error) != "" || status.CheckedAt.IsZero() || time.Since(status.CheckedAt.UTC()) > HostPackageUpdateFreshness {
+	now := time.Now().UTC()
+	meta := agentPackageUpdateMetaFromModel(status)
+	if !host.CommandsEnabled || status == nil || !status.Supported || strings.TrimSpace(status.Manager) != "apt" || strings.TrimSpace(status.InventoryHash) == "" || status.PendingCount <= 0 || strings.TrimSpace(status.Error) != "" || !HostPackageUpdateTelemetryFresh(meta, now) {
 		return nil
 	}
 	return []ResourceCapability{{
@@ -533,7 +537,9 @@ func hostPackageUpdateCapabilities(host models.Host) []ResourceCapability {
 
 func hostStorageCleanupCapability(host models.Host) (ResourceCapability, bool) {
 	status := host.StorageCleanup
-	if !host.CommandsEnabled || status == nil || !status.Supported || strings.TrimSpace(status.Provider) != "apt-package-cache" || strings.TrimSpace(status.Fingerprint) == "" || status.ReclaimableBytes < HostStorageCleanupMinReclaimableBytes || strings.TrimSpace(status.Error) != "" || status.CheckedAt.IsZero() || time.Since(status.CheckedAt.UTC()) > HostStorageCleanupFreshness {
+	now := time.Now().UTC()
+	meta := agentStorageCleanupMetaFromModel(status)
+	if !host.CommandsEnabled || status == nil || !status.Supported || strings.TrimSpace(status.Provider) != "apt-package-cache" || strings.TrimSpace(status.Fingerprint) == "" || status.ReclaimableBytes < HostStorageCleanupMinReclaimableBytes || strings.TrimSpace(status.Error) != "" || !HostStorageCleanupTelemetryFresh(meta, now) {
 		return ResourceCapability{}, false
 	}
 	if _, ok := HostStorageCleanupPressureDisk(convertDisks(host.Disks)); !ok {
@@ -548,6 +554,20 @@ func hostStorageCleanupCapability(host models.Host) (ResourceCapability, bool) {
 		Platform:             "linux",
 		InternalHandler:      hostStorageCleanupHandler,
 	}, true
+}
+
+func agentPackageUpdateMetaFromModel(status *models.HostPackageUpdateStatus) *AgentPackageUpdateMeta {
+	if status == nil {
+		return nil
+	}
+	return &AgentPackageUpdateMeta{CheckedAt: status.CheckedAt, ObservedAt: status.ObservedAt}
+}
+
+func agentStorageCleanupMetaFromModel(status *models.HostStorageCleanupStatus) *AgentStorageCleanupMeta {
+	if status == nil {
+		return nil
+	}
+	return &AgentStorageCleanupMeta{CheckedAt: status.CheckedAt, ObservedAt: status.ObservedAt}
 }
 
 func hostThermalStateToMeta(in *models.HostThermalState) *HostThermalState {

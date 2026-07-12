@@ -72,13 +72,13 @@ func TestResourceFromHostAdvertisesElevatedTypedPackageUpdateCapability(t *testi
 	host := models.Host{
 		ID: "agent-1", Hostname: "host-1", Platform: "linux", Status: "online", LastSeen: now, CommandsEnabled: true,
 		PackageUpdates: &models.HostPackageUpdateStatus{
-			Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("a", 64), PendingCount: 2, CheckedAt: now, RebootRequired: true,
+			Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("a", 64), PendingCount: 2, CheckedAt: now.Add(-time.Minute), ObservedAt: now, RebootRequired: true,
 			Packages: []models.HostPackageUpdate{{Name: "openssl", InstalledVersion: "1.0", AvailableVersion: "1.1"}},
 		},
 	}
 
 	resource, _ := resourceFromHost(host)
-	if resource.Agent == nil || resource.Agent.PackageUpdates == nil || resource.Agent.PackageUpdates.PendingCount != 2 || !resource.Agent.PackageUpdates.RebootRequired {
+	if resource.Agent == nil || resource.Agent.PackageUpdates == nil || resource.Agent.PackageUpdates.PendingCount != 2 || !resource.Agent.PackageUpdates.RebootRequired || !resource.Agent.PackageUpdates.CheckedAt.Equal(now.Add(-time.Minute)) || !resource.Agent.PackageUpdates.ObservedAt.Equal(now) {
 		t.Fatalf("package update projection = %#v", resource.Agent)
 	}
 	if len(resource.Capabilities) != 1 {

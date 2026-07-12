@@ -20037,12 +20037,21 @@ func TestContract_HostUpdatesUseTypedFingerprintBoundAgentOperation(t *testing.T
 	runtimeSrc := string(agentRuntimeSource)
 	for _, snippet := range []string{
 		"ExecuteHostUpdate(ctx context.Context, agentID string, req agentexec.HostUpdatePayload)",
+		"attempt, ok := actionlifecycle.DispatchAttemptFromContext(ctx)",
+		"if !ok || attempt.ActionID != record.ID",
+		"RequestID:             attempt.ID",
+		"ActionID:              record.ID",
 		"ExpectedInventoryHash: resource.Agent.PackageUpdates.InventoryHash",
 		"agentexec.HostUpdateOperationInstall",
+		"beforeBound := result.Before.InventoryHash == resource.Agent.PackageUpdates.InventoryHash",
+		"hostAPTExecutionResult(record.Request.ResourceID, agentID, agentexec.HostUpdateOperationInstall, output, result.Success, result.MutationStarted, result.Verification, beforeBound, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())",
 	} {
 		if !strings.Contains(executorSrc, snippet) {
 			t.Fatalf("host update executor missing typed operation invariant %q", snippet)
 		}
+	}
+	if strings.Contains(executorSrc, "func projectHostUpdateVerification") {
+		t.Fatal("host update executor must not reintroduce a local verification projection")
 	}
 	for _, snippet := range []string{
 		"ExpectedInventoryHash string `json:\"expected_inventory_hash\"`",
@@ -20082,13 +20091,22 @@ func TestContract_HostStorageCleanupIsTypedFingerprintBoundAndPathFree(t *testin
 	runtimeSrc := string(agentRuntimeSource)
 	for _, snippet := range []string{
 		"ExecuteHostStorageCleanup(ctx context.Context, agentID string, req agentexec.HostStorageCleanupPayload)",
+		"attempt, ok := actionlifecycle.DispatchAttemptFromContext(ctx)",
+		"if !ok || attempt.ActionID != record.ID",
+		"RequestID:           attempt.ID",
+		"ActionID:            record.ID",
 		"resource.Agent.StorageCleanup.Fingerprint",
 		"agentexec.HostStorageCleanupOperationPackageCache",
 		"unified.HostStorageCleanupPressureDisk(resource.Agent.Disks)",
+		"beforeBound := result.Before.Fingerprint == resource.Agent.StorageCleanup.Fingerprint",
+		"hostAPTExecutionResult(record.Request.ResourceID, resource.Agent.AgentID, agentexec.HostStorageCleanupOperationPackageCache, output, result.Success, result.MutationStarted, result.Verification, beforeBound, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())",
 	} {
 		if !strings.Contains(executorSrc, snippet) {
 			t.Fatalf("host storage cleanup executor missing invariant %q", snippet)
 		}
+	}
+	if strings.Contains(executorSrc, "func projectHostStorageCleanupVerification") {
+		t.Fatal("host storage cleanup executor must not reintroduce a local verification projection")
 	}
 	for _, snippet := range []string{
 		"ExpectedFingerprint string `json:\"expected_fingerprint\"`",

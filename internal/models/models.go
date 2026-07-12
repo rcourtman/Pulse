@@ -308,6 +308,7 @@ type HostPackageUpdateStatus struct {
 	PendingCount   int                 `json:"pendingCount"`
 	Packages       []HostPackageUpdate `json:"packages,omitempty"`
 	CheckedAt      time.Time           `json:"checkedAt,omitempty"`
+	ObservedAt     time.Time           `json:"observedAt,omitempty"`
 	RebootRequired bool                `json:"rebootRequired,omitempty"`
 	Error          string              `json:"error,omitempty"`
 }
@@ -324,6 +325,7 @@ type HostStorageCleanupStatus struct {
 	Fingerprint      string    `json:"fingerprint,omitempty"`
 	ReclaimableBytes int64     `json:"reclaimableBytes"`
 	CheckedAt        time.Time `json:"checkedAt,omitempty"`
+	ObservedAt       time.Time `json:"observedAt,omitempty"`
 	Error            string    `json:"error,omitempty"`
 }
 

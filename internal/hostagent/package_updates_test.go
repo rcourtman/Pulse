@@ -33,7 +33,7 @@ Conf openssl (3.0.12-1 Debian-Security:12/stable-security [amd64])`
 
 func TestPackageUpdateManagerApplyUsesClosedAPTCommandCatalogAndVerifies(t *testing.T) {
 	beforeOutput := "Inst openssl [1.0] (1.1 repo [amd64])\nInst curl [8.0] (8.1 repo [amd64])\n"
-	m := newPackageUpdateManager("linux")
+	m := newPackageUpdateManager("linux", newPackageManagerLease())
 	m.lookPath = func(name string) (string, error) {
 		if name != "apt-get" {
 			t.Fatalf("lookPath(%q), want apt-get", name)
@@ -106,7 +106,7 @@ func TestPackageUpdateManagerApplyUsesClosedAPTCommandCatalogAndVerifies(t *test
 }
 
 func TestPackageUpdateManagerFailsClosedWhenRefreshFails(t *testing.T) {
-	m := newPackageUpdateManager("linux")
+	m := newPackageUpdateManager("linux", newPackageManagerLease())
 	m.lookPath = func(string) (string, error) { return "/usr/bin/apt-get", nil }
 	m.stat = func(string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 	calls := 0
@@ -122,13 +122,32 @@ func TestPackageUpdateManagerFailsClosedWhenRefreshFails(t *testing.T) {
 	if result.Success || result.Verification != agentexec.HostUpdateVerificationInconclusive || result.Error != "package index refresh failed" {
 		t.Fatalf("result = %#v", result)
 	}
+	if !result.MutationStarted || result.ExecutionPhase != agentexec.HostUpdatePhaseRefresh {
+		t.Fatalf("refresh failure must report possible external effect: %#v", result)
+	}
 	if calls != 2 {
 		t.Fatalf("calls = %d, want probe and refresh only", calls)
 	}
 }
 
+func TestPackageUpdateManagerCanceledRefreshReportsPossibleExternalEffect(t *testing.T) {
+	m := newPackageUpdateManager("linux", newPackageManagerLease())
+	m.lookPath = func(string) (string, error) { return "/usr/bin/apt-get", nil }
+	m.stat = func(string) (os.FileInfo, error) { return nil, os.ErrNotExist }
+	m.run = func(ctx context.Context, _ []string, _ string, args ...string) packageUpdateCommandResult {
+		if strings.Join(args, " ") == "update" {
+			return packageUpdateCommandResult{exitCode: -1, err: context.Canceled}
+		}
+		return packageUpdateCommandResult{stdout: "Inst openssl [1.0] (1.1 repo [amd64])\n"}
+	}
+	result := m.Apply(context.Background(), agentexec.HostUpdatePayload{RequestID: "r1", ActionID: "a1", Operation: agentexec.HostUpdateOperationInstall, ExpectedInventoryHash: aptUpgradeInventoryHash("Inst openssl [1.0] (1.1 repo [amd64])\n")})
+	if !result.MutationStarted || result.ExecutionPhase != agentexec.HostUpdatePhaseRefresh || result.Success {
+		t.Fatalf("canceled refresh truth = %#v", result)
+	}
+}
+
 func TestPackageUpdateManagerRefusesRefreshTimeInventoryDriftBeforeInstall(t *testing.T) {
-	m := newPackageUpdateManager("linux")
+	m := newPackageUpdateManager("linux", newPackageManagerLease())
 	m.lookPath = func(string) (string, error) { return "/usr/bin/apt-get", nil }
 	m.stat = func(string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 	stale := "Inst openssl [1.0] (1.1 repo [amd64])\n"
@@ -163,7 +182,7 @@ func TestPackageUpdateManagerRefusesRefreshTimeInventoryDriftBeforeInstall(t *te
 
 func TestPackageUpdateSnapshotCachesAndUnsupportedPlatformsFailClosed(t *testing.T) {
 	now := time.Date(2026, 7, 11, 1, 0, 0, 0, time.UTC)
-	m := newPackageUpdateManager("windows")
+	m := newPackageUpdateManager("windows", newPackageManagerLease())
 	m.now = func() time.Time { return now }
 	m.run = func(context.Context, []string, string, ...string) packageUpdateCommandResult {
 		t.Fatal("unsupported platform must not execute package manager")

@@ -192,14 +192,25 @@ const (
 // independently. Success means the package-manager mutation completed;
 // Verification states whether the postcondition was actually observed.
 type HostUpdateResultPayload struct {
-	RequestID    string                    `json:"request_id"`
-	Success      bool                      `json:"success"`
-	Before       HostPackageUpdateSnapshot `json:"before"`
-	After        HostPackageUpdateSnapshot `json:"after"`
-	Verification string                    `json:"verification"`
-	Error        string                    `json:"error,omitempty"`
-	Duration     int64                     `json:"duration_ms"`
+	RequestID       string                    `json:"request_id"`
+	ActionID        string                    `json:"action_id"`
+	Success         bool                      `json:"success"`
+	ExecutionPhase  string                    `json:"execution_phase"`
+	MutationStarted bool                      `json:"mutation_started"`
+	Before          HostPackageUpdateSnapshot `json:"before"`
+	After           HostPackageUpdateSnapshot `json:"after"`
+	Verification    string                    `json:"verification"`
+	Error           string                    `json:"error,omitempty"`
+	Duration        int64                     `json:"duration_ms"`
 }
+
+const (
+	HostUpdatePhasePreflight = "preflight"
+	HostUpdatePhaseRefresh   = "refresh"
+	HostUpdatePhaseInstall   = "install"
+	HostUpdatePhaseVerify    = "verify"
+	HostUpdatePhaseComplete  = "complete"
+)
 
 const HostStorageCleanupOperationPackageCache = "clean_package_cache"
 
@@ -234,15 +245,25 @@ const (
 // HostStorageCleanupResultPayload separates mutation success from the
 // read-after-write observation of reclaimed cache bytes.
 type HostStorageCleanupResultPayload struct {
-	RequestID      string                     `json:"request_id"`
-	Success        bool                       `json:"success"`
-	Before         HostStorageCleanupSnapshot `json:"before"`
-	After          HostStorageCleanupSnapshot `json:"after"`
-	ReclaimedBytes int64                      `json:"reclaimed_bytes"`
-	Verification   string                     `json:"verification"`
-	Error          string                     `json:"error,omitempty"`
-	Duration       int64                      `json:"duration_ms"`
+	RequestID       string                     `json:"request_id"`
+	ActionID        string                     `json:"action_id"`
+	Success         bool                       `json:"success"`
+	ExecutionPhase  string                     `json:"execution_phase"`
+	MutationStarted bool                       `json:"mutation_started"`
+	Before          HostStorageCleanupSnapshot `json:"before"`
+	After           HostStorageCleanupSnapshot `json:"after"`
+	ReclaimedBytes  int64                      `json:"reclaimed_bytes"`
+	Verification    string                     `json:"verification"`
+	Error           string                     `json:"error,omitempty"`
+	Duration        int64                      `json:"duration_ms"`
 }
+
+const (
+	HostStorageCleanupPhasePreflight = "preflight"
+	HostStorageCleanupPhaseClean     = "clean"
+	HostStorageCleanupPhaseVerify    = "verify"
+	HostStorageCleanupPhaseComplete  = "complete"
+)
 
 // ConnectedAgent represents an agent connected via WebSocket
 type ConnectedAgent struct {

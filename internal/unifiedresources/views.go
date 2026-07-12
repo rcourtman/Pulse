@@ -1064,6 +1064,30 @@ func (v HostView) CommandsEnabled() bool {
 	return v.r.Agent.CommandsEnabled
 }
 
+func (v HostView) PackageUpdates() *AgentPackageUpdateMeta {
+	if v.r == nil || v.r.Agent == nil || v.r.Agent.PackageUpdates == nil {
+		return nil
+	}
+	copy := *v.r.Agent.PackageUpdates
+	copy.Packages = append([]AgentPackageUpdate(nil), v.r.Agent.PackageUpdates.Packages...)
+	return &copy
+}
+
+func (v HostView) StorageCleanup() *AgentStorageCleanupMeta {
+	if v.r == nil || v.r.Agent == nil || v.r.Agent.StorageCleanup == nil {
+		return nil
+	}
+	copy := *v.r.Agent.StorageCleanup
+	return &copy
+}
+
+func (v HostView) Capabilities() []ResourceCapability {
+	if v.r == nil {
+		return nil
+	}
+	return append([]ResourceCapability(nil), v.r.Capabilities...)
+}
+
 func (v HostView) ReportIP() string {
 	if v.r == nil || v.r.Agent == nil {
 		return ""

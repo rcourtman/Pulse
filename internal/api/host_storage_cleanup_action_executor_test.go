@@ -157,10 +157,11 @@ func TestHostStorageCleanupAvailabilityFailsClosed(t *testing.T) {
 }
 
 func verifiedHostStorageCleanupAgent() *fakeHostStorageCleanupAgent {
+	now := time.Now().UTC()
 	return &fakeHostStorageCleanupAgent{connected: true, result: &agentexec.HostStorageCleanupResultPayload{
 		RequestID: "filled-by-executor", Success: true,
-		Before:         agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: testHostStorageCleanupFingerprint, ReclaimableBytes: 512 * 1024 * 1024},
-		After:          agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: testHostStorageCleanupAfterFingerprint, ReclaimableBytes: 8 * 1024 * 1024},
+		Before:         agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: testHostStorageCleanupFingerprint, ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: now.Add(-time.Second)},
+		After:          agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: testHostStorageCleanupAfterFingerprint, ReclaimableBytes: 8 * 1024 * 1024, CheckedAt: now},
 		ReclaimedBytes: 504 * 1024 * 1024,
 		Verification:   agentexec.HostStorageCleanupVerificationVerified,
 	}}
@@ -174,7 +175,7 @@ func hostStorageCleanupActionResource(now time.Time) unified.Resource {
 		Agent: &unified.AgentData{
 			AgentID: "agent-1", Platform: "linux", CommandsEnabled: true,
 			Disks:          []unified.DiskInfo{{Mountpoint: "/", Usage: 95}},
-			StorageCleanup: &unified.AgentStorageCleanupMeta{Supported: true, Provider: "apt-package-cache", Fingerprint: testHostStorageCleanupFingerprint, ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: now},
+			StorageCleanup: &unified.AgentStorageCleanupMeta{Supported: true, Provider: "apt-package-cache", Fingerprint: testHostStorageCleanupFingerprint, ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: now, ObservedAt: now},
 		},
 		Capabilities: []unified.ResourceCapability{{
 			Name: hostStorageCleanupCapability, Type: unified.CapabilityTypeCommon,

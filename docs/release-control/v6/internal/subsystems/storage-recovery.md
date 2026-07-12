@@ -2049,6 +2049,13 @@ while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
 
+Task 09 package-cache cleanup remains a bounded typed action over the fixed APT
+cache provider and requires fresh canonical reclaimable-byte and containing-
+filesystem pressure evidence. It accepts no path, package selector,
+installed-package removal, reboot, or rollback authority. Compensation is
+unavailable; durable restart/replay continuity remains an explicit Task 07
+dependency.
+
 ### Patrol Autopilot config recovery
 
 The tenant AI config is the durable owner for immutable Patrol Autopilot

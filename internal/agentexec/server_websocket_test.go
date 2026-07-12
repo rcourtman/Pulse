@@ -562,11 +562,13 @@ func TestExecuteHostUpdateRoundTripUsesTypedCommandFreeEnvelope(t *testing.T) {
 			return
 		}
 		response := HostUpdateResultPayload{
-			RequestID:    payload.RequestID,
-			Success:      true,
-			Before:       HostPackageUpdateSnapshot{Supported: true, Manager: "apt", PendingCount: 2},
-			After:        HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: emptyInventoryHash, PendingCount: 0, RebootRequired: true},
-			Verification: HostUpdateVerificationVerified,
+			RequestID:      payload.RequestID,
+			ActionID:       payload.ActionID,
+			Success:        true,
+			ExecutionPhase: HostUpdatePhaseComplete,
+			Before:         HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: inventoryHash, PendingCount: 2, CheckedAt: time.Now().UTC()},
+			After:          HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: emptyInventoryHash, PendingCount: 0, RebootRequired: true, CheckedAt: time.Now().UTC()},
+			Verification:   HostUpdateVerificationVerified,
 		}
 		if err := conn.WriteJSON(mustNewMessage(t, MsgTypeHostUpdateResult, payload.RequestID, response)); err != nil {
 			agentErr <- err
@@ -662,9 +664,11 @@ func TestExecuteHostStorageCleanupRoundTripUsesPathAndCommandFreeEnvelope(t *tes
 		}
 		response := HostStorageCleanupResultPayload{
 			RequestID:      payload.RequestID,
+			ActionID:       payload.ActionID,
+			ExecutionPhase: HostStorageCleanupPhaseComplete,
 			Success:        true,
-			Before:         HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: fingerprint, ReclaimableBytes: 500},
-			After:          HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: afterFingerprint, ReclaimableBytes: 20},
+			Before:         HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: fingerprint, ReclaimableBytes: 500, CheckedAt: time.Now().UTC()},
+			After:          HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: afterFingerprint, ReclaimableBytes: 20, CheckedAt: time.Now().UTC()},
 			ReclaimedBytes: 480,
 			Verification:   HostStorageCleanupVerificationVerified,
 		}

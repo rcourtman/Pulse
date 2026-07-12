@@ -37,12 +37,13 @@ type packageUpdateManager struct {
 	run      func(context.Context, []string, string, ...string) packageUpdateCommandResult
 	lookPath func(string) (string, error)
 	stat     func(string) (os.FileInfo, error)
+	lease    *packageManagerLease
 
 	mu     sync.Mutex
 	cached *agentexec.HostPackageUpdateSnapshot
 }
 
-func newPackageUpdateManager(platform string) *packageUpdateManager {
+func newPackageUpdateManager(platform string, lease *packageManagerLease) *packageUpdateManager {
 	return &packageUpdateManager{
 		platform: strings.ToLower(strings.TrimSpace(platform)),
 		now:      time.Now,
@@ -50,6 +51,7 @@ func newPackageUpdateManager(platform string) *packageUpdateManager {
 		run:      runPackageUpdateCommand,
 		lookPath: packageUpdateLookPath,
 		stat:     packageUpdateStat,
+		lease:    lease,
 	}
 }
 
@@ -57,6 +59,11 @@ func (m *packageUpdateManager) Snapshot(ctx context.Context, force bool) agentex
 	if m == nil {
 		return agentexec.HostPackageUpdateSnapshot{}
 	}
+	release, err := m.lease.acquire(ctx)
+	if err != nil {
+		return agentexec.HostPackageUpdateSnapshot{CheckedAt: m.currentTime(), Error: "package update inspection canceled"}
+	}
+	defer release()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.snapshotLocked(ctx, force)
@@ -98,7 +105,10 @@ func (m *packageUpdateManager) snapshotLocked(ctx context.Context, force bool) a
 
 func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpdatePayload) (result agentexec.HostUpdateResultPayload) {
 	startedAt := time.Now()
-	result = agentexec.HostUpdateResultPayload{RequestID: strings.TrimSpace(req.RequestID)}
+	result = agentexec.HostUpdateResultPayload{
+		RequestID: strings.TrimSpace(req.RequestID), ActionID: strings.TrimSpace(req.ActionID),
+		ExecutionPhase: agentexec.HostUpdatePhasePreflight,
+	}
 	defer func() { result.Duration = time.Since(startedAt).Milliseconds() }()
 
 	if strings.TrimSpace(req.Operation) != agentexec.HostUpdateOperationInstall {
@@ -106,6 +116,13 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 		result.Error = "unsupported typed host update operation"
 		return result
 	}
+	release, err := m.lease.acquire(ctx)
+	if err != nil {
+		result.Verification = agentexec.HostUpdateVerificationInconclusive
+		result.Error = "package manager lease unavailable"
+		return result
+	}
+	defer release()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -119,6 +136,8 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 		return result
 	}
 
+	result.ExecutionPhase = agentexec.HostUpdatePhaseRefresh
+	result.MutationStarted = true
 	refresh := m.run(ctx, nil, "apt-get", "update")
 	if refresh.err != nil || refresh.exitCode != 0 {
 		result.Before = probe
@@ -144,6 +163,7 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 	}
 	if before.PendingCount == 0 {
 		result.Success = true
+		result.ExecutionPhase = agentexec.HostUpdatePhaseComplete
 		result.After = before
 		result.Verification = agentexec.HostUpdateVerificationVerified
 		return result
@@ -154,6 +174,7 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 		"APT_LISTCHANGES_FRONTEND=none",
 		"NEEDRESTART_MODE=a",
 	}
+	result.ExecutionPhase = agentexec.HostUpdatePhaseInstall
 	install := m.run(ctx, env, "apt-get", "-y", "--no-remove", "-o", "Dpkg::Options::=--force-confold", "upgrade")
 	if install.err != nil || install.exitCode != 0 {
 		after := m.snapshotLocked(ctx, true)
@@ -164,6 +185,7 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 	}
 
 	result.Success = true
+	result.ExecutionPhase = agentexec.HostUpdatePhaseVerify
 	after := m.snapshotLocked(ctx, true)
 	result.After = after
 	if after.Error != "" {
@@ -177,6 +199,7 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 		return result
 	}
 	result.Verification = agentexec.HostUpdateVerificationVerified
+	result.ExecutionPhase = agentexec.HostUpdatePhaseComplete
 	return result
 }
 

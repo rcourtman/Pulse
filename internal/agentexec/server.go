@@ -64,6 +64,7 @@ type Server struct {
 	pendingReqs                  map[string]chan CommandResultPayload            // scoped request key -> response channel
 	pendingHostStorageCleanups   map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
 	pendingHostUpdates           map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
+	pendingHostOperations        map[string]pendingHostOperation                 // scoped request key -> exact typed APT operation/query identity
 	deploySubs                   map[string]chan DeployProgressPayload           // deploySubKey(agentID, jobID) -> progress subscriber
 	validateToken                func(token string, agentID string, hostname string) bool
 	commandPolicy                *CommandPolicy
@@ -74,6 +75,7 @@ type Server struct {
 	pingInterval                 time.Duration
 	commandAuthorizationVerifier func(CommandAuthorizationRequest) error
 	newCommandApprovalGrant      func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error)
+	now                          func() time.Time
 }
 
 // CommandAuthorizationRequest is the complete server-side approval scope
@@ -95,6 +97,11 @@ type agentConn struct {
 	writeMu          sync.Mutex
 	done             chan struct{}
 	doneOnce         sync.Once
+}
+
+type pendingHostOperation struct {
+	actionID  string
+	operation string
 }
 
 func (ac *agentConn) signalDone() {
@@ -128,6 +135,7 @@ func NewServer(validateToken func(token string, agentID string, hostname string)
 		pendingReqs:                make(map[string]chan CommandResultPayload),
 		pendingHostStorageCleanups: make(map[string]chan HostStorageCleanupResultPayload),
 		pendingHostUpdates:         make(map[string]chan HostUpdateResultPayload),
+		pendingHostOperations:      make(map[string]pendingHostOperation),
 		deploySubs:                 make(map[string]chan DeployProgressPayload),
 		validateToken:              validateToken,
 		commandPolicy:              DefaultPolicy(),
@@ -136,6 +144,7 @@ func NewServer(validateToken func(token string, agentID string, hostname string)
 		shutdown:                   make(chan struct{}),
 		pingInterval:               defaultPingInterval,
 		newCommandApprovalGrant:    NewCommandApprovalGrant,
+		now:                        time.Now,
 	}
 }
 
@@ -159,6 +168,34 @@ func (s *Server) isShuttingDown() bool {
 
 func pendingRequestKey(agentID, requestID string) string {
 	return agentID + "\x00" + requestID
+}
+
+func (s *Server) claimPendingHostOperation(agentID, requestID, actionID, operation string) (string, error) {
+	key := pendingRequestKey(agentID, requestID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.pendingHostOperations[key]; exists {
+		return "", fmt.Errorf("typed host operation request %q is already pending", requestID)
+	}
+	s.pendingHostOperations[key] = pendingHostOperation{
+		actionID:  strings.TrimSpace(actionID),
+		operation: strings.TrimSpace(operation),
+	}
+	return key, nil
+}
+
+func (s *Server) matchesPendingHostOperation(agentID, requestID, actionID, operation string) bool {
+	key := pendingRequestKey(agentID, requestID)
+	s.mu.RLock()
+	expected, ok := s.pendingHostOperations[key]
+	s.mu.RUnlock()
+	return ok && expected.actionID == strings.TrimSpace(actionID) && expected.operation == strings.TrimSpace(operation)
+}
+
+func (s *Server) releasePendingHostOperation(key string) {
+	s.mu.Lock()
+	delete(s.pendingHostOperations, key)
+	s.mu.Unlock()
 }
 
 func deploySubKey(agentID, jobID string) string {
@@ -828,23 +865,14 @@ func (s *Server) readLoop(ac *agentConn) {
 			}
 
 		case MsgTypeHostUpdateResult:
-			var result HostUpdateResultPayload
-			if err := msg.DecodePayload(&result); err != nil {
-				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to parse host update result")
+			result, decodeErr := DecodeHostUpdateResultPayload(msg.Payload)
+			if decodeErr != nil {
+				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid host update result")
 				continue
 			}
-			requestID := strings.TrimSpace(result.RequestID)
-			if requestID == "" || len(requestID) > maxRequestIDLength {
-				log.Warn().Str("agent_id", ac.agent.AgentID).Msg("Dropping host update result with invalid request id")
+			if !s.matchesPendingHostOperation(ac.agent.AgentID, result.RequestID, result.ActionID, HostUpdateOperationInstall) {
+				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated host update result")
 				continue
-			}
-			if err := validateHostUpdateResultPayload(&result); err != nil {
-				log.Warn().Err(err).Str("agent_id", ac.agent.AgentID).Str("request_id", requestID).Msg("Replacing invalid host update result with a safe failure")
-				result = HostUpdateResultPayload{
-					RequestID:    requestID,
-					Verification: HostUpdateVerificationInconclusive,
-					Error:        "agent returned invalid host update evidence",
-				}
 			}
 			s.mu.RLock()
 			ch, ok := s.pendingHostUpdates[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
@@ -858,23 +886,14 @@ func (s *Server) readLoop(ac *agentConn) {
 			}
 
 		case MsgTypeHostStorageCleanupResult:
-			var result HostStorageCleanupResultPayload
-			if err := msg.DecodePayload(&result); err != nil {
-				log.Error().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Failed to parse host storage cleanup result")
+			result, decodeErr := DecodeHostStorageCleanupResultPayload(msg.Payload)
+			if decodeErr != nil {
+				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid host storage cleanup result")
 				continue
 			}
-			requestID := strings.TrimSpace(result.RequestID)
-			if requestID == "" || len(requestID) > maxRequestIDLength {
-				log.Warn().Str("agent_id", ac.agent.AgentID).Msg("Dropping host storage cleanup result with invalid request id")
+			if !s.matchesPendingHostOperation(ac.agent.AgentID, result.RequestID, result.ActionID, HostStorageCleanupOperationPackageCache) {
+				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated host storage cleanup result")
 				continue
-			}
-			if err := validateHostStorageCleanupResultPayload(&result); err != nil {
-				log.Warn().Err(err).Str("agent_id", ac.agent.AgentID).Str("request_id", requestID).Msg("Replacing invalid host storage cleanup result with a safe failure")
-				result = HostStorageCleanupResultPayload{
-					RequestID:    requestID,
-					Verification: HostStorageCleanupVerificationInconclusive,
-					Error:        "agent returned invalid host storage cleanup evidence",
-				}
 			}
 			s.mu.RLock()
 			ch, ok := s.pendingHostStorageCleanups[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
@@ -1217,7 +1236,7 @@ func (s *Server) ExecuteHostUpdate(ctx context.Context, agentID string, req Host
 	if strings.TrimSpace(req.RequestID) == "" {
 		req.RequestID = uuid.New().String()
 	}
-	if err := validateHostUpdatePayload(&req); err != nil {
+	if err := ValidateHostUpdatePayload(&req); err != nil {
 		return nil, err
 	}
 
@@ -1230,6 +1249,11 @@ func (s *Server) ExecuteHostUpdate(ctx context.Context, agentID string, req Host
 
 	respCh := make(chan HostUpdateResultPayload, 1)
 	reqKey := pendingRequestKey(agentID, req.RequestID)
+	hostOperationKey, err := s.claimPendingHostOperation(agentID, req.RequestID, req.ActionID, req.Operation)
+	if err != nil {
+		return nil, err
+	}
+	defer s.releasePendingHostOperation(hostOperationKey)
 	s.mu.Lock()
 	if _, exists := s.pendingHostUpdates[reqKey]; exists {
 		s.mu.Unlock()
@@ -1258,11 +1282,16 @@ func (s *Server) ExecuteHostUpdate(ctx context.Context, agentID string, req Host
 	defer timer.Stop()
 	select {
 	case result := <-respCh:
+		if err := ValidateHostUpdateResultForRequestAt(req, result, s.currentTime()); err != nil {
+			return nil, fmt.Errorf("host update result validation failed: %w", err)
+		}
 		return &result, nil
 	case <-timer.C:
 		return nil, fmt.Errorf("host update timed out after %s", time.Duration(req.Timeout)*time.Second)
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	case <-ac.done:
+		return nil, fmt.Errorf("agent %s disconnected before host update receipt", agentID)
 	case <-s.shutdown:
 		return nil, errServerShuttingDown
 	}
@@ -1282,7 +1311,7 @@ func (s *Server) ExecuteHostStorageCleanup(ctx context.Context, agentID string, 
 	if strings.TrimSpace(req.RequestID) == "" {
 		req.RequestID = uuid.New().String()
 	}
-	if err := validateHostStorageCleanupPayload(&req); err != nil {
+	if err := ValidateHostStorageCleanupPayload(&req); err != nil {
 		return nil, err
 	}
 
@@ -1295,6 +1324,11 @@ func (s *Server) ExecuteHostStorageCleanup(ctx context.Context, agentID string, 
 
 	respCh := make(chan HostStorageCleanupResultPayload, 1)
 	reqKey := pendingRequestKey(agentID, req.RequestID)
+	hostOperationKey, err := s.claimPendingHostOperation(agentID, req.RequestID, req.ActionID, req.Operation)
+	if err != nil {
+		return nil, err
+	}
+	defer s.releasePendingHostOperation(hostOperationKey)
 	s.mu.Lock()
 	if _, exists := s.pendingHostStorageCleanups[reqKey]; exists {
 		s.mu.Unlock()
@@ -1323,14 +1357,26 @@ func (s *Server) ExecuteHostStorageCleanup(ctx context.Context, agentID string, 
 	defer timer.Stop()
 	select {
 	case result := <-respCh:
+		if err := ValidateHostStorageCleanupResultForRequestAt(req, result, s.currentTime()); err != nil {
+			return nil, fmt.Errorf("host storage cleanup result validation failed: %w", err)
+		}
 		return &result, nil
 	case <-timer.C:
 		return nil, fmt.Errorf("host storage cleanup timed out after %s", time.Duration(req.Timeout)*time.Second)
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	case <-ac.done:
+		return nil, fmt.Errorf("agent %s disconnected before host storage cleanup receipt", agentID)
 	case <-s.shutdown:
 		return nil, errServerShuttingDown
 	}
+}
+
+func (s *Server) currentTime() time.Time {
+	if s != nil && s.now != nil {
+		return s.now().UTC()
+	}
+	return time.Now().UTC()
 }
 
 // ReadFile reads a file from an agent

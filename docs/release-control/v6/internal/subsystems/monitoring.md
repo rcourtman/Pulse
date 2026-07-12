@@ -1629,3 +1629,8 @@ belongs to a future PVE `/cluster/backup` source. PBS task-history reads must
 therefore use a bounded filtered lookback over `/nodes/localhost/tasks` and
 surface truncation or permission gaps explicitly instead of treating one recent
 unfiltered sample as configured backup-job proof.
+
+Task 09 preserves two APT telemetry clocks at host-agent ingest: `CheckedAt`
+is agent-observed time and `ObservedAt` is server-received time. Monitoring
+must not overwrite the former with the latter; replay and skew safety consumes
+both timestamps downstream.

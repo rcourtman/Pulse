@@ -529,16 +529,16 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 			go c.handleExecuteCommand(ctx, conn, payload)
 
 		case msgTypeHostUpdate:
-			var payload agentexec.HostUpdatePayload
-			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			payload, err := agentexec.DecodeHostUpdatePayload(msg.Payload)
+			if err != nil {
 				c.logger.Error().Err(err).Msg("Failed to parse host_update payload")
 				continue
 			}
 			go c.handleHostUpdate(ctx, conn, payload)
 
 		case msgTypeHostStorageCleanup:
-			var payload agentexec.HostStorageCleanupPayload
-			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			payload, err := agentexec.DecodeHostStorageCleanupPayload(msg.Payload)
+			if err != nil {
 				c.logger.Error().Err(err).Msg("Failed to parse host_storage_cleanup payload")
 				continue
 			}
@@ -583,23 +583,26 @@ func (c *CommandClient) handleHostUpdate(ctx context.Context, conn *websocket.Co
 	defer cancel()
 
 	result := agentexec.HostUpdateResultPayload{
-		RequestID:    strings.TrimSpace(payload.RequestID),
-		Verification: agentexec.HostUpdateVerificationInconclusive,
+		RequestID: strings.TrimSpace(payload.RequestID), ActionID: strings.TrimSpace(payload.ActionID),
+		ExecutionPhase: agentexec.HostUpdatePhasePreflight, Verification: agentexec.HostUpdateVerificationInconclusive,
 	}
 	if c.packageUpdates == nil {
 		result.Error = "host package update service is unavailable"
 	} else {
 		result = c.packageUpdates.Apply(updateCtx, payload)
 	}
+	c.sendHostUpdateResult(conn, result)
+}
 
+func (c *CommandClient) sendHostUpdateResult(conn *websocket.Conn, result agentexec.HostUpdateResultPayload) {
 	encoded, err := json.Marshal(result)
 	if err != nil {
-		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to marshal host update result")
+		c.logger.Error().Err(err).Str("request_id", result.RequestID).Msg("Failed to marshal host update result")
 		return
 	}
 	msg := wsMessage{
 		Type:      msgTypeHostUpdateResult,
-		ID:        payload.RequestID,
+		ID:        result.RequestID,
 		Timestamp: time.Now(),
 		Payload:   encoded,
 	}
@@ -607,7 +610,7 @@ func (c *CommandClient) handleHostUpdate(ctx context.Context, conn *websocket.Co
 	err = conn.WriteJSON(msg)
 	c.connMu.Unlock()
 	if err != nil {
-		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to send host update result")
+		c.logger.Error().Err(err).Str("request_id", result.RequestID).Msg("Failed to send host update result")
 	}
 }
 
@@ -620,23 +623,26 @@ func (c *CommandClient) handleHostStorageCleanup(ctx context.Context, conn *webs
 	defer cancel()
 
 	result := agentexec.HostStorageCleanupResultPayload{
-		RequestID:    strings.TrimSpace(payload.RequestID),
-		Verification: agentexec.HostStorageCleanupVerificationInconclusive,
+		RequestID: strings.TrimSpace(payload.RequestID), ActionID: strings.TrimSpace(payload.ActionID),
+		ExecutionPhase: agentexec.HostStorageCleanupPhasePreflight, Verification: agentexec.HostStorageCleanupVerificationInconclusive,
 	}
 	if c.storageCleanup == nil {
 		result.Error = "host storage cleanup service is unavailable"
 	} else {
 		result = c.storageCleanup.Apply(cleanupCtx, payload)
 	}
+	c.sendHostStorageCleanupResult(conn, result)
+}
 
+func (c *CommandClient) sendHostStorageCleanupResult(conn *websocket.Conn, result agentexec.HostStorageCleanupResultPayload) {
 	encoded, err := json.Marshal(result)
 	if err != nil {
-		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to marshal host storage cleanup result")
+		c.logger.Error().Err(err).Str("request_id", result.RequestID).Msg("Failed to marshal host storage cleanup result")
 		return
 	}
 	msg := wsMessage{
 		Type:      msgTypeHostStorageCleanupResult,
-		ID:        payload.RequestID,
+		ID:        result.RequestID,
 		Timestamp: time.Now(),
 		Payload:   encoded,
 	}
@@ -644,7 +650,7 @@ func (c *CommandClient) handleHostStorageCleanup(ctx context.Context, conn *webs
 	err = conn.WriteJSON(msg)
 	c.connMu.Unlock()
 	if err != nil {
-		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to send host storage cleanup result")
+		c.logger.Error().Err(err).Str("request_id", result.RequestID).Msg("Failed to send host storage cleanup result")
 	}
 }
 

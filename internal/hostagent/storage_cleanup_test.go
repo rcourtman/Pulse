@@ -52,7 +52,7 @@ func TestStorageCleanupManagerApplyUsesClosedAPTCatalogAndVerifiesBytes(t *testi
 	after := agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("b", 64), ReclaimableBytes: 40, CheckedAt: time.Now().UTC()}
 	snapshots := []agentexec.HostStorageCleanupSnapshot{before, after}
 	var calls [][]string
-	manager := newStorageCleanupManager("linux")
+	manager := newStorageCleanupManager("linux", newPackageManagerLease())
 	manager.lookPath = func(string) (string, error) { return "/usr/bin/apt-get", nil }
 	manager.scan = func() (agentexec.HostStorageCleanupSnapshot, error) {
 		snapshot := snapshots[0]
@@ -81,7 +81,7 @@ func TestStorageCleanupManagerApplyUsesClosedAPTCatalogAndVerifiesBytes(t *testi
 }
 
 func TestStorageCleanupManagerRefusesFingerprintDriftBeforeMutation(t *testing.T) {
-	manager := newStorageCleanupManager("linux")
+	manager := newStorageCleanupManager("linux", newPackageManagerLease())
 	manager.lookPath = func(string) (string, error) { return "/usr/bin/apt-get", nil }
 	manager.scan = func() (agentexec.HostStorageCleanupSnapshot, error) {
 		return agentexec.HostStorageCleanupSnapshot{Fingerprint: "sha256:" + strings.Repeat("b", 64), ReclaimableBytes: 400}, nil
