@@ -251,22 +251,22 @@ reportReady:
 		rg06BarrierMeasured(t, "policy_downgrade", "policy_authorization_revoked", persistence, store, patrol, investigations, resource, func() error { policyOverride.Store("downgrade"); return nil }, func() {}, func() { policyOverride.Store("") }, func(findingID, investigationID string) (aicontracts.ActionDisposition, error) {
 			return rg06SubmitBarrier(context.Background(), broker, rg06BarrierProposalFor(runID, "downgrade", resource.ID, findingID, investigationID))
 		}, server, containerID),
-		rg06BarrierMeasured(t, "stale_resource", "policy_authorization_revoked", persistence, store, patrol, investigations, resource, func() error {
-			staleAt := time.Now().UTC().Add(-2 * time.Hour)
-			resourceProvider.freshness = staleAt
-			resourceProvider.resources[0].LastSeen = staleAt
-			resourceProvider.resources[0].UpdatedAt = staleAt
-			resourceProvider.resources[0].SourceStatus[unified.SourceAgent] = unified.SourceStatus{Status: "stale", LastSeen: staleAt}
-			resources.invalidateCache(orgID)
-			return nil
-		}, func() {}, func() {
+		rg06BarrierMeasured(t, "stale_resource", "drifted plan", persistence, store, patrol, investigations, resource, func() error { return nil }, func() {}, func() {
 			resourceProvider.freshness = reportAt
 			resourceProvider.resources[0].LastSeen = reportAt
 			resourceProvider.resources[0].UpdatedAt = reportAt
 			resourceProvider.resources[0].SourceStatus[unified.SourceAgent] = unified.SourceStatus{Status: "online", LastSeen: reportAt}
 			resources.invalidateCache(orgID)
 		}, func(findingID, investigationID string) (aicontracts.ActionDisposition, error) {
-			return rg06SubmitBarrier(context.Background(), broker, rg06BarrierProposalFor(runID, "stale", resource.ID, findingID, investigationID))
+			return rg06SubmitBarrierAfterPlan(context.Background(), broker, rg06BarrierProposalFor(runID, "stale", resource.ID, findingID, investigationID), func() error {
+				staleAt := time.Now().UTC().Add(-2 * time.Hour)
+				resourceProvider.freshness = staleAt
+				resourceProvider.resources[0].LastSeen = staleAt
+				resourceProvider.resources[0].UpdatedAt = staleAt
+				resourceProvider.resources[0].SourceStatus[unified.SourceAgent] = unified.SourceStatus{Status: "stale", LastSeen: staleAt}
+				resources.invalidateCache(orgID)
+				return nil
+			})
 		}, server, containerID),
 		rg06BarrierMeasured(t, "never_auto_remediate", "policy_authorization_revoked", persistence, store, patrol, investigations, resource, func() error {
 			return store.SetResourceOperatorState(unified.ResourceOperatorState{CanonicalID: resource.ID, NeverAutoRemediate: true, AutoRemediationPolicy: unified.AutoRemediationPolicy{Enabled: true, CapabilityNames: []string{hostStorageCleanupCapability}}, SetAt: time.Now().UTC(), SetBy: "rg06-operator"})
@@ -536,12 +536,21 @@ func rg06BarrierMeasured(t *testing.T, name, expectedReason string, persistence 
 }
 
 func rg06SubmitBarrier(ctx context.Context, broker *patrolActionBroker, proposal aicontracts.ActionProposal) (aicontracts.ActionDisposition, error) {
+	return rg06SubmitBarrierAfterPlan(ctx, broker, proposal, nil)
+}
+
+func rg06SubmitBarrierAfterPlan(ctx context.Context, broker *patrolActionBroker, proposal aicontracts.ActionProposal, afterPlan func() error) (aicontracts.ActionDisposition, error) {
 	disposition, err := broker.Submit(ctx, proposal)
 	if err != nil {
 		return disposition, err
 	}
 	if disposition.State != string(unified.ActionStatePending) {
 		return disposition, fmt.Errorf("barrier action was not pending before policy admission: state=%s", disposition.State)
+	}
+	if afterPlan != nil {
+		if err := afterPlan(); err != nil {
+			return disposition, err
+		}
 	}
 	record, executeErr := broker.lifecycle().ExecuteUnderPolicy(ctx, broker.orgID, disposition.ActionID, patrolActionPolicyActor, func(ctx context.Context, current unified.ActionAuditRecord, at time.Time) (unified.ActionPolicyAuthorizationLease, string, error) {
 		return broker.policyAuthorizationLease(ctx, proposal, current, at)
