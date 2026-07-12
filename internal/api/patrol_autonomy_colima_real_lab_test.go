@@ -186,7 +186,7 @@ reportReady:
 	if err != nil {
 		t.Fatal(err)
 	}
-	host, err := monitor.ApplyHostReport(report, nil)
+	host, err := monitor.ApplyHostReport(report, &config.APITokenRecord{ID: agentID})
 	if err != nil {
 		t.Fatal(err)
 	}
