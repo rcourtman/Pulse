@@ -3152,6 +3152,77 @@ func newEmptyWorkflowPromptActivityHistoryData() *WorkflowPromptActivityHistoryD
 	}
 }
 
+// activityHistoryData is the shared on-disk shape of the activity history
+// payloads (external-agent and workflow-prompt). Field names and order match
+// the exported per-type structs so the persisted JSON is byte-identical.
+type activityHistoryData[R any] struct {
+	Version   int       `json:"version"`
+	LastSaved time.Time `json:"last_saved"`
+	Events    []R       `json:"events"`
+}
+
+// recordActivityHistory appends one already-normalized activity marker and
+// prunes old records while holding the persistence lock, avoiding
+// load-append-save races between concurrent callers. cutoff and maxRecords
+// are forwarded to prune; errLabel is the lowercase error-wrapping and log
+// label ("external agent activity history").
+func recordActivityHistory[R any](
+	c *ConfigPersistence,
+	filePath string,
+	record R,
+	now time.Time,
+	cutoff time.Time,
+	maxRecords int,
+	prune func([]R, time.Time, int) []R,
+	errLabel string,
+) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if err := c.EnsureConfigDir(); err != nil {
+		return fmt.Errorf("prepare config directory for %s: %w", errLabel, err)
+	}
+
+	history := &activityHistoryData[R]{Version: 1, Events: make([]R, 0)}
+	data, err := c.fs.ReadFile(filePath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("read %s: %w", errLabel, err)
+		}
+	} else {
+		if c.crypto != nil {
+			if decrypted, decErr := c.crypto.Decrypt(data); decErr == nil {
+				data = decrypted
+			}
+		}
+		if unmarshalErr := json.Unmarshal(data, history); unmarshalErr != nil {
+			log.Debug().Err(unmarshalErr).Str("file", filePath).Msg("Resetting unreadable " + errLabel)
+			history = &activityHistoryData[R]{Version: 1, Events: make([]R, 0)}
+		}
+	}
+
+	history.Events = append(history.Events, record)
+	history.Events = prune(history.Events, cutoff, maxRecords)
+	history.Version = 1
+	history.LastSaved = now
+
+	jsonData, err := json.Marshal(history)
+	if err != nil {
+		return fmt.Errorf("marshal %s: %w", errLabel, err)
+	}
+	if c.crypto != nil {
+		encrypted, encErr := c.crypto.Encrypt(jsonData)
+		if encErr != nil {
+			return fmt.Errorf("encrypt %s: %w", errLabel, encErr)
+		}
+		jsonData = encrypted
+	}
+	if err := c.writeConfigFileLocked(filePath, jsonData, 0600); err != nil {
+		return fmt.Errorf("persist %s: %w", errLabel, err)
+	}
+	return nil
+}
+
 // RecordExternalAgentActivity appends one content-free external-agent activity
 // marker and prunes old records while holding the persistence lock, avoiding
 // load-append-save races between concurrent agent requests.
@@ -3167,56 +3238,16 @@ func (c *ConfigPersistence) RecordExternalAgentActivity(record ExternalAgentActi
 	if !ok {
 		return nil
 	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return fmt.Errorf("prepare config directory for external agent activity history: %w", err)
-	}
-
-	history := newEmptyExternalAgentActivityHistoryData()
-	data, err := c.fs.ReadFile(c.externalAgentActivityFile)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("read external agent activity history: %w", err)
-		}
-	} else {
-		if c.crypto != nil {
-			if decrypted, decErr := c.crypto.Decrypt(data); decErr == nil {
-				data = decrypted
-			}
-		}
-		if unmarshalErr := json.Unmarshal(data, history); unmarshalErr != nil {
-			log.Debug().Err(unmarshalErr).Str("file", c.externalAgentActivityFile).Msg("Resetting unreadable external agent activity history")
-			history = newEmptyExternalAgentActivityHistoryData()
-		}
-	}
-
-	history.Events = append(history.Events, record)
-	history.Events = pruneExternalAgentActivityRecords(
-		history.Events,
+	return recordActivityHistory(
+		c,
+		c.externalAgentActivityFile,
+		record,
+		now,
 		record.Timestamp.Add(-externalAgentActivityHistoryRetention),
 		maxExternalAgentActivityHistoryRecords,
+		pruneExternalAgentActivityRecords,
+		"external agent activity history",
 	)
-	history.Version = 1
-	history.LastSaved = now
-
-	jsonData, err := json.Marshal(history)
-	if err != nil {
-		return fmt.Errorf("marshal external agent activity history: %w", err)
-	}
-	if c.crypto != nil {
-		encrypted, encErr := c.crypto.Encrypt(jsonData)
-		if encErr != nil {
-			return fmt.Errorf("encrypt external agent activity history: %w", encErr)
-		}
-		jsonData = encrypted
-	}
-	if err := c.writeConfigFileLocked(c.externalAgentActivityFile, jsonData, 0600); err != nil {
-		return fmt.Errorf("persist external agent activity history: %w", err)
-	}
-	return nil
 }
 
 // RecordWorkflowPromptActivity appends one content-free workflow prompt
@@ -3235,56 +3266,16 @@ func (c *ConfigPersistence) RecordWorkflowPromptActivity(record WorkflowPromptAc
 	if !ok {
 		return nil
 	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if err := c.EnsureConfigDir(); err != nil {
-		return fmt.Errorf("prepare config directory for workflow prompt activity history: %w", err)
-	}
-
-	history := newEmptyWorkflowPromptActivityHistoryData()
-	data, err := c.fs.ReadFile(c.workflowPromptActivityFile)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("read workflow prompt activity history: %w", err)
-		}
-	} else {
-		if c.crypto != nil {
-			if decrypted, decErr := c.crypto.Decrypt(data); decErr == nil {
-				data = decrypted
-			}
-		}
-		if unmarshalErr := json.Unmarshal(data, history); unmarshalErr != nil {
-			log.Debug().Err(unmarshalErr).Str("file", c.workflowPromptActivityFile).Msg("Resetting unreadable workflow prompt activity history")
-			history = newEmptyWorkflowPromptActivityHistoryData()
-		}
-	}
-
-	history.Events = append(history.Events, record)
-	history.Events = pruneWorkflowPromptActivityRecords(
-		history.Events,
+	return recordActivityHistory(
+		c,
+		c.workflowPromptActivityFile,
+		record,
+		now,
 		record.Timestamp.Add(-workflowPromptActivityHistoryRetention),
 		maxWorkflowPromptActivityHistoryRecords,
+		pruneWorkflowPromptActivityRecords,
+		"workflow prompt activity history",
 	)
-	history.Version = 1
-	history.LastSaved = now
-
-	jsonData, err := json.Marshal(history)
-	if err != nil {
-		return fmt.Errorf("marshal workflow prompt activity history: %w", err)
-	}
-	if c.crypto != nil {
-		encrypted, encErr := c.crypto.Encrypt(jsonData)
-		if encErr != nil {
-			return fmt.Errorf("encrypt workflow prompt activity history: %w", encErr)
-		}
-		jsonData = encrypted
-	}
-	if err := c.writeConfigFileLocked(c.workflowPromptActivityFile, jsonData, 0600); err != nil {
-		return fmt.Errorf("persist workflow prompt activity history: %w", err)
-	}
-	return nil
 }
 
 // loadHistoryData generic helper for loading history data from disk.
