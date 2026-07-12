@@ -186,6 +186,13 @@ import {
 } from './assistantSlashCommands';
 import { getAssistantWorkflowStarters, type AssistantWorkflowStarter } from './workflowStarters';
 import {
+  composePromptWithPastedBlocks,
+  createPastedTextBlock,
+  pastedBlockLabel,
+  shouldCollapsePastedText,
+  type PastedTextBlock,
+} from './composerPaste';
+import {
   assistantNotificationsEnabled,
   assistantNotificationsSupported,
   setAssistantNotificationsEnabled,
@@ -738,6 +745,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [mentionStartIndex, setMentionStartIndex] = createSignal(0);
   const [mentionResources, setMentionResources] = createSignal<MentionResource[]>([]);
   const [accumulatedMentions, setAccumulatedMentions] = createSignal<MentionResource[]>([]);
+  const [pastedBlocks, setPastedBlocks] = createSignal<PastedTextBlock[]>([]);
   const [slashCommandActive, setSlashCommandActive] = createSignal(false);
   const [slashCommandQuery, setSlashCommandQuery] = createSignal('');
   let textareaRef: HTMLTextAreaElement | undefined;
@@ -3144,14 +3152,47 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setMentionResources(dedupeMentionResources(mentionCandidates));
   });
 
-  const restoreFailedSubmitDraft = (draft: string, mentions: MentionResource[]) => {
-    if (input().trim() || accumulatedMentions().length > 0) {
+  const restoreFailedSubmitDraft = (
+    draft: string,
+    mentions: MentionResource[],
+    blocks: PastedTextBlock[] = [],
+  ) => {
+    if (input().trim() || accumulatedMentions().length > 0 || pastedBlocks().length > 0) {
       return;
     }
     setInput(draft);
     setAccumulatedMentions(cloneMentions(mentions));
+    setPastedBlocks(blocks);
     setMentionActive(false);
     setSlashCommandActive(false);
+    queueMicrotask(() => {
+      resizeTextarea();
+      focusComposer();
+    });
+  };
+
+  // Long pastes collapse into chips instead of flooding the textarea; the
+  // full text rejoins the prompt at send time (composePromptWithPastedBlocks).
+  const handleComposerPaste = (e: ClipboardEvent) => {
+    const text = e.clipboardData?.getData('text/plain') ?? '';
+    if (!shouldCollapsePastedText(text)) return;
+    e.preventDefault();
+    setPastedBlocks((prev) => [...prev, createPastedTextBlock(text)]);
+  };
+
+  const removePastedBlock = (id: string) => {
+    setPastedBlocks((prev) => prev.filter((block) => block.id !== id));
+    focusComposer();
+  };
+
+  // Clicking the chip body un-collapses: the text returns to the textarea so
+  // the user can trim or edit it inline.
+  const expandPastedBlock = (id: string) => {
+    const block = pastedBlocks().find((candidate) => candidate.id === id);
+    if (!block) return;
+    setPastedBlocks((prev) => prev.filter((candidate) => candidate.id !== id));
+    const current = input();
+    setInput(current ? `${current}\n${block.text}` : block.text);
     queueMicrotask(() => {
       resizeTextarea();
       focusComposer();
@@ -3172,6 +3213,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     setRestoredPromptDraft(null);
     setInput('');
     setAccumulatedMentions([]);
+    setPastedBlocks([]);
     setMentionActive(false);
     setSlashCommandActive(false);
     setSlashCommandQuery('');
@@ -3335,8 +3377,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (composerSubmitDispatchLocked) return;
 
     const submittedInput = readComposerInputForSubmit();
-    const prompt = submittedInput.trim();
-    if (!prompt) return;
+    const typedPrompt = submittedInput.trim();
+    const submittedBlocks = pastedBlocks();
+    if (!typedPrompt && submittedBlocks.length === 0) return;
     composerSubmitDispatchLocked = true;
     queueMicrotask(() => {
       composerSubmitDispatchLocked = false;
@@ -3344,11 +3387,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (submittedInput !== input()) {
       setInput(submittedInput);
     }
-    const slashCommand = parseAssistantSlashCommandInput(prompt);
+    const slashCommand = typedPrompt ? parseAssistantSlashCommandInput(typedPrompt) : null;
     if (slashCommand) {
       executeSlashCommand(slashCommand.action, slashCommand.args);
       return;
     }
+    const prompt = composePromptWithPastedBlocks(typedPrompt, submittedBlocks);
     setSlashCommandActive(false);
     setSlashCommandQuery('');
     const mentions = accumulatedMentions();
@@ -3413,7 +3457,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     sendPromise
       .then((ok) => {
         if (!ok) {
-          restoreFailedSubmitDraft(submittedInput, submittedMentions);
+          restoreFailedSubmitDraft(submittedInput, submittedMentions, submittedBlocks);
           return;
         }
         stashedComposerDraft = null;
@@ -3429,11 +3473,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
       })
       .catch((error) => {
         logger.warn('[AIChat] Failed to send Assistant message:', error);
-        restoreFailedSubmitDraft(submittedInput, submittedMentions);
+        restoreFailedSubmitDraft(submittedInput, submittedMentions, submittedBlocks);
       });
     stashedComposerDraft = null;
     setInput('');
     setAccumulatedMentions([]);
+    setPastedBlocks([]);
     setMentionActive(false);
     setSlashCommandActive(false);
     setSlashCommandQuery('');
@@ -3718,6 +3763,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       setEditingQueuedFollowUp(null);
       setInput('');
       setAccumulatedMentions([]);
+      setPastedBlocks([]);
       setMentionActive(false);
       setSlashCommandActive(false);
       notificationStore.success(AI_CHAT_REDO_LAST_TURN_SUCCESS_MESSAGE, 2000);
@@ -5140,6 +5186,39 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </For>
               </div>
             </Show>
+            <Show when={pastedBlocks().length > 0}>
+              <div
+                class="mb-2 flex min-w-0 flex-wrap items-center gap-1.5"
+                aria-label="Pasted text attachments"
+                data-testid="assistant-pasted-blocks"
+              >
+                <For each={pastedBlocks()}>
+                  {(block) => (
+                    <div class="inline-flex h-7 max-w-full items-center gap-0.5 rounded-md border border-border bg-surface-alt pl-2 pr-0.5 text-[11px] font-medium text-base-content">
+                      <ClipboardCopyIcon class="h-3 w-3 shrink-0 text-muted" aria-hidden="true" />
+                      <button
+                        type="button"
+                        onClick={() => expandPastedBlock(block.id)}
+                        class="min-w-0 truncate px-1 hover:text-blue-700 dark:hover:text-blue-300"
+                        title="Click to edit the pasted text in the composer"
+                        aria-label={`Edit ${pastedBlockLabel(block)} in the composer`}
+                      >
+                        {pastedBlockLabel(block)}
+                      </button>
+                      <ActionIconButton
+                        onClick={() => removePastedBlock(block.id)}
+                        tone="muted"
+                        size="2xs"
+                        title="Remove pasted text"
+                        label={`Remove ${pastedBlockLabel(block)}`}
+                      >
+                        <XIcon class="h-3 w-3" aria-hidden="true" />
+                      </ActionIconButton>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </Show>
             <form
               data-assistant-composer
               onSubmit={(e) => {
@@ -5160,6 +5239,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   value={input()}
                   onInput={handleInputChange}
                   onKeyDown={handleKeyDown}
+                  onPaste={handleComposerPaste}
                   placeholder={AI_CHAT_INPUT_PLACEHOLDER}
                   rows={1}
                   class="max-h-40 min-h-[54px] flex-1 resize-none bg-transparent px-3.5 py-3.5 pr-14 text-sm leading-5 text-base-content placeholder-slate-400 focus:outline-none"
@@ -5185,7 +5265,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <div class="absolute bottom-2 right-2 flex items-center gap-1.5">
                   <ActionIconButton
                     type="submit"
-                    disabled={!input().trim()}
+                    disabled={!input().trim() && pastedBlocks().length === 0}
                     tone="primary"
                     size="lg"
                     title={chat.isLoading() ? 'Queue follow-up' : 'Send'}

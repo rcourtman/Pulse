@@ -2081,6 +2081,78 @@ describe('AIChat', () => {
       expect(mockChat.sendMessage).toHaveBeenCalledWith('hello world', undefined, undefined);
     });
 
+    it('collapses a long paste into a chip and appends it to the sent prompt', () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      const pasted = Array.from({ length: 12 }, (_, i) => `log line ${i}`).join('\n');
+
+      fireEvent.paste(textarea, { clipboardData: { getData: () => pasted } });
+
+      // The textarea stays clean; the paste becomes a chip.
+      expect((textarea as HTMLTextAreaElement).value).toBe('');
+      expect(screen.getByTestId('assistant-pasted-blocks')).toBeInTheDocument();
+      expect(screen.getByText('Pasted text (12 lines)')).toBeInTheDocument();
+
+      fireEvent.input(textarea, { target: { value: 'what is failing here?' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        `what is failing here?\n\n${pasted}`,
+        undefined,
+        undefined,
+      );
+      // Chip is consumed by the send.
+      expect(screen.queryByTestId('assistant-pasted-blocks')).not.toBeInTheDocument();
+    });
+
+    it('keeps short pastes inline in the textarea', () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+
+      fireEvent.paste(textarea, { clipboardData: { getData: () => 'short question' } });
+
+      // Collapse handler must not intercept; jsdom does not perform native
+      // paste insertion, so the absence of a chip is the assertion.
+      expect(screen.queryByTestId('assistant-pasted-blocks')).not.toBeInTheDocument();
+    });
+
+    it('sends a chip-only message and expands a chip back into the textarea', () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      const pasted = Array.from({ length: 9 }, (_, i) => `row ${i}`).join('\n');
+
+      fireEvent.paste(textarea, { clipboardData: { getData: () => pasted } });
+      const chipBody = screen.getByText('Pasted text (9 lines)');
+
+      // Expand puts the text back for inline editing and removes the chip.
+      fireEvent.click(chipBody);
+      expect((textarea as HTMLTextAreaElement).value).toBe(pasted);
+      expect(screen.queryByTestId('assistant-pasted-blocks')).not.toBeInTheDocument();
+
+      // Re-collapse via a fresh paste, clear the typed text, send chip-only.
+      fireEvent.input(textarea, { target: { value: '' } });
+      fireEvent.paste(textarea, { clipboardData: { getData: () => pasted } });
+      const sendButton = screen.getByRole('button', { name: 'Send message' });
+      expect(sendButton).not.toBeDisabled();
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(pasted, undefined, undefined);
+    });
+
+    it('removes a pasted chip without sending it', () => {
+      renderChat();
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      const pasted = Array.from({ length: 10 }, (_, i) => `cfg ${i}`).join('\n');
+
+      fireEvent.paste(textarea, { clipboardData: { getData: () => pasted } });
+      fireEvent.click(screen.getByRole('button', { name: 'Remove Pasted text (10 lines)' }));
+
+      expect(screen.queryByTestId('assistant-pasted-blocks')).not.toBeInTheDocument();
+      fireEvent.input(textarea, { target: { value: 'hello' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+      expect(mockChat.sendMessage).toHaveBeenCalledWith('hello', undefined, undefined);
+    });
+
     it('shows slash command suggestions and runs the selected command with Enter', async () => {
       renderChat();
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
