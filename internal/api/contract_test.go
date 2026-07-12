@@ -20044,7 +20044,10 @@ func TestContract_HostUpdatesUseTypedFingerprintBoundAgentOperation(t *testing.T
 		"ExpectedInventoryHash: resource.Agent.PackageUpdates.InventoryHash",
 		"agentexec.HostUpdateOperationInstall",
 		"beforeBound := result.Before.InventoryHash == resource.Agent.PackageUpdates.InventoryHash",
-		"hostAPTExecutionResult(record.Request.ResourceID, agentID, agentexec.HostUpdateOperationInstall, output, result.Success, result.MutationStarted, result.Verification, beforeBound, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())",
+		"agentexec.ValidateHostUpdateResultForRequestAt(req, *result, receivedAt)",
+		"receivedAt := e.currentTime()",
+		"hostAPTExecutionResult(record.Request.ResourceID, agentID, agentexec.HostUpdateOperationInstall, output, result.Success, result.MutationStarted, result.Verification, beforeBound, true, result.HealthChecked, result.PackageManagerHealthy, result.RecoveryRequired, result.Before.CheckedAt, result.After.CheckedAt, receivedAt, receivedAt)",
+		"query.Record.TerminalAt, receivedAt)",
 	} {
 		if !strings.Contains(executorSrc, snippet) {
 			t.Fatalf("host update executor missing typed operation invariant %q", snippet)
@@ -20055,6 +20058,9 @@ func TestContract_HostUpdatesUseTypedFingerprintBoundAgentOperation(t *testing.T
 	}
 	for _, snippet := range []string{
 		"ExpectedInventoryHash string `json:\"expected_inventory_hash\"`",
+		"HealthChecked         bool                      `json:\"health_checked\"`",
+		"PackageManagerHealthy bool                      `json:\"package_manager_healthy\"`",
+		"RecoveryRequired      bool                      `json:\"recovery_required\"`",
 		"const HostUpdateOperationInstall = \"install_os_updates\"",
 	} {
 		if !strings.Contains(typesSrc, snippet) {
@@ -20065,9 +20071,25 @@ func TestContract_HostUpdatesUseTypedFingerprintBoundAgentOperation(t *testing.T
 		"if before.InventoryHash != strings.TrimSpace(req.ExpectedInventoryHash)",
 		"\"--no-remove\"",
 		"\"Dpkg::Options::=--force-confold\"",
+		"m.run(ctx, nil, \"dpkg\", \"--audit\")",
 	} {
 		if !strings.Contains(runtimeSrc, snippet) {
 			t.Fatalf("host update runtime missing fail-closed command-catalog invariant %q", snippet)
+		}
+	}
+	refreshIndex := strings.Index(runtimeSrc, `m.run(ctx, nil, "apt-get", "update")`)
+	mutationIndex := strings.Index(runtimeSrc, "result.MutationStarted = true")
+	installIndex := strings.Index(runtimeSrc, `m.run(ctx, env, "apt-get", "-y", "--no-remove"`)
+	if refreshIndex < 0 || mutationIndex <= refreshIndex || installIndex <= mutationIndex {
+		t.Fatal("host update MutationStarted must be set only immediately before the fixed install command, after refresh and preflight")
+	}
+	truthSource, err := os.ReadFile("host_apt_action_result.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, snippet := range []string{"package_manager_health_unknown", "package_manager_unhealthy", "ActionEvidenceAgentAttested"} {
+		if !strings.Contains(string(truthSource), snippet) {
+			t.Fatalf("host update truth projection missing legacy/health invariant %q", snippet)
 		}
 	}
 }
@@ -20099,7 +20121,11 @@ func TestContract_HostStorageCleanupIsTypedFingerprintBoundAndPathFree(t *testin
 		"agentexec.HostStorageCleanupOperationPackageCache",
 		"unified.HostStorageCleanupPressureDisk(resource.Agent.Disks)",
 		"beforeBound := result.Before.Fingerprint == resource.Agent.StorageCleanup.Fingerprint",
-		"hostAPTExecutionResult(record.Request.ResourceID, resource.Agent.AgentID, agentexec.HostStorageCleanupOperationPackageCache, output, result.Success, result.MutationStarted, result.Verification, beforeBound, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())",
+		"agentexec.ValidateHostStorageCleanupResultForRequestAt(req, *result, receivedAt)",
+		"hostStorageCleanupResultSummary(*result)",
+		"receivedAt := e.currentTime()",
+		"hostAPTExecutionResult(record.Request.ResourceID, resource.Agent.AgentID, agentexec.HostStorageCleanupOperationPackageCache, output, result.Success, result.MutationStarted, result.Verification, beforeBound, false, false, false, false, result.Before.CheckedAt, result.After.CheckedAt, receivedAt, receivedAt)",
+		"query.Record.TerminalAt, receivedAt)",
 	} {
 		if !strings.Contains(executorSrc, snippet) {
 			t.Fatalf("host storage cleanup executor missing invariant %q", snippet)
@@ -20128,6 +20154,11 @@ func TestContract_HostStorageCleanupIsTypedFingerprintBoundAndPathFree(t *testin
 	} {
 		if !strings.Contains(runtimeSrc, snippet) {
 			t.Fatalf("host storage cleanup runtime missing fail-closed invariant %q", snippet)
+		}
+	}
+	for _, snippet := range []string{"rollback available: false", "rescan required: %t"} {
+		if !strings.Contains(executorSrc, snippet) {
+			t.Fatalf("host storage cleanup truth projection missing %q", snippet)
 		}
 	}
 }

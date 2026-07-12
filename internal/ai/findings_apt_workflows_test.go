@@ -31,7 +31,12 @@ func aptWorkflowTestHost(now time.Time) *ur.HostView {
 func TestAPTWorkflowWatcherEmitsDeterministicCapabilityBoundFindings(t *testing.T) {
 	now := time.Date(2026, 7, 12, 8, 0, 0, 0, time.UTC)
 	host := aptWorkflowTestHost(now)
-	emit, resolve := newAPTWorkflowWatcher().Observe(patrolRuntimeState{readState: &mockReadState{hosts: []*ur.HostView{host}}}, nil, now)
+	readState := &mockReadState{hosts: []*ur.HostView{host}}
+	detected := DetectAPTWorkflowFindings(readState, now)
+	if len(detected) != 2 || detected[0].ID != "apt:host-update:agent:host-1" || detected[1].ID != "apt:cache-cleanup:agent:host-1" {
+		t.Fatalf("canonical detector findings=%#v", detected)
+	}
+	emit, resolve := newAPTWorkflowWatcher().Observe(patrolRuntimeState{readState: readState}, nil, now)
 	if len(emit) != 2 || len(resolve) != 0 {
 		t.Fatalf("emit=%d resolve=%d", len(emit), len(resolve))
 	}

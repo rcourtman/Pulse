@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +24,14 @@ type fakeHostStorageCleanupAgent struct {
 	requests          []agentexec.HostStorageCleanupPayload
 	receiptVersion    int
 	receiptVersionSet bool
+	queryResult       operationreceipt.QueryResult
+	queryErr          error
+	queries           []operationreceipt.Identity
+}
+
+func (f *fakeHostStorageCleanupAgent) QueryAgentOperation(_ context.Context, _ string, identity operationreceipt.Identity) (operationreceipt.QueryResult, error) {
+	f.queries = append(f.queries, identity)
+	return f.queryResult, f.queryErr
 }
 
 var testHostStorageCleanupFingerprint = "sha256:" + strings.Repeat("c", 64)
@@ -31,7 +40,13 @@ var testHostStorageCleanupAfterFingerprint = "sha256:" + strings.Repeat("d", 64)
 func (f *fakeHostStorageCleanupAgent) ExecuteHostStorageCleanup(_ context.Context, agentID string, req agentexec.HostStorageCleanupPayload) (*agentexec.HostStorageCleanupResultPayload, error) {
 	f.agentID = agentID
 	f.requests = append(f.requests, req)
-	return f.result, f.err
+	if f.result == nil {
+		return nil, f.err
+	}
+	result := *f.result
+	result.RequestID = req.RequestID
+	result.ActionID = req.ActionID
+	return &result, f.err
 }
 
 func (f *fakeHostStorageCleanupAgent) IsAgentConnected(string) bool { return f.connected }
@@ -44,7 +59,13 @@ func (f *fakeHostStorageCleanupAgent) AgentOperationReceiptVersion(string) int {
 
 func hostCleanupDispatchTestContext(t *testing.T, actionID string) context.Context {
 	t.Helper()
-	attempt, err := unified.NewActionDispatchAttempt(actionID, time.Now())
+	attempt := hostCleanupDispatchAttempt(t, actionID, time.Now())
+	return actionlifecycle.ContextWithCommittedDispatchAttempt(context.Background(), attempt)
+}
+
+func hostCleanupDispatchAttempt(t *testing.T, actionID string, now time.Time) unified.ActionDispatchAttempt {
+	t.Helper()
+	attempt, err := unified.NewActionDispatchAttempt(actionID, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +77,7 @@ func hostCleanupDispatchTestContext(t *testing.T, actionID string) context.Conte
 	if err != nil {
 		t.Fatal(err)
 	}
-	return actionlifecycle.ContextWithCommittedDispatchAttempt(context.Background(), attempt)
+	return attempt
 }
 
 func TestHostStorageCleanupActionExecutorDispatchesFingerprintBoundOperation(t *testing.T) {
@@ -89,7 +110,7 @@ func TestHostStorageCleanupActionExecutorDoesNotExposeAgentErrorText(t *testing.
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{hostStorageCleanupActionResource(now)}})
 	agents := &fakeHostStorageCleanupAgent{connected: true, result: &agentexec.HostStorageCleanupResultPayload{
-		RequestID: "action-cleanup", Verification: agentexec.HostStorageCleanupVerificationFailed,
+		RequestID: "action-cleanup", ExecutionPhase: agentexec.HostStorageCleanupPhasePreflight, Verification: agentexec.HostStorageCleanupVerificationInconclusive,
 		Before: agentexec.HostStorageCleanupSnapshot{ReclaimableBytes: 512 * 1024 * 1024},
 		After:  agentexec.HostStorageCleanupSnapshot{ReclaimableBytes: 512 * 1024 * 1024},
 		Error:  "private repository package path and token",
@@ -102,6 +123,46 @@ func TestHostStorageCleanupActionExecutorDoesNotExposeAgentErrorText(t *testing.
 	encoded := result.Output + " " + result.ErrorMessage + " " + result.Verification.Note + " " + result.Verification.Output
 	if strings.Contains(encoded, "private repository") || strings.Contains(encoded, "token") {
 		t.Fatalf("executor exposed agent error text: %q", encoded)
+	}
+}
+
+func TestHostStorageCleanupReconcileDelayedTerminalReceiptPreservesAgentAttestedEvidenceWithoutResend(t *testing.T) {
+	terminalAt := time.Now().UTC().Add(-2 * time.Hour)
+	receivedAt := terminalAt.Add(2 * time.Hour)
+	attempt := hostCleanupDispatchAttempt(t, "action-cleanup", terminalAt)
+	payload := agentexec.HostStorageCleanupResultPayload{
+		RequestID: attempt.ID, ActionID: attempt.ActionID, Success: true, MutationStarted: true, ExecutionPhase: agentexec.HostStorageCleanupPhaseComplete,
+		Before:         agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: testHostStorageCleanupFingerprint, ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: terminalAt.Add(-2 * time.Second)},
+		After:          agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: testHostStorageCleanupAfterFingerprint, ReclaimableBytes: 8 * 1024 * 1024, CheckedAt: terminalAt.Add(-time.Second)},
+		ReclaimedBytes: 504 * 1024 * 1024, Verification: agentexec.HostStorageCleanupVerificationVerified,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}
+	agents := &fakeHostStorageCleanupAgent{queryResult: operationreceipt.QueryResult{Version: operationreceipt.ProtocolVersion, Status: operationreceipt.QueryFoundTerminal, Record: &operationreceipt.Record{
+		Identity: identity, State: operationreceipt.StateTerminal, AcceptedAt: terminalAt.Add(-4 * time.Second), StartedAt: terminalAt.Add(-3 * time.Second), TerminalAt: terminalAt,
+		ResultKind: agentexec.HostStorageCleanupReceiptKind, ResultVersion: agentexec.HostAPTReceiptVersion, Result: raw,
+	}}}
+	executor := hostStorageCleanupActionExecutor{agents: agents, now: func() time.Time { return receivedAt }}
+
+	result, receipt, found, err := executor.ReconcileActionDispatch(context.Background(), hostStorageCleanupActionRecord(attempt.ActionID), attempt)
+	if err != nil || !found {
+		t.Fatalf("ReconcileActionDispatch: found=%v err=%v", found, err)
+	}
+	if len(agents.requests) != 0 || len(agents.queries) != 1 {
+		t.Fatalf("mutation requests=%d queries=%d", len(agents.requests), len(agents.queries))
+	}
+	if result == nil || result.ActionResultV2 == nil || result.ActionResultV2.Verification.Status != unified.ActionVerificationConfirmed || result.ActionResultV2.Verification.EvidenceClass != unified.ActionEvidenceAgentAttested {
+		t.Fatalf("result=%#v", result)
+	}
+	evidence := result.ActionResultV2.Verification.Evidence
+	if len(evidence) != 1 || !evidence[0].ObservedAt.Equal(payload.After.CheckedAt) || !evidence[0].ReceivedAt.Equal(receivedAt) {
+		t.Fatalf("evidence=%#v", evidence)
+	}
+	if !receipt.ReceivedAt.Equal(receivedAt) || receipt.TransportRequestID != attempt.ID {
+		t.Fatalf("receipt=%#v", receipt)
 	}
 }
 
@@ -200,7 +261,7 @@ func TestHostCleanupSelfReportedReceiptSupportCannotBypassLiveServerVersion(t *t
 func verifiedHostStorageCleanupAgent() *fakeHostStorageCleanupAgent {
 	now := time.Now().UTC()
 	return &fakeHostStorageCleanupAgent{connected: true, result: &agentexec.HostStorageCleanupResultPayload{
-		RequestID: "filled-by-executor", Success: true,
+		RequestID: "filled-by-executor", Success: true, MutationStarted: true, ExecutionPhase: agentexec.HostStorageCleanupPhaseComplete,
 		Before:         agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: testHostStorageCleanupFingerprint, ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: now.Add(-time.Second)},
 		After:          agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: testHostStorageCleanupAfterFingerprint, ReclaimableBytes: 8 * 1024 * 1024, CheckedAt: now},
 		ReclaimedBytes: 504 * 1024 * 1024,

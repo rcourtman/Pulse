@@ -568,7 +568,7 @@ func TestExecuteHostUpdateRoundTripUsesTypedCommandFreeEnvelope(t *testing.T) {
 			ExecutionPhase: HostUpdatePhaseComplete,
 			Before:         HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: inventoryHash, PendingCount: 2, CheckedAt: time.Now().UTC()},
 			After:          HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: emptyInventoryHash, PendingCount: 0, RebootRequired: true, CheckedAt: time.Now().UTC()},
-			Verification:   HostUpdateVerificationVerified,
+			HealthChecked:  true, PackageManagerHealthy: true, Verification: HostUpdateVerificationVerified,
 		}
 		if err := conn.WriteJSON(mustNewMessage(t, MsgTypeHostUpdateResult, payload.RequestID, response)); err != nil {
 			agentErr <- err

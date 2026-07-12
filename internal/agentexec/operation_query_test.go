@@ -157,7 +157,7 @@ func TestOperationQueryBeforeStateDigestMismatchFailsClosed(t *testing.T) {
 			req := HostUpdatePayload{RequestID: "u.dispatch.1", ActionID: "u", Operation: HostUpdateOperationInstall, ExpectedInventoryHash: "sha256:" + strings.Repeat("a", 64)}
 			_ = BindHostUpdatePayload(&req)
 			id := HostUpdateOperationIdentity("agent", req)
-			result := HostUpdateResultPayload{RequestID: req.RequestID, ActionID: req.ActionID, Success: true, ExecutionPhase: HostUpdatePhaseComplete, MutationStarted: true, Before: HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("b", 64), PendingCount: 1, CheckedAt: now.Add(-time.Second)}, After: HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("c", 64), PendingCount: 0, CheckedAt: now}, Verification: HostUpdateVerificationVerified}
+			result := HostUpdateResultPayload{RequestID: req.RequestID, ActionID: req.ActionID, Success: true, ExecutionPhase: HostUpdatePhaseComplete, MutationStarted: true, HealthChecked: true, PackageManagerHealthy: true, Before: HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("b", 64), PendingCount: 1, CheckedAt: now.Add(-time.Second)}, After: HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("c", 64), PendingCount: 0, CheckedAt: now}, Verification: HostUpdateVerificationVerified}
 			raw, _ := json.Marshal(result)
 			return struct {
 				name     string
@@ -189,6 +189,83 @@ func TestOperationQueryBeforeStateDigestMismatchFailsClosed(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestOperationQueryDurableTerminalTimingUsesAgentCommitBoundary(t *testing.T) {
+	for _, operation := range []string{HostUpdateOperationInstall, HostStorageCleanupOperationPackageCache} {
+		t.Run(operation, func(t *testing.T) {
+			terminalAt := time.Now().UTC().Add(-2 * time.Hour)
+			query, identity := durableAPTTerminalQuery(t, operation, terminalAt, terminalAt.Add(-2*time.Second), terminalAt.Add(-time.Second))
+			if err := ValidateOperationQueryResultForIdentity(query, identity, terminalAt.Add(2*time.Hour)); err != nil {
+				t.Fatalf("delayed valid terminal receipt rejected: %v", err)
+			}
+
+			stale, staleIdentity := durableAPTTerminalQuery(t, operation, terminalAt, terminalAt.Add(-17*time.Minute), terminalAt.Add(-16*time.Minute))
+			if err := ValidateOperationQueryResultForIdentity(stale, staleIdentity, terminalAt.Add(2*time.Hour)); err == nil || !strings.Contains(err.Error(), "stale") {
+				t.Fatalf("stale-at-completion receipt err=%v", err)
+			}
+
+			impossible, impossibleIdentity := durableAPTTerminalQuery(t, operation, terminalAt, terminalAt.Add(-time.Second), terminalAt.Add(-2*time.Second))
+			if err := ValidateOperationQueryResultForIdentity(impossible, impossibleIdentity, terminalAt.Add(2*time.Hour)); err == nil || !strings.Contains(err.Error(), "timestamps") {
+				t.Fatalf("impossible observation chronology err=%v", err)
+			}
+
+			afterTerminal, afterTerminalIdentity := durableAPTTerminalQuery(t, operation, terminalAt, terminalAt.Add(-time.Second), terminalAt.Add(time.Second))
+			if err := ValidateOperationQueryResultForIdentity(afterTerminal, afterTerminalIdentity, terminalAt.Add(2*time.Hour)); err == nil || !strings.Contains(err.Error(), "terminal chronology") {
+				t.Fatalf("terminal-before-observation err=%v", err)
+			}
+
+			futureTerminal := time.Now().UTC().Add(6 * time.Minute)
+			future, futureIdentity := durableAPTTerminalQuery(t, operation, futureTerminal, futureTerminal.Add(-2*time.Second), futureTerminal.Add(-time.Second))
+			if err := ValidateOperationQueryResultForIdentity(future, futureIdentity, time.Now().UTC()); err == nil || !strings.Contains(err.Error(), "future") {
+				t.Fatalf("future terminal err=%v", err)
+			}
+		})
+	}
+}
+
+func durableAPTTerminalQuery(t *testing.T, operation string, terminalAt, beforeAt, afterAt time.Time) (operationreceipt.QueryResult, operationreceipt.Identity) {
+	t.Helper()
+	var identity operationreceipt.Identity
+	var kind string
+	var payload []byte
+	var err error
+	switch operation {
+	case HostUpdateOperationInstall:
+		req := HostUpdatePayload{RequestID: "update.dispatch.1", ActionID: "update", Operation: operation, ExpectedInventoryHash: "sha256:" + strings.Repeat("a", 64)}
+		if err = BindHostUpdatePayload(&req); err == nil {
+			identity = HostUpdateOperationIdentity("agent", req)
+			payload, err = json.Marshal(HostUpdateResultPayload{
+				RequestID: req.RequestID, ActionID: req.ActionID, Success: true, MutationStarted: true, ExecutionPhase: HostUpdatePhaseComplete,
+				Before:        HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: req.ExpectedInventoryHash, PendingCount: 2, CheckedAt: beforeAt},
+				After:         HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("b", 64), CheckedAt: afterAt},
+				HealthChecked: true, PackageManagerHealthy: true, Verification: HostUpdateVerificationVerified,
+			})
+		}
+		kind = HostUpdateReceiptKind
+	case HostStorageCleanupOperationPackageCache:
+		req := HostStorageCleanupPayload{RequestID: "cleanup.dispatch.1", ActionID: "cleanup", Operation: operation, ExpectedFingerprint: "sha256:" + strings.Repeat("c", 64)}
+		if err = BindHostStorageCleanupPayload(&req); err == nil {
+			identity = HostStorageCleanupOperationIdentity("agent", req)
+			payload, err = json.Marshal(HostStorageCleanupResultPayload{
+				RequestID: req.RequestID, ActionID: req.ActionID, Success: true, MutationStarted: true, ExecutionPhase: HostStorageCleanupPhaseComplete,
+				Before:         HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: req.ExpectedFingerprint, ReclaimableBytes: 10, CheckedAt: beforeAt},
+				After:          HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("d", 64), ReclaimableBytes: 1, CheckedAt: afterAt},
+				ReclaimedBytes: 9, Verification: HostStorageCleanupVerificationVerified,
+			})
+		}
+		kind = HostStorageCleanupReceiptKind
+	default:
+		t.Fatalf("unsupported test operation %q", operation)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := operationreceipt.Record{
+		Identity: identity, State: operationreceipt.StateTerminal, AcceptedAt: terminalAt.Add(-20 * time.Minute), StartedAt: terminalAt.Add(-19 * time.Minute), TerminalAt: terminalAt,
+		ResultKind: kind, ResultVersion: HostAPTReceiptVersion, Result: payload,
+	}
+	return operationreceipt.QueryResult{Version: operationreceipt.ProtocolVersion, Status: operationreceipt.QueryFoundTerminal, Record: &record}, identity
 }
 
 func TestLegacyAgentWithoutReceiptProtocolRemainsConnectedButTypedMutationFailsClosed(t *testing.T) {

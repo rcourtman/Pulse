@@ -24,6 +24,9 @@ func TestCommandClientHandlesTypedHostUpdateWithoutExecuteCommand(t *testing.T) 
 	simulations := 0
 	mutations := 0
 	manager.run = func(_ context.Context, _ []string, name string, args ...string) packageUpdateCommandResult {
+		if name == "dpkg" && strings.Join(args, " ") == "--audit" {
+			return packageUpdateCommandResult{}
+		}
 		if name != "apt-get" {
 			t.Fatalf("executable = %q, want apt-get", name)
 		}

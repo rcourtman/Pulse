@@ -197,16 +197,19 @@ const (
 // independently. Success means the package-manager mutation completed;
 // Verification states whether the postcondition was actually observed.
 type HostUpdateResultPayload struct {
-	RequestID       string                    `json:"request_id"`
-	ActionID        string                    `json:"action_id"`
-	Success         bool                      `json:"success"`
-	ExecutionPhase  string                    `json:"execution_phase"`
-	MutationStarted bool                      `json:"mutation_started"`
-	Before          HostPackageUpdateSnapshot `json:"before"`
-	After           HostPackageUpdateSnapshot `json:"after"`
-	Verification    string                    `json:"verification"`
-	Error           string                    `json:"error,omitempty"`
-	Duration        int64                     `json:"duration_ms"`
+	RequestID             string                    `json:"request_id"`
+	ActionID              string                    `json:"action_id"`
+	Success               bool                      `json:"success"`
+	ExecutionPhase        string                    `json:"execution_phase"`
+	MutationStarted       bool                      `json:"mutation_started"`
+	Before                HostPackageUpdateSnapshot `json:"before"`
+	After                 HostPackageUpdateSnapshot `json:"after"`
+	HealthChecked         bool                      `json:"health_checked"`
+	PackageManagerHealthy bool                      `json:"package_manager_healthy"`
+	RecoveryRequired      bool                      `json:"recovery_required"`
+	Verification          string                    `json:"verification"`
+	Error                 string                    `json:"error,omitempty"`
+	Duration              int64                     `json:"duration_ms"`
 }
 
 const (

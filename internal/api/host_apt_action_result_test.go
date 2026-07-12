@@ -8,13 +8,13 @@ import (
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-func TestHostAPTActionResultRefreshFailureIsPossiblePartialEffect(t *testing.T) {
+func TestHostAPTActionResultRefreshFailureIsNotRunBeforeInstallMutation(t *testing.T) {
 	now := time.Date(2026, 7, 12, 9, 0, 0, 0, time.UTC)
-	result, err := hostAPTExecutionResult("agent:host-1", "host-1", agentexec.HostUpdateOperationInstall, "refresh failed", false, true, agentexec.HostUpdateVerificationInconclusive, true, time.Time{}, time.Time{}, now)
+	result, err := hostAPTExecutionResult("agent:host-1", "host-1", agentexec.HostUpdateOperationInstall, "refresh failed", false, false, agentexec.HostUpdateVerificationInconclusive, true, true, false, false, false, time.Time{}, time.Time{}, now, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ActionResultV2.Execution.Status != unified.ActionExecutionInconclusive || result.ActionResultV2.Execution.ReasonCode != "possible_partial_effect" || result.ActionResultV2.Execution.Status == unified.ActionExecutionNotRun {
+	if result.ActionResultV2.Execution.Status != unified.ActionExecutionNotRun || result.ActionResultV2.Execution.ReasonCode != "preflight_refused" {
 		t.Fatalf("canonical execution truth = %#v", result.ActionResultV2.Execution)
 	}
 	if result.ActionResultV2.Compensation.Support != unified.ActionCompensationUnavailable || result.ActionResultV2.Compensation.Status != unified.ActionCompensationNotAvailable {
@@ -25,7 +25,7 @@ func TestHostAPTActionResultRefreshFailureIsPossiblePartialEffect(t *testing.T) 
 func TestHostAPTActionResultPreservesAgentObservedAndServerReceivedTimes(t *testing.T) {
 	checkedAt := time.Date(2026, 7, 12, 8, 59, 0, 0, time.UTC)
 	observedAt := time.Date(2026, 7, 12, 9, 0, 0, 0, time.UTC)
-	result, err := hostAPTExecutionResult("agent:host-1", "host-1", agentexec.HostUpdateOperationInstall, "updates complete", true, true, agentexec.HostUpdateVerificationVerified, true, checkedAt.Add(-time.Second), checkedAt, observedAt)
+	result, err := hostAPTExecutionResult("agent:host-1", "host-1", agentexec.HostUpdateOperationInstall, "updates complete", true, true, agentexec.HostUpdateVerificationVerified, true, true, true, true, false, checkedAt.Add(-time.Second), checkedAt, observedAt, observedAt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestHostAPTActionResultPreservesAgentObservedAndServerReceivedTimes(t *test
 
 func TestHostAPTActionResultFutureVerifiedClaimFailsClosed(t *testing.T) {
 	now := time.Date(2026, 7, 12, 9, 0, 0, 0, time.UTC)
-	result, err := hostAPTExecutionResult("agent:host-1", "host-1", agentexec.HostUpdateOperationInstall, "updates complete", true, true, agentexec.HostUpdateVerificationVerified, true, now, now.Add(unified.HostAPTTelemetryMaxClockSkew+time.Second), now)
+	result, err := hostAPTExecutionResult("agent:host-1", "host-1", agentexec.HostUpdateOperationInstall, "updates complete", true, true, agentexec.HostUpdateVerificationVerified, true, true, true, true, false, now, now.Add(unified.HostAPTTelemetryMaxClockSkew+time.Second), now, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestHostAPTActionResultFutureVerifiedClaimFailsClosed(t *testing.T) {
 
 func TestHostAPTActionResultStaleReadbackFailsClosed(t *testing.T) {
 	now := time.Date(2026, 7, 12, 9, 0, 0, 0, time.UTC)
-	result, err := hostAPTExecutionResult("agent:host-1", "host-1", agentexec.HostUpdateOperationInstall, "updates complete", true, true, agentexec.HostUpdateVerificationVerified, true, now.Add(-time.Hour-time.Minute), now.Add(-time.Hour), now)
+	result, err := hostAPTExecutionResult("agent:host-1", "host-1", agentexec.HostUpdateOperationInstall, "updates complete", true, true, agentexec.HostUpdateVerificationVerified, true, true, true, true, false, now.Add(-time.Hour-time.Minute), now.Add(-time.Hour), now, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,12 +66,24 @@ func TestHostAPTActionResultStaleReadbackFailsClosed(t *testing.T) {
 
 func TestHostAPTActionResultBeforeStateMismatchCannotBecomeContradictionEvidence(t *testing.T) {
 	now := time.Date(2026, 7, 12, 9, 0, 0, 0, time.UTC)
-	result, err := hostAPTExecutionResult("agent:host-1", "host-1", agentexec.HostStorageCleanupOperationPackageCache, "cleanup contradicted", true, true, agentexec.HostStorageCleanupVerificationFailed, false, now.Add(-time.Minute), now, now)
+	result, err := hostAPTExecutionResult("agent:host-1", "host-1", agentexec.HostStorageCleanupOperationPackageCache, "cleanup contradicted", true, true, agentexec.HostStorageCleanupVerificationFailed, false, false, false, false, false, now.Add(-time.Minute), now, now, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	truth := result.ActionResultV2.Verification
 	if truth.Status != unified.ActionVerificationInconclusive || truth.EvidenceClass != unified.ActionEvidenceNone || truth.ReasonCode != "before_state_mismatch" {
 		t.Fatalf("mismatched before-state truth=%#v", truth)
+	}
+}
+
+func TestHostAPTActionResultExplicitUnhealthyManagerCannotConfirmVerifiedClaim(t *testing.T) {
+	now := time.Date(2026, 7, 12, 9, 0, 0, 0, time.UTC)
+	result, err := hostAPTExecutionResult("agent:host-1", "host-1", agentexec.HostUpdateOperationInstall, "phase=complete; package manager health: unhealthy", true, true, agentexec.HostUpdateVerificationVerified, true, true, true, false, false, now.Add(-time.Second), now, now, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	truth := result.ActionResultV2.Verification
+	if truth.Status != unified.ActionVerificationInconclusive || truth.EvidenceClass != unified.ActionEvidenceNone || truth.ReasonCode != "package_manager_unhealthy" {
+		t.Fatalf("unhealthy manager verification truth=%#v", truth)
 	}
 }

@@ -2,6 +2,7 @@ package hostagent
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -98,5 +99,46 @@ func TestStorageCleanupManagerRefusesFingerprintDriftBeforeMutation(t *testing.T
 	})
 	if result.Success || result.Verification != agentexec.HostStorageCleanupVerificationInconclusive || !strings.Contains(result.Error, "replan") {
 		t.Fatalf("unexpected drift result: %#v", result)
+	}
+}
+
+func TestStorageCleanupManagerFailurePhasesPreserveMeasuredEffect(t *testing.T) {
+	before := agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("a", 64), ReclaimableBytes: 400, CheckedAt: time.Now().UTC().Add(-time.Second)}
+	for _, tc := range []struct {
+		name          string
+		cleanFails    bool
+		afterBytes    int64
+		wantPhase     string
+		wantSuccess   bool
+		wantReclaimed int64
+	}{
+		{name: "clean failure", cleanFails: true, afterBytes: 400, wantPhase: agentexec.HostStorageCleanupPhaseClean},
+		{name: "verify failure", afterBytes: 400, wantPhase: agentexec.HostStorageCleanupPhaseVerify, wantSuccess: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			manager := newStorageCleanupManager("linux", newPackageManagerLease())
+			manager.lookPath = func(string) (string, error) { return "/fake/apt-get", nil }
+			scans := 0
+			manager.scan = func() (agentexec.HostStorageCleanupSnapshot, error) {
+				scans++
+				if scans == 1 {
+					return before, nil
+				}
+				return agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("b", 64), ReclaimableBytes: tc.afterBytes, CheckedAt: time.Now().UTC()}, nil
+			}
+			manager.run = func(context.Context, []string, string, ...string) packageUpdateCommandResult {
+				if tc.cleanFails {
+					return packageUpdateCommandResult{exitCode: 100, err: errors.New("controlled clean failure")}
+				}
+				return packageUpdateCommandResult{}
+			}
+			result := manager.Apply(context.Background(), agentexec.HostStorageCleanupPayload{RequestID: "cleanup.dispatch.1", ActionID: "cleanup", Operation: agentexec.HostStorageCleanupOperationPackageCache, ExpectedFingerprint: before.Fingerprint})
+			if result.ExecutionPhase != tc.wantPhase || result.Success != tc.wantSuccess || !result.MutationStarted || result.ReclaimedBytes != tc.wantReclaimed || result.Verification != agentexec.HostStorageCleanupVerificationFailed {
+				t.Fatalf("cleanup truth=%#v", result)
+			}
+			if err := agentexec.ValidateHostStorageCleanupResultPayload(&result); err != nil {
+				t.Fatalf("agent produced invalid cleanup truth: %v", err)
+			}
+		})
 	}
 }

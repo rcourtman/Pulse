@@ -72,7 +72,7 @@ func TestMalformedOrCrossTypeAPTResultCannotPoisonPendingUpdate(t *testing.T) {
 	}
 
 	now := time.Now().UTC()
-	valid := HostUpdateResultPayload{RequestID: "attempt-1", ActionID: "action-1", ExecutionPhase: HostUpdatePhaseComplete, Success: true, Verification: HostUpdateVerificationVerified,
+	valid := HostUpdateResultPayload{RequestID: "attempt-1", ActionID: "action-1", ExecutionPhase: HostUpdatePhaseComplete, Success: true, HealthChecked: true, PackageManagerHealthy: true, Verification: HostUpdateVerificationVerified,
 		Before: HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: hash, PendingCount: 1, CheckedAt: now},
 		After:  HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: empty, PendingCount: 0, CheckedAt: now}}
 	if err := conn.WriteJSON(mustNewMessage(t, MsgTypeHostUpdateResult, "attempt-1", valid)); err != nil {
@@ -154,6 +154,40 @@ func TestAPTResultReceiptTimeValidationUsesControlledClock(t *testing.T) {
 		After:  HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: hash, PendingCount: 1, CheckedAt: receivedAt.Add(-time.Hour)}}
 	if err := ValidateHostUpdateResultForRequestAt(req, result, receivedAt); err == nil || !strings.Contains(err.Error(), "stale") {
 		t.Fatalf("stale result error=%v", err)
+	}
+}
+
+func TestLegacyHostUpdateResultWithoutHealthFieldsRemainsStrictlyDecodableAsUnknown(t *testing.T) {
+	now := time.Now().UTC()
+	payload := HostUpdateResultPayload{
+		RequestID: "legacy.dispatch.1", ActionID: "legacy", Success: true, MutationStarted: true, ExecutionPhase: HostUpdatePhaseComplete,
+		Before:       HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("a", 64), PendingCount: 1, CheckedAt: now.Add(-time.Second)},
+		After:        HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("b", 64), CheckedAt: now},
+		Verification: HostUpdateVerificationVerified,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var legacy map[string]any
+	if err := json.Unmarshal(raw, &legacy); err != nil {
+		t.Fatal(err)
+	}
+	delete(legacy, "health_checked")
+	delete(legacy, "package_manager_healthy")
+	delete(legacy, "recovery_required")
+	raw, _ = json.Marshal(legacy)
+	decoded, err := DecodeHostUpdateResultPayload(raw)
+	if err != nil {
+		t.Fatalf("legacy terminal result rejected: %v", err)
+	}
+	if decoded.HealthChecked || decoded.PackageManagerHealthy || decoded.RecoveryRequired {
+		t.Fatalf("legacy health must remain unknown: %#v", decoded)
+	}
+	legacy["unexpected_authority"] = true
+	hostile, _ := json.Marshal(legacy)
+	if _, err := DecodeHostUpdateResultPayload(hostile); err == nil {
+		t.Fatal("unknown field bypassed strict legacy decode")
 	}
 }
 

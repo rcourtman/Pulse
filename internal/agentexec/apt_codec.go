@@ -89,15 +89,39 @@ const (
 	HostAPTReceiptVersion         = 1
 )
 
+// ValidateOperationQueryResultForIdentity validates a durable receipt against
+// its immutable dispatch identity. Receipt replay can happen long after the
+// agent observed the terminal result, so evidence freshness is anchored to the
+// durable agent-authored terminal boundary rather than the later query time.
+// receivedAt remains the server's transport receipt time and is used only to
+// reject an implausibly future agent terminal timestamp.
 func ValidateOperationQueryResultForIdentity(result operationreceipt.QueryResult, identity operationreceipt.Identity, receivedAt time.Time) error {
+	if result.Version != operationreceipt.ProtocolVersion {
+		return fmt.Errorf("unsupported operation query result version %d", result.Version)
+	}
 	if result.Status == operationreceipt.QueryNotFound {
+		if result.Record != nil {
+			return fmt.Errorf("not-found operation query result contains a record")
+		}
 		return nil
 	}
 	if result.Record == nil || result.Record.Identity != identity {
 		return fmt.Errorf("operation query result identity mismatch")
 	}
+	if err := operationreceipt.ValidateRecord(*result.Record); err != nil {
+		return err
+	}
 	if result.Status != operationreceipt.QueryFoundTerminal {
+		if result.Status != operationreceipt.QueryFoundInterrupted || result.Record.State == operationreceipt.StateTerminal {
+			return fmt.Errorf("operation query result status and record state mismatch")
+		}
 		return nil
+	}
+	if result.Record.State != operationreceipt.StateTerminal {
+		return fmt.Errorf("terminal operation query result requires terminal record")
+	}
+	if receivedAt.IsZero() || result.Record.TerminalAt.After(receivedAt.UTC().Add(5*time.Minute)) {
+		return fmt.Errorf("operation query terminal time is invalid or implausibly future")
 	}
 	switch identity.OperationKind {
 	case HostUpdateOperationInstall:
@@ -112,7 +136,10 @@ func ValidateOperationQueryResultForIdentity(result operationreceipt.QueryResult
 		if err := ValidateHostUpdatePayload(&req); err != nil {
 			return err
 		}
-		return ValidateHostUpdateResultForRequestAt(req, payload, receivedAt)
+		if err := ValidateHostUpdateResultForRequest(req, payload); err != nil {
+			return err
+		}
+		return validateDurableAPTObservation(payload.Before.CheckedAt, payload.After.CheckedAt, result.Record.TerminalAt)
 	case HostStorageCleanupOperationPackageCache:
 		if result.Record.ResultKind != HostStorageCleanupReceiptKind || result.Record.ResultVersion != HostAPTReceiptVersion {
 			return fmt.Errorf("host cleanup query result envelope mismatch")
@@ -125,10 +152,20 @@ func ValidateOperationQueryResultForIdentity(result operationreceipt.QueryResult
 		if err := ValidateHostStorageCleanupPayload(&req); err != nil {
 			return err
 		}
-		return ValidateHostStorageCleanupResultForRequestAt(req, payload, receivedAt)
+		if err := ValidateHostStorageCleanupResultForRequest(req, payload); err != nil {
+			return err
+		}
+		return validateDurableAPTObservation(payload.Before.CheckedAt, payload.After.CheckedAt, result.Record.TerminalAt)
 	default:
 		return fmt.Errorf("unsupported operation query kind %q", identity.OperationKind)
 	}
+}
+
+func validateDurableAPTObservation(before, after, terminalAt time.Time) error {
+	if !validAPTResultObservationChronology(before, after) || terminalAt.IsZero() || terminalAt.Before(after) || after.Before(terminalAt.Add(-hostAPTResultFreshness)) {
+		return fmt.Errorf("durable APT result observation is stale or has invalid terminal chronology")
+	}
+	return nil
 }
 
 func BindHostUpdatePayload(payload *HostUpdatePayload) error {
@@ -197,14 +234,32 @@ func ValidateHostUpdateResultPayload(result *HostUpdateResultPayload) error {
 	default:
 		return fmt.Errorf("unsupported host update execution phase %q", result.ExecutionPhase)
 	}
-	if result.Success && result.ExecutionPhase != HostUpdatePhaseComplete {
-		return fmt.Errorf("successful host update must be complete")
+	if result.Success && result.ExecutionPhase != HostUpdatePhaseVerify && result.ExecutionPhase != HostUpdatePhaseComplete {
+		return fmt.Errorf("successful host update mutation must be in verify or complete phase")
 	}
 	if (result.Verification == HostUpdateVerificationVerified || result.Verification == HostUpdateVerificationFailed) && !validAPTResultObservationChronology(result.Before.CheckedAt, result.After.CheckedAt) {
 		return fmt.Errorf("evidence-bearing host update observation timestamps are invalid")
 	}
-	if result.MutationStarted && result.ExecutionPhase != HostUpdatePhaseRefresh && result.ExecutionPhase != HostUpdatePhaseInstall && result.ExecutionPhase != HostUpdatePhaseVerify && result.ExecutionPhase != HostUpdatePhaseComplete {
+	if result.MutationStarted && result.ExecutionPhase != HostUpdatePhaseInstall && result.ExecutionPhase != HostUpdatePhaseVerify && result.ExecutionPhase != HostUpdatePhaseComplete {
 		return fmt.Errorf("host update mutation state conflicts with execution phase")
+	}
+	if result.RecoveryRequired && !result.MutationStarted {
+		return fmt.Errorf("host update recovery requirement conflicts with mutation state")
+	}
+	if result.PackageManagerHealthy && !result.HealthChecked {
+		return fmt.Errorf("healthy package manager claim requires a completed health check")
+	}
+	if result.HealthChecked && !result.PackageManagerHealthy && result.MutationStarted && !result.RecoveryRequired {
+		return fmt.Errorf("unhealthy package manager after mutation requires recovery")
+	}
+	if result.ExecutionPhase == HostUpdatePhaseInstall && result.MutationStarted && !result.Success && !result.RecoveryRequired {
+		return fmt.Errorf("partial host update install requires recovery")
+	}
+	if result.Success && result.ExecutionPhase == HostUpdatePhaseComplete && result.RecoveryRequired {
+		return fmt.Errorf("successful host update completion cannot require recovery")
+	}
+	if result.Verification == HostUpdateVerificationVerified && result.ExecutionPhase != HostUpdatePhaseComplete {
+		return fmt.Errorf("verified host update must be complete")
 	}
 	return nil
 }
@@ -223,8 +278,11 @@ func ValidateHostStorageCleanupResultPayload(result *HostStorageCleanupResultPay
 	default:
 		return fmt.Errorf("unsupported host storage cleanup execution phase %q", result.ExecutionPhase)
 	}
-	if result.Success && result.ExecutionPhase != HostStorageCleanupPhaseComplete {
-		return fmt.Errorf("successful host storage cleanup must be complete")
+	if result.Success && result.ExecutionPhase != HostStorageCleanupPhaseVerify && result.ExecutionPhase != HostStorageCleanupPhaseComplete {
+		return fmt.Errorf("successful host storage cleanup mutation must be in verify or complete phase")
+	}
+	if result.Verification == HostStorageCleanupVerificationVerified && result.ExecutionPhase != HostStorageCleanupPhaseComplete {
+		return fmt.Errorf("verified host storage cleanup must be complete")
 	}
 	if (result.Verification == HostStorageCleanupVerificationVerified || result.Verification == HostStorageCleanupVerificationFailed) && !validAPTResultObservationChronology(result.Before.CheckedAt, result.After.CheckedAt) {
 		return fmt.Errorf("evidence-bearing host storage cleanup observation timestamps are invalid")

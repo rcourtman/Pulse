@@ -115,10 +115,14 @@ func (e hostUpdateActionExecutor) ExecuteAction(ctx context.Context, record unif
 	if result == nil {
 		return nil, fmt.Errorf("host update agent returned no result")
 	}
+	receivedAt := e.currentTime()
+	if err := agentexec.ValidateHostUpdateResultForRequestAt(req, *result, receivedAt); err != nil {
+		return nil, fmt.Errorf("invalid host update agent result: %w", err)
+	}
 
-	output := fmt.Sprintf("APT package updates: %d pending before, %d pending after; reboot required: %t", result.Before.PendingCount, result.After.PendingCount, result.After.RebootRequired)
+	output := hostUpdateResultSummary(*result)
 	beforeBound := result.Before.InventoryHash == resource.Agent.PackageUpdates.InventoryHash
-	return hostAPTExecutionResult(record.Request.ResourceID, agentID, agentexec.HostUpdateOperationInstall, output, result.Success, result.MutationStarted, result.Verification, beforeBound, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())
+	return hostAPTExecutionResult(record.Request.ResourceID, agentID, agentexec.HostUpdateOperationInstall, output, result.Success, result.MutationStarted, result.Verification, beforeBound, true, result.HealthChecked, result.PackageManagerHealthy, result.RecoveryRequired, result.Before.CheckedAt, result.After.CheckedAt, receivedAt, receivedAt)
 }
 
 func (e hostUpdateActionExecutor) ReconcileActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (*unified.ExecutionResult, unified.ActionDispatchReceipt, bool, error) {
@@ -134,7 +138,8 @@ func (e hostUpdateActionExecutor) ReconcileActionDispatch(ctx context.Context, r
 	if query.Status != operationreceipt.QueryFoundTerminal {
 		return nil, unified.ActionDispatchReceipt{}, false, nil
 	}
-	if err := agentexec.ValidateOperationQueryResultForIdentity(query, identity, e.currentTime()); err != nil {
+	receivedAt := e.currentTime()
+	if err := agentexec.ValidateOperationQueryResultForIdentity(query, identity, receivedAt); err != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
 	result, err := agentexec.DecodeHostUpdateResultPayload(query.Record.Result)
@@ -142,16 +147,27 @@ func (e hostUpdateActionExecutor) ReconcileActionDispatch(ctx context.Context, r
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
 	req := agentexec.HostUpdatePayload{RequestID: attempt.ID, ActionID: record.ID, Operation: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, ExpectedInventoryHash: result.Before.InventoryHash}
-	if err := agentexec.ValidateHostUpdateResultForRequestAt(req, result, e.currentTime()); err != nil {
+	if err := agentexec.ValidateHostUpdateResultForRequest(req, result); err != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
-	output := fmt.Sprintf("APT package updates: %d pending before, %d pending after; reboot required: %t", result.Before.PendingCount, result.After.PendingCount, result.After.RebootRequired)
-	execution, buildErr := hostAPTExecutionResult(record.Request.ResourceID, attempt.AgentID, attempt.OperationKind, output, result.Success, result.MutationStarted, result.Verification, true, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())
+	output := hostUpdateResultSummary(result)
+	execution, buildErr := hostAPTExecutionResult(record.Request.ResourceID, attempt.AgentID, attempt.OperationKind, output, result.Success, result.MutationStarted, result.Verification, true, true, result.HealthChecked, result.PackageManagerHealthy, result.RecoveryRequired, result.Before.CheckedAt, result.After.CheckedAt, query.Record.TerminalAt, receivedAt)
 	if buildErr != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, buildErr
 	}
-	receipt := unified.ActionDispatchReceipt{AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: e.currentTime()}
+	receipt := unified.ActionDispatchReceipt{AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: receivedAt}
 	return execution, receipt, true, nil
+}
+
+func hostUpdateResultSummary(result agentexec.HostUpdateResultPayload) string {
+	health := "unknown"
+	if result.HealthChecked {
+		health = "unhealthy"
+		if result.PackageManagerHealthy {
+			health = "healthy"
+		}
+	}
+	return fmt.Sprintf("APT package updates: phase=%s; %d pending before, %d pending after; package manager health: %s; recovery required: %t; reboot required: %t", result.ExecutionPhase, result.Before.PendingCount, result.After.PendingCount, health, result.RecoveryRequired, result.After.RebootRequired)
 }
 
 func (e hostUpdateActionExecutor) currentResource(ctx context.Context, resourceID string) (unified.Resource, error) {

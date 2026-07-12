@@ -2062,8 +2062,13 @@ Task 09 package-cache cleanup remains a bounded typed action over the fixed APT
 cache provider and requires fresh canonical reclaimable-byte and containing-
 filesystem pressure evidence. It accepts no path, package selector,
 installed-package removal, reboot, or rollback authority. Compensation is
-unavailable; durable restart/replay continuity remains an explicit Task 07
-dependency.
+unavailable. Clean and verify failure results retain their validated phase,
+bounded before/after/reclaimed bytes, explicit non-rollbackable posture, and a
+rescan requirement without implying restoration. Task 09 now consumes the
+accepted Task 07 generic receipt owner for callback-loss and reopened-server
+query-only reconciliation; interrupted, not-found, or tombstoned receipts never
+authorize resend. Browser and disposable Debian/Ubuntu proof remain explicit
+operational residuals.
 
 ### Patrol Autopilot config recovery
 

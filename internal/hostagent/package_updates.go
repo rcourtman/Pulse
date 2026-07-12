@@ -137,11 +137,11 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 	}
 
 	result.ExecutionPhase = agentexec.HostUpdatePhaseRefresh
-	result.MutationStarted = true
 	refresh := m.run(ctx, nil, "apt-get", "update")
 	if refresh.err != nil || refresh.exitCode != 0 {
 		result.Before = probe
 		result.After = probe
+		result.HealthChecked, result.PackageManagerHealthy = m.checkPackageManagerHealth(ctx)
 		result.Verification = agentexec.HostUpdateVerificationInconclusive
 		result.Error = "package index refresh failed"
 		return result
@@ -151,21 +151,37 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 	result.Before = before
 	if before.Error != "" {
 		result.After = before
+		result.HealthChecked, result.PackageManagerHealthy = m.checkPackageManagerHealth(ctx)
 		result.Verification = agentexec.HostUpdateVerificationInconclusive
 		result.Error = "package update preflight failed"
 		return result
 	}
 	if before.InventoryHash != strings.TrimSpace(req.ExpectedInventoryHash) {
 		result.After = before
+		result.HealthChecked, result.PackageManagerHealthy = m.checkPackageManagerHealth(ctx)
 		result.Verification = agentexec.HostUpdateVerificationInconclusive
 		result.Error = "package update inventory changed; replan required"
 		return result
 	}
 	if before.PendingCount == 0 {
+		result.After = before
+		result.HealthChecked, result.PackageManagerHealthy = m.checkPackageManagerHealth(ctx)
+		if !result.HealthChecked || !result.PackageManagerHealthy {
+			result.Verification = agentexec.HostUpdateVerificationInconclusive
+			result.Error = "package manager health could not be established"
+			return result
+		}
 		result.Success = true
 		result.ExecutionPhase = agentexec.HostUpdatePhaseComplete
-		result.After = before
 		result.Verification = agentexec.HostUpdateVerificationVerified
+		return result
+	}
+	result.HealthChecked, result.PackageManagerHealthy = m.checkPackageManagerHealth(ctx)
+	if !result.HealthChecked || !result.PackageManagerHealthy {
+		result.After = before
+		result.ExecutionPhase = agentexec.HostUpdatePhasePreflight
+		result.Verification = agentexec.HostUpdateVerificationInconclusive
+		result.Error = "package manager health check refused installation"
 		return result
 	}
 
@@ -175,10 +191,13 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 		"NEEDRESTART_MODE=a",
 	}
 	result.ExecutionPhase = agentexec.HostUpdatePhaseInstall
+	result.MutationStarted = true
 	install := m.run(ctx, env, "apt-get", "-y", "--no-remove", "-o", "Dpkg::Options::=--force-confold", "upgrade")
 	if install.err != nil || install.exitCode != 0 {
 		after := m.snapshotLocked(ctx, true)
 		result.After = after
+		result.HealthChecked, result.PackageManagerHealthy = m.checkPackageManagerHealth(ctx)
+		result.RecoveryRequired = true
 		result.Verification = agentexec.HostUpdateVerificationFailed
 		result.Error = "package installation failed"
 		return result
@@ -189,18 +208,40 @@ func (m *packageUpdateManager) Apply(ctx context.Context, req agentexec.HostUpda
 	after := m.snapshotLocked(ctx, true)
 	result.After = after
 	if after.Error != "" {
+		result.HealthChecked, result.PackageManagerHealthy = m.checkPackageManagerHealth(ctx)
+		result.RecoveryRequired = true
 		result.Verification = agentexec.HostUpdateVerificationInconclusive
 		result.Error = "package installation completed but verification was inconclusive"
 		return result
 	}
 	if after.PendingCount != 0 {
+		result.HealthChecked, result.PackageManagerHealthy = m.checkPackageManagerHealth(ctx)
+		result.RecoveryRequired = true
 		result.Verification = agentexec.HostUpdateVerificationFailed
 		result.Error = "package installation completed but updates remain pending"
+		return result
+	}
+	result.HealthChecked, result.PackageManagerHealthy = m.checkPackageManagerHealth(ctx)
+	if !result.HealthChecked || !result.PackageManagerHealthy {
+		result.Verification = agentexec.HostUpdateVerificationInconclusive
+		result.RecoveryRequired = true
+		result.Error = "package installation completed but package manager health was not established"
 		return result
 	}
 	result.Verification = agentexec.HostUpdateVerificationVerified
 	result.ExecutionPhase = agentexec.HostUpdatePhaseComplete
 	return result
+}
+
+func (m *packageUpdateManager) checkPackageManagerHealth(ctx context.Context) (checked, healthy bool) {
+	if _, err := m.lookPath("dpkg"); err != nil {
+		return false, false
+	}
+	result := m.run(ctx, nil, "dpkg", "--audit")
+	if result.err != nil && result.exitCode < 0 {
+		return false, false
+	}
+	return true, result.err == nil && result.exitCode == 0 && strings.TrimSpace(result.stdout) == ""
 }
 
 type packageUpdateCommandResult struct {

@@ -4392,11 +4392,33 @@ generic owner, persist only bounded sanitized typed results, and still share
 the package-manager lease. Raw commands, paths, package selectors, stderr,
 secrets, and unbounded output are outside the receipt schema.
 
+Task 09 now consumes that continuity end to end. A delayed terminal receipt is
+validated against its immutable identity/digest and the agent-attested durable
+terminal boundary, not the later query time. The server retains the later
+query receipt separately. Impossible observation/terminal chronology, a
+future terminal timestamp, stale-at-completion evidence, before-state drift,
+or a hostile envelope still fails closed. Callback loss and a reopened server
+store reconcile both APT actions by query only; the original typed dispatch is
+never resent. Legacy APT v1 terminal payloads that predate additive package-
+manager health facts remain structurally valid receipts, but their verified
+claim is projected as health-unknown/inconclusive rather than confirmed.
+
+For host updates, `MutationStarted` begins immediately before the fixed install
+command, not during metadata refresh or simulation. A fixed read-only
+`dpkg --audit` health check under the same shared lease supplies explicit
+`health_checked`, `package_manager_healthy`, and `recovery_required` facts.
+Refresh failure, refreshed inventory drift, zero-pending state, and pre-install
+health refusal therefore cannot claim partial installation or action-caused
+recovery. Install/verify failures preserve phase, remaining count, tri-state
+health, and recovery posture through the existing ActionResultV2 summaries.
+
 Durable receipt protocol support is explicit agent-reported and server-observed
 capability metadata. Missing, legacy, or future versions stay connected for
 monitoring but advertise no APT mutation capability, emit no actionable APT
 finding, and fail dispatch readiness. Product version strings never imply this
 authority. The raw protocol integer stays internal to ingest, registry, and
 live dispatch checks; customer/frontend resource JSON consumes only derived
-capabilities and readiness. Claims 16 and 17 remain open until Task 09 resumes and the required
-browser/lab evidence plus Task 12 certification are complete.
+capabilities and readiness. The fake-only code/test floor for claims 16 and 17
+is implemented; both claims and workflow scorecards remain below operational
+completion until browser proof, disposable Debian/Ubuntu lab proof, and Task 12
+certification are complete.

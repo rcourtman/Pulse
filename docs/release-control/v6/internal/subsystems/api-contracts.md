@@ -7459,13 +7459,27 @@ missing, stale, wrong-organization, wrong-actor, expired, revoked, malformed,
 conflicting, and unavailable-store evidence.
 
 Task 09 APT executors consume Task 10 `ActionResultV2` without local truth
-enums. APT metadata refresh is an external package-manager effect, so refresh
-failure or cancellation is `inconclusive/possible_partial_effect`, never
-`not_run`. Readback from the mutating agent is `agent_attested`, preserves
-agent-observed and server-received timestamps, and declares compensation
-unavailable. Durable post-disconnect reconciliation remains a Task 07
-continuation dependency.
+enums. Host-update `MutationStarted` means the fixed install command began;
+metadata refresh, refreshed-inventory drift, zero-pending state, and pre-install
+health refusal do not claim install effects or action-caused recovery. Install
+and verify outcomes project the validated phase, bounded remaining count,
+explicit health-check/healthy facts, and recovery requirement through existing
+execution/verification summaries. Package-manager health comes only from the
+fixed read-only agent health catalog under the shared lease, never raw stderr or
+absence of an error string. Cache-cleanup failures preserve clean/verify phase,
+measured reclaim effect, non-rollbackable posture, and rescan requirement.
 
-This is a partial non-lab producer migration only. It does not change L20 or
-RA35 completion, claims 16/17, workflow scorecards, browser certification, or
-real Debian/Ubuntu execution status.
+Readback from the mutating agent remains `agent_attested`, preserves agent-
+observed and server-received timestamps, and declares compensation unavailable.
+Durable delayed receipts use their agent-attested terminal boundary for
+chronology/freshness while retaining server query receipt time separately.
+Additive health facts do not invalidate older Task 07 APT v1 terminal receipts:
+missing facts are unknown and downgrade a verified claim to
+`inconclusive/package_manager_health_unknown` with no evidence and no resend.
+Explicit contradictory health/recovery combinations fail closed.
+
+The non-lab detector/proposal/policy/receipt/result/reconciliation code and test
+floor is implemented for both workflows. Claims 16/17 and both workflow
+scorecards remain below operational completion; browser certification,
+disposable Debian/Ubuntu execution, and Task 12 final-SHA certification remain
+open and are not inferred from fake-only proof.

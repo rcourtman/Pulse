@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -23,6 +24,14 @@ type fakeHostUpdateAgent struct {
 	requests          []agentexec.HostUpdatePayload
 	receiptVersion    int
 	receiptVersionSet bool
+	queryResult       operationreceipt.QueryResult
+	queryErr          error
+	queries           []operationreceipt.Identity
+}
+
+func (f *fakeHostUpdateAgent) QueryAgentOperation(_ context.Context, _ string, identity operationreceipt.Identity) (operationreceipt.QueryResult, error) {
+	f.queries = append(f.queries, identity)
+	return f.queryResult, f.queryErr
 }
 
 var testHostPackageInventoryHash = "sha256:" + strings.Repeat("a", 64)
@@ -31,7 +40,13 @@ var testHostPackageEmptyInventoryHash = "sha256:" + strings.Repeat("b", 64)
 func (f *fakeHostUpdateAgent) ExecuteHostUpdate(_ context.Context, agentID string, req agentexec.HostUpdatePayload) (*agentexec.HostUpdateResultPayload, error) {
 	f.agentID = agentID
 	f.requests = append(f.requests, req)
-	return f.result, f.err
+	if f.result == nil {
+		return nil, f.err
+	}
+	result := *f.result
+	result.RequestID = req.RequestID
+	result.ActionID = req.ActionID
+	return &result, f.err
 }
 
 func (f *fakeHostUpdateAgent) IsAgentConnected(string) bool { return f.connected }
@@ -44,7 +59,13 @@ func (f *fakeHostUpdateAgent) AgentOperationReceiptVersion(string) int {
 
 func hostUpdateDispatchTestContext(t *testing.T, actionID string) context.Context {
 	t.Helper()
-	attempt, err := unified.NewActionDispatchAttempt(actionID, time.Now())
+	attempt := hostUpdateDispatchAttempt(t, actionID, time.Now())
+	return actionlifecycle.ContextWithCommittedDispatchAttempt(context.Background(), attempt)
+}
+
+func hostUpdateDispatchAttempt(t *testing.T, actionID string, now time.Time) unified.ActionDispatchAttempt {
+	t.Helper()
+	attempt, err := unified.NewActionDispatchAttempt(actionID, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +77,7 @@ func hostUpdateDispatchTestContext(t *testing.T, actionID string) context.Contex
 	if err != nil {
 		t.Fatal(err)
 	}
-	return actionlifecycle.ContextWithCommittedDispatchAttempt(context.Background(), attempt)
+	return attempt
 }
 
 func TestHostUpdateActionExecutorDispatchesTypedOperationAndProjectsVerification(t *testing.T) {
@@ -67,11 +88,10 @@ func TestHostUpdateActionExecutorDispatchesTypedOperationAndProjectsVerification
 		resources: []unified.Resource{hostUpdateActionResource(now)},
 	})
 	agents := &fakeHostUpdateAgent{connected: true, result: &agentexec.HostUpdateResultPayload{
-		RequestID:    "action-host-update",
-		Success:      true,
-		Before:       agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: now.Add(-time.Second)},
-		After:        agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageEmptyInventoryHash, PendingCount: 0, RebootRequired: true, CheckedAt: now},
-		Verification: agentexec.HostUpdateVerificationVerified,
+		RequestID: "action-host-update", Success: true, MutationStarted: true, ExecutionPhase: agentexec.HostUpdatePhaseComplete,
+		Before:        agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: now.Add(-time.Second)},
+		After:         agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageEmptyInventoryHash, PendingCount: 0, RebootRequired: true, CheckedAt: now},
+		HealthChecked: true, PackageManagerHealthy: true, Verification: agentexec.HostUpdateVerificationVerified,
 	}}
 	executor := newHostUpdateActionExecutor(h, agents)
 
@@ -99,7 +119,7 @@ func TestHostUpdateActionExecutorReportsInconclusiveVerificationHonestly(t *test
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{hostUpdateActionResource(now)}})
 	agents := &fakeHostUpdateAgent{connected: true, result: &agentexec.HostUpdateResultPayload{
-		RequestID: "action-host-update", Success: true,
+		RequestID: "action-host-update", Success: true, ExecutionPhase: agentexec.HostUpdatePhaseComplete,
 		Before:       agentexec.HostPackageUpdateSnapshot{PendingCount: 2},
 		After:        agentexec.HostPackageUpdateSnapshot{PendingCount: 0},
 		Verification: agentexec.HostUpdateVerificationInconclusive,
@@ -115,15 +135,82 @@ func TestHostUpdateActionExecutorReportsInconclusiveVerificationHonestly(t *test
 	}
 }
 
+func TestHostUpdateReconcileDelayedTerminalReceiptPreservesAgentAttestedEvidenceWithoutResend(t *testing.T) {
+	terminalAt := time.Now().UTC().Add(-2 * time.Hour)
+	receivedAt := terminalAt.Add(2 * time.Hour)
+	attempt := hostUpdateDispatchAttempt(t, "action-host-update", terminalAt)
+	payload := agentexec.HostUpdateResultPayload{
+		RequestID: attempt.ID, ActionID: attempt.ActionID, Success: true, MutationStarted: true, ExecutionPhase: agentexec.HostUpdatePhaseComplete,
+		Before:        agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: terminalAt.Add(-2 * time.Second)},
+		After:         agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageEmptyInventoryHash, PendingCount: 0, RebootRequired: true, CheckedAt: terminalAt.Add(-time.Second)},
+		HealthChecked: true, PackageManagerHealthy: true, Verification: agentexec.HostUpdateVerificationVerified,
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity := operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}
+	agents := &fakeHostUpdateAgent{queryResult: operationreceipt.QueryResult{Version: operationreceipt.ProtocolVersion, Status: operationreceipt.QueryFoundTerminal, Record: &operationreceipt.Record{
+		Identity: identity, State: operationreceipt.StateTerminal, AcceptedAt: terminalAt.Add(-4 * time.Second), StartedAt: terminalAt.Add(-3 * time.Second), TerminalAt: terminalAt,
+		ResultKind: agentexec.HostUpdateReceiptKind, ResultVersion: agentexec.HostAPTReceiptVersion, Result: raw,
+	}}}
+	executor := hostUpdateActionExecutor{agents: agents, now: func() time.Time { return receivedAt }}
+
+	result, receipt, found, err := executor.ReconcileActionDispatch(context.Background(), hostUpdateActionRecord(attempt.ActionID), attempt)
+	if err != nil || !found {
+		t.Fatalf("ReconcileActionDispatch: found=%v err=%v", found, err)
+	}
+	if len(agents.requests) != 0 || len(agents.queries) != 1 {
+		t.Fatalf("mutation requests=%d queries=%d", len(agents.requests), len(agents.queries))
+	}
+	if result == nil || result.ActionResultV2 == nil || result.ActionResultV2.Verification.Status != unified.ActionVerificationConfirmed || result.ActionResultV2.Verification.EvidenceClass != unified.ActionEvidenceAgentAttested {
+		t.Fatalf("result=%#v", result)
+	}
+	evidence := result.ActionResultV2.Verification.Evidence
+	if len(evidence) != 1 || !evidence[0].ObservedAt.Equal(payload.After.CheckedAt) || !evidence[0].ReceivedAt.Equal(receivedAt) {
+		t.Fatalf("evidence=%#v", evidence)
+	}
+	if !receipt.ReceivedAt.Equal(receivedAt) || receipt.TransportRequestID != attempt.ID {
+		t.Fatalf("receipt=%#v", receipt)
+	}
+}
+
+func TestHostUpdateReconcileLegacyTerminalReceiptDowngradesUnknownHealthWithoutResend(t *testing.T) {
+	terminalAt := time.Now().UTC().Add(-2 * time.Hour)
+	receivedAt := terminalAt.Add(2 * time.Hour)
+	attempt := hostUpdateDispatchAttempt(t, "action-host-update", terminalAt)
+	payload := agentexec.HostUpdateResultPayload{
+		RequestID: attempt.ID, ActionID: attempt.ActionID, Success: true, MutationStarted: true, ExecutionPhase: agentexec.HostUpdatePhaseComplete,
+		Before:       agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: terminalAt.Add(-2 * time.Second)},
+		After:        agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageEmptyInventoryHash, CheckedAt: terminalAt.Add(-time.Second)},
+		Verification: agentexec.HostUpdateVerificationVerified,
+	}
+	raw, _ := json.Marshal(payload)
+	identity := operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}
+	agents := &fakeHostUpdateAgent{queryResult: terminalAPTQuery(identity, agentexec.HostUpdateReceiptKind, raw, terminalAt)}
+	executor := hostUpdateActionExecutor{agents: agents, now: func() time.Time { return receivedAt }}
+	result, _, found, err := executor.ReconcileActionDispatch(context.Background(), hostUpdateActionRecord(attempt.ActionID), attempt)
+	if err != nil || !found {
+		t.Fatalf("ReconcileActionDispatch: found=%v err=%v", found, err)
+	}
+	truth := result.ActionResultV2.Verification
+	if truth.Status != unified.ActionVerificationInconclusive || truth.EvidenceClass != unified.ActionEvidenceNone || truth.ReasonCode != "package_manager_health_unknown" || len(truth.Evidence) != 0 {
+		t.Fatalf("legacy verification truth=%#v", truth)
+	}
+	if len(agents.requests) != 0 || len(agents.queries) != 1 {
+		t.Fatalf("legacy receipt requests=%d queries=%d", len(agents.requests), len(agents.queries))
+	}
+}
+
 func TestPatrolFullModeRunsHostUpdateThroughCanonicalLifecycle(t *testing.T) {
 	now := time.Now().UTC()
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{hostUpdateActionResource(now)}})
 	agents := &fakeHostUpdateAgent{connected: true, result: &agentexec.HostUpdateResultPayload{
 		RequestID: "filled-by-executor", Success: true,
-		Before:       agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: now.Add(-time.Second)},
-		After:        agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageEmptyInventoryHash, PendingCount: 0, CheckedAt: now},
-		Verification: agentexec.HostUpdateVerificationVerified,
+		Before:        agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: now.Add(-time.Second)},
+		After:         agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageEmptyInventoryHash, PendingCount: 0, CheckedAt: now},
+		HealthChecked: true, PackageManagerHealthy: true, Verification: agentexec.HostUpdateVerificationVerified,
 	}}
 	h.SetActionExecutor(newRoutedActionExecutor(h, newHostUpdateActionExecutor(h, agents)))
 	store, err := h.getStore("default")

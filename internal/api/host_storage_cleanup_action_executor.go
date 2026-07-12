@@ -110,10 +110,14 @@ func (e hostStorageCleanupActionExecutor) ExecuteAction(ctx context.Context, rec
 	if result == nil {
 		return nil, fmt.Errorf("host storage cleanup agent returned no result")
 	}
+	receivedAt := e.currentTime()
+	if err := agentexec.ValidateHostStorageCleanupResultForRequestAt(req, *result, receivedAt); err != nil {
+		return nil, fmt.Errorf("invalid host storage cleanup agent result: %w", err)
+	}
 
-	output := fmt.Sprintf("APT package cache: %d bytes before, %d bytes after, %d bytes reclaimed", result.Before.ReclaimableBytes, result.After.ReclaimableBytes, result.ReclaimedBytes)
+	output := hostStorageCleanupResultSummary(*result)
 	beforeBound := result.Before.Fingerprint == resource.Agent.StorageCleanup.Fingerprint
-	return hostAPTExecutionResult(record.Request.ResourceID, resource.Agent.AgentID, agentexec.HostStorageCleanupOperationPackageCache, output, result.Success, result.MutationStarted, result.Verification, beforeBound, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())
+	return hostAPTExecutionResult(record.Request.ResourceID, resource.Agent.AgentID, agentexec.HostStorageCleanupOperationPackageCache, output, result.Success, result.MutationStarted, result.Verification, beforeBound, false, false, false, false, result.Before.CheckedAt, result.After.CheckedAt, receivedAt, receivedAt)
 }
 
 func (e hostStorageCleanupActionExecutor) ReconcileActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (*unified.ExecutionResult, unified.ActionDispatchReceipt, bool, error) {
@@ -129,7 +133,8 @@ func (e hostStorageCleanupActionExecutor) ReconcileActionDispatch(ctx context.Co
 	if query.Status != operationreceipt.QueryFoundTerminal {
 		return nil, unified.ActionDispatchReceipt{}, false, nil
 	}
-	if err := agentexec.ValidateOperationQueryResultForIdentity(query, identity, e.currentTime()); err != nil {
+	receivedAt := e.currentTime()
+	if err := agentexec.ValidateOperationQueryResultForIdentity(query, identity, receivedAt); err != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
 	result, err := agentexec.DecodeHostStorageCleanupResultPayload(query.Record.Result)
@@ -137,16 +142,20 @@ func (e hostStorageCleanupActionExecutor) ReconcileActionDispatch(ctx context.Co
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
 	req := agentexec.HostStorageCleanupPayload{RequestID: attempt.ID, ActionID: record.ID, Operation: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, ExpectedFingerprint: result.Before.Fingerprint}
-	if err := agentexec.ValidateHostStorageCleanupResultForRequestAt(req, result, e.currentTime()); err != nil {
+	if err := agentexec.ValidateHostStorageCleanupResultForRequest(req, result); err != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
-	output := fmt.Sprintf("APT package cache: %d bytes before, %d bytes after, %d bytes reclaimed", result.Before.ReclaimableBytes, result.After.ReclaimableBytes, result.ReclaimedBytes)
-	execution, buildErr := hostAPTExecutionResult(record.Request.ResourceID, attempt.AgentID, attempt.OperationKind, output, result.Success, result.MutationStarted, result.Verification, true, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())
+	output := hostStorageCleanupResultSummary(result)
+	execution, buildErr := hostAPTExecutionResult(record.Request.ResourceID, attempt.AgentID, attempt.OperationKind, output, result.Success, result.MutationStarted, result.Verification, true, false, false, false, false, result.Before.CheckedAt, result.After.CheckedAt, query.Record.TerminalAt, receivedAt)
 	if buildErr != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, buildErr
 	}
-	receipt := unified.ActionDispatchReceipt{AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: e.currentTime()}
+	receipt := unified.ActionDispatchReceipt{AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: receivedAt}
 	return execution, receipt, true, nil
+}
+
+func hostStorageCleanupResultSummary(result agentexec.HostStorageCleanupResultPayload) string {
+	return fmt.Sprintf("APT package cache: phase=%s; %d bytes before, %d bytes after, %d bytes reclaimed; rollback available: false; rescan required: %t", result.ExecutionPhase, result.Before.ReclaimableBytes, result.After.ReclaimableBytes, result.ReclaimedBytes, result.MutationStarted && result.Verification != agentexec.HostStorageCleanupVerificationVerified)
 }
 
 func (e hostStorageCleanupActionExecutor) currentResource(ctx context.Context, resourceID string) (unified.Resource, error) {

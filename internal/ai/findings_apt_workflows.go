@@ -23,6 +23,31 @@ type aptWorkflowWatcher struct{}
 
 func newAPTWorkflowWatcher() *aptWorkflowWatcher { return &aptWorkflowWatcher{} }
 
+// DetectAPTWorkflowFindings is the deterministic, model-free detector entry
+// point used by Patrol and end-to-end action lifecycle proofs. It emits only
+// findings supported by fresh canonical host views; active-finding resolution
+// remains owned by aptWorkflowWatcher so missing or stale authority cannot be
+// mistaken for a cleared condition.
+func DetectAPTWorkflowFindings(readState unifiedresources.ReadState, now time.Time) []*Finding {
+	if readState == nil {
+		return nil
+	}
+	now = now.UTC()
+	var findings []*Finding
+	for _, host := range readState.Hosts() {
+		if host == nil || strings.TrimSpace(host.ID()) == "" {
+			continue
+		}
+		if finding, _, _ := aptHostUpdateFinding(host, now); finding != nil {
+			findings = append(findings, finding)
+		}
+		if finding, _, _ := aptPackageCacheFinding(host, now); finding != nil {
+			findings = append(findings, finding)
+		}
+	}
+	return findings
+}
+
 func (w *aptWorkflowWatcher) Observe(state patrolRuntimeState, active []*Finding, now time.Time) (emit []*Finding, resolve []resolveSentinel) {
 	if w == nil {
 		return nil, nil
@@ -36,25 +61,34 @@ func (w *aptWorkflowWatcher) Observe(state patrolRuntimeState, active []*Finding
 	now = now.UTC()
 	present := make(map[string]struct{})
 	resolved := make(map[string]struct{})
+	detected := make(map[string]struct{})
+	for _, finding := range DetectAPTWorkflowFindings(state.readState, now) {
+		emit = append(emit, finding)
+		detected[finding.ID] = struct{}{}
+	}
 	for _, host := range state.readState.Hosts() {
 		if host == nil || strings.TrimSpace(host.ID()) == "" {
 			continue
 		}
 		resourceID := strings.TrimSpace(host.ID())
 		present[resourceID] = struct{}{}
-		if finding, known, cleared := aptHostUpdateFinding(host, now); finding != nil {
-			emit = append(emit, finding)
-		} else if known && cleared {
-			id := aptHostUpdateFindingIDPrefix + resourceID
-			resolve = append(resolve, resolveSentinel{DedupKey: id, Reason: aptWorkflowResolveCleared})
-			resolved[id] = struct{}{}
+		updateID := aptHostUpdateFindingIDPrefix + resourceID
+		if _, found := detected[updateID]; !found {
+			_, known, cleared := aptHostUpdateFinding(host, now)
+			if known && cleared {
+				id := aptHostUpdateFindingIDPrefix + resourceID
+				resolve = append(resolve, resolveSentinel{DedupKey: id, Reason: aptWorkflowResolveCleared})
+				resolved[id] = struct{}{}
+			}
 		}
-		if finding, known, cleared := aptPackageCacheFinding(host, now); finding != nil {
-			emit = append(emit, finding)
-		} else if known && cleared {
-			id := aptPackageCacheFindingIDPrefix + resourceID
-			resolve = append(resolve, resolveSentinel{DedupKey: id, Reason: aptWorkflowResolveCleared})
-			resolved[id] = struct{}{}
+		cleanupID := aptPackageCacheFindingIDPrefix + resourceID
+		if _, found := detected[cleanupID]; !found {
+			_, known, cleared := aptPackageCacheFinding(host, now)
+			if known && cleared {
+				id := aptPackageCacheFindingIDPrefix + resourceID
+				resolve = append(resolve, resolveSentinel{DedupKey: id, Reason: aptWorkflowResolveCleared})
+				resolved[id] = struct{}{}
+			}
 		}
 	}
 	for _, finding := range active {
