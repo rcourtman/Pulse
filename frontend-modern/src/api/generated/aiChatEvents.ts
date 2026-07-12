@@ -59,6 +59,7 @@ export interface DoneData {
   input_tokens?: number;
   output_tokens?: number;
   context_limit_tokens?: number;
+  session_cost_usd?: number;
 }
 
 export interface ErrorData {

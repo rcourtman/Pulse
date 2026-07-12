@@ -138,6 +138,7 @@ func (s *Service) generateSessionTitle(ctx context.Context, sessionID string) er
 			OutputTokens:  response.OutputTokens,
 			TargetType:    "assistant_session_title",
 			TargetID:      normalizedSessionID,
+			SessionID:     normalizedSessionID,
 		})
 	}
 

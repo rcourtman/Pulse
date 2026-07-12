@@ -225,6 +225,13 @@ Assistant chat `workflow_state` events are a shared AI/API payload boundary.
 The backend source of truth is `internal/ai/chat.WorkflowStateData`, generated
 to `frontend-modern/src/api/generated/aiChatEvents.ts` by
 `scripts/generate-types.go` and pinned by `internal/api/contract_test.go`.
+The done event (`internal/ai/chat.DoneData`) follows the same generated
+contract and carries, alongside token usage and `context_limit_tokens`, an
+optional `session_cost_usd`: the backend-estimated cumulative session spend
+summed from the operator cost ledger. It is omitted (not zero) whenever any
+of the session's recorded models has unknown pricing, so clients must treat
+absence as "no honest figure" and must not substitute a client-side pricing
+table.
 Agent capabilities manifest payloads follow the same rule:
 `internal/agentcapabilities.Manifest`, `Capability`, `CapabilityCategory`,
 `SurfaceContract`, `SurfaceContractComponent`, `OperatorSurfaceContract`,

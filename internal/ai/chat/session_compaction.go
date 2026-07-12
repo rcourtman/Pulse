@@ -169,6 +169,7 @@ func (s *Service) SummarizeSession(ctx context.Context, sessionID string) (map[s
 			OutputTokens:  response.OutputTokens,
 			TargetType:    "assistant_session_compaction",
 			TargetID:      normalizedSessionID,
+			SessionID:     normalizedSessionID,
 		})
 	}
 

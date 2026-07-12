@@ -129,4 +129,18 @@ describe('AI chat stream event contract', () => {
     expect(event.data?.model).toBe('deepseek:deepseek-v4-pro');
     expect(aiChatEventsSource).toContain('model?: string');
   });
+
+  it('exposes the estimated cumulative session cost on done events', () => {
+    const done: DoneData = {
+      session_id: 'sess-stream',
+      model: 'deepseek:deepseek-v4-pro',
+      input_tokens: 904,
+      output_tokens: 30,
+      session_cost_usd: 0.0123,
+    };
+    const event: AIChatStreamEvent = { type: 'done', data: done };
+
+    expect(event.data?.session_cost_usd).toBe(0.0123);
+    expect(aiChatEventsSource).toContain('session_cost_usd?: number');
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatAssistantTurnDuration,
+  formatSessionCostUSD,
   getAssistantTurnSummary,
 } from '../assistantTurnSummary';
 import type { ChatMessage } from '../types';
@@ -66,6 +67,33 @@ describe('assistantTurnSummary', () => {
       title:
         'Last assistant turn summary: Model: Qwen via OpenRouter. Duration: 3s. Usage: 8,500 total, 8,200 input, 300 output, context 8,200 of 131,072 (6%)',
     });
+  });
+
+  it('formats session cost with a sub-cent floor and hides non-costs', () => {
+    expect(formatSessionCostUSD(0.1234)).toBe('$0.12');
+    expect(formatSessionCostUSD(1.5)).toBe('$1.50');
+    expect(formatSessionCostUSD(0.0042)).toBe('<$0.01');
+    expect(formatSessionCostUSD(0)).toBe('');
+    expect(formatSessionCostUSD(undefined)).toBe('');
+  });
+
+  it('appends the estimated session cost when the done event carries it', () => {
+    const summary = getAssistantTurnSummary(
+      makeAssistantMessage({
+        tokens: { input: 500, output: 200, sessionCostUsd: 0.1234 },
+      }),
+      { getModelRouteLabel: () => 'Qwen via OpenRouter' },
+    );
+    expect(summary?.label).toBe('Last turn: Qwen via OpenRouter · 3s · 700 tokens · $0.12 session');
+    expect(summary?.title).toContain('Estimated session cost: $0.12');
+  });
+
+  it('omits session cost when pricing is unknown or free', () => {
+    const summary = getAssistantTurnSummary(makeAssistantMessage(), {
+      getModelRouteLabel: () => 'Qwen via OpenRouter',
+    });
+    expect(summary?.label).not.toContain('session');
+    expect(summary?.title).not.toContain('session cost');
   });
 
   it('keeps route and duration visible when provider usage is missing', () => {

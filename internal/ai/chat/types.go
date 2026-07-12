@@ -466,6 +466,11 @@ type DoneData struct {
 	// ContextLimitTokens is the active model's context window, so the client
 	// can show how full the turn's context was without a model table of its own.
 	ContextLimitTokens int `json:"context_limit_tokens,omitempty"`
+	// SessionCostUSD is the estimated cumulative spend for this session
+	// (turns, compaction, title calls) summed from the cost ledger. Omitted
+	// when any of the session's models has no known pricing (e.g. local
+	// Ollama), so the client never shows a partial figure.
+	SessionCostUSD float64 `json:"session_cost_usd,omitempty"`
 }
 
 // Control level constants

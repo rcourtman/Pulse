@@ -27,7 +27,7 @@ func TestRecordChatTurnCost_RecordsWhenStoreConfigured(t *testing.T) {
 		totalToolCalls:    3,
 	}
 
-	svc.recordChatTurnCost(loop, "anthropic:claude-test", sessionHandoffKindResourceContext)
+	svc.recordChatTurnCost(loop, "anthropic:claude-test", sessionHandoffKindResourceContext, "session-test")
 
 	events := store.ListEvents(1)
 	if len(events) != 1 {
@@ -64,7 +64,7 @@ func TestRecordChatTurnCost_NoopWhenStoreNil(t *testing.T) {
 		totalOutputTokens: 50,
 	}
 	// Must not panic.
-	svc.recordChatTurnCost(loop, "anthropic:claude-test", "")
+	svc.recordChatTurnCost(loop, "anthropic:claude-test", "", "session-test")
 }
 
 // TestRecordChatTurnCost_NoopWhenZeroTokens verifies the recorder
@@ -78,7 +78,7 @@ func TestRecordChatTurnCost_NoopWhenZeroTokens(t *testing.T) {
 		totalInputTokens:  0,
 		totalOutputTokens: 0,
 	}
-	svc.recordChatTurnCost(loop, "anthropic:claude-test", "")
+	svc.recordChatTurnCost(loop, "anthropic:claude-test", "", "session-test")
 
 	if events := store.ListEvents(1); len(events) != 0 {
 		t.Errorf("expected 0 events for zero-token loop, got %d", len(events))
@@ -94,7 +94,7 @@ func TestRecordChatTurnCost_HandlesMalformedModel(t *testing.T) {
 	svc := &Service{costStore: store}
 	loop := &AgenticLoop{totalInputTokens: 10, totalOutputTokens: 5}
 
-	svc.recordChatTurnCost(loop, "bare-model-name", "")
+	svc.recordChatTurnCost(loop, "bare-model-name", "", "session-test")
 
 	events := store.ListEvents(1)
 	if len(events) != 1 {

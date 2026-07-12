@@ -1053,17 +1053,24 @@ export function useChat(options: UseChatOptions = {}) {
 
   const extractTokens = (
     data: unknown,
-  ): { input: number; output: number; contextLimit?: number } | null => {
+  ): {
+    input: number;
+    output: number;
+    contextLimit?: number;
+    sessionCostUsd?: number;
+  } | null => {
     if (!data || typeof data !== 'object') return null;
     const record = data as Record<string, unknown>;
     const input = Number(record.input_tokens ?? record.inputTokens ?? record.input);
     const output = Number(record.output_tokens ?? record.outputTokens ?? record.output);
     if (!Number.isFinite(input) && !Number.isFinite(output)) return null;
     const contextLimit = Number(record.context_limit_tokens ?? record.contextLimitTokens);
+    const sessionCostUsd = Number(record.session_cost_usd ?? record.sessionCostUsd);
     return {
       input: Number.isFinite(input) && input > 0 ? input : 0,
       output: Number.isFinite(output) && output > 0 ? output : 0,
       ...(Number.isFinite(contextLimit) && contextLimit > 0 ? { contextLimit } : {}),
+      ...(Number.isFinite(sessionCostUsd) && sessionCostUsd > 0 ? { sessionCostUsd } : {}),
     };
   };
 

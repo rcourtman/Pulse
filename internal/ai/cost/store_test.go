@@ -465,3 +465,78 @@ func TestSetOnSaveError_CallbackCalled(t *testing.T) {
 		t.Error("expected lastSaveError to be set after failed save")
 	}
 }
+
+func TestSessionCostUSD(t *testing.T) {
+	store := NewStore(30)
+
+	// Two priced turns plus a priced title call for session A.
+	store.Record(UsageEvent{
+		Provider:     "anthropic",
+		RequestModel: "claude-sonnet-4",
+		UseCase:      "chat",
+		InputTokens:  1_000_000,
+		OutputTokens: 0,
+		SessionID:    "session-a",
+	})
+	store.Record(UsageEvent{
+		Provider:     "anthropic",
+		RequestModel: "claude-sonnet-4",
+		UseCase:      "chat",
+		InputTokens:  0,
+		OutputTokens: 1_000_000,
+		SessionID:    "session-a",
+	})
+	// An unrelated session must not leak into the sum.
+	store.Record(UsageEvent{
+		Provider:     "anthropic",
+		RequestModel: "claude-sonnet-4",
+		UseCase:      "chat",
+		InputTokens:  1_000_000,
+		OutputTokens: 1_000_000,
+		SessionID:    "session-b",
+	})
+
+	usd, known := store.SessionCostUSD("session-a")
+	if !known {
+		t.Fatal("expected session-a pricing to be known")
+	}
+	// claude-sonnet*: $3/MTok input + $15/MTok output.
+	if usd < 17.99 || usd > 18.01 {
+		t.Errorf("expected session-a cost ~18.00, got %v", usd)
+	}
+
+	// Any unpriced model in the session hides the whole figure.
+	store.Record(UsageEvent{
+		Provider:     "openrouter",
+		RequestModel: "totally-unknown-model",
+		UseCase:      "chat",
+		InputTokens:  10,
+		OutputTokens: 10,
+		SessionID:    "session-a",
+	})
+	if _, known := store.SessionCostUSD("session-a"); known {
+		t.Error("expected mixed known/unknown session pricing to report known=false")
+	}
+
+	// No events and blank ids are unknown, not zero-cost.
+	if _, known := store.SessionCostUSD("session-missing"); known {
+		t.Error("expected unmatched session to report known=false")
+	}
+	if _, known := store.SessionCostUSD("  "); known {
+		t.Error("expected blank session id to report known=false")
+	}
+
+	// Free local models are known at zero; the caller decides not to render.
+	store.Record(UsageEvent{
+		Provider:     "ollama",
+		RequestModel: "qwen3:8b",
+		UseCase:      "chat",
+		InputTokens:  5_000,
+		OutputTokens: 2_000,
+		SessionID:    "session-free",
+	})
+	usd, known = store.SessionCostUSD("session-free")
+	if !known || usd != 0 {
+		t.Errorf("expected free session to be known at 0, got usd=%v known=%v", usd, known)
+	}
+}

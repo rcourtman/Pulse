@@ -306,7 +306,7 @@ func assistantContextScopeForChatTurn(
 // not configured or when the loop consumed zero tokens (an early
 // failure before the first turn completed). UseCase is "chat" — the
 // canonical taxonomy noted on cost.UsageEvent.UseCase.
-func (s *Service) recordChatTurnCost(loop *AgenticLoop, requestModel, contextScope string) {
+func (s *Service) recordChatTurnCost(loop *AgenticLoop, requestModel, contextScope, sessionID string) {
 	if s == nil || loop == nil {
 		return
 	}
@@ -336,6 +336,7 @@ func (s *Service) recordChatTurnCost(loop *AgenticLoop, requestModel, contextSco
 		ToolCallCount: loop.GetTotalToolCalls(),
 		InputTokens:   inputTokens,
 		OutputTokens:  outputTokens,
+		SessionID:     strings.TrimSpace(sessionID),
 	})
 }
 
@@ -961,7 +962,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		resultMessages, err := loop.ExecuteWithTools(ctx, session.ID, messages, filteredTools, attemptCallback)
 		s.unregisterActiveLoop(session.ID, loop)
 		resultMessages = sanitizeMessagesForHandoffResourcePolicy(resultMessages, handoffResources, handoffResourceProvider)
-		s.recordChatTurnCost(loop, attempt.Model, contextScope)
+		s.recordChatTurnCost(loop, attempt.Model, contextScope, session.ID)
 
 		log.Debug().
 			Str("session_id", session.ID).
@@ -1008,13 +1009,22 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	}
 
 	// Send done event with token usage for this request.
-	doneData, _ := json.Marshal(DoneData{
+	done := DoneData{
 		SessionID:          session.ID,
 		Model:              selectedModel,
 		InputTokens:        loop.GetTotalInputTokens(),
 		OutputTokens:       loop.GetTotalOutputTokens(),
 		ContextLimitTokens: providers.ContextWindowTokens(selectedModel),
-	})
+	}
+	s.mu.RLock()
+	doneCostStore := s.costStore
+	s.mu.RUnlock()
+	if doneCostStore != nil {
+		if sessionCost, known := doneCostStore.SessionCostUSD(session.ID); known {
+			done.SessionCostUSD = sessionCost
+		}
+	}
+	doneData, _ := json.Marshal(done)
 	streamCallback(StreamEvent{Type: "done", Data: doneData})
 
 	// Upgrade the placeholder title (truncated first prompt) to a

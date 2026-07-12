@@ -15,6 +15,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -405,6 +406,107 @@ func TestService_ExecuteStream_Success(t *testing.T) {
 	}
 	if len(messages) < 2 {
 		t.Fatalf("expected at least 2 messages, got %d", len(messages))
+	}
+}
+
+func TestService_ExecuteStream_DoneCarriesKnownSessionCost(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	provider := &stubServiceProvider{
+		streamFn: func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "hello"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{InputTokens: 1_000_000, OutputTokens: 1_000_000},
+			})
+			return nil
+		},
+	}
+	loop := NewAgenticLoop(provider, executor, "system")
+
+	svc := &Service{
+		// claude-sonnet* has known pricing ($3/MTok in + $15/MTok out), so
+		// 1M+1M stub tokens must surface as an ~$18 session cost on done.
+		cfg:         &config.AIConfig{ChatModel: "anthropic:claude-sonnet-4"},
+		sessions:    store,
+		executor:    executor,
+		agenticLoop: loop,
+		provider:    provider,
+		started:     true,
+		costStore:   cost.NewStore(7),
+	}
+
+	var done DoneData
+	var doneSeen bool
+	callback := func(event StreamEvent) {
+		if event.Type != "done" {
+			return
+		}
+		doneSeen = true
+		if err := json.Unmarshal(event.Data, &done); err != nil {
+			t.Fatalf("unmarshal done event: %v", err)
+		}
+	}
+
+	req := ExecuteRequest{SessionID: "sess-cost", Prompt: "hello"}
+	if err := svc.ExecuteStream(context.Background(), req, callback); err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+	if !doneSeen {
+		t.Fatal("expected a done event")
+	}
+	if done.SessionCostUSD < 17.99 || done.SessionCostUSD > 18.01 {
+		t.Fatalf("done.SessionCostUSD = %v, want ~18.00", done.SessionCostUSD)
+	}
+}
+
+func TestService_ExecuteStream_DoneOmitsUnknownSessionCost(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	provider := &stubServiceProvider{}
+	loop := NewAgenticLoop(provider, executor, "system")
+
+	svc := &Service{
+		// No pricing table entry for this route, so done must omit the cost
+		// rather than show a partial or zero figure.
+		cfg:         &config.AIConfig{ChatModel: "openrouter:totally-unknown-model"},
+		sessions:    store,
+		executor:    executor,
+		agenticLoop: loop,
+		provider:    provider,
+		started:     true,
+		costStore:   cost.NewStore(7),
+	}
+
+	var done DoneData
+	callback := func(event StreamEvent) {
+		if event.Type != "done" {
+			return
+		}
+		if err := json.Unmarshal(event.Data, &done); err != nil {
+			t.Fatalf("unmarshal done event: %v", err)
+		}
+	}
+
+	req := ExecuteRequest{SessionID: "sess-unknown-cost", Prompt: "hello"}
+	if err := svc.ExecuteStream(context.Background(), req, callback); err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+	if done.SessionCostUSD != 0 {
+		t.Fatalf("done.SessionCostUSD = %v, want 0 (omitted)", done.SessionCostUSD)
 	}
 }
 

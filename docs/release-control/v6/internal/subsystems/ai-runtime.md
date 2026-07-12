@@ -3637,6 +3637,16 @@ window from `providers.ContextWindowTokens`) alongside token usage, and the
 drawer's last-turn summary renders input tokens as a percentage of that
 window ("8,500 tokens (6% of context)") so operators can see compaction
 coming; when the limit is absent the summary renders exactly as before.
+The done event also carries `session_cost_usd`, the estimated cumulative
+spend for the session summed from the operator cost ledger
+(`cost.Store.SessionCostUSD`) across the session's recorded events: chat
+turns, compaction, and title calls, all of which stamp `session_id` on
+their `cost.UsageEvent`. The figure is omitted whenever any of the
+session's events prices against an unknown model, and free local models
+(Ollama) price known-at-zero, so the drawer's last-turn summary appends
+"$0.12 session" only when the whole session is honestly priceable and
+non-zero. The summary never invents a client-side pricing table; the
+backend ledger is the only cost authority.
 
 Post-tool model turns mark the status handoff: every agentic turn after the
 first emits a `model_processing` workflow state ("Working on the response

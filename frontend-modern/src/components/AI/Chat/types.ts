@@ -180,7 +180,7 @@ export interface ChatMessage {
   timestamp: Date;
   completedAt?: Date;
   model?: string;
-  tokens?: { input: number; output: number; contextLimit?: number };
+  tokens?: { input: number; output: number; contextLimit?: number; sessionCostUsd?: number };
   toolCalls?: ToolExecution[];
   isStreaming?: boolean;
   workflowStatus?: WorkflowStatus;

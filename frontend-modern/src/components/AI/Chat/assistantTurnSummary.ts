@@ -33,6 +33,15 @@ export const formatAssistantTurnDuration = (startedAt: Date, completedAt?: Date)
   return remainingMinutes ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 };
 
+// Session spend is cumulative and backend-estimated; it is absent whenever
+// any of the session's models has no known pricing, so no figure beats a
+// wrong figure. Sub-cent totals round up to a floor instead of showing $0.00.
+export const formatSessionCostUSD = (usd: number | undefined): string => {
+  if (!Number.isFinite(usd) || !usd || usd <= 0) return '';
+  if (usd < 0.01) return '<$0.01';
+  return `$${usd.toFixed(2)}`;
+};
+
 const assistantTokenSummary = (message: ChatMessage) => {
   const input = normalizeAssistantTokenCount(message.tokens?.input);
   const output = normalizeAssistantTokenCount(message.tokens?.output);
@@ -67,8 +76,10 @@ export const getAssistantTurnSummary = (
   const modelLabel = model ? options.getModelRouteLabel?.(model) || model : '';
   const durationLabel = formatAssistantTurnDuration(message.timestamp, message.completedAt);
   const tokenSummary = assistantTokenSummary(message);
+  const sessionCost = formatSessionCostUSD(message.tokens?.sessionCostUsd);
+  const sessionCostLabel = sessionCost ? `${sessionCost} session` : '';
 
-  const labelParts = [modelLabel, durationLabel, tokenSummary?.label].filter(
+  const labelParts = [modelLabel, durationLabel, tokenSummary?.label, sessionCostLabel].filter(
     (part): part is string => Boolean(part?.trim()),
   );
   if (labelParts.length === 0) return null;
@@ -77,6 +88,7 @@ export const getAssistantTurnSummary = (
     modelLabel ? `Model: ${modelLabel}` : undefined,
     durationLabel ? `Duration: ${durationLabel}` : undefined,
     tokenSummary ? `Usage: ${tokenSummary.detail}` : undefined,
+    sessionCost ? `Estimated session cost: ${sessionCost}` : undefined,
   ].filter((part): part is string => Boolean(part));
 
   return {

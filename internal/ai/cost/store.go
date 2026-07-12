@@ -24,6 +24,9 @@ type UsageEvent struct {
 	TargetType    string    `json:"target_type,omitempty"`
 	TargetID      string    `json:"target_id,omitempty"`
 	FindingID     string    `json:"finding_id,omitempty"`
+	// SessionID ties chat-session spend (turns, compaction, title calls)
+	// together so per-session cost can be summed for the drawer footer.
+	SessionID string `json:"session_id,omitempty"`
 }
 
 // Persistence defines the storage contract for usage history.
@@ -126,6 +129,38 @@ func (s *Store) Record(event UsageEvent) {
 	s.trimLocked(time.Now())
 	s.scheduleSaveLocked()
 	s.mu.Unlock()
+}
+
+// SessionCostUSD sums the estimated spend for one chat session across its
+// recorded events (turns, compaction, title calls). known is true only when
+// the session has at least one event and every event priced against a known
+// model, so callers never show a partial figure as the session total.
+func (s *Store) SessionCostUSD(sessionID string) (usd float64, known bool) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return 0, false
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	matched := false
+	for _, e := range s.events {
+		if e.SessionID != sessionID {
+			continue
+		}
+		matched = true
+		provider, model := ResolveProviderAndModel(e.Provider, e.RequestModel, e.ResponseModel)
+		eventUSD, eventKnown, _ := EstimateUSD(provider, model, int64(e.InputTokens), int64(e.OutputTokens))
+		if !eventKnown {
+			return 0, false
+		}
+		usd += eventUSD
+	}
+	if !matched {
+		return 0, false
+	}
+	return usd, true
 }
 
 // Clear removes all retained usage events and persists the empty history.
