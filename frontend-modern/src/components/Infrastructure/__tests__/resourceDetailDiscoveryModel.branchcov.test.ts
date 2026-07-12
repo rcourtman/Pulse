@@ -164,15 +164,33 @@ describe('toDiscoveryConfig — explicit discoveryTarget branch', () => {
         }),
       });
       // No explicit hostname => getPreferredHostLabel(resource) wins.
+      // Guest metadata keys off the canonical workload id (resource id here,
+      // no PVE identity on the fixture), not the discovery resource id.
       expect(toDiscoveryConfig(resource)).toEqual({
         resourceType: 'vm',
         agentId: 'vm-agent',
         resourceId: 'vm-rid',
         hostname: 'vm-name',
         metadataKind: 'guest',
-        metadataId: 'vm-rid',
+        metadataId: 'res-1',
         targetLabel: 'guest',
       });
+    });
+
+    it('keys explicit vm guest metadata by the canonical instance:node:vmid id', () => {
+      const resource = baseResource({
+        type: 'vm',
+        name: 'vm-name',
+        proxmox: { instance: 'pve-main', nodeName: 'node1', vmid: 105 },
+        discoveryTarget: discoveryTarget({
+          resourceType: 'vm',
+          agentId: 'vm-agent',
+          resourceId: 'vm-rid',
+        }),
+      });
+      const result = toDiscoveryConfig(resource);
+      expect(result?.metadataKind).toBe('guest');
+      expect(result?.metadataId).toBe('pve-main:node1:105');
     });
 
     it('maps an explicit system-container target to a guest config', () => {
@@ -187,7 +205,7 @@ describe('toDiscoveryConfig — explicit discoveryTarget branch', () => {
       const result = toDiscoveryConfig(resource);
       expect(result?.resourceType).toBe('system-container');
       expect(result?.metadataKind).toBe('guest');
-      expect(result?.metadataId).toBe('sc-rid');
+      expect(result?.metadataId).toBe('res-1');
       expect(result?.targetLabel).toBe('guest');
     });
 
@@ -218,7 +236,7 @@ describe('toDiscoveryConfig — explicit discoveryTarget branch', () => {
       const result = toDiscoveryConfig(resource);
       expect(result?.resourceType).toBe('app-container');
       expect(result?.metadataKind).toBe('guest');
-      expect(result?.metadataId).toBe('app-rid');
+      expect(result?.metadataId).toBe('res-1');
       expect(result?.targetLabel).toBe('container');
     });
 

@@ -14,6 +14,7 @@ import {
   getPreferredInfrastructureDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
+import { getCanonicalWorkloadIdForResource } from '@/utils/workloads';
 
 export type DiscoveryConfig = {
   resourceType: DiscoveryResourceType;
@@ -102,7 +103,6 @@ const getDockerContainerMetadataId = (
 const getMetadataTarget = (
   resource: Resource,
   resourceType: DiscoveryResourceType,
-  fallbackMetadataId: string,
   platformData: PlatformData | undefined,
 ): Pick<DiscoveryConfig, 'metadataKind' | 'metadataId'> => {
   if (resourceType === 'app-container') {
@@ -115,9 +115,14 @@ const getMetadataTarget = (
     }
   }
 
+  // Guest metadata is keyed by the canonical workload id shared with the
+  // workloads surfaces (`instance:node:vmid` for PVE guests, resource id
+  // otherwise — also the key v5 upgrades carry over). Saving under any other
+  // id (unified resource hash, bare vmid, discovery resource id) strands the
+  // URL where no table reads it.
   return {
     metadataKind: 'guest',
-    metadataId: fallbackMetadataId,
+    metadataId: getCanonicalWorkloadIdForResource(resource),
   };
 };
 
@@ -159,7 +164,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
       const isHostDiscovery = isAgentDiscoveryResourceType(resourceType);
       const metadataTarget = isHostDiscovery
         ? { metadataKind: 'agent' as const, metadataId: explicitDiscoveryAgentId }
-        : getMetadataTarget(resource, resourceType, explicitDiscoveryResourceId, platformData);
+        : getMetadataTarget(resource, resourceType, platformData);
       const targetLabel = isHostDiscovery
         ? 'agent'
         : resourceType === 'app-container'
@@ -267,7 +272,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         resourceId: vmidResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
-        metadataId: resource.id,
+        metadataId: getCanonicalWorkloadIdForResource(resource),
         targetLabel: 'guest',
       };
     case 'system-container':
@@ -281,7 +286,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         resourceId: vmidResourceId || resource.id,
         hostname,
         metadataKind: 'guest',
-        metadataId: resource.id,
+        metadataId: getCanonicalWorkloadIdForResource(resource),
         targetLabel: 'guest',
       };
     case 'app-container':
@@ -293,7 +298,7 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
         agentId: workloadAgentId,
         resourceId: asString(dockerPlatformData?.containerId) || resource.id,
         hostname,
-        ...getMetadataTarget(resource, 'app-container', resource.id, platformData),
+        ...getMetadataTarget(resource, 'app-container', platformData),
         targetLabel: 'container',
       };
     case 'pod':

@@ -364,7 +364,10 @@ func (s *countingRG06AgentServer) CleanupCalls() int { return int(s.cleanupCalls
 func startRG06Agent(t *testing.T, runID, agentID, image, binary string, port int) string {
 	t.Helper()
 	name := "pulse-rg06-agent-" + runID
-	args := []string{"--context", "colima", "create", "--name", name, "--label", "com.pulse.intelligence-lab.run=" + runID, "--label", "com.pulse.intelligence-lab.gate=rg-06", "--add-host", "host.docker.internal:host-gateway", "--tmpfs", "/var/cache/apt/archives:size=72m", "-e", fmt.Sprintf("PULSE_URL=http://host.docker.internal:%d", port), "-e", "PULSE_TOKEN=rg06-local-lab", "-e", "PULSE_AGENT_ID=" + agentID, "-e", "PULSE_HOSTNAME=rg06-agent-" + runID, "-e", "PULSE_ENABLE_HOST=true", "-e", "PULSE_ENABLE_COMMANDS=true", "-e", "PULSE_INTERVAL=2s", "-e", "PULSE_HEALTH_ADDR=off", image, "/bin/sh", "-c", "dd if=/dev/zero of=/var/cache/apt/archives/rg06-fixture.deb bs=1M count=65 status=none && touch -d @0 /var/cache/apt/archives/rg06-fixture.deb && exec /usr/local/bin/pulse-agent"}
+	// A real ext4 mount is required because production disk telemetry correctly
+	// excludes tmpfs/pseudo filesystems. Privilege is confined to this labeled,
+	// disposable Colima container and is needed only to mount its loop image.
+	args := []string{"--context", "colima", "create", "--name", name, "--label", "com.pulse.intelligence-lab.run=" + runID, "--label", "com.pulse.intelligence-lab.gate=rg-06", "--privileged", "--add-host", "host.docker.internal:host-gateway", "-e", fmt.Sprintf("PULSE_URL=http://host.docker.internal:%d", port), "-e", "PULSE_TOKEN=rg06-local-lab", "-e", "PULSE_AGENT_ID=" + agentID, "-e", "PULSE_HOSTNAME=rg06-agent-" + runID, "-e", "PULSE_ENABLE_HOST=true", "-e", "PULSE_ENABLE_COMMANDS=true", "-e", "PULSE_INTERVAL=2s", "-e", "PULSE_HEALTH_ADDR=off", image, "/bin/sh", "-c", "dd if=/dev/zero of=/rg06-cache.img bs=1M count=96 status=none && mkfs.ext4 -q -F /rg06-cache.img && mount -o loop /rg06-cache.img /var/cache/apt/archives && dd if=/dev/zero of=/var/cache/apt/archives/rg06-fixture.deb bs=1M count=88 status=none && touch -d @0 /var/cache/apt/archives/rg06-fixture.deb && exec /usr/local/bin/pulse-agent"}
 	cmd := exec.Command("docker", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
