@@ -107,6 +107,7 @@ type CommandClient struct {
 	commandPolicy             *agentexec.CommandPolicy
 	packageUpdates            *packageUpdateManager
 	storageCleanup            *storageCleanupManager
+	dockerLifecycle           dockerLifecycleManager
 	operationReceipts         *operationreceipt.Store
 	operationReceiptErr       error
 	operationReceiptCloseOnce sync.Once
@@ -145,6 +146,7 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 		commandPolicy:       agentexec.DefaultPolicy(),
 		packageUpdates:      cfg.packageUpdates,
 		storageCleanup:      cfg.storageCleanup,
+		dockerLifecycle:     newLocalDockerLifecycleManager(),
 		operationReceipts:   receipts,
 		operationReceiptErr: receiptErr,
 		logger:              logger,
@@ -167,23 +169,25 @@ func (c *CommandClient) stopChan() <-chan struct{} {
 type messageType string
 
 const (
-	msgTypeAgentRegister            messageType = "agent_register"
-	msgTypeAgentPing                messageType = "agent_ping"
-	msgTypeCommandResult            messageType = "command_result"
-	msgTypeRegistered               messageType = "registered"
-	msgTypePong                     messageType = "pong"
-	msgTypeExecuteCmd               messageType = "execute_command"
-	msgTypeReadFile                 messageType = "read_file"
-	msgTypeHostStorageCleanup       messageType = "host_storage_cleanup"
-	msgTypeHostStorageCleanupResult messageType = "host_storage_cleanup_result"
-	msgTypeHostUpdate               messageType = "host_update"
-	msgTypeHostUpdateResult         messageType = "host_update_result"
-	msgTypeOperationQuery           messageType = "agent_operation_query"
-	msgTypeOperationQueryResult     messageType = "agent_operation_query_result"
-	msgTypeDeployPreflight          messageType = "deploy_preflight"
-	msgTypeDeployInstall            messageType = "deploy_install"
-	msgTypeDeployCancel             messageType = "deploy_cancel"
-	msgTypeDeployProgress           messageType = "deploy_progress"
+	msgTypeAgentRegister                  messageType = "agent_register"
+	msgTypeAgentPing                      messageType = "agent_ping"
+	msgTypeCommandResult                  messageType = "command_result"
+	msgTypeRegistered                     messageType = "registered"
+	msgTypePong                           messageType = "pong"
+	msgTypeExecuteCmd                     messageType = "execute_command"
+	msgTypeReadFile                       messageType = "read_file"
+	msgTypeHostStorageCleanup             messageType = "host_storage_cleanup"
+	msgTypeHostStorageCleanupResult       messageType = "host_storage_cleanup_result"
+	msgTypeHostUpdate                     messageType = "host_update"
+	msgTypeHostUpdateResult               messageType = "host_update_result"
+	msgTypeDockerContainerLifecycle       messageType = "docker_container_lifecycle"
+	msgTypeDockerContainerLifecycleResult messageType = "docker_container_lifecycle_result"
+	msgTypeOperationQuery                 messageType = "agent_operation_query"
+	msgTypeOperationQueryResult           messageType = "agent_operation_query_result"
+	msgTypeDeployPreflight                messageType = "deploy_preflight"
+	msgTypeDeployInstall                  messageType = "deploy_install"
+	msgTypeDeployCancel                   messageType = "deploy_cancel"
+	msgTypeDeployProgress                 messageType = "deploy_progress"
 )
 
 type wsMessage struct {
@@ -563,6 +567,14 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 			}
 			go c.handleHostStorageCleanup(ctx, conn, payload)
 
+		case msgTypeDockerContainerLifecycle:
+			payload, err := agentexec.DecodeDockerContainerLifecyclePayload(msg.Payload)
+			if err != nil {
+				c.logger.Error().Err(err).Msg("Failed to parse docker container lifecycle payload")
+				continue
+			}
+			go c.handleDockerContainerLifecycle(ctx, conn, payload)
+
 		case msgTypeOperationQuery:
 			query, err := operationreceipt.DecodeQuery(msg.Payload)
 			if err != nil {
@@ -711,6 +723,65 @@ func (c *CommandClient) handleHostStorageCleanup(ctx context.Context, conn *webs
 	c.sendHostStorageCleanupResult(conn, result)
 }
 
+func (c *CommandClient) handleDockerContainerLifecycle(ctx context.Context, conn *websocket.Conn, payload agentexec.DockerContainerLifecyclePayload) {
+	identity := agentexec.DockerContainerLifecycleOperationIdentity(c.agentID, payload)
+	record, admitted, err := c.admitOperation(identity)
+	if err != nil {
+		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Docker lifecycle durable admission refused")
+		return
+	}
+	if !admitted {
+		if record.State == operationreceipt.StateTerminal {
+			c.replayDockerContainerLifecycle(conn, record)
+		}
+		return
+	}
+	if _, err := c.operationReceipts.MarkStarted(identity); err != nil {
+		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Docker lifecycle durable start refused")
+		return
+	}
+	timeout := time.Duration(payload.Timeout) * time.Second
+	if timeout <= 0 {
+		timeout = 2 * time.Minute
+	}
+	operationCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	result := agentexec.DockerContainerLifecycleResultPayload{
+		RequestID: payload.RequestID, ActionID: payload.ActionID, Operation: payload.Operation,
+		OperationVersion: payload.OperationVersion, RequestDigest: payload.RequestDigest, ContainerID: payload.ContainerID,
+		ExecutionPhase: agentexec.DockerContainerPhasePreflight,
+	}
+	if c.dockerLifecycle == nil {
+		result.Error = "typed container lifecycle service is unavailable"
+	} else {
+		result = c.dockerLifecycle.Apply(operationCtx, payload)
+	}
+	result.Error = sanitizeDockerLifecycleError(result.Error)
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return
+	}
+	if _, err := c.operationReceipts.Complete(identity, operationreceipt.TerminalEnvelope{Kind: agentexec.DockerContainerLifecycleReceiptKind, Version: agentexec.DockerContainerLifecycleReceiptVersion, Payload: encoded}); err != nil {
+		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to persist docker lifecycle terminal receipt")
+		return
+	}
+	c.sendDockerContainerLifecycleResult(conn, result)
+}
+
+func (c *CommandClient) sendDockerContainerLifecycleResult(conn *websocket.Conn, result agentexec.DockerContainerLifecycleResultPayload) {
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return
+	}
+	msg := wsMessage{Type: msgTypeDockerContainerLifecycleResult, ID: result.RequestID, Timestamp: time.Now(), Payload: encoded}
+	c.connMu.Lock()
+	err = conn.WriteJSON(msg)
+	c.connMu.Unlock()
+	if err != nil {
+		c.logger.Error().Err(err).Str("request_id", result.RequestID).Msg("Failed to send docker lifecycle result")
+	}
+}
+
 func (c *CommandClient) admitOperation(identity operationreceipt.Identity) (operationreceipt.Record, bool, error) {
 	if c.operationReceiptErr != nil {
 		return operationreceipt.Record{}, false, c.operationReceiptErr
@@ -764,6 +835,20 @@ func (c *CommandClient) replayHostStorageCleanup(conn *websocket.Conn, record op
 	}
 }
 
+func (c *CommandClient) replayDockerContainerLifecycle(conn *websocket.Conn, record operationreceipt.Record) {
+	var result agentexec.DockerContainerLifecycleResultPayload
+	if err := json.Unmarshal(record.Result, &result); err == nil {
+		c.sendDockerContainerLifecycleResult(conn, result)
+	}
+}
+
+func sanitizeDockerLifecycleError(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	return "typed container lifecycle did not complete as requested"
+}
+
 func sanitizeHostUpdateReceipt(result agentexec.HostUpdateResultPayload) agentexec.HostUpdateResultPayload {
 	result.Before.Packages, result.After.Packages = nil, nil
 	result.Before.Error, result.After.Error = "", ""
@@ -810,6 +895,16 @@ func hostOperationReceiptConfig() operationreceipt.Config {
 				return err
 			}
 			return agentexec.ValidateHostStorageCleanupResultForRequest(req, result)
+		}},
+		agentexec.DockerContainerLifecycleReceiptKind: {agentexec.DockerContainerLifecycleReceiptVersion: func(identity operationreceipt.Identity, payload json.RawMessage) error {
+			result, err := agentexec.DecodeDockerContainerLifecycleResultPayload(payload)
+			if err != nil {
+				return err
+			}
+			if result.RequestID != identity.AttemptID || result.ActionID != identity.ActionID || result.Operation != identity.OperationKind || result.OperationVersion != identity.OperationVersion || result.RequestDigest != identity.RequestDigest {
+				return operationreceipt.ErrBindingConflict
+			}
+			return nil
 		}},
 	}}
 }

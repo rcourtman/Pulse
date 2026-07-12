@@ -7358,6 +7358,27 @@ consumption remain separate work; no mobile or relay-local workaround may
 compensate for a missing core API. Claims 16 and 17 remain open pending Task 09
 resumption, real browser/lab evidence, and Task 12 certification.
 
+Typed Docker / Podman container start, stop, and restart operations extend that
+same durable boundary rather than creating a provider-local action protocol.
+The agent wire request is closed and binds the exact action, dispatch attempt,
+operation kind/version, request digest, agent, and immutable container identity.
+Its result is a bounded observation envelope only: workflow phase, whether a
+mutation started and completed, whether readback ran, before/after snapshots,
+bounded operation/transport error facts, and timestamps. The agent and
+`internal/agentexec` must not author success, verification, evidence-class, or
+compensation truth. The server rejects cross-operation identity reuse and any
+result or durable receipt that does not match the complete pending identity.
+Only the API-owned Docker lifecycle executor projects those facts into the
+unified-resource-owned `ActionResultV2`: a completed mutation remains execution
+`succeeded` even when readback contradicts, while preflight-proven no-effect is
+`not_run` and partial or unknown post-dispatch effect is `inconclusive`.
+Fresh same-agent readback is `agent_attested`; absent, invalid, or stale
+readback is inconclusive with a stable reason. A direct daemon observation may
+be classified `independent` only when a distinct observer trust domain binds
+the action, subject, observation and receipt times, before/after facts, and
+canonical evidence digest. It is independent operational evidence, not a
+cryptographic attestation.
+
 ### Canonical mutation plane
 
 `internal/mutationregistry/manifest.json` is the generated closed registry for

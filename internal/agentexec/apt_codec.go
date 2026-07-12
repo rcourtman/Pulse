@@ -156,6 +156,21 @@ func ValidateOperationQueryResultForIdentity(result operationreceipt.QueryResult
 			return err
 		}
 		return validateDurableAPTObservation(payload.Before.CheckedAt, payload.After.CheckedAt, result.Record.TerminalAt)
+	case DockerContainerOperationStart, DockerContainerOperationStop, DockerContainerOperationRestart:
+		if result.Record.ResultKind != DockerContainerLifecycleReceiptKind || result.Record.ResultVersion != DockerContainerLifecycleReceiptVersion {
+			return fmt.Errorf("docker container lifecycle query result envelope mismatch")
+		}
+		payload, err := DecodeDockerContainerLifecycleResultPayload(result.Record.Result)
+		if err != nil {
+			return err
+		}
+		if payload.RequestID != identity.AttemptID || payload.ActionID != identity.ActionID || payload.Operation != identity.OperationKind || payload.OperationVersion != identity.OperationVersion || payload.RequestDigest != identity.RequestDigest {
+			return operationreceipt.ErrBindingConflict
+		}
+		if payload.ReadbackRan && (payload.After.ObservedAt.IsZero() || result.Record.TerminalAt.Before(payload.After.ObservedAt)) {
+			return fmt.Errorf("docker container lifecycle readback has invalid terminal chronology")
+		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported operation query kind %q", identity.OperationKind)
 	}

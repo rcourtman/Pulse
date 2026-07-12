@@ -1046,7 +1046,8 @@
       "owned_prefixes": [
         "internal/agentexec/",
         "internal/agentupdate/",
-        "internal/hostagent/"
+        "internal/hostagent/",
+        "scripts/intelligence_lab/"
       ],
       "owned_files": [
         ".github/workflows/unified-agent-native.yml",
@@ -1114,7 +1115,8 @@
         "scripts/install.ps1",
         "scripts/install.sh",
         "scripts/installtests/windows_agent_lifecycle.ps1",
-        "scripts/installtests/windowslifecycleserver/main.go"
+        "scripts/installtests/windowslifecycleserver/main.go",
+        "tests/integration/tests/84-docker-restart-real-lab-artifact.spec.ts"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -1122,6 +1124,23 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "docker-restart-intelligence-lab",
+            "label": "Docker restart managed-runtime and artifact-backed browser proof",
+            "match_prefixes": [
+              "scripts/intelligence_lab/"
+            ],
+            "match_files": [
+              "tests/integration/tests/84-docker-restart-real-lab-artifact.spec.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/docker_restart_colima_real_lab_test.go",
+              "scripts/intelligence_lab/test_artifact_redaction.py",
+              "tests/integration/tests/84-docker-restart-real-lab-artifact.spec.ts"
+            ]
+          },
           {
             "id": "pulse-agent-cli-entrypoint",
             "label": "pulse-agent CLI entrypoint proof",
@@ -1228,6 +1247,7 @@
               "internal/hostagent/commands_deploy_test.go",
               "internal/hostagent/commands_host_update_test.go",
               "internal/hostagent/commands_storage_cleanup_test.go",
+              "internal/hostagent/docker_lifecycle_test.go",
               "internal/hostagent/package_updates_test.go",
               "internal/hostagent/send_report_test.go",
               "internal/hostagent/storage_cleanup_test.go"
@@ -1488,6 +1508,7 @@
             "exact_files": [
               "internal/agentexec/approval_grant_test.go",
               "internal/agentexec/deploy_test.go",
+              "internal/agentexec/docker_lifecycle_contract_test.go",
               "internal/agentexec/policy_test.go",
               "internal/agentexec/server_coverage_test.go",
               "internal/agentexec/server_test.go",

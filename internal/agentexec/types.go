@@ -12,24 +12,26 @@ type MessageType string
 
 const (
 	// Agent -> Server messages
-	MsgTypeAgentRegister            MessageType = "agent_register"
-	MsgTypeAgentPing                MessageType = "agent_ping"
-	MsgTypeCommandResult            MessageType = "command_result"
-	MsgTypeHostStorageCleanupResult MessageType = "host_storage_cleanup_result"
-	MsgTypeHostUpdateResult         MessageType = "host_update_result"
-	MsgTypeOperationQueryResult     MessageType = "agent_operation_query_result"
+	MsgTypeAgentRegister                  MessageType = "agent_register"
+	MsgTypeAgentPing                      MessageType = "agent_ping"
+	MsgTypeCommandResult                  MessageType = "command_result"
+	MsgTypeHostStorageCleanupResult       MessageType = "host_storage_cleanup_result"
+	MsgTypeHostUpdateResult               MessageType = "host_update_result"
+	MsgTypeDockerContainerLifecycleResult MessageType = "docker_container_lifecycle_result"
+	MsgTypeOperationQueryResult           MessageType = "agent_operation_query_result"
 
 	// Server -> Agent messages
-	MsgTypeRegistered         MessageType = "registered"
-	MsgTypePong               MessageType = "pong"
-	MsgTypeExecuteCmd         MessageType = "execute_command"
-	MsgTypeHostStorageCleanup MessageType = "host_storage_cleanup"
-	MsgTypeReadFile           MessageType = "read_file"
-	MsgTypeHostUpdate         MessageType = "host_update"
-	MsgTypeOperationQuery     MessageType = "agent_operation_query"
-	MsgTypeDeployPreflight    MessageType = "deploy_preflight"
-	MsgTypeDeployInstall      MessageType = "deploy_install"
-	MsgTypeDeployCancelJob    MessageType = "deploy_cancel"
+	MsgTypeRegistered               MessageType = "registered"
+	MsgTypePong                     MessageType = "pong"
+	MsgTypeExecuteCmd               MessageType = "execute_command"
+	MsgTypeHostStorageCleanup       MessageType = "host_storage_cleanup"
+	MsgTypeReadFile                 MessageType = "read_file"
+	MsgTypeHostUpdate               MessageType = "host_update"
+	MsgTypeDockerContainerLifecycle MessageType = "docker_container_lifecycle"
+	MsgTypeOperationQuery           MessageType = "agent_operation_query"
+	MsgTypeDeployPreflight          MessageType = "deploy_preflight"
+	MsgTypeDeployInstall            MessageType = "deploy_install"
+	MsgTypeDeployCancelJob          MessageType = "deploy_cancel"
 
 	// Agent -> Server messages (deploy)
 	MsgTypeDeployProgress MessageType = "deploy_progress"
@@ -155,6 +157,61 @@ type CommandResultPayload struct {
 }
 
 const HostUpdateOperationInstall = "install_os_updates"
+
+const (
+	DockerContainerOperationStart   = "start_container"
+	DockerContainerOperationStop    = "stop_container"
+	DockerContainerOperationRestart = "restart_container"
+)
+
+// DockerContainerLifecyclePayload is a closed container lifecycle operation.
+// It carries an immutable container ID and request-bound before state, never
+// command text, flags, a shell fragment, or a user-controlled container name.
+type DockerContainerLifecyclePayload struct {
+	RequestID         string    `json:"request_id"`
+	ActionID          string    `json:"action_id"`
+	Operation         string    `json:"operation"`
+	OperationVersion  int       `json:"operation_version"`
+	RequestDigest     string    `json:"request_digest"`
+	Runtime           string    `json:"runtime"`
+	ContainerID       string    `json:"container_id"`
+	ExpectedState     string    `json:"expected_state"`
+	ExpectedStartedAt time.Time `json:"expected_started_at,omitempty"`
+	Timeout           int       `json:"timeout,omitempty"`
+}
+
+type DockerContainerLifecycleSnapshot struct {
+	ContainerID  string    `json:"container_id"`
+	State        string    `json:"state"`
+	Running      bool      `json:"running"`
+	StartedAt    time.Time `json:"started_at,omitempty"`
+	RestartCount int       `json:"restart_count"`
+	ObservedAt   time.Time `json:"observed_at"`
+}
+
+type DockerContainerLifecycleResultPayload struct {
+	RequestID         string                           `json:"request_id"`
+	ActionID          string                           `json:"action_id"`
+	Operation         string                           `json:"operation"`
+	OperationVersion  int                              `json:"operation_version"`
+	RequestDigest     string                           `json:"request_digest"`
+	ContainerID       string                           `json:"container_id"`
+	ExecutionPhase    string                           `json:"execution_phase"`
+	MutationStarted   bool                             `json:"mutation_started"`
+	MutationCompleted bool                             `json:"mutation_completed"`
+	ReadbackRan       bool                             `json:"readback_ran"`
+	Before            DockerContainerLifecycleSnapshot `json:"before"`
+	After             DockerContainerLifecycleSnapshot `json:"after"`
+	Error             string                           `json:"error,omitempty"`
+	Duration          int64                            `json:"duration_ms"`
+}
+
+const (
+	DockerContainerPhasePreflight = "preflight"
+	DockerContainerPhaseMutate    = "mutate"
+	DockerContainerPhaseVerify    = "verify"
+	DockerContainerPhaseComplete  = "complete"
+)
 
 // HostUpdatePayload is the closed, typed host-package operation sent to a
 // Unified Agent. It intentionally has no command or package-name fields: the

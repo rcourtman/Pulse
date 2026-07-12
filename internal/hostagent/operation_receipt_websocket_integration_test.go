@@ -174,3 +174,58 @@ func TestRealServerAndUnifiedAgentWebSocketExecutesAPTThroughFakeTypedManagersAn
 		t.Fatalf("fake mutation catalog calls: refresh=%d upgrade=%d clean=%d", refreshCalls, upgradeCalls, cleanCalls)
 	}
 }
+
+type countingDockerLifecycleManager struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (m *countingDockerLifecycleManager) Apply(_ context.Context, req agentexec.DockerContainerLifecyclePayload) agentexec.DockerContainerLifecycleResultPayload {
+	m.mu.Lock()
+	m.calls++
+	m.mu.Unlock()
+	now := time.Now().UTC()
+	return agentexec.DockerContainerLifecycleResultPayload{
+		RequestID: req.RequestID, ActionID: req.ActionID, Operation: req.Operation, OperationVersion: req.OperationVersion, RequestDigest: req.RequestDigest, ContainerID: req.ContainerID,
+		ExecutionPhase: agentexec.DockerContainerPhaseComplete, MutationStarted: true, MutationCompleted: true, ReadbackRan: true,
+		Before: agentexec.DockerContainerLifecycleSnapshot{ContainerID: req.ContainerID, State: "running", Running: true, StartedAt: req.ExpectedStartedAt, ObservedAt: now.Add(-time.Second)},
+		After:  agentexec.DockerContainerLifecycleSnapshot{ContainerID: req.ContainerID, State: "running", Running: true, StartedAt: now, ObservedAt: now},
+	}
+}
+
+func TestRealServerAndUnifiedAgentWebSocketDockerDuplicateReplayMutatesOnce(t *testing.T) {
+	server := agentexec.NewServer(func(token, agent, host string) bool { return token == "token" })
+	httpServer := httptest.NewServer(http.HandlerFunc(server.HandleWebSocket))
+	defer httpServer.Close()
+	logger := zerolog.Nop()
+	client := NewCommandClient(Config{PulseURL: httpServer.URL, APIToken: "token", StateDir: t.TempDir(), Logger: &logger}, "agent-docker", "host", "linux", "6")
+	manager := &countingDockerLifecycleManager{}
+	client.dockerLifecycle = manager
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- client.Run(ctx) }()
+	defer func() { cancel(); _ = client.Close(); <-done }()
+	deadline := time.Now().Add(3 * time.Second)
+	for !server.IsAgentConnected("agent-docker") && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !server.IsAgentConnected("agent-docker") {
+		t.Fatal("real command client did not connect")
+	}
+	startedAt := time.Now().UTC().Add(-time.Minute)
+	req := agentexec.DockerContainerLifecyclePayload{RequestID: "docker.dispatch.1", ActionID: "docker", Operation: agentexec.DockerContainerOperationRestart, Runtime: "docker", ContainerID: dockerLifecycleTestContainerID, ExpectedState: "running", ExpectedStartedAt: startedAt, Timeout: 5}
+	if err := agentexec.BindDockerContainerLifecyclePayload(&req); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		result, err := server.ExecuteDockerContainerLifecycle(context.Background(), "agent-docker", req)
+		if err != nil || result == nil || !result.MutationCompleted || !result.ReadbackRan {
+			t.Fatalf("replay %d result=%+v err=%v", i, result, err)
+		}
+	}
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	if manager.calls != 1 {
+		t.Fatalf("typed docker mutation calls = %d, want one", manager.calls)
+	}
+}

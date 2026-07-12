@@ -19946,7 +19946,7 @@ func TestContract_ResourceActionReadinessPayloadShape(t *testing.T) {
 	}
 }
 
-func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchTrusted(t *testing.T) {
+func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOperation(t *testing.T) {
 	source, err := os.ReadFile("docker_container_action_executor.go")
 	if err != nil {
 		t.Fatalf("read docker_container_action_executor.go: %v", err)
@@ -19961,11 +19961,17 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchTrusted(t 
 		"func (e dockerContainerActionExecutor) connectedDockerCommandAgentID(resource unified.Resource) (string, error)",
 		"resource.Docker.AgentID",
 		"e.agents.GetAgentForHost(strings.TrimSpace(resource.Docker.Hostname))",
-		"Trusted:    true",
+		"ExecuteDockerContainerLifecycle(context.Context, string, agentexec.DockerContainerLifecyclePayload)",
+		"BindActionDispatch",
+		"ReconcileActionDispatch",
+		"dockerContainerExecutionResult",
 	} {
 		if !strings.Contains(src, snippet) {
-			t.Fatalf("docker lifecycle executor must pin command-agent/trusted dispatch snippet %q", snippet)
+			t.Fatalf("docker lifecycle executor must pin durable typed dispatch snippet %q", snippet)
 		}
+	}
+	if strings.Contains(src, "ExecuteCommand(ctx, agentID") || strings.Contains(src, "docker inspect -f") || strings.Contains(src, "podman inspect -f") {
+		t.Fatal("docker lifecycle executor regressed to raw command dispatch or server-authored agent inspect")
 	}
 	if !strings.Contains(sharedSrc, "GetAgentForHost(hostname string) (string, bool)") {
 		t.Fatal("shared action command interface must keep hostname-based command-agent resolution available")

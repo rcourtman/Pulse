@@ -421,6 +421,18 @@ host name and dispatches a trusted internal container command after action
 approval, storage and recovery consumers may observe only the resulting action
 audit and verification evidence; they must not reinterpret that trusted command
 path as recovery authority or a storage-owned action transport.
+Container restart declares rollback unavailable. Its canonical
+`ActionResultV2.compensation` therefore records support `unavailable` and status
+`not_available`; neither same-agent readback nor a distinct direct-daemon
+observation creates rollback authority. Removing an exactly labelled disposable
+lab fixture is test-environment cleanup compensation only, never product
+rollback or evidence that Pulse can restore the restarted process. Dispatch,
+callback loss, and process-restart recovery remain on the shared action attempt
+and operation-receipt journal: reconciliation queries the bound attempt/receipt
+without blind redispatch, and an interrupted, missing, conflicting, or
+tombstoned receipt cannot authorize another mutation. Storage/recovery code must
+not add a Docker-specific receipt journal, infer restore readiness from a
+terminal container action, or represent cleanup as recovery compensation.
 Disconnected command-agent readiness for those lifecycle actions remains an
 API/runtime fail-closed condition; storage/recovery consumers may observe that
 an action is unavailable, but must not reinterpret it as recovery degradation

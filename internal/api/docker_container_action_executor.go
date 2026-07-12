@@ -9,6 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -17,6 +18,47 @@ const dockerContainerLifecycleHandler = "docker.container.lifecycle"
 type dockerContainerActionExecutor struct {
 	resources *ResourceHandlers
 	agents    actionAgentCommander
+	observer  dockerContainerPostconditionObserver
+}
+
+type dockerContainerPostconditionObservation struct {
+	ObserverID  string
+	TrustDomain string
+	Method      string
+	Snapshot    agentexec.DockerContainerLifecycleSnapshot
+	ReceivedAt  time.Time
+}
+
+type dockerContainerPostconditionObserver interface {
+	ObserveDockerContainer(context.Context, string, string) (dockerContainerPostconditionObservation, error)
+}
+
+type dockerContainerLifecycleAgentCommander interface {
+	ExecuteDockerContainerLifecycle(context.Context, string, agentexec.DockerContainerLifecyclePayload) (*agentexec.DockerContainerLifecycleResultPayload, error)
+}
+
+func (e dockerContainerActionExecutor) BindActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (unified.ActionDispatchAttempt, error) {
+	operation, err := dockerAgentLifecycleOperation(record.Request.CapabilityName)
+	if err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	resource, err := e.currentDockerContainerResource(ctx, record.Request.ResourceID, record.Request.CapabilityName)
+	if err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	runtime, err := dockerContainerRuntime(resource)
+	if err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	agentID, err := e.connectedDockerCommandAgentID(resource)
+	if err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	req := dockerContainerLifecycleRequest(attempt.ID, record.ID, operation, runtime, resource)
+	if err := agentexec.BindDockerContainerLifecyclePayload(&req); err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	return unified.BindActionDispatchAttempt(attempt, unified.ActionDispatchBinding{OperationKind: req.Operation, OperationVersion: req.OperationVersion, RequestDigest: req.RequestDigest, AgentID: agentID})
 }
 
 func newDockerContainerActionExecutor(resources *ResourceHandlers, agents actionAgentCommander) ActionExecutor {
@@ -52,8 +94,7 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 	if err != nil {
 		return nil, err
 	}
-	containerRef := dockerContainerRef(resource)
-	if containerRef == "" {
+	if dockerContainerRef(resource) == "" {
 		return nil, fmt.Errorf("docker container resource %q has no executable container id", record.Request.ResourceID)
 	}
 	agentID, err := e.connectedDockerCommandAgentID(resource)
@@ -61,36 +102,75 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 		return nil, err
 	}
 
-	command := fmt.Sprintf("%s %s %s", runtime, operation, shellQuote(containerRef))
-	result, err := e.agents.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-		RequestID:  attempt.ID,
-		Command:    command,
-		ApprovalID: record.ID,
-		TargetType: "agent",
-		Timeout:    120,
-		Trusted:    true,
-	})
+	typedAgents, ok := e.agents.(dockerContainerLifecycleAgentCommander)
+	if !ok {
+		return nil, fmt.Errorf("typed docker container lifecycle agent is unavailable")
+	}
+	agentOperation, err := dockerAgentLifecycleOperation(operation)
 	if err != nil {
 		return nil, err
 	}
+	req := dockerContainerLifecycleRequest(attempt.ID, record.ID, agentOperation, runtime, resource)
+	if err := agentexec.BindDockerContainerLifecyclePayload(&req); err != nil {
+		return nil, err
+	}
+	if agentexec.DockerContainerLifecycleOperationIdentity(agentID, req) != (operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}) {
+		return nil, fmt.Errorf("docker container lifecycle dispatch binding drift")
+	}
+	result, err := typedAgents.ExecuteDockerContainerLifecycle(ctx, agentID, req)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, fmt.Errorf("docker container lifecycle agent returned no result")
+	}
+	receivedAt := time.Now().UTC()
+	if err := agentexec.ValidateDockerContainerLifecycleResultForRequest(req, *result); err != nil {
+		return nil, fmt.Errorf("invalid docker container lifecycle agent result: %w", err)
+	}
+	var independent *dockerContainerPostconditionObservation
+	if e.observer != nil {
+		if observation, observeErr := e.observer.ObserveDockerContainer(ctx, record.ID, req.ContainerID); observeErr == nil {
+			independent = &observation
+		}
+	}
+	return dockerContainerExecutionResult(record.Request.ResourceID, agentID, req, *result, independent, receivedAt)
+}
 
-	output := redactActionOutput(commandOutput(result))
-	execution := &unified.ExecutionResult{
-		Success: result.ExitCode == 0,
-		Output:  output,
+func (e dockerContainerActionExecutor) ReconcileActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (*unified.ExecutionResult, unified.ActionDispatchReceipt, bool, error) {
+	querier, ok := e.agents.(operationReceiptQuerier)
+	if !ok {
+		return nil, unified.ActionDispatchReceipt{}, false, nil
 	}
-	if result.ExitCode != 0 {
-		execution.ErrorMessage = strings.TrimSpace(firstNonEmpty(result.Error, output, fmt.Sprintf("container %s exited with status %d", operation, result.ExitCode)))
-		return execution, nil
+	identity := operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}
+	query, err := querier.QueryAgentOperation(ctx, attempt.AgentID, identity)
+	if err != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, err
 	}
-
-	verification := e.verifyContainerState(ctx, agentID, record.ID, runtime, containerRef, operation)
-	execution.Verification = verification
-	if verification != nil && verification.Ran && !verification.Success {
-		execution.Success = false
-		execution.ErrorMessage = "container lifecycle action completed but verification did not confirm the expected state"
+	if query.Status != operationreceipt.QueryFoundTerminal {
+		return nil, unified.ActionDispatchReceipt{}, false, nil
 	}
-	return execution, nil
+	receivedAt := time.Now().UTC()
+	if err := agentexec.ValidateOperationQueryResultForIdentity(query, identity, receivedAt); err != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, err
+	}
+	result, err := agentexec.DecodeDockerContainerLifecycleResultPayload(query.Record.Result)
+	if err != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, err
+	}
+	req := agentexec.DockerContainerLifecyclePayload{RequestID: attempt.ID, ActionID: record.ID, Operation: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, Runtime: "docker", ContainerID: result.ContainerID, ExpectedState: result.Before.State, ExpectedStartedAt: result.Before.StartedAt}
+	var independent *dockerContainerPostconditionObservation
+	if e.observer != nil {
+		if observation, observeErr := e.observer.ObserveDockerContainer(ctx, record.ID, result.ContainerID); observeErr == nil {
+			independent = &observation
+		}
+	}
+	execution, err := dockerContainerExecutionResult(record.Request.ResourceID, attempt.AgentID, req, result, independent, receivedAt)
+	if err != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, err
+	}
+	receipt := unified.ActionDispatchReceipt{AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: receivedAt}
+	return execution, receipt, true, nil
 }
 
 func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {
@@ -103,11 +183,19 @@ func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context,
 	if e.agents == nil {
 		return unavailableDockerActionReadiness(operation, "command_agent_unavailable", "Docker / Podman command execution is not available.")
 	}
+	if _, ok := e.agents.(dockerContainerLifecycleAgentCommander); !ok {
+		return unavailableDockerActionReadiness(operation, "typed_operation_unavailable", "Typed Docker / Podman lifecycle execution is not available.")
+	}
 	if _, err := e.executableDockerContainerResource(ctx, resource, operation); err != nil {
 		return unavailableDockerActionReadiness(operation, dockerActionUnavailableReasonCode(err), dockerActionUnavailableReason(err))
 	}
 	if _, err := e.connectedDockerCommandAgentID(resource); err != nil {
 		return unavailableDockerActionReadiness(operation, "command_agent_disconnected", "Docker / Podman command agent is not connected.")
+	}
+	agentID, _ := e.connectedDockerCommandAgentID(resource)
+	liveCapability, supported := e.agents.(agentOperationReceiptCapability)
+	if !supported || liveCapability.AgentOperationReceiptVersion(agentID) != operationreceipt.ProtocolVersion {
+		return unavailableDockerActionReadiness(operation, "operation_receipt_unsupported", "This agent does not support durable typed-operation receipts.")
 	}
 	return readiness
 }
@@ -246,69 +334,31 @@ func dockerContainerRef(resource unified.Resource) string {
 	if ref := strings.TrimSpace(resource.Docker.ContainerID); ref != "" {
 		return ref
 	}
-	return strings.TrimSpace(resource.Name)
+	return ""
 }
 
-func (e dockerContainerActionExecutor) verifyContainerState(ctx context.Context, agentID, actionID, runtime, containerRef, operation string) *unified.ActionVerificationResult {
-	expectRunning := operation == "start" || operation == "restart"
-	command := fmt.Sprintf("%s inspect -f '{{.State.Status}} {{.State.Running}}' %s", runtime, shellQuote(containerRef))
-
-	var lastOutput string
-	for attempt := 0; attempt < 3; attempt++ {
-		if attempt > 0 {
-			timer := time.NewTimer(500 * time.Millisecond)
-			select {
-			case <-ctx.Done():
-				timer.Stop()
-				return &unified.ActionVerificationResult{Ran: false}
-			case <-timer.C:
-			}
-		}
-
-		result, err := e.agents.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
-			RequestID:  actionID + "-verify",
-			Command:    command,
-			ApprovalID: actionID,
-			TargetType: "agent",
-			Timeout:    30,
-			Trusted:    true,
-		})
-		if err != nil {
-			return &unified.ActionVerificationResult{Ran: false}
-		}
-		lastOutput = redactActionOutput(commandOutput(result))
-		status, running := parseDockerInspectState(lastOutput)
-		if result.ExitCode == 0 && status != "" && running == expectRunning {
-			return &unified.ActionVerificationResult{
-				Ran:     true,
-				Command: command,
-				Output:  lastOutput,
-				Success: true,
-				RanAt:   time.Now().UTC(),
-			}
-		}
-	}
-
-	return &unified.ActionVerificationResult{
-		Ran:     true,
-		Command: command,
-		Output:  lastOutput,
-		Success: false,
-		RanAt:   time.Now().UTC(),
-		Note:    fmt.Sprintf("expected running=%t", expectRunning),
+func dockerAgentLifecycleOperation(operation string) (string, error) {
+	switch strings.TrimSpace(operation) {
+	case "start", agentexec.DockerContainerOperationStart:
+		return agentexec.DockerContainerOperationStart, nil
+	case "stop", agentexec.DockerContainerOperationStop:
+		return agentexec.DockerContainerOperationStop, nil
+	case "restart", agentexec.DockerContainerOperationRestart:
+		return agentexec.DockerContainerOperationRestart, nil
+	default:
+		return "", fmt.Errorf("unsupported docker container lifecycle capability %q", operation)
 	}
 }
 
-func parseDockerInspectState(output string) (string, bool) {
-	fields := strings.Fields(strings.ToLower(strings.TrimSpace(output)))
-	if len(fields) == 0 {
-		return "", false
+func dockerContainerLifecycleRequest(attemptID, actionID, operation, runtime string, resource unified.Resource) agentexec.DockerContainerLifecyclePayload {
+	startedAt := time.Time{}
+	if resource.Docker != nil && resource.Docker.StartedAt != nil {
+		startedAt = resource.Docker.StartedAt.UTC()
 	}
-	running := false
-	if len(fields) > 1 {
-		running = fields[1] == "true"
+	return agentexec.DockerContainerLifecyclePayload{
+		RequestID: attemptID, ActionID: actionID, Operation: operation, Runtime: runtime,
+		ContainerID: dockerContainerRef(resource), ExpectedState: strings.ToLower(strings.TrimSpace(resource.Docker.ContainerState)), ExpectedStartedAt: startedAt, Timeout: 120,
 	}
-	return fields[0], running
 }
 
 func isDockerContainerLifecycleOperation(operation string) bool {

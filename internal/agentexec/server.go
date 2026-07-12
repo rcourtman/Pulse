@@ -61,24 +61,25 @@ var hostStorageCleanupFingerprintPattern = regexp.MustCompile(`^sha256:[a-f0-9]{
 
 // Server manages WebSocket connections from agents
 type Server struct {
-	mu                           sync.RWMutex
-	agents                       map[string]*agentConn                           // agentID -> connection
-	pendingReqs                  map[string]chan CommandResultPayload            // scoped request key -> response channel
-	pendingHostStorageCleanups   map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
-	pendingHostUpdates           map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
-	pendingHostOperations        map[string]pendingHostOperation                 // scoped request key -> exact typed APT operation/query identity
-	pendingOperationQueries      map[string]pendingOperationQuery
-	deploySubs                   map[string]chan DeployProgressPayload // deploySubKey(agentID, jobID) -> progress subscriber
-	validateToken                func(token string, agentID string, hostname string) bool
-	commandPolicy                *CommandPolicy
-	ipConnCounts                 map[string]int
-	maxConnsPerIP                int
-	shutdown                     chan struct{}
-	shutdownOnce                 sync.Once
-	pingInterval                 time.Duration
-	commandAuthorizationVerifier func(CommandAuthorizationRequest) error
-	newCommandApprovalGrant      func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error)
-	now                          func() time.Time
+	mu                               sync.RWMutex
+	agents                           map[string]*agentConn                           // agentID -> connection
+	pendingReqs                      map[string]chan CommandResultPayload            // scoped request key -> response channel
+	pendingHostStorageCleanups       map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
+	pendingHostUpdates               map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
+	pendingDockerContainerLifecycles map[string]chan DockerContainerLifecycleResultPayload
+	pendingHostOperations            map[string]pendingHostOperation // scoped request key -> exact typed APT operation/query identity
+	pendingOperationQueries          map[string]pendingOperationQuery
+	deploySubs                       map[string]chan DeployProgressPayload // deploySubKey(agentID, jobID) -> progress subscriber
+	validateToken                    func(token string, agentID string, hostname string) bool
+	commandPolicy                    *CommandPolicy
+	ipConnCounts                     map[string]int
+	maxConnsPerIP                    int
+	shutdown                         chan struct{}
+	shutdownOnce                     sync.Once
+	pingInterval                     time.Duration
+	commandAuthorizationVerifier     func(CommandAuthorizationRequest) error
+	newCommandApprovalGrant          func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error)
+	now                              func() time.Time
 }
 
 // CommandAuthorizationRequest is the complete server-side approval scope
@@ -105,6 +106,8 @@ type agentConn struct {
 type pendingHostOperation struct {
 	actionID  string
 	operation string
+	identity  operationreceipt.Identity
+	subjectID string
 }
 
 type pendingOperationQuery struct {
@@ -139,21 +142,22 @@ func NewServer(validateToken func(token string, agentID string, hostname string)
 	}
 
 	return &Server{
-		agents:                     make(map[string]*agentConn),
-		pendingReqs:                make(map[string]chan CommandResultPayload),
-		pendingHostStorageCleanups: make(map[string]chan HostStorageCleanupResultPayload),
-		pendingHostUpdates:         make(map[string]chan HostUpdateResultPayload),
-		pendingHostOperations:      make(map[string]pendingHostOperation),
-		pendingOperationQueries:    make(map[string]pendingOperationQuery),
-		deploySubs:                 make(map[string]chan DeployProgressPayload),
-		validateToken:              validateToken,
-		commandPolicy:              DefaultPolicy(),
-		ipConnCounts:               make(map[string]int),
-		maxConnsPerIP:              defaultMaxWebSocketConnectionsPerIP,
-		shutdown:                   make(chan struct{}),
-		pingInterval:               defaultPingInterval,
-		newCommandApprovalGrant:    NewCommandApprovalGrant,
-		now:                        time.Now,
+		agents:                           make(map[string]*agentConn),
+		pendingReqs:                      make(map[string]chan CommandResultPayload),
+		pendingHostStorageCleanups:       make(map[string]chan HostStorageCleanupResultPayload),
+		pendingHostUpdates:               make(map[string]chan HostUpdateResultPayload),
+		pendingDockerContainerLifecycles: make(map[string]chan DockerContainerLifecycleResultPayload),
+		pendingHostOperations:            make(map[string]pendingHostOperation),
+		pendingOperationQueries:          make(map[string]pendingOperationQuery),
+		deploySubs:                       make(map[string]chan DeployProgressPayload),
+		validateToken:                    validateToken,
+		commandPolicy:                    DefaultPolicy(),
+		ipConnCounts:                     make(map[string]int),
+		maxConnsPerIP:                    defaultMaxWebSocketConnectionsPerIP,
+		shutdown:                         make(chan struct{}),
+		pingInterval:                     defaultPingInterval,
+		newCommandApprovalGrant:          NewCommandApprovalGrant,
+		now:                              time.Now,
 	}
 }
 
@@ -199,6 +203,30 @@ func (s *Server) matchesPendingHostOperation(agentID, requestID, actionID, opera
 	expected, ok := s.pendingHostOperations[key]
 	s.mu.RUnlock()
 	return ok && expected.actionID == strings.TrimSpace(actionID) && expected.operation == strings.TrimSpace(operation)
+}
+
+func (s *Server) claimPendingDockerOperation(identity operationreceipt.Identity, containerID string) (string, error) {
+	identity, err := operationreceipt.NormalizeIdentity(identity)
+	if err != nil {
+		return "", err
+	}
+	key := pendingRequestKey(identity.AgentID, identity.AttemptID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.pendingHostOperations[key]; exists {
+		return "", fmt.Errorf("typed operation request %q is already pending", identity.AttemptID)
+	}
+	s.pendingHostOperations[key] = pendingHostOperation{actionID: identity.ActionID, operation: identity.OperationKind, identity: identity, subjectID: strings.ToLower(strings.TrimSpace(containerID))}
+	return key, nil
+}
+
+func (s *Server) matchesPendingDockerOperation(agentID string, result DockerContainerLifecycleResultPayload) bool {
+	key := pendingRequestKey(agentID, result.RequestID)
+	s.mu.RLock()
+	expected, ok := s.pendingHostOperations[key]
+	s.mu.RUnlock()
+	actual := operationreceipt.Identity{AttemptID: result.RequestID, ActionID: result.ActionID, OperationKind: result.Operation, OperationVersion: result.OperationVersion, RequestDigest: result.RequestDigest, AgentID: strings.TrimSpace(agentID)}
+	return ok && expected.identity == actual && expected.subjectID == strings.ToLower(strings.TrimSpace(result.ContainerID))
 }
 
 func (s *Server) releasePendingHostOperation(key string) {
@@ -936,6 +964,27 @@ func (s *Server) readLoop(ac *agentConn) {
 				}
 			}
 
+		case MsgTypeDockerContainerLifecycleResult:
+			result, decodeErr := DecodeDockerContainerLifecycleResultPayload(msg.Payload)
+			if decodeErr != nil {
+				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid docker container lifecycle result")
+				continue
+			}
+			if !s.matchesPendingDockerOperation(ac.agent.AgentID, result) {
+				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated docker lifecycle result")
+				continue
+			}
+			s.mu.RLock()
+			ch, ok := s.pendingDockerContainerLifecycles[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
+			s.mu.RUnlock()
+			if ok {
+				select {
+				case ch <- result:
+				default:
+					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Docker lifecycle result channel full, dropping")
+				}
+			}
+
 		case MsgTypeOperationQueryResult:
 			result, decodeErr := operationreceipt.DecodeQueryResult(msg.Payload)
 			if decodeErr != nil {
@@ -1434,6 +1483,86 @@ func (s *Server) ExecuteHostStorageCleanup(ctx context.Context, agentID string, 
 		return nil, ctx.Err()
 	case <-ac.done:
 		return nil, fmt.Errorf("agent %s disconnected before host storage cleanup receipt", agentID)
+	case <-s.shutdown:
+		return nil, errServerShuttingDown
+	}
+}
+
+// ExecuteDockerContainerLifecycle dispatches one closed typed container
+// operation. The Unified Agent owns the fixed runtime command catalog and
+// performs preflight plus read-after-write inside this single dispatch.
+func (s *Server) ExecuteDockerContainerLifecycle(ctx context.Context, agentID string, req DockerContainerLifecyclePayload) (*DockerContainerLifecycleResultPayload, error) {
+	if s == nil {
+		return nil, fmt.Errorf("agent execution server is unavailable")
+	}
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, fmt.Errorf("agent id is required")
+	}
+	if strings.TrimSpace(req.RequestID) == "" {
+		req.RequestID = uuid.NewString()
+	}
+	if err := BindDockerContainerLifecyclePayload(&req); err != nil {
+		return nil, err
+	}
+	if err := ValidateDockerContainerLifecyclePayload(&req); err != nil {
+		return nil, err
+	}
+	s.mu.RLock()
+	ac, ok := s.agents[agentID]
+	s.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("agent %s not connected", agentID)
+	}
+	if ac.agent.OperationReceiptVersion != operationreceipt.ProtocolVersion {
+		return nil, fmt.Errorf("agent does not support durable operation receipts")
+	}
+
+	respCh := make(chan DockerContainerLifecycleResultPayload, 1)
+	reqKey := pendingRequestKey(agentID, req.RequestID)
+	identity := DockerContainerLifecycleOperationIdentity(agentID, req)
+	hostOperationKey, err := s.claimPendingDockerOperation(identity, req.ContainerID)
+	if err != nil {
+		return nil, err
+	}
+	defer s.releasePendingHostOperation(hostOperationKey)
+	s.mu.Lock()
+	if _, exists := s.pendingDockerContainerLifecycles[reqKey]; exists {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("docker container lifecycle request %q is already pending", req.RequestID)
+	}
+	s.pendingDockerContainerLifecycles[reqKey] = respCh
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.pendingDockerContainerLifecycles, reqKey)
+		s.mu.Unlock()
+	}()
+
+	msg, err := NewMessage(MsgTypeDockerContainerLifecycle, req.RequestID, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode docker container lifecycle request: %w", err)
+	}
+	ac.writeMu.Lock()
+	err = s.sendMessage(ac.conn, msg)
+	ac.writeMu.Unlock()
+	if err != nil {
+		return nil, fmt.Errorf("failed to send docker container lifecycle request: %w", err)
+	}
+	timer := time.NewTimer(time.Duration(req.Timeout) * time.Second)
+	defer timer.Stop()
+	select {
+	case result := <-respCh:
+		if err := ValidateDockerContainerLifecycleResultForRequest(req, result); err != nil {
+			return nil, fmt.Errorf("docker container lifecycle result validation failed: %w", err)
+		}
+		return &result, nil
+	case <-timer.C:
+		return nil, fmt.Errorf("docker container lifecycle timed out after %s", time.Duration(req.Timeout)*time.Second)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-ac.done:
+		return nil, fmt.Errorf("agent %s disconnected before docker container lifecycle receipt", agentID)
 	case <-s.shutdown:
 		return nil, errServerShuttingDown
 	}

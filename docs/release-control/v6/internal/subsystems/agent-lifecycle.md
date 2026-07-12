@@ -1078,6 +1078,16 @@ the intentionally sparse public response.
    Patrol run across agentic turns.
 2. Add or change update continuity and persisted-version handoff through `internal/agentupdate/`.
 3. Add or change runtime-side Unified Agent startup, first-report assembly, and enroll/runtime continuity through `internal/hostagent/`.
+   Local real-lab journey harnesses under `scripts/intelligence_lab/` belong to
+   this lifecycle boundary. They must be explicitly authorized, use ignored
+   artifacts, bind every mutation to an exact disposable run label, preserve
+   pre-existing resources, redact bounded evidence, prove idempotent cleanup,
+   and distinguish lab compensation from product rollback.
+   The artifact-backed current-build browser contract for the Docker restart
+   journey is `tests/integration/tests/84-docker-restart-real-lab-artifact.spec.ts`.
+   It may render only the strict redacted projection produced by the matching
+   managed-runtime run and must reject missing or mismatched proposal, action,
+   attempt, receipt, finding, and evidence identities.
    Proxmox host-agent setup must treat local `proxmox-registered` markers as a cache, not authority: before skipping token setup or node repair, `internal/hostagent/proxmox_setup.go` must revalidate the current type and candidate hosts against Pulse through the canonical auto-register contract.
    Runtime-side PVE token setup must also keep the same permission shape as the
    generated setup script: Pulse-managed PVE monitor tokens are

@@ -10,9 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
@@ -21,8 +23,43 @@ type fakeDockerActionAgentCommander struct {
 	results     []*agentexec.CommandResultPayload
 	calls       []agentexec.ExecuteCommandPayload
 	callAgents  []string
+	typedCalls  []agentexec.DockerContainerLifecyclePayload
 	connected   map[string]bool
 	agentByHost map[string]string
+	queryResult operationreceipt.QueryResult
+	queries     []operationreceipt.Identity
+}
+
+func dockerActionDispatchContext(t *testing.T, executor dockerContainerActionExecutor, record unified.ActionAuditRecord) context.Context {
+	t.Helper()
+	attempt, err := unified.NewActionDispatchAttempt(record.ID, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt, err = executor.BindActionDispatch(context.Background(), record, attempt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return actionlifecycle.ContextWithCommittedDispatchAttempt(context.Background(), attempt)
+}
+
+func (f *fakeDockerActionAgentCommander) AgentOperationReceiptVersion(string) int { return 1 }
+
+func (f *fakeDockerActionAgentCommander) QueryAgentOperation(_ context.Context, _ string, identity operationreceipt.Identity) (operationreceipt.QueryResult, error) {
+	f.queries = append(f.queries, identity)
+	return f.queryResult, nil
+}
+
+func (f *fakeDockerActionAgentCommander) ExecuteDockerContainerLifecycle(_ context.Context, agentID string, req agentexec.DockerContainerLifecyclePayload) (*agentexec.DockerContainerLifecycleResultPayload, error) {
+	f.callAgents = append(f.callAgents, agentID)
+	f.typedCalls = append(f.typedCalls, req)
+	now := time.Now().UTC()
+	return &agentexec.DockerContainerLifecycleResultPayload{
+		RequestID: req.RequestID, ActionID: req.ActionID, Operation: req.Operation, OperationVersion: req.OperationVersion, RequestDigest: req.RequestDigest, ContainerID: req.ContainerID,
+		ExecutionPhase: agentexec.DockerContainerPhaseComplete, MutationStarted: true, MutationCompleted: true, ReadbackRan: true,
+		Before: agentexec.DockerContainerLifecycleSnapshot{ContainerID: req.ContainerID, State: req.ExpectedState, Running: true, StartedAt: req.ExpectedStartedAt, ObservedAt: now.Add(-time.Second)},
+		After:  agentexec.DockerContainerLifecycleSnapshot{ContainerID: req.ContainerID, State: "running", Running: true, StartedAt: now, ObservedAt: now},
+	}, nil
 }
 
 func (f *fakeDockerActionAgentCommander) ExecuteCommand(_ context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
@@ -77,36 +114,28 @@ func TestDockerContainerActionExecutorDispatchesPodmanRestartAndVerification(t *
 			dockerContainerActionResource("app-container:api", "podman", "running", now),
 		},
 	})
-	agents := &fakeDockerActionAgentCommander{results: []*agentexec.CommandResultPayload{
-		{RequestID: "act_container", Success: true, ExitCode: 0, Stdout: "api restarted"},
-		{RequestID: "act_container-verify", Success: true, ExitCode: 0, Stdout: "running true"},
-	}}
-	executor := newDockerContainerActionExecutor(h, agents)
+	agents := &fakeDockerActionAgentCommander{}
+	executor := newDockerContainerActionExecutor(h, agents).(dockerContainerActionExecutor)
+	record := dockerContainerActionRecord("act_container", "app-container:api", "restart")
 
-	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_container"), dockerContainerActionRecord("act_container", "app-container:api", "restart"))
+	result, err := executor.ExecuteAction(dockerActionDispatchContext(t, executor, record), record)
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
 	if result == nil || !result.Success || result.Verification == nil || !result.Verification.Success {
 		t.Fatalf("result = %#v, want successful execution and verification", result)
 	}
-	if len(agents.calls) != 2 {
-		t.Fatalf("agent calls = %d, want dispatch and verification", len(agents.calls))
+	if len(agents.typedCalls) != 1 || len(agents.calls) != 0 {
+		t.Fatalf("typed/raw agent calls = %d/%d, want one typed dispatch and zero raw commands", len(agents.typedCalls), len(agents.calls))
 	}
-	if got := agents.calls[0].Command; got != "podman restart 'container-123'" {
-		t.Fatalf("dispatch command = %q", got)
+	if got := agents.typedCalls[0].Operation; got != agentexec.DockerContainerOperationRestart {
+		t.Fatalf("typed operation = %q", got)
 	}
-	if agents.calls[0].ApprovalID != "act_container" || !agents.calls[0].Trusted {
-		t.Fatalf("dispatch approval/trust = %q/%v", agents.calls[0].ApprovalID, agents.calls[0].Trusted)
+	if agents.typedCalls[0].Runtime != "podman" {
+		t.Fatalf("runtime = %q", agents.typedCalls[0].Runtime)
 	}
-	if agents.calls[0].RequestID != "act_container.dispatch.1" {
-		t.Fatalf("dispatch request identity = %q", agents.calls[0].RequestID)
-	}
-	if got := agents.calls[1].Command; got != "podman inspect -f '{{.State.Status}} {{.State.Running}}' 'container-123'" {
-		t.Fatalf("verification command = %q", got)
-	}
-	if !agents.calls[1].Trusted {
-		t.Fatalf("verification command should be trusted")
+	if agents.typedCalls[0].RequestID != "act_container.dispatch.1" {
+		t.Fatalf("dispatch request identity = %q", agents.typedCalls[0].RequestID)
 	}
 }
 
@@ -121,10 +150,6 @@ func TestDockerContainerActionExecutorResolvesCommandAgentByDockerHostname(t *te
 		resources: []unified.Resource{resource},
 	})
 	agents := &fakeDockerActionAgentCommander{
-		results: []*agentexec.CommandResultPayload{
-			{RequestID: "act_container", Success: true, ExitCode: 0, Stdout: "api restarted"},
-			{RequestID: "act_container-verify", Success: true, ExitCode: 0, Stdout: "running true"},
-		},
 		connected: map[string]bool{
 			"docker-source-1": false,
 			"command-agent-1": true,
@@ -144,15 +169,16 @@ func TestDockerContainerActionExecutorResolvesCommandAgentByDockerHostname(t *te
 		t.Fatalf("CheckActionAvailable readiness = %#v, want available through hostname-resolved command agent", readiness)
 	}
 
-	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_container"), dockerContainerActionRecord("act_container", "app-container:api", "restart"))
+	record := dockerContainerActionRecord("act_container", "app-container:api", "restart")
+	result, err := executor.ExecuteAction(dockerActionDispatchContext(t, executor, record), record)
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
 	if result == nil || !result.Success {
 		t.Fatalf("result = %#v, want successful execution", result)
 	}
-	if len(agents.callAgents) != 2 {
-		t.Fatalf("call agents = %#v, want dispatch and verification through hostname-resolved agent", agents.callAgents)
+	if len(agents.callAgents) != 1 {
+		t.Fatalf("call agents = %#v, want one typed dispatch through hostname-resolved agent", agents.callAgents)
 	}
 	for _, agentID := range agents.callAgents {
 		if agentID != "command-agent-1" {
@@ -205,6 +231,53 @@ func TestDockerContainerActionExecutorAvailabilityRequiresConnectedAgent(t *test
 	}
 	if len(agents.calls) != 0 {
 		t.Fatalf("agent calls = %#v, want none", agents.calls)
+	}
+}
+
+func TestDockerContainerActionExecutorStaleFixtureIsTripleZero(t *testing.T) {
+	now := time.Now().UTC()
+	resource := dockerContainerActionResource("app-container:api", "docker", "running", now)
+	resource.SourceStatus[unified.SourceDocker] = unified.SourceStatus{Status: "stale", LastSeen: now.Add(-time.Hour)}
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{resource}})
+	agents := &fakeDockerActionAgentCommander{}
+	executor := newDockerContainerActionExecutor(h, agents).(dockerContainerActionExecutor)
+	readiness := executor.CheckActionAvailable(context.Background(), unified.ActionRequest{ResourceID: resource.ID, CapabilityName: "restart"}, resource)
+	if readiness.Available || readiness.ReasonCode != "stale_inventory" || len(agents.typedCalls) != 0 || len(agents.calls) != 0 {
+		t.Fatalf("stale readiness=%#v typed=%d raw=%d", readiness, len(agents.typedCalls), len(agents.calls))
+	}
+}
+
+func TestDockerContainerActionExecutorCallbackLossReconcilesReceiptWithoutRedispatch(t *testing.T) {
+	now := time.Now().UTC()
+	resource := dockerContainerActionResource("app-container:api", "docker", "running", now)
+	startedAt := now.Add(-time.Minute)
+	resource.Docker.StartedAt = &startedAt
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{resource}})
+	agents := &fakeDockerActionAgentCommander{}
+	executor := newDockerContainerActionExecutor(h, agents).(dockerContainerActionExecutor)
+	record := dockerContainerActionRecord("act_container", resource.ID, "restart")
+	attempt, err := unified.NewActionDispatchAttempt(record.ID, now.Add(-5*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt, err = executor.BindActionDispatch(context.Background(), record, attempt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facts := agentexec.DockerContainerLifecycleResultPayload{
+		RequestID: attempt.ID, ActionID: record.ID, Operation: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, ContainerID: resource.Docker.ContainerID,
+		ExecutionPhase: agentexec.DockerContainerPhaseComplete, MutationStarted: true, MutationCompleted: true, ReadbackRan: true,
+		Before: agentexec.DockerContainerLifecycleSnapshot{ContainerID: resource.Docker.ContainerID, State: "running", Running: true, StartedAt: startedAt, ObservedAt: now.Add(-2 * time.Second)},
+		After:  agentexec.DockerContainerLifecycleSnapshot{ContainerID: resource.Docker.ContainerID, State: "running", Running: true, StartedAt: now.Add(-time.Second), ObservedAt: now.Add(-time.Second)},
+	}
+	raw, _ := json.Marshal(facts)
+	identity := operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}
+	agents.queryResult = operationreceipt.QueryResult{Version: operationreceipt.ProtocolVersion, Status: operationreceipt.QueryFoundTerminal, Record: &operationreceipt.Record{Identity: identity, State: operationreceipt.StateTerminal, AcceptedAt: now.Add(-4 * time.Second), StartedAt: now.Add(-3 * time.Second), TerminalAt: now, ResultKind: agentexec.DockerContainerLifecycleReceiptKind, ResultVersion: agentexec.DockerContainerLifecycleReceiptVersion, Result: raw}}
+	result, _, found, err := executor.ReconcileActionDispatch(context.Background(), record, attempt)
+	if err != nil || !found || result == nil || result.ActionResultV2.Execution.Status != unified.ActionExecutionSucceeded || len(agents.typedCalls) != 0 || len(agents.queries) != 1 {
+		t.Fatalf("reconcile result=%#v found=%v err=%v typed=%d queries=%d", result, found, err, len(agents.typedCalls), len(agents.queries))
 	}
 }
 
@@ -408,7 +481,7 @@ func dockerContainerActionResource(id, runtime, state string, now time.Time) uni
 		},
 		Docker: &unified.DockerData{
 			AgentID:        "agent-1",
-			ContainerID:    "container-123",
+			ContainerID:    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 			ContainerState: state,
 			Runtime:        runtime,
 		},

@@ -4417,6 +4417,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/hostagent/commands_deploy_test.go",
                 "internal/hostagent/commands_host_update_test.go",
                 "internal/hostagent/commands_storage_cleanup_test.go",
+                "internal/hostagent/docker_lifecycle_test.go",
                 "internal/hostagent/package_updates_test.go",
                 "internal/hostagent/send_report_test.go",
                 "internal/hostagent/storage_cleanup_test.go",
