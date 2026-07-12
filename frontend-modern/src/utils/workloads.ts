@@ -209,7 +209,8 @@ export const buildCanonicalNodeScopedWorkloadId = ({
 export const getCanonicalWorkloadIdForResource = (
   resource: Pick<Resource, 'id' | 'type' | 'clusterId' | 'proxmox'>,
 ): string => {
-  if (resource.type === 'vm' || resource.type === 'system-container') {
+  const workloadType = resolveWorkloadTypeFromString(resource.type);
+  if (workloadType === 'vm' || workloadType === 'system-container') {
     const canonicalId = buildCanonicalNodeScopedWorkloadId({
       instance: resource.proxmox?.instance || resource.clusterId,
       node: resource.proxmox?.node || resource.proxmox?.nodeName,

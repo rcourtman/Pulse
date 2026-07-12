@@ -216,13 +216,15 @@ describe('toDiscoveryConfig', () => {
       },
     };
 
+    // Guest metadata keys off the canonical workload id (the resource id for
+    // non-PVE guests), not the vSphere managed-object id.
     expect(toDiscoveryConfig(resource)).toEqual({
       resourceType: 'vm',
       agentId: 'guest-agent-01',
       resourceId: 'vm-201',
       hostname: 'warehouse-api-01.internal',
       metadataKind: 'guest',
-      metadataId: 'vm-201',
+      metadataId: 'vm-270aaf3d37cc7501',
       targetLabel: 'guest',
     });
   });
