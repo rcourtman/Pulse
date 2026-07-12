@@ -6,19 +6,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 type fakeHostStorageCleanupAgent struct {
-	connected bool
-	result    *agentexec.HostStorageCleanupResultPayload
-	err       error
-	agentID   string
-	requests  []agentexec.HostStorageCleanupPayload
+	connected         bool
+	result            *agentexec.HostStorageCleanupResultPayload
+	err               error
+	agentID           string
+	requests          []agentexec.HostStorageCleanupPayload
+	receiptVersion    int
+	receiptVersionSet bool
 }
 
 var testHostStorageCleanupFingerprint = "sha256:" + strings.Repeat("c", 64)
@@ -31,6 +35,29 @@ func (f *fakeHostStorageCleanupAgent) ExecuteHostStorageCleanup(_ context.Contex
 }
 
 func (f *fakeHostStorageCleanupAgent) IsAgentConnected(string) bool { return f.connected }
+func (f *fakeHostStorageCleanupAgent) AgentOperationReceiptVersion(string) int {
+	if f.receiptVersionSet {
+		return f.receiptVersion
+	}
+	return operationreceipt.ProtocolVersion
+}
+
+func hostCleanupDispatchTestContext(t *testing.T, actionID string) context.Context {
+	t.Helper()
+	attempt, err := unified.NewActionDispatchAttempt(actionID, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := agentexec.HostStorageCleanupPayload{RequestID: attempt.ID, ActionID: actionID, Operation: agentexec.HostStorageCleanupOperationPackageCache, ExpectedFingerprint: testHostStorageCleanupFingerprint}
+	if err := agentexec.BindHostStorageCleanupPayload(&req); err != nil {
+		t.Fatal(err)
+	}
+	attempt, err = unified.BindActionDispatchAttempt(attempt, unified.ActionDispatchBinding{OperationKind: req.Operation, OperationVersion: req.OperationVersion, RequestDigest: req.RequestDigest, AgentID: "agent-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return actionlifecycle.ContextWithCommittedDispatchAttempt(context.Background(), attempt)
+}
 
 func TestHostStorageCleanupActionExecutorDispatchesFingerprintBoundOperation(t *testing.T) {
 	now := time.Now().UTC()
@@ -38,7 +65,7 @@ func TestHostStorageCleanupActionExecutorDispatchesFingerprintBoundOperation(t *
 	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{hostStorageCleanupActionResource(now)}})
 	agents := verifiedHostStorageCleanupAgent()
 
-	result, err := newHostStorageCleanupActionExecutor(h, agents).ExecuteAction(actionDispatchTestContext(t, "action-cleanup"), hostStorageCleanupActionRecord("action-cleanup"))
+	result, err := newHostStorageCleanupActionExecutor(h, agents).ExecuteAction(hostCleanupDispatchTestContext(t, "action-cleanup"), hostStorageCleanupActionRecord("action-cleanup"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
@@ -68,7 +95,7 @@ func TestHostStorageCleanupActionExecutorDoesNotExposeAgentErrorText(t *testing.
 		Error:  "private repository package path and token",
 	}}
 
-	result, err := newHostStorageCleanupActionExecutor(h, agents).ExecuteAction(actionDispatchTestContext(t, "action-cleanup"), hostStorageCleanupActionRecord("action-cleanup"))
+	result, err := newHostStorageCleanupActionExecutor(h, agents).ExecuteAction(hostCleanupDispatchTestContext(t, "action-cleanup"), hostStorageCleanupActionRecord("action-cleanup"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
@@ -131,6 +158,8 @@ func TestHostStorageCleanupAvailabilityFailsClosed(t *testing.T) {
 		reasonCode string
 	}{
 		{name: "commands disabled", mutate: func(r *unified.Resource) { r.Agent.CommandsEnabled = false }, connected: true, reasonCode: "host_commands_disabled"},
+		{name: "missing receipt protocol", mutate: func(r *unified.Resource) { r.Agent.OperationReceiptVersion = 0 }, connected: true, reasonCode: "operation_receipt_unsupported"},
+		{name: "future receipt protocol", mutate: func(r *unified.Resource) { r.Agent.OperationReceiptVersion = operationreceipt.ProtocolVersion + 1 }, connected: true, reasonCode: "operation_receipt_unsupported"},
 		{name: "stale inventory", mutate: func(r *unified.Resource) { r.Agent.StorageCleanup.CheckedAt = now.Add(-time.Hour) }, connected: true, reasonCode: "stale_cleanup_inventory"},
 		{name: "inventory error", mutate: func(r *unified.Resource) { r.Agent.StorageCleanup.Error = "inspection failed" }, connected: true, reasonCode: "cleanup_inventory_error"},
 		{name: "invalid fingerprint", mutate: func(r *unified.Resource) { r.Agent.StorageCleanup.Fingerprint = "sha256:bad" }, connected: true, reasonCode: "invalid_cleanup_inventory"},
@@ -156,6 +185,18 @@ func TestHostStorageCleanupAvailabilityFailsClosed(t *testing.T) {
 	}
 }
 
+func TestHostCleanupSelfReportedReceiptSupportCannotBypassLiveServerVersion(t *testing.T) {
+	now := time.Now().UTC()
+	resource := hostStorageCleanupActionResource(now)
+	for _, version := range []int{0, operationreceipt.ProtocolVersion + 1} {
+		agents := &fakeHostStorageCleanupAgent{connected: true, receiptVersion: version, receiptVersionSet: true}
+		readiness := hostStorageCleanupActionExecutor{agents: agents, now: func() time.Time { return now }}.CheckActionAvailable(context.Background(), unified.ActionRequest{CapabilityName: hostStorageCleanupCapability}, resource)
+		if readiness.Available || readiness.ReasonCode != "operation_receipt_unsupported" {
+			t.Fatalf("version=%d readiness=%#v", version, readiness)
+		}
+	}
+}
+
 func verifiedHostStorageCleanupAgent() *fakeHostStorageCleanupAgent {
 	now := time.Now().UTC()
 	return &fakeHostStorageCleanupAgent{connected: true, result: &agentexec.HostStorageCleanupResultPayload{
@@ -173,7 +214,7 @@ func hostStorageCleanupActionResource(now time.Time) unified.Resource {
 		Status: unified.StatusOnline, LastSeen: now, UpdatedAt: now,
 		Sources: []unified.DataSource{unified.SourceAgent}, SourceStatus: map[unified.DataSource]unified.SourceStatus{unified.SourceAgent: {Status: "online", LastSeen: now}},
 		Agent: &unified.AgentData{
-			AgentID: "agent-1", Platform: "linux", CommandsEnabled: true,
+			AgentID: "agent-1", Platform: "linux", CommandsEnabled: true, OperationReceiptVersion: operationreceipt.ProtocolVersion,
 			Disks:          []unified.DiskInfo{{Mountpoint: "/", Usage: 95}},
 			StorageCleanup: &unified.AgentStorageCleanupMeta{Supported: true, Provider: "apt-package-cache", Fingerprint: testHostStorageCleanupFingerprint, ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: now, ObservedAt: now},
 		},

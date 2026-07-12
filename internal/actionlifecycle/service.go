@@ -34,6 +34,10 @@ type DispatchReconciler interface {
 	ReconcileActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (result *unified.ExecutionResult, receipt unified.ActionDispatchReceipt, found bool, err error)
 }
 
+type DispatchBinder interface {
+	BindActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (unified.ActionDispatchAttempt, error)
+}
+
 // AvailabilityChecker lets an executor contribute live readiness checks
 // before Pulse advertises or persists an executable action plan.
 type AvailabilityChecker interface {
@@ -920,6 +924,12 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID string, actor uni
 	if err != nil {
 		return unified.ActionAuditRecord{}, err
 	}
+	if binder, ok := s.Executor.(DispatchBinder); ok {
+		attempt, err = binder.BindActionDispatch(ctx, started, attempt)
+		if err != nil {
+			return unified.ActionAuditRecord{}, err
+		}
+	}
 	if err := store.RecordActionExecutionAdmission(started, startEvent, attempt); err != nil {
 		if errors.Is(err, unified.ErrActionAlreadyExecuting) || errors.Is(err, unified.ErrActionExecutionFinal) {
 			current, found, queryErr := store.GetActionAudit(actionID)
@@ -1032,6 +1042,12 @@ func (s *Service) beginPolicyExecution(ctx context.Context, orgID, actionID, act
 	if err != nil {
 		return unified.ActionAuditRecord{}, store, false, err
 	}
+	if binder, ok := s.Executor.(DispatchBinder); ok {
+		attempt, err = binder.BindActionDispatch(ctx, started, attempt)
+		if err != nil {
+			return unified.ActionAuditRecord{}, store, false, err
+		}
+	}
 	if err := store.RecordActionPolicyExecutionAdmission(started, approvedEvent, startEvent, attempt); err != nil {
 		if errors.Is(err, unified.ErrActionAlreadyExecuting) || errors.Is(err, unified.ErrActionExecutionFinal) {
 			current, ok, queryErr := store.GetActionAudit(actionID)
@@ -1110,6 +1126,9 @@ func (s *Service) dispatchCommitted(ctx context.Context, orgID string, store Sto
 }
 
 func (s *Service) reconcileCommitted(ctx context.Context, orgID string, store Store, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt, actor string) (unified.ActionAuditRecord, error) {
+	if _, bindingOwned := s.Executor.(DispatchBinder); bindingOwned && !attempt.HasOperationBinding() {
+		return record, nil
+	}
 	reconciler, ok := s.Executor.(DispatchReconciler)
 	if !ok {
 		return record, nil

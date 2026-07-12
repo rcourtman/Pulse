@@ -9,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -22,6 +23,18 @@ var hostStorageCleanupFingerprintPattern = regexp.MustCompile(`^sha256:[a-f0-9]{
 type hostStorageCleanupAgentCommander interface {
 	ExecuteHostStorageCleanup(ctx context.Context, agentID string, req agentexec.HostStorageCleanupPayload) (*agentexec.HostStorageCleanupResultPayload, error)
 	IsAgentConnected(agentID string) bool
+}
+
+func (e hostStorageCleanupActionExecutor) BindActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (unified.ActionDispatchAttempt, error) {
+	resource, err := e.currentResource(ctx, record.Request.ResourceID)
+	if err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	req := agentexec.HostStorageCleanupPayload{RequestID: attempt.ID, ActionID: record.ID, Operation: agentexec.HostStorageCleanupOperationPackageCache, ExpectedFingerprint: resource.Agent.StorageCleanup.Fingerprint}
+	if err := agentexec.BindHostStorageCleanupPayload(&req); err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	return unified.BindActionDispatchAttempt(attempt, unified.ActionDispatchBinding{OperationKind: req.Operation, OperationVersion: req.OperationVersion, RequestDigest: req.RequestDigest, AgentID: resource.Agent.AgentID})
 }
 
 type hostStorageCleanupActionExecutor struct {
@@ -76,13 +89,21 @@ func (e hostStorageCleanupActionExecutor) ExecuteAction(ctx context.Context, rec
 	if err != nil {
 		return nil, err
 	}
-	result, err := e.agents.ExecuteHostStorageCleanup(ctx, strings.TrimSpace(resource.Agent.AgentID), agentexec.HostStorageCleanupPayload{
+	agentID := strings.TrimSpace(resource.Agent.AgentID)
+	req := agentexec.HostStorageCleanupPayload{
 		RequestID:           attempt.ID,
 		ActionID:            record.ID,
 		Operation:           agentexec.HostStorageCleanupOperationPackageCache,
 		ExpectedFingerprint: resource.Agent.StorageCleanup.Fingerprint,
 		Timeout:             300,
-	})
+	}
+	if err := agentexec.BindHostStorageCleanupPayload(&req); err != nil {
+		return nil, err
+	}
+	if agentexec.HostStorageCleanupOperationIdentity(agentID, req) != (operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}) {
+		return nil, fmt.Errorf("host cleanup dispatch binding drift")
+	}
+	result, err := e.agents.ExecuteHostStorageCleanup(ctx, agentID, req)
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +114,39 @@ func (e hostStorageCleanupActionExecutor) ExecuteAction(ctx context.Context, rec
 	output := fmt.Sprintf("APT package cache: %d bytes before, %d bytes after, %d bytes reclaimed", result.Before.ReclaimableBytes, result.After.ReclaimableBytes, result.ReclaimedBytes)
 	beforeBound := result.Before.Fingerprint == resource.Agent.StorageCleanup.Fingerprint
 	return hostAPTExecutionResult(record.Request.ResourceID, resource.Agent.AgentID, agentexec.HostStorageCleanupOperationPackageCache, output, result.Success, result.MutationStarted, result.Verification, beforeBound, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())
+}
+
+func (e hostStorageCleanupActionExecutor) ReconcileActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (*unified.ExecutionResult, unified.ActionDispatchReceipt, bool, error) {
+	identity := operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}
+	querier, ok := e.agents.(operationReceiptQuerier)
+	if !ok {
+		return nil, unified.ActionDispatchReceipt{}, false, nil
+	}
+	query, err := querier.QueryAgentOperation(ctx, attempt.AgentID, identity)
+	if err != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, err
+	}
+	if query.Status != operationreceipt.QueryFoundTerminal {
+		return nil, unified.ActionDispatchReceipt{}, false, nil
+	}
+	if err := agentexec.ValidateOperationQueryResultForIdentity(query, identity, e.currentTime()); err != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, err
+	}
+	result, err := agentexec.DecodeHostStorageCleanupResultPayload(query.Record.Result)
+	if err != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, err
+	}
+	req := agentexec.HostStorageCleanupPayload{RequestID: attempt.ID, ActionID: record.ID, Operation: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, ExpectedFingerprint: result.Before.Fingerprint}
+	if err := agentexec.ValidateHostStorageCleanupResultForRequestAt(req, result, e.currentTime()); err != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, err
+	}
+	output := fmt.Sprintf("APT package cache: %d bytes before, %d bytes after, %d bytes reclaimed", result.Before.ReclaimableBytes, result.After.ReclaimableBytes, result.ReclaimedBytes)
+	execution, buildErr := hostAPTExecutionResult(record.Request.ResourceID, attempt.AgentID, attempt.OperationKind, output, result.Success, result.MutationStarted, result.Verification, true, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())
+	if buildErr != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, buildErr
+	}
+	receipt := unified.ActionDispatchReceipt{AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: e.currentTime()}
+	return execution, receipt, true, nil
 }
 
 func (e hostStorageCleanupActionExecutor) currentResource(ctx context.Context, resourceID string) (unified.Resource, error) {
@@ -124,6 +178,9 @@ func (e hostStorageCleanupActionExecutor) validateResource(resource unified.Reso
 	if !resource.Agent.CommandsEnabled {
 		return fmt.Errorf("host command operations are disabled")
 	}
+	if resource.Agent.OperationReceiptVersion != operationreceipt.ProtocolVersion {
+		return fmt.Errorf("durable operation receipt protocol is unsupported")
+	}
 	status := resource.Agent.StorageCleanup
 	if status == nil || !status.Supported || strings.TrimSpace(status.Provider) != "apt-package-cache" {
 		return fmt.Errorf("host storage cleanup provider is unsupported")
@@ -144,8 +201,12 @@ func (e hostStorageCleanupActionExecutor) validateResource(resource unified.Reso
 		return fmt.Errorf("package cache filesystem is not under storage pressure")
 	}
 	agentID := strings.TrimSpace(resource.Agent.AgentID)
+	liveCapability, supported := e.agents.(agentOperationReceiptCapability)
 	if agentID == "" || e.agents == nil || !e.agents.IsAgentConnected(agentID) {
 		return fmt.Errorf("host command agent is disconnected")
+	}
+	if !supported || liveCapability.AgentOperationReceiptVersion(agentID) != operationreceipt.ProtocolVersion {
+		return fmt.Errorf("live durable operation receipt protocol is unsupported")
 	}
 	return nil
 }
@@ -167,6 +228,8 @@ func hostStorageCleanupUnavailableReasonCode(err error) string {
 		return "unsupported_resource"
 	case strings.Contains(message, "disabled"):
 		return "host_commands_disabled"
+	case strings.Contains(message, "receipt protocol"):
+		return "operation_receipt_unsupported"
 	case strings.Contains(message, "unsupported"):
 		return "unsupported_cleanup_provider"
 	case strings.Contains(message, "inventory") && strings.Contains(message, "error"):
@@ -192,6 +255,8 @@ func hostStorageCleanupUnavailableReason(err error) string {
 		return "This resource is not an agent-managed host."
 	case "host_commands_disabled":
 		return "Typed host operations are disabled for this agent."
+	case "operation_receipt_unsupported":
+		return "This agent does not support durable typed-operation receipts."
 	case "unsupported_cleanup_provider":
 		return "This host does not expose a supported package-cache cleanup provider."
 	case "cleanup_inventory_error":

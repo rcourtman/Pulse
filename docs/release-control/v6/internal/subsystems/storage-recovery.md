@@ -116,6 +116,15 @@ payload. Raw per-core CPU evidence and normalized capacity CPU must not be used
 as backup coverage, restore readiness, storage-health, or recovery-point
 signals.
 
+Unified Agent durable-operation-receipt metadata is likewise an internal
+monitoring and agent-lifecycle boundary. The exact current protocol may be a
+fail-closed prerequisite when unified resources derive the bounded
+`clean_package_cache` APT capability, but the raw version is not a public
+resource field and is never storage truth, pressure truth, mutation authority,
+verification truth, or recovery evidence. Storage pressure and cleanup posture
+remain independently observed inputs, and the live authenticated agent-server
+readiness check remains authoritative before any action admission or dispatch.
+
 Per-member cluster endpoint connection-address overrides accepted by
 `internal/api/config_node_handlers.go` (`clusterEndpointOverrides` on the node
 update payload writing `ClusterEndpoints[n].IPOverride`) are monitoring

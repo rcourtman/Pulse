@@ -11,7 +11,60 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 )
+
+func TestSQLiteResourceStoreDoesNotPersistRawOperationReceiptProtocolOrReplayAuthority(t *testing.T) {
+	now := time.Now().UTC()
+	host := models.Host{
+		ID: "agent-receipt", Hostname: "host-receipt", Platform: "linux", Status: "online", LastSeen: now,
+		CommandsEnabled: true, OperationReceiptVersion: operationreceipt.ProtocolVersion,
+		Disks:          []models.Disk{{Mountpoint: "/", Usage: 95}},
+		PackageUpdates: &models.HostPackageUpdateStatus{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("a", 64), PendingCount: 1, CheckedAt: now, ObservedAt: now},
+		StorageCleanup: &models.HostStorageCleanupStatus{Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("b", 64), ReclaimableBytes: 512 << 20, CheckedAt: now, ObservedAt: now},
+	}
+	resource := HostIngestRecord(host).Resource
+	encoded, err := json.Marshal(resource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "operationReceiptVersion") || strings.Contains(string(encoded), "operation_receipt_version") {
+		t.Fatalf("public resource exposed raw receipt protocol: %s", encoded)
+	}
+	capabilities := map[string]bool{}
+	for _, capability := range resource.Capabilities {
+		capabilities[capability.Name] = true
+	}
+	if !capabilities["install_os_updates"] || !capabilities["clean_package_cache"] || len(capabilities) != 2 {
+		t.Fatalf("derived capabilities = %#v", capabilities)
+	}
+
+	store, err := NewSQLiteResourceStore(t.TempDir(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	rows, err := store.db.Query(`SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name, schema string
+		if err := rows.Scan(&name, &schema); err != nil {
+			t.Fatal(err)
+		}
+		lower := strings.ToLower(schema)
+		if strings.Contains(lower, "operation_receipt_version") || name == "operation_receipts" {
+			t.Fatalf("resource store acquired raw protocol or agent replay authority: table=%q schema=%q", name, schema)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func atomicLifecycleTestRecord(id string, state ActionState) ActionAuditRecord {
 	now := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)

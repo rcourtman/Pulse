@@ -18,7 +18,7 @@ func aptWorkflowTestHost(now time.Time) *ur.HostView {
 			{Name: "clean_package_cache", InternalHandler: "host.storage_cleanup"},
 		},
 		Agent: &ur.AgentData{
-			AgentID: "host-1", CommandsEnabled: true,
+			AgentID: "host-1", CommandsEnabled: true, OperationReceiptVersion: 1,
 			PackageUpdates: &ur.AgentPackageUpdateMeta{Supported: true, Manager: "apt", InventoryHash: digestA, PendingCount: 3, CheckedAt: now.Add(-time.Minute), ObservedAt: now},
 			StorageCleanup: &ur.AgentStorageCleanupMeta{Supported: true, Provider: "apt-package-cache", Fingerprint: digestB, ReclaimableBytes: 128 * 1024 * 1024, CheckedAt: now.Add(-time.Minute), ObservedAt: now},
 			Disks:          []ur.DiskInfo{{Mountpoint: "/", Usage: 95}},
@@ -45,6 +45,18 @@ func TestAPTWorkflowWatcherEmitsDeterministicCapabilityBoundFindings(t *testing.
 				t.Fatalf("finding exposed command/path %q: %s", forbidden, lower)
 			}
 		}
+	}
+}
+
+func TestAPTWorkflowWatcherLegacyReceiptProtocolWithFreshTelemetryEmitsNothing(t *testing.T) {
+	now := time.Date(2026, 7, 12, 8, 0, 0, 0, time.UTC)
+	resource := hostResourceForAPTTest(aptWorkflowTestHost(now), now)
+	resource.Agent.OperationReceiptVersion = 0
+	resource.Capabilities = nil
+	view := ur.NewHostView(resource)
+	emit, resolve := newAPTWorkflowWatcher().Observe(patrolRuntimeState{readState: &mockReadState{hosts: []*ur.HostView{&view}}}, nil, now)
+	if len(emit) != 0 || len(resolve) != 0 {
+		t.Fatalf("emit=%d resolve=%d", len(emit), len(resolve))
 	}
 }
 
@@ -117,7 +129,7 @@ func hostResourceForAPTTest(_ *ur.HostView, now time.Time) *ur.Resource {
 	return &ur.Resource{
 		ID: "agent:host-1", Type: ur.ResourceTypeAgent, Name: "host-1", Status: ur.StatusOnline,
 		Capabilities: []ur.ResourceCapability{{Name: "install_os_updates", InternalHandler: "host.package_updates"}, {Name: "clean_package_cache", InternalHandler: "host.storage_cleanup"}},
-		Agent: &ur.AgentData{AgentID: "host-1", CommandsEnabled: true,
+		Agent: &ur.AgentData{AgentID: "host-1", CommandsEnabled: true, OperationReceiptVersion: 1,
 			PackageUpdates: &ur.AgentPackageUpdateMeta{Supported: true, Manager: "apt", InventoryHash: digestA, PendingCount: 3, CheckedAt: now.Add(-time.Minute), ObservedAt: now},
 			StorageCleanup: &ur.AgentStorageCleanupMeta{Supported: true, Provider: "apt-package-cache", Fingerprint: digestB, ReclaimableBytes: 128 * 1024 * 1024, CheckedAt: now.Add(-time.Minute), ObservedAt: now},
 			Disks:          []ur.DiskInfo{{Mountpoint: "/", Usage: 95}}},

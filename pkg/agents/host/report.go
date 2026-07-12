@@ -31,17 +31,18 @@ type ClusterNodeSensors struct {
 
 // AgentInfo describes the reporting agent.
 type AgentInfo struct {
-	ID              string             `json:"id"`
-	Version         string             `json:"version,omitempty"`
-	Type            string             `json:"type,omitempty"` // "unified", "host", or "docker" - empty means legacy
-	IntervalSeconds int                `json:"intervalSeconds,omitempty"`
-	Hostname        string             `json:"hostname,omitempty"`
-	UpdatedFrom     string             `json:"updatedFrom,omitempty"`     // Previous version if recently auto-updated
-	CommandsEnabled bool               `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
-	DiskExclude     []string           `json:"diskExclude,omitempty"`     // Disk exclusion patterns from --disk-exclude flag
-	AppliedConfig   *ConfigFingerprint `json:"appliedConfig,omitempty"`
-	Update          *UpdateStatus      `json:"update,omitempty"`
-	Modules         []ModuleStatus     `json:"modules,omitempty"`
+	ID                      string             `json:"id"`
+	Version                 string             `json:"version,omitempty"`
+	Type                    string             `json:"type,omitempty"` // "unified", "host", or "docker" - empty means legacy
+	IntervalSeconds         int                `json:"intervalSeconds,omitempty"`
+	Hostname                string             `json:"hostname,omitempty"`
+	UpdatedFrom             string             `json:"updatedFrom,omitempty"`     // Previous version if recently auto-updated
+	CommandsEnabled         bool               `json:"commandsEnabled,omitempty"` // Whether AI command execution is enabled
+	OperationReceiptVersion int                `json:"operationReceiptVersion,omitempty"`
+	DiskExclude             []string           `json:"diskExclude,omitempty"` // Disk exclusion patterns from --disk-exclude flag
+	AppliedConfig           *ConfigFingerprint `json:"appliedConfig,omitempty"`
+	Update                  *UpdateStatus      `json:"update,omitempty"`
+	Modules                 []ModuleStatus     `json:"modules,omitempty"`
 }
 
 // ModuleStatus describes whether an enabled Unified Agent module initialized

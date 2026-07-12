@@ -7,6 +7,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 )
 
 func decodeStrictAPTPayload(data []byte, target any) error {
@@ -77,6 +79,108 @@ func ValidateHostUpdatePayload(payload *HostUpdatePayload) error {
 
 func ValidateHostStorageCleanupPayload(payload *HostStorageCleanupPayload) error {
 	return validateHostStorageCleanupPayload(payload)
+}
+
+const HostAPTOperationVersion = 1
+
+const (
+	HostUpdateReceiptKind         = "pulse.host_update_result"
+	HostStorageCleanupReceiptKind = "pulse.host_storage_cleanup_result"
+	HostAPTReceiptVersion         = 1
+)
+
+func ValidateOperationQueryResultForIdentity(result operationreceipt.QueryResult, identity operationreceipt.Identity, receivedAt time.Time) error {
+	if result.Status == operationreceipt.QueryNotFound {
+		return nil
+	}
+	if result.Record == nil || result.Record.Identity != identity {
+		return fmt.Errorf("operation query result identity mismatch")
+	}
+	if result.Status != operationreceipt.QueryFoundTerminal {
+		return nil
+	}
+	switch identity.OperationKind {
+	case HostUpdateOperationInstall:
+		if result.Record.ResultKind != HostUpdateReceiptKind || result.Record.ResultVersion != HostAPTReceiptVersion {
+			return fmt.Errorf("host update query result envelope mismatch")
+		}
+		payload, err := DecodeHostUpdateResultPayload(result.Record.Result)
+		if err != nil {
+			return err
+		}
+		req := HostUpdatePayload{RequestID: identity.AttemptID, ActionID: identity.ActionID, Operation: identity.OperationKind, OperationVersion: identity.OperationVersion, RequestDigest: identity.RequestDigest, ExpectedInventoryHash: payload.Before.InventoryHash}
+		if err := ValidateHostUpdatePayload(&req); err != nil {
+			return err
+		}
+		return ValidateHostUpdateResultForRequestAt(req, payload, receivedAt)
+	case HostStorageCleanupOperationPackageCache:
+		if result.Record.ResultKind != HostStorageCleanupReceiptKind || result.Record.ResultVersion != HostAPTReceiptVersion {
+			return fmt.Errorf("host cleanup query result envelope mismatch")
+		}
+		payload, err := DecodeHostStorageCleanupResultPayload(result.Record.Result)
+		if err != nil {
+			return err
+		}
+		req := HostStorageCleanupPayload{RequestID: identity.AttemptID, ActionID: identity.ActionID, Operation: identity.OperationKind, OperationVersion: identity.OperationVersion, RequestDigest: identity.RequestDigest, ExpectedFingerprint: payload.Before.Fingerprint}
+		if err := ValidateHostStorageCleanupPayload(&req); err != nil {
+			return err
+		}
+		return ValidateHostStorageCleanupResultForRequestAt(req, payload, receivedAt)
+	default:
+		return fmt.Errorf("unsupported operation query kind %q", identity.OperationKind)
+	}
+}
+
+func BindHostUpdatePayload(payload *HostUpdatePayload) error {
+	if payload == nil {
+		return fmt.Errorf("host update payload is required")
+	}
+	payload.OperationVersion = HostAPTOperationVersion
+	digest, err := hostUpdateRequestDigest(*payload)
+	if err != nil {
+		return err
+	}
+	payload.RequestDigest = digest
+	return nil
+}
+
+func hostUpdateRequestDigest(payload HostUpdatePayload) (string, error) {
+	return operationreceipt.DigestCanonicalJSON(struct {
+		ActionID              string `json:"action_id"`
+		Operation             string `json:"operation"`
+		OperationVersion      int    `json:"operation_version"`
+		ExpectedInventoryHash string `json:"expected_inventory_hash"`
+	}{strings.TrimSpace(payload.ActionID), strings.TrimSpace(payload.Operation), payload.OperationVersion, strings.TrimSpace(payload.ExpectedInventoryHash)})
+}
+
+func BindHostStorageCleanupPayload(payload *HostStorageCleanupPayload) error {
+	if payload == nil {
+		return fmt.Errorf("host storage cleanup payload is required")
+	}
+	payload.OperationVersion = HostAPTOperationVersion
+	digest, err := hostStorageCleanupRequestDigest(*payload)
+	if err != nil {
+		return err
+	}
+	payload.RequestDigest = digest
+	return nil
+}
+
+func hostStorageCleanupRequestDigest(payload HostStorageCleanupPayload) (string, error) {
+	return operationreceipt.DigestCanonicalJSON(struct {
+		ActionID            string `json:"action_id"`
+		Operation           string `json:"operation"`
+		OperationVersion    int    `json:"operation_version"`
+		ExpectedFingerprint string `json:"expected_fingerprint"`
+	}{strings.TrimSpace(payload.ActionID), strings.TrimSpace(payload.Operation), payload.OperationVersion, strings.TrimSpace(payload.ExpectedFingerprint)})
+}
+
+func HostUpdateOperationIdentity(agentID string, payload HostUpdatePayload) operationreceipt.Identity {
+	return operationreceipt.Identity{AttemptID: payload.RequestID, ActionID: payload.ActionID, OperationKind: payload.Operation, OperationVersion: payload.OperationVersion, RequestDigest: payload.RequestDigest, AgentID: agentID}
+}
+
+func HostStorageCleanupOperationIdentity(agentID string, payload HostStorageCleanupPayload) operationreceipt.Identity {
+	return operationreceipt.Identity{AttemptID: payload.RequestID, ActionID: payload.ActionID, OperationKind: payload.Operation, OperationVersion: payload.OperationVersion, RequestDigest: payload.RequestDigest, AgentID: agentID}
 }
 
 func ValidateHostUpdateResultPayload(result *HostUpdateResultPayload) error {

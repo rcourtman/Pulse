@@ -109,6 +109,74 @@ func TestActionTruthTypesStayUnifiedResourceOwned(t *testing.T) {
 	}
 }
 
+func TestOperationReceiptProtocolRemainsInternalToIngestAndRuntime(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	for _, path := range []string{
+		"internal/models/models_frontend.go",
+		"internal/unifiedresources/types.go",
+	} {
+		source, err := os.ReadFile(filepath.Join(repoRoot, path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if path == "internal/models/models_frontend.go" && strings.Contains(string(source), "OperationReceiptVersion") {
+			t.Fatalf("%s exposes the raw receipt protocol in a frontend DTO", path)
+		}
+		if path == "internal/unifiedresources/types.go" {
+			field := regexp.MustCompile(`OperationReceiptVersion\s+int\s+` + "`json:\"-\"`")
+			if !field.Match(source) {
+				t.Fatalf("%s must keep receipt metadata internal-only", path)
+			}
+		}
+	}
+
+	err := filepath.Walk(filepath.Join(repoRoot, "frontend-modern", "src"), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() || (filepath.Ext(path) != ".ts" && filepath.Ext(path) != ".tsx") {
+			return nil
+		}
+		source, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(source), "OperationReceiptVersion") || strings.Contains(string(source), "operationReceiptVersion") {
+			t.Errorf("%s learned the internal receipt protocol", filepath.ToSlash(path))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{"internal/actionlifecycle", "internal/workflow", "internal/workflows"} {
+		root := filepath.Join(repoRoot, path)
+		if _, err := os.Stat(root); os.IsNotExist(err) {
+			continue
+		}
+		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			source, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			if regexp.MustCompile(`(?m)^\s*OperationReceiptVersion\s+`).Match(source) {
+				t.Errorf("%s declares workflow-local receipt protocol truth", filepath.ToSlash(path))
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestProductionActionLifecycleDoesNotUseRecordActionAuditAsUpsert(t *testing.T) {
 	paths := []string{"../actionlifecycle/service.go", "../ai/tools/action_audit.go", "../api/patrol_action_broker.go"}
 	for _, path := range paths {

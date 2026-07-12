@@ -9,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -22,6 +23,23 @@ var hostPackageUpdateInventoryHashPattern = regexp.MustCompile(`^sha256:[a-f0-9]
 type hostUpdateAgentCommander interface {
 	ExecuteHostUpdate(ctx context.Context, agentID string, req agentexec.HostUpdatePayload) (*agentexec.HostUpdateResultPayload, error)
 	IsAgentConnected(agentID string) bool
+}
+
+type operationReceiptQuerier interface {
+	QueryAgentOperation(context.Context, string, operationreceipt.Identity) (operationreceipt.QueryResult, error)
+}
+type agentOperationReceiptCapability interface{ AgentOperationReceiptVersion(string) int }
+
+func (e hostUpdateActionExecutor) BindActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (unified.ActionDispatchAttempt, error) {
+	resource, err := e.currentResource(ctx, record.Request.ResourceID)
+	if err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	req := agentexec.HostUpdatePayload{RequestID: attempt.ID, ActionID: record.ID, Operation: agentexec.HostUpdateOperationInstall, ExpectedInventoryHash: resource.Agent.PackageUpdates.InventoryHash}
+	if err := agentexec.BindHostUpdatePayload(&req); err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	return unified.BindActionDispatchAttempt(attempt, unified.ActionDispatchBinding{OperationKind: req.Operation, OperationVersion: req.OperationVersion, RequestDigest: req.RequestDigest, AgentID: resource.Agent.AgentID})
 }
 
 type hostUpdateActionExecutor struct {
@@ -77,13 +95,20 @@ func (e hostUpdateActionExecutor) ExecuteAction(ctx context.Context, record unif
 		return nil, err
 	}
 	agentID := strings.TrimSpace(resource.Agent.AgentID)
-	result, err := e.agents.ExecuteHostUpdate(ctx, agentID, agentexec.HostUpdatePayload{
+	req := agentexec.HostUpdatePayload{
 		RequestID:             attempt.ID,
 		ActionID:              record.ID,
 		Operation:             agentexec.HostUpdateOperationInstall,
 		ExpectedInventoryHash: resource.Agent.PackageUpdates.InventoryHash,
 		Timeout:               900,
-	})
+	}
+	if err := agentexec.BindHostUpdatePayload(&req); err != nil {
+		return nil, err
+	}
+	if agentexec.HostUpdateOperationIdentity(agentID, req) != (operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}) {
+		return nil, fmt.Errorf("host update dispatch binding drift")
+	}
+	result, err := e.agents.ExecuteHostUpdate(ctx, agentID, req)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +119,39 @@ func (e hostUpdateActionExecutor) ExecuteAction(ctx context.Context, record unif
 	output := fmt.Sprintf("APT package updates: %d pending before, %d pending after; reboot required: %t", result.Before.PendingCount, result.After.PendingCount, result.After.RebootRequired)
 	beforeBound := result.Before.InventoryHash == resource.Agent.PackageUpdates.InventoryHash
 	return hostAPTExecutionResult(record.Request.ResourceID, agentID, agentexec.HostUpdateOperationInstall, output, result.Success, result.MutationStarted, result.Verification, beforeBound, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())
+}
+
+func (e hostUpdateActionExecutor) ReconcileActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (*unified.ExecutionResult, unified.ActionDispatchReceipt, bool, error) {
+	identity := operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}
+	querier, ok := e.agents.(operationReceiptQuerier)
+	if !ok {
+		return nil, unified.ActionDispatchReceipt{}, false, nil
+	}
+	query, err := querier.QueryAgentOperation(ctx, attempt.AgentID, identity)
+	if err != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, err
+	}
+	if query.Status != operationreceipt.QueryFoundTerminal {
+		return nil, unified.ActionDispatchReceipt{}, false, nil
+	}
+	if err := agentexec.ValidateOperationQueryResultForIdentity(query, identity, e.currentTime()); err != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, err
+	}
+	result, err := agentexec.DecodeHostUpdateResultPayload(query.Record.Result)
+	if err != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, err
+	}
+	req := agentexec.HostUpdatePayload{RequestID: attempt.ID, ActionID: record.ID, Operation: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, ExpectedInventoryHash: result.Before.InventoryHash}
+	if err := agentexec.ValidateHostUpdateResultForRequestAt(req, result, e.currentTime()); err != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, err
+	}
+	output := fmt.Sprintf("APT package updates: %d pending before, %d pending after; reboot required: %t", result.Before.PendingCount, result.After.PendingCount, result.After.RebootRequired)
+	execution, buildErr := hostAPTExecutionResult(record.Request.ResourceID, attempt.AgentID, attempt.OperationKind, output, result.Success, result.MutationStarted, result.Verification, true, result.Before.CheckedAt, result.After.CheckedAt, e.currentTime())
+	if buildErr != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, buildErr
+	}
+	receipt := unified.ActionDispatchReceipt{AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: e.currentTime()}
+	return execution, receipt, true, nil
 }
 
 func (e hostUpdateActionExecutor) currentResource(ctx context.Context, resourceID string) (unified.Resource, error) {
@@ -125,6 +183,9 @@ func (e hostUpdateActionExecutor) validateResource(resource unified.Resource) er
 	if !resource.Agent.CommandsEnabled {
 		return fmt.Errorf("host command operations are disabled")
 	}
+	if resource.Agent.OperationReceiptVersion != operationreceipt.ProtocolVersion {
+		return fmt.Errorf("durable operation receipt protocol is unsupported")
+	}
 	status := resource.Agent.PackageUpdates
 	if status == nil || !status.Supported || strings.TrimSpace(status.Manager) != "apt" {
 		return fmt.Errorf("host package manager is unsupported")
@@ -142,8 +203,12 @@ func (e hostUpdateActionExecutor) validateResource(resource unified.Resource) er
 		return fmt.Errorf("host has no pending package updates")
 	}
 	agentID := strings.TrimSpace(resource.Agent.AgentID)
+	liveCapability, supported := e.agents.(agentOperationReceiptCapability)
 	if agentID == "" || e.agents == nil || !e.agents.IsAgentConnected(agentID) {
 		return fmt.Errorf("host command agent is disconnected")
+	}
+	if !supported || liveCapability.AgentOperationReceiptVersion(agentID) != operationreceipt.ProtocolVersion {
+		return fmt.Errorf("live durable operation receipt protocol is unsupported")
 	}
 	return nil
 }
@@ -165,6 +230,8 @@ func hostUpdateUnavailableReasonCode(err error) string {
 		return "unsupported_resource"
 	case strings.Contains(message, "disabled"):
 		return "host_commands_disabled"
+	case strings.Contains(message, "receipt protocol"):
+		return "operation_receipt_unsupported"
 	case strings.Contains(message, "unsupported"):
 		return "unsupported_package_manager"
 	case strings.Contains(message, "inventory") && strings.Contains(message, "error"):
@@ -188,6 +255,8 @@ func hostUpdateUnavailableReason(err error) string {
 		return "This resource is not an agent-managed host."
 	case "host_commands_disabled":
 		return "Typed host operations are disabled for this agent."
+	case "operation_receipt_unsupported":
+		return "This agent does not support durable typed-operation receipts."
 	case "unsupported_package_manager":
 		return "This host does not expose a supported package manager."
 	case "package_inventory_error":

@@ -483,6 +483,18 @@ operator-safe error. Monitoring stamps freshness from server receipt time and
 normalizes that scalar evidence without receiving cache entry names or paths.
 It does not infer cleanup eligibility, run cache scans server-side, or turn
 reclaimable bytes into mutation authority.
+The authenticated Unified Agent report also carries `OperationReceiptVersion`
+as monitoring-owned runtime ingest metadata. Absence, zero, unknown, and future
+versions are unsupported; monitoring must never infer support from an agent or
+product version string. Each accepted report replaces the prior value, so an
+agent replacement or compatible-to-legacy downgrade immediately removes the
+receipt-protocol prerequisite for actionable update and cleanup capabilities.
+The raw protocol integer stays internal to agent transport, monitoring ingest,
+canonical capability construction, and dispatch readiness. Customer-facing
+resource and frontend contracts expose only the derived capabilities. A
+compatible report is necessary but never sufficient mutation authority: the
+agent execution server's live, authenticated connection recheck remains
+authoritative immediately before durable action admission and dispatch.
 
 HTTP availability probes consume the shared explicitly unverified,
 parseable-peer-certificate capture

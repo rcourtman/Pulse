@@ -20132,6 +20132,45 @@ func TestContract_HostStorageCleanupIsTypedFingerprintBoundAndPathFree(t *testin
 	}
 }
 
+func TestContract_DurableOperationReceiptCapabilityGatesAPTActions(t *testing.T) {
+	files := map[string][]string{
+		"../../pkg/agents/host/report.go":         {"OperationReceiptVersion int", `json:"operationReceiptVersion,omitempty"`},
+		"../unifiedresources/adapters.go":         {"host.OperationReceiptVersion != operationreceipt.ProtocolVersion", "hostPackageUpdateCapabilities(host)", "hostStorageCleanupCapability(host)"},
+		"host_update_action_executor.go":          {"resource.Agent.OperationReceiptVersion != operationreceipt.ProtocolVersion", "AgentOperationReceiptVersion(agentID) != operationreceipt.ProtocolVersion"},
+		"host_storage_cleanup_action_executor.go": {"resource.Agent.OperationReceiptVersion != operationreceipt.ProtocolVersion", "AgentOperationReceiptVersion(agentID) != operationreceipt.ProtocolVersion"},
+		"../ai/findings_apt_workflows.go":         {"aptHostHasCapability(host, \"install_os_updates\", \"host.package_updates\")", "aptHostHasCapability(host, \"clean_package_cache\", \"host.storage_cleanup\")"},
+	}
+	for path, fragments := range files {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		source := string(data)
+		for _, fragment := range fragments {
+			if !strings.Contains(source, fragment) {
+				t.Errorf("%s missing durable receipt capability guard %q", path, fragment)
+			}
+		}
+	}
+}
+
+func TestContract_OperationReceiptProtocolStaysOutOfCustomerDTOs(t *testing.T) {
+	frontend, err := os.ReadFile("../models/models_frontend.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(frontend), "OperationReceiptVersion") || strings.Contains(string(frontend), "operationReceiptVersion") {
+		t.Fatal("frontend DTO learned raw operation receipt protocol")
+	}
+	resourceTypes, err := os.ReadFile("../unifiedresources/types.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(resourceTypes), "OperationReceiptVersion int") || !strings.Contains(string(resourceTypes), "`json:\"-\"`") {
+		t.Fatal("canonical registry must retain receipt protocol as internal-only metadata")
+	}
+}
+
 // TestContract_AgentCapabilitiesManifestIsPublic pins the auth
 // contract for the discovery surface: the manifest must be in the
 // router's publicPaths list so it serves without a token. The

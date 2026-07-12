@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rs/zerolog"
 )
 
@@ -51,9 +53,14 @@ func TestCommandClientHandlesTypedHostStorageCleanup(t *testing.T) {
 			t.Errorf("write registered: %v", err)
 			return
 		}
-		payload, _ := json.Marshal(agentexec.HostStorageCleanupPayload{
+		request := agentexec.HostStorageCleanupPayload{
 			RequestID: "cleanup-1", ActionID: "action-1", Operation: agentexec.HostStorageCleanupOperationPackageCache, ExpectedFingerprint: before.Fingerprint, Timeout: 5,
-		})
+		}
+		if err := agentexec.BindHostStorageCleanupPayload(&request); err != nil {
+			t.Errorf("bind request: %v", err)
+			return
+		}
+		payload, _ := json.Marshal(request)
 		if err := conn.WriteJSON(wsMessage{Type: msgTypeHostStorageCleanup, ID: "cleanup-1", Timestamp: time.Now(), Payload: payload}); err != nil {
 			t.Errorf("write host storage cleanup: %v", err)
 			return
@@ -77,9 +84,14 @@ func TestCommandClientHandlesTypedHostStorageCleanup(t *testing.T) {
 	defer server.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
+	receipts, err := operationreceipt.Open(filepath.Join(t.TempDir(), "receipts.db"), hostOperationReceiptConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer receipts.Close()
 	client := &CommandClient{
 		pulseURL: strings.TrimRight(server.URL, "/"), apiToken: "token", agentID: "agent-1", hostname: "host-1",
-		platform: "linux", version: "6.0.6", storageCleanup: manager, logger: zerolog.Nop(), done: make(chan struct{}),
+		platform: "linux", version: "6.0.6", storageCleanup: manager, operationReceipts: receipts, logger: zerolog.Nop(), done: make(chan struct{}),
 	}
 	errCh := make(chan error, 1)
 	go func() { errCh <- client.connectAndHandle(ctx) }()

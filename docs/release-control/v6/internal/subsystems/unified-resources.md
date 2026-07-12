@@ -3059,6 +3059,11 @@ When a correlated response includes the existing `ExecutionResult`, SQLite and
 MemoryStore commit the receipt, `receipt_recorded` attempt, terminal audit, and
 lifecycle event atomically. Standalone callbacks without a result remain
 transport-only receipts and do not invent terminal truth.
+Current typed agent attempts also persist the transport-derived operation kind,
+operation version, request digest, and agent identity with that admission.
+Pre-B2 rows migrate with empty binding columns and remain readable but inert;
+they are never rebound from current resource telemetry or resent. Agent
+operation reconciliation requires exact equality with this persisted binding.
 Queued, claimed, forged, conflicting, duplicate, late, and out-of-order receipt
 handling is monotonic and tenant-scoped, and the in-memory store mirrors the
 SQLite crash-boundary behavior.

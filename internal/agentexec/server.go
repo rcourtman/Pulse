@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
@@ -32,9 +33,10 @@ var (
 	writeTextMessage = func(conn *websocket.Conn, data []byte) error {
 		return conn.WriteMessage(websocket.TextMessage, data)
 	}
-	defaultPingInterval = 5 * time.Second
-	pingWriteWait       = 5 * time.Second
-	readFileTimeout     = 30 * time.Second
+	defaultPingInterval   = 5 * time.Second
+	pingWriteWait         = 5 * time.Second
+	readFileTimeout       = 30 * time.Second
+	operationQueryTimeout = 10 * time.Second
 
 	errServerShuttingDown = errors.New("agent execution server is shutting down")
 )
@@ -65,7 +67,8 @@ type Server struct {
 	pendingHostStorageCleanups   map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
 	pendingHostUpdates           map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
 	pendingHostOperations        map[string]pendingHostOperation                 // scoped request key -> exact typed APT operation/query identity
-	deploySubs                   map[string]chan DeployProgressPayload           // deploySubKey(agentID, jobID) -> progress subscriber
+	pendingOperationQueries      map[string]pendingOperationQuery
+	deploySubs                   map[string]chan DeployProgressPayload // deploySubKey(agentID, jobID) -> progress subscriber
 	validateToken                func(token string, agentID string, hostname string) bool
 	commandPolicy                *CommandPolicy
 	ipConnCounts                 map[string]int
@@ -104,6 +107,11 @@ type pendingHostOperation struct {
 	operation string
 }
 
+type pendingOperationQuery struct {
+	identity operationreceipt.Identity
+	ch       chan operationreceipt.QueryResult
+}
+
 func (ac *agentConn) signalDone() {
 	ac.doneOnce.Do(func() {
 		defer func() {
@@ -136,6 +144,7 @@ func NewServer(validateToken func(token string, agentID string, hostname string)
 		pendingHostStorageCleanups: make(map[string]chan HostStorageCleanupResultPayload),
 		pendingHostUpdates:         make(map[string]chan HostUpdateResultPayload),
 		pendingHostOperations:      make(map[string]pendingHostOperation),
+		pendingOperationQueries:    make(map[string]pendingOperationQuery),
 		deploySubs:                 make(map[string]chan DeployProgressPayload),
 		validateToken:              validateToken,
 		commandPolicy:              DefaultPolicy(),
@@ -347,6 +356,16 @@ func validateHostUpdatePayload(req *HostUpdatePayload) error {
 	if req.Operation != HostUpdateOperationInstall {
 		return fmt.Errorf("unsupported host update operation %q", req.Operation)
 	}
+	if req.OperationVersion != HostAPTOperationVersion {
+		return fmt.Errorf("unsupported host update operation version %d", req.OperationVersion)
+	}
+	expectedDigest, err := hostUpdateRequestDigest(*req)
+	if err != nil {
+		return err
+	}
+	if req.RequestDigest != expectedDigest {
+		return fmt.Errorf("host update request digest mismatch")
+	}
 	if !hostUpdateInventoryHashPattern.MatchString(req.ExpectedInventoryHash) {
 		return fmt.Errorf("expected inventory hash is required and must be sha256")
 	}
@@ -410,6 +429,16 @@ func validateHostStorageCleanupPayload(req *HostStorageCleanupPayload) error {
 	}
 	if req.Operation != HostStorageCleanupOperationPackageCache {
 		return fmt.Errorf("unsupported host storage cleanup operation %q", req.Operation)
+	}
+	if req.OperationVersion != HostAPTOperationVersion {
+		return fmt.Errorf("unsupported host storage cleanup operation version %d", req.OperationVersion)
+	}
+	expectedDigest, err := hostStorageCleanupRequestDigest(*req)
+	if err != nil {
+		return err
+	}
+	if req.RequestDigest != expectedDigest {
+		return fmt.Errorf("host storage cleanup request digest mismatch")
 	}
 	if !hostStorageCleanupFingerprintPattern.MatchString(req.ExpectedFingerprint) {
 		return fmt.Errorf("expected cleanup fingerprint is required and must be sha256")
@@ -665,12 +694,13 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ac := &agentConn{
 		conn: conn,
 		agent: ConnectedAgent{
-			AgentID:     reg.AgentID,
-			Hostname:    reg.Hostname,
-			Version:     reg.Version,
-			Platform:    reg.Platform,
-			Tags:        reg.Tags,
-			ConnectedAt: time.Now(),
+			AgentID:                 reg.AgentID,
+			Hostname:                reg.Hostname,
+			Version:                 reg.Version,
+			Platform:                reg.Platform,
+			Tags:                    reg.Tags,
+			ConnectedAt:             time.Now(),
+			OperationReceiptVersion: reg.OperationReceiptVersion,
 		},
 		approvalGrantKey: DeriveApprovalGrantKey(reg.Token),
 		done:             make(chan struct{}),
@@ -906,6 +936,31 @@ func (s *Server) readLoop(ac *agentConn) {
 				}
 			}
 
+		case MsgTypeOperationQueryResult:
+			result, decodeErr := operationreceipt.DecodeQueryResult(msg.Payload)
+			if decodeErr != nil {
+				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid operation query result")
+				continue
+			}
+			key := pendingRequestKey(ac.agent.AgentID, strings.TrimSpace(msg.ID))
+			s.mu.RLock()
+			pending, ok := s.pendingOperationQueries[key]
+			s.mu.RUnlock()
+			if !ok {
+				continue
+			}
+			if result.Record != nil && result.Record.Identity != pending.identity {
+				log.Warn().Str("agent_id", ac.agent.AgentID).Msg("Dropping mismatched operation query result")
+				continue
+			}
+			if err := ValidateOperationQueryResultForIdentity(result, pending.identity, s.currentTime()); err != nil {
+				log.Warn().Err(err).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid correlated operation query result")
+				continue
+			}
+			select {
+			case pending.ch <- result:
+			default:
+			}
 		case MsgTypeDeployProgress:
 			var progress DeployProgressPayload
 			if err := msg.DecodePayload(&progress); err != nil {
@@ -1236,6 +1291,9 @@ func (s *Server) ExecuteHostUpdate(ctx context.Context, agentID string, req Host
 	if strings.TrimSpace(req.RequestID) == "" {
 		req.RequestID = uuid.New().String()
 	}
+	if err := BindHostUpdatePayload(&req); err != nil {
+		return nil, err
+	}
 	if err := ValidateHostUpdatePayload(&req); err != nil {
 		return nil, err
 	}
@@ -1245,6 +1303,9 @@ func (s *Server) ExecuteHostUpdate(ctx context.Context, agentID string, req Host
 	s.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("agent %s not connected", agentID)
+	}
+	if ac.agent.OperationReceiptVersion != operationreceipt.ProtocolVersion {
+		return nil, fmt.Errorf("agent does not support durable operation receipts")
 	}
 
 	respCh := make(chan HostUpdateResultPayload, 1)
@@ -1311,6 +1372,9 @@ func (s *Server) ExecuteHostStorageCleanup(ctx context.Context, agentID string, 
 	if strings.TrimSpace(req.RequestID) == "" {
 		req.RequestID = uuid.New().String()
 	}
+	if err := BindHostStorageCleanupPayload(&req); err != nil {
+		return nil, err
+	}
 	if err := ValidateHostStorageCleanupPayload(&req); err != nil {
 		return nil, err
 	}
@@ -1320,6 +1384,9 @@ func (s *Server) ExecuteHostStorageCleanup(ctx context.Context, agentID string, 
 	s.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("agent %s not connected", agentID)
+	}
+	if ac.agent.OperationReceiptVersion != operationreceipt.ProtocolVersion {
+		return nil, fmt.Errorf("agent does not support durable operation receipts")
 	}
 
 	respCh := make(chan HostStorageCleanupResultPayload, 1)
@@ -1377,6 +1444,75 @@ func (s *Server) currentTime() time.Time {
 		return s.now().UTC()
 	}
 	return time.Now().UTC()
+}
+
+func (s *Server) AgentOperationReceiptVersion(agentID string) int {
+	if s == nil {
+		return 0
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	connection, ok := s.agents[strings.TrimSpace(agentID)]
+	if !ok {
+		return 0
+	}
+	return connection.agent.OperationReceiptVersion
+}
+
+// QueryAgentOperation reconciles a committed attempt without mutation or resend.
+func (s *Server) QueryAgentOperation(ctx context.Context, agentID string, identity operationreceipt.Identity) (operationreceipt.QueryResult, error) {
+	identity, err := operationreceipt.NormalizeIdentity(identity)
+	if err != nil {
+		return operationreceipt.QueryResult{}, err
+	}
+	agentID = strings.TrimSpace(agentID)
+	if identity.AgentID != agentID {
+		return operationreceipt.QueryResult{}, operationreceipt.ErrBindingConflict
+	}
+	s.mu.RLock()
+	ac, ok := s.agents[agentID]
+	s.mu.RUnlock()
+	if !ok {
+		return operationreceipt.QueryResult{}, fmt.Errorf("agent %s not connected", agentID)
+	}
+	if ac.agent.OperationReceiptVersion != operationreceipt.ProtocolVersion {
+		return operationreceipt.QueryResult{}, fmt.Errorf("agent does not support durable operation receipts")
+	}
+	queryID := identity.AttemptID + ".query." + uuid.NewString()
+	key := pendingRequestKey(agentID, queryID)
+	ch := make(chan operationreceipt.QueryResult, 1)
+	s.mu.Lock()
+	if _, exists := s.pendingOperationQueries[key]; exists {
+		s.mu.Unlock()
+		return operationreceipt.QueryResult{}, fmt.Errorf("operation query %q is already pending", identity.AttemptID)
+	}
+	s.pendingOperationQueries[key] = pendingOperationQuery{identity: identity, ch: ch}
+	s.mu.Unlock()
+	defer func() { s.mu.Lock(); delete(s.pendingOperationQueries, key); s.mu.Unlock() }()
+	msg, err := NewMessage(MsgTypeOperationQuery, queryID, operationreceipt.Query{Version: operationreceipt.ProtocolVersion, Identity: identity})
+	if err != nil {
+		return operationreceipt.QueryResult{}, err
+	}
+	ac.writeMu.Lock()
+	err = s.sendMessage(ac.conn, msg)
+	ac.writeMu.Unlock()
+	if err != nil {
+		return operationreceipt.QueryResult{}, err
+	}
+	timer := time.NewTimer(operationQueryTimeout)
+	defer timer.Stop()
+	select {
+	case result := <-ch:
+		return result, nil
+	case <-ctx.Done():
+		return operationreceipt.QueryResult{}, ctx.Err()
+	case <-timer.C:
+		return operationreceipt.QueryResult{}, fmt.Errorf("operation receipt query timed out")
+	case <-ac.done:
+		return operationreceipt.QueryResult{}, fmt.Errorf("agent %s disconnected during operation query", agentID)
+	case <-s.shutdown:
+		return operationreceipt.QueryResult{}, errServerShuttingDown
+	}
 }
 
 // ReadFile reads a file from an agent

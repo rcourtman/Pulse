@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockruntime"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
@@ -70,7 +72,7 @@ func TestResourceFromProxmoxNodeUsesDisplayNameWithoutChangingRawNodeIdentity(t 
 func TestResourceFromHostAdvertisesElevatedTypedPackageUpdateCapability(t *testing.T) {
 	now := time.Now().UTC()
 	host := models.Host{
-		ID: "agent-1", Hostname: "host-1", Platform: "linux", Status: "online", LastSeen: now, CommandsEnabled: true,
+		ID: "agent-1", Hostname: "host-1", Platform: "linux", Status: "online", LastSeen: now, CommandsEnabled: true, OperationReceiptVersion: operationreceipt.ProtocolVersion,
 		PackageUpdates: &models.HostPackageUpdateStatus{
 			Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("a", 64), PendingCount: 2, CheckedAt: now.Add(-time.Minute), ObservedAt: now, RebootRequired: true,
 			Packages: []models.HostPackageUpdate{{Name: "openssl", InstalledVersion: "1.0", AvailableVersion: "1.1"}},
@@ -100,11 +102,13 @@ func TestResourceFromHostAdvertisesElevatedTypedPackageUpdateCapability(t *testi
 
 func TestResourceFromHostDoesNotAdvertiseUnsupportedOrCommandDisabledPackageUpdates(t *testing.T) {
 	base := models.Host{
-		ID: "agent-1", Hostname: "host-1", Platform: "linux", Status: "online", LastSeen: time.Now().UTC(), CommandsEnabled: true,
+		ID: "agent-1", Hostname: "host-1", Platform: "linux", Status: "online", LastSeen: time.Now().UTC(), CommandsEnabled: true, OperationReceiptVersion: operationreceipt.ProtocolVersion,
 		PackageUpdates: &models.HostPackageUpdateStatus{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("a", 64), PendingCount: 1, CheckedAt: time.Now().UTC()},
 	}
 	for _, mutate := range []func(*models.Host){
 		func(host *models.Host) { host.CommandsEnabled = false },
+		func(host *models.Host) { host.OperationReceiptVersion = 0 },
+		func(host *models.Host) { host.OperationReceiptVersion = operationreceipt.ProtocolVersion + 1 },
 		func(host *models.Host) { host.PackageUpdates.Supported = false },
 		func(host *models.Host) { host.PackageUpdates.Manager = "dnf" },
 		func(host *models.Host) { host.PackageUpdates = nil },
@@ -123,10 +127,10 @@ func TestResourceFromHostDoesNotAdvertiseUnsupportedOrCommandDisabledPackageUpda
 func TestResourceFromHostAdvertisesPressureBoundPackageCacheCleanup(t *testing.T) {
 	now := time.Now().UTC()
 	host := models.Host{
-		ID: "agent-cleanup", Hostname: "host-cleanup", Platform: "linux", Status: "online", LastSeen: now, CommandsEnabled: true,
+		ID: "agent-cleanup", Hostname: "host-cleanup", Platform: "linux", Status: "online", LastSeen: now, CommandsEnabled: true, OperationReceiptVersion: operationreceipt.ProtocolVersion,
 		Disks: []models.Disk{{Mountpoint: "/", Usage: 95}},
 		StorageCleanup: &models.HostStorageCleanupStatus{
-			Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("c", 64), ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: now,
+			Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("c", 64), ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: now, ObservedAt: now,
 		},
 	}
 
@@ -149,14 +153,16 @@ func TestResourceFromHostAdvertisesPressureBoundPackageCacheCleanup(t *testing.T
 func TestResourceFromHostStorageCleanupUsesActualCacheFilesystemAndFailsClosed(t *testing.T) {
 	now := time.Now().UTC()
 	base := models.Host{
-		ID: "agent-cleanup", Hostname: "host-cleanup", Platform: "linux", Status: "online", LastSeen: now, CommandsEnabled: true,
+		ID: "agent-cleanup", Hostname: "host-cleanup", Platform: "linux", Status: "online", LastSeen: now, CommandsEnabled: true, OperationReceiptVersion: operationreceipt.ProtocolVersion,
 		Disks: []models.Disk{{Mountpoint: "/", Usage: 95}},
 		StorageCleanup: &models.HostStorageCleanupStatus{
-			Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("c", 64), ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: now,
+			Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("c", 64), ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: now, ObservedAt: now,
 		},
 	}
 	mutations := []func(*models.Host){
 		func(host *models.Host) { host.CommandsEnabled = false },
+		func(host *models.Host) { host.OperationReceiptVersion = 0 },
+		func(host *models.Host) { host.OperationReceiptVersion = operationreceipt.ProtocolVersion + 1 },
 		func(host *models.Host) { host.StorageCleanup.Supported = false },
 		func(host *models.Host) { host.StorageCleanup.Provider = "arbitrary-path" },
 		func(host *models.Host) { host.StorageCleanup.Fingerprint = "" },
@@ -181,6 +187,22 @@ func TestResourceFromHostStorageCleanupUsesActualCacheFilesystemAndFailsClosed(t
 		if len(resource.Capabilities) != 0 {
 			t.Fatalf("case %d advertised capabilities %#v", i, resource.Capabilities)
 		}
+	}
+}
+
+func TestResourceFromCompatibleHostAdvertisesBothDurableAPTCapabilities(t *testing.T) {
+	now := time.Now().UTC()
+	host := models.Host{ID: "agent", Hostname: "host", Platform: "linux", Status: "online", LastSeen: now, CommandsEnabled: true, OperationReceiptVersion: operationreceipt.ProtocolVersion, Disks: []models.Disk{{Mountpoint: "/", Usage: 95}}, PackageUpdates: &models.HostPackageUpdateStatus{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("a", 64), PendingCount: 2, CheckedAt: now, ObservedAt: now}, StorageCleanup: &models.HostStorageCleanupStatus{Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("b", 64), ReclaimableBytes: 512 * 1024 * 1024, CheckedAt: now, ObservedAt: now}}
+	resource, _ := resourceFromHost(host)
+	if len(resource.Capabilities) != 2 || resource.Agent.OperationReceiptVersion != operationreceipt.ProtocolVersion {
+		t.Fatalf("resource=%#v", resource)
+	}
+	encoded, err := json.Marshal(resource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "operationReceiptVersion") {
+		t.Fatalf("public resource exposed receipt protocol: %s", encoded)
 	}
 }
 

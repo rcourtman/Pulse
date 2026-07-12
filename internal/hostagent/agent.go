@@ -548,6 +548,15 @@ func (a *Agent) signalRemoteConfigChanged() {
 	}
 }
 
+func (a *Agent) currentOperationReceiptVersion() int {
+	a.commandClientMu.Lock()
+	defer a.commandClientMu.Unlock()
+	if a.commandClient == nil {
+		return 0
+	}
+	return a.commandClient.operationReceiptVersion()
+}
+
 func (a *Agent) startCommandClient(client *CommandClient) bool {
 	if client == nil {
 		return false
@@ -855,17 +864,18 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 
 	report := agentshost.Report{
 		Agent: agentshost.AgentInfo{
-			ID:              a.agentID,
-			Version:         a.agentVersion,
-			Type:            runtimeConfig.agentType,
-			IntervalSeconds: int(runtimeConfig.interval / time.Second),
-			Hostname:        a.hostname,
-			UpdatedFrom:     updatedFrom,
-			CommandsEnabled: runtimeConfig.commandsEnabled,
-			DiskExclude:     append([]string(nil), runtimeConfig.diskExclude...),
-			AppliedConfig:   runtimeConfig.appliedConfig,
-			Update:          a.currentUpdateStatus(),
-			Modules:         a.currentModuleStatus(),
+			ID:                      a.agentID,
+			Version:                 a.agentVersion,
+			Type:                    runtimeConfig.agentType,
+			IntervalSeconds:         int(runtimeConfig.interval / time.Second),
+			Hostname:                a.hostname,
+			UpdatedFrom:             updatedFrom,
+			CommandsEnabled:         runtimeConfig.commandsEnabled,
+			OperationReceiptVersion: a.currentOperationReceiptVersion(),
+			DiskExclude:             append([]string(nil), runtimeConfig.diskExclude...),
+			AppliedConfig:           runtimeConfig.appliedConfig,
+			Update:                  a.currentUpdateStatus(),
+			Modules:                 a.currentModuleStatus(),
 		},
 		Host: agentshost.HostInfo{
 			ID:             a.machineID,

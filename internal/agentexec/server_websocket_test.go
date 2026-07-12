@@ -533,7 +533,7 @@ func TestExecuteHostUpdateRoundTripUsesTypedCommandFreeEnvelope(t *testing.T) {
 	defer conn.Close()
 
 	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
-		AgentID: "host-agent-1", Hostname: "host1", Version: "6.0.6", Platform: "linux", Token: "any",
+		AgentID: "host-agent-1", Hostname: "host1", Version: "6.0.6", Platform: "linux", Token: "any", OperationReceiptVersion: 1,
 	}))
 	_ = wsReadRegisteredPayload(t, conn)
 
@@ -632,7 +632,7 @@ func TestExecuteHostStorageCleanupRoundTripUsesPathAndCommandFreeEnvelope(t *tes
 	}
 	defer conn.Close()
 	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
-		AgentID: "host-agent-cleanup", Hostname: "host1", Version: "6.0.6", Platform: "linux", Token: "any",
+		AgentID: "host-agent-cleanup", Hostname: "host1", Version: "6.0.6", Platform: "linux", Token: "any", OperationReceiptVersion: 1,
 	}))
 	_ = wsReadRegisteredPayload(t, conn)
 

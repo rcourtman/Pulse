@@ -1,10 +1,22 @@
 package models
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestHostFrontendDoesNotExposeOperationReceiptProtocol(t *testing.T) {
+	host := Host{ID: "agent", OperationReceiptVersion: 1}
+	encoded, err := json.Marshal(host.ToFrontend())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "operationReceiptVersion") {
+		t.Fatalf("frontend payload exposed protocol: %s", encoded)
+	}
+}
 
 func TestZeroIfNegative(t *testing.T) {
 	tests := []struct {

@@ -17,6 +17,7 @@ const (
 	MsgTypeCommandResult            MessageType = "command_result"
 	MsgTypeHostStorageCleanupResult MessageType = "host_storage_cleanup_result"
 	MsgTypeHostUpdateResult         MessageType = "host_update_result"
+	MsgTypeOperationQueryResult     MessageType = "agent_operation_query_result"
 
 	// Server -> Agent messages
 	MsgTypeRegistered         MessageType = "registered"
@@ -25,6 +26,7 @@ const (
 	MsgTypeHostStorageCleanup MessageType = "host_storage_cleanup"
 	MsgTypeReadFile           MessageType = "read_file"
 	MsgTypeHostUpdate         MessageType = "host_update"
+	MsgTypeOperationQuery     MessageType = "agent_operation_query"
 	MsgTypeDeployPreflight    MessageType = "deploy_preflight"
 	MsgTypeDeployInstall      MessageType = "deploy_install"
 	MsgTypeDeployCancelJob    MessageType = "deploy_cancel"
@@ -79,12 +81,13 @@ func (m Message) DecodePayload(target any) error {
 
 // AgentRegisterPayload is sent by agent on connection
 type AgentRegisterPayload struct {
-	AgentID  string   `json:"agent_id"`
-	Hostname string   `json:"hostname"`
-	Version  string   `json:"version"`
-	Platform string   `json:"platform"` // "linux", "windows", "darwin"
-	Tags     []string `json:"tags,omitempty"`
-	Token    string   `json:"token"` // API token for authentication
+	AgentID                 string   `json:"agent_id"`
+	Hostname                string   `json:"hostname"`
+	Version                 string   `json:"version"`
+	Platform                string   `json:"platform"` // "linux", "windows", "darwin"
+	Tags                    []string `json:"tags,omitempty"`
+	Token                   string   `json:"token"` // API token for authentication
+	OperationReceiptVersion int      `json:"operation_receipt_version,omitempty"`
 }
 
 // RegisteredPayload is sent by server after successful registration
@@ -161,6 +164,8 @@ type HostUpdatePayload struct {
 	RequestID             string `json:"request_id"`
 	ActionID              string `json:"action_id"`
 	Operation             string `json:"operation"`
+	OperationVersion      int    `json:"operation_version"`
+	RequestDigest         string `json:"request_digest"`
 	ExpectedInventoryHash string `json:"expected_inventory_hash"`
 	Timeout               int    `json:"timeout,omitempty"`
 }
@@ -223,6 +228,8 @@ type HostStorageCleanupPayload struct {
 	RequestID           string `json:"request_id"`
 	ActionID            string `json:"action_id"`
 	Operation           string `json:"operation"`
+	OperationVersion    int    `json:"operation_version"`
+	RequestDigest       string `json:"request_digest"`
 	ExpectedFingerprint string `json:"expected_fingerprint"`
 	Timeout             int    `json:"timeout,omitempty"`
 }
@@ -267,12 +274,13 @@ const (
 
 // ConnectedAgent represents an agent connected via WebSocket
 type ConnectedAgent struct {
-	AgentID     string
-	Hostname    string
-	Version     string
-	Platform    string
-	Tags        []string
-	ConnectedAt time.Time
+	AgentID                 string
+	Hostname                string
+	Version                 string
+	Platform                string
+	Tags                    []string
+	ConnectedAt             time.Time
+	OperationReceiptVersion int
 }
 
 // --- Deploy protocol payloads ---

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 )
 
 func TestStrictAPTCodecsRejectUnknownTrailingAndOpenAuthorityFields(t *testing.T) {
@@ -42,7 +44,7 @@ func TestMalformedOrCrossTypeAPTResultCannotPoisonPendingUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{AgentID: "apt-agent", Hostname: "host", Version: "6", Platform: "linux", Token: "any"}))
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{AgentID: "apt-agent", Hostname: "host", Version: "6", Platform: "linux", Token: "any", OperationReceiptVersion: operationreceipt.ProtocolVersion}))
 	_ = wsReadRegisteredPayload(t, conn)
 
 	done := make(chan error, 1)
@@ -91,7 +93,7 @@ func TestCrossTypeSameRequestCollisionRefusesSecondMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{AgentID: "apt-agent", Hostname: "host", Version: "6", Platform: "linux", Token: "any"}))
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{AgentID: "apt-agent", Hostname: "host", Version: "6", Platform: "linux", Token: "any", OperationReceiptVersion: operationreceipt.ProtocolVersion}))
 	_ = wsReadRegisteredPayload(t, conn)
 
 	ctx, cancel := context.WithCancel(context.Background())

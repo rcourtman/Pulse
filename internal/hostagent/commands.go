@@ -23,6 +23,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	sshknownhosts "github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -92,24 +93,28 @@ func (b *cappedBuffer) String() string {
 
 // CommandClient handles WebSocket connection to Pulse for AI command execution
 type CommandClient struct {
-	pulseURL           string
-	apiToken           string
-	agentID            string
-	hostname           string
-	platform           string
-	version            string
-	stateDir           string
-	insecureSkipVerify bool
-	caCertPath         string
-	serverFingerprint  string
-	deploySSHUser      string
-	commandPolicy      *agentexec.CommandPolicy
-	packageUpdates     *packageUpdateManager
-	storageCleanup     *storageCleanupManager
-	sshKnownHosts      sshknownhosts.Manager
-	sshKnownHostsOnce  sync.Once
-	sshKnownHostsErr   error
-	logger             zerolog.Logger
+	pulseURL                  string
+	apiToken                  string
+	agentID                   string
+	hostname                  string
+	platform                  string
+	version                   string
+	stateDir                  string
+	insecureSkipVerify        bool
+	caCertPath                string
+	serverFingerprint         string
+	deploySSHUser             string
+	commandPolicy             *agentexec.CommandPolicy
+	packageUpdates            *packageUpdateManager
+	storageCleanup            *storageCleanupManager
+	operationReceipts         *operationreceipt.Store
+	operationReceiptErr       error
+	operationReceiptCloseOnce sync.Once
+	operationReceiptCloseErr  error
+	sshKnownHosts             sshknownhosts.Manager
+	sshKnownHostsOnce         sync.Once
+	sshKnownHostsErr          error
+	logger                    zerolog.Logger
 
 	conn   *websocket.Conn
 	connMu sync.Mutex
@@ -124,23 +129,26 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 		stateDir = defaultStateDir
 	}
 
+	receipts, receiptErr := operationreceipt.Open(filepath.Join(stateDir, "operation-receipts.db"), hostOperationReceiptConfig())
 	return &CommandClient{
-		pulseURL:           strings.TrimRight(cfg.PulseURL, "/"),
-		apiToken:           cfg.APIToken,
-		agentID:            agentID,
-		hostname:           hostname,
-		platform:           platform,
-		version:            version,
-		stateDir:           stateDir,
-		insecureSkipVerify: cfg.InsecureSkipVerify,
-		caCertPath:         cfg.CACertPath,
-		serverFingerprint:  cfg.ServerFingerprint,
-		deploySSHUser:      cfg.DeploySSHUser,
-		commandPolicy:      agentexec.DefaultPolicy(),
-		packageUpdates:     cfg.packageUpdates,
-		storageCleanup:     cfg.storageCleanup,
-		logger:             logger,
-		done:               make(chan struct{}),
+		pulseURL:            strings.TrimRight(cfg.PulseURL, "/"),
+		apiToken:            cfg.APIToken,
+		agentID:             agentID,
+		hostname:            hostname,
+		platform:            platform,
+		version:             version,
+		stateDir:            stateDir,
+		insecureSkipVerify:  cfg.InsecureSkipVerify,
+		caCertPath:          cfg.CACertPath,
+		serverFingerprint:   cfg.ServerFingerprint,
+		deploySSHUser:       cfg.DeploySSHUser,
+		commandPolicy:       agentexec.DefaultPolicy(),
+		packageUpdates:      cfg.packageUpdates,
+		storageCleanup:      cfg.storageCleanup,
+		operationReceipts:   receipts,
+		operationReceiptErr: receiptErr,
+		logger:              logger,
+		done:                make(chan struct{}),
 	}
 }
 
@@ -170,6 +178,8 @@ const (
 	msgTypeHostStorageCleanupResult messageType = "host_storage_cleanup_result"
 	msgTypeHostUpdate               messageType = "host_update"
 	msgTypeHostUpdateResult         messageType = "host_update_result"
+	msgTypeOperationQuery           messageType = "agent_operation_query"
+	msgTypeOperationQueryResult     messageType = "agent_operation_query_result"
 	msgTypeDeployPreflight          messageType = "deploy_preflight"
 	msgTypeDeployInstall            messageType = "deploy_install"
 	msgTypeDeployCancel             messageType = "deploy_cancel"
@@ -184,12 +194,13 @@ type wsMessage struct {
 }
 
 type registerPayload struct {
-	AgentID  string   `json:"agent_id"`
-	Hostname string   `json:"hostname"`
-	Version  string   `json:"version"`
-	Platform string   `json:"platform"`
-	Tags     []string `json:"tags,omitempty"`
-	Token    string   `json:"token"`
+	AgentID                 string   `json:"agent_id"`
+	Hostname                string   `json:"hostname"`
+	Version                 string   `json:"version"`
+	Platform                string   `json:"platform"`
+	Tags                    []string `json:"tags,omitempty"`
+	Token                   string   `json:"token"`
+	OperationReceiptVersion int      `json:"operation_receipt_version,omitempty"`
 }
 
 type registeredPayload struct {
@@ -409,11 +420,12 @@ func (c *CommandClient) buildWebSocketOrigin() (string, error) {
 
 func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 	payload, err := json.Marshal(registerPayload{
-		AgentID:  c.agentID,
-		Hostname: c.hostname,
-		Version:  c.version,
-		Platform: c.platform,
-		Token:    c.apiToken,
+		AgentID:                 c.agentID,
+		Hostname:                c.hostname,
+		Version:                 c.version,
+		Platform:                c.platform,
+		Token:                   c.apiToken,
+		OperationReceiptVersion: c.operationReceiptVersion(),
 	})
 	if err != nil {
 		return fmt.Errorf("marshal registration payload: %w", err)
@@ -426,6 +438,13 @@ func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {
 	}
 
 	return conn.WriteJSON(msg)
+}
+
+func (c *CommandClient) operationReceiptVersion() int {
+	if c != nil && c.operationReceiptErr == nil && c.operationReceipts != nil {
+		return operationreceipt.ProtocolVersion
+	}
+	return 0
 }
 
 func (c *CommandClient) waitForRegistration(conn *websocket.Conn) error {
@@ -544,6 +563,14 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 			}
 			go c.handleHostStorageCleanup(ctx, conn, payload)
 
+		case msgTypeOperationQuery:
+			query, err := operationreceipt.DecodeQuery(msg.Payload)
+			if err != nil {
+				c.logger.Warn().Err(err).Msg("Rejected malformed operation receipt query")
+				continue
+			}
+			go c.handleOperationQuery(conn, msg.ID, query)
+
 		case msgTypeDeployPreflight:
 			var payload deployPreflightPayload
 			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
@@ -575,6 +602,22 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 }
 
 func (c *CommandClient) handleHostUpdate(ctx context.Context, conn *websocket.Conn, payload agentexec.HostUpdatePayload) {
+	identity := agentexec.HostUpdateOperationIdentity(c.agentID, payload)
+	record, admitted, err := c.admitOperation(identity)
+	if err != nil {
+		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Host update durable admission refused")
+		return
+	}
+	if !admitted {
+		if record.State == operationreceipt.StateTerminal {
+			c.replayHostUpdate(conn, record)
+		}
+		return
+	}
+	if _, err := c.operationReceipts.MarkStarted(identity); err != nil {
+		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Host update durable start refused")
+		return
+	}
 	timeout := time.Duration(payload.Timeout) * time.Second
 	if timeout <= 0 {
 		timeout = 15 * time.Minute
@@ -590,6 +633,15 @@ func (c *CommandClient) handleHostUpdate(ctx context.Context, conn *websocket.Co
 		result.Error = "host package update service is unavailable"
 	} else {
 		result = c.packageUpdates.Apply(updateCtx, payload)
+	}
+	result = sanitizeHostUpdateReceipt(result)
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return
+	}
+	if _, err := c.operationReceipts.Complete(identity, operationreceipt.TerminalEnvelope{Kind: agentexec.HostUpdateReceiptKind, Version: agentexec.HostAPTReceiptVersion, Payload: encoded}); err != nil {
+		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to persist host update terminal receipt")
+		return
 	}
 	c.sendHostUpdateResult(conn, result)
 }
@@ -615,6 +667,22 @@ func (c *CommandClient) sendHostUpdateResult(conn *websocket.Conn, result agente
 }
 
 func (c *CommandClient) handleHostStorageCleanup(ctx context.Context, conn *websocket.Conn, payload agentexec.HostStorageCleanupPayload) {
+	identity := agentexec.HostStorageCleanupOperationIdentity(c.agentID, payload)
+	record, admitted, err := c.admitOperation(identity)
+	if err != nil {
+		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Host cleanup durable admission refused")
+		return
+	}
+	if !admitted {
+		if record.State == operationreceipt.StateTerminal {
+			c.replayHostStorageCleanup(conn, record)
+		}
+		return
+	}
+	if _, err := c.operationReceipts.MarkStarted(identity); err != nil {
+		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Host cleanup durable start refused")
+		return
+	}
 	timeout := time.Duration(payload.Timeout) * time.Second
 	if timeout <= 0 {
 		timeout = 5 * time.Minute
@@ -631,7 +699,119 @@ func (c *CommandClient) handleHostStorageCleanup(ctx context.Context, conn *webs
 	} else {
 		result = c.storageCleanup.Apply(cleanupCtx, payload)
 	}
+	result = sanitizeHostStorageCleanupReceipt(result)
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return
+	}
+	if _, err := c.operationReceipts.Complete(identity, operationreceipt.TerminalEnvelope{Kind: agentexec.HostStorageCleanupReceiptKind, Version: agentexec.HostAPTReceiptVersion, Payload: encoded}); err != nil {
+		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to persist host cleanup terminal receipt")
+		return
+	}
 	c.sendHostStorageCleanupResult(conn, result)
+}
+
+func (c *CommandClient) admitOperation(identity operationreceipt.Identity) (operationreceipt.Record, bool, error) {
+	if c.operationReceiptErr != nil {
+		return operationreceipt.Record{}, false, c.operationReceiptErr
+	}
+	if c.operationReceipts == nil {
+		return operationreceipt.Record{}, false, fmt.Errorf("operation receipt store unavailable")
+	}
+	return c.operationReceipts.Admit(identity)
+}
+
+func (c *CommandClient) handleOperationQuery(conn *websocket.Conn, correlationID string, query operationreceipt.Query) {
+	var result operationreceipt.QueryResult
+	var err error
+	if query.Identity.AgentID != c.agentID {
+		err = operationreceipt.ErrBindingConflict
+	} else if c.operationReceiptErr != nil {
+		err = c.operationReceiptErr
+	} else if c.operationReceipts == nil {
+		err = fmt.Errorf("operation receipt store unavailable")
+	} else {
+		result, err = c.operationReceipts.Query(query.Identity)
+	}
+	if err != nil {
+		c.logger.Warn().Err(err).Str("request_id", query.Identity.AttemptID).Msg("Operation receipt query refused")
+		return
+	}
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		return
+	}
+	msg := wsMessage{Type: msgTypeOperationQueryResult, ID: strings.TrimSpace(correlationID), Timestamp: time.Now(), Payload: encoded}
+	c.connMu.Lock()
+	err = conn.WriteJSON(msg)
+	c.connMu.Unlock()
+	if err != nil {
+		c.logger.Debug().Err(err).Str("request_id", query.Identity.AttemptID).Msg("Failed to send operation receipt query result")
+	}
+}
+
+func (c *CommandClient) replayHostUpdate(conn *websocket.Conn, record operationreceipt.Record) {
+	var result agentexec.HostUpdateResultPayload
+	if err := json.Unmarshal(record.Result, &result); err == nil {
+		c.sendHostUpdateResult(conn, result)
+	}
+}
+
+func (c *CommandClient) replayHostStorageCleanup(conn *websocket.Conn, record operationreceipt.Record) {
+	var result agentexec.HostStorageCleanupResultPayload
+	if err := json.Unmarshal(record.Result, &result); err == nil {
+		c.sendHostStorageCleanupResult(conn, result)
+	}
+}
+
+func sanitizeHostUpdateReceipt(result agentexec.HostUpdateResultPayload) agentexec.HostUpdateResultPayload {
+	result.Before.Packages, result.After.Packages = nil, nil
+	result.Before.Error, result.After.Error = "", ""
+	if result.Error != "" {
+		result.Error = "typed host update did not complete"
+	}
+	return result
+}
+
+func sanitizeHostStorageCleanupReceipt(result agentexec.HostStorageCleanupResultPayload) agentexec.HostStorageCleanupResultPayload {
+	result.Before.Error, result.After.Error = "", ""
+	if result.Error != "" {
+		result.Error = "typed host cleanup did not complete"
+	}
+	return result
+}
+
+func hostOperationReceiptConfig() operationreceipt.Config {
+	return operationreceipt.Config{Validators: map[string]map[int]operationreceipt.TerminalValidator{
+		agentexec.HostUpdateReceiptKind: {agentexec.HostAPTReceiptVersion: func(identity operationreceipt.Identity, payload json.RawMessage) error {
+			result, err := agentexec.DecodeHostUpdateResultPayload(payload)
+			if err != nil {
+				return err
+			}
+			if len(result.Before.Packages) > 0 || len(result.After.Packages) > 0 || result.Before.Error != "" || result.After.Error != "" {
+				return fmt.Errorf("host update receipt contains non-persistable detail")
+			}
+			req := agentexec.HostUpdatePayload{RequestID: identity.AttemptID, ActionID: identity.ActionID, Operation: identity.OperationKind, OperationVersion: identity.OperationVersion, RequestDigest: identity.RequestDigest, ExpectedInventoryHash: result.Before.InventoryHash}
+			if err := agentexec.ValidateHostUpdatePayload(&req); err != nil {
+				return err
+			}
+			return agentexec.ValidateHostUpdateResultForRequest(req, result)
+		}},
+		agentexec.HostStorageCleanupReceiptKind: {agentexec.HostAPTReceiptVersion: func(identity operationreceipt.Identity, payload json.RawMessage) error {
+			result, err := agentexec.DecodeHostStorageCleanupResultPayload(payload)
+			if err != nil {
+				return err
+			}
+			if result.Before.Error != "" || result.After.Error != "" {
+				return fmt.Errorf("host cleanup receipt contains non-persistable detail")
+			}
+			req := agentexec.HostStorageCleanupPayload{RequestID: identity.AttemptID, ActionID: identity.ActionID, Operation: identity.OperationKind, OperationVersion: identity.OperationVersion, RequestDigest: identity.RequestDigest, ExpectedFingerprint: result.Before.Fingerprint}
+			if err := agentexec.ValidateHostStorageCleanupPayload(&req); err != nil {
+				return err
+			}
+			return agentexec.ValidateHostStorageCleanupResultForRequest(req, result)
+		}},
+	}}
 }
 
 func (c *CommandClient) sendHostStorageCleanupResult(conn *websocket.Conn, result agentexec.HostStorageCleanupResultPayload) {
@@ -894,10 +1074,18 @@ func (c *CommandClient) Close() error {
 		close(c.done)
 	}
 
+	var closeErr error
 	if c.conn != nil {
-		err := c.conn.Close()
+		closeErr = c.conn.Close()
 		c.conn = nil
-		return err
 	}
-	return nil
+	c.operationReceiptCloseOnce.Do(func() {
+		if c.operationReceipts != nil {
+			c.operationReceiptCloseErr = c.operationReceipts.Close()
+		}
+	})
+	if closeErr != nil {
+		return closeErr
+	}
+	return c.operationReceiptCloseErr
 }

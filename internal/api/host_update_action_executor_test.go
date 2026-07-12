@@ -6,19 +6,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
 type fakeHostUpdateAgent struct {
-	connected bool
-	result    *agentexec.HostUpdateResultPayload
-	err       error
-	agentID   string
-	requests  []agentexec.HostUpdatePayload
+	connected         bool
+	result            *agentexec.HostUpdateResultPayload
+	err               error
+	agentID           string
+	requests          []agentexec.HostUpdatePayload
+	receiptVersion    int
+	receiptVersionSet bool
 }
 
 var testHostPackageInventoryHash = "sha256:" + strings.Repeat("a", 64)
@@ -31,6 +35,29 @@ func (f *fakeHostUpdateAgent) ExecuteHostUpdate(_ context.Context, agentID strin
 }
 
 func (f *fakeHostUpdateAgent) IsAgentConnected(string) bool { return f.connected }
+func (f *fakeHostUpdateAgent) AgentOperationReceiptVersion(string) int {
+	if f.receiptVersionSet {
+		return f.receiptVersion
+	}
+	return operationreceipt.ProtocolVersion
+}
+
+func hostUpdateDispatchTestContext(t *testing.T, actionID string) context.Context {
+	t.Helper()
+	attempt, err := unified.NewActionDispatchAttempt(actionID, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := agentexec.HostUpdatePayload{RequestID: attempt.ID, ActionID: actionID, Operation: agentexec.HostUpdateOperationInstall, ExpectedInventoryHash: testHostPackageInventoryHash}
+	if err := agentexec.BindHostUpdatePayload(&req); err != nil {
+		t.Fatal(err)
+	}
+	attempt, err = unified.BindActionDispatchAttempt(attempt, unified.ActionDispatchBinding{OperationKind: req.Operation, OperationVersion: req.OperationVersion, RequestDigest: req.RequestDigest, AgentID: "agent-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return actionlifecycle.ContextWithCommittedDispatchAttempt(context.Background(), attempt)
+}
 
 func TestHostUpdateActionExecutorDispatchesTypedOperationAndProjectsVerification(t *testing.T) {
 	now := time.Now().UTC()
@@ -48,7 +75,7 @@ func TestHostUpdateActionExecutorDispatchesTypedOperationAndProjectsVerification
 	}}
 	executor := newHostUpdateActionExecutor(h, agents)
 
-	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "action-host-update"), hostUpdateActionRecord("action-host-update"))
+	result, err := executor.ExecuteAction(hostUpdateDispatchTestContext(t, "action-host-update"), hostUpdateActionRecord("action-host-update"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
@@ -79,7 +106,7 @@ func TestHostUpdateActionExecutorReportsInconclusiveVerificationHonestly(t *test
 		Error:        "package installation completed but verification was inconclusive",
 	}}
 
-	result, err := newHostUpdateActionExecutor(h, agents).ExecuteAction(actionDispatchTestContext(t, "action-host-update"), hostUpdateActionRecord("action-host-update"))
+	result, err := newHostUpdateActionExecutor(h, agents).ExecuteAction(hostUpdateDispatchTestContext(t, "action-host-update"), hostUpdateActionRecord("action-host-update"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
@@ -146,6 +173,8 @@ func TestHostUpdateActionAvailabilityFailsClosed(t *testing.T) {
 		reasonCode string
 	}{
 		{name: "commands disabled", mutate: func(r *unified.Resource) { r.Agent.CommandsEnabled = false }, connected: true, reasonCode: "host_commands_disabled"},
+		{name: "missing receipt protocol", mutate: func(r *unified.Resource) { r.Agent.OperationReceiptVersion = 0 }, connected: true, reasonCode: "operation_receipt_unsupported"},
+		{name: "future receipt protocol", mutate: func(r *unified.Resource) { r.Agent.OperationReceiptVersion = operationreceipt.ProtocolVersion + 1 }, connected: true, reasonCode: "operation_receipt_unsupported"},
 		{name: "stale inventory", mutate: func(r *unified.Resource) { r.Agent.PackageUpdates.CheckedAt = now.Add(-time.Hour) }, connected: true, reasonCode: "stale_package_inventory"},
 		{name: "inventory error", mutate: func(r *unified.Resource) { r.Agent.PackageUpdates.Error = "inspection failed" }, connected: true, reasonCode: "package_inventory_error"},
 		{name: "invalid inventory fingerprint", mutate: func(r *unified.Resource) { r.Agent.PackageUpdates.InventoryHash = "sha256:bad" }, connected: true, reasonCode: "invalid_package_inventory"},
@@ -165,6 +194,53 @@ func TestHostUpdateActionAvailabilityFailsClosed(t *testing.T) {
 	}
 }
 
+func TestHostUpdateCompatibleProposalRefusesLiveAgentDowngradeBeforeExecuting(t *testing.T) {
+	now := time.Now().UTC()
+	resource := hostUpdateActionResource(now)
+	resource.Capabilities[0].MinimumApprovalLevel = unified.ApprovalNone
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{resource}})
+	agents := &fakeHostUpdateAgent{connected: true}
+	h.SetActionExecutor(newRoutedActionExecutor(h, newHostUpdateActionExecutor(h, agents)))
+	service := h.ActionLifecycle()
+	actor := unified.ActionActor{SubjectID: "requester", Kind: unified.ActionActorService, CredentialID: "service:test", OrgID: "default"}
+	plan, err := service.Plan(context.Background(), "default", unified.ActionRequest{RequestID: "downgrade", ResourceID: resource.ID, CapabilityName: hostPackageUpdateCapability, Reason: "test", RequestedBy: "requester", Actor: actor}, actor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agents.receiptVersionSet = true
+	agents.receiptVersion = 0
+	if _, err := service.Execute(context.Background(), "default", plan.ActionID, actor, "downgrade"); err == nil {
+		t.Fatal("downgraded agent executed")
+	}
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	audit, found, err := store.GetActionAudit(plan.ActionID)
+	if err != nil || !found || audit.State == unified.ActionStateExecuting {
+		t.Fatalf("audit=%#v found=%v err=%v", audit, found, err)
+	}
+	if _, found, err := store.GetActionDispatchAttempt(plan.ActionID); err != nil || found {
+		t.Fatalf("dispatch found=%v err=%v", found, err)
+	}
+	if len(agents.requests) != 0 {
+		t.Fatalf("requests=%#v", agents.requests)
+	}
+}
+
+func TestHostUpdateSelfReportedReceiptSupportCannotBypassLiveServerVersion(t *testing.T) {
+	now := time.Now().UTC()
+	resource := hostUpdateActionResource(now)
+	for _, version := range []int{0, operationreceipt.ProtocolVersion + 1} {
+		agents := &fakeHostUpdateAgent{connected: true, receiptVersion: version, receiptVersionSet: true}
+		readiness := hostUpdateActionExecutor{agents: agents, now: func() time.Time { return now }}.CheckActionAvailable(context.Background(), unified.ActionRequest{CapabilityName: hostPackageUpdateCapability}, resource)
+		if readiness.Available || readiness.ReasonCode != "operation_receipt_unsupported" {
+			t.Fatalf("version=%d readiness=%#v", version, readiness)
+		}
+	}
+}
+
 func hostUpdateActionResource(now time.Time) unified.Resource {
 	return unified.Resource{
 		ID: "agent:host-1", Type: unified.ResourceTypeAgent, Technology: "linux", Name: "host-1",
@@ -172,7 +248,7 @@ func hostUpdateActionResource(now time.Time) unified.Resource {
 		Sources:      []unified.DataSource{unified.SourceAgent},
 		SourceStatus: map[unified.DataSource]unified.SourceStatus{unified.SourceAgent: {Status: "online", LastSeen: now}},
 		Agent: &unified.AgentData{
-			AgentID: "agent-1", Platform: "linux", CommandsEnabled: true,
+			AgentID: "agent-1", Platform: "linux", CommandsEnabled: true, OperationReceiptVersion: operationreceipt.ProtocolVersion,
 			PackageUpdates: &unified.AgentPackageUpdateMeta{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: now, ObservedAt: now},
 		},
 		Capabilities: []unified.ResourceCapability{{

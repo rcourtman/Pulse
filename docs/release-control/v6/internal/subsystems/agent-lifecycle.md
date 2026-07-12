@@ -4357,7 +4357,7 @@ two-axis result contract. API tokens are ineligible for the human Autopilot
 acknowledgement even where an owner-bound token remains compatible with an
 authenticated action capability.
 
-### Task 09 typed APT transport and shared package-manager authority (partial)
+### Task 07 generic durable agent-operation receipts and Task 09 APT adapter
 
 Host update and package-cache cleanup use one strict server/agent codec;
 unknown fields, trailing JSON, malformed identity, and open command, path,
@@ -4367,8 +4367,36 @@ inspection, refresh, update, and cleanup paths share one composition-root-
 injected lease; nil authority fails closed. Metadata refresh is the first
 possible external effect.
 
-This slice contains no APT-specific journal or replay store. Accepted Task 07
-has server dispatch attempts and query-only reconciliation but no reusable
-agent-side durable typed-operation receipt primitive. Disconnect, restart,
-late-receipt, and no-blind-replay proof stay open until that generic crash-safe
-contract exists and Task 09 consumes it.
+The agent-side authority is the generic SQLite operation-receipt store in
+`internal/operationreceipt/`, not an APT-specific journal. Before any typed
+mutation, it durably binds the canonical dispatch attempt, action, operation
+kind/version, request digest, and authenticated agent identity. Admission and
+start are atomic keyed transitions; a process reopen conservatively converts
+accepted or started work to `interrupted_unknown`, which is queryable but never
+automatically executable. Strict versioned terminal envelopes remain exactly
+replayable while recent, then compact to immutable identity-and-digest
+replay-denial tombstones. Replayable payload bytes are TTL/byte bounded;
+tombstone metadata grows monotonically by design so no prior attempt can become
+new authority. Disk exhaustion fails the current admission before mutation and
+recovers when storage capacity returns; operator disk monitoring remains
+required and total tombstone disk use is not described as bounded.
+
+The server derives operation version and request digest after canonical request
+fields are fixed, persists that binding on the action dispatch attempt, and
+queries the authenticated agent by the exact binding after callback loss or
+restart. `not_found`, interrupted, tombstoned, malformed, late, duplicate,
+wrong-agent, and mismatched responses never authorize resend or terminal truth.
+Terminal payload kind/version and strict adapter codecs are revalidated on
+write, read, query, and reopen. APT update and cleanup are adapters over this
+generic owner, persist only bounded sanitized typed results, and still share
+the package-manager lease. Raw commands, paths, package selectors, stderr,
+secrets, and unbounded output are outside the receipt schema.
+
+Durable receipt protocol support is explicit agent-reported and server-observed
+capability metadata. Missing, legacy, or future versions stay connected for
+monitoring but advertise no APT mutation capability, emit no actionable APT
+finding, and fail dispatch readiness. Product version strings never imply this
+authority. The raw protocol integer stays internal to ingest, registry, and
+live dispatch checks; customer/frontend resource JSON consumes only derived
+capabilities and readiness. Claims 16 and 17 remain open until Task 09 resumes and the required
+browser/lab evidence plus Task 12 certification are complete.

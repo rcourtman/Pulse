@@ -1,11 +1,49 @@
 package unifiedresources
 
 import (
+	"database/sql"
 	"errors"
+	_ "modernc.org/sqlite"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 )
+
+func TestSQLiteActionDispatchBindingMigrationKeepsLegacyReceiptPendingInert(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "resources", "unified_resources.db")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`CREATE TABLE action_dispatch_attempts(attempt_id TEXT PRIMARY KEY,action_id TEXT NOT NULL UNIQUE,state TEXT NOT NULL,created_at DATETIME NOT NULL,updated_at DATETIME NOT NULL,lease_owner TEXT,lease_expires_at DATETIME,dispatch_count INTEGER NOT NULL DEFAULT 0);INSERT INTO action_dispatch_attempts(attempt_id,action_id,state,created_at,updated_at,dispatch_count)VALUES('legacy.dispatch.1','legacy','receipt_pending',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,1)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	attempt, found, err := store.GetActionDispatchAttempt("legacy")
+	if err != nil || !found {
+		t.Fatalf("attempt=%#v found=%v err=%v", attempt, found, err)
+	}
+	if attempt.State != ActionDispatchReceiptPending || attempt.OperationKind != "" || attempt.OperationVersion != 0 || attempt.RequestDigest != "" || attempt.AgentID != "" {
+		t.Fatalf("migrated attempt=%#v", attempt)
+	}
+	if _, claimed, err := store.ClaimActionDispatch("legacy", "worker", time.Now(), time.Minute); err != nil || claimed {
+		t.Fatalf("claimed=%v err=%v", claimed, err)
+	}
+}
 
 func admitDispatchTestAction(t *testing.T, store ResourceStore, id string, now time.Time) ActionDispatchAttempt {
 	t.Helper()

@@ -7345,11 +7345,18 @@ receipt and terminal audit/event atomically, eliminating the
 receipt-recorded/result-lost crash window without extending Task 10's schema.
 Legacy executing rows without an attempt remain readable but inert.
 
-This Task 07 Phase B1 contract intentionally stops at transport continuity.
-Task 10 remains sole schema owner for execution, verification, evidence, and
-compensation truth. Compensation and verification-attempt recovery, plus
-mobile and relay inbox/push-dedup consumption, remain Phase B2 work after Task
-10; no mobile or relay-local workaround may compensate for a missing core API.
+Task 07 Phase B1 owns server transport continuity. Phase B2 now adds the
+generic agent-side durable operation-receipt owner, exact server/agent binding,
+query-only reconciliation, payload-to-tombstone retention, and explicit agent
+receipt-protocol capability gate consumed by the APT adapters. A query
+`not_found`, interrupted record, or replay-denial tombstone leaves the action
+`executing` with its dispatch `receipt_pending`; it never authorizes executor
+or transport resend. Task 10 remains sole schema owner for execution,
+verification, evidence, and compensation truth. Compensation and
+verification-attempt recovery plus mobile/relay inbox and push-dedup
+consumption remain separate work; no mobile or relay-local workaround may
+compensate for a missing core API. Claims 16 and 17 remain open pending Task 09
+resumption, real browser/lab evidence, and Task 12 certification.
 
 ### Canonical mutation plane
 

@@ -15,9 +15,9 @@ func insertActionDispatchSQL(exec sqlExecutor, attempt ActionDispatchAttempt) er
 	}
 	if _, err := exec.Exec(`
 		INSERT INTO action_dispatch_attempts
-			(attempt_id, action_id, state, created_at, updated_at, lease_owner, lease_expires_at, dispatch_count)
-		VALUES (?, ?, ?, ?, ?, NULL, NULL, ?)
-	`, attempt.ID, attempt.ActionID, string(attempt.State), attempt.CreatedAt, attempt.UpdatedAt, attempt.DispatchCount); err != nil {
+			(attempt_id, action_id, state, created_at, updated_at, lease_owner, lease_expires_at, dispatch_count, operation_kind, operation_version, request_digest, agent_id)
+		VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?)
+	`, attempt.ID, attempt.ActionID, string(attempt.State), attempt.CreatedAt, attempt.UpdatedAt, attempt.DispatchCount, attempt.OperationKind, attempt.OperationVersion, attempt.RequestDigest, attempt.AgentID); err != nil {
 		return fmt.Errorf("insert action dispatch attempt: %w", err)
 	}
 	if _, err := exec.Exec(`
@@ -34,7 +34,7 @@ func scanActionDispatch(scanner interface{ Scan(...any) error }) (ActionDispatch
 	var state string
 	var owner sql.NullString
 	var lease sql.NullTime
-	if err := scanner.Scan(&attempt.ID, &attempt.ActionID, &state, &attempt.CreatedAt, &attempt.UpdatedAt, &owner, &lease, &attempt.DispatchCount); err != nil {
+	if err := scanner.Scan(&attempt.ID, &attempt.ActionID, &state, &attempt.CreatedAt, &attempt.UpdatedAt, &owner, &lease, &attempt.DispatchCount, &attempt.OperationKind, &attempt.OperationVersion, &attempt.RequestDigest, &attempt.AgentID); err != nil {
 		return ActionDispatchAttempt{}, err
 	}
 	attempt.State = ActionDispatchState(state)
@@ -47,7 +47,7 @@ func scanActionDispatch(scanner interface{ Scan(...any) error }) (ActionDispatch
 
 func getActionDispatchFrom(queryer actionAuditQueryRower, actionID string) (ActionDispatchAttempt, bool, error) {
 	row := queryer.QueryRow(`
-		SELECT attempt_id, action_id, state, created_at, updated_at, lease_owner, lease_expires_at, dispatch_count
+		SELECT attempt_id, action_id, state, created_at, updated_at, lease_owner, lease_expires_at, dispatch_count, operation_kind, operation_version, request_digest, agent_id
 		FROM action_dispatch_attempts WHERE action_id = ?
 	`, strings.TrimSpace(actionID))
 	attempt, err := scanActionDispatch(row)
@@ -59,7 +59,7 @@ func getActionDispatchFrom(queryer actionAuditQueryRower, actionID string) (Acti
 
 func getActionDispatchByAttemptFrom(queryer actionAuditQueryRower, attemptID string) (ActionDispatchAttempt, bool, error) {
 	row := queryer.QueryRow(`
-		SELECT attempt_id, action_id, state, created_at, updated_at, lease_owner, lease_expires_at, dispatch_count
+		SELECT attempt_id, action_id, state, created_at, updated_at, lease_owner, lease_expires_at, dispatch_count, operation_kind, operation_version, request_digest, agent_id
 		FROM action_dispatch_attempts WHERE attempt_id = ?
 	`, strings.TrimSpace(attemptID))
 	attempt, err := scanActionDispatch(row)

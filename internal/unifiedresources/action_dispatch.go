@@ -21,14 +21,29 @@ const (
 // ActionDispatchAttempt is the create-once durable identity for sending one
 // canonical action to its mutation transport.
 type ActionDispatchAttempt struct {
-	ID             string              `json:"id"`
-	ActionID       string              `json:"actionId"`
-	State          ActionDispatchState `json:"state"`
-	CreatedAt      time.Time           `json:"createdAt"`
-	UpdatedAt      time.Time           `json:"updatedAt"`
-	LeaseOwner     string              `json:"leaseOwner,omitempty"`
-	LeaseExpiresAt time.Time           `json:"leaseExpiresAt,omitempty"`
-	DispatchCount  int                 `json:"dispatchCount"`
+	ID               string              `json:"id"`
+	ActionID         string              `json:"actionId"`
+	State            ActionDispatchState `json:"state"`
+	CreatedAt        time.Time           `json:"createdAt"`
+	UpdatedAt        time.Time           `json:"updatedAt"`
+	LeaseOwner       string              `json:"leaseOwner,omitempty"`
+	LeaseExpiresAt   time.Time           `json:"leaseExpiresAt,omitempty"`
+	DispatchCount    int                 `json:"dispatchCount"`
+	OperationKind    string              `json:"operationKind,omitempty"`
+	OperationVersion int                 `json:"operationVersion,omitempty"`
+	RequestDigest    string              `json:"requestDigest,omitempty"`
+	AgentID          string              `json:"agentId,omitempty"`
+}
+
+type ActionDispatchBinding struct {
+	OperationKind    string
+	OperationVersion int
+	RequestDigest    string
+	AgentID          string
+}
+
+func (a ActionDispatchAttempt) HasOperationBinding() bool {
+	return strings.TrimSpace(a.OperationKind) != "" && a.OperationVersion > 0 && strings.TrimSpace(a.RequestDigest) != "" && strings.TrimSpace(a.AgentID) != ""
 }
 
 // ActionDispatchReceipt proves only that the transport answered the committed
@@ -71,6 +86,9 @@ func NormalizeActionDispatchAttempt(attempt ActionDispatchAttempt) (ActionDispat
 	attempt.ID = strings.TrimSpace(attempt.ID)
 	attempt.ActionID = strings.TrimSpace(attempt.ActionID)
 	attempt.LeaseOwner = strings.TrimSpace(attempt.LeaseOwner)
+	attempt.OperationKind = strings.TrimSpace(attempt.OperationKind)
+	attempt.RequestDigest = strings.TrimSpace(attempt.RequestDigest)
+	attempt.AgentID = strings.TrimSpace(attempt.AgentID)
 	if attempt.ActionID == "" {
 		return ActionDispatchAttempt{}, fmt.Errorf("action dispatch action id required")
 	}
@@ -104,7 +122,19 @@ func NormalizeActionDispatchAttempt(attempt ActionDispatchAttempt) (ActionDispat
 	if attempt.DispatchCount < 0 {
 		return ActionDispatchAttempt{}, fmt.Errorf("action dispatch count cannot be negative")
 	}
+	bound := attempt.OperationKind != "" || attempt.OperationVersion != 0 || attempt.RequestDigest != "" || attempt.AgentID != ""
+	if bound && (attempt.OperationKind == "" || attempt.OperationVersion <= 0 || attempt.RequestDigest == "" || attempt.AgentID == "") {
+		return ActionDispatchAttempt{}, fmt.Errorf("action dispatch operation binding is incomplete")
+	}
 	return attempt, nil
+}
+
+func BindActionDispatchAttempt(attempt ActionDispatchAttempt, binding ActionDispatchBinding) (ActionDispatchAttempt, error) {
+	attempt.OperationKind = binding.OperationKind
+	attempt.OperationVersion = binding.OperationVersion
+	attempt.RequestDigest = binding.RequestDigest
+	attempt.AgentID = binding.AgentID
+	return NormalizeActionDispatchAttempt(attempt)
 }
 
 func NormalizeActionDispatchReceipt(receipt ActionDispatchReceipt) (ActionDispatchReceipt, error) {

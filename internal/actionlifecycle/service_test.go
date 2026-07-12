@@ -428,6 +428,45 @@ func TestSQLiteRestartRecoveryReconcilesReceiptPendingWithoutResend(t *testing.T
 	}
 }
 
+func TestSQLiteRestartRecoveryNotFoundRemainsReceiptPendingWithoutResend(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now().UTC()
+	store, err := unified.NewSQLiteResourceStore(dir, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	executor := &reconcilingExecutor{executeErr: context.DeadlineExceeded, found: false}
+	service := serviceForStore(t, store, testResource(now, unified.ApprovalNone), executor)
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Execute(context.Background(), "default", plan.ActionID, testActionActor("operator", "default"), "initial"); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("execute err=%v", err)
+	}
+	for n := 0; n < 2; n++ {
+		recovered, err := service.RecoverExecutingActions(context.Background(), "default", "system:restart-recovery", 100)
+		if err != nil || len(recovered) != 1 || recovered[0].State != unified.ActionStateExecuting {
+			t.Fatalf("pass=%d recovered=%#v err=%v", n, recovered, err)
+		}
+	}
+	attempt, found, err := store.GetActionDispatchAttempt(plan.ActionID)
+	if err != nil || !found || attempt.State != unified.ActionDispatchReceiptPending {
+		t.Fatalf("attempt=%#v found=%v err=%v", attempt, found, err)
+	}
+	if _, found, err := store.GetActionDispatchReceipt(attempt.ID); err != nil || found {
+		t.Fatalf("receipt found=%v err=%v", found, err)
+	}
+	audit, found, err := store.GetActionAudit(plan.ActionID)
+	if err != nil || !found || audit.State != unified.ActionStateExecuting || audit.Result != nil {
+		t.Fatalf("audit=%#v found=%v err=%v", audit, found, err)
+	}
+	if executor.executeCalls != 1 || executor.reconcileCalls != 2 {
+		t.Fatalf("execute=%d reconcile=%d", executor.executeCalls, executor.reconcileCalls)
+	}
+}
+
 func TestActionDetailAndInboxMaterializeExplicitExpiry(t *testing.T) {
 	now := time.Date(2026, 7, 11, 14, 0, 0, 0, time.UTC)
 	store := unified.NewMemoryStore()
@@ -783,6 +822,11 @@ type reconcilingExecutor struct {
 	found          bool
 	result         *unified.ExecutionResult
 }
+type bindingReconcilingExecutor struct{ reconcilingExecutor }
+
+func (e *bindingReconcilingExecutor) BindActionDispatch(_ context.Context, _ unified.ActionAuditRecord, a unified.ActionDispatchAttempt) (unified.ActionDispatchAttempt, error) {
+	return a, nil
+}
 
 func (e *reconcilingExecutor) ExecuteAction(_ context.Context, _ unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
 	e.executeCalls++
@@ -797,6 +841,46 @@ func (e *reconcilingExecutor) ReconcileActionDispatch(_ context.Context, record 
 	return e.result, unified.ActionDispatchReceipt{
 		AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: time.Now().UTC(),
 	}, true, nil
+}
+
+func TestLegacyUnboundReceiptPendingAttemptIsInertForBindingOwnedExecutor(t *testing.T) {
+	now := time.Now().UTC()
+	store := unified.NewMemoryStore()
+	executor := &bindingReconcilingExecutor{}
+	service := serviceForStore(t, store, testResource(now, unified.ApprovalNone), executor)
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, found, err := store.GetActionAudit(plan.ActionID)
+	if err != nil || !found {
+		t.Fatal(err)
+	}
+	started, event, err := unified.BeginActionExecution(record, "operator", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt, err := unified.NewActionDispatchAttempt(started.ID, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RecordActionExecutionAdmission(started, event, attempt); err != nil {
+		t.Fatal(err)
+	}
+	claimed, won, err := store.ClaimActionDispatch(started.ID, "legacy-worker", now, time.Minute)
+	if err != nil || !won {
+		t.Fatalf("claim=%#v won=%v err=%v", claimed, won, err)
+	}
+	if _, err := store.MarkActionDispatchStarted(claimed.ID, "legacy-worker", now); err != nil {
+		t.Fatal(err)
+	}
+	recovered, err := service.RecoverExecutingActions(context.Background(), "default", "system:recovery", 10)
+	if err != nil || len(recovered) != 1 || recovered[0].State != unified.ActionStateExecuting {
+		t.Fatalf("recovered=%#v err=%v", recovered, err)
+	}
+	if executor.executeCalls != 0 || executor.reconcileCalls != 0 {
+		t.Fatalf("execute=%d reconcile=%d", executor.executeCalls, executor.reconcileCalls)
+	}
 }
 
 func (s *stubExecutor) ExecuteAction(_ context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {

@@ -11,7 +11,7 @@ import (
 
 func TestHostStorageCleanupPayloadIsClosedAndSelectorFree(t *testing.T) {
 	typeOf := reflect.TypeOf(HostStorageCleanupPayload{})
-	want := []string{"RequestID", "ActionID", "Operation", "ExpectedFingerprint", "Timeout"}
+	want := []string{"RequestID", "ActionID", "Operation", "OperationVersion", "RequestDigest", "ExpectedFingerprint", "Timeout"}
 	if typeOf.NumField() != len(want) {
 		t.Fatalf("host storage cleanup payload fields = %d, want %d", typeOf.NumField(), len(want))
 	}

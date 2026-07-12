@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
@@ -153,17 +154,18 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 			SwapUsed:  host.Memory.SwapUsed,
 			SwapTotal: host.Memory.SwapTotal,
 		},
-		CommandsEnabled:   host.CommandsEnabled,
-		ReportIP:          host.ReportIP,
-		DiskExclude:       append([]string(nil), host.DiskExclude...),
-		IsLegacy:          host.IsLegacy,
-		NetInRate:         host.NetInRate,
-		NetOutRate:        host.NetOutRate,
-		DiskReadRate:      host.DiskReadRate,
-		DiskWriteRate:     host.DiskWriteRate,
-		LinkedNodeID:      host.LinkedNodeID,
-		LinkedVMID:        host.LinkedVMID,
-		LinkedContainerID: host.LinkedContainerID,
+		CommandsEnabled:         host.CommandsEnabled,
+		OperationReceiptVersion: host.OperationReceiptVersion,
+		ReportIP:                host.ReportIP,
+		DiskExclude:             append([]string(nil), host.DiskExclude...),
+		IsLegacy:                host.IsLegacy,
+		NetInRate:               host.NetInRate,
+		NetOutRate:              host.NetOutRate,
+		DiskReadRate:            host.DiskReadRate,
+		DiskWriteRate:           host.DiskWriteRate,
+		LinkedNodeID:            host.LinkedNodeID,
+		LinkedVMID:              host.LinkedVMID,
+		LinkedContainerID:       host.LinkedContainerID,
 	}
 	if host.PackageUpdates != nil {
 		packages := make([]AgentPackageUpdate, len(host.PackageUpdates.Packages))
@@ -521,7 +523,7 @@ func hostPackageUpdateCapabilities(host models.Host) []ResourceCapability {
 	status := host.PackageUpdates
 	now := time.Now().UTC()
 	meta := agentPackageUpdateMetaFromModel(status)
-	if !host.CommandsEnabled || status == nil || !status.Supported || strings.TrimSpace(status.Manager) != "apt" || strings.TrimSpace(status.InventoryHash) == "" || status.PendingCount <= 0 || strings.TrimSpace(status.Error) != "" || !HostPackageUpdateTelemetryFresh(meta, now) {
+	if !host.CommandsEnabled || host.OperationReceiptVersion != operationreceipt.ProtocolVersion || status == nil || !status.Supported || strings.TrimSpace(status.Manager) != "apt" || strings.TrimSpace(status.InventoryHash) == "" || status.PendingCount <= 0 || strings.TrimSpace(status.Error) != "" || !HostPackageUpdateTelemetryFresh(meta, now) {
 		return nil
 	}
 	return []ResourceCapability{{
@@ -539,7 +541,7 @@ func hostStorageCleanupCapability(host models.Host) (ResourceCapability, bool) {
 	status := host.StorageCleanup
 	now := time.Now().UTC()
 	meta := agentStorageCleanupMetaFromModel(status)
-	if !host.CommandsEnabled || status == nil || !status.Supported || strings.TrimSpace(status.Provider) != "apt-package-cache" || strings.TrimSpace(status.Fingerprint) == "" || status.ReclaimableBytes < HostStorageCleanupMinReclaimableBytes || strings.TrimSpace(status.Error) != "" || !HostStorageCleanupTelemetryFresh(meta, now) {
+	if !host.CommandsEnabled || host.OperationReceiptVersion != operationreceipt.ProtocolVersion || status == nil || !status.Supported || strings.TrimSpace(status.Provider) != "apt-package-cache" || strings.TrimSpace(status.Fingerprint) == "" || status.ReclaimableBytes < HostStorageCleanupMinReclaimableBytes || strings.TrimSpace(status.Error) != "" || !HostStorageCleanupTelemetryFresh(meta, now) {
 		return ResourceCapability{}, false
 	}
 	if _, ok := HostStorageCleanupPressureDisk(convertDisks(host.Disks)); !ok {

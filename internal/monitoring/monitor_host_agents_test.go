@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strings"
@@ -11,12 +12,113 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
+
+func TestApplyHostReportOperationReceiptProtocolReplacesCapabilityAuthority(t *testing.T) {
+	now := time.Now().UTC()
+	baseReport := func(version int) agentshost.Report {
+		return agentshost.Report{
+			Agent: agentshost.AgentInfo{
+				ID:                      "receipt-agent",
+				Version:                 "6.0.6",
+				Type:                    "unified",
+				IntervalSeconds:         30,
+				CommandsEnabled:         true,
+				OperationReceiptVersion: version,
+			},
+			Host: agentshost.HostInfo{
+				ID:        "receipt-machine",
+				Hostname:  "receipt-host",
+				Platform:  "linux",
+				OSName:    "debian",
+				OSVersion: "12",
+				PackageUpdates: &agentshost.PackageUpdateStatus{
+					Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("a", 64), PendingCount: 2, CheckedAt: now,
+				},
+				StorageCleanup: &agentshost.StorageCleanupStatus{
+					Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("b", 64), ReclaimableBytes: 512 << 20, CheckedAt: now,
+				},
+			},
+			Disks:     []agentshost.Disk{{Mountpoint: "/", TotalBytes: 100 << 30, UsedBytes: 95 << 30, FreeBytes: 5 << 30, Usage: 95}},
+			Timestamp: now,
+		}
+	}
+	capabilityNames := func(host models.Host) map[string]bool {
+		names := map[string]bool{}
+		for _, capability := range unifiedresources.HostIngestRecord(host).Resource.Capabilities {
+			names[capability.Name] = true
+		}
+		return names
+	}
+	t.Run("legacy absent", func(t *testing.T) {
+		encoded, err := json.Marshal(baseReport(0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(encoded), "operationReceiptVersion") {
+			t.Fatalf("legacy fixture unexpectedly contains receipt protocol: %s", encoded)
+		}
+		var legacy agentshost.Report
+		if err := json.Unmarshal(encoded, &legacy); err != nil {
+			t.Fatal(err)
+		}
+		monitor := newTestMonitor(t)
+		host, err := monitor.ApplyHostReport(legacy, &config.APITokenRecord{ID: "receipt-token"})
+		if err != nil {
+			t.Fatalf("ApplyHostReport: %v", err)
+		}
+		if host.OperationReceiptVersion != 0 || len(capabilityNames(host)) != 0 {
+			t.Fatalf("legacy absent protocol gained capability authority: version=%d capabilities=%#v", host.OperationReceiptVersion, capabilityNames(host))
+		}
+	})
+
+	for _, test := range []struct {
+		name    string
+		version int
+		want    bool
+	}{
+		{name: "explicit zero unsupported", version: 0, want: false},
+		{name: "current supported", version: operationreceipt.ProtocolVersion, want: true},
+		{name: "future unsupported", version: operationreceipt.ProtocolVersion + 1, want: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			monitor := newTestMonitor(t)
+			host, err := monitor.ApplyHostReport(baseReport(test.version), &config.APITokenRecord{ID: "receipt-token"})
+			if err != nil {
+				t.Fatalf("ApplyHostReport: %v", err)
+			}
+			if host.OperationReceiptVersion != test.version {
+				t.Fatalf("ingested receipt version = %d, want %d", host.OperationReceiptVersion, test.version)
+			}
+			names := capabilityNames(host)
+			got := names["install_os_updates"] && names["clean_package_cache"] && len(names) == 2
+			if got != test.want {
+				t.Fatalf("derived capabilities = %#v, want both=%v", names, test.want)
+			}
+		})
+	}
+
+	monitor := newTestMonitor(t)
+	compatible, err := monitor.ApplyHostReport(baseReport(operationreceipt.ProtocolVersion), &config.APITokenRecord{ID: "receipt-token"})
+	if err != nil || len(capabilityNames(compatible)) != 2 {
+		t.Fatalf("compatible ingest: capabilities=%#v err=%v", capabilityNames(compatible), err)
+	}
+	downgradedReport := baseReport(0)
+	downgradedReport.Timestamp = now.Add(time.Second)
+	downgraded, err := monitor.ApplyHostReport(downgradedReport, &config.APITokenRecord{ID: "receipt-token"})
+	if err != nil {
+		t.Fatalf("downgrade ApplyHostReport: %v", err)
+	}
+	if downgraded.OperationReceiptVersion != 0 || len(capabilityNames(downgraded)) != 0 {
+		t.Fatalf("downgrade retained capability authority: version=%d capabilities=%#v", downgraded.OperationReceiptVersion, capabilityNames(downgraded))
+	}
+}
 
 func TestMonitor_GetConfiguredHostIPs_ResolvesOutsideMonitorLock(t *testing.T) {
 	originalLookup := lookupConfiguredHostIP

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -63,6 +64,30 @@ func (e routedActionExecutor) ExecuteAction(ctx context.Context, record unified.
 		return nil, err
 	}
 	return executor.ExecuteAction(ctx, normalized)
+}
+
+func (e routedActionExecutor) BindActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (unified.ActionDispatchAttempt, error) {
+	executor, err := e.executorForAction(ctx, record.Request)
+	if err != nil {
+		return unified.ActionDispatchAttempt{}, err
+	}
+	binder, ok := executor.(actionlifecycle.DispatchBinder)
+	if !ok {
+		return attempt, nil
+	}
+	return binder.BindActionDispatch(ctx, record, attempt)
+}
+
+func (e routedActionExecutor) ReconcileActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (*unified.ExecutionResult, unified.ActionDispatchReceipt, bool, error) {
+	executor, err := e.executorForAction(ctx, record.Request)
+	if err != nil {
+		return nil, unified.ActionDispatchReceipt{}, false, err
+	}
+	reconciler, ok := executor.(actionlifecycle.DispatchReconciler)
+	if !ok {
+		return nil, unified.ActionDispatchReceipt{}, false, nil
+	}
+	return reconciler.ReconcileActionDispatch(ctx, record, attempt)
 }
 
 func (e routedActionExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {

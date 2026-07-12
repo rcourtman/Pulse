@@ -487,6 +487,10 @@ func (s *SQLiteResourceStore) initSchema() error {
 		lease_owner TEXT,
 		lease_expires_at DATETIME,
 		dispatch_count INTEGER NOT NULL DEFAULT 0
+		, operation_kind TEXT NOT NULL DEFAULT ''
+		, operation_version INTEGER NOT NULL DEFAULT 0
+		, request_digest TEXT NOT NULL DEFAULT ''
+		, agent_id TEXT NOT NULL DEFAULT ''
 	);
 	CREATE INDEX IF NOT EXISTS idx_action_dispatch_attempts_state_updated ON action_dispatch_attempts(state, updated_at);
 	CREATE TABLE IF NOT EXISTS action_dispatch_outbox (
@@ -581,11 +585,31 @@ func (s *SQLiteResourceStore) initSchema() error {
 	if err := s.migrateActionLifecycleEventsSchema(); err != nil {
 		return err
 	}
+	if err := s.migrateActionDispatchSchema(); err != nil {
+		return err
+	}
 	if err := s.migrateResourceOperatorStateSchema(); err != nil {
 		return err
 	}
 	if err := s.migrateActionAuditRedaction(); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (s *SQLiteResourceStore) migrateActionDispatchSchema() error {
+	columns, err := s.tableColumns("action_dispatch_attempts")
+	if err != nil {
+		return err
+	}
+	definitions := map[string]string{"operation_kind": "TEXT NOT NULL DEFAULT ''", "operation_version": "INTEGER NOT NULL DEFAULT 0", "request_digest": "TEXT NOT NULL DEFAULT ''", "agent_id": "TEXT NOT NULL DEFAULT ''"}
+	for name, definition := range definitions {
+		if _, ok := columns[name]; ok {
+			continue
+		}
+		if _, err := s.db.Exec("ALTER TABLE action_dispatch_attempts ADD COLUMN " + name + " " + definition); err != nil {
+			return fmt.Errorf("add action_dispatch_attempts.%s column: %w", name, err)
+		}
 	}
 	return nil
 }

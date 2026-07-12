@@ -6,6 +6,16 @@ import (
 	"time"
 )
 
+func TestLegacyReportJSONDefaultsOperationReceiptProtocolUnsupported(t *testing.T) {
+	var report Report
+	if err := json.Unmarshal([]byte(`{"agent":{"id":"legacy","commandsEnabled":true},"host":{"hostname":"legacy"}}`), &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Agent.OperationReceiptVersion != 0 {
+		t.Fatalf("version=%d", report.Agent.OperationReceiptVersion)
+	}
+}
+
 func float64Ptr(value float64) *float64 {
 	return &value
 }
