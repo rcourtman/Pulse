@@ -52,6 +52,21 @@ func TestHostAPTActionResultFutureVerifiedClaimFailsClosed(t *testing.T) {
 	}
 }
 
+func TestHostAPTActionResultBoundsPermittedPositiveClockSkewToReceipt(t *testing.T) {
+	now := time.Date(2026, 7, 12, 9, 0, 0, 0, time.UTC)
+	result, err := hostAPTExecutionResult("agent:host-1", "host-1", agentexec.HostStorageCleanupOperationPackageCache, "cleanup complete", true, true, agentexec.HostStorageCleanupVerificationVerified, true, false, false, false, false, now.Add(-time.Second), now.Add(time.Second), now, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	truth := result.ActionResultV2.Verification
+	if truth.Status != unified.ActionVerificationConfirmed || truth.EvidenceClass != unified.ActionEvidenceAgentAttested || len(truth.Evidence) != 1 {
+		t.Fatalf("bounded clock skew lost verified readback: %#v", truth)
+	}
+	if !truth.Evidence[0].ObservedAt.Equal(now) || !truth.Evidence[0].ReceivedAt.Equal(now) {
+		t.Fatalf("bounded clock skew was not conservatively normalized: %#v", truth.Evidence[0])
+	}
+}
+
 func TestHostAPTActionResultStaleReadbackFailsClosed(t *testing.T) {
 	now := time.Date(2026, 7, 12, 9, 0, 0, 0, time.UTC)
 	result, err := hostAPTExecutionResult("agent:host-1", "host-1", agentexec.HostUpdateOperationInstall, "updates complete", true, true, agentexec.HostUpdateVerificationVerified, true, true, true, true, false, now.Add(-time.Hour-time.Minute), now.Add(-time.Hour), now, now)
