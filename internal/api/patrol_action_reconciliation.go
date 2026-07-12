@@ -158,7 +158,10 @@ func patrolOutcomeForActionAudit(audit unifiedresources.ActionAuditRecord) aicon
 		}
 		switch truth.Verification.Status {
 		case unifiedresources.ActionVerificationConfirmed:
-			return aicontracts.OutcomeFixVerified
+			if truth.Verification.EvidenceClass == unifiedresources.ActionEvidenceIndependent {
+				return aicontracts.OutcomeFixVerified
+			}
+			return aicontracts.OutcomeFixVerificationUnknown
 		case unifiedresources.ActionVerificationContradicted:
 			return aicontracts.OutcomeFixVerificationFailed
 		default:

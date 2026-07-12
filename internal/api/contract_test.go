@@ -20852,3 +20852,14 @@ func TestContract_PatrolActionBrokerKeepsPolicyExecutionCoreOwned(t *testing.T) 
 		}
 	}
 }
+
+func TestContract_PatrolFixVerifiedRequiresIndependentEvidence(t *testing.T) {
+	source, err := os.ReadFile("patrol_action_reconciliation.go")
+	if err != nil {
+		t.Fatalf("read patrol_action_reconciliation.go: %v", err)
+	}
+	pattern := regexp.MustCompile(`(?s)case unifiedresources\.ActionVerificationConfirmed:\s+if truth\.Verification\.EvidenceClass == unifiedresources\.ActionEvidenceIndependent \{\s+return aicontracts\.OutcomeFixVerified\s+\}\s+return aicontracts\.OutcomeFixVerificationUnknown`)
+	if !pattern.Match(source) {
+		t.Fatal("fix_verified must require canonical independent verification; agent-attested confirmation must remain verification unknown")
+	}
+}

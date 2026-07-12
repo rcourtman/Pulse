@@ -253,8 +253,8 @@ func TestPatrolActionReconciliationCannotRegressFromOutOfOrderCallback(t *testin
 	if got.Action == nil || got.Action.ActionID != "act-1" || got.Action.State != string(unifiedresources.ActionStateCompleted) {
 		t.Fatalf("reconciled action = %#v, want authoritative completed action", got.Action)
 	}
-	if got.Outcome != aicontracts.OutcomeFixVerified {
-		t.Fatalf("outcome = %q, want %q", got.Outcome, aicontracts.OutcomeFixVerified)
+	if got.Outcome != aicontracts.OutcomeFixVerificationUnknown {
+		t.Fatalf("outcome = %q, want %q", got.Outcome, aicontracts.OutcomeFixVerificationUnknown)
 	}
 }
 

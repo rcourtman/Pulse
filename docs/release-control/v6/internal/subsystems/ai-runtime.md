@@ -5905,3 +5905,11 @@ to-reconciliation code/test floor only. Claims 16/17 and both APT scorecards
 remain below operational completion because browser workflow evidence,
 disposable Debian/Ubuntu real-lab evidence, and Task 12 final-SHA certification
 remain explicit residuals; no tier-5 or tier-6 evidence is claimed here.
+
+`fix_verified` is reserved for a canonical action result whose successful
+execution has a confirmed independent postcondition. Agent-attested
+confirmation remains useful evidence but projects to
+`fix_verification_unknown`; investigation and finding records remain unresolved
+and terminal push copy stays explicitly inconclusive. This keeps legacy
+single-outcome consumers conservative while `ActionDisposition.ActionResultV2`
+retains both truth axes and the evidence source.

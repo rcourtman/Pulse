@@ -312,7 +312,7 @@ reportReady:
 		t.Fatalf("positive authority binding audit=%#v", audit)
 	}
 	reconciled := patrol.GetFindings().Get(positiveFinding.ID)
-	if reconciled == nil || reconciled.ResolvedAt == nil || reconciled.InvestigationOutcome != string(aicontracts.OutcomeFixVerified) {
+	if reconciled == nil || reconciled.ResolvedAt != nil || reconciled.InvestigationOutcome != string(aicontracts.OutcomeFixVerificationUnknown) {
 		t.Fatalf("positive finding reconciliation=%#v", reconciled)
 	}
 	cacheAfterPositive := rg06CacheState(t, containerID)

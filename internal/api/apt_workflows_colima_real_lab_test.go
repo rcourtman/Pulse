@@ -372,7 +372,7 @@ func runRG09PositiveWorkflow(t *testing.T, dataPath string, resource unified.Res
 		t.Fatalf("dispatch receipt found=%v err=%v receipt=%#v", found, err, receipt)
 	}
 	reconciled := patrol.GetFindings().Get(finding.ID)
-	if reconciled == nil || reconciled.ResolvedAt == nil || reconciled.InvestigationOutcome != string(aicontracts.OutcomeFixVerified) {
+	if reconciled == nil || reconciled.ResolvedAt != nil || reconciled.InvestigationOutcome != string(aicontracts.OutcomeFixVerificationUnknown) {
 		t.Fatalf("finding reconciliation=%#v", reconciled)
 	}
 	projection, err := json.Marshal(struct {
@@ -387,7 +387,7 @@ func runRG09PositiveWorkflow(t *testing.T, dataPath string, resource unified.Res
 			t.Fatalf("raw APT detail %q escaped audit/finding projection: %s", forbidden, projection)
 		}
 	}
-	return rg09WorkflowProof{ActionID: audit.ID, AttemptID: attempt.ID, DispatchCount: attempt.DispatchCount, EvidenceClass: truth.Verification.EvidenceClass, FindingID: finding.ID, FindingOutcome: reconciled.InvestigationOutcome, Resolved: true}
+	return rg09WorkflowProof{ActionID: audit.ID, AttemptID: attempt.ID, DispatchCount: attempt.DispatchCount, EvidenceClass: truth.Verification.EvidenceClass, FindingID: finding.ID, FindingOutcome: reconciled.InvestigationOutcome, Resolved: false}
 }
 
 func rg09UpdateDriftBarrier(t *testing.T, server *rg09Server, agentID, containerID, expectedHash, distro string) map[string]any {

@@ -2079,6 +2079,13 @@ while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
 
+Storage and recovery consumers must not treat confirmed agent-attested action
+readback as independently verified restoration. The canonical result retains
+its confirmation and evidence class, while the legacy Patrol finding outcome
+remains `fix_verification_unknown` unless bounded distinct-trust-domain
+evidence is present. Only independently confirmed successful execution may
+auto-resolve a finding as `fix_verified`.
+
 Task 09 package-cache cleanup remains a bounded typed action over the fixed APT
 cache provider and requires fresh canonical reclaimable-byte and containing-
 filesystem pressure evidence. It accepts no path, package selector,

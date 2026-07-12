@@ -628,11 +628,11 @@ func TestPatrolTypedActionJourneyDetectPlanApproveExecuteVerifyAndReconcile(t *t
 	if completed.Action == nil || completed.Action.State != string(unified.ActionStateCompleted) {
 		t.Fatalf("completed investigation action = %#v", completed.Action)
 	}
-	if completed.Outcome != aicontracts.OutcomeFixVerified {
-		t.Fatalf("completed outcome = %q, want verified", completed.Outcome)
+	if completed.Outcome != aicontracts.OutcomeFixVerificationUnknown {
+		t.Fatalf("completed outcome = %q, want verification unknown", completed.Outcome)
 	}
 	updatedFinding := patrol.GetFindings().Get(finding.ID)
-	if updatedFinding == nil || updatedFinding.InvestigationOutcome != string(aicontracts.OutcomeFixVerified) || updatedFinding.ResolvedAt == nil {
+	if updatedFinding == nil || updatedFinding.InvestigationOutcome != string(aicontracts.OutcomeFixVerificationUnknown) || updatedFinding.ResolvedAt != nil {
 		t.Fatalf("reconciled finding = %#v", updatedFinding)
 	}
 	store, err := resources.getStore("default")
@@ -648,10 +648,10 @@ func TestPatrolTypedActionJourneyDetectPlanApproveExecuteVerifyAndReconcile(t *t
 	}
 	select {
 	case push := <-pushes:
-		if push.ActionType != relay.PushActionViewFixResult || push.ActionID != finding.ID || push.Body != "Action completed and verified" {
+		if push.ActionType != relay.PushActionViewFixResult || push.ActionID != finding.ID || push.Body != "Action completed; verification was inconclusive" {
 			t.Fatalf("terminal push = %#v", push)
 		}
 	default:
-		t.Fatal("verified lifecycle did not publish a terminal mobile notification")
+		t.Fatal("agent-attested lifecycle did not publish an honest terminal mobile notification")
 	}
 }

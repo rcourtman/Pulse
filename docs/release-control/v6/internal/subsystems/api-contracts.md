@@ -7543,3 +7543,13 @@ workflow. Action list/detail continues to carry policy provenance,
 `ActionResultV2`, durable dispatch attempt, and receipt fields unchanged. Unit
 guards pin those projections and verify that APT presentation reads the shared
 `ActionAuditRecord`/`ActionResultV2` types directly.
+
+Patrol finding reconciliation treats `fix_verified` as an independently
+confirmed postcondition, not a synonym for agent readback success. It requires
+canonical execution `succeeded`, verification `confirmed`, and
+`evidenceClass=independent`; normalization already requires bounded durable
+evidence from a trust domain distinct from the executor. Confirmed
+`agent_attested` truth remains visible in `ActionResultV2` and its compatibility
+verification projection, but the finding maps to `fix_verification_unknown`
+and remains unresolved. Malformed digests, missing evidence, and false
+independence fail closed through canonical result normalization.

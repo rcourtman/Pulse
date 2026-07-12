@@ -4480,3 +4480,12 @@ capabilities and readiness. The fake-only code/test floor for claims 16 and 17
 is implemented; both claims and workflow scorecards remain below operational
 completion until browser proof, disposable Debian/Ubuntu lab proof, and Task 12
 certification are complete.
+
+RG-06 and RG-09 keep the executing agent's fresh typed readback classified as
+`agent_attested`. A separate Colima control-plane observation proves the lab
+fixture changed, but it does not enter the authenticated product action result
+and therefore cannot upgrade the product finding to `fix_verified`. Until a
+distinct-trust-domain observation is ingested into `ActionResultV2`, those
+findings remain `fix_verification_unknown` and unresolved. The Docker restart
+journey, which does ingest its direct daemon observation as independent
+evidence, remains the positive `fix_verified` control.

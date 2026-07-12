@@ -85,7 +85,7 @@ func TestActionResultV2EventFindingContextTelemetryProjectionMatrix(t *testing.T
 					expectedOutcome := aicontracts.OutcomeFixVerificationUnknown
 					if execution == unified.ActionExecutionFailed || execution == unified.ActionExecutionNotRun {
 						expectedOutcome = aicontracts.OutcomeFixFailed
-					} else if execution == unified.ActionExecutionSucceeded && verification == unified.ActionVerificationConfirmed {
+					} else if execution == unified.ActionExecutionSucceeded && verification == unified.ActionVerificationConfirmed && class == unified.ActionEvidenceIndependent {
 						expectedOutcome = aicontracts.OutcomeFixVerified
 					} else if execution == unified.ActionExecutionSucceeded && verification == unified.ActionVerificationContradicted {
 						expectedOutcome = aicontracts.OutcomeFixVerificationFailed
@@ -111,6 +111,36 @@ func TestActionResultV2EventFindingContextTelemetryProjectionMatrix(t *testing.T
 	}
 	if cases != 32 {
 		t.Fatalf("legal consumer projection cases=%d, want 32", cases)
+	}
+}
+
+func TestPatrolOutcomeRequiresIndependentEvidenceForFixVerified(t *testing.T) {
+	agentAttested := apiActionResultTruth(t, unified.ActionExecutionSucceeded, unified.ActionVerificationConfirmed, unified.ActionEvidenceAgentAttested)
+	independent := apiActionResultTruth(t, unified.ActionExecutionSucceeded, unified.ActionVerificationConfirmed, unified.ActionEvidenceIndependent)
+	falseIndependent := independent
+	falseIndependent.Verification.Evidence = append([]unified.ActionEvidence(nil), independent.Verification.Evidence...)
+	falseIndependent.Verification.Evidence[0].ObserverTrustDomain = falseIndependent.Verification.Evidence[0].ExecutorTrustDomain
+	badDigest := independent
+	badDigest.Verification.Evidence = append([]unified.ActionEvidence(nil), independent.Verification.Evidence...)
+	badDigest.Verification.Evidence[0].Digest = "sha256:" + strings.Repeat("0", 64)
+
+	tests := []struct {
+		name  string
+		truth unified.ActionResultV2
+		want  aicontracts.InvestigationOutcome
+	}{
+		{name: "agent_attested", truth: agentAttested, want: aicontracts.OutcomeFixVerificationUnknown},
+		{name: "independent", truth: independent, want: aicontracts.OutcomeFixVerified},
+		{name: "false_independence", truth: falseIndependent, want: aicontracts.OutcomeFixVerificationUnknown},
+		{name: "bad_digest", truth: badDigest, want: aicontracts.OutcomeFixVerificationUnknown},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			record := unified.ActionAuditRecord{State: unified.ActionStateCompleted, Result: &unified.ExecutionResult{ActionResultV2: &test.truth}}
+			if got := patrolOutcomeForActionAudit(record); got != test.want {
+				t.Fatalf("outcome=%q want=%q truth=%#v", got, test.want, test.truth)
+			}
+		})
 	}
 }
 

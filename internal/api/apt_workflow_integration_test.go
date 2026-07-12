@@ -289,7 +289,7 @@ func runAPTWorkflowFindingJourney(t *testing.T, resources *ResourceHandlers, fin
 		t.Fatalf("terminal action truth=%#v", audit.Result)
 	}
 	reconciled := patrol.GetFindings().Get(finding.ID)
-	if reconciled == nil || reconciled.ResolvedAt == nil || reconciled.InvestigationOutcome != string(aicontracts.OutcomeFixVerified) {
+	if reconciled == nil || reconciled.ResolvedAt != nil || reconciled.InvestigationOutcome != string(aicontracts.OutcomeFixVerificationUnknown) {
 		t.Fatalf("reconciled finding=%#v", reconciled)
 	}
 	var notification relay.PushNotificationPayload
@@ -371,7 +371,7 @@ func runAPTWorkflowReceiptRecoveryJourney(t *testing.T, resource unified.Resourc
 		t.Fatalf("requests=%d queries=%d; recovery must query once without resend", requests, queries)
 	}
 	reconciled := patrol.GetFindings().Get(finding.ID)
-	if reconciled == nil || reconciled.ResolvedAt == nil || reconciled.InvestigationOutcome != string(aicontracts.OutcomeFixVerified) {
+	if reconciled == nil || reconciled.ResolvedAt != nil || reconciled.InvestigationOutcome != string(aicontracts.OutcomeFixVerificationUnknown) {
 		t.Fatalf("reconciled finding=%#v", reconciled)
 	}
 }
