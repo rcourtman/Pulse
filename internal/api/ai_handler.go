@@ -59,7 +59,7 @@ type AIService interface {
 	AbortSession(ctx context.Context, sessionID string) error
 	SummarizeSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
 	ForkSession(ctx context.Context, sessionID string) (*chat.Session, error)
-	UndoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnUndoResult, error)
+	UndoLastTurn(ctx context.Context, sessionID string, opts chat.SessionTurnUndoOptions) (*chat.SessionTurnUndoResult, error)
 	RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error)
 	AnswerQuestion(ctx context.Context, questionID string, answers []chat.QuestionAnswer) error
 	AssistantSurfaceToolContract(ctx context.Context) agentcapabilities.SurfaceToolContract
@@ -3207,6 +3207,8 @@ func (h *AIHandler) HandleFork(w http.ResponseWriter, r *http.Request, sessionID
 }
 
 // HandleUndoLastTurn handles POST /api/ai/sessions/{id}/undo.
+// The body is optional; retry/regenerate sends SessionTurnUndoOptions with the
+// prompt being re-run so a stale retry can never remove a different turn.
 func (h *AIHandler) HandleUndoLastTurn(w http.ResponseWriter, r *http.Request, sessionID string) {
 	ctx := r.Context()
 	if !h.IsRunning(ctx) {
@@ -3220,7 +3222,15 @@ func (h *AIHandler) HandleUndoLastTurn(w http.ResponseWriter, r *http.Request, s
 		return
 	}
 
-	result, err := svc.UndoLastTurn(ctx, sessionID)
+	var opts chat.SessionTurnUndoOptions
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&opts); err != nil && err != io.EOF {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+	}
+
+	result, err := svc.UndoLastTurn(ctx, sessionID, opts)
 	if err != nil {
 		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
 		return

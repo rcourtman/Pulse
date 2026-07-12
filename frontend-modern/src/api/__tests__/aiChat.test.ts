@@ -1407,6 +1407,37 @@ describe('AIChatAPI', () => {
     });
   });
 
+  it('sends the expected-prompt guard body when undo runs for a retry', async () => {
+    const undoResult = {
+      success: true,
+      session_id: 'session/root',
+      restored_prompt: 'show me the affected hosts',
+      removed_messages: 2,
+      can_redo: true,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(undoResult);
+
+    await expect(
+      AIChatAPI.undoLastTurn('session/root', { expectedPrompt: '  show me the affected hosts  ' }),
+    ).resolves.toEqual(undoResult);
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/sessions/session%2Froot/undo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expected_prompt: 'show me the affected hosts' }),
+    });
+  });
+
+  it('keeps the undo request bodyless when no guard is provided', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({ success: true, session_id: 's', can_redo: false });
+
+    await AIChatAPI.undoLastTurn('s', { expectedPrompt: '   ' });
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/sessions/s/undo', {
+      method: 'POST',
+    });
+  });
+
   it('compacts a session through the summarize endpoint', async () => {
     const result = {
       success: true,

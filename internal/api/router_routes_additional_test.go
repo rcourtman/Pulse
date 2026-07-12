@@ -204,7 +204,7 @@ func TestRouteAISessions_Fork(t *testing.T) {
 func TestRouteAISessions_UndoLastTurn(t *testing.T) {
 	mockSvc := &MockAIService{}
 	mockSvc.On("IsRunning").Return(true)
-	mockSvc.On("UndoLastTurn", mock.Anything, "session-1").Return(&chat.SessionTurnUndoResult{
+	mockSvc.On("UndoLastTurn", mock.Anything, "session-1", chat.SessionTurnUndoOptions{}).Return(&chat.SessionTurnUndoResult{
 		Success:        true,
 		SessionID:      "session-1",
 		RestoredPrompt: "Inspect storage warnings",
@@ -216,6 +216,32 @@ func TestRouteAISessions_UndoLastTurn(t *testing.T) {
 
 	router := &Router{aiHandler: handler}
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/undo", nil)
+	rec := httptest.NewRecorder()
+
+	router.routeAISessions(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	mockSvc.AssertExpectations(t)
+}
+
+func TestRouteAISessions_UndoLastTurnRetryOptions(t *testing.T) {
+	mockSvc := &MockAIService{}
+	mockSvc.On("IsRunning").Return(true)
+	mockSvc.On("UndoLastTurn", mock.Anything, "session-1", chat.SessionTurnUndoOptions{
+		ExpectedPrompt: "Inspect storage warnings",
+	}).Return(&chat.SessionTurnUndoResult{
+		Success:   true,
+		SessionID: "session-1",
+	}, nil)
+
+	handler := &AIHandler{}
+	setUnexportedField(t, handler, "defaultService", mockSvc)
+
+	router := &Router{aiHandler: handler}
+	body := strings.NewReader(`{"expected_prompt":"Inspect storage warnings"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/sessions/session-1/undo", body)
 	rec := httptest.NewRecorder()
 
 	router.routeAISessions(rec, req)

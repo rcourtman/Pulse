@@ -45,6 +45,16 @@ type SessionTurnUndoResult struct {
 	Message         string `json:"message,omitempty"`
 }
 
+// SessionTurnUndoOptions controls how the latest user turn is removed.
+type SessionTurnUndoOptions struct {
+	// ExpectedPrompt, when non-empty, only removes the turn if the latest
+	// user prompt matches it, so a retry can never remove a different turn
+	// (e.g. when the failed send never reached the session). The removed
+	// turn stays redoable until the retried send lands, at which point
+	// AddMessage clears the redo stack like any other new message.
+	ExpectedPrompt string `json:"expected_prompt"`
+}
+
 // SessionTurnRedoResult is returned when a previously undone turn is restored.
 type SessionTurnRedoResult struct {
 	Success          bool   `json:"success"`

@@ -2439,10 +2439,11 @@ export function useChat(options: UseChatOptions = {}) {
     });
   };
 
-  // Retry a failed assistant turn: drop the failed assistant message and the
-  // user prompt that triggered it from the view, then re-send that prompt so the
-  // conversation shows a single clean attempt instead of a dead-end error.
-  const retryMessage = (assistantMessageId: string, sendOptionOverrides?: SendMessageOptions) => {
+  // Retry an assistant turn (failed or regenerated): drop the assistant message
+  // and the user prompt that triggered it from the view AND from the persisted
+  // session, then re-send that prompt so the conversation shows a single clean
+  // attempt instead of a dead-end error plus a double-recorded prompt.
+  const retryMessage = async (assistantMessageId: string, sendOptionOverrides?: SendMessageOptions) => {
     const msgs = messages();
     const idx = msgs.findIndex((m) => m.id === assistantMessageId);
     if (idx < 0) return;
@@ -2456,6 +2457,19 @@ export function useChat(options: UseChatOptions = {}) {
       ...(sendOptionsFromRequestContext(request) || {}),
       ...(sendOptionOverrides || {}),
     };
+    // Remove the retried turn from the durable session so the re-send doesn't
+    // double-record the prompt. The expected-prompt guard makes this a no-op
+    // when the failed send never reached the session; a transport error here
+    // degrades to the old duplicate-history behavior rather than blocking the
+    // retry.
+    const currentSessionId = sessionId().trim();
+    if (currentSessionId) {
+      try {
+        await AIChatAPI.undoLastTurn(currentSessionId, { expectedPrompt: prompt });
+      } catch (error) {
+        logger.warn('[useChat] Retry could not remove the previous turn from session history', error);
+      }
+    }
     const removeIds = new Set([msgs[userIdx].id, assistantMessageId]);
     setMessages((prev) => prev.filter((m) => !removeIds.has(m.id)));
     void sendMessage(

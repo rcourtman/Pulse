@@ -337,6 +337,43 @@ func TestSessionStoreUndoRedoLastTurn(t *testing.T) {
 	assert.Equal(t, "No undone turn to redo.", redo.Message)
 }
 
+func TestSessionStoreUndoLastTurnExpectedPromptGuard(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+
+	session, err := store.Create()
+	require.NoError(t, err)
+
+	require.NoError(t, store.AddMessage(session.ID, Message{ID: "u1", Role: "user", Content: "First prompt"}))
+	require.NoError(t, store.AddMessage(session.ID, Message{ID: "a1", Role: "assistant", Content: "First answer"}))
+
+	// A retry whose prompt never reached the session must not remove the
+	// previous turn.
+	undo, err := store.UndoLastTurnWithOptions(session.ID, SessionTurnUndoOptions{
+		ExpectedPrompt: "Prompt that never persisted",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, undo)
+	assert.False(t, undo.Success)
+	assert.Equal(t, "The latest turn no longer matches the prompt being retried.", undo.Message)
+
+	messages, err := store.GetMessages(session.ID)
+	require.NoError(t, err)
+	require.Len(t, messages, 2)
+
+	// A matching prompt (modulo surrounding whitespace) removes the turn.
+	undo, err = store.UndoLastTurnWithOptions(session.ID, SessionTurnUndoOptions{
+		ExpectedPrompt: "  First prompt  ",
+	})
+	require.NoError(t, err)
+	assert.True(t, undo.Success)
+	assert.Equal(t, "First prompt", undo.RestoredPrompt)
+
+	messages, err = store.GetMessages(session.ID)
+	require.NoError(t, err)
+	assert.Empty(t, messages)
+}
+
 func TestSessionStoreForkRejectsMissingOrInvalidSession(t *testing.T) {
 	store, err := NewSessionStore(t.TempDir())
 	require.NoError(t, err)

@@ -28,6 +28,7 @@ interface ChatMessagesProps {
   ) => void;
   onSkipQuestion: (messageId: string, questionId: string) => void;
   onRetry?: (messageId: string) => void;
+  onRegenerate?: (messageId: string) => void;
   onChangeModel?: () => void;
   getModelRouteLabel?: (modelId: string) => string;
   getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
@@ -69,6 +70,20 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
   const [mirroredMessages, setMirroredMessages] = createStore<ChatMessage[]>([]);
   createEffect(() => {
     setMirroredMessages(reconcile(props.messages, { key: 'id', merge: false }));
+  });
+
+  // Regenerate re-runs the LAST turn via session undo, so only the final
+  // assistant answer qualifies, and only once it has settled with nothing
+  // pending and a user prompt to re-send.
+  const regenerableMessageId = createMemo(() => {
+    if (!props.onRegenerate) return null;
+    const msgs = props.messages;
+    if (msgs.length === 0) return null;
+    const last = msgs[msgs.length - 1];
+    if (last.role !== 'assistant' || last.isStreaming || last.error) return null;
+    if (last.pendingApprovals?.length || last.pendingQuestions?.length) return null;
+    const hasPrompt = msgs.some((m) => m.role === 'user' && m.content.trim());
+    return hasPrompt ? last.id : null;
   });
 
   const isContainerNearBottom = () => {
@@ -286,6 +301,11 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                 }
                 onSkipQuestion={(questionId) => props.onSkipQuestion(message.id, questionId)}
                 onRetry={props.onRetry}
+                onRegenerate={
+                  message.id === regenerableMessageId()
+                    ? () => props.onRegenerate?.(message.id)
+                    : undefined
+                }
                 onChangeModel={props.onChangeModel}
                 getModelRouteLabel={props.getModelRouteLabel}
                 modelRouteAlternative={props.getModelRouteAlternative?.(message)}

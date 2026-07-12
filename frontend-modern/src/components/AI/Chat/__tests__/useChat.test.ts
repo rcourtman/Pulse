@@ -557,7 +557,8 @@ describe('useChat', () => {
       expect(chat.messages()).toHaveLength(2);
 
       mockChat.mockResolvedValueOnce(undefined);
-      chat.retryMessage(failed!.id);
+      mockUndoLastTurn.mockResolvedValueOnce({ success: true, session_id: 'sess', can_redo: false });
+      await chat.retryMessage(failed!.id);
       await new Promise((r) => setTimeout(r, 0));
 
       const msgs = chat.messages();
@@ -565,6 +566,28 @@ describe('useChat', () => {
       expect(msgs.filter((m) => m.role === 'user')).toHaveLength(1);
       expect(msgs.some((m) => m.error)).toBe(false);
       expect(mockChat).toHaveBeenCalledTimes(2);
+      // The persisted turn is removed (guarded by the retried prompt) so the
+      // re-send does not double-record the prompt in session history.
+      expect(mockUndoLastTurn).toHaveBeenCalledWith('sess', { expectedPrompt: 'hello' });
+      expect(mockUndoLastTurn.mock.invocationCallOrder[0]).toBeLessThan(
+        mockChat.mock.invocationCallOrder[1],
+      );
+      dispose();
+    });
+
+    it('retryMessage still re-sends when the history undo fails', async () => {
+      mockChat.mockRejectedValueOnce(new Error('server error'));
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      await chat.sendMessage('hello');
+
+      const failed = chat.messages().find((m) => m.role === 'assistant');
+      mockChat.mockResolvedValueOnce(undefined);
+      mockUndoLastTurn.mockRejectedValueOnce(new Error('network down'));
+      await chat.retryMessage(failed!.id);
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockChat).toHaveBeenCalledTimes(2);
+      expect(chat.messages().some((m) => m.error)).toBe(false);
       dispose();
     });
 
@@ -603,7 +626,7 @@ describe('useChat', () => {
       const failed = chat.messages().find((m) => m.role === 'assistant');
       expect(failed?.error).toContain('server error');
 
-      chat.retryMessage(failed!.id);
+      await chat.retryMessage(failed!.id);
       await new Promise((r) => setTimeout(r, 0));
 
       expect(mockChat).toHaveBeenCalledTimes(2);

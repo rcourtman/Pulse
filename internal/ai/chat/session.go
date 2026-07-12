@@ -818,6 +818,13 @@ func (s *SessionStore) Fork(id string) (*Session, error) {
 // UndoLastTurn removes the latest user-authored turn from a session and stores
 // the removed messages so RedoLastTurn can restore them.
 func (s *SessionStore) UndoLastTurn(id string) (*SessionTurnUndoResult, error) {
+	return s.UndoLastTurnWithOptions(id, SessionTurnUndoOptions{})
+}
+
+// UndoLastTurnWithOptions removes the latest user-authored turn subject to the
+// given options: an expected-prompt guard so retry/regenerate flows cannot
+// remove a turn other than the one being re-run.
+func (s *SessionStore) UndoLastTurnWithOptions(id string, opts SessionTurnUndoOptions) (*SessionTurnUndoResult, error) {
 	if err := validateSessionID(id); err != nil {
 		return nil, err
 	}
@@ -843,6 +850,15 @@ func (s *SessionStore) UndoLastTurn(id string) (*SessionTurnUndoResult, error) {
 			SessionID: data.ID,
 			CanRedo:   len(data.TurnRedoStack) > 0,
 			Message:   "No user turn to undo.",
+		}, nil
+	}
+	if expected := strings.TrimSpace(opts.ExpectedPrompt); expected != "" &&
+		strings.TrimSpace(data.Messages[lastUserIndex].Content) != expected {
+		return &SessionTurnUndoResult{
+			Success:   false,
+			SessionID: data.ID,
+			CanRedo:   len(data.TurnRedoStack) > 0,
+			Message:   "The latest turn no longer matches the prompt being retried.",
 		}, nil
 	}
 

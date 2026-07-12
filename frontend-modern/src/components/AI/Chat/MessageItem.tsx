@@ -55,6 +55,9 @@ interface MessageItemProps {
   ) => void;
   onSkipQuestion: (questionId: string) => void;
   onRetry?: (messageId: string) => void;
+  // Provided only for the latest settled assistant answer: re-runs the turn in
+  // place (same prompt, fresh generation).
+  onRegenerate?: () => void;
   onChangeModel?: () => void;
   getModelRouteLabel?: (modelId: string) => string;
   modelRouteAlternative?: ModelRouteRecoveryOption | null;
@@ -659,6 +662,18 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                   stopPropagation
                   class="ml-auto opacity-0 shadow-sm transition-opacity focus:opacity-100 group-hover:opacity-100"
                 />
+              </Show>
+              <Show when={props.onRegenerate}>
+                <ActionIconButton
+                  onClick={() => props.onRegenerate?.()}
+                  label="Regenerate response"
+                  title="Regenerate response"
+                  tone="outline"
+                  size="sm"
+                  class={`${canCopy() ? '' : 'ml-auto '}opacity-0 shadow-sm transition-opacity focus:opacity-100 group-hover:opacity-100`}
+                >
+                  <RotateCcwIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                </ActionIconButton>
               </Show>
             </div>
 

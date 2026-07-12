@@ -493,6 +493,13 @@ same browser-safe history boundary. Lifecycle surfaces, MCP adapters, and
 agents may display the updated title as human navigation metadata, but they
 must not treat a renamed title as command authorization, host identity,
 enrollment state, capability evidence, or install-token disclosure.
+Assistant turn undo through `POST /api/ai/sessions/{id}/undo` (including the
+optional expected-prompt guard body used by retry/regenerate) is the same
+kind of conversation-history mutation: it rewrites chat transcript state
+only. Lifecycle surfaces and agents must not interpret an undone or
+regenerated Assistant turn as reverting any lifecycle action, approval, or
+agent command the original turn produced; governed action history remains
+the only revert authority for infrastructure changes.
 The native Assistant surface-tool inventory at
 `GET /api/ai/assistant/surface-tools` is also AI-runtime/API-contract metadata:
 lifecycle surfaces may display which Assistant tools are available, but must

@@ -352,7 +352,7 @@ func TestService_SessionWrappers(t *testing.T) {
 		Role:    "assistant",
 		Content: "There are 42 device nodes.",
 	}))
-	undo, err := service.UndoLastTurn(ctx, forked.ID)
+	undo, err := service.UndoLastTurn(ctx, forked.ID, SessionTurnUndoOptions{})
 	require.NoError(t, err)
 	require.NotNil(t, undo)
 	assert.True(t, undo.Success)

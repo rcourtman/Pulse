@@ -20,6 +20,7 @@ let capturedMessageItemProps: Array<{
     answers: Array<{ id: string; value: string }>,
   ) => void;
   onSkipQuestion: (questionId: string) => void;
+  onRegenerate?: () => void;
   onChangeModel?: () => void;
   getModelRouteLabel?: (modelId: string) => string;
   modelRouteAlternative?: ModelRouteRecoveryOption | null;
@@ -41,6 +42,7 @@ vi.mock('../MessageItem', () => ({
       answers: Array<{ id: string; value: string }>,
     ) => void;
     onSkipQuestion: (questionId: string) => void;
+    onRegenerate?: () => void;
     onChangeModel?: () => void;
     getModelRouteLabel?: (modelId: string) => string;
     modelRouteAlternative?: ModelRouteRecoveryOption | null;
@@ -375,6 +377,58 @@ describe('ChatMessages', () => {
       propsForMsg!.onApprove(fakeApproval);
 
       expect(handlers.onApprove).toHaveBeenCalledWith('msg-42', fakeApproval);
+    });
+
+    it('provides onRegenerate only for the last settled assistant answer', () => {
+      const handlers = makeHandlers();
+      const onRegenerate = vi.fn();
+      const messages = [
+        makeMessage({ id: 'u1', role: 'user', content: 'first prompt' }),
+        makeMessage({ id: 'a1', role: 'assistant', content: 'first answer' }),
+        makeMessage({ id: 'u2', role: 'user', content: 'second prompt' }),
+        makeMessage({ id: 'a2', role: 'assistant', content: 'second answer' }),
+      ];
+      render(() => (
+        <ChatMessages messages={messages} {...handlers} onRegenerate={onRegenerate} />
+      ));
+
+      const earlier = capturedMessageItemProps.find((p) => p.message.id === 'a1');
+      const last = capturedMessageItemProps.find((p) => p.message.id === 'a2');
+      expect(earlier!.onRegenerate).toBeUndefined();
+      expect(last!.onRegenerate).toBeDefined();
+
+      last!.onRegenerate!();
+      expect(onRegenerate).toHaveBeenCalledWith('a2');
+    });
+
+    it('withholds onRegenerate while the last answer is streaming, failed, or awaiting input', () => {
+      const handlers = makeHandlers();
+      const onRegenerate = vi.fn();
+      const variants: Array<Partial<ChatMessage>> = [
+        { isStreaming: true },
+        { error: 'provider unreachable' },
+        {
+          pendingApprovals: [
+            { command: 'reboot', toolId: 't1', toolName: 'pulse_control', runOnHost: false },
+          ],
+        },
+      ];
+      for (const overrides of variants) {
+        capturedMessageItemProps = [];
+        const { unmount } = render(() => (
+          <ChatMessages
+            messages={[
+              makeMessage({ id: 'u1', role: 'user', content: 'prompt' }),
+              makeMessage({ id: 'a1', role: 'assistant', content: 'answer', ...overrides }),
+            ]}
+            {...handlers}
+            onRegenerate={onRegenerate}
+          />
+        ));
+        const last = capturedMessageItemProps.find((p) => p.message.id === 'a1');
+        expect(last!.onRegenerate).toBeUndefined();
+        unmount();
+      }
     });
 
     it('forwards onSkip with message.id prepended', () => {

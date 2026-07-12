@@ -1296,10 +1296,17 @@ payload shape change when the portal presents compact client rows.
     `chat.IsSystemSessionID`; browser clients must not re-derive that
     ownership from ID string patterns, and must keep system sessions out of
     resumable-chat offers (quick-resume) while leaving them listable for
-    inspection. Browser clients must use the
-    shared `AIChatAPI.undoLastTurn(sessionId)` and
-    `AIChatAPI.redoLastTurn(sessionId)` helpers so path encoding and response
-    shape stay canonical.
+    inspection. The undo endpoint accepts an optional JSON body
+    (`chat.SessionTurnUndoOptions`) whose `expected_prompt` field makes the
+    removal conditional on the latest user-authored prompt matching the
+    prompt being re-run; retry/regenerate flows send it so a stale retry can
+    never remove a different turn, and a guard mismatch returns
+    `success:false` with a browser-safe message rather than an error status.
+    An absent or empty body preserves the unguarded undo shape. Browser
+    clients must use the shared
+    `AIChatAPI.undoLastTurn(sessionId, { expectedPrompt })` and
+    `AIChatAPI.redoLastTurn(sessionId)` helpers so path encoding, guard
+    trimming, and response shape stay canonical.
     OpenCode-style file diff/revert session routes are deliberately not part
     of Pulse's supported Assistant session contract: Pulse sessions do not own
     local code-file edits, and infrastructure mutations must be reviewed

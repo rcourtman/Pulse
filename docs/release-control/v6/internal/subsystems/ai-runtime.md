@@ -2624,6 +2624,22 @@ query...`, and `Reading storage...` before streamed tool arguments are
    finding id, handoff metadata, approval/autonomous override, and selected
    model route when available so the operator can edit and resend without
    reconstructing hidden context from transcript prose.
+   Retry and regenerate are turn re-runs over the same undo boundary, not a
+   parallel history mutation path. `POST /api/ai/sessions/{id}/undo` accepts an
+   optional JSON body (`chat.SessionTurnUndoOptions`) whose `expected_prompt`
+   field, when non-empty, makes the removal conditional on the latest
+   user-authored prompt matching the prompt being re-run, so a retry whose
+   failed send never reached the session cannot remove a different turn.
+   Frontend retry ("Try again" on a failed turn, model-route switch retry) and
+   regenerate must remove the replaced turn through this guarded undo before
+   re-sending so session history never records the prompt twice; a failed
+   guard or transport error degrades to a plain re-send rather than blocking
+   the retry. The removed turn stays redoable until the re-sent message lands,
+   at which point the normal new-message rule clears redo state. The
+   regenerate affordance is offered only on the latest settled assistant
+   answer (nothing streaming, no error block, no pending approval or
+   question, and a user prompt available to re-send) because the undo
+   boundary only operates on the last durable turn.
    The empty Assistant drawer may surface recent non-empty sessions as direct
    resume actions using the backend session list already owned by the drawer;
    it must not create a parallel recent-chat store or product-authored prompt

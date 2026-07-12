@@ -3344,7 +3344,7 @@ func (s *Service) ForkSession(ctx context.Context, sessionID string) (*Session, 
 }
 
 // UndoLastTurn removes the latest user turn from the durable chat session.
-func (s *Service) UndoLastTurn(ctx context.Context, sessionID string) (*SessionTurnUndoResult, error) {
+func (s *Service) UndoLastTurn(ctx context.Context, sessionID string, opts SessionTurnUndoOptions) (*SessionTurnUndoResult, error) {
 	s.mu.RLock()
 	sessions := s.sessions
 	s.mu.RUnlock()
@@ -3353,7 +3353,7 @@ func (s *Service) UndoLastTurn(ctx context.Context, sessionID string) (*SessionT
 		return nil, fmt.Errorf("service not started")
 	}
 
-	return sessions.UndoLastTurn(sessionID)
+	return sessions.UndoLastTurnWithOptions(sessionID, opts)
 }
 
 // RedoLastTurn restores the latest turn removed by UndoLastTurn.

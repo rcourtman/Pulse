@@ -384,9 +384,21 @@ export class AIChatAPI {
   }
 
   // Undo latest chat turn and return the user prompt so the composer can restore it.
-  static async undoLastTurn(sessionId: string): Promise<ChatSessionUndoResult> {
+  // Retry/regenerate passes expectedPrompt so a stale retry can never remove a
+  // turn other than the one being re-run.
+  static async undoLastTurn(
+    sessionId: string,
+    options?: { expectedPrompt?: string },
+  ): Promise<ChatSessionUndoResult> {
+    const expectedPrompt = options?.expectedPrompt?.trim();
     return apiFetchJSON(`${this.baseUrl}/sessions/${encodeURIComponent(sessionId)}/undo`, {
       method: 'POST',
+      ...(expectedPrompt
+        ? {
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expected_prompt: expectedPrompt }),
+          }
+        : {}),
     }) as Promise<ChatSessionUndoResult>;
   }
 

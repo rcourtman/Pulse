@@ -63,7 +63,7 @@ func (s *capturingAIService) SummarizeSession(ctx context.Context, sessionID str
 func (s *capturingAIService) ForkSession(ctx context.Context, sessionID string) (*chat.Session, error) {
 	return &chat.Session{ID: "fork"}, nil
 }
-func (s *capturingAIService) UndoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnUndoResult, error) {
+func (s *capturingAIService) UndoLastTurn(ctx context.Context, sessionID string, opts chat.SessionTurnUndoOptions) (*chat.SessionTurnUndoResult, error) {
 	return &chat.SessionTurnUndoResult{Success: true, SessionID: sessionID}, nil
 }
 func (s *capturingAIService) RedoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnRedoResult, error) {

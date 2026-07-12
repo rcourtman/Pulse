@@ -2417,7 +2417,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const switchToModelRoute = (modelId: string, failedMessageId?: string) => {
     selectModel(modelId);
     if (failedMessageId) {
-      chat.retryMessage(failedMessageId, { model: modelId });
+      void chat.retryMessage(failedMessageId, { model: modelId });
     }
     focusComposer();
   };
@@ -4833,7 +4833,10 @@ export const AIChat: Component<AIChatProps> = (props) => {
             onSkip={handleSkip}
             onAnswerQuestion={handleAnswerQuestion}
             onSkipQuestion={handleSkipQuestion}
-            onRetry={(messageId) => chat.retryMessage(messageId)}
+            onRetry={(messageId) => void chat.retryMessage(messageId)}
+            onRegenerate={
+              chat.isLoading() ? undefined : (messageId) => void chat.retryMessage(messageId)
+            }
             onChangeModel={openModelSelectorFromError}
             getModelRouteLabel={formatChatMessageModelRoute}
             getModelRouteAlternative={getFailedTurnModelRouteAlternative}

@@ -189,8 +189,8 @@ func (m *MockAIService) ForkSession(ctx context.Context, sessionID string) (*cha
 	return args.Get(0).(*chat.Session), args.Error(1)
 }
 
-func (m *MockAIService) UndoLastTurn(ctx context.Context, sessionID string) (*chat.SessionTurnUndoResult, error) {
-	args := m.Called(ctx, sessionID)
+func (m *MockAIService) UndoLastTurn(ctx context.Context, sessionID string, opts chat.SessionTurnUndoOptions) (*chat.SessionTurnUndoResult, error) {
+	args := m.Called(ctx, sessionID, opts)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
