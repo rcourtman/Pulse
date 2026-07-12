@@ -21,6 +21,7 @@ let capturedMessageItemProps: Array<{
   ) => void;
   onSkipQuestion: (questionId: string) => void;
   onRegenerate?: () => void;
+  onEditPrompt?: () => void;
   onChangeModel?: () => void;
   getModelRouteLabel?: (modelId: string) => string;
   modelRouteAlternative?: ModelRouteRecoveryOption | null;
@@ -43,6 +44,7 @@ vi.mock('../MessageItem', () => ({
     ) => void;
     onSkipQuestion: (questionId: string) => void;
     onRegenerate?: () => void;
+    onEditPrompt?: () => void;
     onChangeModel?: () => void;
     getModelRouteLabel?: (modelId: string) => string;
     modelRouteAlternative?: ModelRouteRecoveryOption | null;
@@ -429,6 +431,31 @@ describe('ChatMessages', () => {
         expect(last!.onRegenerate).toBeUndefined();
         unmount();
       }
+    });
+
+    it('provides onEditPrompt only for the latest non-queued user prompt', () => {
+      const handlers = makeHandlers();
+      const onEditPrompt = vi.fn();
+      const messages = [
+        makeMessage({ id: 'u1', role: 'user', content: 'first prompt' }),
+        makeMessage({ id: 'a1', role: 'assistant', content: 'first answer' }),
+        makeMessage({ id: 'u2', role: 'user', content: 'second prompt' }),
+        makeMessage({ id: 'a2', role: 'assistant', content: 'second answer' }),
+        makeMessage({ id: 'q1', role: 'user', content: 'queued follow-up', delivery: 'queued' }),
+      ];
+      render(() => (
+        <ChatMessages messages={messages} {...handlers} onEditPrompt={onEditPrompt} />
+      ));
+
+      const earlier = capturedMessageItemProps.find((p) => p.message.id === 'u1');
+      const latest = capturedMessageItemProps.find((p) => p.message.id === 'u2');
+      const queued = capturedMessageItemProps.find((p) => p.message.id === 'q1');
+      expect(earlier!.onEditPrompt).toBeUndefined();
+      expect(queued!.onEditPrompt).toBeUndefined();
+      expect(latest!.onEditPrompt).toBeDefined();
+
+      latest!.onEditPrompt!();
+      expect(onEditPrompt).toHaveBeenCalledWith('u2');
     });
 
     it('forwards onSkip with message.id prepended', () => {

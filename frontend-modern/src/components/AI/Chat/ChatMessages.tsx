@@ -29,6 +29,7 @@ interface ChatMessagesProps {
   onSkipQuestion: (messageId: string, questionId: string) => void;
   onRetry?: (messageId: string) => void;
   onRegenerate?: (messageId: string) => void;
+  onEditPrompt?: (messageId: string) => void;
   onChangeModel?: () => void;
   getModelRouteLabel?: (modelId: string) => string;
   getModelRouteAlternative?: (message: ChatMessage) => ModelRouteRecoveryOption | null;
@@ -84,6 +85,20 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
     if (last.pendingApprovals?.length || last.pendingQuestions?.length) return null;
     const hasPrompt = msgs.some((m) => m.role === 'user' && m.content.trim());
     return hasPrompt ? last.id : null;
+  });
+
+  // Edit-and-resend rides the same last-turn undo boundary: the only editable
+  // prompt is the user message that undo would remove, i.e. the latest
+  // non-queued user prompt.
+  const editablePromptMessageId = createMemo(() => {
+    if (!props.onEditPrompt) return null;
+    const msgs = props.messages;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const msg = msgs[i];
+      if (msg.role !== 'user' || msg.delivery === 'queued') continue;
+      return msg.content.trim() ? msg.id : null;
+    }
+    return null;
   });
 
   const isContainerNearBottom = () => {
@@ -304,6 +319,11 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
                 onRegenerate={
                   message.id === regenerableMessageId()
                     ? () => props.onRegenerate?.(message.id)
+                    : undefined
+                }
+                onEditPrompt={
+                  message.id === editablePromptMessageId()
+                    ? () => props.onEditPrompt?.(message.id)
                     : undefined
                 }
                 onChangeModel={props.onChangeModel}

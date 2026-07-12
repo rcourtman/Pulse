@@ -58,6 +58,9 @@ interface MessageItemProps {
   // Provided only for the latest settled assistant answer: re-runs the turn in
   // place (same prompt, fresh generation).
   onRegenerate?: () => void;
+  // Provided only for the user prompt of the latest turn: undoes the turn and
+  // restores the prompt into the composer for editing.
+  onEditPrompt?: () => void;
   onChangeModel?: () => void;
   getModelRouteLabel?: (modelId: string) => string;
   modelRouteAlternative?: ModelRouteRecoveryOption | null;
@@ -543,6 +546,18 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
       {/* User message - compact bubble */}
       <Show when={isUser()}>
         <div class="group flex max-w-[85%] items-start justify-end gap-2">
+          <Show when={props.onEditPrompt}>
+            <ActionIconButton
+              onClick={() => props.onEditPrompt?.()}
+              label="Edit and resend"
+              title="Edit and resend"
+              tone="outline"
+              size="sm"
+              class="mt-1 opacity-0 shadow-sm transition-opacity focus:opacity-100 group-hover:opacity-100"
+            >
+              <PencilIcon class="h-3.5 w-3.5" aria-hidden="true" />
+            </ActionIconButton>
+          </Show>
           <Show when={canCopy()}>
             <CopyValueButton
               value={copyableMessageText()}

@@ -4837,6 +4837,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             onRegenerate={
               chat.isLoading() ? undefined : (messageId) => void chat.retryMessage(messageId)
             }
+            onEditPrompt={canUndoLastTurn() ? () => void handleUndoLastTurn() : undefined}
             onChangeModel={openModelSelectorFromError}
             getModelRouteLabel={formatChatMessageModelRoute}
             getModelRouteAlternative={getFailedTurnModelRouteAlternative}
