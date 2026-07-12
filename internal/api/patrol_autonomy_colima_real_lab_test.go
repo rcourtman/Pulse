@@ -252,12 +252,17 @@ reportReady:
 			return rg06SubmitBarrier(context.Background(), broker, rg06BarrierProposalFor(runID, "downgrade", resource.ID, findingID, investigationID))
 		}, server, containerID),
 		rg06BarrierMeasured(t, "stale_resource", "policy_authorization_revoked", persistence, store, patrol, investigations, resource, func() error {
-			resourceProvider.freshness = time.Now().UTC().Add(-2 * time.Hour)
-			resourceProvider.resources[0].SourceStatus[unified.SourceAgent] = unified.SourceStatus{Status: "stale", LastSeen: time.Now().UTC().Add(-2 * time.Hour)}
+			staleAt := time.Now().UTC().Add(-2 * time.Hour)
+			resourceProvider.freshness = staleAt
+			resourceProvider.resources[0].LastSeen = staleAt
+			resourceProvider.resources[0].UpdatedAt = staleAt
+			resourceProvider.resources[0].SourceStatus[unified.SourceAgent] = unified.SourceStatus{Status: "stale", LastSeen: staleAt}
 			resources.invalidateCache(orgID)
 			return nil
 		}, func() {}, func() {
 			resourceProvider.freshness = reportAt
+			resourceProvider.resources[0].LastSeen = reportAt
+			resourceProvider.resources[0].UpdatedAt = reportAt
 			resourceProvider.resources[0].SourceStatus[unified.SourceAgent] = unified.SourceStatus{Status: "online", LastSeen: reportAt}
 			resources.invalidateCache(orgID)
 		}, func(findingID, investigationID string) (aicontracts.ActionDisposition, error) {
