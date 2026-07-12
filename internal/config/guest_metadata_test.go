@@ -652,3 +652,58 @@ func TestGuestMetadataStore_GetWithLegacyMigration_ConcurrentMigration(t *testin
 		t.Error("New ID should exist after migration")
 	}
 }
+
+func TestGuestMetadataStore_Load_DropsMalformedIdentityKeys(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	fileData := map[string]*GuestMetadata{
+		"::0": {
+			ID:            "::0",
+			LastKnownName: "windows-lab",
+			LastKnownType: "qemu",
+		},
+		"pve1:node1:100": {
+			ID:            "pve1:node1:100",
+			LastKnownName: "web-server",
+			LastKnownType: "qemu",
+		},
+		// Legacy hyphenated keys carry no colons and must survive cleanup.
+		"minipc-201": {
+			ID:            "minipc-201",
+			LastKnownName: "legacy-vm",
+		},
+	}
+	data, _ := json.Marshal(fileData)
+	filePath := filepath.Join(tmpDir, "guest_metadata.json")
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	store := NewGuestMetadataStore(tmpDir, nil)
+
+	if meta := store.Get("::0"); meta != nil {
+		t.Errorf("expected malformed ::0 entry to be dropped on load, got %+v", meta)
+	}
+	if store.Get("pve1:node1:100") == nil {
+		t.Error("expected canonical entry to survive cleanup")
+	}
+	if store.Get("minipc-201") == nil {
+		t.Error("expected legacy hyphenated entry to survive cleanup")
+	}
+
+	// The cleanup must be persisted back to disk so it only happens once.
+	raw, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("Failed to re-read metadata file: %v", err)
+	}
+	var onDisk map[string]*GuestMetadata
+	if err := json.Unmarshal(raw, &onDisk); err != nil {
+		t.Fatalf("Failed to parse rewritten metadata file: %v", err)
+	}
+	if _, exists := onDisk["::0"]; exists {
+		t.Error("expected ::0 entry to be removed from disk")
+	}
+	if len(onDisk) != 2 {
+		t.Errorf("on-disk entry count = %d, want 2", len(onDisk))
+	}
+}

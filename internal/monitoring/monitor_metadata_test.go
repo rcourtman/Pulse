@@ -208,3 +208,56 @@ func TestPVEBackupTemplateInventoryScopeFromClusterResources(t *testing.T) {
 		t.Fatalf("did not expect non-template subject to be captured")
 	}
 }
+
+func TestBuildGuestLookupsFromReadState_SkipsGuestsWithoutProxmoxIdentity(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := config.NewGuestMetadataStore(tmpDir, nil)
+	registry := unifiedresources.NewRegistry(nil)
+	// Agent-managed / non-Proxmox guests (TrueNAS, vSphere, host agents) have
+	// no instance/node/vmid; they used to collide on the degenerate "::0" key.
+	registry.IngestSnapshot(models.StateSnapshot{
+		VMs: []models.VM{
+			{ID: "vm-agent-1", Name: "windows-lab", Type: "qemu"},
+			{ID: "vm-agent-2", Name: "ubuntu-build", Type: "qemu"},
+			{ID: "vm-1", Name: "canonical-vm", Instance: "pve1", Node: "node1", VMID: 100, Type: "qemu"},
+		},
+		Containers: []models.Container{
+			{ID: "ct-agent-1", Name: "agent-ct", Type: "lxc"},
+		},
+	})
+
+	byKey, byVMID := buildGuestLookupsFromReadState(registry, store)
+
+	if got, exists := byKey["::0"]; exists {
+		t.Fatalf("expected no degenerate ::0 lookup key, got %+v", got)
+	}
+	if entries := byVMID["0"]; len(entries) != 0 {
+		t.Fatalf("expected no vmid-0 lookups, got %+v", entries)
+	}
+	if got := byKey[alerts.BuildGuestKey("pve1", "node1", 100)]; got.Name != "canonical-vm" {
+		t.Fatalf("expected canonical vm lookup to survive, got %+v", got)
+	}
+
+	// persistGuestIdentity writes asynchronously; give a regression a chance
+	// to land before asserting nothing was persisted under "::0".
+	time.Sleep(50 * time.Millisecond)
+	if meta := store.Get("::0"); meta != nil {
+		t.Fatalf("expected no ::0 metadata entry to be persisted, got %+v", meta)
+	}
+}
+
+func TestEnrichWithPersistedMetadata_SkipsMalformedKeys(t *testing.T) {
+	store := config.NewGuestMetadataStore(t.TempDir(), nil)
+	_ = store.Set("::0", &config.GuestMetadata{ID: "::0", LastKnownName: "windows-lab", LastKnownType: "qemu"})
+	_ = store.Set("pve1:node1:100", &config.GuestMetadata{ID: "pve1:node1:100", LastKnownName: "real-vm", LastKnownType: "qemu"})
+
+	lookup := make(map[string][]alerts.GuestLookup)
+	enrichWithPersistedMetadata(store, lookup)
+
+	if entries := lookup["0"]; len(entries) != 0 {
+		t.Fatalf("expected malformed ::0 entry to be skipped, got %+v", entries)
+	}
+	if len(lookup["100"]) != 1 || lookup["100"][0].Name != "real-vm" {
+		t.Fatalf("expected valid persisted entry, got %+v", lookup["100"])
+	}
+}

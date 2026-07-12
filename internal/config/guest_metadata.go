@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog/log"
@@ -90,8 +91,34 @@ func (s *GuestMetadataStore) Load() error {
 		return fmt.Errorf("failed to unmarshal metadata: %w", err)
 	}
 
+	// One-time cleanup: older builds keyed guests without Proxmox identity
+	// (host-agent / TrueNAS / vSphere VMs) under the degenerate "::0" key,
+	// where every such guest collided. Drop those entries — they are
+	// unresolvable to any real guest.
+	removed := 0
+	for key := range s.metadata {
+		if isMalformedGuestKey(key) {
+			delete(s.metadata, key)
+			removed++
+		}
+	}
+	if removed > 0 {
+		log.Info().Int("count", removed).Msg("Dropped malformed guest metadata entries with empty identity")
+		if err := s.save(); err != nil {
+			log.Warn().Err(err).Msg("Failed to persist guest metadata cleanup")
+		}
+	}
+
 	log.Info().Int("count", len(s.metadata)).Msg("Loaded guest metadata")
 	return nil
+}
+
+// isMalformedGuestKey reports whether a guest metadata key uses the canonical
+// instance:node:vmid format but carries no identity (empty instance AND node,
+// e.g. "::0"). Legacy hyphenated keys never contain colons and are unaffected.
+func isMalformedGuestKey(key string) bool {
+	parts := strings.Split(key, ":")
+	return len(parts) == 3 && parts[0] == "" && parts[1] == ""
 }
 
 // save writes metadata to disk (must be called with lock held)

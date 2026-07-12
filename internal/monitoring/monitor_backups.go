@@ -569,6 +569,9 @@ func buildGuestLookupsFromReadState(readState unifiedresources.ReadState, metada
 		if vm == nil {
 			continue
 		}
+		if !hasGuestKeyIdentity(vm.Instance(), vm.Node(), vm.VMID()) {
+			continue
+		}
 		info := alerts.GuestLookup{
 			ResourceID: makeGuestID(vm.Instance(), vm.Node(), vm.VMID()),
 			Name:       vm.Name(),
@@ -592,6 +595,9 @@ func buildGuestLookupsFromReadState(readState unifiedresources.ReadState, metada
 
 	for _, ct := range readState.Containers() {
 		if ct == nil {
+			continue
+		}
+		if !hasGuestKeyIdentity(ct.Instance(), ct.Node(), ct.VMID()) {
 			continue
 		}
 		guestType := firstNonEmptyString(ct.ContainerType(), "lxc")
@@ -644,6 +650,17 @@ func populateGuestNodeMapFromReadState(readState unifiedresources.ReadState, ins
 	}
 }
 
+// hasGuestKeyIdentity reports whether an instance/node/vmid triple carries
+// enough Proxmox identity to form a meaningful guest key. Guests from
+// non-Proxmox platforms (TrueNAS, vSphere, host agents) have none of these,
+// so they would all collide on the degenerate "::0" key.
+func hasGuestKeyIdentity(instance, node string, vmid int) bool {
+	if vmid <= 0 {
+		return false
+	}
+	return strings.TrimSpace(instance) != "" || strings.TrimSpace(node) != ""
+}
+
 // enrichWithPersistedMetadata adds entries from the metadata store for guests
 // that no longer exist in the live inventory but have persisted identity data
 func enrichWithPersistedMetadata(metadataStore *config.GuestMetadataStore, byVMID map[string][]alerts.GuestLookup) {
@@ -663,6 +680,12 @@ func enrichWithPersistedMetadata(metadataStore *config.GuestMetadataStore, byVMI
 		instance, node = parts[0], parts[1]
 		vmid, err := strconv.Atoi(parts[2])
 		if err != nil {
+			continue
+		}
+		// Skip malformed keys (e.g. "::0") persisted by older builds for
+		// guests without Proxmox identity — they would produce a bogus
+		// lookup with empty instance/node and VMID 0.
+		if !hasGuestKeyIdentity(instance, node, vmid) {
 			continue
 		}
 
