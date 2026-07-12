@@ -241,7 +241,7 @@ reportReady:
 	// real pressure. The helper measures all five zero dimensions and records
 	// lifecycle refusal separately from the triple-zero claim.
 	barriers := []map[string]any{
-		rg06BarrierMeasured(t, "emergency_stop", "action_emergency_stop", persistence, store, patrol, investigations, resource, func() error {
+		rg06BarrierMeasured(t, "emergency_stop", "policy_authorization_revoked", persistence, store, patrol, investigations, resource, func() error {
 			return mutateRG06Config(persistence, func(cfg *config.AIConfig) { cfg.PatrolActionEmergencyStop = true })
 		}, func() {
 			_ = mutateRG06Config(persistence, func(cfg *config.AIConfig) { cfg.PatrolActionEmergencyStop = false })
