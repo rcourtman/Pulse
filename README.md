@@ -42,6 +42,7 @@ Designed for homelabs, sysadmins, internal IT teams, and providers who want seri
 - **Pulse Patrol**: Scheduled background health checks (every 10 minutes to every 7 days) that catch silent failures: failed backup jobs, pools approaching capacity, restart-looping VMs, clock drift, failing container health checks. Runs on every tier; community installs use your own AI provider or a local model.
 - **Investigation and Safe Fixes (Pro / hosted Cloud)**: Alert-triggered root-cause investigation, plus optional remediation under command safety policies with verification and an audit trail
 - **Chat Assistant (BYOK)**: Ask questions about your infrastructure in natural language
+- **Bring Your Own Agent (MCP)**: Prefer Claude Code, OpenCode, or another MCP client? Pulse ships an MCP server exposing the same governed tools the Assistant uses (inventory, metrics, alerts, storage, action proposals). Setup lives under Settings → Pulse Intelligence → Assistant → External agents
 - **Cost Tracking**: Track usage and costs per provider/model
 
 ### Core Monitoring
@@ -166,7 +167,7 @@ and Recovery desktop history-table layout are all aligned.
 - **[Security](SECURITY.md)**: Learn about Pulse's security model and best practices.
 - **[API Reference](docs/API.md)**: Integrate Pulse with your own tools.
 - **[Architecture](ARCHITECTURE.md)**: High-level system design and data flow.
-- **[AI Features](docs/AI.md)**: Pulse Assistant (Chat) and Pulse Patrol documentation.
+- **[AI Features](docs/AI.md)**: Pulse Assistant (Chat), Pulse Patrol, and the Pulse MCP external-agent adapter.
 - **[Multi-Tenant](docs/MULTI_TENANT.md)**: Enterprise/internal multi-organization setup and configuration.
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Solutions to common issues.
 - **[Agent Security](docs/AGENT_SECURITY.md)**: Agent privilege model, Proxmox API-only choices, and checksum/signature verification.
