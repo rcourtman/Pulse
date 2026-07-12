@@ -37,6 +37,10 @@ class LabError(RuntimeError):
     pass
 
 
+def isolated_go_cache(run_id: str) -> Path:
+    return Path("/Volumes/Development/.go-task-caches") / f"rg09-{run_id}"
+
+
 def write_json(path: Path, value: object) -> None:
     payload = json.dumps(value, indent=2, sort_keys=True) + "\n"
     if contains_forbidden_secret_shape(payload):
@@ -121,7 +125,9 @@ def linux_arch() -> str:
     return mapping[arch]
 
 
-def build_pinned_agent(repo: Path, sha: str, scratch_dir: Path) -> tuple[Path, Path, str]:
+def build_pinned_agent(
+    repo: Path, sha: str, scratch_dir: Path, go_cache: Path
+) -> tuple[Path, Path, str]:
     archive = scratch_dir / "pulse-source.tar"
     source = scratch_dir / "pulse-source"
     binary = scratch_dir / "pulse-agent-linux"
@@ -140,12 +146,13 @@ def build_pinned_agent(repo: Path, sha: str, scratch_dir: Path) -> tuple[Path, P
         "<!doctype html><title>RG-09 proof build</title>\n", encoding="utf-8"
     )
     env = os.environ.copy()
+    go_cache.mkdir(parents=True, mode=0o700)
     env.update(
         {
             "GOOS": "linux",
             "GOARCH": linux_arch(),
             "CGO_ENABLED": "0",
-            "GOCACHE": str(scratch_dir / "go-cache"),
+            "GOCACHE": str(go_cache),
         }
     )
     command(["go", "build", "-trimpath", "-o", str(binary), "./cmd/pulse-agent"], cwd=source, env=env)
@@ -168,6 +175,7 @@ def main() -> int:
     repo = args.repo.resolve()
     artifact_dir = args.artifact_dir.resolve()
     scratch_dir = args.scratch_dir.resolve()
+    go_cache = isolated_go_cache(args.run_id)
     if not repo.is_dir():
         raise LabError(f"repo does not exist: {repo}")
     artifact_dir.mkdir(parents=True, exist_ok=False)
@@ -203,7 +211,9 @@ def main() -> int:
             "fixture_images": image_ids,
         }
         write_json(artifact_dir / "environment.json", versions)
-        source, binary, archive_digest = build_pinned_agent(repo, args.sha, scratch_dir)
+        source, binary, archive_digest = build_pinned_agent(
+            repo, args.sha, scratch_dir, go_cache
+        )
         env = os.environ.copy()
         env.update(
             {
@@ -250,8 +260,11 @@ def main() -> int:
             "preexisting_unchanged": bool(pre) and post == pre,
         }
         shutil.rmtree(scratch_dir, ignore_errors=True)
+        shutil.rmtree(go_cache, ignore_errors=True)
         if scratch_dir.exists():
             failed = failed or LabError("RG-09 scratch state was not deleted")
+        if go_cache.exists():
+            failed = failed or LabError("RG-09 isolated Go cache was not deleted")
         if second != {"containers": [], "volumes": [], "networks": []}:
             failed = failed or LabError("second label-scoped cleanup was not a no-op")
         if pre and post != pre:

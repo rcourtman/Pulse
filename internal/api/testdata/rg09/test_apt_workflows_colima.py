@@ -23,6 +23,12 @@ class APTWorkflowsColimaTest(unittest.TestCase):
         self.assertIsNotNone(lab.SHA.fullmatch("a" * 40))
         self.assertIsNone(lab.SHA.fullmatch("a" * 39))
 
+    def test_isolated_go_cache_uses_development_ssd(self) -> None:
+        self.assertEqual(
+            lab.isolated_go_cache("rg09-release-001"),
+            Path("/Volumes/Development/.go-task-caches/rg09-rg09-release-001"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
