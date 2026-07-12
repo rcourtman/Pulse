@@ -207,7 +207,7 @@ func TestPatrolFullModeRunsHostUpdateThroughCanonicalLifecycle(t *testing.T) {
 	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{hostUpdateActionResource(now)}})
 	agents := &fakeHostUpdateAgent{connected: true, result: &agentexec.HostUpdateResultPayload{
-		RequestID: "filled-by-executor", Success: true,
+		RequestID: "filled-by-executor", Success: true, MutationStarted: true, ExecutionPhase: agentexec.HostUpdatePhaseComplete,
 		Before:        agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: now.Add(-time.Second)},
 		After:         agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: testHostPackageEmptyInventoryHash, PendingCount: 0, CheckedAt: now},
 		HealthChecked: true, PackageManagerHealthy: true, Verification: agentexec.HostUpdateVerificationVerified,

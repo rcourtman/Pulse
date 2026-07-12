@@ -47,6 +47,87 @@ func TestAPTUpdateDetectorProposalApprovalDispatchAuditAndFindingReconciliation(
 	}
 }
 
+func TestAPTUpdateEmptyExecutionPhaseCannotVerifyResolveOrReplay(t *testing.T) {
+	now := time.Now().UTC()
+	resource := hostUpdateActionResource(now)
+	finding := detectSingleAPTWorkflowFinding(t, resource, now)
+	resources := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	resources.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{resource}})
+	agents := &fakeHostUpdateAgent{connected: true, result: &agentexec.HostUpdateResultPayload{
+		Success: true,
+		Before: agentexec.HostPackageUpdateSnapshot{
+			Supported: true, Manager: "apt", InventoryHash: testHostPackageInventoryHash, PendingCount: 3, CheckedAt: now.Add(-time.Second),
+		},
+		After: agentexec.HostPackageUpdateSnapshot{
+			Supported: true, Manager: "apt", InventoryHash: testHostPackageEmptyInventoryHash, CheckedAt: now,
+		},
+		HealthChecked: true, PackageManagerHealthy: true, Verification: agentexec.HostUpdateVerificationVerified,
+	}}
+	resources.SetActionExecutor(newRoutedActionExecutor(resources, newHostUpdateActionExecutor(resources, agents)))
+
+	aiHandler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+	notifications := make(chan relay.PushNotificationPayload, 2)
+	patrol.SetPushNotifyCallback(func(payload relay.PushNotificationPayload) { notifications <- payload })
+	if !patrol.GetFindings().Add(finding) {
+		t.Fatal("deterministic finding was not admitted")
+	}
+	investigations := newTestInvestigationStore()
+	investigation := investigations.Create(finding.ID, "invalid-result-session")
+	aiHandler.investigationStores = map[string]aicontracts.InvestigationStore{"default": investigations}
+	aiHandler.SetResourceStoreProvider(resources.getStore)
+	resources.SetActionTransitionPublisher(aiHandler.ReconcilePatrolActionTransition)
+	store, err := resources.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetResourceOperatorState(unified.ResourceOperatorState{
+		CanonicalID: resource.ID,
+		AutoRemediationPolicy: unified.AutoRemediationPolicy{
+			Enabled: true, CapabilityNames: []string{hostPackageUpdateCapability},
+		},
+		SetAt: now, SetBy: "operator@example.com",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	proposal := aicontracts.ActionProposal{
+		ProposalID: "proposal-invalid-host-update", FindingID: finding.ID, InvestigationID: investigation.ID,
+		ResourceID: finding.ResourceID, CapabilityName: hostPackageUpdateCapability, Params: map[string]any{},
+		Reason: "Reject a malformed typed host update result without replay.",
+	}
+	broker := NewPatrolActionBroker("default", resources, func(context.Context, string) (PatrolActionPolicySnapshot, error) {
+		return PatrolActionPolicySnapshot{EffectiveAutonomyLevel: "full", FullModeUnlocked: true}, nil
+	})
+	disposition, err := broker.Submit(context.Background(), proposal)
+	if err == nil || !strings.Contains(err.Error(), `unsupported host update execution phase ""`) {
+		t.Fatalf("Submit disposition=%#v err=%v", disposition, err)
+	}
+	duplicate, duplicateErr := broker.Submit(context.Background(), proposal)
+	if duplicateErr != nil {
+		t.Fatalf("duplicate Submit disposition=%#v err=%v", duplicate, duplicateErr)
+	}
+	if duplicate.State != string(unified.ActionStateExecuting) || duplicate.VerificationStatus == string(unified.VerificationVerified) || len(agents.requests) != 1 || len(agents.queries) != 1 {
+		t.Fatalf("duplicate disposition=%#v requests=%d queries=%d", duplicate, len(agents.requests), len(agents.queries))
+	}
+	reader, ok := store.(unified.ActionAuditOriginReader)
+	if !ok {
+		t.Fatal("action store does not expose canonical origin lookup")
+	}
+	audit, found, err := reader.GetLatestActionAuditByOrigin(patrolActionOriginSurface, investigation.ID)
+	if err != nil || !found || audit.State != unified.ActionStateExecuting || audit.VerificationOutcome.Status == unified.VerificationVerified {
+		t.Fatalf("malformed result audit found=%v err=%v audit=%#v", found, err, audit)
+	}
+	reconciled := patrol.GetFindings().Get(finding.ID)
+	if reconciled == nil || reconciled.ResolvedAt != nil || reconciled.InvestigationOutcome == string(aicontracts.OutcomeFixVerified) {
+		t.Fatalf("malformed result reconciled finding=%#v", reconciled)
+	}
+	select {
+	case notification := <-notifications:
+		t.Fatalf("malformed result emitted terminal notification=%#v", notification)
+	default:
+	}
+}
+
 func TestAPTUpdateCallbackLossServerRestartReconcilesTerminalAuditAndFindingWithoutResend(t *testing.T) {
 	now := time.Now().UTC()
 	resource := hostUpdateActionResource(now)
