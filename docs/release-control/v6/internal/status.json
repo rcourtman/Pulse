@@ -6426,6 +6426,12 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/apt_workflows_colima_real_lab_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/contract_test.go",
           "kind": "file"
         },
@@ -6475,6 +6481,18 @@
         {
           "repo": "pulse",
           "path": "internal/api/patrol_autopilot_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/testdata/rg09/apt_workflows_colima.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/testdata/rg09/test_apt_workflows_colima.py",
           "kind": "file",
           "evidence_tier": "test-proof"
         },

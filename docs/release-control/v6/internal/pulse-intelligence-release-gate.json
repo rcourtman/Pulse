@@ -158,10 +158,16 @@
       "non_mutating_proof_commands": [
         {
           "id": "rg-09-apt-fake-contracts",
-          "argv": ["go", "test", "./internal/api", "./internal/agentexec", "./internal/hostagent", "-run", "Test(APTUpdateDetectorProposalApprovalDispatchAuditAndFindingReconciliation|APTUpdateCallbackLossServerRestartReconcilesTerminalAuditAndFindingWithoutResend|APTCacheCleanupDetectorProposalApprovalDispatchAuditAndFindingReconciliation|APTCacheCleanupCallbackLossServerRestartReconcilesTerminalAuditAndFindingWithoutResend|PackageUpdateManagerApplyUsesClosedAPTCommandCatalogAndVerifies|PackageUpdateManagerFailsClosedWhenRefreshFails|PackageUpdateManagerRefusesRefreshTimeInventoryDriftBeforeInstall|StorageCleanupManagerApplyUsesClosedAPTCatalogAndVerifiesBytes|StorageCleanupManagerRefusesFingerprintDriftBeforeMutation)", "-count=1"]
+          "argv": ["go", "test", "./internal/api", "./internal/agentexec", "./internal/hostagent", "./internal/ai", "./internal/unifiedresources", "-run", "Test(APTUpdateDetectorProposalApprovalDispatchAuditAndFindingReconciliation|APTUpdateCallbackLossServerRestartReconcilesTerminalAuditAndFindingWithoutResend|APTCacheCleanupDetectorProposalApprovalDispatchAuditAndFindingReconciliation|APTCacheCleanupCallbackLossServerRestartReconcilesTerminalAuditAndFindingWithoutResend|APTWorkflowWatcherReplayAndFutureTimesRemainUnresolved|APTWorkflowWatcherCapabilityLossDoesNotResolveActiveFinding|HostUpdateActionAvailabilityFailsClosed|HostStorageCleanupAvailabilityFailsClosed|StrictAPTCodecsRejectUnknownTrailingAndOpenAuthorityFields|MalformedOrCrossTypeAPTResultCannotPoisonPendingUpdate|CrossTypeSameRequestCollisionRefusesSecondMutation|PackageUpdateManagerApplyUsesClosedAPTCommandCatalogAndVerifies|PackageUpdateManagerFailsClosedWhenRefreshFails|PackageUpdateManagerRefusesRefreshTimeInventoryDriftBeforeInstall|StorageCleanupManagerApplyUsesClosedAPTCatalogAndVerifiesBytes|StorageCleanupManagerRefusesFingerprintDriftBeforeMutation|RealServerAndUnifiedAgentWebSocketExecutesAPTThroughFakeTypedManagersAndReplaysWithoutMutation|HostAPTActionTruthRedactsRawAgentAndPackageDetail)", "-count=1"]
         }
       ],
-      "mutation_gated_commands": []
+      "mutation_gated_commands": [
+        {
+          "id": "rg-09-debian-ubuntu-colima-lab",
+          "argv": ["python3", "internal/api/testdata/rg09/apt_workflows_colima.py", "--run-id", "<release-id>", "--sha", "<full-release-sha>", "--repo", "<clean-git-archive>", "--artifact-dir", "<external-artifact-dir>", "--scratch-dir", "<external-scratch-dir>"],
+          "authorization": "EXPLICIT_RELEASE_REQUIRED"
+        }
+      ]
     },
     {
       "id": "RG-10",
