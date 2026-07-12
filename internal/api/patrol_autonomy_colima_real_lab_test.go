@@ -75,7 +75,7 @@ func TestPatrolAutonomyColimaRealLabCanonicalJourney(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Truncate(time.Microsecond)
-	orgID := "rg06-" + runID
+	orgID := "default"
 
 	// The acknowledgement and activation are written and reopened before any
 	// action is planned. Their digest is a measured authority baseline.
