@@ -252,17 +252,19 @@ describe('actionAuditPresentation branch coverage (supplemental)', () => {
     });
 
     it('normalises uppercase status to the canonical map key via toLowerCase()', () => {
+      // 'VERIFIED' must lowercase to the canonical 'verified' key and resolve to
+      // the same presentation. Asserting equality against the canonical result
+      // (rather than hard-coded copy) keeps this focused on the normalisation
+      // branch and robust to label/detail wording changes.
+      const canonical = getActionAuditVerificationOutcomePresentation({
+        verificationOutcome: { status: 'verified' },
+      });
+      expect(canonical).toBeDefined();
       expect(
         getActionAuditVerificationOutcomePresentation({
           verificationOutcome: { status: 'VERIFIED' },
         }),
-      ).toStrictEqual({
-        label: 'Verification confirmed',
-        detail: 'Pulse confirmed the intended state after execution.',
-        evidenceSummary: undefined,
-        className:
-          'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
-      });
+      ).toStrictEqual(canonical);
     });
 
     it('collapses a whitespace-only evidenceSummary to undefined', () => {
