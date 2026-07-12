@@ -1772,12 +1772,15 @@ func (h *AISettingsHandler) SetOnModelChange(callback func()) {
 	h.onModelChange = callback
 }
 
-func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
+// aiSettingsUpdateTouchesProviderTransport reports whether the update touches
+// the fields shared by the chat-restart and Patrol-readiness predicates:
+// enablement, model selection, auth method, provider API keys/base URLs, and
+// their clear flags.
+func aiSettingsUpdateTouchesProviderTransport(req AISettingsUpdateRequest) bool {
 	return req.Enabled != nil ||
 		req.Model != nil ||
 		req.ChatModel != nil ||
 		req.PatrolModel != nil ||
-		req.AutoFixModel != nil ||
 		req.AuthMethod != nil ||
 		req.AnthropicAPIKey != nil ||
 		req.OpenAIAPIKey != nil ||
@@ -1810,6 +1813,10 @@ func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
 		req.ClearOllamaURL != nil ||
 		req.ClearOllamaUsername != nil ||
 		req.ClearOllamaPassword != nil
+}
+
+func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
+	return req.AutoFixModel != nil || aiSettingsUpdateTouchesProviderTransport(req)
 }
 
 // aiSettingsUpdateRequiresPatrolPreflight reports whether the settings
@@ -1849,44 +1856,9 @@ func aiSettingsUpdateRequiresPatrolPreflight(oldCfg, newCfg *config.AIConfig) bo
 }
 
 func aiSettingsUpdateTouchesPatrolReadiness(req AISettingsUpdateRequest) bool {
-	return req.Enabled != nil ||
-		req.Model != nil ||
-		req.ChatModel != nil ||
-		req.PatrolModel != nil ||
-		req.PatrolEnabled != nil ||
+	return req.PatrolEnabled != nil ||
 		req.PatrolIntervalMinutes != nil ||
-		req.AuthMethod != nil ||
-		req.AnthropicAPIKey != nil ||
-		req.OpenAIAPIKey != nil ||
-		req.OpenRouterAPIKey != nil ||
-		req.DeepSeekAPIKey != nil ||
-		req.ZaiAPIKey != nil ||
-		req.GroqAPIKey != nil ||
-		req.MistralAPIKey != nil ||
-		req.CerebrasAPIKey != nil ||
-		req.TogetherAPIKey != nil ||
-		req.FireworksAPIKey != nil ||
-		req.GeminiAPIKey != nil ||
-		req.OllamaBaseURL != nil ||
-		req.OllamaUsername != nil ||
-		req.OllamaPassword != nil ||
-		req.OllamaKeepAlive != nil ||
-		req.OpenAIBaseURL != nil ||
-		req.ZaiBaseURL != nil ||
-		req.ClearAnthropicKey != nil ||
-		req.ClearOpenAIKey != nil ||
-		req.ClearOpenRouterKey != nil ||
-		req.ClearDeepSeekKey != nil ||
-		req.ClearZaiKey != nil ||
-		req.ClearGroqKey != nil ||
-		req.ClearMistralKey != nil ||
-		req.ClearCerebrasKey != nil ||
-		req.ClearTogetherKey != nil ||
-		req.ClearFireworksKey != nil ||
-		req.ClearGeminiKey != nil ||
-		req.ClearOllamaURL != nil ||
-		req.ClearOllamaUsername != nil ||
-		req.ClearOllamaPassword != nil
+		aiSettingsUpdateTouchesProviderTransport(req)
 }
 
 // SetOnControlSettingsChange sets a callback to be invoked when control settings change
@@ -4178,118 +4150,15 @@ type AIRunCommandRequest struct {
 	TargetHost string `json:"target_host,omitempty"` // Explicit host for routing
 }
 
-// HandleRunCommand executes a single approved command (POST /api/ai/run-command)
+// HandleRunCommand answers POST /api/ai/run-command. Raw command execution is
+// retired (L20 action governance): the endpoint always responds 410 Gone and
+// never consumes approvals. Callers must use advertised typed resource actions.
 func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	writeJSONError(w, http.StatusGone, agentcapabilities.AgentErrCodeRawCommandRetired, "Raw command execution is retired. Use an advertised typed resource action.")
-	return
-
-	// Require authentication
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
-
-	// Parse request
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
-	bodyBytes, readErr := io.ReadAll(r.Body)
-	if readErr != nil {
-		log.Error().Err(readErr).Msg("Failed to read request body")
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-	log.Debug().Int("body_len", len(bodyBytes)).Msg("run-command request received")
-
-	var req AIRunCommandRequest
-	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		log.Error().Err(err).Msg("Failed to decode JSON body")
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if strings.TrimSpace(req.Command) == "" {
-		http.Error(w, "Command is required", http.StatusBadRequest)
-		return
-	}
-	if strings.TrimSpace(req.ApprovalID) == "" {
-		http.Error(w, "approval_id is required", http.StatusBadRequest)
-		return
-	}
-
-	approvalTargetType, approvalTargetID, targetErr := normalizeRunCommandApprovalTarget(req)
-	if targetErr != nil {
-		http.Error(w, targetErr.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Gated for Patrol fix actions (Pro feature). Request shape is validated before the
-	// entitlement check so clients get deterministic 400s for malformed calls.
-	if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-		WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Patrol fix actions require Pulse Pro")
-		return
-	}
-
-	store := approval.GetStore()
-	if store == nil {
-		http.Error(w, "Approval store not initialized", http.StatusServiceUnavailable)
-		return
-	}
-
-	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
-	approvalReq, ok := store.GetApproval(req.ApprovalID)
-	if !ok || !approval.BelongsToOrg(approvalReq, orgID) {
-		http.Error(w, "Approval request not found", http.StatusNotFound)
-		return
-	}
-	if approvalReq.Plan == nil || strings.TrimSpace(approvalReq.Plan.ActionID) == "" {
-		http.Error(w, "Approval authorization is incomplete", http.StatusConflict)
-		return
-	}
-	approvedHash := strings.TrimSpace(approvalReq.CommandHash)
-	if approvedHash == "" {
-		approvedHash = approval.ComputeCommandHash(approvalReq.Command, approvalReq.TargetType, approvalReq.TargetID)
-	}
-	if approvedHash != approval.ComputeCommandHash(req.Command, approvalTargetType, approvalTargetID) {
-		http.Error(w, "Approval command does not match", http.StatusConflict)
-		return
-	}
-
-	log.Info().
-		Str("command_hash", agentexec.ComputeCommandApprovalHash(req.Command, approvalTargetType, approvalTargetID)).
-		Str("approval_id", req.ApprovalID).
-		Str("target_type", approvalTargetType).
-		Str("target_id", approvalTargetID).
-		Bool("run_on_host", req.RunOnHost).
-		Str("target_host", req.TargetHost).
-		Msg("Executing approved command")
-
-	// Execute with timeout (5 minutes for long-running commands)
-	ctx, cancel := context.WithTimeout(r.Context(), 300*time.Second)
-	defer cancel()
-
-	resp, err := h.GetAIService(r.Context()).RunCommand(ctx, ai.RunCommandRequest{
-		Command:    req.Command,
-		ApprovalID: req.ApprovalID,
-		TargetType: approvalTargetType,
-		TargetID:   approvalTargetID,
-		RunOnHost:  req.RunOnHost,
-		VMID:       req.VMID,
-		TargetHost: strings.ToLower(strings.TrimSpace(req.TargetHost)),
-		OrgID:      orgID,
-		ActionID:   approvalReq.Plan.ActionID,
-	})
-
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to execute command")
-		http.Error(w, "Failed to execute command", http.StatusInternalServerError)
-		return
-	}
-
-	if err := utils.WriteJSONResponse(w, resp); err != nil {
-		log.Error().Err(err).Msg("Failed to write run command response")
-	}
 }
 
 func normalizeRunCommandApprovalTarget(req AIRunCommandRequest) (string, string, error) {

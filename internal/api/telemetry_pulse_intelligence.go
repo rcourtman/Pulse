@@ -149,6 +149,13 @@ func pulseIntelligenceApprovedActionOutcomeIDs(store unifiedresources.ResourceSt
 	return attemptIDs, successIDs
 }
 
+// Deliberate parity with pulseIntelligenceApprovedActionDecisionIDs: both
+// bodies are pinned verbatim by
+// TestContract_PulseIntelligenceRejectedDecisionTelemetryUsesActionLifecycle /
+// TestContract_PulseIntelligenceApprovedDecisionTelemetryUsesActionDecisionEvidence,
+// which require the literal state filter and audit predicate in each.
+//
+//nolint:dupl
 func pulseIntelligenceRejectedActionDecisionIDs(store unifiedresources.ResourceStore, orgID string, since time.Time) map[string]struct{} {
 	decisionIDs := map[string]struct{}{}
 	if store == nil {
@@ -179,6 +186,10 @@ func pulseIntelligenceRejectedActionDecisionIDs(store unifiedresources.ResourceS
 	return decisionIDs
 }
 
+// Deliberate parity with pulseIntelligenceRejectedActionDecisionIDs — see the
+// contract-pin note there.
+//
+//nolint:dupl
 func pulseIntelligenceApprovedActionDecisionIDs(store unifiedresources.ResourceStore, orgID string, since time.Time) map[string]struct{} {
 	decisionIDs := map[string]struct{}{}
 	if store == nil {
