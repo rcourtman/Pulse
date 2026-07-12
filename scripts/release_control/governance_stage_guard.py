@@ -30,7 +30,12 @@ DEFAULT_REPO_ROOT = REPO_ROOT
 def git_env() -> dict[str, str]:
     env = os.environ.copy()
     if REPO_ROOT != DEFAULT_REPO_ROOT:
-        env.pop("GIT_INDEX_FILE", None)
+        # Unit tests patch REPO_ROOT to a temporary repository. Scrub the full
+        # inherited hook environment: a pre-commit run from a linked worktree
+        # exports an absolute GIT_DIR, which would silently point git at the
+        # real repository instead of the temp one.
+        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
+            env.pop(name, None)
     return env
 
 
