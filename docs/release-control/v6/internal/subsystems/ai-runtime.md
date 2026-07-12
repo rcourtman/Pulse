@@ -5778,6 +5778,18 @@ Production code contains no command or rollback execution algorithm; exported
 approve/execute/rollback interfaces and HTTP endpoints are permanently inert
 even when a command executor is injected.
 
+The agent transport catalogue now classifies wire roles independently from
+mutation identity. `docker_container_lifecycle` is the typed mutation request
+for the existing `resource.docker.container-lifecycle` capability and may be
+sent only after committed action-lifecycle authority.
+`agent_operation_query` is query-only reconciliation;
+`agent_operation_query_result` and `docker_container_lifecycle_result` are
+non-admitting receipt/result messages. Query, result, receipt, and general
+protocol roles are forbidden from carrying a mutation registry id or durable
+authority reference, so response-shaped lookalikes cannot become dispatch
+entry points. Task 10 remains the sole owner of `ActionResultV2` execution,
+verification, evidence, and compensation truth.
+
 Action planning and approval attribution are now server-owned across Assistant,
 Patrol, and MCP projections. Trusted brokers use explicit service/policy actor
 contexts; public `requestedBy` content cannot become audit authority. The agent

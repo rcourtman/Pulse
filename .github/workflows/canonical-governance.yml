@@ -116,7 +116,7 @@ jobs:
         run: python3 scripts/release_control/registry_audit.py --check
 
       - name: Run canonical mutation registry audits
-        run: go test ./internal/mutationregistry ./internal/ai/tools -run 'Test(EveryRegisteredMutationHasDisposition|InfrastructureAPIRoutesResolveToRegistry|TransportCommandCatalogsResolveToRegistry|PatrolJobRegistrationResolvesToRegistry|RuntimeCandidateAuditNegativeFixtures|RegisteredModelMutationSchemasResolveToClosedRegistry|RetiredMutationAliasesCannotShadowExtensions)' -count=1
+        run: go test ./internal/mutationregistry ./internal/ai/tools -run 'Test(EveryRegisteredMutationHasDisposition|InfrastructureAPIRoutesResolveToRegistry|TransportCommandCatalogsResolveToRegistry|PatrolJobRegistrationResolvesToRegistry|RuntimeCandidateAuditNegativeFixtures|ActionRouteMethodAuthorityIsExactAndLookalikesFailClosed|NonAdmittingTransportMessagesCannotCarryDispatchAuthority|UnknownTransportLookalikeFailsClosed|RegisteredModelMutationSchemasResolveToClosedRegistry|RetiredMutationAliasesCannotShadowExtensions)' -count=1
 
       - name: Run contract audit
         run: python3 scripts/release_control/contract_audit.py --check
