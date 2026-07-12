@@ -540,9 +540,28 @@ func rg06SubmitBarrier(ctx context.Context, broker *patrolActionBroker, proposal
 }
 
 func rg06SubmitBarrierAfterPlan(ctx context.Context, broker *patrolActionBroker, proposal aicontracts.ActionProposal, afterPlan func() error) (aicontracts.ActionDisposition, error) {
-	disposition, err := broker.Submit(ctx, proposal)
-	if err != nil {
-		return disposition, err
+	var disposition aicontracts.ActionDisposition
+	if afterPlan == nil {
+		var err error
+		disposition, err = broker.Submit(ctx, proposal)
+		if err != nil {
+			return disposition, err
+		}
+	} else {
+		policyFactors, _ := broker.planPolicyFactors(ctx, proposal, broker.currentTime())
+		plan, err := broker.lifecycle().PlanWithOptions(ctx, broker.orgID, unified.ActionRequest{RequestID: proposal.ProposalID, ResourceID: proposal.ResourceID, CapabilityName: proposal.CapabilityName, Params: proposal.Params, Reason: proposal.Reason, RequestedBy: patrolActionBrokerActor}, actionlifecycle.PlanOptions{
+			Actor:         unified.ActionActor{SubjectID: patrolActionBrokerActor, Kind: unified.ActionActorService, CredentialID: "service:patrol-action-broker", OrgID: broker.orgID},
+			Origin:        &unified.ActionOrigin{Surface: patrolActionOriginSurface, FindingID: proposal.FindingID, InvestigationID: proposal.InvestigationID, ProposalID: proposal.ProposalID},
+			PolicyFactors: policyFactors,
+		})
+		if err != nil {
+			return disposition, err
+		}
+		record, found, err := broker.lifecycle().Get(broker.orgID, plan.ActionID)
+		if err != nil || !found {
+			return disposition, fmt.Errorf("planned barrier action unavailable: found=%v err=%v", found, err)
+		}
+		disposition = dispositionFromRecord(record)
 	}
 	if disposition.State != string(unified.ActionStatePending) {
 		return disposition, fmt.Errorf("barrier action was not pending before policy admission: state=%s", disposition.State)
