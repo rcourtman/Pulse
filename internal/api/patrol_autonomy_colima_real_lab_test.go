@@ -268,7 +268,7 @@ reportReady:
 				return nil
 			})
 		}, server, containerID),
-		rg06BarrierMeasured(t, "never_auto_remediate", "policy_authorization_revoked", persistence, store, patrol, investigations, resource, func() error {
+		rg06BarrierMeasured(t, "never_auto_remediate", "operator-locked", persistence, store, patrol, investigations, resource, func() error {
 			return store.SetResourceOperatorState(unified.ResourceOperatorState{CanonicalID: resource.ID, NeverAutoRemediate: true, AutoRemediationPolicy: unified.AutoRemediationPolicy{Enabled: true, CapabilityNames: []string{hostStorageCleanupCapability}}, SetAt: time.Now().UTC(), SetBy: "rg06-operator"})
 		}, func() {}, func() {
 			_ = store.SetResourceOperatorState(unified.ResourceOperatorState{CanonicalID: resource.ID, AutoRemediationPolicy: unified.AutoRemediationPolicy{Enabled: true, CapabilityNames: []string{hostStorageCleanupCapability}}, SetAt: time.Now().UTC(), SetBy: "rg06-operator"})
