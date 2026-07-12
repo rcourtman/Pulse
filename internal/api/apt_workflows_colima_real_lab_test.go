@@ -155,12 +155,12 @@ func runRG09Distro(t *testing.T, runID, distro, image, agentBinary, scratchDir s
 	ws.Listener = listener
 	ws.Start()
 	defer ws.Close()
-	containerID := startRG09Agent(t, runID, distro, agentID, image, agentBinary, scratchDir, ws.Listener.Addr().(*net.TCPAddr).Port)
+	containerID, cacheVolume := startRG09Agent(t, runID, distro, agentID, image, agentBinary, scratchDir, ws.Listener.Addr().(*net.TCPAddr).Port)
 	defer func() {
 		if t.Failed() {
 			t.Logf("RG-09 %s agent failure diagnostic (redacted):\n%s", distro, rg09AgentFailureDiagnostic(containerID))
 		}
-		stopRG09Agent(containerID)
+		stopRG09Agent(containerID, cacheVolume)
 	}()
 	waitForRG06Agent(t, server.Server, agentID)
 
@@ -470,13 +470,22 @@ func rg09DockerExec(t *testing.T, containerID string, args ...string) string {
 	return string(output)
 }
 
-func startRG09Agent(t *testing.T, runID, distro, agentID, image, binary, scratchDir string, port int) string {
+func startRG09Agent(t *testing.T, runID, distro, agentID, image, binary, scratchDir string, port int) (string, string) {
 	t.Helper()
 	name := fmt.Sprintf("pulse-rg09-%s-%s", distro, runID)
+	cacheVolume := name + "-apt-cache"
+	volumeOutput, err := exec.Command("docker", "--context", "colima", "volume", "create",
+		"--label", "com.pulse.intelligence-lab.run="+runID,
+		"--label", "com.pulse.intelligence-lab.gate=rg-09",
+		cacheVolume).CombinedOutput()
+	if err != nil {
+		t.Fatalf("create RG-09 cache volume: %v: %s", err, strings.TrimSpace(string(volumeOutput)))
+	}
 	args := []string{"--context", "colima", "create", "--name", name,
 		"--label", "com.pulse.intelligence-lab.run=" + runID,
 		"--label", "com.pulse.intelligence-lab.gate=rg-09",
 		"--privileged", "--add-host", "host.docker.internal:host-gateway",
+		"--mount", "type=volume,source=" + cacheVolume + ",target=/var/lib/pulse-rg09-cache",
 		"-e", fmt.Sprintf("PULSE_URL=http://host.docker.internal:%d", port),
 		"-e", "PULSE_TOKEN=rg09-local-lab", "-e", "PULSE_AGENT_ID=" + agentID,
 		"-e", "PULSE_HOSTNAME=" + name, "-e", "PULSE_ENABLE_HOST=true",
@@ -484,33 +493,37 @@ func startRG09Agent(t *testing.T, runID, distro, agentID, image, binary, scratch
 		image, "/bin/sh", "/usr/local/bin/rg09-entrypoint.sh"}
 	output, err := exec.Command("docker", args...).CombinedOutput()
 	if err != nil {
+		_ = exec.Command("docker", "--context", "colima", "volume", "rm", "-f", cacheVolume).Run()
 		t.Fatalf("create RG-09 agent: %v: %s", err, strings.TrimSpace(string(output)))
 	}
 	containerID := strings.TrimSpace(string(output))
 	scriptPath := filepath.Join(scratchDir, "rg09-entrypoint-"+distro+".sh")
 	if err := os.WriteFile(scriptPath, []byte(rg09EntrypointScript), 0o700); err != nil {
-		stopRG09Agent(containerID)
+		stopRG09Agent(containerID, cacheVolume)
 		t.Fatal(err)
 	}
 	for source, target := range map[string]string{binary: "/usr/local/bin/pulse-agent", scriptPath: "/usr/local/bin/rg09-entrypoint.sh"} {
 		copyOutput, copyErr := exec.Command("docker", "--context", "colima", "cp", source, containerID+":"+target).CombinedOutput()
 		if copyErr != nil {
-			stopRG09Agent(containerID)
+			stopRG09Agent(containerID, cacheVolume)
 			t.Fatalf("copy RG-09 fixture: %v: %s", copyErr, strings.TrimSpace(string(copyOutput)))
 		}
 	}
 	startOutput, err := exec.Command("docker", "--context", "colima", "start", containerID).CombinedOutput()
 	if err != nil {
 		logs, _ := exec.Command("docker", "--context", "colima", "logs", containerID).CombinedOutput()
-		stopRG09Agent(containerID)
+		stopRG09Agent(containerID, cacheVolume)
 		t.Fatalf("start RG-09 agent: %v: %s logs=%s", err, strings.TrimSpace(string(startOutput)), strings.TrimSpace(string(logs)))
 	}
-	return containerID
+	return containerID, cacheVolume
 }
 
-func stopRG09Agent(containerID string) {
+func stopRG09Agent(containerID, cacheVolume string) {
 	if strings.TrimSpace(containerID) != "" {
 		_ = exec.Command("docker", "--context", "colima", "rm", "-f", containerID).Run()
+	}
+	if strings.TrimSpace(cacheVolume) != "" {
+		_ = exec.Command("docker", "--context", "colima", "volume", "rm", "-f", cacheVolume).Run()
 	}
 }
 
@@ -573,11 +586,13 @@ const rg09EntrypointScript = `#!/bin/sh
 set -eu
 state=/var/lib/pulse-rg09
 repo=/opt/pulse-rg09-repo
+cache_image=/var/lib/pulse-rg09-cache/cache.img
 if [ ! -f "$state/ready" ]; then
   mkdir -p "$state" "$repo" /tmp/rg09-packages /var/cache/apt/archives
   printf '%s\n' "$PULSE_AGENT_ID" > /etc/machine-id
   rm -f /etc/apt/sources.list
   rm -f /etc/apt/sources.list.d/*
+  rm -f /etc/apt/apt.conf.d/docker-clean
   make_package() {
     version="$1"
     root="/tmp/rg09-packages/root-$version"
@@ -632,13 +647,13 @@ printf 'deb [trusted=yes] file:/opt/pulse-rg09-missing ./\n' > /etc/apt/sources.
 SCRIPT
   chmod 0755 /usr/local/bin/rg09-set-repo /usr/local/bin/rg09-break-repo /usr/local/bin/pulse-agent
   /usr/local/bin/rg09-set-repo 2
-  dd if=/dev/zero of="$state/cache.img" bs=1M count=96 status=none
-  mkfs.ext4 -q -F "$state/cache.img"
-  mount -o loop "$state/cache.img" /var/cache/apt/archives
+  dd if=/dev/zero of="$cache_image" bs=1M count=96 status=none
+  mkfs.ext4 -q -F "$cache_image"
+  mount -o loop "$cache_image" /var/cache/apt/archives
   dd if=/dev/zero of=/var/cache/apt/archives/rg09-cache-fixture.deb bs=1M count=80 status=none
   touch -d @0 /var/cache/apt/archives/rg09-cache-fixture.deb
   touch "$state/ready"
 fi
-grep -qs ' /var/cache/apt/archives ' /proc/mounts || mount -o loop "$state/cache.img" /var/cache/apt/archives
+grep -qs ' /var/cache/apt/archives ' /proc/mounts || mount -o loop "$cache_image" /var/cache/apt/archives
 exec /usr/local/bin/pulse-agent
 `
