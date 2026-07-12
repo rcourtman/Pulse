@@ -134,7 +134,9 @@ const ActionHistoryRow: Component<{ audit: ActionAuditRecord }> = (props) => {
               : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300';
             return (
               <div class={`rounded border px-2 py-1 text-[10px] ${toneClass}`}>
-                <div class="font-medium">{v.success ? 'Verified' : 'Verification failed'}</div>
+                <div class="font-medium">
+                  {v.success ? 'Legacy check passed (source unclassified)' : 'Legacy check failed (source unclassified)'}
+                </div>
                 <Show when={v.command}>
                   <div class="mt-0.5 font-mono text-[10px] opacity-80">{v.command}</div>
                 </Show>

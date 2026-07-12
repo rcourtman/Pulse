@@ -5301,7 +5301,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     <span
                       class={`h-1.5 w-1.5 rounded-full ${controlPresentation().dotClassName}`}
                     />
-                    <span>{controlPresentation().label}</span>
+                    <span>Chat: {controlPresentation().label}</span>
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         stroke-linecap="round"

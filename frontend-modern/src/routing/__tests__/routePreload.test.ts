@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { APP_SHELL_ROUTE_PRELOAD_PATHS } from '../routePreload';
-import { PATROL_PATH, buildProxmoxPath, buildStandalonePath } from '../resourceLinks';
+import { ACTIONS_PATH, PATROL_PATH, buildProxmoxPath, buildStandalonePath } from '../resourceLinks';
 
 describe('route preloading', () => {
   it('keeps Proxmox in the authenticated app-shell preload set', () => {
@@ -13,6 +13,7 @@ describe('route preloading', () => {
       buildProxmoxPath(),
       buildStandalonePath(),
       PATROL_PATH,
+      ACTIONS_PATH,
       '/alerts',
       '/settings',
     ]);

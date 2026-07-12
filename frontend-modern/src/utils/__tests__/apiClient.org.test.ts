@@ -8,6 +8,7 @@ import {
   setApiToken,
   setOrgID,
 } from '@/utils/apiClient';
+import { ResourceActionsAPI } from '@/api/resourceActions';
 
 const mockFetch = vi.fn();
 
@@ -67,6 +68,39 @@ describe('apiClient org context', () => {
     const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
     const headers = options.headers as Record<string, string>;
     expect(headers['X-Pulse-Org-ID']).toBe('tenant-ledger');
+  });
+
+  it('preserves authenticated organization context across durable action operations', async () => {
+    mockFetch.mockImplementation(async () =>
+      new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+
+    setOrgID('tenant-actions');
+    await ResourceActionsAPI.listActions('pending', 20);
+    await ResourceActionsAPI.listActions('settled', 20);
+    await ResourceActionsAPI.getAction('action/one');
+    await ResourceActionsAPI.decideAction('action/one', 'approved', 'Reviewed by operator');
+    await ResourceActionsAPI.executeAction('action/one', 'Execute the reviewed plan');
+
+    expect(mockFetch.mock.calls.map(([url]) => String(url))).toEqual([
+      '/api/actions?view=pending&limit=20',
+      '/api/actions?view=settled&limit=20',
+      '/api/actions/action%2Fone',
+      '/api/actions/action%2Fone/decision',
+      '/api/actions/action%2Fone/execute',
+    ]);
+    for (const [, options] of mockFetch.mock.calls as [string, RequestInit][]) {
+      const headers = options.headers as Record<string, string>;
+      expect(headers['X-Pulse-Org-ID']).toBe('tenant-actions');
+    }
+    const mutationBodies = mockFetch.mock.calls.slice(3).map(([, options]) =>
+      JSON.parse(String((options as RequestInit).body)),
+    );
+    expect(mutationBodies).toEqual([
+      { outcome: 'approved', reason: 'Reviewed by operator' },
+      { reason: 'Execute the reviewed plan' },
+    ]);
+    expect(mutationBodies.every((body) => !('orgId' in body))).toBe(true);
   });
 
   it('preserves hosted org context on structured commercial errors', async () => {

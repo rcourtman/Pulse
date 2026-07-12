@@ -1,5 +1,6 @@
 import {
   buildProxmoxPath,
+  ACTIONS_PATH,
   buildStandalonePath,
   DOCKER_PATH,
   KUBERNETES_PATH,
@@ -26,6 +27,7 @@ export const APP_SHELL_ROUTE_PRELOAD_PATHS = [
   ROOT_PROXMOX_PATH,
   ROOT_STANDALONE_PATH,
   PATROL_PATH,
+  ACTIONS_PATH,
   ALERTS_PATH,
   SETTINGS_PATH,
 ] as const;
@@ -74,6 +76,11 @@ const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
     id: 'alerts',
     matches: (route) => route === ALERTS_PATH || route.startsWith(`${ALERTS_PATH}/`),
     preload: () => import('@/pages/Alerts').then(() => undefined),
+  },
+  {
+    id: 'actions',
+    matches: (route) => route === ACTIONS_PATH || route.startsWith(`${ACTIONS_PATH}/`),
+    preload: () => import('@/pages/Actions').then(() => undefined),
   },
   {
     id: 'patrol',

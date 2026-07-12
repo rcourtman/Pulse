@@ -30,6 +30,7 @@ export const VMWARE_PATH = '/vmware';
 export const VMWARE_DEFAULT_TAB = 'overview';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
 export const PATROL_PATH = '/patrol';
+export const ACTIONS_PATH = '/actions';
 export const PATROL_CONTROL_ANCHOR = 'patrol-control';
 export const PATROL_CONTROL_STARTER_QUERY_PARAM = 'patrolControlStarter';
 export const PATROL_CONTROL_STARTER = 'patrol_control';

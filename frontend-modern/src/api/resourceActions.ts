@@ -1,8 +1,11 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import type {
   ActionAuditPlan,
+  ActionDetailResponse,
   ActionDecisionResponse,
   ActionExecutionResponse,
+  ActionInboxResponse,
+  ActionInboxView,
   PendingActionsResponse,
   ResourceActionRequest,
 } from '@/types/actionAudit';
@@ -10,6 +13,15 @@ import type {
 export type ActionDecisionOutcome = 'approved' | 'rejected';
 
 export class ResourceActionsAPI {
+  static async listActions(view: ActionInboxView, limit = 100): Promise<ActionInboxResponse> {
+    const params = new URLSearchParams({ view, limit: String(limit) });
+    return apiFetchJSON<ActionInboxResponse>(`/api/actions?${params.toString()}`);
+  }
+
+  static async getAction(actionId: string): Promise<ActionDetailResponse> {
+    return apiFetchJSON<ActionDetailResponse>(`/api/actions/${encodeURIComponent(actionId)}`);
+  }
+
   static async listPendingActions(): Promise<PendingActionsResponse> {
     return apiFetchJSON<PendingActionsResponse>('/api/actions/pending');
   }

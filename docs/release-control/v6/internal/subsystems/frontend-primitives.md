@@ -548,7 +548,7 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
    settings shell derives posture summaries or hardening actions. The first-run
    shell must use generic host, Docker, and LXC bootstrap commands rather than
    probing public status for deployment identity.
-9. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`: the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary.
+9. `frontend-modern/src/routing/routePreload.ts` shared with `performance-and-scalability`, `unified-resources`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.
 10. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
     Assistant session pickers and reloads must restore only safe
     `handoff_summary` presentation state from the session list. Loading a plain
@@ -629,6 +629,11 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
     rather than an installed agent or provider API.
 
 ## Extension Points
+
+Global Actions review uses the canonical shared `Dialog`, `Button`, and mobile
+navigation primitives. The responsive route must preserve named tabs, keyboard
+focus, dialog focus containment, and phone-width overflow checks; journey 83
+is the desktop/browser accessibility proof and is not mobile-device proof.
 
 Assistant shell entry changes must keep Assistant contextual rather than
 generic: `AppLayout.tsx` and the command palette may expose a compact launcher,

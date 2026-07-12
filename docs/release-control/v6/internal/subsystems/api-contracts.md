@@ -1661,6 +1661,14 @@ payload shape change when the portal presents compact client rows.
 
 ## Extension Points
 
+The frontend action wire mirror in `frontend-modern/src/types/actionAudit.ts`
+tracks the durable inbox/detail, policy provenance, dispatch, and
+`ActionResultV2` objects. `frontend-modern/src/api/resourceActions.ts` owns
+`GET /api/actions?view=pending|settled` and `GET /api/actions/{id}` consumption;
+`frontend-modern/src/api/patrol.ts` owns Autopilot acknowledgement create,
+activation, effective-mode, and revocation consumption. These mirrors must use
+backend JSON names and closed enums rather than frontend authority dialects.
+
 Patrol Open work copy in the browser may clarify row-level evidence, approval,
 automatic-action, and verification-result review as presentation over existing
 Patrol finding/run/status payloads. Such copy changes do not by themselves add

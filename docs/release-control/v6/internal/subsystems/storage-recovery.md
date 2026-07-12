@@ -72,6 +72,16 @@ approval requirement, and digest; absent historical fields read as explicit
 `legacy_unknown`. Recovery must never synthesize policy authorities or treat
 the descriptive snapshot as reusable dispatch authorization.
 
+The authenticated `/actions` workspace recovers from the durable server list
+and detail contracts (`/api/actions` and `/api/actions/{id}`), not from client
+memory. Reconnect and resume must rehydrate both pending and settled action
+records, then load the selected action by id so expiry, revocation, policy
+drift, execution, verification, and compensation truth come from the current
+audit record. Resource links may hand an action id into that workspace, but the
+handoff is only a lookup key: a pending-only cache, an open dialog snapshot, or
+any other client-local state is never recovery authority and must not recreate
+an action that the durable store no longer returns.
+
 Assistant access to recovery points and storage evidence is read-side context.
 `ai:chat`, relay-mobile chat, and the `read_only` control level cannot project
 or execute storage/infrastructure mutation, finding lifecycle changes, or

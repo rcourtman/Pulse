@@ -55,6 +55,19 @@ vi.mock('@/api/resourceActions', () => ({
       result: { success: true },
       audit: {},
     }),
+    getAction: vi.fn().mockResolvedValue({
+      audit: {
+        id: 'action-1',
+        createdAt: '2026-06-12T20:00:00Z',
+        updatedAt: '2026-06-12T20:00:00Z',
+        state: 'pending_approval',
+        decisionRevision: 0,
+        request: { requestId: 'request-1', resourceId: 'container-1', capabilityName: 'restart', reason: 'restart Docker container edge-web', requestedBy: 'ui:docker-page' },
+        plan: { actionId: 'action-1', requestId: 'request-1', allowed: true, requiresApproval: true, approvalPolicy: 'admin', rollbackAvailable: false, expiresAt: '2026-06-12T20:05:00Z', policyDecision: { version: 0, status: 'legacy_unknown', scope: { orgId: '', resourceId: '', capabilityName: '' }, authorities: [], approvalRequirement: { version: 0, floor: 'admin', quorum: 1, disallowRequester: false }, planningAllowed: false, requiresApproval: true } },
+        verificationOutcome: { status: 'unknown' },
+      },
+      events: [],
+    }),
   },
 }));
 
@@ -62,6 +75,7 @@ vi.mock('@/stores/notifications', () => ({
   notificationStore: {
     success: vi.fn(),
     error: vi.fn(),
+    warning: vi.fn(),
   },
 }));
 
@@ -722,7 +736,7 @@ describe('Docker native tables', () => {
     );
   });
 
-  it('runs Docker lifecycle row actions through the governed action API', async () => {
+  it('opens canonical review on the first Docker lifecycle click without auto-approving or executing', async () => {
     const onLifecycleActionSettled = vi.fn();
 
     renderInRouter(() => (
@@ -767,10 +781,9 @@ describe('Docker native tables', () => {
     ));
 
     const restartButton = screen.getByRole('button', {
-      name: 'Restart edge-web through governed action',
+      name: 'Review restart for edge-web',
     });
     fireEvent.click(restartButton);
-    fireEvent.click(screen.getByRole('button', { name: 'Click again to restart edge-web' }));
 
     await waitFor(() =>
       expect(ResourceActionsAPI.planAction).toHaveBeenCalledWith(
@@ -781,18 +794,11 @@ describe('Docker native tables', () => {
         }),
       ),
     );
-    await waitFor(() =>
-      expect(ResourceActionsAPI.executeAction).toHaveBeenCalledWith(
-        'action-1',
-        expect.stringContaining('restart Docker container edge-web'),
-      ),
-    );
-    expect(ResourceActionsAPI.decideAction).toHaveBeenCalledWith(
-      'action-1',
-      'approved',
-      expect.stringContaining('restart Docker container edge-web'),
-    );
-    expect(onLifecycleActionSettled).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('dialog', { name: 'Restart' })).toBeInTheDocument();
+    expect(screen.getByText('Why Pulse allows this review')).toBeInTheDocument();
+    expect(ResourceActionsAPI.decideAction).not.toHaveBeenCalled();
+    expect(ResourceActionsAPI.executeAction).not.toHaveBeenCalled();
+    expect(onLifecycleActionSettled).not.toHaveBeenCalled();
   });
 
   it('shows disabled Docker lifecycle buttons with explicit unavailable reasons', () => {

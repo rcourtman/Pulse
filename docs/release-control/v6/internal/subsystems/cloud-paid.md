@@ -548,6 +548,12 @@ or other self-hosted uncapped continuity plans.
 
 ## Extension Points
 
+The authenticated app shell exposes `/actions` as a global utility route on
+desktop and responsive navigation. `App.tsx` and `AppLayout.tsx` only provide
+route/navigation ownership; action authority and result truth remain in the
+unified-resources and api-contracts projections. Navigation proof is owned by
+the App/AppLayout, routing, and desktop Actions journey tests.
+
 1. Add or change limits through `pkg/licensing/`
 2. Add or change hosted entitlement issuance through `internal/cloudcp/entitlements/service.go`
    Hosted entitlement refresh is scoped to active workspace rows only. A tenant

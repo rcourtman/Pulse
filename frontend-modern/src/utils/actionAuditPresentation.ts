@@ -2,7 +2,6 @@ import type {
   ActionAuditRefusalPrefix,
   ActionAuditRecord,
   ActionAuditState,
-  ActionVerificationOutcome,
   ActionVerificationResult,
 } from '@/types/actionAudit';
 
@@ -54,6 +53,11 @@ const ACTION_STATE_PRESENTATION: Record<ActionAuditState, ActionAuditStatePresen
     label: 'Rejected',
     className:
       'bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-200 dark:border-red-700',
+  },
+  expired: {
+    label: 'Expired',
+    className:
+      'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900 dark:text-amber-200 dark:border-amber-700',
   },
   executing: {
     label: 'Executing',
@@ -110,6 +114,31 @@ const ACTION_REFUSAL_PRESENTATION: Record<
     className:
       'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
   },
+  'policy_authorization_expired:': {
+    label: 'Policy authority expired',
+    detail: 'Pulse refused dispatch because the server authorization lease expired.',
+    className: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+  },
+  'policy_authorization_invalid:': {
+    label: 'Policy authority invalid',
+    detail: 'Pulse refused dispatch because current server policy authority could not be validated.',
+    className: 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
+  },
+  'policy_authorization_revoked:': {
+    label: 'Policy authority revoked',
+    detail: 'Pulse refused dispatch because current server policy authority was revoked.',
+    className: 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
+  },
+  'action_emergency_stop:': {
+    label: 'Emergency stop active',
+    detail: 'Pulse refused dispatch because the action emergency stop is active.',
+    className: 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300',
+  },
+  'action_replan_required:': {
+    label: 'New review required',
+    detail: 'Pulse refused dispatch because current policy requires a new plan and review.',
+    className: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+  },
 };
 
 const ACTION_REFUSAL_PREFIXES = Object.keys(
@@ -126,8 +155,8 @@ const VERIFICATION_OUTCOME_PRESENTATION: Record<
     className: 'border-border bg-surface text-base-content',
   },
   verified: {
-    label: 'Verification confirmed',
-    detail: 'Pulse confirmed the intended state after execution.',
+    label: 'Legacy check passed (source unclassified)',
+    detail: 'This older record does not identify an evidence source. Do not treat it as independent confirmation.',
     className:
       'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
   },
@@ -233,6 +262,17 @@ export const getActionAuditResultPresentation = (
     };
   }
 
+  const truth = result.actionResultV2?.execution;
+  if (truth) {
+    const presentation = {
+      succeeded: { kind: 'success' as const, label: 'Execution succeeded', className: 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200' },
+      failed: { kind: 'failure' as const, label: 'Execution failed', className: 'border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300' },
+      not_run: { kind: 'failure' as const, label: 'Execution did not run', className: 'border-border bg-surface text-base-content' },
+      inconclusive: { kind: 'failure' as const, label: 'Execution inconclusive', className: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300' },
+    }[truth.status];
+    return { ...presentation, detail: truth.summary?.trim() || undefined, reasonLabel: truth.reasonCode ? formatActionCapabilityLabel(truth.reasonCode) : undefined };
+  }
+
   if (result.success) {
     return {
       kind: 'success',
@@ -252,9 +292,37 @@ export const getActionAuditResultPresentation = (
 };
 
 export const getActionAuditVerificationOutcomePresentation = (
-  audit: Pick<ActionAuditRecord, 'verificationOutcome'>,
+  audit: {
+    verificationOutcome?: { status?: string; evidenceSummary?: string };
+    result?: ActionAuditRecord['result'];
+  },
 ): ActionAuditVerificationOutcomePresentation | undefined => {
-  const outcome: ActionVerificationOutcome | undefined = audit.verificationOutcome;
+  const truth = audit.result?.actionResultV2?.verification;
+  if (truth) {
+    const source = truth.evidenceClass === 'independent' ? 'Independent observer' : truth.evidenceClass === 'agent_attested' ? 'Executing agent (agent-attested)' : 'No evidence source';
+    const statusCopy = {
+      confirmed: truth.evidenceClass === 'independent'
+        ? ['Confirmed by independent observer', 'An observer in a different trust domain confirmed the intended state.']
+        : truth.evidenceClass === 'agent_attested'
+          ? ['Confirmed by executing agent', 'The same agent trust domain that executed the action reported the intended state.']
+          : ['Confirmation lacks an evidence source', 'The record says confirmed but provides no evidence source; do not treat it as independently verified.'],
+      contradicted: ['Outcome contradicted', 'Observed evidence contradicted the intended state.'],
+      inconclusive: ['Outcome inconclusive', 'Available evidence could not establish the intended state.'],
+      not_attempted: ['Outcome not verified', 'No outcome verification was attempted.'],
+    } as const;
+    const [label, detail] = statusCopy[truth.status];
+    return {
+      label,
+      detail,
+      evidenceSummary: `${truth.summary?.trim() || 'No additional verification summary.'} Source: ${source}.`,
+      className: truth.status === 'confirmed'
+        ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+        : truth.status === 'contradicted'
+          ? 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300'
+          : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+    };
+  }
+  const outcome = audit.verificationOutcome;
   const status = (outcome?.status || '').trim().toLowerCase();
   if (!status) return undefined;
 
@@ -280,4 +348,5 @@ export const getActionAuditVerification = (
 
 export const shouldRenderActionAuditVerification = (
   audit: Pick<ActionAuditRecord, 'verification' | 'result'>,
-): boolean => getActionAuditVerification(audit)?.ran === true;
+): boolean =>
+  audit.result?.actionResultV2 === undefined && getActionAuditVerification(audit)?.ran === true;

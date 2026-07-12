@@ -156,7 +156,7 @@ describe('actionAuditPresentation', () => {
         },
       }),
     ).toMatchObject({
-      label: 'Verification confirmed',
+      label: 'Legacy check passed (source unclassified)',
       evidenceSummary: 'Readback matched the intended running state.',
     });
     expect(
@@ -186,7 +186,7 @@ describe('actionAuditPresentation', () => {
     expect(
       getActionAuditVerificationOutcomePresentation({
         verificationOutcome: {
-          status: 'needs_review',
+          status: 'needs_review' as never,
         },
       }),
     ).toMatchObject({ label: 'Verification outcome recorded' });

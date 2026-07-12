@@ -428,10 +428,11 @@
     },
     {
       "path": "frontend-modern/src/routing/routePreload.ts",
-      "rationale": "the app-shell route preload registry is both a canonical frontend shell boundary and an authenticated hot-path performance boundary",
+      "rationale": "the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace",
       "subsystems": [
         "frontend-primitives",
-        "performance-and-scalability"
+        "performance-and-scalability",
+        "unified-resources"
       ]
     },
     {
@@ -6056,6 +6057,7 @@
       "lane": "L13",
       "contract": "docs/release-control/v6/internal/subsystems/unified-resources.md",
       "owned_prefixes": [
+        "frontend-modern/src/features/actions/",
         "internal/unifiedresources/"
       ],
       "owned_files": [
@@ -6154,7 +6156,10 @@
         "frontend-modern/src/features/vmware/VsphereHostsTable.tsx",
         "frontend-modern/src/features/vmware/VsphereNetworksTable.tsx",
         "frontend-modern/src/hooks/useUnifiedResources.ts",
+        "frontend-modern/src/pages/Actions.tsx",
+        "frontend-modern/src/routing/navigation.ts",
         "frontend-modern/src/routing/resourceLinks.ts",
+        "frontend-modern/src/routing/routePreload.ts",
         "frontend-modern/src/types/resource.ts",
         "frontend-modern/src/utils/actionAuditPresentation.ts",
         "frontend-modern/src/utils/agentResources.ts",
@@ -6397,6 +6402,30 @@
               "frontend-modern/src/types/__tests__/resource.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "internal/unifiedresources/code_standards_test.go"
+            ]
+          },
+          {
+            "id": "product-trust-actions-frontend",
+            "label": "durable actions inbox and canonical decision review proof",
+            "match_prefixes": [
+              "frontend-modern/src/features/actions/"
+            ],
+            "match_files": [
+              "frontend-modern/src/pages/Actions.tsx",
+              "frontend-modern/src/routing/navigation.ts",
+              "frontend-modern/src/routing/routePreload.ts"
+            ],
+            "allow_same_subsystem_tests": true,
+            "test_prefixes": [
+              "frontend-modern/src/features/actions/__tests__/"
+            ],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/resourceActions.test.ts",
+              "frontend-modern/src/features/docker/__tests__/DockerNativeTables.test.tsx",
+              "frontend-modern/src/routing/__tests__/navigation.test.ts",
+              "frontend-modern/src/routing/__tests__/routePreload.test.ts",
+              "tests/integration/tests/81-actions-inbox.spec.ts",
+              "tests/integration/tests/83-product-trust-accessibility.spec.ts"
             ]
           },
           {

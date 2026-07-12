@@ -1,5 +1,6 @@
 import {
   DOCKER_PATH,
+  ACTIONS_PATH,
   KUBERNETES_PATH,
   PATROL_PATH,
   PROXMOX_PATH,
@@ -16,6 +17,7 @@ export type AppTabId =
   | 'truenas'
   | 'vmware'
   | 'alerts'
+  | 'actions'
   | 'ai'
   | 'settings';
 
@@ -29,6 +31,7 @@ export function getActiveTabForPath(path: string): ActiveAppTabId {
   if (path.startsWith(VMWARE_PATH)) return 'vmware';
   if (path.startsWith(STANDALONE_PATH)) return 'standalone';
   if (path.startsWith('/alerts')) return 'alerts';
+  if (path.startsWith(ACTIONS_PATH)) return 'actions';
   if (path.startsWith(PATROL_PATH)) return 'ai';
   if (path.startsWith('/settings')) return 'settings';
   return null;

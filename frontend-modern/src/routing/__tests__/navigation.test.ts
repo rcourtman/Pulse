@@ -21,6 +21,8 @@ describe('navigation routing helpers', () => {
     expect(getActiveTabForPath('/ceph')).toBeNull();
     expect(getActiveTabForPath('/recovery')).toBeNull();
     expect(getActiveTabForPath('/alerts/open')).toBe('alerts');
+    expect(getActiveTabForPath('/actions')).toBe('actions');
+    expect(getActiveTabForPath('/actions/history')).toBe('actions');
     expect(getActiveTabForPath('/patrol')).toBe('ai');
     expect(getActiveTabForPath('/ai')).toBeNull();
     expect(getActiveTabForPath('/operations')).toBeNull();

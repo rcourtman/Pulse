@@ -99,11 +99,64 @@ export type InvestigationOutcome =
   | 'fix_verification_unknown';
 export type PatrolAutonomyLevel = 'monitor' | 'approval' | 'assisted' | 'full';
 
+export type PatrolAutopilotStatusCode =
+  | 'active'
+  | 'not_requested'
+  | 'acknowledgement_required'
+  | 'acknowledgement_stale_version'
+  | 'acknowledgement_wrong_org'
+  | 'acknowledgement_wrong_actor'
+  | 'acknowledgement_user_required'
+  | 'acknowledgement_digest_invalid'
+  | 'acknowledgement_expired'
+  | 'acknowledgement_revoked'
+  | 'acknowledgement_conflict'
+  | 'activation_digest_invalid'
+  | 'legacy_unlock_ignored'
+  | 'acknowledgement_store_unavailable'
+  | 'acknowledgement_activation_raced'
+  | 'license_required';
+
+export interface PatrolAutopilotAcceptedLimits {
+  policyAllowlistRequired: boolean;
+  emergencyStopHonored: boolean;
+  approvalFloorsHonored: boolean;
+  verificationReconciledWhenSupported: boolean;
+  evidenceClassDisclosed: boolean;
+  inconclusiveOutcomeAllowed: boolean;
+  executionSuccessIsNotOutcomeTruth: boolean;
+  activationRevocationBound?: boolean;
+}
+
+export interface PatrolAutopilotStatus {
+  code: PatrolAutopilotStatusCode;
+  active: boolean;
+  currentVersion: number;
+  acknowledgementVersion?: number;
+  acknowledgementId?: string;
+  acknowledgementDigest?: string;
+  acknowledgedBy?: string;
+  acceptedAt?: string;
+  expiresAt?: string;
+  acceptedScope: string[];
+  acceptedLimits: PatrolAutopilotAcceptedLimits;
+}
+
 export interface PatrolAutonomySettings {
   autonomy_level: PatrolAutonomyLevel;
-  full_mode_unlocked: boolean; // User has acknowledged Full mode risks
+  requested_autonomy_level: PatrolAutonomyLevel;
+  effective_autonomy_level: PatrolAutonomyLevel;
+  full_mode_unlocked: boolean;
+  autopilot_acknowledgement: PatrolAutopilotStatus;
   investigation_budget: number; // Max turns per investigation (5-30)
   investigation_timeout_sec: number; // Max seconds per investigation (60-600)
+}
+
+export interface PatrolAutonomyUpdate {
+  autonomy_level: PatrolAutonomyLevel;
+  acknowledgement_id?: string;
+  investigation_budget: number;
+  investigation_timeout_sec: number;
 }
 
 export interface Investigation {
@@ -431,12 +484,31 @@ export async function getPatrolAutonomySettings(): Promise<PatrolAutonomySetting
  * Update Patrol mode settings
  */
 export async function updatePatrolAutonomySettings(
-  settings: PatrolAutonomySettings,
+  settings: PatrolAutonomyUpdate,
 ): Promise<{ success: boolean; settings: PatrolAutonomySettings }> {
   return apiFetchJSON('/api/ai/patrol/autonomy', {
     method: 'PUT',
     body: JSON.stringify(settings),
   });
+}
+
+export async function createPatrolAutopilotAcknowledgement(
+  acknowledgementId: string,
+): Promise<{ created: boolean; acknowledgement: PatrolAutopilotStatus }> {
+  return apiFetchJSON('/api/ai/patrol/autonomy/acknowledgements', {
+    method: 'POST',
+    body: JSON.stringify({ acknowledgement_id: acknowledgementId }),
+  });
+}
+
+export async function revokePatrolAutopilotAcknowledgement(
+  acknowledgementId: string,
+  reason = 'Operator revoked Autopilot from Patrol controls.',
+): Promise<{ revoked: boolean; created: boolean; acknowledgement_id: string }> {
+  return apiFetchJSON(
+    `/api/ai/patrol/autonomy/acknowledgements/${encodeURIComponent(acknowledgementId)}`,
+    { method: 'DELETE', body: JSON.stringify({ reason }) },
+  );
 }
 
 /**

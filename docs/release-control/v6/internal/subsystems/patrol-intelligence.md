@@ -59,6 +59,16 @@ Patrol-specific presentation helpers.
 
 ## Extension Points
 
+Desktop Autopilot activation consumes the server-owned acknowledgement
+contract through `frontend-modern/src/api/patrol.ts` and
+`PatrolAutopilotAcknowledgementDialog.tsx`. The UI displays requested versus
+effective mode, records the current acknowledgement version before full-mode
+activation, exposes revocation, and treats expiry, revocation, version drift,
+and activation races as server-authored demotion. Proof is
+`PatrolAutopilotAcknowledgementDialog.test.tsx`,
+`usePatrolIntelligenceState.test.ts`, and desktop journey 82. This statement
+does not certify mobile or physical-device behavior.
+
 Open work descriptions are Patrol-owned operator guidance. They may mention the
 visible next step, approvals, and verification results when those words help the
 operator understand what to do next, but they must not become a separate proof

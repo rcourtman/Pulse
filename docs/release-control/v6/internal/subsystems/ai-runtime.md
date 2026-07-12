@@ -533,6 +533,11 @@ component-local required-scope list.
 
 ## Extension Points
 
+Assistant control wording must identify the effective scope as Assistant chat
+only. Patrol autonomy and global Actions remain separate authority surfaces;
+the chat pill may display the effective `control_level` but must not imply that
+read-only chat demotes Patrol or infrastructure action policy.
+
 The manual Patrol route is an extension boundary for scoped work. `POST
 /api/ai/patrol/run` (`HandleForcePatrol`) accepts an optional scope body
 (`resource_ids` and/or `resource_types`, plus optional `alert_identifier`,

@@ -12,12 +12,11 @@ describe('ResourceActionHistory verification rendering', () => {
   it('renders the post-dispatch verification outcome on each audit row when ran=true', () => {
     // The broker's read-after-write verification outcome lives on
     // result.verification (ActionVerificationResult). The audit history row
-    // must surface it so operators can see "Pulse confirmed the workload
-    // service is active" — not just "command exit 0". Pin the wiring so the
-    // surface cannot silently regress to an output-only render.
+    // must surface it without implying independent evidence. Pin the wiring
+    // so the surface cannot silently regress to an output-only render.
     expect(sourceText).toContain('shouldRenderActionAuditVerification(props.audit)');
-    expect(sourceText).toContain('Verified');
-    expect(sourceText).toContain('Verification failed');
+    expect(sourceText).toContain('Legacy check passed (source unclassified)');
+    expect(sourceText).toContain('Legacy check failed (source unclassified)');
   });
 
   it('shows the verification command and output verbatim when present', () => {
@@ -71,7 +70,7 @@ describe('ResourceActionHistory verification rendering', () => {
     );
 
     const actionHistory = within(screen.getByTestId('resource-action-history-section'));
-    expect(actionHistory.getAllByText('Verified')).toHaveLength(1);
+    expect(actionHistory.getAllByText('Legacy check passed (source unclassified)')).toHaveLength(1);
     expect(actionHistory.getByText("systemctl is-active 'nginx'")).toBeInTheDocument();
     expect(actionHistory.queryByText('should not render')).toBeNull();
     expect(actionHistory.queryByText('sensitive output')).toBeNull();

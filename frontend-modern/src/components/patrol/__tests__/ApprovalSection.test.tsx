@@ -104,7 +104,7 @@ function audit(
       investigationId: 'investigation-1',
       proposalId: 'proposal-1',
     },
-    verificationOutcome: { status: verification },
+    verificationOutcome: { status: verification as never },
   };
 }
 

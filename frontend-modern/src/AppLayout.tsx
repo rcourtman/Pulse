@@ -3,6 +3,7 @@ import { Portal } from 'solid-js/web';
 import type { JSX } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import BellIcon from 'lucide-solid/icons/bell';
+import ListChecksIcon from 'lucide-solid/icons/list-checks';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
@@ -266,6 +267,7 @@ export function AppLayout(props: AppLayoutProps) {
     vmware: 'vSphere',
     standalone: 'Machines',
     alerts: 'Alerts',
+    actions: 'Actions',
     ai: 'Patrol',
     settings: 'Settings',
   };
@@ -511,6 +513,16 @@ export function AppLayout(props: AppLayoutProps) {
         count: activeAlertCount,
         breakdown,
         icon: BellIcon,
+      },
+      {
+        id: 'actions',
+        label: 'Actions',
+        route: '/actions',
+        tooltip: 'Review proposed changes and verified outcomes',
+        badge: null,
+        count: undefined,
+        breakdown: undefined,
+        icon: ListChecksIcon,
       },
       {
         id: 'ai',

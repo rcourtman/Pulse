@@ -3396,7 +3396,7 @@ describe('AIChat', () => {
   describe('control level', () => {
     it('displays Read-only as default control label', () => {
       renderChat();
-      expect(screen.getByText('Read-only')).toBeInTheDocument();
+      expect(screen.getByText('Chat: Read-only')).toBeInTheDocument();
     });
 
     it('opens control menu on click and focuses the current mode', async () => {
@@ -5581,7 +5581,7 @@ describe('AIChat', () => {
       renderChat();
 
       await waitFor(() => {
-        expect(screen.getByText('Ask first')).toBeInTheDocument();
+        expect(screen.getByText('Chat: Ask first')).toBeInTheDocument();
       });
       expect(
         screen.queryByText(/Approval required for this dashboard brief/),
@@ -5622,7 +5622,7 @@ describe('AIChat', () => {
       renderChat();
 
       await waitFor(() => {
-        expect(screen.getByText('Ask first')).toBeInTheDocument();
+        expect(screen.getByText('Chat: Ask first')).toBeInTheDocument();
       });
       expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
       expect(
@@ -5655,7 +5655,7 @@ describe('AIChat', () => {
       renderChat();
 
       await waitFor(() => {
-        expect(screen.getByText('Ask first')).toBeInTheDocument();
+        expect(screen.getByText('Chat: Ask first')).toBeInTheDocument();
       });
       expect(screen.getByText('Approval required before any action.')).toBeInTheDocument();
       expect(

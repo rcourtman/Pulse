@@ -17,6 +17,7 @@ const StandaloneIcon: Component<{ class?: string }> = (props) => (
 );
 const ProxmoxIcon: Component<{ class?: string }> = (props) => <span class={props.class}>PX</span>;
 const AlertsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AL</span>;
+const ActionsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AC</span>;
 const SettingsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>SE</span>;
 const PatrolIcon: Component<{ class?: string }> = (props) => (
   <svg aria-label="Pulse Patrol" class={props.class} viewBox="0 0 24 24">
@@ -115,6 +116,45 @@ describe('MobileNavBar', () => {
     expect(within(patrolButton).getByText('Patrol')).toBeInTheDocument();
     expect(within(patrolButton).getByText('2')).toBeInTheDocument();
     expect(within(navList).queryByText('Needs Attention')).toBeNull();
+  });
+
+  it('keeps Actions named, reachable, and route-correct among monitor-first destinations', () => {
+    const onUtilityClick = vi.fn();
+    const utilityTabs = [
+      { id: 'settings' as const, label: 'Settings', route: '/settings', tooltip: 'Settings', badge: null, count: undefined, breakdown: undefined, icon: SettingsIcon },
+      { id: 'ai' as const, label: 'Patrol', route: '/patrol', tooltip: 'Patrol', badge: null, count: undefined, breakdown: undefined, icon: PatrolIcon },
+      { id: 'actions' as const, label: 'Actions', route: '/actions', tooltip: 'Review actions', badge: null, count: undefined, breakdown: undefined, icon: ActionsIcon },
+      { id: 'alerts' as const, label: 'Alerts', route: '/alerts', tooltip: 'Alerts', badge: null, count: undefined, breakdown: undefined, icon: AlertsIcon },
+    ];
+
+    const { container } = render(() => (
+      <MobileNavBar
+        activeTab={() => 'actions'}
+        primaryTabs={() => []}
+        utilityTabs={() => utilityTabs}
+        onPrimaryClick={() => {}}
+        onUtilityClick={onUtilityClick}
+      />
+    ));
+
+    const navList = screen.getByRole('tablist', { name: 'Mobile navigation' });
+    const actionsButton = within(navList).getByRole('button', { name: 'Actions' });
+    expect(Array.from(container.querySelectorAll('button[data-tab-id]')).map((button) => button.getAttribute('data-tab-id'))).toEqual([
+      'alerts',
+      'actions',
+      'ai',
+      'settings',
+    ]);
+    expect(actionsButton).toHaveAttribute('data-tab-id', 'actions');
+    expect(actionsButton).toHaveAttribute('type', 'button');
+    actionsButton.focus();
+    expect(actionsButton).toHaveFocus();
+    fireEvent.click(actionsButton);
+    expect(onUtilityClick).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'actions',
+      label: 'Actions',
+      route: '/actions',
+    }));
   });
 
   it('allows inactive platform tabs to render without an active mobile tab', () => {

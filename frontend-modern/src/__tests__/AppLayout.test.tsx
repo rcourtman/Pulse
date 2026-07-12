@@ -140,7 +140,7 @@ describe('AppLayout navigation icons', () => {
     expect(systemGroup).toBeTruthy();
 
     const desktopTabs = within(systemGroup as HTMLElement).getAllByRole('tab');
-    expect(desktopTabs).toHaveLength(3);
+    expect(desktopTabs).toHaveLength(4);
     desktopTabs.forEach((tab) => {
       expect(tab.querySelector('svg')).toBeTruthy();
     });
@@ -157,7 +157,7 @@ describe('AppLayout navigation icons', () => {
     expect(within(systemGroup as HTMLElement).queryByRole('tab', { name: 'Patrol P' })).toBeNull();
 
     const mobileTablist = screen.getByRole('tablist', { name: 'Mobile navigation' });
-    ['alerts', 'ai', 'settings'].forEach((tabId) => {
+    ['alerts', 'actions', 'ai', 'settings'].forEach((tabId) => {
       const button = mobileTablist.querySelector<HTMLElement>(`[data-tab-id="${tabId}"]`);
       expect(button).toBeTruthy();
       expect(button?.querySelector('svg')).toBeTruthy();

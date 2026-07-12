@@ -87,6 +87,7 @@ function isWorkspaceEntryRoutePath(pathname: string): boolean {
 const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
 );
+const ActionsPage = lazy(() => import('./pages/Actions'));
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
 const ProxmoxPage = lazy(() => import('./pages/Proxmox'));
 const DockerPage = lazy(() => import('./pages/Docker'));
@@ -573,6 +574,7 @@ function App() {
       <Route path={`${STANDALONE_PATH}/*`} component={StandalonePage} />
 
       <Route path="/alerts/*" component={AlertsPage} />
+      <Route path="/actions/*" component={ActionsPage} />
       <Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />
       <Route path="/settings/*" component={SettingsRoute} />
       <Route path="*all" component={NotFoundPage} />

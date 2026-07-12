@@ -54,6 +54,107 @@ describe('ActionAuditAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/actions/pending');
   });
 
+  it('hydrates durable inbox views and detail with policy provenance and independent result axes', async () => {
+    const scope = {
+      orgId: 'org-1',
+      resourceId: 'docker:container:web',
+      capabilityName: 'restart',
+    };
+    const approvalRequirement = {
+      version: 1,
+      floor: 'admin' as const,
+      quorum: 1,
+      disallowRequester: false,
+    };
+    const policyDecision = {
+      version: 1,
+      status: 'resolved' as const,
+      decisionId: 'policy-decision:sha256:one',
+      actionId: 'action/one',
+      scope,
+      authorities: [
+        {
+          kind: 'resource_operator_policy' as const,
+          sourceId: 'resource-policy:docker:container:web',
+          revision: 'resource-policy:sha256:one',
+          status: 'consulted' as const,
+          scope,
+          approvalFloor: 'admin' as const,
+          reasonCodes: ['resource_capability_allowed' as const, 'resource_window_open' as const],
+        },
+      ],
+      approvalRequirement,
+      planningAllowed: true,
+      requiresApproval: true,
+    };
+    const audit: ActionAuditRecord = {
+      id: 'action/one',
+      createdAt: '2026-07-12T00:00:00Z',
+      updatedAt: '2026-07-12T00:01:00Z',
+      state: 'completed',
+      request: {
+        requestId: 'request-1',
+        resourceId: scope.resourceId,
+        capabilityName: scope.capabilityName,
+        reason: 'Recover the edge proxy',
+        requestedBy: 'pulse_patrol',
+      },
+      plan: {
+        actionId: 'action/one',
+        requestId: 'request-1',
+        allowed: true,
+        requiresApproval: true,
+        approvalPolicy: 'admin',
+        approvalRequirement,
+        rollbackAvailable: true,
+        expiresAt: '2026-07-12T00:10:00Z',
+        policyDecision,
+      },
+      result: {
+        success: true,
+        actionResultV2: {
+          version: 2,
+          execution: { status: 'succeeded', summary: 'Dispatch completed.' },
+          verification: {
+            status: 'contradicted',
+            evidenceClass: 'independent',
+            summary: 'The observer still sees the prior state.',
+          },
+          compensation: {
+            support: 'declared',
+            status: 'not_attempted',
+            strategy: 'Restore the previous container state.',
+          },
+        },
+      },
+    };
+
+    apiFetchJSONMock
+      .mockResolvedValueOnce({ view: 'pending', actions: [], count: 0 })
+      .mockResolvedValueOnce({ view: 'settled', actions: [audit], count: 1 })
+      .mockResolvedValueOnce({ audit, events: [] });
+
+    await expect(ResourceActionsAPI.listActions('pending', 25)).resolves.toMatchObject({
+      view: 'pending',
+      count: 0,
+    });
+    await expect(ResourceActionsAPI.listActions('settled', 25)).resolves.toMatchObject({
+      view: 'settled',
+      count: 1,
+    });
+    const detail = await ResourceActionsAPI.getAction('action/one');
+
+    expect(apiFetchJSONMock).toHaveBeenNthCalledWith(1, '/api/actions?view=pending&limit=25');
+    expect(apiFetchJSONMock).toHaveBeenNthCalledWith(2, '/api/actions?view=settled&limit=25');
+    expect(apiFetchJSONMock).toHaveBeenNthCalledWith(3, '/api/actions/action%2Fone');
+    expect(detail.audit.plan.policyDecision).toEqual(policyDecision);
+    expect(detail.audit.result?.actionResultV2).toMatchObject({
+      execution: { status: 'succeeded' },
+      verification: { status: 'contradicted', evidenceClass: 'independent' },
+      compensation: { support: 'declared', status: 'not_attempted' },
+    });
+  });
+
   it('builds the canonical resource-scoped action audit query', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       audits: [

@@ -1,12 +1,15 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { AIAPI } from '@/api/ai';
 import {
+  createPatrolAutopilotAcknowledgement,
   getPatrolAutonomySettings,
   getPatrolRunHistory,
   getPatrolStatus,
+  revokePatrolAutopilotAcknowledgement,
   triggerPatrolRun,
   updatePatrolAutonomySettings,
   type PatrolAutonomyLevel,
+  type PatrolAutopilotStatus,
   type PatrolRunRecord,
   type PatrolRuntimeState,
   type PatrolStatus,
@@ -229,6 +232,9 @@ export function usePatrolIntelligenceState() {
   const [isRefreshing, setIsRefreshing] = createSignal(false);
   const [isManualRefreshRunning, setIsManualRefreshRunning] = createSignal(false);
   const [autonomyLevel, setAutonomyLevel] = createSignal<PatrolAutonomyLevel>('monitor');
+  const [requestedAutonomyLevel, setRequestedAutonomyLevel] = createSignal<PatrolAutonomyLevel>('monitor');
+  const [autopilotStatus, setAutopilotStatus] = createSignal<PatrolAutopilotStatus | null>(null);
+  const [autopilotDialogOpen, setAutopilotDialogOpen] = createSignal(false);
   const [isUpdatingAutonomy, setIsUpdatingAutonomy] = createSignal(false);
   const [activityRefreshTrigger, setActivityRefreshTrigger] = createSignal(0);
   const [manualRunRequested, setManualRunRequested] = createSignal(false);
@@ -577,13 +583,10 @@ export function usePatrolIntelligenceState() {
     try {
       const settings = await getPatrolAutonomySettings();
       if (!settings) return;
-      const effectiveSettings = resolvePatrolAutonomySettingsForSave({
-        level: settings.autonomy_level,
-        fullModeUnlocked: settings.full_mode_unlocked,
-        autoFixLocked: autoFixLocked(),
-      });
-      setAutonomyLevel(effectiveSettings.autonomyLevel);
-      setFullModeUnlocked(effectiveSettings.fullModeUnlocked);
+      setRequestedAutonomyLevel(settings.requested_autonomy_level);
+      setAutonomyLevel(settings.effective_autonomy_level);
+      setAutopilotStatus(settings.autopilot_acknowledgement);
+      setFullModeUnlocked(settings.autopilot_acknowledgement.active);
       setInvestigationBudget(settings.investigation_budget);
       setInvestigationTimeout(settings.investigation_timeout_sec);
     } catch (err) {
@@ -596,28 +599,26 @@ export function usePatrolIntelligenceState() {
     const controlLocked = autoFixLocked();
     if (controlLocked && level !== 'monitor') return;
 
+    if (level === 'full') {
+      setAutopilotDialogOpen(true);
+      return;
+    }
     const previousLevel = autonomyLevel();
-    const previousFullModeUnlocked = fullModeUnlocked();
-    const effectiveSettings = resolvePatrolAutonomySettingsForSave({
-      level,
-      fullModeUnlocked: level === 'full',
-      autoFixLocked: controlLocked,
-    });
     const shouldRecordPatrolControlStarter =
       !controlLocked &&
-      (effectiveSettings.autonomyLevel !== previousLevel ||
-        effectiveSettings.fullModeUnlocked !== previousFullModeUnlocked);
-    setAutonomyLevel(effectiveSettings.autonomyLevel);
-    setFullModeUnlocked(effectiveSettings.fullModeUnlocked);
+      level !== previousLevel;
     setIsUpdatingAutonomy(true);
 
     try {
-      await updatePatrolAutonomySettings({
-        autonomy_level: effectiveSettings.autonomyLevel,
-        full_mode_unlocked: effectiveSettings.fullModeUnlocked,
+      const response = await updatePatrolAutonomySettings({
+        autonomy_level: level,
         investigation_budget: investigationBudget(),
         investigation_timeout_sec: investigationTimeout(),
       });
+      setRequestedAutonomyLevel(response.settings.requested_autonomy_level);
+      setAutonomyLevel(response.settings.effective_autonomy_level);
+      setAutopilotStatus(response.settings.autopilot_acknowledgement);
+      setFullModeUnlocked(response.settings.autopilot_acknowledgement.active);
       if (shouldRecordPatrolControlStarter) {
         await recordPatrolControlStarterActivity();
         await loadVisiblePatrolData();
@@ -625,8 +626,53 @@ export function usePatrolIntelligenceState() {
     } catch (err) {
       console.error('Failed to update autonomy:', err);
       setAutonomyLevel(previousLevel);
-      setFullModeUnlocked(previousFullModeUnlocked);
       notificationStore.error((err as Error).message || 'Failed to update Patrol mode');
+    } finally {
+      setIsUpdatingAutonomy(false);
+    }
+  }
+
+  async function acknowledgeAndActivateAutopilot() {
+    if (isUpdatingAutonomy() || autoFixLocked()) return;
+    setIsUpdatingAutonomy(true);
+    const acknowledgementId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `patrol-autopilot-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    try {
+      const acknowledgement = await createPatrolAutopilotAcknowledgement(acknowledgementId);
+      const response = await updatePatrolAutonomySettings({
+        autonomy_level: 'full',
+        acknowledgement_id: acknowledgement.acknowledgement.acknowledgementId || acknowledgementId,
+        investigation_budget: investigationBudget(),
+        investigation_timeout_sec: investigationTimeout(),
+      });
+      setRequestedAutonomyLevel(response.settings.requested_autonomy_level);
+      setAutonomyLevel(response.settings.effective_autonomy_level);
+      setAutopilotStatus(response.settings.autopilot_acknowledgement);
+      setFullModeUnlocked(response.settings.autopilot_acknowledgement.active);
+      setAutopilotDialogOpen(false);
+      await recordPatrolControlStarterActivity();
+      await loadVisiblePatrolData();
+      notificationStore.success('Autopilot acknowledgement recorded and mode activated.');
+    } catch (err) {
+      await loadAutonomySettings();
+      notificationStore.error((err as Error).message || 'Autopilot could not be activated.');
+    } finally {
+      setIsUpdatingAutonomy(false);
+    }
+  }
+
+  async function revokeAutopilot() {
+    const acknowledgementId = autopilotStatus()?.acknowledgementId;
+    if (!acknowledgementId || isUpdatingAutonomy()) return;
+    setIsUpdatingAutonomy(true);
+    try {
+      await revokePatrolAutopilotAcknowledgement(acknowledgementId);
+      await loadAutonomySettings();
+      notificationStore.success('Autopilot acknowledgement revoked. Effective mode refreshed.');
+    } catch (err) {
+      notificationStore.error((err as Error).message || 'Autopilot acknowledgement could not be revoked.');
     } finally {
       setIsUpdatingAutonomy(false);
     }
@@ -725,6 +771,7 @@ export function usePatrolIntelligenceState() {
       await Promise.all([
         aiIntelligenceStore.loadDashboardData(),
         refetchPatrolStatus(),
+        loadAutonomySettings(),
       ]);
       if (requestId === refreshRequestId) {
         clearPatrolLoadError();
@@ -955,6 +1002,10 @@ export function usePatrolIntelligenceState() {
     activityRefreshTrigger,
     assistantHandoffFindingId,
     autonomyLevel,
+    requestedAutonomyLevel,
+    autopilotStatus,
+    autopilotDialogOpen,
+    acknowledgeAndActivateAutopilot,
     autoFixCapabilityBlock,
     autoFixLocked,
     blockedAt,
@@ -980,6 +1031,7 @@ export function usePatrolIntelligenceState() {
     isTogglingPatrol,
     isTriggeringPatrol,
     isUpdatingAutonomy,
+    revokeAutopilot,
     licenseRequired,
     loadAllData,
     licenseRuntimeIdentity,
@@ -1008,6 +1060,7 @@ export function usePatrolIntelligenceState() {
     setActiveTab,
     setFindingsFilterOverride,
     setFullModeUnlocked,
+    setAutopilotDialogOpen,
     setSelectedRun,
     setFindingScrollTimer: (timer: ReturnType<typeof setTimeout> | undefined) => {
       findingScrollTimerRef = timer;

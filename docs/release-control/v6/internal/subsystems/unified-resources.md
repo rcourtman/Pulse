@@ -158,6 +158,12 @@ temperature, capacity, health, and identity enrichment.
 113. `frontend-modern/src/features/docker/DockerAlertsTable.tsx`
 114. `frontend-modern/src/features/docker/DockerServicesTable.tsx`
 115. `frontend-modern/src/features/docker/DockerStorageUsageTable.tsx`
+116. `frontend-modern/src/features/actions/ActionDecisionPacket.tsx`
+117. `frontend-modern/src/features/actions/ActionReviewDialog.tsx`
+118. `frontend-modern/src/features/actions/actionPresentation.ts`
+119. `frontend-modern/src/pages/Actions.tsx`
+120. `frontend-modern/src/routing/navigation.ts`
+121. `frontend-modern/src/routing/routePreload.ts`
 116. `frontend-modern/src/features/kubernetes/KubernetesAlertsTable.tsx`
 117. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx`
 118. `frontend-modern/src/features/proxmox/ProxmoxCephTable.tsx`
@@ -552,11 +558,12 @@ container inventory table.
 11. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `performance-and-scalability`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 12. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `storage-recovery`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
 13. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `storage-recovery`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
-14. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `frontend-primitives`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
+14. `frontend-modern/src/routing/routePreload.ts` shared with `frontend-primitives`, `performance-and-scalability`: the app-shell route preload registry is a canonical frontend shell boundary, an authenticated hot-path performance boundary, and the entry point for the unified-resource Actions workspace.
+15. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `frontend-primitives`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
     It must carry the manifest `surface_kind` distinction so `docker` remains
     machine-readable as a `runtime-lens` while owning infrastructure sources
     remain `platform` entries.
-15. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `frontend-primitives`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
+16. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `frontend-primitives`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
     That shared vocabulary boundary owns the generic `docker` platform label:
     selectors, badges, and filter options render it as "Docker / Podman" so
     v5 Docker users can still find the runtime surface while Podman-backed
@@ -578,7 +585,7 @@ container inventory table.
     display/source family; `platformScopes` is the overlap set used when a
     runtime workload belongs to both Docker and an owning infrastructure
     platform.
-16. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+17. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
     `/api/resources` type filters must accept URL-encoded comma-separated lists
     from browser query builders exactly like literal comma separators, so Docker
     / Podman runtime pages do not lose `docker-host` inventory while requesting
@@ -599,6 +606,16 @@ container inventory table.
     expansion remains a per-resource timeline behavior; unscoped provider
     activity must not infer related resources in the frontend.
 ## Extension Points
+
+The desktop Product Trust projection is owned at
+`frontend-modern/src/features/actions/` with the route shell in
+`frontend-modern/src/pages/Actions.tsx`. It must consume durable
+`ActionAuditRecord.plan.policyDecision` and `result.actionResultV2` without
+deriving policy authority or collapsing execution, verification, and recovery
+into one outcome. Docker lifecycle controls may create a canonical plan and
+open this shared review, but may not auto-approve, auto-execute, or use a
+second-click local confirmation. Proof is owned by the colocated action tests,
+`DockerNativeTables.test.tsx`, and desktop journeys 81 and 83.
 
 1. Add new resource types and identity fields in `internal/unifiedresources/types.go`
    Agentless availability endpoints enter the model as

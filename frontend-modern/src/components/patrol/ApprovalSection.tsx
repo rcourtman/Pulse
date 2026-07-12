@@ -75,6 +75,8 @@ function statePresentation(state: ActionAuditState): {
       return { label: 'Approved', tone: 'success' };
     case 'rejected':
       return { label: 'Rejected', tone: 'warning' };
+    case 'expired':
+      return { label: 'Expired', tone: 'warning' };
     case 'executing':
       return { label: 'Applying', tone: 'info' };
     case 'completed':
