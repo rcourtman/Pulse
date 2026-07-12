@@ -3989,7 +3989,7 @@
             "./internal/ai/tools",
             "./internal/api",
             "-run",
-            "TestParseProviderToolInputRejectsInternalApprovalMetadata|TestValidateDeclaredToolArgumentsRejectsUnknownProviderProperties|TestExecuteCommand_RoundTripViaWebSocket|TestExecuteCommand_InvalidApprovalAuthorizationNeverMintsOrDispatches|TestService_ExecuteStream_AutonomousRawCommandRequiresApproval|TestPulseToolExecutor_ExecuteRunCommand|TestHandleChat_CannotElevateAutonomousModePerRequest|TestVerifyAndConsumeCommandAuthorization",
+            "TestParseProviderToolInputRejectsInternalApprovalMetadata|TestValidateDeclaredToolArgumentsRejectsUnknownProviderProperties|TestExecuteCommand_RoundTripViaWebSocket|TestExecuteCommand_InvalidApprovalAuthorizationNeverMintsOrDispatches|TestService_ExecuteStream_AutonomousRawCommandRequiresApproval|TestService_Execute_RepeatedDeniedToolCallTerminatesBounded|TestServiceToolLoop_|TestPulseToolExecutor_ExecuteRunCommand|TestHandleChat_CannotElevateAutonomousModePerRequest|TestVerifyAndConsumeCommandAuthorization",
             "-count=1"
           ]
         },
@@ -4107,6 +4107,17 @@
           "repo": "pulse",
           "path": "internal/ai/chat/service_investigation.go",
           "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/service_tool_loop.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/service_tool_loop_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         },
         {
           "repo": "pulse",

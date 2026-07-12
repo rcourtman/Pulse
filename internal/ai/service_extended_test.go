@@ -2112,6 +2112,8 @@ func TestService_ExecuteStream_PolicyBlock(t *testing.T) {
 
 func TestService_ExecuteStream_AutonomousRawCommandRequiresApproval(t *testing.T) {
 	tmpDir := t.TempDir()
+	store := installEmptyServiceToolLoopApprovalStore(t)
+	mutationPath := filepath.Join(tmpDir, "autonomous-raw-command")
 	persistence := config.NewConfigPersistence(tmpDir)
 	dispatches := 0
 	svc := NewService(persistence, &mockAgentServer{
@@ -2128,8 +2130,8 @@ func TestService_ExecuteStream_AutonomousRawCommandRequiresApproval(t *testing.T
 		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
 			iteration++
 			return &providers.ChatResponse{
-				ToolCalls: []providers.ToolCall{{ID: "call-1", Name: "run_command", Input: map[string]interface{}{
-					"command": "touch /tmp/autonomous-raw-command", "target_host": "agent-1",
+				ToolCalls: []providers.ToolCall{{ID: fmt.Sprintf("call-%d", iteration), Name: "run_command", Input: map[string]interface{}{
+					"command": "touch " + mutationPath, "target_host": "agent-1",
 				}}},
 				StopReason: "tool_use",
 			}, nil
@@ -2138,22 +2140,35 @@ func TestService_ExecuteStream_AutonomousRawCommandRequiresApproval(t *testing.T
 	svc.provider = mock
 
 	approvalEvents := 0
+	loopFailureEvents := 0
 	_, err := svc.ExecuteStream(context.Background(), ExecuteRequest{TargetType: "agent"}, func(event StreamEvent) {
 		if event.Type == "approval_needed" {
 			approvalEvents++
 		}
+		if event.Type == "error" {
+			if data, ok := event.Data.(ServiceToolLoopFailureData); ok && data.Code == ServiceToolLoopFailureCode {
+				loopFailureEvents++
+			}
+		}
 	})
-	if err != nil {
-		t.Fatalf("ExecuteStream failed: %v", err)
-	}
+	requireServiceToolLoopFailure(t, err, ServiceToolLoopFailureRepeatedDenied)
 	if dispatches != 0 {
 		t.Fatalf("agent dispatches = %d, want 0", dispatches)
 	}
-	if iteration != 1 {
-		t.Fatalf("provider iterations = %d, want 1", iteration)
+	if iteration != 2 {
+		t.Fatalf("provider iterations = %d, want 2", iteration)
 	}
-	if approvalEvents != 1 {
-		t.Fatalf("approval events = %d, want 1", approvalEvents)
+	if approvalEvents != 0 {
+		t.Fatalf("approval events = %d, want 0", approvalEvents)
+	}
+	if loopFailureEvents != 1 {
+		t.Fatalf("typed loop failure events = %d, want 1", loopFailureEvents)
+	}
+	if got := len(store.GetPendingApprovals()); got != 0 {
+		t.Fatalf("persisted approvals = %d, want 0", got)
+	}
+	if _, statErr := os.Stat(mutationPath); !os.IsNotExist(statErr) {
+		t.Fatalf("external mutation path exists or stat failed unexpectedly: %v", statErr)
 	}
 }
 

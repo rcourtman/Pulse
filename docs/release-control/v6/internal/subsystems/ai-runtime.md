@@ -44,6 +44,16 @@ side-effect-free typed proposal whose correlation identity is server-authored.
 Unknown profiles, actions, aliases, origins, scopes, and mutation
 classifications fail closed.
 
+Model/tool orchestration is bounded by construction rather than by request
+timeout. The legacy `Service` streaming and non-streaming paths share one
+ten-provider-call budget owned by `internal/ai/service_tool_loop.go`; reaching
+that budget returns a typed terminal failure. A provider that repeats the same
+policy-denied tool name and arguments terminates on the second provider call,
+before the repeated call can execute. Denial-loop termination must not create
+an approval, mint command authority, dispatch an agent message, or mutate
+external state. The canonical chat `AgenticLoop` retains its separately
+configurable bounded-turn contract for native Assistant and Patrol flows.
+
 Discovery `run` currently persists read-derived evidence in the discovery
 cache. That cache write is not an H1 finding/knowledge/infrastructure mutation
 exception and remains a separately governed residual under

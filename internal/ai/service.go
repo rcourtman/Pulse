@@ -2247,10 +2247,14 @@ Always execute the commands rather than telling the user how to do it.`
 	var finalContent string
 	var model string
 
-	// Agentic loop - keep going while AI requests tools
-	maxIterations := 10 // Safety limit
-	for i := 0; i < maxIterations; i++ {
+	// Agentic loop - keep going while AI requests tools within the shared
+	// provider-call budget.
+	loopGuard := newServiceToolLoopGuard()
+	for {
 		if err := s.enforceBudget(req.UseCase); err != nil {
+			return nil, err
+		}
+		if err := loopGuard.beforeProviderCall(); err != nil {
 			return nil, err
 		}
 
@@ -2298,6 +2302,9 @@ Always execute the commands rather than telling the user how to do it.`
 		// If no tool calls, we're done
 		if len(resp.ToolCalls) == 0 || resp.StopReason != "tool_use" {
 			break
+		}
+		if err := s.observeDeniedServiceToolCalls(loopGuard, resp.ToolCalls); err != nil {
+			return nil, err
 		}
 
 		// Add assistant's response with tool calls to messages
@@ -2466,11 +2473,19 @@ Always execute the commands rather than telling the user how to do it.`
 	var finalContent string
 	var model string
 
-	// Agentic loop - keep going while AI requests tools
-	// No artificial iteration limit - the context timeout (5 minutes) provides the safety net
-	iteration := 0
+	// Agentic loop - keep going while AI requests tools within the same
+	// provider-call budget as non-streaming execution.
+	loopGuard := newServiceToolLoopGuard()
 	for {
-		iteration++
+		if err := s.enforceBudget(req.UseCase); err != nil {
+			callback(StreamEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
+			return nil, err
+		}
+		if err := loopGuard.beforeProviderCall(); err != nil {
+			emitServiceToolLoopFailure(callback, err)
+			return nil, err
+		}
+		iteration := loopGuard.providerCalls
 		log.Debug().
 			Int("iteration", iteration).
 			Int("message_count", len(messages)).
@@ -2482,11 +2497,6 @@ Always execute the commands rather than telling the user how to do it.`
 		// This is especially important after tool execution when the next AI call can take a while
 		if iteration > 1 {
 			callback(StreamEvent{Type: "processing", Data: fmt.Sprintf("Analyzing results (iteration %d)...", iteration)})
-		}
-
-		if err := s.enforceBudget(req.UseCase); err != nil {
-			callback(StreamEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
-			return nil, err
 		}
 
 		chatReq := providers.ChatRequest{
@@ -2563,6 +2573,10 @@ Always execute the commands rather than telling the user how to do it.`
 				Int("iteration", iteration).
 				Msg("AI streaming loop ending - no more tool calls or stop_reason != tool_use")
 			break
+		}
+		if err := s.observeDeniedServiceToolCalls(loopGuard, resp.ToolCalls); err != nil {
+			emitServiceToolLoopFailure(callback, err)
+			return nil, err
 		}
 
 		// Add assistant's response with tool calls to messages
