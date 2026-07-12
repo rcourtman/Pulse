@@ -36,7 +36,7 @@ func (c *subprocessConn) Close() error {
 		c.stdin.Close()
 		c.stdout.Close()
 		if c.cmd.Process != nil {
-			c.cmd.Process.Kill()
+			_ = c.cmd.Process.Kill()
 		}
 		c.cancelTimers()
 	})

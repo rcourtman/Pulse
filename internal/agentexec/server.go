@@ -1326,10 +1326,21 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	}
 }
 
-// ExecuteHostUpdate dispatches the closed typed host-package operation. Unlike
-// ExecuteCommand, no command text crosses this boundary; the agent owns the
-// package-manager catalog, preflight, mutation, and read-after-write proof.
-func (s *Server) ExecuteHostUpdate(ctx context.Context, agentID string, req HostUpdatePayload) (*HostUpdateResultPayload, error) {
+// hostOperationPlan carries the per-operation pieces of one closed typed
+// agent operation dispatch; executeHostOperation owns the shared pending
+// bookkeeping, transport, and receipt-wait lifecycle.
+type hostOperationPlan[Req any, Res any] struct {
+	label          string
+	msgType        MessageType
+	prepare        func(*Req) error
+	requestID      func(Req) string
+	timeoutSeconds func(Req) int
+	claim          func(agentID string, req Req) (string, error)
+	pending        func() map[string]chan Res
+	validateResult func(Req, Res) error
+}
+
+func executeHostOperation[Req any, Res any](ctx context.Context, s *Server, agentID string, req Req, plan hostOperationPlan[Req, Res]) (*Res, error) {
 	if s == nil {
 		return nil, fmt.Errorf("agent execution server is unavailable")
 	}
@@ -1337,13 +1348,7 @@ func (s *Server) ExecuteHostUpdate(ctx context.Context, agentID string, req Host
 	if agentID == "" {
 		return nil, fmt.Errorf("agent id is required")
 	}
-	if strings.TrimSpace(req.RequestID) == "" {
-		req.RequestID = uuid.New().String()
-	}
-	if err := BindHostUpdatePayload(&req); err != nil {
-		return nil, err
-	}
-	if err := ValidateHostUpdatePayload(&req); err != nil {
+	if err := plan.prepare(&req); err != nil {
 		return nil, err
 	}
 
@@ -1357,215 +1362,147 @@ func (s *Server) ExecuteHostUpdate(ctx context.Context, agentID string, req Host
 		return nil, fmt.Errorf("agent does not support durable operation receipts")
 	}
 
-	respCh := make(chan HostUpdateResultPayload, 1)
-	reqKey := pendingRequestKey(agentID, req.RequestID)
-	hostOperationKey, err := s.claimPendingHostOperation(agentID, req.RequestID, req.ActionID, req.Operation)
+	requestID := plan.requestID(req)
+	respCh := make(chan Res, 1)
+	reqKey := pendingRequestKey(agentID, requestID)
+	hostOperationKey, err := plan.claim(agentID, req)
 	if err != nil {
 		return nil, err
 	}
 	defer s.releasePendingHostOperation(hostOperationKey)
+	pending := plan.pending()
 	s.mu.Lock()
-	if _, exists := s.pendingHostUpdates[reqKey]; exists {
+	if _, exists := pending[reqKey]; exists {
 		s.mu.Unlock()
-		return nil, fmt.Errorf("host update request %q is already pending", req.RequestID)
+		return nil, fmt.Errorf("%s request %q is already pending", plan.label, requestID)
 	}
-	s.pendingHostUpdates[reqKey] = respCh
+	pending[reqKey] = respCh
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
-		delete(s.pendingHostUpdates, reqKey)
+		delete(pending, reqKey)
 		s.mu.Unlock()
 	}()
 
-	msg, err := NewMessage(MsgTypeHostUpdate, req.RequestID, req)
+	msg, err := NewMessage(plan.msgType, requestID, req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode host update request: %w", err)
+		return nil, fmt.Errorf("failed to encode %s request: %w", plan.label, err)
 	}
 	ac.writeMu.Lock()
 	err = s.sendMessage(ac.conn, msg)
 	ac.writeMu.Unlock()
 	if err != nil {
-		return nil, fmt.Errorf("failed to send host update request: %w", err)
+		return nil, fmt.Errorf("failed to send %s request: %w", plan.label, err)
 	}
 
-	timer := time.NewTimer(time.Duration(req.Timeout) * time.Second)
+	timeout := time.Duration(plan.timeoutSeconds(req)) * time.Second
+	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
 	case result := <-respCh:
-		if err := ValidateHostUpdateResultForRequestAt(req, result, s.currentTime()); err != nil {
-			return nil, fmt.Errorf("host update result validation failed: %w", err)
+		if err := plan.validateResult(req, result); err != nil {
+			return nil, fmt.Errorf("%s result validation failed: %w", plan.label, err)
 		}
 		return &result, nil
 	case <-timer.C:
-		return nil, fmt.Errorf("host update timed out after %s", time.Duration(req.Timeout)*time.Second)
+		return nil, fmt.Errorf("%s timed out after %s", plan.label, timeout)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-ac.done:
-		return nil, fmt.Errorf("agent %s disconnected before host update receipt", agentID)
+		return nil, fmt.Errorf("agent %s disconnected before %s receipt", agentID, plan.label)
 	case <-s.shutdown:
 		return nil, errServerShuttingDown
 	}
 }
 
+// ExecuteHostUpdate dispatches the closed typed host-package operation. Unlike
+// ExecuteCommand, no command text crosses this boundary; the agent owns the
+// package-manager catalog, preflight, mutation, and read-after-write proof.
+//
+//nolint:dupl // parallel typed-operation wiring of the shared executeHostOperation flow; only operation symbols differ
+func (s *Server) ExecuteHostUpdate(ctx context.Context, agentID string, req HostUpdatePayload) (*HostUpdateResultPayload, error) {
+	return executeHostOperation(ctx, s, agentID, req, hostOperationPlan[HostUpdatePayload, HostUpdateResultPayload]{
+		label:   "host update",
+		msgType: MsgTypeHostUpdate,
+		prepare: func(r *HostUpdatePayload) error {
+			if strings.TrimSpace(r.RequestID) == "" {
+				r.RequestID = uuid.New().String()
+			}
+			if err := BindHostUpdatePayload(r); err != nil {
+				return err
+			}
+			return ValidateHostUpdatePayload(r)
+		},
+		requestID:      func(r HostUpdatePayload) string { return r.RequestID },
+		timeoutSeconds: func(r HostUpdatePayload) int { return r.Timeout },
+		claim: func(agentID string, r HostUpdatePayload) (string, error) {
+			return s.claimPendingHostOperation(agentID, r.RequestID, r.ActionID, r.Operation)
+		},
+		pending: func() map[string]chan HostUpdateResultPayload { return s.pendingHostUpdates },
+		validateResult: func(r HostUpdatePayload, result HostUpdateResultPayload) error {
+			return ValidateHostUpdateResultForRequestAt(r, result, s.currentTime())
+		},
+	})
+}
+
 // ExecuteHostStorageCleanup dispatches the closed package-cache cleanup
 // operation. No command text, path, package selector, or removal policy crosses
 // the server/agent boundary.
+//
+//nolint:dupl // parallel typed-operation wiring of the shared executeHostOperation flow; only operation symbols differ
 func (s *Server) ExecuteHostStorageCleanup(ctx context.Context, agentID string, req HostStorageCleanupPayload) (*HostStorageCleanupResultPayload, error) {
-	if s == nil {
-		return nil, fmt.Errorf("agent execution server is unavailable")
-	}
-	agentID = strings.TrimSpace(agentID)
-	if agentID == "" {
-		return nil, fmt.Errorf("agent id is required")
-	}
-	if strings.TrimSpace(req.RequestID) == "" {
-		req.RequestID = uuid.New().String()
-	}
-	if err := BindHostStorageCleanupPayload(&req); err != nil {
-		return nil, err
-	}
-	if err := ValidateHostStorageCleanupPayload(&req); err != nil {
-		return nil, err
-	}
-
-	s.mu.RLock()
-	ac, ok := s.agents[agentID]
-	s.mu.RUnlock()
-	if !ok {
-		return nil, fmt.Errorf("agent %s not connected", agentID)
-	}
-	if ac.agent.OperationReceiptVersion != operationreceipt.ProtocolVersion {
-		return nil, fmt.Errorf("agent does not support durable operation receipts")
-	}
-
-	respCh := make(chan HostStorageCleanupResultPayload, 1)
-	reqKey := pendingRequestKey(agentID, req.RequestID)
-	hostOperationKey, err := s.claimPendingHostOperation(agentID, req.RequestID, req.ActionID, req.Operation)
-	if err != nil {
-		return nil, err
-	}
-	defer s.releasePendingHostOperation(hostOperationKey)
-	s.mu.Lock()
-	if _, exists := s.pendingHostStorageCleanups[reqKey]; exists {
-		s.mu.Unlock()
-		return nil, fmt.Errorf("host storage cleanup request %q is already pending", req.RequestID)
-	}
-	s.pendingHostStorageCleanups[reqKey] = respCh
-	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		delete(s.pendingHostStorageCleanups, reqKey)
-		s.mu.Unlock()
-	}()
-
-	msg, err := NewMessage(MsgTypeHostStorageCleanup, req.RequestID, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode host storage cleanup request: %w", err)
-	}
-	ac.writeMu.Lock()
-	err = s.sendMessage(ac.conn, msg)
-	ac.writeMu.Unlock()
-	if err != nil {
-		return nil, fmt.Errorf("failed to send host storage cleanup request: %w", err)
-	}
-
-	timer := time.NewTimer(time.Duration(req.Timeout) * time.Second)
-	defer timer.Stop()
-	select {
-	case result := <-respCh:
-		if err := ValidateHostStorageCleanupResultForRequestAt(req, result, s.currentTime()); err != nil {
-			return nil, fmt.Errorf("host storage cleanup result validation failed: %w", err)
-		}
-		return &result, nil
-	case <-timer.C:
-		return nil, fmt.Errorf("host storage cleanup timed out after %s", time.Duration(req.Timeout)*time.Second)
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-ac.done:
-		return nil, fmt.Errorf("agent %s disconnected before host storage cleanup receipt", agentID)
-	case <-s.shutdown:
-		return nil, errServerShuttingDown
-	}
+	return executeHostOperation(ctx, s, agentID, req, hostOperationPlan[HostStorageCleanupPayload, HostStorageCleanupResultPayload]{
+		label:   "host storage cleanup",
+		msgType: MsgTypeHostStorageCleanup,
+		prepare: func(r *HostStorageCleanupPayload) error {
+			if strings.TrimSpace(r.RequestID) == "" {
+				r.RequestID = uuid.New().String()
+			}
+			if err := BindHostStorageCleanupPayload(r); err != nil {
+				return err
+			}
+			return ValidateHostStorageCleanupPayload(r)
+		},
+		requestID:      func(r HostStorageCleanupPayload) string { return r.RequestID },
+		timeoutSeconds: func(r HostStorageCleanupPayload) int { return r.Timeout },
+		claim: func(agentID string, r HostStorageCleanupPayload) (string, error) {
+			return s.claimPendingHostOperation(agentID, r.RequestID, r.ActionID, r.Operation)
+		},
+		pending: func() map[string]chan HostStorageCleanupResultPayload { return s.pendingHostStorageCleanups },
+		validateResult: func(r HostStorageCleanupPayload, result HostStorageCleanupResultPayload) error {
+			return ValidateHostStorageCleanupResultForRequestAt(r, result, s.currentTime())
+		},
+	})
 }
 
 // ExecuteDockerContainerLifecycle dispatches one closed typed container
 // operation. The Unified Agent owns the fixed runtime command catalog and
 // performs preflight plus read-after-write inside this single dispatch.
 func (s *Server) ExecuteDockerContainerLifecycle(ctx context.Context, agentID string, req DockerContainerLifecyclePayload) (*DockerContainerLifecycleResultPayload, error) {
-	if s == nil {
-		return nil, fmt.Errorf("agent execution server is unavailable")
-	}
-	agentID = strings.TrimSpace(agentID)
-	if agentID == "" {
-		return nil, fmt.Errorf("agent id is required")
-	}
-	if strings.TrimSpace(req.RequestID) == "" {
-		req.RequestID = uuid.NewString()
-	}
-	if err := BindDockerContainerLifecyclePayload(&req); err != nil {
-		return nil, err
-	}
-	if err := ValidateDockerContainerLifecyclePayload(&req); err != nil {
-		return nil, err
-	}
-	s.mu.RLock()
-	ac, ok := s.agents[agentID]
-	s.mu.RUnlock()
-	if !ok {
-		return nil, fmt.Errorf("agent %s not connected", agentID)
-	}
-	if ac.agent.OperationReceiptVersion != operationreceipt.ProtocolVersion {
-		return nil, fmt.Errorf("agent does not support durable operation receipts")
-	}
-
-	respCh := make(chan DockerContainerLifecycleResultPayload, 1)
-	reqKey := pendingRequestKey(agentID, req.RequestID)
-	identity := DockerContainerLifecycleOperationIdentity(agentID, req)
-	hostOperationKey, err := s.claimPendingDockerOperation(identity, req.ContainerID)
-	if err != nil {
-		return nil, err
-	}
-	defer s.releasePendingHostOperation(hostOperationKey)
-	s.mu.Lock()
-	if _, exists := s.pendingDockerContainerLifecycles[reqKey]; exists {
-		s.mu.Unlock()
-		return nil, fmt.Errorf("docker container lifecycle request %q is already pending", req.RequestID)
-	}
-	s.pendingDockerContainerLifecycles[reqKey] = respCh
-	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		delete(s.pendingDockerContainerLifecycles, reqKey)
-		s.mu.Unlock()
-	}()
-
-	msg, err := NewMessage(MsgTypeDockerContainerLifecycle, req.RequestID, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode docker container lifecycle request: %w", err)
-	}
-	ac.writeMu.Lock()
-	err = s.sendMessage(ac.conn, msg)
-	ac.writeMu.Unlock()
-	if err != nil {
-		return nil, fmt.Errorf("failed to send docker container lifecycle request: %w", err)
-	}
-	timer := time.NewTimer(time.Duration(req.Timeout) * time.Second)
-	defer timer.Stop()
-	select {
-	case result := <-respCh:
-		if err := ValidateDockerContainerLifecycleResultForRequest(req, result); err != nil {
-			return nil, fmt.Errorf("docker container lifecycle result validation failed: %w", err)
-		}
-		return &result, nil
-	case <-timer.C:
-		return nil, fmt.Errorf("docker container lifecycle timed out after %s", time.Duration(req.Timeout)*time.Second)
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-ac.done:
-		return nil, fmt.Errorf("agent %s disconnected before docker container lifecycle receipt", agentID)
-	case <-s.shutdown:
-		return nil, errServerShuttingDown
-	}
+	return executeHostOperation(ctx, s, agentID, req, hostOperationPlan[DockerContainerLifecyclePayload, DockerContainerLifecycleResultPayload]{
+		label:   "docker container lifecycle",
+		msgType: MsgTypeDockerContainerLifecycle,
+		prepare: func(r *DockerContainerLifecyclePayload) error {
+			if strings.TrimSpace(r.RequestID) == "" {
+				r.RequestID = uuid.NewString()
+			}
+			if err := BindDockerContainerLifecyclePayload(r); err != nil {
+				return err
+			}
+			return ValidateDockerContainerLifecyclePayload(r)
+		},
+		requestID:      func(r DockerContainerLifecyclePayload) string { return r.RequestID },
+		timeoutSeconds: func(r DockerContainerLifecyclePayload) int { return r.Timeout },
+		claim: func(agentID string, r DockerContainerLifecyclePayload) (string, error) {
+			return s.claimPendingDockerOperation(DockerContainerLifecycleOperationIdentity(agentID, r), r.ContainerID)
+		},
+		pending: func() map[string]chan DockerContainerLifecycleResultPayload {
+			return s.pendingDockerContainerLifecycles
+		},
+		validateResult: func(r DockerContainerLifecyclePayload, result DockerContainerLifecycleResultPayload) error {
+			return ValidateDockerContainerLifecycleResultForRequest(r, result)
+		},
+	})
 }
 
 func (s *Server) currentTime() time.Time {

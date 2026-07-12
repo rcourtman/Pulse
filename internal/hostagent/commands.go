@@ -613,49 +613,79 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 	}
 }
 
-func (c *CommandClient) handleHostUpdate(ctx context.Context, conn *websocket.Conn, payload agentexec.HostUpdatePayload) {
-	identity := agentexec.HostUpdateOperationIdentity(c.agentID, payload)
+// durableOperationSpec carries the per-operation pieces of one durable typed
+// operation handler; runDurableOperation owns the shared admit → start →
+// apply → persist-receipt → send lifecycle.
+type durableOperationSpec[Res any] struct {
+	warnLabel      string // log-message prefix, e.g. "Host update"
+	persistLabel   string // receipt-persist log fragment, e.g. "host update"
+	defaultTimeout time.Duration
+	replay         func(*websocket.Conn, operationreceipt.Record)
+	apply          func(context.Context) Res
+	receiptKind    string
+	receiptVersion int
+	send           func(*websocket.Conn, Res)
+}
+
+func runDurableOperation[Res any](ctx context.Context, c *CommandClient, conn *websocket.Conn, identity operationreceipt.Identity, requestID string, timeoutSeconds int, spec durableOperationSpec[Res]) {
 	record, admitted, err := c.admitOperation(identity)
 	if err != nil {
-		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Host update durable admission refused")
+		c.logger.Warn().Err(err).Str("request_id", requestID).Msg(spec.warnLabel + " durable admission refused")
 		return
 	}
 	if !admitted {
 		if record.State == operationreceipt.StateTerminal {
-			c.replayHostUpdate(conn, record)
+			spec.replay(conn, record)
 		}
 		return
 	}
 	if _, err := c.operationReceipts.MarkStarted(identity); err != nil {
-		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Host update durable start refused")
+		c.logger.Warn().Err(err).Str("request_id", requestID).Msg(spec.warnLabel + " durable start refused")
 		return
 	}
-	timeout := time.Duration(payload.Timeout) * time.Second
+	timeout := time.Duration(timeoutSeconds) * time.Second
 	if timeout <= 0 {
-		timeout = 15 * time.Minute
+		timeout = spec.defaultTimeout
 	}
-	updateCtx, cancel := context.WithTimeout(ctx, timeout)
+	operationCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	result := agentexec.HostUpdateResultPayload{
-		RequestID: strings.TrimSpace(payload.RequestID), ActionID: strings.TrimSpace(payload.ActionID),
-		ExecutionPhase: agentexec.HostUpdatePhasePreflight, Verification: agentexec.HostUpdateVerificationInconclusive,
-	}
-	if c.packageUpdates == nil {
-		result.Error = "host package update service is unavailable"
-	} else {
-		result = c.packageUpdates.Apply(updateCtx, payload)
-	}
-	result = sanitizeHostUpdateReceipt(result)
+	result := spec.apply(operationCtx)
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		return
 	}
-	if _, err := c.operationReceipts.Complete(identity, operationreceipt.TerminalEnvelope{Kind: agentexec.HostUpdateReceiptKind, Version: agentexec.HostAPTReceiptVersion, Payload: encoded}); err != nil {
-		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to persist host update terminal receipt")
+	if _, err := c.operationReceipts.Complete(identity, operationreceipt.TerminalEnvelope{Kind: spec.receiptKind, Version: spec.receiptVersion, Payload: encoded}); err != nil {
+		c.logger.Error().Err(err).Str("request_id", requestID).Msg("Failed to persist " + spec.persistLabel + " terminal receipt")
 		return
 	}
-	c.sendHostUpdateResult(conn, result)
+	spec.send(conn, result)
+}
+
+//nolint:dupl // parallel typed-operation wiring of the shared runDurableOperation flow; only operation symbols differ
+func (c *CommandClient) handleHostUpdate(ctx context.Context, conn *websocket.Conn, payload agentexec.HostUpdatePayload) {
+	identity := agentexec.HostUpdateOperationIdentity(c.agentID, payload)
+	runDurableOperation(ctx, c, conn, identity, payload.RequestID, payload.Timeout, durableOperationSpec[agentexec.HostUpdateResultPayload]{
+		warnLabel:      "Host update",
+		persistLabel:   "host update",
+		defaultTimeout: 15 * time.Minute,
+		replay:         c.replayHostUpdate,
+		apply: func(updateCtx context.Context) agentexec.HostUpdateResultPayload {
+			result := agentexec.HostUpdateResultPayload{
+				RequestID: strings.TrimSpace(payload.RequestID), ActionID: strings.TrimSpace(payload.ActionID),
+				ExecutionPhase: agentexec.HostUpdatePhasePreflight, Verification: agentexec.HostUpdateVerificationInconclusive,
+			}
+			if c.packageUpdates == nil {
+				result.Error = "host package update service is unavailable"
+			} else {
+				result = c.packageUpdates.Apply(updateCtx, payload)
+			}
+			return sanitizeHostUpdateReceipt(result)
+		},
+		receiptKind:    agentexec.HostUpdateReceiptKind,
+		receiptVersion: agentexec.HostAPTReceiptVersion,
+		send:           c.sendHostUpdateResult,
+	})
 }
 
 func (c *CommandClient) sendHostUpdateResult(conn *websocket.Conn, result agentexec.HostUpdateResultPayload) {
@@ -678,94 +708,57 @@ func (c *CommandClient) sendHostUpdateResult(conn *websocket.Conn, result agente
 	}
 }
 
+//nolint:dupl // parallel typed-operation wiring of the shared runDurableOperation flow; only operation symbols differ
 func (c *CommandClient) handleHostStorageCleanup(ctx context.Context, conn *websocket.Conn, payload agentexec.HostStorageCleanupPayload) {
 	identity := agentexec.HostStorageCleanupOperationIdentity(c.agentID, payload)
-	record, admitted, err := c.admitOperation(identity)
-	if err != nil {
-		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Host cleanup durable admission refused")
-		return
-	}
-	if !admitted {
-		if record.State == operationreceipt.StateTerminal {
-			c.replayHostStorageCleanup(conn, record)
-		}
-		return
-	}
-	if _, err := c.operationReceipts.MarkStarted(identity); err != nil {
-		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Host cleanup durable start refused")
-		return
-	}
-	timeout := time.Duration(payload.Timeout) * time.Second
-	if timeout <= 0 {
-		timeout = 5 * time.Minute
-	}
-	cleanupCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	result := agentexec.HostStorageCleanupResultPayload{
-		RequestID: strings.TrimSpace(payload.RequestID), ActionID: strings.TrimSpace(payload.ActionID),
-		ExecutionPhase: agentexec.HostStorageCleanupPhasePreflight, Verification: agentexec.HostStorageCleanupVerificationInconclusive,
-	}
-	if c.storageCleanup == nil {
-		result.Error = "host storage cleanup service is unavailable"
-	} else {
-		result = c.storageCleanup.Apply(cleanupCtx, payload)
-	}
-	result = sanitizeHostStorageCleanupReceipt(result)
-	encoded, err := json.Marshal(result)
-	if err != nil {
-		return
-	}
-	if _, err := c.operationReceipts.Complete(identity, operationreceipt.TerminalEnvelope{Kind: agentexec.HostStorageCleanupReceiptKind, Version: agentexec.HostAPTReceiptVersion, Payload: encoded}); err != nil {
-		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to persist host cleanup terminal receipt")
-		return
-	}
-	c.sendHostStorageCleanupResult(conn, result)
+	runDurableOperation(ctx, c, conn, identity, payload.RequestID, payload.Timeout, durableOperationSpec[agentexec.HostStorageCleanupResultPayload]{
+		warnLabel:      "Host cleanup",
+		persistLabel:   "host cleanup",
+		defaultTimeout: 5 * time.Minute,
+		replay:         c.replayHostStorageCleanup,
+		apply: func(cleanupCtx context.Context) agentexec.HostStorageCleanupResultPayload {
+			result := agentexec.HostStorageCleanupResultPayload{
+				RequestID: strings.TrimSpace(payload.RequestID), ActionID: strings.TrimSpace(payload.ActionID),
+				ExecutionPhase: agentexec.HostStorageCleanupPhasePreflight, Verification: agentexec.HostStorageCleanupVerificationInconclusive,
+			}
+			if c.storageCleanup == nil {
+				result.Error = "host storage cleanup service is unavailable"
+			} else {
+				result = c.storageCleanup.Apply(cleanupCtx, payload)
+			}
+			return sanitizeHostStorageCleanupReceipt(result)
+		},
+		receiptKind:    agentexec.HostStorageCleanupReceiptKind,
+		receiptVersion: agentexec.HostAPTReceiptVersion,
+		send:           c.sendHostStorageCleanupResult,
+	})
 }
 
 func (c *CommandClient) handleDockerContainerLifecycle(ctx context.Context, conn *websocket.Conn, payload agentexec.DockerContainerLifecyclePayload) {
 	identity := agentexec.DockerContainerLifecycleOperationIdentity(c.agentID, payload)
-	record, admitted, err := c.admitOperation(identity)
-	if err != nil {
-		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Docker lifecycle durable admission refused")
-		return
-	}
-	if !admitted {
-		if record.State == operationreceipt.StateTerminal {
-			c.replayDockerContainerLifecycle(conn, record)
-		}
-		return
-	}
-	if _, err := c.operationReceipts.MarkStarted(identity); err != nil {
-		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Docker lifecycle durable start refused")
-		return
-	}
-	timeout := time.Duration(payload.Timeout) * time.Second
-	if timeout <= 0 {
-		timeout = 2 * time.Minute
-	}
-	operationCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	result := agentexec.DockerContainerLifecycleResultPayload{
-		RequestID: payload.RequestID, ActionID: payload.ActionID, Operation: payload.Operation,
-		OperationVersion: payload.OperationVersion, RequestDigest: payload.RequestDigest, ContainerID: payload.ContainerID,
-		ExecutionPhase: agentexec.DockerContainerPhasePreflight,
-	}
-	if c.dockerLifecycle == nil {
-		result.Error = "typed container lifecycle service is unavailable"
-	} else {
-		result = c.dockerLifecycle.Apply(operationCtx, payload)
-	}
-	result.Error = sanitizeDockerLifecycleError(result.Error)
-	encoded, err := json.Marshal(result)
-	if err != nil {
-		return
-	}
-	if _, err := c.operationReceipts.Complete(identity, operationreceipt.TerminalEnvelope{Kind: agentexec.DockerContainerLifecycleReceiptKind, Version: agentexec.DockerContainerLifecycleReceiptVersion, Payload: encoded}); err != nil {
-		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to persist docker lifecycle terminal receipt")
-		return
-	}
-	c.sendDockerContainerLifecycleResult(conn, result)
+	runDurableOperation(ctx, c, conn, identity, payload.RequestID, payload.Timeout, durableOperationSpec[agentexec.DockerContainerLifecycleResultPayload]{
+		warnLabel:      "Docker lifecycle",
+		persistLabel:   "docker lifecycle",
+		defaultTimeout: 2 * time.Minute,
+		replay:         c.replayDockerContainerLifecycle,
+		apply: func(operationCtx context.Context) agentexec.DockerContainerLifecycleResultPayload {
+			result := agentexec.DockerContainerLifecycleResultPayload{
+				RequestID: payload.RequestID, ActionID: payload.ActionID, Operation: payload.Operation,
+				OperationVersion: payload.OperationVersion, RequestDigest: payload.RequestDigest, ContainerID: payload.ContainerID,
+				ExecutionPhase: agentexec.DockerContainerPhasePreflight,
+			}
+			if c.dockerLifecycle == nil {
+				result.Error = "typed container lifecycle service is unavailable"
+			} else {
+				result = c.dockerLifecycle.Apply(operationCtx, payload)
+			}
+			result.Error = sanitizeDockerLifecycleError(result.Error)
+			return result
+		},
+		receiptKind:    agentexec.DockerContainerLifecycleReceiptKind,
+		receiptVersion: agentexec.DockerContainerLifecycleReceiptVersion,
+		send:           c.sendDockerContainerLifecycleResult,
+	})
 }
 
 func (c *CommandClient) sendDockerContainerLifecycleResult(conn *websocket.Conn, result agentexec.DockerContainerLifecycleResultPayload) {
