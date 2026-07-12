@@ -25,6 +25,19 @@ func TestPackageManagerLeaseNilFailsClosed(t *testing.T) {
 	}
 }
 
+func TestSupportsAPTPlatformUsesCanonicalRuntimeIdentity(t *testing.T) {
+	for _, platform := range []string{"linux", "debian", "ubuntu", "debian gnu/linux"} {
+		if !supportsAPTPlatform(platform) {
+			t.Fatalf("APT platform %q was rejected", platform)
+		}
+	}
+	for _, platform := range []string{"windows", "macos", "freebsd"} {
+		if supportsAPTPlatform(platform) {
+			t.Fatalf("non-APT platform %q was accepted", platform)
+		}
+	}
+}
+
 func TestConfigurePackageManagersInjectsOneSharedLeaseAndSerializesRefresh(t *testing.T) {
 	updates, cleanup := configurePackageManagers("linux", nil, nil)
 	if updates.lease == nil || cleanup.lease == nil || updates.lease != cleanup.lease {

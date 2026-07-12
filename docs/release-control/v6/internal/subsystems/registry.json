@@ -1125,6 +1125,19 @@
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
+            "id": "patrol-autonomy-colima-real-lab",
+            "label": "RG-06 server-owned limited-unattended-autonomy Colima proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/intelligence_lab/patrol_autonomy_colima.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/patrol_autonomy_colima_real_lab_test.go"
+            ]
+          },
+          {
             "id": "docker-restart-intelligence-lab",
             "label": "Docker restart managed-runtime and artifact-backed browser proof",
             "match_prefixes": [

@@ -76,7 +76,7 @@ func (m *packageUpdateManager) snapshotLocked(ctx context.Context, force bool) a
 	}
 
 	snapshot := agentexec.HostPackageUpdateSnapshot{CheckedAt: now}
-	if m.platform != "linux" {
+	if !supportsAPTPlatform(m.platform) {
 		m.storeSnapshot(snapshot)
 		return snapshot
 	}

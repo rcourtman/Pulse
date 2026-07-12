@@ -104,7 +104,13 @@
           "argv": ["go", "test", "./internal/api", "./internal/actionlifecycle", "-run", "Test(PatrolFullModeRunsStorageCleanupThroughCanonicalLifecycle|PatrolFullModeRunsHostUpdateThroughCanonicalLifecycle|PatrolAutopilotAcknowledgementAPIRejectsPublicAuthorityAndAPIToken|PatrolAutopilotActivationRequiresCurrentBoundAcknowledgement|PatrolAutopilotVersionRotationAndRevocationRaceFailClosed|PatrolAutopilotStoreUnavailableDoesNotChangeModeOrFabricateEvidence|EmergencyStopBlocksHumanAndPolicyAdmissionMemoryStore|EmergencyStopBlocksHumanAndPolicyAdmissionSQLite)", "-count=1"]
         }
       ],
-      "mutation_gated_commands": []
+      "mutation_gated_commands": [
+        {
+          "id": "rg-06-colima-autonomy-lab",
+          "argv": ["python3", "scripts/intelligence_lab/patrol_autonomy_colima.py", "--run-id", "<release-id>", "--sha", "<full-release-sha>", "--repo", "<clean-git-archive>", "--artifact-dir", "<external-artifact-dir>", "--scratch-dir", "<external-scratch-dir>"],
+          "authorization": "EXPLICIT_RELEASE_REQUIRED"
+        }
+      ]
     },
     {
       "id": "RG-07",

@@ -67,7 +67,7 @@ func (m *storageCleanupManager) snapshotLocked(force bool) agentexec.HostStorage
 	}
 
 	snapshot := agentexec.HostStorageCleanupSnapshot{CheckedAt: now}
-	if m.platform != "linux" {
+	if !supportsAPTPlatform(m.platform) {
 		m.storeSnapshot(snapshot)
 		return snapshot
 	}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 )
 
 // packageManagerLease is the single host-local authority for every APT-backed
@@ -12,6 +14,14 @@ import (
 type packageManagerLease struct {
 	once sync.Once
 	ch   chan struct{}
+}
+
+// supportsAPTPlatform resolves distro-specific agent identity through the
+// canonical runtime-platform contract. Agents intentionally preserve values
+// such as "debian" and "ubuntu" for display, so an exact "linux" comparison
+// incorrectly disables the production APT managers on their primary hosts.
+func supportsAPTPlatform(platform string) bool {
+	return platformsupport.AgentCommandPlatform(platform) == platformsupport.RuntimePlatformLinux
 }
 
 func newPackageManagerLease() *packageManagerLease {

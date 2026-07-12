@@ -1088,6 +1088,32 @@ the intentionally sparse public response.
    It may render only the strict redacted projection produced by the matching
    managed-runtime run and must reject missing or mismatched proposal, action,
    attempt, receipt, finding, and evidence identities.
+   RG-06 has a separate mutation harness at
+   `scripts/intelligence_lab/patrol_autonomy_colima.py` and
+   `internal/api/patrol_autonomy_colima_real_lab_test.go`. It must run from a
+   clean archive of the audited SHA, build the pinned `cmd/pulse-agent`, and
+   execute both the agent and certification test from that same extracted
+   source directory with an artifact SHA binding. It must refuse to pull or
+   mutate a non-disposable image. The disposable Debian
+   agent creates bounded APT cache pressure, reports through the production
+   WebSocket, and is converted with `unifiedresources.HostIngestRecord`; the
+   production `clean_package_cache` capability and
+   `hostStorageCleanupActionExecutor` therefore remain the sole eligibility and
+   execution path. The proof binds every action to the persisted current-version
+   human acknowledgement and activation, records server actor/org/resource/
+   capability and policy-plan bindings, proves one command, one transport
+   attempt, one receipt, independent cache before/after readback, terminal
+   ActionResultV2 truth, and finding reconciliation. Each revoked, downgraded,
+   emergency-stop, stale-resource, and Never barrier first creates a valid
+   finding/investigation and measures cache/daemon state, agent command count,
+   transport attempt/receipt, audit/event state, authority/config digest, and
+   finding resolution before and after, including cache bytes/fingerprints and
+   container identity/running/start state. Every barrier must produce the
+   expected canonical refusal reason and never reach completed state. Negative
+   triple-zero means measured unauthorized mutation, transport dispatch, and
+   authority writes are all zero; expected lifecycle refusal event deltas are
+   recorded separately and do not get mislabelled as zero activity. The one authorized dispatch is recorded
+   separately and never disguised as triple-zero evidence.
    Proxmox host-agent setup must treat local `proxmox-registered` markers as a cache, not authority: before skipping token setup or node repair, `internal/hostagent/proxmox_setup.go` must revalidate the current type and candidate hosts against Pulse through the canonical auto-register contract.
    Runtime-side PVE token setup must also keep the same permission shape as the
    generated setup script: Pulse-managed PVE monitor tokens are

@@ -48,6 +48,21 @@ func TestScanAPTPackageCacheCountsOnlyRegularDebArchives(t *testing.T) {
 	}
 }
 
+func TestStorageCleanupSnapshotSupportsLinuxDistroIdentity(t *testing.T) {
+	for _, platform := range []string{"debian", "ubuntu"} {
+		t.Run(platform, func(t *testing.T) {
+			manager := newStorageCleanupManager(platform, newPackageManagerLease())
+			manager.lookPath = func(string) (string, error) { return "/usr/bin/apt-get", nil }
+			manager.scan = func() (agentexec.HostStorageCleanupSnapshot, error) {
+				return agentexec.HostStorageCleanupSnapshot{Fingerprint: "sha256:" + strings.Repeat("a", 64), ReclaimableBytes: 64 << 20}, nil
+			}
+			if snapshot := manager.Snapshot(context.Background(), true); !snapshot.Supported || snapshot.Provider != "apt-package-cache" || snapshot.ReclaimableBytes != 64<<20 {
+				t.Fatalf("distro storage cleanup disabled: %#v", snapshot)
+			}
+		})
+	}
+}
+
 func TestStorageCleanupManagerApplyUsesClosedAPTCatalogAndVerifiesBytes(t *testing.T) {
 	before := agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("a", 64), ReclaimableBytes: 400, CheckedAt: time.Now().UTC()}
 	after := agentexec.HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("b", 64), ReclaimableBytes: 40, CheckedAt: time.Now().UTC()}

@@ -315,6 +315,22 @@ func TestPackageUpdateSnapshotCachesAndUnsupportedPlatformsFailClosed(t *testing
 	}
 }
 
+func TestPackageUpdateSnapshotSupportsLinuxDistroIdentity(t *testing.T) {
+	for _, platform := range []string{"debian", "ubuntu"} {
+		t.Run(platform, func(t *testing.T) {
+			m := newPackageUpdateManager(platform, newPackageManagerLease())
+			m.lookPath = func(string) (string, error) { return "/usr/bin/apt-get", nil }
+			m.stat = func(string) (os.FileInfo, error) { return nil, os.ErrNotExist }
+			m.run = func(context.Context, []string, string, ...string) packageUpdateCommandResult {
+				return packageUpdateCommandResult{}
+			}
+			if snapshot := m.Snapshot(context.Background(), true); !snapshot.Supported || snapshot.Manager != "apt" {
+				t.Fatalf("distro package manager disabled: %#v", snapshot)
+			}
+		})
+	}
+}
+
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
