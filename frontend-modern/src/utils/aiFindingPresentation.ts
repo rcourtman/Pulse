@@ -5,6 +5,7 @@ import type { MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { isLivePendingApproval } from '@/utils/approvalState';
 import { getPatrolProviderSettingsAction } from '@/utils/patrolRuntimeActions';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
+import { formatBytes } from '@/utils/format';
 
 const DEFAULT_BADGE_CLASSES = 'border-border bg-surface-alt text-muted';
 const DEFAULT_LOOP_STATE_CLASSES = 'border-border bg-surface-alt text-muted';
@@ -685,6 +686,41 @@ export interface PatrolFindingRowScaffold {
   items: PatrolFindingRowScaffoldItem[];
 }
 
+const formatBoundedFindingTime = (value: string): string | undefined => {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.valueOf()) ? undefined : parsed.toLocaleString();
+};
+
+export function getFindingEvidencePresentation(
+  finding: Pick<UnifiedFinding, 'evidence' | 'key'>,
+): string {
+  const evidence = String(finding.evidence || '').trim();
+  if (finding.key === 'apt-host-updates') {
+    const match = evidence.match(
+      /^pending_updates=(\d+) inventory=\S+ checked_at=(\S+) received_at=(\S+) reboot_required=(true|false)$/,
+    );
+    const count = match ? Number(match[1]) : Number.NaN;
+    const checkedAt = match ? formatBoundedFindingTime(match[2]) : undefined;
+    const receivedAt = match ? formatBoundedFindingTime(match[3]) : undefined;
+    if (!match || !Number.isSafeInteger(count) || count < 0 || !checkedAt || !receivedAt) return 'Pulse could not safely present the bounded host-update observation. Refresh before acting.';
+    const rebootBoundary = match[4] === 'true' ? 'Yes. No reboot is authorized by this finding or action.' : 'No.';
+    return `${count} operating system update${count === 1 ? '' : 's'} ${count === 1 ? 'was' : 'were'} pending when the agent checked at ${checkedAt}. Pulse received that observation at ${receivedAt}. The host already reported reboot required: ${rebootBoundary}`;
+  }
+  if (finding.key === 'apt-package-cache-pressure') {
+    const match = evidence.match(
+      /^reclaimable_bytes=(\d+) filesystem_usage=([0-9.]+) fingerprint=\S+ checked_at=(\S+) received_at=(\S+)$/,
+    );
+    const bytes = match ? Number(match[1]) : Number.NaN;
+    const usage = match ? Number(match[2]) : Number.NaN;
+    const checkedAt = match ? formatBoundedFindingTime(match[3]) : undefined;
+    const receivedAt = match ? formatBoundedFindingTime(match[4]) : undefined;
+    if (!match || !Number.isSafeInteger(bytes) || bytes < 0 || !Number.isFinite(usage) || usage < 0 || usage > 100 || !checkedAt || !receivedAt) return 'Pulse could not safely present the bounded package-cleanup observation. Refresh before acting.';
+    return `${formatBytes(bytes)} of downloaded package data was reclaimable while the filesystem was ${usage}% full. The agent checked at ${checkedAt}, and Pulse received that observation at ${receivedAt}.`;
+  }
+  return evidence;
+}
+
 export function getPatrolFindingActionableState(
   finding: Pick<UnifiedFinding, 'status' | 'investigationStatus' | 'investigationOutcome'>,
 ): PatrolActionableStatePresentation | undefined {
@@ -850,7 +886,7 @@ export function getPatrolFindingRowScaffold(
         id: 'checked',
         label: 'What Pulse checked',
         value: getNonEmptyPresentationText(
-          finding.evidence,
+          getFindingEvidencePresentation(finding),
           'Patrol recorded this from the current check.',
         ),
       },

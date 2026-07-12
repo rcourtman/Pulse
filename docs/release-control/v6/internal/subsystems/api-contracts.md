@@ -7483,3 +7483,12 @@ floor is implemented for both workflows. Claims 16/17 and both workflow
 scorecards remain below operational completion; browser certification,
 disposable Debian/Ubuntu execution, and Task 12 final-SHA certification remain
 open and are not inferred from fake-only proof.
+
+The frontend APT Product Trust consumer mirrors the canonical API rather than
+inventing local execution, verification, evidence, health, recovery, or
+compensation enums. `UnifiedFinding.key` is preserved from the Patrol finding
+wire record so bounded evidence presentation can select the exact owned
+workflow. Action list/detail continues to carry policy provenance,
+`ActionResultV2`, durable dispatch attempt, and receipt fields unchanged. Unit
+guards pin those projections and verify that APT presentation reads the shared
+`ActionAuditRecord`/`ActionResultV2` types directly.

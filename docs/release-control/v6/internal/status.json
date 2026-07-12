@@ -3964,6 +3964,21 @@
       "release_gate_ids": [],
       "proof_commands": [
         {
+          "id": "ra35-apt-product-trust-browser",
+          "run": [
+            "env",
+            "PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173",
+            "tests/integration/node_modules/.bin/playwright",
+            "test",
+            "--config=tests/integration/playwright.config.ts",
+            "tests/78-monitor-first-patrol-workbench.spec.ts",
+            "tests/81-actions-inbox.spec.ts",
+            "--project=chromium",
+            "--grep",
+            "APT"
+          ]
+        },
+        {
           "id": "ra35-chat-authority-boundary",
           "run": [
             "go",
@@ -4041,6 +4056,17 @@
         }
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/actions/__tests__/aptActionPresentation.test.ts",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/actions/aptActionPresentation.ts",
+          "kind": "file"
+        },
         {
           "repo": "pulse",
           "path": "internal/actionlifecycle/service.go",
@@ -4171,6 +4197,18 @@
           "repo": "pulse",
           "path": "pkg/aicontracts/orchestrator_deps.go",
           "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/81-actions-inbox.spec.ts",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         }
       ]
     },
@@ -7981,7 +8019,7 @@
     },
     {
       "id": "action-governance-auditability-post-rc-hardening",
-      "summary": "Task 07 durable delivery and generic agent-operation receipts are accepted: transactional dispatch admission, one-shot send CAS, immutable attempt/action/operation/digest/agent binding, query-only restart reconciliation, strict sanitized terminal envelopes, and permanent replay-denial tombstones. Task 09 now consumes that owner for both APT workflows and completes the fake-only detector-to-finding, exact empty-parameter proposal, shared policy/approval, typed dispatch, delayed/callback-loss/reopened-server receipt reconciliation, ActionResultV2 truth, terminal audit, and finding reconciliation floor without blind resend. Host update health is explicit tri-state evidence from a fixed read-only catalog; legacy v1 receipts lacking additive health facts terminalize as health-unknown/inconclusive. Task 10 remains sole owner of execution, verification, evidence, compensation, and rollback truth. Claims 16 and 17 and both workflow scorecards remain open below operational completion until browser proof, disposable Debian/Ubuntu lab proof, and Task 12 certification pass. Mobile/relay consumption remains separate with no local workaround for absent core APIs. Raw model command, file write, arbitrary pod exec, legacy run_command, /api/ai/run-command, and enterprise command remediation remain retired with no replacement or executable historical authority.",
+      "summary": "Task 07 durable delivery and generic agent-operation receipts are accepted: transactional dispatch admission, one-shot send CAS, immutable attempt/action/operation/digest/agent binding, query-only restart reconciliation, strict sanitized terminal envelopes, and permanent replay-denial tombstones. Task 09 consumes that owner for both APT workflows and completes the fake-only detector-to-finding, exact empty-parameter proposal, shared policy/approval, typed dispatch, delayed/callback-loss/reopened-server receipt reconciliation, ActionResultV2 truth, terminal audit, and finding reconciliation floor without blind resend. Task 11 adds the desktop/browser tier-5 Product Trust consumer: bounded command/path/package-free Patrol evidence; exact empty parameter and elevated-versus-low-risk review; separate execution, evidence-sourced verification, and recovery cards; agent-attested confirmed updates; reboot fact without reboot authority; partial/unknown-health recovery; measured irreversible cleanup; and one durable receipt across reconnect, all exercised in current-build Chromium and a 390-pixel viewport with fake typed API fixtures only. Malformed phases, counts, timestamps, usage, or cleanup arithmetic fail closed. Task 10 remains sole owner of execution, verification, evidence, compensation, and rollback truth. Claims 16 and 17 and both workflow scorecards remain operationally open until disposable Debian/Ubuntu tier-6 proof and Task 12 final-SHA certification pass. Mobile/relay, physical-device, MSP aggregation, and real-lab proof remain separate. Raw model command, file write, arbitrary pod exec, legacy run_command, /api/ai/run-command, and enterprise command remediation remain retired with no replacement or executable historical authority.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-04-25",

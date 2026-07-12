@@ -38,4 +38,14 @@ describe('ActionReviewDialog trust gates', () => {
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
     expect(screen.getByTestId('action-review-invalid')).toHaveTextContent('review expired');
   });
+
+  it('offers no decision or run control when a typed APT action carries parameters', () => {
+    const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
+    audit.request = { ...audit.request, capabilityName: 'install_os_updates', params: { package: 'curl' } };
+    audit.plan.policyDecision!.scope.capabilityName = 'install_os_updates';
+    render(() => <ActionReviewDialog detail={detail(audit)} onClose={vi.fn()} />);
+    expect(screen.getByTestId('action-review-invalid')).toHaveTextContent('unexpected operator-selected parameters');
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Run action' })).toBeNull();
+  });
 });

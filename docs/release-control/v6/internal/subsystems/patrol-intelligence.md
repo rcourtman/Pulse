@@ -2002,3 +2002,15 @@ limits explicitly allow inconclusive verification and never turn execution
 success into outcome truth. Task 11 still owns acknowledgement presentation,
 cancel/no-submit browser proof, and device coverage; M7 remains open until that
 work and Task 12 certification are complete.
+
+APT Patrol findings preserve the backend-owned finding `key` through the
+canonical frontend store. Presentation recognizes only the exact bounded update
+or cleanup observation envelope, validates non-negative safe integer counts,
+finite 0..100 filesystem usage, and valid agent-observed/server-received
+timestamps, and suppresses inventory hashes and fingerprints from the default
+monitoring view. Invalid evidence fails closed to a refresh-before-acting
+message. A reboot-required observation explicitly says that neither the finding
+nor its action authorizes a reboot. Contradicted, inconclusive, or health-unknown
+postconditions remain actionable; only canonical confirmed postcondition truth
+may support resolution. Package-manager internals remain forensic detail rather
+than the least-expert default.

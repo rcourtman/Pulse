@@ -7,6 +7,7 @@ import { notificationStore } from '@/stores/notifications';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { ActionDecisionPacket } from './ActionDecisionPacket';
 import { formatActionName } from './actionPresentation';
+import { getAPTActionPresentation } from './aptActionPresentation';
 
 export const ActionReviewDialog: Component<{
   detail: ActionDetailResponse | null;
@@ -26,20 +27,26 @@ export const ActionReviewDialog: Component<{
   const hasCurrentPolicyProvenance = createMemo(
     () => audit()?.plan.policyDecision?.status === 'resolved',
   );
+  const aptParametersValid = createMemo(() => {
+    const action = audit();
+    return action ? getAPTActionPresentation(action)?.parametersValid !== false : false;
+  });
   const isExpired = createMemo(() => {
     const expiresAt = audit()?.plan.expiresAt;
     if (!expiresAt) return true;
     const timestamp = new Date(expiresAt).valueOf();
     return Number.isNaN(timestamp) || timestamp <= clock();
   });
-  const canDecide = () => hasCurrentPolicyProvenance() && !isExpired() && audit()?.state === 'pending_approval';
+  const canDecide = () => hasCurrentPolicyProvenance() && aptParametersValid() && !isExpired() && audit()?.state === 'pending_approval';
   const canExecute = () =>
     hasCurrentPolicyProvenance() &&
+    aptParametersValid() &&
     !isExpired() &&
     (audit()?.state === 'approved' ||
       (audit()?.state === 'planned' && !audit()?.plan.requiresApproval));
   const invalidActionMessage = createMemo(() => {
     if (!hasCurrentPolicyProvenance()) return 'This action has no current server policy provenance. Close it and create a new plan before approving or running anything.';
+    if (!aptParametersValid()) return 'This host-maintenance action contains unexpected operator-selected parameters. Close it and create a new plan; do not approve or run this record.';
     if (isExpired()) return 'This action review expired. Close it and create a new plan so current resource and policy state can be checked again.';
     return '';
   });
@@ -90,7 +97,7 @@ export const ActionReviewDialog: Component<{
               <div><p class="text-xs font-semibold uppercase tracking-wide text-muted">Governed action review</p><h2 id="action-review-title" class="mt-1 text-xl font-semibold">{formatActionName(record().request.capabilityName)}</h2><p class="mt-1 break-all text-sm text-muted">{record().request.resourceId}</p></div>
               <Button variant="ghost" size="icon" aria-label="Close action review" onClick={props.onClose}><XIcon class="h-5 w-5" /></Button>
             </header>
-            <div class="overflow-y-auto px-5 py-4"><ActionDecisionPacket audit={record()} /><Show when={invalidActionMessage()}><div role="alert" data-testid="action-review-invalid" class="mt-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">{invalidActionMessage()}</div></Show><Show when={error()}><div role="alert" class="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200">{error()}</div></Show></div>
+            <div class="overflow-y-auto px-5 py-4"><ActionDecisionPacket audit={record()} detail={props.detail ?? undefined} /><Show when={invalidActionMessage()}><div role="alert" data-testid="action-review-invalid" class="mt-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">{invalidActionMessage()}</div></Show><Show when={error()}><div role="alert" class="mt-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-200">{error()}</div></Show></div>
             <footer class="flex flex-col-reverse gap-2 border-t border-border px-5 py-4 sm:flex-row sm:justify-end">
               <Button onClick={props.onClose}>Close</Button>
               <Show when={canDecide()}><Button variant="danger" disabled={busy()} onClick={() => void decide('rejected')}>Reject</Button><Button variant="primary" isLoading={busy()} onClick={() => void decide('approved')}>Approve</Button></Show>

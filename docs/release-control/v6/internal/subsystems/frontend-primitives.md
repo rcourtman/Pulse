@@ -4952,3 +4952,12 @@ action state and approval policy, not only from a legacy approval id. A
 `pending_approval` action or any non-`none` approval floor remains explicitly
 approval-bound in shared handoff metadata so Assistant, the collapsed finding
 row, and the expanded action review cannot disagree.
+
+The shared Actions dialog remains the responsive and accessible review
+primitive for typed APT maintenance. Its heading supplies the dialog accessible
+name, the close control has an explicit name, pending action rows are keyboard
+reachable, and the scroll-bounded panel keeps safety, execution, verification,
+recovery, delivery, and next-step content actionable at desktop and 390-pixel
+phone viewports. Responsive layout must not hide the exact parameter authority,
+evidence source, or recovery instruction, and it must not add a duplicate legacy
+verification card when `ActionResultV2` is present.

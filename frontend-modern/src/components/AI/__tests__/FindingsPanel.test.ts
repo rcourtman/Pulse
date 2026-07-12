@@ -64,6 +64,15 @@ const aiFindingPresentationSource = readFileSync(
 );
 
 describe('FindingsPanel assistant handoff', () => {
+  it('routes bounded APT evidence through the canonical finding presenter in collapsed and expanded detail', () => {
+    expect(findingsPanelSource).toContain('getFindingEvidencePresentation');
+    expect(findingsPanelSource).toContain('{getFindingEvidencePresentation(finding)}');
+    expect(aiFindingPresentationSource).toContain("finding.key === 'apt-host-updates'");
+    expect(aiFindingPresentationSource).toContain("finding.key === 'apt-package-cache-pressure'");
+    expect(aiFindingPresentationSource).not.toContain('inventory=${');
+    expect(aiFindingPresentationSource).not.toContain('fingerprint=${');
+  });
+
   it('passes stale Patrol coverage into the current-work empty-state presenter', () => {
     expect(findingsPanelSource).toContain('coverageStale?: boolean');
     expect(findingsPanelSource).toContain('coverageStale: props.coverageStale');

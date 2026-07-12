@@ -1710,6 +1710,29 @@ through the canonical resource model, but unified-resource consumers must not
 reintroduce removed workload aliases or feature-local resource-type shims just
 to satisfy one table, drawer, or badge surface.
 
+### APT Product Trust browser projection
+
+The durable Actions inbox and resource action history consume the canonical APT
+workflows without adding a frontend action-truth dialect. The shared
+`aptActionPresentation.ts` translator may recognize only the complete bounded
+host-update and package-cache summaries emitted by the accepted backend
+contract. It validates the closed phase set, safe integer counts, cleanup byte
+arithmetic, and exact empty parameter envelope before presenting facts. Any
+partial, malformed, unknown-phase, or arithmetically impossible summary yields
+no fact card and directs the operator to refresh and review the canonical
+record. Execution, verification plus adjacent evidence source, and compensation
+remain three independent `ActionResultV2` cards.
+
+APT review presents server-recorded policy provenance and distinguishes the
+elevated update posture from low-risk-eligible cache cleanup. Both typed actions
+declare that no command, path, package selection, removal choice, or reboot
+authority is accepted from the browser. Reboot-required is a reported fact only;
+there is no reboot control. Durable attempt and receipt detail appears once and
+explains that refresh or reconnect rehydrates the existing action rather than
+creating a duplicate. Package cleanup is explicitly irreversible; an
+inconclusive or failed cleanup requires a fresh scan and never presents fake
+rollback or automatic retry.
+
 Task 09 owns shared APT telemetry freshness in
 `internal/unifiedresources/host_apt_telemetry.go`. Capability construction,
 finding admission, and execution readiness consume the same dual-timestamp and

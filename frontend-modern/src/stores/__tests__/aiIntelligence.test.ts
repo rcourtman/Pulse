@@ -112,6 +112,7 @@ describe('aiIntelligenceStore', () => {
     vi.mocked(getPatrolFindings).mockResolvedValueOnce([
       {
         id: 'patrol-finding-1',
+        key: 'apt-host-updates',
         severity: 'warning',
         category: 'reliability',
         resource_id: 'instance:node:100',
@@ -135,6 +136,7 @@ describe('aiIntelligenceStore', () => {
     expect(aiIntelligenceStore.patrolFindings).toHaveLength(1);
     expect(aiIntelligenceStore.patrolFindings[0]).toMatchObject({
       id: 'patrol-finding-1',
+      key: 'apt-host-updates',
       source: 'ai-patrol',
       isThreshold: false,
       status: 'active',

@@ -73,6 +73,7 @@ import {
   getFindingSubjectPresentation,
   getFindingTitlePresentation,
   getFindingRecencyPresentation,
+  getFindingEvidencePresentation,
   hasFindingInvestigationDetails,
   hasFindingInvestigationHandoffPointer,
   getInvestigationConfidenceBadgeTone,
@@ -1356,7 +1357,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         <Show when={finding.evidence}>
           <p class="text-sm text-base-content mt-2">
             <span class="font-medium">What Pulse checked:</span>{' '}
-            {finding.evidence}
+            {getFindingEvidencePresentation(finding)}
           </p>
         </Show>
         <Show when={finding.recommendation}>

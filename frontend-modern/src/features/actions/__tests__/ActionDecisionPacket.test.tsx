@@ -59,4 +59,33 @@ describe('ActionDecisionPacket', () => {
     expect(within(screen.getByTestId('action-compensation-truth')).getByText('Not Attempted')).toBeInTheDocument();
     cleanup();
   });
+
+  it('shows bounded APT facts, agent attestation, recovery, and one durable receipt without a reboot control', () => {
+    const aptAudit: ActionAuditRecord = {
+      ...audit,
+      request: { ...audit.request, resourceId: 'proxmox:node:pve-1', capabilityName: 'install_os_updates', params: {} },
+      plan: {
+        ...audit.plan,
+        policyDecision: {
+          ...audit.plan.policyDecision!,
+          scope: { ...audit.plan.policyDecision!.scope, resourceId: 'proxmox:node:pve-1', capabilityName: 'install_os_updates' },
+          authorities: audit.plan.policyDecision!.authorities.map((authority) => ({ ...authority, scope: { ...authority.scope, resourceId: 'proxmox:node:pve-1', capabilityName: 'install_os_updates' }, reasonCodes: ['capability_approval_admin', 'capability_auto_elevated'] })),
+        },
+      },
+      result: { success: true, actionResultV2: {
+        version: 2,
+        execution: { status: 'succeeded', summary: 'APT package updates: phase=complete; 6 pending before, 0 pending after; package manager health: healthy; recovery required: false; reboot required: true' },
+        verification: { status: 'confirmed', evidenceClass: 'agent_attested', summary: 'The executing agent observed the canonical postcondition.', evidence: [{ version: 1, id: 'evidence-1', observerId: 'agent:pve-1', observerKind: 'agent', observerTrustDomain: 'host:pve-1', executorTrustDomain: 'host:pve-1', method: 'typed_read_after_write', subjectId: 'proxmox:node:pve-1', observedAt: '2026-07-12T00:01:00Z', receivedAt: '2026-07-12T00:05:00Z', digest: 'sha256:evidence' }] },
+        compensation: { support: 'unavailable', status: 'not_available', summary: 'No rollback is available.' },
+      } },
+    };
+    render(() => <ActionDecisionPacket audit={aptAudit} detail={{ audit: aptAudit, events: [], attempt: { id: 'attempt-1', actionId: aptAudit.id, state: 'receipt_recorded', createdAt: aptAudit.createdAt, updatedAt: aptAudit.updatedAt, dispatchCount: 1 }, receipt: { attemptId: 'attempt-1', actionId: aptAudit.id, transportRequestId: 'transport-1', receivedAt: '2026-07-12T00:05:00Z' } }} />);
+    expect(within(screen.getByTestId('apt-action-facts')).getByText('Yes — fact only; no reboot was authorized')).toBeInTheDocument();
+    expect(within(screen.getByTestId('action-verification-truth')).getByText('Confirmed by executing agent')).toBeInTheDocument();
+    expect(within(screen.getByTestId('action-compensation-truth')).getByText('No rollback is available.')).toBeInTheDocument();
+    expect(screen.getByText('One agent receipt is recorded for this action.')).toBeInTheDocument();
+    expect(screen.getAllByTestId('action-delivery-truth')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /reboot/i })).toBeNull();
+    expect(screen.queryByText('APT package updates:', { exact: false })).toBeNull();
+  });
 });

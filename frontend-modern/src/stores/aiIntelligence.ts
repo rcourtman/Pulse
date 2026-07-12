@@ -143,6 +143,7 @@ function normalizeFindingStatus(item: FindingStatusInput, now: number): UnifiedF
 
 export interface UnifiedFinding {
   id: string;
+  key?: string;
   source: 'threshold' | 'ai-patrol' | 'ai-chat' | 'anomaly' | 'correlation' | 'forecast';
   resourceId: string;
   resourceName: string;
@@ -280,6 +281,7 @@ function normalizeUnifiedFindingRecord(item: UnifiedFindingRecord, now: number):
 function normalizePatrolFindingRecord(item: PatrolFinding, now: number): UnifiedFinding {
   return {
     id: item.id,
+    key: item.key,
     source: 'ai-patrol',
     resourceId: item.resource_id,
     resourceName: item.resource_name || item.resource_id,

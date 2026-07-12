@@ -6,7 +6,11 @@ import type {
 } from '@/types/actionAudit';
 
 export const formatActionName = (value: string): string =>
-  value
+  value === 'install_os_updates'
+    ? 'Install operating system updates'
+    : value === 'clean_package_cache'
+      ? 'Clear downloaded package data'
+      : value
     .replace(/[._-]+/g, ' ')
     .trim()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());

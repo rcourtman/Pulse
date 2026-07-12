@@ -206,6 +206,10 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceActionHistorySource).toContain('getActionAuditResultPresentation');
     expect(resourceActionHistorySource).toContain('getActionAuditVerificationOutcomePresentation');
     expect(resourceActionHistorySource).toContain('formatActionApprovalPolicyLabel');
+    expect(resourceActionHistorySource).toContain('getAPTActionPresentation');
+    expect(resourceActionHistorySource).toContain('resource-apt-action-facts');
+    expect(resourceActionHistorySource).toContain('resource-action-recovery-truth');
+    expect(resourceActionHistorySource).toContain('resource-apt-action-next-step');
     // The audit history must surface the broker's read-after-write
     // verification outcome alongside the dispatch result, not silently
     // drop it. Pin the wiring so future refactors cannot regress to an
@@ -213,10 +217,11 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceActionHistorySource).toContain(
       'shouldRenderActionAuditVerification(props.audit)',
     );
-    expect(resourceActionHistorySource).toContain('Verified');
-    expect(resourceActionHistorySource).toContain('Verification failed');
+    expect(resourceActionHistorySource).toContain('Legacy check passed (source unclassified)');
+    expect(resourceActionHistorySource).toContain('Legacy check failed (source unclassified)');
     expect(actionAuditPresentationSource).toContain('resource_remediation_locked:');
-    expect(actionAuditPresentationSource).toContain('Verification confirmed');
+    expect(actionAuditPresentationSource).toContain('Confirmed by executing agent');
+    expect(actionAuditPresentationSource).toContain('Confirmed by independent observer');
     expect(actionAuditApiSource).toContain('/api/audit/actions');
     expect(actionAuditApiSource).toContain('ACTION_AUDIT_UNAVAILABLE_STATUSES');
     expect(actionAuditPresentationSource).toContain('pending_approval');
@@ -922,9 +927,9 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(actionHistory.getByText('Restart nginx')).toBeInTheDocument();
     expect(actionHistory.getByText('Approval scoped to this resource.')).toBeInTheDocument();
     expect(actionHistory.getByText('nginx restarted')).toBeInTheDocument();
-    expect(actionHistory.getByText('Verification confirmed')).toBeInTheDocument();
     expect(actionHistory.getByText('Readback reported nginx active.')).toBeInTheDocument();
-    expect(actionHistory.getByText('Verified')).toBeInTheDocument();
+    expect(actionHistory.getAllByText('Legacy check passed (source unclassified)')).toHaveLength(2);
+    expect(actionHistory.queryByText('Verified')).toBeNull();
     expect(actionHistory.getByText("systemctl is-active 'nginx'")).toBeInTheDocument();
     expect(actionHistory.getByText('active')).toBeInTheDocument();
     expect(actionHistory.getByText('Refused')).toBeInTheDocument();

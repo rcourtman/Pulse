@@ -1,5 +1,5 @@
 import { For, Show, createMemo, type Component } from 'solid-js';
-import type { ActionAuditRecord } from '@/types/actionAudit';
+import type { ActionAuditRecord, ActionDetailResponse } from '@/types/actionAudit';
 import {
   formatActionName,
   formatEvidenceClass,
@@ -7,10 +7,13 @@ import {
   formatPolicyReason,
   verificationTruthLabel,
 } from './actionPresentation';
+import { getAPTActionPresentation } from './aptActionPresentation';
 
-export const ActionDecisionPacket: Component<{ audit: ActionAuditRecord }> = (props) => {
+export const ActionDecisionPacket: Component<{ audit: ActionAuditRecord; detail?: ActionDetailResponse }> = (props) => {
   const policy = () => props.audit.plan.policyDecision;
   const result = () => props.audit.result?.actionResultV2;
+  const apt = () => getAPTActionPresentation(props.audit);
+  const firstEvidence = () => result()?.verification.evidence?.[0];
   const expiry = createMemo(() => {
     const value = new Date(props.audit.plan.expiresAt ?? '');
     return Number.isNaN(value.valueOf()) ? 'Not recorded' : value.toLocaleString();
@@ -33,6 +36,20 @@ export const ActionDecisionPacket: Component<{ audit: ActionAuditRecord }> = (pr
           <div class="mt-3"><div class="text-sm text-muted">Also affected</div><ul class="mt-1 list-disc pl-5 text-sm"><For each={props.audit.plan.predictedBlastRadius}>{(resource) => <li>{resource}</li>}</For></ul></div>
         </Show>
       </section>
+
+      <Show when={apt()}>
+        {(presentation) => (
+          <section aria-labelledby="action-safety-heading" data-testid="apt-action-safety" class="rounded-lg border border-border bg-surface p-4">
+            <h3 id="action-safety-heading" class="text-sm font-semibold text-base-content">Safety and authority</h3>
+            <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+              <div><dt class="text-muted">Risk posture</dt><dd class="font-medium">{presentation().safetyPosture}</dd></div>
+              <div><dt class="text-muted">Decision required</dt><dd class="font-medium">{presentation().approvalPosture}</dd></div>
+              <div class="sm:col-span-2"><dt class="text-muted">Operator-selected parameters</dt><dd>{presentation().parameterAuthority}</dd></div>
+              <div class="sm:col-span-2"><dt class="text-muted">What this action can do</dt><dd>{presentation().authorityBoundary}</dd></div>
+            </dl>
+          </section>
+        )}
+      </Show>
 
       <section aria-labelledby="action-policy-heading" class="rounded-lg border border-border bg-surface p-4">
         <h3 id="action-policy-heading" class="text-sm font-semibold text-base-content">Why Pulse allows this review</h3>
@@ -60,20 +77,28 @@ export const ActionDecisionPacket: Component<{ audit: ActionAuditRecord }> = (pr
         {(truth) => (
           <section aria-labelledby="action-result-heading" class="space-y-3">
             <h3 id="action-result-heading" class="text-sm font-semibold text-base-content">Recorded outcome</h3>
+            <Show when={apt()?.facts.length}>
+              <div data-testid="apt-action-facts" class="rounded-lg border border-border bg-surface p-4">
+                <div class="text-xs font-semibold uppercase tracking-wide text-muted">Agent-reported facts</div>
+                <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                  <For each={apt()?.facts ?? []}>{(fact) => <div><dt class="text-muted">{fact.label}</dt><dd class="font-medium">{fact.value}</dd></div>}</For>
+                </dl>
+              </div>
+            </Show>
             <div data-testid="action-execution-truth" class="rounded-lg border border-border bg-surface p-4">
               <div class="text-xs font-semibold uppercase tracking-wide text-muted">Execution</div>
               <div class="mt-1 font-semibold">{truth().execution.status === 'not_run' ? 'Did not run' : formatActionName(truth().execution.status)}</div>
               <Show when={truth().execution.reasonCode}><div class="mt-1 text-xs text-muted">Reason: {formatActionName(truth().execution.reasonCode!)}</div></Show>
-              <Show when={truth().execution.summary}><p class="mt-2 text-sm">{truth().execution.summary}</p></Show>
+              <Show when={truth().execution.summary && !apt()}><p class="mt-2 text-sm">{truth().execution.summary}</p></Show>
             </div>
             <div data-testid="action-verification-truth" class="rounded-lg border border-border bg-surface p-4">
               <div class="text-xs font-semibold uppercase tracking-wide text-muted">Verification</div>
               <div class="mt-1 font-semibold">{verificationTruthLabel(truth().verification.status, truth().verification.evidenceClass)}</div>
               <div class="mt-1 text-sm text-muted">Source: {formatEvidenceClass(truth().verification.evidenceClass)}</div>
               <Show when={truth().verification.reasonCode}><div class="mt-1 text-xs text-muted">Reason: {formatActionName(truth().verification.reasonCode!)}</div></Show>
-              <Show when={truth().verification.summary}><p class="mt-2 text-sm">{truth().verification.summary}</p></Show>
+              <Show when={truth().verification.summary && (!apt() || truth().verification.summary !== truth().execution.summary)}><p class="mt-2 text-sm">{truth().verification.summary}</p></Show>
               <Show when={(truth().verification.evidence ?? []).length > 0}>
-                <details class="mt-3 rounded border border-border-subtle p-3 text-xs"><summary class="cursor-pointer font-medium">Evidence details</summary><ul class="mt-2 space-y-2"><For each={truth().verification.evidence}>{(evidence) => <li><div>{evidence.summary || evidence.method}</div><div class="text-muted">Observed by {evidence.observerId} · {evidence.observerTrustDomain}</div></li>}</For></ul></details>
+                <details class="mt-3 rounded border border-border-subtle p-3 text-xs"><summary class="cursor-pointer font-medium">Evidence details</summary><ul class="mt-2 space-y-2"><For each={truth().verification.evidence}>{(evidence) => <li><div>{apt() ? 'Typed read-after-write observation' : evidence.summary || evidence.method}</div><div class="text-muted">Observed by {evidence.observerId} · {evidence.observerTrustDomain}</div><div class="text-muted">Agent observed {new Date(evidence.observedAt).toLocaleString()} · Pulse received {new Date(evidence.receivedAt).toLocaleString()}</div></li>}</For></ul></details>
               </Show>
             </div>
             <div data-testid="action-compensation-truth" class="rounded-lg border border-border bg-surface p-4">
@@ -83,8 +108,22 @@ export const ActionDecisionPacket: Component<{ audit: ActionAuditRecord }> = (pr
               <Show when={truth().compensation.strategy}><div class="mt-1 text-sm">Strategy: {truth().compensation.strategy}</div></Show>
               <Show when={truth().compensation.summary}><p class="mt-2 text-sm">{truth().compensation.summary}</p></Show>
             </div>
+            <Show when={apt()}>{(presentation) => <div data-testid="apt-action-next-step" class="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"><div class="font-semibold">What to do next</div><p class="mt-1">{presentation().nextStep}</p></div>}</Show>
           </section>
         )}
+      </Show>
+
+      <Show when={props.detail?.attempt || props.detail?.receipt}>
+        <section aria-labelledby="action-delivery-heading" data-testid="action-delivery-truth" class="rounded-lg border border-border bg-surface p-4">
+          <h3 id="action-delivery-heading" class="text-sm font-semibold text-base-content">Durable delivery record</h3>
+          <p class="mt-2 text-sm font-medium">{props.detail?.receipt ? 'One agent receipt is recorded for this action.' : props.detail?.attempt?.state === 'receipt_pending' ? 'The action was sent once and Pulse is waiting for the durable agent receipt.' : 'Pulse recorded the delivery attempt before sending it.'}</p>
+          <p class="mt-1 text-sm text-muted">Refreshing or reconnecting re-reads this action record; it does not create another action.</p>
+          <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+            <Show when={firstEvidence()?.observedAt}><div><dt class="text-muted">Agent observation</dt><dd>{new Date(firstEvidence()!.observedAt).toLocaleString()}</dd></div></Show>
+            <Show when={props.detail?.receipt?.receivedAt}><div><dt class="text-muted">Receipt recorded by Pulse</dt><dd>{new Date(props.detail!.receipt!.receivedAt).toLocaleString()}</dd></div></Show>
+          </dl>
+          <details class="mt-3 rounded border border-border-subtle p-3 text-xs"><summary class="cursor-pointer font-medium">Delivery identifiers</summary><div class="mt-2 break-all text-muted">Action {props.audit.id}<Show when={props.detail?.attempt?.id}> · Attempt {props.detail?.attempt?.id}</Show><Show when={props.detail?.receipt?.transportRequestId}> · Transport {props.detail?.receipt?.transportRequestId}</Show></div></details>
+        </section>
       </Show>
     </div>
   );

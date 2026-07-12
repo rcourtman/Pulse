@@ -2,9 +2,46 @@ import { describe, expect, it } from 'vitest';
 
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import {
+  getFindingEvidencePresentation,
   getFindingResourceCriticalitySortOrder,
   sortFindingsForAttentionQueue,
 } from '@/utils/aiFindingPresentation';
+
+describe('getFindingEvidencePresentation', () => {
+  it('presents bounded update evidence without package inventory or fingerprints', () => {
+    const evidence = getFindingEvidencePresentation(makeFinding({ key: 'apt-host-updates', evidence: 'pending_updates=6 inventory=sha256:secret checked_at=2026-07-12T10:00:00Z received_at=2026-07-12T10:05:00Z reboot_required=true' }));
+    expect(evidence).toContain('6 operating system updates were pending');
+    expect(evidence).toContain('Pulse received that observation');
+    expect(evidence).toContain('reboot required: Yes');
+    expect(evidence).toContain('No reboot is authorized by this finding or action');
+    expect(evidence).not.toContain('sha256');
+    expect(evidence).not.toContain('inventory');
+  });
+
+  it('presents cleanup pressure without exposing the raw fingerprint', () => {
+    const evidence = getFindingEvidencePresentation(makeFinding({ key: 'apt-package-cache-pressure', evidence: 'reclaimable_bytes=104857600 filesystem_usage=91.5 fingerprint=sha256:secret checked_at=2026-07-12T10:00:00Z received_at=2026-07-12T10:05:00Z' }));
+    expect(evidence).toContain('100 MB of downloaded package data');
+    expect(evidence).toContain('91.5% full');
+    expect(evidence).not.toContain('fingerprint');
+    expect(evidence).not.toContain('sha256');
+  });
+
+  it('fails closed instead of partially interpreting malformed APT evidence', () => {
+    expect(getFindingEvidencePresentation(makeFinding({ key: 'apt-host-updates', evidence: 'pending_updates=6 inventory=leaked' }))).toContain('could not safely present');
+  });
+
+  it.each([
+    ['unsafe update count', 'apt-host-updates', 'pending_updates=999999999999999999999 inventory=sha256:x checked_at=2026-07-12T10:00:00Z received_at=2026-07-12T10:05:00Z reboot_required=false'],
+    ['invalid update timestamp', 'apt-host-updates', 'pending_updates=6 inventory=sha256:x checked_at=not-a-time received_at=2026-07-12T10:05:00Z reboot_required=false'],
+    ['dotted usage', 'apt-package-cache-pressure', 'reclaimable_bytes=100 filesystem_usage=9.1.5 fingerprint=sha256:x checked_at=2026-07-12T10:00:00Z received_at=2026-07-12T10:05:00Z'],
+    ['NaN usage', 'apt-package-cache-pressure', 'reclaimable_bytes=100 filesystem_usage=NaN fingerprint=sha256:x checked_at=2026-07-12T10:00:00Z received_at=2026-07-12T10:05:00Z'],
+    ['usage above 100', 'apt-package-cache-pressure', 'reclaimable_bytes=100 filesystem_usage=100.1 fingerprint=sha256:x checked_at=2026-07-12T10:00:00Z received_at=2026-07-12T10:05:00Z'],
+    ['unsafe reclaimable bytes', 'apt-package-cache-pressure', 'reclaimable_bytes=999999999999999999999 filesystem_usage=91.5 fingerprint=sha256:x checked_at=2026-07-12T10:00:00Z received_at=2026-07-12T10:05:00Z'],
+    ['invalid cleanup timestamp', 'apt-package-cache-pressure', 'reclaimable_bytes=100 filesystem_usage=91.5 fingerprint=sha256:x checked_at=2026-07-12T10:00:00Z received_at=not-a-time'],
+  ] as const)('uses the bounded fallback for %s', (_name, key, evidence) => {
+    expect(getFindingEvidencePresentation(makeFinding({ key, evidence }))).toContain('could not safely present');
+  });
+});
 
 function makeFinding(overrides: Partial<UnifiedFinding>): UnifiedFinding {
   return {
