@@ -36,7 +36,11 @@ def base_payload() -> dict:
 class ReadinessAssertionGuardTest(unittest.TestCase):
     def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
         env = os.environ.copy()
-        env.pop("GIT_INDEX_FILE", None)
+        # Scrub the full hook environment: with only GIT_INDEX_FILE removed, a
+        # pre-commit run from a linked worktree exports an absolute GIT_DIR and
+        # "git init" here re-initializes the REAL repository as bare.
+        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
+            env.pop(name, None)
         return subprocess.run(
             ["git", *args],
             cwd=repo_root,

@@ -15,11 +15,13 @@ DEFAULT_REPO_ROOT = REPO_ROOT
 
 def git_env() -> dict[str, str]:
     env = os.environ.copy()
-    # Unit tests patch REPO_ROOT to a temporary repository. In that case, an
-    # inherited alternate index from the caller should not leak into the temp
-    # repo and point git plumbing at entries from a different repository.
+    # Unit tests patch REPO_ROOT to a temporary repository. In that case, the
+    # inherited hook environment (alternate index, or the absolute GIT_DIR a
+    # pre-commit run from a linked worktree exports) should not leak into the
+    # temp repo and point git plumbing at a different repository.
     if REPO_ROOT != DEFAULT_REPO_ROOT:
-        env.pop("GIT_INDEX_FILE", None)
+        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
+            env.pop(name, None)
     return env
 
 
