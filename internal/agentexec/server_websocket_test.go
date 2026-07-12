@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
@@ -21,6 +22,62 @@ type wsRawMessage struct {
 	ID        string           `json:"id,omitempty"`
 	Timestamp time.Time        `json:"timestamp"`
 	Payload   *json.RawMessage `json:"payload,omitempty"`
+}
+
+func TestOperationQueryInconclusiveAPTDriftPreservesAdmittedDigest(t *testing.T) {
+	now := time.Now().UTC()
+	updateReq := HostUpdatePayload{RequestID: "u-drift.dispatch.1", ActionID: "u-drift", Operation: HostUpdateOperationInstall, ExpectedInventoryHash: "sha256:" + strings.Repeat("a", 64)}
+	if err := BindHostUpdatePayload(&updateReq); err != nil {
+		t.Fatal(err)
+	}
+	updateIdentity := HostUpdateOperationIdentity("agent", updateReq)
+	updateResult := HostUpdateResultPayload{
+		RequestID: updateReq.RequestID, ActionID: updateReq.ActionID, ExecutionPhase: HostUpdatePhaseRefresh, Verification: HostUpdateVerificationInconclusive,
+		Before: HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("b", 64), PendingCount: 2, CheckedAt: now.Add(-time.Second)},
+		After:  HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("b", 64), PendingCount: 2, CheckedAt: now},
+	}
+	updateRaw, err := json.Marshal(updateResult)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cleanupReq := HostStorageCleanupPayload{RequestID: "c-drift.dispatch.1", ActionID: "c-drift", Operation: HostStorageCleanupOperationPackageCache, ExpectedFingerprint: "sha256:" + strings.Repeat("c", 64)}
+	if err := BindHostStorageCleanupPayload(&cleanupReq); err != nil {
+		t.Fatal(err)
+	}
+	cleanupIdentity := HostStorageCleanupOperationIdentity("agent", cleanupReq)
+	cleanupResult := HostStorageCleanupResultPayload{
+		RequestID: cleanupReq.RequestID, ActionID: cleanupReq.ActionID, ExecutionPhase: HostStorageCleanupPhasePreflight, Verification: HostStorageCleanupVerificationInconclusive,
+		Before: HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("d", 64), ReclaimableBytes: 10, CheckedAt: now.Add(-time.Second)},
+		After:  HostStorageCleanupSnapshot{Supported: true, Provider: "apt-package-cache", Fingerprint: "sha256:" + strings.Repeat("d", 64), ReclaimableBytes: 10, CheckedAt: now},
+	}
+	cleanupRaw, err := json.Marshal(cleanupResult)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name     string
+		identity operationreceipt.Identity
+		kind     string
+		payload  json.RawMessage
+	}{
+		{name: "update inventory drift", identity: updateIdentity, kind: HostUpdateReceiptKind, payload: updateRaw},
+		{name: "cleanup fingerprint drift", identity: cleanupIdentity, kind: HostStorageCleanupReceiptKind, payload: cleanupRaw},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			record := operationreceipt.Record{Identity: tc.identity, State: operationreceipt.StateTerminal, AcceptedAt: now.Add(-3 * time.Second), StartedAt: now.Add(-2 * time.Second), TerminalAt: now.Add(time.Second), ResultKind: tc.kind, ResultVersion: HostAPTReceiptVersion, Result: tc.payload}
+			query := operationreceipt.QueryResult{Version: operationreceipt.ProtocolVersion, Status: operationreceipt.QueryFoundTerminal, Record: &record}
+			if err := ValidateOperationQueryResultForIdentity(query, tc.identity, now.Add(2*time.Second)); err != nil {
+				t.Fatalf("bound inconclusive drift receipt rejected: %v", err)
+			}
+			tampered := tc.identity
+			tampered.RequestDigest = "sha256:" + strings.Repeat("e", 64)
+			if err := ValidateOperationQueryResultForIdentity(query, tampered, now.Add(2*time.Second)); err == nil {
+				t.Fatal("wrong request digest accepted")
+			}
+		})
+	}
 }
 
 func newWSServer(t *testing.T, s *Server) *httptest.Server {

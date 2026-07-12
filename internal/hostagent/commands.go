@@ -876,11 +876,7 @@ func hostOperationReceiptConfig() operationreceipt.Config {
 			if len(result.Before.Packages) > 0 || len(result.After.Packages) > 0 || result.Before.Error != "" || result.After.Error != "" {
 				return fmt.Errorf("host update receipt contains non-persistable detail")
 			}
-			req := agentexec.HostUpdatePayload{RequestID: identity.AttemptID, ActionID: identity.ActionID, Operation: identity.OperationKind, OperationVersion: identity.OperationVersion, RequestDigest: identity.RequestDigest, ExpectedInventoryHash: result.Before.InventoryHash}
-			if err := agentexec.ValidateHostUpdatePayload(&req); err != nil {
-				return err
-			}
-			return agentexec.ValidateHostUpdateResultForRequest(req, result)
+			return agentexec.ValidateHostUpdateReceiptForIdentity(identity, result)
 		}},
 		agentexec.HostStorageCleanupReceiptKind: {agentexec.HostAPTReceiptVersion: func(identity operationreceipt.Identity, payload json.RawMessage) error {
 			result, err := agentexec.DecodeHostStorageCleanupResultPayload(payload)
@@ -890,11 +886,7 @@ func hostOperationReceiptConfig() operationreceipt.Config {
 			if result.Before.Error != "" || result.After.Error != "" {
 				return fmt.Errorf("host cleanup receipt contains non-persistable detail")
 			}
-			req := agentexec.HostStorageCleanupPayload{RequestID: identity.AttemptID, ActionID: identity.ActionID, Operation: identity.OperationKind, OperationVersion: identity.OperationVersion, RequestDigest: identity.RequestDigest, ExpectedFingerprint: result.Before.Fingerprint}
-			if err := agentexec.ValidateHostStorageCleanupPayload(&req); err != nil {
-				return err
-			}
-			return agentexec.ValidateHostStorageCleanupResultForRequest(req, result)
+			return agentexec.ValidateHostStorageCleanupReceiptForIdentity(identity, result)
 		}},
 		agentexec.DockerContainerLifecycleReceiptKind: {agentexec.DockerContainerLifecycleReceiptVersion: func(identity operationreceipt.Identity, payload json.RawMessage) error {
 			result, err := agentexec.DecodeDockerContainerLifecycleResultPayload(payload)

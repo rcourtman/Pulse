@@ -4439,12 +4439,19 @@ Task 09 now consumes that continuity end to end. A delayed terminal receipt is
 validated against its immutable identity/digest and the agent-attested durable
 terminal boundary, not the later query time. The server retains the later
 query receipt separately. Impossible observation/terminal chronology, a
-future terminal timestamp, stale-at-completion evidence, before-state drift,
-or a hostile envelope still fails closed. Callback loss and a reopened server
-store reconcile both APT actions by query only; the original typed dispatch is
-never resent. Legacy APT v1 terminal payloads that predate additive package-
-manager health facts remain structurally valid receipts, but their verified
-claim is projected as health-unknown/inconclusive rather than confirmed.
+future terminal timestamp, stale-at-completion evidence, an evidence-bearing
+before-state mismatch, or a hostile envelope still fails closed. A legitimate
+pre-mutation inventory or cache-fingerprint drift result remains terminal and
+inconclusive: its newly observed `Before` value is not substituted for the
+originally authorized expected value when validating the admitted request
+digest. The generic receipt store continues to bind completion and replay to
+the exact admitted attempt/action/operation/digest/agent identity, while the
+drift observation records why mutation was refused and replan is required.
+Callback loss and a reopened server store reconcile both APT actions by query
+only; the original typed dispatch is never resent. Legacy APT v1 terminal
+payloads that predate additive package-manager health facts remain
+structurally valid receipts, but their verified claim is projected as health-
+unknown/inconclusive rather than confirmed.
 
 For host updates, `MutationStarted` begins immediately before the fixed install
 command, not during metadata refresh or simulation. A fixed read-only

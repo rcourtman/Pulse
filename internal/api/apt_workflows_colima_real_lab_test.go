@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -155,7 +156,12 @@ func runRG09Distro(t *testing.T, runID, distro, image, agentBinary, scratchDir s
 	ws.Start()
 	defer ws.Close()
 	containerID := startRG09Agent(t, runID, distro, agentID, image, agentBinary, scratchDir, ws.Listener.Addr().(*net.TCPAddr).Port)
-	defer stopRG09Agent(containerID)
+	defer func() {
+		if t.Failed() {
+			t.Logf("RG-09 %s agent failure diagnostic (redacted):\n%s", distro, rg09AgentFailureDiagnostic(containerID))
+		}
+		stopRG09Agent(containerID)
+	}()
 	waitForRG06Agent(t, server.Server, agentID)
 
 	initialReport := waitForRG09Report(t, reportCh, func(report agentshost.Report) bool {
@@ -505,6 +511,45 @@ func startRG09Agent(t *testing.T, runID, distro, agentID, image, binary, scratch
 func stopRG09Agent(containerID string) {
 	if strings.TrimSpace(containerID) != "" {
 		_ = exec.Command("docker", "--context", "colima", "rm", "-f", containerID).Run()
+	}
+}
+
+var rg09SensitiveLogValue = regexp.MustCompile(`(?i)((?:authorization|api[_-]?token|password|secret)["' ]*[:=]["' ]*)[^"'\s,}]+`)
+
+func rg09AgentFailureDiagnostic(containerID string) string {
+	output, err := exec.Command("docker", "--context", "colima", "logs", "--tail", "200", containerID).CombinedOutput()
+	diagnostic := string(output)
+	if err != nil {
+		diagnostic += "\n[container log read failed]"
+	}
+	return rg09RedactAgentDiagnostic(diagnostic)
+}
+
+func rg09RedactAgentDiagnostic(value string) string {
+	const maxDiagnosticBytes = 16 << 10
+	if len(value) > maxDiagnosticBytes {
+		value = value[len(value)-maxDiagnosticBytes:]
+	}
+	value = rg09SensitiveLogValue.ReplaceAllString(value, `${1}[REDACTED]`)
+	for old, replacement := range map[string]string{
+		"rg09-local-lab":     "[REDACTED]",
+		"pulse-rg09-fixture": "[fixture-package]",
+		"/var/cache/apt":     "[package-cache-path]",
+		"apt-get":            "[package-manager-command]",
+	} {
+		value = strings.ReplaceAll(value, old, replacement)
+	}
+	if len(value) > maxDiagnosticBytes {
+		value = value[len(value)-maxDiagnosticBytes:]
+	}
+	return strings.TrimSpace(value)
+}
+
+func TestRG09AgentFailureDiagnosticIsBoundedAndRedacted(t *testing.T) {
+	raw := strings.Repeat("x", 17<<10) + ` authorization: Bearer-value api_token=token-value rg09-local-lab pulse-rg09-fixture /var/cache/apt apt-get`
+	got := rg09RedactAgentDiagnostic(raw)
+	if len(got) > 16<<10 || strings.Contains(got, "Bearer-value") || strings.Contains(got, "token-value") || strings.Contains(got, "rg09-local-lab") || strings.Contains(got, "pulse-rg09-fixture") || strings.Contains(got, "/var/cache/apt") || strings.Contains(got, "apt-get") {
+		t.Fatalf("failure diagnostic was not bounded and redacted: %q", got)
 	}
 }
 

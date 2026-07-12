@@ -141,3 +141,59 @@ func TestCommandClientHandlesTypedHostUpdateWithoutExecuteCommand(t *testing.T) 
 		t.Fatal("command client did not stop")
 	}
 }
+
+func TestHostUpdateInventoryDriftReceiptCompletesAndReplaysWithAdmittedIdentity(t *testing.T) {
+	receipts, err := operationreceipt.Open(filepath.Join(t.TempDir(), "receipts.db"), hostOperationReceiptConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer receipts.Close()
+
+	req := agentexec.HostUpdatePayload{RequestID: "drift.dispatch.1", ActionID: "drift", Operation: agentexec.HostUpdateOperationInstall, ExpectedInventoryHash: "sha256:" + strings.Repeat("a", 64)}
+	if err := agentexec.BindHostUpdatePayload(&req); err != nil {
+		t.Fatal(err)
+	}
+	identity := agentexec.HostUpdateOperationIdentity("agent-1", req)
+	if _, admitted, err := receipts.Admit(identity); err != nil || !admitted {
+		t.Fatalf("admit=%v err=%v", admitted, err)
+	}
+	if _, err := receipts.MarkStarted(identity); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	result := agentexec.HostUpdateResultPayload{
+		RequestID: req.RequestID, ActionID: req.ActionID, ExecutionPhase: agentexec.HostUpdatePhaseRefresh, Verification: agentexec.HostUpdateVerificationInconclusive,
+		Before: agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("b", 64), PendingCount: 2, CheckedAt: now.Add(-time.Second)},
+		After:  agentexec.HostPackageUpdateSnapshot{Supported: true, Manager: "apt", InventoryHash: "sha256:" + strings.Repeat("b", 64), PendingCount: 2, CheckedAt: now},
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope := operationreceipt.TerminalEnvelope{Kind: agentexec.HostUpdateReceiptKind, Version: agentexec.HostAPTReceiptVersion, Payload: raw}
+	record, err := receipts.Complete(identity, envelope)
+	if err != nil || record.State != operationreceipt.StateTerminal {
+		t.Fatalf("complete record=%+v err=%v", record, err)
+	}
+	if replay, admitted, err := receipts.Admit(identity); err != nil || admitted || replay.State != operationreceipt.StateTerminal || string(replay.Result) != string(raw) {
+		t.Fatalf("replay record=%+v admitted=%v err=%v", replay, admitted, err)
+	}
+
+	wrongRequest := result
+	wrongRequest.RequestID = "other.dispatch.1"
+	wrongRaw, _ := json.Marshal(wrongRequest)
+	if _, err := receipts.Complete(identity, operationreceipt.TerminalEnvelope{Kind: agentexec.HostUpdateReceiptKind, Version: agentexec.HostAPTReceiptVersion, Payload: wrongRaw}); err == nil {
+		t.Fatal("wrong request id accepted")
+	}
+	wrongAction := result
+	wrongAction.ActionID = "other"
+	wrongRaw, _ = json.Marshal(wrongAction)
+	if _, err := receipts.Complete(identity, operationreceipt.TerminalEnvelope{Kind: agentexec.HostUpdateReceiptKind, Version: agentexec.HostAPTReceiptVersion, Payload: wrongRaw}); err == nil {
+		t.Fatal("wrong action id accepted")
+	}
+	wrongDigest := identity
+	wrongDigest.RequestDigest = "sha256:" + strings.Repeat("c", 64)
+	if _, err := receipts.Complete(wrongDigest, envelope); err == nil {
+		t.Fatal("wrong admitted request digest accepted")
+	}
+}
