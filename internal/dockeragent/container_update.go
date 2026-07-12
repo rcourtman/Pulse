@@ -52,6 +52,33 @@ func decodeUpdateContainerPayload(payload map[string]any) (updateContainerComman
 	return commandPayload, nil
 }
 
+// sanitizeSharedNamespaceConfig strips settings that the daemon derives from
+// the network mode. A container sharing another container's network namespace
+// (network_mode: container:<id> / service:<x>) or the host's cannot carry its
+// own hostname, ports, links, or DNS options: the daemon rejects the create
+// with "conflicting options: ... and the network mode", which would leave the
+// update stuck after the backup rename.
+func sanitizeSharedNamespaceConfig(config *containertypes.Config, hostConfig *containertypes.HostConfig) {
+	if config == nil || hostConfig == nil {
+		return
+	}
+	if !hostConfig.NetworkMode.IsContainer() && !hostConfig.NetworkMode.IsHost() {
+		return
+	}
+	config.Hostname = ""
+	config.Domainname = ""
+	if hostConfig.NetworkMode.IsContainer() {
+		config.ExposedPorts = nil
+		hostConfig.PortBindings = nil
+		hostConfig.PublishAllPorts = false
+		hostConfig.Links = nil
+		hostConfig.DNS = nil
+		hostConfig.DNSOptions = nil
+		hostConfig.DNSSearch = nil
+		hostConfig.ExtraHosts = nil
+	}
+}
+
 // handleUpdateContainerCommand handles the update_container command from Pulse.
 func (a *Agent) handleUpdateContainerCommand(ctx context.Context, target TargetConfig, command agentsdocker.Command) error {
 	commandPayload, err := decodeUpdateContainerPayload(command.Payload)
@@ -257,6 +284,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 
 	// 5. Prepare network configuration
 	// We need to handle network settings carefully
+	sanitizeSharedNamespaceConfig(inspect.Config, inspect.HostConfig)
 	var networkingConfig *network.NetworkingConfig
 	if len(inspect.NetworkSettings.Networks) > 0 {
 		networkingConfig = &network.NetworkingConfig{

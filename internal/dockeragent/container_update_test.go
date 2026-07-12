@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"sync"
 	"testing"
@@ -616,6 +617,142 @@ func TestHandleUpdateContainerCommand(t *testing.T) {
 
 		if err := agent.handleUpdateContainerCommand(context.Background(), TargetConfig{URL: server.URL, Token: "token"}, cmd); err != nil {
 			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestUpdateContainer_SharedNamespaceCreateConfig(t *testing.T) {
+	logger := zerolog.Nop()
+	swap(t, &sleepFn, func(time.Duration) {})
+	swap(t, &newTimerFn, func(time.Duration) *time.Timer {
+		return time.NewTimer(0)
+	})
+	swap(t, &nowFn, func() time.Time {
+		return time.Date(2024, 3, 1, 12, 0, 0, 0, time.UTC)
+	})
+
+	newInspect := func(networkMode string) containertypes.InspectResponse {
+		inspect := baseInspect()
+		inspect.HostConfig.NetworkMode = containertypes.NetworkMode(networkMode)
+		inspect.Config.Hostname = "nstest"
+		inspect.Config.Domainname = "lan"
+		inspect.Config.ExposedPorts = network.PortSet{network.MustParsePort("8080/tcp"): {}}
+		inspect.HostConfig.PortBindings = network.PortMap{network.MustParsePort("8080/tcp"): {{HostPort: "8080"}}}
+		inspect.HostConfig.PublishAllPorts = true
+		inspect.HostConfig.Links = []string{"db:db"}
+		inspect.HostConfig.DNS = []netip.Addr{netip.MustParseAddr("192.168.1.53")}
+		inspect.HostConfig.DNSOptions = []string{"ndots:1"}
+		inspect.HostConfig.DNSSearch = []string{"lan"}
+		inspect.HostConfig.ExtraHosts = []string{"gw:192.168.1.1"}
+		return inspect
+	}
+
+	runUpdate := func(t *testing.T, networkMode string) (*containertypes.Config, *containertypes.HostConfig) {
+		t.Helper()
+
+		var (
+			mu               sync.Mutex
+			createdConfig    *containertypes.Config
+			createdHost      *containertypes.HostConfig
+			cleanupCh        = make(chan struct{})
+			cleanupCloseOnce sync.Once
+		)
+
+		agent := &Agent{
+			docker: &fakeDockerClient{
+				containerInspectFn: func(_ context.Context, id string) (containertypes.InspectResponse, error) {
+					inspect := newInspect(networkMode)
+					if id == "new123" {
+						inspect.Image = "sha256:new0000000000"
+					}
+					return inspect, nil
+				},
+				imagePullFn: func(context.Context, string, dockerImagePullOptions) (io.ReadCloser, error) {
+					return io.NopCloser(strings.NewReader("{}")), nil
+				},
+				containerStopFn: func(context.Context, string, dockerContainerStopOptions) error {
+					return nil
+				},
+				containerRenameFn: func(context.Context, string, string) error {
+					return nil
+				},
+				containerCreateFn: func(_ context.Context, config *containertypes.Config, hostConfig *containertypes.HostConfig, _ *network.NetworkingConfig, _ *v1.Platform, _ string) (containertypes.CreateResponse, error) {
+					mu.Lock()
+					createdConfig = config
+					createdHost = hostConfig
+					mu.Unlock()
+					return containertypes.CreateResponse{ID: "new123"}, nil
+				},
+				networkConnectFn: func(context.Context, string, string, *network.EndpointSettings) error {
+					return nil
+				},
+				containerStartFn: func(context.Context, string, dockerContainerStartOptions) error {
+					return nil
+				},
+				containerRemoveFn: func(context.Context, string, dockerContainerRemoveOptions) error {
+					cleanupCloseOnce.Do(func() { close(cleanupCh) })
+					return nil
+				},
+			},
+			logger: logger,
+		}
+
+		result := agent.updateContainerWithProgress(context.Background(), "container1", nil)
+		if !result.Success {
+			t.Fatalf("expected success, got error %q", result.Error)
+		}
+		<-cleanupCh
+
+		mu.Lock()
+		defer mu.Unlock()
+		if createdConfig == nil || createdHost == nil {
+			t.Fatal("expected ContainerCreate to be called")
+		}
+		return createdConfig, createdHost
+	}
+
+	t.Run("container network mode strips namespace-owned settings", func(t *testing.T) {
+		config, hostConfig := runUpdate(t, "container:owner123")
+
+		if config.Hostname != "" || config.Domainname != "" {
+			t.Fatalf("expected hostname/domainname cleared, got %q/%q", config.Hostname, config.Domainname)
+		}
+		if len(config.ExposedPorts) != 0 {
+			t.Fatalf("expected exposed ports cleared, got %v", config.ExposedPorts)
+		}
+		if len(hostConfig.PortBindings) != 0 || hostConfig.PublishAllPorts {
+			t.Fatalf("expected port bindings cleared, got %v publishAll=%v", hostConfig.PortBindings, hostConfig.PublishAllPorts)
+		}
+		if len(hostConfig.Links) != 0 || len(hostConfig.DNS) != 0 || len(hostConfig.DNSOptions) != 0 || len(hostConfig.DNSSearch) != 0 || len(hostConfig.ExtraHosts) != 0 {
+			t.Fatal("expected links/dns/extra hosts cleared")
+		}
+		if got := string(hostConfig.NetworkMode); got != "container:owner123" {
+			t.Fatalf("expected network mode preserved, got %q", got)
+		}
+	})
+
+	t.Run("host network mode strips hostname only", func(t *testing.T) {
+		config, hostConfig := runUpdate(t, "host")
+
+		if config.Hostname != "" || config.Domainname != "" {
+			t.Fatalf("expected hostname/domainname cleared, got %q/%q", config.Hostname, config.Domainname)
+		}
+		if len(config.ExposedPorts) != 1 || len(hostConfig.PortBindings) != 1 || !hostConfig.PublishAllPorts {
+			t.Fatal("expected port settings preserved for host network mode")
+		}
+		if len(hostConfig.DNS) != 1 || len(hostConfig.ExtraHosts) != 1 {
+			t.Fatal("expected dns/extra hosts preserved for host network mode")
+		}
+	})
+
+	t.Run("bridge network mode left untouched", func(t *testing.T) {
+		config, hostConfig := runUpdate(t, "bridge")
+
+		if config.Hostname != "nstest" || config.Domainname != "lan" {
+			t.Fatalf("expected hostname/domainname preserved, got %q/%q", config.Hostname, config.Domainname)
+		}
+		if len(config.ExposedPorts) != 1 || len(hostConfig.PortBindings) != 1 {
+			t.Fatal("expected port settings preserved for bridge network mode")
 		}
 	})
 }
