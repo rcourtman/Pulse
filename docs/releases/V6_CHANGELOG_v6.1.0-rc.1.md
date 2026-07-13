@@ -1,6 +1,6 @@
-# Pulse v6.0.6-rc.1
+# Pulse v6.1.0-rc.1
 
-_This changelog describes the `v6.0.6-rc.1` release candidate compared with
+_This changelog describes the `v6.1.0-rc.1` release candidate compared with
 stable `v6.0.5`._
 
 ## Added
@@ -12,11 +12,17 @@ stable `v6.0.5`._
 - Desktop and Pulse Mobile clients now use the canonical pending-action queue,
   decision endpoint, and action identity instead of retired command-shaped
   approval endpoints.
+- The desktop Actions inbox now provides one review surface for proposed work,
+  policy provenance, approval state, execution progress, verification detail,
+  and direct Patrol handoffs.
 - Docker and Kubernetes actions verify supported scale and update outcomes
   after execution.
 - Policy-scoped Patrol autonomy can authorize low-risk Docker and Podman
   restarts only for explicitly allowed resources and optional recurring
   maintenance windows.
+- Host update, Debian and Ubuntu package, storage-pressure cleanup, Docker
+  restart, and supported Proxmox guest lifecycle plans now share the governed
+  action, durable receipt, and independent-verification path.
 - Local provider setup includes a guided Ollama `qwen3:8b` quickstart.
 - Cluster members can override discovered connection addresses.
 - The Unified Agent accepts a rotating JSON log path for native service use.
@@ -37,12 +43,20 @@ stable `v6.0.5`._
   read later.
 - Investigation prompts include the validated capability catalog with approval
   floors, parameter schemas, and sensitive/operator-only constraints.
+- Assistant supports in-place retry, response regeneration, edit-and-resend,
+  mid-turn steering, collapsed long-paste attachments, and estimated
+  last-turn cost summaries.
+- Patrol action handoffs open the matching Actions review, background Patrol
+  sessions stay out of Assistant quick resume, and pending approvals are
+  visible on the Actions navigation tab.
 - Docker, Kubernetes, TrueNAS, vSphere, and Proxmox node tables share one
   sortable platform-table model and retain user-controlled column ordering.
 - Windows native CI exercises installer parsing, install, version replacement,
   logged readiness, forced-process recovery, restart persistence, and cleanup.
 - Release automation builds one signed exact-SHA candidate and promotes that
   candidate without rebuilding.
+- Action dispatch now binds server-authored policy provenance and reviewed plan
+  identity through durable admission, transport, result, and audit records.
 
 ## Fixed
 
@@ -53,6 +67,8 @@ stable `v6.0.5`._
 - Docker update guidance recreates the container so the selected image is
   actually applied.
 - Docker and Kubernetes agent liveness handles clock skew correctly.
+- Docker updates preserve containers that share another container's network
+  namespace.
 - Guest suppression is honored for posture alerts.
 - Legacy OIDC callback handling recovers the initiating provider.
 - Simultaneous provider/runtime and proposal-channel failures preserve both
@@ -65,6 +81,14 @@ stable `v6.0.5`._
 - Windows install success now requires both local readiness and a non-empty
   durable service log.
 - Discovery backfills quiesce during shutdown.
+- Cluster members retain an operator-selected connection address when they
+  re-register through another member.
+- Guest alerts move with the guest when its owning node changes, and missing
+  guest-agent disk data uses an unavailable sentinel instead of a fabricated
+  measurement.
+- Physical disk tables keep wide-node disks visible and avoid reporting
+  standby SSDs as active failures.
+- SSO-backed administrators retain their effective settings privileges.
 
 ## Security
 
@@ -77,9 +101,15 @@ stable `v6.0.5`._
   explicitly while the public signing application is pending.
 - Demo SSH setup no longer weakens host-key handling for private deploy hosts
   or IP targets.
+- Update verification documentation and release output use a guarded OpenSSH
+  `allowed_signers` line, and hardened update services keep configuration
+  backups on a writable path.
 
 ## Release Metadata
 
-- Version: `v6.0.6-rc.1`
+- Version: `v6.1.0-rc.1`
 - Rollback target: `v6.0.5`
+- Rollback command: `./scripts/install.sh --version v6.0.5`
 - Promotion path: release candidate from `main`
+- Mobile companion candidates: iOS build 8 and Android versionCode 7 on the
+  TestFlight and Google Play internal-testing tracks

@@ -977,7 +977,10 @@ TLS floor in the dynamic config.
    `mobile-candidate-required` is a blocking state until the mobile candidate
    is built/submitted and the release is rerun with `mobile-candidate-uploaded`
    evidence. Compatibility or uploaded-candidate decisions must carry evidence
-   text rather than relying on memory.
+   text rather than relying on memory. A `mobile-candidate-uploaded` release
+   packet must also name the exact iOS build number and Android version code in
+   its release notes and changelog, and must distinguish TestFlight or Play
+   internal-testing availability from a public store rollout.
 12. Keep forward release signing pinned to an explicit trust root. Governed
    release scripts, Docker release builds, and historical backfill paths must
    accept the active private signing key only alongside a non-secret expected
@@ -1007,6 +1010,9 @@ operator-facing Actions inbox, monitor-first product workflows, governed host
 and storage operations, native-agent update safety, Windows logged-readiness
 and recovery proof, OIDC callback recovery, and fail-closed security hardening
 behind RC validation before the next stable minor release.
+The companion evidence for this cut is Pulse Mobile iOS build 8 and Android
+versionCode 7 on TestFlight and Google Play internal testing only. The release
+packet must not describe either candidate as a public store rollout.
 The same release boundary now provides one canonical in-app release-note
 experience. Update checks can preview a curated `Highlights` section, and an
 authenticated running-version endpoint lets the update surface show those
