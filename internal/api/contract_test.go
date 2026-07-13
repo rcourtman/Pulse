@@ -19995,7 +19995,8 @@ func TestContract_ProxmoxLifecycleActionsResolveNodeCommandAgentAndVerifyState(t
 		"Trusted:    true",
 		"func (e proxmoxGuestActionExecutor) verifyProxmoxGuestState(",
 		"proxmoxGuestStatusCommand(kind, vmid)",
-		"parseProxmoxGuestStatus(lastOutput) == expected",
+		"agentexec.EvaluateCapabilityPostcondition",
+		"func (e proxmoxGuestActionExecutor) observeProxmoxGuestPostcondition(",
 	} {
 		if !strings.Contains(src, snippet) {
 			t.Fatalf("proxmox lifecycle executor must pin command-agent/trusted verification snippet %q", snippet)
@@ -20014,7 +20015,7 @@ func TestContract_ProxmoxLifecycleActionsResolveNodeCommandAgentAndVerifyState(t
 	for _, snippet := range []string{
 		"newRoutedActionExecutor(",
 		"newDockerContainerActionExecutor(r.resourceHandlers, r.agentExecServer)",
-		"newProxmoxGuestActionExecutor(r.resourceHandlers, r.agentExecServer)",
+		"newProxmoxGuestActionExecutor(r.resourceHandlers, r.agentExecServer, newProxmoxGuestMonitoringObserver(r.resolveMonitorForOrg))",
 		"newHostStorageCleanupActionExecutor(r.resourceHandlers, r.agentExecServer)",
 		"newHostUpdateActionExecutor(r.resourceHandlers, r.agentExecServer)",
 	} {

@@ -2,6 +2,7 @@ package agentexec
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,6 +20,7 @@ const (
 	// VM and container status as reported by Proxmox.
 	FieldVMStatus        PostconditionField = "status"
 	FieldContainerStatus PostconditionField = "status"
+	FieldGuestUptime     PostconditionField = "uptime"
 
 	// Systemd unit fields read via DBus or systemctl show.
 	FieldUnitActiveState          PostconditionField = "ActiveState"
@@ -49,6 +51,10 @@ const (
 	// EqualsField: observed value must equal another observed field on the
 	// same read (e.g. readyReplicas == desiredReplicas).
 	CompareEqualsField PostconditionComparator = "equals_field"
+	// LessThanBefore: the numeric observed value must be lower than the
+	// corresponding pre-action observation. This proves that a running guest
+	// actually restarted instead of merely remaining online.
+	CompareLessThanBefore PostconditionComparator = "less_than_before"
 )
 
 // PostconditionCheck is one assertion the verifier evaluates against the
@@ -74,6 +80,16 @@ type CapabilityPostcondition struct {
 	Window      time.Duration        `json:"window"`
 	Description string               `json:"description"`
 	Checks      []PostconditionCheck `json:"checks"`
+}
+
+// PostconditionEvaluation is the provider-neutral result of evaluating one
+// registered postcondition against bounded before/after observations.
+// Conclusive=false means the observation did not contain enough valid data to
+// claim either confirmation or contradiction.
+type PostconditionEvaluation struct {
+	Conclusive bool
+	Matched    bool
+	ReasonCode string
 }
 
 // defaultVerifyWindow is the per-capability fallback window. The agentexec
@@ -111,6 +127,72 @@ func CapabilityPostconditionNames() []string {
 	return names
 }
 
+// EvaluateCapabilityPostcondition applies the closed registry definition to
+// provider-normalized string observations. Providers only map their typed read
+// into the closed field vocabulary; they do not reimplement the comparisons.
+func EvaluateCapabilityPostcondition(capability string, before, after map[PostconditionField]string, actionStartedAt time.Time) (PostconditionEvaluation, bool) {
+	postcondition, ok := LookupCapabilityPostcondition(capability)
+	if !ok {
+		return PostconditionEvaluation{}, false
+	}
+	for _, check := range postcondition.Checks {
+		observed, exists := normalizedPostconditionValue(after, check.Field)
+		if !exists {
+			return PostconditionEvaluation{ReasonCode: "observed_field_missing"}, true
+		}
+		switch check.Comparator {
+		case CompareEquals:
+			if !strings.EqualFold(observed, strings.TrimSpace(check.Expected)) {
+				return PostconditionEvaluation{Conclusive: true, ReasonCode: "postcondition_contradicted"}, true
+			}
+		case CompareEqualsField:
+			peer, exists := normalizedPostconditionValue(after, PostconditionField(check.Expected))
+			if !exists {
+				return PostconditionEvaluation{ReasonCode: "comparison_field_missing"}, true
+			}
+			if !strings.EqualFold(observed, peer) {
+				return PostconditionEvaluation{Conclusive: true, ReasonCode: "postcondition_contradicted"}, true
+			}
+		case CompareAfterOrEqualActionStart:
+			if actionStartedAt.IsZero() {
+				return PostconditionEvaluation{ReasonCode: "action_start_missing"}, true
+			}
+			observedAt, err := time.Parse(time.RFC3339Nano, observed)
+			if err != nil {
+				return PostconditionEvaluation{ReasonCode: "observed_timestamp_invalid"}, true
+			}
+			if observedAt.Before(actionStartedAt) {
+				return PostconditionEvaluation{Conclusive: true, ReasonCode: "postcondition_contradicted"}, true
+			}
+		case CompareLessThanBefore:
+			previous, exists := normalizedPostconditionValue(before, check.Field)
+			if !exists {
+				return PostconditionEvaluation{ReasonCode: "before_field_missing"}, true
+			}
+			previousValue, previousErr := strconv.ParseUint(previous, 10, 64)
+			observedValue, observedErr := strconv.ParseUint(observed, 10, 64)
+			if previousErr != nil || observedErr != nil {
+				return PostconditionEvaluation{ReasonCode: "observed_number_invalid"}, true
+			}
+			if previousValue <= 1 {
+				return PostconditionEvaluation{ReasonCode: "before_value_insufficient"}, true
+			}
+			if observedValue >= previousValue {
+				return PostconditionEvaluation{Conclusive: true, ReasonCode: "postcondition_contradicted"}, true
+			}
+		default:
+			return PostconditionEvaluation{ReasonCode: "comparator_unsupported"}, true
+		}
+	}
+	return PostconditionEvaluation{Conclusive: true, Matched: true}, true
+}
+
+func normalizedPostconditionValue(values map[PostconditionField]string, field PostconditionField) (string, bool) {
+	value, ok := values[field]
+	value = strings.TrimSpace(value)
+	return value, ok && value != ""
+}
+
 // capabilityPostconditions is the closed registry of postconditions the
 // verifier substrate knows how to evaluate. New tool capabilities must add
 // an entry here AND a corresponding test in verifier_postconditions_test.go
@@ -125,6 +207,34 @@ var capabilityPostconditions = map[string]CapabilityPostcondition{
 			{Field: FieldVMStatus, Comparator: CompareEquals, Expected: "running"},
 		},
 	},
+	"qm.shutdown": {
+		Capability:  "qm.shutdown",
+		VerifyRead:  "qm status <vmid>",
+		Window:      defaultVerifyWindow,
+		Description: "Proxmox VM transitioned to stopped after graceful shutdown",
+		Checks: []PostconditionCheck{
+			{Field: FieldVMStatus, Comparator: CompareEquals, Expected: "stopped"},
+		},
+	},
+	"qm.stop": {
+		Capability:  "qm.stop",
+		VerifyRead:  "qm status <vmid>",
+		Window:      defaultVerifyWindow,
+		Description: "Proxmox VM transitioned to stopped after hard stop",
+		Checks: []PostconditionCheck{
+			{Field: FieldVMStatus, Comparator: CompareEquals, Expected: "stopped"},
+		},
+	},
+	"qm.reboot": {
+		Capability:  "qm.reboot",
+		VerifyRead:  "Proxmox API guest status <vmid>",
+		Window:      defaultVerifyWindow,
+		Description: "Proxmox VM is running with uptime reset after reboot",
+		Checks: []PostconditionCheck{
+			{Field: FieldVMStatus, Comparator: CompareEquals, Expected: "running"},
+			{Field: FieldGuestUptime, Comparator: CompareLessThanBefore},
+		},
+	},
 	"pct.start": {
 		Capability:  "pct.start",
 		VerifyRead:  "pct status <vmid>",
@@ -132,6 +242,34 @@ var capabilityPostconditions = map[string]CapabilityPostcondition{
 		Description: "Proxmox CT transitioned to running after start command",
 		Checks: []PostconditionCheck{
 			{Field: FieldContainerStatus, Comparator: CompareEquals, Expected: "running"},
+		},
+	},
+	"pct.shutdown": {
+		Capability:  "pct.shutdown",
+		VerifyRead:  "pct status <vmid>",
+		Window:      defaultVerifyWindow,
+		Description: "Proxmox CT transitioned to stopped after graceful shutdown",
+		Checks: []PostconditionCheck{
+			{Field: FieldContainerStatus, Comparator: CompareEquals, Expected: "stopped"},
+		},
+	},
+	"pct.stop": {
+		Capability:  "pct.stop",
+		VerifyRead:  "pct status <vmid>",
+		Window:      defaultVerifyWindow,
+		Description: "Proxmox CT transitioned to stopped after hard stop",
+		Checks: []PostconditionCheck{
+			{Field: FieldContainerStatus, Comparator: CompareEquals, Expected: "stopped"},
+		},
+	},
+	"pct.reboot": {
+		Capability:  "pct.reboot",
+		VerifyRead:  "Proxmox API guest status <vmid>",
+		Window:      defaultVerifyWindow,
+		Description: "Proxmox CT is running with uptime reset after reboot",
+		Checks: []PostconditionCheck{
+			{Field: FieldContainerStatus, Comparator: CompareEquals, Expected: "running"},
+			{Field: FieldGuestUptime, Comparator: CompareLessThanBefore},
 		},
 	},
 	"docker.restart": {

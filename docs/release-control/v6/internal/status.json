@@ -8113,7 +8113,7 @@
     },
     {
       "id": "action-governance-auditability-post-rc-hardening",
-      "summary": "Task 07 durable delivery and generic agent-operation receipts are accepted: transactional dispatch admission, one-shot send CAS, immutable attempt/action/operation/digest/agent binding, query-only restart reconciliation, strict sanitized terminal envelopes, and permanent replay-denial tombstones. Task 09 consumes that owner for both APT workflows and completes the detector-to-finding, exact empty-parameter proposal, shared policy/approval, typed dispatch, delayed/callback-loss/reopened-server receipt reconciliation, ActionResultV2 truth, terminal audit, and finding reconciliation floor without blind resend. Task 11 adds the desktop/browser tier-5 Product Trust consumer: bounded command/path/package-free Patrol evidence; exact empty parameter and elevated-versus-low-risk review; separate execution, evidence-sourced verification, and recovery cards; agent-attested confirmed updates; reboot fact without reboot authority; partial/unknown-health recovery; measured irreversible cleanup; and one durable receipt across reconnect, all exercised in current-build Chromium and a 390-pixel viewport. Malformed phases, counts, timestamps, usage, or cleanup arithmetic fail closed. The closed RG-01 through RG-12 matrix now supplies the disposable Debian/Ubuntu tier-6, Docker, browser, physical-device, live-Relay, revocation, cleanup, and independent Task 12 proof that previously kept claims 16 and 17 and both workflow scorecards operationally open. Task 10 remains sole owner of execution, verification, evidence, compensation, and rollback truth, and RG06/RG09 product outcomes remain agent-attested fix_verification_unknown. This follow-up now tracks only broader post-RC auditability beyond the proved bounded capability set, including additional operation and platform coverage, deeper compensation and rollback proof, and MSP or fleet aggregation; it does not reopen the accepted matrix. Raw model command, file write, arbitrary pod exec, legacy run_command, /api/ai/run-command, and enterprise command remediation remain retired with no replacement or executable historical authority.",
+      "summary": "Task 07 durable delivery and generic agent-operation receipts are accepted: transactional dispatch admission, one-shot send CAS, immutable attempt/action/operation/digest/agent binding, query-only restart reconciliation, strict sanitized terminal envelopes, and permanent replay-denial tombstones. Task 09 consumes that owner for both APT workflows and completes the detector-to-finding, exact empty-parameter proposal, shared policy/approval, typed dispatch, delayed/callback-loss/reopened-server receipt reconciliation, ActionResultV2 truth, terminal audit, and finding reconciliation floor without blind resend. Task 11 adds the desktop/browser tier-5 Product Trust consumer: bounded command/path/package-free Patrol evidence; exact empty parameter and elevated-versus-low-risk review; separate execution, evidence-sourced verification, and recovery cards; agent-attested confirmed updates; reboot fact without reboot authority; partial/unknown-health recovery; measured irreversible cleanup; and one durable receipt across reconnect, all exercised in current-build Chromium and a 390-pixel viewport. Malformed phases, counts, timestamps, usage, or cleanup arithmetic fail closed. The closed RG-01 through RG-12 matrix now supplies the disposable Debian/Ubuntu tier-6, Docker, browser, physical-device, live-Relay, revocation, cleanup, and independent Task 12 proof that previously kept claims 16 and 17 and both workflow scorecards operationally open. Task 10 remains sole owner of execution, verification, evidence, compensation, and rollback truth, and RG06/RG09 product outcomes remain agent-attested fix_verification_unknown. Proxmox VM/LXC lifecycle now supplies the first production distinct-trust-domain verification path: the node agent executes, the tenant-scoped server Proxmox client observes status and uptime, reboot requires an uptime reset, and ActionResultV2 keeps execution success independent from postcondition contradiction. This follow-up now tracks only broader post-RC auditability beyond the proved bounded capability set, including additional operation and platform coverage, deeper compensation and rollback proof, and MSP or fleet aggregation; it does not reopen the accepted matrix. Raw model command, file write, arbitrary pod exec, legacy run_command, /api/ai/run-command, and enterprise command remediation remain retired with no replacement or executable historical authority.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-04-25",
@@ -8485,6 +8485,21 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/proxmox_guest_action_observer.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/proxmox_guest_action_result.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/proxmox_action_observer.go",
           "kind": "file"
         }
       ]

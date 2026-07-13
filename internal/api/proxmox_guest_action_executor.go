@@ -27,13 +27,36 @@ const (
 type proxmoxGuestActionExecutor struct {
 	resources *ResourceHandlers
 	agents    actionAgentCommander
+	observer  proxmoxGuestPostconditionObserver
 }
 
-func newProxmoxGuestActionExecutor(resources *ResourceHandlers, agents actionAgentCommander) ActionExecutor {
+type proxmoxGuestLifecycleSnapshot struct {
+	Instance   string
+	Node       string
+	VMID       int
+	Kind       proxmoxGuestKind
+	Status     string
+	Uptime     uint64
+	ObservedAt time.Time
+}
+
+type proxmoxGuestPostconditionObservation struct {
+	ObserverID  string
+	TrustDomain string
+	Method      string
+	Snapshot    proxmoxGuestLifecycleSnapshot
+	ReceivedAt  time.Time
+}
+
+type proxmoxGuestPostconditionObserver interface {
+	ObserveProxmoxGuest(context.Context, string, string, string, int, proxmoxGuestKind) (proxmoxGuestPostconditionObservation, error)
+}
+
+func newProxmoxGuestActionExecutor(resources *ResourceHandlers, agents actionAgentCommander, observer proxmoxGuestPostconditionObserver) ActionExecutor {
 	if resources == nil || agents == nil {
 		return nil
 	}
-	return proxmoxGuestActionExecutor{resources: resources, agents: agents}
+	return proxmoxGuestActionExecutor{resources: resources, agents: agents, observer: observer}
 }
 
 func (e proxmoxGuestActionExecutor) ActionHandlerNames() []string {
@@ -63,8 +86,15 @@ func (e proxmoxGuestActionExecutor) ExecuteAction(ctx context.Context, record un
 	if err != nil {
 		return nil, err
 	}
+	var independentBefore *proxmoxGuestPostconditionObservation
+	if e.observer != nil {
+		if observation, observeErr := e.observer.ObserveProxmoxGuest(ctx, record.Request.ResourceID, resource.Proxmox.Instance, resource.Proxmox.NodeName, vmid, kind); observeErr == nil && validProxmoxGuestObservation(resource, kind, observation) {
+			independentBefore = &observation
+		}
+	}
 
 	command := proxmoxGuestLifecycleCommand(kind, operation, vmid)
+	actionStartedAt := time.Now().UTC()
 	result, err := e.agents.ExecuteCommand(ctx, agentID, agentexec.ExecuteCommandPayload{
 		RequestID:  attempt.ID,
 		Command:    command,
@@ -78,22 +108,13 @@ func (e proxmoxGuestActionExecutor) ExecuteAction(ctx context.Context, record un
 	}
 
 	output := redactActionOutput(commandOutput(result))
-	execution := &unified.ExecutionResult{
-		Success: result.ExitCode == 0,
-		Output:  output,
-	}
 	if result.ExitCode != 0 {
-		execution.ErrorMessage = strings.TrimSpace(firstNonEmpty(result.Error, output, fmt.Sprintf("proxmox guest %s exited with status %d", operation, result.ExitCode)))
-		return execution, nil
+		return proxmoxGuestExecutionResult(record.ID, record.Request.ResourceID, agentID, kind, operation, result.ExitCode, output, result.Error, nil, independentBefore, nil, agentexec.PostconditionEvaluation{}, actionStartedAt)
 	}
 
-	verification := e.verifyProxmoxGuestState(ctx, agentID, record.ID, kind, vmid, operation)
-	execution.Verification = verification
-	if verification != nil && verification.Ran && !verification.Success {
-		execution.Success = false
-		execution.ErrorMessage = "proxmox guest lifecycle action completed but verification did not confirm the expected state"
-	}
-	return execution, nil
+	agentVerification := e.verifyProxmoxGuestState(ctx, agentID, record.ID, kind, vmid, operation, actionStartedAt)
+	independentAfter, independentEvaluation := e.observeProxmoxGuestPostcondition(ctx, record.Request.ResourceID, resource, kind, operation, independentBefore, actionStartedAt)
+	return proxmoxGuestExecutionResult(record.ID, record.Request.ResourceID, agentID, kind, operation, result.ExitCode, output, result.Error, agentVerification, independentBefore, independentAfter, independentEvaluation, actionStartedAt)
 }
 
 func (e proxmoxGuestActionExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {
@@ -300,14 +321,18 @@ func proxmoxGuestLifecycleTimeout(operation string) int {
 	}
 }
 
-func (e proxmoxGuestActionExecutor) verifyProxmoxGuestState(ctx context.Context, agentID, actionID string, kind proxmoxGuestKind, vmid int, operation string) *unified.ActionVerificationResult {
-	expected := proxmoxExpectedGuestStatus(operation)
-	if expected == "" {
-		return &unified.ActionVerificationResult{Ran: false}
+func (e proxmoxGuestActionExecutor) verifyProxmoxGuestState(ctx context.Context, agentID, actionID string, kind proxmoxGuestKind, vmid int, operation string, actionStartedAt time.Time) *unified.ActionVerificationResult {
+	capability := proxmoxPostconditionCapability(kind, operation)
+	if _, ok := agentexec.LookupCapabilityPostcondition(capability); !ok {
+		return &unified.ActionVerificationResult{Ran: false, Note: "No registered postcondition is available for this Proxmox action."}
+	}
+	if strings.EqualFold(strings.TrimSpace(operation), "reboot") {
+		return &unified.ActionVerificationResult{Ran: false, Note: "The executing agent's status-only read cannot prove that the guest restarted."}
 	}
 	command := proxmoxGuestStatusCommand(kind, vmid)
 
 	var lastOutput string
+	var lastEvaluation agentexec.PostconditionEvaluation
 	for attempt := 0; attempt < 5; attempt++ {
 		if attempt > 0 {
 			timer := time.NewTimer(1 * time.Second)
@@ -331,7 +356,11 @@ func (e proxmoxGuestActionExecutor) verifyProxmoxGuestState(ctx context.Context,
 			return &unified.ActionVerificationResult{Ran: false}
 		}
 		lastOutput = redactActionOutput(commandOutput(result))
-		if result.ExitCode == 0 && parseProxmoxGuestStatus(lastOutput) == expected {
+		if result.ExitCode != 0 {
+			continue
+		}
+		lastEvaluation, _ = agentexec.EvaluateCapabilityPostcondition(capability, nil, proxmoxGuestPostconditionValues(kind, parseProxmoxGuestStatus(lastOutput), 0), actionStartedAt)
+		if lastEvaluation.Conclusive && lastEvaluation.Matched {
 			return &unified.ActionVerificationResult{
 				Ran:     true,
 				Command: command,
@@ -348,19 +377,78 @@ func (e proxmoxGuestActionExecutor) verifyProxmoxGuestState(ctx context.Context,
 		Output:  lastOutput,
 		Success: false,
 		RanAt:   time.Now().UTC(),
-		Note:    "expected status " + expected,
+		Note:    firstNonEmpty(lastEvaluation.ReasonCode, "postcondition was not confirmed"),
 	}
 }
 
-func proxmoxExpectedGuestStatus(operation string) string {
-	switch strings.TrimSpace(operation) {
-	case "start", "reboot":
-		return "running"
-	case "shutdown", "stop":
-		return "stopped"
-	default:
-		return ""
+func (e proxmoxGuestActionExecutor) observeProxmoxGuestPostcondition(ctx context.Context, resourceID string, resource unified.Resource, kind proxmoxGuestKind, operation string, before *proxmoxGuestPostconditionObservation, actionStartedAt time.Time) (*proxmoxGuestPostconditionObservation, agentexec.PostconditionEvaluation) {
+	if e.observer == nil || resource.Proxmox == nil {
+		return nil, agentexec.PostconditionEvaluation{}
 	}
+	capability := proxmoxPostconditionCapability(kind, operation)
+	postcondition, ok := agentexec.LookupCapabilityPostcondition(capability)
+	if !ok {
+		return nil, agentexec.PostconditionEvaluation{ReasonCode: "postcondition_unregistered"}
+	}
+	window := postcondition.Window
+	if window <= 0 {
+		window = 2 * time.Minute
+	}
+	verifyCtx, cancel := context.WithTimeout(ctx, window)
+	defer cancel()
+
+	var beforeValues map[agentexec.PostconditionField]string
+	if before != nil {
+		beforeValues = proxmoxGuestPostconditionValues(kind, before.Snapshot.Status, before.Snapshot.Uptime)
+	}
+	var last *proxmoxGuestPostconditionObservation
+	lastEvaluation := agentexec.PostconditionEvaluation{ReasonCode: "independent_observation_unavailable"}
+	for {
+		observation, err := e.observer.ObserveProxmoxGuest(verifyCtx, resourceID, resource.Proxmox.Instance, resource.Proxmox.NodeName, resource.Proxmox.VMID, kind)
+		if err == nil && validProxmoxGuestObservation(resource, kind, observation) {
+			last = &observation
+			lastEvaluation, _ = agentexec.EvaluateCapabilityPostcondition(capability, beforeValues, proxmoxGuestPostconditionValues(kind, observation.Snapshot.Status, observation.Snapshot.Uptime), actionStartedAt)
+			if lastEvaluation.Conclusive && lastEvaluation.Matched {
+				return last, lastEvaluation
+			}
+		}
+
+		timer := time.NewTimer(time.Second)
+		select {
+		case <-verifyCtx.Done():
+			timer.Stop()
+			return last, lastEvaluation
+		case <-timer.C:
+		}
+	}
+}
+
+func proxmoxPostconditionCapability(kind proxmoxGuestKind, operation string) string {
+	tool := "qm"
+	if kind == proxmoxGuestCT {
+		tool = "pct"
+	}
+	return tool + "." + strings.ToLower(strings.TrimSpace(operation))
+}
+
+func proxmoxGuestPostconditionValues(kind proxmoxGuestKind, status string, uptime uint64) map[agentexec.PostconditionField]string {
+	statusField := agentexec.FieldVMStatus
+	if kind == proxmoxGuestCT {
+		statusField = agentexec.FieldContainerStatus
+	}
+	return map[agentexec.PostconditionField]string{
+		statusField:                strings.ToLower(strings.TrimSpace(status)),
+		agentexec.FieldGuestUptime: strconv.FormatUint(uptime, 10),
+	}
+}
+
+func validProxmoxGuestObservation(resource unified.Resource, kind proxmoxGuestKind, observation proxmoxGuestPostconditionObservation) bool {
+	if resource.Proxmox == nil || observation.Snapshot.VMID != resource.Proxmox.VMID || observation.Snapshot.Kind != kind {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(observation.Snapshot.Instance), strings.TrimSpace(resource.Proxmox.Instance)) &&
+		strings.EqualFold(strings.TrimSpace(observation.Snapshot.Node), strings.TrimSpace(resource.Proxmox.NodeName)) &&
+		strings.TrimSpace(observation.Snapshot.Status) != "" && !observation.Snapshot.ObservedAt.IsZero() && !observation.ReceivedAt.IsZero()
 }
 
 func parseProxmoxGuestStatus(output string) string {

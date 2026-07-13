@@ -133,6 +133,7 @@ resource health.
 55. `internal/monitoring/resource_stale_thresholds.go`
 56. `internal/monitoring/recovery_ingest.go`
 57. `internal/monitoring/multi_tenant_monitor.go`
+58. `internal/monitoring/proxmox_action_observer.go`
 
 ## Shared Boundaries
 
@@ -1646,3 +1647,11 @@ Task 09 preserves two APT telemetry clocks at host-agent ingest: `CheckedAt`
 is agent-observed time and `ObservedAt` is server-received time. Monitoring
 must not overwrite the former with the latter; replay and skew safety consumes
 both timestamps downstream.
+
+Monitoring now also exposes a bounded direct Proxmox guest observation for the
+governed action verifier. `ObserveProxmoxGuest` resolves the configured
+instance client under the monitor lock, reads VM or LXC status and uptime from
+the Proxmox API, validates the requested guest identity, and stamps server
+observation time. It must not satisfy this contract from cached resource state
+or node-agent telemetry: the action layer depends on this read remaining in a
+trust domain distinct from the node agent that executes `qm` / `pct`.

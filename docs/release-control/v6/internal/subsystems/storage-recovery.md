@@ -148,6 +148,14 @@ recovery surfaces may observe disconnected command readiness, but they must not
 re-enable command config, reinterpret the suppression as backup or restore
 state, or introduce a recovery-local command-token binding path.
 
+Proxmox VM/LXC lifecycle verification in `internal/api/` is likewise adjacent
+action-governance evidence, not recovery evidence. The node agent may execute a
+governed `qm` / `pct` action while the tenant-scoped server Proxmox client
+independently observes guest status and uptime, but a confirmed start, stop,
+shutdown, or reboot proves only that action's registered postcondition. Storage
+and recovery surfaces must not reinterpret that `ActionResultV2` evidence as a
+recovery point, backup freshness, restore success, or protected-workload state.
+
 Hosted tenant agent install commands in `internal/api/cloud_agent_install_command.go`
 are adjacent API/lifecycle transport only. A provider-hosted MSP PVE/PBS install
 token may allow agent reporting for the scoped tenant workspace, but it must not

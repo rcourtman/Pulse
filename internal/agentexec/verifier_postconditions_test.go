@@ -12,7 +12,12 @@ import (
 // of capabilities the verifier substrate must understand. Drift either way
 // (missing entry, drift in field/comparator) breaks the verifier contract.
 func TestCapabilityPostconditionsCoversRequiredCapabilities(t *testing.T) {
-	required := []string{"qm.start", "pct.start", "docker.restart", "systemctl.restart", "kubectl.rollout"}
+	required := []string{
+		"docker.restart", "kubectl.rollout",
+		"pct.reboot", "pct.shutdown", "pct.start", "pct.stop",
+		"qm.reboot", "qm.shutdown", "qm.start", "qm.stop",
+		"systemctl.restart",
+	}
 	sort.Strings(required)
 	got := CapabilityPostconditionNames()
 	if !reflect.DeepEqual(got, required) {
@@ -55,12 +60,60 @@ func TestCapabilityPostconditionEntriesParse(t *testing.T) {
 			mustReferenceCmd: "qm status",
 		},
 		{
+			capability:       "qm.shutdown",
+			minChecks:        1,
+			expectFields:     []PostconditionField{FieldVMStatus},
+			expectCompare:    []PostconditionComparator{CompareEquals},
+			expectWindow:     2 * time.Minute,
+			mustReferenceCmd: "qm status",
+		},
+		{
+			capability:       "qm.stop",
+			minChecks:        1,
+			expectFields:     []PostconditionField{FieldVMStatus},
+			expectCompare:    []PostconditionComparator{CompareEquals},
+			expectWindow:     2 * time.Minute,
+			mustReferenceCmd: "qm status",
+		},
+		{
+			capability:       "qm.reboot",
+			minChecks:        2,
+			expectFields:     []PostconditionField{FieldVMStatus, FieldGuestUptime},
+			expectCompare:    []PostconditionComparator{CompareEquals, CompareLessThanBefore},
+			expectWindow:     2 * time.Minute,
+			mustReferenceCmd: "Proxmox API",
+		},
+		{
 			capability:       "pct.start",
 			minChecks:        1,
 			expectFields:     []PostconditionField{FieldContainerStatus},
 			expectCompare:    []PostconditionComparator{CompareEquals},
 			expectWindow:     2 * time.Minute,
 			mustReferenceCmd: "pct status",
+		},
+		{
+			capability:       "pct.shutdown",
+			minChecks:        1,
+			expectFields:     []PostconditionField{FieldContainerStatus},
+			expectCompare:    []PostconditionComparator{CompareEquals},
+			expectWindow:     2 * time.Minute,
+			mustReferenceCmd: "pct status",
+		},
+		{
+			capability:       "pct.stop",
+			minChecks:        1,
+			expectFields:     []PostconditionField{FieldContainerStatus},
+			expectCompare:    []PostconditionComparator{CompareEquals},
+			expectWindow:     2 * time.Minute,
+			mustReferenceCmd: "pct status",
+		},
+		{
+			capability:       "pct.reboot",
+			minChecks:        2,
+			expectFields:     []PostconditionField{FieldContainerStatus, FieldGuestUptime},
+			expectCompare:    []PostconditionComparator{CompareEquals, CompareLessThanBefore},
+			expectWindow:     2 * time.Minute,
+			mustReferenceCmd: "Proxmox API",
 		},
 		{
 			capability:       "docker.restart",
@@ -121,6 +174,38 @@ func TestCapabilityPostconditionEntriesParse(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEvaluateCapabilityPostcondition(t *testing.T) {
+	t.Run("reboot requires uptime reset", func(t *testing.T) {
+		before := map[PostconditionField]string{FieldVMStatus: "running", FieldGuestUptime: "7200"}
+		after := map[PostconditionField]string{FieldVMStatus: "running", FieldGuestUptime: "0"}
+		evaluation, ok := EvaluateCapabilityPostcondition("qm.reboot", before, after, time.Now())
+		if !ok || !evaluation.Conclusive || !evaluation.Matched {
+			t.Fatalf("evaluation = %#v, ok=%v", evaluation, ok)
+		}
+
+		after[FieldGuestUptime] = "7201"
+		evaluation, ok = EvaluateCapabilityPostcondition("qm.reboot", before, after, time.Now())
+		if !ok || !evaluation.Conclusive || evaluation.Matched || evaluation.ReasonCode != "postcondition_contradicted" {
+			t.Fatalf("non-reset evaluation = %#v, ok=%v", evaluation, ok)
+		}
+	})
+
+	t.Run("missing reboot baseline is inconclusive", func(t *testing.T) {
+		after := map[PostconditionField]string{FieldContainerStatus: "running", FieldGuestUptime: "4"}
+		evaluation, ok := EvaluateCapabilityPostcondition("pct.reboot", nil, after, time.Now())
+		if !ok || evaluation.Conclusive || evaluation.Matched || evaluation.ReasonCode != "before_field_missing" {
+			t.Fatalf("evaluation = %#v, ok=%v", evaluation, ok)
+		}
+	})
+
+	t.Run("status mismatch is contradicted", func(t *testing.T) {
+		evaluation, ok := EvaluateCapabilityPostcondition("qm.shutdown", nil, map[PostconditionField]string{FieldVMStatus: "running"}, time.Now())
+		if !ok || !evaluation.Conclusive || evaluation.Matched {
+			t.Fatalf("evaluation = %#v, ok=%v", evaluation, ok)
+		}
+	})
 }
 
 // TestLookupCapabilityPostconditionUnknown verifies the false return path so

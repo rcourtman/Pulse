@@ -37,7 +37,9 @@ product API routes free of maintainer commercial analytics.
    5a. `internal/api/action_executor.go`
    5b. `internal/api/docker_container_action_executor.go`
    5c. `internal/api/proxmox_guest_action_executor.go`
-   5d. `internal/api/host_update_action_executor.go`
+   5d. `internal/api/proxmox_guest_action_observer.go`
+   5e. `internal/api/proxmox_guest_action_result.go`
+   5f. `internal/api/host_update_action_executor.go`
    6a. `internal/actionlifecycle/service.go`
 7. `internal/actionplanner/planner.go`
 8. `pkg/pulsecli/api_client.go`
@@ -7422,6 +7424,19 @@ be classified `independent` only when a distinct observer trust domain binds
 the action, subject, observation and receipt times, before/after facts, and
 canonical evidence digest. It is independent operational evidence, not a
 cryptographic attestation.
+
+Proxmox VM and LXC lifecycle execution now consumes that same two-axis truth
+contract in production. The node agent remains the executor, while the API
+composition root injects the tenant-scoped monitoring client as a direct
+Proxmox control-plane observer. Fresh, identity-matched control-plane reads use
+an `agent:*`-distinct trust domain and are digest-bound into `ActionResultV2`;
+missing clients, mismatched guest identity, stale timestamps, or same-domain
+evidence fail closed to the agent-attested or inconclusive result. Start,
+shutdown, stop, and reboot all evaluate the shared closed postcondition
+registry. Reboot additionally requires the direct API uptime to reset from a
+fresh pre-action observation, so a guest that merely stayed `running` cannot
+be reported as verified. A contradicted postcondition never rewrites a
+successful command dispatch into execution failure.
 
 ### Canonical mutation plane
 

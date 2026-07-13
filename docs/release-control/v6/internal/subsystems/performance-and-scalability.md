@@ -421,7 +421,10 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    router setup may register the Proxmox executor alongside Docker / Podman,
    but it must not resolve guests, probe node agents, call `qm` / `pct`, poll
    verification state, or refresh inventory outside the route-local action
-   plan/execute path.
+   plan/execute path. Injecting the tenant-monitor resolver at setup remains
+   constant work; the direct Proxmox status/uptime reads are action-local and
+   poll at most once per second within the closed postcondition registry's
+   bounded verification window.
    Retiring self-hosted trial acquisition follows that same rule: removing
    `/auth/trial-activate` and `POST /api/license/trial/start` from public-path
    and CSRF inventories must stay as constant-time route-table absence rather

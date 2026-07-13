@@ -123,6 +123,24 @@ func TestPVETagStyleRefreshStaysPerInstance(t *testing.T) {
 	}
 }
 
+func TestProxmoxActionObserverUsesDirectControlPlaneClient(t *testing.T) {
+	data, err := os.ReadFile("proxmox_action_observer.go")
+	if err != nil {
+		t.Fatalf("read proxmox_action_observer.go: %v", err)
+	}
+	source := string(data)
+	for _, snippet := range []string{"m.getPVEClient(instance)", "client.GetVMStatus(ctx, node, vmid)", "client.GetContainerStatus(ctx, node, vmid)"} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("Proxmox action observer must use direct control-plane read %q", snippet)
+		}
+	}
+	for _, forbidden := range []string{"m.GetState(", "m.ReadState(", "m.resourceStore", "m.state."} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("Proxmox action observer must not derive independent evidence through cached monitoring state %q", forbidden)
+		}
+	}
+}
+
 func TestBroadcastResourceDiskIOUsesUnifiedResourceMetrics(t *testing.T) {
 	hasDiskIO, readRate, writeRate := monitorDiskIOMetricInput(&unifiedresources.ResourceMetrics{
 		DiskRead:  &unifiedresources.MetricValue{Value: 4096.4, Unit: "bytes/s", Source: unifiedresources.SourceAgent},

@@ -31,6 +31,7 @@ that binary, not separate customer-facing agent products.
 5. `internal/hostagent/agent.go`
    5a. `internal/dockeragent/agent.go`
    5b. `internal/kubernetesagent/agent.go`
+   5c. `internal/agentexec/verifier_postconditions.go`
 6. `cmd/pulse-agent/main.go`
 7. `scripts/install.sh`
 8. `scripts/install.ps1`
@@ -481,6 +482,12 @@ connected Proxmox node command agent and records action audit plus verification.
 Lifecycle surfaces must not run `qm` / `pct`, SSH to a node, call Proxmox
 mutation APIs, or substitute a guest-local agent to perform VM/LXC lifecycle
 control.
+The executing node agent's status read remains agent-attested. The closed
+postcondition registry in `internal/agentexec/verifier_postconditions.go`
+defines start, shutdown, stop, and reboot checks for both `qm` and `pct`, while
+the API-owned verifier supplies provider observations. Reboot is not confirmed
+from status alone: it requires a distinct Proxmox API observation whose uptime
+reset proves that the guest actually restarted.
 Disconnected command-agent state is also API-owned readiness: lifecycle
 surfaces may reflect missing backend-advertised capabilities, but must not
 reconnect, substitute, or directly address an agent to make a stale container
@@ -4500,6 +4507,8 @@ RG-06 and RG-09 keep the executing agent's fresh typed readback classified as
 fixture changed, but it does not enter the authenticated product action result
 and therefore cannot upgrade the product finding to `fix_verified`. Until a
 distinct-trust-domain observation is ingested into `ActionResultV2`, those
-findings remain `fix_verification_unknown` and unresolved. The Docker restart
-journey, which does ingest its direct daemon observation as independent
-evidence, remains the positive `fix_verified` control.
+findings remain `fix_verification_unknown` and unresolved. Proxmox VM/LXC
+lifecycle is now the first production path to ingest a server-side provider
+observation as independent evidence; the Docker restart lab journey remains a
+positive control but does not imply that agent-reported Docker inventory is an
+independent production observer.

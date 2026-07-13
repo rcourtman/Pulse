@@ -662,6 +662,12 @@ second-click local confirmation. Proof is owned by the colocated action tests,
    Unified-resource consumers must not infer Proxmox lifecycle affordances from
    table row status alone or issue direct `qm` / `pct`, SSH, provider API, or
    guest-agent calls outside the governed action contract.
+   The lifecycle executor must project terminal truth through `ActionResultV2`
+   without coupling execution success to verification. Same-agent status reads
+   remain `agent_attested`; only a fresh, identity-matched read through the
+   tenant's server-side Proxmox API client may be `independent`. Reboot
+   confirmation additionally requires an uptime reset relative to the direct
+   pre-action observation, not merely a post-action `running` status.
    Agent-managed Linux hosts may advertise `install_os_updates` only when the
    report carries supported APT package posture and typed command operations
    are enabled. The capability is admin-floor, `elevated` auto-authorization
@@ -1780,6 +1786,13 @@ state digest identity for downstream recovery without implementing recovery.
 Workflow, API, AI, agent, Docker, host-agent, and relay packages must not
 declare competing truth enums. Generated wire mirrors remain a bounded later
 presentation concern, not a second source of semantics.
+
+The first production distinct-trust-domain consumer is the Proxmox VM/LXC
+lifecycle executor. Its node-agent dispatch and Proxmox API observation remain
+separate evidence domains, and the API-owned projection binds the exact action,
+resource, before/after snapshots, observation times, and canonical digest.
+This does not authorize provider-local mutation or relax the false-independence
+guard for Docker or agent-attested APT readback.
 
 The canonical action resource contract now owns immutable `ActionActor` and
 versioned `ApprovalRequirement` bindings. Actor subject/kind/credential/org and

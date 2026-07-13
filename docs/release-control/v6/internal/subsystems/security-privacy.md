@@ -371,6 +371,13 @@ the `white_label` branding entitlement.
     command, package selector, or deletion rule. Cache entry names,
     fingerprint, raw APT output, and agent error text remain out of model
     context and terminal action output.
+    Proxmox VM/LXC lifecycle observer wiring is also not mutation authority.
+    It may resolve only the current tenant's existing monitor and use that
+    monitor's configured Proxmox client for bounded status/uptime reads after a
+    governed node-agent action. It must not expose provider credentials or raw
+    provider responses, cross tenant or guest identity, call a provider
+    mutation API, or classify the executing agent's own trust domain as
+    independent evidence.
     Router glue may also pass monitor-owned source freshness thresholds into
     unified-resource adapters, but those thresholds are operational cadence
     metadata only. They must not disclose credentials, command output, raw

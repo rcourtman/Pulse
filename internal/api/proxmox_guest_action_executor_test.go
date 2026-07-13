@@ -29,7 +29,7 @@ func TestProxmoxGuestActionExecutorDispatchesVMShutdownAndVerification(t *testin
 		{RequestID: "act_vm", Success: true, ExitCode: 0, Stdout: "shutdown requested"},
 		{RequestID: "act_vm-verify-1", Success: true, ExitCode: 0, Stdout: "status: stopped"},
 	}}
-	executor := newProxmoxGuestActionExecutor(h, agents)
+	executor := newProxmoxGuestActionExecutor(h, agents, nil)
 
 	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_vm"), proxmoxGuestActionRecord("act_vm", "vm:160", "shutdown"))
 	if err != nil {
@@ -73,7 +73,7 @@ func TestProxmoxGuestActionExecutorDispatchesLXCStartAndVerification(t *testing.
 		{RequestID: "act_ct", Success: true, ExitCode: 0, Stdout: "start requested"},
 		{RequestID: "act_ct-verify-1", Success: true, ExitCode: 0, Stdout: "status: running"},
 	}}
-	executor := newProxmoxGuestActionExecutor(h, agents)
+	executor := newProxmoxGuestActionExecutor(h, agents, nil)
 
 	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_ct"), proxmoxGuestActionRecord("act_ct", "system-container:101", "start"))
 	if err != nil {
@@ -110,7 +110,7 @@ func TestProxmoxGuestActionExecutorResolvesCommandAgentByNodeHostname(t *testing
 		},
 		agentByHost: map[string]string{"delly": "command-agent-1"},
 	}
-	executor := newProxmoxGuestActionExecutor(h, agents).(proxmoxGuestActionExecutor)
+	executor := newProxmoxGuestActionExecutor(h, agents, nil).(proxmoxGuestActionExecutor)
 
 	readiness := executor.CheckActionAvailable(context.Background(), unified.ActionRequest{
 		RequestID:      "req-availability",
@@ -137,7 +137,7 @@ func TestProxmoxGuestActionExecutorResolvesCommandAgentByNodeHostname(t *testing
 	}
 }
 
-func TestProxmoxGuestActionExecutorVerificationFailureFailsAction(t *testing.T) {
+func TestProxmoxGuestActionExecutorVerificationContradictionDoesNotRewriteExecution(t *testing.T) {
 	now := time.Now().UTC()
 	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
@@ -154,17 +154,163 @@ func TestProxmoxGuestActionExecutorVerificationFailureFailsAction(t *testing.T) 
 		{RequestID: "act_vm-verify-4", Success: true, ExitCode: 0, Stdout: "status: running"},
 		{RequestID: "act_vm-verify-5", Success: true, ExitCode: 0, Stdout: "status: running"},
 	}}
-	executor := newProxmoxGuestActionExecutor(h, agents)
+	executor := newProxmoxGuestActionExecutor(h, agents, nil)
 
 	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_vm"), proxmoxGuestActionRecord("act_vm", "vm:160", "shutdown"))
 	if err != nil {
 		t.Fatalf("ExecuteAction: %v", err)
 	}
-	if result == nil || result.Success || result.Verification == nil || result.Verification.Success {
-		t.Fatalf("result = %#v, want failed verification to fail action", result)
+	if result == nil || !result.Success || result.Verification == nil || result.Verification.Success {
+		t.Fatalf("result = %#v, want succeeded execution with contradicted verification", result)
 	}
-	if !strings.Contains(result.ErrorMessage, "verification did not confirm") {
-		t.Fatalf("error = %q, want verification failure", result.ErrorMessage)
+	if result.ActionResultV2 == nil || result.ActionResultV2.Execution.Status != unified.ActionExecutionSucceeded || result.ActionResultV2.Verification.Status != unified.ActionVerificationContradicted || result.ActionResultV2.Verification.EvidenceClass != unified.ActionEvidenceAgentAttested {
+		t.Fatalf("canonical truth = %#v, want independent execution and verification axes", result.ActionResultV2)
+	}
+	if result.ErrorMessage != "" {
+		t.Fatalf("error = %q, want no execution error from verification contradiction", result.ErrorMessage)
+	}
+}
+
+func TestProxmoxGuestActionExecutorUsesIndependentControlPlaneVerification(t *testing.T) {
+	now := time.Now().UTC()
+	resource := proxmoxGuestActionResource("vm:160", unified.ResourceTypeVM, "running", now)
+	resource.Proxmox.Uptime = 3600
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{resource},
+	})
+	agents := &fakeDockerActionAgentCommander{results: []*agentexec.CommandResultPayload{
+		{RequestID: "act_vm", Success: true, ExitCode: 0, Stdout: "shutdown requested"},
+		{RequestID: "act_vm-verify-1", Success: true, ExitCode: 0, Stdout: "status: stopped"},
+	}}
+	observer := &fakeProxmoxGuestPostconditionObserver{observations: []proxmoxGuestPostconditionObservation{
+		proxmoxGuestActionObservation(now.Add(-time.Second), "running", 3600, "proxmox-control-plane:default:homelab"),
+		proxmoxGuestActionObservation(now.Add(time.Second), "stopped", 0, "proxmox-control-plane:default:homelab"),
+	}}
+	executor := newProxmoxGuestActionExecutor(h, agents, observer)
+
+	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_vm"), proxmoxGuestActionRecord("act_vm", "vm:160", "shutdown"))
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	if result == nil || result.ActionResultV2 == nil {
+		t.Fatalf("result = %#v, want canonical truth", result)
+	}
+	truth := result.ActionResultV2.Verification
+	if truth.Status != unified.ActionVerificationConfirmed || truth.EvidenceClass != unified.ActionEvidenceIndependent || len(truth.Evidence) != 1 {
+		t.Fatalf("verification truth = %#v, want independent confirmation", truth)
+	}
+	if truth.Evidence[0].ObserverKind != "proxmox_control_plane" || truth.Evidence[0].ObserverTrustDomain == truth.Evidence[0].ExecutorTrustDomain {
+		t.Fatalf("independent evidence = %#v", truth.Evidence[0])
+	}
+}
+
+func TestProxmoxGuestActionExecutorRequiresUptimeResetToVerifyReboot(t *testing.T) {
+	now := time.Now().UTC()
+	resource := proxmoxGuestActionResource("vm:160", unified.ResourceTypeVM, "running", now)
+	resource.Proxmox.Uptime = 7200
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{resource}})
+	agents := &fakeDockerActionAgentCommander{results: []*agentexec.CommandResultPayload{{RequestID: "act_vm", Success: true, ExitCode: 0, Stdout: "reboot requested"}}}
+	observer := &fakeProxmoxGuestPostconditionObserver{observations: []proxmoxGuestPostconditionObservation{
+		proxmoxGuestActionObservation(now.Add(-time.Second), "running", 7200, "proxmox-control-plane:default:homelab"),
+		proxmoxGuestActionObservation(now.Add(time.Second), "running", 4, "proxmox-control-plane:default:homelab"),
+	}}
+	executor := newProxmoxGuestActionExecutor(h, agents, observer)
+
+	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_vm"), proxmoxGuestActionRecord("act_vm", "vm:160", "reboot"))
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	if result == nil || result.ActionResultV2 == nil || result.ActionResultV2.Verification.Status != unified.ActionVerificationConfirmed || result.ActionResultV2.Verification.EvidenceClass != unified.ActionEvidenceIndependent {
+		t.Fatalf("result = %#v, want independently verified reboot", result)
+	}
+	if len(agents.calls) != 1 {
+		t.Fatalf("agent calls = %d, want mutation only because status-only agent read cannot prove reboot", len(agents.calls))
+	}
+}
+
+func TestProxmoxGuestActionExecutorKeepsIndependentContradictionSeparateFromExecution(t *testing.T) {
+	now := time.Now().UTC()
+	resource := proxmoxGuestActionResource("vm:160", unified.ResourceTypeVM, "running", now)
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{resource}})
+	agents := &fakeDockerActionAgentCommander{results: []*agentexec.CommandResultPayload{{RequestID: "act_vm", Success: true, ExitCode: 0, Stdout: "reboot requested"}}}
+	observer := &fakeProxmoxGuestPostconditionObserver{observations: []proxmoxGuestPostconditionObservation{
+		proxmoxGuestActionObservation(now.Add(-time.Second), "running", 7200, "proxmox-control-plane:default:homelab"),
+		proxmoxGuestActionObservation(now.Add(time.Second), "running", 7201, "proxmox-control-plane:default:homelab"),
+	}}
+	executor := newProxmoxGuestActionExecutor(h, agents, observer)
+	ctx, cancel := context.WithTimeout(actionDispatchTestContext(t, "act_vm"), 100*time.Millisecond)
+	defer cancel()
+
+	result, err := executor.ExecuteAction(ctx, proxmoxGuestActionRecord("act_vm", "vm:160", "reboot"))
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	if result == nil || result.ActionResultV2 == nil || !result.Success {
+		t.Fatalf("result = %#v, want successful command execution", result)
+	}
+	truth := result.ActionResultV2.Verification
+	if truth.Status != unified.ActionVerificationContradicted || truth.EvidenceClass != unified.ActionEvidenceIndependent {
+		t.Fatalf("verification truth = %#v, want independent contradiction", truth)
+	}
+}
+
+func TestProxmoxGuestActionExecutorRejectsSameDomainIndependentEvidence(t *testing.T) {
+	now := time.Now().UTC()
+	resource := proxmoxGuestActionResource("vm:160", unified.ResourceTypeVM, "running", now)
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{snapshot: models.StateSnapshot{LastUpdate: now}, resources: []unified.Resource{resource}})
+	agents := &fakeDockerActionAgentCommander{results: []*agentexec.CommandResultPayload{
+		{RequestID: "act_vm", Success: true, ExitCode: 0, Stdout: "shutdown requested"},
+		{RequestID: "act_vm-verify-1", Success: true, ExitCode: 0, Stdout: "status: stopped"},
+	}}
+	observer := &fakeProxmoxGuestPostconditionObserver{observations: []proxmoxGuestPostconditionObservation{
+		proxmoxGuestActionObservation(now.Add(-time.Second), "running", 100, "agent:node-agent-1"),
+		proxmoxGuestActionObservation(now.Add(time.Second), "stopped", 0, "agent:node-agent-1"),
+	}}
+	executor := newProxmoxGuestActionExecutor(h, agents, observer)
+
+	result, err := executor.ExecuteAction(actionDispatchTestContext(t, "act_vm"), proxmoxGuestActionRecord("act_vm", "vm:160", "shutdown"))
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	if result == nil || result.ActionResultV2 == nil || result.ActionResultV2.Verification.Status != unified.ActionVerificationConfirmed || result.ActionResultV2.Verification.EvidenceClass != unified.ActionEvidenceAgentAttested {
+		t.Fatalf("result = %#v, want same-domain observation rejected in favor of agent-attested truth", result)
+	}
+}
+
+type fakeProxmoxGuestPostconditionObserver struct {
+	observations []proxmoxGuestPostconditionObservation
+	next         int
+}
+
+func (o *fakeProxmoxGuestPostconditionObserver) ObserveProxmoxGuest(context.Context, string, string, string, int, proxmoxGuestKind) (proxmoxGuestPostconditionObservation, error) {
+	if o.next >= len(o.observations) {
+		return proxmoxGuestPostconditionObservation{}, context.DeadlineExceeded
+	}
+	observation := o.observations[o.next]
+	o.next++
+	return observation, nil
+}
+
+func proxmoxGuestActionObservation(observedAt time.Time, status string, uptime uint64, trustDomain string) proxmoxGuestPostconditionObservation {
+	return proxmoxGuestPostconditionObservation{
+		ObserverID:  "proxmox-api:default:homelab",
+		TrustDomain: trustDomain,
+		Method:      "proxmox_api_guest_status_current",
+		Snapshot: proxmoxGuestLifecycleSnapshot{
+			Instance:   "homelab",
+			Node:       "delly",
+			VMID:       160,
+			Kind:       proxmoxGuestVM,
+			Status:     status,
+			Uptime:     uptime,
+			ObservedAt: observedAt,
+		},
+		ReceivedAt: observedAt,
 	}
 }
 
@@ -181,7 +327,7 @@ func TestHandlePlanActionRejectsDisconnectedProxmoxNodeCommandAgent(t *testing.T
 		h,
 		newProxmoxGuestActionExecutor(h, &fakeDockerActionAgentCommander{
 			connected: map[string]bool{"node-agent-1": false},
-		}),
+		}, nil),
 	))
 
 	rec := httptest.NewRecorder()
@@ -228,7 +374,7 @@ func TestResourceResponsesFilterDisconnectedProxmoxLifecycleCapabilities(t *test
 		h,
 		newProxmoxGuestActionExecutor(h, &fakeDockerActionAgentCommander{
 			connected: map[string]bool{"node-agent-1": false},
-		}),
+		}, nil),
 	))
 
 	listRec := httptest.NewRecorder()

@@ -639,7 +639,7 @@ func (r *Router) setupRoutes() {
 		r.resourceHandlers.SetActionExecutor(newRoutedActionExecutor(
 			r.resourceHandlers,
 			newDockerContainerActionExecutor(r.resourceHandlers, r.agentExecServer),
-			newProxmoxGuestActionExecutor(r.resourceHandlers, r.agentExecServer),
+			newProxmoxGuestActionExecutor(r.resourceHandlers, r.agentExecServer, newProxmoxGuestMonitoringObserver(r.resolveMonitorForOrg)),
 			newHostStorageCleanupActionExecutor(r.resourceHandlers, r.agentExecServer),
 			newHostUpdateActionExecutor(r.resourceHandlers, r.agentExecServer),
 		))
