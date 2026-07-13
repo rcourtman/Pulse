@@ -326,6 +326,12 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 	}
 
 	m.mu.Lock()
+	migratedAlertIdentity := false
+	defer func() {
+		if migratedAlertIdentity {
+			m.saveActiveAlertsAsync("guest lifecycle alert node move")
+		}
+	}()
 	defer m.mu.Unlock()
 
 	storageKey := canonicalTrackingKeyForSpec(params.Spec, params.AlertID)
@@ -334,6 +340,9 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 	var existing *Alert
 	if current, ok := m.getActiveAlertNoLock(storageKey); ok {
 		existing = current
+	} else if migrated := m.migrateGuestAlertNoLock(storageKey, params.Spec.ID, string(params.Spec.Kind), params.Spec.ResourceID, params.ResourceName, params.Node, params.Instance, string(params.Spec.ResourceType)); migrated != nil {
+		existing = migrated
+		migratedAlertIdentity = true
 	}
 
 	confirmations := 0
@@ -459,6 +468,12 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 	}
 
 	m.mu.Lock()
+	migratedAlertIdentity := false
+	defer func() {
+		if migratedAlertIdentity {
+			m.saveActiveAlertsAsync("guest stateful alert node move")
+		}
+	}()
 	defer m.mu.Unlock()
 
 	storageKey := canonicalTrackingKeyForSpec(params.Spec, params.AlertID)
@@ -467,6 +482,9 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 	var existing *Alert
 	if current, ok := m.getActiveAlertNoLock(storageKey); ok {
 		existing = current
+	} else if migrated := m.migrateGuestAlertNoLock(storageKey, params.Spec.ID, string(params.Spec.Kind), params.Spec.ResourceID, params.ResourceName, params.Node, params.Instance, string(params.Spec.ResourceType)); migrated != nil {
+		existing = migrated
+		migratedAlertIdentity = true
 	}
 
 	var pendingSince time.Time

@@ -170,6 +170,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				m.mu.Lock()
 				delete(m.offlineConfirmations, guestID)
 				m.mu.Unlock()
+				m.rehomeStrandedGuestAlert(canonicalPoweredStateStateID(guestID), canonicalPoweredStateSpecID(guestID), string(alertspecs.AlertSpecKindPoweredState), guestID, name, node, instanceName, "guest")
 				m.clearAlert(canonicalPoweredStateStateID(guestID))
 			} else if snapshot.OnBoot != nil && !*snapshot.OnBoot {
 				// Guest is explicitly not configured to autostart (onboot=0).
@@ -407,6 +408,12 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 	alertID := canonicalPoweredStateStateID(guestID)
 
 	m.mu.Lock()
+	migratedAlertIdentity := false
+	defer func() {
+		if migratedAlertIdentity {
+			m.saveActiveAlertsAsync("guest powered-off node move resolve")
+		}
+	}()
 	defer m.mu.Unlock()
 
 	// Reset confirmation count when guest comes back online
@@ -418,10 +425,16 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 		delete(m.offlineConfirmations, guestID)
 	}
 
-	// Check if powered-off alert exists
+	// Check if powered-off alert exists. A guest that moved nodes may still
+	// hold the alert under its old node-scoped identity; re-home it so it
+	// resolves instead of stranding.
 	alert, exists := m.getActiveAlertNoLock(alertID)
 	if !exists {
-		return
+		alert = m.migrateGuestAlertNoLock(alertID, canonicalPoweredStateSpecID(guestID), string(alertspecs.AlertSpecKindPoweredState), guestID, name, "", "", "guest")
+		if alert == nil {
+			return
+		}
+		migratedAlertIdentity = true
 	}
 
 	// Remove from active alerts
@@ -560,7 +573,8 @@ func (m *Manager) suppressGuestAlerts(guestID string) bool {
 		if alert == nil {
 			continue
 		}
-		if alert.ResourceID == guestID || strings.HasPrefix(alert.ResourceID, guestID+"/") || strings.HasPrefix(alertID, guestID) {
+		if alert.ResourceID == guestID || strings.HasPrefix(alert.ResourceID, guestID+"/") || strings.HasPrefix(alertID, guestID) ||
+			guestAlertBelongsToGuest(alert.ResourceID, guestID) {
 			m.clearAlertNoLock(alertID)
 			delete(m.recentAlerts, trackingKey)
 			delete(m.pendingAlerts, trackingKey)

@@ -7,14 +7,20 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type guestMetricIdentity struct {
+// Guest alerts are keyed by node-scoped resource IDs ("instance:node:vmid"),
+// so a guest that moves between cluster nodes changes identity while remaining
+// the same guest. The helpers in this file re-home active alerts of any kind
+// (metric thresholds and lifecycle kinds such as powered-state) onto the
+// guest's current node identity so they keep updating and can resolve.
+
+type guestAlertIdentity struct {
 	instance       string
 	node           string
 	vmid           int
 	resourceSuffix string
 }
 
-func isGuestMetricResourceType(resourceType string) bool {
+func isGuestAlertResourceType(resourceType string) bool {
 	switch strings.ToLower(strings.TrimSpace(resourceType)) {
 	case "guest", "vm", "container", "system-container":
 		return true
@@ -23,15 +29,15 @@ func isGuestMetricResourceType(resourceType string) bool {
 	}
 }
 
-func parseGuestMetricIdentity(resourceID string) (guestMetricIdentity, bool) {
+func parseGuestAlertIdentity(resourceID string) (guestAlertIdentity, bool) {
 	resourceID = strings.TrimSpace(resourceID)
 	if resourceID == "" {
-		return guestMetricIdentity{}, false
+		return guestAlertIdentity{}, false
 	}
 
 	parts := strings.Split(resourceID, ":")
 	if len(parts) < 3 {
-		return guestMetricIdentity{}, false
+		return guestAlertIdentity{}, false
 	}
 
 	last := strings.TrimSpace(parts[len(parts)-1])
@@ -40,17 +46,17 @@ func parseGuestMetricIdentity(resourceID string) (guestMetricIdentity, bool) {
 		digitCount++
 	}
 	if digitCount == 0 {
-		return guestMetricIdentity{}, false
+		return guestAlertIdentity{}, false
 	}
 
 	vmid, err := strconv.Atoi(last[:digitCount])
 	if err != nil || vmid <= 0 {
-		return guestMetricIdentity{}, false
+		return guestAlertIdentity{}, false
 	}
 
 	suffix := last[digitCount:]
 	if suffix != "" && !strings.HasPrefix(suffix, "-") {
-		return guestMetricIdentity{}, false
+		return guestAlertIdentity{}, false
 	}
 
 	instance := strings.TrimSpace(strings.Join(parts[:len(parts)-2], ":"))
@@ -59,10 +65,10 @@ func parseGuestMetricIdentity(resourceID string) (guestMetricIdentity, bool) {
 		instance = node
 	}
 	if instance == "" || node == "" {
-		return guestMetricIdentity{}, false
+		return guestAlertIdentity{}, false
 	}
 
-	return guestMetricIdentity{
+	return guestAlertIdentity{
 		instance:       instance,
 		node:           node,
 		vmid:           vmid,
@@ -70,18 +76,62 @@ func parseGuestMetricIdentity(resourceID string) (guestMetricIdentity, bool) {
 	}, true
 }
 
-func sameStableGuestMetricIdentity(left, right guestMetricIdentity) bool {
+func sameStableGuestAlertIdentity(left, right guestAlertIdentity) bool {
 	return left.instance == right.instance &&
 		left.vmid == right.vmid &&
 		left.resourceSuffix == right.resourceSuffix
 }
 
-func (m *Manager) migrateGuestMetricAlertNoLock(storageKey, specID, kind, resourceID, resourceName, node, instance, resourceType string) *Alert {
-	if !isGuestMetricResourceType(resourceType) {
+// guestAlertBelongsToGuest reports whether resourceID identifies the same
+// guest as guestID (same instance and vmid) regardless of the node segment,
+// including per-disk sub-resources of that guest.
+func guestAlertBelongsToGuest(resourceID, guestID string) bool {
+	alertIdentity, ok := parseGuestAlertIdentity(resourceID)
+	if !ok {
+		return false
+	}
+	guestIdentity, ok := parseGuestAlertIdentity(guestID)
+	if !ok || guestIdentity.resourceSuffix != "" {
+		return false
+	}
+	return alertIdentity.instance == guestIdentity.instance && alertIdentity.vmid == guestIdentity.vmid
+}
+
+// guestDiskAlertBelongsToGuest is guestAlertBelongsToGuest restricted to
+// per-disk sub-resources ("<guestID>-disk-<key>").
+func guestDiskAlertBelongsToGuest(resourceID, guestID string) bool {
+	identity, ok := parseGuestAlertIdentity(resourceID)
+	if !ok || !strings.HasPrefix(identity.resourceSuffix, "-disk-") {
+		return false
+	}
+	return guestAlertBelongsToGuest(resourceID, guestID)
+}
+
+// guestSpecIDMatchesAcrossNodes reports whether an existing alert's canonical
+// spec is the same logical spec as specID once the node-scoped resource ID is
+// swapped out. Metric spec IDs are node-independent ("metric-threshold:cpu");
+// lifecycle spec IDs embed the node-scoped resource ID
+// ("<resourceID>-powered-state").
+func guestSpecIDMatchesAcrossNodes(existingSpecID, existingResourceID, specID, resourceID string) bool {
+	if specID == "" || existingSpecID == "" {
+		return false
+	}
+	if existingSpecID == specID {
+		return true
+	}
+	suffix, ok := strings.CutPrefix(specID, resourceID)
+	if !ok || suffix == "" || existingResourceID == "" {
+		return false
+	}
+	return existingSpecID == existingResourceID+suffix
+}
+
+func (m *Manager) migrateGuestAlertNoLock(storageKey, specID, kind, resourceID, resourceName, node, instance, resourceType string) *Alert {
+	if !isGuestAlertResourceType(resourceType) {
 		return nil
 	}
 
-	currentIdentity, ok := parseGuestMetricIdentity(resourceID)
+	currentIdentity, ok := parseGuestAlertIdentity(resourceID)
 	if !ok {
 		return nil
 	}
@@ -105,12 +155,12 @@ func (m *Manager) migrateGuestMetricAlertNoLock(storageKey, specID, kind, resour
 		}
 
 		backfillCanonicalIdentity(alert)
-		if alert.CanonicalSpecID != specID {
+		if !guestSpecIDMatchesAcrossNodes(alert.CanonicalSpecID, alert.ResourceID, specID, resourceID) {
 			continue
 		}
 
-		existingIdentity, ok := parseGuestMetricIdentity(alert.ResourceID)
-		if !ok || !sameStableGuestMetricIdentity(existingIdentity, currentIdentity) {
+		existingIdentity, ok := parseGuestAlertIdentity(alert.ResourceID)
+		if !ok || !sameStableGuestAlertIdentity(existingIdentity, currentIdentity) {
 			continue
 		}
 
@@ -147,19 +197,38 @@ func (m *Manager) migrateGuestMetricAlertNoLock(storageKey, specID, kind, resour
 	if matchCount > 1 {
 		log.Warn().
 			Str("resourceID", resourceID).
-			Str("metricSpecID", specID).
+			Str("specID", specID).
 			Int("matches", matchCount).
-			Msg("Multiple guest metric alerts matched node-move identity; migrated the most recently seen alert")
+			Msg("Multiple guest alerts matched node-move identity; migrated the most recently seen alert")
 	}
 
 	log.Info().
 		Str("oldTrackingKey", oldTrackingKey).
 		Str("newTrackingKey", storageKey).
 		Str("resourceID", resourceID).
-		Str("metricSpecID", specID).
-		Msg("Migrated guest metric alert to current node identity")
+		Str("specID", specID).
+		Msg("Migrated guest alert to current node identity")
 
 	return matchedAlert
+}
+
+// rehomeStrandedGuestAlert re-homes a guest alert left under an old node-scoped
+// identity onto storageKey so that an immediately following clear/resolve by
+// the current identity can find it. No-op when storageKey is already active or
+// no stranded alert matches.
+func (m *Manager) rehomeStrandedGuestAlert(storageKey, specID, kind, resourceID, resourceName, node, instance, resourceType string) {
+	if storageKey == "" {
+		return
+	}
+	m.mu.Lock()
+	var migrated *Alert
+	if _, exists := m.getActiveAlertNoLock(storageKey); !exists {
+		migrated = m.migrateGuestAlertNoLock(storageKey, specID, kind, resourceID, resourceName, node, instance, resourceType)
+	}
+	m.mu.Unlock()
+	if migrated != nil {
+		m.saveActiveAlertsAsync("guest alert node move")
+	}
 }
 
 func (m *Manager) moveAlertTrackingStateNoLock(oldTrackingKey, newTrackingKey string, alert *Alert) {

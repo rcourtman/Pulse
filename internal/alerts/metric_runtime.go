@@ -157,6 +157,9 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 	canonicalStateID := buildCanonicalStateID(resourceID, canonicalSpecID)
 
 	if threshold == nil || threshold.Trigger <= 0 {
+		// A guest that moved nodes may hold this alert under its old node-scoped
+		// identity; re-home it first so the clear below can resolve it.
+		m.rehomeStrandedGuestAlert(canonicalStateID, canonicalSpecID, string(alertspecs.AlertSpecKindMetricThreshold), resourceID, resourceName, node, instance, resourceType)
 		m.clearAlert(canonicalStateID)
 		m.clearAlert(alertID)
 		return
@@ -185,7 +188,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		existingAlert, exists = m.getActiveAlertNoLock(canonicalStateID)
 	}
 	if !exists && canonicalStateID != "" {
-		if migrated := m.migrateGuestMetricAlertNoLock(canonicalStateID, canonicalSpecID, string(alertspecs.AlertSpecKindMetricThreshold), resourceID, resourceName, node, instance, resourceType); migrated != nil {
+		if migrated := m.migrateGuestAlertNoLock(canonicalStateID, canonicalSpecID, string(alertspecs.AlertSpecKindMetricThreshold), resourceID, resourceName, node, instance, resourceType); migrated != nil {
 			existingAlert = migrated
 			exists = true
 			migratedAlertIdentity = true

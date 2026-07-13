@@ -103,6 +103,9 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		m.mu.Lock()
 		delete(m.pendingAlerts, trackingKey)
 		m.mu.Unlock()
+		// A guest that moved nodes may hold this alert under its old node-scoped
+		// identity; re-home it first so the clear below can resolve it.
+		m.rehomeStrandedGuestAlert(storageKey, spec.ID, string(spec.Kind), spec.ResourceID, resourceName, node, instance, resourceType)
 		m.clearAlert(storageKey)
 		return
 	}
@@ -120,7 +123,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 
 	existingAlert, exists := m.getActiveAlertNoLock(storageKey)
 	if !exists {
-		if migrated := m.migrateGuestMetricAlertNoLock(storageKey, spec.ID, string(spec.Kind), spec.ResourceID, resourceName, node, instance, resourceType); migrated != nil {
+		if migrated := m.migrateGuestAlertNoLock(storageKey, spec.ID, string(spec.Kind), spec.ResourceID, resourceName, node, instance, resourceType); migrated != nil {
 			existingAlert = migrated
 			exists = true
 			migratedAlertIdentity = true

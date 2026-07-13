@@ -830,7 +830,8 @@ func (m *Manager) clearGuestMetricAlerts(guestID string, metrics ...string) int 
 		if alert == nil || alert.Type == "powered-off" {
 			continue
 		}
-		if alert.ResourceID != guestID && !strings.HasPrefix(alert.ResourceID, perDiskPrefix) {
+		if alert.ResourceID != guestID && !strings.HasPrefix(alert.ResourceID, perDiskPrefix) &&
+			!guestAlertBelongsToGuest(alert.ResourceID, guestID) {
 			continue
 		}
 		if len(allowedMetrics) > 0 {
@@ -857,7 +858,10 @@ func (m *Manager) cleanupGuestDiskAlerts(guestID string, seen map[string]struct{
 
 	cleared := 0
 	for storageKey, alert := range m.activeAlerts {
-		if alert == nil || !strings.HasPrefix(alert.ResourceID, prefix) {
+		if alert == nil {
+			continue
+		}
+		if !strings.HasPrefix(alert.ResourceID, prefix) && !guestDiskAlertBelongsToGuest(alert.ResourceID, guestID) {
 			continue
 		}
 		if seen != nil {
