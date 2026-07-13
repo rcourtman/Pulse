@@ -1,0 +1,147 @@
+import { describe, expect, it } from 'vitest';
+import type {
+  ActionEvidenceClass,
+  ActionPolicyAuthorityFactor,
+  ActionPolicyAuthorityKind,
+  ActionVerificationTruthStatus,
+} from '@/types/actionAudit';
+import {
+  formatActionName,
+  formatPolicyAuthority,
+  verificationTruthLabel,
+} from '../actionPresentation';
+
+const makeAuthority = (
+  kind: ActionPolicyAuthorityKind,
+  overrides: Partial<ActionPolicyAuthorityFactor> = {},
+): ActionPolicyAuthorityFactor => ({
+  kind,
+  sourceId: `authority:${kind}`,
+  status: 'consulted',
+  scope: { orgId: 'org-1', resourceId: 'proxmox:node:pve-1', capabilityName: 'install_os_updates' },
+  reasonCodes: ['capability_auto_elevated'],
+  ...overrides,
+});
+
+describe('formatActionName', () => {
+  it('returns the curated human title for the install_os_updates capability', () => {
+    expect(formatActionName('install_os_updates')).toBe('Install operating system updates');
+  });
+
+  it('returns the curated human title for the clean_package_cache capability', () => {
+    expect(formatActionName('clean_package_cache')).toBe('Clear downloaded package data');
+  });
+
+  it.each([
+    ['snake_case capability is humanized', 'restart_service', 'Restart Service'],
+    ['dotted capability is humanized', 'restart.service', 'Restart Service'],
+    ['dashed capability is humanized', 'restart-service', 'Restart Service'],
+    ['mixed separators collapse to single spaces', 'restart._-service', 'Restart Service'],
+    ['repeated separators collapse to a single space', 'restart___service', 'Restart Service'],
+    ['multi-word capability title-cases each word', 'restart_long_running_service', 'Restart Long Running Service'],
+    ['already-spaced phrase is still title-cased', 'restart service', 'Restart Service'],
+    ['camelCase token has no separator and only first letter uppercased', 'restartService', 'RestartService'],
+    ['leading and trailing separators are trimmed before title-casing', '_restart_service_', 'Restart Service'],
+    ['single word is title-cased', 'reboot', 'Reboot'],
+    ['single character is uppercased', 'x', 'X'],
+  ] as const)('regex path: %s', (_name, input, expected) => {
+    expect(formatActionName(input)).toBe(expected);
+  });
+
+  it('treats capability names that merely start with the curated key as generic regex input', () => {
+    expect(formatActionName('install_os_updates_v2')).toBe('Install Os Updates V2');
+    expect(formatActionName('clean_package_cache_extra')).toBe('Clean Package Cache Extra');
+  });
+
+  it('returns an empty string for empty input', () => {
+    expect(formatActionName('')).toBe('');
+  });
+
+  it.each(['_', '.', '-', '_._', '-_.', '___'])('returns an empty string for an all-separator input %j', (input) => {
+    expect(formatActionName(input)).toBe('');
+  });
+
+  it('throws a TypeError when called with null despite the declared string type', () => {
+    expect(() => formatActionName(null as unknown as string)).toThrow(TypeError);
+  });
+
+  it('throws a TypeError when called with undefined despite the declared string type', () => {
+    expect(() => formatActionName(undefined as unknown as string)).toThrow(TypeError);
+  });
+});
+
+describe('formatPolicyAuthority', () => {
+  it.each([
+    ['capability_registry', 'Capability safety policy'],
+    ['tenant_patrol_policy', 'Patrol policy for this organization'],
+    ['resource_operator_policy', 'Policy for this resource'],
+  ] as const)('returns the curated label for kind %s', (kind, expected) => {
+    expect(formatPolicyAuthority(makeAuthority(kind))).toBe(expected);
+  });
+
+  it('ignores non-kind fields when selecting the label', () => {
+    const consulted = makeAuthority('capability_registry', { status: 'consulted', reasonCodes: [] });
+    const unavailable = makeAuthority('capability_registry', {
+      status: 'unavailable',
+      sourceId: 'other-source',
+      approvalFloor: 'admin',
+    });
+    expect(formatPolicyAuthority(consulted)).toBe('Capability safety policy');
+    expect(formatPolicyAuthority(unavailable)).toBe('Capability safety policy');
+  });
+
+  it('returns undefined when factor.kind is an unrecognized value, because the switch has no default arm', () => {
+    const malformed = {
+      ...makeAuthority('capability_registry'),
+      kind: 'not_a_real_authority_kind',
+    } as unknown as ActionPolicyAuthorityFactor;
+    expect(formatPolicyAuthority(malformed)).toBeUndefined();
+  });
+
+  it('returns undefined when factor is an empty object, because kind is undefined and the switch has no default', () => {
+    expect(formatPolicyAuthority({} as unknown as ActionPolicyAuthorityFactor)).toBeUndefined();
+  });
+});
+
+describe('verificationTruthLabel', () => {
+  it.each([
+    ['confirmed', undefined, 'Confirmation lacks an evidence source'],
+    ['confirmed', 'none' as ActionEvidenceClass, 'Confirmation lacks an evidence source'],
+  ] as const)('reports a confirmed status without independent/agent evidence (%s, %s)', (status, evidenceClass, expected) => {
+    expect(verificationTruthLabel(status, evidenceClass)).toBe(expected);
+  });
+
+  it('credits an independent observer for a confirmed outcome', () => {
+    expect(verificationTruthLabel('confirmed', 'independent')).toBe('Confirmed by independent observer');
+  });
+
+  it('credits the executing agent for a confirmed outcome', () => {
+    expect(verificationTruthLabel('confirmed', 'agent_attested')).toBe('Confirmed by executing agent');
+  });
+
+  it('routes an unrecognized evidence class to the "lacks an evidence source" arm without throwing', () => {
+    expect(
+      verificationTruthLabel('confirmed', 'bogus' as unknown as ActionEvidenceClass),
+    ).toBe('Confirmation lacks an evidence source');
+  });
+
+  it.each([
+    ['contradicted', 'Outcome contradicted'],
+    ['inconclusive', 'Outcome inconclusive'],
+    ['not_attempted', 'Outcome not verified'],
+  ] as const)('returns the curated label for status %s', (status, expected) => {
+    expect(verificationTruthLabel(status)).toBe(expected);
+  });
+
+  it('ignores evidenceClass for non-confirmed statuses', () => {
+    expect(verificationTruthLabel('contradicted', 'independent')).toBe('Outcome contradicted');
+    expect(verificationTruthLabel('inconclusive', 'agent_attested')).toBe('Outcome inconclusive');
+    expect(verificationTruthLabel('not_attempted', 'none')).toBe('Outcome not verified');
+  });
+
+  it('returns undefined when status is unrecognized, because the switch has no default arm', () => {
+    expect(
+      verificationTruthLabel('bogus' as unknown as ActionVerificationTruthStatus, 'independent'),
+    ).toBeUndefined();
+  });
+});
