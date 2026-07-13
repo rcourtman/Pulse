@@ -795,7 +795,7 @@ describe('Docker native tables', () => {
       ),
     );
     expect(await screen.findByRole('dialog', { name: 'Restart' })).toBeInTheDocument();
-    expect(screen.getByText('Why Pulse allows this review')).toBeInTheDocument();
+    expect(screen.getByText('Policy evidence unavailable')).toBeInTheDocument();
     expect(ResourceActionsAPI.decideAction).not.toHaveBeenCalled();
     expect(ResourceActionsAPI.executeAction).not.toHaveBeenCalled();
     expect(onLifecycleActionSettled).not.toHaveBeenCalled();

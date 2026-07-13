@@ -74,7 +74,7 @@ export function Actions() {
   };
 
   return (
-    <div class="mx-auto w-full max-w-6xl space-y-4 px-3 py-4 sm:px-5">
+    <div class="w-full space-y-4 px-3 py-4 sm:px-5">
       <PageHeader
         title="Actions"
         description="Review proposed infrastructure changes and track their outcomes."
@@ -160,7 +160,8 @@ export function Actions() {
             <For each={displayedActions()}>
               {(action) => {
                 const state = () => getActionInboxStatePresentation(action.state);
-                const resource = () => getActionResourcePresentation(action.request.resourceId);
+                const resource = () =>
+                  getActionResourcePresentation(action.request.resourceId, action.resource);
                 const title = () => formatActionName(action.request.capabilityName);
                 return (
                   <li>

@@ -1,5 +1,6 @@
 import type {
   ActionAuditRecord,
+  ActionResourceReference,
   ActionAuditState,
   ActionEvidenceClass,
   ActionPolicyAuthorityFactor,
@@ -85,9 +86,32 @@ const CANONICAL_RESOURCE_KINDS: Record<string, string> = {
   'proxmox:lxc': 'Proxmox container',
 };
 
-export const getActionResourcePresentation = (resourceId: string): ActionResourcePresentation => {
+const RESOURCE_TYPE_LABELS: Record<string, string> = {
+  'app-container': 'App container',
+  agent: 'Host agent',
+  container: 'Container',
+  lxc: 'Proxmox container',
+  node: 'Node',
+  vm: 'Virtual machine',
+};
+
+const resourceTypeLabel = (resourceType: string): string =>
+  RESOURCE_TYPE_LABELS[resourceType.trim().toLowerCase()] || formatActionName(resourceType);
+
+export const getActionResourcePresentation = (
+  resourceId: string,
+  resource?: ActionResourceReference,
+): ActionResourcePresentation => {
   const normalized = resourceId.trim();
   if (!normalized) return { label: 'Unknown resource', detail: '' };
+
+  const authoritativeName = resource?.name?.trim();
+  if (authoritativeName) {
+    return {
+      label: authoritativeName,
+      detail: resourceTypeLabel(resource?.type ?? ''),
+    };
+  }
 
   const canonicalParts = normalized.split(':').filter(Boolean);
   if (canonicalParts.length > 1) {

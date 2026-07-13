@@ -414,6 +414,12 @@ same read routes, the response is explicitly `readOnly` and the rows remain
 inspection fixtures only. Agent lifecycle surfaces must remove decision and
 execution affordances, must not treat a mock approval as an agent command
 grant, and must not infer lifecycle reachability from fixture state.
+Those list/detail reads may also attach the canonical unified-resource name and
+contract type as a sibling `resource` presentation object. Agent lifecycle
+consumers must treat that object as display metadata only: the exact
+`request.resourceId` remains the command target, and resource display changes
+must not alter the action ID, plan hash, approval binding, dispatch identity, or
+durable receipt reconciliation.
 The investigation
 continuity reconciler in `internal/api/patrol_action_reconciliation.go` is
 also API-owned: callbacks only wake an authoritative action-audit re-read,

@@ -7,7 +7,7 @@ import { notificationStore } from '@/stores/notifications';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { ActionDecisionPacket } from './ActionDecisionPacket';
-import { formatActionName } from './actionPresentation';
+import { formatActionName, getActionResourcePresentation } from './actionPresentation';
 import { getAPTActionPresentation } from './aptActionPresentation';
 
 export const ActionReviewDialog: Component<{
@@ -19,6 +19,12 @@ export const ActionReviewDialog: Component<{
   const [error, setError] = createSignal('');
   const [clock, setClock] = createSignal(Date.now());
   const audit = () => props.detail?.audit;
+  const resource = createMemo(() => {
+    const record = audit();
+    return record
+      ? getActionResourcePresentation(record.request.resourceId, record.resource)
+      : { label: '', detail: '' };
+  });
   const readOnly = createMemo(
     () => props.detail?.readOnly === true || presentationPolicyIsReadOnly(),
   );
@@ -155,7 +161,10 @@ export const ActionReviewDialog: Component<{
                 <h2 id="action-review-title" class="mt-1 text-xl font-semibold">
                   {formatActionName(record().request.capabilityName)}
                 </h2>
-                <p class="mt-1 break-all text-sm text-muted">{record().request.resourceId}</p>
+                <p class="mt-1 text-sm text-muted">
+                  {resource().label}
+                  <Show when={resource().detail}> · {resource().detail}</Show>
+                </p>
               </div>
               <Button
                 variant="ghost"

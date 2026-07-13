@@ -1166,6 +1166,7 @@ describe('shared primitive guardrails', () => {
   it('keeps the Actions inbox on the canonical in-page subtab primitive', () => {
     expect(actionsSource).toContain('<Subtabs');
     expect(actionsSource).not.toContain('role="tablist"');
+    expect(actionsSource).not.toContain('max-w-6xl');
   });
 
   it('keeps contextual row focus on one shared helper across summary consumers', () => {

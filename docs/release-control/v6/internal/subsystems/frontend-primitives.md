@@ -635,9 +635,15 @@ Global Actions review uses the canonical shared `Dialog`, `Button`, `Subtabs`,
 selector is an in-page sub-navigation surface and must compose `Subtabs`
 instead of recreating a segmented tablist in `Actions.tsx`; queue rows may own
 action state and resource semantics, but their frame and badge chrome stay on
-the shared primitives. The responsive route must preserve named tabs, keyboard
-focus, dialog focus containment, and phone-width overflow checks; journey 83
-is the desktop/browser accessibility proof and is not mobile-device proof.
+the shared primitives. Actions uses the full content width supplied by the app
+shell, matching Patrol instead of adding a page-local maximum-width container.
+The review's policy provenance uses a native keyboard-operable disclosure so
+the initial dialog layer stays calm without removing audit detail; intent,
+exact target identity, safety/authority posture, and fail-closed provenance
+warnings remain visible before expansion. The responsive route must preserve
+named tabs, keyboard focus, dialog focus containment, and phone-width overflow
+checks; journey 83 is the desktop/browser accessibility proof and is not
+mobile-device proof.
 
 Assistant shell entry changes must keep Assistant contextual rather than
 generic: `AppLayout.tsx` and the command palette may expose a compact launcher,

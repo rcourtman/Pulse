@@ -1743,11 +1743,21 @@ The Actions inbox presents that durable record as a compact operator queue,
 not a stack of equally weighted audit cards. Open work orders approval-required
 decisions before runnable and executing actions; each collapsed row exposes
 only state, action, bounded resource identity, recency, and reason before the
-operator opens the governed review. Opaque canonical resource IDs remain in
-the row's accessible name and title but are visually demoted to a type plus
-short suffix. Read-only demo posture is quiet supporting context rather than a
-page-level callout. The governed review dialog continues to own the full exact
-resource ID, plan, policy evidence, lifecycle, authority, and outcome truth.
+operator opens the governed review. Action list and detail reads enrich each
+audit with the current canonical resource name and contract type when that
+resource can be resolved. This metadata is a read-time presentation projection,
+not part of `ActionRequest`, durable plan identity, or `planHash`; a resource
+rename therefore cannot change action authority. Opaque canonical resource IDs
+remain in the row's accessible name and title, while the visual row prefers the
+API-supplied name and type and falls back to the bounded ID-derived type plus
+short suffix only when the resource projection is unavailable. Read-only demo
+posture is quiet supporting context rather than a page-level callout. The
+governed review dialog continues to own the full exact resource ID, plan,
+policy evidence, lifecycle, authority, and outcome truth. Its first layer keeps
+intent plus safety/authority facts visible while the immutable planning-time
+policy sources, revisions, and reason codes sit behind an explicit disclosure;
+missing provenance remains an immediate fail-closed warning rather than hidden
+detail.
 
 APT review presents server-recorded policy provenance and distinguishes the
 elevated update posture from low-risk-eligible cache cleanup. Both typed actions

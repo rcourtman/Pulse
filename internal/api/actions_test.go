@@ -366,6 +366,60 @@ func TestHandleListPendingActionsReturnsOnlyCanonicalDecisionQueue(t *testing.T)
 	}
 }
 
+func TestHandleListAndDetailActionsProjectCanonicalResourcePresentation(t *testing.T) {
+	now := time.Date(2026, 7, 13, 15, 0, 0, 0, time.UTC)
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{{
+			ID:       "vm:42",
+			Type:     unified.ResourceTypeVM,
+			Name:     "Checkout API",
+			Status:   unified.StatusWarning,
+			LastSeen: now,
+			Sources:  []unified.DataSource{unified.SourceProxmox},
+		}},
+	})
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := unified.ActionAuditRecord{
+		ID: "act-resource-presentation", CreatedAt: now, UpdatedAt: now, State: unified.ActionStatePending,
+		Request: unified.ActionRequest{RequestID: "req-resource-presentation", ResourceID: "vm:42", CapabilityName: "restart", Reason: "Recover checkout", RequestedBy: "pulse_patrol"},
+		Plan: unified.ActionPlan{
+			ActionID: "act-resource-presentation", RequestID: "req-resource-presentation",
+			Allowed: true, RequiresApproval: true, ApprovalPolicy: unified.ApprovalAdmin,
+			PlannedAt: now, ExpiresAt: now.Add(4 * time.Hour), PlanHash: "sha256:resource-presentation",
+		},
+	}
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatal(err)
+	}
+
+	listRec := httptest.NewRecorder()
+	h.HandleListActions(listRec, httptest.NewRequest(http.MethodGet, "/api/actions?view=pending", nil))
+	var inbox actionInboxResponse
+	if err := json.Unmarshal(listRec.Body.Bytes(), &inbox); listRec.Code != http.StatusOK || err != nil {
+		t.Fatalf("list status=%d body=%s err=%v", listRec.Code, listRec.Body.String(), err)
+	}
+	if len(inbox.Actions) != 1 || inbox.Actions[0].Resource == nil || inbox.Actions[0].Resource.Name != "Checkout API" || inbox.Actions[0].Resource.ID != "vm:42" || inbox.Actions[0].Resource.Type != unified.ResourceTypeVM {
+		t.Fatalf("list resource projection=%#v", inbox.Actions)
+	}
+
+	detailRec := httptest.NewRecorder()
+	detailReq := httptest.NewRequest(http.MethodGet, "/api/actions/act-resource-presentation", nil)
+	detailReq.SetPathValue("id", record.ID)
+	h.HandleGetAction(detailRec, detailReq)
+	var detail actionDetailResponse
+	if err := json.Unmarshal(detailRec.Body.Bytes(), &detail); detailRec.Code != http.StatusOK || err != nil {
+		t.Fatalf("detail status=%d body=%s err=%v", detailRec.Code, detailRec.Body.String(), err)
+	}
+	if detail.Audit.Resource == nil || detail.Audit.Resource.Name != "Checkout API" || detail.Audit.Request.ResourceID != "vm:42" {
+		t.Fatalf("detail resource projection=%#v", detail.Audit)
+	}
+}
+
 func TestHandleGetActionAndInboxAreTenantScoped(t *testing.T) {
 	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	now := time.Now().UTC()

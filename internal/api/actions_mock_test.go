@@ -45,6 +45,9 @@ func TestMockActionInboxAndDetailUseCanonicalResponses(t *testing.T) {
 			if action.Plan.PolicyDecision.DecisionID == "" || action.Plan.PlanHash == "" {
 				t.Fatalf("list %s returned incomplete review identity: %#v", test.view, action.Plan)
 			}
+			if action.Resource == nil || action.Resource.Name == "" || action.Resource.Type == "" {
+				t.Fatalf("list %s returned no canonical resource presentation: %#v", test.view, action.Resource)
+			}
 		}
 	}
 
@@ -62,6 +65,9 @@ func TestMockActionInboxAndDetailUseCanonicalResponses(t *testing.T) {
 	}
 	if detail.Audit.ID != fixtures[0].Audit.ID || len(detail.Events) == 0 {
 		t.Fatalf("detail = %#v", detail)
+	}
+	if detail.Audit.Resource == nil || detail.Audit.Resource.Name == "" {
+		t.Fatalf("detail returned no canonical resource presentation: %#v", detail.Audit.Resource)
 	}
 	if !detail.ReadOnly {
 		t.Fatal("mock detail must declare itself read-only")

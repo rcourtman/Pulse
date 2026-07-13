@@ -406,6 +406,13 @@ scope overlap as storage or recovery ownership. A Docker workload that also
 belongs to an owning platform remains governed by the resource, policy, and
 backup capability contracts exposed by unified resources and the shared API
 boundary.
+Action list/detail reads may attach the current canonical resource name and
+contract type as a sibling `resource` presentation object. Storage and recovery
+consumers may show that metadata, but restore or remediation authority remains
+bound to `request.resourceId`, the reviewed plan hash, and the durable action
+record. A resource rename or an unavailable presentation projection must never
+retarget execution, invalidate recovery evidence, or make an existing audit
+unreadable.
 Successful action plans also remain API-owned audit facts before
 storage/recovery surfaces consume them: approval-required plans must persist
 as `pending_approval` with initial lifecycle evidence, and retry/idempotency

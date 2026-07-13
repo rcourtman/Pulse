@@ -7355,7 +7355,13 @@ dispatch attempt, and correlated receipt. Decisions and execution remain
 inventory and router allowlist, and queue failures use the shared
 `agentcapabilities` vocabulary. Pending rows are oldest-first and expose the
 same action audit shape, including requester and origin, used by desktop and
-mobile. The mobile client must approve by recording an approved decision and
+mobile. Action list and detail audits may add a `resource` read projection with
+the canonical unified-resource `id`, `name`, and contract `type`. That object is
+resolved at read time and is presentation metadata only: it must stay outside
+`ActionRequest`, persistence, action ID, plan hash, decision binding, and
+execution authority. An unavailable or superseded resource therefore omits the
+projection without making the durable audit unreadable. The mobile client must
+approve by recording an approved decision and
 must not treat that decision as execution. A later explicit Run action gesture,
 with its own local authentication gate, calls execute. Interactive clients bind
 both requests to the exact reviewed plan by sending `planHash`; the REST fields

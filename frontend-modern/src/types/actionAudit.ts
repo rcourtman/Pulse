@@ -29,6 +29,12 @@ export interface ActionAuditRequest {
   actor?: ActionActor;
 }
 
+export interface ActionResourceReference {
+  id: string;
+  name: string;
+  type: string;
+}
+
 export type ResourceActionRequest = Omit<ActionAuditRequest, 'actor'>;
 
 export interface ActionApprovalRequirement {
@@ -257,6 +263,8 @@ export interface ActionAuditRecord {
   state: ActionAuditState;
   decisionRevision?: number;
   request: ActionAuditRequest;
+  /** Read-time display metadata from the canonical resource API; never part of plan identity. */
+  resource?: ActionResourceReference;
   plan: ActionAuditPlan;
   origin?: ActionAuditOrigin;
   approvals?: ActionAuditApprovalRecord[];

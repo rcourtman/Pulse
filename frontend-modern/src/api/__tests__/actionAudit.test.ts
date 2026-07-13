@@ -190,6 +190,11 @@ describe('ActionAuditAPI', () => {
         reason: 'Recover the edge proxy',
         requestedBy: 'pulse_patrol',
       },
+      resource: {
+        id: scope.resourceId,
+        name: 'Edge proxy',
+        type: 'app-container',
+      },
       plan: {
         actionId: 'action/one',
         requestId: 'request-1',
@@ -242,6 +247,12 @@ describe('ActionAuditAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenNthCalledWith(2, '/api/actions?view=settled&limit=25');
     expect(apiFetchJSONMock).toHaveBeenNthCalledWith(3, '/api/actions/action%2Fone');
     expect(detail.audit.plan.policyDecision).toEqual(policyDecision);
+    expect(detail.audit.resource).toEqual({
+      id: 'docker:container:web',
+      name: 'Edge proxy',
+      type: 'app-container',
+    });
+    expect(detail.audit.request).not.toHaveProperty('resourceName');
     expect(detail.readOnly).toBe(true);
     expect(detail.audit.result?.actionResultV2).toMatchObject({
       execution: { status: 'succeeded' },

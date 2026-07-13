@@ -124,6 +124,16 @@ describe('Actions inbox presentation', () => {
     });
   });
 
+  it('prefers canonical display metadata supplied by the action API', () => {
+    expect(
+      getActionResourcePresentation('docker:container:7d3a91bd1a70', {
+        id: 'docker:container:7d3a91bd1a70',
+        name: 'Checkout API',
+        type: 'app-container',
+      }),
+    ).toEqual({ label: 'Checkout API', detail: 'App container' });
+  });
+
   it('sorts decisions before runnable and executing work without mutating the API response', () => {
     const actions = [
       { id: 'running', state: 'executing', updatedAt: '2026-07-13T12:03:00Z' },

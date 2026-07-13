@@ -69,22 +69,39 @@ type actionExecutionResponse struct {
 	Audit    unified.ActionAuditRecord `json:"audit"`
 }
 
+// actionResourcePresentation is read-time metadata from the canonical unified
+// resource registry. It is deliberately kept outside ActionRequest so a name
+// change cannot alter a persisted plan identity or plan hash.
+type actionResourcePresentation struct {
+	ID   string               `json:"id"`
+	Name string               `json:"name"`
+	Type unified.ResourceType `json:"type"`
+}
+
+type actionAuditProjection struct {
+	unified.ActionAuditRecord
+	Resource *actionResourcePresentation `json:"resource,omitempty"`
+}
+
 type pendingActionsResponse struct {
-	Actions  []unified.ActionAuditRecord `json:"actions"`
-	Count    int                         `json:"count"`
-	ReadOnly bool                        `json:"readOnly"`
+	Actions  []actionAuditProjection `json:"actions"`
+	Count    int                     `json:"count"`
+	ReadOnly bool                    `json:"readOnly"`
 }
 
 type actionInboxResponse struct {
 	View     actionlifecycle.ActionListView `json:"view"`
-	Actions  []unified.ActionAuditRecord    `json:"actions"`
+	Actions  []actionAuditProjection        `json:"actions"`
 	Count    int                            `json:"count"`
 	ReadOnly bool                           `json:"readOnly"`
 }
 
 type actionDetailResponse struct {
-	actionlifecycle.ActionDetail
-	ReadOnly bool `json:"readOnly"`
+	Audit    actionAuditProjection          `json:"audit"`
+	Events   []unified.ActionLifecycleEvent `json:"events"`
+	Attempt  *unified.ActionDispatchAttempt `json:"attempt,omitempty"`
+	Receipt  *unified.ActionDispatchReceipt `json:"receipt,omitempty"`
+	ReadOnly bool                           `json:"readOnly"`
 }
 
 // ActionLifecycle returns the shared transport-independent action lifecycle
@@ -169,8 +186,9 @@ func (h *ResourceHandlers) HandleListPendingActions(w http.ResponseWriter, r *ht
 	}
 	if mock.IsMockEnabled() {
 		actions := mockActionAuditsByState(maxPendingActionAudits, unified.ActionStatePending)
+		projected := projectActionAudits(actions, mockActionResourceRegistry())
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(pendingActionsResponse{Actions: actions, Count: len(actions), ReadOnly: true}); err != nil {
+		if err := json.NewEncoder(w).Encode(pendingActionsResponse{Actions: projected, Count: len(projected), ReadOnly: true}); err != nil {
 			writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionQueueEncodeFailed, "Failed to encode pending actions")
 		}
 		return
@@ -183,8 +201,9 @@ func (h *ResourceHandlers) HandleListPendingActions(w http.ResponseWriter, r *ht
 	if actions == nil {
 		actions = []unified.ActionAuditRecord{}
 	}
+	projected := h.projectActionAudits(GetOrgID(r.Context()), actions)
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(pendingActionsResponse{Actions: actions, Count: len(actions)}); err != nil {
+	if err := json.NewEncoder(w).Encode(pendingActionsResponse{Actions: projected, Count: len(projected)}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionQueueEncodeFailed, "Failed to encode pending actions")
 	}
 }
@@ -213,8 +232,9 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		actions := mockActionAuditsByState(limit, states...)
+		projected := projectActionAudits(actions, mockActionResourceRegistry())
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: actions, Count: len(actions), ReadOnly: true}); err != nil {
+		if err := json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: projected, Count: len(projected), ReadOnly: true}); err != nil {
 			writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionListEncodeFailed, "Failed to encode actions")
 		}
 		return
@@ -233,8 +253,9 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 	if actions == nil {
 		actions = []unified.ActionAuditRecord{}
 	}
+	projected := h.projectActionAudits(GetOrgID(r.Context()), actions)
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: actions, Count: len(actions)}); err != nil {
+	if err := json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: projected, Count: len(projected)}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionListEncodeFailed, "Failed to encode actions")
 	}
 }
@@ -253,8 +274,9 @@ func (h *ResourceHandlers) HandleGetAction(w http.ResponseWriter, r *http.Reques
 			}
 			w.Header().Set("Content-Type", "application/json")
 			if err := json.NewEncoder(w).Encode(actionDetailResponse{
-				ActionDetail: actionlifecycle.ActionDetail{Audit: fixture.Audit, Events: fixture.Events},
-				ReadOnly:     true,
+				Audit:    projectActionAudit(fixture.Audit, mockActionResourceRegistry()),
+				Events:   fixture.Events,
+				ReadOnly: true,
 			}); err != nil {
 				writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailEncodeFailed, "Failed to encode action detail")
 			}
@@ -275,7 +297,12 @@ func (h *ResourceHandlers) HandleGetAction(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(detail); err != nil {
+	if err := json.NewEncoder(w).Encode(actionDetailResponse{
+		Audit:   h.projectActionAudit(GetOrgID(r.Context()), detail.Audit),
+		Events:  detail.Events,
+		Attempt: detail.Attempt,
+		Receipt: detail.Receipt,
+	}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailEncodeFailed, "Failed to encode action detail")
 	}
 }
@@ -520,6 +547,51 @@ func mockActionAuditsByState(limit int, states ...unified.ActionState) []unified
 		}
 	}
 	return actions
+}
+
+func mockActionResourceRegistry() *unified.ResourceRegistry {
+	resources, _ := mock.UnifiedResourceSnapshot()
+	registry := unified.NewRegistry(nil)
+	registry.IngestResources(resources)
+	return registry
+}
+
+func (h *ResourceHandlers) projectActionAudit(orgID string, record unified.ActionAuditRecord) actionAuditProjection {
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		return actionAuditProjection{ActionAuditRecord: record}
+	}
+	return projectActionAudit(record, registry)
+}
+
+func (h *ResourceHandlers) projectActionAudits(orgID string, records []unified.ActionAuditRecord) []actionAuditProjection {
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		registry = nil
+	}
+	return projectActionAudits(records, registry)
+}
+
+func projectActionAudits(records []unified.ActionAuditRecord, registry *unified.ResourceRegistry) []actionAuditProjection {
+	projected := make([]actionAuditProjection, 0, len(records))
+	for _, record := range records {
+		projected = append(projected, projectActionAudit(record, registry))
+	}
+	return projected
+}
+
+func projectActionAudit(record unified.ActionAuditRecord, registry *unified.ResourceRegistry) actionAuditProjection {
+	projection := actionAuditProjection{ActionAuditRecord: record}
+	resource, ok := presentationResourceByID(registry, record.Request.ResourceID)
+	if !ok || resource == nil || strings.TrimSpace(resource.Name) == "" {
+		return projection
+	}
+	projection.Resource = &actionResourcePresentation{
+		ID:   unified.CanonicalResourceID(resource.ID),
+		Name: strings.TrimSpace(resource.Name),
+		Type: resourceContractType(*resource),
+	}
+	return projection
 }
 
 // writeActionLifecycleReadError handles the store/query/not-found failures

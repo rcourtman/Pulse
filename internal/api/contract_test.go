@@ -14795,6 +14795,55 @@ func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ActionReadProjectionKeepsResourcePresentationOutsidePlanIdentity(t *testing.T) {
+	projection := actionAuditProjection{
+		ActionAuditRecord: unifiedresources.ActionAuditRecord{
+			ID:    "action-resource-contract",
+			State: unifiedresources.ActionStatePending,
+			Request: unifiedresources.ActionRequest{
+				RequestID:      "request-resource-contract",
+				ResourceID:     "vm:42",
+				CapabilityName: "restart",
+				Reason:         "Recover checkout",
+				RequestedBy:    "pulse_patrol",
+			},
+			Plan: unifiedresources.ActionPlan{
+				ActionID: "action-resource-contract",
+				PlanHash: "sha256:stable-plan-identity",
+			},
+		},
+		Resource: &actionResourcePresentation{
+			ID:   "vm:42",
+			Name: "Checkout API",
+			Type: unifiedresources.ResourceTypeVM,
+		},
+	}
+
+	encoded, err := json.Marshal(projection)
+	if err != nil {
+		t.Fatalf("marshal action read projection: %v", err)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(encoded, &wire); err != nil {
+		t.Fatalf("decode action read projection: %v", err)
+	}
+	resource, ok := wire["resource"].(map[string]any)
+	if !ok || resource["id"] != "vm:42" || resource["name"] != "Checkout API" || resource["type"] != "vm" {
+		t.Fatalf("resource presentation = %#v", wire["resource"])
+	}
+	request, ok := wire["request"].(map[string]any)
+	if !ok {
+		t.Fatalf("request = %#v", wire["request"])
+	}
+	if _, exists := request["resourceName"]; exists {
+		t.Fatalf("resource presentation leaked into action request: %#v", request)
+	}
+	plan, ok := wire["plan"].(map[string]any)
+	if !ok || plan["planHash"] != "sha256:stable-plan-identity" {
+		t.Fatalf("plan identity changed in read projection: %#v", wire["plan"])
+	}
+}
+
 func TestContract_UnifiedActionLifecycleEventsJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 3, 18, 16, 0, 0, 0, time.UTC)
 	payload := struct {
