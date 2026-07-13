@@ -266,7 +266,7 @@ ensure_update_disk_headroom() {
 
 ensure_config_backup_headroom() {
     local config_path="${1:-$CONFIG_DIR}"
-    local backup_parent=""
+    local backup_parent="${2:-}"
     local free_bytes=""
     local config_bytes=""
     local required_bytes=""
@@ -275,7 +275,9 @@ ensure_config_backup_headroom() {
         return 0
     fi
 
-    backup_parent="$(dirname "$config_path")"
+    if [[ -z "$backup_parent" ]]; then
+        backup_parent="$(dirname "$config_path")"
+    fi
     free_bytes=$(get_available_bytes_for_path "$backup_parent" 2>/dev/null || true)
     config_bytes=$(get_directory_size_bytes "$config_path" 2>/dev/null || true)
 
@@ -289,7 +291,7 @@ ensure_config_backup_headroom() {
         print_error "Not enough free disk space to back up the existing Pulse configuration"
         print_info "Configuration size: $(bytes_to_human "$config_bytes")"
         print_info "Available in $backup_parent: $(bytes_to_human "$free_bytes"), required: $(bytes_to_human "$required_bytes")"
-        print_info "Free disk space or remove old ${config_path}.backup.* directories, then retry the update"
+        print_info "Free disk space or remove old configuration backups under $backup_parent, then retry the update"
         return 1
     fi
 
@@ -2846,8 +2848,17 @@ create_user() {
 backup_existing() {
     if [[ -d "$CONFIG_DIR" ]]; then
         print_info "Backing up existing configuration..."
-        ensure_config_backup_headroom "$CONFIG_DIR" || return 1
-        local backup_dir="${CONFIG_DIR}.backup.$(date +%Y%m%d-%H%M%S)"
+        local backup_parent backup_dir
+        backup_parent="$(dirname "$CONFIG_DIR")"
+        if [[ ! -w "$backup_parent" ]]; then
+            # The hardened pulse-update.service unit mounts /etc read-only
+            # (ProtectSystem=strict; only /opt/pulse, /etc/pulse and /tmp are
+            # writable), so keep the safety copy under the install dir there.
+            backup_parent="$INSTALL_DIR/config-backups"
+            mkdir -p "$backup_parent" || return 1
+        fi
+        ensure_config_backup_headroom "$CONFIG_DIR" "$backup_parent" || return 1
+        backup_dir="$backup_parent/$(basename "$CONFIG_DIR").backup.$(date +%Y%m%d-%H%M%S)"
         if ! cp -a "$CONFIG_DIR" "$backup_dir"; then
             rm -rf "$backup_dir"
             return 1
@@ -3096,8 +3107,22 @@ resolve_target_release() {
     fi
 
     if [[ -z "$LATEST_RELEASE" ]]; then
-        print_warn "Could not determine latest release from GitHub, using fallback version"
-        LATEST_RELEASE="v4.5.1"
+        print_error "Could not determine the latest Pulse release from GitHub"
+        print_info "GitHub may be unreachable or rate limiting. Retry later, or pin the release explicitly:"
+        print_info "  bash install.sh --version vX.Y.Z"
+        exit 1
+    fi
+
+    # Never move an existing install backwards from auto-resolution. Explicit
+    # downgrades stay available via --version.
+    if [[ -n "${CURRENT_VERSION:-}" && "$CURRENT_VERSION" != "unknown" ]]; then
+        local resolve_cmp=0
+        compare_versions "$LATEST_RELEASE" "$CURRENT_VERSION" || resolve_cmp=$?
+        if [[ "$resolve_cmp" -eq 2 ]]; then
+            print_error "Resolved release $LATEST_RELEASE is older than the installed $CURRENT_VERSION; refusing to downgrade automatically"
+            print_info "To downgrade on purpose, run: bash install.sh --version $LATEST_RELEASE"
+            exit 1
+        fi
     fi
 
     print_info "Latest version: $LATEST_RELEASE"
