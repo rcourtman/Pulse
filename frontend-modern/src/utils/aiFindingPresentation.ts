@@ -4,7 +4,7 @@ import type { InvestigationOutcome, InvestigationStatus } from '@/api/patrol';
 import type { MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 import { isLivePendingApproval } from '@/utils/approvalState';
 import { getPatrolProviderSettingsAction } from '@/utils/patrolRuntimeActions';
-import { formatIdentifierLabel } from '@/utils/textPresentation';
+import { formatIdentifierLabel, titleCaseDelimitedLabel } from '@/utils/textPresentation';
 import { formatBytes } from '@/utils/format';
 
 const DEFAULT_BADGE_CLASSES = 'border-border bg-surface-alt text-muted';
@@ -306,8 +306,9 @@ export interface PatrolFindingsBadgePresentation {
 
 export interface PatrolFindingDisplayGroup<TFinding> {
   id: string;
-  resourceKey: string;
-  resourceLabel: string;
+  affectedResourceCount: number;
+  kind: 'correlated' | 'finding' | 'node' | 'resource';
+  label: string;
   primaryFinding: TFinding;
   relatedFindings: TFinding[];
   findings: TFinding[];
@@ -524,15 +525,15 @@ export const getFindingSubjectPresentation = (
 export const getPatrolFindingResourceGroupKey = (
   finding: Pick<UnifiedFinding, 'id' | 'resourceId' | 'resourceName' | 'resourceType' | 'title'>,
 ): string => {
+  const resourceId = String(finding.resourceId || '').trim();
+  if (resourceId) {
+    return `id:${resourceId.toLowerCase()}`;
+  }
+
   const resourceName = String(finding.resourceName || '').trim();
   const resourceType = String(finding.resourceType || '').trim();
   if (resourceName || resourceType) {
     return `subject:${getFindingSubjectPresentation(finding).label.toLowerCase()}`;
-  }
-
-  const resourceId = String(finding.resourceId || '').trim();
-  if (resourceId) {
-    return `id:${resourceId}`;
   }
 
   return `finding:${finding.id}`;
@@ -541,34 +542,97 @@ export const getPatrolFindingResourceGroupKey = (
 export function buildPatrolFindingDisplayGroups<
   TFinding extends Pick<
     UnifiedFinding,
-    'id' | 'resourceId' | 'resourceName' | 'resourceType' | 'title'
+    | 'correlatedFindingIds'
+    | 'id'
+    | 'node'
+    | 'resourceId'
+    | 'resourceName'
+    | 'resourceType'
+    | 'title'
   >,
 >(findings: readonly TFinding[]): PatrolFindingDisplayGroup<TFinding>[] {
-  const groups: PatrolFindingDisplayGroup<TFinding>[] = [];
-  const groupsByResourceKey = new Map<string, PatrolFindingDisplayGroup<TFinding>>();
+  const findingById = new Map(findings.map((finding) => [finding.id, finding]));
+  const parentById = new Map(findings.map((finding) => [finding.id, finding.id]));
 
+  const findRoot = (findingId: string): string => {
+    const parent = parentById.get(findingId) ?? findingId;
+    if (parent === findingId) return parent;
+    const root = findRoot(parent);
+    parentById.set(findingId, root);
+    return root;
+  };
+  const union = (leftId: string, rightId: string) => {
+    const leftRoot = findRoot(leftId);
+    const rightRoot = findRoot(rightId);
+    if (leftRoot !== rightRoot) parentById.set(rightRoot, leftRoot);
+  };
+
+  const firstIdByResource = new Map<string, string>();
+  const firstIdByNode = new Map<string, string>();
   for (const finding of findings) {
     const resourceKey = getPatrolFindingResourceGroupKey(finding);
-    const existing = groupsByResourceKey.get(resourceKey);
-    if (existing) {
-      existing.findings.push(finding);
-      existing.relatedFindings.push(finding);
-      continue;
+    const firstResourceId = firstIdByResource.get(resourceKey);
+    if (firstResourceId) union(firstResourceId, finding.id);
+    else firstIdByResource.set(resourceKey, finding.id);
+
+    const node = String(finding.node || '').trim();
+    if (node) {
+      const nodeKey = node.toLowerCase();
+      const firstNodeId = firstIdByNode.get(nodeKey);
+      if (firstNodeId) union(firstNodeId, finding.id);
+      else firstIdByNode.set(nodeKey, finding.id);
     }
 
-    const group: PatrolFindingDisplayGroup<TFinding> = {
-      id: resourceKey,
-      resourceKey,
-      resourceLabel: getFindingSubjectPresentation(finding).label,
-      primaryFinding: finding,
-      relatedFindings: [],
-      findings: [finding],
-    };
-    groupsByResourceKey.set(resourceKey, group);
-    groups.push(group);
+    for (const correlatedId of finding.correlatedFindingIds ?? []) {
+      if (findingById.has(correlatedId)) union(finding.id, correlatedId);
+    }
   }
 
-  return groups;
+  const componentByRoot = new Map<string, TFinding[]>();
+  for (const finding of findings) {
+    const root = findRoot(finding.id);
+    const component = componentByRoot.get(root);
+    if (component) component.push(finding);
+    else componentByRoot.set(root, [finding]);
+  }
+
+  return [...componentByRoot.values()].map((component) => {
+    const primaryFinding = component[0];
+    const resourceKeys = new Set(component.map(getPatrolFindingResourceGroupKey));
+    const nodes = new Set(
+      component.map((finding) => String(finding.node || '').trim()).filter(Boolean),
+    );
+    const componentIds = new Set(component.map((finding) => finding.id));
+    const hasExplicitCorrelation = component.some((finding) =>
+      (finding.correlatedFindingIds ?? []).some((id) => componentIds.has(id)),
+    );
+    const kind: PatrolFindingDisplayGroup<TFinding>['kind'] =
+      component.length === 1
+        ? 'finding'
+        : hasExplicitCorrelation
+          ? 'correlated'
+          : resourceKeys.size === 1
+            ? 'resource'
+            : nodes.size === 1
+              ? 'node'
+              : 'correlated';
+    const commonNode = nodes.size === 1 ? [...nodes][0] : '';
+    const label =
+      kind === 'finding' || kind === 'resource'
+        ? getFindingSubjectPresentation(primaryFinding).label
+        : (commonNode ? titleCaseDelimitedLabel(commonNode, { preserveShortAllCaps: true }) : '') ||
+          `${resourceKeys.size} related ${resourceKeys.size === 1 ? 'resource' : 'resources'}`;
+
+    return {
+      id: `group:${component.map((finding) => finding.id).join(':')}`,
+      affectedResourceCount: resourceKeys.size,
+      kind,
+      label,
+      primaryFinding,
+      relatedFindings: component.slice(1),
+      findings: component,
+    };
+  });
 }
 
 export type PatrolFindingWorkType = 'approval' | 'failed' | 'in_progress' | 'recurring' | 'new';
@@ -673,21 +737,9 @@ export interface PatrolActionableStatePresentation {
   tone: MetadataBadgeTone;
 }
 
-export type PatrolFindingRowScaffoldItemId =
-  'affected' | 'checked' | 'next-step' | 'problem' | 'verification' | 'workflow' | 'why';
-
-export interface PatrolFindingRowScaffoldItem {
-  id: PatrolFindingRowScaffoldItemId;
-  label: string;
-  value: string;
-}
-
-export interface PatrolFindingRowScaffold {
-  items: PatrolFindingRowScaffoldItem[];
-}
-
 const formatBoundedFindingTime = (value: string): string | undefined => {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return undefined;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value))
+    return undefined;
   const parsed = new Date(value);
   return Number.isNaN(parsed.valueOf()) ? undefined : parsed.toLocaleString();
 };
@@ -703,8 +755,10 @@ export function getFindingEvidencePresentation(
     const count = match ? Number(match[1]) : Number.NaN;
     const checkedAt = match ? formatBoundedFindingTime(match[2]) : undefined;
     const receivedAt = match ? formatBoundedFindingTime(match[3]) : undefined;
-    if (!match || !Number.isSafeInteger(count) || count < 0 || !checkedAt || !receivedAt) return 'Pulse could not safely present the bounded host-update observation. Refresh before acting.';
-    const rebootBoundary = match[4] === 'true' ? 'Yes. No reboot is authorized by this finding or action.' : 'No.';
+    if (!match || !Number.isSafeInteger(count) || count < 0 || !checkedAt || !receivedAt)
+      return 'Pulse could not safely present the bounded host-update observation. Refresh before acting.';
+    const rebootBoundary =
+      match[4] === 'true' ? 'Yes. No reboot is authorized by this finding or action.' : 'No.';
     return `${count} operating system update${count === 1 ? '' : 's'} ${count === 1 ? 'was' : 'were'} pending when the agent checked at ${checkedAt}. Pulse received that observation at ${receivedAt}. The host already reported reboot required: ${rebootBoundary}`;
   }
   if (finding.key === 'apt-package-cache-pressure') {
@@ -715,7 +769,17 @@ export function getFindingEvidencePresentation(
     const usage = match ? Number(match[2]) : Number.NaN;
     const checkedAt = match ? formatBoundedFindingTime(match[3]) : undefined;
     const receivedAt = match ? formatBoundedFindingTime(match[4]) : undefined;
-    if (!match || !Number.isSafeInteger(bytes) || bytes < 0 || !Number.isFinite(usage) || usage < 0 || usage > 100 || !checkedAt || !receivedAt) return 'Pulse could not safely present the bounded package-cleanup observation. Refresh before acting.';
+    if (
+      !match ||
+      !Number.isSafeInteger(bytes) ||
+      bytes < 0 ||
+      !Number.isFinite(usage) ||
+      usage < 0 ||
+      usage > 100 ||
+      !checkedAt ||
+      !receivedAt
+    )
+      return 'Pulse could not safely present the bounded package-cleanup observation. Refresh before acting.';
     return `${formatBytes(bytes)} of downloaded package data was reclaimable while the filesystem was ${usage}% full. The agent checked at ${checkedAt}, and Pulse received that observation at ${receivedAt}.`;
   }
   return evidence;
@@ -745,171 +809,14 @@ export function getPatrolFindingActionableState(
   return undefined;
 }
 
-function getPatrolFindingVerificationSummary(
-  finding: Pick<
-    UnifiedFinding,
-    'investigationStatus' | 'investigationOutcome' | 'investigationRecord'
-  >,
+export function getPatrolFindingQueueSummary(
+  finding: Partial<Pick<UnifiedFinding, 'description' | 'impact' | 'recommendation'>>,
 ): string {
-  const actionState = finding.investigationRecord?.action?.state;
-  if (finding.investigationOutcome === 'fix_queued') {
-    if (actionState === 'planned') return 'The governed action is ready to run.';
-    if (actionState === 'approved') return 'The governed action is approved and ready to run.';
-    if (actionState === 'executing') return 'The governed action is running; verification follows.';
-    if (actionState === 'pending_approval')
-      return 'Waiting for an approval decision before the action runs.';
+  for (const candidate of [finding.impact, finding.description, finding.recommendation]) {
+    const normalized = String(candidate || '').trim();
+    if (normalized) return normalized;
   }
-  switch (finding.investigationOutcome) {
-    case 'fix_queued':
-      return 'Waiting for the governed action record before any change runs.';
-    case 'fix_executed':
-      return 'Fix ran; verification is in progress.';
-    case 'fix_verified':
-    case 'resolved':
-      return 'Verified outcome recorded.';
-    case 'fix_verification_failed':
-      return 'Verification failed and needs review.';
-    case 'fix_verification_unknown':
-      return 'Verification was inconclusive.';
-    case 'fix_failed':
-    case 'cannot_fix':
-    case 'timed_out':
-    case 'needs_attention':
-      return 'No verified fix; action needs review.';
-    case 'fix_rejected':
-      return 'No change ran because the fix was rejected.';
-    default:
-      break;
-  }
-
-  if (finding.investigationStatus === 'running' || finding.investigationStatus === 'pending') {
-    return 'Patrol is investigating; no fix has run yet.';
-  }
-
-  return 'No fix has run yet.';
-}
-
-function getPatrolFindingWorkflowSummary(
-  workflow: FindingPatrolWorkflowPresentation | undefined,
-): string {
-  if (!workflow) {
-    return 'Review evidence, decide the next action, and verify any outcome before closing.';
-  }
-
-  switch (workflow.stage) {
-    case 'approval':
-      if (workflow.label === 'Approve or reject') {
-        return 'Review evidence first; no change runs until the typed action is approved, then Patrol verifies the outcome.';
-      }
-      if (workflow.label === 'Run action' || workflow.label === 'Run approved action') {
-        return 'Review the typed plan, run it through the governed action lifecycle, then verify the outcome.';
-      }
-      return 'Recover the queued action before any change can run, then verify the outcome after a decision.';
-    case 'verification':
-      return 'The governed action ran; review follow-up evidence before closing the issue.';
-    case 'attention':
-      return 'Review the blocked or failed step before approving another change or resolving manually.';
-    case 'investigating':
-      return 'Patrol is explaining the issue and preparing the next decision point.';
-    case 'recorded':
-      return 'Patrol recorded the outcome; use history if you need the completed trail.';
-    case 'paused':
-      return 'Patrol will return this issue to the workflow when the reminder expires.';
-  }
-}
-
-const getNonEmptyPresentationText = (value: string | undefined, fallback: string): string => {
-  const normalized = String(value || '').trim();
-  return normalized || fallback;
-};
-
-export function getPatrolFindingRowScaffold(
-  finding: Pick<
-    UnifiedFinding,
-    | 'description'
-    | 'evidence'
-    | 'id'
-    | 'impact'
-    | 'investigationOutcome'
-    | 'investigationStatus'
-    | 'loopState'
-    | 'recommendation'
-    | 'resourceId'
-    | 'resourceName'
-    | 'resourceType'
-    | 'source'
-    | 'status'
-    | 'title'
-  >,
-  approvals: Pick<ApprovalRequest, 'status' | 'toolId' | 'targetId' | 'expiresAt'>[] = [],
-  now = Date.now(),
-): PatrolFindingRowScaffold | undefined {
-  if (
-    finding.source !== 'ai-patrol' ||
-    finding.status !== 'active' ||
-    isPatrolRuntimeFinding(finding)
-  ) {
-    return undefined;
-  }
-
-  const title = getNonEmptyPresentationText(
-    getFindingTitlePresentation(finding).label,
-    'Current Patrol issue',
-  );
-  const subject = getNonEmptyPresentationText(
-    getFindingSubjectPresentation(finding).label,
-    'Affected resource not specified',
-  );
-  const workflow = getFindingPatrolWorkflowPresentation(finding, approvals, now);
-
-  return {
-    items: [
-      {
-        id: 'problem',
-        label: 'Problem',
-        value: title,
-      },
-      {
-        id: 'affected',
-        label: 'Affected',
-        value: subject,
-      },
-      {
-        id: 'why',
-        label: 'Why it matters',
-        value: getNonEmptyPresentationText(
-          finding.impact || finding.description,
-          'Review this Patrol finding before making infrastructure changes.',
-        ),
-      },
-      {
-        id: 'checked',
-        label: 'What Pulse checked',
-        value: getNonEmptyPresentationText(
-          getFindingEvidencePresentation(finding),
-          'Patrol recorded this from the current check.',
-        ),
-      },
-      {
-        id: 'workflow',
-        label: 'Safe workflow',
-        value: getPatrolFindingWorkflowSummary(workflow),
-      },
-      {
-        id: 'next-step',
-        label: 'Recommended next step',
-        value: getNonEmptyPresentationText(
-          workflow?.detail || finding.recommendation,
-          'Open details to review evidence and decide the next action.',
-        ),
-      },
-      {
-        id: 'verification',
-        label: 'Verification',
-        value: getPatrolFindingVerificationSummary(finding),
-      },
-    ],
-  };
+  return 'Open this issue to review what Patrol found and decide the next step.';
 }
 
 export const getPatrolFindingIssueCountLabel = (count: number): string => {

@@ -85,11 +85,17 @@ or historical proof/counting for resolved-only work.
    problem above the list. When active Patrol findings are the next operator
    step, the finding row owns the canonical primary action, contextual
    Assistant handoffs, approvals, verification, and manual controls. A
-   compact row-owned issue scaffold may translate the same finding, approval,
-   and workflow fields into problem, affected resource, consequence, checked
-   evidence, safe workflow step, next step, and verification state, but it must
-   stay attached to the active issue row and must not become a separate proof,
-   trust, or status strip. Because a
+   compact row must expose only what the operator needs to prioritise the
+   queue: severity, current workflow state, title, affected resource, recency,
+   and one bounded consequence summary. Checked evidence, recommendation,
+   approval controls, verification state, history, and manual controls belong
+   to the single selected issue review beside the queue; the collapsed list
+   must not render those fields as an always-open checklist. Findings may be
+   grouped only from API-owned identity facts: the same canonical resource, a
+   shared parent node, or explicit correlated finding IDs. Grouping must not
+   infer causality from title or description prose, and the queue's affected
+   resource count must continue to count canonical resources rather than
+   visual groups. Because a
    contextual Assistant handoff from that workflow is still a first-party Patrol
    starter for the same governed journey, it must record content-free workflow
    prompt activity through the shared marker route with the `pulse_patrol`
@@ -919,6 +925,19 @@ fix`, or `Explain` based on current finding state), while secondary
    instead of reopening the compact strip into a sparse status panel.
 
 ## Current State
+
+The active Patrol queue now uses compact severity-accented rows for
+prioritisation and a single focused review panel for the selected issue. The
+collapsed row carries severity, actionable state, title, resource and recency,
+plus one consequence line; evidence, recommendation, approval, verification,
+history, and manual controls render only in the selected review. The previous
+seven-field always-visible row scaffold and duplicate Open work count badge
+were retired. Active findings group through API-owned same-resource, parent
+node, or explicit correlation relationships, while the workspace continues to
+count the underlying affected resources. Component, presentation, and browser
+journey proof live in `FindingsPanel.links.test.tsx`,
+`FindingsPanel.test.ts`, `aiFindingWorkType.test.ts`, and
+`tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts`.
 
 Patrol provider-repair actions now use the canonical Pulse Intelligence >
 Provider & Models route `/settings/pulse-intelligence/provider`. The legacy

@@ -19,6 +19,9 @@ type PatrolWorkbenchFixtureOptions = {
   runStatus?: "healthy" | "issues_found" | "error";
 };
 
+const recentPatrolStartedAt = new Date(Date.now() - 102_000).toISOString();
+const recentPatrolCompletedAt = new Date(Date.now() - 60_000).toISOString();
+
 const test = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
     await use(authStorageStatePath);
@@ -116,8 +119,8 @@ const buildRuntimeState = () => ({
 const buildRunHistory = (options: Required<PatrolWorkbenchFixtureOptions>) => [
   {
     id: options.findingCount > 0 ? "run-active-work" : "run-calm-day",
-    started_at: "2026-06-30T08:05:00Z",
-    completed_at: "2026-06-30T08:05:42Z",
+    started_at: recentPatrolStartedAt,
+    completed_at: recentPatrolCompletedAt,
     duration_ms: 42_000,
     type: "full",
     trigger_reason: "scheduled",
@@ -151,7 +154,7 @@ const buildPatrolStatus = (
   runtime_state: "active",
   running: false,
   enabled: true,
-  last_patrol_at: "2026-06-30T08:05:42Z",
+  last_patrol_at: recentPatrolCompletedAt,
   next_patrol_at: "2099-06-30T14:05:42Z",
   last_duration_ms: 42_000,
   resources_checked: options.resourcesChecked,
@@ -231,8 +234,8 @@ const buildPatrolFindingsResponse = (
           "CPU stayed above the configured warning threshold during the scheduled Patrol check.",
         recommendation:
           "Review the host load and move or stop noisy workloads before approving a fix.",
-        detected_at: "2026-06-30T08:05:00Z",
-        last_seen_at: "2026-06-30T08:05:42Z",
+        detected_at: recentPatrolStartedAt,
+        last_seen_at: recentPatrolCompletedAt,
         auto_resolved: false,
         times_raised: 1,
         suppressed: false,
@@ -558,9 +561,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     ).toHaveCount(0);
     await expect(page.getByText("Patrol checked 1 resource")).toHaveCount(0);
     await expect(page.getByText("No Patrol work waiting")).toHaveCount(0);
-    await expect(
-      page.getByText("Next check scheduled"),
-    ).toHaveCount(0);
+    await expect(page.getByText("Next check scheduled")).toHaveCount(0);
 
     await page.getByRole("tab", { name: "Patrol" }).click();
     await expect(page).toHaveURL(/\/patrol$/);
@@ -629,88 +630,193 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(
       page.getByRole("list", { name: "Patrol protection posture" }),
     ).toHaveCount(0);
-    const issueSummary = page.locator('dl[aria-label="Patrol issue summary"]');
-    await expect(issueSummary).toBeVisible();
-    await expect(issueSummary.getByText("Problem")).toBeVisible();
-    await expect(issueSummary.getByText("Affected")).toBeVisible();
-    await expect(issueSummary.getByText("Why it matters")).toBeVisible();
-    await expect(issueSummary.getByText("What Pulse checked")).toBeVisible();
-    await expect(issueSummary.getByText("Safe workflow")).toBeVisible();
-    await expect(issueSummary.getByText("Recommended next step")).toBeVisible();
-    await expect(issueSummary.getByText("Verification")).toBeVisible();
+    await expect(page.getByText("High CPU pressure on pve-main")).toBeVisible();
+    await expect(page.getByText("Approval required")).toBeVisible();
     await expect(
-      issueSummary.getByText("High CPU pressure on pve-main"),
-    ).toBeVisible();
-    await expect(issueSummary.getByText("pve-main (agent)")).toBeVisible();
-    await expect(
-      issueSummary.getByText(
+      page.getByText(
         "Sustained CPU pressure can slow hosted workloads on this Proxmox host.",
       ),
     ).toBeVisible();
+    const collapsedIssue = page.getByRole("button", {
+      name: "Open issue details for High CPU pressure on pve-main",
+    });
+    await expect(collapsedIssue.getByText("Problem")).toHaveCount(0);
+    await expect(collapsedIssue.getByText("Affected")).toHaveCount(0);
+    await expect(collapsedIssue.getByText("Safe workflow")).toHaveCount(0);
+    await expect(collapsedIssue.getByText("Verification")).toHaveCount(0);
+    await expect(collapsedIssue.getByText("What Pulse checked:")).toHaveCount(
+      0,
+    );
+
+    await page
+      .getByRole("button", {
+        name: "Review issue for High CPU pressure on pve-main",
+      })
+      .click();
+    const issueReview = page.getByRole("complementary", {
+      name: "Review High CPU pressure on pve-main",
+    });
+    await expect(issueReview).toBeVisible();
+    await expect(issueReview.getByText("pve-main (agent)")).toBeVisible();
     await expect(
-      issueSummary.getByText(
+      issueReview.getByText(
         "CPU stayed above the configured warning threshold during the scheduled Patrol check.",
       ),
     ).toBeVisible();
-    await expect(
-      issueSummary.getByText(
-        "Review evidence first; no change runs until the proposed fix is approved, then Patrol verifies the outcome.",
-      ),
-    ).toBeVisible();
-    await expect(
-      issueSummary.getByText(
-        "A governed fix is waiting for an approve or reject decision.",
-      ),
-    ).toBeVisible();
-    await expect(
-      issueSummary.getByText("Waiting for approval before any fix runs."),
-    ).toBeVisible();
+    await expect(issueReview.getByText("What Pulse checked:")).toBeVisible();
+    await expect(issueReview.getByText("Recommended next step:")).toBeVisible();
     await expect(
       page.getByRole("heading", { name: /^Pulse Assistant$/ }),
     ).toHaveCount(0);
   });
 
-  test("Patrol presents bounded APT findings without package-manager internals", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith("mobile-"), "Phone action review is covered by the Actions journey");
-    await mockMonitorFirstPatrolWorkbench(page, { findingCount: 1, runStatus: "issues_found" });
+  test("Patrol presents bounded APT findings without package-manager internals", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Phone action review is covered by the Actions journey",
+    );
+    await mockMonitorFirstPatrolWorkbench(page, {
+      findingCount: 1,
+      runStatus: "issues_found",
+    });
     const updateFinding = {
-        id: "apt-updates-active", key: "apt-host-updates", alertIdentifier: `${monitoredProxmoxResource.id}::apt/updates`, severity: "warning", category: "maintenance",
-        resource_id: monitoredProxmoxResource.id, resource_name: monitoredProxmoxResource.displayName, resource_type: monitoredProxmoxResource.type,
-        title: "Operating system updates need review", description: "Patrol found a bounded host-maintenance action for review.", impact: "Unapplied updates can leave the host behind its intended maintenance posture.",
-        evidence: "pending_updates=6 inventory=sha256:must-not-render checked_at=2026-07-12T10:00:00Z received_at=2026-07-12T10:05:00Z reboot_required=true",
-        recommendation: "Review the governed update action. A reboot, if required later, is a separate action.", detected_at: "2026-07-12T10:00:00Z", last_seen_at: "2026-07-12T10:05:00Z", auto_resolved: false, times_raised: 1, suppressed: false, investigation_attempts: 1,
-        investigation_status: "completed", investigation_outcome: "verification_failed",
-      };
+      id: "apt-updates-active",
+      key: "apt-host-updates",
+      alertIdentifier: `${monitoredProxmoxResource.id}::apt/updates`,
+      severity: "warning",
+      category: "maintenance",
+      resource_id: monitoredProxmoxResource.id,
+      resource_name: monitoredProxmoxResource.displayName,
+      resource_type: monitoredProxmoxResource.type,
+      title: "Operating system updates need review",
+      description: "Patrol found a bounded host-maintenance action for review.",
+      impact:
+        "Unapplied updates can leave the host behind its intended maintenance posture.",
+      evidence:
+        "pending_updates=6 inventory=sha256:must-not-render checked_at=2026-07-12T10:00:00Z received_at=2026-07-12T10:05:00Z reboot_required=true",
+      recommendation:
+        "Review the governed update action. A reboot, if required later, is a separate action.",
+      detected_at: "2026-07-12T10:00:00Z",
+      last_seen_at: "2026-07-12T10:05:00Z",
+      auto_resolved: false,
+      times_raised: 1,
+      suppressed: false,
+      investigation_attempts: 1,
+      investigation_status: "completed",
+      investigation_outcome: "verification_failed",
+    };
     const cleanupFinding = {
-        id: "apt-cleanup-active", key: "apt-package-cache-pressure", alertIdentifier: `${monitoredProxmoxResource.id}::apt/cache`, severity: "warning", category: "storage",
-        resource_id: monitoredProxmoxResource.id, resource_name: monitoredProxmoxResource.displayName, resource_type: monitoredProxmoxResource.type,
-        title: "Downloaded package data is using needed space", description: "Patrol measured reclaimable downloaded package data on the pressured filesystem.", impact: "The host may run short of operational disk space.",
-        evidence: "reclaimable_bytes=104857600 filesystem_usage=91.5 fingerprint=sha256:must-not-render checked_at=2026-07-12T10:00:00Z received_at=2026-07-12T10:05:00Z",
-        recommendation: "Review the governed cleanup action and rescan after any inconclusive attempt.", detected_at: "2026-07-12T10:00:00Z", last_seen_at: "2026-07-12T10:05:00Z", auto_resolved: false, times_raised: 1, suppressed: false, investigation_attempts: 1,
-        investigation_status: "completed", investigation_outcome: "fix_failed",
-      };
+      id: "apt-cleanup-active",
+      key: "apt-package-cache-pressure",
+      alertIdentifier: `${monitoredProxmoxResource.id}::apt/cache`,
+      severity: "warning",
+      category: "storage",
+      resource_id: monitoredProxmoxResource.id,
+      resource_name: monitoredProxmoxResource.displayName,
+      resource_type: monitoredProxmoxResource.type,
+      title: "Downloaded package data is using needed space",
+      description:
+        "Patrol measured reclaimable downloaded package data on the pressured filesystem.",
+      impact: "The host may run short of operational disk space.",
+      evidence:
+        "reclaimable_bytes=104857600 filesystem_usage=91.5 fingerprint=sha256:must-not-render checked_at=2026-07-12T10:00:00Z received_at=2026-07-12T10:05:00Z",
+      recommendation:
+        "Review the governed cleanup action and rescan after any inconclusive attempt.",
+      detected_at: "2026-07-12T10:00:00Z",
+      last_seen_at: "2026-07-12T10:05:00Z",
+      auto_resolved: false,
+      times_raised: 1,
+      suppressed: false,
+      investigation_attempts: 1,
+      investigation_status: "completed",
+      investigation_outcome: "fix_failed",
+    };
     const findings = [updateFinding];
-    await page.route("**/api/ai/patrol/findings*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(findings) }));
-    await page.route("**/api/ai/unified/findings*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ findings, count: 2, active_count: 2 }) }));
+    await page.route("**/api/ai/patrol/findings*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(findings),
+      }),
+    );
+    await page.route("**/api/ai/unified/findings*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ findings, count: 2, active_count: 2 }),
+      }),
+    );
     await page.goto("/patrol", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { level: 1, name: "Patrol" })).toBeVisible();
-    await expect(page.getByText("Operating system updates need review").first()).toBeVisible();
-    await expect(page.getByText("6 operating system updates were pending when the agent checked", { exact: false })).toBeVisible();
-    await expect(page.getByText("reboot required: Yes", { exact: false })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Patrol" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Operating system updates need review").first(),
+    ).toBeVisible();
+    await page
+      .getByRole("button", {
+        name: "Review issue for Operating system updates need review",
+      })
+      .click();
+    const updateReview = page.getByRole("complementary", {
+      name: "Review Operating system updates need review",
+    });
+    await expect(
+      updateReview.getByText(
+        "6 operating system updates were pending when the agent checked",
+        { exact: false },
+      ),
+    ).toBeVisible();
+    await expect(
+      updateReview.getByText("reboot required: Yes", { exact: false }),
+    ).toBeVisible();
     await expect(page.getByText("sha256:must-not-render")).toHaveCount(0);
     await expect(page.getByText("inventory=", { exact: false })).toHaveCount(0);
     await page.unroute("**/api/ai/patrol/findings*");
     await page.unroute("**/api/ai/unified/findings*");
-    await page.route("**/api/ai/patrol/findings*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([cleanupFinding]) }));
-    await page.route("**/api/ai/unified/findings*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ findings: [cleanupFinding], count: 1, active_count: 1 }) }));
+    await page.route("**/api/ai/patrol/findings*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([cleanupFinding]),
+      }),
+    );
+    await page.route("**/api/ai/unified/findings*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          findings: [cleanupFinding],
+          count: 1,
+          active_count: 1,
+        }),
+      }),
+    );
     await page.reload({ waitUntil: "domcontentloaded" });
-    const cleanupTitle = page.getByText("Downloaded package data is using needed space").first();
+    const cleanupTitle = page
+      .getByText("Downloaded package data is using needed space")
+      .first();
     await expect(cleanupTitle).toBeVisible();
     await cleanupTitle.locator("xpath=ancestor::*[@role='button'][1]").click();
-    await expect(page.getByText("100 MB of downloaded package data was reclaimable", { exact: false }).first()).toBeVisible();
-    await expect(page.getByText("91.5% full", { exact: false }).first()).toBeVisible();
-    await expect(page.getByText("fingerprint=", { exact: false })).toHaveCount(0);
-    await testInfo.attach("apt-bounded-patrol-findings", { body: await page.screenshot(), contentType: "image/png" });
+    await expect(
+      page
+        .getByText("100 MB of downloaded package data was reclaimable", {
+          exact: false,
+        })
+        .first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("91.5% full", { exact: false }).first(),
+    ).toBeVisible();
+    await expect(page.getByText("fingerprint=", { exact: false })).toHaveCount(
+      0,
+    );
+    await testInfo.attach("apt-bounded-patrol-findings", {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
 
     const resolvedFinding = {
       ...updateFinding,
@@ -719,19 +825,47 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       auto_resolved: true,
       resolved_at: "2026-07-12T10:06:00Z",
       investigation_outcome: "fix_verified",
-      evidence: "pending_updates=0 inventory=sha256:must-not-render checked_at=2026-07-12T10:01:00Z received_at=2026-07-12T10:06:00Z reboot_required=false",
+      evidence:
+        "pending_updates=0 inventory=sha256:must-not-render checked_at=2026-07-12T10:01:00Z received_at=2026-07-12T10:06:00Z reboot_required=false",
     };
     await page.unroute("**/api/ai/patrol/findings*");
     await page.unroute("**/api/ai/unified/findings*");
-    await page.route("**/api/ai/patrol/findings*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([resolvedFinding]) }));
-    await page.route("**/api/ai/unified/findings*", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ findings: [resolvedFinding], count: 1, active_count: 0 }) }));
+    await page.route("**/api/ai/patrol/findings*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([resolvedFinding]),
+      }),
+    );
+    await page.route("**/api/ai/unified/findings*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          findings: [resolvedFinding],
+          count: 1,
+          active_count: 0,
+        }),
+      }),
+    );
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Resolved" }).click();
-    const resolvedTitle = page.getByText("Operating system updates confirmed complete").first();
+    const resolvedTitle = page
+      .getByText("Operating system updates confirmed complete")
+      .first();
     await expect(resolvedTitle).toBeVisible();
     await resolvedTitle.locator("xpath=ancestor::*[@role='button'][1]").click();
-    await expect(page.getByText("0 operating system updates were pending", { exact: false }).first()).toBeVisible();
-    await expect(page.getByText("Operating system updates need review")).toHaveCount(0);
-    await testInfo.attach("apt-confirmed-postcondition-resolved", { body: await page.screenshot(), contentType: "image/png" });
+    await expect(
+      page
+        .getByText("0 operating system updates were pending", { exact: false })
+        .first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Operating system updates need review"),
+    ).toHaveCount(0);
+    await testInfo.attach("apt-confirmed-postcondition-resolved", {
+      body: await page.screenshot(),
+      contentType: "image/png",
+    });
   });
 });

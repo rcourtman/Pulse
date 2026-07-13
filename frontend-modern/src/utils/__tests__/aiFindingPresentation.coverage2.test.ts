@@ -17,7 +17,6 @@ import {
   getOperatorStateDismissCause,
   getPatrolFindingsBadgePresentation,
   getPatrolFindingResourceGroupKey,
-  getPatrolFindingRowScaffold,
   getPatrolWorkTypeCompositionClause,
   isPatrolRuntimeFinding,
   normalizePatrolRuntimeFindingLabel,
@@ -141,11 +140,15 @@ describe('getFindingSeverityBadgeClasses', () => {
   });
 
   it('returns the watch (neutral surface) classes', () => {
-    expect(getFindingSeverityBadgeClasses('watch')).toBe('border-border bg-surface-alt text-base-content');
+    expect(getFindingSeverityBadgeClasses('watch')).toBe(
+      'border-border bg-surface-alt text-base-content',
+    );
   });
 
   it('falls back to the default badge classes for an unknown severity', () => {
-    expect(getFindingSeverityBadgeClasses('severe')).toBe('border-border bg-surface-alt text-muted');
+    expect(getFindingSeverityBadgeClasses('severe')).toBe(
+      'border-border bg-surface-alt text-muted',
+    );
   });
 
   it('falls back to the default badge classes for the empty string', () => {
@@ -211,8 +214,12 @@ describe('getFindingSeveritySortOrder', () => {
   });
 
   it('ranks critical before warning before watch before info', () => {
-    expect(getFindingSeveritySortOrder('critical')).toBeLessThan(getFindingSeveritySortOrder('warning'));
-    expect(getFindingSeveritySortOrder('warning')).toBeLessThan(getFindingSeveritySortOrder('watch'));
+    expect(getFindingSeveritySortOrder('critical')).toBeLessThan(
+      getFindingSeveritySortOrder('warning'),
+    );
+    expect(getFindingSeveritySortOrder('warning')).toBeLessThan(
+      getFindingSeveritySortOrder('watch'),
+    );
     expect(getFindingSeveritySortOrder('watch')).toBeLessThan(getFindingSeveritySortOrder('info'));
   });
 });
@@ -304,7 +311,9 @@ describe('getFindingSeverityPresentation', () => {
 
 describe('isPatrolRuntimeFinding', () => {
   it('is true when resourceId is "ai-service"', () => {
-    expect(isPatrolRuntimeFinding({ resourceId: 'ai-service', resourceName: '', title: '' })).toBe(true);
+    expect(isPatrolRuntimeFinding({ resourceId: 'ai-service', resourceName: '', title: '' })).toBe(
+      true,
+    );
   });
 
   it('is true when resourceName is "Pulse Patrol Service" (case-insensitive)', () => {
@@ -320,9 +329,9 @@ describe('isPatrolRuntimeFinding', () => {
   });
 
   it('is false when none of the runtime identifiers match', () => {
-    expect(isPatrolRuntimeFinding({ resourceId: 'vm:1', resourceName: 'node-1', title: 'CPU high' })).toBe(
-      false,
-    );
+    expect(
+      isPatrolRuntimeFinding({ resourceId: 'vm:1', resourceName: 'node-1', title: 'CPU high' }),
+    ).toBe(false);
   });
 
   it('is false when all fields are empty strings', () => {
@@ -343,7 +352,11 @@ describe('isPatrolRuntimeFinding', () => {
 
   it('does not match a title that contains but does not start with "Pulse Patrol:"', () => {
     expect(
-      isPatrolRuntimeFinding({ resourceId: '', resourceName: '', title: 'Issue: Pulse Patrol: down' }),
+      isPatrolRuntimeFinding({
+        resourceId: '',
+        resourceName: '',
+        title: 'Issue: Pulse Patrol: down',
+      }),
     ).toBe(false);
   });
 });
@@ -393,7 +406,9 @@ describe('normalizePatrolRuntimeFindingLabel', () => {
 
 describe('getFindingTitlePresentation', () => {
   it('returns the trimmed raw title for a non-runtime finding', () => {
-    expect(getFindingTitlePresentation(makeFinding({ title: '  CPU high  ', resourceId: 'vm:1' }))).toEqual({
+    expect(
+      getFindingTitlePresentation(makeFinding({ title: '  CPU high  ', resourceId: 'vm:1' })),
+    ).toEqual({
       label: 'CPU high',
     });
   });
@@ -406,7 +421,9 @@ describe('getFindingTitlePresentation', () => {
 
   it('returns the normalized label for a runtime finding with a standard title', () => {
     expect(
-      getFindingTitlePresentation(makeFinding({ title: 'Pulse Patrol: CPU high', resourceId: 'ai-service' })),
+      getFindingTitlePresentation(
+        makeFinding({ title: 'Pulse Patrol: CPU high', resourceId: 'ai-service' }),
+      ),
     ).toEqual({ label: 'CPU high' });
   });
 
@@ -430,26 +447,23 @@ describe('getFindingTitlePresentation', () => {
 // ===================================================================
 
 describe('getPatrolFindingResourceGroupKey', () => {
-  it('groups by subject label when resourceName is present', () => {
+  it('groups by canonical resource id before presentation fields', () => {
     const key = getPatrolFindingResourceGroupKey(
       makeFinding({ id: 'f1', resourceName: 'db-primary', resourceType: '', resourceId: 'vm:1' }),
     );
-    expect(key).toBe('subject:db-primary');
+    expect(key).toBe('id:vm:1');
   });
 
-  it('groups by subject label (with formatted type) when only resourceType is present', () => {
+  it('normalizes canonical resource ids for consistent grouping', () => {
     const key = getPatrolFindingResourceGroupKey(
-      makeFinding({ id: 'f1', resourceName: '', resourceType: 'k8s_pod', resourceId: 'vm:1' }),
+      makeFinding({ id: 'f1', resourceName: '', resourceType: 'k8s_pod', resourceId: 'VM:1' }),
     );
-    // getFindingSubjectPresentation formats as "resourceName (type)" but resourceName
-    // falls back to resourceId when empty. Here resourceName is '' so it uses resourceId.
-    // resourceType present → label = `${resourceName-or-id} (${formatIdentifierLabel(type)})`
-    expect(key).toBe('subject:vm:1 (k8s pod)');
+    expect(key).toBe('id:vm:1');
   });
 
-  it('groups by subject label using resourceName when both name and type are present', () => {
+  it('falls back to a formatted subject label when no resource id is available', () => {
     const key = getPatrolFindingResourceGroupKey(
-      makeFinding({ id: 'f1', resourceName: 'web-node', resourceType: 'vm', resourceId: 'vm:1' }),
+      makeFinding({ id: 'f1', resourceName: 'web-node', resourceType: 'vm', resourceId: '' }),
     );
     expect(key).toBe('subject:web-node (vm)');
   });
@@ -468,9 +482,9 @@ describe('getPatrolFindingResourceGroupKey', () => {
     expect(key).toBe('finding:lonely');
   });
 
-  it('lowercases the subject label for consistent grouping', () => {
+  it('lowercases a fallback subject label for consistent grouping', () => {
     const key = getPatrolFindingResourceGroupKey(
-      makeFinding({ id: 'f1', resourceName: 'DB-Primary', resourceType: '', resourceId: 'vm:1' }),
+      makeFinding({ id: 'f1', resourceName: 'DB-Primary', resourceType: '', resourceId: '' }),
     );
     expect(key).toBe('subject:db-primary');
   });
@@ -586,7 +600,9 @@ describe('getFindingPatrolWorkflowPresentation', () => {
 
   it('returns undefined for a dismissed finding (status not active/resolved/snoozed)', () => {
     expect(
-      getFindingPatrolWorkflowPresentation(makeFinding({ source: 'ai-patrol', status: 'dismissed' })),
+      getFindingPatrolWorkflowPresentation(
+        makeFinding({ source: 'ai-patrol', status: 'dismissed' }),
+      ),
     ).toBeUndefined();
   });
 
@@ -599,7 +615,12 @@ describe('getFindingPatrolWorkflowPresentation', () => {
   });
 
   it('returns the approval stage with "Approve or reject" when a live approval exists', () => {
-    const finding = makeFinding({ id: 'f1', source: 'ai-patrol', status: 'active', resourceId: 'vm:1' });
+    const finding = makeFinding({
+      id: 'f1',
+      source: 'ai-patrol',
+      status: 'active',
+      resourceId: 'vm:1',
+    });
     const result = getFindingPatrolWorkflowPresentation(finding, [liveApproval('f1')], NOW);
     expect(result?.stage).toBe('approval');
     expect(result?.label).toBe('Approve or reject');
@@ -608,7 +629,12 @@ describe('getFindingPatrolWorkflowPresentation', () => {
 
   it('returns the investigating stage when investigationStatus is running', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationStatus: 'running' }),
+      makeFinding({
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        investigationStatus: 'running',
+      }),
     );
     expect(result?.stage).toBe('investigating');
     expect(result?.label).toBe('Patrol investigating');
@@ -617,21 +643,36 @@ describe('getFindingPatrolWorkflowPresentation', () => {
 
   it('returns the investigating stage when investigationStatus is pending', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationStatus: 'pending' }),
+      makeFinding({
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        investigationStatus: 'pending',
+      }),
     );
     expect(result?.stage).toBe('investigating');
   });
 
   it('returns the investigating stage when loopState is investigating', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', loopState: 'investigating' }),
+      makeFinding({
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        loopState: 'investigating',
+      }),
     );
     expect(result?.stage).toBe('investigating');
   });
 
   it('returns the recorded stage for an active finding with fix_verified outcome', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationOutcome: 'fix_verified' }),
+      makeFinding({
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        investigationOutcome: 'fix_verified',
+      }),
     );
     expect(result?.stage).toBe('recorded');
     expect(result?.label).toBe('Outcome recorded');
@@ -639,14 +680,25 @@ describe('getFindingPatrolWorkflowPresentation', () => {
 
   it('returns the recorded stage for an active finding with resolved outcome', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationOutcome: 'resolved' }),
+      makeFinding({
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        investigationOutcome: 'resolved',
+      }),
     );
     expect(result?.stage).toBe('recorded');
   });
 
   it('returns the approval stage with "Recover action" for fix_queued without a live approval', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ id: 'f1', source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationOutcome: 'fix_queued' }),
+      makeFinding({
+        id: 'f1',
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        investigationOutcome: 'fix_queued',
+      }),
     );
     expect(result?.stage).toBe('approval');
     expect(result?.label).toBe('Recover action');
@@ -654,7 +706,12 @@ describe('getFindingPatrolWorkflowPresentation', () => {
 
   it('returns the verification stage for fix_executed', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationOutcome: 'fix_executed' }),
+      makeFinding({
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        investigationOutcome: 'fix_executed',
+      }),
     );
     expect(result?.stage).toBe('verification');
     expect(result?.label).toBe('Verify outcome');
@@ -662,7 +719,12 @@ describe('getFindingPatrolWorkflowPresentation', () => {
 
   it('returns the attention stage for fix_failed', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationOutcome: 'fix_failed' }),
+      makeFinding({
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        investigationOutcome: 'fix_failed',
+      }),
     );
     expect(result?.stage).toBe('attention');
     expect(result?.label).toBe('Fix failed');
@@ -671,14 +733,24 @@ describe('getFindingPatrolWorkflowPresentation', () => {
 
   it('returns the attention stage for fix_verification_failed', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationOutcome: 'fix_verification_failed' }),
+      makeFinding({
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        investigationOutcome: 'fix_verification_failed',
+      }),
     );
     expect(result?.stage).toBe('attention');
   });
 
   it('returns the attention stage for fix_rejected with "Decide follow-up"', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationOutcome: 'fix_rejected' }),
+      makeFinding({
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        investigationOutcome: 'fix_rejected',
+      }),
     );
     expect(result?.stage).toBe('attention');
     expect(result?.label).toBe('Decide follow-up');
@@ -687,7 +759,12 @@ describe('getFindingPatrolWorkflowPresentation', () => {
 
   it('returns the verification stage for fix_verification_unknown', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationOutcome: 'fix_verification_unknown' }),
+      makeFinding({
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        investigationOutcome: 'fix_verification_unknown',
+      }),
     );
     expect(result?.stage).toBe('verification');
     expect(result?.label).toBe('Check outcome');
@@ -695,7 +772,12 @@ describe('getFindingPatrolWorkflowPresentation', () => {
 
   it('returns the attention stage with "Needs input" for needs_attention', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationOutcome: 'needs_attention' }),
+      makeFinding({
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        investigationOutcome: 'needs_attention',
+      }),
     );
     expect(result?.stage).toBe('attention');
     expect(result?.label).toBe('Needs input');
@@ -703,14 +785,24 @@ describe('getFindingPatrolWorkflowPresentation', () => {
 
   it('returns the attention stage for cannot_fix', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationOutcome: 'cannot_fix' }),
+      makeFinding({
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        investigationOutcome: 'cannot_fix',
+      }),
     );
     expect(result?.stage).toBe('attention');
   });
 
   it('returns the attention stage for timed_out', () => {
     const result = getFindingPatrolWorkflowPresentation(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationOutcome: 'timed_out' }),
+      makeFinding({
+        source: 'ai-patrol',
+        status: 'active',
+        resourceId: 'vm:1',
+        investigationOutcome: 'timed_out',
+      }),
     );
     expect(result?.stage).toBe('attention');
   });
@@ -718,175 +810,14 @@ describe('getFindingPatrolWorkflowPresentation', () => {
   it('returns undefined for an active finding with an unrecognised outcome and no investigation status', () => {
     expect(
       getFindingPatrolWorkflowPresentation(
-        makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', investigationOutcome: undefined }),
+        makeFinding({
+          source: 'ai-patrol',
+          status: 'active',
+          resourceId: 'vm:1',
+          investigationOutcome: undefined,
+        }),
       ),
     ).toBeUndefined();
-  });
-});
-
-// ===================================================================
-// getPatrolFindingVerificationSummary (private, reached via
-// getPatrolFindingRowScaffold — the scaffold guard requires source
-// 'ai-patrol', status 'active', and NOT a patrol-runtime finding)
-// ===================================================================
-
-describe('getPatrolFindingVerificationSummary (via getPatrolFindingRowScaffold)', () => {
-  const verificationValue = (overrides: Partial<UnifiedFinding>): string | undefined => {
-    const scaffold = getPatrolFindingRowScaffold(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', ...overrides }),
-    );
-    return scaffold?.items.find((item) => item.id === 'verification')?.value;
-  };
-
-  it('reports waiting-for-approval for fix_queued', () => {
-    expect(verificationValue({ investigationOutcome: 'fix_queued' })).toBe(
-      'Waiting for the governed action record before any change runs.',
-    );
-  });
-
-  it('reports verification-in-progress for fix_executed', () => {
-    expect(verificationValue({ investigationOutcome: 'fix_executed' })).toBe(
-      'Fix ran; verification is in progress.',
-    );
-  });
-
-  it('reports verified outcome for fix_verified', () => {
-    expect(verificationValue({ investigationOutcome: 'fix_verified' })).toBe(
-      'Verified outcome recorded.',
-    );
-  });
-
-  it('reports verified outcome for resolved', () => {
-    expect(verificationValue({ investigationOutcome: 'resolved' })).toBe(
-      'Verified outcome recorded.',
-    );
-  });
-
-  it('reports verification failed for fix_verification_failed', () => {
-    expect(verificationValue({ investigationOutcome: 'fix_verification_failed' })).toBe(
-      'Verification failed and needs review.',
-    );
-  });
-
-  it('reports inconclusive for fix_verification_unknown', () => {
-    expect(verificationValue({ investigationOutcome: 'fix_verification_unknown' })).toBe(
-      'Verification was inconclusive.',
-    );
-  });
-
-  it('reports no verified fix for fix_failed', () => {
-    expect(verificationValue({ investigationOutcome: 'fix_failed' })).toBe(
-      'No verified fix; action needs review.',
-    );
-  });
-
-  it('reports no verified fix for cannot_fix', () => {
-    expect(verificationValue({ investigationOutcome: 'cannot_fix' })).toBe(
-      'No verified fix; action needs review.',
-    );
-  });
-
-  it('reports no verified fix for timed_out', () => {
-    expect(verificationValue({ investigationOutcome: 'timed_out' })).toBe(
-      'No verified fix; action needs review.',
-    );
-  });
-
-  it('reports no verified fix for needs_attention', () => {
-    expect(verificationValue({ investigationOutcome: 'needs_attention' })).toBe(
-      'No verified fix; action needs review.',
-    );
-  });
-
-  it('reports rejected fix for fix_rejected', () => {
-    expect(verificationValue({ investigationOutcome: 'fix_rejected' })).toBe(
-      'No change ran because the fix was rejected.',
-    );
-  });
-
-  it('reports investigating when investigationStatus is running and no outcome', () => {
-    expect(verificationValue({ investigationStatus: 'running' })).toBe(
-      'Patrol is investigating; no fix has run yet.',
-    );
-  });
-
-  it('reports investigating when investigationStatus is pending and no outcome', () => {
-    expect(verificationValue({ investigationStatus: 'pending' })).toBe(
-      'Patrol is investigating; no fix has run yet.',
-    );
-  });
-
-  it('reports no-fix-yet when no outcome and investigationStatus is completed', () => {
-    expect(verificationValue({ investigationStatus: 'completed' })).toBe('No fix has run yet.');
-  });
-
-  it('reports no-fix-yet when no outcome and no investigation status', () => {
-    expect(verificationValue({})).toBe('No fix has run yet.');
-  });
-});
-
-// ===================================================================
-// getPatrolFindingWorkflowSummary (private, reached via
-// getPatrolFindingRowScaffold). The 'paused' stage is unreachable here
-// because the scaffold guard requires status 'active' and 'paused'
-// only arises from status 'snoozed'.
-// ===================================================================
-
-describe('getPatrolFindingWorkflowSummary (via getPatrolFindingRowScaffold)', () => {
-  const workflowValue = (overrides: Partial<UnifiedFinding>, approvals: ApprovalRequest[] = []): string | undefined => {
-    const scaffold = getPatrolFindingRowScaffold(
-      makeFinding({ source: 'ai-patrol', status: 'active', resourceId: 'vm:1', ...overrides }),
-      approvals,
-      NOW,
-    );
-    return scaffold?.items.find((item) => item.id === 'workflow')?.value;
-  };
-
-  it('returns the default review message when no workflow stage is determined', () => {
-    // Active, non-runtime, no investigation status/outcome → workflow undefined
-    expect(workflowValue({})).toBe(
-      'Review evidence, decide the next action, and verify any outcome before closing.',
-    );
-  });
-
-  it('returns the approve-or-reject message when a live approval is pending', () => {
-    expect(
-      workflowValue({ id: 'f1' }, [liveApproval('f1')]),
-    ).toBe(
-      'Review evidence first; no change runs until the typed action is approved, then Patrol verifies the outcome.',
-    );
-  });
-
-  it('returns the recover-queued-fix message for fix_queued without a live approval (Recover action stage)', () => {
-    expect(
-      workflowValue({ investigationOutcome: 'fix_queued' }),
-    ).toBe(
-      'Recover the queued action before any change can run, then verify the outcome after a decision.',
-    );
-  });
-
-  it('returns the verification message for fix_executed', () => {
-    expect(
-      workflowValue({ investigationOutcome: 'fix_executed' }),
-    ).toBe('The governed action ran; review follow-up evidence before closing the issue.');
-  });
-
-  it('returns the attention message for fix_failed', () => {
-    expect(
-      workflowValue({ investigationOutcome: 'fix_failed' }),
-    ).toBe('Review the blocked or failed step before approving another change or resolving manually.');
-  });
-
-  it('returns the investigating message for running investigationStatus', () => {
-    expect(
-      workflowValue({ investigationStatus: 'running' }),
-    ).toBe('Patrol is explaining the issue and preparing the next decision point.');
-  });
-
-  it('returns the recorded message for fix_verified outcome', () => {
-    expect(
-      workflowValue({ investigationOutcome: 'fix_verified' }),
-    ).toBe('Patrol recorded the outcome; use history if you need the completed trail.');
   });
 });
 
@@ -905,9 +836,9 @@ describe('getFindingResolutionReason', () => {
 
   describe('manual resolution priority', () => {
     it('returns "Resolved by you" when autoResolved is explicitly false and outcome is not a patrol fix', () => {
-      expect(
-        getFindingResolutionReason({ ...base, autoResolved: false }, 'today'),
-      ).toBe('Resolved by you today');
+      expect(getFindingResolutionReason({ ...base, autoResolved: false }, 'today')).toBe(
+        'Resolved by you today',
+      );
     });
 
     it('does NOT return "Resolved by you" when autoResolved is false but outcome is fix_verified', () => {
@@ -956,39 +887,39 @@ describe('getFindingResolutionReason', () => {
     });
 
     it('returns cpu-normal for cpu alertType', () => {
-      expect(
-        getFindingResolutionReason({ ...thresholdBase, alertType: 'cpu' }, 'now'),
-      ).toBe('CPU returned to normal now');
+      expect(getFindingResolutionReason({ ...thresholdBase, alertType: 'cpu' }, 'now')).toBe(
+        'CPU returned to normal now',
+      );
     });
 
     it('returns memory-normal for memory alertType', () => {
-      expect(
-        getFindingResolutionReason({ ...thresholdBase, alertType: 'memory' }, 'now'),
-      ).toBe('Memory returned to normal now');
+      expect(getFindingResolutionReason({ ...thresholdBase, alertType: 'memory' }, 'now')).toBe(
+        'Memory returned to normal now',
+      );
     });
 
     it('returns disk-normal for disk alertType', () => {
-      expect(
-        getFindingResolutionReason({ ...thresholdBase, alertType: 'disk' }, 'now'),
-      ).toBe('Disk usage returned to normal now');
+      expect(getFindingResolutionReason({ ...thresholdBase, alertType: 'disk' }, 'now')).toBe(
+        'Disk usage returned to normal now',
+      );
     });
 
     it('returns network-recovered for network alertType', () => {
-      expect(
-        getFindingResolutionReason({ ...thresholdBase, alertType: 'network' }, 'now'),
-      ).toBe('Network recovered now');
+      expect(getFindingResolutionReason({ ...thresholdBase, alertType: 'network' }, 'now')).toBe(
+        'Network recovered now',
+      );
     });
 
     it('returns condition-cleared for an unrecognised alertType', () => {
-      expect(
-        getFindingResolutionReason({ ...thresholdBase, alertType: 'custom' }, 'now'),
-      ).toBe('Condition cleared now');
+      expect(getFindingResolutionReason({ ...thresholdBase, alertType: 'custom' }, 'now')).toBe(
+        'Condition cleared now',
+      );
     });
 
     it('returns condition-cleared when alertType is undefined', () => {
-      expect(
-        getFindingResolutionReason({ ...thresholdBase, alertType: undefined }, 'now'),
-      ).toBe('Condition cleared now');
+      expect(getFindingResolutionReason({ ...thresholdBase, alertType: undefined }, 'now')).toBe(
+        'Condition cleared now',
+      );
     });
 
     it('treats source=threshold (without isThreshold) as threshold', () => {
@@ -1072,7 +1003,10 @@ describe('getFindingResolutionReason', () => {
 
     it('returns "Resolved after manual review" for needs_attention', () => {
       expect(
-        getFindingResolutionReason({ ...patrolBase, investigationOutcome: 'needs_attention' }, 'now'),
+        getFindingResolutionReason(
+          { ...patrolBase, investigationOutcome: 'needs_attention' },
+          'now',
+        ),
       ).toBe('Resolved after manual review now');
     });
 
@@ -1094,11 +1028,15 @@ describe('getFindingResolutionReason', () => {
 
   describe('fallback for non-threshold non-patrol sources', () => {
     it('returns the generic "Resolved" message', () => {
-      expect(getFindingResolutionReason({ ...base, source: 'anomaly' }, 'now')).toBe('Resolved now');
+      expect(getFindingResolutionReason({ ...base, source: 'anomaly' }, 'now')).toBe(
+        'Resolved now',
+      );
     });
 
     it('returns the generic "Resolved" message for ai-chat source', () => {
-      expect(getFindingResolutionReason({ ...base, source: 'ai-chat' }, 'now')).toBe('Resolved now');
+      expect(getFindingResolutionReason({ ...base, source: 'ai-chat' }, 'now')).toBe(
+        'Resolved now',
+      );
     });
   });
 });
@@ -1194,9 +1132,7 @@ describe('formatFindingForClipboard', () => {
   });
 
   it('does not include regression when regressionCount is zero', () => {
-    const result = formatFindingForClipboard(
-      makeFinding({ title: 'Issue', regressionCount: 0 }),
-    );
+    const result = formatFindingForClipboard(makeFinding({ title: 'Issue', regressionCount: 0 }));
     expect(result).not.toContain('Regressed:');
   });
 });
@@ -1229,7 +1165,11 @@ describe('getOperatorStateDismissCause', () => {
     expect(
       getOperatorStateDismissCause({
         lifecycle: [
-          { at: 't1', type: 'dismissed', metadata: { operator_state_cause: 'intentionally_offline' } },
+          {
+            at: 't1',
+            type: 'dismissed',
+            metadata: { operator_state_cause: 'intentionally_offline' },
+          },
           { at: 't2', type: 'resolved' },
         ],
       }),
@@ -1294,39 +1234,37 @@ describe('getPatrolWorkTypeCompositionClause', () => {
   });
 
   it('uses singular "needs approval" for exactly one approval', () => {
-    expect(
-      getPatrolWorkTypeCompositionClause({ ...emptyComp, approval: 1 }),
-    ).toBe(' — 1 needs approval');
+    expect(getPatrolWorkTypeCompositionClause({ ...emptyComp, approval: 1 })).toBe(
+      ' — 1 needs approval',
+    );
   });
 
   it('uses plural "need approval" for multiple approvals', () => {
-    expect(
-      getPatrolWorkTypeCompositionClause({ ...emptyComp, approval: 3 }),
-    ).toBe(' — 3 need approval');
+    expect(getPatrolWorkTypeCompositionClause({ ...emptyComp, approval: 3 })).toBe(
+      ' — 3 need approval',
+    );
   });
 
   it('uses singular "failed fix" for exactly one failed', () => {
-    expect(
-      getPatrolWorkTypeCompositionClause({ ...emptyComp, failed: 1 }),
-    ).toBe(' — 1 failed fix');
+    expect(getPatrolWorkTypeCompositionClause({ ...emptyComp, failed: 1 })).toBe(' — 1 failed fix');
   });
 
   it('uses plural "failed fixes" for multiple failed', () => {
-    expect(
-      getPatrolWorkTypeCompositionClause({ ...emptyComp, failed: 2 }),
-    ).toBe(' — 2 failed fixes');
+    expect(getPatrolWorkTypeCompositionClause({ ...emptyComp, failed: 2 })).toBe(
+      ' — 2 failed fixes',
+    );
   });
 
   it('includes in-progress count', () => {
-    expect(
-      getPatrolWorkTypeCompositionClause({ ...emptyComp, inProgress: 4 }),
-    ).toBe(' — 4 in progress');
+    expect(getPatrolWorkTypeCompositionClause({ ...emptyComp, inProgress: 4 })).toBe(
+      ' — 4 in progress',
+    );
   });
 
   it('includes recurring count', () => {
-    expect(
-      getPatrolWorkTypeCompositionClause({ ...emptyComp, recurring: 5 }),
-    ).toBe(' — 5 recurring');
+    expect(getPatrolWorkTypeCompositionClause({ ...emptyComp, recurring: 5 })).toBe(
+      ' — 5 recurring',
+    );
   });
 
   it('joins all parts with commas in priority order', () => {

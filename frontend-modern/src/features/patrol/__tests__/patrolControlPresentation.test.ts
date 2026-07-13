@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import type { PatrolAutonomyLevel } from '@/api/patrol';
 import {
   getPatrolProInvestigationHandoff,
-  getPatrolQueueBadgeLabel,
   getPatrolQueueWorkspaceDescription,
   getMonitorContextPatrolProtectionPosture,
   getPatrolReadyWorkDetail,
@@ -24,8 +23,7 @@ describe('patrolControlPresentation', () => {
       },
       approval: {
         label: 'Ask first',
-        detail:
-          'Patrol investigates and prepares fixes, but every change waits for your approval.',
+        detail: 'Patrol investigates and prepares fixes, but every change waits for your approval.',
         compactLabel: 'Ask first',
       },
       assisted: {
@@ -83,17 +81,6 @@ describe('patrolControlPresentation', () => {
         autonomyLocked: true,
       }),
     ).toBe('Current Patrol issues appear here.');
-  });
-
-  it('summarizes the open queue by affected resource instead of raw findings', () => {
-    expect(getPatrolQueueBadgeLabel({ findingCount: 2, affectedResourceCount: 1 })).toBe(
-      '1 resource',
-    );
-    expect(getPatrolQueueBadgeLabel({ findingCount: 3, affectedResourceCount: 2 })).toBe(
-      '2 resources',
-    );
-    expect(getPatrolQueueBadgeLabel({ findingCount: 2, affectedResourceCount: 0 })).toBeUndefined();
-    expect(getPatrolQueueBadgeLabel({ findingCount: 0, affectedResourceCount: 0 })).toBeUndefined();
   });
 
   it('uses the grouped queue count when open findings exist', () => {

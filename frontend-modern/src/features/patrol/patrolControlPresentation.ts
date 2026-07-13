@@ -276,14 +276,6 @@ export function getPatrolReadyWorkDetail(input: PatrolControlCopyInput): string 
   }
 }
 
-export function getPatrolQueueBadgeLabel(input: PatrolQueueCountInput): string | undefined {
-  const affectedResourceCount = normalizeCount(input.affectedResourceCount);
-  if (affectedResourceCount <= 0) {
-    return undefined;
-  }
-  return formatCount(affectedResourceCount, 'resource');
-}
-
 export function getPatrolQueueWorkspaceDescription(
   input: PatrolControlCopyInput & PatrolQueueCountInput,
 ): string {

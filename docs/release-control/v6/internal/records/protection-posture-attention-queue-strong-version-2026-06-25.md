@@ -133,6 +133,13 @@ loop, and routes the operator from real findings/evidence to safe action.
   evidence, next step, and verification state from existing finding, approval,
   and workflow fields. The scaffold stays attached to the issue row and does
   not create a separate proof, trust, or status strip.
+- 2026-07-13: Replaced the always-visible seven-field scaffold with a compact
+  prioritisation queue and one focused selected-issue review. Collapsed rows
+  now keep severity, workflow state, title, resource, recency, and one
+  consequence visible; evidence, recommendation, approvals, verification,
+  history, and manual controls move into review. Active findings may group only
+  through API-owned same-resource, shared-node, or explicit-correlation facts,
+  and the duplicate count badge beside Open work was removed.
 - 2026-06-30: Added Proxmox overview monitor-context Patrol coverage posture.
   It appears only when Patrol has no current work, failed/latest check,
   running check, setup failure, overdue schedule, or pending approval; uses

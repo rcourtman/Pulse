@@ -148,6 +148,7 @@ export interface UnifiedFinding {
   resourceId: string;
   resourceName: string;
   resourceType: string;
+  node?: string;
   resourceCriticality?: ResourceCriticality;
   alertIdentifier?: string;
   alertType?: string;
@@ -240,6 +241,7 @@ function normalizeUnifiedFindingRecord(item: UnifiedFindingRecord, now: number):
     resourceId: item.resource_id,
     resourceName: item.resource_name || item.resource_id,
     resourceType: item.resource_type || 'unknown',
+    node: item.node,
     resourceCriticality: validateResourceCriticality(item.resource_criticality),
     alertIdentifier,
     isThreshold: Boolean(item.is_threshold || item.source === 'threshold'),
@@ -286,6 +288,7 @@ function normalizePatrolFindingRecord(item: PatrolFinding, now: number): Unified
     resourceId: item.resource_id,
     resourceName: item.resource_name || item.resource_id,
     resourceType: item.resource_type || 'unknown',
+    node: item.node,
     resourceCriticality: validateResourceCriticality(item.resource_criticality),
     alertIdentifier: item.alertIdentifier,
     isThreshold: false,

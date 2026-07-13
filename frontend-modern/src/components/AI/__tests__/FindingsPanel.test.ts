@@ -90,9 +90,7 @@ describe('FindingsPanel assistant handoff', () => {
     // must project it through presentCapacityForecast so the operator sees a
     // deterministic "Filling up / Stable · days-to-full · % used" line rather
     // than relying on the model-authored description for urgency.
-    expect(findingsPanelSource).toContain(
-      "from '@/utils/patrolCapacityForecastPresentation'",
-    );
+    expect(findingsPanelSource).toContain("from '@/utils/patrolCapacityForecastPresentation'");
     expect(findingsPanelSource).toContain('presentCapacityForecast(finding.capacityForecast)');
     expect(findingsPanelSource).toContain('capacityForecastToneClass');
   });
@@ -185,9 +183,10 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).toContain(
       "aria-label={`${expandedId() === finding.id ? 'Close issue details' : 'Open issue details'} for ${title.label}`}",
     );
-    expect(findingsPanelSource).toContain(
-      "aria-label={`${expandedId() === finding.id ? 'Hide' : 'View'} details for ${title.label}`}",
-    );
+    expect(findingsPanelSource).toContain("'Close review'");
+    expect(findingsPanelSource).toContain("'Review issue'");
+    expect(findingsPanelSource).toContain("'Hide'");
+    expect(findingsPanelSource).toContain("'View'");
     expect(findingsPanelSource).toContain("e.key === 'Enter' || e.key === ' '");
     expect(findingsPanelSource).toContain('onClick={toggleExpanded}');
   });
@@ -331,11 +330,11 @@ describe('FindingsPanel assistant handoff', () => {
     expect(findingsPanelSource).not.toContain("workflow.stage === 'paused'");
   });
 
-  it('turns approval-required Patrol findings into a direct collapsed action', () => {
+  it('keeps approval decisions inside the selected Patrol issue review', () => {
     expect(findingsPanelSource).toContain('const collapsedApprovalAction = () => {');
     expect(findingsPanelSource).toContain("workflow?.stage === 'approval'");
     expect(findingsPanelSource).toContain(
-      '<Show when={expandedId() !== finding.id ? collapsedApprovalAction() : undefined}>',
+      '!isPatrolFindingsSource() && expandedId() !== finding.id',
     );
     expect(findingsPanelSource).toContain('title={action().detail}');
     expect(findingsPanelSource).toContain('{action().label}');
@@ -966,33 +965,18 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain("{' · '}snoozed until");
     });
 
-    it('uses shared metadata badges for the current Patrol queue resource count only', () => {
-      expect(patrolWorkspaceSource).toContain('aria-hidden="true"');
-      expect(patrolWorkspaceSource).toContain('<MetadataBadge');
-      expect(patrolWorkspaceSource).toContain('getPatrolQueueBadgeLabel');
+    it('keeps the Open work heading free of a duplicate count badge', () => {
       expect(patrolWorkspaceSource).toContain('queueAffectedResourceCount');
-      expect(patrolWorkspaceSource).toContain('{queueBadgeLabel()}');
-      expect(patrolWorkspaceSource).not.toContain('{runHistoryCount()}');
-    });
-
-    it('routes the findings tab badge tone through the shared patrol findings badge helper', () => {
-      expect(patrolWorkspaceSource).toContain('getPatrolFindingsBadgePresentation');
-      expect(patrolWorkspaceSource).toContain('state.findingsTabBadgeFindings()');
-      expect(patrolWorkspaceSource).toContain('MetadataBadge');
-      expect(patrolWorkspaceSource).toContain('findingsBadgePresentation().tone');
-      expect(patrolWorkspaceSource).not.toContain('findingsBadgePresentation().toneClasses');
+      expect(patrolWorkspaceSource).not.toContain('getPatrolQueueBadgeLabel');
+      expect(patrolWorkspaceSource).not.toContain('{queueBadgeLabel()}');
     });
 
     it('surfaces work-type composition in the workspace description', () => {
       expect(aiFindingPresentationSource).toContain(
         'export function classifyPatrolFindingWorkType',
       );
-      expect(aiFindingPresentationSource).toContain(
-        'export function getPatrolWorkTypeComposition',
-      );
-      expect(aiFindingPresentationSource).toContain(
-        'getPatrolWorkTypeCompositionClause',
-      );
+      expect(aiFindingPresentationSource).toContain('export function getPatrolWorkTypeComposition');
+      expect(aiFindingPresentationSource).toContain('getPatrolWorkTypeCompositionClause');
       expect(patrolWorkspaceSource).toContain('getPatrolWorkTypeComposition');
       expect(patrolWorkspaceSource).toContain('workTypeComposition');
     });
@@ -1000,21 +984,18 @@ describe('aiFindingPresentation', () => {
     it('shows contract-sanctioned actionable state badges on collapsed Patrol rows', () => {
       expect(findingsPanelSource).toContain('getPatrolFindingActionableState');
       expect(findingsPanelSource).toContain('patrolActionableState');
-      expect(findingsPanelSource).toContain('isPatrolFindingsSource() && patrolActionableState()');
+      expect(findingsPanelSource).toContain('when={isPatrolFindingsSource()}');
+      expect(findingsPanelSource).toContain("patrolActionableState()?.label ?? 'Needs review'");
     });
 
-    it('renders row-owned Patrol issue scaffolding without adding a trust strip', () => {
-      expect(findingsPanelSource).toContain('getPatrolFindingRowScaffold');
-      expect(findingsPanelSource).toContain('patrolRowScaffold');
-      expect(findingsPanelSource).toContain('aria-label="Patrol issue summary"');
-      expect(aiFindingPresentationSource).toContain("label: 'Problem'");
-      expect(aiFindingPresentationSource).toContain("label: 'Affected'");
-      expect(aiFindingPresentationSource).toContain("label: 'Why it matters'");
-      expect(aiFindingPresentationSource).toContain("label: 'What Pulse checked'");
-      expect(aiFindingPresentationSource).toContain("label: 'Safe workflow'");
-      expect(aiFindingPresentationSource).toContain("label: 'Recommended next step'");
-      expect(aiFindingPresentationSource).toContain("label: 'Verification'");
-      expect(aiFindingPresentationSource).toContain('getPatrolFindingWorkflowSummary');
+    it('keeps collapsed Patrol rows compact and moves full context into focused review', () => {
+      expect(findingsPanelSource).toContain('getPatrolFindingQueueSummary');
+      expect(findingsPanelSource).toContain("'Needs review'");
+      expect(findingsPanelSource).toContain("'Review issue'");
+      expect(findingsPanelSource).toContain('selectedPatrolFinding');
+      expect(findingsPanelSource).toContain('renderExpandedContent(finding()');
+      expect(findingsPanelSource).not.toContain('aria-label="Patrol issue summary"');
+      expect(findingsPanelSource).not.toContain('getPatrolFindingRowScaffold');
       expect(findingsPanelSource).not.toContain('Patrol trust summary');
       expect(findingsPanelSource).not.toContain('Patrol proof strip');
     });
@@ -1042,14 +1023,14 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).not.toContain('<Show when={collapsedPatrolStatusBadge()}>');
     });
 
-    it('groups active Patrol queue findings by resource without changing run records', () => {
+    it('groups active Patrol queue findings by API-owned resource, node, and correlation facts', () => {
       expect(findingsPanelSource).toContain('buildPatrolFindingDisplayGroups');
       expect(findingsPanelSource).toContain('getPatrolFindingIssueCountLabel');
-      expect(findingsPanelSource).toContain('const shouldGroupPatrolFindingsByResource');
+      expect(findingsPanelSource).toContain('const shouldGroupActivePatrolFindings');
       expect(findingsPanelSource).toContain("filter() === 'active'");
       expect(findingsPanelSource).toContain('props.runSnapshot === undefined');
       expect(findingsPanelSource).toContain(
-        'aria-label={`${group.resourceLabel}: ${getPatrolFindingIssueCountLabel(',
+        'aria-label={`${group.label}: ${getPatrolFindingIssueCountLabel(',
       );
       expect(findingsPanelSource).toContain(
         '{getPatrolFindingIssueCountLabel(group.findings.length)}',
@@ -1058,13 +1039,15 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('relatedFindings: group.relatedFindings');
       expect(findingsPanelSource).not.toContain('<For each={group.findings}>');
       expect(findingsPanelSource).toContain('hideSubject: true');
+      expect(aiFindingPresentationSource).toContain('correlatedFindingIds');
+      expect(aiFindingPresentationSource).toContain("String(finding.node || '').trim()");
     });
 
     it('uses canonical finding recency presentation instead of raw detected timestamps for active rows', () => {
       expect(findingsPanelSource).toContain(
         'const recency = getFindingRecencyPresentation(finding);',
       );
-      expect(findingsPanelSource).toContain('{subject.label} - {recency.label} ');
+      expect(findingsPanelSource).toContain("{subject.label} {' · '} {recency.label}");
       expect(findingsPanelSource).toContain('{formatTime(recency.timestamp)}');
     });
 
@@ -1093,7 +1076,7 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain(
         'const subject = getFindingSubjectPresentation(finding);',
       );
-      expect(findingsPanelSource).toContain('{subject.label} - {recency.label}');
+      expect(findingsPanelSource).toContain("{subject.label} {' · '} {recency.label}");
       expect(findingsPanelSource).not.toContain('{finding.resourceName} ({finding.resourceType})');
     });
   });
@@ -1469,8 +1452,9 @@ describe('aiFindingPresentation', () => {
 
       expect(groups).toHaveLength(2);
       expect(groups[0]).toMatchObject({
-        resourceKey: 'subject:tower array (storage)',
-        resourceLabel: 'Tower Array (storage)',
+        affectedResourceCount: 1,
+        kind: 'resource',
+        label: 'Tower Array (storage)',
       });
       expect(groups[0].primaryFinding.id).toBe('critical');
       expect(groups[0].findings.map((finding) => finding.id)).toEqual(['critical', 'warning']);
@@ -1479,7 +1463,7 @@ describe('aiFindingPresentation', () => {
       expect(groups[1].relatedFindings).toEqual([]);
     });
 
-    it('groups display-identical resources even when backend finding ids differ', () => {
+    it('keeps display-identical resources separate when canonical resource ids differ', () => {
       const groups = buildPatrolFindingDisplayGroups([
         {
           id: 'array-risk',
@@ -1497,8 +1481,65 @@ describe('aiFindingPresentation', () => {
         },
       ]);
 
+      expect(groups).toHaveLength(2);
+      expect(groups.map((group) => group.primaryFinding.id)).toEqual(['array-risk', 'pool-usage']);
+    });
+
+    it('groups different resources under their shared API-owned node', () => {
+      const groups = buildPatrolFindingDisplayGroups([
+        {
+          id: 'portal-restarts',
+          resourceId: 'container:portal',
+          resourceName: 'customer-portal',
+          resourceType: 'app-container',
+          node: 'edge-apps-01',
+          title: 'Container is restarting repeatedly',
+        },
+        {
+          id: 'inventory-restarts',
+          resourceId: 'container:inventory',
+          resourceName: 'inventory-api',
+          resourceType: 'app-container',
+          node: 'edge-apps-01',
+          title: 'Container is restarting repeatedly',
+        },
+      ]);
+
       expect(groups).toHaveLength(1);
-      expect(groups[0].findings.map((finding) => finding.id)).toEqual(['array-risk', 'pool-usage']);
+      expect(groups[0]).toMatchObject({
+        affectedResourceCount: 2,
+        kind: 'node',
+        label: 'Edge Apps 01',
+      });
+    });
+
+    it('groups explicitly correlated findings across different nodes', () => {
+      const groups = buildPatrolFindingDisplayGroups([
+        {
+          id: 'gateway',
+          resourceId: 'service:gateway',
+          resourceName: 'mail-gateway',
+          resourceType: 'pmg',
+          node: 'edge-01',
+          correlatedFindingIds: ['backup-link'],
+          title: 'Mail gateway is degraded',
+        },
+        {
+          id: 'backup-link',
+          resourceId: 'service:backup',
+          resourceName: 'dr-vault',
+          resourceType: 'pbs',
+          node: 'backup-01',
+          title: 'Backup connection is degraded',
+        },
+      ]);
+
+      expect(groups).toHaveLength(1);
+      expect(groups[0]).toMatchObject({
+        affectedResourceCount: 2,
+        kind: 'correlated',
+        label: '2 related resources',
+      });
     });
 
     it('keeps findings without resource identity separate instead of inventing duplicates', () => {
@@ -1508,7 +1549,8 @@ describe('aiFindingPresentation', () => {
       ]);
 
       expect(groups).toHaveLength(2);
-      expect(groups.map((group) => group.resourceKey)).toEqual(['finding:a', 'finding:b']);
+      expect(groups.map((group) => group.kind)).toEqual(['finding', 'finding']);
+      expect(groups.map((group) => group.label)).toEqual(['', '']);
     });
   });
 

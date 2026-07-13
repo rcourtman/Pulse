@@ -44,7 +44,7 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
     expect(workspaceSource).toContain('PATROL_WORKSPACE_SETUP_TITLE');
     expect(workspaceSource).toContain('PATROL_WORKSPACE_SETUP_DESCRIPTION');
     expect(workspaceSource).toContain('buildPatrolFindingDisplayGroups');
-    expect(workspaceSource).toContain('getPatrolQueueBadgeLabel');
+    expect(workspaceSource).not.toContain('getPatrolQueueBadgeLabel');
     expect(workspaceSource).toContain('queueIssueCount');
     expect(workspaceSource).toContain('queueAffectedResourceCount');
     expect(workspaceSource).toContain('affectedResourceCount: queueAffectedResourceCount()');
@@ -59,8 +59,7 @@ describe('PatrolIntelligenceWorkspace trust strip', () => {
     expect(workspaceSource).not.toContain('protectionPostureSummaries');
     expect(workspaceSource).toContain('autonomyLevel: state.autonomyLevel()');
     expect(workspaceSource).toContain('autonomyLocked: state.autoFixLocked()');
-    expect(workspaceSource).toContain('Boolean(queueBadgeLabel())');
-    expect(workspaceSource).toContain('{queueBadgeLabel()}');
+    expect(workspaceSource).not.toContain('queueBadgeLabel');
     const removedAllModeCopy =
       'Open work Patrol can ' +
       'watch, investigate, ask you to approve, or record under your Patrol mode.';

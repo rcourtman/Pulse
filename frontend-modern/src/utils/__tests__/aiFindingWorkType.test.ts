@@ -5,12 +5,10 @@ import {
   getPatrolWorkTypeComposition,
   getPatrolWorkTypeCompositionClause,
   getPatrolFindingActionableState,
-  getPatrolFindingRowScaffold,
+  getPatrolFindingQueueSummary,
 } from '@/utils/aiFindingPresentation';
 
 type ClassifyInput = Parameters<typeof classifyPatrolFindingWorkType>[0];
-type RowScaffoldInput = Parameters<typeof getPatrolFindingRowScaffold>[0];
-type RowScaffoldApprovalInput = NonNullable<Parameters<typeof getPatrolFindingRowScaffold>[1]>;
 
 function makeFinding(overrides: Partial<ClassifyInput> = {}): ClassifyInput {
   return {
@@ -23,52 +21,30 @@ function makeFinding(overrides: Partial<ClassifyInput> = {}): ClassifyInput {
   };
 }
 
-function makeRowScaffoldFinding(overrides: Partial<RowScaffoldInput> = {}): RowScaffoldInput {
-  return {
-    id: 'finding-active-work',
-    source: 'ai-patrol',
-    status: 'active',
-    resourceId: 'node:pve-main',
-    resourceName: 'pve-main',
-    resourceType: 'agent',
-    title: 'High CPU pressure on pve-main',
-    description: 'Patrol detected sustained CPU pressure on the monitored Proxmox host.',
-    impact: 'Sustained CPU pressure can slow hosted workloads on this Proxmox host.',
-    evidence: 'CPU stayed above the configured warning threshold during the scheduled Patrol check.',
-    recommendation: 'Review the host load and move or stop noisy workloads before approving a fix.',
-    investigationStatus: undefined,
-    investigationOutcome: undefined,
-    loopState: undefined,
-    ...overrides,
-  };
-}
-
 describe('classifyPatrolFindingWorkType', () => {
   it('classifies a plain active finding as new', () => {
     expect(classifyPatrolFindingWorkType(makeFinding())).toBe('new');
   });
 
   it('classifies fix_queued as approval', () => {
-    expect(
-      classifyPatrolFindingWorkType(makeFinding({ investigationOutcome: 'fix_queued' })),
-    ).toBe('approval');
-  });
-
-  it.each([
-    'fix_failed',
-    'fix_verification_failed',
-    'cannot_fix',
-    'timed_out',
-  ] as const)('classifies %s as failed', (outcome) => {
-    expect(classifyPatrolFindingWorkType(makeFinding({ investigationOutcome: outcome }))).toBe(
-      'failed',
+    expect(classifyPatrolFindingWorkType(makeFinding({ investigationOutcome: 'fix_queued' }))).toBe(
+      'approval',
     );
   });
 
+  it.each(['fix_failed', 'fix_verification_failed', 'cannot_fix', 'timed_out'] as const)(
+    'classifies %s as failed',
+    (outcome) => {
+      expect(classifyPatrolFindingWorkType(makeFinding({ investigationOutcome: outcome }))).toBe(
+        'failed',
+      );
+    },
+  );
+
   it('classifies investigation running as in_progress', () => {
-    expect(
-      classifyPatrolFindingWorkType(makeFinding({ investigationStatus: 'running' })),
-    ).toBe('in_progress');
+    expect(classifyPatrolFindingWorkType(makeFinding({ investigationStatus: 'running' }))).toBe(
+      'in_progress',
+    );
   });
 
   it('classifies fix_executed as in_progress (verification pending)', () => {
@@ -78,9 +54,7 @@ describe('classifyPatrolFindingWorkType', () => {
   });
 
   it('classifies regression as recurring', () => {
-    expect(
-      classifyPatrolFindingWorkType(makeFinding({ regressionCount: 2 })),
-    ).toBe('recurring');
+    expect(classifyPatrolFindingWorkType(makeFinding({ regressionCount: 2 }))).toBe('recurring');
   });
 
   it('classifies multiple raises as recurring', () => {
@@ -116,121 +90,27 @@ describe('classifyPatrolFindingWorkType', () => {
   });
 });
 
-describe('getPatrolFindingRowScaffold', () => {
-  it('summarizes a plain active Patrol finding as row-owned issue text', () => {
-    expect(getPatrolFindingRowScaffold(makeRowScaffoldFinding())?.items).toEqual([
-      { id: 'problem', label: 'Problem', value: 'High CPU pressure on pve-main' },
-      { id: 'affected', label: 'Affected', value: 'pve-main (agent)' },
-      {
-        id: 'why',
-        label: 'Why it matters',
-        value: 'Sustained CPU pressure can slow hosted workloads on this Proxmox host.',
-      },
-      {
-        id: 'checked',
-        label: 'What Pulse checked',
-        value: 'CPU stayed above the configured warning threshold during the scheduled Patrol check.',
-      },
-      {
-        id: 'workflow',
-        label: 'Safe workflow',
-        value: 'Review evidence, decide the next action, and verify any outcome before closing.',
-      },
-      {
-        id: 'next-step',
-        label: 'Recommended next step',
-        value: 'Review the host load and move or stop noisy workloads before approving a fix.',
-      },
-      { id: 'verification', label: 'Verification', value: 'No fix has run yet.' },
-    ]);
+describe('getPatrolFindingQueueSummary', () => {
+  it('prioritises the operator-facing consequence', () => {
+    expect(
+      getPatrolFindingQueueSummary({
+        impact: 'Hosted workloads may slow down.',
+        description: 'CPU stayed above the warning threshold.',
+        recommendation: 'Review host load.',
+      }),
+    ).toBe('Hosted workloads may slow down.');
   });
 
-  it('uses live approval workflow and verification state for queued fixes', () => {
-    const approvals: RowScaffoldApprovalInput = [
-      {
-        status: 'pending',
-        toolId: 'investigation_fix',
-        targetId: 'finding-active-work',
-        expiresAt: '2099-06-30T08:11:00Z',
-      },
-    ];
-
-    expect(
-      getPatrolFindingRowScaffold(
-        makeRowScaffoldFinding({
-          investigationStatus: 'needs_attention',
-          investigationOutcome: 'fix_queued',
-        }),
-        approvals,
-        Date.parse('2026-06-30T08:07:00Z'),
-      )?.items,
-    ).toContainEqual({
-      id: 'next-step',
-      label: 'Recommended next step',
-      value: 'A governed fix is waiting for an approve or reject decision.',
-    });
-    expect(
-      getPatrolFindingRowScaffold(
-        makeRowScaffoldFinding({
-          investigationStatus: 'needs_attention',
-          investigationOutcome: 'fix_queued',
-        }),
-        approvals,
-        Date.parse('2026-06-30T08:07:00Z'),
-      )?.items,
-    ).toContainEqual({
-      id: 'workflow',
-      label: 'Safe workflow',
-      value:
-        'Review evidence first; no change runs until the typed action is approved, then Patrol verifies the outcome.',
-    });
-    expect(
-      getPatrolFindingRowScaffold(
-        makeRowScaffoldFinding({
-          investigationStatus: 'needs_attention',
-          investigationOutcome: 'fix_queued',
-        }),
-        approvals,
-        Date.parse('2026-06-30T08:07:00Z'),
-      )?.items,
-    ).toContainEqual({
-      id: 'verification',
-      label: 'Verification',
-      value: 'Waiting for the governed action record before any change runs.',
-    });
-  });
-
-  it('keeps executed fixes on the verification step before closure', () => {
-    expect(
-      getPatrolFindingRowScaffold(
-        makeRowScaffoldFinding({
-          investigationStatus: 'completed',
-          investigationOutcome: 'fix_executed',
-        }),
-      )?.items,
-    ).toContainEqual({
-      id: 'workflow',
-      label: 'Safe workflow',
-      value: 'The governed action ran; review follow-up evidence before closing the issue.',
-    });
-  });
-
-  it('does not scaffold non-Patrol, runtime setup, or resolved findings', () => {
-    expect(
-      getPatrolFindingRowScaffold(makeRowScaffoldFinding({ source: 'threshold' })),
-    ).toBeUndefined();
-    expect(
-      getPatrolFindingRowScaffold(
-        makeRowScaffoldFinding({
-          resourceId: 'ai-service',
-          resourceName: 'Pulse Patrol service',
-          title: 'Pulse Patrol: insufficient API credits',
-        }),
-      ),
-    ).toBeUndefined();
-    expect(
-      getPatrolFindingRowScaffold(makeRowScaffoldFinding({ status: 'resolved' })),
-    ).toBeUndefined();
+  it('falls back through description, recommendation, and review copy', () => {
+    expect(getPatrolFindingQueueSummary({ description: 'Disk usage is rising.' })).toBe(
+      'Disk usage is rising.',
+    );
+    expect(getPatrolFindingQueueSummary({ recommendation: 'Review the affected disk.' })).toBe(
+      'Review the affected disk.',
+    );
+    expect(getPatrolFindingQueueSummary({})).toBe(
+      'Open this issue to review what Patrol found and decide the next step.',
+    );
   });
 });
 
@@ -334,9 +214,9 @@ describe('getPatrolFindingActionableState', () => {
   it.each(['fix_failed', 'fix_verification_failed', 'cannot_fix', 'timed_out'] as const)(
     'returns fix failed for %s',
     (outcome) => {
-      expect(getPatrolFindingActionableState(makeFinding({ investigationOutcome: outcome }))).toEqual(
-        { label: 'Fix failed', tone: 'danger' },
-      );
+      expect(
+        getPatrolFindingActionableState(makeFinding({ investigationOutcome: outcome })),
+      ).toEqual({ label: 'Fix failed', tone: 'danger' });
     },
   );
 

@@ -8,7 +8,6 @@ import { ApprovalBanner, RunHistoryPanel } from '@/components/patrol';
 import {
   getFindingTitlePresentation,
   buildPatrolFindingDisplayGroups,
-  getPatrolFindingsBadgePresentation,
   getPatrolWorkTypeComposition,
   isPatrolRuntimeFinding,
 } from '@/utils/aiFindingPresentation';
@@ -25,7 +24,6 @@ import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { getPatrolSetupAction, getPatrolSetupHint } from '@/utils/patrolRuntimeActions';
 import {
   getPatrolProInvestigationHandoff,
-  getPatrolQueueBadgeLabel,
   getPatrolQueueWorkspaceDescription,
   getPatrolWorkspaceWorkGroups,
   isPatrolCoverageStale,
@@ -46,23 +44,17 @@ import {
 
 export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
-  const findingsBadgePresentation = () =>
-    getPatrolFindingsBadgePresentation(state.findingsTabBadgeFindings());
   const queueDisplayGroups = createMemo(() =>
     buildPatrolFindingDisplayGroups(state.findingsTabBadgeFindings()),
   );
   const queueIssueCount = createMemo(
     () => state.findingsTabBadgeCount() ?? state.findingsTabBadgeFindings().length,
   );
-  const queueAffectedResourceCount = createMemo(() => queueDisplayGroups().length);
+  const queueAffectedResourceCount = createMemo(() =>
+    queueDisplayGroups().reduce((count, group) => count + group.affectedResourceCount, 0),
+  );
   const workTypeComposition = createMemo(() =>
     getPatrolWorkTypeComposition(state.findingsTabBadgeFindings()),
-  );
-  const queueBadgeLabel = createMemo(() =>
-    getPatrolQueueBadgeLabel({
-      affectedResourceCount: queueAffectedResourceCount(),
-      findingCount: queueIssueCount(),
-    }),
   );
   const isHistoryOpen = () => state.activeTab() === 'history';
   const isSetupOnly = () =>
@@ -165,18 +157,6 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
         <div class="min-w-0">
           <div class="flex min-w-0 flex-wrap items-center gap-2">
             <h2 class="text-sm font-semibold text-base-content">{workspaceTitle()}</h2>
-            <Show
-              when={
-                !isHistoryOpen() &&
-                !isSetupOnly() &&
-                !state.selectedRun() &&
-                Boolean(queueBadgeLabel())
-              }
-            >
-              <MetadataBadge aria-hidden="true" tone={findingsBadgePresentation().tone} size="xs">
-                {queueBadgeLabel()}
-              </MetadataBadge>
-            </Show>
           </div>
           <p class="mt-1 text-xs text-muted">{workspaceDescription()}</p>
         </div>

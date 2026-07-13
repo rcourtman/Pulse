@@ -190,7 +190,7 @@ vi.mock('@/stores/aiIntelligence', () => ({
 
 describe('FindingsPanel resource links', () => {
   const expectCollapsedFinding = (title: string) => {
-    expect(screen.getByRole('button', { name: `View details for ${title}` })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `Review issue for ${title}` })).toBeInTheDocument();
   };
 
   beforeEach(() => {
@@ -269,7 +269,7 @@ describe('FindingsPanel resource links', () => {
 
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'View details for Provider billing or quota issue',
+        name: 'Review issue for Provider billing or quota issue',
       }),
     );
 
@@ -306,15 +306,15 @@ describe('FindingsPanel resource links', () => {
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
 
     const disclosure = screen.getByRole('button', {
-      name: 'View details for Provider connection issue',
+      name: 'Review issue for Provider connection issue',
     });
 
     expect(
       screen.getAllByRole('button', {
-        name: 'View details for Provider connection issue',
+        name: 'Review issue for Provider connection issue',
       }),
     ).toHaveLength(1);
-    expect(disclosure).toHaveTextContent('Details');
+    expect(disclosure).toHaveTextContent('Review');
     expect(screen.queryByRole('button', { name: 'Acknowledge' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Snooze 24h' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument();
@@ -323,9 +323,12 @@ describe('FindingsPanel resource links', () => {
 
     expect(
       screen.getByRole('button', {
-        name: 'Hide details for Provider connection issue',
+        name: 'Close review for Provider connection issue',
       }),
-    ).toHaveTextContent('Hide');
+    ).toHaveTextContent('Close');
+    expect(
+      screen.getByRole('complementary', { name: 'Review Provider connection issue' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Manage')).toBeInTheDocument();
     const assistantHandoff = screen.getByRole('button', { name: 'Open in Assistant' });
     expect(assistantHandoff.closest('details')).not.toBeNull();
@@ -442,17 +445,19 @@ describe('FindingsPanel resource links', () => {
 
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
 
-    const approvalAction = screen.getByRole('button', { name: 'Approve or reject' });
-    expect(approvalAction).toBeInTheDocument();
+    expect(screen.getByText('Approval required')).toBeInTheDocument();
+    const approvalAction = screen.getByRole('button', {
+      name: 'Review issue for Worker disk is full',
+    });
     expect(screen.queryByText('Review finding')).not.toBeInTheDocument();
 
     fireEvent.click(approvalAction);
 
     expect(
       screen.getByRole('button', {
-        name: 'Hide details for Worker disk is full',
+        name: 'Close review for Worker disk is full',
       }),
-    ).toHaveTextContent('Hide');
+    ).toHaveTextContent('Close');
   });
 
   it('keeps selected Patrol run issue rows simple and expandable', async () => {
@@ -521,7 +526,7 @@ describe('FindingsPanel resource links', () => {
     expect(screen.queryByText('Review finding')).not.toBeInTheDocument();
 
     const disclosure = screen.getByRole('button', {
-      name: 'View details for Unraid array running without parity protection while at 86% capacity',
+      name: 'Review issue for Unraid array running without parity protection while at 86% capacity',
     });
     expect(disclosure).toHaveAttribute('aria-expanded', 'false');
 
@@ -529,7 +534,7 @@ describe('FindingsPanel resource links', () => {
 
     expect(
       screen.getByRole('button', {
-        name: 'Hide details for Unraid array running without parity protection while at 86% capacity',
+        name: 'Close review for Unraid array running without parity protection while at 86% capacity',
       }),
     ).toHaveAttribute('aria-expanded', 'true');
     expect(
@@ -541,14 +546,14 @@ describe('FindingsPanel resource links', () => {
       screen.getAllByText(
         'Verify the parity check is progressing and let it complete before making array changes.',
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(screen.getByText('Recommended next step:')).toBeInTheDocument();
     expect(screen.getByText('What Pulse checked:')).toBeInTheDocument();
     expect(
       screen.getAllByText(
         'Checked array status via Unraid API: parity_status=check, capacity=85.9%, disk2=95.8%.',
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
   });
 
   it('can render Patrol findings from the direct Patrol source', async () => {
@@ -639,28 +644,18 @@ describe('FindingsPanel investigate action gating', () => {
 
   const expandRow = () =>
     fireEvent.click(
-      screen.getByRole('button', { name: 'View details for Provider connection issue' }),
+      screen.getByRole('button', { name: 'Review issue for Provider connection issue' }),
     );
 
   it('shows an Investigate action above Watch-only mode on an un-investigated patrol finding', async () => {
-    render(() => (
-      <FindingsPanel
-        findingsSource="patrol"
-        autonomyLevel="approval"
-      />
-    ));
+    render(() => <FindingsPanel findingsSource="patrol" autonomyLevel="approval" />);
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
     expandRow();
     expect(screen.getByRole('button', { name: /Investigate/ })).toBeInTheDocument();
   });
 
   it('hides the Investigate action in Watch-only (monitor) mode', async () => {
-    render(() => (
-      <FindingsPanel
-        findingsSource="patrol"
-        autonomyLevel="monitor"
-      />
-    ));
+    render(() => <FindingsPanel findingsSource="patrol" autonomyLevel="monitor" />);
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
     expandRow();
     expect(screen.queryByRole('button', { name: /^Investigate$/ })).toBeNull();

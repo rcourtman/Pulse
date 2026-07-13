@@ -37,7 +37,10 @@ import { createSuppressionRuleFromFinding, reinvestigateFinding } from '@/api/pa
 import type { PatrolRunRecord, PatrolRuntimeState, PatrolAutonomyLevel } from '@/api/patrol';
 import { formatRelativeTime } from '@/utils/format';
 import { getFindingAlertIdentifier, hasTriggeringAlert } from '@/utils/findingAlertIdentity';
-import { FilterSegmentedControl, type FilterSegmentOption } from '@/components/shared/FilterToolbar';
+import {
+  FilterSegmentedControl,
+  type FilterSegmentOption,
+} from '@/components/shared/FilterToolbar';
 import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import type { IntelligenceHealthScore } from '@/types/aiIntelligence';
@@ -49,6 +52,7 @@ import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import InfoIcon from 'lucide-solid/icons/info';
 import ChevronDownIcon from 'lucide-solid/icons/chevron-down';
+import XIcon from 'lucide-solid/icons/x';
 import {
   buildFindingFilterOptions,
   formatFindingForClipboard,
@@ -83,7 +87,7 @@ import {
   getInvestigationOutcomeSortOrder,
   getInvestigationStatusBadgeTone,
   getPatrolFindingActionableState,
-  getPatrolFindingRowScaffold,
+  getPatrolFindingQueueSummary,
 } from '@/utils/aiFindingPresentation';
 import { copyToClipboard } from '@/utils/clipboard';
 
@@ -94,16 +98,9 @@ const FINDING_ROW_BADGE_PROPS = {
 } as const;
 
 export type FindingsPanelFilter =
-  | 'all'
-  | 'active'
-  | 'resolved'
-  | 'approvals'
-  | 'attention'
-  | 'overdue';
+  'all' | 'active' | 'resolved' | 'approvals' | 'attention' | 'overdue';
 
-function capacityForecastToneClass(
-  tone: 'critical' | 'warning' | 'info',
-): string {
+function capacityForecastToneClass(tone: 'critical' | 'warning' | 'info'): string {
   switch (tone) {
     case 'critical':
       return 'text-red-700 dark:text-red-300';
@@ -111,6 +108,19 @@ function capacityForecastToneClass(
       return 'text-amber-700 dark:text-amber-300';
     default:
       return 'text-sky-700 dark:text-sky-300';
+  }
+}
+
+function patrolSeverityAccentClass(severity: UnifiedFinding['severity']): string {
+  switch (severity) {
+    case 'critical':
+      return 'border-l-red-500';
+    case 'warning':
+      return 'border-l-amber-500';
+    case 'watch':
+      return 'border-l-sky-500';
+    default:
+      return 'border-l-slate-400';
   }
 }
 
@@ -449,7 +459,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       (f) => f.source !== 'threshold' && !f.isThreshold && !hasTriggeringAlert(f),
     );
   });
-  const shouldGroupPatrolFindingsByResource = createMemo(
+  const shouldGroupActivePatrolFindings = createMemo(
     () =>
       isPatrolFindingsSource() &&
       filter() === 'active' &&
@@ -458,11 +468,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   );
   const patrolFindingDisplayGroups = createMemo(() => {
     const findings = patrolFindings();
-    if (!shouldGroupPatrolFindingsByResource()) {
+    if (!shouldGroupActivePatrolFindings()) {
       return findings.map((finding) => ({
         id: `finding:${finding.id}`,
-        resourceKey: `finding:${finding.id}`,
-        resourceLabel: getFindingSubjectPresentation(finding).label,
+        affectedResourceCount: 1,
+        kind: 'finding' as const,
+        label: getFindingSubjectPresentation(finding).label,
         primaryFinding: finding,
         relatedFindings: [],
         findings: [finding],
@@ -470,6 +481,22 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     }
 
     return buildPatrolFindingDisplayGroups(findings);
+  });
+  const selectedPatrolGroup = createMemo(() => {
+    if (!isPatrolFindingsSource() || !expandedId()) return undefined;
+    return patrolFindingDisplayGroups().find((group) =>
+      group.findings.some((finding) => finding.id === expandedId()),
+    );
+  });
+  const selectedPatrolFinding = createMemo(() => {
+    const selectedId = expandedId();
+    if (!selectedId) return undefined;
+    return selectedPatrolGroup()?.findings.find((finding) => finding.id === selectedId);
+  });
+  createEffect(() => {
+    if (isPatrolFindingsSource() && expandedId() && !selectedPatrolFinding()) {
+      setExpandedId(null);
+    }
   });
   const filterOptions = createMemo(() => buildFindingFilterOptions(filterCounts()));
   const filterSegments = createMemo<FilterSegmentOption[]>(() => {
@@ -677,9 +704,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       }
     } catch (err) {
       setActionLoading(null);
-      notificationStore.error(
-        err instanceof Error ? err.message : 'Failed to start investigation',
-      );
+      notificationStore.error(err instanceof Error ? err.message : 'Failed to start investigation');
     }
   };
 
@@ -905,10 +930,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const patrolWorkflow = () =>
       getFindingPatrolWorkflowPresentation(finding, aiIntelligenceStore.patrolPendingApprovals);
     const patrolActionableState = () => getPatrolFindingActionableState(finding);
-    const patrolRowScaffold = () =>
-      isPatrolFindingsSource()
-        ? getPatrolFindingRowScaffold(finding, aiIntelligenceStore.patrolPendingApprovals)
-        : undefined;
+    const patrolQueueSummary = () => getPatrolFindingQueueSummary(finding);
     const collapsedApprovalAction = () => {
       const workflow = patrolWorkflow();
       return workflow?.stage === 'approval' ? workflow : undefined;
@@ -950,10 +972,18 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       <div
         id={`finding-${finding.id}`}
         class={`p-3 transition-colors ${
+          isPatrolFindingsSource()
+            ? `border-l-2 ${patrolSeverityAccentClass(finding.severity)} ${
+                expandedId() === finding.id ? 'bg-surface-alt/80' : 'hover:bg-surface-hover'
+              }`
+            : ''
+        } ${
           finding.status === 'active'
             ? finding.acknowledgedAt
               ? 'opacity-60 hover:opacity-80 bg-surface-alt'
-              : 'hover:bg-surface-hover'
+              : isPatrolFindingsSource()
+                ? ''
+                : 'hover:bg-surface-hover'
             : 'opacity-60 bg-surface-alt hover:opacity-80'
         }`}
       >
@@ -1007,15 +1037,16 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   verifying fix, fix failed). Raw investigation-status and
                   investigation-outcome badges stay hidden for Patrol
                   findings; this badge surfaces the operator-facing meaning. */}
-              <Show when={isPatrolFindingsSource() && patrolActionableState()}>
-                {(state) => (
-                  <MetadataBadge {...FINDING_ROW_BADGE_PROPS} tone={state().tone}>
-                    {state().label}
-                  </MetadataBadge>
-                )}
+              <Show when={isPatrolFindingsSource()}>
+                <MetadataBadge
+                  {...FINDING_ROW_BADGE_PROPS}
+                  tone={patrolActionableState()?.tone ?? 'muted'}
+                >
+                  {patrolActionableState()?.label ?? 'Needs review'}
+                </MetadataBadge>
               </Show>
               {/* Alert-triggered badge */}
-              <Show when={hasTriggeringAlert(finding)}>
+              <Show when={!isPatrolFindingsSource() && hasTriggeringAlert(finding)}>
                 <MetadataBadge
                   {...FINDING_ROW_BADGE_PROPS}
                   tone="warning"
@@ -1101,7 +1132,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   needs to be triaged differently from a fresh detection.
                   Sits next to the confidence badge so trust + recurrence
                   can be scanned together without expanding the card. */}
-              <Show when={(finding.regressionCount || 0) > 0}>
+              <Show when={!isPatrolFindingsSource() && (finding.regressionCount || 0) > 0}>
                 <MetadataBadge
                   {...FINDING_ROW_BADGE_PROPS}
                   tone="warning"
@@ -1120,12 +1151,12 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               </span>
             </div>
             {/* Resource info */}
-            <div class="text-xs text-muted mt-1">
+            <div class="mt-1 text-xs text-muted">
               <Show
                 when={options.hideSubject}
                 fallback={
                   <>
-                    {subject.label} - {recency.label} {formatTime(recency.timestamp)}
+                    {subject.label} {' · '} {recency.label} {formatTime(recency.timestamp)}
                   </>
                 }
               >
@@ -1187,27 +1218,19 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 </span>
               </Show>
             </div>
-            <Show when={patrolRowScaffold()}>
-              {(scaffold) => (
-                <dl
-                  aria-label="Patrol issue summary"
-                  class="mt-2 grid gap-x-3 gap-y-1 text-xs sm:grid-cols-2 xl:grid-cols-3"
-                >
-                  <For each={scaffold().items}>
-                    {(item) => (
-                      <div class="min-w-0">
-                        <dt class="font-medium text-base-content">{item.label}</dt>
-                        <dd class="mt-0.5 break-words text-muted">{item.value}</dd>
-                      </div>
-                    )}
-                  </For>
-                </dl>
-              )}
+            <Show when={isPatrolFindingsSource()}>
+              <p class="mt-1.5 truncate text-xs leading-5 text-muted">{patrolQueueSummary()}</p>
             </Show>
           </div>
           {/* Actions */}
           <div class="flex items-center gap-1 shrink-0">
-            <Show when={expandedId() !== finding.id ? collapsedApprovalAction() : undefined}>
+            <Show
+              when={
+                !isPatrolFindingsSource() && expandedId() !== finding.id
+                  ? collapsedApprovalAction()
+                  : undefined
+              }
+            >
               {(action) => (
                 <button
                   type="button"
@@ -1288,23 +1311,51 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </Show>
             <button
               type="button"
-              aria-label={`${expandedId() === finding.id ? 'Hide' : 'View'} details for ${title.label}`}
+              aria-label={
+                isPatrolFindingsSource()
+                  ? `${expandedId() === finding.id ? 'Close review' : 'Review issue'} for ${title.label}`
+                  : `${expandedId() === finding.id ? 'Hide' : 'View'} details for ${title.label}`
+              }
               aria-expanded={expandedId() === finding.id}
               aria-controls={`finding-${finding.id}-details`}
               onClick={toggleExpanded}
               class="inline-flex items-center gap-1 rounded border border-border bg-surface px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              title={expandedId() === finding.id ? 'Hide details' : 'View details'}
+              title={
+                isPatrolFindingsSource()
+                  ? expandedId() === finding.id
+                    ? 'Close review'
+                    : 'Review issue'
+                  : expandedId() === finding.id
+                    ? 'Hide details'
+                    : 'View details'
+              }
             >
-              <span>{expandedId() === finding.id ? 'Hide' : 'Details'}</span>
+              <span>
+                {isPatrolFindingsSource()
+                  ? expandedId() === finding.id
+                    ? 'Close'
+                    : 'Review'
+                  : expandedId() === finding.id
+                    ? 'Hide'
+                    : 'Details'}
+              </span>
               <ChevronDownIcon
-                class={`h-3.5 w-3.5 transition-transform ${expandedId() === finding.id ? 'rotate-180' : ''}`}
+                class={`h-3.5 w-3.5 transition-transform ${
+                  isPatrolFindingsSource()
+                    ? '-rotate-90'
+                    : expandedId() === finding.id
+                      ? 'rotate-180'
+                      : ''
+                }`}
               />
             </button>
           </div>
         </div>
 
         {/* Expanded content */}
-        <Show when={expandedId() === finding.id}>{renderExpandedContent(finding, options)}</Show>
+        <Show when={!isPatrolFindingsSource() && expandedId() === finding.id}>
+          {renderExpandedContent(finding, options)}
+        </Show>
       </div>
     );
   };
@@ -1362,8 +1413,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
         </Show>
         <Show when={finding.recommendation}>
           <p class="text-sm text-base-content mt-2">
-            <span class="font-medium">Recommended next step:</span>{' '}
-            {finding.recommendation}
+            <span class="font-medium">Recommended next step:</span> {finding.recommendation}
           </p>
         </Show>
         <Show when={finding.aiConfidence && finding.aiConfidence > 0}>
@@ -1599,11 +1649,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
               <span class="text-muted">{proHandoff!.detail}</span>
               <Show when={proHandoff!.destination} keyed>
                 {(destination) => (
-                  <UpgradeButtonLink
-                    destination={destination}
-                    size="sm"
-                    mobileFullWidth={false}
-                  >
+                  <UpgradeButtonLink destination={destination} size="sm" mobileFullWidth={false}>
                     {proHandoff!.actionLabel}
                   </UpgradeButtonLink>
                 )}
@@ -1980,87 +2026,150 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       </Show>
 
       <Show when={!shouldShowLoadingState()}>
-        <Card padding="none" class="overflow-hidden">
-          {/* Content */}
-          <div class="divide-y divide-border-subtle">
-            <Show when={patrolFindingDisplayGroups().length === 0}>
-              <div class="p-6 text-sm text-muted text-center">
-                <Show when={shouldShowRichEmptyState()}>
-                  <div class="flex flex-col items-center gap-3">
-                    <Show
-                      when={emptyStateCopy().tone === 'success'}
-                      fallback={
-                        <Show
-                          when={emptyStateCopy().tone === 'error'}
-                          fallback={
-                            <Show
-                              when={emptyStateCopy().tone === 'warning'}
-                              fallback={
-                                <InfoIcon class={`w-10 h-10 ${emptyStateTone().iconClass}`} />
-                              }
-                            >
-                              <AlertTriangleIcon
-                                class={`w-10 h-10 ${emptyStateTone().iconClass}`}
-                              />
-                            </Show>
-                          }
-                        >
-                          <AlertTriangleIcon class={`w-10 h-10 ${emptyStateTone().iconClass}`} />
-                        </Show>
-                      }
-                    >
-                      <CheckCircleIcon class={`w-10 h-10 ${emptyStateTone().iconClass}`} />
-                    </Show>
-                    <div>
-                      <p class="font-medium text-base-content">{emptyStateCopy().title}</p>
-                      <Show when={emptyStateCopy().body}>
-                        <p class="text-xs mt-1">{emptyStateCopy().body}</p>
+        <div
+          class={
+            selectedPatrolFinding()
+              ? 'grid items-start gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(24rem,1.1fr)]'
+              : ''
+          }
+        >
+          <Card padding="none" class="overflow-hidden">
+            {/* Content */}
+            <div class="divide-y divide-border-subtle">
+              <Show when={patrolFindingDisplayGroups().length === 0}>
+                <div class="p-6 text-sm text-muted text-center">
+                  <Show when={shouldShowRichEmptyState()}>
+                    <div class="flex flex-col items-center gap-3">
+                      <Show
+                        when={emptyStateCopy().tone === 'success'}
+                        fallback={
+                          <Show
+                            when={emptyStateCopy().tone === 'error'}
+                            fallback={
+                              <Show
+                                when={emptyStateCopy().tone === 'warning'}
+                                fallback={
+                                  <InfoIcon class={`w-10 h-10 ${emptyStateTone().iconClass}`} />
+                                }
+                              >
+                                <AlertTriangleIcon
+                                  class={`w-10 h-10 ${emptyStateTone().iconClass}`}
+                                />
+                              </Show>
+                            }
+                          >
+                            <AlertTriangleIcon class={`w-10 h-10 ${emptyStateTone().iconClass}`} />
+                          </Show>
+                        }
+                      >
+                        <CheckCircleIcon class={`w-10 h-10 ${emptyStateTone().iconClass}`} />
                       </Show>
+                      <div>
+                        <p class="font-medium text-base-content">{emptyStateCopy().title}</p>
+                        <Show when={emptyStateCopy().body}>
+                          <p class="text-xs mt-1">{emptyStateCopy().body}</p>
+                        </Show>
+                      </div>
                     </div>
-                  </div>
-                </Show>
-                <Show when={filter() === 'attention'}>{emptyStateCopy().title}</Show>
-                <Show when={filter() === 'approvals'}>{emptyStateCopy().title}</Show>
-                <Show when={filter() === 'overdue'}>No overdue will-fix-later commitments.</Show>
-                <Show
-                  when={
-                    filter() !== 'active' &&
-                    filter() !== 'attention' &&
-                    filter() !== 'approvals' &&
-                    filter() !== 'overdue' &&
-                    props.runSnapshot === undefined
-                  }
-                >
-                  {emptyStateCopy().title}
-                </Show>
-              </div>
-            </Show>
-            <For each={patrolFindingDisplayGroups()}>
-              {(group) => (
-                <Show
-                  when={group.findings.length > 1}
-                  fallback={renderFindingItem(group.primaryFinding, false)}
-                >
-                  <section
-                    class="divide-y divide-border-subtle"
-                    aria-label={`${group.resourceLabel}: ${getPatrolFindingIssueCountLabel(group.findings.length)}`}
+                  </Show>
+                  <Show when={filter() === 'attention'}>{emptyStateCopy().title}</Show>
+                  <Show when={filter() === 'approvals'}>{emptyStateCopy().title}</Show>
+                  <Show when={filter() === 'overdue'}>No overdue will-fix-later commitments.</Show>
+                  <Show
+                    when={
+                      filter() !== 'active' &&
+                      filter() !== 'attention' &&
+                      filter() !== 'approvals' &&
+                      filter() !== 'overdue' &&
+                      props.runSnapshot === undefined
+                    }
                   >
-                    <div class="flex flex-wrap items-center justify-between gap-2 bg-surface-alt/60 px-3 py-2 text-xs">
-                      <span class="font-semibold text-base-content">{group.resourceLabel}</span>
-                      <span class="text-muted">
-                        {getPatrolFindingIssueCountLabel(group.findings.length)}
-                      </span>
+                    {emptyStateCopy().title}
+                  </Show>
+                </div>
+              </Show>
+              <For each={patrolFindingDisplayGroups()}>
+                {(group) => (
+                  <Show
+                    when={group.findings.length > 1}
+                    fallback={renderFindingItem(group.primaryFinding, false)}
+                  >
+                    <section
+                      class="divide-y divide-border-subtle"
+                      aria-label={`${group.label}: ${getPatrolFindingIssueCountLabel(group.findings.length)}`}
+                    >
+                      <div class="flex flex-wrap items-center justify-between gap-2 bg-surface-alt/60 px-3 py-2 text-xs">
+                        <span class="font-semibold text-base-content">{group.label}</span>
+                        <span class="text-muted">
+                          {getPatrolFindingIssueCountLabel(group.findings.length)}
+                          <Show when={group.affectedResourceCount > 1}>
+                            {` · ${group.affectedResourceCount} resources`}
+                          </Show>
+                        </span>
+                      </div>
+                      {renderFindingItem(group.primaryFinding, false, {
+                        hideSubject: true,
+                        relatedFindings: group.relatedFindings,
+                      })}
+                    </section>
+                  </Show>
+                )}
+              </For>
+            </div>
+          </Card>
+
+          <Show when={selectedPatrolFinding()}>
+            {(finding) => {
+              const group = () => selectedPatrolGroup();
+              const title = () => getFindingTitlePresentation(finding());
+              const subject = () => getFindingSubjectPresentation(finding());
+              const recency = () => getFindingRecencyPresentation(finding());
+              const severity = () => getFindingSeverityPresentation(finding());
+              return (
+                <aside
+                  id={`finding-${finding().id}-details`}
+                  aria-label={`Review ${title().label}`}
+                  class="overflow-hidden rounded-md border border-border bg-surface shadow-sm xl:sticky xl:top-4"
+                >
+                  <div class="flex items-start justify-between gap-3 border-b border-border-subtle bg-surface-alt/60 px-4 py-3">
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <MetadataBadge
+                          {...FINDING_ROW_BADGE_PROPS}
+                          tone={severity().badgeTone}
+                          uppercase={severity().uppercase}
+                        >
+                          {severity().label}
+                        </MetadataBadge>
+                        <span class="text-xs font-medium text-muted">Review issue</span>
+                      </div>
+                      <h3 class="mt-2 text-sm font-semibold leading-5 text-base-content">
+                        {title().label}
+                      </h3>
+                      <p class="mt-1 text-xs text-muted">
+                        {subject().label} {' · '} {recency().label}{' '}
+                        {formatTime(recency().timestamp)}
+                      </p>
                     </div>
-                    {renderFindingItem(group.primaryFinding, false, {
-                      hideSubject: true,
-                      relatedFindings: group.relatedFindings,
+                    <button
+                      type="button"
+                      aria-label={`Close review panel for ${title().label}`}
+                      onClick={() => setExpandedId(null)}
+                      class="rounded p-1.5 text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    >
+                      <XIcon class="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div class="max-h-[calc(100vh-12rem)] overflow-y-auto px-4 pb-4">
+                    {renderExpandedContent(finding(), {
+                      relatedFindings: group()?.relatedFindings ?? [],
                     })}
-                  </section>
-                </Show>
-              )}
-            </For>
-          </div>
-        </Card>
+                  </div>
+                </aside>
+              );
+            }}
+          </Show>
+        </div>
       </Show>
     </div>
   );
