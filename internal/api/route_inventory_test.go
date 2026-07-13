@@ -452,6 +452,7 @@ var allRouteAllowlist = []string{
 	"/api/updates/apply",
 	"/api/updates/rollback",
 	"/api/updates/status",
+	"/api/updates/release-notes",
 	"/api/updates/stream",
 	"/api/updates/plan",
 	"/api/updates/history",

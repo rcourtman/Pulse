@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,14 +23,15 @@ const applyUpdateStartAckTimeout = 250 * time.Millisecond
 
 // UpdateHandlers handles update-related API requests
 type UpdateHandlers struct {
-	manager          UpdateManager
-	history          *updates.UpdateHistory
-	registry         *updates.UpdaterRegistry
-	statusRateLimits map[string]time.Time // IP -> last request time
-	statusMu         sync.RWMutex
-	getConfig        func(context.Context) *config.Config
-	getHostsSnapshot func(context.Context) []models.Host
-	now              func() time.Time
+	manager           UpdateManager
+	history           *updates.UpdateHistory
+	registry          *updates.UpdaterRegistry
+	statusRateLimits  map[string]time.Time // IP -> last request time
+	statusMu          sync.RWMutex
+	getConfig         func(context.Context) *config.Config
+	getHostsSnapshot  func(context.Context) []models.Host
+	getCurrentVersion func() (*updates.VersionInfo, error)
+	now               func() time.Time
 }
 
 // UpdateManager defines the interface for update management operations
@@ -67,11 +69,12 @@ func NewUpdateHandlersWithContext(manager UpdateManager, history *updates.Update
 	}
 
 	h := &UpdateHandlers{
-		manager:          manager,
-		history:          history,
-		registry:         registry,
-		statusRateLimits: make(map[string]time.Time),
-		now:              time.Now,
+		manager:           manager,
+		history:           history,
+		registry:          registry,
+		statusRateLimits:  make(map[string]time.Time),
+		getCurrentVersion: updates.GetCurrentVersion,
+		now:               time.Now,
 	}
 
 	// Start periodic cleanup of rate limit map
@@ -119,6 +122,55 @@ func (h *UpdateHandlers) HandleCheckUpdates(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(info); err != nil {
 		log.Error().Err(err).Msg("Failed to encode update info")
+	}
+}
+
+// releaseNotesProvider is implemented by update managers that can fetch
+// release notes for a specific published version.
+type releaseNotesProvider interface {
+	GetReleaseNotes(ctx context.Context, version string) (*updates.ReleaseNotesInfo, error)
+}
+
+// HandleGetReleaseNotes returns the GitHub release notes for the currently
+// running version. Unlike the other update endpoints it is exposed to all
+// authenticated users so the UI can show a post-update "What's New" card.
+func (h *UpdateHandlers) HandleGetReleaseNotes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	provider, ok := h.manager.(releaseNotesProvider)
+	if !ok {
+		http.Error(w, "Release notes not available", http.StatusNotFound)
+		return
+	}
+
+	versionInfo, err := h.getCurrentVersion()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get version info for release notes")
+		http.Error(w, "Failed to get version info", http.StatusInternalServerError)
+		return
+	}
+	if versionInfo.IsDevelopment || versionInfo.IsSourceBuild {
+		http.Error(w, "Release notes not available for this build", http.StatusNotFound)
+		return
+	}
+
+	notes, err := provider.GetReleaseNotes(r.Context(), versionInfo.Version)
+	if err != nil {
+		if errors.Is(err, updates.ErrReleaseNotFound) {
+			http.Error(w, "Release not found", http.StatusNotFound)
+			return
+		}
+		log.Warn().Err(err).Str("version", versionInfo.Version).Msg("Failed to fetch release notes")
+		http.Error(w, "Failed to fetch release notes", http.StatusBadGateway)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(notes); err != nil {
+		log.Error().Err(err).Msg("Failed to encode release notes")
 	}
 }
 

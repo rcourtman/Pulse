@@ -18,12 +18,20 @@ import (
 // MockUpdateManager implements UpdateManager interface for testing
 type MockUpdateManager struct {
 	CheckForUpdatesFunc    func(ctx context.Context, channel string) (*updates.UpdateInfo, error)
+	GetReleaseNotesFunc    func(ctx context.Context, version string) (*updates.ReleaseNotesInfo, error)
 	ApplyUpdateFunc        func(ctx context.Context, req updates.ApplyUpdateRequest) error
 	RollbackToBackupFunc   func(ctx context.Context, req updates.RollbackRequest) error
 	GetStatusFunc          func() updates.UpdateStatus
 	GetSSECachedStatusFunc func() (updates.UpdateStatus, time.Time)
 	AddSSEClientFunc       func(w http.ResponseWriter, clientID string) *updates.SSEClient
 	RemoveSSEClientFunc    func(clientID string)
+}
+
+func (m *MockUpdateManager) GetReleaseNotes(ctx context.Context, version string) (*updates.ReleaseNotesInfo, error) {
+	if m.GetReleaseNotesFunc != nil {
+		return m.GetReleaseNotesFunc(ctx, version)
+	}
+	return nil, updates.ErrReleaseNotFound
 }
 
 func (m *MockUpdateManager) CheckForUpdatesWithChannel(ctx context.Context, channel string) (*updates.UpdateInfo, error) {
@@ -136,6 +144,61 @@ func TestHandleCheckUpdates_InvalidChannel(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestHandleGetReleaseNotes(t *testing.T) {
+	publishedAt := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
+	mockManager := &MockUpdateManager{
+		GetReleaseNotesFunc: func(_ context.Context, version string) (*updates.ReleaseNotesInfo, error) {
+			if version != "6.1.0-rc.1" {
+				t.Fatalf("expected running version 6.1.0-rc.1, got %q", version)
+			}
+			return &updates.ReleaseNotesInfo{
+				Version:      version,
+				ReleaseNotes: "## Highlights\n- Reviewed actions",
+				ReleaseDate:  publishedAt,
+				IsPrerelease: true,
+			}, nil
+		},
+	}
+
+	h := NewUpdateHandlers(mockManager, nil)
+	h.getCurrentVersion = func() (*updates.VersionInfo, error) {
+		return &updates.VersionInfo{Version: "6.1.0-rc.1"}, nil
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/updates/release-notes", nil)
+
+	h.HandleGetReleaseNotes(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var info updates.ReleaseNotesInfo
+	if err := json.NewDecoder(w.Body).Decode(&info); err != nil {
+		t.Fatalf("decode release notes response: %v", err)
+	}
+	if info.Version != "6.1.0-rc.1" || info.ReleaseNotes == "" || !info.IsPrerelease {
+		t.Fatalf("unexpected release notes response: %+v", info)
+	}
+	if !info.ReleaseDate.Equal(publishedAt) {
+		t.Fatalf("expected release date %v, got %v", publishedAt, info.ReleaseDate)
+	}
+}
+
+func TestHandleGetReleaseNotesRejectsDevelopmentBuild(t *testing.T) {
+	h := NewUpdateHandlers(&MockUpdateManager{}, nil)
+	h.getCurrentVersion = func() (*updates.VersionInfo, error) {
+		return &updates.VersionInfo{Version: "6.1.0-rc.1+git.1", IsDevelopment: true}, nil
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodGet, "/api/updates/release-notes", nil)
+
+	h.HandleGetReleaseNotes(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

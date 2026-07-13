@@ -208,7 +208,12 @@ update, or rollback transport. The server updater's own downgrade guard and
 `POST /api/updates/rollback` backup-restore endpoint are equally server
 self-update plumbing: they roll the Pulse server binary and its local
 backups, never agent binaries, and agent lifecycle surfaces must not key
-enrollment, update liveness, or fleet-control semantics off them. Workflow starter counts on that endpoint,
+enrollment, update liveness, or fleet-control semantics off them.
+The authenticated `GET /api/updates/release-notes` projection follows the same
+server-only boundary: it reads the exact published notes for the running Pulse
+server release and must not be used as agent version, enrollment, update
+availability, or fleet rollout evidence.
+Workflow starter counts on that endpoint,
 contextual Assistant/external-agent collaboration counts inside the Assistant
 step, the content-free Patrol control starter split, and Patrol control
 completed-loop, resolved-loop, or `patrolControlValueState` proof mirrored to

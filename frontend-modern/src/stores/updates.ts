@@ -219,8 +219,7 @@ const clearPendingApply = () => {
   saveState(state);
 };
 
-const formatVersionLabel = (version: string) =>
-  version.startsWith('v') ? version : `v${version}`;
+const formatVersionLabel = (version: string) => (version.startsWith('v') ? version : `v${version}`);
 
 // One-time post-update confirmation: consume the pending-apply marker on the
 // first version fetch after an apply. When the running version moved off the
@@ -449,12 +448,15 @@ export const updateStore = {
   clearDismissed,
 
   // Manual testing helpers
-  simulateUpdate: (version: string = 'v6.0.0') => {
+  simulateUpdate: (
+    version: string = 'v6.0.0',
+    releaseNotes: string = '## Highlights\n- Preview the release highlights shown to users',
+  ) => {
     setUpdateInfo({
       available: true,
       currentVersion: versionInfo()?.version || 'v6.0.0',
       latestVersion: version,
-      releaseNotes: 'Test update notification',
+      releaseNotes,
       releaseDate: new Date().toISOString(),
       downloadUrl: '#',
       isPrerelease: false,

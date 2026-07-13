@@ -7,6 +7,7 @@ import { SecurityWarning } from './components/SecurityWarning';
 import { Login } from './components/Login';
 import { logger } from './utils/logger';
 import { UpdateBanner } from './components/UpdateBanner';
+import { WhatsNewCard } from './components/WhatsNewCard';
 import { DemoBanner } from './components/DemoBanner';
 import { CommercialMigrationBanner } from './components/CommercialMigrationBanner';
 import { GitHubStarBanner } from './components/GitHubStarBanner';
@@ -480,6 +481,7 @@ function App() {
                         <DemoBanner />
                         <CommercialMigrationBanner />
                         <UpdateBanner />
+                        <WhatsNewCard />
                         <GitHubStarBanner />
                         <GlobalUpdateProgressWatcher />
                       </Show>

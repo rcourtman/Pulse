@@ -207,6 +207,8 @@ describe('App architecture', () => {
     );
     expect(appSource).toContain('<AIChat onClose={() => aiChatStore.close()} />');
     expect(appSource).toContain('showOrgSwitcher={runtime.showOrgSwitcher}');
+    expect(appSource).toContain("import { WhatsNewCard } from './components/WhatsNewCard';");
+    expect(appSource).toContain('<WhatsNewCard />');
     expect(appSource).not.toContain('TrialBanner');
     expect(appSource).not.toContain('MonitoredSystemLimitWarningBanner');
     expect(appSource).not.toContain('monitoredSystemLimitWarningBanner');
@@ -420,7 +422,8 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain('aiChatStore.setEnabled(');
     expect(appRuntimeStateSource).toContain('aiIntelligenceStore.loadPatrolFindings()');
     expect(appRuntimeStateSource).toContain('aiIntelligenceStore.loadPendingApprovals()');
-    expect(appRuntimeStateSource).toContain('window.setInterval(refreshPatrolOpenWork, 30000)');
+    expect(appRuntimeStateSource).toContain('actionInboxStore.loadPendingActionCount()');
+    expect(appRuntimeStateSource).toContain('window.setInterval(refreshOpenWorkBadges, 30000)');
     expect(appRuntimeStateSource).toContain(
       "eventBus.on('theme_changed', handleRemoteThemeChange);",
     );

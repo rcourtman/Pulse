@@ -2863,6 +2863,11 @@ query...`, and `Reading storage...` before streamed tool arguments are
    call the operator's choice `Patrol mode`.
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
+   The shared app shell may also mount the deployment-installability-owned
+   post-update release highlights card. That card must consume published
+   release notes through the update surface and must not read, reset, or
+   otherwise couple itself to Assistant sessions, Patrol state, model routing,
+   or AI-provider readiness.
    That shared drawer ownership also covers passive resource reads while the
    shell is mounted but closed. `frontend-modern/src/components/AI/Chat/`
    may consume the live websocket snapshot or the existing unified-resource

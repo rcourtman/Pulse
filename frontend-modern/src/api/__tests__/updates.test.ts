@@ -32,6 +32,19 @@ describe('UpdatesAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/version');
   });
 
+  it('fetches release notes for the running version', async () => {
+    const response = {
+      version: '6.1.0-rc.1',
+      releaseNotes: '## Highlights\n- Reviewed actions',
+      releaseDate: '2026-07-13T12:00:00Z',
+      isPrerelease: true,
+    };
+    apiFetchJSONMock.mockResolvedValueOnce(response as any);
+
+    await expect(UpdatesAPI.getReleaseNotes()).resolves.toEqual(response);
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/updates/release-notes');
+  });
+
   it('encodes optional update-check channel safely', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({ available: false } as any);
     await UpdatesAPI.checkForUpdates('rc');
@@ -105,7 +118,8 @@ describe('UpdatesAPI', () => {
             id: 'agent-token-scopes',
             status: 'blocked',
             title: 'Agent token scopes',
-            summary: 'Registered agents exist, but no loaded API token grants agent reporting scope.',
+            summary:
+              'Registered agents exist, but no loaded API token grants agent reporting scope.',
           },
         ],
       },

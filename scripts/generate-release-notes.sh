@@ -1,7 +1,21 @@
 #!/usr/bin/env bash
 
-# Generate release notes using LLM analysis of actual code diffs (not commit messages)
-# Usage: ./scripts/generate-release-notes.sh <version> [previous-tag]
+# Generate release notes with an agent that explores the actual repo history.
+#
+# Engine: headless Claude Code (`claude -p`, uses your Claude subscription —
+# no API key), with Codex CLI (`codex exec`, OpenAI subscription) as fallback.
+# The agent runs read-only git/gh commands itself instead of being fed
+# pre-chewed diff fragments, so nothing user-visible is missed by grep luck.
+#
+# Usage:  ./scripts/generate-release-notes.sh <version> [previous-tag]
+#
+# Contract: the release notes markdown is written to STDOUT (trigger-release.sh
+# captures it); all progress/diagnostics go to STDERR. SAVE_TO_FILE=1 also
+# writes release-notes-v<version>.md.
+#
+# Env overrides:
+#   RELEASE_NOTES_ENGINE=claude|codex   force an engine (default: claude, codex fallback)
+#   RELEASE_NOTES_MODEL=<model>         model for the claude engine (default: sonnet)
 
 set -euo pipefail
 
@@ -9,353 +23,153 @@ VERSION=${1:-}
 PREVIOUS_TAG=${2:-}
 
 if [ -z "$VERSION" ]; then
-    echo "Usage: $0 <version> [previous-tag]"
-    echo "Example: $0 4.29.0 v4.28.0"
+    echo "Usage: $0 <version> [previous-tag]" >&2
+    echo "Example: $0 6.1.0 v6.0.6" >&2
     exit 1
 fi
 
-# Find previous tag if not specified
+cd "$(git rev-parse --show-toplevel)"
+
 if [ -z "$PREVIOUS_TAG" ]; then
     PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
     if [ -z "$PREVIOUS_TAG" ]; then
-        echo "No previous tag found, cannot generate diff-based release notes"
+        echo "No previous tag found, cannot generate diff-based release notes" >&2
         exit 1
     fi
 fi
 
-echo "Generating release notes for v${VERSION}..."
-echo "Comparing code changes from ${PREVIOUS_TAG} to HEAD..."
-
-# Get diff stats (excluding non-user-facing files)
-DIFF_STAT=$(git diff ${PREVIOUS_TAG}..HEAD --stat \
-    -- ':!*.md' ':!*.test.go' ':!*_test.go' ':!*_test.tsx' ':!*_test.ts' \
-    ':!.github/*' ':!tests/*' ':!docs/*' ':!*.txt' ':!*.json' ':!go.sum' \
-    ':!frontend-modern/src/**/__tests__/*' \
-    | tail -20)
-
-# Get list of changed user-facing files
-CHANGED_FILES=$(git diff ${PREVIOUS_TAG}..HEAD --name-only \
-    -- ':!*.md' ':!*.test.go' ':!*_test.go' ':!*_test.tsx' ':!*_test.ts' \
-    ':!.github/*' ':!tests/*' ':!docs/*' ':!*.txt' ':!go.sum' \
-    ':!frontend-modern/src/**/__tests__/*' \
-    | head -100)
-
-# Get specific diffs for key user-facing areas (truncated for API limits)
-
-# API routes/handlers - new endpoints
-API_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'internal/api/*.go' ':!*_test.go' \
-    | grep -E '^\+.*func.*Handle|^\+.*router\.(GET|POST|PUT|DELETE|PATCH)|^\+.*\.Path\(' \
-    | head -30 || echo "")
-
-# Frontend pages and components - new features
-FRONTEND_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'frontend-modern/src/components/*.tsx' 'frontend-modern/src/pages/*.tsx' \
-    ':!*_test.tsx' ':!*__tests__*' \
-    | grep -E '^\+.*export|^\+.*function.*\(|^\+.*const.*=' \
-    | head -40 || echo "")
-
-# Config options - new settings users can configure
-CONFIG_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'internal/config/*.go' ':!*_test.go' \
-    | grep -E '^\+.*`json:|^\+.*`yaml:' \
-    | head -20 || echo "")
-
-# Notifications/alerts - webhook changes, alert features
-ALERT_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'internal/notifications/*.go' 'internal/alerts/*.go' ':!*_test.go' \
-    | grep -E '^\+' \
-    | head -30 || echo "")
-
-# Agent changes - host/docker agent features
-AGENT_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'cmd/pulse-agent/*.go' 'internal/agent/*.go' ':!*_test.go' \
-    | grep -E '^\+' \
-    | head -20 || echo "")
-
-# Install script changes
-INSTALL_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'scripts/install.sh' 'install.sh' \
-    | grep -E '^\+' \
-    | head -20 || echo "")
-
-# Models/types - new data structures
-MODELS_DIFF=$(git diff ${PREVIOUS_TAG}..HEAD -- 'internal/models/*.go' ':!*_test.go' \
-    | grep -E '^\+.*type.*struct|^\+.*`json:' \
-    | head -20 || echo "")
-
-# Bug fixes: Find commits referencing issues and verify fix is still in final code
-echo "Checking for verified bug fixes..."
-VERIFIED_BUG_FIXES=""
-
-# Get commits that reference issues (pattern: #1234 or Related to #1234)
-ISSUE_COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --oneline --grep='#[0-9]' 2>/dev/null || echo "")
-
-if [ -n "$ISSUE_COMMITS" ]; then
-    while IFS= read -r commit_line; do
-        [ -z "$commit_line" ] && continue
-        
-        # Extract commit hash and message
-        COMMIT_HASH=$(echo "$commit_line" | awk '{print $1}')
-        COMMIT_MSG=$(echo "$commit_line" | cut -d' ' -f2-)
-        
-        # Get the files this commit touched
-        COMMIT_FILES=$(git diff-tree --no-commit-id --name-only -r "$COMMIT_HASH" 2>/dev/null | head -5)
-        
-        # Check if any of those files have changes in the final diff
-        CHANGE_STILL_EXISTS=false
-        for file in $COMMIT_FILES; do
-            if git diff ${PREVIOUS_TAG}..HEAD --name-only | grep -q "^${file}$"; then
-                # File is still modified in final diff - verify the commit's changes exist
-                COMMIT_ADDITIONS=$(git show "$COMMIT_HASH" --pretty="" --unified=0 -- "$file" 2>/dev/null | grep '^+[^+]' | head -3 || echo "")
-                if [ -n "$COMMIT_ADDITIONS" ]; then
-                    # Check if at least one added line still exists in final diff
-                    FIRST_ADDITION=$(echo "$COMMIT_ADDITIONS" | head -1 | sed 's/^+//' | head -c 40)
-                    if [ -n "$FIRST_ADDITION" ] && git diff ${PREVIOUS_TAG}..HEAD -- "$file" | grep -qF "$FIRST_ADDITION"; then
-                        CHANGE_STILL_EXISTS=true
-                        break
-                    fi
-                fi
-            fi
-        done
-        
-        if [ "$CHANGE_STILL_EXISTS" = true ]; then
-            VERIFIED_BUG_FIXES="${VERIFIED_BUG_FIXES}${commit_line}
-"
-        fi
-    done <<< "$ISSUE_COMMITS"
-fi
-
-# Clean up the bug fixes list
-VERIFIED_BUG_FIXES=$(echo "$VERIFIED_BUG_FIXES" | sed '/^$/d' | head -15)
-
-echo "Collected diffs from key areas"
-
-# Auto-load API keys from local secrets if not already set
-PULSE_SECRETS_DIR="${PULSE_SECRETS_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/pulse/secrets}"
-if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -f "${PULSE_SECRETS_DIR}/anthropic/api_key" ]; then
-    ANTHROPIC_API_KEY=$(cat "${PULSE_SECRETS_DIR}/anthropic/api_key")
-    export ANTHROPIC_API_KEY
-fi
-
-# Check for LLM API keys
-if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-    LLM_PROVIDER="anthropic"
-elif [ -n "${OPENAI_API_KEY:-}" ]; then
-    LLM_PROVIDER="openai"
-else
-    echo "No LLM API keys detected – cannot generate diff-based notes."
-    echo "Set ANTHROPIC_API_KEY or OPENAI_API_KEY"
+if ! git rev-parse -q --verify "${PREVIOUS_TAG}^{commit}" >/dev/null; then
+    echo "Previous tag '${PREVIOUS_TAG}' does not exist" >&2
     exit 1
 fi
 
-echo "Using LLM provider: ${LLM_PROVIDER}"
+echo "Generating release notes for v${VERSION} (changes since ${PREVIOUS_TAG})..." >&2
 
-# Build the prompt with actual code changes
 read -r -d '' PROMPT <<EOF || true
-You are generating release notes for Pulse v${VERSION}.
-Pulse is a monitoring dashboard for Proxmox VE, PBS, and Docker containers.
+You are generating the release notes for Pulse v${VERSION}.
 
-IMPORTANT: You are analyzing ACTUAL CODE DIFFS, not commit messages. This means you see what is truly different between v${PREVIOUS_TAG} and v${VERSION}. Focus only on user-visible changes.
+Pulse is a self-hosted monitoring dashboard for Proxmox VE, PBS, Docker, and
+Kubernetes, used mostly by homelab and small-ops users.
 
-Here are the files that changed (excluding tests/docs):
-${CHANGED_FILES}
+The repo is checked out at the commit that will become v${VERSION}. The
+previous release tag is ${PREVIOUS_TAG}. Investigate the changes yourself —
+start with \`git log ${PREVIOUS_TAG}..HEAD --oneline\` and
+\`git diff ${PREVIOUS_TAG}..HEAD --stat\`, then use targeted \`git diff\` /
+\`git show\` and read source files where the diff alone is unclear. For
+commits that reference GitHub issues (#1234), you may use \`gh issue view\` to
+understand the user-facing symptom. Only describe changes that exist in the
+final code state; verify anything you are unsure about before writing it.
 
-Summary of changes:
-${DIFF_STAT}
+Focus on USER-VISIBLE changes only: features, fixes, and behavior users will
+notice. Ignore internal refactors, test changes, CI/tooling, and docs.
 
-NEW API ENDPOINTS/HANDLERS (lines starting with + are additions):
-${API_DIFF:-No significant API changes detected}
-
-NEW FRONTEND FEATURES:
-${FRONTEND_DIFF:-No significant frontend changes detected}
-
-NEW CONFIG OPTIONS:
-${CONFIG_DIFF:-No significant config changes detected}
-
-ALERT/NOTIFICATION CHANGES:
-${ALERT_DIFF:-No significant alert changes detected}
-
-AGENT CHANGES:
-${AGENT_DIFF:-No significant agent changes detected}
-
-INSTALL SCRIPT CHANGES:
-${INSTALL_DIFF:-No significant install changes detected}
-
-NEW DATA MODELS:
-${MODELS_DIFF:-No significant model changes detected}
-
-VERIFIED BUG FIXES (commits referencing issues, verified still in final code):
-${VERIFIED_BUG_FIXES:-No verified bug fix commits found}
-
-Generate release notes following this format:
+Write the release notes in exactly this format:
 
 ## v${VERSION}
 
-### New Features
-[List genuinely new user-facing features. Be specific about what users can now do.]
+### Highlights
+[2-4 short bullets, plain English, covering only what a typical user would
+notice and care about. This section is rendered inside the Pulse UI itself
+(the post-update "What's New" banner and the update-banner preview), so each
+bullet must be self-contained and jargon-free. IMPORTANT: if this release has
+nothing a typical user would notice (only internal fixes or minor patches),
+OMIT this entire section — that deliberately keeps the in-app banner silent
+for maintenance releases. Keep the heading at level 3 (###).]
 
-### Bug Fixes  
-[List fixes for issues users would have encountered. Use the VERIFIED BUG FIXES section above - these reference actual GitHub issues. Include the issue number in format (#1234).]
+### New Features
+[Genuinely new user-facing capabilities. Be specific about what users can now do.]
+
+### Bug Fixes
+[Fixes for problems users would have encountered. Include issue refs like
+(#1234) only when the fix verifiably addresses that issue.]
 
 ### Improvements
-[List enhancements to existing features.]
+[Enhancements to existing features.]
 
----
+Guidelines:
+- Plain, factual, understated. No marketing language, no emojis.
+- Omit any section that has no items.
+- Do NOT write an Installation section or anything after Improvements — the
+  release pipeline appends those.
+- Highlights is the ONE exception to "boring": it is shown in-app to users who
+  just updated, so pick the few changes they would actually notice — but still
+  facts, no hype.
 
-## Installation
-
-**Quick Install (LXC / Proxmox VE):**
-\`\`\`bash
-curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | bash
-\`\`\`
-
-**Docker:**
-\`\`\`bash
-docker pull rcourtman/pulse:${VERSION}
-\`\`\`
-
-**Helm:**
-\`\`\`bash
-helm upgrade --install pulse oci://ghcr.io/rcourtman/pulse-chart --version ${VERSION}
-\`\`\`
-
-See the [Installation Guide](https://github.com/rcourtman/Pulse#installation) for details.
-
-Paid Pulse Pro, Relay, and eligible legacy customers: public GitHub release
-assets and the public \`rcourtman/pulse\` Docker image are community builds. They do
-not include the private Pulse Pro runtime hooks. Use
-https://pulserelay.pro/download.html with your activation key to get the
-private Pulse Pro Docker image or Linux archive.
-
-GUIDELINES:
-- Write plain, factual release notes. No marketing language or excitement.
-- Only mention features that exist in the FINAL code state
-- Do not mention internal refactors, test changes, or CI/CD improvements
-- Do not mention AI features prominently - these are optional features
-- Keep it concise and boring - users want facts, not hype
-- If a section has no items, omit the section entirely
-- No emojis
+Your reply must be ONLY the release-notes markdown, starting with
+"## v${VERSION}" — no preamble, no code fences, no commentary.
 EOF
 
-# Helper to call Anthropic
-generate_with_anthropic() {
-    local response content
-    response=$(curl -s https://api.anthropic.com/v1/messages \
-      -H "Content-Type: application/json" \
-      -H "x-api-key: ${ANTHROPIC_API_KEY}" \
-      -H "anthropic-version: 2023-06-01" \
-      -d @- <<JSON
-{
-  "model": "claude-sonnet-4-20250514",
-  "max_tokens": 2000,
-  "system": "You are a technical writer creating factual, understated release notes. Be concise and avoid marketing language.",
-  "messages": [
-    {
-      "role": "user",
-      "content": $(echo "$PROMPT" | jq -Rs .)
-    }
-  ]
-}
-JSON
-) || {
-        echo "Anthropic API request failed" >&2
-        return 1
-    }
-
-    local response_type
-    response_type=$(echo "$response" | jq -r '.type // empty')
-    if [ "$response_type" = "error" ]; then
-        local message
-        message=$(echo "$response" | jq -r '.error.message // "Unknown error"')
-        echo "Anthropic API error: $message" >&2
-        return 1
-    fi
-
-    content=$(echo "$response" | jq -r '.content[0].text // empty')
-    if [ -z "$content" ] || [ "$content" = "null" ]; then
-        echo "Anthropic API returned empty content: $response" >&2
-        return 1
-    fi
-
-    printf '%s' "$content"
+# Strip accidental markdown fences and anything before the "## v" heading.
+clean_notes() {
+    sed -e 's/^```[a-z]*$//' -e 's/^```$//' | awk '/^## v/{found=1} found{print}'
 }
 
-# Helper to call OpenAI
-generate_with_openai() {
-    local response content error_msg
-    response=$(curl -s https://api.openai.com/v1/chat/completions \
-      -H "Content-Type: application/json" \
-      -H "Authorization: Bearer ${OPENAI_API_KEY}" \
-      -d @- <<JSON
-{
-  "model": "gpt-4o",
-  "messages": [
-    {
-      "role": "system",
-      "content": "You are a technical writer creating factual, understated release notes. Be concise and avoid marketing language."
-    },
-    {
-      "role": "user",
-      "content": $(echo "$PROMPT" | jq -Rs .)
-    }
-  ],
-  "temperature": 0.3,
-  "max_tokens": 2000
-}
-JSON
-) || {
-        echo "OpenAI API request failed" >&2
-        return 1
-    }
-
-    error_msg=$(echo "$response" | jq -r '.error.message? // empty')
-    if [ -n "$error_msg" ]; then
-        echo "OpenAI API error: $error_msg" >&2
-        return 1
-    fi
-
-    content=$(echo "$response" | jq -r '.choices[0].message.content // empty')
-    if [ -z "$content" ] || [ "$content" = "null" ]; then
-        echo "OpenAI API returned empty content: $response" >&2
-        return 1
-    fi
-
-    printf '%s' "$content"
+# Both engines must run on the logged-in subscription (Claude Max / OpenAI
+# plan), never on metered API keys. Stray env vars silently override
+# subscription auth — scrub them before invoking either CLI.
+scrub_env() {
+    env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL \
+        -u ANTHROPIC_PROFILE -u OPENAI_API_KEY "$@"
 }
 
-# Call LLM API based on provider
+generate_with_claude() {
+    command -v claude >/dev/null || return 1
+    echo "Engine: claude (model: ${RELEASE_NOTES_MODEL:-sonnet})" >&2
+    scrub_env claude -p "$PROMPT" \
+        --model "${RELEASE_NOTES_MODEL:-sonnet}" \
+        --allowedTools \
+            "Bash(git log:*)" "Bash(git diff:*)" "Bash(git show:*)" \
+            "Bash(git describe:*)" "Bash(git tag:*)" "Bash(git rev-parse:*)" \
+            "Bash(gh issue view:*)" "Bash(gh pr view:*)" \
+            "Read" "Grep" "Glob" \
+        </dev/null
+}
+
+generate_with_codex() {
+    command -v codex >/dev/null || return 1
+    echo "Engine: codex" >&2
+    local out
+    out=$(mktemp)
+    # Session log goes to stderr; only the agent's final message is kept.
+    if ! scrub_env codex exec --sandbox read-only -o "$out" "$PROMPT" >&2 </dev/null; then
+        rm -f "$out"
+        return 1
+    fi
+    cat "$out"
+    rm -f "$out"
+}
+
 RELEASE_NOTES=""
-if [ "$LLM_PROVIDER" = "anthropic" ]; then
-    if ! RELEASE_NOTES=$(generate_with_anthropic); then
-        if [ -n "${OPENAI_API_KEY:-}" ]; then
-            echo "Anthropic generation failed, falling back to OpenAI..." >&2
-            RELEASE_NOTES=$(generate_with_openai) || {
-                echo "Both LLM providers failed" >&2
+case "${RELEASE_NOTES_ENGINE:-claude}" in
+    codex)
+        RELEASE_NOTES=$(generate_with_codex) || {
+            echo "Codex generation failed" >&2
+            exit 1
+        }
+        ;;
+    *)
+        if ! RELEASE_NOTES=$(generate_with_claude); then
+            echo "Claude generation failed, trying Codex fallback..." >&2
+            RELEASE_NOTES=$(generate_with_codex) || {
+                echo "Both engines failed (need 'claude' or 'codex' CLI, logged in)" >&2
                 exit 1
             }
-        else
-            echo "Anthropic generation failed and no OpenAI fallback" >&2
-            exit 1
         fi
-    fi
-else
-    RELEASE_NOTES=$(generate_with_openai) || {
-        echo "OpenAI generation failed" >&2
-        exit 1
-    }
-fi
+        ;;
+esac
 
-if [ -z "$RELEASE_NOTES" ] || [ "$RELEASE_NOTES" = "null" ]; then
-    echo "Error: Release notes generation returned empty content" >&2
+RELEASE_NOTES=$(printf '%s\n' "$RELEASE_NOTES" | clean_notes)
+
+if [ -z "$RELEASE_NOTES" ]; then
+    echo "Error: release notes generation returned no '## v' section" >&2
     exit 1
 fi
 
-# Output release notes
-echo ""
-echo "Generated release notes:"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "$RELEASE_NOTES"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+# Notes to stdout only — callers capture this.
+printf '%s\n' "$RELEASE_NOTES"
 
-# Optionally save to file
 if [ "${SAVE_TO_FILE:-}" = "1" ]; then
     OUTPUT_FILE="release-notes-v${VERSION}.md"
-    echo "$RELEASE_NOTES" > "$OUTPUT_FILE"
-    echo ""
-    echo "Saved to: $OUTPUT_FILE"
+    printf '%s\n' "$RELEASE_NOTES" > "$OUTPUT_FILE"
+    echo "Saved to ${OUTPUT_FILE}" >&2
 fi

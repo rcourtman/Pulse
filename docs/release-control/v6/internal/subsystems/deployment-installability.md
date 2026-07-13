@@ -32,6 +32,10 @@ TLS floor in the dynamic config.
 1. `internal/updates/`
 2. `internal/api/updates.go`
 3. `frontend-modern/src/api/updates.ts`
+4. `frontend-modern/src/components/UpdateBanner.tsx`
+5. `frontend-modern/src/components/WhatsNewCard.tsx`
+6. `frontend-modern/src/components/whatsNewModel.ts`
+7. `frontend-modern/src/utils/localStorage.ts`
 4. `cmd/pulse-control-plane/main.go`
 5. `cmd/pulse-control-plane/mobile_proof_cmd.go`
 6. `cmd/pulse-control-plane/provider_msp.go`
@@ -72,6 +76,7 @@ TLS floor in the dynamic config.
 34. `go.mod`
 35. `go.sum`
 36. `scripts/build-release.sh`
+37. `scripts/generate-release-notes.sh`
 37. `scripts/check-workflow-dispatch-inputs.py`
 38. `scripts/clean-mock-alerts.sh`
 39. `scripts/com.pulse.hot-dev.plist.template`
@@ -479,7 +484,13 @@ TLS floor in the dynamic config.
    must preserve server-derived `owner_user_id` lineage on bootstrap tokens and
    enrollment runtime tokens while keeping deploy binding metadata limited to
    deploy facts such as cluster, job, target, source agent, and expected node.
-4. Add or change server update transport through `internal/api/updates.go`, `internal/updates/`, and `frontend-modern/src/api/updates.ts`
+4. Add or change server update transport and release-note presentation through
+   `internal/api/updates.go`, `internal/updates/`,
+   `frontend-modern/src/api/updates.ts`,
+   `frontend-modern/src/components/UpdateBanner.tsx`,
+   `frontend-modern/src/components/WhatsNewCard.tsx`,
+   `frontend-modern/src/components/whatsNewModel.ts`, and
+   `frontend-modern/src/utils/localStorage.ts`
    Server update planning must attach the canonical upgrade-readiness verdict
    to `/api/updates/plan` responses before an operator starts a v6 update, and
    `POST /api/updates/apply` must recompute the same verdict and reject
@@ -492,6 +503,14 @@ TLS floor in the dynamic config.
    unreadable token state and warning about missing, expired, or soon-expiring
    agent reporting scopes without pretending shell-only inspection can prove
    live registered-agent continuity.
+   The authenticated running-release notes endpoint must fetch only the exact
+   published tag for the running release, cache both hits and misses, stay
+   unavailable for source/development builds, and return the canonical release
+   body without inventing a second changelog source. The update banner may
+   preview only the curated `Highlights` section from update-check metadata,
+   while the post-update card may show that same section once per later
+   installed release and must stay silent for a first baseline, malformed or
+   development versions, missing releases, and releases without highlights.
 5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, deterministic dev auth seeding, dependency manifest floors, frontend build chunking, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `scripts/lib/hot-dev-runtime.sh`, `scripts/lib/hot-dev-auth.sh`, `scripts/dev-deploy-agent.sh`, `Makefile`, `package.json`, `package-lock.json`, `frontend-modern/package.json`, `frontend-modern/package-lock.json`, `frontend-modern/vite.config.ts`, `go.mod`, `go.sum`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, `scripts/run_demo_public_browser_smoke.sh`, `scripts/demo_public_browser_smoke.cjs`, `scripts/com.pulse.hot-dev.plist.template`, `tests/integration/scripts/managed-dev-runtime.mjs`, `tests/integration/playwright.config.ts`, `tests/integration/tests/helpers.ts`, `tests/integration/tests/runtime-defaults.ts`, `tests/integration/README.md`, and `tests/integration/QUICK_START.md`
    First-run browser helpers are part of that dev-runtime proof boundary. They
    must preserve the setup-created API token in the shared runtime state, prefer
@@ -977,16 +996,23 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
-The active support prerelease `v6.0.6-rc.1` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.1.0-rc.1` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.0.6-rc.1` release
+fallback, and Helm chart release metadata to the same `6.1.0-rc.1` release
 version. This support prerelease keeps `rollback_version=v6.0.5`, publishes a
 versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and
 does not move stable/latest install pointers or stable semver aliases. It puts
-the typed Pulse Intelligence lifecycle, monitor-first product workflows,
-native-agent update safety, Windows logged-readiness and recovery proof,
-OIDC callback recovery, and fail-closed security hardening behind RC
-validation before the next stable patch.
+the expanded Pulse Intelligence action and verification lifecycle, the
+operator-facing Actions inbox, monitor-first product workflows, governed host
+and storage operations, native-agent update safety, Windows logged-readiness
+and recovery proof, OIDC callback recovery, and fail-closed security hardening
+behind RC validation before the next stable minor release.
+The same release boundary now provides one canonical in-app release-note
+experience. Update checks can preview a curated `Highlights` section, and an
+authenticated running-version endpoint lets the update surface show those
+same published highlights once after a later upgrade. Missing highlights stay
+quiet by design, and source or development builds never masquerade as
+published releases.
 The initial GA promotion
 metadata remains
 `promoted_from_tag=v6.0.0-rc.7`, `rollback_version=v5.1.35`,
@@ -1040,8 +1066,8 @@ compose image default, standalone installer fallback constant, and packaged
 Helm metadata. A draft release workflow failure caused by stale image or chart
 pins is a release-packet blocker until the defaults, tests, and evidence
 record are refreshed from the new branch head.
-For the active support prerelease `v6.0.6-rc.1` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.0.6-rc.1`
+For the active support prerelease `v6.1.0-rc.1` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.1.0-rc.1`
 until the next governed stable cut moves them forward. The stable promotion
 guard remains in force and must reject leftover `-rc.` defaults when the
 governed `VERSION` returns to a stable release.

@@ -5,7 +5,9 @@ import { UpdatesAPI, type UpdatePlan } from '@/api/updates';
 import { UpdateConfirmationModal } from './UpdateConfirmationModal';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
-import { buildReleaseNotesUrl } from '@/components/updateVersion';
+import { buildReleaseNotesUrl, normalizeReleaseVersion } from '@/components/updateVersion';
+import { extractHighlights } from '@/components/whatsNewModel';
+import { renderMarkdown } from '@/components/AI/aiChatUtils';
 
 // The Pro binary self-updates from the license server download broker (see
 // internal/updates/pro_update.go), so in-app apply keeps the Pro runtime.
@@ -54,6 +56,16 @@ export function UpdateBanner() {
   const releaseNotesUrl = createMemo(() =>
     buildReleaseNotesUrl(updateStore.updateInfo()?.latestVersion),
   );
+
+  // Curated `## Highlights` section of the upcoming release, if the release
+  // author wrote one — helps answer "is this update worth taking now?"
+  // without leaving for GitHub. Empty when absent, and the block hides.
+  const highlightsHtml = createMemo(() => {
+    const info = updateStore.updateInfo();
+    if (!info?.available || !info.releaseNotes) return '';
+    const highlights = extractHighlights(info.releaseNotes);
+    return highlights ? renderMarkdown(highlights) : '';
+  });
 
   // The compiled Pro binary self-updates from the license server download
   // broker, so in-app apply is safe and keeps the Pro runtime; only the
@@ -268,12 +280,27 @@ export function UpdateBanner() {
                   {updateStore.updateInfo()?.latestVersion}
                 </p>
 
+                {/* What's new preview (curated Highlights section of the release notes) */}
+                <Show when={highlightsHtml()}>
+                  <div class="mt-2 p-3 rounded-md border bg-blue-100 dark:bg-blue-950 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200">
+                    <div class="font-medium mb-1">
+                      What's new in v
+                      {normalizeReleaseVersion(updateStore.updateInfo()?.latestVersion)}
+                    </div>
+                    <div
+                      class="max-h-40 overflow-y-auto [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:mt-0.5 [&_p]:mt-1 [&_a]:underline [&_code]:font-mono [&_code]:text-xs"
+                      // eslint-disable-next-line solid/no-innerhtml -- renderMarkdown sanitizes via DOMPurify
+                      innerHTML={highlightsHtml()}
+                    />
+                  </div>
+                </Show>
+
                 {/* Pro edition with in-app apply: updates install the private
                     Pulse Pro build from the license server */}
                 <Show when={isProEdition() && updatePlan()?.canAutoUpdate}>
                   <p class="text-xs">
-                    Updates install the private Pulse Pro build from the license server, so
-                    applying keeps Pro features (Audit, RBAC, Reporting, SSO).
+                    Updates install the private Pulse Pro build from the license server, so applying
+                    keeps Pro features (Audit, RBAC, Reporting, SSO).
                   </p>
                 </Show>
 

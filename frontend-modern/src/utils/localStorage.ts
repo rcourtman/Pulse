@@ -165,6 +165,7 @@ export const STORAGE_KEYS = {
 
   // Updates
   UPDATES: 'pulse-updates',
+  WHATS_NEW_LAST_SEEN: 'pulseWhatsNewLastSeen',
 
   // Alert settings
   ALERT_HISTORY_TIME_FILTER: 'alertHistoryTimeFilter',

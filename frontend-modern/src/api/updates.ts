@@ -26,6 +26,13 @@ export interface DockerUpdateCommands {
   composeUpCommand: string;
 }
 
+export interface ReleaseNotesInfo {
+  version: string;
+  releaseNotes: string;
+  releaseDate: string;
+  isPrerelease: boolean;
+}
+
 export interface UpdateStatus {
   status: string;
   progress: number;
@@ -147,6 +154,10 @@ export class UpdatesAPI {
 
   static async getVersion(): Promise<VersionInfo> {
     return apiFetchJSON('/api/version');
+  }
+
+  static async getReleaseNotes(): Promise<ReleaseNotesInfo> {
+    return apiFetchJSON('/api/updates/release-notes');
   }
 
   static async getUpdatePlan(version: string, channel?: UpdateChannel): Promise<UpdatePlan> {

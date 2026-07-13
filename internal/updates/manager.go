@@ -186,6 +186,10 @@ type Manager struct {
 	checkCache     map[string]*UpdateInfo // keyed by channel
 	cacheTime      map[string]time.Time   // keyed by channel
 	cacheDuration  time.Duration
+	notesCache     *ReleaseNotesInfo // release notes for notesCacheTag (nil when notesCacheMiss)
+	notesCacheTag  string
+	notesCacheMiss bool
+	notesCacheTime time.Time
 	progressChan   chan UpdateStatus
 	sseBroadcast   *SSEBroadcaster
 	lifecycleMu    sync.RWMutex

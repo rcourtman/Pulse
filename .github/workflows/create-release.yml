@@ -725,6 +725,16 @@ jobs:
             --hotfix-exception "${{ needs.prepare.outputs.hotfix_exception }}" \
             --hotfix-reason "${{ needs.prepare.outputs.hotfix_reason }}"
 
+          # The in-app "What's New" banner only fires when the release body has
+          # a Highlights section (see frontend-modern/src/components/whatsNewModel.ts).
+          # Surface which way this release will behave so silence is a choice,
+          # not an accident.
+          if grep -qiE '^#{1,6}[[:space:]]+highlights\b' "$RENDERED_NOTES_FILE"; then
+            echo "::notice::Release notes include a Highlights section — the in-app What's New banner will show it after users update."
+          else
+            echo "::notice::Release notes have no Highlights section — the in-app What's New banner stays silent for this release (expected for maintenance releases)."
+          fi
+
           echo "notes_file=${RENDERED_NOTES_FILE}" >> $GITHUB_OUTPUT
 
       - name: Locate existing release

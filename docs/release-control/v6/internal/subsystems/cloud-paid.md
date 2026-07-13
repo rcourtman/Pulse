@@ -875,6 +875,11 @@ the App/AppLayout, routing, and desktop Actions journey tests.
     Relay tier remains a tangible standalone paid product.
 18. Add contract tests where runtime and pricing need to stay aligned
 19. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
+    The shared app shell may mount the deployment-installability-owned
+    post-update release highlights card next to existing global banners, but
+    that card must remain independent of plan, entitlement, organization, and
+    hosted bootstrap state. It must not turn release communication into a
+    commercial prompt or add another capability probe to the shell.
     That same hosted bootstrap boundary also owns the runtime-capability JSON
     shape that the app shell consumes before it decides whether organization
     chrome and multi-tenant routes exist. `pkg/licensing/entitlement_payload.go`

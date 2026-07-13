@@ -1634,6 +1634,12 @@ payload shape change when the portal presents compact client rows.
     target, so installer preflight failures point operators at the artifact
     they actually need.
 85. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
+    `GET /api/updates/release-notes` is the authenticated running-release
+    companion to update checks. It returns the exact published tag body as
+    `version`, `releaseNotes`, `releaseDate`, and `isPrerelease`, rejects
+    source/development builds, and keeps missing releases distinct from
+    upstream failures. `frontend-modern/src/api/updates.ts` must preserve that
+    payload without creating a frontend-authored changelog shape.
 86. `pkg/aicontracts/action_broker.go` shared with `ai-runtime`: the public typed action-proposal broker contract is both an AI runtime proposal boundary (the only sanctioned Patrol route to an infrastructure mutation) and a canonical API dependency contract over the shared action lifecycle service.
     The updater registry behind `GET /api/updates/plan` is a plan-provider
     seam only (`SupportsApply`, `PrepareUpdate`, `GetDeploymentType`); apply
