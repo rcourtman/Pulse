@@ -64,7 +64,84 @@ func previousStableForPrereleaseVersion(version string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	return previousStablePatchVersion(base)
+	baseParts, ok := parseStableVersion(base)
+	if !ok {
+		return "", false
+	}
+
+	releaseNotes, err := filepath.Glob(repoFile("docs", "releases", "RELEASE_NOTES_v*.md"))
+	if err != nil {
+		return "", false
+	}
+
+	best := [3]int{-1, -1, -1}
+	found := false
+	for _, releaseNote := range releaseNotes {
+		filename := filepath.Base(releaseNote)
+		candidate := strings.TrimSuffix(strings.TrimPrefix(filename, "RELEASE_NOTES_v"), ".md")
+		parts, valid := parseStableVersion(candidate)
+		if !valid || compareStableVersions(parts, baseParts) >= 0 {
+			continue
+		}
+		if !found || compareStableVersions(parts, best) > 0 {
+			best = parts
+			found = true
+		}
+	}
+	if !found {
+		return "", false
+	}
+	return fmt.Sprintf("%d.%d.%d", best[0], best[1], best[2]), true
+}
+
+func parseStableVersion(version string) ([3]int, bool) {
+	parts := strings.Split(version, ".")
+	if len(parts) != 3 {
+		return [3]int{}, false
+	}
+	parsed := [3]int{}
+	for index, part := range parts {
+		value, err := strconv.Atoi(part)
+		if err != nil || value < 0 {
+			return [3]int{}, false
+		}
+		parsed[index] = value
+	}
+	return parsed, true
+}
+
+func compareStableVersions(left, right [3]int) int {
+	for index := range left {
+		if left[index] < right[index] {
+			return -1
+		}
+		if left[index] > right[index] {
+			return 1
+		}
+	}
+	return 0
+}
+
+func TestPreviousStableForPrereleaseVersionCrossesMinorBoundaries(t *testing.T) {
+	tests := []struct {
+		version string
+		want    string
+	}{
+		{version: "6.0.5-rc.4", want: "6.0.4"},
+		{version: "6.1.0-rc.1", want: "6.0.5"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.version, func(t *testing.T) {
+			got, ok := previousStableForPrereleaseVersion(test.version)
+			if !ok {
+				t.Fatalf("previousStableForPrereleaseVersion(%q) did not find a stable release", test.version)
+			}
+			if got != test.want {
+				t.Fatalf("previousStableForPrereleaseVersion(%q) = %q, want %q", test.version, got, test.want)
+			}
+		})
+	}
 }
 
 func previousPrereleaseVersion(version string) (string, bool) {
@@ -232,7 +309,7 @@ func TestInstallDockerProofTracksSupportPrereleaseContract(t *testing.T) {
 		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
 		"the expanded Pulse Intelligence action and verification lifecycle, the operator-facing Actions inbox, monitor-first product workflows, governed host and storage operations, native-agent update safety, Windows logged-readiness and recovery proof, OIDC callback recovery, and fail-closed security hardening behind RC validation",
-		"The companion evidence for this cut is Pulse Mobile iOS build 8 and Android versionCode 7 on TestFlight and Google Play internal testing only. The release packet must not describe either candidate as a public store rollout.",
+		"The companion evidence for this cut is Pulse Mobile iOS build 9 and Android versionCode 8 on TestFlight and Google Play internal testing only. The release packet must not describe either candidate as a public store rollout.",
 		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
 	)
 }

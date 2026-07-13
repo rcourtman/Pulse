@@ -132,12 +132,17 @@ exit 0
 	if err := os.WriteFile(chownStub, []byte(chownScript), 0o755); err != nil {
 		t.Fatalf("write chown stub: %v", err)
 	}
+	systemChown, err := exec.LookPath("chown")
+	if err != nil {
+		t.Fatalf("find system chown: %v", err)
+	}
 
 	shell := prefix + `
 set -eu
 root="` + root + `"
 uid="$(id -u)"
 gid="$(id -g)"
+"` + systemChown + `" "$uid:$gid" "$root"
 export CHOWN_LOG="` + chownLog + `"
 export PATH="` + binDir + `:$PATH"
 chown_tree_if_owner_mismatch pulse:pulse "$uid" "$gid" "$root"
@@ -150,7 +155,7 @@ chown_tree_if_owner_mismatch pulse:pulse "$uid" "$gid" "$root"
 	}
 
 	if logData, err := os.ReadFile(chownLog); err == nil && len(logData) > 0 {
-		t.Fatalf("already-owned tree was chowned:\n%s", logData)
+		t.Fatalf("already-owned tree was chowned:\n%s\nhelper output:\n%s", logData, out)
 	} else if err != nil && !os.IsNotExist(err) {
 		t.Fatalf("read chown log: %v", err)
 	}

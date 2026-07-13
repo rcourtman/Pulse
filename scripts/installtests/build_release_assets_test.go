@@ -346,7 +346,7 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Legacy OIDC callbacks",
 		"Windows service recovery",
 		"fail closed",
-		"Pulse Mobile iOS candidate build 8 and Android candidate versionCode 7",
+		"Pulse Mobile iOS candidate build 9 and Android candidate versionCode 8",
 		"TestFlight and Google Play internal-testing tracks",
 		"rollback target for this release candidate is `v"+previous+"`",
 	)
@@ -370,7 +370,7 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"Windows service installation fails closed",
 		"First-run security boundaries now fail closed",
 		"one signed exact-SHA candidate",
-		"Mobile companion candidates: iOS build 8 and Android versionCode 7",
+		"Mobile companion candidates: iOS build 9 and Android versionCode 8",
 		"TestFlight and Google Play internal-testing tracks",
 	)
 	assertFileContainsAll(t, repoFile("docs", "RELEASE_NOTES.md"),
@@ -404,7 +404,7 @@ func TestCurrentSupportPrereleasePacketTracksInstallMetadata(t *testing.T) {
 		"The active support prerelease `v"+version+"` cut sets the repo-root `VERSION`, repo-root `docker-compose.yml` image default, `scripts/install-docker.sh` fallback, and Helm chart release metadata to the same `"+version+"` release version.",
 		"This support prerelease keeps `rollback_version=v"+previous+"`, publishes a versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and does not move stable/latest install pointers or stable semver aliases.",
 		"For the active support prerelease `v"+version+"` cut, the repo-root compose default and `scripts/install-docker.sh` fallback must both pin `"+version+"` until the next governed stable cut moves them forward.",
-		"The companion evidence for this cut is Pulse Mobile iOS build 8 and Android versionCode 7 on TestFlight and Google Play internal testing only. The release packet must not describe either candidate as a public store rollout.",
+		"The companion evidence for this cut is Pulse Mobile iOS build 9 and Android versionCode 8 on TestFlight and Google Play internal testing only. The release packet must not describe either candidate as a public store rollout.",
 	)
 }
 
