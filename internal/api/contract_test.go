@@ -95,6 +95,81 @@ func TestContract_ActionExecutorAdmissionRequiresDurableAttemptAndSendCAS(t *tes
 	}
 }
 
+func TestContract_ActionMutationsRejectMismatchedPresentedPlanIdentity(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	executor := &stubActionExecutor{result: &unifiedresources.ExecutionResult{Success: true}}
+	h.SetActionExecutor(executor)
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pending := unifiedresources.ActionAuditRecord{
+		ID: "act_contract_plan_decision", CreatedAt: now, UpdatedAt: now, State: unifiedresources.ActionStatePending,
+		Request: boundActionTestRequest("req-contract-plan-decision", "vm:42", "restart", "Recover workload", "pulse_patrol"),
+		Plan: unifiedresources.ActionPlan{
+			ActionID: "act_contract_plan_decision", RequestID: "req-contract-plan-decision", Allowed: true,
+			RequiresApproval: true, ApprovalPolicy: unifiedresources.ApprovalAdmin,
+			ApprovalRequirement: unifiedresources.ApprovalRequirementForFloor(unifiedresources.ApprovalAdmin),
+			PlannedAt:           now, ExpiresAt: now.Add(time.Hour), ResourceVersion: "resource:v1",
+			PolicyVersion: "policy:v1", PlanHash: "sha256:authoritative",
+		},
+	}
+	approved := unifiedresources.ActionAuditRecord{
+		ID: "act_contract_plan_execution", CreatedAt: now, UpdatedAt: now, State: unifiedresources.ActionStateApproved,
+		Request: boundActionTestRequest("req-contract-plan-execution", "vm:43", "restart", "Recover workload", "pulse_patrol"),
+		Plan: unifiedresources.ActionPlan{
+			ActionID: "act_contract_plan_execution", RequestID: "req-contract-plan-execution", Allowed: true,
+			RequiresApproval: true, ApprovalPolicy: unifiedresources.ApprovalAdmin,
+			ApprovalRequirement: unifiedresources.ApprovalRequirementForFloor(unifiedresources.ApprovalAdmin),
+			PlannedAt:           now, ExpiresAt: now.Add(time.Hour), ResourceVersion: "resource:v1",
+			PolicyVersion: "policy:v1", PlanHash: "sha256:authoritative",
+		},
+		Approvals: []unifiedresources.ActionApprovalRecord{
+			boundActionTestApproval("act_contract_plan_execution", "sha256:authoritative", "operator@example.com", now),
+		},
+	}
+	for _, record := range []unifiedresources.ActionAuditRecord{pending, approved} {
+		if err := store.RecordActionAudit(record); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	decisionRecorder := httptest.NewRecorder()
+	decisionRequest := httptest.NewRequest(http.MethodPost, "/api/actions/act_contract_plan_decision/decision", bytes.NewBufferString(`{
+		"outcome":"approved",
+		"planHash":"sha256:reviewed-stale"
+	}`))
+	decisionRequest.SetPathValue("id", pending.ID)
+	h.HandleDecideAction(decisionRecorder, actionHandlerTestRequest(decisionRequest, "operator@example.com"))
+	if decisionRecorder.Code != http.StatusConflict || !strings.Contains(decisionRecorder.Body.String(), `"error":"action_plan_identity_mismatch"`) {
+		t.Fatalf("decision status=%d body=%s", decisionRecorder.Code, decisionRecorder.Body.String())
+	}
+
+	executionRecorder := httptest.NewRecorder()
+	executionRequest := httptest.NewRequest(http.MethodPost, "/api/actions/act_contract_plan_execution/execute", bytes.NewBufferString(`{
+		"planHash":"sha256:reviewed-stale"
+	}`))
+	executionRequest.SetPathValue("id", approved.ID)
+	h.HandleExecuteAction(executionRecorder, actionHandlerTestRequest(executionRequest, "operator@example.com"))
+	if executionRecorder.Code != http.StatusConflict || !strings.Contains(executionRecorder.Body.String(), `"error":"action_plan_identity_mismatch"`) {
+		t.Fatalf("execution status=%d body=%s", executionRecorder.Code, executionRecorder.Body.String())
+	}
+	if executor.calls != 0 {
+		t.Fatalf("mismatched client plan reached executor: calls=%d", executor.calls)
+	}
+
+	decisionAudit, found, err := store.GetActionAudit(pending.ID)
+	if err != nil || !found || decisionAudit.State != unifiedresources.ActionStatePending || len(decisionAudit.Approvals) != 0 {
+		t.Fatalf("mismatched decision changed audit: found=%v err=%v audit=%#v", found, err, decisionAudit)
+	}
+	executionAudit, found, err := store.GetActionAudit(approved.ID)
+	if err != nil || !found || executionAudit.State != unifiedresources.ActionStateApproved || executionAudit.Result != nil {
+		t.Fatalf("mismatched execution changed audit: found=%v err=%v audit=%#v", found, err, executionAudit)
+	}
+}
+
 type resourceContractSnapshot struct {
 	ID   string
 	Name string

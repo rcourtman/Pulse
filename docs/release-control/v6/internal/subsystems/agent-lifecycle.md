@@ -1374,6 +1374,11 @@ the intentionally sparse public response.
    Approval-gated command execution must expose stable rejection reasons for
    invalid approval grants so fleet operators can distinguish missing, expired,
    mismatched, and signature-invalid grants through agent metrics.
+   Interactive action clients may additionally present the reviewed `planHash`
+   on decision and execution requests. The shared `internal/api/actions.go`
+   boundary must reject a mismatch before it records approval state or dispatches
+   to an agent; lifecycle consumers must never reinterpret a stale client plan as
+   command authority merely because the action id is still valid.
    The server must not mint that grant from a nonempty approval id alone.
    `internal/agentexec` accepts approval-gated arbitrary commands only with a
    non-serializable server-owned authorization context and a verifier that

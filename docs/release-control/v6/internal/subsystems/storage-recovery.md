@@ -3912,6 +3912,11 @@ storage mutation grant. Per-resource capability allowlists and recurring
 windows may admit only capabilities whose canonical resource contract declares
 eligibility; storage-pressure remediation remains approval-bound until a
 complete capability and verification workflow explicitly declares otherwise.
+Interactive decisions and executions may carry the exact reviewed `planHash`;
+the shared `internal/api/actions.go` boundary must reject a presented mismatch
+before audit mutation or executor dispatch. Storage and recovery consumers must
+preserve that binding and must not treat an approved row or matching action id
+alone as authority for a recovery or storage mutation.
 That same shared `internal/api/` boundary also owns hosted browser-session
 precedence for adjacent protected reads. Storage- and recovery-adjacent hosted
 surfaces may run without local auth configured, but a valid tenant

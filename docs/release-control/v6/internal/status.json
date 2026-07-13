@@ -8028,7 +8028,7 @@
     },
     {
       "id": "mobile-post-rc-hardening",
-      "summary": "Track explicit Pulse Mobile store-publication execution and post-GA mobile hardening beyond the current proof floor. Build 4 has current physical Android and iOS companion-role proof; public rollout still requires a separate human-triggered release operation, and future mobile hardening must not reopen the GA readiness gate unless new evidence regresses.",
+      "summary": "Track explicit Pulse Mobile store-publication execution and remaining post-GA mobile hardening beyond the current proof floor. Governed action parity now keeps approval and execution separately authenticated, binds both gestures to the reviewed plan identity, preserves approved work in the durable inbox, removes command-shaped presentation, renders approval posture truthfully, and persists revoked-access recovery. Build 4 retains physical Android and iOS companion-role proof; public rollout still requires a separate human-triggered release operation, and future hardening must not reopen the GA readiness gate unless new evidence regresses.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-13",

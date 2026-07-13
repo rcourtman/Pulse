@@ -7356,12 +7356,22 @@ inventory and router allowlist, and queue failures use the shared
 `agentcapabilities` vocabulary. Pending rows are oldest-first and expose the
 same action audit shape, including requester and origin, used by desktop and
 mobile. The mobile client must approve by recording an approved decision and
-then calling execute, and must reject through the decision endpoint; legacy
+must not treat that decision as execution. A later explicit Run action gesture,
+with its own local authentication gate, calls execute. Interactive clients bind
+both requests to the exact reviewed plan by sending `planHash`; the REST fields
+remain optional for transport compatibility, but any presented hash that differs
+from the authoritative persisted plan fails with
+`action_plan_identity_mismatch` before a decision write or executor dispatch.
+Mobile uses the durable pending inbox so approved-but-not-run and executing
+actions survive refresh and remain visible. It must reject through the decision
+endpoint; legacy
 `/api/ai/approvals` routes are readable history only and are not a live Patrol
 action path. `ActionPlanInfo` carries canonical preflight detail across the
 broker boundary. Transition publication is org-scoped, persistence precedes
 publication, and API reconciliation treats the callback payload only as an id
 to re-read from the action lifecycle store.
+The 2026-07-13 mobile parity proof is recorded in
+`docs/release-control/v6/internal/records/mobile-governed-action-parity-2026-07-13.md`.
 The same plan and audit projection carries the unified-resource-owned
 `policyDecision` object unchanged through plan responses, action list/detail,
 audit, and Patrol action-reference boundaries. Public plan requests cannot

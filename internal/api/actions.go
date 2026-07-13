@@ -32,6 +32,11 @@ type ActionAvailabilityChecker = actionlifecycle.AvailabilityChecker
 type actionDecisionRequest struct {
 	Outcome unified.ApprovalOutcome `json:"outcome"`
 	Reason  string                  `json:"reason,omitempty"`
+	// PlanHash is an optional transport-level binding supplied by interactive
+	// clients that displayed a specific plan. Older clients may omit it; when
+	// present it must match the authoritative persisted plan before Pulse
+	// records the decision.
+	PlanHash string `json:"planHash,omitempty"`
 }
 
 type publicActionPlanRequest struct {
@@ -52,7 +57,8 @@ type actionDecisionResponse struct {
 }
 
 type actionExecutionRequest struct {
-	Reason string `json:"reason,omitempty"`
+	Reason   string `json:"reason,omitempty"`
+	PlanHash string `json:"planHash,omitempty"`
 }
 
 type actionExecutionResponse struct {
@@ -297,6 +303,7 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 	}
 	decision.Outcome = unified.ApprovalOutcome(strings.TrimSpace(string(decision.Outcome)))
 	decision.Reason = strings.TrimSpace(decision.Reason)
+	decision.PlanHash = strings.TrimSpace(decision.PlanHash)
 	if decision.Outcome != unified.OutcomeApproved && decision.Outcome != unified.OutcomeRejected {
 		writeJSONErrorWithDetails(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionDecision, "Invalid action decision request", map[string]string{
 			"outcome": "outcome must be approved or rejected",
@@ -320,6 +327,10 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 	}
 	if !found {
 		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{"actionId": actionID})
+		return
+	}
+	if decision.PlanHash != "" && decision.PlanHash != record.Plan.PlanHash {
+		writeJSONError(w, http.StatusConflict, "action_plan_identity_mismatch", "The reviewed action plan changed; reload it before deciding")
 		return
 	}
 	canonicalDecision := unified.ActionDecision{
@@ -389,12 +400,30 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 		return
 	}
 	execution.Reason = strings.TrimSpace(execution.Reason)
+	execution.PlanHash = strings.TrimSpace(execution.PlanHash)
 
 	orgID := GetOrgID(r.Context())
 	actor, err := actionActorForRequest(h.cfg, r, orgID)
 	if err != nil {
 		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeActionActorUnavailable, "Authenticated action actor is unavailable")
 		return
+	}
+	if execution.PlanHash != "" {
+		record, found, err := h.ActionLifecycle().Get(orgID, actionID)
+		if err != nil {
+			writeActionLifecycleReadError(w, err, func() {
+				writeJSONError(w, http.StatusInternalServerError, "action_audit_query_failed", "Failed to query action audit")
+			})
+			return
+		}
+		if !found {
+			writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{"actionId": actionID})
+			return
+		}
+		if execution.PlanHash != record.Plan.PlanHash {
+			writeJSONError(w, http.StatusConflict, "action_plan_identity_mismatch", "The approved action plan changed; reload it before execution")
+			return
+		}
 	}
 	completed, err := h.ActionLifecycle().Execute(r.Context(), orgID, actionID, actor, execution.Reason)
 	if err != nil {
