@@ -1,4 +1,5 @@
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { useLocation, useSearchParams } from '@solidjs/router';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import EyeIcon from 'lucide-solid/icons/eye';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
@@ -9,16 +10,29 @@ import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
+import { ACTION_REVIEW_QUERY_PARAM, parseActionReviewId } from '@/features/actions/actionRouting';
 import {
   formatActionName,
   getActionInboxStatePresentation,
   getActionResourcePresentation,
   sortOpenActionsForReview,
 } from '@/features/actions/actionPresentation';
-import type { ActionAuditRecord, ActionDetailResponse, ActionInboxView } from '@/types/actionAudit';
+import type {
+  ActionAuditRecord,
+  ActionAuditState,
+  ActionDetailResponse,
+  ActionInboxView,
+} from '@/types/actionAudit';
 import { formatRelativeTime } from '@/utils/format';
 
+const getInboxViewForState = (state: ActionAuditState): ActionInboxView =>
+  state === 'rejected' || state === 'expired' || state === 'completed' || state === 'failed'
+    ? 'settled'
+    : 'pending';
+
 export function Actions() {
+  const location = useLocation();
+  const [, setSearchParams] = useSearchParams();
   const [view, setView] = createSignal<ActionInboxView>('pending');
   const [selected, setSelected] = createSignal<ActionDetailResponse | null>(null);
   const [detailError, setDetailError] = createSignal('');
@@ -43,11 +57,6 @@ export function Actions() {
     }
   };
 
-  createEffect(() => {
-    view();
-    void loadActions();
-  });
-
   const queueSummary = createMemo(() => {
     const count = actions().length;
     if (view() === 'settled') {
@@ -64,14 +73,37 @@ export function Actions() {
     view() === 'pending' ? sortOpenActionsForReview(actions()) : actions(),
   );
 
-  const openAction = async (record: ActionAuditRecord) => {
+  const openActionById = async (actionId: string) => {
     setDetailError('');
     try {
-      setSelected(await ResourceActionsAPI.getAction(record.id));
+      const detail = await ResourceActionsAPI.getAction(actionId);
+      setSelected(detail);
+      setView(getInboxViewForState(detail.audit.state));
     } catch (cause) {
+      setSelected(null);
       setDetailError(cause instanceof Error ? cause.message : 'Action details are unavailable.');
     }
   };
+
+  const openAction = (record: ActionAuditRecord) => {
+    setSearchParams({ [ACTION_REVIEW_QUERY_PARAM]: record.id }, { replace: true });
+  };
+
+  const closeAction = () => {
+    setSelected(null);
+    setDetailError('');
+    setSearchParams({ [ACTION_REVIEW_QUERY_PARAM]: null }, { replace: true });
+  };
+
+  createEffect(() => {
+    view();
+    void loadActions();
+  });
+
+  createEffect(() => {
+    const actionId = parseActionReviewId(location.search);
+    if (actionId) void openActionById(actionId);
+  });
 
   return (
     <div class="w-full space-y-4 px-3 py-4 sm:px-5">
@@ -169,7 +201,7 @@ export function Actions() {
                       type="button"
                       aria-label={`Review ${title()} on ${action.request.resourceId}, ${state().label}`}
                       class={`group w-full border-l-2 px-3 py-3 text-left transition-colors hover:bg-surface-hover/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 sm:px-4 ${state().accentClass}`}
-                      onClick={() => void openAction(action)}
+                      onClick={() => openAction(action)}
                     >
                       <div class="flex items-center gap-3">
                         <div class="min-w-0 flex-1">
@@ -217,9 +249,10 @@ export function Actions() {
       </Show>
       <ActionReviewDialog
         detail={selected()}
-        onClose={() => setSelected(null)}
+        onClose={closeAction}
         onChanged={async (detail) => {
           setSelected(detail);
+          setView(getInboxViewForState(detail.audit.state));
           await loadActions();
         }}
       />

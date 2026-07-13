@@ -697,7 +697,7 @@ clear`, `Found N new issues`, `Fixed N issues`, `N issues still open`, or
    current finding status, recurrence, investigation record facts, evidence,
    verification, approval state, dry-run posture, existing action artifact
    summary, target resource references, and governed action references without
-   raw command payloads. Inline Patrol approval actions in
+   raw command payloads. Patrol action summaries in
    `frontend-modern/src/components/patrol/ApprovalSection.tsx` that open
    Assistant must follow that same Patrol-owned handoff model rather than a
    prompt-only local shortcut: pass approval ID/status/risk/target plus safe
@@ -1682,7 +1682,11 @@ owning finding must return to the needs-attention path. If malformed approval
 records still reach presentation helpers, they must sort after valid timestamps
 and must not produce non-deterministic comparator results. Patrol approval
 banners must apply the same fail-closed timestamp posture to visible countdown
-copy instead of rendering invalid math such as `NaN`.
+copy instead of rendering invalid math such as `NaN`. The banner is a
+contextual handoff, not a second decision surface: one pending approval
+deep-links to the exact typed action when its canonical action id is present,
+while multiple or legacy approvals lead to the open Actions inbox. It must not
+approve, reject, or execute an action inside Patrol.
 Patrol fix approvals also inherit the unified action-governance preflight
 contract: queued fixes must keep their plan-level dry-run availability, safety
 checks, verification steps, approval policy, and action id in the shared
@@ -1991,12 +1995,16 @@ stricter approved-and-verified detail after the loop also has an approved
 governed decision and verified outcome evidence.
 
 The typed `ActionReference` is the primary Patrol workflow model in both the
-finding row and expanded action review. Pending actions say approve or reject;
-planned or approved actions say run; executing actions say running; terminal
-actions present verified, failed, or honestly inconclusive verification. The
-expanded `ApprovalSection` renders the canonical plan, approval floor,
-preflight, safety checks, verification steps, and rollback availability, then
-uses only `/api/actions` decision/execute calls. Legacy `ProposedFix` and
+finding row and expanded action summary. Pending actions identify required
+review; planned or approved actions identify runnable work; executing actions
+say running; terminal actions present verified, failed, or honestly
+inconclusive verification. Patrol owns that detection and investigation
+context, while the dedicated Actions route is the canonical operator hub for
+decision, execution, progress, and durable outcome history. The expanded
+`ApprovalSection` renders the bounded plan, preflight, safety checks,
+verification steps, and rollback availability, then deep-links by exact action
+id into the shared Actions review. It must not call `/api/actions` decision or
+execute mutations itself. Legacy `ProposedFix` and
 `ApprovalID` data may explain historical records but must never reveal a raw
 command, present an approve/run control, or reconstruct an executable action;
 when the typed reference is absent the UI says action details are unavailable
@@ -2004,11 +2012,12 @@ and offers an Assistant handoff. Collapsed-row attention state must consult the
 same investigation action reference, so it cannot claim there is no approval
 while the expanded panel has one. Browser proof must exercise pending,
 terminal-verified, and legacy-history states rather than judging only source.
-The typed reference must also carry the exact reviewed `planHash` before
-`ApprovalSection` exposes approve, reject, or run controls. Decision and
-execution requests pass that same hash through the canonical browser client;
-missing identity is an explicit replan-required state and never falls back to
-action id alone.
+The typed reference must retain the exact reviewed `planHash` so Patrol can
+surface missing identity as an explicit replan-required state before handing
+off. The Actions review remains the only browser surface that may expose
+approve, reject, or run controls, and every mutation there passes the same
+displayed hash through the canonical browser client; missing identity never
+falls back to action id alone.
 
 Backend Patrol finding reconciliation now reads `ActionResultV2`: execution
 failed or known-not-run maps to fix failure; confirmed verification maps to

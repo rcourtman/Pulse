@@ -2804,7 +2804,6 @@ describe('shared primitive guardrails', () => {
 
     for (const source of [
       findingsPanelSource,
-      approvalBannerSource,
       approvalSectionSource,
       investigationMessagesSource,
       investigationSectionSource,
@@ -3374,16 +3373,14 @@ describe('shared primitive guardrails', () => {
       'px-2 py-1 text-xs rounded-md border border-border bg-surface hover:bg-surface-hover',
     );
     expect(approvalBannerSource).toContain('@/components/shared/Button');
-    expect(approvalBannerSource).toContain('<Button');
-    expect(approvalBannerSource).toContain('variant="success"');
-    expect(approvalBannerSource).toContain('variant="secondary"');
+    expect(approvalBannerSource).toContain('<ButtonLink');
     expect(approvalBannerSource).toContain('variant="warningSolid"');
     expect(approvalBannerSource).not.toContain('px-3 py-1.5 bg-green-600 hover:bg-green-700');
     expect(approvalBannerSource).not.toContain('px-3 py-1.5 bg-surface-alt hover:bg-surface-hover');
     expect(approvalBannerSource).not.toContain('px-3 py-1.5 bg-amber-600 hover:bg-amber-700');
     expect(approvalSectionSource).toContain('@/components/shared/Button');
     expect(approvalSectionSource).toContain('<Button');
-    expect(approvalSectionSource).toContain('variant="success"');
+    expect(approvalSectionSource).toContain('<ButtonLink');
     expect(approvalSectionSource).toContain('variant="primary"');
     expect(approvalSectionSource).toContain('variant="ghost"');
     expect(approvalSectionSource).not.toContain('px-3 py-1.5 bg-green-600 hover:bg-green-700');

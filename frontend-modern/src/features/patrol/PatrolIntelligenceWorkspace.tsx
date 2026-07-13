@@ -137,21 +137,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
 
   return (
     <>
-      <ApprovalBanner
-        onScrollToFinding={(findingId) => {
-          state.setActiveTab('findings');
-          state.setFindingsFilterOverride('approvals');
-          state.clearScrollToFindingTimer();
-          state.setScrollToFindingTimer(
-            setTimeout(() => {
-              state.setScrollToFindingTimer(undefined);
-              const el = document.getElementById(`finding-${findingId}`);
-              el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              state.setFindingScrollTimer(undefined);
-            }, 100),
-          );
-        }}
-      />
+      <ApprovalBanner />
 
       <div class="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
         <div class="min-w-0">

@@ -1,36 +1,29 @@
 /**
  * ApprovalBanner
  *
- * Sticky amber banner at top of page content area.
- * Surfaces pending investigation fix approvals (5-min expiry).
+ * Contextual handoff from Patrol to the canonical Actions inbox.
+ * Surfaces pending investigation fix approvals without creating a second
+ * approval or execution surface inside Patrol.
  * - Hidden when no pending approvals
- * - Single approval: inline approve/deny
- * - Multiple: count + "Review" button to scroll to first finding
+ * - Single approval: deep-links to the exact governed action when available
+ * - Multiple approvals: links to the open Actions inbox
  */
 
 import { Component, Show, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
-import { notificationStore } from '@/stores/notifications';
-import type { ApprovalRequest } from '@/api/ai';
 import {
   getApprovalExpiryStatusLabel,
   getApprovalRiskPresentation,
 } from '@/utils/approvalRiskPresentation';
-import { Button } from '@/components/shared/Button';
-import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
+import { ButtonLink } from '@/components/shared/Button';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
+import { buildActionReviewPath } from '@/features/actions/actionRouting';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
-import CheckIcon from 'lucide-solid/icons/check';
-import XIcon from 'lucide-solid/icons/x';
-
-interface ApprovalBannerProps {
-  onScrollToFinding?: (findingId: string) => void;
-}
+import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
 
 const APPROVAL_BANNER_BADGE_PROPS = { size: 'xs', shape: 'rounded' } as const;
 
-export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
-  const [actionLoading, setActionLoading] = createSignal<string | null>(null);
+export const ApprovalBanner: Component = () => {
   const [tick, setTick] = createSignal(Date.now());
 
   const pending = createMemo(() => aiIntelligenceStore.patrolPendingApprovals);
@@ -49,43 +42,11 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
     return getApprovalExpiryStatusLabel(expiresAt, tick());
   };
 
-  const handleApprove = async (approval: ApprovalRequest) => {
-    setActionLoading(approval.id);
-    try {
-      const result = await aiIntelligenceStore.approveInvestigationFix(approval.id);
-      if (result?.success) {
-        notificationStore.success('Fix executed successfully');
-      } else {
-        notificationStore.error(result?.error || 'Fix execution failed');
-      }
-    } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to execute fix');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleDeny = async (approval: ApprovalRequest) => {
-    setActionLoading(approval.id);
-    try {
-      await aiIntelligenceStore.denyInvestigationFix(approval.id);
-      notificationStore.success('Fix rejected');
-    } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to reject fix');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleReview = () => {
-    const findings = aiIntelligenceStore.findingsWithPendingApprovals;
-    if (findings.length > 0) {
-      props.onScrollToFinding?.(findings[0].id);
-    }
-  };
-
   const firstApprovalRisk = createMemo(() =>
     firstApproval() ? getApprovalRiskPresentation(firstApproval()!.riskLevel) : null,
+  );
+  const reviewPath = createMemo(() =>
+    buildActionReviewPath(pending().length === 1 ? firstApproval()?.plan?.actionId : undefined),
   );
 
   return (
@@ -100,7 +61,7 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
               <Show when={pending().length === 1 && firstApproval()}>
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
-                    Fix awaiting approval
+                    Action awaiting approval
                   </span>
                   <MetadataBadge
                     {...APPROVAL_BANNER_BADGE_PROPS}
@@ -121,53 +82,17 @@ export const ApprovalBanner: Component<ApprovalBannerProps> = (props) => {
               </Show>
               <Show when={pending().length > 1}>
                 <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
-                  {pending().length} fixes awaiting your approval
+                  {pending().length} actions awaiting your approval
                 </span>
               </Show>
             </div>
           </div>
 
           <div class="flex items-center gap-2">
-            <Show when={pending().length === 1 && firstApproval()}>
-              <Button
-                type="button"
-                variant="success"
-                size="sm"
-                onClick={() => handleApprove(firstApproval()!)}
-                disabled={actionLoading() === firstApproval()!.id}
-                class="gap-1.5"
-              >
-                <Show when={actionLoading() === firstApproval()!.id}>
-                  <LoadingSpinner size="sm" tone="inverse" />
-                </Show>
-                <Show when={actionLoading() !== firstApproval()!.id}>
-                  <CheckIcon class="w-3.5 h-3.5" />
-                </Show>
-                Approve fix
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => handleDeny(firstApproval()!)}
-                disabled={actionLoading() === firstApproval()!.id}
-                class="gap-1.5"
-              >
-                <XIcon class="w-3.5 h-3.5" />
-                Reject
-              </Button>
-            </Show>
-            <Show when={pending().length > 1}>
-              <Button
-                type="button"
-                variant="warningSolid"
-                size="sm"
-                onClick={handleReview}
-                class="gap-1.5"
-              >
-                Review
-              </Button>
-            </Show>
+            <ButtonLink href={reviewPath()} variant="warningSolid" size="sm" class="gap-1.5">
+              Review in Actions
+              <ArrowRightIcon class="h-3.5 w-3.5" aria-hidden="true" />
+            </ButtonLink>
           </div>
         </div>
       </div>

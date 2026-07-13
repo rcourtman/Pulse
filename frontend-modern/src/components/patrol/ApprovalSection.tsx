@@ -6,29 +6,20 @@
  * become executable UI authority.
  */
 
-import CheckIcon from 'lucide-solid/icons/check';
+import ArrowRightIcon from 'lucide-solid/icons/arrow-right';
 import MessageSquareIcon from 'lucide-solid/icons/message-square';
-import PlayIcon from 'lucide-solid/icons/play';
-import XIcon from 'lucide-solid/icons/x';
-import { Component, For, Show, createMemo, createResource, createSignal } from 'solid-js';
+import { Component, For, Show, createMemo, createResource } from 'solid-js';
 import { AIAPI } from '@/api/ai';
-import { ResourceActionsAPI } from '@/api/resourceActions';
-import { Button } from '@/components/shared/Button';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
+import { buildActionReviewPath } from '@/features/actions/actionRouting';
 import {
   buildPatrolAssistantFindingHandoff,
   buildPatrolAssistantProposedFixBriefingInput,
 } from '@/features/patrol/patrolInvestigationContextModel';
 import { aiChatStore } from '@/stores/aiChat';
-import { aiIntelligenceStore } from '@/stores/aiIntelligence';
-import { hasFeature } from '@/stores/license';
-import { notificationStore } from '@/stores/notifications';
-import type {
-  ActionAuditRecord,
-  ActionAuditState,
-  PatrolActionReference,
-} from '@/types/actionAudit';
+import type { ActionAuditState, PatrolActionReference } from '@/types/actionAudit';
 
 interface ApprovalSectionProps {
   findingId: string;
@@ -50,17 +41,6 @@ const FIX_RELATED_OUTCOMES = new Set([
 ]);
 
 const BADGE_PROPS = { size: 'xs', shape: 'rounded' } as const;
-
-function actionReferenceFromAudit(audit: ActionAuditRecord): PatrolActionReference {
-  return {
-    action_id: audit.id,
-    proposal_id: audit.origin?.proposalId,
-    resource_id: audit.request.resourceId,
-    capability_name: audit.request.capabilityName,
-    state: audit.state,
-    plan: audit.plan,
-  };
-}
 
 function statePresentation(state: ActionAuditState): {
   label: string;
@@ -86,15 +66,28 @@ function statePresentation(state: ActionAuditState): {
   }
 }
 
+function actionHubLabel(state: ActionAuditState): string {
+  switch (state) {
+    case 'executing':
+      return 'Track in Actions';
+    case 'rejected':
+    case 'expired':
+    case 'completed':
+    case 'failed':
+      return 'View outcome in Actions';
+    case 'planned':
+    case 'pending_approval':
+    case 'approved':
+      return 'Review in Actions';
+  }
+}
+
 function capabilityLabel(value: string): string {
   return value.replace(/[._-]+/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
-  const [busyAction, setBusyAction] = createSignal<string | null>(null);
-  const [latestAudit, setLatestAudit] = createSignal<ActionAuditRecord | null>(null);
-
-  const [investigation, { refetch }] = createResource(
+  const [investigation] = createResource(
     () => ({ findingId: props.findingId, outcome: props.investigationOutcome }),
     async ({ findingId, outcome }) => {
       if (!outcome || !FIX_RELATED_OUTCOMES.has(outcome)) return null;
@@ -106,15 +99,8 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     },
   );
 
-  const action = createMemo<PatrolActionReference | null>(() => {
-    const audit = latestAudit();
-    if (audit) return actionReferenceFromAudit(audit);
-    return investigation()?.action ?? null;
-  });
-  const canManageAction = createMemo(() => hasFeature('ai_autofix'));
+  const action = createMemo<PatrolActionReference | null>(() => investigation()?.action ?? null);
   const verificationStatus = createMemo(() => {
-    const auditedStatus = latestAudit()?.verificationOutcome?.status;
-    if (auditedStatus) return auditedStatus;
     switch (investigation()?.outcome) {
       case 'fix_verified':
         return 'verified';
@@ -129,90 +115,6 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   const shouldShow = createMemo(() =>
     Boolean(props.investigationOutcome && FIX_RELATED_OUTCOMES.has(props.investigationOutcome)),
   );
-
-  const refreshPatrol = async () => {
-    await refetch();
-    await aiIntelligenceStore.loadFindings();
-  };
-
-  const execute = async (actionId: string, planHash: string) => {
-    const result = await ResourceActionsAPI.executeAction(
-      actionId,
-      planHash,
-      'Operator requested execution from the Patrol action review',
-    );
-    setLatestAudit(result.audit);
-    const verification = result.audit.verificationOutcome?.status;
-    if (result.state === 'completed' && verification === 'verified') {
-      notificationStore.success('Action completed and verified');
-    } else if (result.state === 'completed') {
-      notificationStore.warning('Action completed, but verification was inconclusive');
-    } else {
-      notificationStore.error(result.result?.errorMessage || 'Action failed');
-    }
-  };
-
-  const handleApproveAndRun = async (event: Event) => {
-    event.stopPropagation();
-    const current = action();
-    const planHash = current?.plan.planHash?.trim();
-    if (!current || !planHash) return;
-    setBusyAction('approve');
-    try {
-      const decision = await ResourceActionsAPI.decideAction(
-        current.action_id,
-        'approved',
-        planHash,
-        'Approved from the Patrol action review',
-      );
-      setLatestAudit(decision.audit);
-      await execute(current.action_id, planHash);
-      await refreshPatrol();
-    } catch (error) {
-      notificationStore.error((error as Error).message || 'Failed to approve and run action');
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleRun = async (event: Event) => {
-    event.stopPropagation();
-    const current = action();
-    const planHash = current?.plan.planHash?.trim();
-    if (!current || !planHash) return;
-    setBusyAction('execute');
-    try {
-      await execute(current.action_id, planHash);
-      await refreshPatrol();
-    } catch (error) {
-      notificationStore.error((error as Error).message || 'Failed to run action');
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleReject = async (event: Event) => {
-    event.stopPropagation();
-    const current = action();
-    const planHash = current?.plan.planHash?.trim();
-    if (!current || !planHash) return;
-    setBusyAction('reject');
-    try {
-      const decision = await ResourceActionsAPI.decideAction(
-        current.action_id,
-        'rejected',
-        planHash,
-        'Rejected from the Patrol action review',
-      );
-      setLatestAudit(decision.audit);
-      notificationStore.success('Action rejected');
-      await refreshPatrol();
-    } catch (error) {
-      notificationStore.error((error as Error).message || 'Failed to reject action');
-    } finally {
-      setBusyAction(null);
-    }
-  };
 
   const handleDiscuss = (event: Event) => {
     event.stopPropagation();
@@ -354,8 +256,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                   </Show>
                   <Show when={currentAction().state === 'failed'}>
                     <div class="text-sm font-medium text-red-600 dark:text-red-400">
-                      {latestAudit()?.result?.errorMessage ||
-                        'The action failed before verification.'}
+                      The action failed before verification.
                     </div>
                   </Show>
 
@@ -370,63 +271,15 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                   </Show>
 
                   <div class="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3">
-                    <Show
-                      when={
-                        reviewedPlanHash() &&
-                        canManageAction() &&
-                        currentAction().state === 'pending_approval'
-                      }
+                    <ButtonLink
+                      href={buildActionReviewPath(currentAction().action_id)}
+                      variant="primary"
+                      size="sm"
+                      class="gap-1.5"
                     >
-                      <Button
-                        type="button"
-                        variant="success"
-                        size="sm"
-                        onClick={handleApproveAndRun}
-                        disabled={busyAction() !== null}
-                      >
-                        <Show
-                          when={busyAction() === 'approve'}
-                          fallback={<CheckIcon class="h-3.5 w-3.5" />}
-                        >
-                          <LoadingSpinner size="sm" tone="inverse" />
-                        </Show>
-                        Approve and run
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleReject}
-                        disabled={busyAction() !== null}
-                      >
-                        <XIcon class="h-3.5 w-3.5" />
-                        Reject
-                      </Button>
-                    </Show>
-                    <Show
-                      when={
-                        canManageAction() &&
-                        reviewedPlanHash() &&
-                        (currentAction().state === 'planned' ||
-                          currentAction().state === 'approved')
-                      }
-                    >
-                      <Button
-                        type="button"
-                        variant="success"
-                        size="sm"
-                        onClick={handleRun}
-                        disabled={busyAction() !== null}
-                      >
-                        <Show
-                          when={busyAction() === 'execute'}
-                          fallback={<PlayIcon class="h-3.5 w-3.5" />}
-                        >
-                          <LoadingSpinner size="sm" tone="inverse" />
-                        </Show>
-                        Run action
-                      </Button>
-                    </Show>
+                      {actionHubLabel(currentAction().state)}
+                      <ArrowRightIcon class="h-3.5 w-3.5" aria-hidden="true" />
+                    </ButtonLink>
                     <Button type="button" variant="ghost" size="sm" onClick={handleDiscuss}>
                       <MessageSquareIcon class="h-3.5 w-3.5" />
                       Discuss with Assistant

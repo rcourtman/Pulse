@@ -1700,6 +1700,12 @@ tracks the durable inbox/detail, policy provenance, dispatch, and
 `frontend-modern/src/api/patrol.ts` owns Autopilot acknowledgement create,
 activation, effective-mode, and revocation consumption. These mirrors must use
 backend JSON names and closed enums rather than frontend authority dialects.
+The route-backed Actions review consumes an exact typed action id through its
+browser query state and resolves lifecycle state from `GET /api/actions/{id}`;
+Patrol may link to that identity but must not infer Open versus History from
+finding copy or create a second mutation client. Approve, reject, and execute
+remain bound to the canonical Actions review and the exact displayed
+`planHash`.
 
 Patrol Open work copy in the browser may clarify row-level evidence, approval,
 automatic-action, and verification-result review as presentation over existing

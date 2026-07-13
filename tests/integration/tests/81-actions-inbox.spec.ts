@@ -412,8 +412,13 @@ test("Actions inbox exposes the canonical decision packet and durable calm histo
       body: JSON.stringify({ audit: action, events: [] }),
     }),
   );
-  await page.goto("/actions", { waitUntil: "domcontentloaded" });
+  await page.goto("/actions?action=action-1", {
+    waitUntil: "domcontentloaded",
+  });
   await expect(page.getByRole("heading", { name: "Actions" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Restart" })).toBeVisible();
+  await page.getByRole("button", { name: "Close action review" }).click();
+  await expect(page).toHaveURL(/\/actions$/);
   await expect(
     page.getByRole("tab", { name: "Open", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
@@ -429,6 +434,7 @@ test("Actions inbox exposes the canonical decision packet and durable calm histo
   await page
     .getByRole("button", { name: /Restart.*docker:container:edge/ })
     .click();
+  await expect(page).toHaveURL(/\/actions\?action=action-1$/);
   await expect(page.getByRole("dialog", { name: "Restart" })).toBeVisible();
   await expect(
     page.getByText(

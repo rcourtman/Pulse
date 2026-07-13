@@ -161,6 +161,7 @@ temperature, capacity, health, and identity enrichment.
 116. `frontend-modern/src/features/actions/ActionDecisionPacket.tsx`
 117. `frontend-modern/src/features/actions/ActionReviewDialog.tsx`
 118. `frontend-modern/src/features/actions/actionPresentation.ts`
+118a. `frontend-modern/src/features/actions/actionRouting.ts`
 119. `frontend-modern/src/pages/Actions.tsx`
 120. `frontend-modern/src/routing/navigation.ts`
 121. `frontend-modern/src/routing/routePreload.ts`
@@ -616,6 +617,14 @@ into one outcome. Docker lifecycle controls may create a canonical plan and
 open this shared review, but may not auto-approve, auto-execute, or use a
 second-click local confirmation. Proof is owned by the colocated action tests,
 `DockerNativeTables.test.tsx`, and desktop journeys 81 and 83.
+Patrol findings may retain bounded action status and safety context, but exact
+typed action ids hand off to the route-backed Actions review through
+`frontend-modern/src/features/actions/actionRouting.ts`. The `action` query
+parameter is the canonical shareable review identity: opening it fetches the
+durable action directly, selects Open or History from the returned lifecycle
+state, and clearing the dialog removes the query without discarding the inbox.
+Patrol must not create a parallel decision or execution client around that
+handoff.
 The shared review may offer decision or execution controls only when the
 current record carries a non-empty `planHash`; every mutation passes that exact
 displayed identity through the canonical resource-action client. Legacy or
@@ -1757,7 +1766,9 @@ policy evidence, lifecycle, authority, and outcome truth. Its first layer keeps
 intent plus safety/authority facts visible while the immutable planning-time
 policy sources, revisions, and reason codes sit behind an explicit disclosure;
 missing provenance remains an immediate fail-closed warning rather than hidden
-detail.
+detail. Actions is the canonical browser hub for action review, execution
+progress, and recorded outcomes; contextual sources such as Patrol link into an
+exact action review instead of duplicating those mutations locally.
 
 APT review presents server-recorded policy provenance and distinguishes the
 elevated update posture from low-risk-eligible cache cleanup. Both typed actions

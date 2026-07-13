@@ -448,6 +448,10 @@ async function mockMonitorFirstPatrolWorkbench(
               status: "pending",
               requestedAt: "2026-06-30T08:06:00Z",
               expiresAt: "2099-06-30T08:11:00Z",
+              plan: {
+                actionId: "action-finding-active-work",
+                planHash: "sha256:patrol-review",
+              },
             },
           ]
         : [];
@@ -632,6 +636,9 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     ).toHaveCount(0);
     await expect(page.getByText("High CPU pressure on pve-main")).toBeVisible();
     await expect(page.getByText("Approval required")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Review in Actions" }),
+    ).toHaveAttribute("href", "/actions?action=action-finding-active-work");
     await expect(
       page.getByText(
         "Sustained CPU pressure can slow hosted workloads on this Proxmox host.",

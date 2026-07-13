@@ -250,7 +250,6 @@ export function usePatrolIntelligenceState() {
   const [patrolLoadError, setPatrolLoadError] = createSignal('');
 
   let safetyTimerRef: ReturnType<typeof setTimeout> | undefined;
-  let scrollToFindingTimerRef: ReturnType<typeof setTimeout> | undefined;
   let findingScrollTimerRef: ReturnType<typeof setTimeout> | undefined;
   let refreshTimeoutRef: ReturnType<typeof setTimeout> | undefined;
   let manualRefreshTimeoutRef: ReturnType<typeof setTimeout> | undefined;
@@ -263,13 +262,6 @@ export function usePatrolIntelligenceState() {
     if (safetyTimerRef !== undefined) {
       clearTimeout(safetyTimerRef);
       safetyTimerRef = undefined;
-    }
-  };
-
-  const clearScrollToFindingTimer = () => {
-    if (scrollToFindingTimerRef !== undefined) {
-      clearTimeout(scrollToFindingTimerRef);
-      scrollToFindingTimerRef = undefined;
     }
   };
 
@@ -988,7 +980,6 @@ export function usePatrolIntelligenceState() {
   onCleanup(() => {
     stopPolling();
     clearSafetyTimer();
-    clearScrollToFindingTimer();
     clearManualRefreshTimeout();
     if (findingScrollTimerRef !== undefined) {
       clearTimeout(findingScrollTimerRef);
@@ -1012,7 +1003,6 @@ export function usePatrolIntelligenceState() {
     blockedReason,
     canTriggerPatrol,
     circuitBreakerStatus,
-    clearScrollToFindingTimer,
     displayRunHistory,
     findingsTabBadgeCount,
     findingsTabBadgeFindings,
@@ -1064,9 +1054,6 @@ export function usePatrolIntelligenceState() {
     setSelectedRun,
     setFindingScrollTimer: (timer: ReturnType<typeof setTimeout> | undefined) => {
       findingScrollTimerRef = timer;
-    },
-    setScrollToFindingTimer: (timer: ReturnType<typeof setTimeout> | undefined) => {
-      scrollToFindingTimerRef = timer;
     },
     showBlockedBanner,
     showReadinessBanner,

@@ -4977,3 +4977,10 @@ expired actionable reviews.
 Its action controls are also plan-identity-bound: a missing reviewed `planHash`
 renders explicit replan guidance and hides approve, reject, and run controls,
 while an actionable record sends the exact displayed hash on every mutation.
+The dialog is also route-backed through the canonical `action` query parameter.
+Contextual surfaces use the shared button-link primitive to hand off an exact
+typed action id; the Actions route opens that durable review directly, selects
+the matching Open or History subtab from server-authored lifecycle state, and
+removes the query when the dialog closes. Feature pages may summarize action
+context, but they must not recreate approve, reject, run, progress, or outcome
+controls outside the shared Actions review.

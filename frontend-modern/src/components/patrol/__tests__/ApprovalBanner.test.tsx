@@ -1,13 +1,12 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import approvalBannerSource from '../ApprovalBanner.tsx?raw';
 import ApprovalBanner from '../ApprovalBanner';
 import type { ApprovalRequest } from '@/api/ai';
-import type { UnifiedFinding } from '@/stores/aiIntelligence';
 
 const state = vi.hoisted(() => ({
   pendingApprovals: [] as ApprovalRequest[],
-  findingsWithPendingApprovals: [] as UnifiedFinding[],
 }));
 
 vi.mock('@/stores/aiIntelligence', () => ({
@@ -18,66 +17,58 @@ vi.mock('@/stores/aiIntelligence', () => ({
     get patrolPendingApprovals() {
       return state.pendingApprovals;
     },
-    get findingsWithPendingApprovals() {
-      return state.findingsWithPendingApprovals;
-    },
-    approveInvestigationFix: vi.fn(),
-    denyInvestigationFix: vi.fn(),
-  },
-}));
-
-vi.mock('@/stores/notifications', () => ({
-  notificationStore: {
-    success: vi.fn(),
-    error: vi.fn(),
   },
 }));
 
 describe('ApprovalBanner', () => {
   beforeEach(() => {
     state.pendingApprovals = [];
-    state.findingsWithPendingApprovals = [];
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-01T00:00:00Z'));
   });
 
   afterEach(() => {
     cleanup();
+    window.history.replaceState({}, '', '/');
     vi.useRealTimers();
   });
 
+  const renderBanner = () =>
+    render(() => (
+      <Router>
+        <Route path="/" component={ApprovalBanner} />
+      </Router>
+    ));
+
   it('keeps approval risk chips on the shared MetadataBadge primitive', () => {
     expect(approvalBannerSource).toContain('MetadataBadge');
-    expect(approvalBannerSource).toContain('LoadingSpinner');
     expect(approvalBannerSource).toContain('APPROVAL_BANNER_BADGE_PROPS');
     expect(approvalBannerSource).toContain('firstApprovalRisk()!.badgeTone');
     expect(approvalBannerSource).not.toContain('firstApprovalRisk()!.badgeClass');
     expect(approvalBannerSource).not.toMatch(/px-1\.5 py-0\.5 text-\[10px\] font-medium rounded/);
   });
 
-  it('keeps approval action controls on the shared Button primitive', () => {
+  it('keeps the Actions handoff on the shared ButtonLink primitive', () => {
     expect(approvalBannerSource).toContain('@/components/shared/Button');
-    expect(approvalBannerSource).toContain('<Button');
-    expect(approvalBannerSource).toContain('variant="success"');
-    expect(approvalBannerSource).toContain('variant="secondary"');
+    expect(approvalBannerSource).toContain('<ButtonLink');
     expect(approvalBannerSource).toContain('variant="warningSolid"');
-    expect(approvalBannerSource).not.toContain('px-3 py-1.5 bg-green-600 hover:bg-green-700');
-    expect(approvalBannerSource).not.toContain('px-3 py-1.5 bg-surface-alt hover:bg-surface-hover');
-    expect(approvalBannerSource).not.toContain('px-3 py-1.5 bg-amber-600 hover:bg-amber-700');
+    expect(approvalBannerSource).not.toContain('approveInvestigationFix');
+    expect(approvalBannerSource).not.toContain('denyInvestigationFix');
   });
 
-  it('uses governed decision wording for a single approval', () => {
-    state.pendingApprovals = [approvalRequest()];
+  it('deep-links a single approval to its exact governed action review', () => {
+    state.pendingApprovals = [approvalRequest({ plan: { actionId: 'action-single' } })];
 
-    render(() => <ApprovalBanner />);
+    renderBanner();
 
-    expect(screen.getByRole('button', { name: 'Approve fix' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
-    expect(screen.queryByText('Approve & Execute')).not.toBeInTheDocument();
-    expect(screen.queryByText('Deny')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Review in Actions' })).toHaveAttribute(
+      'href',
+      '/actions?action=action-single',
+    );
+    expect(screen.queryByRole('button', { name: /approve|reject/i })).not.toBeInTheDocument();
   });
 
-  it('reviews the first approval-linked finding in canonical urgency order', () => {
+  it('routes multiple approvals to the open Actions inbox', () => {
     state.pendingApprovals = [
       {
         id: 'approval-sooner',
@@ -107,23 +98,18 @@ describe('ApprovalBanner', () => {
       },
     ] as ApprovalRequest[];
 
-    state.findingsWithPendingApprovals = [
-      { id: 'finding-sooner' },
-      { id: 'finding-later' },
-    ] as UnifiedFinding[];
+    renderBanner();
 
-    const onScrollToFinding = vi.fn();
-    render(() => <ApprovalBanner onScrollToFinding={onScrollToFinding} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
-
-    expect(onScrollToFinding).toHaveBeenCalledWith('finding-sooner');
+    expect(screen.getByRole('link', { name: 'Review in Actions' })).toHaveAttribute(
+      'href',
+      '/actions',
+    );
   });
 
   it('renders a deterministic countdown label for a valid single approval expiry', () => {
     state.pendingApprovals = [approvalRequest({ expiresAt: '2026-03-01T00:06:00Z' })];
 
-    render(() => <ApprovalBanner />);
+    renderBanner();
 
     expect(screen.getByText('expires 6m 0s')).toBeInTheDocument();
   });
@@ -131,7 +117,7 @@ describe('ApprovalBanner', () => {
   it('fails closed instead of rendering NaN when a single approval expiry is malformed', () => {
     state.pendingApprovals = [approvalRequest({ expiresAt: 'not-a-date' })];
 
-    render(() => <ApprovalBanner />);
+    renderBanner();
 
     expect(screen.getByText('expiry unavailable')).toBeInTheDocument();
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
@@ -142,7 +128,7 @@ describe('ApprovalBanner', () => {
       approvalRequest({ expiresAt: undefined } as Partial<ApprovalRequest>),
     ];
 
-    render(() => <ApprovalBanner />);
+    renderBanner();
 
     expect(screen.getByText('expiry unavailable')).toBeInTheDocument();
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
