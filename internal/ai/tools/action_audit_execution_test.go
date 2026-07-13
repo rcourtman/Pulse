@@ -461,7 +461,7 @@ func TestRecordApprovalDecisionDoesNotRegressExecutingAudit(t *testing.T) {
 	}
 	executor := NewPulseToolExecutor(ExecutorConfig{ActionAuditStore: actionStore})
 	record := actionAuditRecordFromApproval(req, unifiedresources.ActionStateExecuting, "pulse_control")
-	record.Approvals = approvalRecordsForID(req.ID)
+	record.Approvals = approvalRecordsForID(req.ID, req.Plan)
 	if err := actionStore.RecordActionAudit(record); err != nil {
 		t.Fatalf("RecordActionAudit: %v", err)
 	}
@@ -1104,7 +1104,11 @@ func TestExecuteCommandWithAuditRefusesApprovedDryRunOnlyAndExpiredPlans(t *test
 			if !strings.HasPrefix(audit.Result.ErrorMessage, tc.wantPrefix) {
 				t.Fatalf("ErrorMessage = %q, want prefix %q", audit.Result.ErrorMessage, tc.wantPrefix)
 			}
-			if len(audit.Approvals) != 1 || audit.Approvals[0].Outcome != unifiedresources.OutcomeApproved {
+			if errors.Is(tc.wantErr, unifiedresources.ErrActionDryRunOnly) {
+				if len(audit.Approvals) != 0 {
+					t.Fatalf("dry-run-only refusal minted executable approval authority: %#v", audit.Approvals)
+				}
+			} else if len(audit.Approvals) != 1 || audit.Approvals[0].Outcome != unifiedresources.OutcomeApproved {
 				t.Fatalf("expected approved audit record to be preserved, got %#v", audit.Approvals)
 			}
 

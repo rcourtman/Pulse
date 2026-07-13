@@ -84,7 +84,7 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 	if planFromApproval {
 		plan = mergeApprovedActionPlan(*approvalReq.Plan, plan)
 	}
-	approvalRecords := approvalRecordsForID(approvalID)
+	approvalRecords := approvalRecordsForID(approvalID, &plan)
 
 	record := unifiedresources.ActionAuditRecord{
 		ID:        actionID,
@@ -293,7 +293,7 @@ func (e *PulseToolExecutor) executeNativeActionWithAudit(
 	if planFromApproval {
 		plan = mergeApprovedActionPlan(*approvalReq.Plan, plan)
 	}
-	approvalRecords := approvalRecordsForID(approvalID)
+	approvalRecords := approvalRecordsForID(approvalID, &plan)
 
 	record := unifiedresources.ActionAuditRecord{
 		ID:        actionID,
@@ -371,6 +371,15 @@ func (e *PulseToolExecutor) recordActionExecutionStart(record unifiedresources.A
 		actor = approvalAuditActor
 	}
 	if planFromApproval {
+		if record.Plan.ApprovalPolicy == unifiedresources.ApprovalDryRun {
+			refusalRecord := record
+			if e != nil && e.actionAuditStore != nil {
+				if current, found, err := e.actionAuditStore.GetActionAudit(record.ID); err == nil && found {
+					refusalRecord = current
+				}
+			}
+			return e.recordActionExecutionRefusal(refusalRecord, unifiedresources.ErrActionDryRunOnly, actor, now)
+		}
 		var err error
 		approvalRecord := record
 		record, err = e.ensureApprovalDecisionBeforeExecution(record, approvalID, actor, now)
@@ -490,7 +499,7 @@ func (e *PulseToolExecutor) ensureApprovalDecisionBeforeExecution(record unified
 		return current, nil
 	}
 
-	approvalRecord := actionApprovalRecordForExecution(approvalID, actor, now, unifiedresources.OutcomeApproved)
+	approvalRecord := actionApprovalRecordForExecution(current, approvalID, actor, now, unifiedresources.OutcomeApproved)
 	updated, event, err := unifiedresources.ApplyActionDecision(current, approvalRecord, approvalRecord.Timestamp)
 	if err != nil {
 		log.Warn().Err(err).Str("action_id", record.ID).Msg("failed to normalize approval decision before execution")
@@ -503,11 +512,11 @@ func (e *PulseToolExecutor) ensureApprovalDecisionBeforeExecution(record unified
 	return updated, nil
 }
 
-func actionApprovalRecordForExecution(approvalID, actor string, now time.Time, fallbackOutcome unifiedresources.ApprovalOutcome) unifiedresources.ActionApprovalRecord {
+func actionApprovalRecordForExecution(action unifiedresources.ActionAuditRecord, approvalID, actor string, now time.Time, fallbackOutcome unifiedresources.ApprovalOutcome) unifiedresources.ActionApprovalRecord {
 	if fallbackOutcome == "" {
 		fallbackOutcome = unifiedresources.OutcomeApproved
 	}
-	records := approvalRecordsForID(approvalID)
+	records := approvalRecordsForID(approvalID, &action.Plan)
 	if len(records) > 0 {
 		record := records[len(records)-1]
 		if record.Outcome == "" {
@@ -521,11 +530,15 @@ func actionApprovalRecordForExecution(approvalID, actor string, now time.Time, f
 		}
 		return record
 	}
+	actorBinding := legacyApprovalActorBinding(approvalID, actor, action.Request.Actor.OrgID)
+	evidence := legacyApprovalEvidence(actorBinding, &action.Plan, fallbackOutcome, now)
 	return unifiedresources.ActionApprovalRecord{
-		Actor:     actor,
-		Method:    unifiedresources.MethodAPI,
-		Timestamp: now,
-		Outcome:   fallbackOutcome,
+		Actor:        actorBinding.SubjectID,
+		ActorBinding: actorBinding,
+		Method:       evidence.Method,
+		Timestamp:    now,
+		Outcome:      fallbackOutcome,
+		Evidence:     &evidence,
 	}
 }
 
@@ -617,7 +630,7 @@ func RecordApprovalDecision(store unifiedresources.ResourceStore, approvalID str
 		message = string(state)
 	}
 	record := actionAuditRecordFromApproval(req, state, actor)
-	record.Approvals = approvalRecordsForID(req.ID)
+	record.Approvals = approvalRecordsForID(req.ID, req.Plan)
 	if recordApprovalDecisionAtomically(store, req.ID, record, actor) {
 		return
 	}
@@ -665,7 +678,7 @@ func recordApprovalDecisionAtomically(store unifiedresources.ResourceStore, appr
 	if record.State == unifiedresources.ActionStateRejected {
 		outcome = unifiedresources.OutcomeRejected
 	}
-	approvalRecord := actionApprovalRecordForExecution(approvalID, actor, time.Now().UTC(), outcome)
+	approvalRecord := actionApprovalRecordForExecution(current, approvalID, actor, time.Now().UTC(), outcome)
 	approvalRecord.Outcome = outcome
 	updated, event, err := unifiedresources.ApplyActionDecision(current, approvalRecord, approvalRecord.Timestamp)
 	if err != nil {
@@ -803,9 +816,15 @@ func mergeApprovedActionPlan(approved unifiedresources.ActionPlan, fallback unif
 	return approved
 }
 
-func actionAuditRecordFromApproval(req *approval.ApprovalRequest, state unifiedresources.ActionState, actor string) unifiedresources.ActionAuditRecord {
+func actionAuditRecordFromApproval(req *approval.ApprovalRequest, state unifiedresources.ActionState, _ string) unifiedresources.ActionAuditRecord {
 	now := time.Now().UTC()
 	plan := *req.Plan
+	if plan.ApprovalPolicy == "" {
+		plan.ApprovalPolicy = unifiedresources.ApprovalAdmin
+	}
+	if plan.ApprovalRequirement.Version == 0 {
+		plan.ApprovalRequirement = unifiedresources.ApprovalRequirementForFloor(plan.ApprovalPolicy)
+	}
 	createdAt := plan.PlannedAt
 	if createdAt.IsZero() {
 		createdAt = now
@@ -824,6 +843,13 @@ func actionAuditRecordFromApproval(req *approval.ApprovalRequest, state unifiedr
 	if orgID := strings.TrimSpace(req.OrgID); orgID != "" {
 		params["orgId"] = orgID
 	}
+	requestedBy := approval.RequesterForRequest(req)
+	requestActor := unifiedresources.ActionActor{
+		SubjectID:    requestedBy,
+		Kind:         unifiedresources.ActionActorService,
+		CredentialID: "approval-request:" + strings.TrimSpace(req.ID),
+		OrgID:        approval.NormalizeOrgID(req.OrgID),
+	}
 	return unifiedresources.ActionAuditRecord{
 		ID:        plan.ActionID,
 		CreatedAt: createdAt,
@@ -835,7 +861,8 @@ func actionAuditRecordFromApproval(req *approval.ApprovalRequest, state unifiedr
 			CapabilityName: approvalCapabilityForTargetType(req.TargetType),
 			Params:         params,
 			Reason:         strings.TrimSpace(req.Context),
-			RequestedBy:    actor,
+			RequestedBy:    requestedBy,
+			Actor:          requestActor,
 		},
 		Plan: plan,
 	}
@@ -989,7 +1016,7 @@ func actionAuditPreflight(resourceID, reason string, generatedAt time.Time) *uni
 	}, unifiedresources.ActionRequest{ResourceID: resourceID, Reason: reason}, unifiedresources.ActionPlan{PlannedAt: generatedAt, Message: reason})
 }
 
-func approvalRecordsForID(approvalID string) []unifiedresources.ActionApprovalRecord {
+func approvalRecordsForID(approvalID string, plan *unifiedresources.ActionPlan) []unifiedresources.ActionApprovalRecord {
 	approvalID = strings.TrimSpace(approvalID)
 	if approvalID == "" {
 		return nil
@@ -1003,17 +1030,47 @@ func approvalRecordsForID(approvalID string) []unifiedresources.ActionApprovalRe
 		return nil
 	}
 
-	record := unifiedresources.ActionApprovalRecord{
-		Actor:     strings.TrimSpace(req.DecidedBy),
-		Method:    unifiedresources.MethodAPI,
-		Timestamp: approvalTimestamp(req),
-		Outcome:   unifiedresources.OutcomeApproved,
-		Reason:    strings.TrimSpace(req.Context),
-	}
+	outcome := unifiedresources.OutcomeApproved
 	if req.Status == approval.StatusDenied {
-		record.Outcome = unifiedresources.OutcomeRejected
+		outcome = unifiedresources.OutcomeRejected
+	}
+	actorBinding := legacyApprovalActorBinding(approvalID, req.DecidedBy, req.OrgID)
+	evidence := legacyApprovalEvidence(actorBinding, plan, outcome, approvalTimestamp(req))
+	record := unifiedresources.ActionApprovalRecord{
+		Actor:        actorBinding.SubjectID,
+		ActorBinding: actorBinding,
+		Method:       evidence.Method,
+		Timestamp:    evidence.IssuedAt,
+		Outcome:      outcome,
+		Reason:       strings.TrimSpace(req.Context),
+		Evidence:     &evidence,
 	}
 	return []unifiedresources.ActionApprovalRecord{record}
+}
+
+func legacyApprovalActorBinding(approvalID, subject, orgID string) unifiedresources.ActionActor {
+	return unifiedresources.ActionActor{
+		SubjectID:    strings.TrimSpace(subject),
+		Kind:         unifiedresources.ActionActorUser,
+		CredentialID: "approval-session:" + strings.TrimSpace(approvalID),
+		OrgID:        approval.NormalizeOrgID(orgID),
+	}
+}
+
+func legacyApprovalEvidence(actor unifiedresources.ActionActor, plan *unifiedresources.ActionPlan, outcome unifiedresources.ApprovalOutcome, issuedAt time.Time) unifiedresources.ApprovalEvidence {
+	evidence := unifiedresources.ApprovalEvidence{
+		Version:  1,
+		Method:   unifiedresources.MethodSession,
+		Actor:    actor,
+		OrgID:    actor.OrgID,
+		Outcome:  outcome,
+		IssuedAt: issuedAt.UTC(),
+	}
+	if plan != nil {
+		evidence.ActionID = strings.TrimSpace(plan.ActionID)
+		evidence.PlanHash = strings.TrimSpace(plan.PlanHash)
+	}
+	return evidence
 }
 
 func approvalTimestamp(req *approval.ApprovalRequest) time.Time {

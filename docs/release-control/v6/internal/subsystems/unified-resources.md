@@ -1819,7 +1819,10 @@ and malformed evidence remain explicitly inconclusive. Legacy `Success` and
 Canonical evidence is bounded before redaction and digested as SHA-256 over
 the canonical redacted envelope. Redaction deep-copies nested evidence and
 fails closed to `redaction_contract_violation`; it never preserves invalid or
-unredacted input. A present but malformed stored V2 also fails closed to
+unredacted input. Result normalization is copy-on-normalize across evidence,
+verification, and nested compensation, so callers may safely normalize shared
+immutable snapshots without mutating their stored input or racing other
+readers. A present but malformed stored V2 also fails closed to
 `result_v2_invalid`; legacy booleans can never override it. Compensation truth
 never rewrites the primary result and carries declared trigger, durable
 attempt/step identity, timing, nested execution and verification, and restored

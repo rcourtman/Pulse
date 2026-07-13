@@ -367,7 +367,7 @@ func TestHandleListPendingActionsReturnsOnlyCanonicalDecisionQueue(t *testing.T)
 }
 
 func TestHandleListAndDetailActionsProjectCanonicalResourcePresentation(t *testing.T) {
-	now := time.Date(2026, 7, 13, 15, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Truncate(time.Second)
 	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot: models.StateSnapshot{LastUpdate: now},
@@ -386,11 +386,15 @@ func TestHandleListAndDetailActionsProjectCanonicalResourcePresentation(t *testi
 	}
 	record := unified.ActionAuditRecord{
 		ID: "act-resource-presentation", CreatedAt: now, UpdatedAt: now, State: unified.ActionStatePending,
-		Request: unified.ActionRequest{RequestID: "req-resource-presentation", ResourceID: "vm:42", CapabilityName: "restart", Reason: "Recover checkout", RequestedBy: "pulse_patrol"},
+		Request: unified.ActionRequest{
+			RequestID: "req-resource-presentation", ResourceID: "vm:42", CapabilityName: "restart", Reason: "Recover checkout", RequestedBy: "pulse_patrol",
+			Actor: unified.ActionActor{SubjectID: "pulse_patrol", Kind: unified.ActionActorService, CredentialID: "service:test-patrol", OrgID: "default"},
+		},
 		Plan: unified.ActionPlan{
 			ActionID: "act-resource-presentation", RequestID: "req-resource-presentation",
 			Allowed: true, RequiresApproval: true, ApprovalPolicy: unified.ApprovalAdmin,
-			PlannedAt: now, ExpiresAt: now.Add(4 * time.Hour), PlanHash: "sha256:resource-presentation",
+			ApprovalRequirement: unified.ApprovalRequirementForFloor(unified.ApprovalAdmin),
+			PlannedAt:           now, ExpiresAt: now.Add(4 * time.Hour), PlanHash: "sha256:resource-presentation",
 		},
 	}
 	if err := store.RecordActionAudit(record); err != nil {

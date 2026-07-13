@@ -2132,6 +2132,22 @@ func generateKubernetesNodes(clusterID string, count int) []models.KubernetesNod
 		nodes[idx].Ready = false
 	}
 
+	// A non-empty demo cluster must retain at least one node that can run
+	// workloads. Independent readiness and scheduling rolls can otherwise
+	// produce a fully unavailable estate, making pod placement and the metric
+	// story nondeterministic even when no outage scenario was requested.
+	hasSchedulableReadyNode := false
+	for _, node := range nodes {
+		if node.Ready && !node.Unschedulable {
+			hasSchedulableReadyNode = true
+			break
+		}
+	}
+	if !hasSchedulableReadyNode {
+		nodes[0].Ready = true
+		nodes[0].Unschedulable = false
+	}
+
 	return nodes
 }
 

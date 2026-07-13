@@ -245,6 +245,9 @@ func TestCanonicalActionPlanConstructionCannotBypassPolicyProvenancePlanner(t *t
 		// audit history remain readable but are not canonical action producers.
 		"../api/router_routes_ai_relay.go": true,
 		"../ai/tools/action_audit.go":      true,
+		// Graph-owned mock records are immutable presentation fixtures. They do
+		// not admit, approve, or dispatch executable actions.
+		"../mock/action_fixtures.go": true,
 	}
 	pattern := regexp.MustCompile(`(?s)\bActionPlan\s*\{\s*[A-Za-z_][A-Za-z0-9_]*\s*:`)
 	err := filepath.Walk("..", func(path string, info os.FileInfo, err error) error {

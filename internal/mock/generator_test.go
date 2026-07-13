@@ -380,6 +380,24 @@ func TestBuildFixtureStatePopulatesKubernetesUsageMetrics(t *testing.T) {
 	}
 }
 
+func TestGenerateKubernetesNodesAlwaysRetainsSchedulableReadyNode(t *testing.T) {
+	for count := 1; count <= 8; count++ {
+		for iteration := 0; iteration < 100; iteration++ {
+			nodes := generateKubernetesNodes("fixture-cluster", count)
+			hasSchedulableReadyNode := false
+			for _, node := range nodes {
+				if node.Ready && !node.Unschedulable {
+					hasSchedulableReadyNode = true
+					break
+				}
+			}
+			if !hasSchedulableReadyNode {
+				t.Fatalf("node count %d iteration %d produced no schedulable ready node: %+v", count, iteration, nodes)
+			}
+		}
+	}
+}
+
 func TestBuildFixtureStateIncludesKubernetesDeploymentAPIMetadata(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.K8sClusterCount = 1

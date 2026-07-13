@@ -142,16 +142,12 @@ func TestService_GetTools(t *testing.T) {
 		t.Error("Expected tools")
 	}
 
-	// Verify some common tools are present
-	foundRunCommand := false
+	// The retired raw-command alias must not be projected even when the legacy
+	// control level is configured to allow governed actions.
 	for _, tool := range tools {
 		if tool.Name == agentcapabilities.LegacyAssistantRunCommandToolName {
-			foundRunCommand = true
-			break
+			t.Fatal("retired run_command alias was projected to the provider")
 		}
-	}
-	if !foundRunCommand {
-		t.Error("Expected run_command tool to be available")
 	}
 }
 
@@ -815,9 +811,14 @@ func TestService_GetModelForRequest(t *testing.T) {
 }
 
 func TestService_ExecuteTool_RunCommand(t *testing.T) {
+	dispatched := false
 	mockAgentServer := &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{
 			{Hostname: "node-1", AgentID: "agent-1"},
+		},
+		executeFunc: func(context.Context, string, agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+			dispatched = true
+			return &agentexec.CommandResultPayload{Success: true}, nil
 		},
 	}
 	svc := NewService(nil, mockAgentServer)
@@ -841,57 +842,12 @@ func TestService_ExecuteTool_RunCommand(t *testing.T) {
 		Context: map[string]interface{}{"node": "node-1"},
 	}
 
-	// 1. Allowed command
 	result, exec := svc.executeTool(ctx, req, tc)
-	if !exec.Success {
-		t.Errorf("Expected success, got failure: %s", result)
+	if exec.Success || !strings.Contains(result, "Invocation blocked") {
+		t.Fatalf("retired run_command did not fail closed: success=%v result=%q", exec.Success, result)
 	}
-
-	// 2. Blocked command
-	mockPolicy.decision = agentexec.PolicyBlock
-	result, exec = svc.executeTool(ctx, req, tc)
-	if exec.Success {
-		t.Error("Expected failure for blocked command")
-	}
-	if !strings.Contains(result, "blocked") {
-		t.Errorf("Expected blocked message, got %s", result)
-	}
-
-	// 3. Approval required (non-autonomous)
-	mockPolicy.decision = agentexec.PolicyRequireApproval
-	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelControlled}
-	result, exec = svc.executeTool(ctx, req, tc)
-	if !exec.Success {
-		t.Errorf("Expected success (not an error to need approval), got: %s", result)
-	}
-	if !strings.Contains(result, "APPROVAL_REQUIRED") {
-		t.Errorf("Expected APPROVAL_REQUIRED message, got %s", result)
-	}
-
-	// 4. Request-scoped approval mode must clamp an autonomous default.
-	autonomousMode := false
-	svc.cfg = &config.AIConfig{ControlLevel: config.ControlLevelAutonomous}
-	req.AutonomousMode = &autonomousMode
-	result, exec = svc.executeTool(ctx, req, tc)
-	if !exec.Success {
-		t.Errorf("Expected success (not an error to need approval), got: %s", result)
-	}
-	if !strings.Contains(result, "APPROVAL_REQUIRED") {
-		t.Errorf("Expected request-scoped approval mode to require approval, got %s", result)
-	}
-
-	// 5. Approval-bound handoffs require approval even for policy-allowed commands.
-	mockPolicy.decision = agentexec.PolicyAllow
-	req.RequireCommandApproval = true
-	result, exec = svc.executeTool(ctx, req, tc)
-	if !exec.Success {
-		t.Errorf("Expected success (not an error to need approval), got: %s", result)
-	}
-	if !strings.Contains(result, "APPROVAL_REQUIRED") {
-		t.Errorf("Expected approval-bound handoff to require approval, got %s", result)
-	}
-	if !strings.Contains(result, "handoff requires operator approval") {
-		t.Errorf("Expected handoff approval reason, got %s", result)
+	if dispatched {
+		t.Fatal("retired run_command reached the agent transport")
 	}
 }
 
@@ -1282,25 +1238,16 @@ func TestService_ExecuteTool_RunCommand_WithTargetHost(t *testing.T) {
 	}
 
 	result, exec := svc.executeTool(context.Background(), req, tc)
-	if !exec.Success {
-		t.Errorf("Expected success, got failure: %s", result)
-	}
-	if exec.Input != "[target-node] uptime" {
-		t.Errorf("Expected input to show target-node, got: %s", exec.Input)
+	if exec.Success || !strings.Contains(result, "Invocation blocked") {
+		t.Fatalf("retired run_command did not fail closed: success=%v result=%q", exec.Success, result)
 	}
 
 	changes, err := canonicalStore.GetRecentChanges("vm-100", time.Time{}, 10)
 	if err != nil {
 		t.Fatalf("GetRecentChanges: %v", err)
 	}
-	if len(changes) != 1 {
-		t.Fatalf("expected 1 canonical command change, got %d", len(changes))
-	}
-	if changes[0].Kind != unifiedresources.ChangeCommandExecuted {
-		t.Fatalf("Kind = %q, want %q", changes[0].Kind, unifiedresources.ChangeCommandExecuted)
-	}
-	if got := changes[0].Metadata["alert_identifier"]; got != "alert-123" {
-		t.Fatalf("alert_identifier = %#v, want alert-123", got)
+	if len(changes) != 0 {
+		t.Fatalf("retired run_command wrote canonical change history: %#v", changes)
 	}
 }
 
@@ -3244,12 +3191,11 @@ func TestService_FindingContextCommandRouting(t *testing.T) {
 
 	result, exec := svc.executeTool(context.Background(), req, tc)
 
-	if !exec.Success {
-		t.Errorf("Command execution failed: %s", result)
+	if exec.Success || !strings.Contains(result, "Invocation blocked") {
+		t.Fatalf("retired run_command did not fail closed: success=%v result=%q", exec.Success, result)
 	}
 
-	// Verify it routed to the correct agent (minipc, not pve-node)
-	if routedToAgent != "agent-minipc" {
-		t.Errorf("Expected command to route to agent-minipc, but went to: %s", routedToAgent)
+	if routedToAgent != "" {
+		t.Fatalf("retired run_command reached agent routing: %s", routedToAgent)
 	}
 }

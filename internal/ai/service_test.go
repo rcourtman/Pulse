@@ -1184,8 +1184,8 @@ func TestService_ExecuteTool(t *testing.T) {
 	}
 
 	output, exec := svc.executeTool(ctx, req, tc)
-	if !containsString(output, "agent server not available") {
-		t.Errorf("Expected agent server error, got: %s", output)
+	if !containsString(output, "Invocation blocked") {
+		t.Errorf("expected retired run_command to fail closed, got: %s", output)
 	}
 	if exec.Success {
 		t.Error("Expected failure")

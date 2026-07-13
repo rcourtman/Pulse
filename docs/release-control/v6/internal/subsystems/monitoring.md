@@ -945,6 +945,12 @@ so the Kubernetes platform-page Configuration tab exercises the same
 RBAC summary-count contract live agents use. The
 `TestKubernetesDemoClustersTellDistinctStories` test in
 `internal/mock/demo_scenarios_test.go` guards that distribution.
+Generic Kubernetes fixture synthesis must also preserve at least one ready,
+schedulable node whenever a cluster has nodes. Randomized readiness and cordon
+stories may degrade the remaining nodes, but they must not accidentally create
+a total outage that erases running-pod metrics or makes the demo and its proof
+nondeterministic; explicit curated outage scenarios remain the owner of
+cluster-wide unavailability.
 Bumps to those defaults must keep the
 curated demo scenario's per-node hostname seasoning in
 `demo_scenarios.go` aligned (today: pve1..pve6 with regional labels,

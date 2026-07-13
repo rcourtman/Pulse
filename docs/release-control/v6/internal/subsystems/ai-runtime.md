@@ -3644,13 +3644,16 @@ may keep first-party model-facing descriptions, but it must not re-declare
 required arguments such as `resolution_note` or dismissal `note` when the
 canonical Pulse Intelligence manifest and API contract mark those fields
 optional.
-Legacy native Assistant utility provider aliases for `run_command`, `fetch_url`,
-and `set_resource_url`, plus their provider JSON schemas, are owned by
+Legacy native Assistant utility provider aliases for `fetch_url` and
+`set_resource_url`, plus their provider JSON schemas, are owned by
 `agentcapabilities.LegacyAssistantUtilityProviderTools`. The older native
 Assistant service may continue to expose those compatibility aliases while the
 execution migration proceeds, but it must consume the shared provider projection
 and shared argument constants rather than carrying inline schema maps or local
-tool-input string keys.
+tool-input string keys. The legacy `run_command` alias is retired: the Assistant
+must not offer it, and a fabricated invocation must fail closed before any
+command dispatch. Raw command execution remains available only through the
+governed capability and action-lifecycle path.
 Native Assistant registry tools that operate on Patrol finding lifecycle state
 must also consume the same `agentcapabilities` argument vocabulary for
 `finding_id`, `resolution_note`, `reason`, and `note` instead of repeating
@@ -5855,6 +5858,15 @@ biometric claims never satisfy an MFA floor. Until the core step-up verifier
 accepts action-bound cryptographic evidence, the honest runtime outcome is
 step-up unavailable, not MFA approved.
 
+The legacy Patrol approval bridge must project stored approvals into that same
+server-owned model before a lifecycle decision is appended. It binds a scoped
+service requester, the deciding human `ActorBinding`, and method/session
+`ApprovalEvidence` to the exact action, plan hash, outcome, organization, and
+decision time. A zero-version legacy approval requirement is upgraded to the
+current canonical floor before evaluation; missing or inconsistent authority
+fails closed. A dry-run plan is never executable and must persist refusal
+without minting decision approval authority.
+
 Patrol action proposals persist the exact bounded policy authorities consulted
 at planning time through the canonical unified-resource `policyDecision`
 object. Capability, tenant Patrol, and resource operator factors retain typed
@@ -5907,6 +5919,10 @@ exercised through an exact empty-parameter proposal, shared planning/policy and
 human approval, durable typed dispatch, canonical terminal audit, and finding
 resolution for both workflows. Finding evidence stays bounded and contains no
 command, path, package selector, raw APT output, stderr, or reboot authority.
+The APT verifier claims only canonical APT finding keys. It must return
+unhandled for CPU, memory, disk, and every other non-APT key so the owning
+deterministic verifier can evaluate that finding; APT resource lookup failure
+must never intercept unrelated verification.
 
 Fake-only callback-loss tests reopen the server-side action store and consume
 Task 07 terminal receipts without resending either typed mutation, then

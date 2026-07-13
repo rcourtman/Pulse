@@ -493,6 +493,10 @@ func normalizeRestoredStateTruth(truth ActionRestoredStateTruth) (ActionRestored
 }
 
 func NormalizeActionResultV2(result ActionResultV2) (ActionResultV2, error) {
+	// Normalization is routinely applied to shared store and mock-fixture
+	// snapshots. Clone every nested truth surface before canonicalizing it so
+	// digest calculation and UTC normalization never mutate the caller's copy.
+	result = cloneActionResultV2(result)
 	if result.Version == 0 {
 		result.Version = ActionResultV2Version
 	}

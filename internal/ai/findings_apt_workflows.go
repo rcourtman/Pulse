@@ -188,6 +188,9 @@ func formatAPTBytes(value int64) string {
 }
 
 func verifyAPTWorkflowFinding(state patrolRuntimeState, findingKey, resourceID string, now time.Time) (bool, bool, error) {
+	if findingKey != aptHostUpdateFindingKey && findingKey != aptPackageCacheFindingKey {
+		return false, false, nil
+	}
 	if state.readState == nil {
 		state = state.withDerivedProviders()
 	}

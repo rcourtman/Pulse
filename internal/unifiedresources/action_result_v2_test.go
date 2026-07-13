@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -24,6 +25,40 @@ func actionResultTestEvidence(class ActionEvidenceClass) []ActionEvidence {
 		Method: "resource_status", SubjectID: "vm:42", ObservedAt: now, ReceivedAt: now.Add(time.Second),
 		Summary: "resource reached expected state",
 	}}
+}
+
+func TestNormalizeActionResultV2DoesNotMutateSharedInput(t *testing.T) {
+	input := ActionResultV2{
+		Version:      ActionResultV2Version,
+		Execution:    ActionExecutionTruth{Status: ActionExecutionSucceeded},
+		Verification: ActionVerificationTruth{Status: ActionVerificationConfirmed, EvidenceClass: ActionEvidenceIndependent, Evidence: actionResultTestEvidence(ActionEvidenceIndependent)},
+		Compensation: actionResultTestCompensation(),
+	}
+
+	const callers = 16
+	errs := make(chan error, callers)
+	var wg sync.WaitGroup
+	for range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			normalized, err := NormalizeActionResultV2(input)
+			if err == nil && normalized.Verification.Evidence[0].Digest == "" {
+				err = errors.New("normalized evidence is missing its digest")
+			}
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if input.Verification.Evidence[0].Digest != "" {
+		t.Fatalf("normalization mutated shared input digest: %q", input.Verification.Evidence[0].Digest)
+	}
 }
 
 func actionResultTestCompensation() ActionCompensationTruth {
