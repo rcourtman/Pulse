@@ -523,6 +523,15 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 	if strings.Contains(readme, staleReadmeKey) {
 		t.Fatalf("README.md still references the stale pulse-installer key Ds21c5...; rc.2 → rc.5 shipped this drift")
 	}
+	// Format drift guard — ssh-keygen -Y verify -f expects an allowed_signers
+	// file whose FIRST field is the principal. The docs shipped the key in
+	// authorized_keys order (principal last, parsed as a comment), so the
+	// documented verification failed against a perfectly good signature.
+	// Reported by a customer against v6.0.5 on 2026-07-13.
+	const allowedSignersLine = `pulse-installer namespaces="pulse-install" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZd/DaH+BldzOkq1A8KVTcFk73nAyrE8aJOyf7i00jm pulse-installer`
+	if !strings.Contains(readme, allowedSignersLine) {
+		t.Fatalf("README.md verification snippet must publish the key as an allowed_signers line (principal first), not authorized_keys order")
+	}
 
 	installDocsBytes, err := os.ReadFile(repoFile("docs", "INSTALL.md"))
 	if err != nil {
@@ -534,6 +543,9 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 	}
 	if strings.Contains(installDocs, staleReadmeKey) {
 		t.Fatalf("docs/INSTALL.md still references the stale pulse-installer key Ds21c5...")
+	}
+	if !strings.Contains(installDocs, allowedSignersLine) {
+		t.Fatalf("docs/INSTALL.md verification snippet must publish the key as an allowed_signers line (principal first), not authorized_keys order")
 	}
 	for _, needle := range localRequired {
 		if !strings.Contains(localValidator, needle) {
