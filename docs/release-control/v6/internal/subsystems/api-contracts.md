@@ -6632,6 +6632,20 @@ remain re-discovery-owned and must not become client-writable through this
 payload. `GET /api/config/nodes` continues to expose the stored value as the
 optional `ipOverride` endpoint field consumed by the shared normalization in
 `frontend-modern/src/api/nodes.ts`.
+`ClusterEndpoints[n].IPOverride` has a second canonical writer: when a
+canonical `/api/auto-register` PVE registration in
+`internal/api/config_setup_handlers.go` matches a non-primary cluster member
+endpoint (address identity against the agent's candidate list first, then an
+unambiguous corosync node-name match), the handler adopts the Pulse-verified
+selected host as that member's override plus the fingerprint captured from
+it, responds success without creating a node, and normalizes the stored
+value through the same scheme-less `host[:port]` rules as the node update
+payload. A member match must preserve an admin-managed override absent from
+the agent's candidate list, and its only credential writes are a
+same-token-identity secret refresh and full token promotion onto a
+credential-less cluster instance; it must not replace working cluster
+credentials with the member's per-node token, and discovered member `Host`
+and `IP` stay re-discovery-owned on this path too.
 The same frontend API contract now also governs Proxmox agent-install command
 transport in `frontend-modern/src/api/nodes.ts`: the canonical client request
 shape for `/api/agent-install-command` must support both `type:"pve"` and

@@ -232,6 +232,153 @@ func TestHandleCanonicalAutoRegisterSelectsReachableFallbackCandidateHost(t *tes
 	}
 }
 
+func TestHandleCanonicalAutoRegisterAdoptsClusterMemberConnectionAddress(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "homelab",
+				Host:        "https://192.0.2.10:8006",
+				TokenName:   "pulse-monitor@pve!pulse-pve01",
+				TokenValue:  "cluster-secret",
+				IsCluster:   true,
+				ClusterName: "homelab",
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeID: "node/pve01", NodeName: "pve01", Host: "https://pve01:8006", IP: "192.0.2.10"},
+					{NodeID: "node/pve02", NodeName: "pve02", Host: "https://pve02:8006", IP: "192.0.2.11"},
+				},
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	// A reinstalled agent on the second cluster member re-registers with a
+	// fresh route-aware address; the member's stored short-DNS host must not
+	// win. The stale hostname rides along as an outranked candidate.
+	reqBody := AutoRegisterRequest{
+		Type:           "pve",
+		Host:           server.URL,
+		CandidateHosts: []string{server.URL, "https://pve02:8006"},
+		ServerName:     "pve02",
+		TokenID:        "pulse-monitor@pve!pulse-pve02",
+		TokenValue:     "member-token",
+		Source:         "agent",
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	if len(handler.defaultConfig.PVEInstances) != 1 {
+		t.Fatalf("expected member match to not create an instance, got %d instances", len(handler.defaultConfig.PVEInstances))
+	}
+
+	instance := handler.defaultConfig.PVEInstances[0]
+	if instance.Host != "https://192.0.2.10:8006" {
+		t.Fatalf("cluster host = %q, want untouched primary host", instance.Host)
+	}
+	if instance.TokenName != "pulse-monitor@pve!pulse-pve01" || instance.TokenValue != "cluster-secret" {
+		t.Fatalf("cluster credentials = (%q, %q), want untouched shared token", instance.TokenName, instance.TokenValue)
+	}
+
+	member := instance.ClusterEndpoints[1]
+	wantOverride, err := normalizeClusterEndpointIPOverride(server.URL)
+	if err != nil {
+		t.Fatalf("normalize expected override: %v", err)
+	}
+	if member.IPOverride != wantOverride {
+		t.Fatalf("member override = %q, want adopted agent address %q", member.IPOverride, wantOverride)
+	}
+
+	expectedFingerprint, err := tlsutil.FetchFingerprint(server.URL)
+	if err != nil {
+		t.Fatalf("fetch expected fingerprint: %v", err)
+	}
+	if member.Fingerprint != expectedFingerprint {
+		t.Fatalf("member fingerprint = %q, want pin captured from adopted address %q", member.Fingerprint, expectedFingerprint)
+	}
+
+	untouched := instance.ClusterEndpoints[0]
+	if untouched.IPOverride != "" || untouched.Fingerprint != "" {
+		t.Fatalf("primary member endpoint mutated: override=%q fingerprint=%q", untouched.IPOverride, untouched.Fingerprint)
+	}
+}
+
+func TestHandleCanonicalAutoRegisterPreservesAdminManagedClusterMemberOverride(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:        "homelab",
+				Host:        "https://192.0.2.10:8006",
+				TokenName:   "pulse-monitor@pve!pulse-pve01",
+				TokenValue:  "cluster-secret",
+				IsCluster:   true,
+				ClusterName: "homelab",
+				ClusterEndpoints: []config.ClusterEndpoint{
+					{NodeID: "node/pve01", NodeName: "pve01", Host: "https://pve01:8006", IP: "192.0.2.10"},
+					{NodeID: "node/pve02", NodeName: "pve02", Host: "https://pve02:8006", IP: "192.0.2.11", IPOverride: "10.99.0.5:8006", Fingerprint: "AA:BB"},
+				},
+			},
+		},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	server := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	reqBody := AutoRegisterRequest{
+		Type:           "pve",
+		Host:           server.URL,
+		CandidateHosts: []string{server.URL, "https://pve02:8006"},
+		ServerName:     "pve02",
+		TokenID:        "pulse-monitor@pve!pulse-pve02",
+		TokenValue:     "member-token",
+		Source:         "agent",
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	if len(handler.defaultConfig.PVEInstances) != 1 {
+		t.Fatalf("expected member match to not create an instance, got %d instances", len(handler.defaultConfig.PVEInstances))
+	}
+
+	member := handler.defaultConfig.PVEInstances[0].ClusterEndpoints[1]
+	if member.IPOverride != "10.99.0.5:8006" {
+		t.Fatalf("member override = %q, want admin-managed override preserved", member.IPOverride)
+	}
+	if member.Fingerprint != "AA:BB" {
+		t.Fatalf("member fingerprint = %q, want pin for the admin-managed address preserved", member.Fingerprint)
+	}
+}
+
 func TestHandleCanonicalAutoRegisterDisablesStrictTLSWhenFingerprintCaptureFails(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)

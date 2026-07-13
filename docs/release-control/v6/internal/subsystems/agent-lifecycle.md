@@ -2909,6 +2909,20 @@ cluster source's primary connection is currently disconnected. Only the primary
 configured endpoint may drive disconnected-source repair and token rotation; a
 covered member endpoint must not rotate the cluster token just because it can
 reach `/api/auto-register`.
+A covered member's re-registration must still land its address: canonical
+auto-register matches the agent against cluster member endpoints (address
+identity against the candidate list first, then an unambiguous corosync
+node-name match) instead of creating a standalone instance for consolidation
+to fold back in and silently discard. The Pulse-verified selected host is
+adopted as that member's `ClusterEndpoints[n].IPOverride` (the durable field
+re-discovery preserves and polling prefers) together with the certificate
+fingerprint captured from that address; an admin-managed override absent from
+the agent's candidate list is preserved, mirroring the top-level stored-host
+preservation rule. The only credential writes a member match may perform are
+a same-token-identity secret refresh (the agent rotates its own token in
+place on reinstall, so the stored secret is already invalid) and full token
+promotion onto a cluster source that has no credentials at all; a member's
+distinct per-node token must never replace working cluster credentials.
 That same canonical behavior also includes one auth transport for Proxmox
 completion: runtime-side Unified Agent and script callers must send `/api/auto-register`
 authentication through a one-time setup token in the request-body

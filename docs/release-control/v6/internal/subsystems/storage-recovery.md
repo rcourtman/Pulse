@@ -127,7 +127,9 @@ readiness check remains authoritative before any action admission or dispatch.
 
 Per-member cluster endpoint connection-address overrides accepted by
 `internal/api/config_node_handlers.go` (`clusterEndpointOverrides` on the node
-update payload writing `ClusterEndpoints[n].IPOverride`) are monitoring
+update payload writing `ClusterEndpoints[n].IPOverride`), including the
+agent-driven writes of the same field by canonical auto-register member
+matching in `internal/api/config_setup_handlers.go`, are monitoring
 connectivity state only. Storage- and recovery-adjacent surfaces may observe
 the effective member address for support diagnostics, but they must not treat
 a present or absent `ipOverride` as backup coverage, restore readiness, or

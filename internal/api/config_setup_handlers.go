@@ -11,7 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -436,6 +438,168 @@ func shouldPreserveExistingAutoRegisterHost(existingHost string, candidateHosts 
 		if strings.EqualFold(strings.TrimSpace(candidate), existing) {
 			return false
 		}
+	}
+	return true
+}
+
+// clusterMemberOverrideIdentity canonicalizes a connection address (bare
+// host, host:port, or URL) to lowercase host:port for comparisons, defaulting
+// to the PVE API port. Mirrors config's cluster endpoint identity
+// normalization.
+func clusterMemberOverrideIdentity(value string) string {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return ""
+	}
+	if !strings.Contains(v, "://") {
+		v = "https://" + v
+	}
+	parsed, err := url.Parse(v)
+	if err != nil || parsed.Hostname() == "" {
+		return ""
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if ip := net.ParseIP(host); ip != nil {
+		host = ip.String()
+	}
+	port := parsed.Port()
+	if port == "" {
+		port = config.DefaultPVEPort
+	}
+	return net.JoinHostPort(host, port)
+}
+
+// findCanonicalAutoRegisterClusterMember locates the cluster member endpoint
+// an auto-registering agent corresponds to when no top-level instance host
+// matched. Endpoint address identity against the agent's candidate list is
+// authoritative; a corosync node-name match (agent hostnames may be FQDNs
+// while corosync names are short) is accepted only when it is unambiguous
+// across every configured instance.
+func findCanonicalAutoRegisterClusterMember(instances []config.PVEInstance, serverName string, candidateHosts []string) (int, int, bool) {
+	for i := range instances {
+		for j := range instances[i].ClusterEndpoints {
+			if autoRegisterClusterEndpointMatchesCandidates(instances[i].ClusterEndpoints[j], candidateHosts) {
+				return i, j, true
+			}
+		}
+	}
+
+	name := strings.ToLower(strings.TrimSpace(serverName))
+	if name == "" {
+		return -1, -1, false
+	}
+	short := name
+	if dot := strings.IndexByte(short, '.'); dot > 0 {
+		short = short[:dot]
+	}
+	matchInstance, matchEndpoint, matches := -1, -1, 0
+	for i := range instances {
+		for j := range instances[i].ClusterEndpoints {
+			nodeName := strings.ToLower(strings.TrimSpace(instances[i].ClusterEndpoints[j].NodeName))
+			if nodeName == "" {
+				continue
+			}
+			if nodeName == name || nodeName == short {
+				matchInstance, matchEndpoint = i, j
+				matches++
+			}
+		}
+	}
+	if matches == 1 {
+		return matchInstance, matchEndpoint, true
+	}
+	return -1, -1, false
+}
+
+// shouldAdoptClusterMemberAutoRegisterAddress reports whether a member-matched
+// re-registration may replace the endpoint's connection override. Discovered
+// member Host/IP are rebuilt from cluster status on every re-discovery, so an
+// empty override always adopts the agent's Pulse-verified address. An existing
+// override is replaced only when it appears in the agent's candidate list
+// (deliberately outranked, the member analogue of
+// shouldPreserveExistingAutoRegisterHost); an override the agent cannot see is
+// admin-managed and kept.
+func shouldAdoptClusterMemberAutoRegisterAddress(existingOverride string, candidateHosts []string) bool {
+	override := clusterMemberOverrideIdentity(existingOverride)
+	if override == "" {
+		return true
+	}
+	for _, candidate := range candidateHosts {
+		if identity := clusterMemberOverrideIdentity(candidate); identity != "" && identity == override {
+			return true
+		}
+	}
+	return false
+}
+
+// adoptCanonicalAutoRegisterClusterMember handles re-registration of an agent
+// whose node is a non-primary cluster member rather than a top-level instance:
+// the cluster connection already covers it, so instead of creating a
+// standalone duplicate (which ConsolidatePVEInstances would fold back in,
+// discarding the agent's address), adopt the Pulse-verified selected host as
+// the member's connection override. A covered member must not replace the
+// cluster's credentials with its own per-node token; the only credential
+// writes are a same-token-identity secret refresh (the agent rotates its
+// token in place on reinstall, so the stored secret is already dead) and a
+// full promotion onto a cluster that has no credentials at all.
+func (h *ConfigHandlers) adoptCanonicalAutoRegisterClusterMember(ctx context.Context, serverName, selectedHost, fingerprint, tokenID, tokenValue string, candidateHosts []string, source string) bool {
+	instances := h.getConfig(ctx).PVEInstances
+	i, j, ok := findCanonicalAutoRegisterClusterMember(instances, serverName, candidateHosts)
+	if !ok {
+		return false
+	}
+	instance := &instances[i]
+	endpoint := &instance.ClusterEndpoints[j]
+
+	switch {
+	case tokenID != "" && instance.TokenName == tokenID:
+		if tokenValue != "" {
+			instance.TokenValue = tokenValue
+		}
+	case tokenID != "" && instance.TokenName == "" && instance.TokenValue == "" && instance.User == "" && instance.Password == "":
+		instance.TokenName = tokenID
+		instance.TokenValue = tokenValue
+	}
+	if instance.Source == "" && strings.TrimSpace(source) != "" {
+		instance.Source = strings.TrimSpace(source)
+	}
+
+	selectedIdentity := clusterMemberOverrideIdentity(selectedHost)
+	effectiveIdentity := clusterMemberOverrideIdentity(endpoint.EffectiveIP())
+	switch {
+	case selectedIdentity == "":
+		return true
+	case selectedIdentity == effectiveIdentity:
+		// The member's effective address already routes to the agent's
+		// selection; just refresh the certificate pin below.
+	case shouldAdoptClusterMemberAutoRegisterAddress(endpoint.IPOverride, candidateHosts):
+		override, err := normalizeClusterEndpointIPOverride(selectedHost)
+		if err != nil || override == "" {
+			return true
+		}
+		log.Info().
+			Str("cluster", instances[i].Name).
+			Str("node", endpoint.NodeName).
+			Str("previousOverride", endpoint.IPOverride).
+			Str("override", override).
+			Msg(canonicalAutoRegisterMatchMessage("cluster member endpoint; adopted agent connection address"))
+		endpoint.IPOverride = override
+	default:
+		// Admin-managed override the agent cannot see; keep it and leave the
+		// fingerprint pinned to that address.
+		log.Info().
+			Str("cluster", instances[i].Name).
+			Str("node", endpoint.NodeName).
+			Str("override", endpoint.IPOverride).
+			Msg(canonicalAutoRegisterMatchMessage("cluster member endpoint; preserved admin-managed override"))
+		return true
+	}
+
+	// The fingerprint was captured from selectedHost, which is now the
+	// member's effective address; a reinstall may have regenerated the node's
+	// TLS certificate, so refresh the pin whenever one was captured.
+	if strings.TrimSpace(fingerprint) != "" {
+		endpoint.Fingerprint = fingerprint
 	}
 	return true
 }
@@ -1371,6 +1535,11 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			}
 			instance.VerifySSL = pveNode.VerifySSL
 			log.Info().Str("host", host).Str("type", "pve").Msg(canonicalAutoRegisterMatchMessage("host; updated token in-place"))
+		} else if h.adoptCanonicalAutoRegisterClusterMember(r.Context(), serverName, host, fingerprint, fullTokenID, tokenValue, candidateHosts, registrationSource) {
+			// A non-primary cluster member: the cluster connection already
+			// covers this node, so no instance is created and the shared
+			// cluster token is left untouched.
+			log.Info().Str("host", host).Str("type", "pve").Msg(canonicalAutoRegisterMatchMessage("cluster member endpoint"))
 		} else {
 			// Agent-token auth is restricted to updating existing nodes only.
 			if isAgentAutoRegAuth(r.Context()) {
