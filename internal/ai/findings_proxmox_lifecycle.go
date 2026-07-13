@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -18,7 +19,10 @@ const (
 	proxmoxGuestLifecycleResolveRemoved  = "proxmox_guest_lifecycle:resource_removed"
 	proxmoxVMLifecycleCapabilityHandler  = "proxmox.vm.lifecycle"
 	proxmoxLXCLifecycleCapabilityHandler = "proxmox.ct.lifecycle"
+	proxmoxGuestActionAuditLimit         = 100
 )
+
+type proxmoxGuestActionAuditLookup func(resourceID string, since time.Time, limit int) ([]unifiedresources.ActionAuditRecord, error)
 
 type proxmoxGuestLifecycleSnapshot struct {
 	id           string
@@ -37,12 +41,17 @@ type proxmoxGuestLifecycleSnapshot struct {
 }
 
 type proxmoxGuestLifecycleWatcher struct {
-	mu    sync.Mutex
-	prior map[string]proxmoxGuestLifecycleSnapshot
+	mu                 sync.Mutex
+	prior              map[string]proxmoxGuestLifecycleSnapshot
+	lookupActionAudits proxmoxGuestActionAuditLookup
 }
 
-func newProxmoxGuestLifecycleWatcher() *proxmoxGuestLifecycleWatcher {
-	return &proxmoxGuestLifecycleWatcher{prior: make(map[string]proxmoxGuestLifecycleSnapshot)}
+func newProxmoxGuestLifecycleWatcher(lookupActionAudits ...proxmoxGuestActionAuditLookup) *proxmoxGuestLifecycleWatcher {
+	watcher := &proxmoxGuestLifecycleWatcher{prior: make(map[string]proxmoxGuestLifecycleSnapshot)}
+	if len(lookupActionAudits) > 0 {
+		watcher.lookupActionAudits = lookupActionAudits[0]
+	}
+	return watcher
 }
 
 // DetectProxmoxGuestLifecycleFindings is the pure detector used by Patrol and
@@ -86,8 +95,13 @@ func (w *proxmoxGuestLifecycleWatcher) Observe(state patrolRuntimeState, active 
 		activeByResource[strings.TrimSpace(finding.ResourceID)] = finding
 	}
 
+	type stoppedTransition struct {
+		before proxmoxGuestLifecycleSnapshot
+		after  proxmoxGuestLifecycleSnapshot
+	}
+	transitions := make([]stoppedTransition, 0)
+
 	w.mu.Lock()
-	defer w.mu.Unlock()
 	if w.prior == nil {
 		w.prior = make(map[string]proxmoxGuestLifecycleSnapshot)
 	}
@@ -105,7 +119,7 @@ func (w *proxmoxGuestLifecycleWatcher) Observe(state patrolRuntimeState, active 
 				emit = append(emit, buildProxmoxGuestStoppedFinding(snapshot, now.UTC()))
 			case activeFinding == nil:
 				if previous, ok := w.prior[id]; ok && proxmoxGuestStoppedTransition(previous, snapshot) {
-					emit = append(emit, buildProxmoxGuestStoppedFinding(snapshot, now.UTC()))
+					transitions = append(transitions, stoppedTransition{before: previous, after: snapshot})
 				}
 			}
 			w.prior[id] = snapshot
@@ -126,7 +140,73 @@ func (w *proxmoxGuestLifecycleWatcher) Observe(state patrolRuntimeState, active 
 		}
 		resolve = append(resolve, resolveSentinel{DedupKey: finding.ID, Reason: proxmoxGuestLifecycleResolveRemoved})
 	}
+	w.mu.Unlock()
+
+	for _, transition := range transitions {
+		if w.governedStopCompleted(transition.before, transition.after, now.UTC()) {
+			continue
+		}
+		emit = append(emit, buildProxmoxGuestStoppedFinding(transition.after, now.UTC()))
+	}
 	return emit, resolve
+}
+
+func (w *proxmoxGuestLifecycleWatcher) governedStopCompleted(before, after proxmoxGuestLifecycleSnapshot, now time.Time) bool {
+	if w == nil || w.lookupActionAudits == nil {
+		return false
+	}
+	audits, err := w.lookupActionAudits(after.id, time.Time{}, proxmoxGuestActionAuditLimit)
+	if err != nil {
+		log.Warn().Err(err).Str("resource_id", after.id).Msg("failed to inspect Proxmox guest action audits for Patrol suppression")
+		return false
+	}
+	for _, audit := range audits {
+		if proxmoxGuestAuditExplainsStoppedTransition(audit, before, after, now) {
+			return true
+		}
+	}
+	return false
+}
+
+func proxmoxGuestAuditExplainsStoppedTransition(audit unifiedresources.ActionAuditRecord, before, after proxmoxGuestLifecycleSnapshot, now time.Time) bool {
+	if audit.State != unifiedresources.ActionStateCompleted ||
+		unifiedresources.CanonicalResourceID(audit.Request.ResourceID) != unifiedresources.CanonicalResourceID(after.id) ||
+		audit.Result == nil || !audit.Result.Success || audit.Result.ActionResultV2 == nil ||
+		audit.UpdatedAt.IsZero() || audit.UpdatedAt.Before(before.observedAt) || audit.UpdatedAt.After(now) {
+		return false
+	}
+	capability := strings.ToLower(strings.TrimSpace(audit.Request.CapabilityName))
+	if capability != "shutdown" && capability != "stop" {
+		return false
+	}
+	if unifiedresources.CanonicalActionResultV2(audit).Execution.Status != unifiedresources.ActionExecutionSucceeded {
+		return false
+	}
+	for _, approval := range audit.Approvals {
+		if approval.Outcome != unifiedresources.OutcomeApproved || approval.PolicyLease != nil || approval.Timestamp.IsZero() {
+			continue
+		}
+		approvedAt := approval.Timestamp.UTC()
+		if !approvedAt.Before(before.observedAt) && !approvedAt.After(after.observedAt) && !audit.UpdatedAt.Before(approvedAt) {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *PatrolService) loadProxmoxGuestActionAudits(resourceID string, since time.Time, limit int) ([]unifiedresources.ActionAuditRecord, error) {
+	if p == nil || p.aiService == nil {
+		return nil, nil
+	}
+	p.aiService.mu.RLock()
+	store := p.aiService.resourceExportStore
+	orgID := strings.TrimSpace(p.aiService.orgID)
+	storeOrgID := strings.TrimSpace(p.aiService.resourceExportStoreOrgID)
+	p.aiService.mu.RUnlock()
+	if store == nil || (storeOrgID != "" && storeOrgID != orgID) {
+		return nil, nil
+	}
+	return store.GetActionAudits(resourceID, since, limit)
 }
 
 func proxmoxGuestLifecycleSnapshots(readState unifiedresources.ReadState) map[string]proxmoxGuestLifecycleSnapshot {

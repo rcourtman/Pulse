@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -69,6 +70,102 @@ func TestProxmoxGuestLifecycleWatcherSeedsWithoutFlaggingExistingStoppedGuests(t
 	)}, nil, now)
 	if len(emit) != 0 || len(resolve) != 0 {
 		t.Fatalf("first stopped observation must seed only: emit=%#v resolve=%#v", emit, resolve)
+	}
+}
+
+func TestProxmoxGuestLifecycleWatcherSuppressesGovernedStopWithinObservationWindow(t *testing.T) {
+	now := time.Now().UTC()
+	running := proxmoxLifecycleTestResource("vm:160", unifiedresources.ResourceTypeVM, unifiedresources.StatusOnline, now)
+	stopped := proxmoxLifecycleTestResource("vm:160", unifiedresources.ResourceTypeVM, unifiedresources.StatusOffline, now.Add(10*time.Second))
+	audit := proxmoxLifecycleGovernedStopAudit("vm:160", "shutdown", now.Add(3*time.Second), now.Add(8*time.Second))
+	lookupCalls := 0
+	watcher := newProxmoxGuestLifecycleWatcher(func(resourceID string, since time.Time, limit int) ([]unifiedresources.ActionAuditRecord, error) {
+		lookupCalls++
+		if resourceID != "vm:160" || !since.IsZero() || limit != proxmoxGuestActionAuditLimit {
+			t.Fatalf("lookup resource=%q since=%s limit=%d", resourceID, since, limit)
+		}
+		return []unifiedresources.ActionAuditRecord{audit}, nil
+	})
+	watcher.Observe(patrolRuntimeState{readState: proxmoxLifecycleReadState(running)}, nil, now)
+	emit, resolve := watcher.Observe(patrolRuntimeState{readState: proxmoxLifecycleReadState(stopped)}, nil, now.Add(11*time.Second))
+	if lookupCalls != 1 || len(emit) != 0 || len(resolve) != 0 {
+		t.Fatalf("governed stop must suppress exactly once: calls=%d emit=%#v resolve=%#v", lookupCalls, emit, resolve)
+	}
+
+	emit, _ = watcher.Observe(patrolRuntimeState{readState: proxmoxLifecycleReadState(stopped)}, nil, now.Add(12*time.Second))
+	if lookupCalls != 1 || len(emit) != 0 {
+		t.Fatalf("suppressed transition must still advance baseline: calls=%d emit=%#v", lookupCalls, emit)
+	}
+}
+
+func TestProxmoxGuestLifecycleWatcherEmitsWhenGovernedStopAuditIsNotCausal(t *testing.T) {
+	now := time.Now().UTC()
+	before := proxmoxGuestLifecycleSnapshot{id: "vm:160", observedAt: now}
+	after := proxmoxGuestLifecycleSnapshot{id: "vm:160", observedAt: now.Add(10 * time.Second)}
+	valid := proxmoxLifecycleGovernedStopAudit("vm:160", "stop", now.Add(3*time.Second), now.Add(8*time.Second))
+
+	tests := []struct {
+		name   string
+		mutate func(*unifiedresources.ActionAuditRecord)
+	}{
+		{name: "different resource", mutate: func(a *unifiedresources.ActionAuditRecord) { a.Request.ResourceID = "vm:999" }},
+		{name: "restart capability", mutate: func(a *unifiedresources.ActionAuditRecord) { a.Request.CapabilityName = "restart" }},
+		{name: "failed audit state", mutate: func(a *unifiedresources.ActionAuditRecord) { a.State = unifiedresources.ActionStateFailed }},
+		{name: "legacy result only", mutate: func(a *unifiedresources.ActionAuditRecord) { a.Result.ActionResultV2 = nil }},
+		{name: "failed execution", mutate: func(a *unifiedresources.ActionAuditRecord) { a.Result.Success = false }},
+		{name: "stale approval", mutate: func(a *unifiedresources.ActionAuditRecord) { a.Approvals[0].Timestamp = now.Add(-time.Second) }},
+		{name: "approval after stop", mutate: func(a *unifiedresources.ActionAuditRecord) { a.Approvals[0].Timestamp = now.Add(11 * time.Second) }},
+		{name: "policy authorization", mutate: func(a *unifiedresources.ActionAuditRecord) {
+			a.Approvals[0].PolicyLease = &unifiedresources.ActionPolicyAuthorizationLease{}
+		}},
+		{name: "completion before approval", mutate: func(a *unifiedresources.ActionAuditRecord) { a.UpdatedAt = now.Add(2 * time.Second) }},
+		{name: "future completion", mutate: func(a *unifiedresources.ActionAuditRecord) { a.UpdatedAt = now.Add(12 * time.Second) }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			audit := valid
+			audit.Approvals = append([]unifiedresources.ActionApprovalRecord(nil), valid.Approvals...)
+			result := *valid.Result
+			audit.Result = &result
+			test.mutate(&audit)
+			if proxmoxGuestAuditExplainsStoppedTransition(audit, before, after, now.Add(11*time.Second)) {
+				t.Fatalf("non-causal audit explained transition: %#v", audit)
+			}
+		})
+	}
+}
+
+func TestProxmoxGuestLifecycleWatcherFailsOpenWhenActionAuditLookupFails(t *testing.T) {
+	now := time.Now().UTC()
+	watcher := newProxmoxGuestLifecycleWatcher(func(string, time.Time, int) ([]unifiedresources.ActionAuditRecord, error) {
+		return nil, errors.New("audit store unavailable")
+	})
+	watcher.Observe(patrolRuntimeState{readState: proxmoxLifecycleReadState(
+		proxmoxLifecycleTestResource("vm:160", unifiedresources.ResourceTypeVM, unifiedresources.StatusOnline, now),
+	)}, nil, now)
+	emit, _ := watcher.Observe(patrolRuntimeState{readState: proxmoxLifecycleReadState(
+		proxmoxLifecycleTestResource("vm:160", unifiedresources.ResourceTypeVM, unifiedresources.StatusOffline, now.Add(10*time.Second)),
+	)}, nil, now.Add(11*time.Second))
+	if len(emit) != 1 {
+		t.Fatalf("audit lookup failure must preserve warning: %#v", emit)
+	}
+}
+
+func TestNewPatrolServiceWiresProxmoxLifecycleToOrgScopedActionStore(t *testing.T) {
+	store := unifiedresources.NewMemoryStore()
+	service := &Service{orgID: "org-1", resourceExportStore: store, resourceExportStoreOrgID: "org-1"}
+	patrol := NewPatrolService(service, nil)
+	if patrol.proxmoxGuestLifecycleWatcher == nil || patrol.proxmoxGuestLifecycleWatcher.lookupActionAudits == nil {
+		t.Fatal("production Proxmox lifecycle watcher has no action-audit lookup")
+	}
+	audits, err := patrol.proxmoxGuestLifecycleWatcher.lookupActionAudits("vm:160", time.Time{}, 10)
+	if err != nil || len(audits) != 0 {
+		t.Fatalf("org-scoped action lookup audits=%#v err=%v", audits, err)
+	}
+	service.resourceExportStoreOrgID = "org-2"
+	audits, err = patrol.proxmoxGuestLifecycleWatcher.lookupActionAudits("vm:160", time.Time{}, 10)
+	if err != nil || audits != nil {
+		t.Fatalf("cross-org action store must fail closed: audits=%#v err=%v", audits, err)
 	}
 }
 
@@ -165,5 +262,20 @@ func proxmoxLifecycleTestResource(id string, resourceType unifiedresources.Resou
 		Capabilities: []unifiedresources.ResourceCapability{{
 			Name: capabilityName, Type: unifiedresources.CapabilityTypeCommon, MinimumApprovalLevel: unifiedresources.ApprovalAdmin, Platform: platform, InternalHandler: handler,
 		}},
+	}
+}
+
+func proxmoxLifecycleGovernedStopAudit(resourceID, capability string, approvedAt, completedAt time.Time) unifiedresources.ActionAuditRecord {
+	resultV2 := unifiedresources.ActionResultV2{
+		Version:      unifiedresources.ActionResultV2Version,
+		Execution:    unifiedresources.ActionExecutionTruth{Status: unifiedresources.ActionExecutionSucceeded},
+		Verification: unifiedresources.ActionVerificationTruth{Status: unifiedresources.ActionVerificationNotAttempted, EvidenceClass: unifiedresources.ActionEvidenceNone},
+		Compensation: unifiedresources.ActionCompensationTruth{Support: unifiedresources.ActionCompensationUnavailable, Status: unifiedresources.ActionCompensationNotAvailable},
+	}
+	return unifiedresources.ActionAuditRecord{
+		ID: "action-stop-1", CreatedAt: approvedAt.Add(-time.Minute), UpdatedAt: completedAt, State: unifiedresources.ActionStateCompleted,
+		Request:   unifiedresources.ActionRequest{ResourceID: resourceID, CapabilityName: capability},
+		Approvals: []unifiedresources.ActionApprovalRecord{{Timestamp: approvedAt, Outcome: unifiedresources.OutcomeApproved}},
+		Result:    &unifiedresources.ExecutionResult{Success: true, ActionResultV2: &resultV2},
 	}
 }

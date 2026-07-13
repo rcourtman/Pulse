@@ -616,6 +616,11 @@ into one outcome. Docker lifecycle controls may create a canonical plan and
 open this shared review, but may not auto-approve, auto-execute, or use a
 second-click local confirmation. Proof is owned by the colocated action tests,
 `DockerNativeTables.test.tsx`, and desktop journeys 81 and 83.
+The shared review may offer decision or execution controls only when the
+current record carries a non-empty `planHash`; every mutation passes that exact
+displayed identity through the canonical resource-action client. Legacy or
+mixed-version records without it remain reviewable but require replanning and
+cannot create a browser mutation.
 
 1. Add new resource types and identity fields in `internal/unifiedresources/types.go`
    Agentless availability endpoints enter the model as

@@ -7362,6 +7362,10 @@ both requests to the exact reviewed plan by sending `planHash`; the REST fields
 remain optional for transport compatibility, but any presented hash that differs
 from the authoritative persisted plan fails with
 `action_plan_identity_mismatch` before a decision write or executor dispatch.
+The canonical browser writer in `frontend-modern/src/api/resourceActions.ts`
+requires a non-empty reviewed hash for both mutations and always serializes it.
+Actions and Patrol browser consumers must pass the hash from the plan currently
+shown to the operator; a missing hash fails locally without issuing a request.
 Mobile uses the durable pending inbox so approved-but-not-run and executing
 actions survive refresh and remain visible. It must reject through the decision
 endpoint; legacy

@@ -71,16 +71,26 @@ describe('apiClient org context', () => {
   });
 
   it('preserves authenticated organization context across durable action operations', async () => {
-    mockFetch.mockImplementation(async () =>
-      new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    mockFetch.mockImplementation(
+      async () =>
+        new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
     );
 
     setOrgID('tenant-actions');
     await ResourceActionsAPI.listActions('pending', 20);
     await ResourceActionsAPI.listActions('settled', 20);
     await ResourceActionsAPI.getAction('action/one');
-    await ResourceActionsAPI.decideAction('action/one', 'approved', 'Reviewed by operator');
-    await ResourceActionsAPI.executeAction('action/one', 'Execute the reviewed plan');
+    await ResourceActionsAPI.decideAction(
+      'action/one',
+      'approved',
+      'sha256:reviewed-plan',
+      'Reviewed by operator',
+    );
+    await ResourceActionsAPI.executeAction(
+      'action/one',
+      'sha256:reviewed-plan',
+      'Execute the reviewed plan',
+    );
 
     expect(mockFetch.mock.calls.map(([url]) => String(url))).toEqual([
       '/api/actions?view=pending&limit=20',
@@ -93,12 +103,16 @@ describe('apiClient org context', () => {
       const headers = options.headers as Record<string, string>;
       expect(headers['X-Pulse-Org-ID']).toBe('tenant-actions');
     }
-    const mutationBodies = mockFetch.mock.calls.slice(3).map(([, options]) =>
-      JSON.parse(String((options as RequestInit).body)),
-    );
+    const mutationBodies = mockFetch.mock.calls
+      .slice(3)
+      .map(([, options]) => JSON.parse(String((options as RequestInit).body)));
     expect(mutationBodies).toEqual([
-      { outcome: 'approved', reason: 'Reviewed by operator' },
-      { reason: 'Execute the reviewed plan' },
+      {
+        outcome: 'approved',
+        planHash: 'sha256:reviewed-plan',
+        reason: 'Reviewed by operator',
+      },
+      { planHash: 'sha256:reviewed-plan', reason: 'Execute the reviewed plan' },
     ]);
     expect(mutationBodies.every((body) => !('orgId' in body))).toBe(true);
   });

@@ -53,6 +53,7 @@ function actionReference(stateValue: PatrolActionReference['state']): PatrolActi
       requiresApproval: stateValue === 'pending_approval',
       approvalPolicy: stateValue === 'pending_approval' ? 'admin' : 'none',
       rollbackAvailable: true,
+      planHash: 'sha256:reviewed-plan',
       message: 'Restart the unhealthy workload',
       preflight: {
         target: 'vm:42',
@@ -159,10 +160,12 @@ describe('ApprovalSection typed action lifecycle', () => {
       expect(decideActionMock).toHaveBeenCalledWith(
         'act-1',
         'approved',
+        'sha256:reviewed-plan',
         'Approved from the Patrol action review',
       );
       expect(executeActionMock).toHaveBeenCalledWith(
         'act-1',
+        'sha256:reviewed-plan',
         'Operator requested execution from the Patrol action review',
       );
     });
@@ -190,6 +193,7 @@ describe('ApprovalSection typed action lifecycle', () => {
       expect(decideActionMock).toHaveBeenCalledWith(
         'act-1',
         'rejected',
+        'sha256:reviewed-plan',
         'Rejected from the Patrol action review',
       ),
     );
@@ -213,6 +217,19 @@ describe('ApprovalSection typed action lifecycle', () => {
     expect(notificationWarningMock).toHaveBeenCalledWith(
       'Action completed, but verification was inconclusive',
     );
+  });
+
+  it('fails closed when the typed action has no reviewed plan identity', async () => {
+    const action = actionReference('pending_approval');
+    delete action.plan.planHash;
+    getInvestigationMock.mockResolvedValue(investigation(action));
+
+    render(() => <ApprovalSection findingId="finding-1" investigationOutcome="fix_queued" />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('no reviewed plan identity');
+    expect(screen.queryByRole('button', { name: /approve and run/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^reject$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /run action/i })).not.toBeInTheDocument();
   });
 
   it('fails closed when only a legacy investigation artifact remains', async () => {

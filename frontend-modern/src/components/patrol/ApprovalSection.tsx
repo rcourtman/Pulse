@@ -135,9 +135,10 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
     await aiIntelligenceStore.loadFindings();
   };
 
-  const execute = async (actionId: string) => {
+  const execute = async (actionId: string, planHash: string) => {
     const result = await ResourceActionsAPI.executeAction(
       actionId,
+      planHash,
       'Operator requested execution from the Patrol action review',
     );
     setLatestAudit(result.audit);
@@ -154,16 +155,18 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   const handleApproveAndRun = async (event: Event) => {
     event.stopPropagation();
     const current = action();
-    if (!current) return;
+    const planHash = current?.plan.planHash?.trim();
+    if (!current || !planHash) return;
     setBusyAction('approve');
     try {
       const decision = await ResourceActionsAPI.decideAction(
         current.action_id,
         'approved',
+        planHash,
         'Approved from the Patrol action review',
       );
       setLatestAudit(decision.audit);
-      await execute(current.action_id);
+      await execute(current.action_id, planHash);
       await refreshPatrol();
     } catch (error) {
       notificationStore.error((error as Error).message || 'Failed to approve and run action');
@@ -175,10 +178,11 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   const handleRun = async (event: Event) => {
     event.stopPropagation();
     const current = action();
-    if (!current) return;
+    const planHash = current?.plan.planHash?.trim();
+    if (!current || !planHash) return;
     setBusyAction('execute');
     try {
-      await execute(current.action_id);
+      await execute(current.action_id, planHash);
       await refreshPatrol();
     } catch (error) {
       notificationStore.error((error as Error).message || 'Failed to run action');
@@ -190,12 +194,14 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   const handleReject = async (event: Event) => {
     event.stopPropagation();
     const current = action();
-    if (!current) return;
+    const planHash = current?.plan.planHash?.trim();
+    if (!current || !planHash) return;
     setBusyAction('reject');
     try {
       const decision = await ResourceActionsAPI.decideAction(
         current.action_id,
         'rejected',
+        planHash,
         'Rejected from the Patrol action review',
       );
       setLatestAudit(decision.audit);
@@ -287,6 +293,9 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
             {(currentAction) => {
               const presentation = createMemo(() => statePresentation(currentAction().state));
               const preflight = createMemo(() => currentAction().plan.preflight);
+              const reviewedPlanHash = createMemo(
+                () => currentAction().plan.planHash?.trim() || '',
+              );
               return (
                 <div class="space-y-3">
                   <div class="flex flex-wrap items-center gap-2">
@@ -350,8 +359,24 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                     </div>
                   </Show>
 
+                  <Show when={!reviewedPlanHash()}>
+                    <div
+                      role="alert"
+                      class="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                    >
+                      This action has no reviewed plan identity. Create a new plan before approving
+                      or running it.
+                    </div>
+                  </Show>
+
                   <div class="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-3">
-                    <Show when={canManageAction() && currentAction().state === 'pending_approval'}>
+                    <Show
+                      when={
+                        reviewedPlanHash() &&
+                        canManageAction() &&
+                        currentAction().state === 'pending_approval'
+                      }
+                    >
                       <Button
                         type="button"
                         variant="success"
@@ -381,6 +406,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                     <Show
                       when={
                         canManageAction() &&
+                        reviewedPlanHash() &&
                         (currentAction().state === 'planned' ||
                           currentAction().state === 'approved')
                       }

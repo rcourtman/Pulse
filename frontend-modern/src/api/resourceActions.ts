@@ -12,6 +12,16 @@ import type {
 
 export type ActionDecisionOutcome = 'approved' | 'rejected';
 
+function reviewedPlanHash(planHash: string): string {
+  const normalized = planHash.trim();
+  if (!normalized) {
+    throw new Error(
+      'A reviewed action plan identity is required. Create a new plan before continuing.',
+    );
+  }
+  return normalized;
+}
+
 export class ResourceActionsAPI {
   static async listActions(view: ActionInboxView, limit = 100): Promise<ActionInboxResponse> {
     const params = new URLSearchParams({ view, limit: String(limit) });
@@ -36,6 +46,7 @@ export class ResourceActionsAPI {
   static async decideAction(
     actionId: string,
     outcome: ActionDecisionOutcome,
+    planHash: string,
     reason?: string,
   ): Promise<ActionDecisionResponse> {
     return apiFetchJSON<ActionDecisionResponse>(
@@ -44,18 +55,26 @@ export class ResourceActionsAPI {
         method: 'POST',
         body: JSON.stringify({
           outcome,
+          planHash: reviewedPlanHash(planHash),
           ...(reason ? { reason } : {}),
         }),
       },
     );
   }
 
-  static async executeAction(actionId: string, reason?: string): Promise<ActionExecutionResponse> {
+  static async executeAction(
+    actionId: string,
+    planHash: string,
+    reason?: string,
+  ): Promise<ActionExecutionResponse> {
     return apiFetchJSON<ActionExecutionResponse>(
       `/api/actions/${encodeURIComponent(actionId)}/execute`,
       {
         method: 'POST',
-        body: JSON.stringify(reason ? { reason } : {}),
+        body: JSON.stringify({
+          planHash: reviewedPlanHash(planHash),
+          ...(reason ? { reason } : {}),
+        }),
       },
     );
   }

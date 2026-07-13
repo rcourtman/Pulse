@@ -704,7 +704,7 @@ func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolSe
 	p.findings.SetStormThrottler(p.stormThrottler)
 	p.updateSafetyWatcher = newUpdateSafetyWatcher()
 	p.aptWorkflowWatcher = newAPTWorkflowWatcher()
-	p.proxmoxGuestLifecycleWatcher = newProxmoxGuestLifecycleWatcher()
+	p.proxmoxGuestLifecycleWatcher = newProxmoxGuestLifecycleWatcher(p.loadProxmoxGuestActionAudits)
 	p.pdmAlertBridge = newPDMAlertBridge(newPDMAlertSourceFromEnv())
 	return p
 }

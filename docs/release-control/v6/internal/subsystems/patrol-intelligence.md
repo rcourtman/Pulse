@@ -1985,6 +1985,11 @@ and offers an Assistant handoff. Collapsed-row attention state must consult the
 same investigation action reference, so it cannot claim there is no approval
 while the expanded panel has one. Browser proof must exercise pending,
 terminal-verified, and legacy-history states rather than judging only source.
+The typed reference must also carry the exact reviewed `planHash` before
+`ApprovalSection` exposes approve, reject, or run controls. Decision and
+execution requests pass that same hash through the canonical browser client;
+missing identity is an explicit replan-required state and never falls back to
+action id alone.
 
 Backend Patrol finding reconciliation now reads `ActionResultV2`: execution
 failed or known-not-run maps to fix failure; confirmed verification maps to

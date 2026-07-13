@@ -5927,6 +5927,16 @@ source authority, repeated timestamps, unknown states, and capability loss
 fail closed. Existing stopped guests therefore do not become findings merely
 because Patrol or Pulse restarted.
 
+Production admission also reconciles the transition against the canonical,
+organization-scoped action-audit store before emitting. A completed `shutdown`
+or `stop` may suppress the finding only for the same canonical guest when its
+canonical `ActionResultV2` execution succeeded and a recorded approval falls
+between the prior fresh running observation and the newer stopped observation.
+Legacy-only results, failed or nonterminal actions, other capabilities or
+resources, out-of-window decisions, cross-organization stores, and audit-read
+errors do not suppress the warning. Suppression advances the observation
+baseline so the intentional stop cannot surface one cycle later.
+
 The watcher runs before the model-provider gate whenever guest analysis is
 enabled, so detection is not conditional on an available LLM. Fresh running
 evidence reconciles an active finding; stale or incomplete state does not, and
