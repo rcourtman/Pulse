@@ -1655,3 +1655,9 @@ the Proxmox API, validates the requested guest identity, and stamps server
 observation time. It must not satisfy this contract from cached resource state
 or node-agent telemetry: the action layer depends on this read remaining in a
 trust domain distinct from the node agent that executes `qm` / `pct`.
+
+Canonical Proxmox VM/LXC typed views also expose the monitoring-owned source
+delivery status and timestamp alongside guest power state. Downstream Patrol
+transition detection consumes that status instead of inventing a fixed stale
+window: a stopped guest can have fresh inventory, while a stale source cannot
+authoritatively prove either a stopped transition or recovery.

@@ -8444,7 +8444,7 @@
     },
     {
       "id": "protection-posture-attention-queue",
-      "summary": "Pulse now has a durable strong-version product direction, but the current lane map does not yet model the simple user-facing shape as one governed surface: authenticated launch stays monitor-first on platform and dashboard surfaces, Patrol remains the named checking-loop destination for findings, approvals, and explain-act-verify work, Assistant explains selected context, and coverage signals appear only when attached to relevant monitor or Patrol context instead of becoming a generic Home front door or calm-day proof strip. Without an explicit lane-expansion record, work can drift into Home-first surfaces, Patrol renames, generic Assistant polish, or read-only object-browser copies instead of proving simple monitor-first operations.",
+      "summary": "Pulse now has a durable strong-version product direction and a production Proxmox VM/LXC detector-to-independent-verification Patrol slice, but the current lane map does not yet model the simple user-facing shape as one governed surface: authenticated launch stays monitor-first on platform and dashboard surfaces, Patrol remains the named checking-loop destination for findings, approvals, and explain-act-verify work, Assistant explains selected context, and coverage signals appear only when attached to relevant monitor or Patrol context instead of becoming a generic Home front door or calm-day proof strip. Without an explicit lane-expansion record, work can drift into Home-first surfaces, Patrol renames, generic Assistant polish, or read-only object-browser copies instead of proving simple monitor-first operations.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-06-25",
@@ -8479,6 +8479,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/protection-posture-proxmox-guest-lifecycle-2026-07-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/pulse-intelligence-proactive-operations-lane-2026-05-08.md",
           "kind": "file"
         },
@@ -8489,12 +8494,27 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/ai/findings_proxmox_lifecycle.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/findings_proxmox_lifecycle_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/proxmox_guest_action_observer.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "internal/api/proxmox_guest_action_result.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/proxmox_patrol_integration_test.go",
           "kind": "file"
         },
         {

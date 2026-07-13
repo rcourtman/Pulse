@@ -5913,3 +5913,32 @@ confirmation remains useful evidence but projects to
 and terminal push copy stays explicitly inconclusive. This keeps legacy
 single-outcome consumers conservative while `ActionDisposition.ActionResultV2`
 retains both truth axes and the evidence source.
+
+### Proxmox guest lifecycle Patrol detector floor
+
+`internal/ai/findings_proxmox_lifecycle.go` owns the deterministic production
+detector for Proxmox VM and LXC stopped transitions. The first observation is a
+baseline only: Patrol may emit a finding only when a fresh Proxmox source
+observation moves the same canonical guest from running to stopped at a newer
+source timestamp. Admission also requires the exact current resource-owned
+`start` capability and matching `proxmox.vm.lifecycle` or
+`proxmox.ct.lifecycle` handler. Templates, locked guests, stale or missing
+source authority, repeated timestamps, unknown states, and capability loss
+fail closed. Existing stopped guests therefore do not become findings merely
+because Patrol or Pulse restarted.
+
+The watcher runs before the model-provider gate whenever guest analysis is
+enabled, so detection is not conditional on an available LLM. Fresh running
+evidence reconciles an active finding; stale or incomplete state does not, and
+explicit resource removal uses its own typed resolution reason. Finding
+evidence is bounded to guest kind, stopped state, Proxmox instance/node/VMID,
+and observation time and carries no command, credential, token, or provider
+mutation authority. Operator maintenance and intentionally-offline intent
+continue through the shared finding-store suppression boundary.
+
+The non-lab integration proof takes the emitted finding through an exact empty-
+parameter `start` proposal, shared planning, separate human approval, durable
+node-agent dispatch, canonical action audit, and server-side Proxmox API
+observation. Only confirmed independent evidence projects the originating
+finding to `fix_verified`; command success or same-agent status alone cannot
+produce the green terminal state.

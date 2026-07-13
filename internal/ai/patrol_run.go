@@ -448,6 +448,23 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		}
 	}
 
+	if cfg.AnalyzeGuests && p.proxmoxGuestLifecycleWatcher != nil {
+		proxmoxEmit, proxmoxResolve := p.proxmoxGuestLifecycleWatcher.Observe(state, p.findings.GetActive(FindingSeverityInfo), time.Now())
+		for _, f := range proxmoxEmit {
+			trackFinding(f)
+		}
+		for _, sentinel := range proxmoxResolve {
+			if p.findings.ResolveWithReason(sentinel.DedupKey, sentinel.Reason) {
+				p.mu.RLock()
+				resolveUnified := p.unifiedFindingResolver
+				p.mu.RUnlock()
+				if resolveUnified != nil {
+					resolveUnified(sentinel.DedupKey)
+				}
+			}
+		}
+	}
+
 	// Run PDM alert bridge on every patrol cycle if a source is configured.
 	// Nil source guard mirrors the MVP no-op behavior; the real HTTP client
 	// is wired in a follow-on. Direct FindingsStore.Add bypasses push.

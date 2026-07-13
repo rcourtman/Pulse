@@ -471,9 +471,10 @@ type PatrolService struct {
 	// same resource so a noisy host surfaces as one storm finding rather
 	// than several concurrent per-symptom rows. Owned for the service
 	// lifetime; in-memory only, no goroutine.
-	stormThrottler      *findingStormThrottler
-	updateSafetyWatcher *UpdateSafetyWatcher
-	aptWorkflowWatcher  *aptWorkflowWatcher
+	stormThrottler               *findingStormThrottler
+	updateSafetyWatcher          *UpdateSafetyWatcher
+	aptWorkflowWatcher           *aptWorkflowWatcher
+	proxmoxGuestLifecycleWatcher *proxmoxGuestLifecycleWatcher
 	// PDM alert bridge -- polls the PDM resource list on each patrol cycle
 	// and emits reliability findings for offline nodes and failed guests.
 	// Nil source makes Observe a no-op when PDM env configuration is absent.
@@ -703,6 +704,7 @@ func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolSe
 	p.findings.SetStormThrottler(p.stormThrottler)
 	p.updateSafetyWatcher = newUpdateSafetyWatcher()
 	p.aptWorkflowWatcher = newAPTWorkflowWatcher()
+	p.proxmoxGuestLifecycleWatcher = newProxmoxGuestLifecycleWatcher()
 	p.pdmAlertBridge = newPDMAlertBridge(newPDMAlertSourceFromEnv())
 	return p
 }

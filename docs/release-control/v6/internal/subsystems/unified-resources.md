@@ -1650,6 +1650,11 @@ when the owning node command agent is disconnected, and records disabled-state
 context in `actionReadiness`. Proxmox platform pages and detail drawers may
 consume those fields, but they must not treat row status, VMID, node name, or
 guest metadata as separate permission to run `qm` / `pct` or provider calls.
+Typed VM and system-container read views expose detached capability slices and
+per-source delivery status for internal consumers. A Patrol detector must bind
+to the exact resource-owned lifecycle capability and consume the canonical
+Proxmox source status/timestamp; it must not reconstruct action availability or
+freshness from guest power state or a locally hard-coded polling window.
 
 `InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` now surface
 `degraded` and `alerting` resource counts alongside the existing `online` and

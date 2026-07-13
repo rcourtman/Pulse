@@ -58,9 +58,13 @@ func TestView_VMViewAccessors(t *testing.T) {
 		Name:     "app-vm",
 		Status:   StatusOnline,
 		LastSeen: now,
-		Tags:     []string{"prod", "tier:web"},
-		ParentID: &parentID,
-		Identity: ResourceIdentity{IPAddresses: []string{"10.0.0.10", "fd00::10"}},
+		SourceStatus: map[DataSource]SourceStatus{
+			SourceProxmox: {Status: "online", LastSeen: now},
+		},
+		Capabilities: []ResourceCapability{{Name: "shutdown", InternalHandler: "proxmox.vm.lifecycle"}},
+		Tags:         []string{"prod", "tier:web"},
+		ParentID:     &parentID,
+		Identity:     ResourceIdentity{IPAddresses: []string{"10.0.0.10", "fd00::10"}},
 		Proxmox: &ProxmoxData{
 			SourceID:         " vm-source-1 ",
 			NodeName:         " pve-a ",
@@ -150,6 +154,17 @@ func TestView_VMViewAccessors(t *testing.T) {
 	if !v.LastSeen().Equal(now) {
 		t.Fatalf("expected LastSeen %v, got %v", now, v.LastSeen())
 	}
+	if freshness, ok := v.SourceStatus(SourceProxmox); !ok || freshness.Status != "online" || !freshness.LastSeen.Equal(now) {
+		t.Fatalf("expected fresh Proxmox source status, got %+v ok=%v", freshness, ok)
+	}
+	capabilities := v.Capabilities()
+	if len(capabilities) != 1 || capabilities[0].Name != "shutdown" {
+		t.Fatalf("expected lifecycle capabilities, got %+v", capabilities)
+	}
+	capabilities[0].Name = "mutated"
+	if got := v.Capabilities(); len(got) != 1 || got[0].Name != "shutdown" {
+		t.Fatalf("expected detached lifecycle capabilities, got %+v", got)
+	}
 	if v.ParentID() != parentID {
 		t.Fatalf("expected ParentID %q, got %q", parentID, v.ParentID())
 	}
@@ -223,8 +238,12 @@ func TestView_VMViewAccessors(t *testing.T) {
 			zero.DiskRead() != 0 ||
 			zero.DiskWrite() != 0 ||
 			zero.Lock() != "" ||
-			zero.IPAddresses() != nil {
+			zero.IPAddresses() != nil ||
+			zero.Capabilities() != nil {
 			t.Fatalf("expected zero values for nil resource, got %+v", zero)
+		}
+		if _, ok := zero.SourceStatus(SourceProxmox); ok {
+			t.Fatal("nil VM view must not report source freshness")
 		}
 	})
 
@@ -300,9 +319,13 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 		Name:     "db-ct",
 		Status:   StatusWarning,
 		LastSeen: now,
-		Tags:     []string{"prod", "tier:db"},
-		ParentID: &parentID,
-		Identity: ResourceIdentity{IPAddresses: []string{"10.0.0.20"}},
+		SourceStatus: map[DataSource]SourceStatus{
+			SourceProxmox: {Status: "online", LastSeen: now},
+		},
+		Capabilities: []ResourceCapability{{Name: "start", InternalHandler: "proxmox.ct.lifecycle"}},
+		Tags:         []string{"prod", "tier:db"},
+		ParentID:     &parentID,
+		Identity:     ResourceIdentity{IPAddresses: []string{"10.0.0.20"}},
 		Proxmox: &ProxmoxData{
 			SourceID:      " ct-source-1 ",
 			NodeName:      " pve-b ",
@@ -372,6 +395,17 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 	if !v.LastSeen().Equal(now) {
 		t.Fatalf("expected LastSeen %v, got %v", now, v.LastSeen())
 	}
+	if freshness, ok := v.SourceStatus(SourceProxmox); !ok || freshness.Status != "online" || !freshness.LastSeen.Equal(now) {
+		t.Fatalf("expected fresh Proxmox source status, got %+v ok=%v", freshness, ok)
+	}
+	capabilities := v.Capabilities()
+	if len(capabilities) != 1 || capabilities[0].Name != "start" {
+		t.Fatalf("expected lifecycle capabilities, got %+v", capabilities)
+	}
+	capabilities[0].Name = "mutated"
+	if got := v.Capabilities(); len(got) != 1 || got[0].Name != "start" {
+		t.Fatalf("expected detached lifecycle capabilities, got %+v", got)
+	}
 	if v.ParentID() != parentID || v.ParentName() != "" {
 		t.Fatalf("expected parent id=%q name=%q, got id=%q name=%q", parentID, "", v.ParentID(), v.ParentName())
 	}
@@ -421,8 +455,12 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 			zero.DiskRead() != 0 ||
 			zero.DiskWrite() != 0 ||
 			zero.Lock() != "" ||
-			zero.IPAddresses() != nil {
+			zero.IPAddresses() != nil ||
+			zero.Capabilities() != nil {
 			t.Fatalf("expected zero values for nil resource, got %+v", zero)
+		}
+		if _, ok := zero.SourceStatus(SourceProxmox); ok {
+			t.Fatal("nil container view must not report source freshness")
 		}
 	})
 

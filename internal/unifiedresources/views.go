@@ -222,6 +222,24 @@ func (v VMView) LastSeen() time.Time {
 	return v.r.LastSeen
 }
 
+// SourceStatus returns the canonical delivery freshness recorded for one
+// source. Consumers must use this instead of inferring source freshness from a
+// guest's power state: a stopped guest can still have fresh Proxmox inventory.
+func (v VMView) SourceStatus(source DataSource) (SourceStatus, bool) {
+	if v.r == nil {
+		return SourceStatus{}, false
+	}
+	status, ok := v.r.SourceStatus[source]
+	return status, ok
+}
+
+func (v VMView) Capabilities() []ResourceCapability {
+	if v.r == nil {
+		return nil
+	}
+	return append([]ResourceCapability(nil), v.r.Capabilities...)
+}
+
 func (v VMView) ParentID() string {
 	if v.r == nil || v.r.ParentID == nil {
 		return ""
@@ -488,6 +506,24 @@ func (v ContainerView) LastSeen() time.Time {
 		return time.Time{}
 	}
 	return v.r.LastSeen
+}
+
+// SourceStatus returns the canonical delivery freshness recorded for one
+// source. Consumers must use this instead of inferring source freshness from a
+// guest's power state: a stopped guest can still have fresh Proxmox inventory.
+func (v ContainerView) SourceStatus(source DataSource) (SourceStatus, bool) {
+	if v.r == nil {
+		return SourceStatus{}, false
+	}
+	status, ok := v.r.SourceStatus[source]
+	return status, ok
+}
+
+func (v ContainerView) Capabilities() []ResourceCapability {
+	if v.r == nil {
+		return nil
+	}
+	return append([]ResourceCapability(nil), v.r.Capabilities...)
 }
 
 func (v ContainerView) ParentID() string {
