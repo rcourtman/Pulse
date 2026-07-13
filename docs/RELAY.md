@@ -2,7 +2,7 @@
 
 Pulse Relay provides **end-to-end encrypted remote access** foundations for Pulse instances. It allows secure remote connectivity without exposing your Pulse server to the public internet.
 
-> Supported Pulse Mobile clients pair from **Settings → Relay** using a QR code or deep link and connect through Pulse Relay over end-to-end encrypted remote access.
+> Supported Pulse Mobile clients pair from **Settings → Remote Access** using a QR code or deep link and connect through Pulse Relay over end-to-end encrypted remote access.
 
 ## How It Works
 
@@ -20,7 +20,7 @@ Pulse Relay provides **end-to-end encrypted remote access** foundations for Puls
 
 ## Quick Start
 
-1. Go to **Settings → Relay**.
+1. Go to **Settings → Remote Access**.
 2. Toggle relay **On**.
 3. Use the **QR Code** or **Deep Link** to pair a supported Pulse Mobile client.
 4. Your paired mobile client connects through relay.
@@ -49,7 +49,7 @@ Relay was designed with a zero-trust model:
 
 ### UI
 
-**Settings → Relay** — toggle on/off, view QR code, and manage relay pairing sessions.
+**Settings → Remote Access** — toggle on/off, view QR code, and manage relay pairing sessions.
 
 ### Environment Variables
 
@@ -84,7 +84,7 @@ Relay configuration is stored encrypted in `relay.enc` in the Pulse data directo
 
 1. Pulse Mobile is in early access. Relay and Pro customers get install links from the authenticated [download page](https://pulserelay.pro/download.html).
 2. Open Pulse Mobile and tap **Connect to Server**.
-3. Scan the QR code from **Settings → Relay** in your Pulse web UI.
+3. Scan the QR code from **Settings → Remote Access** in your Pulse web UI.
 4. The app connects via the relay for push notifications and secure Open Pulse handoff.
 
 ### Multiple Servers
@@ -95,7 +95,7 @@ Pulse Mobile can pair with multiple Pulse instances. Each pairing has its own en
 
 ### Relay showing "Disconnected"
 
-1. Confirm your Relay, Pro, grandfathered Pro+, or Cloud license is active (**Settings → Plans**).
+1. Confirm your Relay, Pro, grandfathered Pro+, or Cloud license is active (**Settings → Plans & Billing**).
 2. Verify the Pulse server can reach the relay server:
    ```bash
    curl -s https://relay.pulserelay.pro/healthz
@@ -109,14 +109,14 @@ Pulse Mobile can pair with multiple Pulse instances. Each pairing has its own en
 
 ### Pulse Mobile can't connect
 
-1. Verify relay is enabled in **Settings → Relay**.
+1. Verify relay is enabled in **Settings → Remote Access**.
 2. Confirm your mobile account has beta access.
 3. Re-scan the QR code — sessions can expire.
 4. Ensure your mobile device has internet access.
 
 ### Open Pulse handoff not loading
 
-1. Check the relay connection status in **Settings → Relay**.
+1. Check the relay connection status in **Settings → Remote Access**.
 2. Look for WebSocket reconnection messages in Pulse logs.
 3. Restart Pulse Mobile.
 

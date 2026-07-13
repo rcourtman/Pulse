@@ -212,7 +212,7 @@ automatically.
 Each client runtime (or organization) generates its own reports, scoped to
 that client's resources:
 
-- **UI**: Settings → Reports.
+- **UI**: Settings → Data & Reports.
 - **API**: `GET /api/admin/reports/generate` (single resource) and
   `POST /api/admin/reports/generate-multi` (up to 50 resources per report),
   returning PDF or CSV. In shared-process mode, scope with `X-Pulse-Org-ID`

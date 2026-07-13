@@ -79,7 +79,7 @@ sudo pulse bootstrap-token
 ### Notifications
 
 #### Emails not sending
-- Check SMTP settings in **Alerts → Notification Destinations**.
+- Check SMTP settings in **Alerts → Notifications**.
 - Check logs: `docker logs pulse | grep email`.
 - Ensure your SMTP provider allows the connection (e.g., Gmail App Passwords).
 
@@ -111,7 +111,7 @@ sudo pulse bootstrap-token
 ### Relay / Mobile
 
 #### Relay showing "Disconnected"
-- Confirm a valid Relay, Pro, grandfathered Pro+, or Cloud license is active (**Settings → Plans**).
+- Confirm a valid Relay, Pro, grandfathered Pro+, or Cloud license is active (**Settings → Plans & Billing**).
 - Check Pulse server can reach the relay server (outbound WebSocket to `relay.pulserelay.pro`).
 - Review logs: `journalctl -u pulse | grep relay` or `docker logs pulse | grep relay`.
 

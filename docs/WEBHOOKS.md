@@ -4,7 +4,7 @@ Pulse includes built-in templates for popular services and a generic JSON templa
 
 ## 🚀 Quick Setup
 
-1. Go to **Alerts → Notification Destinations**.
+1. Go to **Alerts → Notifications**.
 2. Click **Add Webhook**.
 3. Click the current service label (Generic by default) to open the service picker, choose the destination type, and paste the URL.
 
@@ -118,7 +118,7 @@ Content-Type: application/json
 Pro, legacy Pro+, and Cloud support dedicated audit webhooks for security event compliance. Unlike alert notifications, these webhooks deliver the raw, signed JSON payload of every security-relevant action (login, config change, group mapping).
 
 ### Setup
-1. Go to **Settings → Security → Webhooks**.
+1. Go to **Settings → Security → Audit Webhooks**.
 2. Add your endpoint URL (e.g., `https://siem.corp.local/ingest/pulse`).
 
 ### Security
@@ -135,7 +135,7 @@ Built-in webhook templates include Gotify, PagerDuty, Slack, and Generic. Use th
 Typical MSP setup:
 
 1. Open the client workspace from Pulse Account.
-2. Add that client's notification destinations in **Alerts → Notification Destinations**.
+2. Add that client's notification destinations in **Alerts → Notifications**.
 3. Use Gotify, PagerDuty, Slack, or Generic depending on where the client or provider team wants alerts to land.
 4. Keep each destination scoped to the client runtime so alert payloads and resolved events never cross into another client's workflow.
 
@@ -160,7 +160,7 @@ There are two integration models. The push model is usually the right fit when t
 
 **Push (recommended): one outbound webhook per organization.** Create a **Generic** webhook for each organization and point it at your external system's inbound endpoint (an ITSM/PSA inbound webhook, an email connector, or middleware that opens service tickets). Shape the JSON with a [custom template](#-custom-templates) so it matches the receiving system's expected schema: every template variable listed above is available. Pulse fires on both `alert` and `resolved` events (`{{.Event}}` is `"alert"` or `"resolved"`), so the receiving system can open a ticket on alert and auto-resolve it on recovery. Add authentication as a custom header (e.g. `Authorization: Bearer ...`).
 
-Configure it from the UI (**Alerts → Notification Destinations → Add Webhook**) per org, or programmatically with an org-bound admin token:
+Configure it from the UI (**Alerts → Notifications → Add Webhook**) per org, or programmatically with an org-bound admin token:
 
 ```http
 POST /api/notifications/webhooks

@@ -62,7 +62,7 @@ Add your Proxmox VE, PBS, PMG, or TrueNAS systems via **Settings → Infrastruct
 
 ### 4. Set Up Mobile Access
 
-Relay is enabled by default on Cloud instances. Open **Settings → Relay** to prepare pairing and connect once mobile beta/public access is enabled.
+Relay is enabled by default on Cloud instances. Open **Settings → Remote Access** to prepare pairing and connect once mobile beta/public access is enabled.
 
 ## Data & Privacy
 
