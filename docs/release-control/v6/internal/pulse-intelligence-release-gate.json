@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "matrix_id": "pulse-intelligence-rg-01-rg-12",
   "program": "pulse-intelligence",
   "result_semantics": {
@@ -15,6 +15,11 @@
     "physical-device",
     "live-relay"
   ],
+  "triple_zero_semantics": {
+    "persistence_writes": "Unauthorized or revoked requests persist no action, approval, or authority state.",
+    "dispatch_attempts": "Unauthorized or revoked requests create no executor, outbox, or transport dispatch attempt.",
+    "external_mutations": "Unauthorized or revoked requests change no provider, device, Relay, or infrastructure state."
+  },
   "gates": [
     {
       "id": "RG-01",
@@ -206,6 +211,7 @@
       "required_evidence_tier": "live-relay",
       "requires_triple_zero": true,
       "allows_ancestor_provenance": false,
+      "artifact_contract": "physical-live-relay-v1",
       "non_mutating_proof_commands": [
         {
           "id": "rg-12-aggregate-verdict",

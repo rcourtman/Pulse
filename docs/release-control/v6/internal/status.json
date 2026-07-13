@@ -3949,7 +3949,7 @@
     },
     {
       "id": "RA35",
-      "summary": "Passed unit and integration proof shows that covered Patrol mutation candidates use typed proposals and the canonical action lifecycle, while covered unsupported and raw-command paths fail closed. This does not certify final-SHA real-lab, browser, physical-device, or live-relay behavior; the aggregate Pulse Intelligence release gate remains blocked.",
+      "summary": "The closed RG-01 through RG-12 matrix independently reached GO for bounded limited autonomy at core a63b3eae2b5a62ee6803bfb4eee8fadbbba8e449 and Pulse Mobile a1ddb451618664025d22a986fbd3fd837e4ffe97. Covered Patrol investigations remain read-only; supported mutation candidates use typed proposals and the canonical action lifecycle; unsupported and raw-command paths fail closed; exact-SHA Docker and Debian/Ubuntu labs, clean Product Trust browser proof, and a physical-iPad/live-Relay pairing, reconnect, inert decision, revocation, and cleanup journey passed. RG06/RG09 product outcomes remain agent-attested fix_verification_unknown even where separate Colima-control readback supplies independent facts. This assertion does not certify arbitrary infrastructure mutations, general MSP-scale autonomy, or broader L20 residuals.",
       "kind": "invariant",
       "blocking_level": "release-ready",
       "proof_type": "hybrid",
@@ -4058,6 +4058,18 @@
         }
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/pulse-intelligence-release-gate.json",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/pulse-intelligence-rg-01-rg-12-external-e2e-2026-07-12.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
         {
           "repo": "pulse",
           "path": "frontend-modern/src/features/actions/__tests__/aptActionPresentation.test.ts",
@@ -4210,6 +4222,18 @@
           "repo": "pulse",
           "path": "pkg/aicontracts/orchestrator_deps.go",
           "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/pulse_intelligence_gate.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/pulse_intelligence_gate_test.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
         },
         {
           "repo": "pulse",
@@ -6209,7 +6233,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Action governance has a first-class typed lifecycle floor backed by unit and integration evidence: covered Patrol investigations are read-only, typed proposals cross shared planning, policy, approval, plan-hash, durable-delivery, audit, verification, and ActionResultV2 contracts, and covered raw or unsupported paths fail closed. Docker restart is the only implemented typed infrastructure vertical with an ancestor-bound Colima artifact; it is not certified against the final SHA. APT update and package-cache cleanup have typed fake-backed contracts but remain operationally open until disposable Debian and Ubuntu tier-6 evidence exists. Limited unattended autonomy remains NO-GO. Current continuity and fail-closed claims apply only to the passed unit and integration profiles, not to clean Product Trust browser, physical-device, live-relay, or final-SHA real-lab behavior. Task 10 remains the sole owner of execution, verification, evidence, compensation, and rollback truth. Task 12 owns the final RG-01 through RG-12 verdict, which remains blocked by RG-06, RG-08, RG-09, RG-11, and RG-12.",
+        "summary": "Action governance has reached the bounded limited-autonomy floor. Covered Patrol investigations are read-only; typed proposals cross shared planning, policy, approval, plan-hash, durable delivery, audit, verification, and ActionResultV2 contracts; covered raw and unsupported paths fail closed. The exact audited core/mobile pair passed the closed RG-01 through RG-12 matrix, including Docker and Debian/Ubuntu Colima journeys, clean Product Trust browser proof, and physical-iPad/live-Relay pairing, notification registration, encrypted reconnect, inert approval and denial, exact-token revocation with HTTP 401, fail-closed UI, and complete cleanup. Agent-executed RG06/RG09 product outcomes remain honestly fix_verification_unknown; separate Colima-control observations do not upgrade product verification. Limited autonomy is GO only for this proved capability set. Arbitrary infrastructure mutations, general MSP-scale autonomy, agent-native discovery, operable onboarding/import planning, and the lane's existing post-RC hardening residuals remain outside this certification, so L20 stays partial with bounded residual tracking.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -7685,11 +7709,11 @@
     },
     {
       "id": "pulse-intelligence-rg-01-rg-12",
-      "summary": "Require the closed RG-01 through RG-12 Pulse Intelligence matrix to reach GO at the final Git SHA. Implemented unit and integration contracts do not substitute for missing Docker final-SHA lab/browser, Debian and Ubuntu APT tier-6, clean Product Trust Playwright, physical-device, or live-relay evidence.",
+      "summary": "The closed RG-01 through RG-12 Pulse Intelligence matrix reached independent GO for bounded limited autonomy at core a63b3eae2b5a62ee6803bfb4eee8fadbbba8e449 and Pulse Mobile a1ddb451618664025d22a986fbd3fd837e4ffe97. Exact-SHA unit/integration, Docker and Debian/Ubuntu Colima, clean Product Trust browser, and physical-iPad/live-Relay proof are sealed by /Volumes/Development/.pulse-proof-artifacts/rg12-a63b3eae-a1ddb451-final-20260712T234230Z with SHA256SUMS hash 58778244cb370be4bf7bd74a8316a5bf4e8ec4dca23f08e45c5bc8cfec152397 and aggregate evidence /Volumes/Development/.pulse-proof-artifacts/pulse-intelligence-evidence-a63b3eae2b5a62ee6803bfb4eee8fadbbba8e449-final.json. This gate does not certify arbitrary infrastructure mutation or general MSP-scale autonomy.",
       "owner": "task-12",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "blocked",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L6",
@@ -7699,6 +7723,24 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/pulse-intelligence-release-gate.json",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/pulse-intelligence-rg-01-rg-12-external-e2e-2026-07-12.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/pulse_intelligence_gate.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/pulse_intelligence_gate_test.py",
           "kind": "file",
           "evidence_tier": "test-proof"
         }
@@ -8071,7 +8113,7 @@
     },
     {
       "id": "action-governance-auditability-post-rc-hardening",
-      "summary": "Task 07 durable delivery and generic agent-operation receipts are accepted: transactional dispatch admission, one-shot send CAS, immutable attempt/action/operation/digest/agent binding, query-only restart reconciliation, strict sanitized terminal envelopes, and permanent replay-denial tombstones. Task 09 consumes that owner for both APT workflows and completes the fake-only detector-to-finding, exact empty-parameter proposal, shared policy/approval, typed dispatch, delayed/callback-loss/reopened-server receipt reconciliation, ActionResultV2 truth, terminal audit, and finding reconciliation floor without blind resend. Task 11 adds the desktop/browser tier-5 Product Trust consumer: bounded command/path/package-free Patrol evidence; exact empty parameter and elevated-versus-low-risk review; separate execution, evidence-sourced verification, and recovery cards; agent-attested confirmed updates; reboot fact without reboot authority; partial/unknown-health recovery; measured irreversible cleanup; and one durable receipt across reconnect, all exercised in current-build Chromium and a 390-pixel viewport with fake typed API fixtures only. Malformed phases, counts, timestamps, usage, or cleanup arithmetic fail closed. Task 10 remains sole owner of execution, verification, evidence, compensation, and rollback truth. Claims 16 and 17 and both workflow scorecards remain operationally open until disposable Debian/Ubuntu tier-6 proof and Task 12 final-SHA certification pass. Mobile/relay, physical-device, MSP aggregation, and real-lab proof remain separate. Raw model command, file write, arbitrary pod exec, legacy run_command, /api/ai/run-command, and enterprise command remediation remain retired with no replacement or executable historical authority.",
+      "summary": "Task 07 durable delivery and generic agent-operation receipts are accepted: transactional dispatch admission, one-shot send CAS, immutable attempt/action/operation/digest/agent binding, query-only restart reconciliation, strict sanitized terminal envelopes, and permanent replay-denial tombstones. Task 09 consumes that owner for both APT workflows and completes the detector-to-finding, exact empty-parameter proposal, shared policy/approval, typed dispatch, delayed/callback-loss/reopened-server receipt reconciliation, ActionResultV2 truth, terminal audit, and finding reconciliation floor without blind resend. Task 11 adds the desktop/browser tier-5 Product Trust consumer: bounded command/path/package-free Patrol evidence; exact empty parameter and elevated-versus-low-risk review; separate execution, evidence-sourced verification, and recovery cards; agent-attested confirmed updates; reboot fact without reboot authority; partial/unknown-health recovery; measured irreversible cleanup; and one durable receipt across reconnect, all exercised in current-build Chromium and a 390-pixel viewport. Malformed phases, counts, timestamps, usage, or cleanup arithmetic fail closed. The closed RG-01 through RG-12 matrix now supplies the disposable Debian/Ubuntu tier-6, Docker, browser, physical-device, live-Relay, revocation, cleanup, and independent Task 12 proof that previously kept claims 16 and 17 and both workflow scorecards operationally open. Task 10 remains sole owner of execution, verification, evidence, compensation, and rollback truth, and RG06/RG09 product outcomes remain agent-attested fix_verification_unknown. This follow-up now tracks only broader post-RC auditability beyond the proved bounded capability set, including additional operation and platform coverage, deeper compensation and rollback proof, and MSP or fleet aggregation; it does not reopen the accepted matrix. Raw model command, file write, arbitrary pod exec, legacy run_command, /api/ai/run-command, and enterprise command remediation remain retired with no replacement or executable historical authority.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-04-25",
