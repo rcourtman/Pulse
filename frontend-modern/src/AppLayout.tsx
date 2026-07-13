@@ -50,6 +50,8 @@ import {
 import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
+import { getActionApprovalBadgePresentation } from '@/features/actions/actionPresentation';
+import { actionInboxStore } from '@/stores/actionInbox';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { isPro } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
@@ -396,6 +398,9 @@ export function AppLayout(props: AppLayoutProps) {
   const getActiveTabDesktop = () => getActiveTabForPath(location.pathname);
   const getActiveTabMobile = () => getActiveTabForPath(location.pathname);
   const assistantPageContext = createMemo(() => getAssistantPageContext(location.pathname));
+  const actionApprovalBadge = createMemo(() =>
+    getActionApprovalBadgePresentation(actionInboxStore.pendingActionCount),
+  );
   const patrolOpenWorkCount = createMemo(() => aiIntelligenceStore.patrolOpenWorkCount);
   const patrolOpenWorkCountLabel = createMemo(() => {
     const count = patrolOpenWorkCount();
@@ -520,7 +525,8 @@ export function AppLayout(props: AppLayoutProps) {
         route: '/actions',
         tooltip: 'Review proposed changes and verified outcomes',
         badge: null,
-        count: undefined,
+        count: actionApprovalBadge()?.count,
+        countLabel: actionApprovalBadge()?.label,
         breakdown: undefined,
         icon: ListChecksIcon,
       },

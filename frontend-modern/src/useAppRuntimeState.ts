@@ -26,6 +26,7 @@ import { eventBus } from '@/stores/events';
 import { showToast } from '@/utils/toast';
 import { updateStore } from '@/stores/updates';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { actionInboxStore } from '@/stores/actionInbox';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import {
   applyThemeClass,
@@ -486,15 +487,16 @@ export const useAppRuntimeState = () => {
     const ready = !isLoading() && !needsAuth();
     if (!ready) return;
 
-    const refreshPatrolOpenWork = () => {
+    const refreshOpenWorkBadges = () => {
       void Promise.allSettled([
         aiIntelligenceStore.loadPatrolFindings(),
         aiIntelligenceStore.loadPendingApprovals(),
+        actionInboxStore.loadPendingActionCount(),
       ]);
     };
 
-    refreshPatrolOpenWork();
-    const interval = window.setInterval(refreshPatrolOpenWork, 30000);
+    refreshOpenWorkBadges();
+    const interval = window.setInterval(refreshOpenWorkBadges, 30000);
     onCleanup(() => {
       window.clearInterval(interval);
     });

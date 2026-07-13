@@ -64,6 +64,22 @@ export const sortOpenActionsForReview = (
     return Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
   });
 
+export interface ActionApprovalBadgePresentation {
+  count: number;
+  label: string;
+}
+
+export const getActionApprovalBadgePresentation = (
+  count: number,
+): ActionApprovalBadgePresentation | null => {
+  if (!Number.isFinite(count) || count <= 0) return null;
+  const normalized = Math.floor(count);
+  return {
+    count: normalized,
+    label: `${normalized} ${normalized === 1 ? 'action awaits' : 'actions await'} approval`,
+  };
+};
+
 export interface ActionResourcePresentation {
   detail: string;
   label: string;
