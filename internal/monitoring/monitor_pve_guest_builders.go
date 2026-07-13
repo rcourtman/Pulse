@@ -701,6 +701,14 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 
 	fsInfo, diskStatusReason, ok := m.fetchVMFSInfo(ctx, instanceName, res, client)
 	if !ok {
+		// No trustworthy usage data: cluster/resources reports 0 used for
+		// QEMU, so passing it through renders a confident "0%" in the UI.
+		// Use the -1 sentinel (same as the agent-disabled path) so the
+		// frontend shows unavailable + diskStatusReason instead; the
+		// stabilizer may still replace this with the previous good sample.
+		if diskTotal > 0 {
+			diskUsage = -1
+		}
 		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, diskStatusReason
 	}
 

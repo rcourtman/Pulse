@@ -1,10 +1,13 @@
 package monitoring
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
 func TestStabilizeGuestLowTrustDiskCarriesForwardPreviousSnapshot(t *testing.T) {
@@ -131,5 +134,52 @@ func TestStabilizeGuestLowTrustDiskCarriesPreviouslyForwardedSnapshotWithAgentEv
 	}
 	if reason != "prev-no-filesystems" {
 		t.Fatalf("reason = %q, want prev-no-filesystems", reason)
+	}
+}
+
+type failingFSInfoClient struct {
+	PVEClientInterface
+	err error
+}
+
+func (c failingFSInfoClient) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error) {
+	return nil, c.err
+}
+
+func TestUpdateVMDisksFromGuestAgentFSInfoErrorUsesUnavailableSentinel(t *testing.T) {
+	// Cluster/resources reports 0 used for QEMU, so a failed agent query must
+	// not pass those zeros through as a confident 0% (it renders as
+	// "0% (0 B/120 GB)" instead of unavailable + reason in the UI).
+	m := &Monitor{}
+	res := proxmox.ClusterResource{Node: "pve1", VMID: 100, Name: "vm100", MaxDisk: 128849018880}
+	client := failingFSInfoClient{err: errors.New("guest agent request timeout")}
+
+	total, used, free, usage, disks, fromAgent, reason := m.updateVMDisksFromGuestAgentFSInfo(
+		context.Background(),
+		"test-instance",
+		res,
+		client,
+		uint64(res.MaxDisk),
+		0,
+		0,
+	)
+
+	if usage != -1 {
+		t.Fatalf("usage = %v, want -1 sentinel", usage)
+	}
+	if reason != "agent-timeout" {
+		t.Fatalf("reason = %q, want agent-timeout", reason)
+	}
+	if fromAgent {
+		t.Fatal("fromAgent = true, want false")
+	}
+	if total != uint64(res.MaxDisk) {
+		t.Fatalf("total = %d, want allocated size %d", total, res.MaxDisk)
+	}
+	if used != 0 || free != total {
+		t.Fatalf("used/free = %d/%d, want 0/%d", used, free, total)
+	}
+	if disks != nil {
+		t.Fatalf("disks = %v, want nil", disks)
 	}
 }
