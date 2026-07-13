@@ -111,5 +111,5 @@ stable `v6.0.5`._
 - Rollback target: `v6.0.5`
 - Rollback command: `./scripts/install.sh --version v6.0.5`
 - Promotion path: release candidate from `main`
-- Mobile companion candidates: iOS build 9 and Android versionCode 8 on the
+- Mobile companion candidates: iOS build 10 and Android versionCode 8 on the
   TestFlight and Google Play internal-testing tracks

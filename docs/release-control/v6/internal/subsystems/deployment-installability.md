@@ -1010,7 +1010,7 @@ operator-facing Actions inbox, monitor-first product workflows, governed host
 and storage operations, native-agent update safety, Windows logged-readiness
 and recovery proof, OIDC callback recovery, and fail-closed security hardening
 behind RC validation before the next stable minor release.
-The companion evidence for this cut is Pulse Mobile iOS build 9 and Android
+The companion evidence for this cut is Pulse Mobile iOS build 10 and Android
 versionCode 8 on TestFlight and Google Play internal testing only. The release
 packet must not describe either candidate as a public store rollout.
 The same release boundary now provides one canonical in-app release-note

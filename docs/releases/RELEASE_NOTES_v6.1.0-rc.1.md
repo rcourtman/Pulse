@@ -117,7 +117,7 @@ This candidate changes authentication and native installer/updater boundaries,
 so it is intentionally using the governed RC path rather than the direct
 stable-patch path.
 
-Pulse Mobile iOS candidate build 9 and Android candidate versionCode 8 carry
+Pulse Mobile iOS candidate build 10 and Android candidate versionCode 8 carry
 the matching plan-bound action review and approval client. They remain on the
 TestFlight and Google Play internal-testing tracks; no public store rollout is
 part of this RC.
