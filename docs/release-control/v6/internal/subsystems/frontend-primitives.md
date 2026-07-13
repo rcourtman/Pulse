@@ -630,8 +630,12 @@ AGENT_SURFACE_ID_PULSE_MCP)` and `getAgentSurfaceToolPosturePresentation`,
 
 ## Extension Points
 
-Global Actions review uses the canonical shared `Dialog`, `Button`, and mobile
-navigation primitives. The responsive route must preserve named tabs, keyboard
+Global Actions review uses the canonical shared `Dialog`, `Button`, `Subtabs`,
+`Card`, `MetadataBadge`, and mobile navigation primitives. The Open/History
+selector is an in-page sub-navigation surface and must compose `Subtabs`
+instead of recreating a segmented tablist in `Actions.tsx`; queue rows may own
+action state and resource semantics, but their frame and badge chrome stay on
+the shared primitives. The responsive route must preserve named tabs, keyboard
 focus, dialog focus containment, and phone-width overflow checks; journey 83
 is the desktop/browser accessibility proof and is not mobile-device proof.
 

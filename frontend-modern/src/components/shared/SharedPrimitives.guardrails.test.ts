@@ -68,6 +68,7 @@ import metadataBadgeSource from '@/components/shared/MetadataBadge.tsx?raw';
 import organizationBadgesSource from '@/components/shared/OrganizationBadges.tsx?raw';
 import discoveryReadinessBadgeSource from '@/components/shared/DiscoveryReadinessBadge.tsx?raw';
 import subtabsSource from '@/components/shared/Subtabs.tsx?raw';
+import actionsSource from '@/pages/Actions.tsx?raw';
 import toggleSource from '@/components/shared/Toggle.tsx?raw';
 import toggleModelSource from '@/components/shared/toggleModel.ts?raw';
 import searchTipsPopoverSource from '@/components/shared/SearchTipsPopover.tsx?raw';
@@ -1160,6 +1161,11 @@ describe('shared primitive guardrails', () => {
     expect(subtabsSource).toContain('subtabsShellClass');
     expect(subtabsSource).toContain('subtabsListClass');
     expect(subtabsSource).toContain('subtabButtonClass');
+  });
+
+  it('keeps the Actions inbox on the canonical in-page subtab primitive', () => {
+    expect(actionsSource).toContain('<Subtabs');
+    expect(actionsSource).not.toContain('role="tablist"');
   });
 
   it('keeps contextual row focus on one shared helper across summary consumers', () => {
@@ -2495,7 +2501,7 @@ describe('shared primitive guardrails', () => {
       'inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50',
     );
     expect(patrolIntelligenceWorkspaceSource).toContain('MetadataBadge');
-    expect(patrolIntelligenceWorkspaceSource).toContain('findingsBadgePresentation().tone');
+    expect(patrolIntelligenceWorkspaceSource).toContain('tone={group.tone}');
     expect(patrolIntelligenceWorkspaceSource).not.toContain(
       'findingsBadgePresentation().toneClasses',
     );

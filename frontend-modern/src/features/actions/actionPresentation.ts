@@ -1,9 +1,12 @@
 import type {
+  ActionAuditRecord,
+  ActionAuditState,
   ActionEvidenceClass,
   ActionPolicyAuthorityFactor,
   ActionPolicyReasonCode,
   ActionVerificationTruthStatus,
 } from '@/types/actionAudit';
+import type { MetadataBadgeTone } from '@/components/shared/MetadataBadge';
 
 export const formatActionName = (value: string): string =>
   value === 'install_os_updates'
@@ -11,9 +14,103 @@ export const formatActionName = (value: string): string =>
     : value === 'clean_package_cache'
       ? 'Clear downloaded package data'
       : value
-    .replace(/[._-]+/g, ' ')
-    .trim()
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+          .replace(/[._-]+/g, ' ')
+          .trim()
+          .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+export interface ActionInboxStatePresentation {
+  accentClass: string;
+  label: string;
+  tone: MetadataBadgeTone;
+}
+
+const ACTION_INBOX_STATE_PRESENTATION: Record<ActionAuditState, ActionInboxStatePresentation> = {
+  planned: { accentClass: 'border-l-slate-400', label: 'Ready to review', tone: 'muted' },
+  pending_approval: {
+    accentClass: 'border-l-amber-500',
+    label: 'Approval required',
+    tone: 'warning',
+  },
+  approved: { accentClass: 'border-l-sky-500', label: 'Ready to run', tone: 'info' },
+  executing: { accentClass: 'border-l-blue-500', label: 'Running', tone: 'info' },
+  completed: { accentClass: 'border-l-emerald-500', label: 'Completed', tone: 'success' },
+  failed: { accentClass: 'border-l-red-500', label: 'Failed', tone: 'danger' },
+  rejected: { accentClass: 'border-l-slate-400', label: 'Rejected', tone: 'muted' },
+  expired: { accentClass: 'border-l-slate-400', label: 'Expired', tone: 'muted' },
+};
+
+export const getActionInboxStatePresentation = (
+  state: ActionAuditState,
+): ActionInboxStatePresentation => ACTION_INBOX_STATE_PRESENTATION[state];
+
+const OPEN_ACTION_PRIORITY: Record<ActionAuditState, number> = {
+  pending_approval: 0,
+  planned: 1,
+  approved: 1,
+  executing: 2,
+  failed: 3,
+  completed: 4,
+  rejected: 4,
+  expired: 4,
+};
+
+export const sortOpenActionsForReview = (
+  actions: readonly ActionAuditRecord[],
+): ActionAuditRecord[] =>
+  [...actions].sort((left, right) => {
+    const priority = OPEN_ACTION_PRIORITY[left.state] - OPEN_ACTION_PRIORITY[right.state];
+    if (priority !== 0) return priority;
+    return Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
+  });
+
+export interface ActionResourcePresentation {
+  detail: string;
+  label: string;
+}
+
+const OPAQUE_RESOURCE_SUFFIX = /^(?:[a-f\d]{12,}|[a-z\d]{16,})$/i;
+
+const compactOpaqueSuffix = (value: string): string => `…${value.slice(-6)}`;
+
+const DASHED_RESOURCE_PREFIXES: Array<{ prefix: string; label: string }> = [
+  { prefix: 'app-container', label: 'App container' },
+  { prefix: 'agent', label: 'Host agent' },
+  { prefix: 'vm', label: 'Virtual machine' },
+];
+
+const CANONICAL_RESOURCE_KINDS: Record<string, string> = {
+  'docker:container': 'Docker container',
+  'proxmox:node': 'Proxmox node',
+  'proxmox:vm': 'Proxmox virtual machine',
+  'proxmox:lxc': 'Proxmox container',
+};
+
+export const getActionResourcePresentation = (resourceId: string): ActionResourcePresentation => {
+  const normalized = resourceId.trim();
+  if (!normalized) return { label: 'Unknown resource', detail: '' };
+
+  const canonicalParts = normalized.split(':').filter(Boolean);
+  if (canonicalParts.length > 1) {
+    const name = canonicalParts.at(-1) || normalized;
+    const kindKey = canonicalParts.slice(0, -1).join(':').toLowerCase();
+    const kind = CANONICAL_RESOURCE_KINDS[kindKey] || formatActionName(kindKey);
+    return OPAQUE_RESOURCE_SUFFIX.test(name)
+      ? { label: kind, detail: compactOpaqueSuffix(name) }
+      : { label: name, detail: kind };
+  }
+
+  for (const candidate of DASHED_RESOURCE_PREFIXES) {
+    const prefix = `${candidate.prefix}-`;
+    if (!normalized.toLowerCase().startsWith(prefix)) continue;
+    const suffix = normalized.slice(prefix.length);
+    return {
+      label: candidate.label,
+      detail: OPAQUE_RESOURCE_SUFFIX.test(suffix) ? compactOpaqueSuffix(suffix) : suffix,
+    };
+  }
+
+  return { label: normalized, detail: '' };
+};
 
 export const formatPolicyAuthority = (factor: ActionPolicyAuthorityFactor): string => {
   switch (factor.kind) {
@@ -65,7 +162,10 @@ export const formatEvidenceClass = (value: ActionEvidenceClass): string => {
   }
 };
 
-export const verificationTruthLabel = (status: ActionVerificationTruthStatus, evidenceClass?: ActionEvidenceClass): string => {
+export const verificationTruthLabel = (
+  status: ActionVerificationTruthStatus,
+  evidenceClass?: ActionEvidenceClass,
+): string => {
   switch (status) {
     case 'confirmed':
       return evidenceClass === 'independent'

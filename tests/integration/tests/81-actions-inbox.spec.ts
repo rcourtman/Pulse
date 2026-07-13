@@ -102,6 +102,12 @@ test("Actions inbox exposes the canonical decision packet and durable calm histo
   await page.route("**/api/actions/action-1", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ audit: action, events: [] }) }));
   await page.goto("/actions", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Actions" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Open", exact: true })).toHaveAttribute("aria-selected", "true");
+  const openActions = page.getByRole("list", { name: "Open actions" });
+  await expect(openActions).toBeVisible();
+  await expect(openActions.getByText("Approval required")).toBeVisible();
+  await expect(openActions.getByText("edge", { exact: true })).toBeVisible();
+  await expect(openActions.getByText("Docker container", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Restart.*docker:container:edge/ }).click();
   await expect(page.getByRole("dialog", { name: "Restart" })).toBeVisible();
   await expect(page.getByText("Capability safety policy")).toBeVisible();

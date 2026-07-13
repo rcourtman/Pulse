@@ -1739,6 +1739,16 @@ no fact card and directs the operator to refresh and review the canonical
 record. Execution, verification plus adjacent evidence source, and compensation
 remain three independent `ActionResultV2` cards.
 
+The Actions inbox presents that durable record as a compact operator queue,
+not a stack of equally weighted audit cards. Open work orders approval-required
+decisions before runnable and executing actions; each collapsed row exposes
+only state, action, bounded resource identity, recency, and reason before the
+operator opens the governed review. Opaque canonical resource IDs remain in
+the row's accessible name and title but are visually demoted to a type plus
+short suffix. Read-only demo posture is quiet supporting context rather than a
+page-level callout. The governed review dialog continues to own the full exact
+resource ID, plan, policy evidence, lifecycle, authority, and outcome truth.
+
 APT review presents server-recorded policy provenance and distinguishes the
 elevated update posture from low-risk-eligible cache cleanup. Both typed actions
 declare that no command, path, package selection, removal choice, or reboot
