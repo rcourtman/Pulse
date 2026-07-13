@@ -18,6 +18,7 @@ type FixtureGraph struct {
 	PlatformFixtures     PlatformFixtures
 	AvailabilityFixtures []AvailabilityFixture
 	DiscoveryFixtures    []*DiscoveryFixture
+	ActionFixtures       []ActionFixture
 }
 
 func emptyFixtureGraph() FixtureGraph {
@@ -37,6 +38,8 @@ func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
 	syncMetricRoleRegistryFromGraph(graph)
 	graph.UpdateMetrics(cfg, now)
 	graph.AlertHistory = buildAlertHistory(graph.State.Nodes, graph.State.VMs, graph.State.Containers)
+	resources, _ := graph.UnifiedResourceSnapshot()
+	graph.ActionFixtures = buildActionFixtures(resources, now)
 	syncMetricRoleRegistryFromGraph(graph)
 	return graph
 }
@@ -48,6 +51,7 @@ func cloneFixtureGraph(in FixtureGraph) FixtureGraph {
 		PlatformFixtures:     clonePlatformFixtures(in.PlatformFixtures),
 		AvailabilityFixtures: cloneAvailabilityFixtures(in.AvailabilityFixtures),
 		DiscoveryFixtures:    cloneDiscoveryFixtures(in.DiscoveryFixtures),
+		ActionFixtures:       cloneActionFixtures(in.ActionFixtures),
 	}
 }
 

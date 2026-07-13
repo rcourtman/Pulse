@@ -2129,6 +2129,11 @@ one graph instead of combining a legacy snapshot read with standalone provider
 defaults. The shared resource graph must therefore see one coherent mock
 platform set regardless of whether a platform is snapshot-backed or
 supplemental-provider-backed.
+The graph also owns governed action fixtures in
+`internal/mock/action_fixtures.go`. Those records must reference canonical
+resource IDs from the graph snapshot, carry current policy provenance and typed
+result truth, and reach the Actions workspace through the backend mock read
+projection rather than a page-local fallback or durable-store contamination.
 Agentless availability fixtures join that same graph-owned seed contract:
 mock UPS, MQTT, ESPHome, HTTP, and controller endpoints must project as
 `SourceAvailability` `network-endpoint` resources with real availability

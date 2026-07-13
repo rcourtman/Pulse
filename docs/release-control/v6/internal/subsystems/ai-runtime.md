@@ -907,6 +907,11 @@ is advertised there. The exported `agentcapabilities.AgentErrCode*` constants
 are the source of those values for both manifest declarations and
 `internal/api/` handler emissions; local string literals in either layer are
 contract drift.
+The governed action tools also declare `mock_mode_enabled` for read-only mock
+runtimes and `action_plan_identity_mismatch` when a presented reviewed hash no
+longer matches the authoritative plan. Pulse MCP documentation must remain a
+generated projection of those manifest codes so Assistant and external-agent
+adapters branch on the same refusal vocabulary as direct HTTP clients.
 `GET /api/actions` and `GET /api/actions/{id}` use that same shared vocabulary
 for invalid view/limit and internal list/detail failures even though those
 relay-mobile continuity reads are not separate Assistant tools; their codes

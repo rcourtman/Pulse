@@ -409,6 +409,11 @@ broker may authorize eligible actions under core-owned tenant/resource policy,
 but that policy decision does not grant agent lifecycle code a parallel
 authorization primitive: all execution still enters through the shared action
 lifecycle and its agent executor.
+When runtime mock mode projects representative action audits through those
+same read routes, the response is explicitly `readOnly` and the rows remain
+inspection fixtures only. Agent lifecycle surfaces must remove decision and
+execution affordances, must not treat a mock approval as an agent command
+grant, and must not infer lifecycle reachability from fixture state.
 The investigation
 continuity reconciler in `internal/api/patrol_action_reconciliation.go` is
 also API-owned: callbacks only wake an authoritative action-audit re-read,

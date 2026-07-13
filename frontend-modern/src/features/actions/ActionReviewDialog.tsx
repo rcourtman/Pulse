@@ -4,6 +4,7 @@ import { ResourceActionsAPI } from '@/api/resourceActions';
 import { Button } from '@/components/shared/Button';
 import { Dialog } from '@/components/shared/Dialog';
 import { notificationStore } from '@/stores/notifications';
+import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import { ActionDecisionPacket } from './ActionDecisionPacket';
 import { formatActionName } from './actionPresentation';
@@ -18,6 +19,9 @@ export const ActionReviewDialog: Component<{
   const [error, setError] = createSignal('');
   const [clock, setClock] = createSignal(Date.now());
   const audit = () => props.detail?.audit;
+  const readOnly = createMemo(
+    () => props.detail?.readOnly === true || presentationPolicyIsReadOnly(),
+  );
   createEffect(() => {
     if (!props.detail) return;
     setClock(Date.now());
@@ -39,12 +43,14 @@ export const ActionReviewDialog: Component<{
     return Number.isNaN(timestamp) || timestamp <= clock();
   });
   const canDecide = () =>
+    !readOnly() &&
     reviewedPlanHash() &&
     hasCurrentPolicyProvenance() &&
     aptParametersValid() &&
     !isExpired() &&
     audit()?.state === 'pending_approval';
   const canExecute = () =>
+    !readOnly() &&
     reviewedPlanHash() &&
     hasCurrentPolicyProvenance() &&
     aptParametersValid() &&
@@ -52,6 +58,11 @@ export const ActionReviewDialog: Component<{
     (audit()?.state === 'approved' ||
       (audit()?.state === 'planned' && !audit()?.plan.requiresApproval));
   const invalidActionMessage = createMemo(() => {
+    const state = audit()?.state;
+    const actionable = state === 'pending_approval' || state === 'approved' || state === 'planned';
+    if (!actionable) return '';
+    if (readOnly())
+      return 'This session is read-only. You can inspect the action and its policy evidence, but you cannot approve or run it.';
     if (!reviewedPlanHash())
       return 'This action has no reviewed plan identity. Close it and create a new plan before approving or running anything.';
     if (!hasCurrentPolicyProvenance())

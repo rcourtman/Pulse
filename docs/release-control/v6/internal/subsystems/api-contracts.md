@@ -7362,6 +7362,13 @@ both requests to the exact reviewed plan by sending `planHash`; the REST fields
 remain optional for transport compatibility, but any presented hash that differs
 from the authoritative persisted plan fails with
 `action_plan_identity_mismatch` before a decision write or executor dispatch.
+When runtime mock mode is enabled, these action read routes project the
+graph-owned mock audit and lifecycle fixtures through the same response shapes;
+plan, decision, and execution routes fail with `mock_mode_enabled`. Mock reads
+must not seed the durable audit database or create a second frontend-only action
+contract. The inbox and detail responses explicitly declare `readOnly: true`
+for that projection so every browser entrypoint can remove mutation controls
+without inferring mock state from fixture content.
 The canonical browser writer in `frontend-modern/src/api/resourceActions.ts`
 requires a non-empty reviewed hash for both mutations and always serializes it.
 Actions and Patrol browser consumers must pass the hash from the plan currently

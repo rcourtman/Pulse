@@ -607,18 +607,21 @@ var (
 	}
 	agentCapabilityPlanActionErrorCodes = []string{
 		AgentErrCodeInvalidActionRequest,
+		AgentErrCodeMockModeEnabled,
 		AgentErrCodeActionActorUnavailable,
 		AgentErrCodeResourceNotFound,
 		AgentErrCodeCapabilityNotFound,
 		AgentErrCodeActionExecutionUnavailable,
 	}
 	agentCapabilityDecisionActionErrorCodes = []string{
+		AgentErrCodeMockModeEnabled,
 		AgentErrCodeMissingID,
 		AgentErrCodeInvalidID,
 		AgentErrCodeInvalidActionDecision,
 		AgentErrCodeActionNotFound,
 		AgentErrCodeActionNotPending,
 		AgentErrCodeActionPlanExpired,
+		AgentErrCodeActionPlanIdentityMismatch,
 		AgentErrCodeActionActorUnavailable,
 		AgentErrCodeActionApprovalForbidden,
 		AgentErrCodeActionStepUpUnavailable,
@@ -627,6 +630,7 @@ var (
 		AgentErrCodeActionReplanRequired,
 	}
 	agentCapabilityExecuteActionErrorCodes = []string{
+		AgentErrCodeMockModeEnabled,
 		AgentErrCodeMissingID,
 		AgentErrCodeInvalidID,
 		AgentErrCodeInvalidActionExecution,
@@ -637,6 +641,7 @@ var (
 		AgentErrCodeActionDryRunOnly,
 		AgentErrCodeActionPlanExpired,
 		AgentErrCodeActionPlanDrift,
+		AgentErrCodeActionPlanIdentityMismatch,
 		AgentErrCodeResourceRemediationLocked,
 		AgentErrCodeActionExecutorUnavailable,
 		AgentErrCodeActionActorUnavailable,

@@ -3906,6 +3906,7 @@ class SubsystemLookupTest(unittest.TestCase):
     def test_lookup_paths_assigns_mock_runtime_fixture_authority_to_monitoring(self) -> None:
         result = lookup_paths(
             [
+                "internal/mock/action_fixtures.go",
                 "internal/mock/demo_scenarios.go",
                 "internal/mock/fixture_graph.go",
                 "internal/mock/platform_fixtures.go",
@@ -3935,6 +3936,7 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(
                 match["verification_requirement"]["exact_files"],
                 [
+                    "internal/mock/action_fixtures_test.go",
                     "internal/mock/canonical_api_guardrails_test.go",
                     "internal/mock/demo_scenarios_test.go",
                     "internal/mock/generator_test.go",

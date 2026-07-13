@@ -108,7 +108,7 @@ description includes its required auth scope. For a read-only external
 agent, start with `monitoring:read`. For the full published Pulse
 Intelligence surface, mint a token with the current manifest scopes:
 <!-- pulse-mcp-scope-list:start -->
-`monitoring:read`, `monitoring:write`, `settings:read`, `settings:write`, and `ai:execute`
+`monitoring:read`, `monitoring:write`, `settings:read`, `settings:write`, `ai:execute`, `actions:plan`, `actions:approve`, and `actions:execute`
 <!-- pulse-mcp-scope-list:end -->
 
 You can also mint narrower tokens for specific workflows. For example,
@@ -248,9 +248,9 @@ the live set.
 
 **Actions (governed plan/approval/execute):**
 
-- `plan_action` (Plan action, `POST /api/actions/plan`, scope `ai:execute`, mode `write`, approval `action_plan`): Plan an action against a resource. The planner validates the request, looks up the capability on the resource, checks executor-owned live availability, and returns an ActionPlan with the approval policy, blast radius, plan hash, and preflight summary. The plan is persisted to the audit history at the planned/pending state only after the live availability check passes, so subsequent decide_action and execute_action calls can reference it by id. Plan-and-execute is a two-step flow when the resulting plan requires approval, one-step otherwise.
-- `decide_action` (Decide action, `POST /api/actions/{actionId}/decision`, scope `ai:execute`, mode `write`, approval `action_plan`): Record an approval decision (approved or rejected) on a previously planned action. The actor is taken from the authenticated identity; an explicit reason can be passed in the body. Idempotent on the persisted decision: re-deciding a non-pending action surfaces the action_not_pending stable code so agents can branch on the conflict rather than retrying blindly.
-- `execute_action` (Execute action, `POST /api/actions/{actionId}/execute`, scope `ai:execute`, mode `write`, approval `action_plan`): Execute a previously planned and (when required) approved action. Returns the persisted audit record with the execution result attached. Refuses with stable codes when the action is in the wrong lifecycle state (action_not_approved, action_already_executing, action_execution_final, action_dry_run_only, action_plan_expired), when the approved plan no longer matches the current resource/capability contract (action_plan_drift), when the target is operator-locked against automated remediation (resource_remediation_locked), or when the API instance has no executor wired (action_executor_unavailable). action.completed SSE events fire on every terminal state so agents watching the stream do not need to poll this endpoint after dispatch.
+- `plan_action` (Plan action, `POST /api/actions/plan`, scope `actions:plan`, mode `write`, approval `action_plan`): Plan an action against a resource. The planner validates the request, looks up the capability on the resource, checks executor-owned live availability, and returns an ActionPlan with the approval policy, blast radius, plan hash, and preflight summary. The plan is persisted to the audit history at the planned/pending state only after the live availability check passes, so subsequent decide_action and execute_action calls can reference it by id. Plan-and-execute is a two-step flow when the resulting plan requires approval, one-step otherwise.
+- `decide_action` (Decide action, `POST /api/actions/{actionId}/decision`, scope `actions:approve`, mode `write`, approval `action_plan`): Record an approval decision (approved or rejected) on a previously planned action. The actor is taken from the authenticated identity; an explicit reason can be passed in the body. An exact retry returns the authoritative persisted decision without adding an approval or lifecycle event; a conflicting retry fails closed.
+- `execute_action` (Execute action, `POST /api/actions/{actionId}/execute`, scope `actions:execute`, mode `write`, approval `action_plan`): Execute a previously planned and (when required) approved action. Returns the persisted audit record with the execution result attached. Refuses with stable codes when the action is in the wrong lifecycle state (action_not_approved, action_already_executing, action_execution_final, action_dry_run_only, action_plan_expired), when the approved plan no longer matches the current resource/capability contract (action_plan_drift), when the target is operator-locked against automated remediation (resource_remediation_locked), or when the API instance has no executor wired (action_executor_unavailable). action.completed SSE events fire on every terminal state so agents watching the stream do not need to poll this endpoint after dispatch.
 
 **Provisioning (infrastructure onboarding):**
 
@@ -319,9 +319,9 @@ Capability-specific stable codes are advertised by the manifest:
 - `snooze_finding`: `invalid_finding_request`, `finding_not_found`, `finding_action_not_allowed`, and `patrol_unavailable`
 - `dismiss_finding`: `invalid_finding_request`, `finding_not_found`, `finding_action_not_allowed`, and `patrol_unavailable`
 - `resolve_finding`: `invalid_finding_request`, `finding_not_found`, `finding_action_not_allowed`, and `patrol_unavailable`
-- `plan_action`: `invalid_action_request`, `resource_not_found`, `capability_not_found`, and `action_execution_unavailable`
-- `decide_action`: `missing_id`, `invalid_id`, `invalid_action_decision`, `action_not_found`, `action_not_pending`, and `action_plan_expired`
-- `execute_action`: `missing_id`, `invalid_id`, `invalid_action_execution`, `action_not_found`, `action_not_approved`, `action_already_executing`, `action_execution_final`, `action_dry_run_only`, `action_plan_expired`, `action_plan_drift`, `resource_remediation_locked`, and `action_executor_unavailable`
+- `plan_action`: `invalid_action_request`, `mock_mode_enabled`, `action_actor_unavailable`, `resource_not_found`, `capability_not_found`, and `action_execution_unavailable`
+- `decide_action`: `mock_mode_enabled`, `missing_id`, `invalid_id`, `invalid_action_decision`, `action_not_found`, `action_not_pending`, `action_plan_expired`, `action_plan_identity_mismatch`, `action_actor_unavailable`, `action_approval_forbidden`, `action_step_up_unavailable`, `action_decision_conflict`, `action_separation_required`, and `action_replan_required`
+- `execute_action`: `mock_mode_enabled`, `missing_id`, `invalid_id`, `invalid_action_execution`, `action_not_found`, `action_not_approved`, `action_already_executing`, `action_execution_final`, `action_dry_run_only`, `action_plan_expired`, `action_plan_drift`, `action_plan_identity_mismatch`, `resource_remediation_locked`, `action_executor_unavailable`, `action_actor_unavailable`, `action_execution_forbidden`, `action_not_executing`, and `action_replan_required`
 <!-- pulse-mcp-errors:end -->
 
 Cross-cutting codes from the auth / multi-tenant middleware

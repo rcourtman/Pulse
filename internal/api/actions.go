@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -69,14 +70,21 @@ type actionExecutionResponse struct {
 }
 
 type pendingActionsResponse struct {
-	Actions []unified.ActionAuditRecord `json:"actions"`
-	Count   int                         `json:"count"`
+	Actions  []unified.ActionAuditRecord `json:"actions"`
+	Count    int                         `json:"count"`
+	ReadOnly bool                        `json:"readOnly"`
 }
 
 type actionInboxResponse struct {
-	View    actionlifecycle.ActionListView `json:"view"`
-	Actions []unified.ActionAuditRecord    `json:"actions"`
-	Count   int                            `json:"count"`
+	View     actionlifecycle.ActionListView `json:"view"`
+	Actions  []unified.ActionAuditRecord    `json:"actions"`
+	Count    int                            `json:"count"`
+	ReadOnly bool                           `json:"readOnly"`
+}
+
+type actionDetailResponse struct {
+	actionlifecycle.ActionDetail
+	ReadOnly bool `json:"readOnly"`
 }
 
 // ActionLifecycle returns the shared transport-independent action lifecycle
@@ -103,6 +111,10 @@ func (h *ResourceHandlers) ActionLifecycle() *actionlifecycle.Service {
 func (h *ResourceHandlers) HandlePlanAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if mock.IsMockEnabled() {
+		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeMockModeEnabled, "Cannot plan actions in mock mode")
 		return
 	}
 
@@ -155,6 +167,14 @@ func (h *ResourceHandlers) HandleListPendingActions(w http.ResponseWriter, r *ht
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if mock.IsMockEnabled() {
+		actions := mockActionAuditsByState(maxPendingActionAudits, unified.ActionStatePending)
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(pendingActionsResponse{Actions: actions, Count: len(actions), ReadOnly: true}); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionQueueEncodeFailed, "Failed to encode pending actions")
+		}
+		return
+	}
 	actions, err := h.ActionLifecycle().DecisionQueue(GetOrgID(r.Context()), maxPendingActionAudits)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionQueueQueryFailed, "Failed to query pending actions")
@@ -184,6 +204,21 @@ func (h *ResourceHandlers) HandleListActions(w http.ResponseWriter, r *http.Requ
 		}
 		limit = parsed
 	}
+	if mock.IsMockEnabled() {
+		states := []unified.ActionState{unified.ActionStatePlanned, unified.ActionStatePending, unified.ActionStateApproved, unified.ActionStateExecuting}
+		if view == actionlifecycle.ActionListSettled {
+			states = []unified.ActionState{unified.ActionStateRejected, unified.ActionStateExpired, unified.ActionStateCompleted, unified.ActionStateFailed}
+		} else if view != actionlifecycle.ActionListPending {
+			writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidActionListView, "Action list view must be pending or settled")
+			return
+		}
+		actions := mockActionAuditsByState(limit, states...)
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(actionInboxResponse{View: view, Actions: actions, Count: len(actions), ReadOnly: true}); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionListEncodeFailed, "Failed to encode actions")
+		}
+		return
+	}
 	actions, err := h.ActionLifecycle().List(GetOrgID(r.Context()), view, limit)
 	if err != nil {
 		if strings.Contains(err.Error(), "unsupported action list view") {
@@ -209,6 +244,23 @@ func (h *ResourceHandlers) HandleGetAction(w http.ResponseWriter, r *http.Reques
 	actionID := strings.TrimSpace(r.PathValue("id"))
 	if actionID == "" || !validAuditEventID.MatchString(actionID) || len(actionID) > 128 {
 		writeJSONError(w, http.StatusBadRequest, agentcapabilities.AgentErrCodeInvalidID, "Invalid action ID format")
+		return
+	}
+	if mock.IsMockEnabled() {
+		for _, fixture := range mock.ActionFixtures() {
+			if fixture.Audit.ID != actionID {
+				continue
+			}
+			w.Header().Set("Content-Type", "application/json")
+			if err := json.NewEncoder(w).Encode(actionDetailResponse{
+				ActionDetail: actionlifecycle.ActionDetail{Audit: fixture.Audit, Events: fixture.Events},
+				ReadOnly:     true,
+			}); err != nil {
+				writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionDetailEncodeFailed, "Failed to encode action detail")
+			}
+			return
+		}
+		writeJSONErrorWithDetails(w, http.StatusNotFound, agentcapabilities.AgentErrCodeActionNotFound, "Action not found", map[string]string{"actionId": actionID})
 		return
 	}
 	detail, found, err := h.ActionLifecycle().Detail(GetOrgID(r.Context()), actionID)
@@ -275,6 +327,10 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if mock.IsMockEnabled() {
+		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeMockModeEnabled, "Cannot decide actions in mock mode")
+		return
+	}
 
 	actionID := strings.TrimSpace(r.PathValue("id"))
 	if actionID == "" {
@@ -330,7 +386,7 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if decision.PlanHash != "" && decision.PlanHash != record.Plan.PlanHash {
-		writeJSONError(w, http.StatusConflict, "action_plan_identity_mismatch", "The reviewed action plan changed; reload it before deciding")
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanIdentityMismatch, "The reviewed action plan changed; reload it before deciding")
 		return
 	}
 	canonicalDecision := unified.ActionDecision{
@@ -370,6 +426,10 @@ func (h *ResourceHandlers) HandleDecideAction(w http.ResponseWriter, r *http.Req
 func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if mock.IsMockEnabled() {
+		writeJSONError(w, http.StatusForbidden, agentcapabilities.AgentErrCodeMockModeEnabled, "Cannot execute actions in mock mode")
 		return
 	}
 
@@ -421,7 +481,7 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 			return
 		}
 		if execution.PlanHash != record.Plan.PlanHash {
-			writeJSONError(w, http.StatusConflict, "action_plan_identity_mismatch", "The approved action plan changed; reload it before execution")
+			writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanIdentityMismatch, "The approved action plan changed; reload it before execution")
 			return
 		}
 	}
@@ -442,6 +502,24 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 	}); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "action_execution_encode_failed", "Failed to encode action execution")
 	}
+}
+
+func mockActionAuditsByState(limit int, states ...unified.ActionState) []unified.ActionAuditRecord {
+	allowed := make(map[unified.ActionState]struct{}, len(states))
+	for _, state := range states {
+		allowed[state] = struct{}{}
+	}
+	actions := make([]unified.ActionAuditRecord, 0, len(states))
+	for _, fixture := range mock.ActionFixtures() {
+		if _, ok := allowed[fixture.Audit.State]; !ok {
+			continue
+		}
+		actions = append(actions, fixture.Audit)
+		if len(actions) == limit {
+			break
+		}
+	}
+	return actions
 }
 
 // writeActionLifecycleReadError handles the store/query/not-found failures

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ResourceActionsAPI } from '@/api/resourceActions';
+import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import type { ActionAuditRecord, ActionDetailResponse } from '@/types/actionAudit';
 import { ActionReviewDialog } from '../ActionReviewDialog';
 
@@ -14,6 +15,7 @@ vi.mock('@/stores/notifications', () => ({
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  syncSessionPresentationPolicy(null);
 });
 
 const makeAudit = (
@@ -140,6 +142,44 @@ describe('ActionReviewDialog trust gates', () => {
     );
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Run action' })).toBeNull();
+  });
+
+  it('keeps mock and other read-only sessions inspectable without mutation controls', () => {
+    syncSessionPresentationPolicy({
+      presentationPolicy: {
+        demoMode: true,
+        readOnly: true,
+        hideCommercial: true,
+        hideUpgrade: true,
+      },
+    });
+    render(() => (
+      <ActionReviewDialog
+        detail={detail(makeAudit('resolved', '2099-01-01T00:00:00Z'))}
+        onClose={vi.fn()}
+      />
+    ));
+    expect(screen.getByTestId('action-review-invalid')).toHaveTextContent('session is read-only');
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Run action' })).toBeNull();
+  });
+
+  it('honors the action API read-only projection when the broader session remains writable', () => {
+    const readOnlyDetail = {
+      ...detail(makeAudit('resolved', '2099-01-01T00:00:00Z')),
+      readOnly: true,
+    };
+    render(() => <ActionReviewDialog detail={readOnlyDetail} onClose={vi.fn()} />);
+    expect(screen.getByTestId('action-review-invalid')).toHaveTextContent('session is read-only');
+    expect(screen.queryByRole('button', { name: 'Reject' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+  });
+
+  it('does not describe a settled historical action as an expired review', () => {
+    const audit = makeAudit('resolved', '2026-07-12T00:10:00Z');
+    audit.state = 'completed';
+    render(() => <ActionReviewDialog detail={detail(audit)} onClose={vi.fn()} />);
+    expect(screen.queryByTestId('action-review-invalid')).toBeNull();
   });
 
   it('binds an approval to the plan shown in the dialog', async () => {

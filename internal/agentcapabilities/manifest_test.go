@@ -461,6 +461,7 @@ func TestCanonicalManifestPinsPulseMCPResolvedOperationsLoopCapabilities(t *test
 			approval: ApprovalPolicyActionPlan,
 			errorCodes: []string{
 				AgentErrCodeInvalidActionRequest,
+				AgentErrCodeMockModeEnabled,
 				AgentErrCodeActionActorUnavailable,
 				AgentErrCodeResourceNotFound,
 				AgentErrCodeCapabilityNotFound,
@@ -476,12 +477,14 @@ func TestCanonicalManifestPinsPulseMCPResolvedOperationsLoopCapabilities(t *test
 			mode:     ActionModeWrite,
 			approval: ApprovalPolicyActionPlan,
 			errorCodes: []string{
+				AgentErrCodeMockModeEnabled,
 				AgentErrCodeMissingID,
 				AgentErrCodeInvalidID,
 				AgentErrCodeInvalidActionDecision,
 				AgentErrCodeActionNotFound,
 				AgentErrCodeActionNotPending,
 				AgentErrCodeActionPlanExpired,
+				AgentErrCodeActionPlanIdentityMismatch,
 				AgentErrCodeActionActorUnavailable,
 				AgentErrCodeActionApprovalForbidden,
 				AgentErrCodeActionStepUpUnavailable,
@@ -499,6 +502,7 @@ func TestCanonicalManifestPinsPulseMCPResolvedOperationsLoopCapabilities(t *test
 			mode:     ActionModeWrite,
 			approval: ApprovalPolicyActionPlan,
 			errorCodes: []string{
+				AgentErrCodeMockModeEnabled,
 				AgentErrCodeMissingID,
 				AgentErrCodeInvalidID,
 				AgentErrCodeInvalidActionExecution,
@@ -509,6 +513,7 @@ func TestCanonicalManifestPinsPulseMCPResolvedOperationsLoopCapabilities(t *test
 				AgentErrCodeActionDryRunOnly,
 				AgentErrCodeActionPlanExpired,
 				AgentErrCodeActionPlanDrift,
+				AgentErrCodeActionPlanIdentityMismatch,
 				AgentErrCodeResourceRemediationLocked,
 				AgentErrCodeActionExecutorUnavailable,
 				AgentErrCodeActionActorUnavailable,

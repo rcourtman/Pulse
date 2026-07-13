@@ -110,7 +110,8 @@ resource health.
 33. `internal/monitoring/docker_detection.go`
 34. `internal/monitoring/monitor_polling_containers.go`
 35. `internal/mock/fixture_graph.go`
-35a. `internal/mock/availability_fixtures.go`
+35a. `internal/mock/action_fixtures.go`
+35b. `internal/mock/availability_fixtures.go`
 36. `internal/dockeragent/docker_client.go`
 37. `pkg/agents/docker/report.go`
 38. `internal/models/models.go`
@@ -1444,6 +1445,11 @@ Availability mock fixtures belong to that same graph authority: UPS network
 cards, MQTT meters, HTTP panels, and controller ping targets must be authored
 once in `internal/mock/` and then projected into availability status, unified
 resources, and connections payloads from that shared graph.
+Governed action mock fixtures follow the same rule. Pending, approved,
+executing, completed, rejected, and failed action examples are authored once in
+`internal/mock/action_fixtures.go`, reference resources from the graph's
+canonical unified-resource snapshot, and are projected by the read-only action
+API without writing demo rows into the durable action-audit database.
 That same boundary now also owns native disk-history fallback when Pulse's own
 history is shallow. `internal/truenas/client.go`,
 `internal/truenas/provider.go`, `internal/monitoring/truenas_poller.go`, and

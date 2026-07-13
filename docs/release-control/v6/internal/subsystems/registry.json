@@ -4563,6 +4563,7 @@
         "internal/dockeragent/docker_client.go",
         "internal/dockeragent/swarm.go",
         "internal/kubernetesagent/agent.go",
+        "internal/mock/action_fixtures.go",
         "internal/mock/availability_fixtures.go",
         "internal/mock/demo_scenarios.go",
         "internal/mock/fixture_graph.go",
@@ -4848,6 +4849,7 @@
             "label": "monitoring mock runtime fixture proof",
             "match_prefixes": [],
             "match_files": [
+              "internal/mock/action_fixtures.go",
               "internal/mock/availability_fixtures.go",
               "internal/mock/demo_scenarios.go",
               "internal/mock/fixture_graph.go",
@@ -4857,6 +4859,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/mock/action_fixtures_test.go",
               "internal/mock/canonical_api_guardrails_test.go",
               "internal/mock/demo_scenarios_test.go",
               "internal/mock/generator_test.go",

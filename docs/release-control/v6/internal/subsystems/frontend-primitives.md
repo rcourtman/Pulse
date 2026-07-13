@@ -4960,7 +4960,10 @@ reachable, and the scroll-bounded panel keeps safety, execution, verification,
 recovery, delivery, and next-step content actionable at desktop and 390-pixel
 phone viewports. Responsive layout must not hide the exact parameter authority,
 evidence source, or recovery instruction, and it must not add a duplicate legacy
-verification card when `ActionResultV2` is present.
+action path or verification card when `ActionResultV2` is present. Read-only
+sessions keep the review packet inspectable but must not render approve, reject,
+or run controls, while settled historical records must not be mislabeled as
+expired actionable reviews.
 Its action controls are also plan-identity-bound: a missing reviewed `planHash`
 renders explicit replan guidance and hides approve, reject, and run controls,
 while an actionable record sends the exact displayed hash on every mutation.

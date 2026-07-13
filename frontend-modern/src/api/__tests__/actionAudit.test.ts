@@ -221,17 +221,20 @@ describe('ActionAuditAPI', () => {
     };
 
     apiFetchJSONMock
-      .mockResolvedValueOnce({ view: 'pending', actions: [], count: 0 })
-      .mockResolvedValueOnce({ view: 'settled', actions: [audit], count: 1 })
-      .mockResolvedValueOnce({ audit, events: [] });
+      .mockResolvedValueOnce({ view: 'pending', actions: [], count: 0, readOnly: true })
+      .mockResolvedValueOnce({ view: 'settled', actions: [audit], count: 1, readOnly: true })
+      .mockResolvedValueOnce({ audit, events: [], readOnly: true });
 
-    await expect(ResourceActionsAPI.listActions('pending', 25)).resolves.toMatchObject({
+    await expect(ResourceActionsAPI.listActions('pending', 25)).resolves.toEqual({
       view: 'pending',
+      actions: [],
       count: 0,
+      readOnly: true,
     });
     await expect(ResourceActionsAPI.listActions('settled', 25)).resolves.toMatchObject({
       view: 'settled',
       count: 1,
+      readOnly: true,
     });
     const detail = await ResourceActionsAPI.getAction('action/one');
 
@@ -239,6 +242,7 @@ describe('ActionAuditAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenNthCalledWith(2, '/api/actions?view=settled&limit=25');
     expect(apiFetchJSONMock).toHaveBeenNthCalledWith(3, '/api/actions/action%2Fone');
     expect(detail.audit.plan.policyDecision).toEqual(policyDecision);
+    expect(detail.readOnly).toBe(true);
     expect(detail.audit.result?.actionResultV2).toMatchObject({
       execution: { status: 'succeeded' },
       verification: { status: 'contradicted', evidenceClass: 'independent' },

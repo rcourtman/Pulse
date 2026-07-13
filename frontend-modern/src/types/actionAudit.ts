@@ -40,9 +40,7 @@ export interface ActionApprovalRequirement {
 
 export type ActionPolicyDecisionStatus = 'resolved' | 'legacy_unknown';
 export type ActionPolicyAuthorityKind =
-  | 'capability_registry'
-  | 'tenant_patrol_policy'
-  | 'resource_operator_policy';
+  'capability_registry' | 'tenant_patrol_policy' | 'resource_operator_policy';
 export type ActionPolicyAuthorityStatus = 'consulted' | 'unavailable' | 'not_found';
 export type ActionPolicyReasonCode =
   | 'capability_approval_none'
@@ -145,10 +143,7 @@ export interface ActionVerificationResult {
 
 export type ActionExecutionStatus = 'not_run' | 'succeeded' | 'failed' | 'inconclusive';
 export type ActionVerificationTruthStatus =
-  | 'not_attempted'
-  | 'confirmed'
-  | 'contradicted'
-  | 'inconclusive';
+  'not_attempted' | 'confirmed' | 'contradicted' | 'inconclusive';
 export type ActionEvidenceClass = 'none' | 'agent_attested' | 'independent';
 
 export interface ActionEvidenceRef {
@@ -289,6 +284,7 @@ export interface PatrolActionReference {
 export interface PendingActionsResponse {
   actions: ActionAuditRecord[];
   count: number;
+  readOnly?: boolean;
 }
 
 export type ActionInboxView = 'pending' | 'settled';
@@ -338,6 +334,7 @@ export interface ActionDetailResponse {
   events: ActionLifecycleEvent[];
   attempt?: ActionDispatchAttempt;
   receipt?: ActionDispatchReceipt;
+  readOnly?: boolean;
 }
 
 export interface ActionDecisionResponse {

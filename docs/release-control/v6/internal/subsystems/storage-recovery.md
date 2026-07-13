@@ -3917,6 +3917,11 @@ the shared `internal/api/actions.go` boundary must reject a presented mismatch
 before audit mutation or executor dispatch. Storage and recovery consumers must
 preserve that binding and must not treat an approved row or matching action id
 alone as authority for a recovery or storage mutation.
+Mock-mode action inbox and detail rows are explicitly read-only projections
+from the shared fixture graph. Storage and recovery consumers may inspect their
+typed execution, verification, and compensation examples, but must not persist
+them as recovery evidence, derive restore readiness from them, or expose any
+mutation control against those fixtures.
 That same shared `internal/api/` boundary also owns hosted browser-session
 precedence for adjacent protected reads. Storage- and recovery-adjacent hosted
 surfaces may run without local auth configured, but a valid tenant
