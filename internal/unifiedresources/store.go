@@ -594,6 +594,9 @@ func (s *SQLiteResourceStore) initSchema() error {
 	if err := s.migrateActionAuditRedaction(); err != nil {
 		return err
 	}
+	if err := s.migrateActionAuditCanonicalization(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -741,6 +744,100 @@ func (s *SQLiteResourceStore) migrateActionLifecycleEventsSchema() error {
 	`); err != nil {
 		return fmt.Errorf("create unique action decision revision index: %w", err)
 	}
+	return nil
+}
+
+// migrateActionAuditCanonicalization rewrites non-terminal action audit rows
+// whose persisted JSON predates the current schema shape. Lifecycle
+// transitions guard against concurrent writers by comparing the stored
+// request/plan/origin JSON byte-for-byte (updateActionAuditSQL); rows written
+// by an older release re-marshal differently after read-time normalization,
+// so every transition on them — including the expiry sweep — matches zero
+// rows and is treated as already-final, stranding the row in the open inbox.
+// Rewriting the stored bytes to the current canonical form once at open
+// restores the compare-and-swap for pre-upgrade rows.
+func (s *SQLiteResourceStore) migrateActionAuditCanonicalization() error {
+	rows, err := s.db.Query(`
+		SELECT id, request_json, plan_json, COALESCE(origin_json, '')
+		FROM action_audits
+		WHERE state IN (?, ?, ?, ?)
+	`, ActionStatePlanned, ActionStatePending, ActionStateApproved, ActionStateExecuting)
+	if err != nil {
+		return fmt.Errorf("query action audit canonicalization rows: %w", err)
+	}
+	type storedRow struct {
+		id          string
+		requestJSON string
+		planJSON    string
+		originJSON  string
+	}
+	var stored []storedRow
+	for rows.Next() {
+		var row storedRow
+		if err := rows.Scan(&row.id, &row.requestJSON, &row.planJSON, &row.originJSON); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan action audit canonicalization row: %w", err)
+		}
+		stored = append(stored, row)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close action audit canonicalization rows: %w", err)
+	}
+	type canonicalUpdate struct {
+		id   string
+		args []any
+	}
+	var updates []canonicalUpdate
+	for _, row := range stored {
+		record, found, err := getActionAuditFrom(s.db, row.id)
+		if err != nil || !found {
+			if err != nil {
+				return fmt.Errorf("read action audit for canonicalization %q: %w", row.id, err)
+			}
+			continue
+		}
+		if _, strictErr := NormalizeActionAuditRecord(record); strictErr != nil {
+			// The row cannot be expressed in the current shape even with
+			// read-time backfills; leave it as stored rather than guessing.
+			log.Printf("[WARN] unified_resources: action audit %q cannot be canonicalized and will not transition: %v", row.id, strictErr)
+			continue
+		}
+		args, argsErr := actionAuditSQLArgs(record)
+		if argsErr != nil {
+			return fmt.Errorf("marshal action audit for canonicalization %q: %w", row.id, argsErr)
+		}
+		if row.requestJSON == args[8] && row.planJSON == args[9] && row.originJSON == firstNonNilString(args[13]) {
+			continue
+		}
+		updates = append(updates, canonicalUpdate{id: row.id, args: args})
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin action audit canonicalization: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+	for _, update := range updates {
+		if _, err := tx.Exec(`
+			UPDATE action_audits
+			SET request_json = ?, plan_json = ?, approvals_json = ?, result_json = ?, verification_outcome_json = ?, origin_json = ?
+			WHERE id = ?
+		`, update.args[8], update.args[9], update.args[10], update.args[11], update.args[12], update.args[13], update.id); err != nil {
+			return fmt.Errorf("canonicalize action audit %q: %w", update.id, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit action audit canonicalization: %w", err)
+	}
+	committed = true
+	log.Printf("[INFO] unified_resources: canonicalized %d pre-upgrade action audit row(s)", len(updates))
 	return nil
 }
 
