@@ -92,7 +92,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
         return {
           href: SECURITY_DOC_URL,
           label: 'Open security guide',
-          external: false,
+          external: true,
         } as const;
     }
   };
