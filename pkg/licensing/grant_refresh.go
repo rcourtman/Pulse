@@ -193,6 +193,10 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 	s.mu.RLock()
 	client := s.serverClient
 	state := s.activationState
+	previousTier := TierFree
+	if s.license != nil {
+		previousTier = s.license.Claims.Tier
+	}
 	persistence := s.persistence
 	clientVersion := s.clientVersion
 	runtimeIdentity := NormalizeRuntimeIdentity(s.runtimeIdentity)
@@ -229,6 +233,7 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 	if state != nil {
 		continuity = normalizeActivationContinuity(state.Continuity)
 	}
+	continuity.DowngradeRetention = AdvanceDowngradeRetention(continuity.DowngradeRetention, previousTier, Tier(gc.Tier), time.Now())
 	lic := grantClaimsToLicenseWithContinuity(gc, resp.Grant.JWT, continuity)
 
 	s.mu.Lock()

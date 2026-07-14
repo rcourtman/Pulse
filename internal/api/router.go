@@ -600,6 +600,9 @@ func (r *Router) setupRoutes() {
 	SetLicenseServiceProvider(r.licenseHandlers)
 	r.reportingHandlers = NewReportingHandlers(r.mtMonitor, recoveryManager)
 	r.reportingHandlers.SetSystemSettingsStore(r.persistence)
+	r.reportingHandlers.SetCommercialLicenseResolver(func(ctx context.Context) *licenseService {
+		return r.licenseHandlers.Service(ctx)
+	})
 	r.logHandlers = NewLogHandlers(r.config, r.persistence)
 	rbacHandlers := NewRBACHandlers(r.config, rbacProvider)
 	var magicLinkService *MagicLinkService

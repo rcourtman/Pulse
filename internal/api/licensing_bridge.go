@@ -44,6 +44,8 @@ type legacyConnectionCountsModel = pkglicensing.LegacyConnectionCounts
 type commercialMigrationStatusModel = pkglicensing.CommercialMigrationStatus
 type purchaseReturnClaimsModel = pkglicensing.PurchaseReturnClaims
 type entitlementLeaseClaimsModel = pkglicensing.EntitlementLeaseClaims
+
+type downgradeRetentionStateModel = pkglicensing.DowngradeRetentionState
 type licenseTier = pkglicensing.Tier
 type checkoutPortalHandoffRequestModel = pkglicensing.CheckoutPortalHandoffRequest
 type checkoutPortalHandoffResponseModel = pkglicensing.CheckoutPortalHandoffResponse
@@ -266,6 +268,10 @@ func verifyEntitlementLeaseTokenFromLicensing(token string, key ed25519.PublicKe
 
 func parseEntitlementLeaseTokenFromLicensing(token string, key ed25519.PublicKey, expectedInstanceHost string) (*entitlementLeaseClaimsModel, error) {
 	return pkglicensing.ParseEntitlementLeaseToken(token, key, expectedInstanceHost)
+}
+
+func normalizeDowngradeRetentionStateFromLicensing(state downgradeRetentionStateModel) downgradeRetentionStateModel {
+	return pkglicensing.NormalizeDowngradeRetentionState(state)
 }
 
 func writePaymentRequiredFromLicensing(w http.ResponseWriter, payload map[string]interface{}) {

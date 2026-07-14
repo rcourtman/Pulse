@@ -250,6 +250,13 @@ PDF/CSV files are not recovery points, backup artifacts, storage-health
 evidence, restore manifests, or cross-client storage inventory. Storage and
 recovery flows may preserve them as normal tenant data during backup/restore,
 but must not interpret their presence as infrastructure protection.
+Commercial downgrade preserves the schedule definitions as inert tenant
+configuration and blocks background generation when `advanced_reporting` is
+absent. Existing generated files outside the lower entitlement become hidden
+through the commercial access boundary and are purge-eligible only after the
+durable day-60 timestamp. Purge must stay inside `reports/generated`, skip
+directories and symlinks, and never treat the cleanup as deletion of report
+definitions, audit records, backups, or recovery points.
 
 Generated Proxmox setup-script, runtime host-agent setup, and installer
 auto-registration changes that affect backup visibility permissions are

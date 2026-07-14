@@ -93,11 +93,12 @@ func normalizeReportResourceType(raw string) (string, error) {
 
 // ReportingHandlers handles reporting-related requests
 type ReportingHandlers struct {
-	mtMonitor        *monitoring.MultiTenantMonitor
-	recoveryManager  *recoverymanager.Manager
-	narratorResolver func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider)
-	settingsStore    reportingSystemSettingsStore
-	scheduleRunMu    sync.Mutex
+	mtMonitor                 *monitoring.MultiTenantMonitor
+	recoveryManager           *recoverymanager.Manager
+	narratorResolver          func(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider)
+	settingsStore             reportingSystemSettingsStore
+	scheduleRunMu             sync.Mutex
+	commercialLicenseResolver func(ctx context.Context) *licenseService
 }
 
 type reportingSystemSettingsStore interface {
@@ -121,6 +122,27 @@ func (h *ReportingHandlers) SetSystemSettingsStore(store reportingSystemSettings
 		return
 	}
 	h.settingsStore = store
+}
+
+// SetCommercialLicenseResolver wires the tenant-scoped entitlement source used
+// by background report scheduling and downgrade retention. HTTP routes retain
+// their existing middleware gates.
+func (h *ReportingHandlers) SetCommercialLicenseResolver(resolver func(ctx context.Context) *licenseService) {
+	if h == nil {
+		return
+	}
+	h.commercialLicenseResolver = resolver
+}
+
+func (h *ReportingHandlers) requireCommercialFeature(ctx context.Context, feature string) error {
+	if h == nil || h.commercialLicenseResolver == nil {
+		return nil
+	}
+	service := h.commercialLicenseResolver(ctx)
+	if service == nil {
+		return fmt.Errorf("commercial entitlement unavailable")
+	}
+	return service.RequireFeature(feature)
 }
 
 func (h *ReportingHandlers) resolveNarrator(ctx context.Context) (reporting.Narrator, reporting.FleetNarrator, reporting.FindingsProvider) {

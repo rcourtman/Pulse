@@ -1377,3 +1377,12 @@ acknowledgement.
 This is not an MFA implementation. No acknowledgement label or local browser
 state may satisfy an action MFA floor without the existing server-verified,
 action-bound cryptographic step-up contract.
+
+Self-hosted commercial transitions authenticate the customer through the
+existing emailed manage-code boundary, then bind the quoted catalog identity,
+amount, proration timestamp, effective date, license version, continuity epoch,
+Stripe customer, subscription, and item to one short-lived hashed quote token.
+The apply route accepts that opaque token only and re-verifies authoritative
+Stripe ownership and current state before mutation. Downgrade artifact cleanup
+must stay within the tenant `reports/generated` directory and skip symlinks so
+commercial retention cannot become an arbitrary-file deletion primitive.

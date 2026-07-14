@@ -195,12 +195,43 @@ type Store struct {
 	buffer   []bufferedMetric
 
 	// Background workers
-	writeCh       chan writeRequest
-	maintenanceCh chan maintenanceRequest
-	stopCh        chan struct{}
-	doneCh        chan struct{}
-	stopOnce      sync.Once
-	stopping      atomic.Bool
+	writeCh                    chan writeRequest
+	maintenanceCh              chan maintenanceRequest
+	stopCh                     chan struct{}
+	doneCh                     chan struct{}
+	stopOnce                   sync.Once
+	stopping                   atomic.Bool
+	commercialRetentionSeconds atomic.Int64
+	commercialPurgeEligibleAt  atomic.Int64
+}
+
+// SetCommercialHistoryRetention applies a delayed commercial ceiling to the
+// configured physical retention. A zero or negative day count clears the
+// ceiling. Access control is enforced elsewhere immediately; this method only
+// governs when excess history becomes physically purgeable.
+func (s *Store) SetCommercialHistoryRetention(days int, purgeEligibleAt time.Time) {
+	if s == nil || days <= 0 || purgeEligibleAt.IsZero() {
+		if s != nil {
+			s.commercialRetentionSeconds.Store(0)
+			s.commercialPurgeEligibleAt.Store(0)
+		}
+		return
+	}
+	s.commercialRetentionSeconds.Store(int64(time.Duration(days) * 24 * time.Hour / time.Second))
+	s.commercialPurgeEligibleAt.Store(purgeEligibleAt.UTC().Unix())
+}
+
+func (s *Store) effectiveRetention(base time.Duration, now time.Time) time.Duration {
+	seconds := s.commercialRetentionSeconds.Load()
+	eligibleAt := s.commercialPurgeEligibleAt.Load()
+	if seconds <= 0 || eligibleAt <= 0 || now.UTC().Unix() < eligibleAt {
+		return base
+	}
+	commercial := time.Duration(seconds) * time.Second
+	if commercial < base {
+		return commercial
+	}
+	return base
 }
 
 // NewStore creates a new metrics store with the given configuration
@@ -1832,10 +1863,10 @@ func (s *Store) runRetention() {
 		tier      Tier
 		retention time.Duration
 	}{
-		{TierRaw, s.config.RetentionRaw},
-		{TierMinute, s.config.RetentionMinute},
-		{TierHourly, s.config.RetentionHourly},
-		{TierDaily, s.config.RetentionDaily},
+		{TierRaw, s.effectiveRetention(s.config.RetentionRaw, now)},
+		{TierMinute, s.effectiveRetention(s.config.RetentionMinute, now)},
+		{TierHourly, s.effectiveRetention(s.config.RetentionHourly, now)},
+		{TierDaily, s.effectiveRetention(s.config.RetentionDaily, now)},
 	}
 
 	var totalDeleted int64

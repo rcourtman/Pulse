@@ -7621,3 +7621,10 @@ evidence from a trust domain distinct from the executor. Confirmed
 verification projection, but the finding maps to `fix_verification_unknown`
 and remains unresolved. Malformed digests, missing evidence, and false
 independence fail closed through canonical result normalization.
+
+Background report execution now consumes the same tenant-scoped commercial
+license service as the HTTP reporting routes. `runReportSchedule` must check
+`advanced_reporting` before resource resolution or artifact generation, and a
+missing resolver service fails closed in the routed runtime. Downgrade cleanup
+is an internal scheduled side effect only: it does not add a public report API,
+change report payload schemas, or delete schedule definitions.

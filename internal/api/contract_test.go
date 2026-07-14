@@ -20990,3 +20990,11 @@ func TestContract_PatrolFixVerifiedRequiresIndependentEvidence(t *testing.T) {
 		t.Fatal("fix_verified must require canonical independent verification; agent-attested confirmation must remain verification unknown")
 	}
 }
+
+func TestContract_BackgroundReportingFailsClosedWithoutCommercialEntitlement(t *testing.T) {
+	handler := NewReportingHandlers(nil, nil)
+	handler.SetCommercialLicenseResolver(func(context.Context) *licenseService { return nil })
+	if err := handler.requireCommercialFeature(context.Background(), featureAdvancedReportingValue); err == nil {
+		t.Fatal("background reporting accepted a missing tenant license service")
+	}
+}

@@ -4533,3 +4533,9 @@ lifecycle is now the first production path to ingest a server-side provider
 observation as independent evidence; the Docker restart lab journey remains a
 positive control but does not imply that agent-reported Docker inventory is an
 independent production observer.
+
+The API router's tenant-scoped commercial resolver for report scheduling is an
+adjacent entitlement boundary, not agent authority. It may stop a background
+report before generation when the current license lacks `advanced_reporting`,
+but it must not mint agent credentials, dispatch agent work, reinterpret an
+agent receipt, or expand any lifecycle capability.

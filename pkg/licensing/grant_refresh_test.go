@@ -893,3 +893,15 @@ func TestGenerateFingerprint(t *testing.T) {
 		t.Error("two fingerprints should be different")
 	}
 }
+
+func TestGrantRefreshDowngradeWindowSurvivesSameTierRefreshAndClearsOnUpgrade(t *testing.T) {
+	now := time.Date(2026, 7, 14, 10, 0, 0, 0, time.UTC)
+	downgraded := AdvanceDowngradeRetention(nil, TierPro, TierRelay, now)
+	refreshed := AdvanceDowngradeRetention(downgraded, TierRelay, TierRelay, now.Add(time.Hour))
+	if refreshed == nil || refreshed.DetectedAt != downgraded.DetectedAt || refreshed.PurgeEligibleAt != downgraded.PurgeEligibleAt {
+		t.Fatalf("same-tier grant refresh changed downgrade window: %+v", refreshed)
+	}
+	if upgraded := AdvanceDowngradeRetention(refreshed, TierRelay, TierPro, now.Add(2*time.Hour)); upgraded != nil {
+		t.Fatalf("upgraded grant retained purge state: %+v", upgraded)
+	}
+}

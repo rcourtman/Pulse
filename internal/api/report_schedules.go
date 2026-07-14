@@ -459,6 +459,9 @@ func (h *ReportingHandlers) runReportSchedule(ctx context.Context, persistence *
 	if next, err := nextReportScheduleRunAt(schedule, now); err == nil {
 		schedule.NextRunAt = &next
 	}
+	if err := h.requireCommercialFeature(ctx, featureAdvancedReportingValue); err != nil {
+		return result, markReportScheduleFailed(schedule, now, fmt.Errorf("advanced reporting entitlement required: %w", err))
+	}
 
 	orgID := GetOrgID(ctx)
 	resources, err := h.resolveReportScheduleResources(ctx, orgID, schedule.Scope)
@@ -810,8 +813,88 @@ func (h *ReportingHandlers) runDueReportSchedules(ctx context.Context, now time.
 	}
 	for _, orgID := range orgIDs {
 		orgCtx := context.WithValue(ctx, OrgIDContextKey, orgID)
+		h.syncCommercialHistoryRetention(orgCtx, orgID, now)
 		h.runDueReportSchedulesForOrg(orgCtx, orgID, now)
 	}
+}
+
+func (h *ReportingHandlers) syncCommercialHistoryRetention(ctx context.Context, orgID string, now time.Time) {
+	if h == nil || h.mtMonitor == nil || h.commercialLicenseResolver == nil {
+		return
+	}
+	monitor, err := h.mtMonitor.GetMonitor(orgID)
+	if err != nil || monitor == nil || monitor.GetMetricsStore() == nil {
+		return
+	}
+	service := h.commercialLicenseResolver(ctx)
+	if service == nil {
+		monitor.GetMetricsStore().SetCommercialHistoryRetention(0, time.Time{})
+		return
+	}
+	activation := service.GetActivationState()
+	if activation == nil || activation.Continuity.DowngradeRetention == nil {
+		monitor.GetMetricsStore().SetCommercialHistoryRetention(0, time.Time{})
+		return
+	}
+	downgrade := normalizeDowngradeRetentionStateFromLicensing(*activation.Continuity.DowngradeRetention)
+	monitor.GetMetricsStore().SetCommercialHistoryRetention(
+		downgrade.CurrentHistoryDays,
+		time.Unix(downgrade.PurgeEligibleAt, 0).UTC(),
+	)
+	if now.UTC().Unix() < downgrade.PurgeEligibleAt || service.RequireFeature(featureAdvancedReportingValue) == nil {
+		return
+	}
+	persistence, err := h.reportSchedulePersistence(ctx)
+	if err != nil {
+		return
+	}
+	if err := purgeGeneratedReportsAfterDowngrade(persistence); err != nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("report schedules: purge downgrade artifacts")
+	}
+}
+
+func purgeGeneratedReportsAfterDowngrade(persistence *config.ConfigPersistence) error {
+	if persistence == nil {
+		return nil
+	}
+	baseDir, err := securityutil.JoinStorageLeaf(persistence.DataDir(), "reports")
+	if err != nil {
+		return err
+	}
+	generatedDir, err := securityutil.JoinStorageLeaf(baseDir, "generated")
+	if err != nil {
+		return err
+	}
+	scheduleDirs, err := os.ReadDir(generatedDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, scheduleDir := range scheduleDirs {
+		if !scheduleDir.IsDir() || scheduleDir.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		dir, err := securityutil.JoinStorageLeaf(generatedDir, scheduleDir.Name())
+		if err != nil {
+			continue
+		}
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, file := range files {
+			if file.IsDir() || file.Type()&os.ModeSymlink != 0 {
+				continue
+			}
+			path, err := securityutil.JoinStorageLeaf(dir, file.Name())
+			if err == nil {
+				_ = os.Remove(path)
+			}
+		}
+	}
+	return nil
 }
 
 func (h *ReportingHandlers) runDueReportSchedulesForOrg(ctx context.Context, orgID string, now time.Time) {

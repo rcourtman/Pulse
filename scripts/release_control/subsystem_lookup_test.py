@@ -3980,6 +3980,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "msp-provider-tenant-management",
                 "paid-feature-entitlement-gating",
                 "paid-runtime-build-attribution-alerting",
+                "self-hosted-commercial-transition-coherence",
                 "upgrade-state-and-entitlement-preservation",
             },
         )
@@ -3996,6 +3997,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             {decision["id"] for decision in lane_context["resolved_decisions"]},
             {
+                "cloud-msp-availability-contract",
                 "cloud-msp-price-id-propagation",
                 "cloud-msp-stripe-prices",
                 "hosted-tenant-runtime-hibernation",
@@ -4008,10 +4010,13 @@ class SubsystemLookupTest(unittest.TestCase):
                 "self-hosted-plans-surface-entitlement-first",
                 "self-hosted-paid-surface-classification",
                 "self-hosted-core-monitoring-free",
+                "self-hosted-commercial-scope-support-contract",
+                "self-hosted-commercial-transition-contract",
                 "self-hosted-paid-extras-packaging",
                 "stable-release-promotion-model",
                 "stripe-mapping-contract-lock",
                 "trial-authority-saas-controlled",
+                "unified-commercial-offer-projection-contract",
                 "v5-pro-price-grandfathering",
             },
         )

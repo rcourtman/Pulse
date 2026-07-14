@@ -1176,6 +1176,12 @@ while row retention works correctly. The reclaim stays a once-per-cycle bounded
 operation (it skips the checkpoint entirely when the freelist is empty) so WAL
 cadence is not made more aggressive, and `TestStoreRetentionReclaimsFreePages`
 guards that a pre-existing backlog drains and the file shrinks.
+Commercial history reduction is a second, delayed ceiling on this same store
+boundary. Entitlement access narrows immediately, but `pkg/metrics/store.go`
+must not tighten physical retention until the durable downgrade state reaches
+its governed day-60 purge timestamp. Re-upgrade clears that ceiling before the
+next retention run. The ceiling may only reduce configured retention; it must
+never expand an operator's shorter storage policy.
 contract instead of inventing an infrastructure-local summary filter branch.
 For shared line charts on that hot path, the shared sparkline primitive may
 isolate the selected series inside the existing render budget, but that

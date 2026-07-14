@@ -20,6 +20,18 @@ agreement, the Pulse Cloud control plane, provider-hosted MSP account
 bootstrap/licensing, hosted tenant lifecycle, and cloud-specific enforcement
 rules.
 
+The subsystem also owns the canonical commercial offer and transition
+boundary across Community, Relay, Pro, Cloud, and MSP. One versioned offer
+contract must project into public pricing, Pulse Account, in-product plan
+presentation, checkout, the read-only Stripe catalog audit, support policy,
+license-server billing state, and runtime entitlements. Stripe remains billing
+truth, while one Pulse-owned idempotent transition authority must atomically
+project authoritative Stripe subscription snapshots into the local billing
+contract, continuity epoch, entitlement state, license version, transition
+history, and grant-revocation outbox. Checkout, webhook, reconciliation,
+refund, support/admin, and future account transition paths must not implement
+independent entitlement mutation rules.
+
 Pulse Pro commercial Pulse Intelligence value reporting is a cloud-paid proof
 surface. It must compare full-loop, approved-execution-loop, Assistant-loop,
 Assistant-resolved-loop, external-agent-loop, external-agent-resolved-loop,
@@ -1102,12 +1114,32 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     Absent claim = 0 = unlimited at every hop, which keeps all existing
     licenses, grants, and plans inert until the governed rollout sets
     `max_users` on a plan.
+27. Add or change the canonical commercial offer, self-hosted subscription
+    transition matrix, cancellation/payment-failure grace, downgrade
+    preservation, or Cloud/MSP availability only through the approved contract
+    in
+    `docs/release-control/v6/internal/records/commercial-offer-lifecycle-contract-2026-07-14.md`.
+    Stripe Customer Portal `subscription_update` remains disabled. Pulse-owned
+    plan changes must use the canonical transition authority, present an
+    explicit amount/effective-date quote, and converge from an authoritative
+    Stripe snapshot rather than trusting one webhook payload or a browser-
+    supplied plan identity. Unknown prices, catalog-version disagreement, and
+    incomplete entitlement projections fail closed. Every material tier,
+    cadence, capability, or restrictive-state change increments
+    `license_version` and emits the version-floor/outbox event in the same
+    local transaction.
 
 ## Forbidden Paths
 
 1. New ad hoc plan names in runtime or UI
 2. Silent aliases between old and new limit keys in live runtime paths
 3. Pricing/UI claims that are not enforced by runtime entitlements
+4. Direct Stripe subscription price changes that update billing identifiers
+   without atomically updating tier, cadence, features, continuity, and license
+   version
+5. Customer Portal configuration as the authority for plan transitions
+6. Separate offer definitions in landing, account, app, support, or Stripe
+   provisioning code
 
 ## Completion Obligations
 
@@ -1237,8 +1269,40 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     hosted capacity policy, keep it hidden from self-hosted plan cards, and
     avoid customer-facing "Unlimited Instances" copy that sounds like the old
     capped self-hosted packaging.
+21. Keep the approved self-hosted scope coherent: one owner-operated
+    environment, three primary/migration/recovery activations, and unmetered
+    monitored systems and child resources. Terms, public copy, activation
+    enforcement, support transfer tooling, and MSP boundaries must use the
+    same definition.
+22. Keep Pro's Relay bundle explicit in every offer and fulfillment
+    projection, including Stripe product-description audits. Relay and Pro are
+    distinct jobs rather than sequential ladder steps, and a Pro buyer must
+    never be told to buy Relay separately for the same environment.
+23. Do not expose Relay/Pro or cadence self-service transitions until the
+    `self-hosted-commercial-transition-coherence` gate proves proration,
+    scheduled reductions, cancellation/recovery grace, payment-failure grace,
+    refund/dispute handling, replay/order convergence, downgrade preservation,
+    and grant-version invalidation.
+24. Keep Cloud unavailable and MSP request-assisted until their respective
+    availability contracts are explicitly reopened. Historical Cloud prices,
+    caps, trial, and support labels are dormant planning data, while provider-
+    hosted MSP remains the default assisted-preview delivery boundary.
 
 ## Current State
+
+The approved commercial contract is recorded in
+`docs/release-control/v6/internal/records/commercial-offer-lifecycle-contract-2026-07-14.md`.
+The local self-hosted license server now has an atomic commercial projection
+and a Pulse-owned quoted transition saga for Relay/Pro and cadence changes.
+Cancellation recovery is non-entitling, payment failure has a distinct
+functional grace, unknown or multi-price snapshots fail closed, and runtime
+downgrade state delays physical history/artifact cleanup while blocking paid
+background work immediately. The implementation is not yet a released self-
+service capability: the governed external Stripe transition matrix, event-
+order/reconciliation exercise, Relay version-floor proof, and production
+catalog/portal audit remain required by
+`self-hosted-commercial-transition-coherence`. Cloud remains unavailable and
+MSP remains an assisted preview.
 
 Hosted handoff target paths are normalized by the shared host-local redirect
 validator at token minting, exchange, and provider-proof boundaries. Absolute,

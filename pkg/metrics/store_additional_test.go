@@ -906,3 +906,12 @@ func TestStoreRetentionReclaimsFreePages(t *testing.T) {
 		t.Fatalf("expected freelist to shrink after reclaim: %d -> %d", freelistBefore, freelistAfter)
 	}
 }
+
+func TestCommercialHistoryRetentionNeverExpandsOperatorPolicy(t *testing.T) {
+	store := &Store{}
+	now := time.Date(2026, 7, 14, 10, 0, 0, 0, time.UTC)
+	store.SetCommercialHistoryRetention(14, now)
+	if got := store.effectiveRetention(7*24*time.Hour, now); got != 7*24*time.Hour {
+		t.Fatalf("commercial ceiling expanded shorter operator retention: %v", got)
+	}
+}

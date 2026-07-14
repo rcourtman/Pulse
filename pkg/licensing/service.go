@@ -891,6 +891,10 @@ func cloneActivationState(in *ActivationState) *ActivationState {
 
 	out := *in
 	out.Continuity = normalizeActivationContinuity(in.Continuity)
+	if out.Continuity.DowngradeRetention != nil {
+		downgrade := *out.Continuity.DowngradeRetention
+		out.Continuity.DowngradeRetention = &downgrade
+	}
 	return &out
 }
 

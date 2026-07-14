@@ -467,3 +467,19 @@ func searchString(s, substr string) bool {
 	}
 	return false
 }
+
+func TestActivationContinuityNormalizesDurableDowngradeRetention(t *testing.T) {
+	now := time.Date(2026, 7, 14, 10, 0, 0, 0, time.UTC)
+	state := AdvanceDowngradeRetention(nil, TierPro, TierRelay, now)
+	continuity := normalizeActivationContinuity(ActivationContinuity{DowngradeRetention: state})
+	if continuity.DowngradeRetention == nil {
+		t.Fatal("valid downgrade retention was discarded")
+	}
+	if continuity.DowngradeRetention.CurrentTier != TierRelay || continuity.DowngradeRetention.PurgeEligibleAt != now.AddDate(0, 0, 60).Unix() {
+		t.Fatalf("unexpected normalized downgrade retention: %+v", continuity.DowngradeRetention)
+	}
+	invalid := normalizeActivationContinuity(ActivationContinuity{DowngradeRetention: &DowngradeRetentionState{CurrentHistoryDays: 14, DetectedAt: 100, PurgeEligibleAt: 100}})
+	if invalid.DowngradeRetention != nil {
+		t.Fatalf("invalid downgrade retention survived: %+v", invalid.DowngradeRetention)
+	}
+}

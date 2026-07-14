@@ -440,6 +440,23 @@ func TestStoreRetentionPrunesOldData(t *testing.T) {
 	}
 }
 
+func TestCommercialHistoryRetentionWaitsUntilPurgeEligibility(t *testing.T) {
+	store := &Store{}
+	base := 90 * 24 * time.Hour
+	now := time.Date(2026, 7, 14, 10, 0, 0, 0, time.UTC)
+	store.SetCommercialHistoryRetention(14, now.Add(60*24*time.Hour))
+	if got := store.effectiveRetention(base, now.Add(59*24*time.Hour)); got != base {
+		t.Fatalf("retention tightened before purge eligibility: %v", got)
+	}
+	if got := store.effectiveRetention(base, now.Add(60*24*time.Hour)); got != 14*24*time.Hour {
+		t.Fatalf("retention after eligibility=%v", got)
+	}
+	store.SetCommercialHistoryRetention(0, time.Time{})
+	if got := store.effectiveRetention(base, now.Add(90*24*time.Hour)); got != base {
+		t.Fatalf("cleared commercial retention=%v", got)
+	}
+}
+
 func TestStoreWriteFlushesBuffer(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig(dir)

@@ -2,6 +2,7 @@ package licensing
 
 import (
 	"testing"
+	"time"
 )
 
 func TestCanTransition_ValidTransitions(t *testing.T) {
@@ -199,5 +200,27 @@ func TestDefaultDowngradePolicy(t *testing.T) {
 	}
 	if DefaultDowngradePolicy.HardDeleteAfterDays != 60 {
 		t.Fatalf("unexpected HardDeleteAfterDays: got=%d want=60", DefaultDowngradePolicy.HardDeleteAfterDays)
+	}
+}
+
+func TestAdvanceDowngradeRetentionPreservesAndClearsRecoveryWindow(t *testing.T) {
+	now := time.Date(2026, 7, 14, 10, 0, 0, 0, time.UTC)
+	state := AdvanceDowngradeRetention(nil, TierPro, TierRelay, now)
+	if state == nil {
+		t.Fatal("expected downgrade retention state")
+	}
+	if state.PreviousHistoryDays != 90 || state.CurrentHistoryDays != 14 {
+		t.Fatalf("history days=%d->%d", state.PreviousHistoryDays, state.CurrentHistoryDays)
+	}
+	if state.RecoveryGuaranteedTo != now.AddDate(0, 0, 30).Unix() || state.PurgeEligibleAt != now.AddDate(0, 0, 60).Unix() {
+		t.Fatalf("unexpected retention window: %+v", state)
+	}
+
+	preserved := AdvanceDowngradeRetention(state, TierRelay, TierRelay, now.Add(24*time.Hour))
+	if preserved == nil || preserved.DetectedAt != state.DetectedAt || preserved.PurgeEligibleAt != state.PurgeEligibleAt {
+		t.Fatalf("same-tier refresh changed retention window: %+v", preserved)
+	}
+	if expanded := AdvanceDowngradeRetention(state, TierRelay, TierPro, now.Add(48*time.Hour)); expanded != nil {
+		t.Fatalf("upgrade should clear pending purge: %+v", expanded)
 	}
 }
