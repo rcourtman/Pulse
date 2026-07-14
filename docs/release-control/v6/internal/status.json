@@ -4900,7 +4900,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "The approved Community / Relay / Pro contract is now projected into local public/account copy, support and legal policy, atomic license-server entitlement state, quoted Relay/Pro and cadence transition sagas, and runtime downgrade preservation. Local Go, copy-model, and desktop/phone browser proof is green. Self-service remains unreleased until the governed Stripe test-mode event/reconciliation matrix, Relay version-floor proof, and production read-only catalog/portal audit satisfy the commercial transition gate.",
+        "summary": "The approved Community / Relay / Pro contract is now projected into local public/account copy, support and legal policy, atomic license-server entitlement state, quoted Relay/Pro and cadence transition sagas, and runtime downgrade preservation. Local Go, copy-model, and desktop/phone browser proof is green. The 2026-07-14 production GET-only audit ran but failed on a missing governed portal configuration and stale public Stripe product descriptions. Self-service remains unreleased until those failures are remediated and re-audited, and the governed Stripe test-mode event/reconciliation matrix plus Relay version-floor proof satisfy the commercial transition gate.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -4972,7 +4972,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "The local commercial projection now changes Stripe catalog identity, tier, cadence, features, continuity epoch, license version, transition history, and revocation outbox atomically, with a quote-bound transition authority for self-hosted plan and cadence changes. Cloud remains unavailable and MSP remains an assisted preview. External Stripe event/reconciliation and Relay version-floor proof remain governed release residuals.",
+        "summary": "The local commercial projection now changes Stripe catalog identity, tier, cadence, features, continuity epoch, license version, transition history, and revocation outbox atomically, with a quote-bound transition authority for self-hosted plan and cadence changes. Cloud remains unavailable and MSP remains an assisted preview. The production read-only catalog/portal audit is exercised but failed expected state; external Stripe event/reconciliation, Relay version-floor proof, and a passing production re-audit remain governed release residuals.",
         "tracking": [
           {
             "kind": "release-gate",
@@ -8025,6 +8025,11 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/commercial-offer-lifecycle-contract-2026-07-14.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-production-audit-blocked-2026-07-14.md",
           "kind": "file"
         },
         {

@@ -1348,10 +1348,19 @@ or local completion steps, schedule-release retries repair the local quote, and
 the authoritative backfill can reopen a terminal inbox event through the
 cursor-aware retry path. The implementation is not yet a released self-
 service capability: the governed external Stripe transition matrix, event-
-order/reconciliation exercise, Relay version-floor proof, and production
-catalog/portal audit remain required by
+order/reconciliation exercise, Relay version-floor proof, and a passing
+production catalog/portal audit remain required by
 `self-hosted-commercial-transition-coherence`. Cloud remains unavailable and
 MSP remains an assisted preview.
+
+The 2026-07-14 GET-only production catalog/portal audit was exercised and
+failed expected state: all 25 governed prices resolved, but the runtime did not
+provide a governed billing-portal configuration identifier and the public
+Relay/Pro Stripe products retained pre-contract descriptions. No Stripe object
+or customer record was mutated or inspected. The dated blocked record is
+`docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-production-audit-blocked-2026-07-14.md`;
+the gate stays blocked until separately approved remediation is deployed and
+the same read-only audit passes.
 
 The Relay side now fails closed on missing feed authority, drains the feed
 before serving, exposes feed staleness through readiness, and tears down stale
