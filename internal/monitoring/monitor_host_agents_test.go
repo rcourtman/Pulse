@@ -383,6 +383,81 @@ func TestApplyDockerReportNormalizesContainerCPUCapacityAcceptedIngestProof(t *t
 	}
 }
 
+func TestApplyDockerReportRefreshesUnifiedReadStateWithoutBroadcast(t *testing.T) {
+	monitor := newTestMonitor(t)
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	monitor.SetResourceStore(adapter)
+
+	_, err := monitor.ApplyDockerReport(agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{ID: "headless-docker-agent", IntervalSeconds: 30},
+		Host: agentsdocker.HostInfo{
+			Hostname:         "headless-docker-host",
+			MachineID:        "headless-docker-machine",
+			DockerVersion:    "27.0.0",
+			TotalCPU:         4,
+			TotalMemoryBytes: 8 << 30,
+		},
+		Containers: []agentsdocker.Container{{
+			ID:    "headless-container-id",
+			Name:  "headless-canary-container",
+			State: "running",
+		}},
+		Timestamp: time.Now().UTC(),
+	}, nil)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport: %v", err)
+	}
+
+	var foundHost bool
+	for _, host := range adapter.DockerHosts() {
+		if host != nil && host.Hostname() == "headless-docker-host" {
+			foundHost = true
+			break
+		}
+	}
+	if !foundHost {
+		t.Fatal("accepted Docker report did not refresh the canonical headless read state")
+	}
+
+	var foundContainer bool
+	for _, container := range adapter.DockerContainers() {
+		if container != nil && container.Name() == "headless-canary-container" {
+			foundContainer = true
+			break
+		}
+	}
+	if !foundContainer {
+		t.Fatal("accepted Docker container report did not refresh the canonical headless read state")
+	}
+}
+
+func TestApplyHostReportRefreshesUnifiedReadStateWithoutBroadcast(t *testing.T) {
+	monitor := newTestMonitor(t)
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	monitor.SetResourceStore(adapter)
+
+	_, err := monitor.ApplyHostReport(agentshost.Report{
+		Agent: agentshost.AgentInfo{ID: "headless-host-agent", IntervalSeconds: 30},
+		Host: agentshost.HostInfo{
+			ID:       "headless-host-machine",
+			Hostname: "headless-host",
+			Platform: "linux",
+			OSName:   "debian",
+		},
+		Timestamp: time.Now().UTC(),
+	}, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	for _, host := range adapter.Hosts() {
+		if host != nil && host.Hostname() == "headless-host" {
+			return
+		}
+	}
+	t.Fatal("accepted host report did not refresh the canonical headless read state")
+}
+
 func TestApplyDockerReportMigratesAppContainerURLToStableNameAcceptedIngestProof(t *testing.T) {
 	monitor := newTestMonitor(t)
 	report := agentsdocker.Report{

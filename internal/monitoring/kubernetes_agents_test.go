@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 )
 
@@ -84,6 +85,27 @@ func TestApplyKubernetesReport(t *testing.T) {
 	if _, err := monitor.ApplyKubernetesReport(report, token); err == nil {
 		t.Fatal("expected error for token bound to different agent")
 	}
+}
+
+func TestApplyKubernetesReportRefreshesUnifiedReadStateWithoutBroadcast(t *testing.T) {
+	monitor := newKubernetesTestMonitor()
+	adapter := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	monitor.SetResourceStore(adapter)
+
+	_, err := monitor.ApplyKubernetesReport(agentsk8s.Report{
+		Agent:   agentsk8s.AgentInfo{ID: "headless-kubernetes-agent", IntervalSeconds: 30},
+		Cluster: agentsk8s.ClusterInfo{ID: "headless-kubernetes-cluster", Name: "headless-canary-cluster"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("ApplyKubernetesReport: %v", err)
+	}
+
+	for _, cluster := range adapter.K8sClusters() {
+		if cluster != nil && cluster.ClusterID() == "headless-kubernetes-cluster" {
+			return
+		}
+	}
+	t.Fatal("accepted Kubernetes report did not refresh the canonical headless read state")
 }
 
 func TestApplyKubernetesReportPreservesNativeAPIInventory(t *testing.T) {

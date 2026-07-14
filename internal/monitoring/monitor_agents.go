@@ -1592,6 +1592,8 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		Int("containers", len(containers)).
 		Msg("Docker host report processed")
 
+	m.refreshUnifiedResourceStoreAfterAgentReport()
+
 	return host, nil
 }
 
@@ -2210,6 +2212,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	// Store cluster peer sensor data if present and evict stale entries
 	m.applyClusterSensors(report.ClusterSensors, observedAt)
 	m.persistHostContinuity(host, report)
+	m.refreshUnifiedResourceStoreAfterAgentReport()
 
 	return host, nil
 }

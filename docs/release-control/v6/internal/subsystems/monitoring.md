@@ -794,6 +794,13 @@ broadcast channel in both direct nil and typed-nil forms. Tenant-scoped
 background monitors can start in headless test or maintenance runtimes before a
 hub is wired, and state publication must no-op safely instead of dereferencing
 a nil `*websocket.Hub` during ticker refresh.
+That same headless runtime boundary applies to agent ingest itself. Once
+`ApplyHostReport`, `ApplyDockerReport`, or `ApplyKubernetesReport` accepts and
+finishes applying a report, monitoring must refresh the canonical monitor
+adapter before returning so typed `ReadState`, `/api/resources`, and Patrol see
+the accepted host, workload, and cluster truth even when no websocket clients
+are connected. Websocket client presence and broadcast hydrate are delivery
+concerns; they must not gate canonical agent-report publication.
 That same Docker/Podman monitoring boundary now also owns Docker
 authorization-plugin posture. `internal/dockeragent/collect.go` must project
 `system.Info().Plugins.Authorization` into the canonical agent report,

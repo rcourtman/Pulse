@@ -4510,8 +4510,9 @@ func (m *Monitor) shouldSkipNodeMetrics(nodeName string) bool {
 	return should
 }
 
-// updateResourceStore populates the resource store with data from the current state.
-// This should be called before broadcasting to ensure fresh data.
+// updateResourceStore populates the canonical resource store from current
+// monitoring state. Callers use it at accepted-ingest boundaries and before
+// broadcast hydration so every ReadState consumer observes the same snapshot.
 func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	m.mu.RLock()
 	store := m.resourceStore
@@ -4593,6 +4594,17 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	m.syncUnifiedPhysicalDiskMetrics(store)
 	m.syncUnifiedAppContainerMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
+}
+
+// refreshUnifiedResourceStoreAfterAgentReport makes accepted agent ingest
+// immediately visible to canonical ReadState consumers. WebSocket broadcasts
+// may also rebuild the store for their own hydrate path, but client presence
+// must never be the trigger that publishes agent-backed runtime truth.
+func (m *Monitor) refreshUnifiedResourceStoreAfterAgentReport() {
+	if m == nil || m.state == nil {
+		return
+	}
+	m.updateResourceStore(m.GetState())
 }
 
 func recordSupplementalResourceChanges(store ResourceStoreInterface, changes []unifiedresources.ResourceChange) {
