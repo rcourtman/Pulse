@@ -267,7 +267,11 @@ duplicate or empty call IDs, malformed argument objects, and violations of
 can execute anything. The normal registry, profile, approval, protected
 resource, action, and verification contracts remain the only infrastructure
 authority. Calls are serialized per local subscription agent and bounded by
-the configured request timeout and prompt/output size limits.
+the configured request timeout and prompt/output size limits. The native
+provider boundary accepts the canonical qualified Pulse model identity from
+shared callers, strips only its own subscription-provider prefix before CLI
+execution, and rejects foreign provider prefixes rather than forwarding an
+invalid or cross-provider model name to the local agent.
 Patrol consumes the provider streaming interface, so the adapter projects each
 fully validated CLI turn into canonical buffered `content`, `tool_start`, and
 `done` events. It must emit nothing before the complete CLI response passes the

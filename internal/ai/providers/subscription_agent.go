@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 // SubscriptionAgent identifies a locally installed, user-authenticated model
@@ -138,12 +140,15 @@ func (c *SubscriptionAgentClient) TestConnection(ctx context.Context) error {
 }
 
 func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
+	model := c.model
 	if strings.TrimSpace(req.Model) != "" {
-		c = &SubscriptionAgentClient{agent: c.agent, model: strings.TrimSpace(req.Model), timeout: c.timeout}
+		model = req.Model
 	}
-	if c.model == "" {
-		return nil, errors.New("subscription agent model is empty")
+	model, err := normalizeSubscriptionAgentModel(c.agent, model)
+	if err != nil {
+		return nil, err
 	}
+	c = &SubscriptionAgentClient{agent: c.agent, model: model, timeout: c.timeout}
 	prompt, err := subscriptionAgentPrompt(req)
 	if err != nil {
 		return nil, err
@@ -204,6 +209,25 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 	}
 	response := ChatResponse{Content: turn.Content, Model: c.model, StopReason: turn.StopReason, ToolCalls: turn.ProviderToolCalls, InputTokens: turn.InputTokens, OutputTokens: turn.OutputTokens}
 	return response.NormalizeCollectionsPtr(), nil
+}
+
+func normalizeSubscriptionAgentModel(agent SubscriptionAgent, model string) (string, error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return "", errors.New("subscription agent model is empty")
+	}
+	if !strings.Contains(model, ":") {
+		return model, nil
+	}
+	provider, bareModel := config.ParseModelString(model)
+	if provider != string(agent) {
+		return "", fmt.Errorf("%s cannot route model for provider %s", agent, provider)
+	}
+	bareModel = strings.TrimSpace(bareModel)
+	if bareModel == "" {
+		return "", errors.New("subscription agent model is empty")
+	}
+	return bareModel, nil
 }
 
 // ChatStream adapts the CLI's bounded, structured one-turn response to Pulse's

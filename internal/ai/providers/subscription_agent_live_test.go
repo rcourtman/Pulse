@@ -34,6 +34,7 @@ func TestSubscriptionAgentLive(t *testing.T) {
 			var toolStarts int
 			var done DoneEvent
 			err := client.ChatStream(ctx, ChatRequest{
+				Model:    string(tt.agent) + ":" + tt.model,
 				System:   "Select the supplied observation tool exactly once. Do not claim that it ran.",
 				Messages: []Message{{Role: "user", Content: "Inspect node tower using the supplied Pulse tool."}},
 				Tools: []Tool{{Name: "get_node_status", Description: "Read the current status of one node", InputSchema: map[string]interface{}{

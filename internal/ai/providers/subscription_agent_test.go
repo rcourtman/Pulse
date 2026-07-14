@@ -40,6 +40,40 @@ func TestCappedBufferBoundsChildOutput(t *testing.T) {
 	}
 }
 
+func TestNormalizeSubscriptionAgentModel(t *testing.T) {
+	tests := []struct {
+		name      string
+		agent     SubscriptionAgent
+		model     string
+		want      string
+		wantError string
+	}{
+		{name: "bare Codex model", agent: SubscriptionAgentCodex, model: "gpt-5.6-luna", want: "gpt-5.6-luna"},
+		{name: "qualified Codex model", agent: SubscriptionAgentCodex, model: "codex-subscription:gpt-5.6-luna", want: "gpt-5.6-luna"},
+		{name: "qualified Claude model", agent: SubscriptionAgentClaude, model: "claude-subscription:sonnet", want: "sonnet"},
+		{name: "foreign subscription route", agent: SubscriptionAgentCodex, model: "claude-subscription:sonnet", wantError: "cannot route model for provider claude-subscription"},
+		{name: "API route", agent: SubscriptionAgentCodex, model: "openai:gpt-5.6", wantError: "cannot route model for provider openai"},
+		{name: "empty model", agent: SubscriptionAgentCodex, model: " ", wantError: "model is empty"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeSubscriptionAgentModel(tt.agent, tt.model)
+			if tt.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantError) {
+					t.Fatalf("normalizeSubscriptionAgentModel() error = %v, want containing %q", err, tt.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Fatalf("normalizeSubscriptionAgentModel() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRejectCodexAgentToolActivity(t *testing.T) {
 	if err := rejectCodexAgentToolActivity([]byte("{\"type\":\"item.completed\",\"item\":{\"type\":\"agent_message\"}}\n")); err != nil {
 		t.Fatalf("agent-only event rejected: %v", err)
@@ -96,6 +130,13 @@ if [ "$1" = "login" ]; then
   exit 0
 fi
 while [ "$#" -gt 0 ]; do
+	if [ "$1" = "--model" ]; then
+		shift
+		if [ "$1" != "gpt-5.6-luna" ]; then
+			echo "unexpected model: $1" >&2
+			exit 92
+		fi
+	fi
   if [ "$1" = "--output-last-message" ]; then
     shift
     printf '%s' '{"content":"","stop_reason":"tool_use","tool_calls":[{"id":"c1","name":"get_node_status","input_json":"{\"node\":\"tower\"}"}]}' > "$1"
@@ -127,12 +168,15 @@ printf '%s' '{"structured_output":{"content":"healthy","stop_reason":"end_turn",
 	if err := codex.TestConnection(ctx); err != nil {
 		t.Fatalf("Codex authentication check failed: %v", err)
 	}
-	response, err := codex.Chat(ctx, ChatRequest{Tools: []Tool{{Name: "get_node_status"}}, ToolChoice: &ToolChoice{Type: ToolChoiceRequired}})
+	response, err := codex.Chat(ctx, ChatRequest{Model: "codex-subscription:gpt-5.6-luna", Tools: []Tool{{Name: "get_node_status"}}, ToolChoice: &ToolChoice{Type: ToolChoiceRequired}})
 	if err != nil {
 		t.Fatalf("Codex structured turn failed: %v", err)
 	}
 	if len(response.ToolCalls) != 1 || response.ToolCalls[0].Name != "get_node_status" {
 		t.Fatalf("Codex tool calls = %#v", response.ToolCalls)
+	}
+	if response.Model != "gpt-5.6-luna" {
+		t.Fatalf("Codex response model = %q, want bare CLI model", response.Model)
 	}
 	var streamEvents []StreamEvent
 	if err := codex.ChatStream(ctx, ChatRequest{Tools: []Tool{{Name: "get_node_status"}}, ToolChoice: &ToolChoice{Type: ToolChoiceRequired}}, func(event StreamEvent) {
