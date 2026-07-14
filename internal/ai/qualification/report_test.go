@@ -97,6 +97,32 @@ func TestWriteComparisonReportPublishesOnlyQualifiedRecommendation(t *testing.T)
 	}
 }
 
+func TestWriteReportPreservesArtifactsWhenReplayCaptureIsIncomplete(t *testing.T) {
+	dir := t.TempDir()
+	report := RunReport{
+		SchemaVersion: ReportSchemaVersion, RunID: "q-incomplete-replay", Passed: true,
+		Manifest: validTestManifest(),
+		PatrolRun: PatrolRun{ToolCalls: []ToolCall{{
+			ID: "truncated", ToolName: "patrol_report_finding", Input: `{"description":"cut...`, Success: true,
+		}}},
+	}
+	if err := WriteReport(dir, report); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"ground-truth.json", "report.json", "report.md", "replay.json", "SHA256SUMS"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Fatalf("missing %s: %v", name, err)
+		}
+	}
+	written, err := LoadReport(filepath.Join(dir, "report.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if written.Passed || !strings.Contains(strings.Join(written.Errors, "\n"), "replay capture incomplete") {
+		t.Fatalf("incomplete capture must fail explicitly without losing artifacts: %+v", written)
+	}
+}
+
 func TestApplyQualificationGatesRejectsIncomparableRuns(t *testing.T) {
 	manifest := validTestManifest()
 	manifest.Repeat.Qualification = 1

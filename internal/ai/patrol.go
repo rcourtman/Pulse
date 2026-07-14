@@ -403,9 +403,12 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 const MaxPatrolRunHistory = 100
 
 const (
-	MaxToolInputSize   = 1024 // max chars for tool input in persisted record
-	MaxToolOutputSize  = 2048 // max chars for tool output in persisted record
-	MaxToolCallsPerRun = 100  // max tool calls stored per run (oldest dropped)
+	// Finding reports routinely carry several independently grounded prose fields.
+	// Keep the persisted input bounded, but large enough to preserve the complete
+	// structured call for qualification replay instead of cutting JSON mid-token.
+	MaxToolInputSize   = 16 * 1024 // max chars for tool input in persisted record
+	MaxToolOutputSize  = 2048      // max chars for tool output in persisted record
+	MaxToolCallsPerRun = 100       // max tool calls stored per run (oldest dropped)
 )
 
 // LearningProvider provides learned preferences for patrol context

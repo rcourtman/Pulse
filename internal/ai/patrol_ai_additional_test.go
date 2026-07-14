@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,21 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	ur "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+func TestPersistedPatrolToolInputKeepsExpectedFindingJSONComplete(t *testing.T) {
+	payload, err := json.Marshal(map[string]string{
+		"description":    strings.Repeat("d", 4*1024),
+		"evidence":       strings.Repeat("e", 4*1024),
+		"recommendation": strings.Repeat("r", 2*1024),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	persisted := truncateString(string(payload), MaxToolInputSize)
+	if persisted != string(payload) || !json.Valid([]byte(persisted)) {
+		t.Fatalf("expected finding input (%d bytes) was not preserved as complete JSON", len(payload))
+	}
+}
 
 func TestSeedFormattingHelpers(t *testing.T) {
 	t.Run("formatBytes", func(t *testing.T) {

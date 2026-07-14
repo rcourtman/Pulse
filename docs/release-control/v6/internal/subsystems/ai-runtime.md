@@ -5637,6 +5637,12 @@ Qualification scoring must keep synthetic Patrol runtime findings on the
 Provider/runtime failure remains an unconditional qualification hard failure,
 but its synthetic service finding must not be reported as an infrastructure
 false positive or matched to scenario ground truth.
+Persisted Patrol tool inputs must retain complete structured finding calls up
+to the bounded 16 KiB record limit so normal evidence-rich findings remain
+deterministically replayable. If any captured input is nevertheless incomplete
+or malformed, report generation must preserve the report, replay diagnostic,
+Markdown, and checksums, mark the run failed, and refuse to present that capture
+as executable deterministic replay.
 That same provider-transport boundary owns OpenAI-compatible tool protocol
 adaptation. Pulse must keep normal tool selection automatic/model-owned for
 OpenAI-compatible providers, including direct DeepSeek paths. Text-only

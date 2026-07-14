@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -28,6 +29,8 @@ type ReplayBundle struct {
 	Exchanges      []ToolExchange `json:"tool_exchanges"`
 	AIAnalysis     string         `json:"ai_analysis,omitempty"`
 	Findings       []Finding      `json:"findings"`
+	Replayable     bool           `json:"replayable"`
+	ReplayIssues   []string       `json:"replay_issues,omitempty"`
 }
 
 type ToolExchange struct {
@@ -48,12 +51,21 @@ func BuildReplayBundle(report RunReport) (ReplayBundle, error) {
 		SchemaVersion: ReplaySchemaVersion, CapturedAt: time.Now().UTC(), RunID: report.RunID,
 		ManifestID: report.Manifest.ID, ManifestDigest: digest, Model: report.Environment.Model,
 		GroundTruth: report.GroundTruth, AIAnalysis: report.PatrolRun.AIAnalysis,
-		Findings: append([]Finding(nil), report.Findings...),
+		Findings:   append([]Finding(nil), report.Findings...),
+		Replayable: true,
 	}
 	for index, call := range report.PatrolRun.ToolCalls {
 		input, err := canonicalToolInput(call.Input)
 		if err != nil {
-			return ReplayBundle{}, fmt.Errorf("canonicalize tool call %s input: %w", call.ID, err)
+			bundle.Replayable = false
+			bundle.ReplayIssues = append(bundle.ReplayIssues, fmt.Sprintf("tool call %s input is not complete JSON: %v", call.ID, err))
+			// Preserve the captured bytes as valid JSON so the artifact remains
+			// inspectable and checksumable. It is deliberately not executable replay.
+			opaque, marshalErr := json.Marshal(map[string]string{"captured_raw_input": call.Input})
+			if marshalErr != nil {
+				return ReplayBundle{}, marshalErr
+			}
+			input = string(opaque)
 		}
 		bundle.Exchanges = append(bundle.Exchanges, ToolExchange{
 			Sequence: index + 1, ToolCallID: call.ID, ToolName: call.ToolName,
@@ -99,6 +111,9 @@ type ReplaySession struct {
 func NewReplaySession(bundle ReplayBundle) (*ReplaySession, error) {
 	if bundle.SchemaVersion != ReplaySchemaVersion {
 		return nil, fmt.Errorf("unsupported replay schema %q", bundle.SchemaVersion)
+	}
+	if len(bundle.ReplayIssues) > 0 {
+		return nil, fmt.Errorf("replay capture is incomplete: %s", strings.Join(bundle.ReplayIssues, "; "))
 	}
 	for index, exchange := range bundle.Exchanges {
 		if exchange.Sequence != index+1 || exchange.ToolName == "" || exchange.CanonicalInput == "" {

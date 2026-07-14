@@ -159,14 +159,18 @@ func WriteReport(dir string, report RunReport) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
+	replay, err := BuildReplayBundle(report)
+	if err != nil {
+		return err
+	}
+	if !replay.Replayable {
+		report.Passed = false
+		report.Errors = append(report.Errors, "deterministic replay capture incomplete: "+strings.Join(replay.ReplayIssues, "; "))
+	}
 	if err := writeJSONFile(filepath.Join(dir, "ground-truth.json"), report.GroundTruth); err != nil {
 		return err
 	}
 	if err := writeJSONFile(filepath.Join(dir, "report.json"), report); err != nil {
-		return err
-	}
-	replay, err := BuildReplayBundle(report)
-	if err != nil {
 		return err
 	}
 	if err := writeJSONFile(filepath.Join(dir, "replay.json"), replay); err != nil {

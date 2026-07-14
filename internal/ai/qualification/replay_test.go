@@ -1,6 +1,9 @@
 package qualification
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestReplaySessionRequiresExactOrderedCanonicalCalls(t *testing.T) {
 	report := RunReport{
@@ -33,6 +36,28 @@ func TestReplaySessionRequiresExactOrderedCanonicalCalls(t *testing.T) {
 	}
 	if err := session.Complete(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestBuildReplayBundleMarksMalformedCapturedInputNonReplayable(t *testing.T) {
+	report := RunReport{
+		RunID: "q-truncated-input", Manifest: validTestManifest(),
+		PatrolRun: PatrolRun{ToolCalls: []ToolCall{{
+			ID: "truncated", ToolName: "patrol_report_finding", Input: `{"description":"cut...`, Success: true,
+		}}},
+	}
+	bundle, err := BuildReplayBundle(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bundle.Replayable || len(bundle.ReplayIssues) != 1 {
+		t.Fatalf("malformed capture must be explicit and non-replayable: %+v", bundle)
+	}
+	if !strings.Contains(bundle.Exchanges[0].CanonicalInput, "captured_raw_input") {
+		t.Fatalf("opaque captured bytes not preserved: %+v", bundle.Exchanges[0])
+	}
+	if _, err := NewReplaySession(bundle); err == nil || !strings.Contains(err.Error(), "incomplete") {
+		t.Fatalf("expected deterministic replay rejection, got %v", err)
 	}
 }
 
