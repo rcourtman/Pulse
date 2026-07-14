@@ -5680,6 +5680,14 @@ baseline before fault injection. The Watch correlation and Pro investigation
 fixtures use Alpine's `nc` applet for the disposable HTTP dependency; a missing
 optional daemon must fail baseline convergence and never be scored as a model
 miss.
+Live qualification collection convergence must require both exact scenario
+resource names and the scenario-owned Docker oracle state projected by Pulse's
+canonical resources API. A direct lab oracle may prove the fault exists, but
+Patrol must not run until the normal agent/API path independently exposes the
+relevant health, running-state, or restart-count condition; a stale healthy
+projection is a collection failure, never a model miss. These expectations are
+derived from manifest oracles before execution and never from Patrol tool
+selection, preserving non-circular scoring.
 Persisted Patrol tool inputs must retain complete structured finding calls up
 to the bounded 16 KiB record limit so normal evidence-rich findings remain
 deterministically replayable. If any captured input is nevertheless incomplete

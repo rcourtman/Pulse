@@ -3,6 +3,7 @@ package qualification
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -43,6 +44,61 @@ func TestTriggerAndWaitAssociatesExactNewScopedRun(t *testing.T) {
 	}
 	if run.ID != "new" {
 		t.Fatalf("run id = %q", run.ID)
+	}
+}
+
+func TestValidateCollectedFaultProjectionUsesScenarioOracle(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Faults = []FaultSpec{
+		{ID: "stopped", Target: "dependency", Oracle: []Predicate{{Probe: "docker.running", Target: "dependency", Operator: "eq", Value: json.RawMessage("false")}}},
+		{ID: "unhealthy", Target: "client", Oracle: []Predicate{{Probe: "docker.health", Target: "client", Operator: "eq", Value: json.RawMessage(`"unhealthy"`)}}},
+		{ID: "restart-loop", Target: "worker", Oracle: []Predicate{{Probe: "docker.restart_count", Target: "worker", Operator: "gte", Value: json.RawMessage("2")}}},
+	}
+	resources := map[string]Resource{
+		"dependency": {Docker: &DockerResource{ContainerState: "running"}},
+		"client":     {Docker: &DockerResource{Health: "healthy"}},
+		"worker":     {Docker: &DockerResource{RestartCount: 1}},
+	}
+	if err := validateCollectedFaultProjection(manifest, resources); err == nil {
+		t.Fatal("expected pre-fault collected projection to be rejected")
+	}
+	resources["dependency"] = Resource{Docker: &DockerResource{ContainerState: "exited"}}
+	resources["client"] = Resource{Docker: &DockerResource{Health: "unhealthy"}}
+	resources["worker"] = Resource{Docker: &DockerResource{RestartCount: 2}}
+	if err := validateCollectedFaultProjection(manifest, resources); err != nil {
+		t.Fatalf("expected collected projection to satisfy scenario-owned oracles: %v", err)
+	}
+}
+
+func TestWaitForResourcesMatchingPollsPastStaleState(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		call := calls.Add(1)
+		health := "healthy"
+		if call >= 2 {
+			health = "unhealthy"
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{
+			"id": "r1", "type": "app-container", "name": "fixture", "docker": map[string]any{"health": health},
+		}}})
+	}))
+	defer server.Close()
+	client, err := NewPulseClient(ClientConfig{BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resources, err := client.WaitForResourcesMatching(context.Background(), map[string]string{"target": "fixture"}, time.Second, time.Millisecond, func(resources map[string]Resource) error {
+		if resources["target"].Docker == nil || resources["target"].Docker.Health != "unhealthy" {
+			return errors.New("fault state is not collected yet")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() < 2 || resources["target"].Docker.Health != "unhealthy" {
+		t.Fatalf("collection returned before fault projection converged: calls=%d resources=%+v", calls.Load(), resources)
 	}
 }
 

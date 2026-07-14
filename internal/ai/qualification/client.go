@@ -97,13 +97,20 @@ func (a PatrolAutonomy) Effective() string {
 }
 
 type Resource struct {
-	ID         string         `json:"id"`
-	Type       string         `json:"type"`
-	Technology string         `json:"technology"`
-	Name       string         `json:"name"`
-	Status     string         `json:"status"`
-	LastSeen   any            `json:"lastSeen,omitempty"`
-	Labels     map[string]any `json:"labels,omitempty"`
+	ID         string          `json:"id"`
+	Type       string          `json:"type"`
+	Technology string          `json:"technology"`
+	Name       string          `json:"name"`
+	Status     string          `json:"status"`
+	LastSeen   any             `json:"lastSeen,omitempty"`
+	Labels     map[string]any  `json:"labels,omitempty"`
+	Docker     *DockerResource `json:"docker,omitempty"`
+}
+
+type DockerResource struct {
+	ContainerState string `json:"containerState,omitempty"`
+	Health         string `json:"health,omitempty"`
+	RestartCount   int    `json:"restartCount,omitempty"`
 }
 
 type Finding struct {
@@ -273,6 +280,10 @@ func (c *PulseClient) Resources(ctx context.Context) ([]Resource, error) {
 }
 
 func (c *PulseClient) WaitForResources(ctx context.Context, names map[string]string, timeout, poll time.Duration) (map[string]Resource, error) {
+	return c.WaitForResourcesMatching(ctx, names, timeout, poll, nil)
+}
+
+func (c *PulseClient) WaitForResourcesMatching(ctx context.Context, names map[string]string, timeout, poll time.Duration, validate func(map[string]Resource) error) (map[string]Resource, error) {
 	if timeout <= 0 {
 		timeout = 5 * time.Minute
 	}
@@ -280,6 +291,7 @@ func (c *PulseClient) WaitForResources(ctx context.Context, names map[string]str
 		poll = 5 * time.Second
 	}
 	deadline := time.Now().Add(timeout)
+	var lastValidationErr error
 	for {
 		resources, err := c.Resources(ctx)
 		if err == nil {
@@ -293,10 +305,20 @@ func (c *PulseClient) WaitForResources(ctx context.Context, names map[string]str
 				}
 			}
 			if len(matched) == len(names) {
-				return matched, nil
+				if validate == nil {
+					return matched, nil
+				}
+				if validationErr := validate(matched); validationErr == nil {
+					return matched, nil
+				} else {
+					lastValidationErr = validationErr
+				}
 			}
 		}
 		if time.Now().After(deadline) {
+			if lastValidationErr != nil {
+				return nil, fmt.Errorf("collection exposed exact resources but did not converge to scenario-owned fault state before %s: %w", deadline.UTC().Format(time.RFC3339), lastValidationErr)
+			}
 			return nil, fmt.Errorf("collection did not expose all %d exact resource names before %s", len(names), deadline.UTC().Format(time.RFC3339))
 		}
 		select {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -230,7 +231,9 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		timeout, _ := positiveDuration(manifest.Collection.ConvergenceTimeout)
 		poll, _ := positiveDuration(manifest.Collection.PollInterval)
 		var collectionErr error
-		collected, collectionErr = r.config.Client.WaitForResources(ctx, prepared.ResourceNames, timeout, poll)
+		collected, collectionErr = r.config.Client.WaitForResourcesMatching(ctx, prepared.ResourceNames, timeout, poll, func(resources map[string]Resource) error {
+			return validateCollectedFaultProjection(manifest, resources)
+		})
 		if collectionErr != nil {
 			return collectionErr
 		}
@@ -415,6 +418,50 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		terminalErr = errors.Join(terminalErr, err)
 	}
 	return report, terminalErr
+}
+
+func validateCollectedFaultProjection(manifest Manifest, resources map[string]Resource) error {
+	for _, fault := range manifest.Faults {
+		for _, predicate := range fault.Oracle {
+			resource, ok := resources[predicate.Target]
+			if !ok {
+				return fmt.Errorf("fault %s target %s is absent from collected resources", fault.ID, predicate.Target)
+			}
+			if resource.Docker == nil {
+				return fmt.Errorf("fault %s target %s has no collected Docker projection", fault.ID, predicate.Target)
+			}
+			switch predicate.Probe {
+			case "docker.health":
+				var expected string
+				if err := json.Unmarshal(predicate.Value, &expected); err != nil {
+					return fmt.Errorf("fault %s has invalid collected health expectation: %w", fault.ID, err)
+				}
+				if !strings.EqualFold(strings.TrimSpace(resource.Docker.Health), strings.TrimSpace(expected)) {
+					return fmt.Errorf("fault %s target %s collected health=%q want %q", fault.ID, predicate.Target, resource.Docker.Health, expected)
+				}
+			case "docker.running":
+				var expected bool
+				if err := json.Unmarshal(predicate.Value, &expected); err != nil {
+					return fmt.Errorf("fault %s has invalid collected running expectation: %w", fault.ID, err)
+				}
+				running := strings.EqualFold(strings.TrimSpace(resource.Docker.ContainerState), "running")
+				if running != expected {
+					return fmt.Errorf("fault %s target %s collected running=%t state=%q want %t", fault.ID, predicate.Target, running, resource.Docker.ContainerState, expected)
+				}
+			case "docker.restart_count":
+				var expected int
+				if err := json.Unmarshal(predicate.Value, &expected); err != nil {
+					return fmt.Errorf("fault %s has invalid collected restart-count expectation: %w", fault.ID, err)
+				}
+				observed := resource.Docker.RestartCount
+				satisfied := predicate.Operator == "eq" && observed == expected || predicate.Operator == "gte" && observed >= expected
+				if !satisfied {
+					return fmt.Errorf("fault %s target %s collected restart_count=%d does not satisfy %s %d", fault.ID, predicate.Target, observed, predicate.Operator, expected)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func phaseDuration(phases []PhaseTiming, name string) time.Duration {
