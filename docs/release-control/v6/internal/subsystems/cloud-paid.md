@@ -224,6 +224,9 @@ avoids a cloud-control-plane report data path across clients.
 84. `pulse-pro:relay-server/revocation_feed.go`
 85. `pulse-pro:landing-page/index.html`
 86. `pulse-pro:scripts/validate_stripe_catalog.py`
+87. `pulse-pro:license-server/README.md`
+88. `pulse-pro:license-server/entrypoint.sh.template`
+89. `pulse-pro:license-server/secrets.env.template`
 
 ## Shared Boundaries
 
@@ -3075,6 +3078,11 @@ subscription plan updates disabled because Relay/Pro product and cadence
 transitions stay in the Pulse-owned verified transition authority. Production
 readiness therefore requires a read-only external proof that the configured
 portal exposes only that intended scope before this commercial gate can pass.
+The repo-owned license-server entrypoint must require that configuration before
+the production binary starts, and the runtime configuration template and
+operator documentation must describe the same restricted portal scope. This
+turns a missing production value into a pre-deploy failure instead of a broken
+customer manage-subscription path.
 The public Stripe catalog audit must also enforce product descriptions that
 name the one owner-operated environment boundary and state that Pro includes
 Relay, so checkout cannot contradict the canonical package model.

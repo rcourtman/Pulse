@@ -2819,9 +2819,12 @@
         "pulse-pro:landing-page/manage.html",
         "pulse-pro:landing-page/thanks.html",
         "pulse-pro:license-server/admin_ui.go",
+        "pulse-pro:license-server/entrypoint.sh.template",
         "pulse-pro:license-server/grandfathering.go",
         "pulse-pro:license-server/intelligence_value.go",
         "pulse-pro:license-server/main.go",
+        "pulse-pro:license-server/README.md",
+        "pulse-pro:license-server/secrets.env.template",
         "pulse-pro:license-server/self_hosted_feature_catalog.generated.go",
         "pulse-pro:license-server/v6_checkout.go",
         "pulse-pro:license-server/v6_commercial_transitions.go",
@@ -3629,6 +3632,21 @@
               "pulse-pro:relay-server/main_test.go",
               "pulse-pro:relay-server/registry_test.go",
               "pulse-pro:relay-server/revocation_feed_test.go"
+            ]
+          },
+          {
+            "id": "license-runtime-commercial-config",
+            "label": "license runtime commercial configuration proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-pro:license-server/entrypoint.sh.template",
+              "pulse-pro:license-server/README.md",
+              "pulse-pro:license-server/secrets.env.template"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-pro:scripts/tests/test_license_runtime_config_contract.py"
             ]
           },
           {
