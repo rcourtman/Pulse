@@ -13,6 +13,10 @@ interface ResourceDetailDrawerSupportDisclosureProps {
   buttonClass?: string;
   contentClass?: string;
   dataTestId?: string;
+  // Rendered in the header row next to the toggle button, visible whether or
+  // not the section is expanded — for actions that must not require a click
+  // on the disclosure first (e.g. an open-web-interface link).
+  headerExtra?: JSX.Element;
 }
 
 export const ResourceDetailDrawerSupportDisclosure: Component<
@@ -35,16 +39,19 @@ export const ResourceDetailDrawerSupportDisclosure: Component<
           </Show>
         </div>
 
-        <button
-          type="button"
-          onClick={props.onToggle}
-          class={
-            props.buttonClass ??
-            'inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base'
-          }
-        >
-          {props.expanded ? props.hideLabel : props.showLabel}
-        </button>
+        <div class="flex min-w-0 items-center gap-2">
+          {props.headerExtra}
+          <button
+            type="button"
+            onClick={props.onToggle}
+            class={
+              props.buttonClass ??
+              'inline-flex shrink-0 items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base'
+            }
+          >
+            {props.expanded ? props.hideLabel : props.showLabel}
+          </button>
+        </div>
       </div>
 
       <Show when={props.expanded}>

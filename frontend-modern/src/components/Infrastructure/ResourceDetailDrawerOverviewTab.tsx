@@ -1,5 +1,6 @@
 import { For, Show, Suspense } from 'solid-js';
 import type { Component } from 'solid-js';
+import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import type {
   Resource,
   ResourceChangeKind,
@@ -19,6 +20,7 @@ import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFa
 import { FormSelect } from '@/components/shared/FormSelect';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
+import { WEB_INTERFACE_LINK_COLOR_CLASS } from '@/components/shared/WebInterfaceNameLink';
 import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresentation';
 import { getServiceHealthPresentation } from '@/utils/serviceHealthPresentation';
 import { ResourceCorrelationSummary } from './ResourceCorrelationSummary';
@@ -213,104 +215,126 @@ const timelineSourceAdapterOptions: Array<{
 ];
 
 const AccessDisclosure: Component<{
+  resource: Resource;
   drawer: UseResourceDetailDrawerStateResult;
   class?: string;
-}> = (props) => (
-  <SupportDisclosure
-    title="Access"
-    summary={props.drawer.accessSummary()}
-    expanded={props.drawer.showAccessContext()}
-    onToggle={() => props.drawer.setShowAccessContext((value) => !value)}
-    showLabel="Show access"
-    hideLabel="Hide access"
-    class={props.class}
-    contentClass="mt-3 space-y-3"
-    dataTestId="resource-access-section"
-  >
-    <Show when={props.drawer.relatedLinks().length > 0}>
-      <div class="space-y-1">
-        <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">Links</div>
-        <div class="flex flex-wrap gap-2">
-          <For each={props.drawer.relatedLinks()}>
-            {(link) => (
-              <a
-                href={link.href}
-                aria-label={link.ariaLabel}
-                class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
-              >
-                {link.compactLabel}
-              </a>
-            )}
-          </For>
-        </div>
-      </div>
-    </Show>
+}> = (props) => {
+  const customUrl = () => (props.resource.customUrl ?? '').trim();
 
-    <Show when={props.drawer.discoveryConfig()}>
-      {(config) => (
-        <div class="space-y-3">
-          <WebInterfaceUrlField
-            metadataKind={config().metadataKind}
-            metadataId={config().metadataId}
-            targetLabel={config().targetLabel}
-            title="Web interface"
-            discoveryLoading={props.drawer.discoveryLoading()}
-            suggestedUrl={props.drawer.discoveryIdentifiedSummary()?.suggestedUrl}
-            suggestedUrlReasonText={
-              props.drawer.discoveryIdentifiedSummary()?.suggestedUrlReasonText
-            }
-            suggestedUrlReasonTitle={
-              props.drawer.discoveryIdentifiedSummary()?.suggestedUrlReasonTitle
-            }
-            suggestedUrlDiagnostic={
-              props.drawer.discoveryIdentifiedSummary()?.suggestedUrlDiagnostic
-            }
-            embedded
-          />
-
-          <Show when={!props.drawer.hasDiscoveryTab()}>
-            <div
-              class="space-y-2 border-t border-border pt-3"
-              data-testid="resource-access-analysis"
+  return (
+    <SupportDisclosure
+      title="Access"
+      summary={props.drawer.accessSummary()}
+      expanded={props.drawer.showAccessContext()}
+      onToggle={() => props.drawer.setShowAccessContext((value) => !value)}
+      showLabel="Show access"
+      hideLabel="Hide access"
+      class={props.class}
+      contentClass="mt-3 space-y-3"
+      dataTestId="resource-access-section"
+      headerExtra={
+        <Show when={customUrl()}>
+          {(href) => (
+            <a
+              href={href()}
+              target="_blank"
+              rel="noopener noreferrer"
+              class={`inline-flex min-w-0 max-w-[260px] items-center gap-1 text-[11px] font-medium ${WEB_INTERFACE_LINK_COLOR_CLASS}`}
+              title={`Open ${href()}`}
+              data-testid="resource-access-open-url"
             >
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
-                    Analysis
-                  </div>
-                  <Show when={props.drawer.discoveryContextSummary()}>
-                    <div class="mt-1 text-[10px] text-base-content">
-                      {props.drawer.discoveryContextSummary()}
-                    </div>
-                  </Show>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => props.drawer.setShowDiscoveryContext((value) => !value)}
-                  class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
+              <span class="truncate">{href()}</span>
+              <ExternalLinkIcon class="h-3 w-3 shrink-0" />
+            </a>
+          )}
+        </Show>
+      }
+    >
+      <Show when={props.drawer.relatedLinks().length > 0}>
+        <div class="space-y-1">
+          <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">Links</div>
+          <div class="flex flex-wrap gap-2">
+            <For each={props.drawer.relatedLinks()}>
+              {(link) => (
+                <a
+                  href={link.href}
+                  aria-label={link.ariaLabel}
+                  class="inline-flex items-center rounded border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200 dark:hover:bg-blue-900"
                 >
-                  {props.drawer.showDiscoveryContext() ? 'Hide analysis' : 'Open analysis'}
-                </button>
-              </div>
-
-              <Show when={props.drawer.showDiscoveryContext()}>
-                <Suspense fallback={<DiscoveryLoadingFallback />}>
-                  <DiscoveryTab
-                    resourceType={config().resourceType}
-                    agentId={config().agentId}
-                    resourceId={config().resourceId}
-                    hostname={config().hostname}
-                    commandsEnabled={props.drawer.agentMeta()?.commandsEnabled}
-                  />
-                </Suspense>
-              </Show>
-            </div>
-          </Show>
+                  {link.compactLabel}
+                </a>
+              )}
+            </For>
+          </div>
         </div>
-      )}
-    </Show>
-  </SupportDisclosure>
-);
+      </Show>
+
+      <Show when={props.drawer.discoveryConfig()}>
+        {(config) => (
+          <div class="space-y-3">
+            <WebInterfaceUrlField
+              metadataKind={config().metadataKind}
+              metadataId={config().metadataId}
+              targetLabel={config().targetLabel}
+              title="Web interface"
+              discoveryLoading={props.drawer.discoveryLoading()}
+              suggestedUrl={props.drawer.discoveryIdentifiedSummary()?.suggestedUrl}
+              suggestedUrlReasonText={
+                props.drawer.discoveryIdentifiedSummary()?.suggestedUrlReasonText
+              }
+              suggestedUrlReasonTitle={
+                props.drawer.discoveryIdentifiedSummary()?.suggestedUrlReasonTitle
+              }
+              suggestedUrlDiagnostic={
+                props.drawer.discoveryIdentifiedSummary()?.suggestedUrlDiagnostic
+              }
+              embedded
+            />
+
+            <Show when={!props.drawer.hasDiscoveryTab()}>
+              <div
+                class="space-y-2 border-t border-border pt-3"
+                data-testid="resource-access-analysis"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div class="text-[10px] font-medium uppercase tracking-wide text-base-content">
+                      Analysis
+                    </div>
+                    <Show when={props.drawer.discoveryContextSummary()}>
+                      <div class="mt-1 text-[10px] text-base-content">
+                        {props.drawer.discoveryContextSummary()}
+                      </div>
+                    </Show>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => props.drawer.setShowDiscoveryContext((value) => !value)}
+                    class="inline-flex items-center rounded-md border border-border bg-surface px-2.5 py-1 text-[10px] font-medium text-base-content transition-colors hover:bg-base"
+                  >
+                    {props.drawer.showDiscoveryContext() ? 'Hide analysis' : 'Open analysis'}
+                  </button>
+                </div>
+
+                <Show when={props.drawer.showDiscoveryContext()}>
+                  <Suspense fallback={<DiscoveryLoadingFallback />}>
+                    <DiscoveryTab
+                      resourceType={config().resourceType}
+                      agentId={config().agentId}
+                      resourceId={config().resourceId}
+                      hostname={config().hostname}
+                      commandsEnabled={props.drawer.agentMeta()?.commandsEnabled}
+                    />
+                  </Suspense>
+                </Show>
+              </div>
+            </Show>
+          </div>
+        )}
+      </Show>
+    </SupportDisclosure>
+  );
+};
 
 export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOverviewTabProps> = (
   props,
@@ -329,8 +353,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
   const shouldRenderOperatorStateSection = () =>
     !compactTableRow() ||
     resource.capabilities?.some(
-      (capability) =>
-        capability.autoAuthorization && capability.autoAuthorization !== 'never',
+      (capability) => capability.autoAuthorization && capability.autoAuthorization !== 'never',
     );
   const shouldRenderActionHistorySection = () =>
     drawer.actionAuditAvailable() &&
@@ -342,13 +365,16 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
   const shouldPromoteKubernetesDetails = () => compactTableRow() && drawer.hasKubernetesDetails();
   const shouldPromoteHostDetails = () =>
     compactTableRow() && isPulseAgentPlatformResource(resource) && drawer.hasHostDetails();
-  const shouldPromoteAccessContext = () =>
-    compactTableRow() && drawer.showAccessContext() && drawer.hasAccessContext();
+  // Access is promoted whenever it exists in row presentation — not only when
+  // expanded — so the section (and its open-URL link) sits in one stable spot
+  // at the top of the drawer instead of teleporting from the bottom of the
+  // drawer to the top when "Show access" is clicked.
+  const shouldPromoteAccessContext = () => compactTableRow() && drawer.hasAccessContext();
 
   return (
     <div class="space-y-3">
       <Show when={shouldPromoteAccessContext()}>
-        <AccessDisclosure drawer={drawer} />
+        <AccessDisclosure resource={resource} drawer={drawer} />
       </Show>
 
       <Show when={shouldPromoteTrueNASDetails()}>
@@ -717,7 +743,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
             </Show>
 
             <Show when={drawer.hasAccessContext() && !shouldPromoteAccessContext()}>
-              <AccessDisclosure drawer={drawer} class="h-full" />
+              <AccessDisclosure resource={resource} drawer={drawer} class="h-full" />
             </Show>
 
             <Show when={drawer.hasInvestigationContext()}>
