@@ -336,6 +336,21 @@ func TestGetPatrolSystemPrompt_IncludesTrustScaffoldingGuidance(t *testing.T) {
 	}
 }
 
+func TestGetPatrolSystemPromptForTriage_IncludesQuietRunEfficiencyContract(t *testing.T) {
+	ps := NewPatrolService(&Service{cfg: &config.AIConfig{PatrolAutonomyLevel: config.PatrolAutonomyMonitor}}, nil)
+	prompt := ps.getPatrolSystemPromptForTriage()
+
+	for _, want := range []string{
+		"treat the supplied snapshot as sufficient for a calm-day assessment",
+		"without using platform or inventory tools merely to reconfirm the same healthy state",
+		"does not prohibit a targeted read",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("triage patrol system prompt missing %q", want)
+		}
+	}
+}
+
 func TestRunAIAnalysis_EarlyErrors(t *testing.T) {
 	t.Run("nil service", func(t *testing.T) {
 		ps := NewPatrolService(nil, nil)

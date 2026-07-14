@@ -5711,6 +5711,15 @@ The exact scoped inventory is the authoritative resource set. Patrol must call
 `patrol_get_findings` once near the beginning of a run and reuse that snapshot
 for all lifecycle decisions, avoiding duplicate reads and their extra provider
 turns on both healthy and faulted runs.
+On a quiet deterministic triage with a current exact scoped inventory showing
+the scoped resources running and healthy and no active alerts or findings, the
+model uses the supplied snapshot as sufficient calm-day evidence and does not
+spend platform or inventory tool calls merely reconfirming the same state. A
+concrete snapshot signal or active finding may still justify a targeted read;
+quiet triage is not a deterministic replacement for model-owned assessment.
+Provider-facing `pulse_docker` calls are host-scoped: every advertised action
+requires a Docker host name or ID in the structured schema, matching the
+executor contract and preventing invalid hostless Swarm-state calls.
 Persisted Patrol tool inputs must retain complete structured finding calls up
 to the bounded 16 KiB record limit so normal evidence-rich findings remain
 deterministically replayable. If any captured input is nevertheless incomplete

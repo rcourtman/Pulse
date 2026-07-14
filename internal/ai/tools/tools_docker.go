@@ -53,13 +53,13 @@ func (e *PulseToolExecutor) registerDockerTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseDockerToolName,
-			Description: `Read Docker update posture and Swarm state. Container control is planned through pulse_control using a canonical resource capability. Container updates remain unavailable until durable delivery and compensation contracts are complete.`,
+			Description: `Read host-scoped Docker update posture and Swarm state. Every advertised action requires the Docker host name or ID; use the host identity from the current resource context. Container control is planned through pulse_control using a canonical resource capability. Container updates remain unavailable until durable delivery and compensation contracts are complete.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"action": {
 						Type:        "string",
-						Description: "Docker action to perform",
+						Description: "Docker action to perform; every action is scoped to the required host",
 						Enum:        []string{"updates", "check_updates", "services", "tasks", "swarm"},
 					},
 					"container": {
@@ -68,7 +68,7 @@ func (e *PulseToolExecutor) registerDockerTools() {
 					},
 					"host": {
 						Type:        "string",
-						Description: "Docker host name or ID",
+						Description: "Required Docker host name or ID for every action",
 					},
 					"operation": {
 						Type:        "string",
@@ -84,7 +84,7 @@ func (e *PulseToolExecutor) registerDockerTools() {
 						Description: "Filter by stack name (for services)",
 					},
 				},
-				Required: []string{"action"},
+				Required: []string{"action", "host"},
 			},
 		},
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {

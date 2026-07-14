@@ -1286,6 +1286,8 @@ Pulse has assembled deterministic evidence before this turn. The flagged items a
 
 Your job is to assess the provided evidence and decide which items, if any, require attention. Available evidence sources include historical metrics, logs, backup/replication/RAID details, and resource configuration.
 
+When deterministic triage is quiet, the current exact scoped inventory shows the scoped resources running and healthy, and there are no active alerts or findings, treat the supplied snapshot as sufficient for a calm-day assessment. Call patrol_get_findings exactly once, then return the all-clear without using platform or inventory tools merely to reconfirm the same healthy state. A quiet result does not prohibit a targeted read when the snapshot, surrounding evidence, or an active finding contains a concrete signal that needs investigation.
+
 ## Direct Provider-State Flags
 
 The deterministic triage table and exact scoped inventory are current evidence collected through Pulse's normal provider paths. When they show a direct failed health check, failed backup, or broken replication state, treat detection as complete: call patrol_get_findings, then report or assess the confirmed symptom from the seed evidence. Do not call pulse_query, pulse_discovery, pulse_read, or broad inventory tools before recording that symptom. Root-cause investigation is a separate follow-up; unavailable logs must not consume the reporting turn.

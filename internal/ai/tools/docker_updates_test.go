@@ -66,6 +66,24 @@ func TestExecuteCheckDockerUpdates(t *testing.T) {
 	assert.Contains(t, result.Content[0].Text, "Failed to trigger update check")
 }
 
+func TestPulseDockerToolSchemaRequiresHostForEveryAdvertisedAction(t *testing.T) {
+	exec := NewPulseToolExecutor(ExecutorConfig{})
+
+	var dockerTool Tool
+	for _, tool := range exec.registry.ListTools(exec.invocationPolicy()) {
+		if tool.Name == "pulse_docker" {
+			dockerTool = tool
+			break
+		}
+	}
+
+	require.Equal(t, "pulse_docker", dockerTool.Name)
+	assert.Contains(t, dockerTool.InputSchema.Required, "action")
+	assert.Contains(t, dockerTool.InputSchema.Required, "host")
+	assert.Contains(t, dockerTool.Description, "Every advertised action requires")
+	assert.Contains(t, dockerTool.InputSchema.Properties["host"].Description, "Required")
+}
+
 func TestExecuteCheckDockerUpdates_RetriesTransientError(t *testing.T) {
 	origSleep := dockerUpdateQueueSleepFn
 	dockerUpdateQueueSleepFn = func(context.Context, time.Duration) error { return nil }
