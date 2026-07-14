@@ -96,6 +96,14 @@ four-turn model budget: active-finding inspection, report or assessment, one
 bounded fallback turn, and a tool-free final summary. A capability-unavailable
 read result is terminal for that capability within the run and must not trigger
 retries or broad inventory scans.
+Patrol report, assessment, and resolution tools remain governed Pulse-state
+writes for invocation authorization, but accepting one does not represent an
+infrastructure mutation and must not enter or satisfy the infrastructure
+read-after-write FSM. A successful finding-lifecycle write moves the loop to a
+text-only conclusion. When a real infrastructure write does require another
+verification turn, the internal verification constraint is appended to the
+provider conversation as a user-role instruction; the request must never end
+in an assistant prefill that compatible providers reject before verification.
 Patrol finding storage must consolidate equivalent active storage-capacity
 siblings before they reach browser surfaces: a broader storage risk and a
 generic usage/capacity finding for the same normalized storage identity are one

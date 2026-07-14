@@ -349,6 +349,39 @@ func isKnownGovernedWriteProgress(toolName string, input map[string]interface{},
 	}
 }
 
+// Patrol finding lifecycle calls mutate governed Pulse state, so their
+// invocation classification must remain write. They do not mutate
+// infrastructure, however, and therefore must not put the infrastructure FSM
+// into VERIFYING or satisfy verification for a preceding infrastructure write.
+func isPatrolFindingLifecycleWrite(toolName string) bool {
+	switch strings.TrimSpace(toolName) {
+	case agentcapabilities.PatrolReportFindingToolName,
+		agentcapabilities.PatrolAssessFindingToolName,
+		agentcapabilities.PatrolResolveFindingToolName:
+		return true
+	default:
+		return false
+	}
+}
+
+func applySuccessfulToolFSM(fsm *SessionFSM, toolKind ToolKind, toolName string) bool {
+	if fsm == nil {
+		return false
+	}
+	if isPatrolFindingLifecycleWrite(toolName) {
+		return true
+	}
+	fsm.OnToolSuccess(toolKind, toolName)
+	return false
+}
+
+func appendFSMVerificationPrompt(messages []providers.Message, prompt string) []providers.Message {
+	return append(messages, providers.Message{
+		Role:    "user",
+		Content: prompt,
+	})
+}
+
 // sanitizeProviderStreamErrorForUser turns a raw provider/transport error into a
 // clean, human message safe to render in the chat. Upstream errors (especially
 // from OpenAI-compatible gateways like OpenRouter) embed raw JSON bodies and
@@ -1199,10 +1232,14 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						verifyTarget,
 					)
 
-					// Update the last assistant message to include verification constraint
+					// Preserve the existing transcript behavior for the internal
+					// constraint, but also add the missing user-role provider anchor.
+					// Providers that reject assistant prefill require the conversation to
+					// end with user input before they can perform the verification turn.
 					if len(resultMessages) > 0 {
 						resultMessages[len(resultMessages)-1].Content = verifyPrompt
 					}
+					providerMessages = appendFSMVerificationPrompt(providerMessages, verifyPrompt)
 
 					// Note: verification constraint is injected into resultMessages above (for the model).
 					// We intentionally do NOT emit this to the user callback — it's an internal protocol
@@ -1810,7 +1847,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 			// === FSM STATE TRANSITION: Update FSM after successful tool execution ===
 			if fsm != nil && !isError {
-				fsm.OnToolSuccess(toolKind, tc.Name)
+				findingLifecycleWrite := applySuccessfulToolFSM(fsm, toolKind, tc.Name)
+				if findingLifecycleWrite {
+					// Finding lifecycle persistence is complete when the governed
+					// handler accepts it. It neither changes infrastructure nor proves
+					// verification of a preceding infrastructure change. Conclude on
+					// the next text-only turn.
+					writeCompletedLastTurn = true
+					log.Debug().
+						Str("tool", tc.Name).
+						Str("state", string(fsm.State)).
+						Msg("[AgenticLoop] Patrol finding lifecycle write accepted without infrastructure verification transition")
+				}
 				if toolKind == ToolKindWrite && fsm.State == StateVerifying {
 					emitWorkflowState(callback, "verify", "Verifying the write before the Assistant responds.", sessionFSMState(fsm), tc.Name)
 				}
@@ -1818,7 +1866,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				// If we just completed verification (read after write in VERIFYING), transition to READING
 				// This allows subsequent writes to proceed without being blocked
 				// CRITICAL: Must call this IMMEDIATELY after OnToolSuccess, not just when model gives final answer
-				if fsm.State == StateVerifying && fsm.ReadAfterWrite {
+				if !findingLifecycleWrite && fsm.State == StateVerifying && fsm.ReadAfterWrite {
 					fsm.CompleteVerification()
 					log.Debug().
 						Str("tool", tc.Name).
@@ -1832,7 +1880,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				//
 				// Verification evidence is a structured field in the tool output:
 				//   { "verification": { "ok": true, ... } }
-				if toolKind == ToolKindWrite && agentcapabilities.ToolResultHasVerificationOK(resultText) {
+				if !findingLifecycleWrite && toolKind == ToolKindWrite && agentcapabilities.ToolResultHasVerificationOK(resultText) {
 					fsm.OnToolSuccess(ToolKindRead, "self_verify")
 					if fsm.State == StateVerifying && fsm.ReadAfterWrite {
 						fsm.CompleteVerification()
