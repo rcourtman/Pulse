@@ -5728,6 +5728,12 @@ reports it immediately and does not spend logs, discovery, Docker-service, or
 other root-cause tool calls after confirmation; causal analysis belongs to the
 separate Pro investigation track. Quiet triage is not a deterministic
 replacement for model-owned assessment.
+Model-authored structured findings remain concise for continuous operation:
+description uses at most three short sentences, impact one sentence, evidence
+three concrete facts, and recommendation two short sentences, without
+repeating the same state or caveat across fields. Concision must preserve the
+exact evidence needed to verify the finding rather than replacing it with a
+generic summary.
 Provider-facing `pulse_docker` calls are host-scoped: every advertised action
 requires a Docker host name or ID in the structured schema, matching the
 executor contract and preventing invalid hostless Swarm-state calls.

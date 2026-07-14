@@ -326,6 +326,8 @@ func TestGetPatrolSystemPrompt_IncludesTrustScaffoldingGuidance(t *testing.T) {
 	required := []string{
 		"Authoring Impact",
 		"Authoring Evidence",
+		"Finding Concision",
+		"at most three short sentences",
 		"trust anchor",
 		"Call patrol_get_findings exactly once",
 	}

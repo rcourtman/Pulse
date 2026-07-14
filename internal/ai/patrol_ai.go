@@ -1257,6 +1257,10 @@ Every finding must include the ` + "`evidence`" + ` field in patrol_report_findi
 - If you used pulse_metrics, pulse_storage, pulse_read, or any investigation tool, reference the key data points from those calls.
 - The operator should be able to look at your evidence and confirm: yes, this is real, I can see the same thing.
 
+## Finding Concision
+
+Keep structured findings dense enough to scan and cheap enough to run continuously. Use at most three short sentences for ` + "`description`" + `, one sentence for ` + "`impact`" + `, three concrete facts for ` + "`evidence`" + `, and two short sentences for ` + "`recommendation`" + `. Do not repeat the same state, metric, or caveat across fields. Preserve the exact evidence needed to verify the conclusion; remove narration and speculative background.
+
 ## Final Summary Format
 
 After completing your investigation, write a concise summary using this structure:
