@@ -485,6 +485,15 @@ module attests the first mutating step (the backup rename), so failures before
 it report an unmutated tree, and restore attempts with their outcome ride the
 result so the server-side executor reports declared compensation truth instead
 of guessing.
+Agent (re)registration on the `internal/agentexec` command server is also the
+durable-dispatch recovery trigger: after a successful registration the server
+fires a router-installed notifier that re-drives the API-owned
+executing-action recovery pass, because a receipt-pending dispatch attempt
+can only be reconciled against the agent's durable operation receipt while
+that agent is connected. The notifier is observation-only wiring; it grants
+no command authority, fires only after token validation admits the agent, and
+a rejected or replaced registration must not synthesize receipts or resend
+transport.
 Host OS package updates follow a stricter adjacent boundary. The Unified Agent
 may report a bounded, read-only APT upgrade simulation through
 `pkg/agents/host/report.go`, but installation authority is available only via

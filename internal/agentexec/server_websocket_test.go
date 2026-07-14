@@ -285,6 +285,52 @@ func TestHandleWebSocket_RejectsPerIPConnectionFlood(t *testing.T) {
 	}
 }
 
+func TestHandleWebSocket_RegistrationFiresAgentRegisteredNotifier(t *testing.T) {
+	s := NewServer(func(token string, agentID string, hostname string) bool { return token == "ok" })
+	notified := make(chan string, 2)
+	s.SetAgentRegisteredNotifier(func(agentID string) { notified <- agentID })
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	rejectedConn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer rejectedConn.Close()
+	wsWriteMessage(t, rejectedConn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID: "a-rejected", Hostname: "host-rejected", Token: "bad",
+	}))
+	if reg := wsReadRegisteredPayload(t, rejectedConn); reg.Success {
+		t.Fatalf("expected registration to be rejected")
+	}
+
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+	wsWriteMessage(t, conn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID: "a1", Hostname: "host1", Token: "ok",
+	}))
+	if reg := wsReadRegisteredPayload(t, conn); !reg.Success {
+		t.Fatalf("registration failed: %q", reg.Message)
+	}
+
+	select {
+	case agentID := <-notified:
+		if agentID != "a1" {
+			t.Fatalf("notified agent = %q, want a1 (rejected registration must not notify)", agentID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("agent-registered notifier did not fire")
+	}
+	select {
+	case agentID := <-notified:
+		t.Fatalf("unexpected second notification for agent %q", agentID)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 func TestHandleWebSocket_InvalidTokenRejected(t *testing.T) {
 	s := NewServer(func(string, string, string) bool { return false })
 	ts := newWSServer(t, s)

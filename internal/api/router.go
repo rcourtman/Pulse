@@ -179,6 +179,7 @@ type Router struct {
 	stripeWebhookHandlers    *StripeWebhookHandlers
 	patrolLifecycleMu        sync.Mutex
 	startedPatrolOrgs        map[string]bool
+	actionRecoveryMu         sync.Mutex
 	aiAutoFixEndpoints       extensions.AIAutoFixEndpoints
 	aiAlertAnalysisEndpoints extensions.AIAlertAnalysisEndpoints
 
@@ -646,6 +647,12 @@ func (r *Router) setupRoutes() {
 			newHostStorageCleanupActionExecutor(r.resourceHandlers, r.agentExecServer),
 			newHostUpdateActionExecutor(r.resourceHandlers, r.agentExecServer),
 		))
+		// Receipt-pending dispatch attempts can only reconcile while the
+		// owning agent is connected, so each agent (re)registration re-drives
+		// the durable-dispatch recovery pass that startup begins.
+		r.agentExecServer.SetAgentRegisteredNotifier(func(string) {
+			r.recoverExecutingActions("system:agent-reconnect-recovery")
+		})
 	}
 	if r.monitor != nil {
 		r.configureProxmoxGuestDockerDetection(r.monitor)
@@ -1335,12 +1342,75 @@ func (r *Router) StartBackgroundWorkers() {
 		r.startLifecycleWorker(func() {
 			r.backgroundUpdateChecker(r.lifecycleCtx)
 		})
+		r.startLifecycleWorker(func() {
+			r.recoverExecutingActions("system:restart-recovery")
+		})
 		if r.reportingHandlers != nil {
 			r.startLifecycleWorker(func() {
 				r.reportingHandlers.RunReportScheduleScheduler(r.lifecycleCtx)
 			})
 		}
 	})
+}
+
+// maxExecutingActionRecoveryBatch bounds one durable-dispatch recovery pass
+// per org. Recovery re-runs on every agent (re)registration, so a bounded
+// pass still converges when more actions are stuck than one batch covers.
+const maxExecutingActionRecoveryBatch = 100
+
+// recoverExecutingActions reconciles actions left in the executing state by a
+// server restart or a lost agent callback. Every org routes through
+// Service.RecoverExecutingActions: receipt-pending attempts reconcile
+// query-only against the durable agent operation receipt, a committed-but-
+// never-sent dispatch may be re-driven once, and nothing is blindly
+// re-executed. It runs at startup and again whenever an agent (re)registers,
+// because receipt reconciliation can only answer while the owning agent is
+// connected.
+func (r *Router) recoverExecutingActions(actor string) {
+	if r == nil || r.resourceHandlers == nil || mock.IsMockEnabled() {
+		return
+	}
+	// Serialize passes: an agent reconnect storm after a restart would
+	// otherwise run redundant overlapping passes over the same records.
+	r.actionRecoveryMu.Lock()
+	defer r.actionRecoveryMu.Unlock()
+	ctx := r.lifecycleCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	orgIDs := []string{"default"}
+	if r.multiTenant != nil {
+		if orgs, err := r.multiTenant.ListOrganizations(); err != nil {
+			log.Warn().Err(err).Msg("Executing-action recovery could not list organizations; recovering default org only")
+		} else {
+			orgIDs = orgIDs[:0]
+			for _, org := range orgs {
+				if org != nil {
+					orgIDs = append(orgIDs, org.ID)
+				}
+			}
+		}
+	}
+	lifecycle := r.resourceHandlers.ActionLifecycle()
+	for _, orgID := range orgIDs {
+		if ctx.Err() != nil {
+			return
+		}
+		recovered, err := lifecycle.RecoverExecutingActions(ctx, orgID, actor, maxExecutingActionRecoveryBatch)
+		if err != nil {
+			log.Warn().Err(err).Str("org_id", orgID).Str("actor", actor).Msg("Executing-action recovery pass failed")
+			continue
+		}
+		terminal := 0
+		for _, record := range recovered {
+			if record.State == unifiedresources.ActionStateCompleted || record.State == unifiedresources.ActionStateFailed {
+				terminal++
+			}
+		}
+		if terminal > 0 {
+			log.Info().Int("recovered", terminal).Int("examined", len(recovered)).Str("org_id", orgID).Str("actor", actor).Msg("Recovered executing actions from durable dispatch state")
+		}
+	}
 }
 
 func (r *Router) startLifecycleWorker(worker func()) {

@@ -81,6 +81,7 @@ type Server struct {
 	commandAuthorizationVerifier     func(CommandAuthorizationRequest) error
 	newCommandApprovalGrant          func([]byte, string, ExecuteCommandPayload, time.Time, time.Duration) (*CommandApprovalGrant, error)
 	now                              func() time.Time
+	agentRegisteredNotifier          func(agentID string)
 }
 
 // CommandAuthorizationRequest is the complete server-side approval scope
@@ -170,6 +171,20 @@ func (s *Server) SetCommandAuthorizationVerifier(verifier func(CommandAuthorizat
 		return
 	}
 	s.commandAuthorizationVerifier = verifier
+}
+
+// SetAgentRegisteredNotifier installs a callback fired after an agent
+// completes registration (including a reconnect that replaces an existing
+// connection). Durable-dispatch recovery hangs off this: receipt-pending
+// reconciliation can only query an agent while it is connected, so the
+// registration itself is the recovery trigger. The callback runs on its own
+// goroutine because the query response can only be read once this server
+// enters the connection's read loop.
+func (s *Server) SetAgentRegisteredNotifier(notify func(agentID string)) {
+	if s == nil {
+		return
+	}
+	s.agentRegisteredNotifier = notify
 }
 
 func (s *Server) isShuttingDown() bool {
@@ -816,6 +831,10 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	pingDone := make(chan struct{})
 	go s.pingLoop(ac, pingDone)
 	defer close(pingDone)
+
+	if notify := s.agentRegisteredNotifier; notify != nil {
+		go notify(reg.AgentID)
+	}
 
 	// Run read loop (blocking) - don't use goroutine, or HTTP handler will close connection
 	s.readLoop(ac)

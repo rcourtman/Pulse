@@ -7449,6 +7449,15 @@ consumption remain separate work; no mobile or relay-local workaround may
 compensate for a missing core API. Claims 16 and 17 remain open pending Task 09
 resumption, real browser/lab evidence, and Task 12 certification.
 
+That callable reconciliation path is production-driven, not merely callable:
+the API server runs `RecoverExecutingActions` for every organization from a
+startup background worker and again whenever an agent (re)registers on the
+agentexec command server, because a receipt-pending attempt can only be
+answered while the owning agent is connected. Both triggers reuse the same
+bounded, serialized pass; neither introduces a new resend authority, and a
+disconnected agent simply leaves the action `executing`/`receipt_pending`
+until its next registration re-drives reconciliation.
+
 Typed Docker / Podman container start, stop, and restart operations extend that
 same durable boundary rather than creating a provider-local action protocol.
 The agent wire request is closed and binds the exact action, dispatch attempt,
