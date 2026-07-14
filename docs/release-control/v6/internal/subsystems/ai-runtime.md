@@ -88,8 +88,12 @@ not fabricate one. Scoped
 triage seed context contains both deterministic flags and the explicitly scoped
 resource inventory, including exact app-container health, rather than reducing
 the model's evidence to whichever resources the deterministic pass happened to
-flag. Quick scoped checks have a strict three-turn model budget: active-finding
-inspection, report or assessment, and final summary. A capability-unavailable
+flag. A direct provider-state triage flag is a Watch detection stop condition:
+the model checks active findings and records the confirmed symptom from seed
+evidence before any query, discovery, log, or broad inventory call; root-cause
+investigation is a separate follow-up. Quick scoped checks have a strict
+four-turn model budget: active-finding inspection, report or assessment, one
+bounded fallback turn, and a tool-free final summary. A capability-unavailable
 read result is terminal for that capability within the run and must not trigger
 retries or broad inventory scans.
 Patrol finding storage must consolidate equivalent active storage-capacity

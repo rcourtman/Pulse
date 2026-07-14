@@ -156,8 +156,8 @@ func TestComputeTriageMaxTurns(t *testing.T) {
 
 	quickScope := &PatrolScope{Depth: PatrolDepthQuick}
 	for _, flagCount := range []int{0, 1, 15, 100} {
-		if got := computeTriageMaxTurns(flagCount, quickScope); got != 3 {
-			t.Fatalf("quick scope with %d flags: expected strict 3-turn budget, got %d", flagCount, got)
+		if got := computeTriageMaxTurns(flagCount, quickScope); got != 4 {
+			t.Fatalf("quick scope with %d flags: expected strict 4-turn budget, got %d", flagCount, got)
 		}
 	}
 }
@@ -188,6 +188,8 @@ func TestGetPatrolSystemPromptForTriage(t *testing.T) {
 		"Report that symptom even when logs or command execution are unavailable",
 		"root cause is unknown",
 		"do not retry that capability",
+		"treat detection as complete",
+		"Do not call pulse_query, pulse_discovery, pulse_read",
 	} {
 		if !strings.Contains(prompt, required) {
 			t.Fatalf("expected confirmed-symptom evidence contract %q in prompt, got:\n%s", required, prompt)

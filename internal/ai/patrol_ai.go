@@ -958,12 +958,13 @@ func computePatrolMaxTurns(resourceCount int, scope *PatrolScope) int {
 func computeTriageMaxTurns(flagCount int, scope *PatrolScope) int {
 	// A quick Patrol run is an intentionally narrow check of already-scoped
 	// resources. The seed contains the current resource evidence, leaving one
-	// turn to inspect active findings, one to report/assess, and one to finish.
+	// turn to inspect active findings, one to report/assess, one bounded fallback
+	// turn, and one tool-free final response.
 	// Giving quick runs the full adaptive budget encourages broad rediscovery
 	// and can multiply the same large tool schema across otherwise redundant
 	// provider calls.
 	if scope != nil && scope.Depth == PatrolDepthQuick {
-		return 3
+		return 4
 	}
 
 	const (
@@ -1284,6 +1285,10 @@ const triageSystemPreamble = `You are Pulse Patrol, a model-owned infrastructure
 Pulse has assembled deterministic evidence before this turn. The flagged items are listed in your seed context under "Deterministic Triage Results" as prioritized context, not as a final diagnosis and not as proof that unflagged resources are healthy.
 
 Your job is to assess the provided evidence and decide which items, if any, require attention. Available evidence sources include historical metrics, logs, backup/replication/RAID details, and resource configuration.
+
+## Direct Provider-State Flags
+
+The deterministic triage table and exact scoped inventory are current evidence collected through Pulse's normal provider paths. When they show a direct failed health check, failed backup, or broken replication state, treat detection as complete: call patrol_get_findings, then report or assess the confirmed symptom from the seed evidence. Do not call pulse_query, pulse_discovery, pulse_read, or broad inventory tools before recording that symptom. Root-cause investigation is a separate follow-up; unavailable logs must not consume the reporting turn.
 
 After investigation, report new confirmed issues via patrol_report_finding and explicitly assess every active finding with patrol_assess_finding.
 
