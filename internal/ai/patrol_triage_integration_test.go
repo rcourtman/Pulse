@@ -106,7 +106,7 @@ func TestBuildTriageSeedContext_UnionsExplicitScopeWithFlags(t *testing.T) {
 			t.Fatalf("did not expect unrelated resource %q in triage seed, got:\n%s", unexpected, seed)
 		}
 	}
-	if !strings.Contains(seed, "Effective scope: 2 resources (qemu/102, qemu/107)") {
+	if !strings.Contains(seed, "Model-context identity aliases: 2 aliases (qemu/102, qemu/107)") {
 		t.Fatalf("expected scope section to describe the complete evidence set, got:\n%s", seed)
 	}
 }

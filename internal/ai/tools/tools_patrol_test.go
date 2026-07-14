@@ -758,6 +758,7 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	found := map[string]bool{}
 	var resolveTool Tool
 	var reportTool Tool
+	var getFindingsTool Tool
 	for _, tool := range tools {
 		if tool.Name == "patrol_report_finding" || tool.Name == "patrol_assess_finding" || tool.Name == "patrol_resolve_finding" || tool.Name == "patrol_get_findings" {
 			found[tool.Name] = true
@@ -767,6 +768,9 @@ func TestPatrolToolsRegistered(t *testing.T) {
 		}
 		if tool.Name == "patrol_report_finding" {
 			reportTool = tool
+		}
+		if tool.Name == "patrol_get_findings" {
+			getFindingsTool = tool
 		}
 	}
 
@@ -782,6 +786,8 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	require.NotEmpty(t, reportTool.Name)
 	assert.Contains(t, reportTool.Description, "failed health check")
 	assert.Contains(t, reportTool.Description, "root cause is unknown")
+	require.NotEmpty(t, getFindingsTool.Name)
+	assert.Contains(t, getFindingsTool.Description, "exactly once")
 }
 
 func TestPatrolToolsAvailability(t *testing.T) {

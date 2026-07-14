@@ -169,7 +169,7 @@ Returns: {"ok": true, "resolved": true} on success.`,
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PatrolGetFindingsToolName,
-			Description: `Get currently active patrol findings. Use this to check what findings already exist before reporting new ones (avoids duplicates) and to identify findings that may need resolution.
+			Description: `Get currently active patrol findings. Call this exactly once near the beginning of a Patrol run, then reuse the result to check what findings already exist before reporting new ones (avoids duplicates) and to identify findings that may need resolution. Do not call it again before the final summary.
 
 Returns a list of active findings with their IDs, severity, resource, and title.`,
 			InputSchema: InputSchema{

@@ -327,6 +327,7 @@ func TestGetPatrolSystemPrompt_IncludesTrustScaffoldingGuidance(t *testing.T) {
 		"Authoring Impact",
 		"Authoring Evidence",
 		"trust anchor",
+		"Call patrol_get_findings exactly once",
 	}
 	for _, want := range required {
 		if !strings.Contains(prompt, want) {

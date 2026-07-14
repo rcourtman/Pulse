@@ -1201,13 +1201,13 @@ The seed context includes service identity (from discovery) and reachability dat
 
 A direct provider-reported failed health check, failed backup, or broken replication state is already confirmed evidence of an operational symptom. Report that symptom even when logs or command execution are unavailable. Use warning/reliability for a failed health check unless the evidence establishes a critical consequence. State that the root cause is unknown and recommend the next safe diagnostic step; never invent a root cause. Missing optional root-cause evidence must not suppress a confirmed symptom-level finding.
 
-**Step 3 — Report or assess findings.** Report new confirmed issues with patrol_report_finding. For every active finding returned by patrol_get_findings, call patrol_assess_finding exactly once with present, resolved, or uncertain and current evidence. Do not silently skip a known finding: omission is not evidence that it cleared. patrol_resolve_finding remains available for compatibility, but patrol_assess_finding is the complete existing-finding verdict.
-Always call patrol_get_findings before reporting, assessing, or resolving findings.
+**Step 3 — Report or assess findings.** Report new confirmed issues with patrol_report_finding. Call patrol_get_findings exactly once near the beginning of the run and reuse that result; do not call it again before the final summary. For every active finding it returned, call patrol_assess_finding exactly once with present, resolved, or uncertain and current evidence. Do not silently skip a known finding: omission is not evidence that it cleared. patrol_resolve_finding remains available for compatibility, but patrol_assess_finding is the complete existing-finding verdict.
 
 The snapshot eliminates routine data gathering. When a notable signal needs current or historical confirmation, gather enough evidence to distinguish real problems from noise before reporting it.
 
 ## Efficiency Rules
 - Do NOT call the same tool with the same parameters twice in a single patrol run.
+- In particular, call patrol_get_findings once and reuse its result for all finding lifecycle decisions in the run.
 - Keep track of what you've already checked. If you've already retrieved metrics for a resource, use the data you have.
 - Once direct resource evidence confirms an actionable symptom, report it before pursuing optional root-cause detail.
 - If a tool reports that a resource lacks the required agent or native capability, do not retry that capability or replace it with a broad inventory scan. Continue with the evidence already available.
@@ -1642,7 +1642,7 @@ func (p *PatrolService) assembleSeedWithinBudget(sections []seedSection, budgetT
 	return sb.String()
 }
 
-func buildScopeSection(scope *PatrolScope, effectiveScopeIDs []string) string {
+func buildScopeSection(scope *PatrolScope, effectiveIdentityAliases []string) string {
 	if scope == nil {
 		return ""
 	}
@@ -1656,16 +1656,17 @@ func buildScopeSection(scope *PatrolScope, effectiveScopeIDs []string) string {
 		sb.WriteString(fmt.Sprintf("Context: %s\n", scope.Context))
 	}
 	if len(scope.ResourceIDs) > 0 {
-		sb.WriteString(fmt.Sprintf("Requested resources: %s\n", strings.Join(scope.ResourceIDs, ", ")))
+		sb.WriteString(fmt.Sprintf("Resolved requested identity aliases: %s\n", strings.Join(scope.ResourceIDs, ", ")))
 	}
 	if len(scope.ResourceTypes) > 0 {
 		sb.WriteString(fmt.Sprintf("Requested resource types: %s\n", strings.Join(scope.ResourceTypes, ", ")))
 	}
-	if len(effectiveScopeIDs) > 0 {
-		sb.WriteString(fmt.Sprintf("Effective scope: %d %s (%s)\n",
-			len(effectiveScopeIDs),
-			seedCountLabel(len(effectiveScopeIDs), "resource", "resources"),
-			seedTruncateOutlierList(effectiveScopeIDs, 8)))
+	if len(effectiveIdentityAliases) > 0 {
+		sb.WriteString(fmt.Sprintf("Model-context identity aliases: %d %s (%s)\n",
+			len(effectiveIdentityAliases),
+			seedCountLabel(len(effectiveIdentityAliases), "alias", "aliases"),
+			seedTruncateOutlierList(effectiveIdentityAliases, 8)))
+		sb.WriteString("Identity aliases are not separate infrastructure resources. Multiple aliases can identify the same scoped resource; do not query each alias. Use the exact scoped inventory rows below as the authoritative resource set.\n")
 	}
 	if scope.AlertIdentifier != "" {
 		sb.WriteString(fmt.Sprintf("Alert Identifier: %s\n", scope.AlertIdentifier))

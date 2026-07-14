@@ -5705,6 +5705,12 @@ read-only host response when the identity resolves, and returns a successful
 typed `not_found` result when it does not; a model following the advertised
 schema must not incur a failed tool call because the executor used a narrower
 legacy type switch.
+Scoped Patrol prompt context must describe canonical/source IDs and aliases as
+identity aliases, not count each value as a distinct infrastructure resource.
+The exact scoped inventory is the authoritative resource set. Patrol must call
+`patrol_get_findings` once near the beginning of a run and reuse that snapshot
+for all lifecycle decisions, avoiding duplicate reads and their extra provider
+turns on both healthy and faulted runs.
 Persisted Patrol tool inputs must retain complete structured finding calls up
 to the bounded 16 KiB record limit so normal evidence-rich findings remain
 deterministically replayable. If any captured input is nevertheless incomplete
