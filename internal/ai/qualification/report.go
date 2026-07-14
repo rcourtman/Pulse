@@ -250,6 +250,7 @@ func ReplayScore(report RunReport) RunReport {
 	report.Score = ScoreRun(ScoringInput{
 		Manifest: report.Manifest, GroundTruth: report.GroundTruth,
 		Run: report.PatrolRun, Findings: report.Findings,
+		Provider:          report.Environment.Provider,
 		Model:             report.Environment.Model,
 		CollectionLatency: report.Score.CollectionLatency,
 		EndToEndLatency:   report.Score.EndToEndLatency,

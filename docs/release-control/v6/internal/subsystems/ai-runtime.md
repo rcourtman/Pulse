@@ -5668,7 +5668,11 @@ than silently borrowing a direct-provider family price. Reviewed OpenRouter
 routes use exact model IDs and model-specific review dates from the public
 OpenRouter Models API; aliases, fast variants, routers, and other unreviewed
 routes remain unknown and therefore fail any non-zero qualification cost
-budget until their actual route price is explicitly recorded.
+budget until their actual route price is explicitly recorded. Live scoring
+uses the provider resolved by Patrol readiness, even when the configured
+OpenRouter model is an unprefixed slash route such as
+`anthropic/claude-sonnet-5`; scorer replay persists and reuses that resolved
+provider so the same captured report prices deterministically.
 After a non-interactive Patrol finding lifecycle write succeeds, the structured
 tool result is authoritative and the remaining text-only provider turn is only
 for operator-facing summary prose. That turn must use a bounded summary system

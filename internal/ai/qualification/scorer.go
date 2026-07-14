@@ -193,6 +193,7 @@ type ScoringInput struct {
 	GroundTruth       GroundTruth
 	Run               PatrolRun
 	Findings          []Finding
+	Provider          string
 	Model             string
 	CollectionLatency time.Duration
 	EndToEndLatency   time.Duration
@@ -211,6 +212,9 @@ func ScoreRun(input ScoringInput) Score {
 		EndToEndLatency:   input.EndToEndLatency,
 	}
 	provider, model := splitModel(input.Model)
+	if resolvedProvider := strings.ToLower(strings.TrimSpace(input.Provider)); resolvedProvider != "" {
+		provider = resolvedProvider
+	}
 	usd, known, price := cost.EstimateUSD(provider, model, int64(input.Run.InputTokens), int64(input.Run.OutputTokens))
 	score.Cost = CostEstimate{Provider: provider, Model: model, USD: usd, Known: known, PricingAsOf: price.AsOf, InputPerMTok: price.InputUSDPerMTok, OutputPerMTok: price.OutputUSDPerMTok}
 

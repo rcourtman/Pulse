@@ -160,7 +160,10 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 			}
 		}
 		model := settings.EffectivePatrolModel()
-		provider, _ := splitModel(model)
+		provider := strings.ToLower(strings.TrimSpace(status.Readiness.Provider))
+		if provider == "" {
+			provider, _ = splitModel(model)
+		}
 		report.Environment = Environment{
 			GitSHA: r.config.GitSHA, GitDirty: r.config.GitDirty,
 			PulseVersion: version.Version,
@@ -386,9 +389,10 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 	report.Score = ScoreRun(ScoringInput{
 		Manifest: manifest, GroundTruth: report.GroundTruth,
 		Run: report.PatrolRun, Findings: report.Findings,
-		Model: report.Environment.Model, CollectionLatency: phaseDuration(report.Phases, "normal_collection_convergence"),
-		EndToEndLatency: time.Since(faultStarted),
-		FaultsIntact:    faultsIntact, NoMutation: noMutation,
+		Provider: report.Environment.Provider, Model: report.Environment.Model,
+		CollectionLatency: phaseDuration(report.Phases, "normal_collection_convergence"),
+		EndToEndLatency:   time.Since(faultStarted),
+		FaultsIntact:      faultsIntact, NoMutation: noMutation,
 	})
 	if manifest.Track != TrackWatch && len(report.Investigation) == 0 {
 		report.Score.HardFailures = append(report.Score.HardFailures, "no completed investigation evidence")

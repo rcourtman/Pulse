@@ -27,6 +27,26 @@ func TestScoreRunUsesScenarioGroundTruthNotToolCalls(t *testing.T) {
 	}
 }
 
+func TestScoreRunUsesResolvedProviderForUnprefixedOpenRouterRoute(t *testing.T) {
+	manifest := validTestManifest()
+	score := ScoreRun(ScoringInput{
+		Manifest: manifest,
+		Provider: "openrouter",
+		Model:    "anthropic/claude-sonnet-5",
+		Run:      PatrolRun{InputTokens: 32_246, OutputTokens: 806},
+	})
+
+	if !score.Cost.Known {
+		t.Fatalf("expected resolved OpenRouter route price, got %+v", score.Cost)
+	}
+	if score.Cost.Provider != "openrouter" || score.Cost.Model != "anthropic/claude-sonnet-5" {
+		t.Fatalf("unexpected resolved route: %+v", score.Cost)
+	}
+	if score.Cost.USD <= 0 || score.Cost.PricingAsOf != "2026-07-14" {
+		t.Fatalf("unexpected reviewed route estimate: %+v", score.Cost)
+	}
+}
+
 func TestScoreRunPreservesDiagnosticsButFailsErroredPatrolRun(t *testing.T) {
 	manifest := validTestManifest()
 	manifest.Gates = GateSpec{
