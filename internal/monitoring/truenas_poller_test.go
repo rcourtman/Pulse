@@ -1820,3 +1820,45 @@ func TestTrueNASPollerDoubleStartKeepsSingleLoop(t *testing.T) {
 		t.Fatal("expected restart to install a fresh poller loop")
 	}
 }
+
+func TestTrueNASPollerKeysSystemsByConnection(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	// Both appliances report the same hostname (#1573, #1575); the configured
+	// connections must keep them distinct instead of collapsing them into one
+	// flapping resource.
+	first := newTrueNASMockServer(t, "truenas")
+	t.Cleanup(first.Close)
+	second := newTrueNASMockServer(t, "truenas")
+	t.Cleanup(second.Close)
+
+	mtp, persistence := newTestTenantPersistence(t)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
+		trueNASInstanceForServer(t, "conn-first", first.URL(), true),
+		trueNASInstanceForServer(t, "conn-second", second.URL(), true),
+	}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
+	poller.Start(context.Background())
+	t.Cleanup(poller.Stop)
+
+	systemSourceIDs := func() map[string]struct{} {
+		ids := make(map[string]struct{})
+		for _, record := range poller.GetCurrentRecordsForOrg("default") {
+			if record.Resource.Type == unifiedresources.ResourceTypeAgent {
+				ids[record.SourceID] = struct{}{}
+			}
+		}
+		return ids
+	}
+	waitForCondition(t, 2*time.Second, func() bool {
+		ids := systemSourceIDs()
+		_, firstOK := ids["system:conn-first"]
+		_, secondOK := ids["system:conn-second"]
+		return firstOK && secondOK && len(ids) == 2
+	}, "expected one connection-scoped system source ID per configured connection")
+}

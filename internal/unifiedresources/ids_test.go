@@ -104,3 +104,11 @@ func TestResourceIdentityPinEraIDsSkipsWeakOnlyKeys(t *testing.T) {
 		t.Fatalf("expected era IDs %v, got %v", want, got)
 	}
 }
+
+func TestMachineIdentityCanonicalIDMatchesRegistryMachineArm(t *testing.T) {
+	registry := NewRegistry(NewMemoryStore())
+	want := registry.canonicalIDFromIdentity(ResourceTypeAgent, ResourceIdentity{MachineID: "machine-123"})
+	if got := MachineIdentityCanonicalID(ResourceTypeAgent, " machine-123 "); got != want {
+		t.Fatalf("MachineIdentityCanonicalID = %q, want registry machine-arm ID %q", got, want)
+	}
+}

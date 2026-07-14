@@ -1469,6 +1469,39 @@ AI-only summary payloads, or page-local heuristics.
     or apply it to the wrong tenant.
     Regression coverage: `TestSQLiteStoreActionAuditOriginRoundTrip` in
     `internal/unifiedresources/store_test.go`.
+27. Keep API-added TrueNAS systems keyed by the configured connection,
+    never by snapshot-reported identity. `systemSourceID` in
+    `internal/truenas/provider.go` scopes the system source ID (and every
+    child pool/dataset/app/VM/share/disk scoped under it) to the
+    connection ID the poller passes through
+    `NewLiveProviderForConnection`; the hostname arm exists only for
+    fixture snapshots, which carry no connection. The system's ingest
+    identity deliberately carries no machine key: the TrueNAS DMI serial
+    is shared by DR clones and can be vendor placeholder garbage, and the
+    retired client fallback minted machine keys from the reported
+    hostname, fully merging same-hostname systems (#1573, #1575). For the
+    same reason `ingest` skips `completeIdentityFromPins` for
+    `SourceTrueNAS`: a hostname-bucket pin (stale pre-fix TrueNAS pin or
+    a pulse-agent's pin on a same-named host) must not lend the system a
+    machine key and re-merge what connection scoping keeps apart.
+    `trueNASSystemMetricResourceID` must stay `systemSourceID` minus its
+    `system:` prefix so `Agent.AgentID`, native history keys, and
+    `canonicalAgentMetricID` in `BuildMetricsTarget` resolve one series.
+    Rows minted under the retired hostname-keyed derivation re-key once
+    through record-declared succession: records name their old canonical
+    IDs in `IngestRecord.SupersededCanonicalIDs` and
+    `ResourceRegistry.IngestRecords` applies the same
+    `ApplyCanonicalIDSuccessions` semantics as pin-driven successions
+    (operator state and action audits re-key, the superseded pin row
+    drops, never while the old ID belongs to a live resource, journal
+    rows never rewritten). Regression coverage:
+    `TestRegistryIngestRecordsKeepsSameHostnameSystemsDistinct` /
+    `TestIngestRecordsSucceedLegacyHostnameScopedCanonicalIDs` /
+    `TestIngestRecordsDoNotCompleteTrueNASIdentityFromPins` in
+    `internal/truenas/contract_test.go`, and
+    `TestIngestRecordsRecordDeclaredSuccessions` /
+    `TestIngestRecordsSkipRecordDeclaredSuccessionForLiveOldID` in
+    `internal/unifiedresources/canonical_id_succession_test.go`.
 
 ## Current State
 

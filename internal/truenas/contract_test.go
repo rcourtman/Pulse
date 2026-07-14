@@ -1,6 +1,7 @@
 package truenas
 
 import (
+	"context"
 	"math"
 	"strings"
 	"testing"
@@ -669,4 +670,203 @@ func identityToInput(identity unifiedresources.ResourceIdentity) *models.Resourc
 		MachineID: machineID,
 		IPs:       ips,
 	}
+}
+
+func newConnectionProvider(t *testing.T, fixtures FixtureSnapshot, connectionID string) *Provider {
+	t.Helper()
+	provider := NewLiveProviderForConnection(&FixtureFetcher{Snapshot: fixtures}, connectionID)
+	if err := provider.Refresh(context.Background()); err != nil {
+		t.Fatalf("refresh fixture-backed provider: %v", err)
+	}
+	return provider
+}
+
+func TestRegistryIngestRecordsKeepsSameHostnameSystemsDistinct(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	// The #1573/#1575 shape: two systems report the same hostname and no DMI
+	// serial. Only the configured connections tell them apart.
+	first := DefaultFixtures()
+	first.System.MachineID = ""
+	second := DefaultFixtures()
+	second.System.MachineID = ""
+	for i := range second.Disks {
+		second.Disks[i].Serial = strings.TrimSpace(second.Disks[i].Serial) + "-second"
+	}
+
+	records := append(
+		newConnectionProvider(t, first, "conn-first").Records(),
+		newConnectionProvider(t, second, "conn-second").Records()...,
+	)
+	registry := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+
+	resources := registry.List()
+	systems := resourcesByNameAndType(resources, unifiedresources.ResourceTypeAgent, "truenas-main")
+	if len(systems) != 2 {
+		t.Fatalf("expected 2 TrueNAS systems for the shared hostname, got %d from %+v", len(systems), systems)
+	}
+	if systems[0].ID == systems[1].ID {
+		t.Fatalf("expected distinct canonical IDs for same-hostname systems, both got %s", systems[0].ID)
+	}
+	agentIDs := map[string]struct{}{}
+	systemIDs := map[string]struct{}{}
+	for _, system := range systems {
+		systemIDs[system.ID] = struct{}{}
+		if system.Agent == nil {
+			t.Fatalf("expected agent data on TrueNAS system %s", system.ID)
+		}
+		agentIDs[system.Agent.AgentID] = struct{}{}
+	}
+	for _, want := range []string{"conn-first", "conn-second"} {
+		if _, ok := agentIDs[want]; !ok {
+			t.Fatalf("expected connection-scoped agent metric IDs, got %v", agentIDs)
+		}
+	}
+
+	poolParents := map[string]struct{}{}
+	poolCount := 0
+	for _, pool := range resourcesByNameAndType(resources, unifiedresources.ResourceTypeStorage, "tank") {
+		if pool.Storage == nil || pool.Storage.Topology != "pool" {
+			continue
+		}
+		poolCount++
+		if pool.ParentID == nil {
+			t.Fatalf("expected tank pool %s to have a parent system", pool.ID)
+		}
+		if _, ok := systemIDs[*pool.ParentID]; !ok {
+			t.Fatalf("expected tank pool %s parented to one of the systems, got parent %s", pool.ID, *pool.ParentID)
+		}
+		poolParents[*pool.ParentID] = struct{}{}
+	}
+	if poolCount != 2 || len(poolParents) != 2 {
+		t.Fatalf("expected one tank pool per system, got %d pools across %d parents", poolCount, len(poolParents))
+	}
+}
+
+func TestIngestRecordsSucceedLegacyHostnameScopedCanonicalIDs(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	fixtures := DefaultFixtures()
+	// A serial-less box: the retired client fallback minted its machine key
+	// from the reported hostname.
+	fixtures.System.MachineID = ""
+	hostname := fixtures.System.Hostname
+	legacySystemSourceID := "system:" + hostname
+
+	legacySystemID := unifiedresources.MachineIdentityCanonicalID(unifiedresources.ResourceTypeAgent, hostname)
+	legacyPoolID := unifiedresources.SourceSpecificID(
+		unifiedresources.ResourceTypeStorage,
+		unifiedresources.SourceTrueNAS,
+		scopedPoolSourceID(legacySystemSourceID, "tank"),
+	)
+
+	store := unifiedresources.NewMemoryStore()
+	for _, canonicalID := range []string{legacySystemID, legacyPoolID} {
+		if err := store.SetResourceOperatorState(unifiedresources.ResourceOperatorState{
+			CanonicalID:          canonicalID,
+			IntentionallyOffline: true,
+		}); err != nil {
+			t.Fatalf("seed operator state for %s: %v", canonicalID, err)
+		}
+	}
+	if err := store.UpsertResourceIdentityPins([]unifiedresources.ResourceIdentityPin{{
+		CanonicalID:  legacySystemID,
+		ResourceType: unifiedresources.ResourceTypeAgent,
+		MachineID:    hostname,
+		Hostname:     hostname,
+	}}); err != nil {
+		t.Fatalf("seed legacy identity pin: %v", err)
+	}
+
+	registry := unifiedresources.NewRegistry(store)
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, newConnectionProvider(t, fixtures, "conn-a").Records())
+
+	newSystemID := unifiedresources.SourceSpecificID(unifiedresources.ResourceTypeAgent, unifiedresources.SourceTrueNAS, "system:conn-a")
+	newPoolID := unifiedresources.SourceSpecificID(
+		unifiedresources.ResourceTypeStorage,
+		unifiedresources.SourceTrueNAS,
+		scopedPoolSourceID("system:conn-a", "tank"),
+	)
+	system := mustResourceByID(t, registry.List(), newSystemID)
+	if system.Agent == nil || system.Agent.AgentID != "conn-a" {
+		t.Fatalf("expected connection-scoped system record, got %+v", system.Agent)
+	}
+
+	for oldID, newID := range map[string]string{legacySystemID: newSystemID, legacyPoolID: newPoolID} {
+		if _, found, err := store.GetResourceOperatorState(oldID); err != nil || found {
+			t.Fatalf("expected operator state to leave superseded ID %s (found=%v err=%v)", oldID, found, err)
+		}
+		state, found, err := store.GetResourceOperatorState(newID)
+		if err != nil || !found {
+			t.Fatalf("expected operator state re-keyed to %s (found=%v err=%v)", newID, found, err)
+		}
+		if !state.IntentionallyOffline {
+			t.Fatalf("expected re-keyed operator state to keep its fields, got %+v", state)
+		}
+	}
+
+	pins, err := store.ListResourceIdentityPins()
+	if err != nil {
+		t.Fatalf("list identity pins: %v", err)
+	}
+	for _, pin := range pins {
+		if pin.CanonicalID == legacySystemID {
+			t.Fatalf("expected superseded hostname-derived pin to be deleted, still present: %+v", pin)
+		}
+	}
+}
+
+func TestIngestRecordsDoNotCompleteTrueNASIdentityFromPins(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	fixtures := DefaultFixtures()
+	fixtures.System.MachineID = ""
+	hostname := fixtures.System.Hostname
+
+	// A pulse-agent's pin for a host with the same name must not lend the
+	// TrueNAS system its machine key: completion would merge every TrueNAS
+	// connection sharing that hostname into the agent host.
+	agentPinID := unifiedresources.MachineIdentityCanonicalID(unifiedresources.ResourceTypeAgent, "agent-machine-id")
+	store := unifiedresources.NewMemoryStore()
+	if err := store.UpsertResourceIdentityPins([]unifiedresources.ResourceIdentityPin{{
+		CanonicalID:  agentPinID,
+		ResourceType: unifiedresources.ResourceTypeAgent,
+		MachineID:    "agent-machine-id",
+		Hostname:     hostname,
+	}}); err != nil {
+		t.Fatalf("seed agent identity pin: %v", err)
+	}
+
+	registry := unifiedresources.NewRegistry(store)
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, newConnectionProvider(t, fixtures, "conn-a").Records())
+
+	expectedID := unifiedresources.SourceSpecificID(unifiedresources.ResourceTypeAgent, unifiedresources.SourceTrueNAS, "system:conn-a")
+	system := mustResourceByID(t, registry.List(), expectedID)
+	if system.Identity.MachineID != "" {
+		t.Fatalf("expected TrueNAS system identity to stay machine-keyless, got %q", system.Identity.MachineID)
+	}
+}
+
+func mustResourceByID(t *testing.T, resources []unifiedresources.Resource, id string) unifiedresources.Resource {
+	t.Helper()
+	for _, resource := range resources {
+		if resource.ID == id {
+			return resource
+		}
+	}
+	t.Fatalf("missing resource with canonical ID %s", id)
+	return unifiedresources.Resource{}
 }

@@ -296,7 +296,7 @@ func (p *TrueNASPoller) syncConnections() {
 			if existingProvider != nil {
 				existingProvider.Close()
 			}
-			p.providersByOrg[orgID][connID] = truenas.NewLiveProvider(&truenas.APIFetcher{Client: client})
+			p.providersByOrg[orgID][connID] = truenas.NewLiveProviderForConnection(&truenas.APIFetcher{Client: client}, connID)
 		}
 	}
 

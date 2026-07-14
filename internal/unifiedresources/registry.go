@@ -70,6 +70,15 @@ type IngestRecord struct {
 	ParentSourceID string
 	Resource       Resource
 	Identity       ResourceIdentity
+	// SupersededCanonicalIDs names canonical IDs this record's resource was
+	// minted under by a retired derivation era (e.g. TrueNAS systems keyed by
+	// reported hostname before they were keyed by the configured connection).
+	// After ingest, operator-owned rows (resource_operator_state,
+	// action_audits) and the superseded identity pin re-key to the record's
+	// current canonical ID via canonical-ID succession, with the same guards
+	// as pin-driven successions: never while the old ID still belongs to a
+	// live resource, and change-journal rows are never rewritten.
+	SupersededCanonicalIDs []string
 }
 
 // ResourceRegistry merges resources from multiple sources.
@@ -500,6 +509,8 @@ func (rr *ResourceRegistry) ingestSnapshot(snapshot models.StateSnapshot, thresh
 
 // IngestRecords ingests normalized records for a single source.
 func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRecord) {
+	var successions []CanonicalIDSuccession
+	supersededSeen := make(map[string]struct{})
 	for _, record := range records {
 		sourceID := normalizeSourceID(record.SourceID)
 		if sourceID == "" {
@@ -512,8 +523,23 @@ func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRec
 				resource.ParentID = &parentID
 			}
 		}
-		rr.ingest(source, sourceID, resource, record.Identity)
+		newID := rr.ingest(source, sourceID, resource, record.Identity)
+		for _, superseded := range record.SupersededCanonicalIDs {
+			superseded = CanonicalResourceID(superseded)
+			if superseded == "" || newID == "" || superseded == newID {
+				continue
+			}
+			if _, dup := supersededSeen[superseded]; dup {
+				continue
+			}
+			supersededSeen[superseded] = struct{}{}
+			successions = append(successions, CanonicalIDSuccession{
+				OldCanonicalID: superseded,
+				NewCanonicalID: newID,
+			})
+		}
 	}
+	rr.applyRecordSuccessions(successions)
 
 	rr.mu.Lock()
 	rr.refreshStorageConsumersLocked()
@@ -523,6 +549,39 @@ func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRec
 	rr.buildChildCounts()
 	rr.viewsDirty = true
 	rr.mu.Unlock()
+}
+
+// applyRecordSuccessions re-keys operator-owned store rows from canonical IDs
+// that ingested records declared superseded (IngestRecord.SupersededCanonicalIDs)
+// onto the records' current canonical IDs. Mirrors the guards of pin-driven
+// successions in PersistIdentityPins: a superseded ID still held by a live
+// resource is skipped so a genuinely distinct sibling never has its rows
+// stolen. Re-runs are cheap no-ops once the old rows are gone.
+func (rr *ResourceRegistry) applyRecordSuccessions(successions []CanonicalIDSuccession) {
+	if len(successions) == 0 || rr.store == nil {
+		return
+	}
+	successor, ok := rr.store.(canonicalIDSuccessor)
+	if !ok {
+		return
+	}
+
+	rr.mu.RLock()
+	kept := make([]CanonicalIDSuccession, 0, len(successions))
+	for _, succession := range successions {
+		if _, live := rr.resources[succession.OldCanonicalID]; live {
+			continue
+		}
+		kept = append(kept, succession)
+	}
+	rr.mu.RUnlock()
+
+	if len(kept) == 0 {
+		return
+	}
+	if err := successor.ApplyCanonicalIDSuccessions(kept); err != nil {
+		log.Printf("unifiedresources: failed to apply record-declared canonical ID successions: %v", err)
+	}
 }
 
 // IngestResources seeds the registry from already-unified resources.
@@ -2283,8 +2342,14 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	// Complete weak host identities from the durable pins before matching and
 	// ID derivation, so canonical IDs do not depend on which sources happen to
 	// be present in this rebuild (boot windows ingest the Proxmox node record
-	// before the agent has checked in).
-	identity = rr.completeIdentityFromPins(resource.Type, identity)
+	// before the agent has checked in). TrueNAS is exempt: its systems are
+	// keyed by the configured connection and deliberately carry no machine
+	// key, so a hostname-bucket pin (a stale pre-#1573 TrueNAS pin, or a
+	// pulse-agent's pin on a same-named host) completing the identity would
+	// re-merge systems the connection scoping keeps apart.
+	if source != SourceTrueNAS {
+		identity = rr.completeIdentityFromPins(resource.Type, identity)
+	}
 	resource.Identity = identity
 	resource.Sources = []DataSource{source}
 	resource.SourceStatus = map[DataSource]SourceStatus{

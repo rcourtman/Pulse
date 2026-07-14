@@ -153,10 +153,12 @@ func (c *Client) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 		return nil, err
 	}
 
+	// MachineID is the raw DMI serial only. It must never fall back to the
+	// reported hostname: hostname is not a machine identity, and the old
+	// fallback gave two serial-less systems that report the same hostname
+	// identical machine keys, fully merging them in the resource registry
+	// (#1573, #1575).
 	machineID := strings.TrimSpace(response.SystemSerial)
-	if machineID == "" {
-		machineID = strings.TrimSpace(response.Hostname)
-	}
 
 	build := strings.TrimSpace(response.BuildTime.String())
 	if build == "" {

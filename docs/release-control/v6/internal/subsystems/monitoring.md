@@ -331,6 +331,21 @@ resource health.
     dataset, app, VM, share, and disk names from different appliances remain
     distinct. Mock fixture metrics and seeded/live history must use the same
     scoped source keys as the TrueNAS provider metrics targets.
+    The owning system source key itself is connection-scoped: the poller
+    constructs live providers through `NewLiveProviderForConnection` so
+    `systemSourceID` keys the system (and every child scoped under it) by the
+    configured connection ID, never by the snapshot-reported hostname, and the
+    system's ingest identity carries no machine key (DMI serials are shared by
+    DR clones and can be vendor placeholders). Two appliances that report the
+    same hostname must remain distinct resources (#1573, #1575). The hostname
+    arm of `systemSourceID` exists only for fixture snapshots, which carry no
+    connection; mock-mode identities stay hostname-scoped through that arm.
+    Regression coverage: `TestTrueNASPollerKeysSystemsByConnection` in
+    `internal/monitoring/truenas_poller_test.go` and
+    `TestRegistryIngestRecordsKeepsSameHostnameSystemsDistinct` in
+    `internal/truenas/contract_test.go`. The canonical-ID migration semantics
+    for rows minted under the retired hostname-keyed derivation live in the
+    unified-resources contract (record-declared succession, item 27).
     TrueNAS storage and alert inventory follow native query methods first:
     pools use `pool.query`, datasets use `pool.dataset.query`, disks use
     `disk.query` with pool join options, and alerts use `alert.list`, with

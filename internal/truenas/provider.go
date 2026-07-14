@@ -144,6 +144,7 @@ func (f *FixtureFetcher) Fetch(context.Context) (*FixtureSnapshot, error) {
 // Provider converts TrueNAS snapshot data into unified resources.
 type Provider struct {
 	fetcher      Fetcher
+	connectionID string
 	lastSnapshot *FixtureSnapshot
 	mu           sync.Mutex
 	now          func() time.Time
@@ -157,6 +158,17 @@ func NewLiveProvider(fetcher Fetcher) *Provider {
 			return time.Now().UTC()
 		},
 	}
+}
+
+// NewLiveProviderForConnection returns a live provider whose resources are
+// keyed by the configured connection rather than the hostname the TrueNAS API
+// reports. Two systems that report the same hostname (a DR box restored from
+// the primary's config, the default "truenas" name) must stay distinct
+// resources (#1573, #1575).
+func NewLiveProviderForConnection(fetcher Fetcher, connectionID string) *Provider {
+	provider := NewLiveProvider(fetcher)
+	provider.connectionID = strings.TrimSpace(connectionID)
+	return provider
 }
 
 // NewProvider returns a fixture-backed provider.
@@ -300,7 +312,7 @@ func (p *Provider) SystemMetricHistory(ctx context.Context, duration time.Durati
 	if snapshot == nil {
 		return "", nil, fmt.Errorf("truenas provider has no cached snapshot")
 	}
-	resourceID := trueNASSystemMetricResourceID(snapshot.System)
+	resourceID := trueNASSystemMetricResourceID(p.connectionID, snapshot.System)
 	if resourceID == "" {
 		return "", nil, fmt.Errorf("truenas provider snapshot is missing system metric resource id")
 	}
@@ -423,8 +435,10 @@ func (p *Provider) Snapshot() *FixtureSnapshot {
 
 // FixtureRecords projects a TrueNAS fixture snapshot into canonical unified
 // resource ingest records without consulting the runtime feature flag.
+// Fixture snapshots carry no connection, so they keep the hostname-scoped
+// source IDs that mock mode and the mock metric identities derive.
 func FixtureRecords(snapshot FixtureSnapshot) []unifiedresources.IngestRecord {
-	return truenasRecordsFromSnapshot(&snapshot, nil)
+	return truenasRecordsFromSnapshot(&snapshot, "", nil)
 }
 
 // Records returns unified records if the feature flag is enabled.
@@ -433,10 +447,10 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 		return nil
 	}
 
-	return truenasRecordsFromSnapshot(p.Snapshot(), p.now)
+	return truenasRecordsFromSnapshot(p.Snapshot(), p.connectionID, p.now)
 }
 
-func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time) []unifiedresources.IngestRecord {
+func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, now func() time.Time) []unifiedresources.IngestRecord {
 	if snapshot == nil {
 		return nil
 	}
@@ -452,7 +466,37 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 			collectedAt = time.Now().UTC()
 		}
 	}
-	systemSourceID := systemSourceID(snapshot.System.Hostname)
+	systemSourceID := systemSourceID(connectionID, snapshot.System.Hostname)
+	// legacySystemSourceID is the retired hostname-keyed derivation. It is
+	// only used to compute superseded canonical IDs so operator-owned rows
+	// (never-auto-remediate, maintenance windows, action audits) written
+	// under the old keys follow the resource onto its connection-scoped ID.
+	legacySystemSourceID := ""
+	if hostname := strings.TrimSpace(snapshot.System.Hostname); hostname != "" {
+		if legacy := "system:" + hostname; legacy != systemSourceID {
+			legacySystemSourceID = legacy
+		}
+	}
+	supersededChildIDs := func(resourceType unifiedresources.ResourceType, legacyChildSourceID string) []string {
+		if legacySystemSourceID == "" {
+			return nil
+		}
+		return []string{unifiedresources.SourceSpecificID(resourceType, unifiedresources.SourceTrueNAS, legacyChildSourceID)}
+	}
+	var systemSupersededIDs []string
+	if legacySystemSourceID != "" {
+		// The retired client fell back to the reported hostname when the DMI
+		// serial was empty, and the registry minted the system's canonical ID
+		// from that machine key. Reproduce that ladder to name the old ID.
+		legacyMachineID := strings.TrimSpace(snapshot.System.MachineID)
+		if legacyMachineID == "" {
+			legacyMachineID = strings.TrimSpace(snapshot.System.Hostname)
+		}
+		systemSupersededIDs = []string{
+			unifiedresources.MachineIdentityCanonicalID(unifiedresources.ResourceTypeAgent, legacyMachineID),
+			unifiedresources.SourceSpecificID(unifiedresources.ResourceTypeAgent, unifiedresources.SourceTrueNAS, legacySystemSourceID),
+		}
+	}
 	systemAssessment := assessSystemStorage(snapshot)
 	systemRisk := unifiedresources.StorageRiskFromAssessment(systemAssessment)
 	_, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary := unifiedresources.StorageRiskSemantics(systemRisk)
@@ -460,9 +504,10 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Apps)+len(snapshot.VMs)+len(snapshot.Shares)+len(snapshot.Disks))
 
 	totalCapacity, totalUsed := aggregatePoolUsage(snapshot.Pools)
-	systemAgent := agentDataFromTrueNASSystem(snapshot.System, systemRisk, protectionReduced, protectionSummary, rebuildInProgress, rebuildSummary)
+	systemAgent := agentDataFromTrueNASSystem(connectionID, snapshot.System, systemRisk, protectionReduced, protectionSummary, rebuildInProgress, rebuildSummary)
 	records = append(records, unifiedresources.IngestRecord{
-		SourceID: systemSourceID,
+		SourceID:               systemSourceID,
+		SupersededCanonicalIDs: systemSupersededIDs,
 		Resource: unifiedresources.Resource{
 			Type:        unifiedresources.ResourceTypeAgent,
 			Name:        strings.TrimSpace(snapshot.System.Hostname),
@@ -493,8 +538,12 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 			},
 			Incidents: systemIncidents,
 		},
+		// The system's identity deliberately carries no machine key: the
+		// TrueNAS DMI serial is shared by DR clones and can be vendor
+		// placeholder garbage, so the identity matcher would re-merge the
+		// systems this record's connection-scoped source ID keeps apart
+		// (#1573, #1575). The configured connection is the identity.
 		Identity: unifiedresources.ResourceIdentity{
-			MachineID: snapshot.System.MachineID,
 			Hostnames: []string{snapshot.System.Hostname},
 		},
 	})
@@ -505,8 +554,9 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 		incidents := poolIncidents[strings.TrimSpace(pool.Name)]
 		poolSourceID := scopedPoolSourceID(systemSourceID, pool.Name)
 		records = append(records, unifiedresources.IngestRecord{
-			SourceID:       poolSourceID,
-			ParentSourceID: systemSourceID,
+			SourceID:               poolSourceID,
+			ParentSourceID:         systemSourceID,
+			SupersededCanonicalIDs: supersededChildIDs(unifiedresources.ResourceTypeStorage, scopedPoolSourceID(legacySystemSourceID, pool.Name)),
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypeStorage,
 				Name:      pool.Name,
@@ -549,8 +599,9 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 		}
 		totalBytes := dataset.UsedBytes + dataset.AvailBytes
 		records = append(records, unifiedresources.IngestRecord{
-			SourceID:       scopedDatasetSourceID(systemSourceID, dataset.Name),
-			ParentSourceID: scopedPoolSourceID(systemSourceID, parentPool),
+			SourceID:               scopedDatasetSourceID(systemSourceID, dataset.Name),
+			ParentSourceID:         scopedPoolSourceID(systemSourceID, parentPool),
+			SupersededCanonicalIDs: supersededChildIDs(unifiedresources.ResourceTypeStorage, scopedDatasetSourceID(legacySystemSourceID, dataset.Name)),
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypeStorage,
 				Name:      dataset.Name,
@@ -616,8 +667,9 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 		}
 
 		records = append(records, unifiedresources.IngestRecord{
-			SourceID:       scopedAppSourceID(systemSourceID, app),
-			ParentSourceID: systemSourceID,
+			SourceID:               scopedAppSourceID(systemSourceID, app),
+			ParentSourceID:         systemSourceID,
+			SupersededCanonicalIDs: supersededChildIDs(unifiedresources.ResourceTypeAppContainer, scopedAppSourceID(legacySystemSourceID, app)),
 			Resource: unifiedresources.Resource{
 				Type:       unifiedresources.ResourceTypeAppContainer,
 				Technology: "docker",
@@ -642,8 +694,9 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 
 	for _, vm := range snapshot.VMs {
 		records = append(records, unifiedresources.IngestRecord{
-			SourceID:       scopedVirtualMachineSourceID(systemSourceID, vm),
-			ParentSourceID: systemSourceID,
+			SourceID:               scopedVirtualMachineSourceID(systemSourceID, vm),
+			ParentSourceID:         systemSourceID,
+			SupersededCanonicalIDs: supersededChildIDs(unifiedresources.ResourceTypeVM, scopedVirtualMachineSourceID(legacySystemSourceID, vm)),
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypeVM,
 				Name:      virtualMachineDisplayName(vm),
@@ -674,8 +727,9 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 			parentSourceID = scopedPoolSourceID(systemSourceID, pool)
 		}
 		records = append(records, unifiedresources.IngestRecord{
-			SourceID:       scopedNetworkShareSourceID(systemSourceID, share),
-			ParentSourceID: parentSourceID,
+			SourceID:               scopedNetworkShareSourceID(systemSourceID, share),
+			ParentSourceID:         parentSourceID,
+			SupersededCanonicalIDs: supersededChildIDs(unifiedresources.ResourceTypeNetworkShare, scopedNetworkShareSourceID(legacySystemSourceID, share)),
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypeNetworkShare,
 				Name:      networkShareDisplayName(share),
@@ -710,9 +764,17 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 		if pool := strings.TrimSpace(disk.Pool); pool != "" {
 			parentSourceID = scopedPoolSourceID(systemSourceID, pool)
 		}
+		// Disks with a serial mint identity-keyed canonical IDs that do not
+		// depend on the source ID, so only serial-less disks re-key when the
+		// system scope moves to the connection.
+		var diskSupersededIDs []string
+		if disk.Serial == "" {
+			diskSupersededIDs = supersededChildIDs(unifiedresources.ResourceTypePhysicalDisk, scopedDiskSourceID(legacySystemSourceID, disk.Name))
+		}
 		records = append(records, unifiedresources.IngestRecord{
-			SourceID:       scopedDiskSourceID(systemSourceID, disk.Name),
-			ParentSourceID: parentSourceID,
+			SourceID:               scopedDiskSourceID(systemSourceID, disk.Name),
+			ParentSourceID:         parentSourceID,
+			SupersededCanonicalIDs: diskSupersededIDs,
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypePhysicalDisk,
 				Name:      disk.Name,
@@ -851,9 +913,9 @@ func metricsFromTrueNASSystem(system SystemInfo, totalCapacity, totalUsed int64)
 	return metrics
 }
 
-func agentDataFromTrueNASSystem(system SystemInfo, storageRisk *unifiedresources.StorageRisk, protectionReduced bool, protectionSummary string, rebuildInProgress bool, rebuildSummary string) *unifiedresources.AgentData {
+func agentDataFromTrueNASSystem(connectionID string, system SystemInfo, storageRisk *unifiedresources.StorageRisk, protectionReduced bool, protectionSummary string, rebuildInProgress bool, rebuildSummary string) *unifiedresources.AgentData {
 	agent := &unifiedresources.AgentData{
-		AgentID:               trueNASSystemMetricResourceID(system),
+		AgentID:               trueNASSystemMetricResourceID(connectionID, system),
 		Hostname:              strings.TrimSpace(system.Hostname),
 		MachineID:             strings.TrimSpace(system.MachineID),
 		Platform:              "truenas",
@@ -1314,7 +1376,16 @@ func aggregatePoolUsage(pools []Pool) (int64, int64) {
 	return total, used
 }
 
-func systemSourceID(hostname string) string {
+// systemSourceID keys an API-added TrueNAS system by the configured
+// connection. The reported hostname is not an identity: two systems that
+// report the same hostname (a DR clone, the default "truenas" name) must not
+// collapse into one resource and flap between each other's data every poll
+// (#1573, #1575). The hostname arm survives only for fixture snapshots,
+// which carry no connection.
+func systemSourceID(connectionID, hostname string) string {
+	if id := strings.TrimSpace(connectionID); id != "" {
+		return "system:" + id
+	}
 	return "system:" + strings.TrimSpace(hostname)
 }
 
@@ -2116,7 +2187,15 @@ func systemMemoryPercentHistory(history *SystemMetricHistory, fallbackTotalBytes
 	return nil
 }
 
-func trueNASSystemMetricResourceID(system SystemInfo) string {
+// trueNASSystemMetricResourceID must stay systemSourceID minus its "system:"
+// prefix: BuildMetricsTarget derives the agent metric target by stripping
+// that prefix from the TrueNAS source ID (canonicalAgentMetricID), and the
+// records' Agent.AgentID plus the native history keys returned by
+// SystemMetricHistory have to resolve to the same series.
+func trueNASSystemMetricResourceID(connectionID string, system SystemInfo) string {
+	if id := strings.TrimSpace(connectionID); id != "" {
+		return id
+	}
 	return strings.TrimSpace(system.Hostname)
 }
 

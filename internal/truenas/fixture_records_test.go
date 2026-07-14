@@ -12,7 +12,7 @@ func TestFixtureRecordsIgnoreFeatureFlag(t *testing.T) {
 		t.Fatal("expected fixture records even when feature flag is disabled")
 	}
 
-	systemID := systemSourceID("truenas-main")
+	systemID := systemSourceID("", "truenas-main")
 	for _, record := range records {
 		if record.SourceID == systemID {
 			return

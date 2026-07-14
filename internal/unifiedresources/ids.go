@@ -24,6 +24,15 @@ func SourceSpecificID(resourceType ResourceType, source DataSource, sourceID str
 	return fmt.Sprintf("%s-%s", resourceType, hex.EncodeToString(hash[:8]))
 }
 
+// MachineIdentityCanonicalID returns the canonical ID the registry mints for
+// a resource keyed by its machine identity, the strongest arm of the
+// chooseNewID ladder. Providers use it to name superseded canonical IDs
+// (IngestRecord.SupersededCanonicalIDs) when a derivation correction retires
+// a machine key, so operator-owned rows follow the resource to its new ID.
+func MachineIdentityCanonicalID(resourceType ResourceType, machineID string) string {
+	return buildHashID(resourceType, "machine:"+strings.TrimSpace(machineID))
+}
+
 // CanonicalResourceID returns the canonical v6 resource identifier.
 func CanonicalResourceID(id string) string {
 	trimmed := strings.TrimSpace(id)

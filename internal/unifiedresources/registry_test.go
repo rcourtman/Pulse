@@ -5101,3 +5101,76 @@ func TestCanonicalIDSuccessionSkipsLiveShortNamedHost(t *testing.T) {
 		t.Fatalf("FQDN sibling stole the live short-named host's operator state")
 	}
 }
+
+// Record-declared successions (IngestRecord.SupersededCanonicalIDs) must
+// re-key operator rows to the record's minted canonical ID, but never while
+// the superseded ID still belongs to a live resource in the registry: a
+// distinct sibling's rows must not be stolen.
+func TestIngestRecordsRecordDeclaredSuccessions(t *testing.T) {
+	store := NewMemoryStore()
+	oldID := SourceSpecificID(ResourceTypeStorage, SourceTrueNAS, "system:legacy-host/pool:tank")
+	if err := store.SetResourceOperatorState(ResourceOperatorState{
+		CanonicalID:        oldID,
+		NeverAutoRemediate: true,
+	}); err != nil {
+		t.Fatalf("seed operator state: %v", err)
+	}
+
+	registry := NewRegistry(store)
+	registry.IngestRecords(SourceTrueNAS, []IngestRecord{{
+		SourceID: "system:conn-a/pool:tank",
+		Resource: Resource{
+			Type:     ResourceTypeStorage,
+			Name:     "tank",
+			LastSeen: time.Now().UTC(),
+		},
+		SupersededCanonicalIDs: []string{oldID},
+	}})
+
+	newID := SourceSpecificID(ResourceTypeStorage, SourceTrueNAS, "system:conn-a/pool:tank")
+	if _, found, err := store.GetResourceOperatorState(oldID); err != nil || found {
+		t.Fatalf("expected operator state to leave superseded ID (found=%v err=%v)", found, err)
+	}
+	state, found, err := store.GetResourceOperatorState(newID)
+	if err != nil || !found || !state.NeverAutoRemediate {
+		t.Fatalf("expected operator state re-keyed to %s (found=%v err=%v state=%+v)", newID, found, err, state)
+	}
+}
+
+func TestIngestRecordsSkipRecordDeclaredSuccessionForLiveOldID(t *testing.T) {
+	store := NewMemoryStore()
+	oldID := SourceSpecificID(ResourceTypeStorage, SourceTrueNAS, "system:legacy-host/pool:tank")
+	if err := store.SetResourceOperatorState(ResourceOperatorState{
+		CanonicalID:        oldID,
+		NeverAutoRemediate: true,
+	}); err != nil {
+		t.Fatalf("seed operator state: %v", err)
+	}
+
+	registry := NewRegistry(store)
+	// The old derivation is still alive in this registry: another record
+	// legitimately owns it, so the succession must not run.
+	registry.IngestRecords(SourceTrueNAS, []IngestRecord{
+		{
+			SourceID: "system:legacy-host/pool:tank",
+			Resource: Resource{
+				Type:     ResourceTypeStorage,
+				Name:     "tank",
+				LastSeen: time.Now().UTC(),
+			},
+		},
+		{
+			SourceID: "system:conn-a/pool:tank",
+			Resource: Resource{
+				Type:     ResourceTypeStorage,
+				Name:     "tank",
+				LastSeen: time.Now().UTC(),
+			},
+			SupersededCanonicalIDs: []string{oldID},
+		},
+	})
+
+	if _, found, err := store.GetResourceOperatorState(oldID); err != nil || !found {
+		t.Fatalf("expected operator state to stay under live old ID (found=%v err=%v)", found, err)
+	}
+}
