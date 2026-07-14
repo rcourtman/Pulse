@@ -113,6 +113,8 @@ Query params:
 
 Note: `GET /api/resources` is optimized for list views. Some large, platform-specific fields may be omitted from the list response and are only returned by `GET /api/resources/{id}`.
 
+Note: guest disk usage percentages use `-1` as an "unknown" sentinel — reported when a VM is stopped or its guest agent is unavailable, so there is no filesystem view to measure. Consumers should treat negative values as "no data", not as a percentage; the accompanying `diskStatusReason` field (e.g. `vm-stopped`, `agent-disabled`) says why.
+
 `GET /api/resources/stats`
 Returns aggregations (counts + health rollups).
 
