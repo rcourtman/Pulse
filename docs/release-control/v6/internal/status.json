@@ -8860,19 +8860,6 @@
   ],
   "work_claims": [
     {
-      "id": "commercial-production-remediation-prep-release-gate-self-hosted-commercial-transition-coherence",
-      "agent_id": "commercial-production-remediation-prep",
-      "summary": "Prepare guarded, idempotent Stripe commercial-state remediation without executing external mutations.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-14T20:36:24Z",
-      "heartbeat_at": "2026-07-14T20:36:24Z",
-      "expires_at": "2026-07-14T22:36:24Z",
-      "work_item": {
-        "kind": "release-gate",
-        "id": "self-hosted-commercial-transition-coherence"
-      }
-    },
-    {
       "id": "patrol-community-qualification-lane-l6",
       "agent_id": "patrol-community-qualification",
       "summary": "Add local Patrol model-suite execution and privacy-allowlisted community qualification evidence export without network upload.",
