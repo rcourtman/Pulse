@@ -145,6 +145,7 @@ func ollamaKeepAliveRequestValue(value string) any {
 type ollamaMessage struct {
 	Role      string           `json:"role"`
 	Content   string           `json:"content"`
+	Thinking  string           `json:"thinking,omitempty"`   // Prior-turn reasoning for assistant messages
 	ToolCalls []ollamaToolCall `json:"tool_calls,omitempty"` // For assistant messages with tool calls
 }
 
@@ -193,6 +194,7 @@ type ollamaResponse struct {
 type ollamaMessageResp struct {
 	Role      string           `json:"role"`
 	Content   string           `json:"content"`
+	Thinking  string           `json:"thinking,omitempty"` // Reasoning tokens from thinking models (e.g. qwen3)
 	ToolCalls []ollamaToolCall `json:"tool_calls,omitempty"`
 }
 
@@ -211,8 +213,9 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 	for _, m := range req.Messages {
 		msg := ollamaMessage{
-			Role:    m.Role,
-			Content: m.Content,
+			Role:     m.Role,
+			Content:  m.Content,
+			Thinking: m.ReasoningContent,
 		}
 		// Include tool calls for assistant messages (for multi-turn with tool use)
 		if len(m.ToolCalls) > 0 {
@@ -325,11 +328,12 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 	// Build response with tool calls if present
 	chatResp := &ChatResponse{
-		Content:      ollamaResp.Message.Content,
-		Model:        ollamaResp.Model,
-		StopReason:   ollamaResp.DoneReason,
-		InputTokens:  ollamaResp.PromptEvalCount,
-		OutputTokens: ollamaResp.EvalCount,
+		Content:          ollamaResp.Message.Content,
+		ReasoningContent: ollamaResp.Message.Thinking,
+		Model:            ollamaResp.Model,
+		StopReason:       ollamaResp.DoneReason,
+		InputTokens:      ollamaResp.PromptEvalCount,
+		OutputTokens:     ollamaResp.EvalCount,
 	}
 
 	// Convert Ollama tool calls to our format
@@ -354,8 +358,10 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 
 // SupportsThinking returns true if the model supports extended thinking
 func (c *OllamaClient) SupportsThinking(model string) bool {
-	// Ollama models don't currently support extended thinking in stream output
-	return false
+	// Ollama's native /api/chat streams reasoning in message.thinking for
+	// thinking models (e.g. qwen3). Whether a given model actually thinks is
+	// decided by the model itself; the provider passes through whatever it emits.
+	return true
 }
 
 // ollamaStreamResponse is a single chunk from the Ollama streaming API
@@ -385,8 +391,9 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 	for _, m := range req.Messages {
 		msg := ollamaMessage{
-			Role:    m.Role,
-			Content: m.Content,
+			Role:     m.Role,
+			Content:  m.Content,
+			Thinking: m.ReasoningContent,
 		}
 		if len(m.ToolCalls) > 0 {
 			for _, tc := range m.ToolCalls {
@@ -497,6 +504,15 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 				break
 			}
 			return fmt.Errorf("stream decode error: %w", err)
+		}
+
+		// Reasoning tokens arrive in message.thinking before any content for
+		// thinking models (e.g. qwen3); surface them live instead of dead air.
+		if chunk.Message.Thinking != "" {
+			callback(StreamEvent{
+				Type: "thinking",
+				Data: ThinkingEvent{Text: chunk.Message.Thinking},
+			})
 		}
 
 		// Regular content

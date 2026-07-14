@@ -78,6 +78,48 @@ func TestOllamaClient_ChatStream_Success(t *testing.T) {
 	assert.True(t, done)
 }
 
+func TestOllamaClient_ChatStream_Thinking(t *testing.T) {
+	// Thinking models (e.g. qwen3) stream reasoning in message.thinking
+	// before any content arrives — Pulse must surface it live.
+	mockResponse := `{"model":"qwen3:8b","message":{"role":"assistant","content":"","thinking":"Let me"},"done":false}
+{"model":"qwen3:8b","message":{"role":"assistant","content":"","thinking":" think."},"done":false}
+{"model":"qwen3:8b","message":{"role":"assistant","content":"Answer"},"done":false}
+{"model":"qwen3:8b","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop","prompt_eval_count":10,"eval_count":5}
+`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		w.Write([]byte(mockResponse))
+	}))
+	defer server.Close()
+
+	client := newTestOllamaClient(t, "qwen3:8b", server.URL, "", "", 0)
+
+	var thinking, content string
+	var events []string
+
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Model:    "qwen3:8b",
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}, func(event StreamEvent) {
+		events = append(events, event.Type)
+		switch event.Type {
+		case "thinking":
+			if data, ok := event.Data.(ThinkingEvent); ok {
+				thinking += data.Text
+			}
+		case "content":
+			if data, ok := event.Data.(ContentEvent); ok {
+				content += data.Text
+			}
+		}
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "Let me think.", thinking)
+	assert.Equal(t, "Answer", content)
+	assert.Equal(t, []string{"thinking", "thinking", "content", "done"}, events)
+}
+
 func TestOllamaClient_ChatStream_ToolCall(t *testing.T) {
 	// Mock Ollama Tool Call Streaming (NDJSON)
 	// Note: Ollama sends tool calls in the message object, often in one chunk or accumulated.
@@ -194,8 +236,9 @@ func TestOllamaClient_Chat_Success(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(ollamaResponse{
 			Model: "llama3",
 			Message: ollamaMessageResp{
-				Role:    "assistant",
-				Content: "Hello",
+				Role:     "assistant",
+				Content:  "Hello",
+				Thinking: "pondering",
 				ToolCalls: []ollamaToolCall{
 					{Function: ollamaFunctionCall{Name: "get_time", Arguments: map[string]interface{}{"tz": "UTC"}}},
 				},
@@ -224,6 +267,7 @@ func TestOllamaClient_Chat_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "Hello", resp.Content)
+	assert.Equal(t, "pondering", resp.ReasoningContent)
 	assert.Equal(t, "tool_use", resp.StopReason)
 	require.Len(t, resp.ToolCalls, 1)
 	assert.Equal(t, "get_time", resp.ToolCalls[0].Name)
@@ -328,9 +372,9 @@ func TestOllamaClient_TestConnection(t *testing.T) {
 }
 
 func TestOllamaClient_SupportsThinking(t *testing.T) {
-	client := newTestOllamaClient(t, "llama3", "http://localhost:11434", "", "", 0)
-	if client.SupportsThinking("llama3") {
-		t.Fatal("expected SupportsThinking to be false")
+	client := newTestOllamaClient(t, "qwen3:8b", "http://localhost:11434", "", "", 0)
+	if !client.SupportsThinking("qwen3:8b") {
+		t.Fatal("expected SupportsThinking to be true")
 	}
 }
 
