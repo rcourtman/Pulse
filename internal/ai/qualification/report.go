@@ -265,6 +265,7 @@ func ReplayScore(report RunReport) RunReport {
 		Run: report.PatrolRun, Findings: report.Findings,
 		Provider:          report.Environment.Provider,
 		Model:             report.Environment.Model,
+		InferenceRoute:    report.Environment.InferenceRoute,
 		CollectionLatency: report.Score.CollectionLatency,
 		EndToEndLatency:   report.Score.EndToEndLatency,
 		FaultsIntact:      !report.Manifest.Security.RequireFaultIntact || allObservationsPassed(report.PostPatrol),
@@ -585,6 +586,8 @@ func renderMarkdown(report RunReport) string {
 	fmt.Fprintf(&b, "| Tokens | %d in / %d out |\n", report.Score.InputTokens, report.Score.OutputTokens)
 	if report.Score.Cost.Known {
 		fmt.Fprintf(&b, "| Estimated cost | $%.4f |\n", report.Score.Cost.USD)
+	} else if !report.Score.Cost.BudgetApplicable {
+		fmt.Fprintf(&b, "| Estimated cost | unknown (%s; API budget not applicable) |\n", report.Score.Cost.BillingBasis)
 	} else {
 		fmt.Fprintf(&b, "| Estimated cost | unknown |\n")
 	}

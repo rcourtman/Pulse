@@ -57,13 +57,15 @@ type CollectedTruth struct {
 }
 
 type CostEstimate struct {
-	Provider      string  `json:"provider"`
-	Model         string  `json:"model"`
-	USD           float64 `json:"usd"`
-	Known         bool    `json:"known"`
-	PricingAsOf   string  `json:"pricing_as_of,omitempty"`
-	InputPerMTok  float64 `json:"input_usd_per_mtok,omitempty"`
-	OutputPerMTok float64 `json:"output_usd_per_mtok,omitempty"`
+	Provider         string  `json:"provider"`
+	Model            string  `json:"model"`
+	USD              float64 `json:"usd"`
+	Known            bool    `json:"known"`
+	BillingBasis     string  `json:"billing_basis"`
+	BudgetApplicable bool    `json:"budget_applicable"`
+	PricingAsOf      string  `json:"pricing_as_of,omitempty"`
+	InputPerMTok     float64 `json:"input_usd_per_mtok,omitempty"`
+	OutputPerMTok    float64 `json:"output_usd_per_mtok,omitempty"`
 }
 
 type MatchResult struct {
@@ -195,6 +197,7 @@ type ScoringInput struct {
 	Findings          []Finding
 	Provider          string
 	Model             string
+	InferenceRoute    string
 	CollectionLatency time.Duration
 	EndToEndLatency   time.Duration
 	FaultsIntact      bool
@@ -215,8 +218,16 @@ func ScoreRun(input ScoringInput) Score {
 	if resolvedProvider := strings.ToLower(strings.TrimSpace(input.Provider)); resolvedProvider != "" {
 		provider = resolvedProvider
 	}
+	inferenceRoute := strings.TrimSpace(input.InferenceRoute)
+	if inferenceRoute == "" {
+		inferenceRoute = inferenceRouteForProvider(provider)
+	}
 	usd, known, price := cost.EstimateUSD(provider, model, int64(input.Run.InputTokens), int64(input.Run.OutputTokens))
-	score.Cost = CostEstimate{Provider: provider, Model: model, USD: usd, Known: known, PricingAsOf: price.AsOf, InputPerMTok: price.InputUSDPerMTok, OutputPerMTok: price.OutputUSDPerMTok}
+	score.Cost = CostEstimate{
+		Provider: provider, Model: model, USD: usd, Known: known,
+		BillingBasis: inferenceRoute, BudgetApplicable: inferenceRoute == "metered_api",
+		PricingAsOf: price.AsOf, InputPerMTok: price.InputUSDPerMTok, OutputPerMTok: price.OutputUSDPerMTok,
+	}
 
 	eligibleFindings := findingsEligibleForDetection(input.Findings, input.Run.FindingAssessments)
 	infrastructureFindings := make([]Finding, 0, len(eligibleFindings))
@@ -503,7 +514,7 @@ func applyGates(score *Score, manifest Manifest) {
 	if manifest.Budgets.OutputTokensP95 > 0 && score.OutputTokens > manifest.Budgets.OutputTokensP95 {
 		score.GateFailures = append(score.GateFailures, fmt.Sprintf("output tokens %d exceed %d", score.OutputTokens, manifest.Budgets.OutputTokensP95))
 	}
-	if manifest.Budgets.CostUSDP95 > 0 {
+	if manifest.Budgets.CostUSDP95 > 0 && score.Cost.BudgetApplicable {
 		if !score.Cost.Known {
 			score.GateFailures = append(score.GateFailures, "cost budget cannot be evaluated because model pricing is unknown")
 		} else if score.Cost.USD > manifest.Budgets.CostUSDP95 {

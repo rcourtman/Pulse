@@ -411,7 +411,9 @@ PULSE_TEST_SUBSCRIPTION_AGENTS=1 \
 Qualification reports record `inference_route=local_subscription_agent` so
 subscription-backed runs cannot be confused with direct API or local-model
 runs. Token counts depend on what the CLI exposes, and a subscription allowance
-is not represented as a zero-dollar API price.
+is not represented as a zero-dollar API price. The report keeps its monetary
+cost unknown and marks the per-run metered-API budget as not applicable; plan
+limits, provider errors, latency, and any usage the CLI exposes remain visible.
 
 ### Models
 

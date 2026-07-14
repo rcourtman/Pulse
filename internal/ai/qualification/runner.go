@@ -397,6 +397,7 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		Manifest: manifest, GroundTruth: report.GroundTruth,
 		Run: report.PatrolRun, Findings: report.Findings,
 		Provider: report.Environment.Provider, Model: report.Environment.Model,
+		InferenceRoute:    report.Environment.InferenceRoute,
 		CollectionLatency: phaseDuration(report.Phases, "normal_collection_convergence"),
 		EndToEndLatency:   time.Since(faultStarted),
 		FaultsIntact:      faultsIntact, NoMutation: noMutation,

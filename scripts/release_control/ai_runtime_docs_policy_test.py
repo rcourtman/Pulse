@@ -149,6 +149,8 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertIn("API-key environment variables", normalized_content)
         self.assertIn("dedicated, least-privilege OS account", normalized_content)
         self.assertIn("Pulse retains tool execution and policy enforcement", normalized_content)
+        self.assertIn("not represented as a zero-dollar API price", normalized_content)
+        self.assertIn("per-run metered-API budget as not applicable", normalized_content)
 
     def test_public_ai_privacy_copy_discloses_outbound_usage_telemetry(self) -> None:
         content = read_repo_text("docs/AI.md")

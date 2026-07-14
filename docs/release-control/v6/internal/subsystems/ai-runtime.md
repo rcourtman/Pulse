@@ -287,6 +287,12 @@ Qualification may temporarily opt in the selected route when applying an
 explicit model override, must restore the previous opt-in and Patrol model even
 after failure, and records `inference_route=local_subscription_agent` so a
 subscription run is never compared or published as a metered API route.
+Qualification cost evidence must preserve that route distinction. Unknown
+pricing on `metered_api` remains a fail-closed dollar-budget failure. A
+`local_subscription_agent` or `local_model_server` run instead records its
+monetary cost as unknown with `budget_applicable=false`; it must not invent a
+zero-dollar price, and latency, provider/plan errors, tool efficiency, and any
+usage counts exposed by the transport remain scored and reportable.
 
 ## Canonical Files
 

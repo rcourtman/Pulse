@@ -47,6 +47,33 @@ func TestScoreRunUsesResolvedProviderForUnprefixedOpenRouterRoute(t *testing.T) 
 	}
 }
 
+func TestScoreRunAppliesDollarBudgetOnlyToMeteredAPIRoutes(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Budgets.CostUSDP95 = 0.01
+
+	subscription := ScoreRun(ScoringInput{
+		Manifest: manifest, Provider: "codex-subscription", Model: "codex-subscription:gpt-5.6-luna",
+		InferenceRoute: "local_subscription_agent",
+	})
+	if subscription.Cost.Known || subscription.Cost.BudgetApplicable || subscription.Cost.BillingBasis != "local_subscription_agent" {
+		t.Fatalf("unexpected subscription cost semantics: %+v", subscription.Cost)
+	}
+	if strings.Contains(strings.Join(subscription.GateFailures, "\n"), "cost budget") {
+		t.Fatalf("subscription allowance was treated as metered API spend: %+v", subscription.GateFailures)
+	}
+
+	metered := ScoreRun(ScoringInput{
+		Manifest: manifest, Provider: "unpriced-api", Model: "unpriced-api:model",
+		InferenceRoute: "metered_api",
+	})
+	if !metered.Cost.BudgetApplicable || metered.Cost.BillingBasis != "metered_api" {
+		t.Fatalf("unexpected metered cost semantics: %+v", metered.Cost)
+	}
+	if !strings.Contains(strings.Join(metered.GateFailures, "\n"), "cost budget cannot be evaluated") {
+		t.Fatalf("unpriced metered API route did not fail closed: %+v", metered.GateFailures)
+	}
+}
+
 func TestScoreRunPreservesDiagnosticsButFailsErroredPatrolRun(t *testing.T) {
 	manifest := validTestManifest()
 	manifest.Gates = GateSpec{

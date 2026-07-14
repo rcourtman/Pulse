@@ -428,8 +428,11 @@ failures; they are never blended into a leaderboard.
 Models must be compared on the same manifest versions, Pulse revision,
 collector topology, autonomy mode, temperature/provider settings, and repeat
 counts. Report rankings use pass rate, recall, latency, tokens, and known cost;
-provider errors, unknown pricing, or missing scenarios remain visible failures
-instead of being discarded.
+provider errors, unknown metered-API pricing, or missing scenarios remain
+visible failures instead of being discarded. Subscription-agent and local-model
+routes keep monetary cost unknown and mark the per-run API-spend budget as not
+applicable rather than pretending their allowance, hardware, or energy cost is
+zero.
 
 Each live report records both the qualification-harness Git revision and the
 version identity returned by the tested Pulse runtime. Qualification refuses
