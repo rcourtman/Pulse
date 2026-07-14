@@ -134,6 +134,23 @@ printf '%s' '{"structured_output":{"content":"healthy","stop_reason":"end_turn",
 	if len(response.ToolCalls) != 1 || response.ToolCalls[0].Name != "get_node_status" {
 		t.Fatalf("Codex tool calls = %#v", response.ToolCalls)
 	}
+	var streamEvents []StreamEvent
+	if err := codex.ChatStream(ctx, ChatRequest{Tools: []Tool{{Name: "get_node_status"}}, ToolChoice: &ToolChoice{Type: ToolChoiceRequired}}, func(event StreamEvent) {
+		streamEvents = append(streamEvents, event)
+	}); err != nil {
+		t.Fatalf("Codex buffered stream turn failed: %v", err)
+	}
+	if len(streamEvents) != 2 || streamEvents[0].Type != "tool_start" || streamEvents[1].Type != "done" {
+		t.Fatalf("Codex stream events = %#v", streamEvents)
+	}
+	start, ok := streamEvents[0].Data.(ToolStartEvent)
+	if !ok || start.ID != "c1" || start.Name != "get_node_status" || start.Input["node"] != "tower" {
+		t.Fatalf("Codex tool_start = %#v", streamEvents[0].Data)
+	}
+	done, ok := streamEvents[1].Data.(DoneEvent)
+	if !ok || done.StopReason != "tool_use" || len(done.ToolCalls) != 1 {
+		t.Fatalf("Codex done = %#v", streamEvents[1].Data)
+	}
 
 	claude := NewSubscriptionAgentClient(SubscriptionAgentClaude, "sonnet", 3*time.Second)
 	if err := claude.TestConnection(ctx); err != nil {
@@ -145,6 +162,39 @@ printf '%s' '{"structured_output":{"content":"healthy","stop_reason":"end_turn",
 	}
 	if response.Content != "healthy" || response.InputTokens != 12 || response.OutputTokens != 3 {
 		t.Fatalf("Claude response = %#v", response)
+	}
+}
+
+func TestSubscriptionAgentBufferedStreamEmitsContentBeforeDone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake subscription CLIs use POSIX shell scripts")
+	}
+	binDir := t.TempDir()
+	writeExecutable(t, filepath.Join(binDir, "claude"), `#!/bin/sh
+printf '%s' '{"structured_output":{"content":"healthy","stop_reason":"end_turn","tool_calls":[]},"usage":{"input_tokens":12,"output_tokens":3}}'
+`)
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	client := NewSubscriptionAgentClient(SubscriptionAgentClaude, "sonnet", 3*time.Second)
+	var events []StreamEvent
+	if err := client.ChatStream(context.Background(), ChatRequest{}, func(event StreamEvent) {
+		events = append(events, event)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 || events[0].Type != "content" || events[1].Type != "done" {
+		t.Fatalf("stream events = %#v", events)
+	}
+	content, ok := events[0].Data.(ContentEvent)
+	if !ok || content.Text != "healthy" {
+		t.Fatalf("content event = %#v", events[0].Data)
+	}
+	done, ok := events[1].Data.(DoneEvent)
+	if !ok || done.InputTokens != 12 || done.OutputTokens != 3 || done.ToolCalls == nil {
+		t.Fatalf("done event = %#v", events[1].Data)
+	}
+	if client.SupportsThinking("sonnet") {
+		t.Fatal("subscription-agent adapter must not expose private CLI reasoning")
 	}
 }
 

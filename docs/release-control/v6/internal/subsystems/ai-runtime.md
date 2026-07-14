@@ -268,6 +268,12 @@ can execute anything. The normal registry, profile, approval, protected
 resource, action, and verification contracts remain the only infrastructure
 authority. Calls are serialized per local subscription agent and bounded by
 the configured request timeout and prompt/output size limits.
+Patrol consumes the provider streaming interface, so the adapter projects each
+fully validated CLI turn into canonical buffered `content`, `tool_start`, and
+`done` events. It must emit nothing before the complete CLI response passes the
+schema and tool-boundary checks. This is transport compatibility rather than a
+claim of token-by-token CLI streaming; Pulse still owns tool execution,
+`tool_end` progress, run-history persistence, and verification.
 Codex JSONL event output is also a fail-closed audit channel: reported command,
 file, MCP, web, computer, or image-tool activity invalidates the turn. This
 detects a violated adapter instruction but cannot retroactively protect data a

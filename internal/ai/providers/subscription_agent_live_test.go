@@ -31,19 +31,28 @@ func TestSubscriptionAgentLive(t *testing.T) {
 			if err := client.TestConnection(ctx); err != nil {
 				t.Fatalf("authentication readiness failed: %v", err)
 			}
-			response, err := client.Chat(ctx, ChatRequest{
+			var toolStarts int
+			var done DoneEvent
+			err := client.ChatStream(ctx, ChatRequest{
 				System:   "Select the supplied observation tool exactly once. Do not claim that it ran.",
 				Messages: []Message{{Role: "user", Content: "Inspect node tower using the supplied Pulse tool."}},
 				Tools: []Tool{{Name: "get_node_status", Description: "Read the current status of one node", InputSchema: map[string]interface{}{
 					"type": "object", "additionalProperties": false, "required": []string{"node"}, "properties": map[string]interface{}{"node": map[string]interface{}{"type": "string"}},
 				}}},
 				ToolChoice: &ToolChoice{Type: ToolChoiceRequired},
+			}, func(event StreamEvent) {
+				switch event.Type {
+				case "tool_start":
+					toolStarts++
+				case "done":
+					done, _ = event.Data.(DoneEvent)
+				}
 			})
 			if err != nil {
-				t.Fatalf("structured tool-selection turn failed: %v", err)
+				t.Fatalf("structured streaming tool-selection turn failed: %v", err)
 			}
-			if len(response.ToolCalls) != 1 || response.ToolCalls[0].Name != "get_node_status" {
-				t.Fatalf("unexpected structured response: %#v", response)
+			if toolStarts != 1 || len(done.ToolCalls) != 1 || done.ToolCalls[0].Name != "get_node_status" {
+				t.Fatalf("unexpected structured stream: starts=%d done=%#v", toolStarts, done)
 			}
 		})
 	}

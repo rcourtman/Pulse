@@ -206,6 +206,43 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 	return response.NormalizeCollectionsPtr(), nil
 }
 
+// ChatStream adapts the CLI's bounded, structured one-turn response to Pulse's
+// streaming provider contract. The local subscription CLIs do not expose the
+// same provider stream as an API transport, so no event is emitted until the
+// complete turn has passed the output schema and tool-boundary validation.
+// Pulse still receives canonical tool_start and done events and therefore owns
+// tool execution, progress, persistence, and verification as usual.
+func (c *SubscriptionAgentClient) ChatStream(ctx context.Context, req ChatRequest, callback StreamCallback) error {
+	response, err := c.Chat(ctx, req)
+	if err != nil {
+		return err
+	}
+	if callback == nil {
+		return nil
+	}
+	if response.Content != "" {
+		callback(StreamEvent{Type: "content", Data: ContentEvent{Text: response.Content}})
+	}
+	for _, call := range response.ToolCalls {
+		callback(StreamEvent{
+			Type: "tool_start",
+			Data: ToolStartEvent{ID: call.ID, Name: call.Name, Input: call.Input}.NormalizeCollections(),
+		})
+	}
+	callback(StreamEvent{
+		Type: "done",
+		Data: DoneEvent{
+			StopReason:   response.StopReason,
+			ToolCalls:    response.ToolCalls,
+			InputTokens:  response.InputTokens,
+			OutputTokens: response.OutputTokens,
+		}.NormalizeCollections(),
+	})
+	return nil
+}
+
+func (c *SubscriptionAgentClient) SupportsThinking(string) bool { return false }
+
 func (c *SubscriptionAgentClient) run(ctx context.Context, name string, args []string, stdin []byte, dir string) ([]byte, error) {
 	if c.timeout > 0 {
 		var cancel context.CancelFunc
