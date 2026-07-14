@@ -2869,6 +2869,10 @@ handoff remains limited to explicit Plans, hosted, activation, recovery, or
 support surfaces; feature gates may show neutral "View plans" links through
 `frontend-modern/src/utils/upgradePresentation.ts` only where presentation
 policy allows commercial discovery.
+The shared self-hosted billing presentation and plan-section prop contract must
+therefore expose only the ordinary typed plan handoff. It must not retain a
+parallel trial label, card-required note, `trial=1` destination, or dormant
+trial-action slot after self-hosted trial acquisition has been retired.
 Top-level route files are now expected to stay thin when a feature owns the
 real product surface, but the former `/infrastructure` surface is not one of
 those compatibility cases. It never shipped as a stable v6 route, so

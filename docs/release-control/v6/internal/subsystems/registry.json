@@ -2815,6 +2815,7 @@
         "internal/cloudcp/routes.go",
         "internal/cloudcp/stripe/provisioner.go",
         "internal/hosted/provisioner.go",
+        "pulse-pro:landing-page/index.html",
         "pulse-pro:landing-page/manage.html",
         "pulse-pro:landing-page/thanks.html",
         "pulse-pro:license-server/admin_ui.go",
@@ -2831,7 +2832,8 @@
         "pulse-pro:relay-server/main.go",
         "pulse-pro:relay-server/registry.go",
         "pulse-pro:relay-server/revocation_feed.go",
-        "pulse-pro:scripts/grandfathered_recurring_cutover_preview.py"
+        "pulse-pro:scripts/grandfathered_recurring_cutover_preview.py",
+        "pulse-pro:scripts/validate_stripe_catalog.py"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -2939,6 +2941,20 @@
             ]
           },
           {
+            "id": "public-commercial-offer-surface",
+            "label": "public commercial offer surface proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-pro:landing-page/index.html"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-pro:scripts/tests/test_customer_facing_commercial_copy.py",
+              "pulse-pro:scripts/tests/test_landing_page_localization.py"
+            ]
+          },
+          {
             "id": "public-commercial-management-surface",
             "label": "public commercial management surface proof",
             "match_prefixes": [],
@@ -2949,6 +2965,19 @@
             "test_prefixes": [],
             "exact_files": [
               "pulse-pro:scripts/tests/test_customer_facing_commercial_copy.py"
+            ]
+          },
+          {
+            "id": "public-stripe-catalog-contract",
+            "label": "public Stripe catalog contract proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-pro:scripts/validate_stripe_catalog.py"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-pro:scripts/tests/test_validate_stripe_catalog.py"
             ]
           },
           {
@@ -3600,6 +3629,20 @@
               "pulse-pro:relay-server/main_test.go",
               "pulse-pro:relay-server/registry_test.go",
               "pulse-pro:relay-server/revocation_feed_test.go"
+            ]
+          },
+          {
+            "id": "stripe-billing-portal-session",
+            "label": "Stripe billing portal session scope proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-pro:license-server/main.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-pro:license-server/commercial_strict_json_test.go",
+              "pulse-pro:license-server/main_test.go"
             ]
           },
           {

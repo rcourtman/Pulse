@@ -4715,6 +4715,12 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/selfHostedPlans.test.ts",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/contract_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
@@ -4734,6 +4740,12 @@
         {
           "repo": "pulse",
           "path": "pkg/licensing/subscription_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/main_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         },
@@ -4770,6 +4782,12 @@
         {
           "repo": "pulse-pro",
           "path": "relay-server/revocation_feed_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "scripts/tests/test_validate_stripe_catalog.py",
           "kind": "file",
           "evidence_tier": "test-proof"
         }

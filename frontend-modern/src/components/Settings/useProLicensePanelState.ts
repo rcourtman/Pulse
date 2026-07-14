@@ -394,19 +394,9 @@ export function useProLicensePanelState() {
     };
   });
   const planStatus = createMemo(() => getSelfHostedPlanStatusPresentation(entitlements()));
-  const trialActionEligible = createMemo(() => {
-    const current = entitlements();
-    const state = subscriptionState();
-    if (state === 'active' || state === 'trial') return false;
-    if (current?.trial_expires_at) return false;
-    if (current?.trial_eligible === false) return false;
-    const tier = current?.tier;
-    return !tier || tier === 'free';
-  });
-
   const planComparisonSummary = createMemo(() => {
     if (!showPlanSelectionPrompt()) {
-      return { cards: [], action: null, trialAction: null };
+      return { cards: [], action: null };
     }
     const comparison = getSelfHostedPlanComparisonPresentation({
       entitlements: entitlements(),
@@ -423,17 +413,6 @@ export function useProLicensePanelState() {
             ),
           }
         : null,
-      trialAction:
-        showActions && trialActionEligible()
-          ? {
-              label: SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonTrialActionLabel,
-              note: SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonTrialActionNote,
-              destination: resolveSelfHostedPurchaseStartDestination(
-                SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
-                new URLSearchParams({ trial: '1' }),
-              ),
-            }
-          : null,
     };
   });
 

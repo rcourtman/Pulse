@@ -39,10 +39,10 @@ const renderInRouter = (component: Component) => {
   ));
 };
 
-describe('ProLicensePlanSection trial action', () => {
+describe('ProLicensePlanSection retired trial acquisition', () => {
   afterEach(() => cleanup());
 
-  it('renders the trial button with its card-required note and trial link', () => {
+  it('renders the ordinary plan handoff without a trial action', () => {
     renderInRouter(() => (
       <ProLicensePlanSection
         {...baseProps()}
@@ -54,49 +54,16 @@ describe('ProLicensePlanSection trial action', () => {
               '/auth/license-purchase-start?feature=self_hosted_plan',
             ),
           },
-          trialAction: {
-            label: SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonTrialActionLabel,
-            note: SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonTrialActionNote,
-            destination: resolveUpgradeDestination(
-              '/auth/license-purchase-start?trial=1&feature=self_hosted_plan',
-            ),
-          },
         }}
       />
     ));
 
-    const trialLink = screen.getByRole('link', {
-      name: SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonTrialActionLabel,
+    const plansLink = screen.getByRole('link', {
+      name: SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonActionLabel,
     });
-    expect(trialLink.getAttribute('href')).toContain('trial=1');
-    expect(trialLink.getAttribute('href')).toContain('feature=self_hosted_plan');
-    expect(
-      screen.getByText(SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonTrialActionNote),
-    ).toBeTruthy();
-  });
-
-  it('renders no trial button when trialAction is null', () => {
-    renderInRouter(() => (
-      <ProLicensePlanSection
-        {...baseProps()}
-        planComparisonSummary={{
-          cards: [{ title: 'Pro', body: 'Everything', highlights: [] }],
-          action: {
-            label: SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonActionLabel,
-            destination: resolveUpgradeDestination(
-              '/auth/license-purchase-start?feature=self_hosted_plan',
-            ),
-          },
-          trialAction: null,
-        }}
-      />
-    ));
-
-    expect(
-      screen.queryByText(SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonTrialActionLabel),
-    ).toBeNull();
-    expect(
-      screen.queryByText(SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonTrialActionNote),
-    ).toBeNull();
+    expect(plansLink.getAttribute('href')).toContain('feature=self_hosted_plan');
+    expect(plansLink.getAttribute('href')).not.toContain('trial=1');
+    expect(screen.queryByText(/free pro trial/i)).toBeNull();
+    expect(screen.queryByText(/card required/i)).toBeNull();
   });
 });

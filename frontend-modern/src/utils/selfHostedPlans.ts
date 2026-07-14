@@ -36,7 +36,6 @@ export interface SelfHostedLinkCTA {
 export interface SelfHostedCommercialPresentation {
   pageTitle: string;
   pageDescription: string;
-  mostPopularBadge: string;
   currentPlanLabel: string;
   includedLabel: string;
   freeLabel: string;
@@ -84,7 +83,7 @@ export function getSelfHostedPlanEntitlementSummary(
     case 'relay':
       return `${planLabel} is active on this instance. It includes remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.`;
     case 'pro':
-      return `${planLabel} is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.`;
+      return `${planLabel} is active on this instance. It includes Relay connectivity, Pulse Mobile pairing, push notifications, Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.`;
   }
 }
 
@@ -134,9 +133,10 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     entitlementSummary: getSelfHostedPlanEntitlementSummary('relay'),
     entitlementHighlights: getTierEntitlementHighlights('relay', 14),
     includedExtras: [],
-    comparisonSummary: 'Remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.',
+    comparisonSummary:
+      'Remote web access, Pulse Mobile pairing, push notifications, and 14-day metric history.',
     highlights: [
-      'Everything in Community',
+      'Secure access when you are away from your network',
       'Remote web access via Relay',
       'Pulse Mobile pairing',
       'Push notifications',
@@ -155,9 +155,9 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     entitlementHighlights: getTierEntitlementHighlights('pro', 90),
     includedExtras: getTierIncludedExtras('pro'),
     comparisonSummary:
-      'Patrol investigates issues, applies safe fixes, and verifies the result, plus 90-day metric history and team controls.',
+      'Patrol investigates issues, applies safe fixes, and verifies the result. Relay connectivity is included, plus 90-day metric history and team controls.',
     highlights: [
-      'Everything in Relay',
+      'Relay connectivity, Pulse Mobile pairing, and push notifications included',
       'Patrol modes: Ask first, Safe auto-fix, or Autopilot',
       'Patrol investigates issues and explains the root cause',
       'Patrol applies safe fixes and verifies the result',
@@ -195,7 +195,6 @@ export function getSelfHostedPlanDefinitionForBillingTier(
 export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentation = {
   pageTitle: 'Pricing',
   pageDescription: 'Self-hosted plans and included capabilities.',
-  mostPopularBadge: 'Most Popular',
   currentPlanLabel: 'Current Plan',
   includedLabel: 'Included',
   freeLabel: 'Free',

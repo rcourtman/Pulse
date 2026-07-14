@@ -222,6 +222,8 @@ avoids a cloud-control-plane report data path across clients.
 82. `pulse-pro:relay-server/main.go`
 83. `pulse-pro:relay-server/registry.go`
 84. `pulse-pro:relay-server/revocation_feed.go`
+85. `pulse-pro:landing-page/index.html`
+86. `pulse-pro:scripts/validate_stripe_catalog.py`
 
 ## Shared Boundaries
 
@@ -3057,6 +3059,25 @@ Community copy may mention provider/local-model Patrol, but must not present
 hosted-model credits, account-backed AI access, or trial acquisition as a
 default self-hosted benefit or a reason to put a paid prompt in front of
 ordinary users.
+The public offer, Pulse settings presentation, and Pulse Account handoff must
+also describe Community, Relay, and Pro as distinct jobs rather than an
+artificial feature ladder. Relay is the secure-access product. Pro is the
+Patrol-powered operations product and explicitly includes Relay connectivity,
+Pulse Mobile pairing, and push notifications. Retired Pro trial acquisition
+copy and dormant Cloud checkout catalogs must not reappear in the ordinary
+self-hosted journey; historical Cloud plan identifiers may remain only as
+customer-state labels.
+The Stripe billing portal is limited to invoices and payment methods. Every
+portal-session request must name an explicit governed
+`STRIPE_BILLING_PORTAL_CONFIGURATION_ID` beginning with `bpc_`; a missing or
+invalid configuration fails closed. That Stripe configuration must keep
+subscription plan updates disabled because Relay/Pro product and cadence
+transitions stay in the Pulse-owned verified transition authority. Production
+readiness therefore requires a read-only external proof that the configured
+portal exposes only that intended scope before this commercial gate can pass.
+The public Stripe catalog audit must also enforce product descriptions that
+name the one owner-operated environment boundary and state that Pro includes
+Relay, so checkout cannot contradict the canonical package model.
 That public-demo commercial boundary also owns monitored-system preview
 unavailability wording. Browser presentation may keep the unavailable reason
 nullable until the formatting edge, but it must normalize the message through

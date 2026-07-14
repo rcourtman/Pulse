@@ -79,11 +79,6 @@ interface ProLicensePlanSectionProps {
       label: string;
       destination: UpgradeDestination;
     } | null;
-    trialAction: {
-      label: string;
-      note: string;
-      destination: UpgradeDestination;
-    } | null;
   };
   planSelectionPrompt: ActionNotice | null;
   planStatus: {
@@ -379,18 +374,6 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
             </For>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <Show when={props.planComparisonSummary.trialAction}>
-              {(trialAction) => (
-                <UpgradeButtonLink
-                  variant="primary"
-                  size="settingsActionXs"
-                  class="mt-4 gap-1"
-                  destination={trialAction().destination}
-                >
-                  {trialAction().label}
-                </UpgradeButtonLink>
-              )}
-            </Show>
             <Show when={props.planComparisonSummary.action}>
               {(action) => (
                 <UpgradeButtonLink
@@ -404,9 +387,6 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
               )}
             </Show>
           </div>
-          <Show when={props.planComparisonSummary.trialAction}>
-            {(trialAction) => <p class="mt-2 text-xs text-muted">{trialAction().note}</p>}
-          </Show>
         </div>
       </Show>
       <Show when={props.commercialMigrationNotice}>

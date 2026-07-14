@@ -373,6 +373,9 @@ describe('shell view', function() {
     expect(html).toContain('Use self-hosted billing only for self-hosted purchases.');
     expect(html).toContain('id="open-upgrade-billing"');
     expect(html).toContain('id="open-retrieve-billing"');
+    expect(html).toContain('Invoices and payment methods');
+    expect(html).toContain('Open Stripe for invoices and payment methods. Plan changes stay in Pulse Account.');
+    expect(html).not.toContain('Open Stripe for self-hosted plan, invoice, and payment changes.');
     expect(html).toContain('id="billing-detail-shell" hidden');
     expect(html).toContain('data-account-billing-action="clear-billing-panel"');
     expect(html).toContain('id="upgrade-billing-panel"');

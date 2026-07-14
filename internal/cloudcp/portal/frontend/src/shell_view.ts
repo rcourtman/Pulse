@@ -1655,7 +1655,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var selfHostedBillingActionsHTML = renderSelfHostedUpgradeActionRow(context);
   if (showSelfHostedCommercial) {
     selfHostedBillingActionsHTML +=
-      renderBillingActionRow('open-manage-billing', 'Manage subscriptions', 'Open', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-billing-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
+      renderBillingActionRow('open-manage-billing', 'Invoices and payment methods', 'Open', 'Open Stripe for invoices and payment methods. Plan changes stay in Pulse Account.', 'manage-billing-panel', 'manage-inline-email', ['Invoices', 'Payment methods']) +
       renderBillingActionRow('open-retrieve-billing', 'Retrieve licenses', 'Open', 'Recover the latest active self-hosted license and invoice link.', 'retrieve-billing-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
       renderBillingActionRow('open-refund-billing', 'Refund requests', 'Open', 'Request a self-serve refund when the purchase is still eligible.', 'refund-billing-panel', 'refund-inline-email', ['Eligibility check', 'Revocation']) +
       renderBillingActionRow('open-data-billing', 'Data and privacy', 'Open', 'Request export or deletion for commercial account data.', 'data-billing-panel', 'data-export-email', ['Export', 'Deletion']);
@@ -1664,8 +1664,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   if (showSelfHostedCommercial) {
     selfHostedBillingPanelsHTML +=
       renderBillingTaskPanel(
-        'Manage subscriptions',
-        'Open Stripe for self-hosted plan, invoice, and payment changes.',
+        'Invoices and payment methods',
+        'Open Stripe for invoices and payment methods. Plan changes stay in Pulse Account.',
         'manage-billing-panel',
         '<div id="manage-billing-root"></div>'
       ) +

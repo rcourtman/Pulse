@@ -398,7 +398,9 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getAllByText('Trial').length).toBeGreaterThan(0);
     expect(screen.getByText('7')).toBeInTheDocument();
-    expect(screen.getByText('Patrol Applies Safe Fixes and Verifies the Result')).toBeInTheDocument();
+    expect(
+      screen.getByText('Patrol Applies Safe Fixes and Verifies the Result'),
+    ).toBeInTheDocument();
   });
 
   it('keeps the Patrol mode entry point visible for existing active Pro plans', async () => {
@@ -587,9 +589,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Patrol autonomy loop')).not.toBeInTheDocument();
     expect(screen.queryByText('Decision recorded')).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Pulse Pro is active on this instance. Review the current Patrol decision.',
-      ),
+      screen.getByText('Pulse Pro is active on this instance. Review the current Patrol decision.'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/External-agent setup/i)).not.toBeInTheDocument();
     const patrolControlLink = screen.getByRole('link', { name: 'Review Patrol decision' });
@@ -712,9 +712,7 @@ describe('ProLicensePanel', () => {
     });
 
     expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
-    expect(
-      screen.getByText('Current tier and enabled capabilities.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Current tier and enabled capabilities.')).toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
     expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
@@ -832,12 +830,16 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Pulse Pro is active on this instance. It includes Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
+        'Pulse Pro is active on this instance. It includes Relay connectivity, Pulse Mobile pairing, push notifications, Patrol modes (Ask first, Safe auto-fix, Autopilot), 90-day metric history, RBAC, audit logging, reporting, and agent profiles.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Primary capabilities')).toBeInTheDocument();
-    expect(screen.getByText('Patrol Investigates Issues and Explains the Root Cause')).toBeInTheDocument();
-    expect(screen.getByText('Patrol Applies Safe Fixes and Verifies the Result')).toBeInTheDocument();
+    expect(
+      screen.getByText('Patrol Investigates Issues and Explains the Root Cause'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Patrol Applies Safe Fixes and Verifies the Result'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Included extras')).toBeInTheDocument();
     expect(screen.getByText('Capability details')).toBeInTheDocument();
     expect(screen.getByText('(5 items ready)')).toBeInTheDocument();
@@ -1085,8 +1087,12 @@ describe('ProLicensePanel', () => {
 
     // Verify self-hosted displayable capabilities render with their expected labels.
     expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
-    expect(screen.getByText('Patrol Investigates Issues and Explains the Root Cause')).toBeInTheDocument();
-    expect(screen.getByText('Patrol Applies Safe Fixes and Verifies the Result')).toBeInTheDocument();
+    expect(
+      screen.getByText('Patrol Investigates Issues and Explains the Root Cause'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Patrol Applies Safe Fixes and Verifies the Result'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Update Alerts')).toBeInTheDocument();
     expect(screen.getByText('Role-Based Access Control (RBAC)')).toBeInTheDocument();
     expect(screen.getByText('Audit Logging')).toBeInTheDocument();
@@ -1190,12 +1196,12 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText(title)).toBeInTheDocument();
       if (purchase === SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED) {
         expect(
-          screen.getByText(
-            /Checkout completed and Pulse Pro is active\. Choose Patrol mode\./i,
-          ),
+          screen.getByText(/Checkout completed and Pulse Pro is active\. Choose Patrol mode\./i),
         ).toBeInTheDocument();
         expect(screen.getByText('Available now on this instance')).toBeInTheDocument();
-        expect(screen.getAllByText('Patrol Applies Safe Fixes and Verifies the Result').length).toBeGreaterThan(0);
+        expect(
+          screen.getAllByText('Patrol Applies Safe Fixes and Verifies the Result').length,
+        ).toBeGreaterThan(0);
         expect(screen.getAllByRole('link', { name: 'Choose Patrol mode' })).toHaveLength(1);
         const patrolControlLink = screen.getByRole('link', { name: 'Choose Patrol mode' });
         expect(patrolControlLink).toHaveAttribute('href', PATROL_CONTROL_STARTER_URL);
@@ -1280,12 +1286,12 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getByText('Pulse Pro is now active')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        /Checkout completed and Pulse Pro is active\. Choose Patrol mode\./i,
-      ),
+      screen.getByText(/Checkout completed and Pulse Pro is active\. Choose Patrol mode\./i),
     ).toBeInTheDocument();
     expect(screen.queryByText('Select a plan')).not.toBeInTheDocument();
-    expect(screen.getAllByText('Patrol Applies Safe Fixes and Verifies the Result').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText('Patrol Applies Safe Fixes and Verifies the Result').length,
+    ).toBeGreaterThan(0);
     expect(screen.queryByText('Available plans')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Review plan' })).not.toBeInTheDocument();
   });
@@ -1305,12 +1311,12 @@ describe('ProLicensePanel', () => {
 
     expect(screen.queryByText('Pulse Pro is now active')).not.toBeInTheDocument();
     expect(
-      screen.queryByText(
-        /Checkout completed and Pulse Pro is active\. Choose Patrol mode\./i,
-      ),
+      screen.queryByText(/Checkout completed and Pulse Pro is active\. Choose Patrol mode\./i),
     ).not.toBeInTheDocument();
     expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
-    expect(screen.queryByText('Patrol Applies Safe Fixes and Verifies the Result')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Patrol Applies Safe Fixes and Verifies the Result'),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('Available now on this instance')).not.toBeInTheDocument();
     expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_HREF, {
       replace: true,
