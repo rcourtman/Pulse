@@ -789,6 +789,22 @@ render_systemd_agent_unit() {
 		restrict_suidsgid="false"
 	fi
 
+	local hardening_lines
+	hardening_lines="NoNewPrivileges=${no_new_privileges}
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=${restrict_suidsgid}
+SystemCallArchitectures=native"
+	if [[ -d /usr/syno ]]; then
+		# Synology DSM ships a heavily patched, old systemd whose kernels
+		# cannot apply these sandbox directives; NoNewPrivileges alone kills
+		# the service with status=227/NO_NEW_PRIVILEGES before exec.
+		hardening_lines="# Sandbox hardening omitted: Synology DSM systemd cannot apply it."
+	fi
+
 	cat > "$unit_path" <<EOF
 [Unit]
 Description=Pulse Unified Agent
@@ -801,14 +817,7 @@ ExecStart=${exec_path} ${exec_args}${env_line}
 Restart=always
 RestartSec=5s${user_line}${log_lines}
 UMask=0077
-NoNewPrivileges=${no_new_privileges}
-PrivateTmp=true
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
-LockPersonality=true
-RestrictSUIDSGID=${restrict_suidsgid}
-SystemCallArchitectures=native
+${hardening_lines}
 
 [Install]
 WantedBy=multi-user.target
@@ -2939,11 +2948,29 @@ if [[ ! -s "$TMP_BIN" ]]; then
     fail "Downloaded file is empty." "$EXIT_DOWNLOAD_FAILED"
 fi
 
-# Check if it's a valid executable (ELF for Linux/FreeBSD, Mach-O for macOS)
+# Check if it's a valid executable (ELF for Linux/FreeBSD, Mach-O for macOS).
+# NAS shells (QNAP, some Synology setups) ship without od/hexdump/xxd; fall
+# back through whichever exists and skip the sniff when none do rather than
+# failing a good download — the SHA-256 verification below still guards
+# integrity, this check only catches error pages saved as binaries.
+read_magic_hex() {
+    if command -v od >/dev/null 2>&1; then
+        od -An -tx1 -N4 "$1" 2>/dev/null | tr -d ' \n'
+    elif command -v hexdump >/dev/null 2>&1; then
+        hexdump -v -e '1/1 "%02x"' -n 4 "$1" 2>/dev/null
+    elif command -v xxd >/dev/null 2>&1; then
+        xxd -p -l 4 "$1" 2>/dev/null | tr -d ' \n'
+    else
+        return 1
+    fi
+}
 if [[ "$OS" == "linux" || "$OS" == "freebsd" ]]; then
-    MAGIC=$(od -An -tx1 -N4 "$TMP_BIN" 2>/dev/null | tr -d ' \n' || true)
-    if [[ "$MAGIC" != "7f454c46" ]]; then
-        fail "Downloaded file is not a valid ${OS} ELF executable." "$EXIT_DOWNLOAD_FAILED"
+    if MAGIC=$(read_magic_hex "$TMP_BIN"); then
+        if [[ "$MAGIC" != "7f454c46" ]]; then
+            fail "Downloaded file is not a valid ${OS} ELF executable." "$EXIT_DOWNLOAD_FAILED"
+        fi
+    else
+        log_warn "No od/hexdump/xxd available to sniff the binary header; relying on checksum verification."
     fi
 elif [[ "$OS" == "darwin" ]]; then
     # Mach-O magic: feedface (32-bit) or feedfacf (64-bit) or cafebabe (universal)
