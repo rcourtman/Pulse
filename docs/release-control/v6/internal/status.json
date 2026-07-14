@@ -8840,21 +8840,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "commercial-production-readonly-proof-release-gate-self-hosted-commercial-transition-coherence",
-      "agent_id": "commercial-production-readonly-proof",
-      "summary": "Execute and record the production read-only Stripe catalog and billing portal proof without exposing credentials or mutating Stripe.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-14T19:41:11Z",
-      "heartbeat_at": "2026-07-14T19:41:11Z",
-      "expires_at": "2026-07-14T21:41:11Z",
-      "work_item": {
-        "kind": "release-gate",
-        "id": "self-hosted-commercial-transition-coherence"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
