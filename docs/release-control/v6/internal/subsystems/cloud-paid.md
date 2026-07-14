@@ -219,6 +219,9 @@ avoids a cloud-control-plane report data path across clients.
 79. `internal/cloudcp/provider_msp_bootstrap.go`
 80. `internal/cloudcp/provider_msp_backup.go`
 81. `internal/cloudcp/provider_msp_recovery.go`
+82. `pulse-pro:relay-server/main.go`
+83. `pulse-pro:relay-server/registry.go`
+84. `pulse-pro:relay-server/revocation_feed.go`
 
 ## Shared Boundaries
 
@@ -414,6 +417,9 @@ avoids a cloud-control-plane report data path across clients.
     per-tenant snapshot, health-check, and rollback path. `tenant-runtime
 reconcile --all` remains contract/routing drift repair for each tenant's
     current image line, not an image-line upgrade path.
+16. `pulse-pro:relay-server/main.go` shared with `relay-runtime`: the Relay server startup and readiness path is both a relay-runtime server boundary and a cloud-paid entitlement invalidation boundary.
+17. `pulse-pro:relay-server/registry.go` shared with `relay-runtime`: the Relay server active-session registry is both a relay-runtime connection boundary and a cloud-paid entitlement invalidation boundary.
+18. `pulse-pro:relay-server/revocation_feed.go` shared with `relay-runtime`: the Relay server revocation feed is both a relay-runtime server boundary and a cloud-paid entitlement invalidation boundary.
 
 The real `pulse-pro` license-server legacy checkout issuance, recurring
 renewals, manual issue, and legacy exchange flows are part of that same
@@ -1128,6 +1134,12 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     cadence, capability, or restrictive-state change increments
     `license_version` and emits the version-floor/outbox event in the same
     local transaction.
+28. Add or change Relay-side commercial invalidation only through the shared
+    `pulse-pro:relay-server/main.go`, `pulse-pro:relay-server/revocation_feed.go`,
+    and `pulse-pro:relay-server/registry.go` boundary. Operator Relay startup
+    must fail closed without the authenticated feed, drain it before serving,
+    report stale feed state through readiness, and disconnect already-connected
+    v6 sessions whose grant falls below an applied version floor.
 
 ## Forbidden Paths
 
@@ -1140,6 +1152,9 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
 5. Customer Portal configuration as the authority for plan transitions
 6. Separate offer definitions in landing, account, app, support, or Stripe
    provisioning code
+7. Distributing the global Relay revocation-feed bearer token to customer Pulse
+   installations; customer-runtime invalidation requires installation-scoped
+   authentication or an equivalently bounded authority.
 
 ## Completion Obligations
 
@@ -1287,6 +1302,15 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     availability contracts are explicitly reopened. Historical Cloud prices,
     caps, trial, and support labels are dormant planning data, while provider-
     hosted MSP remains the default assisted-preview delivery boundary.
+25. Keep operator Relay revocation enforcement mandatory and readiness-backed:
+    startup must synchronously establish the monotonic version-floor cache,
+    feed staleness must fail readiness, and feed-applied restrictive events
+    must disconnect stale active v6 sessions and invalidate their reconnect
+    credentials.
+26. Keep customer Pulse invalidation separate from the operator-wide feed
+    credential. Before self-service transitions are released, prove a scoped
+    customer-safe authority that refreshes or clears paid state without giving
+    any installation visibility into another customer's revocation events.
 
 ## Current State
 
@@ -1303,6 +1327,14 @@ order/reconciliation exercise, Relay version-floor proof, and production
 catalog/portal audit remain required by
 `self-hosted-commercial-transition-coherence`. Cloud remains unavailable and
 MSP remains an assisted preview.
+
+The Relay side now fails closed on missing feed authority, drains the feed
+before serving, exposes feed staleness through readiness, and tears down stale
+already-connected v6 sessions while clearing their reconnect tokens. The
+remaining restrictive-transition gap is the customer Pulse runtime: its
+existing optional poller depends on a global operator credential that must not
+be distributed. A scoped installation-authenticated invalidation authority and
+real external Stripe-to-runtime proof remain release-gated.
 
 Hosted handoff target paths are normalized by the shared host-local redirect
 validator at token minting, exchange, and provider-proof boundaries. Absolute,

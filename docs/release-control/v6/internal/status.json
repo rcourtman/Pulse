@@ -4686,11 +4686,13 @@
       "lane_ids": [
         "L2",
         "L3",
+        "L7",
         "L12",
         "L17"
       ],
       "subsystem_ids": [
-        "cloud-paid"
+        "cloud-paid",
+        "relay-runtime"
       ],
       "release_gate_ids": [
         "self-hosted-commercial-transition-coherence"
@@ -4708,6 +4710,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/report_schedules_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
@@ -4721,6 +4728,18 @@
         {
           "repo": "pulse-pro",
           "path": "license-server/v6_commercial_transitions_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "relay-server/bridge_v6_grant_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "relay-server/revocation_feed_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         }
@@ -7944,6 +7963,7 @@
       "lane_ids": [
         "L2",
         "L3",
+        "L7",
         "L12",
         "L17"
       ],
@@ -7968,6 +7988,18 @@
         {
           "repo": "pulse-pro",
           "path": "license-server/v6_commercial_transitions_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "relay-server/bridge_v6_grant_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "relay-server/revocation_feed_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         }
@@ -9558,6 +9590,20 @@
         "L3",
         "L4",
         "L17"
+      ]
+    },
+    {
+      "id": "relay-commercial-invalidation-contract",
+      "summary": "Operator Relay must not serve v6 grants until it has synchronously drained the authenticated revocation feed; stale feed state fails readiness, and an applied license revocation, installation revocation, or higher license-version floor disconnects affected active v6 sessions and clears their persisted reconnect credentials. The global operator feed credential must never be distributed to customer Pulse installations; customer-runtime invalidation requires installation-scoped authentication or an equivalently bounded authority.",
+      "kind": "architecture",
+      "decided_at": "2026-07-14",
+      "subsystem_ids": [
+        "cloud-paid",
+        "relay-runtime"
+      ],
+      "lane_ids": [
+        "L3",
+        "L7"
       ]
     },
     {

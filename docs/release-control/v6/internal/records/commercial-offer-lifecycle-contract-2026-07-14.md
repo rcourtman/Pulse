@@ -157,6 +157,13 @@ foundation required by this contract:
    390-pixel buyer/account browser exercise. These are local implementation and
    rehearsal facts, not a substitute for the required Stripe test-mode and
    production read-only evidence.
+6. `pulse-pro/relay-server` now requires the operator revocation authority,
+   synchronously drains it before serving, reports stale feed state through
+   readiness, disconnects already-connected v6 sessions below a newly applied
+   license-version floor, and clears their persisted reconnect credentials.
+   The joined Relay proof covers feed consumption through active-session
+   teardown. License-server startup also fails closed when v6 is enabled
+   without the matching feed credential.
 
 ## Remaining Readiness Boundary
 
@@ -165,5 +172,9 @@ Stripe test-mode mutation, live catalog/configuration change, purchase,
 deployment, or production customer-data access was authorized or performed in
 this slice. Before self-service is released, the project still needs the
 governed external transition matrix, event-order/reconciliation exercise,
-Relay version-floor proof, and read-only production catalog/portal audit named
-above.
+read-only production catalog/portal audit, and a customer-safe Pulse runtime
+invalidation path named above. The global operator feed credential must never
+be distributed to customer Pulse installations; Pulse convergence requires an
+installation-scoped authenticated feed or an equivalently bounded canonical
+authority. The local Relay proof raises confidence but does not replace the
+required real external Stripe-to-Relay exercise.

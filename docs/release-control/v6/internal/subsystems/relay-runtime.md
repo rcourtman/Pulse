@@ -26,10 +26,16 @@ for Pulse instance bridging.
 2. `internal/relay/protocol.go`
 3. `internal/config/persistence_relay.go`
 4. `internal/api/relay_mobile_capability.go`
+5. `pulse-pro:relay-server/main.go`
+6. `pulse-pro:relay-server/registry.go`
+7. `pulse-pro:relay-server/revocation_feed.go`
 
 ## Shared Boundaries
 
 1. `internal/api/relay_mobile_capability.go` shared with `api-contracts`: the backend-owned Pulse Mobile relay capability inventory is both a relay runtime boundary and a canonical API payload contract surface.
+2. `pulse-pro:relay-server/main.go` shared with `cloud-paid`: the Relay server startup and readiness path is both a relay-runtime server boundary and a cloud-paid entitlement invalidation boundary.
+3. `pulse-pro:relay-server/registry.go` shared with `cloud-paid`: the Relay server active-session registry is both a relay-runtime connection boundary and a cloud-paid entitlement invalidation boundary.
+4. `pulse-pro:relay-server/revocation_feed.go` shared with `cloud-paid`: the Relay server revocation feed is both a relay-runtime server boundary and a cloud-paid entitlement invalidation boundary.
 
 ## Extension Points
 
@@ -47,7 +53,8 @@ for Pulse instance bridging.
    from the UI is allowed to persist the env-effective state to disk;
    the override is not stripped before save.
 4. Add or change the backend-owned mobile relay capability inventory and compatibility scope mapping through `internal/api/relay_mobile_capability.go`
-6. Keep desktop and mobile relay changes aligned with the governed server relay surfaces represented by the L7 lane evidence
+5. Keep desktop and mobile relay changes aligned with the governed server relay surfaces represented by the L7 lane evidence
+6. Add or change server-side grant revocation ingestion, readiness, active-session teardown, or reconnect-token invalidation through `pulse-pro:relay-server/main.go`, `pulse-pro:relay-server/revocation_feed.go`, and `pulse-pro:relay-server/registry.go`.
 
 ## Forbidden Paths
 
@@ -63,6 +70,8 @@ for Pulse instance bridging.
 3. Keep persisted relay config loading tied to explicit proof in `internal/config/persistence_relay_test.go`
 4. Keep backend-owned mobile capability inventory changes tied to explicit proof in `internal/api/relay_mobile_capability_test.go`
 5. Keep mobile relay runtime changes tied to explicit proof in `pulse-mobile:src/relay/__tests__/`
+6. Keep the operator Relay incapable of serving v6 grants until it has synchronously drained the authenticated revocation feed, and expose stale feed state through readiness.
+7. Keep feed-applied restrictive events tied to proof that already-connected stale grants are disconnected and their persisted reconnect credentials are invalidated.
 
 ## Current State
 
@@ -132,6 +141,15 @@ boundary. `POST /api/security/tokens/relay-mobile` lives in the shared
 auth/security router, but it must require the paid `relay` entitlement before
 creating a `relay:mobile:access` token so Community installs cannot bypass
 Relay/mobile gating through direct API calls.
+
+The operator Relay revocation feed is now part of the canonical server runtime,
+not optional commercial decoration. Startup requires the license-server URL and
+operator feed credential, completes an authenticated feed drain before serving,
+and reports stale feed state as unhealthy. Each applied license revocation,
+installation revocation, or license-version floor is enforced against both new
+registrations and already-connected v6 sessions. A forced disconnect also
+clears the persisted reconnect credential so a Relay restart cannot restore an
+invalidated session before full grant registration.
 
 The mobile relay capability inventory and router allowlist include the
 canonical pending-action read, global pending/settled action list, authoritative

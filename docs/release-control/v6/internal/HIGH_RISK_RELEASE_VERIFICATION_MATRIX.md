@@ -163,9 +163,9 @@ Companion drill:
   Relay/Pro and cadence changes cross Stripe proration and schedules, durable
   webhook processing, grandfathering, local entitlement projection, license
   versioning, Relay grant enforcement, downgrade preservation, and customer-
-  visible account state. The current implementation can update Stripe price
-  identifiers without atomically changing tier or features, which can charge
-  for one plan while granting another.
+  visible account state. A failure in replay, feed delivery, or scoped runtime
+  invalidation can still charge for one plan while granting another even when
+  the local projection itself is atomic.
 - Primary runtime surfaces:
   `pulse-pro/license-server/v6_checkout.go`
   `pulse-pro/license-server/v6_stripe.go`
@@ -173,6 +173,9 @@ Companion drill:
   `pulse-pro/license-server/v6_state.go`
   `pulse-pro/license-server/v6_store.go`
   `pulse-pro/license-server/v6_grants.go`
+  `pulse-pro/relay-server/main.go`
+  `pulse-pro/relay-server/revocation_feed.go`
+  `pulse-pro/relay-server/registry.go`
   `pkg/licensing/...`
   Pulse Account Billing and Stripe customer/subscription state
 - Automated proof:
@@ -181,10 +184,12 @@ Companion drill:
   immediate retry convergence, schedule creation/reuse/cancellation ownership,
   atomic commercial snapshot projection, payment-failure versus cancellation
   grace, downgrade history timing, report entitlement denial, and safe artifact
-  purge. The remaining duplicate/reversed/missing external-event matrix and
-  restrictive Relay grant version-floor scenario require the governed Stripe
-  test-mode rehearsal; until that evidence is registered, the gate remains
-  blocked.
+  purge. Relay proof now also covers mandatory operator-feed configuration,
+  synchronous startup drain, readiness staleness, active stale-session
+  teardown, and reconnect-token invalidation. The remaining duplicate/reversed/
+  missing external-event matrix, exact Stripe-to-Relay exercise, and customer-
+  safe installation-scoped Pulse invalidation require the governed rehearsal;
+  until that evidence is registered, the gate remains blocked.
 - Manual scenario:
   1. In Stripe test mode, create fresh Community-to-Relay and Community-to-Pro
      acquisitions for monthly and annual plans.
@@ -199,9 +204,12 @@ Companion drill:
   5. Reverse, duplicate, suppress, and later replay Stripe events; reconcile
      from the current Stripe snapshot and confirm the same final state.
   6. Confirm every material entitlement reduction increments
-     `license_version`, rejects the old grant in Relay/runtime, and preserves
+     `license_version`, disconnects an already-connected old Relay grant within
+     the governed convergence bound, rejects its reconnect token, refreshes or
+     clears Pulse through an installation-scoped authority, and preserves
      configuration, report definitions, audit records, and the governed
-     downgrade history window.
+     downgrade history window. Do not distribute the global Relay feed token to
+     customer installations.
   7. Exercise the buyer/account journey at desktop and phone width and confirm
      the quoted amount, effective date, plan, cadence, cancellation state, and
      recovery behavior match runtime truth.

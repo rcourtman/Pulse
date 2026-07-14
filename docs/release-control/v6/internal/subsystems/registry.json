@@ -1014,6 +1014,30 @@
       ]
     },
     {
+      "path": "pulse-pro:relay-server/main.go",
+      "rationale": "the Relay server startup and readiness path is both a relay-runtime server boundary and a cloud-paid entitlement invalidation boundary",
+      "subsystems": [
+        "cloud-paid",
+        "relay-runtime"
+      ]
+    },
+    {
+      "path": "pulse-pro:relay-server/registry.go",
+      "rationale": "the Relay server active-session registry is both a relay-runtime connection boundary and a cloud-paid entitlement invalidation boundary",
+      "subsystems": [
+        "cloud-paid",
+        "relay-runtime"
+      ]
+    },
+    {
+      "path": "pulse-pro:relay-server/revocation_feed.go",
+      "rationale": "the Relay server revocation feed is both a relay-runtime server boundary and a cloud-paid entitlement invalidation boundary",
+      "subsystems": [
+        "cloud-paid",
+        "relay-runtime"
+      ]
+    },
+    {
       "path": "scripts/generate-pulse-intelligence-docs.go",
       "rationale": "the Pulse Intelligence manifest docs generator is both an AI runtime docs/onboarding projection and a canonical API contract projection over the agent capabilities manifest and Pulse MCP surface tool contract",
       "subsystems": [
@@ -2778,6 +2802,9 @@
         "pulse-pro:license-server/self_hosted_feature_catalog.generated.go",
         "pulse-pro:license-server/v6_checkout.go",
         "pulse-pro:license-server/v6_handlers.go",
+        "pulse-pro:relay-server/main.go",
+        "pulse-pro:relay-server/registry.go",
+        "pulse-pro:relay-server/revocation_feed.go",
         "pulse-pro:scripts/grandfathered_recurring_cutover_preview.py"
       ],
       "verification": {
@@ -3461,6 +3488,24 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/pages/__tests__/RuntimeHome.test.tsx"
+            ]
+          },
+          {
+            "id": "relay-commercial-invalidation",
+            "label": "Relay commercial invalidation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-pro:relay-server/main.go",
+              "pulse-pro:relay-server/registry.go",
+              "pulse-pro:relay-server/revocation_feed.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-pro:relay-server/bridge_v6_grant_test.go",
+              "pulse-pro:relay-server/main_test.go",
+              "pulse-pro:relay-server/registry_test.go",
+              "pulse-pro:relay-server/revocation_feed_test.go"
             ]
           },
           {
@@ -5588,7 +5633,10 @@
       ],
       "owned_files": [
         "internal/api/relay_mobile_capability.go",
-        "internal/config/persistence_relay.go"
+        "internal/config/persistence_relay.go",
+        "pulse-pro:relay-server/main.go",
+        "pulse-pro:relay-server/registry.go",
+        "pulse-pro:relay-server/revocation_feed.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -5611,6 +5659,24 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "relay-server-commercial-runtime",
+            "label": "Relay server commercial runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-pro:relay-server/main.go",
+              "pulse-pro:relay-server/registry.go",
+              "pulse-pro:relay-server/revocation_feed.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-pro:relay-server/bridge_v6_grant_test.go",
+              "pulse-pro:relay-server/main_test.go",
+              "pulse-pro:relay-server/registry_test.go",
+              "pulse-pro:relay-server/revocation_feed_test.go"
+            ]
+          },
           {
             "id": "relay-client-runtime",
             "label": "desktop relay runtime proof",
