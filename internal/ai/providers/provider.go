@@ -3,6 +3,7 @@ package providers
 
 import (
 	"context"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
@@ -69,14 +70,15 @@ type ToolChoice struct {
 
 // ChatRequest represents a request to the AI provider
 type ChatRequest struct {
-	Messages    []Message   `json:"messages"`
-	Model       string      `json:"model"`
-	ExecutionID string      `json:"execution_id,omitempty"` // Stable higher-level run ID shared across related provider turns
-	MaxTokens   int         `json:"max_tokens,omitempty"`
-	Temperature float64     `json:"temperature,omitempty"`
-	System      string      `json:"system,omitempty"`      // System prompt (Anthropic style)
-	Tools       []Tool      `json:"tools,omitempty"`       // Available tools
-	ToolChoice  *ToolChoice `json:"tool_choice,omitempty"` // nil = model-owned automatic selection; none = text-only safety brake; required = provider-native forced tool use where supported
+	Messages          []Message     `json:"messages"`
+	Model             string        `json:"model"`
+	ExecutionID       string        `json:"execution_id,omitempty"` // Stable higher-level run ID shared across related provider turns
+	MaxTokens         int           `json:"max_tokens,omitempty"`
+	Temperature       float64       `json:"temperature,omitempty"`
+	System            string        `json:"system,omitempty"`      // System prompt (Anthropic style)
+	Tools             []Tool        `json:"tools,omitempty"`       // Available tools
+	ToolChoice        *ToolChoice   `json:"tool_choice,omitempty"` // nil = model-owned automatic selection; none = text-only safety brake; required = provider-native forced tool use where supported
+	StreamIdleTimeout time.Duration `json:"-"`                     // Optional use-case-specific inter-chunk stall allowance; provider request payloads must not serialize it.
 }
 
 func (r ChatRequest) NormalizeCollections() ChatRequest {

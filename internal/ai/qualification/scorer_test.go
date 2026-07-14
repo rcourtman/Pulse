@@ -59,6 +59,35 @@ func TestScoreRunPreservesDiagnosticsButFailsErroredPatrolRun(t *testing.T) {
 	}
 }
 
+func TestScoreRunSeparatesSyntheticRuntimeFindingFromInfrastructureFalsePositives(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Gates = GateSpec{MaxFalsePositives: 0}
+	ground := GroundTruth{Faults: []FaultTruth{{
+		ID: "fault", CausalGroup: "fault", TargetName: "target",
+		ResourceID: "r1", ResourceType: "app-container", Active: true,
+	}}}
+	runtimeFinding := Finding{
+		ID: "runtime-error", Key: "ai-patrol-error", ResourceID: "ai-service",
+		ResourceName: "Pulse Patrol Service", ResourceType: "service",
+		Category: "reliability", Severity: "warning",
+	}
+	score := ScoreRun(ScoringInput{
+		Manifest: manifest, GroundTruth: ground, Model: "ollama:qwen3:8b",
+		Run: PatrolRun{Status: "error", ErrorCount: 1}, Findings: []Finding{runtimeFinding},
+		FaultsIntact: true, NoMutation: true,
+	})
+
+	if score.FalsePositives != 0 || len(score.UnmatchedFindingIDs) != 0 {
+		t.Fatalf("synthetic runtime finding counted as infrastructure false positive: %+v", score)
+	}
+	if len(score.RuntimeFindingIDs) != 1 || score.RuntimeFindingIDs[0] != "runtime-error" {
+		t.Fatalf("runtime finding was not reported separately: %+v", score)
+	}
+	if score.Passed || !strings.Contains(strings.Join(score.HardFailures, "\n"), "runtime errors") {
+		t.Fatalf("runtime failure must remain a hard failure: %+v", score)
+	}
+}
+
 func TestApplyProTrackGatesRequiresGroundedInvestigationAndBoundAction(t *testing.T) {
 	manifest := validTestManifest()
 	manifest.Track = TrackRemediation

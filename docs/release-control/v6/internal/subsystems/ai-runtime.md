@@ -5625,6 +5625,18 @@ OpenAI-compatible chat streams. Provider reads that return payload bytes with
 process the buffered frame set and route tool-call assembly plus final done
 event emission through the same canonical finalizer used for `[DONE]` instead
 of dropping the last chunk or leaving tool calls unfinalized on clean close.
+Patrol detection and investigation streams under that boundary must also carry
+an explicit 60-second inter-chunk stall allowance, capped by the operator's
+configured provider request timeout. Interactive Assistant streams retain the
+short default stall bound. A compatible provider pausing between streamed
+reasoning and its next tool-call chunk must not invalidate an otherwise live
+Patrol run, while a genuinely stalled stream must still terminate within the
+Patrol run budget.
+Qualification scoring must keep synthetic Patrol runtime findings on the
+`ai-service` resource separate from model-authored infrastructure findings.
+Provider/runtime failure remains an unconditional qualification hard failure,
+but its synthetic service finding must not be reported as an infrastructure
+false positive or matched to scenario ground truth.
 That same provider-transport boundary owns OpenAI-compatible tool protocol
 adaptation. Pulse must keep normal tool selection automatic/model-owned for
 OpenAI-compatible providers, including direct DeepSeek paths. Text-only

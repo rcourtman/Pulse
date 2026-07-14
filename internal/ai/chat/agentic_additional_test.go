@@ -36,6 +36,19 @@ func TestAgenticLoop_Setters(t *testing.T) {
 	if !called {
 		t.Fatalf("expected budgetChecker to be invoked")
 	}
+
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	if loop.streamIdleTimeout != patrolProviderStreamIdleTimeout {
+		t.Fatalf("detection stream idle timeout=%s want %s", loop.streamIdleTimeout, patrolProviderStreamIdleTimeout)
+	}
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	if loop.streamIdleTimeout != patrolProviderStreamIdleTimeout {
+		t.Fatalf("investigation stream idle timeout=%s want %s", loop.streamIdleTimeout, patrolProviderStreamIdleTimeout)
+	}
+	loop.SetExecutionProfile(tools.ProfileInteractiveAssistant)
+	if loop.streamIdleTimeout != 0 {
+		t.Fatalf("interactive stream idle timeout=%s want provider default", loop.streamIdleTimeout)
+	}
 }
 
 func TestPruneMessagesForModel_Stateless(t *testing.T) {

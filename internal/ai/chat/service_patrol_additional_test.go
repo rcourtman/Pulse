@@ -226,6 +226,9 @@ func TestService_ExecutePatrolStream_Success(t *testing.T) {
 	if mockProvider.lastRequest.ExecutionID != "patrol-run-123" {
 		t.Fatalf("execution_id=%q want patrol-run-123", mockProvider.lastRequest.ExecutionID)
 	}
+	if mockProvider.lastRequest.StreamIdleTimeout != patrolProviderStreamIdleTimeout {
+		t.Fatalf("stream_idle_timeout=%s want %s", mockProvider.lastRequest.StreamIdleTimeout, patrolProviderStreamIdleTimeout)
+	}
 	if doneCount != 1 {
 		t.Fatalf("expected done event to be emitted")
 	}

@@ -30,6 +30,11 @@ func (a *AgenticLoop) SetExecutionProfile(profile tools.ExecutionProfile) {
 	}
 	a.mu.Lock()
 	a.executionProfile = profile
+	if profile == tools.ProfilePatrolDetection || profile == tools.ProfilePatrolInvestigation {
+		a.streamIdleTimeout = patrolProviderStreamIdleTimeout
+	} else {
+		a.streamIdleTimeout = 0
+	}
 	a.mu.Unlock()
 }
 

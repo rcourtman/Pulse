@@ -167,6 +167,16 @@ func boundedOpenAIStreamChunkTimeout(timeout time.Duration) time.Duration {
 	return openaiStreamChunkTimeout
 }
 
+func streamChunkTimeoutForRequest(base, requestLimit, requested time.Duration) time.Duration {
+	if requested <= base {
+		return base
+	}
+	if requestLimit > 0 && requested > requestLimit {
+		return requestLimit
+	}
+	return requested
+}
+
 type openAIStreamReadResult struct {
 	n   int
 	err error
@@ -1131,8 +1141,9 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	}
 
 	receivedFirstChunk := false
+	streamChunkTimeout := streamChunkTimeoutForRequest(c.streamChunkTimeout, c.streamFirstChunkTimeout, req.StreamIdleTimeout)
 	for {
-		chunkTimeout := c.streamChunkTimeout
+		chunkTimeout := streamChunkTimeout
 		if !receivedFirstChunk {
 			chunkTimeout = c.streamFirstChunkTimeout
 		}

@@ -361,6 +361,42 @@ func TestOpenAIClient_ChatStream_TimesOutWaitingForLaterStreamChunk(t *testing.T
 	assert.False(t, doneCalled)
 }
 
+func TestOpenAIClient_ChatStream_RequestIdleTimeoutExtendsLaterChunkWait(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"first\"}}]}\n\n")
+		flusher.Flush()
+		time.Sleep(40 * time.Millisecond)
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+		flusher.Flush()
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "gpt-4", server.URL, time.Second)
+	client.streamChunkTimeout = 10 * time.Millisecond
+	var content string
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages:          []Message{{Role: "user", Content: "Hi"}},
+		StreamIdleTimeout: 100 * time.Millisecond,
+	}, func(event StreamEvent) {
+		if event.Type == "content" {
+			content += event.Data.(ContentEvent).Text
+		}
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "first", content)
+}
+
+func TestStreamChunkTimeoutForRequestHonorsConfiguredLimit(t *testing.T) {
+	assert.Equal(t, 12*time.Second, streamChunkTimeoutForRequest(12*time.Second, 5*time.Minute, 0))
+	assert.Equal(t, time.Minute, streamChunkTimeoutForRequest(12*time.Second, 5*time.Minute, time.Minute))
+	assert.Equal(t, 30*time.Second, streamChunkTimeoutForRequest(12*time.Second, 30*time.Second, time.Minute))
+}
+
 // TestOpenAIClient_ChatStream_OpenRouterReasoning guards the OpenRouter reasoning
 // path. OpenRouter (and other OpenAI-compatible gateways) stream chain-of-thought
 // in the "reasoning" delta field rather than DeepSeek's "reasoning_content". A

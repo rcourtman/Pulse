@@ -108,6 +108,7 @@ type Score struct {
 	EndToEndLatency         time.Duration `json:"end_to_end_latency_ns"`
 	Matches                 []MatchResult `json:"matches"`
 	UnmatchedFindingIDs     []string      `json:"unmatched_finding_ids,omitempty"`
+	RuntimeFindingIDs       []string      `json:"runtime_finding_ids,omitempty"`
 	HardFailures            []string      `json:"hard_failures,omitempty"`
 	GateFailures            []string      `json:"gate_failures,omitempty"`
 }
@@ -210,13 +211,21 @@ func ScoreRun(input ScoringInput) Score {
 	score.Cost = CostEstimate{Provider: provider, Model: model, USD: usd, Known: known, PricingAsOf: price.AsOf, InputPerMTok: price.InputUSDPerMTok, OutputPerMTok: price.OutputUSDPerMTok}
 
 	eligibleFindings := findingsEligibleForDetection(input.Findings, input.Run.FindingAssessments)
+	infrastructureFindings := make([]Finding, 0, len(eligibleFindings))
+	for _, finding := range eligibleFindings {
+		if isPatrolRuntimeFinding(finding) {
+			score.RuntimeFindingIDs = append(score.RuntimeFindingIDs, finding.ID)
+			continue
+		}
+		infrastructureFindings = append(infrastructureFindings, finding)
+	}
 	used := make(map[string]struct{})
 	for _, truth := range input.GroundTruth.Faults {
 		if !truth.Active {
 			continue
 		}
 		fault := findFault(input.Manifest.Faults, truth.ID)
-		match, found := bestFindingMatch(truth, fault, eligibleFindings, used)
+		match, found := bestFindingMatch(truth, fault, infrastructureFindings, used)
 		result := evaluateMatch(truth, fault, match, found)
 		if found {
 			detectedAt := findingDetectionTime(match, input.Run.FindingAssessments)
@@ -244,7 +253,7 @@ func ScoreRun(input ScoringInput) Score {
 		}
 		score.Matches = append(score.Matches, result)
 	}
-	for _, finding := range eligibleFindings {
+	for _, finding := range infrastructureFindings {
 		if _, ok := used[finding.ID]; !ok {
 			if !isExpectedCorrelatedSymptom(input.GroundTruth, finding.ResourceID) {
 				score.UnmatchedFindingIDs = append(score.UnmatchedFindingIDs, finding.ID)
@@ -338,6 +347,11 @@ func findingsEligibleForDetection(findings []Finding, assessments []PatrolFindin
 		eligible = append(eligible, finding)
 	}
 	return eligible
+}
+
+func isPatrolRuntimeFinding(finding Finding) bool {
+	return strings.EqualFold(strings.TrimSpace(finding.Key), "ai-patrol-error") ||
+		strings.EqualFold(strings.TrimSpace(finding.ResourceID), "ai-service")
 }
 
 func (g GroundTruth) activeFaultCount() int {

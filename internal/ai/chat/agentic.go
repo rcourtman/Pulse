@@ -28,6 +28,8 @@ type parallelToolResult struct {
 	Err    error
 }
 
+const patrolProviderStreamIdleTimeout = 60 * time.Second
+
 func isRetryableProviderStreamError(err error) bool {
 	if err == nil {
 		return false
@@ -477,13 +479,14 @@ func (a *AgenticLoop) executeToolSafely(ctx context.Context, id, name string, in
 
 // AgenticLoop handles the tool-calling loop with streaming
 type AgenticLoop struct {
-	provider         providers.StreamingProvider
-	executor         *tools.PulseToolExecutor
-	tools            []providers.Tool
-	baseSystemPrompt string // Base prompt without mode context
-	maxTurns         int
-	orgID            string
-	executionID      string
+	provider          providers.StreamingProvider
+	executor          *tools.PulseToolExecutor
+	tools             []providers.Tool
+	baseSystemPrompt  string // Base prompt without mode context
+	maxTurns          int
+	orgID             string
+	executionID       string
+	streamIdleTimeout time.Duration
 
 	// Provider info for telemetry (e.g., "anthropic", "claude-3-sonnet")
 	providerName string
@@ -658,6 +661,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		providerName := a.providerName
 		modelName := a.modelName
 		requestSanitizer := a.requestSanitizer
+		streamIdleTimeout := a.streamIdleTimeout
 		a.mu.Unlock()
 
 		// === MID-TURN STEERING: inject queued user messages at the boundary ===
@@ -709,10 +713,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		// Build the request with dynamic system prompt (includes current mode)
 		systemPrompt := a.getSystemPrompt()
 		req := providers.ChatRequest{
-			Messages:    providerMessages,
-			System:      systemPrompt,
-			Tools:       tools,
-			ExecutionID: a.executionID,
+			Messages:          providerMessages,
+			System:            systemPrompt,
+			Tools:             tools,
+			ExecutionID:       a.executionID,
+			StreamIdleTimeout: streamIdleTimeout,
 		}
 
 		// Tool selection is model-owned. Pulse normally exposes the governed tool
