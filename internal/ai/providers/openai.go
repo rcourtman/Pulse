@@ -17,15 +17,14 @@ import (
 )
 
 const (
-	openaiAPIURL                      = "https://api.openai.com/v1/chat/completions"
-	openaiMaxRetries                  = 3
-	openaiInitialBackoff              = 2 * time.Second
-	openaiStreamMaxRetries            = 1
-	openaiStreamInitialBackoff        = 1 * time.Second
-	openaiStreamResponseHeaderTimeout = 12 * time.Second
-	openaiStreamChunkTimeout          = 12 * time.Second
-	openrouterRefererURL              = "https://pulse.app"
-	openrouterAppTitle                = "Pulse"
+	openaiAPIURL               = "https://api.openai.com/v1/chat/completions"
+	openaiMaxRetries           = 3
+	openaiInitialBackoff       = 2 * time.Second
+	openaiStreamMaxRetries     = 1
+	openaiStreamInitialBackoff = 1 * time.Second
+	openaiStreamChunkTimeout   = 12 * time.Second
+	openrouterRefererURL       = "https://pulse.app"
+	openrouterAppTitle         = "Pulse"
 	// OpenRouter preflights affordability against the requested maximum
 	// completion budget. Leaving it unset can make small chat turns reserve a
 	// model-scale default and fail against per-key total limits. Keep this high
@@ -37,16 +36,21 @@ const (
 // OpenAIClient implements the Provider interface for OpenAI's API
 // Also works with OpenAI-compatible APIs like DeepSeek
 type OpenAIClient struct {
-	providerName   string
-	apiKey         string
-	model          string
-	baseURL        string
-	requestTimeout time.Duration
-	client         *http.Client
-	streamClient   *http.Client
-	// OpenAI-compatible gateways can accept SSE headers and then stall between
-	// body chunks. Bound that gap separately from the full turn timeout so chat
-	// fallback can move before the drawer looks dead.
+	providerName string
+	apiKey       string
+	model        string
+	baseURL      string
+	client       *http.Client
+	streamClient *http.Client
+	// The configured request timeout bounds how long Pulse waits for the
+	// stream to START (response headers and first chunk). Once deltas flow
+	// there is deliberately no overall wall-clock deadline: reasoning models
+	// (qwen3 via Ollama, DeepSeek) stream thinking deltas for minutes before
+	// real content, and a live stream must never be killed mid-thought
+	// (#1576). Only the stall bounds below end a flowing stream.
+	//
+	// streamChunkTimeout bounds the gap BETWEEN chunks once the stream is
+	// flowing, so chat fallback can move before the drawer looks dead.
 	streamChunkTimeout time.Duration
 	// Local OpenAI-compatible backends (LM Studio, llama.cpp, vLLM on CPU) can
 	// legitimately spend minutes on prompt processing before the first SSE
@@ -81,7 +85,6 @@ func NewOpenAICompatibleClient(providerName, apiKey, model, baseURL string, time
 		apiKey:                  apiKey,
 		model:                   model,
 		baseURL:                 baseURL,
-		requestTimeout:          timeout,
 		client:                  &http.Client{Timeout: timeout},
 		streamClient:            newOpenAIStreamHTTPClient(timeout),
 		streamChunkTimeout:      boundedOpenAIStreamChunkTimeout(timeout),
@@ -147,17 +150,14 @@ func newOpenAIStreamHTTPClient(timeout time.Duration) *http.Client {
 	client := &http.Client{}
 	if transport, ok := http.DefaultTransport.(*http.Transport); ok {
 		transport = transport.Clone()
-		transport.ResponseHeaderTimeout = boundedOpenAIStreamResponseHeaderTimeout(timeout)
+		// Local backends can hold the response headers while the model loads
+		// (Ollama does exactly this on a cold model), so the header wait
+		// honors the configured request timeout like the first-chunk wait
+		// does, rather than a short fixed bound.
+		transport.ResponseHeaderTimeout = timeout
 		client.Transport = transport
 	}
 	return client
-}
-
-func boundedOpenAIStreamResponseHeaderTimeout(timeout time.Duration) time.Duration {
-	if timeout > 0 && timeout < openaiStreamResponseHeaderTimeout {
-		return timeout
-	}
-	return openaiStreamResponseHeaderTimeout
 }
 
 func boundedOpenAIStreamChunkTimeout(timeout time.Duration) time.Duration {
@@ -907,13 +907,11 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	streamCtx := ctx
-	var cancelStream context.CancelFunc
-	if c.requestTimeout > 0 {
-		streamCtx, cancelStream = context.WithTimeout(ctx, c.requestTimeout)
-		defer cancelStream()
-	}
-
+	// No overall wall-clock deadline on the stream: header and first-chunk
+	// waits honor the configured request timeout, and once deltas flow the
+	// inter-chunk stall bound plus caller cancellation are the only limits.
+	// Reasoning models legitimately stream thinking deltas for longer than
+	// any fixed turn budget (#1576).
 	var resp *http.Response
 	var lastErr error
 	streamClient := c.streamClient
@@ -933,19 +931,19 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 
 			backoffTimer := time.NewTimer(backoff)
 			select {
-			case <-streamCtx.Done():
+			case <-ctx.Done():
 				if !backoffTimer.Stop() {
 					select {
 					case <-backoffTimer.C:
 					default:
 					}
 				}
-				return streamCtx.Err()
+				return ctx.Err()
 			case <-backoffTimer.C:
 			}
 		}
 
-		httpReq, err := http.NewRequestWithContext(streamCtx, "POST", c.baseURL, bytes.NewReader(body))
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewReader(body))
 		if err != nil {
 			return fmt.Errorf("failed to create request: %w", err)
 		}
@@ -1138,7 +1136,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		if !receivedFirstChunk {
 			chunkTimeout = c.streamFirstChunkTimeout
 		}
-		n, err := readOpenAIStreamChunk(streamCtx, reader, buf, chunkTimeout)
+		n, err := readOpenAIStreamChunk(ctx, reader, buf, chunkTimeout)
 		if n > 0 {
 			receivedFirstChunk = true
 			pendingData += string(buf[:n])

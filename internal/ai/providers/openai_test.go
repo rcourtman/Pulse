@@ -181,11 +181,15 @@ func TestOpenAIClient_ChatStream_RetriesTransientStartupError(t *testing.T) {
 	assert.Equal(t, "ok", content)
 }
 
-func TestNewOpenAIClient_BoundsStreamResponseHeaderTimeout(t *testing.T) {
+func TestNewOpenAIClient_StreamTimeouts(t *testing.T) {
+	// The waits for the stream to start (response headers, first chunk) honor
+	// the configured request timeout: local backends hold headers during model
+	// load and can spend minutes on prompt processing. Only the inter-chunk
+	// gap keeps the short stall bound.
 	client := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 0)
 	transport, ok := client.streamClient.Transport.(*http.Transport)
 	require.True(t, ok)
-	assert.Equal(t, openaiStreamResponseHeaderTimeout, transport.ResponseHeaderTimeout)
+	assert.Equal(t, 300*time.Second, transport.ResponseHeaderTimeout)
 	assert.Equal(t, openaiStreamChunkTimeout, client.streamChunkTimeout)
 	assert.Equal(t, 300*time.Second, client.streamFirstChunkTimeout)
 
@@ -195,6 +199,52 @@ func TestNewOpenAIClient_BoundsStreamResponseHeaderTimeout(t *testing.T) {
 	assert.Equal(t, 2*time.Second, shortTransport.ResponseHeaderTimeout)
 	assert.Equal(t, 2*time.Second, shortTimeoutClient.streamChunkTimeout)
 	assert.Equal(t, 2*time.Second, shortTimeoutClient.streamFirstChunkTimeout)
+}
+
+// TestOpenAIClient_ChatStream_ReasoningPhaseOutlivesRequestTimeout guards the
+// thinking-model path (#1576). qwen3 served via Ollama's OpenAI-compatible
+// endpoint streams per-token "reasoning" deltas with empty content for most of
+// the turn; that live activity must not be killed by a wall-clock cap at the
+// configured request timeout. Here the stream stays busy well past the 150ms
+// request timeout and must still complete.
+func TestOpenAIClient_ChatStream_ReasoningPhaseOutlivesRequestTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		for i := 0; i < 20; i++ {
+			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"content\":\"\",\"reasoning\":\"think%d \"}}]}\n\n", i)
+			flusher.Flush()
+			time.Sleep(20 * time.Millisecond)
+		}
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"answer\"},\"finish_reason\":\"stop\"}]}\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+		flusher.Flush()
+	}))
+	defer server.Close()
+
+	client := NewOpenAIClient("sk-test", "gpt-4", server.URL, 150*time.Millisecond)
+
+	var thinkingChunks int
+	var content string
+	var doneCalled bool
+	err := client.ChatStream(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}, func(event StreamEvent) {
+		switch event.Type {
+		case "thinking":
+			thinkingChunks++
+		case "content":
+			content += event.Data.(ContentEvent).Text
+		case "done":
+			doneCalled = true
+		}
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, 20, thinkingChunks)
+	assert.Equal(t, "answer", content)
+	assert.True(t, doneCalled)
 }
 
 func TestNewOpenAICompatibleClient_NormalizesProviderBasePaths(t *testing.T) {
