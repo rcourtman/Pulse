@@ -8858,21 +8858,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "patrol-community-qualification-lane-l6",
-      "agent_id": "patrol-community-qualification",
-      "summary": "Add local Patrol model-suite execution and privacy-allowlisted community qualification evidence export without network upload.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-14T20:48:45Z",
-      "heartbeat_at": "2026-07-14T20:48:45Z",
-      "expires_at": "2026-07-14T22:48:45Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L6"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
