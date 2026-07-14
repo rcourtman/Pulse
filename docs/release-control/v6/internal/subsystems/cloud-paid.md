@@ -224,9 +224,10 @@ avoids a cloud-control-plane report data path across clients.
 84. `pulse-pro:relay-server/revocation_feed.go`
 85. `pulse-pro:landing-page/index.html`
 86. `pulse-pro:scripts/validate_stripe_catalog.py`
-87. `pulse-pro:license-server/README.md`
-88. `pulse-pro:license-server/entrypoint.sh.template`
-89. `pulse-pro:license-server/secrets.env.template`
+87. `pulse-pro:scripts/remediate_stripe_commercial_state.py`
+88. `pulse-pro:license-server/README.md`
+89. `pulse-pro:license-server/entrypoint.sh.template`
+90. `pulse-pro:license-server/secrets.env.template`
 
 ## Shared Boundaries
 
@@ -1331,6 +1332,17 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     inbox event for one fresh retry cycle, but it must claim the event before
     dispatch, retain the original payload, use the cursor-aware retry path, and
     return to bounded backoff when the replay still fails.
+28. Keep production Stripe catalog remediation bounded, reviewable, and
+    separate from runtime deployment. The canonical tool must default to
+    GET-only planning, derive public price identity from the pricing model,
+    refuse catalog or Stripe-mode drift before writes, require an explicit
+    apply confirmation, update only the two public self-hosted product
+    descriptions, and create or reuse an exact Pulse-owned invoice/payment-
+    method-only portal configuration. It must not mutate an unknown portal
+    configuration, price, customer, subscription, webhook, license, or
+    deployed environment. The returned portal identifier is a separate
+    approved configuration/deployment input, and a passing GET-only production
+    re-audit remains the postcondition.
 
 ## Current State
 
@@ -1361,6 +1373,15 @@ or customer record was mutated or inspected. The dated blocked record is
 `docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-production-audit-blocked-2026-07-14.md`;
 the gate stays blocked until separately approved remediation is deployed and
 the same read-only audit passes.
+
+Repository-side remediation preparation now exists in
+`pulse-pro:scripts/remediate_stripe_commercial_state.py`. Offline proof covers
+shared-product deduplication, strict price and mode preconditions, exact portal
+reuse, safe creation instead of mutation of a nonconforming portal, bounded
+write endpoints, and apply confirmation. The dormant new-environment price
+creation helper also uses the same canonical descriptions. This preparation
+does not change the production finding: no live apply or runtime deployment
+has been authorized or executed, and the gate remains blocked.
 
 The Relay side now fails closed on missing feed authority, drains the feed
 before serving, exposes feed staleness through readiness, and tears down stale

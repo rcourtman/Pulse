@@ -2975,11 +2975,15 @@
             "label": "public Stripe catalog contract proof",
             "match_prefixes": [],
             "match_files": [
+              "pulse-pro:license-server/scripts/create-v6-stripe-prices.sh",
+              "pulse-pro:scripts/remediate_stripe_commercial_state.py",
               "pulse-pro:scripts/validate_stripe_catalog.py"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "pulse-pro:scripts/tests/test_create_v6_stripe_prices.py",
+              "pulse-pro:scripts/tests/test_remediate_stripe_commercial_state.py",
               "pulse-pro:scripts/tests/test_validate_stripe_catalog.py"
             ]
           },

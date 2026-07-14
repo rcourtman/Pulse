@@ -4793,6 +4793,12 @@
         },
         {
           "repo": "pulse-pro",
+          "path": "scripts/tests/test_remediate_stripe_commercial_state.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
           "path": "scripts/tests/test_validate_stripe_catalog.py",
           "kind": "file",
           "evidence_tier": "test-proof"
@@ -8034,6 +8040,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-remediation-prepared-2026-07-14.md",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/contract_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
@@ -8089,6 +8101,12 @@
         {
           "repo": "pulse-pro",
           "path": "relay-server/revocation_feed_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "scripts/tests/test_remediate_stripe_commercial_state.py",
           "kind": "file",
           "evidence_tier": "test-proof"
         }
