@@ -5721,8 +5721,13 @@ active alerts or findings, the model uses the supplied snapshot as sufficient
 calm-day evidence and does not spend platform or inventory tool calls merely
 reconfirming the same state. Exact scoped app-container rows carry the canonical
 restart count from normal collection. A non-zero count is a concrete signal
-that prevents the calm-day shortcut and may justify a targeted current read;
-quiet triage is not a deterministic replacement for model-owned assessment.
+that prevents the calm-day shortcut and may justify one targeted current
+resource read. In Watch detection, a current `restarting` state or a count that
+increased from the scoped snapshot confirms the operational symptom. The model
+reports it immediately and does not spend logs, discovery, Docker-service, or
+other root-cause tool calls after confirmation; causal analysis belongs to the
+separate Pro investigation track. Quiet triage is not a deterministic
+replacement for model-owned assessment.
 Provider-facing `pulse_docker` calls are host-scoped: every advertised action
 requires a Docker host name or ID in the structured schema, matching the
 executor contract and preventing invalid hostless Swarm-state calls.

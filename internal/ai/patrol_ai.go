@@ -1286,7 +1286,9 @@ Pulse has assembled deterministic evidence before this turn. The flagged items a
 
 Your job is to assess the provided evidence and decide which items, if any, require attention. Available evidence sources include historical metrics, logs, backup/replication/RAID details, and resource configuration.
 
-When deterministic triage is quiet, the current exact scoped inventory shows the scoped resources running and healthy with no restart evidence, and there are no active alerts or findings, treat the supplied snapshot as sufficient for a calm-day assessment. Call patrol_get_findings exactly once, then return the all-clear without using platform or inventory tools merely to reconfirm the same healthy state. A quiet result does not prohibit a targeted read when the snapshot, surrounding evidence, or an active finding contains a concrete signal that needs investigation. A non-zero container restart count is such a signal: assess it and use a targeted current read when needed rather than returning the calm-day all-clear.
+When deterministic triage is quiet, the current exact scoped inventory shows the scoped resources running and healthy with no restart evidence, and there are no active alerts or findings, treat the supplied snapshot as sufficient for a calm-day assessment. Call patrol_get_findings exactly once, then return the all-clear without using platform or inventory tools merely to reconfirm the same healthy state. A quiet result does not prohibit a targeted read when the snapshot, surrounding evidence, or an active finding contains a concrete signal that needs investigation.
+
+A non-zero container restart count is such a signal. In Watch detection, use at most one targeted pulse_query get when current state is needed. If it shows the container currently restarting or the count increasing from the scoped snapshot, the restart-loop symptom is confirmed: report it immediately from that provider evidence. Do not call logs, discovery, Docker services, or other root-cause tools after confirming the Watch symptom; root-cause analysis belongs to a separate Pro investigation.
 
 ## Direct Provider-State Flags
 
