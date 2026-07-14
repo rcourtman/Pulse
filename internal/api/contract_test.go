@@ -20998,3 +20998,40 @@ func TestContract_BackgroundReportingFailsClosedWithoutCommercialEntitlement(t *
 		t.Fatal("background reporting accepted a missing tenant license service")
 	}
 }
+
+func TestContract_RetiredDockerUpdateEndpointsAnswer410WithActionableCopy(t *testing.T) {
+	handlers := &DockerAgentHandlers{}
+
+	update := httptest.NewRecorder()
+	handlers.HandleContainerUpdate(update, httptest.NewRequest(http.MethodPost, "/api/agents/docker/containers/update", strings.NewReader(`{"agentId":"a","containerId":"c"}`)))
+	if update.Code != http.StatusGone {
+		t.Fatalf("legacy container update status = %d, want 410", update.Code)
+	}
+	if body := update.Body.String(); !strings.Contains(body, "/api/actions") || strings.Contains(body, "typed lifecycle delivery") {
+		t.Fatalf("legacy container update copy must point at the action plane without internal jargon: %s", body)
+	}
+
+	updateAll := httptest.NewRecorder()
+	handlers.HandleUpdateAll(updateAll, httptest.NewRequest(http.MethodPost, "/api/agents/docker/runtimes/agent-1/update-all", nil))
+	if updateAll.Code != http.StatusGone {
+		t.Fatalf("legacy update-all status = %d, want 410", updateAll.Code)
+	}
+	if body := updateAll.Body.String(); !strings.Contains(body, "/api/actions") {
+		t.Fatalf("legacy update-all copy must point at the action plane: %s", body)
+	}
+}
+
+func TestContract_DockerContainerUpdateRidesTheLifecycleExecutor(t *testing.T) {
+	executor := dockerContainerActionExecutor{}
+	names := executor.ActionHandlerNames()
+	want := []string{dockerContainerLifecycleHandler, dockerContainerUpdateHandler}
+	if !reflect.DeepEqual(names, want) {
+		t.Fatalf("docker executor handler names = %v, want %v", names, want)
+	}
+	if handler := dockerContainerOperationHandler("update"); handler != dockerContainerUpdateHandler {
+		t.Fatalf("update operation resolves handler %q, want %q", handler, dockerContainerUpdateHandler)
+	}
+	if handler := dockerContainerOperationHandler("restart"); handler != dockerContainerLifecycleHandler {
+		t.Fatalf("restart operation resolves handler %q, want %q", handler, dockerContainerLifecycleHandler)
+	}
+}

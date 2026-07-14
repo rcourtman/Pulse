@@ -108,6 +108,7 @@ type CommandClient struct {
 	packageUpdates            *packageUpdateManager
 	storageCleanup            *storageCleanupManager
 	dockerLifecycle           dockerLifecycleManager
+	dockerUpdater             DockerContainerUpdater
 	operationReceipts         *operationreceipt.Store
 	operationReceiptErr       error
 	operationReceiptCloseOnce sync.Once
@@ -147,6 +148,7 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 		packageUpdates:      cfg.packageUpdates,
 		storageCleanup:      cfg.storageCleanup,
 		dockerLifecycle:     newLocalDockerLifecycleManager(),
+		dockerUpdater:       cfg.DockerContainerUpdater,
 		operationReceipts:   receipts,
 		operationReceiptErr: receiptErr,
 		logger:              logger,
@@ -182,6 +184,8 @@ const (
 	msgTypeHostUpdateResult               messageType = "host_update_result"
 	msgTypeDockerContainerLifecycle       messageType = "docker_container_lifecycle"
 	msgTypeDockerContainerLifecycleResult messageType = "docker_container_lifecycle_result"
+	msgTypeDockerContainerUpdate          messageType = "docker_container_update"
+	msgTypeDockerContainerUpdateResult    messageType = "docker_container_update_result"
 	msgTypeOperationQuery                 messageType = "agent_operation_query"
 	msgTypeOperationQueryResult           messageType = "agent_operation_query_result"
 	msgTypeDeployPreflight                messageType = "deploy_preflight"
@@ -567,6 +571,14 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 			}
 			go c.handleHostStorageCleanup(ctx, conn, payload)
 
+		case msgTypeDockerContainerUpdate:
+			payload, err := agentexec.DecodeDockerContainerUpdatePayload(msg.Payload)
+			if err != nil {
+				c.logger.Warn().Err(err).Msg("Dropping invalid docker container update request")
+				continue
+			}
+			go c.handleDockerContainerUpdate(ctx, conn, payload)
+
 		case msgTypeDockerContainerLifecycle:
 			payload, err := agentexec.DecodeDockerContainerLifecyclePayload(msg.Payload)
 			if err != nil {
@@ -890,6 +902,16 @@ func hostOperationReceiptConfig() operationreceipt.Config {
 		}},
 		agentexec.DockerContainerLifecycleReceiptKind: {agentexec.DockerContainerLifecycleReceiptVersion: func(identity operationreceipt.Identity, payload json.RawMessage) error {
 			result, err := agentexec.DecodeDockerContainerLifecycleResultPayload(payload)
+			if err != nil {
+				return err
+			}
+			if result.RequestID != identity.AttemptID || result.ActionID != identity.ActionID || result.Operation != identity.OperationKind || result.OperationVersion != identity.OperationVersion || result.RequestDigest != identity.RequestDigest {
+				return operationreceipt.ErrBindingConflict
+			}
+			return nil
+		}},
+		agentexec.DockerContainerUpdateReceiptKind: {agentexec.DockerContainerUpdateReceiptVersion: func(identity operationreceipt.Identity, payload json.RawMessage) error {
+			result, err := agentexec.DecodeDockerContainerUpdateResultPayload(payload)
 			if err != nil {
 				return err
 			}

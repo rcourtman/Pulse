@@ -18,6 +18,7 @@ const (
 	MsgTypeHostStorageCleanupResult       MessageType = "host_storage_cleanup_result"
 	MsgTypeHostUpdateResult               MessageType = "host_update_result"
 	MsgTypeDockerContainerLifecycleResult MessageType = "docker_container_lifecycle_result"
+	MsgTypeDockerContainerUpdateResult    MessageType = "docker_container_update_result"
 	MsgTypeOperationQueryResult           MessageType = "agent_operation_query_result"
 
 	// Server -> Agent messages
@@ -28,6 +29,7 @@ const (
 	MsgTypeReadFile                 MessageType = "read_file"
 	MsgTypeHostUpdate               MessageType = "host_update"
 	MsgTypeDockerContainerLifecycle MessageType = "docker_container_lifecycle"
+	MsgTypeDockerContainerUpdate    MessageType = "docker_container_update"
 	MsgTypeOperationQuery           MessageType = "agent_operation_query"
 	MsgTypeDeployPreflight          MessageType = "deploy_preflight"
 	MsgTypeDeployInstall            MessageType = "deploy_install"
@@ -162,6 +164,7 @@ const (
 	DockerContainerOperationStart   = "start_container"
 	DockerContainerOperationStop    = "stop_container"
 	DockerContainerOperationRestart = "restart_container"
+	DockerContainerOperationUpdate  = "update_container"
 )
 
 // DockerContainerLifecyclePayload is a closed container lifecycle operation.
@@ -212,6 +215,69 @@ const (
 	DockerContainerPhaseVerify    = "verify"
 	DockerContainerPhaseComplete  = "complete"
 )
+
+// DockerContainerUpdatePayload is the closed, typed container image update
+// operation. It carries an immutable container ID and the exact image digest
+// the plan observed; the agent refuses when the container no longer runs that
+// digest, then pulls the container's own configured image reference and
+// recreates it from its inspected configuration. It never carries command
+// text, flags, a pull reference, or a user-controlled container name.
+type DockerContainerUpdatePayload struct {
+	RequestID           string `json:"request_id"`
+	ActionID            string `json:"action_id"`
+	Operation           string `json:"operation"`
+	OperationVersion    int    `json:"operation_version"`
+	RequestDigest       string `json:"request_digest"`
+	Runtime             string `json:"runtime"`
+	ContainerID         string `json:"container_id"`
+	ExpectedImageDigest string `json:"expected_image_digest"`
+	Timeout             int    `json:"timeout,omitempty"`
+}
+
+// DockerContainerUpdateResultPayload reports an update outcome. ContainerID
+// is the container the request targeted; a successful update recreates it, so
+// NewContainerID carries the replacement identity and the compensation fields
+// say whether a backup existed and whether rollback was applied on failure.
+type DockerContainerUpdateResultPayload struct {
+	RequestID         string                           `json:"request_id"`
+	ActionID          string                           `json:"action_id"`
+	Operation         string                           `json:"operation"`
+	OperationVersion  int                              `json:"operation_version"`
+	RequestDigest     string                           `json:"request_digest"`
+	ContainerID       string                           `json:"container_id"`
+	ExecutionPhase    string                           `json:"execution_phase"`
+	MutationStarted   bool                             `json:"mutation_started"`
+	MutationCompleted bool                             `json:"mutation_completed"`
+	ReadbackRan       bool                             `json:"readback_ran"`
+	NewContainerID    string                           `json:"new_container_id,omitempty"`
+	ContainerName     string                           `json:"container_name,omitempty"`
+	OldImageDigest    string                           `json:"old_image_digest,omitempty"`
+	NewImageDigest    string                           `json:"new_image_digest,omitempty"`
+	BackupCreated     bool                             `json:"backup_created"`
+	BackupContainer   string                           `json:"backup_container,omitempty"`
+	RollbackAttempted bool                             `json:"rollback_attempted"`
+	RolledBack        bool                             `json:"rolled_back"`
+	After             DockerContainerLifecycleSnapshot `json:"after"`
+	Error             string                           `json:"error,omitempty"`
+	Duration          int64                            `json:"duration_ms"`
+}
+
+// DockerContainerUpdateOutcome is the neutral bridge between the Docker
+// module's update implementation and the typed command channel, so the host
+// command client does not import the Docker module directly.
+type DockerContainerUpdateOutcome struct {
+	Success           bool
+	ContainerName     string
+	OldContainerID    string
+	NewContainerID    string
+	OldImageDigest    string
+	NewImageDigest    string
+	BackupCreated     bool
+	BackupContainer   string
+	RollbackAttempted bool
+	RolledBack        bool
+	Error             string
+}
 
 // HostUpdatePayload is the closed, typed host-package operation sent to a
 // Unified Agent. It intentionally has no command or package-name fields: the

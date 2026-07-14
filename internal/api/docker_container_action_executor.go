@@ -13,7 +13,10 @@ import (
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
-const dockerContainerLifecycleHandler = "docker.container.lifecycle"
+const (
+	dockerContainerLifecycleHandler = "docker.container.lifecycle"
+	dockerContainerUpdateHandler    = "docker.container.update"
+)
 
 type dockerContainerActionExecutor struct {
 	resources *ResourceHandlers
@@ -37,7 +40,44 @@ type dockerContainerLifecycleAgentCommander interface {
 	ExecuteDockerContainerLifecycle(context.Context, string, agentexec.DockerContainerLifecyclePayload) (*agentexec.DockerContainerLifecycleResultPayload, error)
 }
 
+type dockerContainerUpdateAgentCommander interface {
+	ExecuteDockerContainerUpdate(context.Context, string, agentexec.DockerContainerUpdatePayload) (*agentexec.DockerContainerUpdateResultPayload, error)
+}
+
+func isDockerContainerUpdateOperation(operation string) bool {
+	return strings.TrimSpace(operation) == "update"
+}
+
+// dockerContainerOperationHandler returns the internal handler a capability
+// must advertise for the requested operation, so an update request can never
+// ride a lifecycle capability or vice versa.
+func dockerContainerOperationHandler(operation string) string {
+	if isDockerContainerUpdateOperation(operation) {
+		return dockerContainerUpdateHandler
+	}
+	return dockerContainerLifecycleHandler
+}
+
 func (e dockerContainerActionExecutor) BindActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (unified.ActionDispatchAttempt, error) {
+	if isDockerContainerUpdateOperation(record.Request.CapabilityName) {
+		resource, err := e.currentDockerContainerResource(ctx, record.Request.ResourceID, record.Request.CapabilityName)
+		if err != nil {
+			return unified.ActionDispatchAttempt{}, err
+		}
+		runtime, err := dockerContainerRuntime(resource)
+		if err != nil {
+			return unified.ActionDispatchAttempt{}, err
+		}
+		agentID, err := e.connectedDockerCommandAgentID(resource)
+		if err != nil {
+			return unified.ActionDispatchAttempt{}, err
+		}
+		req, err := dockerContainerUpdateRequest(attempt.ID, record.ID, runtime, resource)
+		if err != nil {
+			return unified.ActionDispatchAttempt{}, err
+		}
+		return unified.BindActionDispatchAttempt(attempt, unified.ActionDispatchBinding{OperationKind: req.Operation, OperationVersion: req.OperationVersion, RequestDigest: req.RequestDigest, AgentID: agentID})
+	}
 	operation, err := dockerAgentLifecycleOperation(record.Request.CapabilityName)
 	if err != nil {
 		return unified.ActionDispatchAttempt{}, err
@@ -69,7 +109,7 @@ func newDockerContainerActionExecutor(resources *ResourceHandlers, agents action
 }
 
 func (e dockerContainerActionExecutor) ActionHandlerNames() []string {
-	return []string{dockerContainerLifecycleHandler}
+	return []string{dockerContainerLifecycleHandler, dockerContainerUpdateHandler}
 }
 
 func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
@@ -82,6 +122,9 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 		return nil, err
 	}
 	operation := strings.TrimSpace(record.Request.CapabilityName)
+	if isDockerContainerUpdateOperation(operation) {
+		return e.executeDockerContainerUpdate(ctx, record, attempt)
+	}
 	if !isDockerContainerLifecycleOperation(operation) {
 		return nil, fmt.Errorf("unsupported docker container lifecycle capability %q", operation)
 	}
@@ -137,6 +180,72 @@ func (e dockerContainerActionExecutor) ExecuteAction(ctx context.Context, record
 	return dockerContainerExecutionResult(record.Request.ResourceID, agentID, req, *result, independent, receivedAt)
 }
 
+func (e dockerContainerActionExecutor) executeDockerContainerUpdate(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (*unified.ExecutionResult, error) {
+	operation := strings.TrimSpace(record.Request.CapabilityName)
+	resource, err := e.currentDockerContainerResource(ctx, record.Request.ResourceID, operation)
+	if err != nil {
+		return nil, err
+	}
+	runtime, err := dockerContainerRuntime(resource)
+	if err != nil {
+		return nil, err
+	}
+	if dockerContainerRef(resource) == "" {
+		return nil, fmt.Errorf("docker container resource %q has no executable container id", record.Request.ResourceID)
+	}
+	agentID, err := e.connectedDockerCommandAgentID(resource)
+	if err != nil {
+		return nil, err
+	}
+	typedAgents, ok := e.agents.(dockerContainerUpdateAgentCommander)
+	if !ok {
+		return nil, fmt.Errorf("typed docker container update agent is unavailable")
+	}
+	req, err := dockerContainerUpdateRequest(attempt.ID, record.ID, runtime, resource)
+	if err != nil {
+		return nil, err
+	}
+	if agentexec.DockerContainerUpdateOperationIdentity(agentID, req) != (operationreceipt.Identity{AttemptID: attempt.ID, ActionID: attempt.ActionID, OperationKind: attempt.OperationKind, OperationVersion: attempt.OperationVersion, RequestDigest: attempt.RequestDigest, AgentID: attempt.AgentID}) {
+		return nil, fmt.Errorf("docker container update dispatch binding drift")
+	}
+	result, err := typedAgents.ExecuteDockerContainerUpdate(ctx, agentID, req)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, fmt.Errorf("docker container update agent returned no result")
+	}
+	receivedAt := time.Now().UTC()
+	if err := agentexec.ValidateDockerContainerUpdateResultForRequest(req, *result); err != nil {
+		return nil, fmt.Errorf("invalid docker container update agent result: %w", err)
+	}
+	var independent *dockerContainerPostconditionObservation
+	if e.observer != nil && result.NewContainerID != "" {
+		if observation, observeErr := e.observer.ObserveDockerContainer(ctx, record.ID, result.NewContainerID); observeErr == nil {
+			independent = &observation
+		}
+	}
+	return dockerContainerUpdateExecutionResult(record.Request.ResourceID, agentID, *result, independent, receivedAt)
+}
+
+func dockerContainerUpdateRequest(attemptID, actionID, runtime string, resource unified.Resource) (agentexec.DockerContainerUpdatePayload, error) {
+	expectedDigest := ""
+	if resource.Docker != nil && resource.Docker.UpdateStatus != nil {
+		expectedDigest = strings.ToLower(strings.TrimSpace(resource.Docker.UpdateStatus.CurrentDigest))
+	}
+	if expectedDigest == "" {
+		return agentexec.DockerContainerUpdatePayload{}, fmt.Errorf("resource %q has no current image digest to bind the update against", resource.ID)
+	}
+	req := agentexec.DockerContainerUpdatePayload{
+		RequestID: attemptID, ActionID: actionID, Runtime: runtime,
+		ContainerID: dockerContainerRef(resource), ExpectedImageDigest: expectedDigest,
+	}
+	if err := agentexec.BindDockerContainerUpdatePayload(&req); err != nil {
+		return agentexec.DockerContainerUpdatePayload{}, err
+	}
+	return req, nil
+}
+
 func (e dockerContainerActionExecutor) ReconcileActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (*unified.ExecutionResult, unified.ActionDispatchReceipt, bool, error) {
 	querier, ok := e.agents.(operationReceiptQuerier)
 	if !ok {
@@ -153,6 +262,24 @@ func (e dockerContainerActionExecutor) ReconcileActionDispatch(ctx context.Conte
 	receivedAt := time.Now().UTC()
 	if err := agentexec.ValidateOperationQueryResultForIdentity(query, identity, receivedAt); err != nil {
 		return nil, unified.ActionDispatchReceipt{}, false, err
+	}
+	if attempt.OperationKind == agentexec.DockerContainerOperationUpdate {
+		result, err := agentexec.DecodeDockerContainerUpdateResultPayload(query.Record.Result)
+		if err != nil {
+			return nil, unified.ActionDispatchReceipt{}, false, err
+		}
+		var independent *dockerContainerPostconditionObservation
+		if e.observer != nil && result.NewContainerID != "" {
+			if observation, observeErr := e.observer.ObserveDockerContainer(ctx, record.ID, result.NewContainerID); observeErr == nil {
+				independent = &observation
+			}
+		}
+		execution, err := dockerContainerUpdateExecutionResult(record.Request.ResourceID, attempt.AgentID, result, independent, receivedAt)
+		if err != nil {
+			return nil, unified.ActionDispatchReceipt{}, false, err
+		}
+		receipt := unified.ActionDispatchReceipt{AttemptID: attempt.ID, ActionID: record.ID, TransportRequestID: attempt.ID, ReceivedAt: receivedAt}
+		return execution, receipt, true, nil
 	}
 	result, err := agentexec.DecodeDockerContainerLifecycleResultPayload(query.Record.Result)
 	if err != nil {
@@ -176,14 +303,18 @@ func (e dockerContainerActionExecutor) ReconcileActionDispatch(ctx context.Conte
 func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness {
 	operation := strings.TrimSpace(req.CapabilityName)
 	capability, ok := findDockerLifecycleCapability(resource.Capabilities, operation)
-	if !ok || capability.InternalHandler != dockerContainerLifecycleHandler {
+	if !ok || capability.InternalHandler != dockerContainerOperationHandler(operation) {
 		return unified.ResourceActionReadiness{}
 	}
 	readiness := unified.ResourceActionReadiness{Name: operation, Available: true}
 	if e.agents == nil {
 		return unavailableDockerActionReadiness(operation, "command_agent_unavailable", "Docker / Podman command execution is not available.")
 	}
-	if _, ok := e.agents.(dockerContainerLifecycleAgentCommander); !ok {
+	if isDockerContainerUpdateOperation(operation) {
+		if _, ok := e.agents.(dockerContainerUpdateAgentCommander); !ok {
+			return unavailableDockerActionReadiness(operation, "typed_operation_unavailable", "Typed Docker / Podman update execution is not available.")
+		}
+	} else if _, ok := e.agents.(dockerContainerLifecycleAgentCommander); !ok {
 		return unavailableDockerActionReadiness(operation, "typed_operation_unavailable", "Typed Docker / Podman lifecycle execution is not available.")
 	}
 	if _, err := e.executableDockerContainerResource(ctx, resource, operation); err != nil {
@@ -231,7 +362,7 @@ func (e dockerContainerActionExecutor) executableDockerContainerResource(_ conte
 	}
 	if capability, ok := findDockerLifecycleCapability(resource.Capabilities, operation); !ok {
 		return unified.Resource{}, fmt.Errorf("resource %q does not currently advertise %s capability", resource.ID, operation)
-	} else if capability.InternalHandler != dockerContainerLifecycleHandler {
+	} else if capability.InternalHandler != dockerContainerOperationHandler(operation) {
 		return unified.Resource{}, fmt.Errorf("resource %q advertises %s through unsupported handler %q", resource.ID, operation, capability.InternalHandler)
 	}
 	return resource, nil

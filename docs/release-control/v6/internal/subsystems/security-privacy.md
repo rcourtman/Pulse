@@ -484,6 +484,13 @@ Raw command, file-write, arbitrary pod-exec, and legacy remediation authority
 are retired before handler or transport execution. Extension aliases cannot
 shadow retired names, and transport delivery must name committed lifecycle
 authority rather than accepting model-supplied command or rollback text.
+Container image updates re-entered the plane as a closed typed operation:
+the `docker_container_update` payload carries only an immutable container id,
+runtime, and the plan-observed image digest (never a pull reference or
+command text), the unified agent binds it through the same durable
+operation-receipt admission as the other typed operations, and the process
+bridge in `cmd/pulse-agent/main.go` late-binds the Docker module so a missing
+module refuses before any mutation.
 
 Unified Agent Pulse transports share one fail-closed TLS policy across host,
 Docker/Podman, Kubernetes, remote configuration, commands, and self-update.

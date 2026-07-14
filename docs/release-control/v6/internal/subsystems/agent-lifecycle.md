@@ -455,16 +455,36 @@ the API-owned action audit records `executing` before dispatch and the
 terminal execution result afterward. Dry-run-only plans remain planning evidence
 only; lifecycle surfaces must not present them as executable, dispatch them
 through agent-local command paths, or bypass the API fail-closed execution gate.
-Docker / Podman container start, stop, and restart affordances follow that same
-boundary: lifecycle UI may consume unified-resource capabilities for enabled or
-disabled presentation, but execution must stay inside the API-owned action
-executor wired from `internal/api/router.go` and must not shell out, SSH, or call
-Docker / Podman from lifecycle-local code. That API-owned executor may resolve
-the command WebSocket by Docker source ID or canonical Docker host name and may
-mark its vetted container lifecycle dispatch as a trusted agent command after
-the API action has entered execution; lifecycle surfaces still consume only the
-resource payload, action readiness, and action-audit result rather than issuing
-or approving command-agent grants themselves.
+Docker / Podman container start, stop, restart, and image-update affordances
+follow that same boundary: lifecycle UI may consume unified-resource
+capabilities for enabled or disabled presentation, but execution must stay
+inside the API-owned action executor wired from `internal/api/router.go` and
+must not shell out, SSH, or call Docker / Podman from lifecycle-local code.
+That API-owned executor may resolve the command WebSocket by Docker source ID
+or canonical Docker host name and may mark its vetted container lifecycle
+dispatch as a trusted agent command after the API action has entered
+execution; lifecycle surfaces still consume only the resource payload, action
+readiness, and action-audit result rather than issuing or approving
+command-agent grants themselves.
+
+Docker / Podman container image updates are a fourth typed operation on that
+same closed channel, not an extension of the raw command path and not a
+revival of the retired queued `update_container` transport.
+`docker_container_update` has its own strict codec in
+`internal/agentexec/docker_update_codec.go`: the payload carries only the
+immutable container id, the runtime, and the exact image reference the plan
+was bound to (part of the request digest; no command text, flags, or
+user-controlled names), and the result reports phase, replacement-container
+identity, image digests, backup identity, and rollback attempt and outcome as
+facts, never canonical action truth. The unified agent admits the operation
+through the same durable operation-receipt store and bridges execution to the
+Docker module's own pull/backup/recreate/verify/rollback implementation via
+`internal/hostagent/docker_update.go`; a missing Docker module, a runtime
+mismatch, or image drift since planning refuses before any mutation. The
+module attests the first mutating step (the backup rename), so failures before
+it report an unmutated tree, and restore attempts with their outcome ride the
+result so the server-side executor reports declared compensation truth instead
+of guessing.
 Host OS package updates follow a stricter adjacent boundary. The Unified Agent
 may report a bounded, read-only APT upgrade simulation through
 `pkg/agents/host/report.go`, but installation authority is available only via

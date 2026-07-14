@@ -1660,3 +1660,65 @@ func TestResourceFromHostCarriesReclaimableMemoryCache(t *testing.T) {
 		t.Fatalf("agent memory used+cache+free %d exceeds total %d", sum, resource.Agent.Memory.Total)
 	}
 }
+
+func TestResourceFromDockerContainerAdvertisesUpdateCapabilityOnlyWithDigest(t *testing.T) {
+	now := time.Now().UTC()
+	host := models.DockerHost{
+		ID:       "docker-host-1",
+		AgentID:  "agent-1",
+		Hostname: "dock1",
+		Runtime:  "docker",
+		LastSeen: now,
+	}
+
+	withDigest, _ := resourceFromDockerContainer(models.DockerContainer{
+		ID:    "abc123",
+		Name:  "web",
+		State: "running",
+		Image: "example/web:latest",
+		UpdateStatus: &models.DockerContainerUpdateStatus{
+			UpdateAvailable: true,
+			CurrentDigest:   "sha256:" + strings.Repeat("1", 64),
+			LatestDigest:    "sha256:" + strings.Repeat("2", 64),
+		},
+	}, host)
+	if got := capabilityNames(withDigest.Capabilities); !reflect.DeepEqual(got, []string{"stop", "restart", "update"}) {
+		t.Fatalf("capabilities with detected update = %#v, want stop/restart/update", got)
+	}
+	for _, capability := range withDigest.Capabilities {
+		if capability.Name != "update" {
+			continue
+		}
+		if capability.InternalHandler != "docker.container.update" || capability.MinimumApprovalLevel != ApprovalAdmin || capability.AutoAuthorization != AutoAuthorizeNever {
+			t.Fatalf("update capability contract = %+v", capability)
+		}
+	}
+
+	// The typed dispatch binds to the plan-observed digest; a report that
+	// cannot state the current digest must not offer the action.
+	withoutDigest, _ := resourceFromDockerContainer(models.DockerContainer{
+		ID:    "abc124",
+		Name:  "web2",
+		State: "running",
+		Image: "example/web:latest",
+		UpdateStatus: &models.DockerContainerUpdateStatus{
+			UpdateAvailable: true,
+		},
+	}, host)
+	if got := capabilityNames(withoutDigest.Capabilities); !reflect.DeepEqual(got, []string{"stop", "restart"}) {
+		t.Fatalf("capabilities without current digest = %#v, want stop/restart only", got)
+	}
+
+	current, _ := resourceFromDockerContainer(models.DockerContainer{
+		ID:    "abc125",
+		Name:  "web3",
+		State: "running",
+		Image: "example/web:latest",
+		UpdateStatus: &models.DockerContainerUpdateStatus{
+			CurrentDigest: "sha256:" + strings.Repeat("1", 64),
+		},
+	}, host)
+	if got := capabilityNames(current.Capabilities); !reflect.DeepEqual(got, []string{"stop", "restart"}) {
+		t.Fatalf("capabilities without available update = %#v, want stop/restart only", got)
+	}
+}

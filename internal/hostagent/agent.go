@@ -80,6 +80,11 @@ type Config struct {
 
 	Collector SystemCollector // Optional: override default system information collector (for testing)
 
+	// DockerContainerUpdater bridges typed container update operations to the
+	// Docker / Podman module when the unified agent runs both. Nil when the
+	// Docker module is disabled or not yet connected.
+	DockerContainerUpdater DockerContainerUpdater
+
 	newCommandClientFn   func(Config, string, string, string, string) *CommandClient
 	runCommandClientFn   func(*CommandClient, context.Context) error
 	updatedFromVersionFn func() string

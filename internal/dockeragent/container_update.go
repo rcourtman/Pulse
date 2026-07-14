@@ -25,7 +25,12 @@ type ContainerUpdateResult struct {
 	NewImageDigest  string `json:"newImageDigest,omitempty"`
 	BackupCreated   bool   `json:"backupCreated"`
 	BackupContainer string `json:"backupContainer,omitempty"`
-	Error           string `json:"error,omitempty"`
+	// RollbackAttempted / RolledBack record compensation truth: whether a
+	// failure path tried to restore the original container, and whether the
+	// restore itself succeeded.
+	RollbackAttempted bool   `json:"rollbackAttempted,omitempty"`
+	RolledBack        bool   `json:"rolledBack,omitempty"`
+	Error             string `json:"error,omitempty"`
 }
 
 type updateContainerCommandPayload struct {
@@ -319,7 +324,8 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		result.Error = fmt.Sprintf("Failed to create new container: %v", annotateDockerConnectionError(err))
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to create new container")
 		// Rollback: rename backup back to original name
-		a.rollbackRenameAndRestart(ctx, backupName, result.ContainerName, containerID, wasRunning)
+		result.RollbackAttempted = true
+		result.RolledBack = a.rollbackRenameAndRestart(ctx, backupName, result.ContainerName, containerID, wasRunning)
 		return result
 	}
 
@@ -358,7 +364,8 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 			result.Error = fmt.Sprintf("Failed to start new container: %v", annotateDockerConnectionError(err))
 			a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to start new container")
 			// Rollback: remove new container, rename backup back
-			a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID, wasRunning)
+			result.RollbackAttempted = true
+			result.RolledBack = a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID, wasRunning)
 			return result
 		}
 
@@ -376,7 +383,8 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	if err != nil {
 		result.Error = fmt.Sprintf("Failed to inspect new container: %v", annotateDockerConnectionError(err))
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to inspect new container")
-		a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID, wasRunning)
+		result.RollbackAttempted = true
+		result.RolledBack = a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID, wasRunning)
 		return result
 	}
 
@@ -392,7 +400,8 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 			result.Error = fmt.Sprintf("New container crashed immediately (exit code %d): %s", exitCode, stateErr)
 			a.logger.Error().Str("container", result.ContainerName).Int("exitCode", exitCode).Msg("New container crashed, rolling back")
 			// Rollback
-			a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID, wasRunning)
+			result.RollbackAttempted = true
+			result.RolledBack = a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID, wasRunning)
 			return result
 		}
 
@@ -401,7 +410,8 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 			result.Error = "New container reported unhealthy status"
 			a.logger.Error().Str("container", result.ContainerName).Msg("New container unhealthy, rolling back")
 			// Rollback
-			a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID, wasRunning)
+			result.RollbackAttempted = true
+			result.RolledBack = a.rollbackRemoveRenameAndRestart(ctx, newContainerID, backupName, result.ContainerName, containerID, wasRunning)
 			return result
 		}
 	}
@@ -431,8 +441,10 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	return result
 }
 
-func (a *Agent) rollbackRenameAndRestart(ctx context.Context, backupName, originalName, originalID string, restart bool) {
+func (a *Agent) rollbackRenameAndRestart(ctx context.Context, backupName, originalName, originalID string, restart bool) bool {
+	restored := true
 	if err := a.docker.ContainerRename(ctx, backupName, originalName); err != nil {
+		restored = false
 		a.logger.Warn().
 			Err(err).
 			Str("backup", backupName).
@@ -441,22 +453,26 @@ func (a *Agent) rollbackRenameAndRestart(ctx context.Context, backupName, origin
 	}
 	if restart {
 		if err := a.docker.ContainerStart(ctx, originalID, dockerContainerStartOptions{}); err != nil {
+			restored = false
 			a.logger.Warn().
 				Err(err).
 				Str("container", originalName).
 				Msg("Rollback step failed: restart original container")
 		}
 	}
+	return restored
 }
 
-func (a *Agent) rollbackRemoveRenameAndRestart(ctx context.Context, newContainerID, backupName, originalName, originalID string, restart bool) {
+func (a *Agent) rollbackRemoveRenameAndRestart(ctx context.Context, newContainerID, backupName, originalName, originalID string, restart bool) bool {
+	restored := true
 	if err := a.docker.ContainerRemove(ctx, newContainerID, dockerContainerRemoveOptions{Force: true}); err != nil {
+		restored = false
 		a.logger.Warn().
 			Err(err).
 			Str("containerId", newContainerID).
 			Msg("Rollback step failed: remove replacement container")
 	}
-	a.rollbackRenameAndRestart(ctx, backupName, originalName, originalID, restart)
+	return a.rollbackRenameAndRestart(ctx, backupName, originalName, originalID, restart) && restored
 }
 
 func shortDigest(digest string) string {

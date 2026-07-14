@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
@@ -2171,4 +2172,41 @@ func TestAgentIDFilePersistence(t *testing.T) {
 			t.Errorf("expected file not to be created, got err=%v", err)
 		}
 	})
+}
+
+type stubTypedContainerUpdater struct {
+	calls int
+}
+
+func (s *stubTypedContainerUpdater) TypedContainerUpdate(context.Context, string, string, string, func(string)) (agentexec.DockerContainerUpdateOutcome, error) {
+	s.calls++
+	return agentexec.DockerContainerUpdateOutcome{Success: true}, nil
+}
+
+func TestLateBoundDockerUpdaterBridgesModuleWhenItComesUp(t *testing.T) {
+	bridge := &lateBoundDockerUpdater{}
+
+	if _, err := bridge.TypedContainerUpdate(context.Background(), "docker", strings.Repeat("a", 12), "sha256:"+strings.Repeat("1", 64), nil); err == nil {
+		t.Fatal("bridge without a docker module accepted an update")
+	}
+
+	bridge.set(struct{}{}) // non-implementing candidates must not install
+	if _, err := bridge.TypedContainerUpdate(context.Background(), "docker", strings.Repeat("a", 12), "sha256:"+strings.Repeat("1", 64), nil); err == nil {
+		t.Fatal("bridge accepted an update after a non-implementing candidate was offered")
+	}
+
+	stub := &stubTypedContainerUpdater{}
+	bridge.set(stub)
+	if _, err := bridge.TypedContainerUpdate(context.Background(), "docker", strings.Repeat("a", 12), "sha256:"+strings.Repeat("1", 64), nil); err != nil {
+		t.Fatalf("bridge with an installed module refused: %v", err)
+	}
+	if stub.calls != 1 {
+		t.Fatalf("expected one delegated call, got %d", stub.calls)
+	}
+}
+
+func TestDockerAgentImplementsTypedContainerUpdater(t *testing.T) {
+	// The bridge installs by structural assertion; if the Docker module's
+	// method signature drifts, updates silently refuse at runtime. Pin it.
+	var _ hostagent.DockerContainerUpdater = (*dockeragent.Agent)(nil)
 }

@@ -163,6 +163,21 @@ func ValidateOperationQueryResultForIdentity(result operationreceipt.QueryResult
 			return fmt.Errorf("docker container lifecycle readback has invalid terminal chronology")
 		}
 		return nil
+	case DockerContainerOperationUpdate:
+		if result.Record.ResultKind != DockerContainerUpdateReceiptKind || result.Record.ResultVersion != DockerContainerUpdateReceiptVersion {
+			return fmt.Errorf("docker container update query result envelope mismatch")
+		}
+		payload, err := DecodeDockerContainerUpdateResultPayload(result.Record.Result)
+		if err != nil {
+			return err
+		}
+		if payload.RequestID != identity.AttemptID || payload.ActionID != identity.ActionID || payload.Operation != identity.OperationKind || payload.OperationVersion != identity.OperationVersion || payload.RequestDigest != identity.RequestDigest {
+			return operationreceipt.ErrBindingConflict
+		}
+		if payload.ReadbackRan && (payload.After.ObservedAt.IsZero() || result.Record.TerminalAt.Before(payload.After.ObservedAt)) {
+			return fmt.Errorf("docker container update readback has invalid terminal chronology")
+		}
+		return nil
 	default:
 		return fmt.Errorf("unsupported operation query kind %q", identity.OperationKind)
 	}

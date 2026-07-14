@@ -1771,8 +1771,13 @@ must not treat starter
 
 Infrastructure rollback is a declared lifecycle property, not executable model
 or legacy remediation text. Task 10 owns compensation/truth representation;
-until that contract is complete, affected Docker, Kubernetes, and native
-provider mutations remain fail-closed denied.
+until that contract is complete, affected Kubernetes and native provider
+mutations remain fail-closed denied. Docker container image updates left that
+denied set: the update executor in `internal/api/` reports declared
+compensation (`backup_rename_restore`) with the agent-attested backup
+identity, rollback attempt, and rollback outcome carried in the typed result,
+so a failed update surfaces whether the original container was restored
+instead of guessing.
 
 Storage and recovery consumers inherit create-once action identity, monotonic
 terminal state, and exactly-one executor admission from the shared lifecycle.

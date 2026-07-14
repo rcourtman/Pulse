@@ -67,6 +67,7 @@ type Server struct {
 	pendingHostStorageCleanups       map[string]chan HostStorageCleanupResultPayload // scoped request key -> typed storage-cleanup response
 	pendingHostUpdates               map[string]chan HostUpdateResultPayload         // scoped request key -> typed host-update response
 	pendingDockerContainerLifecycles map[string]chan DockerContainerLifecycleResultPayload
+	pendingDockerContainerUpdates    map[string]chan DockerContainerUpdateResultPayload
 	pendingHostOperations            map[string]pendingHostOperation // scoped request key -> exact typed APT operation/query identity
 	pendingOperationQueries          map[string]pendingOperationQuery
 	deploySubs                       map[string]chan DeployProgressPayload // deploySubKey(agentID, jobID) -> progress subscriber
@@ -147,6 +148,7 @@ func NewServer(validateToken func(token string, agentID string, hostname string)
 		pendingHostStorageCleanups:       make(map[string]chan HostStorageCleanupResultPayload),
 		pendingHostUpdates:               make(map[string]chan HostUpdateResultPayload),
 		pendingDockerContainerLifecycles: make(map[string]chan DockerContainerLifecycleResultPayload),
+		pendingDockerContainerUpdates:    make(map[string]chan DockerContainerUpdateResultPayload),
 		pendingHostOperations:            make(map[string]pendingHostOperation),
 		pendingOperationQueries:          make(map[string]pendingOperationQuery),
 		deploySubs:                       make(map[string]chan DeployProgressPayload),
@@ -221,6 +223,15 @@ func (s *Server) claimPendingDockerOperation(identity operationreceipt.Identity,
 }
 
 func (s *Server) matchesPendingDockerOperation(agentID string, result DockerContainerLifecycleResultPayload) bool {
+	key := pendingRequestKey(agentID, result.RequestID)
+	s.mu.RLock()
+	expected, ok := s.pendingHostOperations[key]
+	s.mu.RUnlock()
+	actual := operationreceipt.Identity{AttemptID: result.RequestID, ActionID: result.ActionID, OperationKind: result.Operation, OperationVersion: result.OperationVersion, RequestDigest: result.RequestDigest, AgentID: strings.TrimSpace(agentID)}
+	return ok && expected.identity == actual && expected.subjectID == strings.ToLower(strings.TrimSpace(result.ContainerID))
+}
+
+func (s *Server) matchesPendingDockerUpdateOperation(agentID string, result DockerContainerUpdateResultPayload) bool {
 	key := pendingRequestKey(agentID, result.RequestID)
 	s.mu.RLock()
 	expected, ok := s.pendingHostOperations[key]
@@ -985,6 +996,27 @@ func (s *Server) readLoop(ac *agentConn) {
 				}
 			}
 
+		case MsgTypeDockerContainerUpdateResult:
+			result, decodeErr := DecodeDockerContainerUpdateResultPayload(msg.Payload)
+			if decodeErr != nil {
+				log.Warn().Err(decodeErr).Str("agent_id", ac.agent.AgentID).Msg("Dropping invalid docker container update result")
+				continue
+			}
+			if !s.matchesPendingDockerUpdateOperation(ac.agent.AgentID, result) {
+				log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Dropping uncorrelated docker update result")
+				continue
+			}
+			s.mu.RLock()
+			ch, ok := s.pendingDockerContainerUpdates[pendingRequestKey(ac.agent.AgentID, result.RequestID)]
+			s.mu.RUnlock()
+			if ok {
+				select {
+				case ch <- result:
+				default:
+					log.Warn().Str("agent_id", ac.agent.AgentID).Str("request_id", result.RequestID).Msg("Docker update result channel full, dropping")
+				}
+			}
+
 		case MsgTypeOperationQueryResult:
 			result, decodeErr := operationreceipt.DecodeQueryResult(msg.Payload)
 			if decodeErr != nil {
@@ -1508,6 +1540,25 @@ func (s *Server) ExecuteDockerContainerLifecycle(ctx context.Context, agentID st
 	if err := ValidateDockerContainerLifecyclePayload(&req); err != nil {
 		return nil, err
 	}
+	identity := DockerContainerLifecycleOperationIdentity(agentID, req)
+	return dispatchTypedDockerContainerOperation(ctx, s, agentID, req.RequestID, req.Timeout, identity, req.ContainerID,
+		MsgTypeDockerContainerLifecycle, req, s.pendingDockerContainerLifecycles, "docker container lifecycle",
+		func(result DockerContainerLifecycleResultPayload) error {
+			return ValidateDockerContainerLifecycleResultForRequest(req, result)
+		})
+}
+
+// dispatchTypedDockerContainerOperation owns the shared skeleton for closed
+// typed container dispatches: durable-receipt capability check, pending
+// operation claim, single-flight request registration, send, and the bounded
+// wait for the validated result.
+func dispatchTypedDockerContainerOperation[Res any](
+	ctx context.Context, s *Server, agentID, requestID string, timeoutSeconds int,
+	identity operationreceipt.Identity, containerID string,
+	msgType MessageType, payload any,
+	pending map[string]chan Res, label string,
+	validate func(Res) error,
+) (*Res, error) {
 	s.mu.RLock()
 	ac, ok := s.agents[agentID]
 	s.mu.RUnlock()
@@ -1518,54 +1569,81 @@ func (s *Server) ExecuteDockerContainerLifecycle(ctx context.Context, agentID st
 		return nil, fmt.Errorf("agent does not support durable operation receipts")
 	}
 
-	respCh := make(chan DockerContainerLifecycleResultPayload, 1)
-	reqKey := pendingRequestKey(agentID, req.RequestID)
-	identity := DockerContainerLifecycleOperationIdentity(agentID, req)
-	hostOperationKey, err := s.claimPendingDockerOperation(identity, req.ContainerID)
+	respCh := make(chan Res, 1)
+	reqKey := pendingRequestKey(agentID, requestID)
+	hostOperationKey, err := s.claimPendingDockerOperation(identity, containerID)
 	if err != nil {
 		return nil, err
 	}
 	defer s.releasePendingHostOperation(hostOperationKey)
 	s.mu.Lock()
-	if _, exists := s.pendingDockerContainerLifecycles[reqKey]; exists {
+	if _, exists := pending[reqKey]; exists {
 		s.mu.Unlock()
-		return nil, fmt.Errorf("docker container lifecycle request %q is already pending", req.RequestID)
+		return nil, fmt.Errorf("%s request %q is already pending", label, requestID)
 	}
-	s.pendingDockerContainerLifecycles[reqKey] = respCh
+	pending[reqKey] = respCh
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
-		delete(s.pendingDockerContainerLifecycles, reqKey)
+		delete(pending, reqKey)
 		s.mu.Unlock()
 	}()
 
-	msg, err := NewMessage(MsgTypeDockerContainerLifecycle, req.RequestID, req)
+	msg, err := NewMessage(msgType, requestID, payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode docker container lifecycle request: %w", err)
+		return nil, fmt.Errorf("failed to encode %s request: %w", label, err)
 	}
 	ac.writeMu.Lock()
 	err = s.sendMessage(ac.conn, msg)
 	ac.writeMu.Unlock()
 	if err != nil {
-		return nil, fmt.Errorf("failed to send docker container lifecycle request: %w", err)
+		return nil, fmt.Errorf("failed to send %s request: %w", label, err)
 	}
-	timer := time.NewTimer(time.Duration(req.Timeout) * time.Second)
+	timer := time.NewTimer(time.Duration(timeoutSeconds) * time.Second)
 	defer timer.Stop()
 	select {
 	case result := <-respCh:
-		if err := ValidateDockerContainerLifecycleResultForRequest(req, result); err != nil {
-			return nil, fmt.Errorf("docker container lifecycle result validation failed: %w", err)
+		if err := validate(result); err != nil {
+			return nil, fmt.Errorf("%s result validation failed: %w", label, err)
 		}
 		return &result, nil
 	case <-timer.C:
-		return nil, fmt.Errorf("docker container lifecycle timed out after %s", time.Duration(req.Timeout)*time.Second)
+		return nil, fmt.Errorf("%s timed out after %s", label, time.Duration(timeoutSeconds)*time.Second)
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-ac.done:
-		return nil, fmt.Errorf("agent %s disconnected before docker container lifecycle receipt", agentID)
+		return nil, fmt.Errorf("agent %s disconnected before %s receipt", agentID, label)
 	case <-s.shutdown:
 		return nil, errServerShuttingDown
 	}
+}
+
+// ExecuteDockerContainerUpdate dispatches one closed typed container image
+// update. The Unified Agent owns pull, backup, recreate, verification, and
+// rollback inside this single dispatch and reports the compensation outcome.
+func (s *Server) ExecuteDockerContainerUpdate(ctx context.Context, agentID string, req DockerContainerUpdatePayload) (*DockerContainerUpdateResultPayload, error) {
+	if s == nil {
+		return nil, fmt.Errorf("agent execution server is unavailable")
+	}
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return nil, fmt.Errorf("agent id is required")
+	}
+	if strings.TrimSpace(req.RequestID) == "" {
+		req.RequestID = uuid.NewString()
+	}
+	if err := BindDockerContainerUpdatePayload(&req); err != nil {
+		return nil, err
+	}
+	if err := ValidateDockerContainerUpdatePayload(&req); err != nil {
+		return nil, err
+	}
+	identity := DockerContainerUpdateOperationIdentity(agentID, req)
+	return dispatchTypedDockerContainerOperation(ctx, s, agentID, req.RequestID, req.Timeout, identity, req.ContainerID,
+		MsgTypeDockerContainerUpdate, req, s.pendingDockerContainerUpdates, "docker container update",
+		func(result DockerContainerUpdateResultPayload) error {
+			return ValidateDockerContainerUpdateResultForRequest(req, result)
+		})
 }
 
 func (s *Server) currentTime() time.Time {

@@ -20,14 +20,15 @@ import (
 )
 
 type fakeDockerActionAgentCommander struct {
-	results     []*agentexec.CommandResultPayload
-	calls       []agentexec.ExecuteCommandPayload
-	callAgents  []string
-	typedCalls  []agentexec.DockerContainerLifecyclePayload
-	connected   map[string]bool
-	agentByHost map[string]string
-	queryResult operationreceipt.QueryResult
-	queries     []operationreceipt.Identity
+	results          []*agentexec.CommandResultPayload
+	calls            []agentexec.ExecuteCommandPayload
+	callAgents       []string
+	typedCalls       []agentexec.DockerContainerLifecyclePayload
+	typedUpdateCalls []agentexec.DockerContainerUpdatePayload
+	connected        map[string]bool
+	agentByHost      map[string]string
+	queryResult      operationreceipt.QueryResult
+	queries          []operationreceipt.Identity
 }
 
 func dockerActionDispatchContext(t *testing.T, executor dockerContainerActionExecutor, record unified.ActionAuditRecord) context.Context {
@@ -59,6 +60,22 @@ func (f *fakeDockerActionAgentCommander) ExecuteDockerContainerLifecycle(_ conte
 		ExecutionPhase: agentexec.DockerContainerPhaseComplete, MutationStarted: true, MutationCompleted: true, ReadbackRan: true,
 		Before: agentexec.DockerContainerLifecycleSnapshot{ContainerID: req.ContainerID, State: req.ExpectedState, Running: true, StartedAt: req.ExpectedStartedAt, ObservedAt: now.Add(-time.Second)},
 		After:  agentexec.DockerContainerLifecycleSnapshot{ContainerID: req.ContainerID, State: "running", Running: true, StartedAt: now, ObservedAt: now},
+	}, nil
+}
+
+func (f *fakeDockerActionAgentCommander) ExecuteDockerContainerUpdate(_ context.Context, agentID string, req agentexec.DockerContainerUpdatePayload) (*agentexec.DockerContainerUpdateResultPayload, error) {
+	f.callAgents = append(f.callAgents, agentID)
+	f.typedUpdateCalls = append(f.typedUpdateCalls, req)
+	now := time.Now().UTC()
+	newID := "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+	return &agentexec.DockerContainerUpdateResultPayload{
+		RequestID: req.RequestID, ActionID: req.ActionID, Operation: req.Operation, OperationVersion: req.OperationVersion, RequestDigest: req.RequestDigest, ContainerID: req.ContainerID,
+		ExecutionPhase: agentexec.DockerContainerPhaseComplete, MutationStarted: true, MutationCompleted: true, ReadbackRan: true,
+		NewContainerID: newID, ContainerName: "api",
+		OldImageDigest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+		NewImageDigest: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+		BackupCreated:  true, BackupContainer: "api_pulse_backup_20260714_000000",
+		After: agentexec.DockerContainerLifecycleSnapshot{ContainerID: newID, State: "running", Running: true, StartedAt: now, ObservedAt: now},
 	}, nil
 }
 
@@ -524,5 +541,81 @@ func dockerContainerActionRecord(actionID, resourceID, operation string) unified
 			PolicyVersion:    "policy:sha256:test",
 			PlanHash:         "sha256:test",
 		},
+	}
+}
+
+func dockerContainerUpdateActionResource(id, runtime string, now time.Time) unified.Resource {
+	resource := dockerContainerActionResource(id, runtime, "running", now)
+	resource.Docker.Image = "ghcr.io/example/api:latest"
+	resource.Docker.UpdateStatus = &unified.DockerUpdateStatusMeta{
+		UpdateAvailable: true,
+		CurrentDigest:   "sha256:" + strings.Repeat("9", 64),
+		LatestDigest:    "sha256:" + strings.Repeat("a", 64),
+	}
+	resource.Capabilities = append(resource.Capabilities, unified.ResourceCapability{
+		Name:                 "update",
+		Type:                 unified.CapabilityTypeCommon,
+		Description:          "Update this container",
+		MinimumApprovalLevel: unified.ApprovalAdmin,
+		Platform:             runtime,
+		InternalHandler:      dockerContainerUpdateHandler,
+	})
+	return resource
+}
+
+func TestDockerContainerActionExecutorDispatchesTypedUpdate(t *testing.T) {
+	now := time.Now().UTC()
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			dockerContainerUpdateActionResource("app-container:api", "docker", now),
+		},
+	})
+	agents := &fakeDockerActionAgentCommander{}
+	executor := newDockerContainerActionExecutor(h, agents).(dockerContainerActionExecutor)
+	record := dockerContainerActionRecord("act_update", "app-container:api", "update")
+
+	result, err := executor.ExecuteAction(dockerActionDispatchContext(t, executor, record), record)
+	if err != nil {
+		t.Fatalf("ExecuteAction: %v", err)
+	}
+	if result == nil || !result.Success || result.Verification == nil || !result.Verification.Success {
+		t.Fatalf("result = %#v, want successful execution and verification", result)
+	}
+	if len(agents.typedUpdateCalls) != 1 || len(agents.typedCalls) != 0 || len(agents.calls) != 0 {
+		t.Fatalf("update/lifecycle/raw agent calls = %d/%d/%d, want exactly one typed update dispatch", len(agents.typedUpdateCalls), len(agents.typedCalls), len(agents.calls))
+	}
+	call := agents.typedUpdateCalls[0]
+	if call.Operation != agentexec.DockerContainerOperationUpdate || call.ExpectedImageDigest != "sha256:"+strings.Repeat("9", 64) || call.Runtime != "docker" {
+		t.Fatalf("typed update payload = %+v", call)
+	}
+	if result.ActionResultV2 == nil || result.ActionResultV2.Compensation.Support != unified.ActionCompensationDeclared || result.ActionResultV2.Compensation.Status != unified.ActionCompensationNotNeeded {
+		t.Fatalf("compensation truth = %+v, want declared/not_needed", result.ActionResultV2)
+	}
+}
+
+func TestDockerContainerActionExecutorRefusesUpdateThroughLifecycleHandler(t *testing.T) {
+	now := time.Now().UTC()
+	resource := dockerContainerActionResource("app-container:api", "docker", "running", now)
+	resource.Docker.Image = "ghcr.io/example/api:latest"
+	resource.Capabilities = append(resource.Capabilities, unified.ResourceCapability{
+		Name:                 "update",
+		Type:                 unified.CapabilityTypeCommon,
+		MinimumApprovalLevel: unified.ApprovalAdmin,
+		Platform:             "docker",
+		InternalHandler:      dockerContainerLifecycleHandler,
+	})
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot:  models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{resource},
+	})
+	agents := &fakeDockerActionAgentCommander{}
+	executor := newDockerContainerActionExecutor(h, agents).(dockerContainerActionExecutor)
+	record := dockerContainerActionRecord("act_update_wrong", "app-container:api", "update")
+
+	if readiness := executor.CheckActionAvailable(context.Background(), record.Request, resource); readiness.Available || readiness.Name != "" {
+		t.Fatalf("readiness = %+v, want fail-closed for wrong handler", readiness)
 	}
 }

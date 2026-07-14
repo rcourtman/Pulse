@@ -532,7 +532,7 @@ func (h *DockerAgentHandlers) HandleContainerUpdate(w http.ResponseWriter, r *ht
 		return
 	}
 
-	writeErrorResponse(w, http.StatusGone, "docker_update_retired", "Docker container updates are unavailable until typed lifecycle delivery and compensation are implemented.", nil)
+	writeErrorResponse(w, http.StatusGone, "docker_update_retired", "This endpoint was retired: container updates now run as audited actions through /api/actions. Refresh the Pulse UI to use the new update flow.", nil)
 }
 
 // HandleUpdateAll triggers an update for all containers with updates available on a Docker / Podman host.
@@ -549,7 +549,7 @@ func (h *DockerAgentHandlers) HandleUpdateAll(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	writeErrorResponse(w, http.StatusGone, "docker_update_all_retired", "Bulk Docker updates are unavailable until typed lifecycle delivery and compensation are implemented.", nil)
+	writeErrorResponse(w, http.StatusGone, "docker_update_all_retired", "This endpoint was retired: container updates now run as audited actions through /api/actions, one action per container. Refresh the Pulse UI to use the new update flow.", nil)
 }
 
 // HandleCheckUpdates triggers an immediate update check for all containers on a Docker / Podman host.

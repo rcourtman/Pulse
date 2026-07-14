@@ -7496,8 +7496,18 @@ exact: it covers `/api/actions/`, `/api/agents/docker/`, `/api/updates/`,
 `/api/ai/remediation/`, and `/api/ai/run-command`; general settings and metadata
 CRUD are not claimed as customer-infrastructure mutation enumeration.
 
-Raw command/file write/arbitrary pod exec, direct Docker update/control, and
-enterprise command remediation are retired compatibility surfaces. Enterprise
+Raw command/file write/arbitrary pod exec, the legacy queued Docker
+update/control transports, and enterprise command remediation are retired
+compatibility surfaces. Container image updates re-entered the plane as
+`resource.docker.container-update` and
+`transport.agent.docker-container-update`: lifecycle-dispositioned, planned
+against an `update` capability that containers advertise only while an image
+update is detected, and executed solely through `dockerContainerActionExecutor`
+over the typed `docker_container_update` agentexec operation with durable
+receipts and declared backup/rollback compensation truth. The legacy
+`POST /api/agents/docker/containers/update` and `/update-all` HTTP surfaces
+remain `retired_denied` and answer 410 with copy that points at the action
+plane. Enterprise
 `remediation.json` remains readable history, but approve, execute, and rollback
 return `command_remediation_retired`/`ErrLegacyRemediationRetired` before any
 injected executor. Task 07 owns durable delivery/reconnect, Task 10 owns truth

@@ -2281,13 +2281,34 @@ func dockerContainerLifecycleCapabilities(ct models.DockerContainer, host models
 		return nil
 	}
 
+	var capabilities []ResourceCapability
 	switch strings.ToLower(strings.TrimSpace(ct.State)) {
 	case "running":
-		return dockerContainerLifecycleCapabilitySet(runtime, "stop", "restart")
+		capabilities = dockerContainerLifecycleCapabilitySet(runtime, "stop", "restart")
 	case "created", "exited", "dead", "stopped":
-		return dockerContainerLifecycleCapabilitySet(runtime, "start")
+		capabilities = dockerContainerLifecycleCapabilitySet(runtime, "start")
 	default:
 		return nil
+	}
+	if ct.UpdateStatus != nil && ct.UpdateStatus.UpdateAvailable && strings.TrimSpace(ct.UpdateStatus.CurrentDigest) != "" {
+		capabilities = append(capabilities, dockerContainerUpdateCapability(runtime))
+	}
+	return capabilities
+}
+
+func dockerContainerUpdateCapability(runtime string) ResourceCapability {
+	displayRuntime := "Docker"
+	if runtime == "podman" {
+		displayRuntime = "Podman"
+	}
+	return ResourceCapability{
+		Name:                 "update",
+		Type:                 CapabilityTypeCommon,
+		Description:          fmt.Sprintf("Update this %s container to its latest image through its reporting Pulse agent, with automatic backup and rollback.", displayRuntime),
+		MinimumApprovalLevel: ApprovalAdmin,
+		AutoAuthorization:    AutoAuthorizeNever,
+		Platform:             runtime,
+		InternalHandler:      "docker.container.update",
 	}
 }
 

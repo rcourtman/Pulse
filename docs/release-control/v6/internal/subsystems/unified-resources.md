@@ -648,7 +648,12 @@ cannot create a browser mutation.
    governed resource contract: `resourceFromDockerContainer` may advertise
    `start`, `stop`, and `restart` only for fresh, supported, agent-backed
    Docker/Podman reports whose daemon posture does not block mutating
-   commands. The API action executor must consume those capabilities through
+   commands. An `update` capability rides the same gate with two extra
+   preconditions: the report must carry a detected image update
+   (`updateStatus.updateAvailable`) and a current image digest, because the
+   plan binds the typed update dispatch to that digest and a container whose
+   digest cannot be stated cannot be safely updated. The API action executor
+   must consume those capabilities through
    `/api/actions/*` and the agent command server; platform rows or drawers
    must not wire direct shell, SSH, provider, or runtime calls around this
    capability contract.

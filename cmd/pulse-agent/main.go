@@ -16,6 +16,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
@@ -354,6 +356,10 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		return nil
 	})
 
+	// The host module starts before the Docker module (which may only come up
+	// after daemon retries), so the typed container-update bridge late-binds.
+	dockerUpdaterBridge := &lateBoundDockerUpdater{}
+
 	// 8. Start Host Agent (if enabled)
 	if cfg.EnableHost {
 		hostCfg := hostagent.Config{
@@ -382,6 +388,8 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			AppliedConfig:      cfg.AppliedConfig,
 			UpdateStatus:       updater.Snapshot,
 			ModuleStatus:       runtimeStatus.moduleStatuses,
+
+			DockerContainerUpdater: dockerUpdaterBridge,
 		}
 
 		agent, err := newHostAgent(hostCfg)
@@ -427,6 +435,9 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		}
 
 		dockerAgent, err = newDockerAgent(dockerCfg)
+		if err == nil {
+			dockerUpdaterBridge.set(dockerAgent)
+		}
 		if err != nil {
 			runtimeStatus.setState("docker", moduleStateRetrying, err)
 			// Docker isn't available yet - start retry loop in background
@@ -440,6 +451,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 				agent := initDockerWithRetry(ctx, dockerCfg, &logger)
 				if agent != nil {
 					dockerAgent = agent
+					dockerUpdaterBridge.set(agent)
 					runtimeStatus.setState("docker", moduleStateRunning, nil)
 					logger.Info().Msg("Docker / Podman module started (after retry)")
 					return agent.Run(ctx)
@@ -1269,6 +1281,35 @@ func initModuleWithRetry[T any](ctx context.Context, logger *zerolog.Logger, com
 
 // initDockerWithRetry attempts to initialize the Docker / Podman collection module with exponential backoff.
 // It returns the module when Docker / Podman becomes available, or nil if the context is cancelled.
+// lateBoundDockerUpdater satisfies hostagent.DockerContainerUpdater while the
+// Docker module comes up (or never does). The host command client holds this
+// bridge for the process lifetime; set installs the module's implementation.
+type lateBoundDockerUpdater struct {
+	mu      sync.RWMutex
+	updater hostagent.DockerContainerUpdater
+}
+
+func (b *lateBoundDockerUpdater) set(candidate any) {
+	updater, ok := candidate.(hostagent.DockerContainerUpdater)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "docker update bridge: %T does not implement the typed container updater\n", candidate)
+		return
+	}
+	b.mu.Lock()
+	b.updater = updater
+	b.mu.Unlock()
+}
+
+func (b *lateBoundDockerUpdater) TypedContainerUpdate(ctx context.Context, runtime, containerID, expectedImageDigest string, progress func(string)) (agentexec.DockerContainerUpdateOutcome, error) {
+	b.mu.RLock()
+	updater := b.updater
+	b.mu.RUnlock()
+	if updater == nil {
+		return agentexec.DockerContainerUpdateOutcome{}, fmt.Errorf("docker module is not running on this agent")
+	}
+	return updater.TypedContainerUpdate(ctx, runtime, containerID, expectedImageDigest, progress)
+}
+
 func initDockerWithRetry(ctx context.Context, cfg dockeragent.Config, logger *zerolog.Logger) RunnableCloser {
 	return initModuleWithRetry(ctx, logger, "docker_agent", "Docker", "Docker not available, will retry", func() (RunnableCloser, error) {
 		return newDockerAgent(cfg)

@@ -5828,8 +5828,14 @@ bind mechanically discovered API, job, and transport candidates to one registry
 disposition. Transport lifecycle entries must name non-transport lifecycle
 authority and committed authority before delivery. Task 07 owns durable
 delivery/reconnect and Task 10 owns terminal truth/compensation; incomplete
-Docker, Kubernetes/native-provider, delivery, and rollback paths remain
-`retired_denied`, not parallel executors.
+Kubernetes/native-provider, delivery, and rollback paths remain
+`retired_denied`, not parallel executors. Docker container image updates left
+the incomplete set: `resource.docker.container-update` and
+`transport.agent.docker-container-update` are lifecycle-dispositioned over the
+typed `docker_container_update` operation with durable receipts and declared
+backup/rollback compensation, while the model-originated
+`assistant.docker.update` route and the legacy queued update transports stay
+`retired_denied`.
 
 Enterprise command-remediation records are readable historical imports only.
 Production code contains no command or rollback execution algorithm; exported
