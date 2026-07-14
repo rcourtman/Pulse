@@ -8842,19 +8842,6 @@
         "kind": "release-gate",
         "id": "self-hosted-commercial-transition-coherence"
       }
-    },
-    {
-      "id": "patrol-provider-stream-resilience-lane-l6",
-      "agent_id": "patrol-provider-stream-resilience",
-      "summary": "Prevent valid Patrol investigations from failing when compatible chat providers pause between streamed reasoning and tool-call chunks.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-14T16:10:50Z",
-      "heartbeat_at": "2026-07-14T16:11:41Z",
-      "expires_at": "2026-07-14T20:11:41Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L6"
-      }
     }
   ],
   "open_decisions": [],
