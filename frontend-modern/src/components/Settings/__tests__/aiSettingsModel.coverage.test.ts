@@ -23,6 +23,8 @@ const ALL_PROVIDERS: AIProvider[] = [
   'cerebras',
   'together',
   'fireworks',
+  'codex-subscription',
+  'claude-subscription',
   'ollama',
 ];
 
@@ -135,6 +137,8 @@ describe('aiSettingsModel - isAIProviderConfigured', () => {
       cerebras: 'cerebras_configured',
       together: 'together_configured',
       fireworks: 'fireworks_configured',
+      'codex-subscription': 'codex_subscription_enabled',
+      'claude-subscription': 'claude_subscription_enabled',
       ollama: 'ollama_configured',
     };
 

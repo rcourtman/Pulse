@@ -344,11 +344,74 @@ Configure providers in the UI: **Settings → Pulse Intelligence → Provider & 
 - **DeepSeek**
 - **Google Gemini**
 - **Ollama** (self-hosted, with tool/function calling support)
+- **Codex subscription (local)** — uses an installed Codex CLI signed in with
+  ChatGPT; no OpenAI API key is required or forwarded
+- **Claude subscription (local)** — uses an installed Claude CLI signed in
+  with a Claude plan; no Anthropic API key is required or forwarded
 - **OpenAI-compatible base URL** (for providers that implement the OpenAI API shape)
 
 Legacy Anthropic OAuth fields may still appear in stored settings so existing
 installs can disconnect and clear old tokens, but Anthropic OAuth is not a
 supported runtime authentication method and does not make Anthropic configured.
+
+### Local subscription-agent routes
+
+The local subscription routes are explicit, same-machine transports for
+self-hosted Pulse. Enable one under **Provider & Models** only when the Pulse
+process runs as a user that can execute the corresponding CLI and read that
+CLI's existing login. Pulse does not copy, store, refresh, or expose the CLI's
+OAuth credentials. It also constructs a strict child-process environment that
+does not forward API-key environment variables such as `OPENAI_API_KEY` or
+`ANTHROPIC_API_KEY`, Pulse secrets, cloud credentials, or unrelated tokens,
+preventing an installed API key from silently changing the billing route.
+
+The child CLI is not given infrastructure authority. Each invocation runs in a
+new temporary directory, with user extensions disabled, no Pulse MCP server,
+no approval capability, and a structured output schema. It returns one proposed
+provider turn. Pulse validates tool names, IDs, argument JSON, and tool-choice
+constraints. Pulse retains tool execution and policy enforcement: the normal
+Pulse tool loop independently applies control level, license,
+protected-resource, approval, action, and verification policy. The CLI never
+executes a Patrol tool itself.
+
+This is still a local agent process, not a remote chat-completions API. Pulse
+rejects a turn if Codex reports command, file, MCP, web, computer, or image-tool
+activity, and Claude is launched with its built-in filesystem, shell, web, and
+task tools denied. Codex's read-only sandbox is the remaining operating-system
+boundary; operators should run self-hosted Pulse under a dedicated,
+least-privilege OS account that cannot read unrelated user secrets. Do not
+enable a subscription-agent route on a broadly privileged service account
+merely to avoid API charges.
+
+Install and authenticate the CLI before enabling its route:
+
+```bash
+codex login
+codex login status
+
+claude auth login
+claude auth status --json
+```
+
+Use model IDs such as `codex-subscription:gpt-5.6-luna`,
+`claude-subscription:sonnet`, or `claude-subscription:opus`. Model availability
+and plan limits remain controlled by the installed CLI and the user's plan.
+These routes are unsuitable for a container or service account unless that
+runtime deliberately has the CLI and its own valid login. Pulse reports missing
+binaries, logged-out sessions, plan limits, and model access failures as
+provider readiness failures; it never falls back to a metered API provider.
+
+The opt-in live transport probe is:
+
+```bash
+PULSE_TEST_SUBSCRIPTION_AGENTS=1 \
+  go test ./internal/ai/providers -run '^TestSubscriptionAgentLive$' -count=1 -v
+```
+
+Qualification reports record `inference_route=local_subscription_agent` so
+subscription-backed runs cannot be confused with direct API or local-model
+runs. Token counts depend on what the CLI exposes, and a subscription allowance
+is not represented as a zero-dollar API price.
 
 ### Models
 

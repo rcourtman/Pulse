@@ -138,6 +138,18 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertNotIn('EVAL_RESOURCE_CONTEXT_FORBIDDEN="/mnt/pve/finance-db,/var/lib/homeassistant,secret"', content)
         self.assertNotRegex(content, r"(?i)understands resources before you ask")
 
+    def test_public_ai_docs_define_local_subscription_agent_safety_boundary(self) -> None:
+        content = read_repo_text("docs/AI.md")
+        normalized_content = " ".join(content.split())
+
+        self.assertIn("codex-subscription:gpt-5.6-luna", content)
+        self.assertIn("claude-subscription:sonnet", content)
+        self.assertIn("claude-subscription:opus", content)
+        self.assertIn("local_subscription_agent", content)
+        self.assertIn("API-key environment variables", normalized_content)
+        self.assertIn("dedicated, least-privilege OS account", normalized_content)
+        self.assertIn("Pulse retains tool execution and policy enforcement", normalized_content)
+
     def test_public_ai_privacy_copy_discloses_outbound_usage_telemetry(self) -> None:
         content = read_repo_text("docs/AI.md")
         normalized_content = " ".join(content.split())

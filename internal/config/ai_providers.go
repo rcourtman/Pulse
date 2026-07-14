@@ -6,11 +6,12 @@ import "strings"
 type AIProviderProtocol string
 
 const (
-	AIProviderProtocolAnthropic        AIProviderProtocol = "anthropic"
-	AIProviderProtocolOpenAICompatible AIProviderProtocol = "openai_compatible"
-	AIProviderProtocolGemini           AIProviderProtocol = "gemini"
-	AIProviderProtocolOllama           AIProviderProtocol = "ollama"
-	AIProviderProtocolRetired          AIProviderProtocol = "retired"
+	AIProviderProtocolAnthropic         AIProviderProtocol = "anthropic"
+	AIProviderProtocolOpenAICompatible  AIProviderProtocol = "openai_compatible"
+	AIProviderProtocolGemini            AIProviderProtocol = "gemini"
+	AIProviderProtocolOllama            AIProviderProtocol = "ollama"
+	AIProviderProtocolRetired           AIProviderProtocol = "retired"
+	AIProviderProtocolSubscriptionAgent AIProviderProtocol = "subscription_agent"
 )
 
 // AIProviderModelDefinition is the config-layer representation of catalog
@@ -275,6 +276,33 @@ func aiProviderDefinitions() []AIProviderDefinition {
 			ModelsDevProviderID: "fireworks-ai",
 			EnvVars:             []string{"FIREWORKS_API_KEY"},
 			DocsURL:             "https://docs.fireworks.ai/tools-sdks/openai-compatibility",
+		},
+		{
+			ID:               AIProviderCodexSubscription,
+			DisplayName:      "Codex subscription (local)",
+			Description:      "Model turns through a locally installed Codex CLI signed in with ChatGPT",
+			Protocol:         AIProviderProtocolSubscriptionAgent,
+			DefaultModel:     "gpt-5.6-luna",
+			ConfiguredField:  "codex_subscription_enabled",
+			UserConfigurable: true,
+			DocsURL:          "https://learn.chatgpt.com/docs/auth",
+			FallbackModels: []AIProviderModelDefinition{
+				{ID: "gpt-5.6-luna", Name: "GPT-5.6 Luna", Description: "Availability depends on the installed Codex CLI and ChatGPT plan", Notable: true},
+			},
+		},
+		{
+			ID:               AIProviderClaudeSubscription,
+			DisplayName:      "Claude subscription (local)",
+			Description:      "Model turns through a locally installed Claude CLI signed in with a Claude plan",
+			Protocol:         AIProviderProtocolSubscriptionAgent,
+			DefaultModel:     "sonnet",
+			ConfiguredField:  "claude_subscription_enabled",
+			UserConfigurable: true,
+			DocsURL:          "https://support.claude.com/en/articles/11145838-use-claude-code-with-your-pro-or-max-plan",
+			FallbackModels: []AIProviderModelDefinition{
+				{ID: "sonnet", Name: "Claude Sonnet", Description: "Current Sonnet alias available to the locally authenticated Claude CLI", Notable: true},
+				{ID: "opus", Name: "Claude Opus", Description: "Current Opus alias available to the locally authenticated Claude CLI", Notable: true},
+			},
 		},
 		{
 			ID:                        AIProviderOllama,

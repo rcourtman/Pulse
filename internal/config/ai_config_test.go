@@ -397,6 +397,8 @@ func TestAIProviderDefinitions_CanonicalDirectProviderRegistry(t *testing.T) {
 		AIProviderCerebras,
 		AIProviderTogether,
 		AIProviderFireworks,
+		AIProviderCodexSubscription,
+		AIProviderClaudeSubscription,
 		AIProviderOllama,
 	}
 	if len(gotIDs) != len(wantIDs) {

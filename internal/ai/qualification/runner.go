@@ -175,7 +175,7 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 			PulseVersion: version.Version,
 			PulseBaseURL: r.config.Client.config.BaseURL,
 			DockerTarget: dockerTargetLabel(r.config.Lab.target),
-			Model:        model, Provider: provider, ChallengeNonce: r.config.ChallengeNonce,
+			Model:        model, Provider: provider, InferenceRoute: inferenceRouteForProvider(provider), ChallengeNonce: r.config.ChallengeNonce,
 			CapturedAt: time.Now().UTC(),
 		}
 		return nil
@@ -449,6 +449,7 @@ func (r *QualificationRunner) initialEnvironment() Environment {
 		DockerTarget:   dockerTarget,
 		Model:          strings.TrimSpace(r.config.ModelOverride),
 		Provider:       provider,
+		InferenceRoute: inferenceRouteForProvider(provider),
 		ChallengeNonce: r.config.ChallengeNonce,
 		CapturedAt:     time.Now().UTC(),
 	}

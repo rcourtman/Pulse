@@ -124,6 +124,44 @@ func TestNewPulseClientRejectsCredentialsInReportableBaseURL(t *testing.T) {
 	}
 }
 
+func TestOverridePatrolModelTemporarilyEnablesAndRestoresSubscriptionRoute(t *testing.T) {
+	requests := make([]map[string]any, 0, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/settings/ai":
+			_, _ = w.Write([]byte(`{"enabled":true,"model":"ollama:qwen3:8b","patrol_model":"ollama:qwen3:8b","codex_subscription_enabled":false}`))
+		case r.Method == http.MethodPut && r.URL.Path == "/api/settings/ai/update":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			requests = append(requests, body)
+			_, _ = w.Write([]byte(`{}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := NewPulseClient(ClientConfig{BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore, err := client.OverridePatrolModel(context.Background(), "codex-subscription:gpt-5.6-luna")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restore(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(requests) != 2 || requests[0]["codex_subscription_enabled"] != true || requests[0]["patrol_model"] != "codex-subscription:gpt-5.6-luna" {
+		t.Fatalf("override request = %#v", requests)
+	}
+	if requests[1]["codex_subscription_enabled"] != false || requests[1]["patrol_model"] != "ollama:qwen3:8b" {
+		t.Fatalf("restore request = %#v", requests[1])
+	}
+}
+
 func TestDecideActionBindsExactPlanHash(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/actions/action-1/decision" || r.Method != http.MethodPost {

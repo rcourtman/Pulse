@@ -1962,6 +1962,8 @@ func TestContract_AISettingsProviderRegistryMetadata(t *testing.T) {
 		"cerebras",
 		"together",
 		"fireworks",
+		"codex-subscription",
+		"claude-subscription",
 		"ollama",
 	}
 	if !reflect.DeepEqual(gotIDs, wantIDs) {

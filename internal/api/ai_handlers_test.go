@@ -263,6 +263,36 @@ func TestAISettingsProvidersProjectionCarriesSuggestedModelWireShape(t *testing.
 	require.NotEmpty(t, ollama["suggested_model_equivalents"])
 }
 
+func TestAISettingsProvidersProjectionCarriesLocalSubscriptionAgentContract(t *testing.T) {
+	settings := config.NewDefaultAIConfig()
+	settings.CodexSubscriptionEnabled = true
+
+	definitions := aiProviderDefinitionResponses(settings)
+	byID := make(map[string]AIProviderDefinitionResponse, len(definitions))
+	for _, definition := range definitions {
+		byID[definition.ID] = definition
+	}
+
+	codex := byID[config.AIProviderCodexSubscription]
+	require.Equal(t, string(config.AIProviderProtocolSubscriptionAgent), codex.Protocol)
+	require.True(t, codex.Configured)
+	require.False(t, codex.RequiresAPIKey)
+	require.Empty(t, codex.APIKeyField)
+	require.Empty(t, codex.EnvVars)
+
+	claude := byID[config.AIProviderClaudeSubscription]
+	require.Equal(t, string(config.AIProviderProtocolSubscriptionAgent), claude.Protocol)
+	require.False(t, claude.Configured)
+	require.False(t, claude.RequiresAPIKey)
+	require.Empty(t, claude.APIKeyField)
+	require.Empty(t, claude.EnvVars)
+
+	enabled := true
+	request := AISettingsUpdateRequest{CodexSubscriptionEnabled: &enabled}
+	require.True(t, shouldRestartAIChat(request))
+	require.True(t, aiSettingsUpdateTouchesPatrolReadiness(request))
+}
+
 func TestAISettingsHandler_PatrolReadinessFlagsReasoningOnlyModel(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}

@@ -38,23 +38,25 @@ type AIConfig struct {
 	CustomContext  string `json:"custom_context"`            // user-provided context about their infrastructure
 
 	// Multi-provider credentials - each provider can be configured independently
-	AnthropicAPIKey  string `json:"anthropic_api_key,omitempty"`  // Anthropic API key
-	OpenAIAPIKey     string `json:"openai_api_key,omitempty"`     // OpenAI API key
-	OpenRouterAPIKey string `json:"openrouter_api_key,omitempty"` // OpenRouter API key
-	DeepSeekAPIKey   string `json:"deepseek_api_key,omitempty"`   // DeepSeek API key
-	GeminiAPIKey     string `json:"gemini_api_key,omitempty"`     // Google Gemini API key
-	ZaiAPIKey        string `json:"zai_api_key,omitempty"`        // Z.ai (Zhipu GLM) API key
-	ZaiBaseURL       string `json:"zai_base_url,omitempty"`       // Custom Z.ai OpenAI-compatible base URL (e.g. coding endpoint)
-	GroqAPIKey       string `json:"groq_api_key,omitempty"`       // Groq API key
-	MistralAPIKey    string `json:"mistral_api_key,omitempty"`    // Mistral API key
-	CerebrasAPIKey   string `json:"cerebras_api_key,omitempty"`   // Cerebras API key
-	TogetherAPIKey   string `json:"together_api_key,omitempty"`   // Together AI API key
-	FireworksAPIKey  string `json:"fireworks_api_key,omitempty"`  // Fireworks AI API key
-	OllamaBaseURL    string `json:"ollama_base_url,omitempty"`    // Ollama server URL (default: http://localhost:11434)
-	OllamaUsername   string `json:"ollama_username,omitempty"`    // Optional Basic Auth username for Ollama
-	OllamaPassword   string `json:"ollama_password,omitempty"`    // Optional Basic Auth password for Ollama
-	OllamaKeepAlive  string `json:"ollama_keep_alive"`            // Ollama keep_alive value; empty uses the server default
-	OpenAIBaseURL    string `json:"openai_base_url,omitempty"`    // Custom OpenAI-compatible base URL (optional)
+	AnthropicAPIKey           string `json:"anthropic_api_key,omitempty"`           // Anthropic API key
+	OpenAIAPIKey              string `json:"openai_api_key,omitempty"`              // OpenAI API key
+	OpenRouterAPIKey          string `json:"openrouter_api_key,omitempty"`          // OpenRouter API key
+	DeepSeekAPIKey            string `json:"deepseek_api_key,omitempty"`            // DeepSeek API key
+	GeminiAPIKey              string `json:"gemini_api_key,omitempty"`              // Google Gemini API key
+	ZaiAPIKey                 string `json:"zai_api_key,omitempty"`                 // Z.ai (Zhipu GLM) API key
+	ZaiBaseURL                string `json:"zai_base_url,omitempty"`                // Custom Z.ai OpenAI-compatible base URL (e.g. coding endpoint)
+	GroqAPIKey                string `json:"groq_api_key,omitempty"`                // Groq API key
+	MistralAPIKey             string `json:"mistral_api_key,omitempty"`             // Mistral API key
+	CerebrasAPIKey            string `json:"cerebras_api_key,omitempty"`            // Cerebras API key
+	TogetherAPIKey            string `json:"together_api_key,omitempty"`            // Together AI API key
+	FireworksAPIKey           string `json:"fireworks_api_key,omitempty"`           // Fireworks AI API key
+	CodexSubscriptionEnabled  bool   `json:"codex_subscription_enabled,omitempty"`  // Use the locally authenticated Codex CLI for Pulse model turns
+	ClaudeSubscriptionEnabled bool   `json:"claude_subscription_enabled,omitempty"` // Use the locally authenticated Claude CLI for Pulse model turns
+	OllamaBaseURL             string `json:"ollama_base_url,omitempty"`             // Ollama server URL (default: http://localhost:11434)
+	OllamaUsername            string `json:"ollama_username,omitempty"`             // Optional Basic Auth username for Ollama
+	OllamaPassword            string `json:"ollama_password,omitempty"`             // Optional Basic Auth password for Ollama
+	OllamaKeepAlive           string `json:"ollama_keep_alive"`                     // Ollama keep_alive value; empty uses the server default
+	OpenAIBaseURL             string `json:"openai_base_url,omitempty"`             // Custom OpenAI-compatible base URL (optional)
 
 	// Legacy Anthropic OAuth fields are retained only for cleanup/migration.
 	AuthMethod        AuthMethod `json:"auth_method,omitempty"`         // "api_key" or legacy "oauth"
@@ -122,19 +124,21 @@ type AIConfig struct {
 
 // AIProvider constants
 const (
-	AIProviderAnthropic  = "anthropic"
-	AIProviderOpenAI     = "openai"
-	AIProviderOpenRouter = "openrouter"
-	AIProviderOllama     = "ollama"
-	AIProviderDeepSeek   = "deepseek"
-	AIProviderGemini     = "gemini"
-	AIProviderZai        = "zai" // Z.ai OpenAI-compatible provider
-	AIProviderGroq       = "groq"
-	AIProviderMistral    = "mistral"
-	AIProviderCerebras   = "cerebras"
-	AIProviderTogether   = "together"
-	AIProviderFireworks  = "fireworks"
-	AIProviderQuickstart = "quickstart" // Retired Pulse-hosted proxy marker retained only for legacy config migration.
+	AIProviderAnthropic          = "anthropic"
+	AIProviderOpenAI             = "openai"
+	AIProviderOpenRouter         = "openrouter"
+	AIProviderOllama             = "ollama"
+	AIProviderDeepSeek           = "deepseek"
+	AIProviderGemini             = "gemini"
+	AIProviderZai                = "zai" // Z.ai OpenAI-compatible provider
+	AIProviderGroq               = "groq"
+	AIProviderMistral            = "mistral"
+	AIProviderCerebras           = "cerebras"
+	AIProviderTogether           = "together"
+	AIProviderFireworks          = "fireworks"
+	AIProviderCodexSubscription  = "codex-subscription"
+	AIProviderClaudeSubscription = "claude-subscription"
+	AIProviderQuickstart         = "quickstart" // Retired Pulse-hosted proxy marker retained only for legacy config migration.
 )
 
 // AI Control Level constants
@@ -391,6 +395,10 @@ func (c *AIConfig) HasProvider(provider string) bool {
 	case AIProviderOllama:
 		// Ollama is only "configured" if user has explicitly set a base URL
 		return c.OllamaBaseURL != ""
+	case AIProviderCodexSubscription:
+		return c.CodexSubscriptionEnabled
+	case AIProviderClaudeSubscription:
+		return c.ClaudeSubscriptionEnabled
 	default:
 		return false
 	}

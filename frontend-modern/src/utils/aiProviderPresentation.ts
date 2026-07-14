@@ -12,6 +12,8 @@ export const AI_PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   cerebras: 'Cerebras',
   together: 'Together AI',
   fireworks: 'Fireworks AI',
+  'codex-subscription': 'Codex subscription (local)',
+  'claude-subscription': 'Claude subscription (local)',
   ollama: 'Ollama',
   pulse: 'Pulse',
 };
@@ -67,8 +69,7 @@ export function getProviderFromModelId(modelId: string): AIProvider | string {
 }
 
 type AIModelRouteLabelInput =
-  | string
-  | (Pick<ModelInfo, 'id'> & Partial<Pick<ModelInfo, 'name' | 'provider'>>);
+  string | (Pick<ModelInfo, 'id'> & Partial<Pick<ModelInfo, 'name' | 'provider'>>);
 
 const GATEWAY_MODEL_PROVIDERS = new Set<string>(['openrouter']);
 const LOCAL_MODEL_ROUTE_LABELS: Record<string, string> = {
@@ -182,7 +183,8 @@ const titleizeModelToken = (token: string): string => {
   if (known) return known;
   const alphaNumeric = normalized.match(/^([a-z]+)([0-9].*)$/);
   if (alphaNumeric) {
-    const prefix = MODEL_TOKEN_DISPLAY_NAMES[alphaNumeric[1]] || titleizeModelToken(alphaNumeric[1]);
+    const prefix =
+      MODEL_TOKEN_DISPLAY_NAMES[alphaNumeric[1]] || titleizeModelToken(alphaNumeric[1]);
     return `${prefix}${alphaNumeric[2]}`;
   }
   if (/^[rv][0-9]/.test(normalized)) {

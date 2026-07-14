@@ -1494,6 +1494,16 @@ payload shape change when the portal presents compact client rows.
     knob, so neither a `cloud_context_privacy` dial nor a
     `share_operational_context_with_cloud` boolean is part of the request or
     response contract.
+    Local subscription-agent configuration is represented by explicit boolean
+    opt-ins, `codex_subscription_enabled` and
+    `claude_subscription_enabled`, plus canonical provider IDs in
+    `configured_providers` and the provider registry projection. Those fields
+    convey route selection only; they are not OAuth tokens, API keys, or proof
+    of current login health. Settings updates may enable or disable them, while
+    provider-test and Patrol-preflight endpoints remain the authority for
+    binary, login, model-access, and structured-tool readiness. No API response
+    may expose CLI credential material, and no failure may silently substitute
+    the corresponding metered API provider.
     Legacy Assistant SSE routes in this handler that still use the older
     execute envelope, including `/api/ai/execute/stream` and
     `/api/ai/investigate-alert`, must preserve their existing top-level

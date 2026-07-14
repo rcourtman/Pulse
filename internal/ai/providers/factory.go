@@ -48,6 +48,18 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 	}
 
 	switch provider {
+	case config.AIProviderCodexSubscription:
+		if !cfg.CodexSubscriptionEnabled {
+			return nil, fmt.Errorf("Codex subscription agent is not enabled")
+		}
+		return NewSubscriptionAgentClient(SubscriptionAgentCodex, model, timeout), nil
+
+	case config.AIProviderClaudeSubscription:
+		if !cfg.ClaudeSubscriptionEnabled {
+			return nil, fmt.Errorf("Claude subscription agent is not enabled")
+		}
+		return NewSubscriptionAgentClient(SubscriptionAgentClaude, model, timeout), nil
+
 	case config.AIProviderAnthropic:
 		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderAnthropic)
 		if apiKey == "" {

@@ -200,23 +200,45 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                         <HelpIcon contentId="ai.ollama.baseUrl" size="xs" />
                       </label>
                     </Show>
-                    <input
-                      type={config.inputType}
-                      value={props.form[config.inputField]}
-                      onInput={(event) =>
-                        props.setForm(config.inputField, event.currentTarget.value)
+                    <Show
+                      when={config.inputType === 'toggle'}
+                      fallback={
+                        <input
+                          type={config.inputType}
+                          value={String(props.form[config.inputField])}
+                          onInput={(event) =>
+                            props.setForm(config.inputField, event.currentTarget.value)
+                          }
+                          placeholder={
+                            configured() && config.configuredPlaceholder
+                              ? config.configuredPlaceholder
+                              : config.placeholder
+                          }
+                          aria-label={`${getAIProviderDisplayName(config.provider)} ${
+                            config.inputType === 'url' ? 'server URL' : 'API key'
+                          }`}
+                          class={controlClass()}
+                          disabled={props.saving()}
+                        />
                       }
-                      placeholder={
-                        configured() && config.configuredPlaceholder
-                          ? config.configuredPlaceholder
-                          : config.placeholder
-                      }
-                      aria-label={`${getAIProviderDisplayName(config.provider)} ${
-                        config.inputType === 'url' ? 'server URL' : 'API key'
-                      }`}
-                      class={controlClass()}
-                      disabled={props.saving()}
-                    />
+                    >
+                      <label class="flex items-start gap-3 rounded-md border border-border bg-surface p-3 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(props.form[config.inputField])}
+                          onChange={(event) =>
+                            props.setForm(config.inputField, event.currentTarget.checked)
+                          }
+                          disabled={props.saving()}
+                          aria-label={`Enable ${getAIProviderDisplayName(config.provider)}`}
+                          class="mt-0.5 h-4 w-4 rounded border-border"
+                        />
+                        <span>
+                          Use this machine's existing subscription login. Pulse stores no OAuth
+                          token and continues to execute all infrastructure tools itself.
+                        </span>
+                      </label>
+                    </Show>
 
                     <For each={config.extraFields || []}>
                       {(extraField) => (
@@ -229,7 +251,7 @@ export const AIProviderConfigurationSection: Component<AIProviderConfigurationSe
                           </label>
                           <input
                             type={extraField.type || 'text'}
-                            value={props.form[extraField.inputField]}
+                            value={String(props.form[extraField.inputField])}
                             onInput={(event) =>
                               props.setForm(extraField.inputField, event.currentTarget.value)
                             }

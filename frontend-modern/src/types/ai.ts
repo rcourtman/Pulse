@@ -12,7 +12,9 @@ export type AIProvider =
   | 'mistral'
   | 'cerebras'
   | 'together'
-  | 'fireworks';
+  | 'fireworks'
+  | 'codex-subscription'
+  | 'claude-subscription';
 export type AuthMethod = 'api_key' | 'oauth';
 export type PatrolReadinessStatus = 'ready' | 'warning' | 'not_ready';
 
@@ -105,6 +107,8 @@ export interface AISettings {
   cerebras_configured?: boolean; // true if Cerebras API key is set
   together_configured?: boolean; // true if Together AI API key is set
   fireworks_configured?: boolean; // true if Fireworks AI API key is set
+  codex_subscription_enabled?: boolean; // local Codex CLI signed in with ChatGPT
+  claude_subscription_enabled?: boolean; // local Claude CLI signed in with a Claude plan
   ollama_configured: boolean; // true (always available for attempt)
   ollama_base_url: string; // Ollama server URL
   ollama_keep_alive: string; // Ollama keep_alive value; empty uses the server default
@@ -250,6 +254,8 @@ export const PROVIDER_DESCRIPTIONS: Record<AIProvider, string> = {
   cerebras: 'Cerebras Inference models',
   together: 'Together AI hosted models',
   fireworks: 'Fireworks AI hosted models',
+  'codex-subscription': 'Models through a locally authenticated Codex CLI',
+  'claude-subscription': 'Models through a locally authenticated Claude CLI',
 };
 
 // Conversation history for multi-turn chats

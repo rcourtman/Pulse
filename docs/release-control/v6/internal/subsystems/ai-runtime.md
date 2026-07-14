@@ -247,6 +247,41 @@ continuations must preserve the provider `functionCall.id` on parsed
 function name remains a separate field resolved from the preceding assistant
 call when building tool-result turns.
 
+Local subscription-agent providers are explicit non-chat-compatible native
+transports owned by `internal/ai/providers/subscription_agent.go`. Their
+configured state is an operator opt-in, not possession of a Pulse-managed
+credential. Readiness requires the corresponding CLI on `PATH` and the CLI's
+own first-party subscription login. The transport must never read, persist,
+refresh, export, or forward that login, and its child environment is an
+allowlist that excludes API keys, Pulse secrets, cloud credentials, and
+unrelated tokens. It must never fall back to an API-key provider.
+
+Each subscription-agent call is a single structured provider turn in a fresh
+temporary working directory. Codex runs ephemeral with user configuration
+ignored and a read-only sandbox. Claude runs without session persistence, in
+safe/plan mode, with filesystem, shell, network, task, and editing tools
+denied. Neither receives Pulse MCP configuration. The agent returns tool
+arguments as encoded JSON; Pulse parses them and rejects unknown tool names,
+duplicate or empty call IDs, malformed argument objects, and violations of
+`none` or `required` tool choice before the existing provider-neutral tool loop
+can execute anything. The normal registry, profile, approval, protected
+resource, action, and verification contracts remain the only infrastructure
+authority. Calls are serialized per local subscription agent and bounded by
+the configured request timeout and prompt/output size limits.
+Codex JSONL event output is also a fail-closed audit channel: reported command,
+file, MCP, web, computer, or image-tool activity invalidates the turn. This
+detects a violated adapter instruction but cannot retroactively protect data a
+same-user read-only process already read, so deployment guidance must require a
+dedicated least-privilege Pulse OS account and must not describe the local
+agent route as equivalent isolation to a remote chat-completions API.
+
+`codex-subscription:*` and `claude-subscription:*` are distinct provider routes
+in settings, readiness, model catalogues, usage, and qualification reports.
+Qualification may temporarily opt in the selected route when applying an
+explicit model override, must restore the previous opt-in and Patrol model even
+after failure, and records `inference_route=local_subscription_agent` so a
+subscription run is never compared or published as a metered API route.
+
 ## Canonical Files
 
 1. `internal/ai/`

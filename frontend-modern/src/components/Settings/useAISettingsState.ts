@@ -62,6 +62,8 @@ const AI_SETTINGS_PROVIDER_PAYLOAD_FIELDS: Record<AIProvider, string[]> = {
   fireworks: ['fireworks_api_key'],
   gemini: ['gemini_api_key'],
   ollama: ['ollama_base_url', 'ollama_keep_alive'],
+  'codex-subscription': ['codex_subscription_enabled'],
+  'claude-subscription': ['claude_subscription_enabled'],
 };
 
 const compactUnique = (values: Array<string | undefined>): string[] => {
@@ -88,7 +90,9 @@ const isKnownAIProvider = (provider: string): provider is AIProvider =>
 const providerPayloadEntries = (payload: Record<string, unknown>): string[] =>
   AI_PROVIDERS.filter((provider) =>
     AI_SETTINGS_PROVIDER_PAYLOAD_FIELDS[provider].some(
-      (field) => typeof payload[field] === 'string' && String(payload[field]).trim().length > 0,
+      (field) =>
+        payload[field] === true ||
+        (typeof payload[field] === 'string' && String(payload[field]).trim().length > 0),
     ),
   );
 
@@ -246,8 +250,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
   // Tracks whether the initial expand policy has been applied, so later
   // resetForm calls (after every save) preserve the operator's own
   // expand/collapse choices instead of clobbering them.
-  const [providersExpandedInitialized, setProvidersExpandedInitialized] =
-    createSignal(false);
+  const [providersExpandedInitialized, setProvidersExpandedInitialized] = createSignal(false);
 
   const [testingProvider, setTestingProvider] = createSignal<AIProvider | null>(null);
   const [providerTestResult, setProviderTestResult] = createSignal<ProviderTestResult | null>(null);
@@ -326,6 +329,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     ollamaKeepAlive: '30s',
     openaiBaseUrl: '',
     zaiBaseUrl: '',
+    codexSubscriptionEnabled: false,
+    claudeSubscriptionEnabled: false,
     costBudgetUSD30d: '',
     requestTimeoutSeconds: 300,
     controlLevel: 'read_only' as AIControlLevel,
@@ -368,6 +373,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         current.together_configured ||
         current.fireworks_configured ||
         current.gemini_configured ||
+        current.codex_subscription_enabled ||
+        current.claude_subscription_enabled ||
         current.ollama_configured),
     );
   });
@@ -418,6 +425,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         ollamaKeepAlive: '30s',
         openaiBaseUrl: '',
         zaiBaseUrl: '',
+        codexSubscriptionEnabled: false,
+        claudeSubscriptionEnabled: false,
         costBudgetUSD30d: '',
         requestTimeoutSeconds: 300,
         controlLevel: 'read_only',
@@ -461,6 +470,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       ollamaKeepAlive: data.ollama_keep_alive ?? '30s',
       openaiBaseUrl: data.openai_base_url || '',
       zaiBaseUrl: data.zai_base_url || '',
+      codexSubscriptionEnabled: Boolean(data.codex_subscription_enabled),
+      claudeSubscriptionEnabled: Boolean(data.claude_subscription_enabled),
       costBudgetUSD30d:
         typeof data.cost_budget_usd_30d === 'number' && data.cost_budget_usd_30d > 0
           ? String(data.cost_budget_usd_30d)
@@ -484,6 +495,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     if (data.cerebras_configured) configured.add('cerebras');
     if (data.together_configured) configured.add('together');
     if (data.fireworks_configured) configured.add('fireworks');
+    if (data.codex_subscription_enabled) configured.add('codex-subscription');
+    if (data.claude_subscription_enabled) configured.add('claude-subscription');
     if (data.ollama_configured) configured.add('ollama');
     // Apply the expand policy only on the first load. Guide first-time
     // setup by expanding the default provider when nothing is configured
@@ -806,6 +819,10 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
           return;
         }
         payload.gemini_api_key = setupApiKey().trim();
+      } else if (setupProvider() === 'codex-subscription') {
+        payload.codex_subscription_enabled = true;
+      } else if (setupProvider() === 'claude-subscription') {
+        payload.claude_subscription_enabled = true;
       } else {
         if (!setupOllamaUrl().trim()) {
           notificationStore.error('Please enter your Ollama server URL');
@@ -901,6 +918,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
           (modelProvider === 'together' && form.togetherApiKey.trim()) ||
           (modelProvider === 'fireworks' && form.fireworksApiKey.trim()) ||
           (modelProvider === 'gemini' && form.geminiApiKey.trim()) ||
+          (modelProvider === 'codex-subscription' && form.codexSubscriptionEnabled) ||
+          (modelProvider === 'claude-subscription' && form.claudeSubscriptionEnabled) ||
           (modelProvider === 'ollama' && form.ollamaBaseUrl.trim());
 
         if (!isAddingCredential) {
@@ -1008,6 +1027,12 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       }
       if (form.zaiBaseUrl !== (settings()?.zai_base_url || '')) {
         payload.zai_base_url = form.zaiBaseUrl.trim();
+      }
+      if (form.codexSubscriptionEnabled !== Boolean(settings()?.codex_subscription_enabled)) {
+        payload.codex_subscription_enabled = form.codexSubscriptionEnabled;
+      }
+      if (form.claudeSubscriptionEnabled !== Boolean(settings()?.claude_subscription_enabled)) {
+        payload.claude_subscription_enabled = form.claudeSubscriptionEnabled;
       }
 
       const rawBudget = form.costBudgetUSD30d.trim();
@@ -1159,6 +1184,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       current?.together_configured,
       current?.fireworks_configured,
       current?.gemini_configured,
+      current?.codex_subscription_enabled,
+      current?.claude_subscription_enabled,
       current?.ollama_configured,
     ].filter(Boolean).length;
     const isLastProvider = configuredCount === 1 && isAIProviderConfigured(provider, current);
@@ -1194,6 +1221,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       if (provider === 'fireworks') clearPayload.clear_fireworks_key = true;
       if (provider === 'gemini') clearPayload.clear_gemini_key = true;
       if (provider === 'ollama') clearPayload.clear_ollama_url = true;
+      if (provider === 'codex-subscription') clearPayload.codex_subscription_enabled = false;
+      if (provider === 'claude-subscription') clearPayload.claude_subscription_enabled = false;
 
       await AIAPI.updateSettings(clearPayload);
       const newSettings = await AIAPI.getSettings();
@@ -1213,6 +1242,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       if (provider === 'fireworks') setForm('fireworksApiKey', '');
       if (provider === 'gemini') setForm('geminiApiKey', '');
       if (provider === 'ollama') setForm('ollamaBaseUrl', '');
+      if (provider === 'codex-subscription') setForm('codexSubscriptionEnabled', false);
+      if (provider === 'claude-subscription') setForm('claudeSubscriptionEnabled', false);
 
       notificationStore.success(`${provider} credentials cleared`);
     } catch (error) {

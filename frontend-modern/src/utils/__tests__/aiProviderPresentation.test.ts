@@ -18,12 +18,18 @@ describe('aiProviderPresentation', () => {
     expect(getAIProviderDisplayName('cerebras')).toBe('Cerebras');
     expect(getAIProviderDisplayName('together')).toBe('Together AI');
     expect(getAIProviderDisplayName('fireworks')).toBe('Fireworks AI');
+    expect(getAIProviderDisplayName('codex-subscription')).toBe('Codex subscription (local)');
+    expect(getAIProviderDisplayName('claude-subscription')).toBe('Claude subscription (local)');
     expect(getAIProviderDisplayName('pulse')).toBe('Pulse');
     expect(getAIProviderDisplayName('custom-provider')).toBe('custom-provider');
   });
 
   it('detects providers from explicit prefixes and model naming heuristics', () => {
     expect(getProviderFromModelId('openai:gpt-4o')).toBe('openai');
+    expect(getProviderFromModelId('codex-subscription:gpt-5.6-luna')).toBe(
+      'codex-subscription',
+    );
+    expect(getProviderFromModelId('claude-subscription:opus')).toBe('claude-subscription');
     expect(getProviderFromModelId('anthropic/claude-sonnet-4.5')).toBe('openrouter');
     expect(getProviderFromModelId('claude-3-5-sonnet')).toBe('anthropic');
     expect(getProviderFromModelId('o4-mini')).toBe('openai');

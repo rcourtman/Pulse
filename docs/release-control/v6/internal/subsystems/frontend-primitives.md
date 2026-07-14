@@ -1537,6 +1537,15 @@ Agent`), with the plain-language source phrase available through accessible
     arrays/maps and the backend registry projection instead of introducing
     provider-specific JSX branches, local configured-state inference, or
     browser-owned default endpoint facts.
+    Local subscription-agent providers are the deliberate exception to
+    credential inputs: their setup rows and first-run options render an
+    explicit boolean opt-in, explain that Pulse uses an already authenticated
+    same-machine CLI, and direct the operator to run provider readiness after
+    saving. They must not ask for, accept, display, or imply storage of an OAuth
+    token or API key, and must not present the opt-in itself as proof that the
+    CLI login or selected model works. Their models remain normal
+    provider-prefixed catalogue entries so Assistant, Patrol, service-context,
+    and shared-default selectors do not invent alias parsing in the browser.
     The Ollama guided quickstart on that card (the copyable `ollama pull`
     command block, the hardware-expectation note, and the post-test next-step
     hint) renders the backend registry's `suggested_model` projection from the

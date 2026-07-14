@@ -26,6 +26,9 @@ export interface AISettingsDialogsProps {
 export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
   const setupProviderConfig = () => getAIProviderConfig(props.setupProvider());
   const setupPresentation = getAISettingsSetupDialogPresentation;
+  const isSubscriptionAgent = () =>
+    props.setupProvider() === 'codex-subscription' ||
+    props.setupProvider() === 'claude-subscription';
 
   return (
     <>
@@ -52,39 +55,57 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
               />
 
               <Show
-                when={props.setupProvider() === 'ollama'}
+                when={isSubscriptionAgent()}
                 fallback={
-                  <div>
-                    <label class="block text-sm font-medium text-base-content mb-1.5">
-                      {setupProviderConfig().title} API Key
-                    </label>
-                    <input
-                      type="password"
-                      value={props.setupApiKey()}
-                      onInput={(event) => props.setSetupApiKey(event.currentTarget.value)}
-                      placeholder={setupProviderConfig().placeholder}
-                      class="w-full px-3 py-2 border border-border rounded-md bg-surface focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <p class="text-xs text-muted mt-1.5">
-                      <ExternalTextLink href={setupProviderConfig().actionLinkHref}>
-                        Get your API key →
-                      </ExternalTextLink>
-                    </p>
-                  </div>
+                  <Show
+                    when={props.setupProvider() === 'ollama'}
+                    fallback={
+                      <div>
+                        <label class="block text-sm font-medium text-base-content mb-1.5">
+                          {setupProviderConfig().title} API Key
+                        </label>
+                        <input
+                          type="password"
+                          value={props.setupApiKey()}
+                          onInput={(event) => props.setSetupApiKey(event.currentTarget.value)}
+                          placeholder={setupProviderConfig().placeholder}
+                          class="w-full px-3 py-2 border border-border rounded-md bg-surface focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <p class="text-xs text-muted mt-1.5">
+                          <ExternalTextLink href={setupProviderConfig().actionLinkHref}>
+                            Get your API key →
+                          </ExternalTextLink>
+                        </p>
+                      </div>
+                    }
+                  >
+                    <div>
+                      <label class="block text-sm font-medium text-base-content mb-1.5">
+                        Ollama Server URL
+                      </label>
+                      <input
+                        type="url"
+                        value={props.setupOllamaUrl()}
+                        onInput={(event) => props.setSetupOllamaUrl(event.currentTarget.value)}
+                        placeholder="http://localhost:11434"
+                        class="w-full px-3 py-2 border border-border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <p class="text-xs text-muted mt-1.5">
+                        Ollama runs locally - no API key needed
+                      </p>
+                    </div>
+                  </Show>
                 }
               >
-                <div>
-                  <label class="block text-sm font-medium text-base-content mb-1.5">
-                    Ollama Server URL
-                  </label>
-                  <input
-                    type="url"
-                    value={props.setupOllamaUrl()}
-                    onInput={(event) => props.setSetupOllamaUrl(event.currentTarget.value)}
-                    placeholder="http://localhost:11434"
-                    class="w-full px-3 py-2 border border-border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <p class="text-xs text-muted mt-1.5">Ollama runs locally - no API key needed</p>
+                <div class="rounded-md border border-border bg-surface-alt p-3 text-sm text-base-content">
+                  Pulse will use this machine's existing {setupProviderConfig().title} login. No API
+                  key or OAuth token is stored in Pulse. Save, then run the provider check to verify
+                  the CLI and login are available to the Pulse process.
+                  <p class="mt-2 text-xs">
+                    <ExternalTextLink href={setupProviderConfig().actionLinkHref}>
+                      {setupProviderConfig().actionLinkLabel}
+                    </ExternalTextLink>
+                  </p>
                 </div>
               </Show>
             </div>
@@ -104,13 +125,13 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
                 class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
                 disabled={
                   props.setupSaving() ||
-                  (props.setupProvider() !== 'ollama' && !props.setupApiKey().trim()) ||
+                  (!isSubscriptionAgent() &&
+                    props.setupProvider() !== 'ollama' &&
+                    !props.setupApiKey().trim()) ||
                   (props.setupProvider() === 'ollama' && !props.setupOllamaUrl().trim())
                 }
               >
-                {props.setupSaving() && (
-                  <LoadingSpinner size="md" tone="inverse" />
-                )}
+                {props.setupSaving() && <LoadingSpinner size="md" tone="inverse" />}
                 {setupPresentation().submitLabel}
               </button>
             </div>

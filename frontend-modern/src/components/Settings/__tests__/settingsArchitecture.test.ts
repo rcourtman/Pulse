@@ -720,6 +720,18 @@ describe('settings architecture guardrails', () => {
     expect(aiProviderConfigurationSectionSource).not.toContain('extraField()');
   });
 
+  it('keeps local subscription agents explicit and credential-free in settings', () => {
+    for (const provider of ['codex-subscription', 'claude-subscription']) {
+      expect(aiSettingsModelSource).toContain(`provider: '${provider}'`);
+    }
+    expect(aiSettingsModelSource).toContain("inputType: 'toggle'");
+    expect(aiSettingsModelSource).toContain("inputField: 'codexSubscriptionEnabled'");
+    expect(aiSettingsModelSource).toContain("inputField: 'claudeSubscriptionEnabled'");
+    expect(aiSettingsDialogsSource).toContain("props.setupProvider() === 'codex-subscription'");
+    expect(aiSettingsDialogsSource).toContain("props.setupProvider() === 'claude-subscription'");
+    expect(aiSettingsDialogsSource).toContain('key or OAuth token is stored in Pulse');
+  });
+
   it('keeps the Ollama quickstart on the server-authored suggested-model projection', () => {
     // The blessed Patrol model is registry-owned backend metadata; the
     // provider row renders the projection and must not hardcode model IDs.

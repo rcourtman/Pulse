@@ -48,10 +48,12 @@ func NewPulseClient(config ClientConfig) (*PulseClient, error) {
 }
 
 type AISettings struct {
-	Enabled       bool   `json:"enabled"`
-	Model         string `json:"model"`
-	PatrolModel   string `json:"patrol_model"`
-	PatrolEnabled bool   `json:"patrol_enabled"`
+	Enabled                   bool   `json:"enabled"`
+	Model                     string `json:"model"`
+	PatrolModel               string `json:"patrol_model"`
+	PatrolEnabled             bool   `json:"patrol_enabled"`
+	CodexSubscriptionEnabled  bool   `json:"codex_subscription_enabled"`
+	ClaudeSubscriptionEnabled bool   `json:"claude_subscription_enabled"`
 }
 
 type PulseVersion struct {
@@ -262,13 +264,26 @@ func (c *PulseClient) OverridePatrolModel(ctx context.Context, model string) (fu
 		return nil, err
 	}
 	previous := settings.PatrolModel
-	if previous == model {
+	provider, _ := splitModel(model)
+	payload := map[string]any{"patrol_model": model}
+	restorePayload := map[string]any{"patrol_model": previous}
+	if provider == "codex-subscription" {
+		payload["codex_subscription_enabled"] = true
+		restorePayload["codex_subscription_enabled"] = settings.CodexSubscriptionEnabled
+	}
+	if provider == "claude-subscription" {
+		payload["claude_subscription_enabled"] = true
+		restorePayload["claude_subscription_enabled"] = settings.ClaudeSubscriptionEnabled
+	}
+	if previous == model && len(payload) == 1 {
 		return func(context.Context) error { return nil }, nil
 	}
-	if err := c.SetPatrolModel(ctx, model); err != nil {
+	if err := c.request(ctx, http.MethodPut, "/api/settings/ai/update", payload, nil); err != nil {
 		return nil, err
 	}
-	return func(restoreCtx context.Context) error { return c.SetPatrolModel(restoreCtx, previous) }, nil
+	return func(restoreCtx context.Context) error {
+		return c.request(restoreCtx, http.MethodPut, "/api/settings/ai/update", restorePayload, nil)
+	}, nil
 }
 
 func (c *PulseClient) Resources(ctx context.Context) ([]Resource, error) {

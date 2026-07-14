@@ -1809,7 +1809,9 @@ func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
 		req.ClearGeminiKey != nil ||
 		req.ClearOllamaURL != nil ||
 		req.ClearOllamaUsername != nil ||
-		req.ClearOllamaPassword != nil
+		req.ClearOllamaPassword != nil ||
+		req.CodexSubscriptionEnabled != nil ||
+		req.ClaudeSubscriptionEnabled != nil
 }
 
 // aiSettingsUpdateRequiresPatrolPreflight reports whether the settings
@@ -1844,6 +1846,12 @@ func aiSettingsUpdateRequiresPatrolPreflight(oldCfg, newCfg *config.AIConfig) bo
 	provider, _ := config.ParseModelString(newPatrolModel)
 	if provider == "" {
 		return false
+	}
+	if provider == config.AIProviderCodexSubscription {
+		return oldCfg.CodexSubscriptionEnabled != newCfg.CodexSubscriptionEnabled
+	}
+	if provider == config.AIProviderClaudeSubscription {
+		return oldCfg.ClaudeSubscriptionEnabled != newCfg.ClaudeSubscriptionEnabled
 	}
 	return oldCfg.GetAPIKeyForProvider(provider) != newCfg.GetAPIKeyForProvider(provider)
 }
@@ -1886,7 +1894,9 @@ func aiSettingsUpdateTouchesPatrolReadiness(req AISettingsUpdateRequest) bool {
 		req.ClearGeminiKey != nil ||
 		req.ClearOllamaURL != nil ||
 		req.ClearOllamaUsername != nil ||
-		req.ClearOllamaPassword != nil
+		req.ClearOllamaPassword != nil ||
+		req.CodexSubscriptionEnabled != nil ||
+		req.ClaudeSubscriptionEnabled != nil
 }
 
 // SetOnControlSettingsChange sets a callback to be invoked when control settings change
@@ -2375,26 +2385,28 @@ type AISettingsResponse struct {
 	UseProactiveThresholds        bool                  `json:"use_proactive_thresholds"`          // true if patrol warns before thresholds (false = use exact thresholds)
 	AvailableModels               []providers.ModelInfo `json:"available_models"`                  // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
-	AnthropicConfigured  bool                           `json:"anthropic_configured"`      // true if Anthropic API key is set
-	OpenAIConfigured     bool                           `json:"openai_configured"`         // true if OpenAI API key is set
-	OpenRouterConfigured bool                           `json:"openrouter_configured"`     // true if OpenRouter API key is set
-	DeepSeekConfigured   bool                           `json:"deepseek_configured"`       // true if DeepSeek API key is set
-	GeminiConfigured     bool                           `json:"gemini_configured"`         // true if Gemini API key is set
-	ZaiConfigured        bool                           `json:"zai_configured"`            // true if Z.ai (Zhipu) API key is set
-	GroqConfigured       bool                           `json:"groq_configured"`           // true if Groq API key is set
-	MistralConfigured    bool                           `json:"mistral_configured"`        // true if Mistral API key is set
-	CerebrasConfigured   bool                           `json:"cerebras_configured"`       // true if Cerebras API key is set
-	TogetherConfigured   bool                           `json:"together_configured"`       // true if Together AI API key is set
-	FireworksConfigured  bool                           `json:"fireworks_configured"`      // true if Fireworks AI API key is set
-	OllamaConfigured     bool                           `json:"ollama_configured"`         // true (always available for attempt)
-	OllamaBaseURL        string                         `json:"ollama_base_url"`           // Ollama server URL
-	OllamaUsername       string                         `json:"ollama_username,omitempty"` // Optional Basic Auth username for Ollama
-	OllamaPasswordSet    bool                           `json:"ollama_password_set"`       // true if an Ollama password is stored
-	OllamaKeepAlive      string                         `json:"ollama_keep_alive"`         // Ollama keep_alive value; empty uses server default
-	OpenAIBaseURL        string                         `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
-	ZaiBaseURL           string                         `json:"zai_base_url,omitempty"`    // Custom Z.ai base URL (e.g. coding endpoint)
-	ConfiguredProviders  []string                       `json:"configured_providers"`      // List of provider names with credentials
-	Providers            []AIProviderDefinitionResponse `json:"providers"`                 // Canonical provider registry metadata
+	AnthropicConfigured       bool                           `json:"anthropic_configured"`      // true if Anthropic API key is set
+	OpenAIConfigured          bool                           `json:"openai_configured"`         // true if OpenAI API key is set
+	OpenRouterConfigured      bool                           `json:"openrouter_configured"`     // true if OpenRouter API key is set
+	DeepSeekConfigured        bool                           `json:"deepseek_configured"`       // true if DeepSeek API key is set
+	GeminiConfigured          bool                           `json:"gemini_configured"`         // true if Gemini API key is set
+	ZaiConfigured             bool                           `json:"zai_configured"`            // true if Z.ai (Zhipu) API key is set
+	GroqConfigured            bool                           `json:"groq_configured"`           // true if Groq API key is set
+	MistralConfigured         bool                           `json:"mistral_configured"`        // true if Mistral API key is set
+	CerebrasConfigured        bool                           `json:"cerebras_configured"`       // true if Cerebras API key is set
+	TogetherConfigured        bool                           `json:"together_configured"`       // true if Together AI API key is set
+	FireworksConfigured       bool                           `json:"fireworks_configured"`      // true if Fireworks AI API key is set
+	OllamaConfigured          bool                           `json:"ollama_configured"`         // true (always available for attempt)
+	OllamaBaseURL             string                         `json:"ollama_base_url"`           // Ollama server URL
+	OllamaUsername            string                         `json:"ollama_username,omitempty"` // Optional Basic Auth username for Ollama
+	OllamaPasswordSet         bool                           `json:"ollama_password_set"`       // true if an Ollama password is stored
+	OllamaKeepAlive           string                         `json:"ollama_keep_alive"`         // Ollama keep_alive value; empty uses server default
+	OpenAIBaseURL             string                         `json:"openai_base_url,omitempty"` // Custom OpenAI base URL
+	ZaiBaseURL                string                         `json:"zai_base_url,omitempty"`    // Custom Z.ai base URL (e.g. coding endpoint)
+	CodexSubscriptionEnabled  bool                           `json:"codex_subscription_enabled,omitempty"`
+	ClaudeSubscriptionEnabled bool                           `json:"claude_subscription_enabled,omitempty"`
+	ConfiguredProviders       []string                       `json:"configured_providers"` // List of provider names with credentials
+	Providers                 []AIProviderDefinitionResponse `json:"providers"`            // Canonical provider registry metadata
 	// Cost controls
 	CostBudgetUSD30d float64 `json:"cost_budget_usd_30d,omitempty"`
 	// Request timeout (seconds) - for slow hardware running local models
@@ -2535,23 +2547,25 @@ type AISettingsUpdateRequest struct {
 	PatrolAlertTriggerTypes       *[]string `json:"patrol_alert_trigger_types,omitempty"`        // allowlist of alert types (empty slice = all types)
 	UseProactiveThresholds        *bool     `json:"use_proactive_thresholds,omitempty"`          // true if patrol warns before thresholds (default: false = exact thresholds)
 	// Multi-provider credentials
-	AnthropicAPIKey  *string `json:"anthropic_api_key,omitempty"`  // Set Anthropic API key
-	OpenAIAPIKey     *string `json:"openai_api_key,omitempty"`     // Set OpenAI API key
-	OpenRouterAPIKey *string `json:"openrouter_api_key,omitempty"` // Set OpenRouter API key
-	DeepSeekAPIKey   *string `json:"deepseek_api_key,omitempty"`   // Set DeepSeek API key
-	GeminiAPIKey     *string `json:"gemini_api_key,omitempty"`     // Set Gemini API key
-	ZaiAPIKey        *string `json:"zai_api_key,omitempty"`        // Set Z.ai (Zhipu) API key
-	GroqAPIKey       *string `json:"groq_api_key,omitempty"`       // Set Groq API key
-	MistralAPIKey    *string `json:"mistral_api_key,omitempty"`    // Set Mistral API key
-	CerebrasAPIKey   *string `json:"cerebras_api_key,omitempty"`   // Set Cerebras API key
-	TogetherAPIKey   *string `json:"together_api_key,omitempty"`   // Set Together AI API key
-	FireworksAPIKey  *string `json:"fireworks_api_key,omitempty"`  // Set Fireworks AI API key
-	OllamaBaseURL    *string `json:"ollama_base_url,omitempty"`    // Set Ollama server URL
-	OllamaUsername   *string `json:"ollama_username,omitempty"`    // Set Ollama Basic Auth username
-	OllamaPassword   *string `json:"ollama_password,omitempty"`    // Set Ollama Basic Auth password
-	OllamaKeepAlive  *string `json:"ollama_keep_alive,omitempty"`  // Set Ollama keep_alive; empty uses server default
-	OpenAIBaseURL    *string `json:"openai_base_url,omitempty"`    // Set custom OpenAI base URL
-	ZaiBaseURL       *string `json:"zai_base_url,omitempty"`       // Set custom Z.ai base URL (e.g. coding endpoint)
+	AnthropicAPIKey           *string `json:"anthropic_api_key,omitempty"`  // Set Anthropic API key
+	OpenAIAPIKey              *string `json:"openai_api_key,omitempty"`     // Set OpenAI API key
+	OpenRouterAPIKey          *string `json:"openrouter_api_key,omitempty"` // Set OpenRouter API key
+	DeepSeekAPIKey            *string `json:"deepseek_api_key,omitempty"`   // Set DeepSeek API key
+	GeminiAPIKey              *string `json:"gemini_api_key,omitempty"`     // Set Gemini API key
+	ZaiAPIKey                 *string `json:"zai_api_key,omitempty"`        // Set Z.ai (Zhipu) API key
+	GroqAPIKey                *string `json:"groq_api_key,omitempty"`       // Set Groq API key
+	MistralAPIKey             *string `json:"mistral_api_key,omitempty"`    // Set Mistral API key
+	CerebrasAPIKey            *string `json:"cerebras_api_key,omitempty"`   // Set Cerebras API key
+	TogetherAPIKey            *string `json:"together_api_key,omitempty"`   // Set Together AI API key
+	FireworksAPIKey           *string `json:"fireworks_api_key,omitempty"`  // Set Fireworks AI API key
+	OllamaBaseURL             *string `json:"ollama_base_url,omitempty"`    // Set Ollama server URL
+	OllamaUsername            *string `json:"ollama_username,omitempty"`    // Set Ollama Basic Auth username
+	OllamaPassword            *string `json:"ollama_password,omitempty"`    // Set Ollama Basic Auth password
+	OllamaKeepAlive           *string `json:"ollama_keep_alive,omitempty"`  // Set Ollama keep_alive; empty uses server default
+	OpenAIBaseURL             *string `json:"openai_base_url,omitempty"`    // Set custom OpenAI base URL
+	ZaiBaseURL                *string `json:"zai_base_url,omitempty"`       // Set custom Z.ai base URL (e.g. coding endpoint)
+	CodexSubscriptionEnabled  *bool   `json:"codex_subscription_enabled,omitempty"`
+	ClaudeSubscriptionEnabled *bool   `json:"claude_subscription_enabled,omitempty"`
 	// Clear flags for removing credentials
 	ClearAnthropicKey   *bool `json:"clear_anthropic_key,omitempty"`   // Clear Anthropic API key
 	ClearOpenAIKey      *bool `json:"clear_openai_key,omitempty"`      // Clear OpenAI API key
@@ -2686,34 +2700,36 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		UseProactiveThresholds:        settings.UseProactiveThresholds,
 		AvailableModels:               nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
-		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
-		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
-		OpenRouterConfigured:   settings.HasProvider(config.AIProviderOpenRouter),
-		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
-		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
-		ZaiConfigured:          settings.HasProvider(config.AIProviderZai),
-		GroqConfigured:         settings.HasProvider(config.AIProviderGroq),
-		MistralConfigured:      settings.HasProvider(config.AIProviderMistral),
-		CerebrasConfigured:     settings.HasProvider(config.AIProviderCerebras),
-		TogetherConfigured:     settings.HasProvider(config.AIProviderTogether),
-		FireworksConfigured:    settings.HasProvider(config.AIProviderFireworks),
-		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
-		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),
-		OllamaUsername:         settings.OllamaUsername,
-		OllamaPasswordSet:      settings.OllamaPassword != "",
-		OllamaKeepAlive:        settings.GetOllamaKeepAlive(),
-		OpenAIBaseURL:          settings.OpenAIBaseURL,
-		ZaiBaseURL:             settings.ZaiBaseURL,
-		ConfiguredProviders:    settings.GetConfiguredProviders(),
-		Providers:              aiProviderDefinitionResponses(settings),
-		CostBudgetUSD30d:       settings.CostBudgetUSD30d,
-		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,
-		ControlLevel:           settings.GetEffectiveControlLevel(hasAutoFixFeature),
-		ProtectedGuests:        settings.GetProtectedGuests(),
-		DiscoveryEnabled:       settings.IsDiscoveryEnabled(),
-		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
-		PatrolPreflight:        cachedPatrolPreflightSnapshot(aiService),
-		PatrolReadiness:        ptrToPatrolReadiness(h.buildPatrolReadiness(ctx, aiService, h.getPatrolService(ctx) != nil)),
+		AnthropicConfigured:       settings.HasProvider(config.AIProviderAnthropic),
+		OpenAIConfigured:          settings.HasProvider(config.AIProviderOpenAI),
+		OpenRouterConfigured:      settings.HasProvider(config.AIProviderOpenRouter),
+		DeepSeekConfigured:        settings.HasProvider(config.AIProviderDeepSeek),
+		GeminiConfigured:          settings.HasProvider(config.AIProviderGemini),
+		ZaiConfigured:             settings.HasProvider(config.AIProviderZai),
+		GroqConfigured:            settings.HasProvider(config.AIProviderGroq),
+		MistralConfigured:         settings.HasProvider(config.AIProviderMistral),
+		CerebrasConfigured:        settings.HasProvider(config.AIProviderCerebras),
+		TogetherConfigured:        settings.HasProvider(config.AIProviderTogether),
+		FireworksConfigured:       settings.HasProvider(config.AIProviderFireworks),
+		OllamaConfigured:          settings.HasProvider(config.AIProviderOllama),
+		OllamaBaseURL:             settings.GetBaseURLForProvider(config.AIProviderOllama),
+		OllamaUsername:            settings.OllamaUsername,
+		OllamaPasswordSet:         settings.OllamaPassword != "",
+		OllamaKeepAlive:           settings.GetOllamaKeepAlive(),
+		OpenAIBaseURL:             settings.OpenAIBaseURL,
+		ZaiBaseURL:                settings.ZaiBaseURL,
+		CodexSubscriptionEnabled:  settings.CodexSubscriptionEnabled,
+		ClaudeSubscriptionEnabled: settings.ClaudeSubscriptionEnabled,
+		ConfiguredProviders:       settings.GetConfiguredProviders(),
+		Providers:                 aiProviderDefinitionResponses(settings),
+		CostBudgetUSD30d:          settings.CostBudgetUSD30d,
+		RequestTimeoutSeconds:     settings.RequestTimeoutSeconds,
+		ControlLevel:              settings.GetEffectiveControlLevel(hasAutoFixFeature),
+		ProtectedGuests:           settings.GetProtectedGuests(),
+		DiscoveryEnabled:          settings.IsDiscoveryEnabled(),
+		DiscoveryIntervalHours:    settings.DiscoveryIntervalHours,
+		PatrolPreflight:           cachedPatrolPreflightSnapshot(aiService),
+		PatrolReadiness:           ptrToPatrolReadiness(h.buildPatrolReadiness(ctx, aiService, h.getPatrolService(ctx) != nil)),
 	}.NormalizeCollections()
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {
@@ -2896,6 +2912,12 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	}
 	if req.ZaiBaseURL != nil {
 		settings.ZaiBaseURL = strings.TrimSpace(*req.ZaiBaseURL)
+	}
+	if req.CodexSubscriptionEnabled != nil {
+		settings.CodexSubscriptionEnabled = *req.CodexSubscriptionEnabled
+	}
+	if req.ClaudeSubscriptionEnabled != nil {
+		settings.ClaudeSubscriptionEnabled = *req.ClaudeSubscriptionEnabled
 	}
 
 	if req.Enabled != nil {
@@ -3180,33 +3202,35 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		UseProactiveThresholds:        settings.UseProactiveThresholds,
 		AvailableModels:               nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
-		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
-		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
-		OpenRouterConfigured:   settings.HasProvider(config.AIProviderOpenRouter),
-		DeepSeekConfigured:     settings.HasProvider(config.AIProviderDeepSeek),
-		GeminiConfigured:       settings.HasProvider(config.AIProviderGemini),
-		ZaiConfigured:          settings.HasProvider(config.AIProviderZai),
-		GroqConfigured:         settings.HasProvider(config.AIProviderGroq),
-		MistralConfigured:      settings.HasProvider(config.AIProviderMistral),
-		CerebrasConfigured:     settings.HasProvider(config.AIProviderCerebras),
-		TogetherConfigured:     settings.HasProvider(config.AIProviderTogether),
-		FireworksConfigured:    settings.HasProvider(config.AIProviderFireworks),
-		OllamaConfigured:       settings.HasProvider(config.AIProviderOllama),
-		OllamaBaseURL:          settings.GetBaseURLForProvider(config.AIProviderOllama),
-		OllamaUsername:         settings.OllamaUsername,
-		OllamaPasswordSet:      settings.OllamaPassword != "",
-		OllamaKeepAlive:        settings.GetOllamaKeepAlive(),
-		OpenAIBaseURL:          settings.OpenAIBaseURL,
-		ZaiBaseURL:             settings.ZaiBaseURL,
-		ConfiguredProviders:    settings.GetConfiguredProviders(),
-		Providers:              aiProviderDefinitionResponses(settings),
-		RequestTimeoutSeconds:  settings.RequestTimeoutSeconds,
-		ControlLevel:           settings.GetEffectiveControlLevel(hasAutoFixFeature),
-		ProtectedGuests:        settings.GetProtectedGuests(),
-		DiscoveryEnabled:       settings.DiscoveryEnabled,
-		DiscoveryIntervalHours: settings.DiscoveryIntervalHours,
-		PatrolReadiness:        ptrToPatrolReadiness(patrolReadiness),
-		PatrolPreflight:        cachedPatrolPreflightSnapshot(aiService),
+		AnthropicConfigured:       settings.HasProvider(config.AIProviderAnthropic),
+		OpenAIConfigured:          settings.HasProvider(config.AIProviderOpenAI),
+		OpenRouterConfigured:      settings.HasProvider(config.AIProviderOpenRouter),
+		DeepSeekConfigured:        settings.HasProvider(config.AIProviderDeepSeek),
+		GeminiConfigured:          settings.HasProvider(config.AIProviderGemini),
+		ZaiConfigured:             settings.HasProvider(config.AIProviderZai),
+		GroqConfigured:            settings.HasProvider(config.AIProviderGroq),
+		MistralConfigured:         settings.HasProvider(config.AIProviderMistral),
+		CerebrasConfigured:        settings.HasProvider(config.AIProviderCerebras),
+		TogetherConfigured:        settings.HasProvider(config.AIProviderTogether),
+		FireworksConfigured:       settings.HasProvider(config.AIProviderFireworks),
+		OllamaConfigured:          settings.HasProvider(config.AIProviderOllama),
+		OllamaBaseURL:             settings.GetBaseURLForProvider(config.AIProviderOllama),
+		OllamaUsername:            settings.OllamaUsername,
+		OllamaPasswordSet:         settings.OllamaPassword != "",
+		OllamaKeepAlive:           settings.GetOllamaKeepAlive(),
+		OpenAIBaseURL:             settings.OpenAIBaseURL,
+		ZaiBaseURL:                settings.ZaiBaseURL,
+		CodexSubscriptionEnabled:  settings.CodexSubscriptionEnabled,
+		ClaudeSubscriptionEnabled: settings.ClaudeSubscriptionEnabled,
+		ConfiguredProviders:       settings.GetConfiguredProviders(),
+		Providers:                 aiProviderDefinitionResponses(settings),
+		RequestTimeoutSeconds:     settings.RequestTimeoutSeconds,
+		ControlLevel:              settings.GetEffectiveControlLevel(hasAutoFixFeature),
+		ProtectedGuests:           settings.GetProtectedGuests(),
+		DiscoveryEnabled:          settings.DiscoveryEnabled,
+		DiscoveryIntervalHours:    settings.DiscoveryIntervalHours,
+		PatrolReadiness:           ptrToPatrolReadiness(patrolReadiness),
+		PatrolPreflight:           cachedPatrolPreflightSnapshot(aiService),
 	}.NormalizeCollections()
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {

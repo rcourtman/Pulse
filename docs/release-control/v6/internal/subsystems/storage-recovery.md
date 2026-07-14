@@ -116,6 +116,14 @@ payload. Raw per-core CPU evidence and normalized capacity CPU must not be used
 as backup coverage, restore readiness, storage-health, or recovery-point
 signals.
 
+Local subscription-agent settings in `internal/api/ai_handlers.go` remain an
+ai-runtime transport choice even when Patrol observes storage or recovery
+evidence. They do not expand recovery inventory, restore authority, or storage
+mutation permissions; provider-requested operations still cross the existing
+governed tool and verification boundaries. CLI authentication state must not be
+included in recovery exports, snapshots, or support bundles, and must not be
+interpreted as recovery readiness.
+
 Unified Agent durable-operation-receipt metadata is likewise an internal
 monitoring and agent-lifecycle boundary. The exact current protocol may be a
 fail-closed prerequisite when unified resources derive the bounded

@@ -878,6 +878,14 @@ ai-runtime configuration surface: they must not become an agent lifecycle
 install-guidance or discovery channel, and agent setup surfaces must not
 consume them as lifecycle state.
 
+Local subscription-agent settings in `internal/api/ai_handlers.go` follow the
+same boundary. Opting into a locally authenticated Codex or Claude CLI selects
+an ai-runtime transport only: it does not install, register, update, authorize,
+or grant scopes to a Pulse agent. Pulse agent tokens and lifecycle credentials
+must not be projected into the provider child process. Any future design that
+distributes subscription CLI state or authentication through an agent requires
+a separate agent-lifecycle contract change and verification.
+
 First-run security discovery under shared `internal/api/` is likewise an
 adjacent API/security boundary, not an agent-lifecycle discovery surface.
 Unauthenticated `/api/security/status` responses must stay on the public tier

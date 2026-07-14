@@ -24,13 +24,15 @@ export type AIProviderCredentialsFormState = {
   ollamaKeepAlive: string;
   openaiBaseUrl: string;
   zaiBaseUrl: string;
+  codexSubscriptionEnabled: boolean;
+  claudeSubscriptionEnabled: boolean;
 };
 
 export type AIProviderConfig = {
   provider: AIProvider;
   title: string;
   configuredLabel?: string;
-  inputType: 'password' | 'url';
+  inputType: 'password' | 'url' | 'toggle';
   inputField: keyof AIProviderCredentialsFormState;
   placeholder: string;
   configuredPlaceholder?: string;
@@ -75,6 +77,8 @@ export const AI_PROVIDERS: AIProvider[] = [
   'cerebras',
   'together',
   'fireworks',
+  'codex-subscription',
+  'claude-subscription',
   'ollama',
 ];
 
@@ -90,6 +94,8 @@ export const AI_SETUP_PROVIDER_OPTIONS: SelectionCardOption<AIProvider>[] = [
   { value: 'cerebras', title: 'Cerebras', description: 'Inference' },
   { value: 'together', title: 'Together', description: 'Open models' },
   { value: 'fireworks', title: 'Fireworks', description: 'Open models' },
+  { value: 'codex-subscription', title: 'Codex plan', description: 'Local login' },
+  { value: 'claude-subscription', title: 'Claude plan', description: 'Local login' },
   { value: 'ollama', title: 'Ollama', description: 'Local' },
 ];
 
@@ -252,6 +258,33 @@ export const AI_PROVIDER_CONFIGS: AIProviderConfig[] = [
     clearTitle: 'Clear API key',
   },
   {
+    provider: 'codex-subscription',
+    title: 'Codex subscription (local)',
+    configuredLabel: 'Enabled',
+    inputType: 'toggle',
+    inputField: 'codexSubscriptionEnabled',
+    placeholder: '',
+    actionLinkLabel: 'Authentication help →',
+    actionLinkHref: 'https://learn.chatgpt.com/docs/auth',
+    helperText:
+      'Uses the local Codex CLI and its ChatGPT login. API-key environment variables are not forwarded.',
+    clearTitle: 'Disable local Codex subscription route',
+  },
+  {
+    provider: 'claude-subscription',
+    title: 'Claude subscription (local)',
+    configuredLabel: 'Enabled',
+    inputType: 'toggle',
+    inputField: 'claudeSubscriptionEnabled',
+    placeholder: '',
+    actionLinkLabel: 'Authentication help →',
+    actionLinkHref:
+      'https://support.claude.com/en/articles/11145838-use-claude-code-with-your-pro-or-max-plan',
+    helperText:
+      'Uses the local Claude CLI and its Claude plan login. API-key environment variables are not forwarded.',
+    clearTitle: 'Disable local Claude subscription route',
+  },
+  {
     provider: 'ollama',
     title: 'Ollama',
     configuredLabel: 'Available',
@@ -287,6 +320,8 @@ export const createInitialProviderHealth = (): Record<AIProvider, ProviderHealth
   cerebras: { status: 'not_configured', message: '' },
   together: { status: 'not_configured', message: '' },
   fireworks: { status: 'not_configured', message: '' },
+  'codex-subscription': { status: 'not_configured', message: '' },
+  'claude-subscription': { status: 'not_configured', message: '' },
   ollama: { status: 'not_configured', message: '' },
 });
 
@@ -326,6 +361,10 @@ export function isAIProviderConfigured(
       return Boolean(settings.together_configured);
     case 'fireworks':
       return Boolean(settings.fireworks_configured);
+    case 'codex-subscription':
+      return Boolean(settings.codex_subscription_enabled);
+    case 'claude-subscription':
+      return Boolean(settings.claude_subscription_enabled);
     case 'ollama':
       return settings.ollama_configured;
     default:

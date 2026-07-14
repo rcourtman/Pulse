@@ -35,9 +35,21 @@ type Environment struct {
 	DockerTarget   string            `json:"docker_target"`
 	Model          string            `json:"model"`
 	Provider       string            `json:"provider"`
+	InferenceRoute string            `json:"inference_route"`
 	ChallengeNonce string            `json:"community_challenge_nonce,omitempty"`
 	CapturedAt     time.Time         `json:"captured_at"`
 	Versions       map[string]string `json:"versions,omitempty"`
+}
+
+func inferenceRouteForProvider(provider string) string {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "codex-subscription", "claude-subscription":
+		return "local_subscription_agent"
+	case "ollama":
+		return "local_model_server"
+	default:
+		return "metered_api"
+	}
 }
 
 type RunReport struct {
