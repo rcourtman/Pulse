@@ -1286,7 +1286,7 @@ Pulse has assembled deterministic evidence before this turn. The flagged items a
 
 Your job is to assess the provided evidence and decide which items, if any, require attention. Available evidence sources include historical metrics, logs, backup/replication/RAID details, and resource configuration.
 
-When deterministic triage is quiet, the current exact scoped inventory shows the scoped resources running and healthy, and there are no active alerts or findings, treat the supplied snapshot as sufficient for a calm-day assessment. Call patrol_get_findings exactly once, then return the all-clear without using platform or inventory tools merely to reconfirm the same healthy state. A quiet result does not prohibit a targeted read when the snapshot, surrounding evidence, or an active finding contains a concrete signal that needs investigation.
+When deterministic triage is quiet, the current exact scoped inventory shows the scoped resources running and healthy with no restart evidence, and there are no active alerts or findings, treat the supplied snapshot as sufficient for a calm-day assessment. Call patrol_get_findings exactly once, then return the all-clear without using platform or inventory tools merely to reconfirm the same healthy state. A quiet result does not prohibit a targeted read when the snapshot, surrounding evidence, or an active finding contains a concrete signal that needs investigation. A non-zero container restart count is such a signal: assess it and use a targeted current read when needed rather than returning the calm-day all-clear.
 
 ## Direct Provider-State Flags
 
@@ -2043,6 +2043,7 @@ type patrolDockerHostRow struct {
 type patrolAppContainerRow struct {
 	id, name, status string
 	health           string
+	restartCount     int
 	cpu, memory      float64
 }
 
@@ -2356,12 +2357,13 @@ func patrolAppContainerRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				continue
 			}
 			rows = append(rows, patrolAppContainerRow{
-				id:     cv.ID(),
-				name:   cv.Name(),
-				status: strings.TrimSpace(cv.ContainerState()),
-				health: strings.TrimSpace(cv.Health()),
-				cpu:    cv.CPUPercent(),
-				memory: cv.MemoryPercent(),
+				id:           cv.ID(),
+				name:         cv.Name(),
+				status:       strings.TrimSpace(cv.ContainerState()),
+				health:       strings.TrimSpace(cv.Health()),
+				restartCount: cv.RestartCount(),
+				cpu:          cv.CPUPercent(),
+				memory:       cv.MemoryPercent(),
 			})
 		}
 		return rows
@@ -2378,12 +2380,13 @@ func patrolAppContainerRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				continue
 			}
 			rows = append(rows, patrolAppContainerRow{
-				id:     container.ID,
-				name:   container.Name,
-				status: container.State,
-				health: container.Health,
-				cpu:    container.CPUPercent,
-				memory: container.MemoryPercent,
+				id:           container.ID,
+				name:         container.Name,
+				status:       container.State,
+				health:       container.Health,
+				restartCount: container.RestartCount,
+				cpu:          container.CPUPercent,
+				memory:       container.MemoryPercent,
 			})
 		}
 	}
@@ -2953,15 +2956,15 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 			containerRows := patrolAppContainerRows(snap, scopedSet)
 			if len(containerRows) > 0 {
 				sb.WriteString("# Scoped App Containers\n")
-				sb.WriteString("| Name | Resource ID | State | Health | CPU | Memory |\n")
-				sb.WriteString("|------|-------------|-------|--------|-----|--------|\n")
+				sb.WriteString("| Name | Resource ID | State | Health | Restarts | CPU | Memory |\n")
+				sb.WriteString("|------|-------------|-------|--------|----------|-----|--------|\n")
 				for _, row := range containerRows {
 					health := strings.TrimSpace(row.health)
 					if health == "" {
 						health = "not reported"
 					}
-					sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %.0f%% | %.0f%% |\n",
-						row.name, row.id, row.status, health, row.cpu, row.memory))
+					sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %d | %.0f%% | %.0f%% |\n",
+						row.name, row.id, row.status, health, row.restartCount, row.cpu, row.memory))
 				}
 				sb.WriteString("\n")
 			}

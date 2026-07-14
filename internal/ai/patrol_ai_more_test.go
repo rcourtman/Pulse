@@ -344,6 +344,7 @@ func TestGetPatrolSystemPromptForTriage_IncludesQuietRunEfficiencyContract(t *te
 		"treat the supplied snapshot as sufficient for a calm-day assessment",
 		"without using platform or inventory tools merely to reconfirm the same healthy state",
 		"does not prohibit a targeted read",
+		"A non-zero container restart count is such a signal",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("triage patrol system prompt missing %q", want)

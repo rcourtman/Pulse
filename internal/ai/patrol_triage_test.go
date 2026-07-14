@@ -397,6 +397,7 @@ func TestTriageContainerHealthChecksState_UsesReadState(t *testing.T) {
 		Docker: &unifiedresources.DockerData{
 			ContainerState: "running",
 			Health:         "unhealthy",
+			RestartCount:   4,
 		},
 	})
 	state := patrolRuntimeState{readState: &mockReadState{dockerCtrs: []*unifiedresources.DockerContainerView{&unhealthy}}}
@@ -418,7 +419,7 @@ func TestTriageContainerHealthChecksState_UsesReadState(t *testing.T) {
 	for _, expected := range []string{
 		"Container health check reported unhealthy while running",
 		"# Scoped App Containers",
-		"| faulty | app-container:tower:faulty | running | unhealthy |",
+		"| faulty | app-container:tower:faulty | running | unhealthy | 4 |",
 	} {
 		if !strings.Contains(seed, expected) {
 			t.Fatalf("expected exact app-container evidence %q in triage seed, got:\n%s", expected, seed)
