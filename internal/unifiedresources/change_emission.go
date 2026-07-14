@@ -255,14 +255,24 @@ func dockerCommandChanged(before, after Resource) bool {
 }
 
 func dockerUpdateStatusChanged(before, after Resource) bool {
-	var beforeStatus, afterStatus any
+	var beforeStatus, afterStatus *DockerUpdateStatusMeta
 	if before.Docker != nil {
 		beforeStatus = before.Docker.UpdateStatus
 	}
 	if after.Docker != nil {
 		afterStatus = after.Docker.UpdateStatus
 	}
-	return !reflect.DeepEqual(beforeStatus, afterStatus)
+	if beforeStatus == nil || afterStatus == nil {
+		return beforeStatus != afterStatus
+	}
+	// LastChecked is restamped by every periodic update check, so comparing the
+	// whole struct emitted a no-op docker.updateStatus change row per container
+	// per check cycle (the resource_changes flooding behind issue #1577). Only
+	// semantic fields count as change.
+	return beforeStatus.UpdateAvailable != afterStatus.UpdateAvailable ||
+		beforeStatus.CurrentDigest != afterStatus.CurrentDigest ||
+		beforeStatus.LatestDigest != afterStatus.LatestDigest ||
+		beforeStatus.Error != afterStatus.Error
 }
 
 func dockerRestartChanged(before, after Resource) bool {

@@ -276,6 +276,47 @@ func TestBuildResourceChange_ClassifiesDockerRestartChange(t *testing.T) {
 	}
 }
 
+func TestBuildResourceChange_IgnoresUpdateStatusLastCheckedOnly(t *testing.T) {
+	before := Resource{
+		ID:     "container:1",
+		Type:   ResourceTypeAppContainer,
+		Name:   "container-1",
+		Status: StatusOnline,
+		Docker: &DockerData{
+			Image: "example/app:1",
+			UpdateStatus: &DockerUpdateStatusMeta{
+				UpdateAvailable: false,
+				CurrentDigest:   "sha256:aaa",
+				LatestDigest:    "sha256:aaa",
+				LastChecked:     time.Date(2026, 7, 14, 6, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+	after := before
+	refreshed := *before.Docker.UpdateStatus
+	refreshed.LastChecked = refreshed.LastChecked.Add(2 * time.Hour)
+	afterDocker := *before.Docker
+	afterDocker.UpdateStatus = &refreshed
+	after.Docker = &afterDocker
+
+	if change := buildResourceChange(before, true, after, true, time.Now().UTC(), nil, SourcePulseDiff, ""); change != nil {
+		t.Fatalf("expected no change for LastChecked-only refresh, got %+v", change)
+	}
+
+	available := refreshed
+	available.UpdateAvailable = true
+	available.LatestDigest = "sha256:bbb"
+	afterDocker.UpdateStatus = &available
+
+	change := buildResourceChange(before, true, after, true, time.Now().UTC(), nil, SourcePulseDiff, "")
+	if change == nil {
+		t.Fatal("expected update-status change when digest/availability changed, got nil")
+	}
+	if !sameStringSet(mustChangedFields(t, change), []string{"docker.updateStatus"}) {
+		t.Fatalf("changedFields = %+v, want docker.updateStatus", mustChangedFields(t, change))
+	}
+}
+
 func TestBuildResourceChange_ClassifiesKubernetesRestartChange(t *testing.T) {
 	before := Resource{
 		ID:     "pod:1",
