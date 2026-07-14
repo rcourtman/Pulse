@@ -5845,7 +5845,6 @@ type manualScopedPatrolRequest struct {
 	ResourceTypes   []string `json:"resource_types,omitempty"`
 	AlertIdentifier string   `json:"alert_identifier,omitempty"`
 	AlertType       string   `json:"alert_type,omitempty"`
-	Context         string   `json:"context,omitempty"`
 }
 
 // buildManualScopedPatrolScope maps an optional scoped-run request body to a
@@ -5877,9 +5876,6 @@ func buildManualScopedPatrolScope(req manualScopedPatrolRequest) (ai.PatrolScope
 	scope.Context = "Manual targeted check"
 	if alertType := strings.TrimSpace(req.AlertType); alertType != "" {
 		scope.Context = "Manual targeted check for alert: " + alertType
-	}
-	if ctx := strings.TrimSpace(req.Context); ctx != "" {
-		scope.Context = ctx
 	}
 	return scope, true
 }
@@ -5919,13 +5915,41 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 	// (consistent with automatic scoped runs) but still honour readiness above.
 	var scopedReq manualScopedPatrolRequest
 	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&scopedReq)
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+		decodeErr := decoder.Decode(&scopedReq)
+		if decodeErr == nil {
+			var trailing any
+			decodeErr = decoder.Decode(&trailing)
+			if errors.Is(decodeErr, io.EOF) {
+				decodeErr = nil
+			} else if decodeErr == nil {
+				decodeErr = errors.New("multiple JSON values")
+			}
+		}
+		if decodeErr != nil && !errors.Is(decodeErr, io.EOF) {
+			writeErrorResponse(w, http.StatusBadRequest, "invalid_patrol_scope",
+				"The Patrol run body must contain only valid resource_ids, resource_types, alert_identifier, and alert_type fields.", nil)
+			return
+		}
 	}
 	if scope, hasScope := buildManualScopedPatrolScope(scopedReq); hasScope {
+		_, resolution := patrol.ResolvePatrolScope(scope)
+		if len(resolution.UnmatchedResourceIDs) > 0 || len(resolution.AmbiguousResourceIDs) > 0 ||
+			(len(resolution.RequestedResourceIDs) > 0 && len(resolution.EffectiveResourceIDs) == 0) {
+			writeErrorResponse(w, http.StatusUnprocessableEntity, "patrol_scope_unresolved",
+				"One or more requested resource identities could not be resolved exactly to the current Patrol collection state.",
+				map[string]string{
+					"unmatched_resource_ids": strings.Join(resolution.UnmatchedResourceIDs, ","),
+					"ambiguous_resource_ids": strings.Join(resolution.AmbiguousResourceIDs, ","),
+				})
+			return
+		}
 		go patrol.TriggerScopedPatrol(context.WithoutCancel(r.Context()), scope)
 		response := map[string]interface{}{
-			"success": true,
-			"message": "Triggered targeted Patrol check",
+			"success":          true,
+			"message":          "Triggered targeted Patrol check",
+			"scope_resolution": resolution,
 		}
 		if err := utils.WriteJSONResponse(w, response); err != nil {
 			log.Error().Err(err).Msg("Failed to write scoped patrol response")

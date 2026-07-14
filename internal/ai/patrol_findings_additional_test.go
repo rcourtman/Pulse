@@ -1369,3 +1369,66 @@ func TestGenerateRemediationPlanFromInvestigationIsDeleted(t *testing.T) {
 		}
 	}
 }
+
+func TestPatrolFindingAssessmentLifecycle(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{
+		VMs: []models.VM{{ID: "vm-401", Name: "web", VMID: 401}},
+	})
+	ps := NewPatrolService(nil, nil)
+	makeFinding := func(id, key string) *Finding {
+		return &Finding{
+			ID: id, Key: key, Severity: FindingSeverityWarning,
+			Category: FindingCategoryReliability, ResourceID: "vm-401",
+			ResourceName: "web", ResourceType: "vm", Title: "Service issue " + id,
+			Description: "service is unhealthy: " + key, Evidence: "old evidence",
+		}
+	}
+	present := makeFinding("assessment-present", "service-unhealthy")
+	uncertain := makeFinding("assessment-uncertain", "dependency-unknown")
+	resolved := makeFinding("assessment-resolved", "configuration-gap")
+	ps.findings.Add(present)
+	ps.findings.Add(uncertain)
+	ps.findings.Add(resolved)
+	presentBefore := ps.findings.Get(present.ID)
+	uncertainBefore := ps.findings.Get(uncertain.ID)
+
+	adapter := newPatrolFindingCreatorAdapterState(ps, state)
+	if err := adapter.AssessFinding(tools.PatrolFindingAssessmentInput{
+		FindingID: present.ID, Verdict: "present", Evidence: "health probe still fails", Reason: "current probe reconfirms the issue",
+	}); err != nil {
+		t.Fatalf("assess present: %v", err)
+	}
+	presentAfter := ps.findings.Get(present.ID)
+	if presentAfter.TimesRaised != presentBefore.TimesRaised+1 || presentAfter.Evidence != "health probe still fails" {
+		t.Fatalf("present assessment did not refresh finding: before=%+v after=%+v", presentBefore, presentAfter)
+	}
+
+	if err := adapter.AssessFinding(tools.PatrolFindingAssessmentInput{
+		FindingID: uncertain.ID, Verdict: "uncertain", Evidence: "dependency endpoint timed out", Reason: "no affirmative health result",
+	}); err != nil {
+		t.Fatalf("assess uncertain: %v", err)
+	}
+	uncertainAfter := ps.findings.Get(uncertain.ID)
+	if uncertainAfter.TimesRaised != uncertainBefore.TimesRaised || uncertainAfter.IsResolved() {
+		t.Fatalf("uncertain assessment must keep finding unchanged and active: before=%+v after=%+v", uncertainBefore, uncertainAfter)
+	}
+
+	if err := adapter.AssessFinding(tools.PatrolFindingAssessmentInput{
+		FindingID: resolved.ID, Verdict: "resolved", Evidence: "configuration now matches policy", Reason: "current configuration is compliant",
+	}); err != nil {
+		t.Fatalf("assess resolved: %v", err)
+	}
+	if got := ps.findings.Get(resolved.ID); got == nil || !got.IsResolved() {
+		t.Fatalf("resolved assessment did not close finding: %+v", got)
+	}
+
+	assessments := adapter.getAssessments()
+	if len(assessments) != 3 {
+		t.Fatalf("assessment count = %d, want 3", len(assessments))
+	}
+	if err := adapter.AssessFinding(tools.PatrolFindingAssessmentInput{
+		FindingID: present.ID, Verdict: "present", Evidence: "duplicate", Reason: "duplicate",
+	}); err == nil {
+		t.Fatal("expected duplicate terminal assessment to be rejected")
+	}
+}

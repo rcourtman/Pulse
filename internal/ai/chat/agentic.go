@@ -340,7 +340,7 @@ func isKnownGovernedWriteProgress(toolName string, input map[string]interface{},
 		return action == "write" || action == "append"
 	case agentcapabilities.PulseKnowledgeToolName:
 		return action == "remember" || action == "note" || action == "save"
-	case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolResolveFindingToolName:
+	case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolAssessFindingToolName, agentcapabilities.PatrolResolveFindingToolName:
 		return true
 	default:
 		return false

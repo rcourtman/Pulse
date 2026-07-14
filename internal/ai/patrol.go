@@ -106,6 +106,16 @@ type PatrolStatus struct {
 	BlockedAt        *time.Time         `json:"blocked_at,omitempty"`
 }
 
+// PatrolFindingAssessment is the model's explicit evidence-grounded verdict
+// for an existing finding during a specific Patrol run.
+type PatrolFindingAssessment struct {
+	FindingID  string    `json:"finding_id"`
+	Verdict    string    `json:"verdict"`
+	Evidence   string    `json:"evidence"`
+	Reason     string    `json:"reason"`
+	AssessedAt time.Time `json:"assessed_at"`
+}
+
 // PatrolRunRecord represents a single patrol check run
 type PatrolRunRecord struct {
 	ID                        string        `json:"id"`
@@ -134,17 +144,18 @@ type PatrolRunRecord struct {
 	PMGChecked        int `json:"pmg_checked"`
 	KubernetesChecked int `json:"kubernetes_checked"`
 	// Findings from this run
-	NewFindings      int      `json:"new_findings"`
-	ExistingFindings int      `json:"existing_findings"`
-	RejectedFindings int      `json:"rejected_findings"`
-	ResolvedFindings int      `json:"resolved_findings"`
-	AutoFixCount     int      `json:"auto_fix_count,omitempty"`
-	FindingsSummary  string   `json:"findings_summary"` // e.g., "All healthy" or "2 warnings, 1 critical"
-	FindingIDs       []string `json:"finding_ids"`      // IDs of findings from this run
-	ErrorCount       int      `json:"error_count"`
-	Status           string   `json:"status"` // "healthy", "issues_found", "error"
-	ErrorSummary     string   `json:"error_summary,omitempty"`
-	ErrorDetail      string   `json:"error_detail,omitempty"`
+	NewFindings        int                       `json:"new_findings"`
+	ExistingFindings   int                       `json:"existing_findings"`
+	RejectedFindings   int                       `json:"rejected_findings"`
+	ResolvedFindings   int                       `json:"resolved_findings"`
+	AutoFixCount       int                       `json:"auto_fix_count,omitempty"`
+	FindingsSummary    string                    `json:"findings_summary"` // e.g., "All healthy" or "2 warnings, 1 critical"
+	FindingIDs         []string                  `json:"finding_ids"`      // IDs of findings from this run
+	FindingAssessments []PatrolFindingAssessment `json:"finding_assessments,omitempty"`
+	ErrorCount         int                       `json:"error_count"`
+	Status             string                    `json:"status"` // "healthy", "issues_found", "error"
+	ErrorSummary       string                    `json:"error_summary,omitempty"`
+	ErrorDetail        string                    `json:"error_detail,omitempty"`
 	// Triage stats
 	TriageFlags      int  `json:"triage_flags"`                 // Number of deterministic flags found
 	TriageSkippedLLM bool `json:"triage_skipped_llm,omitempty"` // Legacy: true for older quiet-triage runs
@@ -158,47 +169,48 @@ type PatrolRunRecord struct {
 }
 
 type patrolRunRecordJSON struct {
-	ID                        string           `json:"id"`
-	Source                    string           `json:"source,omitempty"`
-	StartedAt                 time.Time        `json:"started_at"`
-	CompletedAt               time.Time        `json:"completed_at"`
-	DurationMs                int64            `json:"duration_ms"`
-	Type                      string           `json:"type"`
-	TriggerReason             string           `json:"trigger_reason,omitempty"`
-	ScopeResourceIDs          *[]string        `json:"scope_resource_ids,omitempty"`
-	EffectiveScopeResourceIDs *[]string        `json:"effective_scope_resource_ids,omitempty"`
-	ScopeResourceTypes        *[]string        `json:"scope_resource_types,omitempty"`
-	ScopeContext              string           `json:"scope_context,omitempty"`
-	AlertIdentifier           string           `json:"alert_identifier,omitempty"`
-	FindingID                 string           `json:"finding_id,omitempty"`
-	ResourcesChecked          int              `json:"resources_checked"`
-	NodesChecked              int              `json:"nodes_checked"`
-	GuestsChecked             int              `json:"guests_checked"`
-	DockerChecked             int              `json:"docker_checked"`
-	StorageChecked            int              `json:"storage_checked"`
-	HostsChecked              int              `json:"hosts_checked"`
-	TrueNASChecked            int              `json:"truenas_checked"`
-	PBSChecked                int              `json:"pbs_checked"`
-	PMGChecked                int              `json:"pmg_checked"`
-	KubernetesChecked         int              `json:"kubernetes_checked"`
-	NewFindings               int              `json:"new_findings"`
-	ExistingFindings          int              `json:"existing_findings"`
-	RejectedFindings          int              `json:"rejected_findings"`
-	ResolvedFindings          int              `json:"resolved_findings"`
-	AutoFixCount              int              `json:"auto_fix_count,omitempty"`
-	FindingsSummary           string           `json:"findings_summary"`
-	FindingIDs                []string         `json:"finding_ids"`
-	ErrorCount                int              `json:"error_count"`
-	Status                    string           `json:"status"`
-	ErrorSummary              string           `json:"error_summary,omitempty"`
-	ErrorDetail               string           `json:"error_detail,omitempty"`
-	TriageFlags               int              `json:"triage_flags"`
-	TriageSkippedLLM          bool             `json:"triage_skipped_llm,omitempty"`
-	AIAnalysis                string           `json:"ai_analysis,omitempty"`
-	InputTokens               int              `json:"input_tokens,omitempty"`
-	OutputTokens              int              `json:"output_tokens,omitempty"`
-	ToolCalls                 []ToolCallRecord `json:"tool_calls,omitempty"`
-	ToolCallCount             int              `json:"tool_call_count"`
+	ID                        string                    `json:"id"`
+	Source                    string                    `json:"source,omitempty"`
+	StartedAt                 time.Time                 `json:"started_at"`
+	CompletedAt               time.Time                 `json:"completed_at"`
+	DurationMs                int64                     `json:"duration_ms"`
+	Type                      string                    `json:"type"`
+	TriggerReason             string                    `json:"trigger_reason,omitempty"`
+	ScopeResourceIDs          *[]string                 `json:"scope_resource_ids,omitempty"`
+	EffectiveScopeResourceIDs *[]string                 `json:"effective_scope_resource_ids,omitempty"`
+	ScopeResourceTypes        *[]string                 `json:"scope_resource_types,omitempty"`
+	ScopeContext              string                    `json:"scope_context,omitempty"`
+	AlertIdentifier           string                    `json:"alert_identifier,omitempty"`
+	FindingID                 string                    `json:"finding_id,omitempty"`
+	ResourcesChecked          int                       `json:"resources_checked"`
+	NodesChecked              int                       `json:"nodes_checked"`
+	GuestsChecked             int                       `json:"guests_checked"`
+	DockerChecked             int                       `json:"docker_checked"`
+	StorageChecked            int                       `json:"storage_checked"`
+	HostsChecked              int                       `json:"hosts_checked"`
+	TrueNASChecked            int                       `json:"truenas_checked"`
+	PBSChecked                int                       `json:"pbs_checked"`
+	PMGChecked                int                       `json:"pmg_checked"`
+	KubernetesChecked         int                       `json:"kubernetes_checked"`
+	NewFindings               int                       `json:"new_findings"`
+	ExistingFindings          int                       `json:"existing_findings"`
+	RejectedFindings          int                       `json:"rejected_findings"`
+	ResolvedFindings          int                       `json:"resolved_findings"`
+	AutoFixCount              int                       `json:"auto_fix_count,omitempty"`
+	FindingsSummary           string                    `json:"findings_summary"`
+	FindingIDs                []string                  `json:"finding_ids"`
+	FindingAssessments        []PatrolFindingAssessment `json:"finding_assessments,omitempty"`
+	ErrorCount                int                       `json:"error_count"`
+	Status                    string                    `json:"status"`
+	ErrorSummary              string                    `json:"error_summary,omitempty"`
+	ErrorDetail               string                    `json:"error_detail,omitempty"`
+	TriageFlags               int                       `json:"triage_flags"`
+	TriageSkippedLLM          bool                      `json:"triage_skipped_llm,omitempty"`
+	AIAnalysis                string                    `json:"ai_analysis,omitempty"`
+	InputTokens               int                       `json:"input_tokens,omitempty"`
+	OutputTokens              int                       `json:"output_tokens,omitempty"`
+	ToolCalls                 []ToolCallRecord          `json:"tool_calls,omitempty"`
+	ToolCallCount             int                       `json:"tool_call_count"`
 }
 
 func canonicalPatrolAlertIdentifier(alertIdentifier string) string {
@@ -231,6 +243,7 @@ func normalizePatrolRunRecord(record PatrolRunRecord) PatrolRunRecord {
 	record.Source = normalizePatrolRunSource(record.Source)
 	record.AlertIdentifier = canonicalPatrolAlertIdentifier(record.AlertIdentifier)
 	record.FindingIDs = canonicalPatrolFindingIDs(record.FindingIDs)
+	record.FindingAssessments = append([]PatrolFindingAssessment(nil), record.FindingAssessments...)
 	record.ErrorSummary = strings.TrimSpace(redactPatrolRuntimeFailureDetail(record.ErrorSummary))
 	if strings.TrimSpace(record.ErrorDetail) != "" {
 		record.ErrorDetail = truncateString(summarizePatrolRuntimeFailureDetail(record.ErrorDetail), patrolRuntimeFailureDetailLimit)
@@ -317,6 +330,7 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 		AutoFixCount:              normalized.AutoFixCount,
 		FindingsSummary:           normalized.FindingsSummary,
 		FindingIDs:                normalized.FindingIDs,
+		FindingAssessments:        normalized.FindingAssessments,
 		ErrorCount:                normalized.ErrorCount,
 		Status:                    normalized.Status,
 		ErrorSummary:              normalized.ErrorSummary,
@@ -369,6 +383,7 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		AutoFixCount:              payload.AutoFixCount,
 		FindingsSummary:           payload.FindingsSummary,
 		FindingIDs:                payload.FindingIDs,
+		FindingAssessments:        payload.FindingAssessments,
 		ErrorCount:                payload.ErrorCount,
 		Status:                    payload.Status,
 		ErrorSummary:              payload.ErrorSummary,

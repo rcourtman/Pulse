@@ -450,6 +450,10 @@ func TestPatrolDetectionProfileEnforcesAllowlistedPulseState(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Content)
 	assert.NotContains(t, result.Content[0].Text, "Invocation blocked")
+	result, err = exec.registry.Execute(context.Background(), exec, agentcapabilities.PatrolAssessFindingToolName, map[string]interface{}{})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Content)
+	assert.NotContains(t, result.Content[0].Text, "Invocation blocked")
 
 	// Projection agrees: alerts offers only its read subactions.
 	for _, tool := range exec.registry.ListTools(exec.invocationPolicy()) {
@@ -479,6 +483,8 @@ func TestPatrolInvestigationProfileIsStructurallyReadOnly(t *testing.T) {
 	// No Pulse-state mutations either - not even the Patrol finding tools.
 	text = executeBlockedText(t, exec, "patrol_report_finding", map[string]interface{}{})
 	assert.Contains(t, text, "Invocation blocked")
+	text = executeBlockedText(t, exec, agentcapabilities.PatrolAssessFindingToolName, map[string]interface{}{})
+	assert.Contains(t, text, "Invocation blocked")
 	text = executeBlockedText(t, exec, "pulse_alerts", map[string]interface{}{"action": "dismiss", "alert_id": "a1"})
 	assert.Contains(t, text, "Invocation blocked")
 
@@ -494,6 +500,7 @@ func TestPatrolInvestigationProfileIsStructurallyReadOnly(t *testing.T) {
 		offered[tool.Name] = true
 	}
 	assert.False(t, offered[agentcapabilities.PatrolReportFindingToolName])
+	assert.False(t, offered[agentcapabilities.PatrolAssessFindingToolName])
 	assert.False(t, offered[agentcapabilities.PatrolResolveFindingToolName])
 	assert.True(t, offered[agentcapabilities.PulseQueryToolName])
 }

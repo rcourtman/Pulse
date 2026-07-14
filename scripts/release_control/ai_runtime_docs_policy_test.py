@@ -54,6 +54,13 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
             normalized_content,
         )
         self.assertIn("Pulse MCP", content)
+        self.assertIn("AI_PATROL_QUALIFICATION.md", content)
+        self.assertIn("Every active finding shown or returned to a Patrol run", content)
+        self.assertIn("Silence is not an all-clear signal", normalized_content)
+        self.assertIn(
+            "The Assistant model matrix below proves Assistant orchestration only",
+            normalized_content,
+        )
         self.assertIn("### Tool Inventory", content)
         self.assertIn("The Assistant tool list is registry-owned at runtime", content)
         self.assertIn(

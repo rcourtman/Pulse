@@ -8,7 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
-// registerPatrolTools registers the three patrol-specific tools.
+// registerPatrolTools registers the patrol-specific finding lifecycle tools.
 // These tools are only functional during a patrol run when patrolFindingCreator is set.
 func (e *PulseToolExecutor) registerPatrolTools() {
 	// patrol_report_finding — LLM calls this to create a finding
@@ -88,6 +88,51 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 		},
 	})
 
+	// patrol_assess_finding — LLM records an explicit verdict for a finding
+	// already present in the current Patrol context. This closes the lifecycle
+	// gap where models correctly avoided duplicate reports but Patrol then lost
+	// the fact that the issue was still present.
+	e.registry.registerBuiltin(RegisteredTool{
+		Definition: Tool{
+			Name: agentcapabilities.PatrolAssessFindingToolName,
+			Description: `Record the current verdict for an existing active Patrol finding after checking current evidence.
+
+Use present when the issue is independently reconfirmed, resolved only when current evidence supports closure, and uncertain when the available evidence cannot justify either conclusion. Every active finding presented in the Patrol context must receive one assessment. Do not use this tool for a new issue; use patrol_report_finding instead.
+
+Returns: {"ok": true, "finding_id": "...", "verdict": "present|resolved|uncertain"} on success.`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					agentcapabilities.FindingIDArgumentName: {
+						Type:        "string",
+						Description: "The active finding ID returned by patrol_get_findings",
+					},
+					"verdict": {
+						Type:        "string",
+						Description: "Current evidence-based verdict for this existing finding",
+						Enum:        []string{"present", "resolved", "uncertain"},
+					},
+					"evidence": {
+						Type:        "string",
+						Description: "Current data points, metrics, logs, or tool output supporting this verdict",
+					},
+					agentcapabilities.ReasonArgumentName: {
+						Type:        "string",
+						Description: "Concise explanation connecting the current evidence to the verdict",
+					},
+				},
+				Required: []string{agentcapabilities.FindingIDArgumentName, "verdict", "evidence", agentcapabilities.ReasonArgumentName},
+			},
+		},
+		Handler: handlePatrolAssessFinding,
+		Governance: ToolGovernance{
+			ActionMode:      ToolActionWrite,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "patrol-only; records an evidence-grounded verdict for an existing finding",
+			Summary:         "Reconfirms, resolves, or holds an existing Patrol finding as uncertain.",
+		},
+	})
+
 	// patrol_resolve_finding — LLM calls this to resolve an active finding
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
@@ -150,6 +195,64 @@ Returns a list of active findings with their IDs, severity, resource, and title.
 			Summary:         "Reads active patrol findings for deduplication and investigation context.",
 		},
 	})
+}
+
+func handlePatrolAssessFinding(_ context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+	creator := e.GetPatrolFindingCreator()
+	if creator == nil {
+		return NewTextResult("patrol_assess_finding is only available during a patrol run."), nil
+	}
+	if checker, ok := creator.(PatrolFindingsChecker); ok && !checker.HasCheckedFindings() {
+		return NewErrorResult(fmt.Errorf("call patrol_get_findings before assessing a finding")), nil
+	}
+
+	findingID, _ := args[agentcapabilities.FindingIDArgumentName].(string)
+	verdict, _ := args["verdict"].(string)
+	evidence, _ := args["evidence"].(string)
+	reason, _ := args[agentcapabilities.ReasonArgumentName].(string)
+	findingID = strings.TrimSpace(findingID)
+	verdict = strings.ToLower(strings.TrimSpace(verdict))
+	evidence = strings.TrimSpace(evidence)
+	reason = strings.TrimSpace(reason)
+
+	var missing []string
+	if findingID == "" {
+		missing = append(missing, agentcapabilities.FindingIDArgumentName)
+	}
+	if verdict == "" {
+		missing = append(missing, "verdict")
+	}
+	if evidence == "" {
+		missing = append(missing, "evidence")
+	}
+	if reason == "" {
+		missing = append(missing, agentcapabilities.ReasonArgumentName)
+	}
+	if len(missing) > 0 {
+		return NewErrorResult(fmt.Errorf("missing required fields: %s", strings.Join(missing, ", "))), nil
+	}
+	if verdict != "present" && verdict != "resolved" && verdict != "uncertain" {
+		return NewErrorResult(fmt.Errorf("invalid verdict %q: must be present, resolved, or uncertain", verdict)), nil
+	}
+
+	input := PatrolFindingAssessmentInput{
+		FindingID: findingID,
+		Verdict:   verdict,
+		Evidence:  evidence,
+		Reason:    reason,
+	}
+	assessor, ok := creator.(PatrolFindingAssessor)
+	if !ok {
+		return NewErrorResult(fmt.Errorf("patrol finding adapter does not support explicit assessments")), nil
+	}
+	if err := assessor.AssessFinding(input); err != nil {
+		return NewErrorResult(fmt.Errorf("failed to assess finding: %w", err)), nil
+	}
+	return NewJSONResult(map[string]interface{}{
+		"ok":                                    true,
+		agentcapabilities.FindingIDArgumentName: findingID,
+		"verdict":                               verdict,
+	}), nil
 }
 
 func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
@@ -280,8 +383,23 @@ func handlePatrolResolveFinding(_ context.Context, e *PulseToolExecutor, args ma
 		return NewErrorResult(fmt.Errorf("missing required field: %s", agentcapabilities.ReasonArgumentName)), nil
 	}
 
-	if err := creator.ResolveFinding(findingID, reason); err != nil {
-		return NewErrorResult(fmt.Errorf("failed to resolve finding: %w", err)), nil
+	var resolveErr error
+	if assessor, ok := creator.(PatrolFindingAssessor); ok {
+		// Preserve this legacy tool as an alias onto the explicit assessment
+		// lifecycle so every runtime resolution is persisted with a terminal
+		// verdict. Narrow extension adapters without assessment support retain
+		// the original fail-closed resolution call.
+		resolveErr = assessor.AssessFinding(PatrolFindingAssessmentInput{
+			FindingID: findingID,
+			Verdict:   "resolved",
+			Evidence:  reason,
+			Reason:    reason,
+		})
+	} else {
+		resolveErr = creator.ResolveFinding(findingID, reason)
+	}
+	if resolveErr != nil {
+		return NewErrorResult(fmt.Errorf("failed to resolve finding: %w", resolveErr)), nil
 	}
 
 	result := map[string]interface{}{

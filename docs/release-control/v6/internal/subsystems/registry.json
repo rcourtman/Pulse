@@ -1562,16 +1562,19 @@
       "lane": "L6",
       "contract": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
       "owned_prefixes": [
+        "cmd/patrol-qualify/",
         "cmd/pulse-mcp/",
         "frontend-modern/src/components/AI/Chat/",
         "internal/agentcapabilities/",
         "internal/ai/",
-        "internal/mutationregistry/"
+        "internal/mutationregistry/",
+        "tests/qualification/patrol/"
       ],
       "owned_files": [
         "cmd/pulse-mcp/main.go",
         "cmd/pulse-mcp/README.md",
         "docs/AI.md",
+        "docs/AI_PATROL_QUALIFICATION.md",
         "frontend-modern/src/api/agentCapabilities.ts",
         "frontend-modern/src/api/ai.ts",
         "frontend-modern/src/api/aiChat.ts",
@@ -1604,6 +1607,23 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "patrol-qualification",
+            "label": "Patrol independent-ground-truth qualification, replay, and publication proof",
+            "match_prefixes": [
+              "cmd/patrol-qualify/",
+              "internal/ai/qualification/",
+              "tests/qualification/patrol/"
+            ],
+            "match_files": [
+              "docs/AI_PATROL_QUALIFICATION.md"
+            ],
+            "allow_same_subsystem_tests": true,
+            "test_prefixes": [
+              "internal/ai/qualification/"
+            ],
+            "exact_files": []
+          },
           {
             "id": "canonical-mutation-registry",
             "label": "closed canonical mutation registry and runtime candidate audit proof",

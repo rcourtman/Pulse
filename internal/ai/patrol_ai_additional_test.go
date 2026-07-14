@@ -299,3 +299,16 @@ func TestPatrolService_SeedPreviousRun(t *testing.T) {
 		}
 	}
 }
+
+func TestPatrolMissingAssessmentIDsIncludesSeededAndQueriedFindings(t *testing.T) {
+	result := &AIAnalysisResult{
+		SeededFindingIDs:  []string{"seeded", "resolved-direct", "duplicate"},
+		QueriedFindingIDs: []string{"queried", "duplicate"},
+		Assessments:       []PatrolFindingAssessment{{FindingID: "seeded", Verdict: "present"}},
+		ResolvedIDs:       []string{"resolved-direct"},
+	}
+	missing := patrolMissingAssessmentIDs(result)
+	if len(missing) != 2 || missing[0] != "duplicate" || missing[1] != "queried" {
+		t.Fatalf("missing assessments = %v, want [duplicate queried]", missing)
+	}
+}

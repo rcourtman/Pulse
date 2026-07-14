@@ -440,13 +440,15 @@ type chatServiceExecutorAccessor interface {
 // patrolFindingCreatorAdapter implements tools.PatrolFindingCreator by wrapping
 // the PatrolService's existing FindingsStore and recordFinding method.
 type patrolFindingCreatorAdapter struct {
-	patrol          *PatrolService
-	snap            patrolRuntimeState
-	findingsMu      sync.Mutex
-	findings        []*Finding
-	resolvedIDs     []string
-	rejectedCount   int
-	checkedFindings bool
+	patrol            *PatrolService
+	snap              patrolRuntimeState
+	findingsMu        sync.Mutex
+	findings          []*Finding
+	assessments       []PatrolFindingAssessment
+	queriedFindingIDs []string
+	resolvedIDs       []string
+	rejectedCount     int
+	checkedFindings   bool
 }
 
 func newPatrolFindingCreatorAdapterState(p *PatrolService, snap patrolRuntimeState) *patrolFindingCreatorAdapter {
@@ -553,11 +555,93 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 	isNew := a.patrol.recordFinding(finding)
 
 	// Track for run stats
-	a.findingsMu.Lock()
-	a.findings = append(a.findings, finding)
-	a.findingsMu.Unlock()
+	a.trackCollectedFinding(finding)
 
 	return id, isNew, nil
+}
+
+func (a *patrolFindingCreatorAdapter) findingInCurrentScope(finding *Finding) bool {
+	if finding == nil {
+		return false
+	}
+	scopedResources := patrolRuntimeKnownResources(a.snap)
+	return len(scopedResources) == 0 || scopedResources[finding.ResourceID] || scopedResources[finding.ResourceName]
+}
+
+func (a *patrolFindingCreatorAdapter) trackCollectedFinding(finding *Finding) {
+	if finding == nil {
+		return
+	}
+	a.findingsMu.Lock()
+	defer a.findingsMu.Unlock()
+	for index, existing := range a.findings {
+		if existing != nil && existing.ID == finding.ID {
+			a.findings[index] = finding
+			return
+		}
+	}
+	a.findings = append(a.findings, finding)
+}
+
+// AssessFinding records the model's explicit terminal verdict for an existing
+// finding in this run. Present refreshes the durable finding heartbeat and
+// current evidence, resolved delegates to the existing fail-closed verifier,
+// and uncertain remains a run-owned assessment without mutating the finding.
+func (a *patrolFindingCreatorAdapter) AssessFinding(input tools.PatrolFindingAssessmentInput) error {
+	finding := a.patrol.findings.Get(input.FindingID)
+	if finding == nil || !finding.IsActive() {
+		return fmt.Errorf("finding %s not found or no longer active", input.FindingID)
+	}
+	if !a.findingInCurrentScope(finding) {
+		return fmt.Errorf("finding %s is outside the current patrol scope", input.FindingID)
+	}
+
+	verdict := strings.ToLower(strings.TrimSpace(input.Verdict))
+	assessment := PatrolFindingAssessment{
+		FindingID:  strings.TrimSpace(input.FindingID),
+		Verdict:    verdict,
+		Evidence:   strings.TrimSpace(input.Evidence),
+		Reason:     strings.TrimSpace(input.Reason),
+		AssessedAt: time.Now().UTC(),
+	}
+	a.findingsMu.Lock()
+	for _, existing := range a.assessments {
+		if existing.FindingID == assessment.FindingID {
+			a.findingsMu.Unlock()
+			return fmt.Errorf("finding %s already has verdict %s in this patrol run", assessment.FindingID, existing.Verdict)
+		}
+	}
+	a.findingsMu.Unlock()
+
+	switch verdict {
+	case "present":
+		refreshed := *finding
+		refreshed.Evidence = assessment.Evidence
+		if a.patrol.recordFinding(&refreshed) {
+			return fmt.Errorf("finding %s unexpectedly became a new finding during assessment", assessment.FindingID)
+		}
+		if stored := a.patrol.findings.Get(assessment.FindingID); stored != nil {
+			a.trackCollectedFinding(stored)
+		}
+	case "resolved":
+		if err := a.ResolveFinding(assessment.FindingID, assessment.Reason+": "+assessment.Evidence); err != nil {
+			return err
+		}
+	case "uncertain":
+		// Intentionally no finding mutation. The run-owned assessment protects
+		// this ID from absence-based stale reconciliation and keeps it active.
+	default:
+		return fmt.Errorf("invalid finding assessment verdict %q", verdict)
+	}
+
+	a.findingsMu.Lock()
+	a.assessments = append(a.assessments, assessment)
+	a.findingsMu.Unlock()
+	log.Info().
+		Str("finding_id", assessment.FindingID).
+		Str("verdict", assessment.Verdict).
+		Msg("AI Patrol: Existing finding assessed")
+	return nil
 }
 
 // actionabilityThreshold returns the threshold below which a metric finding is rejected as noise.
@@ -829,6 +913,18 @@ func (a *patrolFindingCreatorAdapter) GetActiveFindings(resourceID, minSeverity 
 			Description:  f.Description,
 			DetectedAt:   f.DetectedAt.Format("2006-01-02 15:04"),
 		})
+		a.findingsMu.Lock()
+		seen := false
+		for _, findingID := range a.queriedFindingIDs {
+			if findingID == f.ID {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			a.queriedFindingIDs = append(a.queriedFindingIDs, f.ID)
+		}
+		a.findingsMu.Unlock()
 	}
 	return result
 }
@@ -872,6 +968,32 @@ func (a *patrolFindingCreatorAdapter) getResolvedIDs() []string {
 	defer a.findingsMu.Unlock()
 	result := make([]string, len(a.resolvedIDs))
 	copy(result, a.resolvedIDs)
+	return result
+}
+
+func (a *patrolFindingCreatorAdapter) getAssessments() []PatrolFindingAssessment {
+	a.findingsMu.Lock()
+	defer a.findingsMu.Unlock()
+	result := make([]PatrolFindingAssessment, len(a.assessments))
+	copy(result, a.assessments)
+	return result
+}
+
+func (a *patrolFindingCreatorAdapter) getAssessedFindingIDs() []string {
+	a.findingsMu.Lock()
+	defer a.findingsMu.Unlock()
+	result := make([]string, 0, len(a.assessments))
+	for _, assessment := range a.assessments {
+		result = append(result, assessment.FindingID)
+	}
+	return result
+}
+
+func (a *patrolFindingCreatorAdapter) getQueriedFindingIDs() []string {
+	a.findingsMu.Lock()
+	defer a.findingsMu.Unlock()
+	result := make([]string, len(a.queriedFindingIDs))
+	copy(result, a.queriedFindingIDs)
 	return result
 }
 

@@ -29,7 +29,7 @@ func TestCanonicalToolGovernanceForAssistantSurfaceMirrorsRegisteredRegistry(t *
 	filtered := make([]ToolGovernanceDescriptor, 0, len(registryGovernance))
 	for _, tool := range registryGovernance {
 		switch tool.Name {
-		case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName:
+		case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolAssessFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName:
 			continue
 		default:
 			filtered = append(filtered, tool)
@@ -88,7 +88,7 @@ func TestCanonicalToolGovernanceForSurfaceFiltersAssistantOnlyRuntime(t *testing
 	foundPatrolToolInCore := false
 	for _, tool := range core {
 		switch tool.Name {
-		case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName:
+		case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolAssessFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName:
 			foundPatrolToolInCore = true
 		}
 	}
@@ -98,7 +98,7 @@ func TestCanonicalToolGovernanceForSurfaceFiltersAssistantOnlyRuntime(t *testing
 
 	for _, tool := range assistant {
 		switch tool.Name {
-		case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName:
+		case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolAssessFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName:
 			t.Fatalf("Assistant fallback governance exposed Patrol runtime tool %s", tool.Name)
 		}
 	}

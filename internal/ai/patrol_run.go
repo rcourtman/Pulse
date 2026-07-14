@@ -520,6 +520,11 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 			runStats.rejectedFindings = aiResult.RejectedFindings
 			runStats.triageFlags = aiResult.TriageFlags
 			runStats.triageSkippedLLM = aiResult.TriageSkippedLLM
+			if missing := patrolMissingAssessmentIDs(aiResult); len(missing) > 0 {
+				runStats.errors++
+				runStats.errorSummary = "Patrol finding assessment incomplete"
+				runStats.errorDetail = fmt.Sprintf("No explicit verdict was accepted for active finding IDs: %s", strings.Join(missing, ", "))
+			}
 
 			if !aiResult.TriageSkippedLLM {
 				runStats.runtimeResolved = p.resolvePatrolRuntimeFailureFinding("full_patrol_success")
@@ -559,8 +564,9 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		// Auto-resolve stale findings: active findings that were presented to the LLM
 		// in seed context but were neither re-reported nor explicitly resolved.
 		// Only runs after successful full patrols (not scoped).
+		observedIDs := append(append([]string{}, runStats.aiAnalysis.ReportedIDs...), assessmentFindingIDs(runStats.aiAnalysis.Assessments)...)
 		autoResolved := p.reconcileStaleFindings(
-			runStats.aiAnalysis.ReportedIDs,
+			observedIDs,
 			runStats.aiAnalysis.ResolvedIDs,
 			runStats.aiAnalysis.SeededFindingIDs,
 			runStats.errors > 0,
@@ -595,7 +601,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	duration := time.Since(start)
 	completedAt := time.Now()
 
-	// Build findings summary string
+	// Build findings summary string.
 	summary := p.findings.GetSummary()
 	var findingsSummaryStr string
 	var status string
@@ -652,7 +658,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		ResolvedFindings:  resolvedCount,
 		AutoFixCount:      0,
 		FindingsSummary:   findingsSummaryStr,
-		FindingIDs:        runStats.findingIDs,
+		FindingIDs:        patrolRunFindingIDs(runStats.findingIDs, assessmentsForRun(runStats.aiAnalysis)),
 		ErrorCount:        runStats.errors,
 		Status:            status,
 		ErrorSummary:      runStats.errorSummary,
@@ -670,12 +676,14 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	// Add AI analysis details if available
 	if runStats.aiAnalysis != nil {
 		runRecord.AIAnalysis = patrolRunAIAnalysisForRecord(runStats.aiAnalysis, patrolRunAnalysisRecordContext{
-			ResourcesChecked: runStats.resourceCount,
-			NewFindings:      runStats.newFindings,
-			ExistingFindings: runStats.existingFindings,
-			ResolvedFindings: resolvedCount,
-			ErrorCount:       runStats.errors,
+			ResourcesChecked:  runStats.resourceCount,
+			NewFindings:       runStats.newFindings,
+			ExistingFindings:  runStats.existingFindings,
+			ResolvedFindings:  resolvedCount,
+			UncertainFindings: patrolUncertainAssessmentCount(runStats.aiAnalysis.Assessments),
+			ErrorCount:        runStats.errors,
 		})
+		runRecord.FindingAssessments = append([]PatrolFindingAssessment(nil), runStats.aiAnalysis.Assessments...)
 		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
 		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
 		runRecord.TriageFlags = runStats.triageFlags
@@ -733,6 +741,27 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		Int("warning", summary.Warning).
 		Int("watch", summary.Watch).
 		Msg("AI Patrol: Completed patrol run")
+}
+
+func patrolFindingSummaryForState(findings []*Finding, state patrolRuntimeState) FindingsSummary {
+	known := patrolRuntimeKnownResources(state)
+	var summary FindingsSummary
+	for _, finding := range findings {
+		if finding == nil || (len(known) > 0 && !known[finding.ResourceID] && !known[finding.ResourceName]) {
+			continue
+		}
+		switch finding.Severity {
+		case FindingSeverityCritical:
+			summary.Critical++
+		case FindingSeverityWarning:
+			summary.Warning++
+		case FindingSeverityWatch:
+			summary.Watch++
+		case FindingSeverityInfo:
+			summary.Info++
+		}
+	}
+	return summary
 }
 
 // runScopedPatrol runs a patrol on a filtered subset of resources.
@@ -823,10 +852,21 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	// Get current state
 	if !p.hasPatrolRuntimeInputs() {
 		log.Warn().Msg("AI Patrol: No runtime state available for scoped patrol")
+		p.recordScopedPatrolScopeFailure(start, runID, scope, PatrolScopeResolution{RequestedResourceIDs: append([]string(nil), scope.ResourceIDs...)}, "Patrol runtime state unavailable", "No normal collection state was available for the requested scoped Patrol run.")
 		return
 	}
 
 	fullState := p.currentPatrolRuntimeState()
+	requestedScope := scope
+	resolvedScope, scopeResolution := resolvePatrolScopeState(fullState, scope)
+	if len(scopeResolution.UnmatchedResourceIDs) > 0 || len(scopeResolution.AmbiguousResourceIDs) > 0 ||
+		(len(scopeResolution.RequestedResourceIDs) > 0 && len(scopeResolution.ResolvedResourceIDs) == 0) {
+		p.recordScopedPatrolScopeFailure(start, runID, requestedScope, scopeResolution,
+			"Patrol scope could not be resolved",
+			"One or more requested resource identities did not resolve exactly to the current Patrol collection state.")
+		return
+	}
+	scope = resolvedScope
 
 	// Filter state based on scope
 	filteredState := p.filterStateByScopeState(fullState, scope)
@@ -866,6 +906,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 			Strs("requested_types", scope.ResourceTypes).
 			Int("effective_scope_count", len(effectiveScopeIDs)).
 			Msg("AI Patrol: No resources matched scope filter")
+		p.recordScopedPatrolScopeFailure(start, runID, scope, scopeResolution, "No resources matched requested Patrol scope", "The requested resource identities did not resolve to any enabled resource in the current normal Patrol collection state.")
 		return
 	}
 
@@ -949,6 +990,11 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 			runStats.rejectedFindings = aiResult.RejectedFindings
 			runStats.triageFlags = aiResult.TriageFlags
 			runStats.triageSkippedLLM = aiResult.TriageSkippedLLM
+			if missing := patrolMissingAssessmentIDs(aiResult); len(missing) > 0 {
+				runStats.errors++
+				runStats.errorSummary = "Patrol finding assessment incomplete"
+				runStats.errorDetail = fmt.Sprintf("No explicit verdict was accepted for active finding IDs: %s", strings.Join(missing, ", "))
+			}
 			if !aiResult.TriageSkippedLLM {
 				runStats.runtimeResolved = p.resolvePatrolRuntimeFailureFinding("scoped_patrol_success")
 			}
@@ -971,8 +1017,10 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	duration := time.Since(start)
 	completedAt := time.Now()
 
-	// Build findings summary string
-	summary := p.findings.GetSummary()
+	// Build a scope-owned findings summary. Findings on unrelated fleet
+	// resources must never make this targeted run appear unhealthy, nor may
+	// their absence make the scoped result look complete.
+	summary := patrolFindingSummaryForState(p.findings.GetActive(FindingSeverityWarning), filteredState)
 	var findingsSummaryStr string
 	var status string
 	totalActive := summary.Critical + summary.Warning
@@ -1016,7 +1064,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		DurationMs:                duration.Milliseconds(),
 		Type:                      "scoped",
 		TriggerReason:             string(scope.Reason),
-		ScopeResourceIDs:          scope.ResourceIDs,
+		ScopeResourceIDs:          scopeResolution.RequestedResourceIDs,
 		EffectiveScopeResourceIDs: effectiveScopeIDs,
 		ScopeResourceTypes:        scope.ResourceTypes,
 		ScopeContext:              scope.Context,
@@ -1037,7 +1085,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		RejectedFindings:          runStats.rejectedFindings,
 		ResolvedFindings:          resolvedFindings,
 		FindingsSummary:           findingsSummaryStr,
-		FindingIDs:                runStats.findingIDs,
+		FindingIDs:                patrolRunFindingIDs(runStats.findingIDs, assessmentsForRun(runStats.aiAnalysis)),
 		ErrorCount:                runStats.errors,
 		Status:                    status,
 		ErrorSummary:              runStats.errorSummary,
@@ -1046,12 +1094,14 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 
 	if runStats.aiAnalysis != nil {
 		runRecord.AIAnalysis = patrolRunAIAnalysisForRecord(runStats.aiAnalysis, patrolRunAnalysisRecordContext{
-			ResourcesChecked: runStats.resourceCount,
-			NewFindings:      runStats.newFindings,
-			ExistingFindings: runStats.existingFindings,
-			ResolvedFindings: resolvedFindings,
-			ErrorCount:       runStats.errors,
+			ResourcesChecked:  runStats.resourceCount,
+			NewFindings:       runStats.newFindings,
+			ExistingFindings:  runStats.existingFindings,
+			ResolvedFindings:  resolvedFindings,
+			UncertainFindings: patrolUncertainAssessmentCount(runStats.aiAnalysis.Assessments),
+			ErrorCount:        runStats.errors,
 		})
+		runRecord.FindingAssessments = append([]PatrolFindingAssessment(nil), runStats.aiAnalysis.Assessments...)
 		runRecord.InputTokens = runStats.aiAnalysis.InputTokens
 		runRecord.OutputTokens = runStats.aiAnalysis.OutputTokens
 		runRecord.TriageFlags = runStats.triageFlags
@@ -1074,7 +1124,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	p.runHistoryStore.Add(runRecord)
 
 	log.Info().
-		Strs("requested_ids", scope.ResourceIDs).
+		Strs("requested_ids", scopeResolution.RequestedResourceIDs).
 		Strs("requested_types", scope.ResourceTypes).
 		Strs("effective_scope_ids", patrolLogResourceIDs(effectiveScopeIDs)).
 		Int("effective_scope_count", len(effectiveScopeIDs)).
@@ -1082,6 +1132,38 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		Int("resources", resourceCount).
 		Str("reason", string(scope.Reason)).
 		Msg("AI Patrol: Scoped patrol complete")
+}
+
+func (p *PatrolService) recordScopedPatrolScopeFailure(start time.Time, runID string, scope PatrolScope, resolution PatrolScopeResolution, summary, detail string) {
+	completedAt := time.Now()
+	record := PatrolRunRecord{
+		ID:                        runID,
+		StartedAt:                 start,
+		CompletedAt:               completedAt,
+		Duration:                  completedAt.Sub(start),
+		DurationMs:                completedAt.Sub(start).Milliseconds(),
+		Type:                      "scoped",
+		TriggerReason:             string(scope.Reason),
+		ScopeResourceIDs:          append([]string(nil), resolution.RequestedResourceIDs...),
+		EffectiveScopeResourceIDs: append([]string(nil), resolution.EffectiveResourceIDs...),
+		ScopeResourceTypes:        append([]string(nil), scope.ResourceTypes...),
+		ScopeContext:              scope.Context,
+		AlertIdentifier:           scope.AlertIdentifier,
+		FindingID:                 scope.FindingID,
+		FindingIDs:                []string{},
+		FindingsSummary:           "Analysis incomplete (scope resolution failed)",
+		ErrorCount:                1,
+		Status:                    "error",
+		ErrorSummary:              summary,
+		ErrorDetail:               detail,
+	}
+	p.mu.Lock()
+	p.lastActivity = completedAt
+	p.lastDuration = record.Duration
+	p.resourcesChecked = 0
+	p.errorCount = 1
+	p.mu.Unlock()
+	p.runHistoryStore.Add(record)
 }
 
 func patrolLogResourceIDs(ids []string) []string {
@@ -1099,6 +1181,7 @@ type patrolScopeMatcher struct {
 	typeSet       map[string]bool
 	hasIDs        bool
 	hasTypes      bool
+	identityOnly  bool
 }
 
 func newPatrolScopeMatcher(scope PatrolScope) patrolScopeMatcher {
@@ -1138,6 +1221,7 @@ func newPatrolScopeMatcher(scope PatrolScope) patrolScopeMatcher {
 		typeSet:       typeSet,
 		hasIDs:        len(resourceIDSet) > 0,
 		hasTypes:      len(typeSet) > 0,
+		identityOnly:  scope.resolvedIdentityOnly,
 	}
 }
 
@@ -1156,15 +1240,23 @@ func (m patrolScopeMatcher) matchesType(candidates ...string) bool {
 	return false
 }
 
-func (m patrolScopeMatcher) matchesID(candidates ...string) bool {
+func (m patrolScopeMatcher) matchesResource(ids []string, aliases ...string) bool {
 	if !m.hasIDs {
 		return true
 	}
-	for _, candidate := range candidates {
+	for _, candidate := range ids {
 		if candidate == "" {
 			continue
 		}
 		if m.resourceIDSet[candidate] {
+			return true
+		}
+	}
+	if m.identityOnly {
+		return false
+	}
+	for _, candidate := range aliases {
+		if candidate != "" && m.resourceIDSet[candidate] {
 			return true
 		}
 	}
@@ -1219,7 +1311,7 @@ func scopePatrolDockerHost(d models.DockerHost, matcher patrolScopeMatcher) (mod
 		return models.DockerHost{}, nil, false
 	}
 
-	hostMatches := matcher.matchesID(d.ID, patrolDockerScopeName(d), d.Hostname, d.DisplayName, d.CustomDisplayName)
+	hostMatches := matcher.matchesResource([]string{d.ID}, patrolDockerScopeName(d), d.Hostname, d.DisplayName, d.CustomDisplayName)
 	if !matcher.hasIDs {
 		included := make([]string, 0, len(d.Containers)+1)
 		if matcher.typeSet["docker-host"] || !matcher.hasTypes {
@@ -1235,7 +1327,7 @@ func scopePatrolDockerHost(d models.DockerHost, matcher patrolScopeMatcher) (mod
 
 	matchedContainers := make([]models.DockerContainer, 0)
 	for _, c := range d.Containers {
-		if matcher.matchesID(c.ID, c.Name) {
+		if matcher.matchesResource([]string{c.ID}, c.Name) {
 			matchedContainers = append(matchedContainers, c)
 		}
 	}
@@ -1332,13 +1424,13 @@ func scopePatrolPBSInstance(pbs models.PBSInstance, matcher patrolScopeMatcher) 
 	if pbsName == "" {
 		pbsName = pbs.Host
 	}
-	pbsMatches := matcher.matchesID(pbs.ID, pbs.Name, pbsName, pbs.Host)
+	pbsMatches := matcher.matchesResource([]string{pbs.ID}, pbs.Name, pbsName, pbs.Host)
 	if !matcher.hasIDs {
 		return true
 	}
 	if !pbsMatches {
 		for _, ds := range pbs.Datastores {
-			if matcher.matchesID(pbs.ID+":"+ds.Name, ds.Name) {
+			if matcher.matchesResource([]string{pbs.ID + ":" + ds.Name}, ds.Name) {
 				pbsMatches = true
 				break
 			}
@@ -1346,7 +1438,7 @@ func scopePatrolPBSInstance(pbs models.PBSInstance, matcher patrolScopeMatcher) 
 	}
 	if !pbsMatches {
 		for _, job := range pbs.BackupJobs {
-			if matcher.matchesID(pbs.ID+":job:"+job.ID, job.ID) {
+			if matcher.matchesResource([]string{pbs.ID + ":job:" + job.ID}, job.ID) {
 				pbsMatches = true
 				break
 			}
@@ -1354,7 +1446,7 @@ func scopePatrolPBSInstance(pbs models.PBSInstance, matcher patrolScopeMatcher) 
 	}
 	if !pbsMatches {
 		for _, job := range pbs.VerifyJobs {
-			if matcher.matchesID(pbs.ID+":verify:"+job.ID, job.ID) {
+			if matcher.matchesResource([]string{pbs.ID + ":verify:" + job.ID}, job.ID) {
 				pbsMatches = true
 				break
 			}
@@ -1364,35 +1456,35 @@ func scopePatrolPBSInstance(pbs models.PBSInstance, matcher patrolScopeMatcher) 
 }
 
 func scopePatrolNode(n models.Node, matcher patrolScopeMatcher) bool {
-	return matcher.matchesType("node") && matcher.matchesID(n.ID, n.Name)
+	return matcher.matchesType("node") && matcher.matchesResource([]string{n.ID}, n.Name)
 }
 
 func scopePatrolVM(vm models.VM, matcher patrolScopeMatcher) bool {
-	return matcher.matchesType("vm") && matcher.matchesID(vm.ID, vm.Name)
+	return matcher.matchesType("vm") && matcher.matchesResource([]string{vm.ID}, vm.Name)
 }
 
 func scopePatrolContainer(ct models.Container, matcher patrolScopeMatcher) bool {
-	return matcher.matchesType("system-container") && matcher.matchesID(ct.ID, ct.Name)
+	return matcher.matchesType("system-container") && matcher.matchesResource([]string{ct.ID}, ct.Name)
 }
 
 func scopePatrolStorage(storage models.Storage, matcher patrolScopeMatcher) bool {
-	return matcher.matchesType("storage") && matcher.matchesID(storage.ID, storage.Name)
+	return matcher.matchesType("storage") && matcher.matchesResource([]string{storage.ID}, storage.Name)
 }
 
 func scopePatrolPhysicalDisk(disk models.PhysicalDisk, matcher patrolScopeMatcher) bool {
-	return matcher.matchesType("physical_disk") && matcher.matchesID(disk.ID, disk.DevPath, disk.Model)
+	return matcher.matchesType("physical_disk") && matcher.matchesResource([]string{disk.ID, disk.DevPath}, disk.Model)
 }
 
 func scopePatrolPMGInstance(pmg models.PMGInstance, matcher patrolScopeMatcher) bool {
-	return matcher.matchesType("pmg") && matcher.matchesID(pmg.ID, pmg.Name, pmg.Host)
+	return matcher.matchesType("pmg") && matcher.matchesResource([]string{pmg.ID}, pmg.Name, pmg.Host)
 }
 
 func scopePatrolHost(h models.Host, matcher patrolScopeMatcher) bool {
-	return matcher.matchesType("agent") && matcher.matchesID(h.ID, h.DisplayName, h.Hostname)
+	return matcher.matchesType("agent") && matcher.matchesResource([]string{h.ID}, h.DisplayName, h.Hostname)
 }
 
 func scopePatrolKubernetesCluster(k models.KubernetesCluster, matcher patrolScopeMatcher) bool {
-	return matcher.matchesType("k8s-cluster") && matcher.matchesID(k.ID, patrolKubernetesScopeName(k))
+	return matcher.matchesType("k8s-cluster") && matcher.matchesResource([]string{k.ID}, patrolKubernetesScopeName(k))
 }
 
 func collectPatrolScopedNodes(nodes []models.Node, matcher patrolScopeMatcher) ([]models.Node, []string) {
@@ -1618,7 +1710,7 @@ func copyScopedPatrolMetadata(dst *patrolRuntimeState, snap patrolRuntimeState, 
 	dst.PBSBackups = collectPatrolScopedPBSBackups(snap.PBSBackups, includedGuestVMIDs)
 }
 
-func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope PatrolScope) patrolRuntimeState {
+func filterPatrolStateByScopeState(snap patrolRuntimeState, scope PatrolScope) patrolRuntimeState {
 	matcher := newPatrolScopeMatcher(scope)
 	filterState := newPatrolScopedFilterState(snap)
 
@@ -1671,6 +1763,10 @@ func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope P
 	copyScopedPatrolMetadata(&filterState.filtered, snap, filterState.includedResourceIDs, filterState.includedGuestVMIDs)
 
 	return filterState.filtered.withDerivedProviders()
+}
+
+func (p *PatrolService) filterStateByScopeState(snap patrolRuntimeState, scope PatrolScope) patrolRuntimeState {
+	return filterPatrolStateByScopeState(snap, scope)
 }
 
 // GetStatus returns the current patrol status

@@ -50,6 +50,7 @@ func TestPulseIntelligenceToolNameConstants(t *testing.T) {
 		"PulseGetBaselinesToolName":          PulseGetBaselinesToolName,
 		"PulseGetPatternsToolName":           PulseGetPatternsToolName,
 		"PatrolGetFindingsToolName":          PatrolGetFindingsToolName,
+		"PatrolAssessFindingToolName":        PatrolAssessFindingToolName,
 		"PatrolReportFindingToolName":        PatrolReportFindingToolName,
 		"PatrolResolveFindingToolName":       PatrolResolveFindingToolName,
 	}
@@ -81,6 +82,7 @@ func TestPulseIntelligenceToolNameConstants(t *testing.T) {
 		"PulseGetBaselinesToolName":          "pulse_get_baselines",
 		"PulseGetPatternsToolName":           "pulse_get_patterns",
 		"PatrolGetFindingsToolName":          "patrol_get_findings",
+		"PatrolAssessFindingToolName":        "patrol_assess_finding",
 		"PatrolReportFindingToolName":        "patrol_report_finding",
 		"PatrolResolveFindingToolName":       "patrol_resolve_finding",
 	}
@@ -128,6 +130,7 @@ func TestClassifyToolCallUsesSharedSafetyClassification(t *testing.T) {
 		{name: "legacy fetch url reads", toolName: LegacyAssistantFetchURLToolName, want: ToolCallKindRead},
 		{name: "legacy set url writes", toolName: LegacyAssistantSetResourceURLToolName, want: ToolCallKindWrite},
 		{name: "patrol findings read", toolName: "patrol_get_findings", want: ToolCallKindRead},
+		{name: "patrol finding assessment", toolName: "patrol_assess_finding", want: ToolCallKindWrite},
 		{name: "patrol report writes", toolName: "patrol_report_finding", want: ToolCallKindWrite},
 		{name: "unknown defaults write", toolName: "future_tool", want: ToolCallKindWrite},
 		{name: "generic action read", toolName: "future_tool", args: map[string]interface{}{"action": "inspect"}, want: ToolCallKindRead},

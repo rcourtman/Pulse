@@ -334,13 +334,19 @@ func TestIntegration_StaleFindingReconciliation(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	// The finding should have been auto-resolved by reconcileStaleFindings
+	// Silence is no longer interpreted as recovery. Without an explicit
+	// assessment, the finding remains active and the run records an incomplete
+	// lifecycle error instead of claiming all clear.
 	stored := ps.findings.Get(preSeedFinding.ID)
 	if stored == nil {
 		t.Fatal("expected finding to still exist in store (resolved, not deleted)")
 	}
-	if !stored.IsResolved() {
-		t.Fatal("expected pre-seeded finding to be auto-resolved after patrol didn't re-report it")
+	if stored.IsResolved() {
+		t.Fatal("expected pre-seeded finding to remain active when Patrol omitted its required assessment")
+	}
+	runs := ps.runHistoryStore.GetRecent(1)
+	if len(runs) != 1 || runs[0].ErrorCount == 0 {
+		t.Fatalf("expected incomplete finding assessment to be durable in the run record, got %+v", runs)
 	}
 }
 

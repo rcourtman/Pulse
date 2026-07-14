@@ -29,17 +29,19 @@ import (
 
 // AIAnalysisResult contains the results of an AI analysis
 type AIAnalysisResult struct {
-	Response         string     // The AI's raw response text
-	Findings         []*Finding // Parsed findings from the response
-	RejectedFindings int        // Findings rejected by threshold validation
-	TriageFlags      int        // Number of deterministic triage flags
-	TriageSkippedLLM bool       // Legacy: true for older records where quiet triage skipped LLM
-	InputTokens      int
-	OutputTokens     int
-	ToolCalls        []ToolCallRecord // Tool invocations during this analysis
-	ReportedIDs      []string         // Finding IDs reported (created/re-reported) this run
-	ResolvedIDs      []string         // Finding IDs explicitly resolved by LLM this run
-	SeededFindingIDs []string         // Finding IDs that were presented in seed context
+	Response          string     // The AI's raw response text
+	Findings          []*Finding // Parsed findings from the response
+	RejectedFindings  int        // Findings rejected by threshold validation
+	TriageFlags       int        // Number of deterministic triage flags
+	TriageSkippedLLM  bool       // Legacy: true for older records where quiet triage skipped LLM
+	InputTokens       int
+	OutputTokens      int
+	ToolCalls         []ToolCallRecord          // Tool invocations during this analysis
+	ReportedIDs       []string                  // Finding IDs reported (created/re-reported) this run
+	ResolvedIDs       []string                  // Finding IDs explicitly resolved by LLM this run
+	Assessments       []PatrolFindingAssessment // Explicit verdicts for existing findings this run
+	SeededFindingIDs  []string                  // Finding IDs that were presented in seed context
+	QueriedFindingIDs []string                  // Finding IDs returned by patrol_get_findings this run
 	// Forecasts are the deterministic capacity forecasts computed this run,
 	// stamped onto matching findings so the surface shows a first-class
 	// urgency signal instead of relying on model prose. Carried as the
@@ -49,11 +51,12 @@ type AIAnalysisResult struct {
 }
 
 type patrolRunAnalysisRecordContext struct {
-	ResourcesChecked int
-	NewFindings      int
-	ExistingFindings int
-	ResolvedFindings int
-	ErrorCount       int
+	ResourcesChecked  int
+	NewFindings       int
+	ExistingFindings  int
+	ResolvedFindings  int
+	UncertainFindings int
+	ErrorCount        int
 }
 
 const (
@@ -236,7 +239,7 @@ func patrolRunAIAnalysisForRecord(result *AIAnalysisResult, ctx patrolRunAnalysi
 	}
 
 	response = replacePatrolSummarySection(response, "Infrastructure Status", renderPatrolRecordStatusLine(ctx))
-	response = replacePatrolSummarySection(response, "Actions Taken", renderPatrolAcceptedActions(result))
+	response = replacePatrolSummarySection(response, "Actions Taken", renderPatrolAcceptedActions(result, ctx))
 	return response
 }
 
@@ -265,6 +268,9 @@ func renderPatrolRecordStatusLine(ctx patrolRunAnalysisRecordContext) string {
 	if ctx.ResolvedFindings > 0 {
 		parts = append(parts, fmt.Sprintf("%d resolved", ctx.ResolvedFindings))
 	}
+	if ctx.UncertainFindings > 0 {
+		parts = append(parts, fmt.Sprintf("%d uncertain", ctx.UncertainFindings))
+	}
 	if len(parts) == 0 {
 		return prefix + "; no accepted warning or critical Patrol findings recorded."
 	}
@@ -272,8 +278,11 @@ func renderPatrolRecordStatusLine(ctx patrolRunAnalysisRecordContext) string {
 	return fmt.Sprintf("%s; accepted Patrol finding activity: %s.", prefix, strings.Join(parts, ", "))
 }
 
-func renderPatrolAcceptedActions(result *AIAnalysisResult) string {
-	if result == nil || (len(result.Findings) == 0 && len(result.ResolvedIDs) == 0) {
+func renderPatrolAcceptedActions(result *AIAnalysisResult, ctx patrolRunAnalysisRecordContext) string {
+	if result == nil || (len(result.Findings) == 0 && len(result.ResolvedIDs) == 0 && len(result.Assessments) == 0) {
+		if ctx.ErrorCount > 0 {
+			return "- Analysis incomplete; no accepted finding activity recorded."
+		}
 		return "- No findings reported — all clear."
 	}
 
@@ -307,10 +316,96 @@ func renderPatrolAcceptedActions(result *AIAnalysisResult) string {
 		}
 		lines = append(lines, fmt.Sprintf("- resolved: %s", resolvedID))
 	}
+	for _, assessment := range result.Assessments {
+		// Present assessments are already represented by the refreshed finding
+		// above. Resolved assessments are represented by ResolvedIDs. Uncertain
+		// requires an explicit line so the summary can never become all-clear.
+		if assessment.Verdict != "uncertain" {
+			continue
+		}
+		findingID := patrolSummaryInline(assessment.FindingID)
+		if findingID == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("- uncertain: %s", findingID))
+	}
 	if len(lines) == 0 {
-		return "- No findings reported — all clear."
+		return "- No accepted finding activity recorded."
 	}
 	return strings.Join(lines, "\n")
+}
+
+func patrolUncertainAssessmentCount(assessments []PatrolFindingAssessment) int {
+	count := 0
+	for _, assessment := range assessments {
+		if assessment.Verdict == "uncertain" {
+			count++
+		}
+	}
+	return count
+}
+
+func assessmentFindingIDs(assessments []PatrolFindingAssessment) []string {
+	ids := make([]string, 0, len(assessments))
+	for _, assessment := range assessments {
+		if findingID := strings.TrimSpace(assessment.FindingID); findingID != "" {
+			ids = append(ids, findingID)
+		}
+	}
+	return ids
+}
+
+func patrolRunFindingIDs(ids []string, assessments []PatrolFindingAssessment) []string {
+	seen := make(map[string]bool, len(ids)+len(assessments))
+	result := make([]string, 0, len(ids)+len(assessments))
+	for _, findingID := range append(append([]string{}, ids...), assessmentFindingIDs(assessments)...) {
+		findingID = strings.TrimSpace(findingID)
+		if findingID == "" || seen[findingID] {
+			continue
+		}
+		seen[findingID] = true
+		result = append(result, findingID)
+	}
+	return result
+}
+
+func assessmentsForRun(result *AIAnalysisResult) []PatrolFindingAssessment {
+	if result == nil {
+		return nil
+	}
+	return result.Assessments
+}
+
+func patrolMissingAssessmentIDs(result *AIAnalysisResult) []string {
+	if result == nil || len(result.SeededFindingIDs)+len(result.QueriedFindingIDs) == 0 {
+		return nil
+	}
+	completed := make(map[string]bool, len(result.Assessments)+len(result.ResolvedIDs))
+	for _, assessment := range result.Assessments {
+		completed[assessment.FindingID] = true
+	}
+	// Keep the direct resolve tool as a compatibility path. It remains behind
+	// the same deterministic verifier, although the assessment tool is the
+	// preferred complete verdict contract.
+	for _, findingID := range result.ResolvedIDs {
+		completed[findingID] = true
+	}
+	missing := make([]string, 0)
+	runtimeFindingID := generateFindingID(patrolRuntimeResourceID, "reliability", patrolRuntimeFindingKey)
+	seen := make(map[string]bool)
+	for _, findingID := range append(append([]string{}, result.SeededFindingIDs...), result.QueriedFindingIDs...) {
+		// Provider-runtime health is resolved deterministically by the run
+		// succeeding; it is not an infrastructure finding the model assesses.
+		if findingID == runtimeFindingID {
+			continue
+		}
+		if !completed[findingID] && !seen[findingID] {
+			missing = append(missing, findingID)
+			seen[findingID] = true
+		}
+	}
+	sort.Strings(missing)
+	return missing
 }
 
 func replacePatrolSummarySection(response, heading, body string) string {
@@ -810,18 +905,20 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	rejectedCount := adapter.rejectedCount
 	adapter.findingsMu.Unlock()
 	return &AIAnalysisResult{
-		Response:         finalContent,
-		Findings:         adapter.getCollectedFindings(),
-		RejectedFindings: rejectedCount,
-		TriageFlags:      len(triageResult.Flags),
-		TriageSkippedLLM: false,
-		InputTokens:      inputTokens,
-		OutputTokens:     outputTokens,
-		ToolCalls:        collectedToolCalls,
-		ReportedIDs:      adapter.getReportedFindingIDs(),
-		ResolvedIDs:      adapter.getResolvedIDs(),
-		SeededFindingIDs: seededFindingIDs,
-		Forecasts:        triageResult.Intel.forecasts,
+		Response:          finalContent,
+		Findings:          adapter.getCollectedFindings(),
+		RejectedFindings:  rejectedCount,
+		TriageFlags:       len(triageResult.Flags),
+		TriageSkippedLLM:  false,
+		InputTokens:       inputTokens,
+		OutputTokens:      outputTokens,
+		ToolCalls:         collectedToolCalls,
+		ReportedIDs:       adapter.getReportedFindingIDs(),
+		ResolvedIDs:       adapter.getResolvedIDs(),
+		Assessments:       adapter.getAssessments(),
+		SeededFindingIDs:  seededFindingIDs,
+		QueriedFindingIDs: adapter.getQueriedFindingIDs(),
+		Forecasts:         triageResult.Intel.forecasts,
 	}, nil
 }
 
@@ -1064,6 +1161,7 @@ You have access to the following tools to investigate infrastructure:
 
 **Patrol Reporting:**
 - patrol_report_finding — Report a finding (creates a structured finding with validation)
+- patrol_assess_finding — Record present, resolved, or uncertain for an existing finding
 - patrol_resolve_finding — Resolve an existing finding that is no longer an issue
 - patrol_get_findings — Check currently active findings (use before reporting to avoid duplicates)
 
@@ -1082,8 +1180,8 @@ The seed context includes service identity (from discovery) and reachability dat
 - Resource configuration details that could explain misconfiguration.
 - Mail queue or spam-volume data if mail flow looks abnormal.
 
-**Step 3 — Report or resolve findings.** Report findings for confirmed issues. Resolve active findings that are no longer issues based on current data.
-Always call patrol_get_findings before reporting or resolving findings.
+**Step 3 — Report or assess findings.** Report new confirmed issues with patrol_report_finding. For every active finding returned by patrol_get_findings, call patrol_assess_finding exactly once with present, resolved, or uncertain and current evidence. Do not silently skip a known finding: omission is not evidence that it cleared. patrol_resolve_finding remains available for compatibility, but patrol_assess_finding is the complete existing-finding verdict.
+Always call patrol_get_findings before reporting, assessing, or resolving findings.
 
 The snapshot eliminates routine data gathering. When a notable signal needs current or historical confirmation, gather enough evidence to distinguish real problems from noise before reporting it.
 
@@ -1165,7 +1263,7 @@ Pulse has assembled deterministic evidence before this turn. The flagged items a
 
 Your job is to assess the provided evidence and decide which items, if any, require attention. Available evidence sources include historical metrics, logs, backup/replication/RAID details, and resource configuration.
 
-After investigation, report confirmed issues via patrol_report_finding and resolve any active findings that are no longer problems.
+After investigation, report new confirmed issues via patrol_report_finding and explicitly assess every active finding with patrol_assess_finding.
 
 Use the triage context to avoid broad routine inventory scans, but do not treat the absence of a flag as conclusive. If surrounding evidence or an active finding makes another resource relevant, choose the governed tools you need and explain the model-owned conclusion.`
 

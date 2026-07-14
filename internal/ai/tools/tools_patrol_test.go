@@ -15,11 +15,13 @@ import (
 
 type mockPatrolFindingCreator struct {
 	createFindingFunc  func(input PatrolFindingInput) (string, bool, error)
+	assessFindingFunc  func(input PatrolFindingAssessmentInput) error
 	resolveFindingFunc func(findingID, reason string) error
 	getActiveFn        func(resourceID, minSeverity string) []PatrolFindingInfo
 
 	// Track calls for assertions
 	createCalls  []PatrolFindingInput
+	assessCalls  []PatrolFindingAssessmentInput
 	resolveCalls []struct {
 		FindingID string
 		Reason    string
@@ -30,6 +32,14 @@ type mockPatrolFindingCreator struct {
 	}
 
 	checked bool
+}
+
+func (m *mockPatrolFindingCreator) AssessFinding(input PatrolFindingAssessmentInput) error {
+	m.assessCalls = append(m.assessCalls, input)
+	if m.assessFindingFunc != nil {
+		return m.assessFindingFunc(input)
+	}
+	return nil
 }
 
 func (m *mockPatrolFindingCreator) CreateFinding(input PatrolFindingInput) (string, bool, error) {
@@ -444,6 +454,61 @@ func TestHandlePatrolReportFinding_OptionalFieldsOmitted(t *testing.T) {
 	assert.Equal(t, "", creator.createCalls[0].Evidence)
 }
 
+// --- patrol_assess_finding tests ---
+
+func TestHandlePatrolAssessFinding_RequiresGetFindings(t *testing.T) {
+	creator := &mockPatrolFindingCreator{}
+	exec := newPatrolTestExecutor(creator)
+	result, err := handlePatrolAssessFinding(context.Background(), exec, map[string]interface{}{
+		agentcapabilities.FindingIDArgumentName: "finding-1",
+		"verdict":                               "present",
+		"evidence":                              "restart count is 12",
+		agentcapabilities.ReasonArgumentName:    "the restart loop remains active",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, extractText(result), "patrol_get_findings")
+	assert.Empty(t, creator.assessCalls)
+}
+
+func TestHandlePatrolAssessFinding_AcceptsExplicitVerdicts(t *testing.T) {
+	for _, verdict := range []string{"present", "resolved", "uncertain"} {
+		t.Run(verdict, func(t *testing.T) {
+			creator := &mockPatrolFindingCreator{checked: true}
+			exec := newPatrolTestExecutor(creator)
+			result, err := handlePatrolAssessFinding(context.Background(), exec, map[string]interface{}{
+				agentcapabilities.FindingIDArgumentName: "finding-1",
+				"verdict":                               verdict,
+				"evidence":                              "current evidence",
+				agentcapabilities.ReasonArgumentName:    "evidence supports verdict",
+			})
+			require.NoError(t, err)
+			require.Len(t, creator.assessCalls, 1)
+			assert.Equal(t, verdict, creator.assessCalls[0].Verdict)
+			assert.Contains(t, extractText(result), verdict)
+		})
+	}
+}
+
+func TestHandlePatrolAssessFinding_RejectsIncompleteOrInvalidVerdict(t *testing.T) {
+	creator := &mockPatrolFindingCreator{checked: true}
+	exec := newPatrolTestExecutor(creator)
+	result, err := handlePatrolAssessFinding(context.Background(), exec, map[string]interface{}{
+		agentcapabilities.FindingIDArgumentName: "finding-1",
+		"verdict":                               "fixed-ish",
+		"evidence":                              "current evidence",
+		agentcapabilities.ReasonArgumentName:    "reason",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, extractText(result), "invalid verdict")
+	result, err = handlePatrolAssessFinding(context.Background(), exec, map[string]interface{}{
+		agentcapabilities.FindingIDArgumentName: "finding-1",
+		"verdict":                               "present",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, extractText(result), "evidence")
+	assert.Empty(t, creator.assessCalls)
+}
+
 // --- patrol_resolve_finding tests ---
 
 func TestHandlePatrolResolveFinding_NilCreator(t *testing.T) {
@@ -492,9 +557,10 @@ func TestHandlePatrolResolveFinding_ValidInput(t *testing.T) {
 	assert.Equal(t, true, result.StructuredContent["ok"])
 	assert.Equal(t, true, result.StructuredContent["resolved"])
 
-	require.Len(t, creator.resolveCalls, 1)
-	assert.Equal(t, "f-123", creator.resolveCalls[0].FindingID)
-	assert.Equal(t, "CPU has returned to 35%", creator.resolveCalls[0].Reason)
+	require.Len(t, creator.assessCalls, 1)
+	assert.Equal(t, "f-123", creator.assessCalls[0].FindingID)
+	assert.Equal(t, "resolved", creator.assessCalls[0].Verdict)
+	assert.Equal(t, "CPU has returned to 35%", creator.assessCalls[0].Evidence)
 }
 
 func TestHandlePatrolResolveFinding_MissingFindingID(t *testing.T) {
@@ -525,8 +591,8 @@ func TestHandlePatrolResolveFinding_MissingReason(t *testing.T) {
 
 func TestHandlePatrolResolveFinding_ResolveError(t *testing.T) {
 	creator := &mockPatrolFindingCreator{
-		resolveFindingFunc: func(findingID, reason string) error {
-			return fmt.Errorf("finding not found: %s", findingID)
+		assessFindingFunc: func(input PatrolFindingAssessmentInput) error {
+			return fmt.Errorf("finding not found: %s", input.FindingID)
 		},
 		checked: true,
 	}
@@ -692,7 +758,7 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	found := map[string]bool{}
 	var resolveTool Tool
 	for _, tool := range tools {
-		if tool.Name == "patrol_report_finding" || tool.Name == "patrol_resolve_finding" || tool.Name == "patrol_get_findings" {
+		if tool.Name == "patrol_report_finding" || tool.Name == "patrol_assess_finding" || tool.Name == "patrol_resolve_finding" || tool.Name == "patrol_get_findings" {
 			found[tool.Name] = true
 		}
 		if tool.Name == "patrol_resolve_finding" {
@@ -701,6 +767,7 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	}
 
 	assert.True(t, found["patrol_report_finding"], "patrol_report_finding should be registered")
+	assert.True(t, found["patrol_assess_finding"], "patrol_assess_finding should be registered")
 	assert.True(t, found["patrol_resolve_finding"], "patrol_resolve_finding should be registered")
 	assert.True(t, found["patrol_get_findings"], "patrol_get_findings should be registered")
 	require.NotEmpty(t, resolveTool.Name)
@@ -715,6 +782,7 @@ func TestPatrolToolsAvailability(t *testing.T) {
 
 	// Without creator, patrol tools should not be available
 	assert.False(t, exec.isToolAvailable("patrol_report_finding"))
+	assert.False(t, exec.isToolAvailable("patrol_assess_finding"))
 	assert.False(t, exec.isToolAvailable("patrol_resolve_finding"))
 	assert.False(t, exec.isToolAvailable("patrol_get_findings"))
 
@@ -723,6 +791,7 @@ func TestPatrolToolsAvailability(t *testing.T) {
 
 	// Now they should be available
 	assert.True(t, exec.isToolAvailable("patrol_report_finding"))
+	assert.True(t, exec.isToolAvailable("patrol_assess_finding"))
 	assert.True(t, exec.isToolAvailable("patrol_resolve_finding"))
 	assert.True(t, exec.isToolAvailable("patrol_get_findings"))
 }

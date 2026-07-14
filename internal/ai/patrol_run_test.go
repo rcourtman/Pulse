@@ -31,6 +31,93 @@ func TestFilterStateByScope_NoScope(t *testing.T) {
 	}
 }
 
+func TestResolvePatrolScopeExpandsCanonicalUnifiedIDToSourceResource(t *testing.T) {
+	snapshot := models.StateSnapshot{VMs: []models.VM{{ID: "source-vm-401", Name: "web", VMID: 401}}}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(snapshot)
+	views := registry.VMs()
+	if len(views) != 1 || views[0].ID() == "" {
+		t.Fatalf("expected one canonical VM view, got %+v", views)
+	}
+	state := newPatrolRuntimeStateWithProviders(snapshot, registry, unifiedresources.NewUnifiedAIAdapter(registry))
+	resolved, resolution := resolvePatrolScopeState(state, PatrolScope{ResourceIDs: []string{views[0].ID()}})
+	if len(resolution.UnmatchedResourceIDs) != 0 || len(resolution.AmbiguousResourceIDs) != 0 {
+		t.Fatalf("canonical ID did not resolve exactly: %+v", resolution)
+	}
+	filtered := (&PatrolService{}).filterStateByScopeState(state, resolved)
+	if len(filtered.VMs) != 1 || filtered.VMs[0].ID != "source-vm-401" {
+		t.Fatalf("resolved scope did not select source VM: %+v", filtered.VMs)
+	}
+	if len(resolution.EffectiveResourceIDs) == 0 {
+		t.Fatalf("expected effective resource IDs, got %+v", resolution)
+	}
+}
+
+func TestResolvePatrolScopeRejectsUnmatchedAndAmbiguousAliases(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{VMs: []models.VM{
+		{ID: "vm-1", Name: "duplicate", VMID: 1},
+		{ID: "vm-2", Name: "duplicate", VMID: 2},
+	}})
+	resolved, resolution := resolvePatrolScopeState(state, PatrolScope{ResourceIDs: []string{"duplicate", "missing"}})
+	if len(resolved.ResourceIDs) != 0 {
+		t.Fatalf("ambiguous or unmatched aliases must not expand: %v", resolved.ResourceIDs)
+	}
+	if len(resolution.AmbiguousResourceIDs) != 1 || resolution.AmbiguousResourceIDs[0] != "duplicate" {
+		t.Fatalf("ambiguous IDs = %v", resolution.AmbiguousResourceIDs)
+	}
+	if len(resolution.UnmatchedResourceIDs) != 1 || resolution.UnmatchedResourceIDs[0] != "missing" {
+		t.Fatalf("unmatched IDs = %v", resolution.UnmatchedResourceIDs)
+	}
+}
+
+func TestResolvePatrolScopeCanonicalIDOutranksAliasCollision(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{VMs: []models.VM{
+		{ID: "vm-canonical", Name: "primary", VMID: 1},
+		{ID: "vm-other", Name: "vm-canonical", VMID: 2},
+	}})
+	resolved, resolution := resolvePatrolScopeState(state, PatrolScope{ResourceIDs: []string{"vm-canonical"}})
+	if len(resolution.AmbiguousResourceIDs) != 0 || len(resolution.UnmatchedResourceIDs) != 0 {
+		t.Fatalf("canonical ID was treated as an alias collision: %+v", resolution)
+	}
+	filtered := filterPatrolStateByScopeState(state, resolved)
+	if len(filtered.VMs) != 1 || filtered.VMs[0].ID != "vm-canonical" {
+		t.Fatalf("canonical ID selected wrong resource: %+v", filtered.VMs)
+	}
+}
+
+func TestRunScopedPatrolPersistsZeroMatchFailure(t *testing.T) {
+	ps := NewPatrolService(nil, &mockStateProvider{state: models.StateSnapshot{
+		Nodes: []models.Node{{ID: "node-1", Name: "pve-1"}},
+	}})
+	ps.SetConfig(PatrolConfig{Enabled: true, AnalyzeNodes: true, Interval: time.Hour})
+	ps.runScopedPatrol(t.Context(), PatrolScope{ResourceIDs: []string{"missing-resource"}, Reason: TriggerReasonManual})
+	runs := ps.runHistoryStore.GetRecent(1)
+	if len(runs) != 1 {
+		t.Fatalf("zero-match scope should create one durable run, got %d", len(runs))
+	}
+	run := runs[0]
+	if run.Status != "error" || run.ErrorCount != 1 || run.ResourcesChecked != 0 {
+		t.Fatalf("unexpected zero-match run: %+v", run)
+	}
+	if len(run.ScopeResourceIDs) != 1 || run.ScopeResourceIDs[0] != "missing-resource" || len(run.EffectiveScopeResourceIDs) != 0 {
+		t.Fatalf("zero-match scope identity was not preserved: %+v", run)
+	}
+	if run.FindingsSummary == "All healthy" {
+		t.Fatal("zero-match run must never claim all healthy")
+	}
+}
+
+func TestPatrolFindingSummaryForStateExcludesOutOfScopeFindings(t *testing.T) {
+	state := newPatrolRuntimeState(models.StateSnapshot{VMs: []models.VM{{ID: "vm-in", Name: "inside", VMID: 1}}})
+	summary := patrolFindingSummaryForState([]*Finding{
+		{ID: "in", ResourceID: "vm-in", Severity: FindingSeverityWarning},
+		{ID: "out", ResourceID: "vm-out", Severity: FindingSeverityCritical},
+	}, state)
+	if summary.Warning != 1 || summary.Critical != 0 {
+		t.Fatalf("scoped summary = %+v, want one warning and no critical findings", summary)
+	}
+}
+
 func TestFilterStateByScope_ByResourceID(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{

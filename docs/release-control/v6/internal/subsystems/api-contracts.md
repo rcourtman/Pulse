@@ -2861,6 +2861,17 @@ a new API state machine, queue contract, or verification-accounting field.
 
 ## Completion Obligations
 
+Manual Patrol execution is a canonical identity-bearing API contract. A scoped
+`POST /api/ai/patrol/run` request accepts only the declared resource and alert
+fields, rejects client-authored prompt context and trailing or unknown JSON,
+and resolves requested resource identities against the current collection
+snapshot before acknowledging the run. Unmatched, ambiguous, or zero-match
+explicit identities return the stable `patrol_scope_unresolved` 422 envelope;
+accepted responses include the requested-to-effective scope resolution. The
+runtime must re-resolve at execution time and persist a failed run if collection
+drift turns the accepted scope into a zero-match race. Clients must not infer a
+successful targeted check from a queued response alone.
+
 1. Update contract tests when payloads change, including admin verification endpoints such as `POST /api/ai/patrol/preflight` whose response shape (`tool_call_observed`, `duration_ms`, classified `cause`/`summary`/`recommendation`, plus `recorded_at`/`recorded_at_unix` for the cached snapshot) is part of the canonical Patrol diagnostic surface, the `patrol_preflight` snapshot field on `/api/settings/ai` that hydrates the Check Patrol model panel on page load, the auto-trigger contract on `POST/PUT /api/settings/ai` whose handler dispatches preflight in the background only when the change actually moved Patrol transport so routine saves do not write a new `patrol_preflight` snapshot, the startup-seed contract where `NewAISettingsHandler` dispatches the same async preflight after `LoadConfig()` succeeds so the first `/api/settings/ai` poll after a Pulse restart already carries a populated `patrol_preflight` snapshot, and the GET-symmetry contract where `HandleGetAISettings` includes `patrol_readiness` (with the cached-preflight-augmented `tools` check) on the same response that already carries `patrol_preflight`, so the Patrol page picks up classified preflight evidence on first load instead of only after a save; readiness checks may keep stable machine IDs such as `configuration`, but user-facing labels in this payload must say Patrol mode rather than Patrol configuration, and the settings UI must summarize successful diagnostic snapshots as model readiness instead of rendering raw preflight/tool-call wording
    The same diagnostic payload may inform Patrol page setup banners, but the
    Patrol page must present it as setup/model-check state and must not render

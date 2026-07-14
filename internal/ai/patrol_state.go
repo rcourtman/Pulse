@@ -419,6 +419,123 @@ func patrolRuntimeSortedResourceIDs(s patrolRuntimeState) []string {
 	return ids
 }
 
+func canonicalPatrolScopeToken(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+// resolvePatrolScopeState expands canonical unified IDs, source IDs, and
+// unique known aliases onto the complete identity set for the matching Patrol
+// runtime record. It never fuzzy-matches and refuses ambiguous aliases.
+func resolvePatrolScopeState(state patrolRuntimeState, scope PatrolScope) (PatrolScope, PatrolScopeResolution) {
+	resolution := PatrolScopeResolution{}
+	for _, requested := range scope.ResourceIDs {
+		if requested = strings.TrimSpace(requested); requested != "" {
+			resolution.RequestedResourceIDs = append(resolution.RequestedResourceIDs, requested)
+		}
+	}
+	if len(resolution.RequestedResourceIDs) == 0 {
+		filtered := filterPatrolStateByScopeState(state, scope)
+		resolution.EffectiveResourceIDs = patrolRuntimeSortedResourceIDs(filtered)
+		return scope, resolution
+	}
+
+	type identityRecord struct {
+		ids         []string
+		aliases     []string
+		idTokens    map[string]bool
+		aliasTokens map[string]bool
+	}
+	records := make([]identityRecord, 0)
+	patrolVisitRuntimeResources(state, func(record patrolRuntimeResourceRecord) bool {
+		candidate := identityRecord{
+			ids: append([]string(nil), record.ids...), aliases: append([]string(nil), record.aliases...),
+			idTokens: make(map[string]bool), aliasTokens: make(map[string]bool),
+		}
+		for _, value := range record.ids {
+			if token := canonicalPatrolScopeToken(value); token != "" {
+				candidate.idTokens[token] = true
+			}
+		}
+		for _, value := range record.aliases {
+			if token := canonicalPatrolScopeToken(value); token != "" {
+				candidate.aliasTokens[token] = true
+			}
+		}
+		if len(candidate.idTokens)+len(candidate.aliasTokens) > 0 {
+			records = append(records, candidate)
+		}
+		return true
+	})
+
+	expanded := make([]string, 0, len(scope.ResourceIDs))
+	seenExpanded := make(map[string]bool)
+	seenResolved := make(map[string]bool)
+	addExpanded := func(value string) {
+		value = strings.TrimSpace(value)
+		if value != "" && !seenExpanded[value] {
+			seenExpanded[value] = true
+			expanded = append(expanded, value)
+		}
+	}
+	addResolved := func(value string) {
+		value = strings.TrimSpace(value)
+		if value != "" && !seenResolved[value] {
+			seenResolved[value] = true
+			resolution.ResolvedResourceIDs = append(resolution.ResolvedResourceIDs, value)
+		}
+	}
+	for _, requested := range resolution.RequestedResourceIDs {
+		token := canonicalPatrolScopeToken(requested)
+		matches := make([]identityRecord, 0, 1)
+		for _, record := range records {
+			if record.idTokens[token] {
+				matches = append(matches, record)
+			}
+		}
+		// A canonical or source ID is authoritative. Only fall back to known
+		// display aliases when no exact identity field matched.
+		if len(matches) == 0 {
+			for _, record := range records {
+				if record.aliasTokens[token] {
+					matches = append(matches, record)
+				}
+			}
+		}
+		switch len(matches) {
+		case 0:
+			resolution.UnmatchedResourceIDs = append(resolution.UnmatchedResourceIDs, requested)
+		case 1:
+			for _, id := range matches[0].ids {
+				addExpanded(id)
+				addResolved(id)
+			}
+		default:
+			resolution.AmbiguousResourceIDs = append(resolution.AmbiguousResourceIDs, requested)
+		}
+	}
+	scope.ResourceIDs = expanded
+	scope.resolvedIdentityOnly = len(expanded) > 0
+	if len(expanded) > 0 {
+		filtered := filterPatrolStateByScopeState(state, scope)
+		resolution.EffectiveResourceIDs = patrolRuntimeSortedResourceIDs(filtered)
+	}
+	sort.Strings(resolution.ResolvedResourceIDs)
+	sort.Strings(resolution.EffectiveResourceIDs)
+	sort.Strings(resolution.UnmatchedResourceIDs)
+	sort.Strings(resolution.AmbiguousResourceIDs)
+	return scope, resolution
+}
+
+// ResolvePatrolScope resolves a scope against the current normal Patrol
+// runtime state without starting a run. API callers use it for synchronous
+// validation; the run resolves again to close collection races.
+func (p *PatrolService) ResolvePatrolScope(scope PatrolScope) (PatrolScope, PatrolScopeResolution) {
+	if p == nil || !p.hasPatrolRuntimeInputs() {
+		return scope, PatrolScopeResolution{RequestedResourceIDs: append([]string(nil), scope.ResourceIDs...), UnmatchedResourceIDs: append([]string(nil), scope.ResourceIDs...)}
+	}
+	return resolvePatrolScopeState(p.currentPatrolRuntimeState(), scope)
+}
+
 type patrolRuntimeResourceCounts struct {
 	nodes      int
 	guests     int

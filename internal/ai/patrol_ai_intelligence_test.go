@@ -341,6 +341,26 @@ func TestPatrolRunAIAnalysisForRecord_RendersAcceptedActions(t *testing.T) {
 	}
 }
 
+func TestPatrolRunAIAnalysisForRecordNeverClaimsAllClearForUncertainOrErroredRun(t *testing.T) {
+	baseResponse := strings.Join([]string{
+		"Infrastructure Status:", "All clear.", "", "Actions Taken:", "- none",
+	}, "\n")
+	uncertain := patrolRunAIAnalysisForRecord(&AIAnalysisResult{
+		Response:    baseResponse,
+		Assessments: []PatrolFindingAssessment{{FindingID: "finding-uncertain", Verdict: "uncertain"}},
+	}, patrolRunAnalysisRecordContext{ResourcesChecked: 1, UncertainFindings: 1})
+	if strings.Contains(uncertain, "No findings reported — all clear") || !strings.Contains(uncertain, "- uncertain: finding-uncertain") {
+		t.Fatalf("uncertain run produced misleading actions: %s", uncertain)
+	}
+
+	errored := patrolRunAIAnalysisForRecord(&AIAnalysisResult{Response: baseResponse}, patrolRunAnalysisRecordContext{
+		ResourcesChecked: 1, ErrorCount: 1,
+	})
+	if strings.Contains(errored, "No findings reported — all clear") || !strings.Contains(errored, "Analysis incomplete") {
+		t.Fatalf("errored run produced misleading actions: %s", errored)
+	}
+}
+
 func TestSeedBackupAnalysisState_ScopesGuestsToRuntime(t *testing.T) {
 	now := time.Now()
 	ps := NewPatrolService(nil, nil)

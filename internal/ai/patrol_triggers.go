@@ -92,6 +92,20 @@ type PatrolScope struct {
 	RetryCount int
 	// RetryAfter prevents processing before this time (for backoff on re-queued patrols)
 	RetryAfter time.Time
+	// resolvedIdentityOnly is set only by the canonical scope resolver. It
+	// prevents an authoritative ID from subsequently matching a different
+	// resource whose display alias happens to contain the same string.
+	resolvedIdentityOnly bool
+}
+
+// PatrolScopeResolution records how caller-supplied identities map onto the
+// exact runtime resources consumed by Patrol's normal collection paths.
+type PatrolScopeResolution struct {
+	RequestedResourceIDs []string `json:"requested_resource_ids"`
+	ResolvedResourceIDs  []string `json:"resolved_resource_ids,omitempty"`
+	EffectiveResourceIDs []string `json:"effective_resource_ids,omitempty"`
+	UnmatchedResourceIDs []string `json:"unmatched_resource_ids,omitempty"`
+	AmbiguousResourceIDs []string `json:"ambiguous_resource_ids,omitempty"`
 }
 
 // PatrolAlertContext describes the alert that triggered a scoped patrol, so the

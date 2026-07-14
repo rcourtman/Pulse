@@ -220,6 +220,10 @@ var registryInvocationDescriptors = map[string]InvocationDescriptor{
 		},
 	},
 	PatrolGetFindingsToolName: staticClass(ToolCallKindRead, MutationNone),
+	// Assessments are accepted finding-lifecycle writes. A present verdict
+	// refreshes the finding, resolved closes it behind the existing verifier,
+	// and uncertain is persisted on the run while keeping the finding active.
+	PatrolAssessFindingToolName: staticClass(ToolCallKindWrite, MutationPulseState),
 	// patrol_propose_action is side-effect-free capture (mutation-none)
 	// and read-kind so a concluding proposal never drives the FSM into
 	// write verification. It is additionally profile-gated: the registry

@@ -31,6 +31,7 @@ const (
 	PulseGetPatternsToolName           = "pulse_get_patterns"
 
 	PatrolGetFindingsToolName    = "patrol_get_findings"
+	PatrolAssessFindingToolName  = "patrol_assess_finding"
 	PatrolReportFindingToolName  = "patrol_report_finding"
 	PatrolResolveFindingToolName = "patrol_resolve_finding"
 	// PatrolProposeActionToolName is the side-effect-free typed action

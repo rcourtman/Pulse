@@ -8753,16 +8753,16 @@
   ],
   "work_claims": [
     {
-      "id": "codex-lane-l23",
-      "agent_id": "codex",
-      "summary": "Implement an independent-ground-truth Pulse Patrol qualification benchmark with disposable live-lab, replay, Watch, investigation, remediation, safety, statistical gates, and reporting support.",
+      "id": "patrol-runtime-implementation-candidate-lane-protection-posture-attention-queue",
+      "agent_id": "patrol-runtime-implementation",
+      "summary": "Implement autonomous Patrol finding assessments, canonical scoped execution, governed Pro handoff, and publishable real-world model qualification.",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-14T09:15:01Z",
-      "heartbeat_at": "2026-07-14T09:15:01Z",
-      "expires_at": "2026-07-14T11:15:01Z",
+      "claimed_at": "2026-07-14T13:41:09Z",
+      "heartbeat_at": "2026-07-14T13:41:09Z",
+      "expires_at": "2026-07-14T21:41:09Z",
       "work_item": {
-        "kind": "lane",
-        "id": "L23"
+        "kind": "candidate-lane",
+        "id": "protection-posture-attention-queue"
       }
     }
   ],

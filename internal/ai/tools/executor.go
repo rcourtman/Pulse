@@ -88,13 +88,31 @@ type FindingsProvider interface {
 }
 
 // PatrolFindingCreator is set on the executor during a patrol run to allow
-// patrol-specific tools (patrol_report_finding, patrol_resolve_finding,
-// patrol_get_findings) to create, resolve, and query findings.
+// patrol-specific tools (patrol_report_finding, patrol_assess_finding,
+// patrol_resolve_finding, patrol_get_findings) to create, assess, resolve,
+// and query findings.
 // Outside of a patrol run this is nil, and the tools return a clear error.
 type PatrolFindingCreator interface {
 	CreateFinding(input PatrolFindingInput) (findingID string, isNew bool, err error)
 	ResolveFinding(findingID, reason string) error
 	GetActiveFindings(resourceID, minSeverity string) []PatrolFindingInfo
+}
+
+// PatrolFindingAssessor is the additive explicit-verdict extension implemented
+// by the current Patrol adapter. Keeping it separate preserves compatibility
+// with narrow test and extension adapters that only implement legacy finding
+// creation/query/resolve behavior.
+type PatrolFindingAssessor interface {
+	AssessFinding(input PatrolFindingAssessmentInput) error
+}
+
+// PatrolFindingAssessmentInput is the explicit terminal verdict for an active
+// finding that was presented to the model during one Patrol run.
+type PatrolFindingAssessmentInput struct {
+	FindingID string `json:"finding_id"`
+	Verdict   string `json:"verdict"`
+	Evidence  string `json:"evidence"`
+	Reason    string `json:"reason"`
 }
 
 // PatrolFindingsChecker tracks whether a patrol run has queried existing findings.
@@ -1107,7 +1125,7 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 		return e.hasReadState()
 	case agentcapabilities.PulseSummarizeToolName:
 		return e.hasReadState()
-	case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName:
+	case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolAssessFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName:
 		// Always available when registered; handler checks patrolFindingCreator at runtime
 		return e.GetPatrolFindingCreator() != nil
 	default:

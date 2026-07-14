@@ -14,7 +14,14 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
+
+type scopedPatrolStateProvider struct {
+	state models.StateSnapshot
+}
+
+func (p *scopedPatrolStateProvider) ReadSnapshot() models.StateSnapshot { return p.state }
 
 func setupAIHandlerWithPatrol(t *testing.T) (*AISettingsHandler, *ai.PatrolService, *unified.UnifiedStore, *learning.LearningStore) {
 	t.Helper()
@@ -1065,17 +1072,6 @@ func TestBuildManualScopedPatrolScope(t *testing.T) {
 				}
 			},
 		},
-		{
-			name:   "explicit context overrides synthesized copy",
-			req:    manualScopedPatrolRequest{ResourceIDs: []string{"vm-1"}, Context: "operator note"},
-			wantOK: true,
-			check: func(t *testing.T, s ai.PatrolScope) {
-				t.Helper()
-				if s.Context != "operator note" {
-					t.Errorf("context = %q, want operator note", s.Context)
-				}
-			},
-		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1094,6 +1090,9 @@ func TestBuildManualScopedPatrolScope(t *testing.T) {
 func TestHandleForcePatrol_ScopedRequestBypassesFullRunCadenceGate(t *testing.T) {
 	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
 	seedReadyAnthropicPatrolRuntime(t, handler)
+	handler.defaultAIService.SetStateProvider(&scopedPatrolStateProvider{state: models.StateSnapshot{
+		VMs: []models.VM{{ID: "vm-101", Name: "web", VMID: 101}},
+	}})
 	handler.defaultAIService.SetLicenseChecker(communityLicenseChecker{})
 
 	// A recent full patrol puts Community tier inside the 1/hour full-run gate,

@@ -45,6 +45,9 @@ All while running entirely on your infrastructure with BYOK for complete privacy
 
 📖 **For a deep technical dive into the Patrol runtime, see [architecture/pulse-patrol-deep-dive.md](architecture/pulse-patrol-deep-dive.md).**
 
+🧪 **For independent live-fault qualification, safety gates, model comparison,
+and release-claim rules, see [AI_PATROL_QUALIFICATION.md](AI_PATROL_QUALIFICATION.md).**
+
 See [architecture/pulse-assistant.md](architecture/pulse-assistant.md) for the original safety architecture documentation.
 
 ### Assistant And MCP
@@ -78,7 +81,8 @@ buildSeedContext()  ── infrastructure evidence and policy context
 LLM analysis (with tools) ← pulse_storage, pulse_metrics, pulse_alerts, etc.
         │
         ▼
-patrol_report_finding() / patrol_resolve_finding() ── model-owned finding lifecycle calls
+patrol_report_finding() / patrol_assess_finding() / patrol_resolve_finding()
+        │                                      └── explicit verdict for every known finding
         │
         ├── DetectSignals() ── deterministic evidence extraction from tool outputs
         │       │
@@ -177,6 +181,21 @@ Findings can be managed via the UI or API:
 - **Dismiss**: Mark as expected behavior (creates suppression rule)
 
 Dismissed and resolved findings persist across Pulse restarts.
+
+Every active finding shown or returned to a Patrol run must receive an
+explicit `present`, `resolved`, or `uncertain` assessment. Silence is not an
+all-clear signal. `present` refreshes current evidence, `resolved` remains
+subject to deterministic verification, and `uncertain` keeps the finding open
+and makes the run visibly inconclusive.
+
+### Patrol model qualification
+
+The Assistant model matrix below proves Assistant orchestration only. Patrol
+recommendations are published separately from live, reversible canary faults,
+healthy controls, normal collection paths, scenario-owned ground truth, and
+track-specific launch gates. See
+[Pulse Patrol autonomous operations and real-world qualification](AI_PATROL_QUALIFICATION.md)
+for the catalogue, methodology, safe lab boundary, and publication command.
 
 ---
 
