@@ -415,6 +415,12 @@ is not represented as a zero-dollar API price. The report keeps its monetary
 cost unknown and marks the per-run metered-API budget as not applicable; plan
 limits, provider errors, latency, and any usage the CLI exposes remain visible.
 
+Z.ai requests sent through a configured `/api/coding/paas/` endpoint are
+recorded as `inference_route=coding_plan_allowance`. Qualification keeps their
+per-run monetary cost unknown and the metered-API dollar budget not applicable,
+while still scoring tokens, latency, provider or plan failures, and model
+quality. The standard Z.ai `/api/paas/` endpoint remains a `metered_api` route.
+
 ### Models
 
 Pulse uses model identifiers in the form: `provider:model-name`

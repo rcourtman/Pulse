@@ -54,6 +54,7 @@ type AISettings struct {
 	PatrolEnabled             bool   `json:"patrol_enabled"`
 	CodexSubscriptionEnabled  bool   `json:"codex_subscription_enabled"`
 	ClaudeSubscriptionEnabled bool   `json:"claude_subscription_enabled"`
+	ZaiBaseURL                string `json:"zai_base_url"`
 }
 
 type PulseVersion struct {

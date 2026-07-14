@@ -151,6 +151,9 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertIn("Pulse retains tool execution and policy enforcement", normalized_content)
         self.assertIn("not represented as a zero-dollar API price", normalized_content)
         self.assertIn("per-run metered-API budget as not applicable", normalized_content)
+        self.assertIn("inference_route=coding_plan_allowance", content)
+        self.assertIn("per-run monetary cost unknown", normalized_content)
+        self.assertIn("standard Z.ai `/api/paas/` endpoint remains a `metered_api` route", normalized_content)
 
     def test_public_ai_privacy_copy_discloses_outbound_usage_telemetry(self) -> None:
         content = read_repo_text("docs/AI.md")

@@ -175,7 +175,7 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 			PulseVersion: version.Version,
 			PulseBaseURL: r.config.Client.config.BaseURL,
 			DockerTarget: dockerTargetLabel(r.config.Lab.target),
-			Model:        model, Provider: provider, InferenceRoute: inferenceRouteForProvider(provider), ChallengeNonce: r.config.ChallengeNonce,
+			Model:        model, Provider: provider, InferenceRoute: inferenceRouteForProviderEndpoint(provider, settings.ZaiBaseURL), ChallengeNonce: r.config.ChallengeNonce,
 			CapturedAt: time.Now().UTC(),
 		}
 		return nil

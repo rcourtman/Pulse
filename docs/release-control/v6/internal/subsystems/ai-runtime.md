@@ -297,6 +297,9 @@ pricing on `metered_api` remains a fail-closed dollar-budget failure. A
 monetary cost as unknown with `budget_applicable=false`; it must not invent a
 zero-dollar price, and latency, provider/plan errors, tool efficiency, and any
 usage counts exposed by the transport remain scored and reportable.
+The configured Z.ai `/api/coding/paas/` endpoint is likewise reported as
+`coding_plan_allowance`, with unknown monetary cost and no per-run metered-API
+dollar budget; the standard `/api/paas/` endpoint remains `metered_api`.
 
 ## Canonical Files
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -50,6 +51,18 @@ func inferenceRouteForProvider(provider string) string {
 	default:
 		return "metered_api"
 	}
+}
+
+func inferenceRouteForProviderEndpoint(provider, baseURL string) string {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider != "zai" {
+		return inferenceRouteForProvider(provider)
+	}
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err == nil && strings.Contains(strings.ToLower(parsed.Path), "/coding/paas/") {
+		return "coding_plan_allowance"
+	}
+	return inferenceRouteForProvider(provider)
 }
 
 type RunReport struct {

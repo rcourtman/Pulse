@@ -61,6 +61,16 @@ func TestScoreRunAppliesDollarBudgetOnlyToMeteredAPIRoutes(t *testing.T) {
 	if strings.Contains(strings.Join(subscription.GateFailures, "\n"), "cost budget") {
 		t.Fatalf("subscription allowance was treated as metered API spend: %+v", subscription.GateFailures)
 	}
+	codingPlan := ScoreRun(ScoringInput{
+		Manifest: manifest, Provider: "zai", Model: "zai:glm-5.2",
+		InferenceRoute: "coding_plan_allowance",
+	})
+	if codingPlan.Cost.Known || codingPlan.Cost.BudgetApplicable || codingPlan.Cost.BillingBasis != "coding_plan_allowance" {
+		t.Fatalf("unexpected coding-plan cost semantics: %+v", codingPlan.Cost)
+	}
+	if strings.Contains(strings.Join(codingPlan.GateFailures, "\n"), "cost budget") {
+		t.Fatalf("coding-plan allowance was treated as metered API spend: %+v", codingPlan.GateFailures)
+	}
 
 	metered := ScoreRun(ScoringInput{
 		Manifest: manifest, Provider: "unpriced-api", Model: "unpriced-api:model",
