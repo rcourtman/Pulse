@@ -5663,6 +5663,12 @@ Qualification scoring must keep synthetic Patrol runtime findings on the
 Provider/runtime failure remains an unconditional qualification hard failure,
 but its synthetic service finding must not be reported as an infrastructure
 false positive or matched to scenario ground truth.
+Qualification cost gates must resolve the configured provider route rather
+than silently borrowing a direct-provider family price. Reviewed OpenRouter
+routes use exact model IDs and model-specific review dates from the public
+OpenRouter Models API; aliases, fast variants, routers, and other unreviewed
+routes remain unknown and therefore fail any non-zero qualification cost
+budget until their actual route price is explicitly recorded.
 Persisted Patrol tool inputs must retain complete structured finding calls up
 to the bounded 16 KiB record limit so normal evidence-rich findings remain
 deterministically replayable. If any captured input is nevertheless incomplete

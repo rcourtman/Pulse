@@ -128,6 +128,39 @@ func TestLookupPriceUsesTieredGeminiPricing(t *testing.T) {
 	}
 }
 
+func TestLookupPriceUsesReviewedOpenRouterRoutes(t *testing.T) {
+	tests := []struct {
+		model  string
+		input  float64
+		output float64
+	}{
+		{model: "anthropic/claude-opus-4.8", input: 5.00, output: 25.00},
+		{model: "anthropic/claude-sonnet-5", input: 2.00, output: 10.00},
+		{model: "deepseek/deepseek-v4-flash", input: 0.09, output: 0.18},
+	}
+	for _, test := range tests {
+		t.Run(test.model, func(t *testing.T) {
+			price, ok := lookupPrice("openrouter", test.model, 50_000)
+			if !ok {
+				t.Fatal("expected reviewed OpenRouter route pricing to resolve")
+			}
+			if price.InputUSDPerMTok != test.input || price.OutputUSDPerMTok != test.output {
+				t.Fatalf("unexpected OpenRouter price: %+v", price)
+			}
+			if price.AsOf != "2026-07-14" {
+				t.Fatalf("unexpected OpenRouter pricing date %q", price.AsOf)
+			}
+		})
+	}
+
+	if _, ok := lookupPrice("openrouter", "anthropic/claude-opus-4.8-fast", 50_000); ok {
+		t.Fatal("expected unreviewed OpenRouter route variant to remain unknown")
+	}
+	if _, ok := lookupPrice("openrouter", "openrouter/auto", 50_000); ok {
+		t.Fatal("expected dynamic OpenRouter alias pricing to remain unknown")
+	}
+}
+
 func TestSetPersistence_LoadError(t *testing.T) {
 	store := NewStore(30)
 	mock := &savePersistence{loadErr: errors.New("load failed")}

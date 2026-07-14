@@ -26,6 +26,7 @@ func EstimateUSD(provider, model string, inputTokens, outputTokens int64) (usd f
 type modelPrice struct {
 	Pattern string
 	Tiers   []priceTier
+	AsOf    string
 }
 
 type priceTier struct {
@@ -59,6 +60,15 @@ var providerPrices = map[string][]modelPrice{
 		flatPrice("deepseek-v4-flash*", 0.14, 0.28),
 		flatPrice("deepseek-v4-pro*", 0.435, 0.87),
 		flatPrice("deepseek-*", 0.14, 0.28),
+	},
+	"openrouter": {
+		// OpenRouter model-catalog list prices, checked from the public Models API
+		// (https://openrouter.ai/api/v1/model/:author/:slug) on 2026-07-14.
+		// Keep these route-specific: OpenRouter aliases, variants, and provider
+		// routing can have different prices and must remain unknown until reviewed.
+		flatPriceAsOf("anthropic/claude-opus-4.8", 5.00, 25.00, "2026-07-14"),
+		flatPriceAsOf("anthropic/claude-sonnet-5", 2.00, 10.00, "2026-07-14"),
+		flatPriceAsOf("deepseek/deepseek-v4-flash", 0.09, 0.18, "2026-07-14"),
 	},
 	"gemini": {
 		// Gemini Developer API standard paid-tier pricing, checked from
@@ -99,6 +109,12 @@ func flatPrice(pattern string, inputUSDPerMTok, outputUSDPerMTok float64) modelP
 	}
 }
 
+func flatPriceAsOf(pattern string, inputUSDPerMTok, outputUSDPerMTok float64, asOf string) modelPrice {
+	price := flatPrice(pattern, inputUSDPerMTok, outputUSDPerMTok)
+	price.AsOf = asOf
+	return price
+}
+
 func tieredPrice(pattern string, tiers ...priceTier) modelPrice {
 	return modelPrice{
 		Pattern: pattern,
@@ -124,10 +140,14 @@ func lookupPrice(provider, model string, inputTokens int64) (TokenPrice, bool) {
 			if !ok {
 				return TokenPrice{}, false
 			}
+			asOf := p.AsOf
+			if asOf == "" {
+				asOf = pricingAsOf
+			}
 			return TokenPrice{
 				InputUSDPerMTok:  tier.InputUSDPerMTok,
 				OutputUSDPerMTok: tier.OutputUSDPerMTok,
-				AsOf:             pricingAsOf,
+				AsOf:             asOf,
 			}, true
 		}
 	}
