@@ -187,12 +187,14 @@ func TestNewOpenAIClient_BoundsStreamResponseHeaderTimeout(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, openaiStreamResponseHeaderTimeout, transport.ResponseHeaderTimeout)
 	assert.Equal(t, openaiStreamChunkTimeout, client.streamChunkTimeout)
+	assert.Equal(t, 300*time.Second, client.streamFirstChunkTimeout)
 
 	shortTimeoutClient := NewOpenAIClient("sk-test", "gpt-4", "https://api.openai.com/v1", 2*time.Second)
 	shortTransport, ok := shortTimeoutClient.streamClient.Transport.(*http.Transport)
 	require.True(t, ok)
 	assert.Equal(t, 2*time.Second, shortTransport.ResponseHeaderTimeout)
 	assert.Equal(t, 2*time.Second, shortTimeoutClient.streamChunkTimeout)
+	assert.Equal(t, 2*time.Second, shortTimeoutClient.streamFirstChunkTimeout)
 }
 
 func TestNewOpenAICompatibleClient_NormalizesProviderBasePaths(t *testing.T) {
@@ -247,7 +249,9 @@ func TestNewOpenAICompatibleClient_NormalizesProviderBasePaths(t *testing.T) {
 func TestOpenAIClient_ChatStream_TimesOutWaitingForFirstStreamChunk(t *testing.T) {
 	body := newBlockingReadCloser()
 	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", time.Second)
-	client.streamChunkTimeout = 10 * time.Millisecond
+	// The wait for first bytes honors the full request timeout (local backends
+	// can spend minutes on prompt processing), not the inter-chunk gap bound.
+	client.streamFirstChunkTimeout = 10 * time.Millisecond
 	client.streamClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			return &http.Response{

@@ -48,6 +48,11 @@ type OpenAIClient struct {
 	// body chunks. Bound that gap separately from the full turn timeout so chat
 	// fallback can move before the drawer looks dead.
 	streamChunkTimeout time.Duration
+	// Local OpenAI-compatible backends (LM Studio, llama.cpp, vLLM on CPU) can
+	// legitimately spend minutes on prompt processing before the first SSE
+	// chunk, so the wait for first bytes honors the configured request timeout
+	// instead of the inter-chunk gap bound (issue discussion #1571).
+	streamFirstChunkTimeout time.Duration
 }
 
 // NewOpenAIClient creates a new OpenAI API client
@@ -72,14 +77,15 @@ func NewOpenAICompatibleClient(providerName, apiKey, model, baseURL string, time
 		timeout = 300 * time.Second // Default 5 minutes
 	}
 	return &OpenAIClient{
-		providerName:       providerName,
-		apiKey:             apiKey,
-		model:              model,
-		baseURL:            baseURL,
-		requestTimeout:     timeout,
-		client:             &http.Client{Timeout: timeout},
-		streamClient:       newOpenAIStreamHTTPClient(timeout),
-		streamChunkTimeout: boundedOpenAIStreamChunkTimeout(timeout),
+		providerName:            providerName,
+		apiKey:                  apiKey,
+		model:                   model,
+		baseURL:                 baseURL,
+		requestTimeout:          timeout,
+		client:                  &http.Client{Timeout: timeout},
+		streamClient:            newOpenAIStreamHTTPClient(timeout),
+		streamChunkTimeout:      boundedOpenAIStreamChunkTimeout(timeout),
+		streamFirstChunkTimeout: timeout,
 	}
 }
 
@@ -1126,9 +1132,15 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 		return false, nil
 	}
 
+	receivedFirstChunk := false
 	for {
-		n, err := readOpenAIStreamChunk(streamCtx, reader, buf, c.streamChunkTimeout)
+		chunkTimeout := c.streamChunkTimeout
+		if !receivedFirstChunk {
+			chunkTimeout = c.streamFirstChunkTimeout
+		}
+		n, err := readOpenAIStreamChunk(streamCtx, reader, buf, chunkTimeout)
 		if n > 0 {
+			receivedFirstChunk = true
 			pendingData += string(buf[:n])
 			lines := strings.Split(pendingData, "\n")
 
