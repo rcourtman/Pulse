@@ -11,7 +11,10 @@ import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { getAlertStyles } from '@/utils/alerts';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { WebInterfaceNameLink } from '@/components/shared/WebInterfaceNameLink';
+import {
+  WEB_INTERFACE_LINK_COLOR_CLASS,
+  WebInterfaceNameLink,
+} from '@/components/shared/WebInterfaceNameLink';
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { NodeDrawer } from '@/components/Workloads/NodeDrawer';
@@ -351,7 +354,7 @@ export const ProxmoxNodesTable: Component<{
                           <WebInterfaceNameLink
                             name={name()}
                             url={externalUrl()}
-                            class="truncate font-semibold text-base-content transition-colors hover:text-sky-600 dark:hover:text-sky-400"
+                            class={`truncate font-semibold ${WEB_INTERFACE_LINK_COLOR_CLASS}`}
                             fallbackClass="truncate font-semibold text-base-content"
                             title={`Open ${name()} web interface`}
                           />

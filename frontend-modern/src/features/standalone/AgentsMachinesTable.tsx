@@ -21,7 +21,10 @@ import { ActionIconButton } from '@/components/shared/Button';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { TemperatureGauge } from '@/components/shared/TemperatureGauge';
-import { WebInterfaceNameLink } from '@/components/shared/WebInterfaceNameLink';
+import {
+  WEB_INTERFACE_LINK_COLOR_CLASS,
+  WebInterfaceNameLink,
+} from '@/components/shared/WebInterfaceNameLink';
 import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
@@ -1575,7 +1578,7 @@ export const AgentsMachinesTable: Component<{
                               <WebInterfaceNameLink
                                 name={name()}
                                 url={savedWebInterfaceUrl()}
-                                class="truncate font-semibold text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                                class={`truncate font-semibold ${WEB_INTERFACE_LINK_COLOR_CLASS}`}
                                 fallbackClass="truncate font-semibold text-base-content"
                               />
                             </div>

@@ -1,7 +1,10 @@
 import { Show } from 'solid-js';
 
 import { GROUPED_TABLE_ROW_BADGE_CLASS } from '@/components/shared/groupedTableRowPresentation';
-import { WebInterfaceNameLink } from '@/components/shared/WebInterfaceNameLink';
+import {
+  WEB_INTERFACE_LINK_COLOR_CLASS,
+  WebInterfaceNameLink,
+} from '@/components/shared/WebInterfaceNameLink';
 import type { GroupHeaderMeta } from '@/features/alerts/thresholds/tableTypes';
 
 interface AlertResourceGroupHeaderProps {
@@ -18,7 +21,7 @@ export function AlertResourceGroupHeader(props: AlertResourceGroupHeaderProps) {
         <WebInterfaceNameLink
           name={groupLabel()}
           url={props.meta?.host}
-          class="text-base-content transition-colors duration-150 hover:text-sky-600 dark:hover:text-sky-400"
+          class={WEB_INTERFACE_LINK_COLOR_CLASS}
           fallbackClass=""
           title={`Open ${groupLabel()} web interface`}
         />

@@ -28,7 +28,10 @@ import {
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import { DiscoveryReadinessBadge } from '@/components/shared/DiscoveryReadinessBadge';
 import { getWorkloadGuestDiskStatusMessage } from '@/utils/workloadGuestPresentation';
-import { WebInterfaceNameLink } from '@/components/shared/WebInterfaceNameLink';
+import {
+  WEB_INTERFACE_LINK_COLOR_CLASS,
+  WebInterfaceNameLink,
+} from '@/components/shared/WebInterfaceNameLink';
 import type { GuestRowProps } from './guestRowModel';
 import { useGuestRowState } from './useGuestRowState';
 import type { WorkloadTableMetric } from './workloadMetricHistoryModel';
@@ -204,7 +207,7 @@ export function GuestRow(props: GuestRowProps) {
                 <WebInterfaceNameLink
                   name={props.guest.name}
                   url={customUrl()}
-                  class="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline select-none truncate"
+                  class={`text-[11px] font-medium select-none truncate ${WEB_INTERFACE_LINK_COLOR_CLASS}`}
                   fallbackClass="text-[11px] font-medium text-base-content select-none truncate"
                 />
                 {/* Show backup indicator in name cell only if backup column is hidden */}
@@ -241,7 +244,10 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Availability */}
         <Show when={isColVisible('availability')}>
-          <td class="px-1.5 sm:px-2 py-0.5 align-middle text-center" data-workload-col="availability">
+          <td
+            class="px-1.5 sm:px-2 py-0.5 align-middle text-center"
+            data-workload-col="availability"
+          >
             <Show when={availabilityPresentation()}>
               {(ap) => <AvailabilityProbeCell presentation={ap()} />}
             </Show>

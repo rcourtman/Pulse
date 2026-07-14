@@ -1,6 +1,12 @@
 import { Show, type Component, type JSX } from 'solid-js';
 import { asTrimmedString } from '@/utils/stringUtils';
 
+// Canonical link colors for resource names that open a web interface. Every
+// table and header that renders a WebInterfaceNameLink composes these with its
+// own sizing/layout classes so a saved URL always reads as a link.
+export const WEB_INTERFACE_LINK_COLOR_CLASS =
+  'text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300';
+
 export interface WebInterfaceNameLinkProps {
   name: string;
   url?: string | null;

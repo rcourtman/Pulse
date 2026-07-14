@@ -13,7 +13,10 @@ import {
 } from '@/components/shared/groupedTableRowPresentation';
 import { ResponsiveMetricCell } from '@/components/shared/responsive';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { WebInterfaceNameLink } from '@/components/shared/WebInterfaceNameLink';
+import {
+  WEB_INTERFACE_LINK_COLOR_CLASS,
+  WebInterfaceNameLink,
+} from '@/components/shared/WebInterfaceNameLink';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { StackedMemoryBar } from '@/components/Workloads/StackedMemoryBar';
@@ -258,8 +261,7 @@ const DOCKER_CONTAINER_SEARCH_TIPS = {
     { code: '-watchtower', description: 'Hide containers matching a term' },
   ],
   footerHighlight: 'Tip',
-  footerText:
-    'Combine exclusions and save them as a default view to keep noisy containers hidden.',
+  footerText: 'Combine exclusions and save them as a default view to keep noisy containers hidden.',
 };
 
 export const DockerContainersTable: Component<DockerContainersTableProps> = (props) => {
@@ -366,10 +368,13 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
   // Grouped-by-host view, mirroring the workloads table: preference persists
   // locally (not in the URL) and only applies once the fleet spans more than
   // one host; a single-host list gains nothing from a group header.
-  const [groupingModePreference, setGroupingModePreference] =
-    usePersistentSignal<GroupedTableMode>('dockerContainersGroupingMode', 'grouped', {
+  const [groupingModePreference, setGroupingModePreference] = usePersistentSignal<GroupedTableMode>(
+    'dockerContainersGroupingMode',
+    'grouped',
+    {
       deserialize: (raw) => (raw === 'grouped' || raw === 'flat' ? raw : 'grouped'),
-    });
+    },
+  );
   const isGroupable = createMemo(() => hostOptions().length > 1);
   const groupingMode = createMemo<GroupedTableMode>(() =>
     isGroupable() ? groupingModePreference() : 'flat',
@@ -444,16 +449,11 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
     const running = () => isContainerRunning(resource);
     const metricsKey = () => buildMetricKeyForUnifiedResource(resource);
     const cpuPercent = () => getPlatformTableFiniteMetric(resource.cpu?.current);
-    const memoryUsed = () =>
-      getPlatformTableFiniteMetric(resource.memory?.used) ?? 0;
-    const memoryTotal = () =>
-      getPlatformTableFiniteMetric(resource.memory?.total) ?? 0;
+    const memoryUsed = () => getPlatformTableFiniteMetric(resource.memory?.used) ?? 0;
+    const memoryTotal = () => getPlatformTableFiniteMetric(resource.memory?.total) ?? 0;
     const memoryPercentOnly = () =>
-      memoryTotal() > 0
-        ? undefined
-        : getPlatformTableFiniteMetric(resource.memory?.current);
-    const hasMemoryMetric = () =>
-      memoryTotal() > 0 || memoryPercentOnly() !== undefined;
+      memoryTotal() > 0 ? undefined : getPlatformTableFiniteMetric(resource.memory?.current);
+    const hasMemoryMetric = () => memoryTotal() > 0 || memoryPercentOnly() !== undefined;
     const restartCount = () => resource.docker?.restartCount ?? 0;
     const ports = () => dockerContainerPortsSummary(resource);
     const networks = () => networksSummary(resource);
@@ -482,9 +482,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
           );
         case 'host':
           return (
-            <TableCell
-              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
-            >
+            <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
               <span class="block max-w-full truncate" title={host()}>
                 {host()}
               </span>
@@ -492,9 +490,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
           );
         case 'runtime':
           return (
-            <TableCell
-              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
-            >
+            <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
               <span class="block max-w-full truncate" title={runtime()}>
                 {runtime()}
               </span>
@@ -502,9 +498,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
           );
         case 'image':
           return (
-            <TableCell
-              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
-            >
+            <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
               <span class="block max-w-full truncate" title={image()}>
                 {image()}
               </span>
@@ -512,9 +506,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
           );
         case 'state':
           return (
-            <TableCell
-              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
-            >
+            <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
               <span class="block max-w-full truncate" title={state()}>
                 {state()}
               </span>
@@ -550,9 +542,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
           );
         case 'restarts':
           return (
-            <TableCell
-              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
-            >
+            <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
               <Show
                 when={typeof resource.docker?.restartCount === 'number'}
                 fallback={<span>—</span>}
@@ -571,22 +561,15 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
           );
         case 'ports':
           return (
-            <TableCell
-              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
-            >
-              <span
-                class="block max-w-full truncate font-mono text-[11px]"
-                title={ports()}
-              >
+            <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
+              <span class="block max-w-full truncate font-mono text-[11px]" title={ports()}>
                 {ports()}
               </span>
             </TableCell>
           );
         case 'networks':
           return (
-            <TableCell
-              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
-            >
+            <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
               <span class="block max-w-full truncate" title={networks()}>
                 {networks()}
               </span>
@@ -594,9 +577,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
           );
         case 'mounts':
           return (
-            <TableCell
-              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
-            >
+            <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
               <span class="block max-w-full truncate" title={mounts()}>
                 {mounts()}
               </span>
@@ -604,9 +585,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
           );
         case 'updates':
           return (
-            <TableCell
-              class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}
-            >
+            <TableCell class={`${getPlatformTableCellClassForKind(column.kind)} text-base-content`}>
               <Show
                 when={action}
                 fallback={
@@ -688,7 +667,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             <WebInterfaceNameLink
               name={group.host}
               url={group.hostResource?.customUrl}
-              class="truncate text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+              class={`truncate ${WEB_INTERFACE_LINK_COLOR_CLASS}`}
               fallbackClass="truncate"
             />
             <span class={GROUPED_TABLE_ROW_BADGE_CLASS}>
@@ -788,7 +767,9 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
             body={
               <Show
                 when={groupingMode() === 'grouped'}
-                fallback={<For each={sortedRows()}>{(resource) => renderContainerRow(resource)}</For>}
+                fallback={
+                  <For each={sortedRows()}>{(resource) => renderContainerRow(resource)}</For>
+                }
               >
                 <For each={groupedRows()}>
                   {(group) => (
