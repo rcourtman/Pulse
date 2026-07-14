@@ -508,6 +508,138 @@ func TestApplyDockerReportMigratesGuestMetadataToStableContainerName(t *testing.
 	}
 }
 
+func TestApplyDockerReportFoldsRuntimeKeyDockerMetadataIntoStableGuestKey(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	baseTimestamp := time.Now().UTC()
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-runtime-fold",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:  "docker-host-runtime-fold",
+			MachineID: "machine-runtime-fold",
+		},
+		Containers: []agentsdocker.Container{
+			{ID: "container-wud", Name: "/wud"},
+		},
+		Timestamp: baseTimestamp,
+	}
+
+	host, err := monitor.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatalf("first ApplyDockerReport failed: %v", err)
+	}
+
+	// A URL saved through the resource drawer historically landed on the
+	// runtime container key in the docker store.
+	if err := monitor.dockerMetadataStore.Set(host.ID+":container:container-wud", &config.DockerMetadata{
+		CustomURL: "https://wud.internal",
+	}); err != nil {
+		t.Fatalf("seed docker metadata: %v", err)
+	}
+
+	report.Timestamp = baseTimestamp.Add(30 * time.Second)
+	if _, err := monitor.ApplyDockerReport(report, nil); err != nil {
+		t.Fatalf("second ApplyDockerReport failed: %v", err)
+	}
+
+	stableKey := dockerAppContainerMetadataKey(host.ID, "wud")
+	stableMeta := monitor.guestMetadataStore.Get(stableKey)
+	if stableMeta == nil {
+		t.Fatalf("expected runtime docker metadata folded into stable guest key %q", stableKey)
+	}
+	if stableMeta.CustomURL != "https://wud.internal" {
+		t.Fatalf("stable guest metadata URL = %q, want https://wud.internal", stableMeta.CustomURL)
+	}
+
+	resources := []unifiedresources.Resource{
+		{
+			ID:   dockerAppContainerLegacyResourceID(host.ID, "container-wud"),
+			Type: unifiedresources.ResourceTypeAppContainer,
+			Name: "wud",
+			Docker: &unifiedresources.DockerData{
+				HostSourceID: host.ID,
+				ContainerID:  "container-wud",
+			},
+		},
+	}
+	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	if got[0].CustomURL != "https://wud.internal" {
+		t.Fatalf("projected CustomURL = %q, want https://wud.internal", got[0].CustomURL)
+	}
+}
+
+func TestApplyDockerReportKeepsClearedStableGuestKeyOverRuntimeDockerMetadata(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	baseTimestamp := time.Now().UTC()
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-cleared-stable",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:  "docker-host-cleared-stable",
+			MachineID: "machine-cleared-stable",
+		},
+		Containers: []agentsdocker.Container{
+			{ID: "container-cleared", Name: "cleared"},
+		},
+		Timestamp: baseTimestamp,
+	}
+
+	host, err := monitor.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatalf("first ApplyDockerReport failed: %v", err)
+	}
+
+	// A user cleared the link: the stable guest key intentionally holds an
+	// empty record. A stale runtime-key docker record must not overwrite or
+	// outrank it.
+	stableKey := dockerAppContainerMetadataKey(host.ID, "cleared")
+	if err := monitor.guestMetadataStore.Set(stableKey, &config.GuestMetadata{
+		CustomURL:     "",
+		LastKnownName: "cleared",
+		LastKnownType: "app-container",
+	}); err != nil {
+		t.Fatalf("seed cleared guest metadata: %v", err)
+	}
+	if err := monitor.dockerMetadataStore.Set(host.ID+":container:container-cleared", &config.DockerMetadata{
+		CustomURL: "https://stale.internal",
+	}); err != nil {
+		t.Fatalf("seed docker metadata: %v", err)
+	}
+
+	report.Timestamp = baseTimestamp.Add(30 * time.Second)
+	if _, err := monitor.ApplyDockerReport(report, nil); err != nil {
+		t.Fatalf("second ApplyDockerReport failed: %v", err)
+	}
+
+	if meta := monitor.guestMetadataStore.Get(stableKey); meta == nil || meta.CustomURL != "" {
+		t.Fatalf("cleared stable guest metadata was overwritten: %#v", meta)
+	}
+
+	resources := []unifiedresources.Resource{
+		{
+			ID:   dockerAppContainerLegacyResourceID(host.ID, "container-cleared"),
+			Type: unifiedresources.ResourceTypeAppContainer,
+			Name: "cleared",
+			Docker: &unifiedresources.DockerData{
+				HostSourceID: host.ID,
+				ContainerID:  "container-cleared",
+			},
+		},
+	}
+	got := monitor.applyDockerMetadataToUnifiedResources(resources)
+	if got[0].CustomURL != "" {
+		t.Fatalf("projected CustomURL = %q, want empty (cleared)", got[0].CustomURL)
+	}
+}
+
 func TestApplyDockerReportSkipsMetadataMigrationForAmbiguousContainerNames(t *testing.T) {
 	monitor := newTestMonitor(t)
 

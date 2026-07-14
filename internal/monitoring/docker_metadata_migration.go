@@ -245,6 +245,43 @@ func (m *Monitor) migrateCurrentDockerContainerMetadataToStableIdentities(
 					break
 				}
 			}
+
+			// URLs saved through the resource drawer historically landed in the
+			// docker store under the runtime container key, which any stable
+			// record outranks in the unified customUrl projection. Fold them
+			// into the stable guest key so those saves surface in the tables
+			// and survive container recreation. Runtime key first: it is where
+			// writes landed, so it is fresher than its copy-if-missing snapshot
+			// under the container-name key.
+			if m.guestMetadataStore != nil && m.dockerMetadataStore != nil &&
+				m.guestMetadataStore.Get(stableKey) == nil {
+				source := m.dockerMetadataStore.Get(dockerContainerRuntimeMetadataKey(hostID, containerID))
+				if source == nil {
+					source = m.dockerMetadataStore.Get(dockerContainerNameMetadataKey(hostID, containerName))
+				}
+				if source != nil {
+					clone := &config.GuestMetadata{
+						CustomURL:     source.CustomURL,
+						Description:   source.Description,
+						LastKnownName: containerName,
+						LastKnownType: "app-container",
+					}
+					if len(source.Tags) > 0 {
+						clone.Tags = append([]string(nil), source.Tags...)
+					}
+					if len(source.Notes) > 0 {
+						clone.Notes = append([]string(nil), source.Notes...)
+					}
+					if err := m.guestMetadataStore.Set(stableKey, clone); err != nil {
+						log.Warn().
+							Err(err).
+							Str("dockerHostID", hostID).
+							Str("containerName", container.Name).
+							Str("containerID", container.ID).
+							Msg("Failed to migrate docker metadata to stable app-container guest key")
+					}
+				}
+			}
 		}
 	}
 }

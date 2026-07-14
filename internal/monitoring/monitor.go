@@ -5232,13 +5232,18 @@ func (m *Monitor) dockerAppContainerCustomURL(
 	}
 
 	if m.dockerMetadataStore != nil {
+		// The runtime key is where drawer saves used to land, so it is always at
+		// least as fresh as the stable name key, which only receives
+		// copy-if-missing snapshots of it. Prefer the runtime record while it
+		// exists; the stable name key covers recreated containers whose old
+		// runtime key no longer matches.
+		if meta := m.dockerMetadataStore.Get(dockerContainerRuntimeMetadataKey(hostID, containerID)); meta != nil {
+			return strings.TrimSpace(meta.CustomURL), true
+		}
 		if stableKey := dockerContainerNameMetadataKey(hostID, resource.Name); stableKey != "" {
 			if meta := m.dockerMetadataStore.Get(stableKey); meta != nil {
 				return strings.TrimSpace(meta.CustomURL), true
 			}
-		}
-		if meta := m.dockerMetadataStore.Get(dockerContainerRuntimeMetadataKey(hostID, containerID)); meta != nil {
-			return strings.TrimSpace(meta.CustomURL), true
 		}
 	}
 
