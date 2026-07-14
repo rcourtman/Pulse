@@ -74,6 +74,7 @@ func (a *diskPoolAssignment) lookup(disk models.PhysicalDisk) string {
 	}
 	wwn := strings.ToLower(strings.TrimSpace(disk.WWN))
 	wwn = strings.TrimPrefix(wwn, "0x")
+	wwn = strings.TrimPrefix(wwn, "eui.")
 	if wwn != "" {
 		if pool, ok := a.serialPool[wwn]; ok {
 			return pool
@@ -196,6 +197,12 @@ func serialFromByID(raw string) string {
 	// Strip optional partition suffix like "-part1"
 	if idx := strings.LastIndex(name, "-part"); idx > 0 {
 		name = name[:idx]
+	}
+	// NVMe pools are often built from nvme-eui.<hex> references (the
+	// installer's pick when identical models share a box); the hex is the
+	// device's WWN/EUI, which smartctl reports as "eui.<hex>" or "0x<hex>".
+	if strings.HasPrefix(name, "nvme-eui.") {
+		return strings.TrimPrefix(name, "nvme-eui.")
 	}
 	// The last underscore-separated token is typically the serial.
 	if idx := strings.LastIndex(name, "_"); idx > 0 {

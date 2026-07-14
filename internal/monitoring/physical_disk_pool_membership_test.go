@@ -34,6 +34,12 @@ func TestDiskPoolAssignmentLookup(t *testing.T) {
 				{Name: "wwn-0x50014ee2123456ab", Leaf: 1},
 			},
 		},
+		{
+			Name: "flash",
+			Devices: []proxmox.ZFSPoolDevice{
+				{Name: "/dev/disk/by-id/nvme-eui.0025385b91501234-part3", Leaf: 1},
+			},
+		},
 	}
 
 	assignment := buildDiskPoolAssignment(pools)
@@ -47,6 +53,16 @@ func TestDiskPoolAssignmentLookup(t *testing.T) {
 			label: "by-id match via serial token",
 			disk:  models.PhysicalDisk{DevPath: "/dev/sda", Serial: "S5Y2NX0R500001Z"},
 			want:  "rpool",
+		},
+		{
+			label: "nvme-eui by-id leaf matches disk WWN in eui form",
+			disk:  models.PhysicalDisk{DevPath: "/dev/nvme0n1", WWN: "eui.0025385B91501234"},
+			want:  "flash",
+		},
+		{
+			label: "nvme-eui by-id leaf matches disk WWN in 0x form",
+			disk:  models.PhysicalDisk{DevPath: "/dev/nvme0n1", WWN: "0x0025385b91501234"},
+			want:  "flash",
 		},
 		{
 			label: "short leaf name matches partition-stripped devpath",
