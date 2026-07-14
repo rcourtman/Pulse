@@ -2070,6 +2070,12 @@ a new API state machine, queue contract, or verification-accounting field.
    lifecycle evidence is appended, and the shared `action.completed` SSE bridge
    publishes the terminal failure so agents do not poll a stale plan into
    execution.
+   The resource version that anchors that comparison hashes semantic state
+   only: relationship edges count by identity (source, target, type, active),
+   never by their `ObservedAt`/`LastSeenAt` observation stamps, because
+   adapters restamp those on every report cycle and a version that churns with
+   observation time makes every human-reviewed plan drift before it can be
+   approved and executed.
    Dry-run-only plans are not executable plans and must fail closed before any
    `executing` mutation. If no API executor is registered, the endpoint must
    fail closed without mutating the approved audit record or appending execution

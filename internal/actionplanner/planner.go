@@ -658,6 +658,11 @@ type normalizedCapabilityForResourceHash struct {
 	Params               []unified.CapabilityParam            `json:"params,omitempty"`
 }
 
+// normalizedRelationship hashes edge identity only. Observation timestamps
+// are deliberately excluded: adapters restamp ObservedAt/LastSeenAt on every
+// report cycle (Docker every ~15s), which made every plan against a
+// relationship-bearing resource drift before a human could review and approve
+// it. Same identity-versus-timestamp boundary as change emission (#1496).
 type normalizedRelationship struct {
 	SourceID   string                   `json:"sourceId"`
 	TargetID   string                   `json:"targetId"`
@@ -665,8 +670,6 @@ type normalizedRelationship struct {
 	Confidence float64                  `json:"confidence"`
 	Active     bool                     `json:"active"`
 	Discoverer string                   `json:"discoverer"`
-	ObservedAt time.Time                `json:"observedAt,omitempty"`
-	LastSeenAt time.Time                `json:"lastSeenAt,omitempty"`
 	Metadata   map[string]any           `json:"metadata,omitempty"`
 }
 
@@ -769,8 +772,6 @@ func normalizeRelationships(relationships []unified.ResourceRelationship) []norm
 			Confidence: relationship.Confidence,
 			Active:     relationship.Active,
 			Discoverer: strings.TrimSpace(relationship.Discoverer),
-			ObservedAt: relationship.ObservedAt.UTC(),
-			LastSeenAt: relationship.LastSeenAt.UTC(),
 			Metadata:   relationship.Metadata,
 		})
 	}

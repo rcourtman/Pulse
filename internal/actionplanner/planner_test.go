@@ -325,3 +325,34 @@ func TestExportedValidationMatchesPlanningExactly(t *testing.T) {
 		t.Fatal("undeclared parameter must fail")
 	}
 }
+
+func TestResourceVersionIgnoresRelationshipObservationTimestamps(t *testing.T) {
+	base := unified.Resource{
+		ID:     "app-container:1",
+		Type:   unified.ResourceTypeAppContainer,
+		Name:   "api",
+		Status: unified.StatusOnline,
+		Relationships: []unified.ResourceRelationship{{
+			SourceID: "app-container:1", TargetID: "docker-network:1",
+			Type: unified.RelationshipType("attached_to"), Confidence: 1, Active: true,
+			Discoverer: "docker_adapter",
+			ObservedAt: time.Date(2026, 7, 14, 11, 0, 0, 0, time.UTC),
+			LastSeenAt: time.Date(2026, 7, 14, 11, 0, 0, 0, time.UTC),
+		}},
+	}
+	restamped := base
+	restamped.Relationships = []unified.ResourceRelationship{base.Relationships[0]}
+	restamped.Relationships[0].ObservedAt = base.Relationships[0].ObservedAt.Add(15 * time.Second)
+	restamped.Relationships[0].LastSeenAt = base.Relationships[0].LastSeenAt.Add(15 * time.Second)
+
+	if ResourceVersion(base) != ResourceVersion(restamped) {
+		t.Fatal("resource version drifted on relationship observation restamp alone")
+	}
+
+	rewired := base
+	rewired.Relationships = []unified.ResourceRelationship{base.Relationships[0]}
+	rewired.Relationships[0].TargetID = "docker-network:2"
+	if ResourceVersion(base) == ResourceVersion(rewired) {
+		t.Fatal("resource version ignored a real relationship change")
+	}
+}
