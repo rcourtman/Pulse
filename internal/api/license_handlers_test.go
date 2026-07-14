@@ -66,13 +66,14 @@ func issueCheckoutActivationGrant(t *testing.T) string {
 	t.Helper()
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID: "lic_checkout_success",
-		Tier:      "pro_plus",
-		State:     "active",
-		Features:  []string{"relay", "ai_alerts"},
-		IssuedAt:  time.Now().Unix(),
-		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-		Email:     "buyer@example.com",
+		LicenseID:      "lic_checkout_success",
+		LicenseVersion: 1,
+		Tier:           "pro_plus",
+		State:          "active",
+		Features:       []string{"relay", "ai_alerts"},
+		IssuedAt:       time.Now().Unix(),
+		ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+		Email:          "buyer@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -401,14 +402,15 @@ func TestHandleActivateLicense_ExchangesLegacyJWTInStrictV6(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-				LicenseID: "lic_exchanged",
-				Tier:      "pro",
-				PlanKey:   tc.planKey,
-				State:     "active",
-				Features:  []string{"relay"},
-				IssuedAt:  time.Now().Unix(),
-				ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-				Email:     "legacy-jwt@example.com",
+				LicenseID:      "lic_exchanged",
+				LicenseVersion: 1,
+				Tier:           "pro",
+				PlanKey:        tc.planKey,
+				State:          "active",
+				Features:       []string{"relay"},
+				IssuedAt:       time.Now().Unix(),
+				ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+				Email:          "legacy-jwt@example.com",
 			})
 			if err != nil {
 				t.Fatalf("generate grant jwt: %v", err)
@@ -417,6 +419,9 @@ func TestHandleActivateLicense_ExchangesLegacyJWTInStrictV6(t *testing.T) {
 			t.Cleanup(func() { license.SetPublicKey(nil) })
 
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if handleTestInstallationStatus(w, r, 1) {
+					return
+				}
 				if r.URL.Path != "/v1/licenses/exchange" {
 					t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
 				}
@@ -499,13 +504,14 @@ func TestHandleActivateLicense_ClearsCommercialMigrationStateOnNativeActivation(
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID: "lic_v6_native",
-		Tier:      "pro",
-		State:     "active",
-		Features:  []string{"relay"},
-		IssuedAt:  time.Now().Unix(),
-		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-		Email:     "native-v6@example.com",
+		LicenseID:      "lic_v6_native",
+		LicenseVersion: 1,
+		Tier:           "pro",
+		State:          "active",
+		Features:       []string{"relay"},
+		IssuedAt:       time.Now().Unix(),
+		ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+		Email:          "native-v6@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -514,6 +520,9 @@ func TestHandleActivateLicense_ClearsCommercialMigrationStateOnNativeActivation(
 	t.Cleanup(func() { license.SetPublicKey(nil) })
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if handleTestInstallationStatus(w, r, 1) {
+			return
+		}
 		if r.URL.Path != "/v1/activate" {
 			t.Fatalf("path = %q, want /v1/activate", r.URL.Path)
 		}
@@ -584,13 +593,14 @@ func TestHandleActivateLicense_ActivationKeyClearsStaleLegacyPersistence(t *test
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID: "lic_v6_native",
-		Tier:      "pro",
-		State:     "active",
-		Features:  []string{"relay"},
-		IssuedAt:  time.Now().Unix(),
-		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-		Email:     "native-v6@example.com",
+		LicenseID:      "lic_v6_native",
+		LicenseVersion: 1,
+		Tier:           "pro",
+		State:          "active",
+		Features:       []string{"relay"},
+		IssuedAt:       time.Now().Unix(),
+		ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+		Email:          "native-v6@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -599,6 +609,9 @@ func TestHandleActivateLicense_ActivationKeyClearsStaleLegacyPersistence(t *test
 	t.Cleanup(func() { license.SetPublicKey(nil) })
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if handleTestInstallationStatus(w, r, 1) {
+			return
+		}
 		if r.URL.Path != "/v1/activate" {
 			t.Fatalf("path = %q, want /v1/activate", r.URL.Path)
 		}
@@ -906,6 +919,9 @@ func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndWritesSuccessBridge
 	grantJWT := issueCheckoutActivationGrant(t)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if handleTestInstallationStatus(w, r, 1) {
+			return
+		}
 		switch r.URL.Path {
 		case "/v1/checkout/session":
 			if r.Method != http.MethodGet {
@@ -990,6 +1006,9 @@ func TestHandleCheckoutActivation_BlocksDuplicateRedemptionAfterSuccess(t *testi
 
 	activateCalls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if handleTestInstallationStatus(w, r, 1) {
+			return
+		}
 		switch r.URL.Path {
 		case "/v1/checkout/session":
 			w.Header().Set("Content-Type", "application/json")
@@ -1062,6 +1081,9 @@ func TestHandleCheckoutActivation_AllowsRetryAfterActivationFailure(t *testing.T
 
 	activateCalls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if handleTestInstallationStatus(w, r, 1) {
+			return
+		}
 		switch r.URL.Path {
 		case "/v1/checkout/session":
 			w.Header().Set("Content-Type", "application/json")

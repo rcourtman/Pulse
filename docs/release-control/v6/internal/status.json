@@ -4715,7 +4715,19 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/report_schedules_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/licensing/installation_status_poll_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         },
@@ -4728,6 +4740,12 @@
         {
           "repo": "pulse-pro",
           "path": "license-server/v6_commercial_transitions_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/v6_status_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         },
@@ -7975,7 +7993,19 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/api/report_schedules_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/licensing/installation_status_poll_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         },
@@ -7988,6 +8018,12 @@
         {
           "repo": "pulse-pro",
           "path": "license-server/v6_commercial_transitions_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/v6_status_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         },
@@ -8751,7 +8787,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "commercial-invalidation-release-gate-self-hosted-commercial-transition-coherence",
+      "agent_id": "commercial-invalidation",
+      "summary": "Replace customer global revocation feed polling with installation-authenticated license status invalidation across Pulse and license server.",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-14T14:40:43Z",
+      "heartbeat_at": "2026-07-14T14:40:43Z",
+      "expires_at": "2026-07-14T18:40:43Z",
+      "work_item": {
+        "kind": "release-gate",
+        "id": "self-hosted-commercial-transition-coherence"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

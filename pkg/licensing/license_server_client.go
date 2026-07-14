@@ -195,6 +195,46 @@ func (c *LicenseServerClient) RefreshGrant(ctx context.Context, installationID, 
 	return &result, nil
 }
 
+// CheckInstallationStatus performs the lightweight installation-authenticated
+// commercial status check. It never returns a replacement grant; callers use
+// RefreshGrant only when the authoritative version requires it.
+func (c *LicenseServerClient) CheckInstallationStatus(ctx context.Context, installationToken string, req InstallationStatusRequest) (*InstallationStatusResponse, error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal installation status request: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/grants/status", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create installation status request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+installationToken)
+
+	statusClient := *c.httpClient
+	statusClient.Timeout = 10 * time.Second
+	resp, err := statusClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("installation status request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result InstallationStatusResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode installation status response: %w", err)
+	}
+	if result.LicenseVersion <= 0 {
+		return nil, fmt.Errorf("decode installation status response: invalid license_version %d", result.LicenseVersion)
+	}
+	return &result, nil
+}
+
 // GetCheckoutSessionResult resolves a commercial checkout session into its
 // authoritative fulfillment payload.
 func (c *LicenseServerClient) GetCheckoutSessionResult(ctx context.Context, sessionID string) (*CheckoutSessionResult, error) {
@@ -267,45 +307,6 @@ func (c *LicenseServerClient) CreateCheckoutPortalHandoff(ctx context.Context, r
 	var result CheckoutPortalHandoffResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode checkout portal handoff response: %w", err)
-	}
-	return &result, nil
-}
-
-// FetchRevocations polls the revocation feed for events after the given sequence number.
-// The feedToken authenticates access to the revocation feed.
-func (c *LicenseServerClient) FetchRevocations(ctx context.Context, feedToken string, sinceSeq int64, limit int) (*RevocationFeedResponse, error) {
-	if err := c.ready(); err != nil {
-		return nil, err
-	}
-
-	if limit <= 0 {
-		limit = 500
-	}
-
-	url := fmt.Sprintf("%s/v1/revocations?since_seq=%d&limit=%d", c.baseURL, sinceSeq, limit)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create revocations request: %w", err)
-	}
-	httpReq.Header.Set("Authorization", "Bearer "+feedToken)
-
-	// Use a shorter timeout for polling.
-	pollClient := *c.httpClient
-	pollClient.Timeout = 10 * time.Second
-
-	resp, err := pollClient.Do(httpReq)
-	if err != nil {
-		return nil, fmt.Errorf("revocations request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, c.parseError(resp)
-	}
-
-	var result RevocationFeedResponse
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
-		return nil, fmt.Errorf("decode revocations response: %w", err)
 	}
 	return &result, nil
 }

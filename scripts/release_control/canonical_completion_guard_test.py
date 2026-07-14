@@ -2720,6 +2720,7 @@ None yet.
                     "test_prefixes": [],
                     "exact_files": [
                         "pkg/licensing/cloud_paid_guardrails_test.go",
+                        "pkg/licensing/installation_status_poll_test.go",
                         "pkg/licensing/models_test.go",
                         "pkg/licensing/service_activate_test.go",
                     ],
@@ -2745,6 +2746,7 @@ None yet.
                     "exact_files": [
                         "pkg/licensing/activation_types_test.go",
                         "pkg/licensing/grant_claims_contract_test.go",
+                        "pkg/licensing/installation_status_poll_test.go",
                         "pkg/licensing/service_activate_test.go",
                     ],
                 }
@@ -2868,7 +2870,7 @@ None yet.
             [
                 "pkg/licensing/service.go",
                 "pkg/licensing/grant_refresh.go",
-                "pkg/licensing/revocation_poll.go",
+                "pkg/licensing/installation_status_poll.go",
             ],
         )
         self.assertEqual(
@@ -2880,14 +2882,14 @@ None yet.
                     "touched_runtime_files": [
                         "pkg/licensing/service.go",
                         "pkg/licensing/grant_refresh.go",
-                        "pkg/licensing/revocation_poll.go",
+                        "pkg/licensing/installation_status_poll.go",
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
                         "pkg/licensing/cloud_paid_guardrails_test.go",
                         "pkg/licensing/grant_refresh_test.go",
-                        "pkg/licensing/revocation_poll_test.go",
+                        "pkg/licensing/installation_status_poll_test.go",
                         "pkg/licensing/service_activate_test.go",
                     ],
                 }
@@ -2910,8 +2912,8 @@ None yet.
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "pkg/licensing/installation_status_poll_test.go",
                         "pkg/licensing/license_server_client_test.go",
-                        "pkg/licensing/revocation_poll_test.go",
                     ],
                 }
             ],

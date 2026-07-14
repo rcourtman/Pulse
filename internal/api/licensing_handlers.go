@@ -42,12 +42,6 @@ const (
 	purchaseReturnKeyPurpose                = "pulse-license-purchase-return"
 )
 
-// revocationFeedToken returns the relay feed token for revocation polling.
-// Empty string means revocation polling is disabled.
-func revocationFeedToken() string {
-	return os.Getenv("PULSE_REVOCATION_FEED_TOKEN")
-}
-
 func wantsMockFixturesFromEnv() bool {
 	return strings.EqualFold(strings.TrimSpace(os.Getenv("PULSE_MOCK_MODE")), "true")
 }
@@ -153,7 +147,7 @@ func (h *LicenseHandlers) StopAllBackgroundLoops() {
 	h.services.Range(func(_, value any) bool {
 		if svc, ok := value.(*licenseService); ok {
 			svc.StopGrantRefresh()
-			svc.StopRevocationPoll()
+			svc.StopInstallationStatusPoll()
 		}
 		return true
 	})
@@ -574,10 +568,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 				}
 				// Start the background refresh loop for the restored grant.
 				service.StartGrantRefresh(context.Background())
-				// Start revocation polling if a feed token is configured.
-				if feedToken := revocationFeedToken(); feedToken != "" {
-					service.StartRevocationPoll(context.Background(), feedToken)
-				}
+				service.StartInstallationStatusPoll(context.Background())
 				log.Info().Str("org_id", orgID).Str("license_id", activationState.LicenseID).Msg("Restored license activation")
 			}
 		}
@@ -612,9 +603,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 					log.Warn().Str("org_id", orgID).Err(clearErr).Msg("Failed to clear commercial migration state after successful auto-exchange")
 				}
 				service.StartGrantRefresh(context.Background())
-				if feedToken := revocationFeedToken(); feedToken != "" {
-					service.StartRevocationPoll(context.Background(), feedToken)
-				}
+				service.StartInstallationStatusPoll(context.Background())
 				if current := service.Current(); current != nil {
 					log.Info().
 						Str("org_id", orgID).
@@ -629,8 +618,8 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 	// If another goroutine stored first, use its service and let ours be GC'd.
 	actual, loaded := h.services.LoadOrStore(orgID, service)
 	if loaded {
-		service.StopGrantRefresh()   // stop our orphaned refresh loop if started
-		service.StopRevocationPoll() // stop our orphaned revocation poller if started
+		service.StopGrantRefresh()           // stop our orphaned refresh loop if started
+		service.StopInstallationStatusPoll() // stop our orphaned status poller if started
 		svc := actual.(*licenseService)
 		h.ensureHostedEntitlementRefreshForOrg(orgID, svc)
 		p, pErr := h.getPersistenceForOrg(orgID)
@@ -985,9 +974,7 @@ func (h *LicenseHandlers) activateLicenseKey(ctx context.Context, licenseKey str
 		}
 		// Activation state is already persisted by ActivateWithKey, but start the refresh loop.
 		service.StartGrantRefresh(context.Background())
-		if feedToken := revocationFeedToken(); feedToken != "" {
-			service.StartRevocationPoll(context.Background(), feedToken)
-		}
+		service.StartInstallationStatusPoll(context.Background())
 		if persistence != nil {
 			if strings.HasPrefix(trimmedKey, activationKeyPrefixValue) {
 				_ = persistence.Delete()

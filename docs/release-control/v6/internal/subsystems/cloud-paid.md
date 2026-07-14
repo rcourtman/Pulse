@@ -147,7 +147,7 @@ avoids a cloud-control-plane report data path across clients.
 10. `pkg/licensing/dev_mode_features.go`
 11. `pkg/licensing/service.go`
 12. `pkg/licensing/grant_refresh.go`
-13. `pkg/licensing/revocation_poll.go`
+13. `pkg/licensing/installation_status_poll.go`
 14. `pkg/licensing/license_server_client.go`
 15. `pkg/licensing/persistence.go`
 16. `pkg/licensing/activation_store.go`
@@ -253,9 +253,9 @@ avoids a cloud-control-plane report data path across clients.
    and `internal/api/licensing_handlers.go` must hand the canonical process
    version and runtime identity into `pkg/licensing/service.go` and
    `pkg/licensing/grant_refresh.go`, and cloud-paid transport must send those
-   values on activate, legacy exchange, and grant refresh instead of inferring
-   install version or paid-runtime status from browser state, dev build
-   metadata, public image tags, or outbound usage telemetry.
+   values on activate, legacy exchange, installation status, and grant refresh
+   instead of inferring install version or paid-runtime status from browser
+   state, dev build metadata, public image tags, or outbound usage telemetry.
    Active self-hosted paid entitlements must also treat runtime identity as a
    first-class product state. A paid Pro, Pro Annual, Pro+, lifetime, or
    enterprise entitlement on a non-Pro or missing runtime identity must render
@@ -804,7 +804,7 @@ the App/AppLayout, routing, and desktop Actions journey tests.
    source may provision only when the plan is otherwise unresolved for staging
    compatibility, and self-hosted v5/v6 checkout metadata must be ignored by
    the Cloud control-plane webhook even if Stripe delivers the event there.
-8. Add or change activation/grant lifecycle, release build helper gating, or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/testing_helpers.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
+8. Add or change activation/grant lifecycle, release build helper gating, or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/testing_helpers.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/installation_status_poll.go`
 9. Add or change license-server transport through `pkg/licensing/license_server_client.go`
    That transport boundary must use HTTPS for non-loopback commercial endpoints,
    may allow plaintext only on direct loopback development targets, and must
@@ -1140,6 +1140,16 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     must fail closed without the authenticated feed, drain it before serving,
     report stale feed state through readiness, and disconnect already-connected
     v6 sessions whose grant falls below an applied version floor.
+29. Add or change customer Pulse commercial invalidation only through
+    `pkg/licensing/installation_status_poll.go`,
+    `pkg/licensing/license_server_client.go`, and the installation-authenticated
+    `pulse-pro:license-server/admin_ui.go`,
+    `pulse-pro:license-server/v6_handlers.go`,
+    `pulse-pro:license-server/v6_grants.go`, and
+    `pulse-pro:license-server/v6_store.go` boundary. The status response may
+    expose only the caller's authoritative license version and bounded cadence
+    hints; it must never expose a grant, the global Relay feed credential, or
+    another commercial subject's event data.
 
 ## Forbidden Paths
 
@@ -1330,11 +1340,16 @@ MSP remains an assisted preview.
 
 The Relay side now fails closed on missing feed authority, drains the feed
 before serving, exposes feed staleness through readiness, and tears down stale
-already-connected v6 sessions while clearing their reconnect tokens. The
-remaining restrictive-transition gap is the customer Pulse runtime: its
-existing optional poller depends on a global operator credential that must not
-be distributed. A scoped installation-authenticated invalidation authority and
-real external Stripe-to-runtime proof remain release-gated.
+already-connected v6 sessions while clearing their reconnect tokens. Customer
+Pulse now uses an immediate, installation-authenticated `POST
+/v1/grants/status` check followed by the existing signed-grant refresh path
+only when the authoritative license version advances. Explicit token,
+installation, or license revocation clears encrypted activation state. An
+authoritative suspension removes paid entitlements immediately while retaining
+the scoped installation credential for automatic recovery; other authorization
+or transport failures retain the last signed grant and surface non-secret
+synchronization health through `/api/license/status`. The global operator feed
+remains Relay-only. Real external Stripe-to-runtime proof remains release-gated.
 
 Hosted handoff target paths are normalized by the shared host-local redirect
 validator at token minting, exchange, and provider-proof boundaries. Absolute,
@@ -2761,7 +2776,7 @@ each ID resolves to an active live recurring Stripe price object.
 Activation service runtime, license-server transport, encrypted activation
 persistence, and hosted entitlement lease signing now follow the same ratchet. Changes
 to `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`,
-`pkg/licensing/revocation_poll.go`, `pkg/licensing/license_server_client.go`,
+`pkg/licensing/installation_status_poll.go`, `pkg/licensing/license_server_client.go`,
 `pkg/licensing/persistence.go`, `pkg/licensing/activation_store.go`, and
 `pkg/licensing/trial_activation.go` should carry their dedicated proof files
 instead of relying only on the generic cloud runtime policy.

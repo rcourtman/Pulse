@@ -2816,12 +2816,15 @@
         "internal/cloudcp/stripe/provisioner.go",
         "internal/hosted/provisioner.go",
         "pulse-pro:landing-page/thanks.html",
+        "pulse-pro:license-server/admin_ui.go",
         "pulse-pro:license-server/grandfathering.go",
         "pulse-pro:license-server/intelligence_value.go",
         "pulse-pro:license-server/main.go",
         "pulse-pro:license-server/self_hosted_feature_catalog.generated.go",
         "pulse-pro:license-server/v6_checkout.go",
+        "pulse-pro:license-server/v6_grants.go",
         "pulse-pro:license-server/v6_handlers.go",
+        "pulse-pro:license-server/v6_store.go",
         "pulse-pro:relay-server/main.go",
         "pulse-pro:relay-server/registry.go",
         "pulse-pro:relay-server/revocation_feed.go",
@@ -2930,6 +2933,7 @@
             "test_prefixes": [],
             "exact_files": [
               "pkg/licensing/cloud_paid_guardrails_test.go",
+              "pkg/licensing/installation_status_poll_test.go",
               "pkg/licensing/models_test.go",
               "pkg/licensing/service_activate_test.go"
             ]
@@ -2946,6 +2950,7 @@
             "exact_files": [
               "pkg/licensing/activation_types_test.go",
               "pkg/licensing/grant_claims_contract_test.go",
+              "pkg/licensing/installation_status_poll_test.go",
               "pkg/licensing/service_activate_test.go"
             ]
           },
@@ -3116,7 +3121,7 @@
             "match_files": [
               "pkg/licensing/dev_mode_features.go",
               "pkg/licensing/grant_refresh.go",
-              "pkg/licensing/revocation_poll.go",
+              "pkg/licensing/installation_status_poll.go",
               "pkg/licensing/service.go",
               "pkg/licensing/testing_helpers.go"
             ],
@@ -3125,7 +3130,7 @@
             "exact_files": [
               "pkg/licensing/cloud_paid_guardrails_test.go",
               "pkg/licensing/grant_refresh_test.go",
-              "pkg/licensing/revocation_poll_test.go",
+              "pkg/licensing/installation_status_poll_test.go",
               "pkg/licensing/service_activate_test.go"
             ]
           },
@@ -3155,8 +3160,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "pkg/licensing/license_server_client_test.go",
-              "pkg/licensing/revocation_poll_test.go"
+              "pkg/licensing/installation_status_poll_test.go",
+              "pkg/licensing/license_server_client_test.go"
             ]
           },
           {
@@ -3508,6 +3513,32 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/pages/__tests__/RuntimeHome.test.tsx"
+            ]
+          },
+          {
+            "id": "customer-license-invalidation",
+            "label": "customer installation-scoped license invalidation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/activation_types.go",
+              "pkg/licensing/grant_refresh.go",
+              "pkg/licensing/installation_status_poll.go",
+              "pkg/licensing/license_server_client.go",
+              "pkg/licensing/models.go",
+              "pkg/licensing/service.go",
+              "pulse-pro:license-server/admin_ui.go",
+              "pulse-pro:license-server/v6_grants.go",
+              "pulse-pro:license-server/v6_handlers.go",
+              "pulse-pro:license-server/v6_store.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/contract_test.go",
+              "pkg/licensing/activation_store_test.go",
+              "pkg/licensing/grant_refresh_test.go",
+              "pkg/licensing/installation_status_poll_test.go",
+              "pulse-pro:license-server/v6_status_test.go"
             ]
           },
           {

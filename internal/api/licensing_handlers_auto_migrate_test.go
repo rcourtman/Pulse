@@ -370,14 +370,15 @@ func TestGetTenantComponents_AutoExchangeLeavesSelfHostedMonitoringUncapped(t *t
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID: "lic_floor_auto",
-		Tier:      "pro",
-		PlanKey:   "legacy_migration_fallback",
-		State:     "active",
-		Features:  []string{"relay"},
-		IssuedAt:  time.Now().Unix(),
-		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-		Email:     "floor-auto@example.com",
+		LicenseID:      "lic_floor_auto",
+		LicenseVersion: 1,
+		Tier:           "pro",
+		PlanKey:        "legacy_migration_fallback",
+		State:          "active",
+		Features:       []string{"relay"},
+		IssuedAt:       time.Now().Unix(),
+		ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+		Email:          "floor-auto@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -386,6 +387,9 @@ func TestGetTenantComponents_AutoExchangeLeavesSelfHostedMonitoringUncapped(t *t
 	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if handleTestInstallationStatus(w, r, 1) {
+			return
+		}
 		if r.URL.Path != "/v1/licenses/exchange" {
 			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
 		}
@@ -577,14 +581,15 @@ func TestActivateLicenseKey_KeepsLegacySelfHostedMigrationUncapped(t *testing.T)
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID: "lic_floor_manual",
-		Tier:      "pro",
-		PlanKey:   "legacy_migration_fallback",
-		State:     "active",
-		Features:  []string{"relay"},
-		IssuedAt:  time.Now().Unix(),
-		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-		Email:     "floor-manual@example.com",
+		LicenseID:      "lic_floor_manual",
+		LicenseVersion: 1,
+		Tier:           "pro",
+		PlanKey:        "legacy_migration_fallback",
+		State:          "active",
+		Features:       []string{"relay"},
+		IssuedAt:       time.Now().Unix(),
+		ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+		Email:          "floor-manual@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -593,6 +598,9 @@ func TestActivateLicenseKey_KeepsLegacySelfHostedMigrationUncapped(t *testing.T)
 	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if handleTestInstallationStatus(w, r, 1) {
+			return
+		}
 		if r.URL.Path != "/v1/licenses/exchange" {
 			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
 		}
@@ -647,14 +655,15 @@ func TestGetTenantComponents_DoesNotCaptureGrandfatherFloorWhenSupplementalInven
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID: "lic_floor_supplemental",
-		Tier:      "pro",
-		PlanKey:   "legacy_migration_fallback",
-		State:     "active",
-		Features:  []string{"relay"},
-		IssuedAt:  time.Now().Unix(),
-		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-		Email:     "floor-supplemental@example.com",
+		LicenseID:      "lic_floor_supplemental",
+		LicenseVersion: 1,
+		Tier:           "pro",
+		PlanKey:        "legacy_migration_fallback",
+		State:          "active",
+		Features:       []string{"relay"},
+		IssuedAt:       time.Now().Unix(),
+		ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+		Email:          "floor-supplemental@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -663,6 +672,9 @@ func TestGetTenantComponents_DoesNotCaptureGrandfatherFloorWhenSupplementalInven
 	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if handleTestInstallationStatus(w, r, 1) {
+			return
+		}
 		if r.URL.Path != "/v1/licenses/exchange" {
 			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
 		}

@@ -220,15 +220,28 @@ const (
 
 // LicenseStatus is the JSON response for license status API.
 type LicenseStatus struct {
-	Valid          bool     `json:"valid"`
-	Tier           Tier     `json:"tier"`
-	PlanVersion    string   `json:"plan_version,omitempty"`
-	Email          string   `json:"email,omitempty"`
-	ExpiresAt      *string  `json:"expires_at,omitempty"`
-	IsLifetime     bool     `json:"is_lifetime"`
-	DaysRemaining  int      `json:"days_remaining"`
-	Features       []string `json:"features"`
-	MaxGuests      int      `json:"max_guests,omitempty"`
-	InGracePeriod  bool     `json:"in_grace_period,omitempty"`
-	GracePeriodEnd *string  `json:"grace_period_end,omitempty"`
+	Valid           bool                          `json:"valid"`
+	Tier            Tier                          `json:"tier"`
+	PlanVersion     string                        `json:"plan_version,omitempty"`
+	Email           string                        `json:"email,omitempty"`
+	ExpiresAt       *string                       `json:"expires_at,omitempty"`
+	IsLifetime      bool                          `json:"is_lifetime"`
+	DaysRemaining   int                           `json:"days_remaining"`
+	Features        []string                      `json:"features"`
+	MaxGuests       int                           `json:"max_guests,omitempty"`
+	InGracePeriod   bool                          `json:"in_grace_period,omitempty"`
+	GracePeriodEnd  *string                       `json:"grace_period_end,omitempty"`
+	Synchronization *LicenseSynchronizationStatus `json:"synchronization,omitempty"`
+}
+
+// LicenseSynchronizationStatus reports non-secret health for the
+// installation-scoped commercial invalidation loop.
+type LicenseSynchronizationStatus struct {
+	Running             bool    `json:"running"`
+	Healthy             bool    `json:"healthy"`
+	Stale               bool    `json:"stale"`
+	LastAttemptAt       *string `json:"last_attempt_at,omitempty"`
+	LastSuccessAt       *string `json:"last_success_at,omitempty"`
+	NextCheckAt         *string `json:"next_check_at,omitempty"`
+	ConsecutiveFailures int     `json:"consecutive_failures"`
 }

@@ -27,6 +27,8 @@ func TestActivationStatePersistence(t *testing.T) {
 		GrantJWT:            "header.payload.signature",
 		GrantJTI:            "grant_xyz",
 		GrantExpiresAt:      1700000000,
+		LicenseVersion:      7,
+		PaidAccessSuspended: true,
 		InstanceFingerprint: "fp-uuid-1234",
 		LicenseServerURL:    "https://license.example.com",
 		ActivatedAt:         1699000000,
@@ -63,6 +65,12 @@ func TestActivationStatePersistence(t *testing.T) {
 		}
 		if loaded.GrantExpiresAt != state.GrantExpiresAt {
 			t.Errorf("GrantExpiresAt = %d, want %d", loaded.GrantExpiresAt, state.GrantExpiresAt)
+		}
+		if loaded.LicenseVersion != state.LicenseVersion {
+			t.Errorf("LicenseVersion = %d, want %d", loaded.LicenseVersion, state.LicenseVersion)
+		}
+		if loaded.PaidAccessSuspended != state.PaidAccessSuspended {
+			t.Errorf("PaidAccessSuspended = %v, want %v", loaded.PaidAccessSuspended, state.PaidAccessSuspended)
 		}
 		if loaded.InstanceFingerprint != state.InstanceFingerprint {
 			t.Errorf("InstanceFingerprint = %q, want %q", loaded.InstanceFingerprint, state.InstanceFingerprint)

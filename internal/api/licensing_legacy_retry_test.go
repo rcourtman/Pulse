@@ -24,13 +24,14 @@ func TestGetTenantComponents_RetriesFailedExchangeInBackground(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID: "lic_retry",
-		Tier:      "pro",
-		State:     "active",
-		Features:  []string{"relay"},
-		IssuedAt:  time.Now().Unix(),
-		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-		Email:     "retry@example.com",
+		LicenseID:      "lic_retry",
+		LicenseVersion: 1,
+		Tier:           "pro",
+		State:          "active",
+		Features:       []string{"relay"},
+		IssuedAt:       time.Now().Unix(),
+		ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+		Email:          "retry@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -42,6 +43,9 @@ func TestGetTenantComponents_RetriesFailedExchangeInBackground(t *testing.T) {
 	// succeed: boot fails, retry #1 fails, retry #2 migrates.
 	var exchangeCalls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if handleTestInstallationStatus(w, r, 1) {
+			return
+		}
 		if r.URL.Path != "/v1/licenses/exchange" {
 			t.Errorf("path = %q, want /v1/licenses/exchange", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)

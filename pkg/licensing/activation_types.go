@@ -17,16 +17,18 @@ const DefaultLicenseServerURL = "https://license.pulserelay.pro"
 // ActivationState holds the local state for an activation-key-based license.
 // Persisted encrypted on disk via Persistence.SaveActivationState.
 type ActivationState struct {
-	InstallationID      string               `json:"installation_id"`      // inst_...
-	InstallationToken   string               `json:"installation_token"`   // pit_live_... (secret)
-	LicenseID           string               `json:"license_id"`           // lic_...
-	GrantJWT            string               `json:"grant_jwt"`            // current relay grant JWT
-	GrantJTI            string               `json:"grant_jti"`            // grant ID for dedup
-	GrantExpiresAt      int64                `json:"grant_expires_at"`     // Unix timestamp
-	InstanceFingerprint string               `json:"instance_fingerprint"` // stable UUID for this installation
-	LicenseServerURL    string               `json:"license_server_url"`   // base URL used for this activation
-	ActivatedAt         int64                `json:"activated_at"`         // Unix timestamp of initial activation
-	LastRefreshedAt     int64                `json:"last_refreshed_at"`    // Unix timestamp of last grant refresh
+	InstallationID      string               `json:"installation_id"`                 // inst_...
+	InstallationToken   string               `json:"installation_token"`              // pit_live_... (secret)
+	LicenseID           string               `json:"license_id"`                      // lic_...
+	GrantJWT            string               `json:"grant_jwt"`                       // current relay grant JWT
+	GrantJTI            string               `json:"grant_jti"`                       // grant ID for dedup
+	GrantExpiresAt      int64                `json:"grant_expires_at"`                // Unix timestamp
+	LicenseVersion      int64                `json:"license_version"`                 // signed grant license version
+	PaidAccessSuspended bool                 `json:"paid_access_suspended,omitempty"` // authoritative local suspension marker
+	InstanceFingerprint string               `json:"instance_fingerprint"`            // stable UUID for this installation
+	LicenseServerURL    string               `json:"license_server_url"`              // base URL used for this activation
+	ActivatedAt         int64                `json:"activated_at"`                    // Unix timestamp of initial activation
+	LastRefreshedAt     int64                `json:"last_refreshed_at"`               // Unix timestamp of last grant refresh
 	Continuity          ActivationContinuity `json:"continuity,omitempty"`
 }
 
@@ -286,25 +288,32 @@ type RefreshGrantResponse struct {
 	RefreshPolicy RefreshHints  `json:"refresh_policy"`
 }
 
-// RevocationEvent is a single event from the revocation feed.
-type RevocationEvent struct {
-	Seq               int64  `json:"seq"`
-	Action            string `json:"action"` // revoke_license|revoke_installation|bump_license_version
-	LicenseID         string `json:"license_id"`
-	InstallationID    string `json:"installation_id"`
-	MinLicenseVersion int64  `json:"min_license_version"`
-	ReasonCode        string `json:"reason_code"`
-	Reason            string `json:"reason"`
-	EffectiveAt       string `json:"effective_at"` // ISO8601
+// InstallationStatusRequest is the lightweight installation-authenticated
+// request used to detect commercial state changes without issuing a new grant.
+type InstallationStatusRequest struct {
+	InstallationID        string           `json:"installation_id"`
+	InstanceFingerprint   string           `json:"instance_fingerprint"`
+	CurrentGrantJTI       string           `json:"current_grant_jti,omitempty"`
+	CurrentLicenseVersion int64            `json:"current_license_version"`
+	ClientVersion         string           `json:"client_version,omitempty"`
+	Runtime               *RuntimeIdentity `json:"runtime,omitempty"`
 }
 
-// RevocationFeedResponse is the payload returned from GET /v1/revocations.
-type RevocationFeedResponse struct {
-	FromSeq   int64             `json:"from_seq"`
-	NextSeq   int64             `json:"next_seq"`
-	LatestSeq int64             `json:"latest_seq"`
-	HasMore   bool              `json:"has_more"`
-	Events    []RevocationEvent `json:"events"`
+// StatusHints contains the server's bounded installation status cadence.
+type StatusHints struct {
+	IntervalSeconds  int     `json:"recommended_check_after_sec"`
+	JitterPercent    float64 `json:"jitter_percent"`
+	RetryBaseSeconds int     `json:"retry_base_sec"`
+	RetryMaxSeconds  int     `json:"retry_max_sec"`
+}
+
+// InstallationStatusResponse reports authoritative license version state.
+// It intentionally contains no grant and no cross-customer event data.
+type InstallationStatusResponse struct {
+	LicenseVersion  int64       `json:"license_version"`
+	RefreshRequired bool        `json:"refresh_required"`
+	StatusPolicy    StatusHints `json:"status_policy"`
+	ServerTime      string      `json:"server_time"`
 }
 
 // ParseExpiresAt parses the RFC3339 expires_at string from a GrantEnvelope

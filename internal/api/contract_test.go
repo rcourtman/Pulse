@@ -7559,19 +7559,65 @@ func TestContract_MissingLicensePublicKeyActivationErrorGuidesLocalBuilds(t *tes
 	}
 }
 
+func TestContract_CustomerLicenseInvalidationUsesInstallationAuthority(t *testing.T) {
+	files := []string{
+		"licensing_handlers.go",
+		"licensing_legacy_retry.go",
+		filepath.Join("..", "..", "pkg", "licensing", "service.go"),
+		filepath.Join("..", "..", "pkg", "licensing", "license_server_client.go"),
+		filepath.Join("..", "..", "pkg", "licensing", "installation_status_poll.go"),
+	}
+	var combined strings.Builder
+	for _, file := range files {
+		body, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		combined.Write(body)
+	}
+	source := combined.String()
+	for _, forbidden := range []string{
+		"PULSE_REVOCATION_FEED_TOKEN",
+		"StartRevocationPoll",
+		"StopRevocationPoll",
+		"FetchRevocations",
+		"revocationPollLoop",
+		"/v1/revocations",
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("customer licensing runtime retains retired global-feed symbol %q", forbidden)
+		}
+	}
+	for _, required := range []string{
+		"/v1/grants/status",
+		"CheckInstallationStatus",
+		"StartInstallationStatusPoll",
+		"CurrentLicenseVersion",
+		"isRevokedActivationError",
+		"isSuspendedActivationError",
+		"suspendPaidEntitlements",
+		"PaidAccessSuspended",
+	} {
+		if !strings.Contains(source, required) {
+			t.Fatalf("customer licensing runtime missing installation-scoped contract symbol %q", required)
+		}
+	}
+}
+
 func TestContract_LegacyMigrationFallbackStaysUncappedJSONSnapshot(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 	const expectedClientVersion = "6.0.0-rc.1"
 
 	grantJWT, grantPublicKey, err := licensetestsupport.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID: "lic_contract_floor",
-		Tier:      "pro",
-		PlanKey:   "legacy_migration_fallback",
-		State:     "active",
-		Features:  []string{"relay"},
-		IssuedAt:  time.Now().Unix(),
-		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-		Email:     "contract-floor@example.com",
+		LicenseID:      "lic_contract_floor",
+		LicenseVersion: 1,
+		Tier:           "pro",
+		PlanKey:        "legacy_migration_fallback",
+		State:          "active",
+		Features:       []string{"relay"},
+		IssuedAt:       time.Now().Unix(),
+		ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+		Email:          "contract-floor@example.com",
 	})
 	if err != nil {
 		t.Fatalf("generate grant jwt: %v", err)
@@ -7580,6 +7626,9 @@ func TestContract_LegacyMigrationFallbackStaysUncappedJSONSnapshot(t *testing.T)
 	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if handleTestInstallationStatus(w, r, 1) {
+			return
+		}
 		if r.URL.Path != "/v1/licenses/exchange" {
 			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
 		}

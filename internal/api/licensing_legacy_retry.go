@@ -87,9 +87,7 @@ func (h *LicenseHandlers) scheduleLegacyExchangeRetry(orgID, legacyJWT string) {
 				log.Warn().Str("org_id", orgID).Err(clearErr).Msg("Failed to clear commercial migration state after background legacy exchange")
 			}
 			service.StartGrantRefresh(context.Background())
-			if feedToken := revocationFeedToken(); feedToken != "" {
-				service.StartRevocationPoll(context.Background(), feedToken)
-			}
+			service.StartInstallationStatusPoll(context.Background())
 			h.syncReleaseDemoFixtureRuntime(orgID, service)
 			if current := service.Current(); current != nil {
 				log.Info().

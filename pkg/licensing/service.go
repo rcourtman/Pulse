@@ -88,10 +88,11 @@ type Service struct {
 	stateMachineConfigured bool
 
 	// Activation-key license server fields.
-	serverClient    *LicenseServerClient // HTTP client for license server
-	activationState *ActivationState     // Current activation state (nil if using legacy JWT)
-	grantRefresh    *grantRefreshLoop    // Background refresh loop (nil until started)
-	revocationPoll  *revocationPollLoop  // Background revocation feed poller (nil until started)
+	serverClient       *LicenseServerClient        // HTTP client for license server
+	activationState    *ActivationState            // Current activation state (nil if using legacy JWT)
+	grantRefresh       *grantRefreshLoop           // Background refresh loop (nil until started)
+	installationStatus *installationStatusPollLoop // Installation-scoped invalidation loop
+	refreshMu          sync.Mutex                  // Serializes scheduled and status-triggered refreshes
 
 	// Persistence reference for activation state save/load. Set via SetPersistence.
 	persistence *Persistence
@@ -187,7 +188,7 @@ func (s *Service) Activate(licenseKey string) (*License, error) {
 
 	// JWT validated successfully — now safe to tear down any existing activation.
 	s.StopGrantRefresh()
-	s.StopRevocationPoll()
+	s.StopInstallationStatusPoll()
 
 	s.mu.Lock()
 	s.license = cloneLicense(license)
@@ -354,6 +355,7 @@ func (s *Service) applyActivationResponse(
 		GrantJWT:            resp.Grant.JWT,
 		GrantJTI:            resp.Grant.JTI,
 		GrantExpiresAt:      resp.Grant.ParseExpiresAt(),
+		LicenseVersion:      gc.LicenseVersion,
 		InstanceFingerprint: fingerprint,
 		LicenseServerURL:    serverURL,
 		ActivatedAt:         now,
@@ -453,13 +455,19 @@ func (s *Service) RestoreActivation(state *ActivationState) error {
 
 	stateCopy := *state
 	stateCopy.Continuity = normalizeActivationContinuity(stateCopy.Continuity)
+	stateCopy.LicenseVersion = gc.LicenseVersion
 
 	lic := grantClaimsToLicenseWithContinuity(gc, stateCopy.GrantJWT, stateCopy.Continuity)
 
 	s.mu.Lock()
-	s.license = cloneLicense(lic)
-	source := NewTokenSource(&s.license.Claims)
-	s.evaluator = NewEvaluator(source)
+	if stateCopy.PaidAccessSuspended {
+		s.license = nil
+		s.evaluator = nil
+	} else {
+		s.license = cloneLicense(lic)
+		source := NewTokenSource(&s.license.Claims)
+		s.evaluator = NewEvaluator(source)
+	}
 	s.activationState = &stateCopy
 	persistence := s.persistence
 	cb := s.onLicenseChange
@@ -489,7 +497,7 @@ func (s *Service) RestoreActivation(state *ActivationState) error {
 func (s *Service) Clear() {
 	// Stop background loops first (outside the lock to avoid deadlock).
 	s.StopGrantRefresh()
-	s.StopRevocationPoll()
+	s.StopInstallationStatusPoll()
 
 	s.mu.Lock()
 	s.license = nil
@@ -691,6 +699,7 @@ func (s *Service) Status() *LicenseStatus {
 		Tier:     TierFree,
 		Features: append([]string(nil), TierFeatures[TierFree]...),
 	}
+	status.Synchronization = s.installationStatusSnapshotLocked(time.Now())
 
 	if s.license == nil {
 		// Hosted path: evaluator drives status when no JWT is present.

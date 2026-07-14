@@ -153,6 +153,17 @@ Browser API types and presentation helpers must treat `exchange_stale_key` plus
 `allow_license_egress` as explicit migration states rather than inferring them
 from HTTP status alone.
 
+Customer license invalidation is also a shared API/cloud-paid contract.
+Customer Pulse may call `POST /v1/grants/status` only with its encrypted
+installation token and installation/fingerprint binding; it must never receive
+or use the operator-wide Relay revocation-feed credential. The successful
+response carries authoritative license version, refresh-required state, and
+bounded cadence hints but no grant or cross-customer event data. Pulse refreshes
+through the signed-grant endpoint only for a newer version, clears activation
+only for explicit token/installation/license revocation codes, removes paid
+entitlements but preserves scoped recovery authority for explicit suspension,
+and exposes only non-secret synchronization health in `/api/license/status`.
+
 `GET /api/connections` consumes the agent desired-config contract for fleet
 governance. When it derives `fleet.commandPolicy`, `fleet.configDrift`, and
 rollout state, it must compare the agent-applied report with the effective
@@ -1551,9 +1562,10 @@ payload shape change when the portal presents compact client rows.
     must hand the canonical process `serverVersion` and normalized runtime
     identity into `internal/api/licensing_handlers.go`, and the shared
     licensing runtime must carry those exact values through `/v1/activate`,
-    `/v1/licenses/exchange`, and `/v1/grants/refresh` so migrated installs can
-    be attributed to exact builds and public-vs-Pro runtime status without
-    inventing a second version source or trusting browser-supplied hints.
+    `/v1/licenses/exchange`, `/v1/grants/status`, and `/v1/grants/refresh` so
+    migrated installs can be attributed to exact builds and public-vs-Pro
+    runtime status without inventing a second version source or trusting
+    browser-supplied hints.
     That same shared licensing boundary also owns self-hosted purchase-return
     framing. `/auth/license-purchase-start` and
     `/auth/license-purchase-activate` may return operators only to the

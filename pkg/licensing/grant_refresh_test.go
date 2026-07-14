@@ -149,7 +149,8 @@ func TestIsRevokedActivationError(t *testing.T) {
 		{"expired token", &LicenseServerError{StatusCode: 401, Code: "TOKEN_EXPIRED"}, false},
 		{"token not found", &LicenseServerError{StatusCode: 401, Code: "INVALID_TOKEN"}, false},
 		{"401 without structured code", &LicenseServerError{StatusCode: 401, Code: "http_401"}, false},
-		{"revocation code on non-401", &LicenseServerError{StatusCode: 403, Code: "TOKEN_REVOKED"}, false},
+		{"explicit revocation on 403", &LicenseServerError{StatusCode: 403, Code: "LICENSE_REVOKED"}, true},
+		{"suspension is not revocation", &LicenseServerError{StatusCode: 403, Code: "LICENSE_SUSPENDED"}, false},
 		{"plain error", fmt.Errorf("connection refused"), false},
 		{"nil error", nil, false},
 	}
@@ -160,6 +161,16 @@ func TestIsRevokedActivationError(t *testing.T) {
 				t.Fatalf("isRevokedActivationError() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestIsSuspendedActivationError(t *testing.T) {
+	if !isSuspendedActivationError(&LicenseServerError{StatusCode: http.StatusForbidden, Code: "license_suspended"}) {
+		t.Fatal("expected explicit suspension to be classified")
+	}
+	if isSuspendedActivationError(&LicenseServerError{StatusCode: http.StatusUnauthorized, Code: "LICENSE_SUSPENDED"}) ||
+		isSuspendedActivationError(&LicenseServerError{StatusCode: http.StatusForbidden, Code: "LICENSE_REVOKED"}) {
+		t.Fatal("only forbidden LICENSE_SUSPENDED may preserve activation while removing paid access")
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -155,8 +156,6 @@ func (s *Service) runGrantRefreshLoop(ctx context.Context) {
 		}
 
 		if err := s.refreshGrantOnce(ctx); err != nil {
-			consecutiveFailures++
-
 			if isRevokedActivationError(err) {
 				// The server explicitly says this installation or licence is
 				// revoked. Clear activation state and revert to free tier.
@@ -164,6 +163,14 @@ func (s *Service) runGrantRefreshLoop(ctx context.Context) {
 				s.clearActivationState()
 				return
 			}
+			if isSuspendedActivationError(err) {
+				consecutiveFailures = 0
+				log.Warn().Msg("Grant refresh reports suspended paid access, preserving activation for recovery")
+				s.suspendPaidEntitlements()
+				continue
+			}
+
+			consecutiveFailures++
 
 			var apiErr *LicenseServerError
 			if errors.As(err, &apiErr) && apiErr.StatusCode == 401 {
@@ -190,9 +197,12 @@ func (s *Service) runGrantRefreshLoop(ctx context.Context) {
 
 // refreshGrantOnce performs a single grant refresh attempt.
 func (s *Service) refreshGrantOnce(ctx context.Context) error {
+	s.refreshMu.Lock()
+	defer s.refreshMu.Unlock()
+
 	s.mu.RLock()
 	client := s.serverClient
-	state := s.activationState
+	state := cloneActivationState(s.activationState)
 	previousTier := TierFree
 	if s.license != nil {
 		previousTier = s.license.Claims.Tier
@@ -201,6 +211,11 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 	clientVersion := s.clientVersion
 	runtimeIdentity := NormalizeRuntimeIdentity(s.runtimeIdentity)
 	s.mu.RUnlock()
+	if previousTier == TierFree && state != nil && state.PaidAccessSuspended {
+		if priorClaims, err := verifyAndParseGrantJWT(state.GrantJWT); err == nil {
+			previousTier = Tier(priorClaims.Tier)
+		}
+	}
 
 	if client == nil {
 		return fmt.Errorf("license server client not configured")
@@ -255,6 +270,8 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 		s.activationState.GrantJWT = resp.Grant.JWT
 		s.activationState.GrantJTI = resp.Grant.JTI
 		s.activationState.GrantExpiresAt = resp.Grant.ParseExpiresAt()
+		s.activationState.LicenseVersion = gc.LicenseVersion
+		s.activationState.PaidAccessSuspended = false
 		s.activationState.LastRefreshedAt = time.Now().Unix()
 		s.activationState.Continuity = continuity
 	}
@@ -290,14 +307,14 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 	return nil
 }
 
-// isRevokedActivationError reports whether err is a license-server 401 that
+// isRevokedActivationError reports whether err is a license-server response that
 // explicitly indicates the installation or licence has been revoked. Only
 // these codes justify wiping local activation state; any other 401 (token
 // not found, token expired, malformed body) keeps the licence and relies on
 // grant-expiry grace instead.
 func isRevokedActivationError(err error) bool {
 	var apiErr *LicenseServerError
-	if !errors.As(err, &apiErr) || apiErr.StatusCode != 401 {
+	if !errors.As(err, &apiErr) || (apiErr.StatusCode != 401 && apiErr.StatusCode != 403) {
 		return false
 	}
 	switch strings.ToUpper(strings.TrimSpace(apiErr.Code)) {
@@ -307,9 +324,53 @@ func isRevokedActivationError(err error) bool {
 	return false
 }
 
+// isSuspendedActivationError reports an authoritative non-grantable state
+// that must remove paid capabilities without deleting the installation token.
+// Keeping the scoped credential allows automatic recovery after billing or
+// cancellation recovery returns the license to a grantable state.
+func isSuspendedActivationError(err error) bool {
+	var apiErr *LicenseServerError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusForbidden &&
+		strings.EqualFold(strings.TrimSpace(apiErr.Code), "LICENSE_SUSPENDED")
+}
+
+// suspendPaidEntitlements immediately returns the runtime to Community while
+// preserving activation state and its installation-scoped recovery authority.
+func (s *Service) suspendPaidEntitlements() {
+	s.mu.Lock()
+	if s.activationState == nil {
+		s.mu.Unlock()
+		return
+	}
+	changed := s.license != nil || s.evaluator != nil || !s.activationState.PaidAccessSuspended
+	s.activationState.PaidAccessSuspended = true
+	s.license = nil
+	s.evaluator = nil
+	cb := s.onLicenseChange
+	activationCB := s.onActivationStateChange
+	stateCopy := cloneActivationState(s.activationState)
+	persistence := s.persistence
+	s.mu.Unlock()
+	if !changed {
+		return
+	}
+	if persistence != nil {
+		if err := persistence.SaveActivationState(stateCopy); err != nil {
+			log.Warn().Err(err).Msg("Failed to persist suspended paid-access state")
+		}
+	}
+	if cb != nil {
+		cb(nil)
+	}
+	if activationCB != nil {
+		activationCB(stateCopy)
+	}
+}
+
 // clearActivationState clears the activation state and reverts to free tier.
 // Called when the license server indicates the installation is revoked.
 func (s *Service) clearActivationState() {
+	s.cancelActivationLoops()
 	s.mu.Lock()
 	persistence := s.persistence
 	s.activationState = nil
@@ -330,6 +391,30 @@ func (s *Service) clearActivationState() {
 	}
 	if activationCB != nil {
 		activationCB(nil)
+	}
+}
+
+// cancelActivationLoops requests shutdown without waiting. It is safe to call
+// from either background loop and avoids cross-loop wait deadlocks during an
+// authoritative revocation clear.
+func (s *Service) cancelActivationLoops() {
+	s.mu.RLock()
+	refreshLoop := s.grantRefresh
+	statusLoop := s.installationStatus
+	s.mu.RUnlock()
+	if refreshLoop != nil {
+		refreshLoop.mu.Lock()
+		if refreshLoop.running && refreshLoop.cancel != nil {
+			refreshLoop.cancel()
+		}
+		refreshLoop.mu.Unlock()
+	}
+	if statusLoop != nil {
+		statusLoop.mu.Lock()
+		if statusLoop.running && statusLoop.cancel != nil {
+			statusLoop.cancel()
+		}
+		statusLoop.mu.Unlock()
 	}
 }
 

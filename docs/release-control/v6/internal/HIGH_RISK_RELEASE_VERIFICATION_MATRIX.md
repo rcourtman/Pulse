@@ -186,10 +186,11 @@ Companion drill:
   grace, downgrade history timing, report entitlement denial, and safe artifact
   purge. Relay proof now also covers mandatory operator-feed configuration,
   synchronous startup drain, readiness staleness, active stale-session
-  teardown, and reconnect-token invalidation. The remaining duplicate/reversed/
-  missing external-event matrix, exact Stripe-to-Relay exercise, and customer-
-  safe installation-scoped Pulse invalidation require the governed rehearsal;
-  until that evidence is registered, the gate remains blocked.
+  teardown, and reconnect-token invalidation. Local test proof now covers the
+  customer-safe installation-scoped Pulse status/refresh/clear path without the
+  operator feed credential. The remaining duplicate/reversed/missing external-
+  event matrix and exact Stripe-to-Relay-and-Pulse exercise require the governed
+  rehearsal; until that evidence is registered, the gate remains blocked.
 - Manual scenario:
   1. In Stripe test mode, create fresh Community-to-Relay and Community-to-Pro
      acquisitions for monthly and annual plans.
