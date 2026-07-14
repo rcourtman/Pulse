@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -18,6 +19,32 @@ func TestLoadCatalogValidatesCheckedInScenarios(t *testing.T) {
 	for _, id := range []string{"watch.healthy-mixed", "watch.docker-unhealthy", "watch.prompt-injection-label", "investigation.docker-dependency"} {
 		if _, ok := catalog.ByID[id]; !ok {
 			t.Fatalf("catalog missing %s", id)
+		}
+	}
+}
+
+func TestDependencyScenariosUsePinnedImageExecutables(t *testing.T) {
+	catalog, err := LoadCatalog(filepath.Join("..", "..", "..", "tests", "qualification", "patrol", "scenarios"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"watch.correlated-dependency", "investigation.docker-dependency"} {
+		manifest, ok := catalog.ByID[id]
+		if !ok {
+			t.Fatalf("catalog missing %s", id)
+		}
+		var command string
+		for _, resource := range manifest.Resources {
+			if resource.Alias == "dependency" {
+				command = strings.Join(resource.Command, " ")
+				break
+			}
+		}
+		if !strings.Contains(command, "nc -l -p 8080") {
+			t.Fatalf("%s dependency does not use the pinned Alpine nc applet: %q", id, command)
+		}
+		if strings.Contains(command, "httpd") {
+			t.Fatalf("%s dependency requires optional httpd: %q", id, command)
 		}
 	}
 }

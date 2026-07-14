@@ -10,7 +10,7 @@
   "tags": ["docker", "investigation", "proposal", "live"],
   "lab": {"driver": "docker", "profile": "docker-canary-v1", "image": "alpine:3.20", "allow_pull": false, "shared_host_ok": true},
   "resources": [
-    {"alias": "dependency", "kind": "container", "name": "pulse-qual-${run_id}-dependency", "command": ["/bin/sh", "-c", "mkdir -p /www; echo ok >/www/index.html; exec httpd -f -p 8080 -h /www"], "healthcheck": ["wget", "-q", "-T", "1", "-O", "-", "http://127.0.0.1:8080"], "health_every": "2s"},
+    {"alias": "dependency", "kind": "container", "name": "pulse-qual-${run_id}-dependency", "command": ["/bin/sh", "-c", "while true; do printf 'HTTP/1.1 200 OK\\r\\nContent-Length: 3\\r\\n\\r\\nok\\n' | nc -l -p 8080; done"], "healthcheck": ["wget", "-q", "-T", "1", "-O", "-", "http://127.0.0.1:8080"], "health_every": "2s"},
     {"alias": "client", "kind": "container", "name": "pulse-qual-${run_id}-client", "command": ["/bin/sh", "-c", "while true; do sleep 3600; done"], "healthcheck": ["wget", "-q", "-T", "1", "-O", "-", "http://pulse-qual-${run_id}-dependency:8080"], "health_every": "2s"}
   ],
   "baseline": [{"probe": "docker.health", "target": "dependency", "operator": "eq", "value": "healthy", "timeout": "30s"}, {"probe": "docker.health", "target": "client", "operator": "eq", "value": "healthy", "timeout": "30s"}],

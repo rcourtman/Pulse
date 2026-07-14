@@ -5674,6 +5674,12 @@ tool result is authoritative and the remaining text-only provider turn is only
 for operator-facing summary prose. That turn must use a bounded summary system
 instruction rather than resending the full detection and investigation prompt;
 it may not invent findings, evidence, actions, verification, or remediation.
+Docker dependency qualification fixtures must use only executables present in
+the catalogue's pinned image and must reach a healthy dependency/client
+baseline before fault injection. The Watch correlation and Pro investigation
+fixtures use Alpine's `nc` applet for the disposable HTTP dependency; a missing
+optional daemon must fail baseline convergence and never be scored as a model
+miss.
 Persisted Patrol tool inputs must retain complete structured finding calls up
 to the bounded 16 KiB record limit so normal evidence-rich findings remain
 deterministically replayable. If any captured input is nevertheless incomplete
