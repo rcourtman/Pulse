@@ -8858,7 +8858,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "patrol-subscription-agent-bridge-lane-l6",
+      "agent_id": "patrol-subscription-agent-bridge",
+      "summary": "Add opt-in local subscription-agent Patrol routes with constrained execution, provenance, and qualification support.",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-14T21:20:33Z",
+      "heartbeat_at": "2026-07-14T21:20:55Z",
+      "expires_at": "2026-07-15T01:20:55Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L6"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
