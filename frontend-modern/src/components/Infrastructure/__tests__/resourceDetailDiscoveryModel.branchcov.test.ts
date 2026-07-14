@@ -240,9 +240,27 @@ describe('toDiscoveryConfig — explicit discoveryTarget branch', () => {
       expect(result?.targetLabel).toBe('container');
     });
 
-    it('maps an explicit app-container target with docker metadata to a docker container config', () => {
+    it('maps an explicit app-container target with docker metadata to the stable guest key', () => {
       const resource = baseResource({
         type: 'app-container',
+        docker: { hostSourceId: 'dhost', containerId: 'dcont' },
+        discoveryTarget: discoveryTarget({
+          resourceType: 'app-container',
+          agentId: 'app-agent',
+          resourceId: 'app-rid',
+        }),
+      });
+      const result = toDiscoveryConfig(resource);
+      expect(result?.metadataKind).toBe('guest');
+      expect(result?.metadataId).toBe('app-container:dhost:name:res-name');
+      expect(result?.targetLabel).toBe('container');
+    });
+
+    it('falls back to the runtime docker key when the container name is unavailable', () => {
+      const resource = baseResource({
+        type: 'app-container',
+        name: '',
+        displayName: '',
         docker: { hostSourceId: 'dhost', containerId: 'dcont' },
         discoveryTarget: discoveryTarget({
           resourceType: 'app-container',
@@ -492,8 +510,8 @@ describe('toDiscoveryConfig — main switch (no usable explicit target)', () => 
       });
       const result = toDiscoveryConfig(resource);
       expect(result?.resourceId).toBe('dcont');
-      expect(result?.metadataKind).toBe('docker');
-      expect(result?.metadataId).toBe('dhost:container:dcont');
+      expect(result?.metadataKind).toBe('guest');
+      expect(result?.metadataId).toBe('app-container:dhost:name:c-docker');
       expect(result?.targetLabel).toBe('container');
     });
 

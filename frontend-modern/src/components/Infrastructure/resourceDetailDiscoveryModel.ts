@@ -14,7 +14,7 @@ import {
   getPreferredInfrastructureDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
-import { getCanonicalWorkloadIdForResource } from '@/utils/workloads';
+import { buildAppContainerMetadataId, getCanonicalWorkloadIdForResource } from '@/utils/workloads';
 
 export type DiscoveryConfig = {
   resourceType: DiscoveryResourceType;
@@ -106,6 +106,24 @@ const getMetadataTarget = (
   platformData: PlatformData | undefined,
 ): Pick<DiscoveryConfig, 'metadataKind' | 'metadataId'> => {
   if (resourceType === 'app-container') {
+    // Docker container web-interface metadata lives under the stable
+    // host-plus-container-name guest key — the same identity the Workloads
+    // drawer saves to and the highest-priority key the backend reads when
+    // projecting unified customUrl. Saving under the runtime container ID
+    // instead strands the URL below stable records in the lookup chain, so a
+    // URL saved here never reaches the tables.
+    const stableMetadataId = buildAppContainerMetadataId({
+      dockerHostId:
+        asString(resource.docker?.hostSourceId) || asString(platformData?.docker?.hostSourceId),
+      name: asString(resource.name) ?? '',
+    });
+    if (stableMetadataId) {
+      return {
+        metadataKind: 'guest',
+        metadataId: stableMetadataId,
+      };
+    }
+
     const dockerMetadataId = getDockerContainerMetadataId(resource, platformData);
     if (dockerMetadataId) {
       return {
