@@ -8751,21 +8751,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "patrol-runtime-implementation-candidate-lane-protection-posture-attention-queue",
-      "agent_id": "patrol-runtime-implementation",
-      "summary": "Implement autonomous Patrol finding assessments, canonical scoped execution, governed Pro handoff, and publishable real-world model qualification.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-14T13:41:09Z",
-      "heartbeat_at": "2026-07-14T13:41:09Z",
-      "expires_at": "2026-07-14T21:41:09Z",
-      "work_item": {
-        "kind": "candidate-lane",
-        "id": "protection-posture-attention-queue"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
