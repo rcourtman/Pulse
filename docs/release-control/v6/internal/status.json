@@ -8848,6 +8848,19 @@
         "kind": "lane",
         "id": "L6"
       }
+    },
+    {
+      "id": "commercial-external-proof-audit-release-gate-self-hosted-commercial-transition-coherence",
+      "agent_id": "commercial-external-proof-audit",
+      "summary": "Add a repeatable read-only Stripe portal and catalog proof auditor without mutating external configuration.",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-14T16:59:08Z",
+      "heartbeat_at": "2026-07-14T16:59:08Z",
+      "expires_at": "2026-07-14T20:59:08Z",
+      "work_item": {
+        "kind": "release-gate",
+        "id": "self-hosted-commercial-transition-coherence"
+      }
     }
   ],
   "open_decisions": [],
