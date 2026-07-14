@@ -487,6 +487,87 @@ func TestRunAIAnalysis_RetriesWithProviderDerivedSeedBudget(t *testing.T) {
 	}
 }
 
+func TestRunAIAnalysis_PreservesPartialEvidenceOnProviderError(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{Enabled: true, PatrolModel: "mock:model"}
+	svc.provider = &mockProvider{}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	mockCS := &mockChatService{
+		executor: executor,
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			creator := executor.GetPatrolFindingCreator()
+			if creator == nil {
+				return nil, fmt.Errorf("patrol finding creator not set")
+			}
+			if _, _, err := creator.CreateFinding(tools.PatrolFindingInput{
+				Key:          "container-unhealthy",
+				Severity:     "warning",
+				Category:     "reliability",
+				ResourceID:   "container-1",
+				ResourceName: "faulty",
+				ResourceType: "app-container",
+				Title:        "Container health check failed",
+				Description:  "The container is unhealthy.",
+				Evidence:     "Docker reports health=unhealthy.",
+			}); err != nil {
+				return nil, err
+			}
+
+			start, _ := json.Marshal(map[string]string{
+				"id": "call-1", "name": "pulse_query", "input": `{"action":"get"}`,
+			})
+			callback(ChatStreamEvent{Type: "tool_start", Data: start})
+			end, _ := json.Marshal(map[string]any{
+				"id": "call-1", "name": "pulse_query", "input": `{"action":"get"}`,
+				"output": `{"health":"unhealthy"}`, "success": true,
+			})
+			callback(ChatStreamEvent{Type: "tool_end", Data: end})
+
+			return &PatrolStreamResponse{
+				Content:      "Partial investigation completed before the provider failed.",
+				InputTokens:  30_049,
+				OutputTokens: 1_686,
+			}, fmt.Errorf("provider interrupted after partial output")
+		},
+	}
+	svc.SetChatService(mockCS)
+
+	ps := NewPatrolService(svc, nil)
+	ps.SetConfig(PatrolConfig{Enabled: true, AnalyzeDocker: true})
+	state := models.StateSnapshot{DockerHosts: []models.DockerHost{{
+		ID: "docker-1", Hostname: "colima", Containers: []models.DockerContainer{{
+			ID: "container-1", Name: "faulty", State: "running", Status: "unhealthy",
+		}},
+	}}}
+
+	result, err := ps.runAIAnalysisState(
+		context.Background(),
+		patrolRuntimeStateForTest(ps, state),
+		&PatrolScope{NoStream: true, Depth: PatrolDepthQuick},
+		"execution-1",
+	)
+	if err == nil || !strings.Contains(err.Error(), "provider interrupted") {
+		t.Fatalf("expected provider error, got %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected partial analysis result alongside provider error")
+	}
+	if result.InputTokens != 30_049 || result.OutputTokens != 1_686 {
+		t.Fatalf("partial tokens = %d/%d", result.InputTokens, result.OutputTokens)
+	}
+	if len(result.ToolCalls) != 1 || result.ToolCalls[0].ToolName != "pulse_query" || !result.ToolCalls[0].Success {
+		t.Fatalf("partial tool calls = %+v", result.ToolCalls)
+	}
+	if len(result.Findings) != 1 || result.Findings[0].ResourceID != "container-1" {
+		t.Fatalf("partial findings = %+v", result.Findings)
+	}
+	if !strings.Contains(result.Response, "Partial investigation") {
+		t.Fatalf("partial response = %q", result.Response)
+	}
+}
+
 func TestSeedResourceInventory_QuietSummary(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	cfg := DefaultPatrolConfig()

@@ -8787,7 +8787,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "patrol-qualification-error-evidence-lane-l6",
+      "agent_id": "patrol-qualification-error-evidence",
+      "summary": "Preserve partial Patrol execution evidence on provider errors and fail qualification runs explicitly without discarding diagnostic scoring.",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-14T15:26:10Z",
+      "heartbeat_at": "2026-07-14T15:26:10Z",
+      "expires_at": "2026-07-14T19:26:10Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L6"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

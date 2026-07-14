@@ -417,6 +417,77 @@ func TestRunScopedPatrolRecordsStructuredRuntimeFailure(t *testing.T) {
 	}
 }
 
+func TestRunScopedPatrolPersistsPartialEvidenceOnProviderError(t *testing.T) {
+	svc := NewService(config.NewConfigPersistence(t.TempDir()), nil)
+	svc.cfg = &config.AIConfig{Enabled: true, PatrolModel: "mock:model"}
+	svc.provider = &mockProvider{}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	var findingID string
+	svc.SetChatService(&mockChatService{
+		executor: executor,
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			creator := executor.GetPatrolFindingCreator()
+			if creator == nil {
+				return nil, errors.New("patrol finding creator not set")
+			}
+			var err error
+			findingID, _, err = creator.CreateFinding(tools.PatrolFindingInput{
+				Key: "node-cpu-high", Severity: "warning", Category: "performance",
+				ResourceID: "node-1", ResourceName: "pve-1", ResourceType: "node",
+				Title: "Node CPU is saturated", Description: "Sustained high CPU was observed.",
+				Evidence: "CPU usage is 95%.", Recommendation: "Inspect the highest CPU consumers.",
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			start, _ := json.Marshal(map[string]string{"id": "call-1", "name": "pulse_query", "input": `{"action":"get"}`})
+			callback(ChatStreamEvent{Type: "tool_start", Data: start})
+			end, _ := json.Marshal(map[string]any{
+				"id": "call-1", "name": "pulse_query", "input": `{"action":"get"}`,
+				"output": `{"cpu":0.95}`, "success": true,
+			})
+			callback(ChatStreamEvent{Type: "tool_end", Data: end})
+
+			return &PatrolStreamResponse{
+				Content:     "The node CPU fault was confirmed before interruption.",
+				InputTokens: 321, OutputTokens: 45,
+			}, errors.New("provider interrupted after partial output")
+		},
+	})
+
+	ps := NewPatrolService(svc, &mockStateProvider{state: models.StateSnapshot{
+		Nodes: []models.Node{{ID: "node-1", Name: "pve-1", Status: "online", CPU: 0.95}},
+	}})
+	ps.SetConfig(PatrolConfig{Enabled: true, Interval: time.Hour, AnalyzeNodes: true})
+
+	ps.runScopedPatrol(context.Background(), PatrolScope{
+		ResourceIDs: []string{"node-1"}, Reason: TriggerReasonManual, NoStream: true,
+	})
+
+	runs := ps.runHistoryStore.GetRecent(1)
+	if len(runs) != 1 {
+		t.Fatalf("expected one scoped patrol run, got %d", len(runs))
+	}
+	run := runs[0]
+	if run.Status != "error" || run.ErrorCount != 1 {
+		t.Fatalf("partial run status = %q with %d errors", run.Status, run.ErrorCount)
+	}
+	if run.InputTokens != 321 || run.OutputTokens != 45 {
+		t.Fatalf("partial run tokens = %d/%d", run.InputTokens, run.OutputTokens)
+	}
+	if run.ToolCallCount != 1 || len(run.ToolCalls) != 1 || run.ToolCalls[0].ToolName != "pulse_query" || !run.ToolCalls[0].Success {
+		t.Fatalf("partial run tool evidence = count %d calls %+v", run.ToolCallCount, run.ToolCalls)
+	}
+	if !containsScopeID(run.FindingIDs, findingID) {
+		t.Fatalf("partial run finding IDs %v do not contain accepted finding %q", run.FindingIDs, findingID)
+	}
+	if !strings.Contains(run.AIAnalysis, "confirmed before interruption") {
+		t.Fatalf("partial run analysis = %q", run.AIAnalysis)
+	}
+}
+
 func TestRunScopedPatrolResolvesPreviousRuntimeFailureOnSuccess(t *testing.T) {
 	svc := NewService(config.NewConfigPersistence(t.TempDir()), nil)
 	svc.cfg = &config.AIConfig{Enabled: true, PatrolModel: "deepseek:deepseek-v4-flash", DeepSeekAPIKey: "sk-test"}

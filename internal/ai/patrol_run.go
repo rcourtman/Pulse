@@ -504,6 +504,28 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		p.resetStreamForRun(runID)
 		// Run agentic AI analysis — the LLM uses tools to investigate and reports findings
 		aiResult, aiErr := p.runAIAnalysisState(ctx, state, scope, executionID)
+		if aiResult != nil {
+			runStats.aiAnalysis = aiResult
+			runStats.rejectedFindings = aiResult.RejectedFindings
+			runStats.triageFlags = aiResult.TriageFlags
+			runStats.triageSkippedLLM = aiResult.TriageSkippedLLM
+
+			// Findings are recorded by the Patrol finding tools before the model
+			// response completes. Preserve their run-level accounting even when a
+			// later provider error interrupts the same analysis.
+			for _, f := range aiResult.Findings {
+				if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
+					runStats.findingIDs = append(runStats.findingIDs, f.ID)
+					stored := p.findings.Get(f.ID)
+					if stored != nil && stored.TimesRaised <= 1 {
+						runStats.newFindings++
+						newFindings = append(newFindings, f)
+					} else {
+						runStats.existingFindings++
+					}
+				}
+			}
+		}
 		if aiErr != nil {
 			log.Warn().Err(aiErr).Msg("AI Patrol: LLM analysis failed")
 			runStats.errors++
@@ -516,10 +538,6 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 			errorFinding := newPatrolRuntimeFailureFinding(failure, time.Now())
 			trackFinding(errorFinding)
 		} else if aiResult != nil {
-			runStats.aiAnalysis = aiResult
-			runStats.rejectedFindings = aiResult.RejectedFindings
-			runStats.triageFlags = aiResult.TriageFlags
-			runStats.triageSkippedLLM = aiResult.TriageSkippedLLM
 			if missing := patrolMissingAssessmentIDs(aiResult); len(missing) > 0 {
 				runStats.errors++
 				runStats.errorSummary = "Patrol finding assessment incomplete"
@@ -534,22 +552,6 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 			// matching findings, so the surface shows a first-class urgency
 			// signal (trend/eta) instead of relying on model prose.
 			p.stampCapacityForecasts(aiResult.Forecasts)
-
-			// Findings are already recorded via patrol_report_finding tool calls.
-			// Track stats from the collected findings.
-			for _, f := range aiResult.Findings {
-				if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
-					runStats.findingIDs = append(runStats.findingIDs, f.ID)
-					// Check if this finding was new by looking at the store
-					stored := p.findings.Get(f.ID)
-					if stored != nil && stored.TimesRaised <= 1 {
-						runStats.newFindings++
-						newFindings = append(newFindings, f)
-					} else {
-						runStats.existingFindings++
-					}
-				}
-			}
 		}
 	}
 
@@ -972,6 +974,26 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		}
 		// Run agentic AI analysis on filtered state with scope
 		aiResult, aiErr := p.runAIAnalysisState(ctx, filteredState, &scope, executionID)
+		if aiResult != nil {
+			runStats.aiAnalysis = aiResult
+			runStats.rejectedFindings = aiResult.RejectedFindings
+			runStats.triageFlags = aiResult.TriageFlags
+			runStats.triageSkippedLLM = aiResult.TriageSkippedLLM
+
+			// Keep accepted finding evidence attached to this run even if the
+			// provider fails after the corresponding tool call completed.
+			for _, f := range aiResult.Findings {
+				if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
+					runStats.findingIDs = append(runStats.findingIDs, f.ID)
+					stored := p.findings.Get(f.ID)
+					if stored != nil && stored.TimesRaised <= 1 {
+						runStats.newFindings++
+					} else {
+						runStats.existingFindings++
+					}
+				}
+			}
+		}
 		if aiErr != nil {
 			log.Warn().Err(aiErr).Msg("AI Patrol (scoped): LLM analysis failed")
 			runStats.errors++
@@ -986,10 +1008,6 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 			}
 			runStats.findingIDs = append(runStats.findingIDs, errorFinding.ID)
 		} else if aiResult != nil {
-			runStats.aiAnalysis = aiResult
-			runStats.rejectedFindings = aiResult.RejectedFindings
-			runStats.triageFlags = aiResult.TriageFlags
-			runStats.triageSkippedLLM = aiResult.TriageSkippedLLM
 			if missing := patrolMissingAssessmentIDs(aiResult); len(missing) > 0 {
 				runStats.errors++
 				runStats.errorSummary = "Patrol finding assessment incomplete"
@@ -997,19 +1015,6 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 			}
 			if !aiResult.TriageSkippedLLM {
 				runStats.runtimeResolved = p.resolvePatrolRuntimeFailureFinding("scoped_patrol_success")
-			}
-
-			// Findings are already recorded via patrol_report_finding tool calls.
-			for _, f := range aiResult.Findings {
-				if f.Severity == FindingSeverityWarning || f.Severity == FindingSeverityCritical {
-					runStats.findingIDs = append(runStats.findingIDs, f.ID)
-					stored := p.findings.Get(f.ID)
-					if stored != nil && stored.TimesRaised <= 1 {
-						runStats.newFindings++
-					} else {
-						runStats.existingFindings++
-					}
-				}
 			}
 		}
 	}

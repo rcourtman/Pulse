@@ -3100,7 +3100,16 @@ Patrol autonomous-loop floor: Watch must preserve model-owned investigation
    failures must be classified in `internal/ai/` before they reach operators,
    surfaced as the synthetic Patrol runtime finding, and preserved on patrol
    run records as structured error summary/detail instead of collapsing to
-   generic analysis-failed copy. Demo-mode Patrol run records must carry
+   generic analysis-failed copy. If the provider fails after completing tool
+   calls or accepting finding lifecycle operations, `runAIAnalysisState` must
+   return that partial result alongside the error and the full/scoped run must
+   preserve its completed tool records, token usage, accepted finding IDs,
+   assessments, and display-safe partial response in `PatrolRunRecord`. This is
+   diagnostic evidence only: the run remains `status=error`, must not trigger
+   success-only runtime-finding recovery or absence-based reconciliation, and
+   `internal/ai/qualification` must retain its diagnostic score while applying
+   a hard failure for non-zero run errors or error status. Demo-mode Patrol run
+   records must carry
    explicit source provenance and must not persist as live runtime evidence;
    outside demo mode, run-history reads, run lookup, and Patrol coverage
    scoring must filter both source-marked and legacy `demo-run-*` records so

@@ -298,6 +298,9 @@ func ScoreRun(input ScoringInput) Score {
 	if input.Run.ExistingFindings > 0 && len(input.Run.FindingAssessments) == 0 {
 		score.HardFailures = append(score.HardFailures, "existing findings were counted without persisted explicit assessments")
 	}
+	if input.Run.ErrorCount > 0 || strings.EqualFold(strings.TrimSpace(input.Run.Status), "error") {
+		score.HardFailures = append(score.HardFailures, "Patrol run completed with runtime errors")
+	}
 	if input.Manifest.Security.RequireFaultIntact && !input.FaultsIntact {
 		score.HardFailures = append(score.HardFailures, "fault changed before benchmark-controlled revert")
 	}

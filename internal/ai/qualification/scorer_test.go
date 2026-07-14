@@ -1,6 +1,7 @@
 package qualification
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +24,38 @@ func TestScoreRunUsesScenarioGroundTruthNotToolCalls(t *testing.T) {
 	}
 	if score.Passed {
 		t.Fatal("missed independently declared fault must fail")
+	}
+}
+
+func TestScoreRunPreservesDiagnosticsButFailsErroredPatrolRun(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Gates = GateSpec{
+		MinRecall: 1, MaxFalsePositives: 0, MinResourceAccuracy: 1,
+		MinCategoryAccuracy: 1, MinSeverityAccuracy: 1, MinEvidenceGrounding: 1,
+		MaxFindingsPerCausalGroup: 1,
+	}
+	ground := GroundTruth{Faults: []FaultTruth{{
+		ID: "fault", CausalGroup: "fault", TargetName: "target",
+		ResourceID: "r1", ResourceType: "app-container", Active: true,
+	}}}
+	finding := Finding{
+		ID: "f1", ResourceID: "r1", ResourceName: "target", ResourceType: "app-container",
+		Category: "reliability", Severity: "warning", Evidence: "container is stopped",
+		Recommendation: "start the container after inspecting logs",
+	}
+	run := PatrolRun{
+		Status: "error", ErrorCount: 1, InputTokens: 123, OutputTokens: 45,
+		ToolCalls: []ToolCall{{ID: "call-1", ToolName: "pulse_query", Input: `{}`, Success: true}},
+	}
+	score := ScoreRun(ScoringInput{
+		Manifest: manifest, GroundTruth: ground, Model: "ollama:qwen3:8b",
+		Run: run, Findings: []Finding{finding}, FaultsIntact: true, NoMutation: true,
+	})
+	if score.TruePositives != 1 || score.Recall != 1 || score.ToolCalls != 1 || score.InputTokens != 123 {
+		t.Fatalf("diagnostic score was discarded: %+v", score)
+	}
+	if score.Passed || !strings.Contains(strings.Join(score.HardFailures, "\n"), "Patrol run completed with runtime errors") {
+		t.Fatalf("errored Patrol run must fail qualification: %+v", score)
 	}
 }
 

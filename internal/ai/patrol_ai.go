@@ -751,11 +751,10 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 				}
 			}
 		})
-		if chatErr != nil {
-			return nil, chatErr
+		finalContent := ""
+		if chatResp != nil {
+			finalContent = chatResp.Content
 		}
-
-		finalContent := chatResp.Content
 		if finalContent == "" {
 			finalContent = contentBuffer.String()
 		}
@@ -765,12 +764,34 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 		collectedRawOutputs := append([]string(nil), rawToolOutputs...)
 		toolCallsMu.Unlock()
 
-		return &patrolStreamAttempt{
+		attempt := &patrolStreamAttempt{
 			response:       chatResp,
 			finalContent:   finalContent,
 			toolCalls:      collectedToolCalls,
 			rawToolOutputs: collectedRawOutputs,
-		}, nil
+		}
+		return attempt, chatErr
+	}
+	buildAnalysisResult := func(content string, toolCalls []ToolCallRecord, inputTokens, outputTokens int) *AIAnalysisResult {
+		adapter.findingsMu.Lock()
+		rejectedCount := adapter.rejectedCount
+		adapter.findingsMu.Unlock()
+		return &AIAnalysisResult{
+			Response:          CleanThinkingTokens(content),
+			Findings:          adapter.getCollectedFindings(),
+			RejectedFindings:  rejectedCount,
+			TriageFlags:       len(triageResult.Flags),
+			TriageSkippedLLM:  false,
+			InputTokens:       inputTokens,
+			OutputTokens:      outputTokens,
+			ToolCalls:         append([]ToolCallRecord(nil), toolCalls...),
+			ReportedIDs:       adapter.getReportedFindingIDs(),
+			ResolvedIDs:       adapter.getResolvedIDs(),
+			Assessments:       adapter.getAssessments(),
+			SeededFindingIDs:  seededFindingIDs,
+			QueriedFindingIDs: adapter.getQueriedFindingIDs(),
+			Forecasts:         triageResult.Intel.forecasts,
+		}
 	}
 
 	attempt, chatErr := executePatrol(seedContext)
@@ -805,23 +826,33 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	}
 
 	if chatErr != nil {
+		var partialResult *AIAnalysisResult
 		if attempt != nil && attempt.response != nil {
 			p.recordPatrolUsage(attempt.response.InputTokens, attempt.response.OutputTokens)
+		}
+		if attempt != nil {
+			inputTokens, outputTokens := 0, 0
+			if attempt.response != nil {
+				inputTokens = attempt.response.InputTokens
+				outputTokens = attempt.response.OutputTokens
+			}
+			candidate := buildAnalysisResult(attempt.finalContent, attempt.toolCalls, inputTokens, outputTokens)
+			if candidate.Response != "" || inputTokens > 0 || outputTokens > 0 || len(candidate.ToolCalls) > 0 ||
+				len(candidate.Findings) > 0 || len(candidate.ResolvedIDs) > 0 || len(candidate.Assessments) > 0 || len(candidate.QueriedFindingIDs) > 0 {
+				partialResult = candidate
+			}
 		}
 		if !noStream {
 			p.setStreamPhase("idle")
 			p.broadcast(PatrolStreamEvent{Type: "error", Content: chatErr.Error()})
 		}
-		return nil, fmt.Errorf("agentic patrol failed: %w", chatErr)
+		return partialResult, fmt.Errorf("agentic patrol failed: %w", chatErr)
 	}
 
 	finalContent := attempt.finalContent
 	inputTokens = attempt.response.InputTokens
 	outputTokens = attempt.response.OutputTokens
 	p.recordPatrolUsage(attempt.response.InputTokens, attempt.response.OutputTokens)
-
-	// Clean thinking tokens
-	finalContent = CleanThinkingTokens(finalContent)
 
 	log.Debug().
 		Int("input_tokens", inputTokens).
@@ -901,25 +932,7 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	}
 
 	// Findings were already created via tool calls — collect them
-	adapter.findingsMu.Lock()
-	rejectedCount := adapter.rejectedCount
-	adapter.findingsMu.Unlock()
-	return &AIAnalysisResult{
-		Response:          finalContent,
-		Findings:          adapter.getCollectedFindings(),
-		RejectedFindings:  rejectedCount,
-		TriageFlags:       len(triageResult.Flags),
-		TriageSkippedLLM:  false,
-		InputTokens:       inputTokens,
-		OutputTokens:      outputTokens,
-		ToolCalls:         collectedToolCalls,
-		ReportedIDs:       adapter.getReportedFindingIDs(),
-		ResolvedIDs:       adapter.getResolvedIDs(),
-		Assessments:       adapter.getAssessments(),
-		SeededFindingIDs:  seededFindingIDs,
-		QueriedFindingIDs: adapter.getQueriedFindingIDs(),
-		Forecasts:         triageResult.Intel.forecasts,
-	}, nil
+	return buildAnalysisResult(finalContent, collectedToolCalls, inputTokens, outputTokens), nil
 }
 
 func computePatrolMaxTurns(resourceCount int, scope *PatrolScope) int {
