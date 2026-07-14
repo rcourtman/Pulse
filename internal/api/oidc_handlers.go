@@ -668,15 +668,19 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 		}
 	}
 
-	// Store OIDC tokens for session refresh
-	var oidcTokens *OIDCTokenInfo
+	// Stamp issuer/client on the session even when the provider issued no
+	// refresh token (e.g. offline_access not requested): the SSO-session
+	// surfaces (/api/security/status ssoSessionUsername, X-Auth-Method) key on
+	// OIDCIssuer, and without it a successful SSO login reports an empty SSO
+	// session and strands the user on the login page (issue #1574). Token
+	// refresh itself stays gated on RefreshToken being present.
+	oidcTokens := &OIDCTokenInfo{
+		Issuer:   provider.OIDC.IssuerURL,
+		ClientID: provider.OIDC.ClientID,
+	}
 	if token.RefreshToken != "" {
-		oidcTokens = &OIDCTokenInfo{
-			RefreshToken:   token.RefreshToken,
-			AccessTokenExp: token.Expiry,
-			Issuer:         provider.OIDC.IssuerURL,
-			ClientID:       provider.OIDC.ClientID,
-		}
+		oidcTokens.RefreshToken = token.RefreshToken
+		oidcTokens.AccessTokenExp = token.Expiry
 	}
 
 	if err := r.establishOIDCSession(w, req, principal, username, oidcTokens); err != nil {

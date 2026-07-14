@@ -416,9 +416,12 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain(
       'const isPreAuthLoginBootstrapPath = (pathname: string): boolean =>',
     );
+    expect(appRuntimeStateSource).toContain('const hasSSOCallbackSuccessHint = (): boolean => {');
     expect(appRuntimeStateSource).toContain(
-      'if (isPreAuthLoginBootstrapPath(window.location.pathname) && !hasLocalAuthBootstrapHint()) {',
+      'isPreAuthLoginBootstrapPath(window.location.pathname) &&',
     );
+    expect(appRuntimeStateSource).toContain('!hasLocalAuthBootstrapHint() &&');
+    expect(appRuntimeStateSource).toContain('!hasSSOCallbackSuccessHint()');
     expect(appRuntimeStateSource).toContain('aiChatStore.setEnabled(');
     expect(appRuntimeStateSource).toContain('aiIntelligenceStore.loadPatrolFindings()');
     expect(appRuntimeStateSource).toContain('aiIntelligenceStore.loadPendingApprovals()');

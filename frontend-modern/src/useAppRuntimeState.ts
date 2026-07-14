@@ -104,6 +104,22 @@ export const useAppRuntimeState = () => {
     }
   };
 
+  // A completed SSO redirect (?oidc=success / ?saml=success) means a session
+  // cookie may exist even though no local-auth artifacts do, so the pre-auth
+  // bootstrap short-circuit below must not pin the user to the login page
+  // before the /api/state probe runs (issue #1574).
+  const hasSSOCallbackSuccessHint = (): boolean => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('oidc') === 'success' || params.get('saml') === 'success';
+    } catch {
+      return false;
+    }
+  };
+
   const fallbackState: State = {
     connectedInfrastructure: [],
     metrics: [],
@@ -673,7 +689,11 @@ export const useAppRuntimeState = () => {
         return;
       }
 
-      if (isPreAuthLoginBootstrapPath(window.location.pathname) && !hasLocalAuthBootstrapHint()) {
+      if (
+        isPreAuthLoginBootstrapPath(window.location.pathname) &&
+        !hasLocalAuthBootstrapHint() &&
+        !hasSSOCallbackSuccessHint()
+      ) {
         logger.debug('[App] Public login bootstrap has no local auth hint yet', {
           pathname: window.location.pathname,
         });
