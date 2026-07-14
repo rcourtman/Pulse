@@ -68,10 +68,24 @@ func (p *HTTPProxy) Close() {
 
 // NewHTTPProxy creates a proxy that forwards requests to the given local address.
 func NewHTTPProxy(localAddr string, logger zerolog.Logger) *HTTPProxy {
+	return NewHTTPProxyWithLocalHandler(localAddr, nil, logger)
+}
+
+// NewHTTPProxyWithLocalHandler creates a proxy that dispatches requests to the
+// given handler in-process. localAddr is retained for request URL construction
+// and as the dial target when handler is nil. Passing the handler is the
+// correct mode inside the Pulse server: the main listener may serve TLS or
+// bind a non-loopback address, so a loopback dial is not a faithful hop.
+func NewHTTPProxyWithLocalHandler(localAddr string, handler http.Handler, logger zerolog.Logger) *HTTPProxy {
+	var transport http.RoundTripper
+	if handler != nil {
+		transport = newHandlerTransport(handler)
+	}
 	return &HTTPProxy{
 		localAddr: localAddr,
 		client: &http.Client{
-			Timeout: proxyRequestTimeout,
+			Timeout:   proxyRequestTimeout,
+			Transport: transport,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
@@ -79,6 +93,7 @@ func NewHTTPProxy(localAddr string, logger zerolog.Logger) *HTTPProxy {
 		streamClient: &http.Client{
 			// No Timeout — streaming responses are long-lived.
 			// Cancellation is handled via context.
+			Transport: transport,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse
 			},

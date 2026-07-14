@@ -122,6 +122,7 @@ type ClientDeps struct {
 	LicenseTokenFunc   func() string  // returns the raw license JWT
 	TokenValidator     TokenValidator // validates API tokens from CHANNEL_OPEN
 	LocalAddr          string         // e.g. "127.0.0.1:7655"
+	LocalHandler       http.Handler   // in-process local API dispatch; when set, LocalAddr is never dialed (required when the listener serves TLS or binds a non-loopback address)
 	ServerVersion      string         // Pulse version for ClientVersion in REGISTER
 	IdentityPubKey     string         // base64-encoded Ed25519 public key for MITM prevention
 	IdentityPrivateKey string         // base64-encoded Ed25519 private key for signing KEY_EXCHANGE
@@ -175,7 +176,7 @@ func NewClient(cfg Config, deps ClientDeps, logger zerolog.Logger) *Client {
 	return &Client{
 		config:     cfg,
 		deps:       deps,
-		proxy:      NewHTTPProxy(deps.LocalAddr, logger),
+		proxy:      NewHTTPProxyWithLocalHandler(deps.LocalAddr, deps.LocalHandler, logger),
 		logger:     logger,
 		channels:   make(map[uint32]*channelState),
 		startupErr: startupErr,

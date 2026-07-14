@@ -3439,7 +3439,13 @@ func (r *Router) StartRelay(ctx context.Context) {
 			config.Mu.Unlock()
 			return ok
 		},
-		LocalAddr:          localAddr,
+		LocalAddr: localAddr,
+		// Dispatch proxied requests to our own handler chain in-process.
+		// The main listener may serve TLS (HTTPS_ENABLED) or bind a
+		// non-loopback address, so dialing localAddr is not reliable.
+		LocalHandler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			r.Handler().ServeHTTP(w, req)
+		}),
 		ServerVersion:      r.serverVersion,
 		IdentityPubKey:     cfg.IdentityPublicKey,
 		IdentityPrivateKey: cfg.IdentityPrivateKey,
