@@ -86,6 +86,31 @@ func TestBuildTriageSeedContext_FlaggedOnly(t *testing.T) {
 	}
 }
 
+func TestBuildTriageSeedContext_UnionsExplicitScopeWithFlags(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := triageIntegrationState(10)
+	triage := triageIntegrationResult(state, map[string]bool{"qemu/102": true})
+	scope := &PatrolScope{
+		ResourceIDs: []string{"qemu/107"},
+		Depth:       PatrolDepthQuick,
+	}
+
+	seed, _ := ps.buildTriageSeedContextState(triage, patrolRuntimeStateForTest(ps, state), scope, nil)
+	for _, expected := range []string{"vm-02", "vm-07"} {
+		if !strings.Contains(seed, expected) {
+			t.Fatalf("expected flagged or explicitly scoped resource %q in triage seed, got:\n%s", expected, seed)
+		}
+	}
+	for _, unexpected := range []string{"vm-00", "vm-03", "vm-09"} {
+		if strings.Contains(seed, unexpected) {
+			t.Fatalf("did not expect unrelated resource %q in triage seed, got:\n%s", unexpected, seed)
+		}
+	}
+	if !strings.Contains(seed, "Effective scope: 2 resources (qemu/102, qemu/107)") {
+		t.Fatalf("expected scope section to describe the complete evidence set, got:\n%s", seed)
+	}
+}
+
 func TestBuildTriageSeedContext_SmallOutput(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := triageIntegrationState(40)
@@ -130,8 +155,10 @@ func TestComputeTriageMaxTurns(t *testing.T) {
 	}
 
 	quickScope := &PatrolScope{Depth: PatrolDepthQuick}
-	if got := computeTriageMaxTurns(15, quickScope); got != 20 {
-		t.Fatalf("quick scope expected 20-turn cap, got %d", got)
+	for _, flagCount := range []int{0, 1, 15, 100} {
+		if got := computeTriageMaxTurns(flagCount, quickScope); got != 3 {
+			t.Fatalf("quick scope with %d flags: expected strict 3-turn budget, got %d", flagCount, got)
+		}
 	}
 }
 
@@ -155,6 +182,16 @@ func TestGetPatrolSystemPromptForTriage(t *testing.T) {
 	}
 	if strings.Contains(prompt, "Your job is to find issues that simple threshold-based alerts CANNOT catch") {
 		t.Fatalf("expected standard opening to be replaced in triage prompt, got:\n%s", prompt)
+	}
+	for _, required := range []string{
+		"failed health check",
+		"Report that symptom even when logs or command execution are unavailable",
+		"root cause is unknown",
+		"do not retry that capability",
+	} {
+		if !strings.Contains(prompt, required) {
+			t.Fatalf("expected confirmed-symptom evidence contract %q in prompt, got:\n%s", required, prompt)
+		}
 	}
 }
 

@@ -757,12 +757,16 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	})
 	found := map[string]bool{}
 	var resolveTool Tool
+	var reportTool Tool
 	for _, tool := range tools {
 		if tool.Name == "patrol_report_finding" || tool.Name == "patrol_assess_finding" || tool.Name == "patrol_resolve_finding" || tool.Name == "patrol_get_findings" {
 			found[tool.Name] = true
 		}
 		if tool.Name == "patrol_resolve_finding" {
 			resolveTool = tool
+		}
+		if tool.Name == "patrol_report_finding" {
+			reportTool = tool
 		}
 	}
 
@@ -775,6 +779,9 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	assert.Contains(t, resolveTool.InputSchema.Required, agentcapabilities.ReasonArgumentName)
 	assert.Contains(t, resolveTool.InputSchema.Properties, agentcapabilities.FindingIDArgumentName)
 	assert.Contains(t, resolveTool.InputSchema.Properties, agentcapabilities.ReasonArgumentName)
+	require.NotEmpty(t, reportTool.Name)
+	assert.Contains(t, reportTool.Description, "failed health check")
+	assert.Contains(t, reportTool.Description, "root cause is unknown")
 }
 
 func TestPatrolToolsAvailability(t *testing.T) {

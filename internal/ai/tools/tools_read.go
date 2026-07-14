@@ -17,7 +17,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name:        agentcapabilities.PulseReadToolName,
-			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. Use target_host for agent-routed reads, or resource_id for API-backed native resource logs such as supported TrueNAS app-containers. When Pulse has attached resource context, use target_host="current_resource" or resource_id="current_resource" for the attached resource instead of copying redacted identifiers.`,
+			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. Agent-routed actions require a command-capable agent; resource_id logs require a supported native log adapter. Use target_host for agent-routed reads, or resource_id for API-backed native resource logs such as supported TrueNAS app-containers. When Pulse has attached resource context, use target_host="current_resource" or resource_id="current_resource" for the attached resource instead of copying redacted identifiers. If the tool reports that the required capability is unavailable, do not retry the same capability; continue with provider evidence already available.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{

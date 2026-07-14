@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"sort"
 	"strconv"
@@ -955,6 +956,16 @@ func computePatrolMaxTurns(resourceCount int, scope *PatrolScope) int {
 }
 
 func computeTriageMaxTurns(flagCount int, scope *PatrolScope) int {
+	// A quick Patrol run is an intentionally narrow check of already-scoped
+	// resources. The seed contains the current resource evidence, leaving one
+	// turn to inspect active findings, one to report/assess, and one to finish.
+	// Giving quick runs the full adaptive budget encourages broad rediscovery
+	// and can multiply the same large tool schema across otherwise redundant
+	// provider calls.
+	if scope != nil && scope.Depth == PatrolDepthQuick {
+		return 3
+	}
+
 	const (
 		triageBaseTurns    = 5
 		triageTurnsPerFlag = 3
@@ -969,12 +980,6 @@ func computeTriageMaxTurns(flagCount int, scope *PatrolScope) int {
 	if turns > triageMaxTurns {
 		turns = triageMaxTurns
 	}
-	if scope != nil && scope.Depth == PatrolDepthQuick {
-		if turns > 20 {
-			turns = 20
-		}
-	}
-
 	return turns
 }
 
@@ -1168,7 +1173,7 @@ You have access to the following tools to investigate infrastructure:
 - pulse_pmg — Proxmox Mail Gateway status, mail stats, queues
 
 **Deep Investigation:**
-- pulse_read — Read-only command execution, file reads, log tailing
+- pulse_read — Read-only command execution, file reads, and log tailing when a command-capable agent or native log adapter is available for the resource
 - pulse_discovery — Read or refresh discovered service details, config paths, ports, and bind mounts
 - pulse_knowledge — User notes, incidents, event correlations
 
@@ -1193,6 +1198,8 @@ The seed context includes service identity (from discovery) and reachability dat
 - Resource configuration details that could explain misconfiguration.
 - Mail queue or spam-volume data if mail flow looks abnormal.
 
+A direct provider-reported failed health check, failed backup, or broken replication state is already confirmed evidence of an operational symptom. Report that symptom even when logs or command execution are unavailable. Use warning/reliability for a failed health check unless the evidence establishes a critical consequence. State that the root cause is unknown and recommend the next safe diagnostic step; never invent a root cause. Missing optional root-cause evidence must not suppress a confirmed symptom-level finding.
+
 **Step 3 — Report or assess findings.** Report new confirmed issues with patrol_report_finding. For every active finding returned by patrol_get_findings, call patrol_assess_finding exactly once with present, resolved, or uncertain and current evidence. Do not silently skip a known finding: omission is not evidence that it cleared. patrol_resolve_finding remains available for compatibility, but patrol_assess_finding is the complete existing-finding verdict.
 Always call patrol_get_findings before reporting, assessing, or resolving findings.
 
@@ -1201,6 +1208,8 @@ The snapshot eliminates routine data gathering. When a notable signal needs curr
 ## Efficiency Rules
 - Do NOT call the same tool with the same parameters twice in a single patrol run.
 - Keep track of what you've already checked. If you've already retrieved metrics for a resource, use the data you have.
+- Once direct resource evidence confirms an actionable symptom, report it before pursuing optional root-cause detail.
+- If a tool reports that a resource lacks the required agent or native capability, do not retry that capability or replace it with a broad inventory scan. Continue with the evidence already available.
 
 ## Severity & Thresholds
 
@@ -1340,9 +1349,14 @@ func (p *PatrolService) buildTriageSeedSectionsState(
 	if triage == nil {
 		triage = &TriageResult{}
 	}
-	flaggedSet := triage.FlaggedIDs
-	if flaggedSet == nil {
-		flaggedSet = map[string]bool{}
+	seedSet := p.buildScopedSetForRuntime(scope, snap)
+	if seedSet == nil {
+		seedSet = make(map[string]bool, len(triage.FlaggedIDs))
+	} else {
+		seedSet = maps.Clone(seedSet)
+	}
+	for id := range triage.FlaggedIDs {
+		seedSet[id] = true
 	}
 
 	findingsCtx, seededFindingIDs := p.seedFindingsAndContextState(scope, snap)
@@ -1352,8 +1366,8 @@ func (p *PatrolService) buildTriageSeedSectionsState(
 		// P0 — always include.
 		{priority: 0, name: "triage_overview", content: formatTriageOverviewSection(triage)},
 		{priority: 0, name: "findings", content: findingsCtx},
-		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlertsState(snap, flaggedSet, cfg, now)},
-		{priority: 0, name: "scope", content: buildScopeSection(scope, sortedScopedIDs(flaggedSet))},
+		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlertsState(snap, seedSet, cfg, now)},
+		{priority: 0, name: "scope", content: buildScopeSection(scope, sortedScopedIDs(seedSet))},
 
 		// P2 — triage already preserves the flagged set, so these sections can
 		// summarize under tighter provider-derived retry budgets.
@@ -1366,8 +1380,8 @@ func (p *PatrolService) buildTriageSeedSectionsState(
 		{
 			priority: 2,
 			name:     "flagged_inventory",
-			content:  p.seedResourceInventoryState(snap, flaggedSet, cfg, now, false, guestIntel),
-			summary:  p.seedResourceInventorySummaryState(snap, flaggedSet, cfg, now, guestIntel),
+			content:  p.seedResourceInventoryState(snap, seedSet, cfg, now, false, guestIntel),
+			summary:  p.seedResourceInventorySummaryState(snap, seedSet, cfg, now, guestIntel),
 		},
 
 		// P3 — healthy rollup is useful context but lowest-value on retries.
@@ -2020,6 +2034,7 @@ type patrolDockerHostRow struct {
 
 type patrolAppContainerRow struct {
 	id, name, status string
+	health           string
 	cpu, memory      float64
 }
 
@@ -2336,6 +2351,7 @@ func patrolAppContainerRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				id:     cv.ID(),
 				name:   cv.Name(),
 				status: strings.TrimSpace(cv.ContainerState()),
+				health: strings.TrimSpace(cv.Health()),
 				cpu:    cv.CPUPercent(),
 				memory: cv.MemoryPercent(),
 			})
@@ -2357,6 +2373,7 @@ func patrolAppContainerRows(snap patrolRuntimeState, scopedSet map[string]bool) 
 				id:     container.ID,
 				name:   container.Name,
 				status: container.State,
+				health: container.Health,
 				cpu:    container.CPUPercent,
 				memory: container.MemoryPercent,
 			})
@@ -2919,6 +2936,27 @@ func (p *PatrolService) seedResourceInventoryState(snap patrolRuntimeState, scop
 				}
 			}
 			sb.WriteString("\n")
+		}
+
+		// Full unscoped runs retain the compact host rollup above. Scoped and
+		// triage runs also carry exact app-container evidence so a child resource
+		// does not disappear merely because its parent host is outside the set.
+		if scopedSet != nil {
+			containerRows := patrolAppContainerRows(snap, scopedSet)
+			if len(containerRows) > 0 {
+				sb.WriteString("# Scoped App Containers\n")
+				sb.WriteString("| Name | Resource ID | State | Health | CPU | Memory |\n")
+				sb.WriteString("|------|-------------|-------|--------|-----|--------|\n")
+				for _, row := range containerRows {
+					health := strings.TrimSpace(row.health)
+					if health == "" {
+						health = "not reported"
+					}
+					sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %.0f%% | %.0f%% |\n",
+						row.name, row.id, row.status, health, row.cpu, row.memory))
+				}
+				sb.WriteString("\n")
+			}
 		}
 	}
 

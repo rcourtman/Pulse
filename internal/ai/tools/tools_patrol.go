@@ -17,7 +17,7 @@ func (e *PulseToolExecutor) registerPatrolTools() {
 			Name: agentcapabilities.PatrolReportFindingToolName,
 			Description: `Report an infrastructure finding discovered during patrol investigation.
 
-Call this tool to create a structured finding after you have gathered sufficient evidence via investigation tools.
+Call this tool to create a structured finding after you have gathered sufficient evidence. A provider-reported failed health check, failed backup, or broken replication state is sufficient evidence for the confirmed symptom even when optional logs or command execution are unavailable. Use warning/reliability for a failed health check unless the evidence establishes a critical consequence. Report the symptom and state that its root cause is unknown; do not fabricate a cause or suppress the finding while searching for one.
 The finding will be validated against current metrics and deduplicated automatically.
 
 Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,

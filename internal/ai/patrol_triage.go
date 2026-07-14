@@ -71,6 +71,7 @@ func (p *PatrolService) runDeterministicTriageState(
 	flags = append(flags, triageAnomalyChecks(intel)...)
 	flags = append(flags, triageBackupChecksState(snap, scopedSet)...)
 	flags = append(flags, triageDiskHealthChecksState(snap, scopedSet)...)
+	flags = append(flags, triageContainerHealthChecksState(snap, scopedSet)...)
 	flags = append(flags, triageAlertChecksState(snap, scopedSet)...)
 	flags = append(flags, triageConnectivityChecksState(snap, guestIntel, scopedSet)...)
 	flags = append(flags, triageRecentChanges(intel)...)
@@ -97,6 +98,36 @@ func (p *PatrolService) runDeterministicTriageState(
 		Intel:      intel,
 		GuestIntel: guestIntel,
 		FlaggedIDs: flaggedIDs,
+	}
+}
+
+func triageContainerHealthChecksState(snap patrolRuntimeState, scopedSet map[string]bool) []TriageFlag {
+	rows := patrolAppContainerRows(snap, scopedSet)
+	flags := make([]TriageFlag, 0)
+	for _, row := range rows {
+		if !strings.EqualFold(strings.TrimSpace(row.status), "running") || !triageContainerHealthFailed(row.health) {
+			continue
+		}
+
+		health := strings.TrimSpace(row.health)
+		flags = append(flags, TriageFlag{
+			ResourceID:   row.id,
+			ResourceName: triageResourceName(row.name, row.id),
+			ResourceType: "app-container",
+			Category:     "health",
+			Severity:     "warning",
+			Reason:       fmt.Sprintf("Container health check reported %s while running", health),
+		})
+	}
+	return flags
+}
+
+func triageContainerHealthFailed(health string) bool {
+	switch strings.ToLower(strings.TrimSpace(health)) {
+	case "unhealthy", "failed", "failing", "error", "critical", "degraded":
+		return true
+	default:
+		return false
 	}
 }
 

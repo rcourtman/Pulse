@@ -359,6 +359,73 @@ func TestTriageDiskHealthChecksState_UsesPhysicalDiskFallback(t *testing.T) {
 	}
 }
 
+func TestTriageContainerHealthChecksState_FlagsConfirmedFailureOnly(t *testing.T) {
+	state := patrolRuntimeState{
+		DockerHosts: []models.DockerHost{{
+			ID:       "docker-host-1",
+			Hostname: "tower",
+			Containers: []models.DockerContainer{
+				{ID: "app-container:tower:faulty", Name: "faulty", State: "running", Health: "unhealthy"},
+				{ID: "app-container:tower:healthy", Name: "healthy", State: "running", Health: "healthy"},
+				{ID: "app-container:tower:starting", Name: "starting", State: "running", Health: "starting"},
+				{ID: "app-container:tower:stopped", Name: "stopped", State: "exited", Health: "unhealthy"},
+			},
+		}},
+	}
+
+	flags := triageContainerHealthChecksState(state, nil)
+	if len(flags) != 1 {
+		t.Fatalf("expected one confirmed container-health failure, got %#v", flags)
+	}
+	flag := flags[0]
+	if flag.ResourceID != "app-container:tower:faulty" || flag.ResourceName != "faulty" || flag.ResourceType != "app-container" {
+		t.Fatalf("expected exact app-container identity, got %#v", flag)
+	}
+	if flag.Category != "health" || flag.Severity != "warning" || !strings.Contains(flag.Reason, "reported unhealthy while running") {
+		t.Fatalf("expected grounded warning health flag, got %#v", flag)
+	}
+}
+
+func TestTriageContainerHealthChecksState_UsesReadState(t *testing.T) {
+	parentID := "docker-host-1"
+	unhealthy := unifiedresources.NewDockerContainerView(&unifiedresources.Resource{
+		ID:       "app-container:tower:faulty",
+		Name:     "faulty",
+		Type:     unifiedresources.ResourceTypeAppContainer,
+		Status:   unifiedresources.StatusOnline,
+		ParentID: &parentID,
+		Docker: &unifiedresources.DockerData{
+			ContainerState: "running",
+			Health:         "unhealthy",
+		},
+	})
+	state := patrolRuntimeState{readState: &mockReadState{dockerCtrs: []*unifiedresources.DockerContainerView{&unhealthy}}}
+
+	flags := triageContainerHealthChecksState(state, map[string]bool{"app-container:tower:faulty": true})
+	if len(flags) != 1 || flags[0].ResourceID != "app-container:tower:faulty" {
+		t.Fatalf("expected read-state container health failure, got %#v", flags)
+	}
+
+	ps := NewPatrolService(nil, nil)
+	triage := &TriageResult{
+		Flags:      flags,
+		FlaggedIDs: map[string]bool{flags[0].ResourceID: true},
+	}
+	seed, _ := ps.buildTriageSeedContextState(triage, state, &PatrolScope{
+		ResourceIDs: []string{flags[0].ResourceID},
+		Depth:       PatrolDepthQuick,
+	}, nil)
+	for _, expected := range []string{
+		"Container health check reported unhealthy while running",
+		"# Scoped App Containers",
+		"| faulty | app-container:tower:faulty | running | unhealthy |",
+	} {
+		if !strings.Contains(seed, expected) {
+			t.Fatalf("expected exact app-container evidence %q in triage seed, got:\n%s", expected, seed)
+		}
+	}
+}
+
 func TestTriageAlertChecks(t *testing.T) {
 	state := patrolRuntimeState{
 		ActiveAlerts: []models.Alert{

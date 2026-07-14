@@ -289,6 +289,15 @@ func TestPulseToolExecutor_ListTools_IncludesPulseReadForNativeAppReadProvider(t
 
 	tools := exec.ListTools()
 	assert.True(t, containsTool(tools, "pulse_read"))
+	for _, tool := range tools {
+		if tool.Name != "pulse_read" {
+			continue
+		}
+		assert.Contains(t, tool.Description, "require a command-capable agent")
+		assert.Contains(t, tool.Description, "do not retry the same capability")
+		return
+	}
+	t.Fatal("pulse_read tool definition was not projected")
 }
 
 func TestExecuteReadLogs_TrueNASAppUsesNativeReadProvider(t *testing.T) {

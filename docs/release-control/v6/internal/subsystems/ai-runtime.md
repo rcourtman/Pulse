@@ -78,6 +78,20 @@ the same investigate, approval, execution, and verification boundaries enforced
 by the orchestrator. Prompt copy must not fall back to the legacy
 `patrol_auto_fix` boolean or the retired "observe only" / "auto-fix mode"
 framing.
+Patrol's Watch evidence contract treats a direct provider-reported failed
+health check, failed backup, or broken replication state as sufficient evidence
+for the confirmed operational symptom. The model reports that symptom even when
+an agent or native log adapter cannot supply optional root-cause evidence,
+uses warning/reliability for a failed health check unless evidence establishes
+a critical consequence, states that the root cause remains unknown, and must
+not fabricate one. Scoped
+triage seed context contains both deterministic flags and the explicitly scoped
+resource inventory, including exact app-container health, rather than reducing
+the model's evidence to whichever resources the deterministic pass happened to
+flag. Quick scoped checks have a strict three-turn model budget: active-finding
+inspection, report or assessment, and final summary. A capability-unavailable
+read result is terminal for that capability within the run and must not trigger
+retries or broad inventory scans.
 Patrol finding storage must consolidate equivalent active storage-capacity
 siblings before they reach browser surfaces: a broader storage risk and a
 generic usage/capacity finding for the same normalized storage identity are one
