@@ -579,6 +579,20 @@ component-local required-scope list.
 
 ## Extension Points
 
+Patrol model qualification extends only through
+`internal/ai/qualification/`, `cmd/patrol-qualify/`, and reviewed manifests
+under `tests/qualification/patrol/`. `live-suite` may sequence every manifest
+for one explicit track, but it must retain the existing live-fault and separate
+remediation authorization gates for every run. Voluntary community evidence
+must be a local, mode-0600, allowlist-only derivation: it may carry aggregate
+scores, safety booleans, cost/latency, exact model/provider, scenario and
+runtime provenance, a pre-run public challenge, and source content digests. It
+must not copy raw findings, resources, topology, endpoints, logs, prompts,
+model output, tool identity or payloads, action identity or payloads, or error
+prose, and creating it must never perform a network upload. Community evidence
+may shortlist models but cannot satisfy Pulse certification or hosted-model
+selection without a separately reproduced controlled-lab campaign.
+
 Assistant control wording must identify the effective scope as Assistant chat
 only. Patrol autonomy and global Actions remain separate authority surfaces;
 the chat pill may display the effective `control_level` but must not imply that

@@ -122,6 +122,32 @@ func TestRunnerRequiresSeparateRemediationAuthorization(t *testing.T) {
 	}
 }
 
+func TestRunnerBindsOnlyValidCommunityChallenge(t *testing.T) {
+	manifest := validTestManifest()
+	client, err := NewPulseClient(ClientConfig{BaseURL: "http://127.0.0.1:1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lab := NewDockerLab(nil, DockerTarget{Context: "test"})
+	if _, err := NewRunner(RunnerConfig{Manifest: manifest, Lab: lab, Client: client, ChallengeNonce: "too short"}); err == nil {
+		t.Fatal("invalid community challenge must fail before lab execution")
+	}
+	runner, err := NewRunner(RunnerConfig{
+		Manifest: manifest, Lab: lab, Client: client,
+		ModelOverride: "provider:model", ChallengeNonce: " challenge-1234567890 ",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runner.config.ChallengeNonce != "challenge-1234567890" {
+		t.Fatalf("normalized challenge = %q", runner.config.ChallengeNonce)
+	}
+	environment := runner.initialEnvironment()
+	if environment.Model != "provider:model" || environment.Provider != "provider" || environment.ChallengeNonce != "challenge-1234567890" {
+		t.Fatalf("initial environment did not bind requested provenance: %+v", environment)
+	}
+}
+
 func TestRenderResourceNameRequiresRunScopedPrefix(t *testing.T) {
 	if _, err := renderResourceName("customer-database", "db", "q-20260714-abcdef"); err == nil {
 		t.Fatal("expected non-lab name to be rejected")

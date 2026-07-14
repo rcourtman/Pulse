@@ -28,15 +28,16 @@ type PhaseTiming struct {
 }
 
 type Environment struct {
-	GitSHA       string            `json:"git_sha"`
-	GitDirty     bool              `json:"git_dirty"`
-	PulseVersion string            `json:"pulse_version"`
-	PulseBaseURL string            `json:"pulse_base_url"`
-	DockerTarget string            `json:"docker_target"`
-	Model        string            `json:"model"`
-	Provider     string            `json:"provider"`
-	CapturedAt   time.Time         `json:"captured_at"`
-	Versions     map[string]string `json:"versions,omitempty"`
+	GitSHA         string            `json:"git_sha"`
+	GitDirty       bool              `json:"git_dirty"`
+	PulseVersion   string            `json:"pulse_version"`
+	PulseBaseURL   string            `json:"pulse_base_url"`
+	DockerTarget   string            `json:"docker_target"`
+	Model          string            `json:"model"`
+	Provider       string            `json:"provider"`
+	ChallengeNonce string            `json:"community_challenge_nonce,omitempty"`
+	CapturedAt     time.Time         `json:"captured_at"`
+	Versions       map[string]string `json:"versions,omitempty"`
 }
 
 type RunReport struct {
@@ -391,6 +392,13 @@ func ApplyQualificationGates(comparison *ComparisonReport, catalog Catalog, trac
 				verdict.Qualified = false
 				verdict.Failures = append(verdict.Failures, fmt.Sprintf("missing scenario %s", manifest.ID))
 				continue
+			}
+			catalogDigest, err := manifest.Digest()
+			if err != nil {
+				return fmt.Errorf("digest catalog scenario %s: %w", manifest.ID, err)
+			}
+			if len(scenario.ManifestDigests) != 1 || scenario.ManifestDigests[0] != catalogDigest {
+				scenario.Failures = append(scenario.Failures, "report manifest digest does not match the selected catalogue")
 			}
 			required := manifest.Repeat.Qualification
 			if scenario.Runs < required {

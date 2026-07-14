@@ -21,3 +21,37 @@ func TestLiveRepeatCountUsesManifestProfile(t *testing.T) {
 		t.Fatal("unknown repeat profile must fail")
 	}
 }
+
+func TestSelectLiveManifestsSupportsOneScenarioOrWholeTrack(t *testing.T) {
+	watchA := qualification.Manifest{ID: "watch.a", Track: qualification.TrackWatch}
+	watchB := qualification.Manifest{ID: "watch.b", Track: qualification.TrackWatch}
+	investigation := qualification.Manifest{ID: "investigation.a", Track: qualification.TrackInvestigation}
+	catalog := qualification.Catalog{
+		Manifests: []qualification.Manifest{watchA, watchB, investigation},
+		ByID: map[string]qualification.Manifest{
+			watchA.ID: watchA, watchB.ID: watchB, investigation.ID: investigation,
+		},
+	}
+
+	selected, err := selectLiveManifests(catalog, "live", "watch.b", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selected) != 1 || selected[0].ID != "watch.b" {
+		t.Fatalf("single selection = %+v", selected)
+	}
+
+	selected, err = selectLiveManifests(catalog, "live-suite", "", qualification.TrackWatch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selected) != 2 || selected[0].ID != "watch.a" || selected[1].ID != "watch.b" {
+		t.Fatalf("suite selection = %+v", selected)
+	}
+	if _, err := selectLiveManifests(catalog, "live-suite", "", ""); err == nil {
+		t.Fatal("suite without a track must fail")
+	}
+	if _, err := selectLiveManifests(catalog, "live", "missing", ""); err == nil {
+		t.Fatal("unknown single scenario must fail")
+	}
+}

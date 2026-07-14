@@ -55,6 +55,8 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         )
         self.assertIn("Pulse MCP", content)
         self.assertIn("AI_PATROL_QUALIFICATION.md", content)
+        self.assertIn("full-track local suite", normalized_content)
+        self.assertIn("privacy-allowlisted community evidence export", normalized_content)
         self.assertIn("Every active finding shown or returned to a Patrol run", content)
         self.assertIn("Silence is not an all-clear signal", normalized_content)
         self.assertIn(
@@ -149,6 +151,23 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         )
         self.assertIn("enabled by default and can be disabled any time", normalized_content)
         self.assertNotIn("anonymous telemetry", normalized_content.lower())
+
+    def test_patrol_qualification_docs_keep_community_evidence_local_and_bounded(self) -> None:
+        content = read_repo_text("docs/AI_PATROL_QUALIFICATION.md")
+        normalized_content = " ".join(content.split())
+
+        self.assertIn("-mode live-suite", content)
+        self.assertIn("-mode export-contribution", content)
+        self.assertIn("The export command performs no network request", normalized_content)
+        self.assertIn("explicit allowlist", normalized_content)
+        self.assertIn("It never copies raw findings", normalized_content)
+        self.assertIn("Community tested", content)
+        self.assertIn("Community validated", content)
+        self.assertIn("Pulse certified", content)
+        self.assertIn(
+            "Only Pulse-certified models may become the default hosted route",
+            normalized_content,
+        )
 
     def test_public_ai_docs_use_current_surface_naming(self) -> None:
         for doc_path in PUBLIC_AI_DOC_PATHS:

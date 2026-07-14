@@ -195,7 +195,8 @@ recommendations are published separately from live, reversible canary faults,
 healthy controls, normal collection paths, scenario-owned ground truth, and
 track-specific launch gates. See
 [Pulse Patrol autonomous operations and real-world qualification](AI_PATROL_QUALIFICATION.md)
-for the catalogue, methodology, safe lab boundary, and publication command.
+for the catalogue, methodology, safe lab boundary, full-track local suite,
+privacy-allowlisted community evidence export, and publication command.
 
 ---
 

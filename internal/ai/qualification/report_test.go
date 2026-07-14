@@ -155,6 +155,30 @@ func TestApplyQualificationGatesRejectsIncomparableRuns(t *testing.T) {
 	}
 }
 
+func TestApplyQualificationGatesRejectsStaleScenarioManifest(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Repeat = RepeatSpec{Development: 1, Nightly: 1, Qualification: 1}
+	catalog := Catalog{Manifests: []Manifest{manifest}, ByID: map[string]Manifest{manifest.ID: manifest}}
+	comparison := ComparisonReport{
+		GitSHAs: []string{"revision-a"}, PulseVersions: []string{"6.1.0-test"},
+		Models: []ModelSummary{{Model: "provider:model"}},
+		Scenarios: []ScenarioSummary{{
+			ModelSummary: ModelSummary{
+				Model: "provider:model", Runs: 1, Passed: 1,
+				PassRate: WilsonInterval(1, 1), FaultRecall: WilsonInterval(1, 1),
+			},
+			ScenarioID: manifest.ID, Track: TrackWatch,
+			ManifestDigests: []string{strings.Repeat("0", 64)},
+		}},
+	}
+	if err := ApplyQualificationGates(&comparison, catalog, TrackWatch); err != nil {
+		t.Fatal(err)
+	}
+	if comparison.Qualification[0].Qualified || !strings.Contains(strings.Join(comparison.Qualification[0].Failures, " "), "does not match the selected catalogue") {
+		t.Fatalf("stale manifest qualification = %+v", comparison.Qualification)
+	}
+}
+
 func TestWriteReportIncludesReplayAndChecksumsWithPrivateMode(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "report")
 	report := RunReport{

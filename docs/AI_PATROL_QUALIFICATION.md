@@ -268,6 +268,26 @@ go run ./cmd/patrol-qualify \
   -authorize-live-faults
 ```
 
+Run the complete catalogue for one track with one command. The suite remains
+sequential so model overrides, finding association, fault injection, and
+teardown cannot race:
+
+```sh
+export PULSE_QUALIFY_PASSWORD='<local password>'
+go run ./cmd/patrol-qualify \
+  -mode live-suite \
+  -qualification-track watch \
+  -repeat-profile development \
+  -model anthropic:<pinned-model-id> \
+  -docker-context colima \
+  -authorize-live-faults \
+  -artifacts tmp/patrol-qualification/<model-and-revision>
+```
+
+`live-suite` selects every checked-in scenario for the requested track. The
+remediation track still requires `--authorize-remediation`; selecting the
+track does not broaden mutation authority.
+
 An SSH Docker host is allowed only for a manifest-approved shared lab:
 
 ```sh
@@ -303,6 +323,68 @@ go run ./cmd/patrol-qualify -mode verify-replay -replay-bundle <run>/replay.json
 
 Neither replay command is evidence that the current collector, provider, or
 model works. Live qualification remains mandatory.
+
+## Voluntary community evidence
+
+Community runs can cheaply explore the long tail of provider/model routes, but
+they do not replace controlled Pulse certification. A future registry can
+issue a public challenge nonce before a campaign. Bind it into every live
+report at run time:
+
+```sh
+go run ./cmd/patrol-qualify \
+  -mode live-suite \
+  -qualification-track watch \
+  -repeat-profile development \
+  -community-challenge '<server-issued-nonce>' \
+  -model <provider:model> \
+  -docker-context colima \
+  -authorize-live-faults \
+  -artifacts tmp/patrol-qualification/community-candidate
+```
+
+After reviewing the local raw reports, create a separate shareable candidate:
+
+```sh
+go run ./cmd/patrol-qualify \
+  -mode export-contribution \
+  -reports tmp/patrol-qualification/community-candidate \
+  -qualification-track watch \
+  -contribution-dir tmp/patrol-community-export
+```
+
+The export command performs no network request. It writes mode-0600
+`contribution.json`, `README.md`, and `SHA256SUMS` and instructs the operator to
+review them before sharing. The JSON is constructed from an explicit allowlist
+of aggregate score, safety, cost, latency, model/provider, scenario digest,
+Pulse/harness revision, challenge, and content-digest fields. It never copies
+raw findings, resource identity, hostnames, IP addresses, Pulse URLs, Docker
+targets, topology, logs, prompts, model output, tool names/arguments/results,
+action identity, or error prose.
+
+The source report and replay SHA-256 digests bind a candidate to locally held
+full evidence for selective audit without publishing that evidence. They do
+not prove that a self-reported run was honest. A challenge prevents accidental
+reuse of pre-challenge evidence only when it was supplied before every live
+run; it is not an anti-Sybil identity or certification signature.
+The export applies qualification gates against the selected checked-in
+catalogue; a report whose embedded scenario digest is merely self-consistent
+but stale relative to that catalogue receives an explicit qualification
+failure.
+
+Public results must keep three evidence classes distinct:
+
+1. **Community tested**: one or more structurally valid candidate exports.
+2. **Community validated**: the statistical gate passes across a future
+   registry's required number of unrelated contributors and environments.
+3. **Pulse certified**: Pulse reproduced the complete pinned campaign in its
+   controlled disposable lab.
+
+Community evidence is a candidate-discovery input. Only Pulse-certified models
+may become the default hosted route or receive an unqualified product
+recommendation. Field feedback from real findings is useful calibration data,
+but operator acceptance or dismissal is not scenario-owned ground truth and
+must not be blended into qualification scores.
 
 ## Scoring and launch gates
 

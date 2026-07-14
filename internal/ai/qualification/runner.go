@@ -26,6 +26,7 @@ type RunnerConfig struct {
 	GitSHA               string
 	GitDirty             bool
 	ExpectedPulseVersion string
+	ChallengeNonce       string
 	// AuthorizeRemediation is a second, independent operator gate. Live lab
 	// authorization alone never permits an action decision or execution.
 	AuthorizeRemediation bool
@@ -51,6 +52,10 @@ func NewRunner(config RunnerConfig) (*QualificationRunner, error) {
 	}
 	if config.RunID == "" {
 		config.RunID = newRunID()
+	}
+	config.ChallengeNonce = strings.TrimSpace(config.ChallengeNonce)
+	if err := ValidateContributionChallenge(config.ChallengeNonce); err != nil {
+		return nil, err
 	}
 	if !safeID.MatchString(config.RunID) {
 		return nil, errors.New("invalid run id")
@@ -78,6 +83,7 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		RunID:         r.config.RunID,
 		GeneratedAt:   time.Now().UTC(),
 		Manifest:      manifest,
+		Environment:   r.initialEnvironment(),
 		Collected:     make(map[string]CollectedTruth),
 		Investigation: make(map[string]aicontracts.InvestigationSession),
 	}
@@ -169,7 +175,8 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 			PulseVersion: version.Version,
 			PulseBaseURL: r.config.Client.config.BaseURL,
 			DockerTarget: dockerTargetLabel(r.config.Lab.target),
-			Model:        model, Provider: provider, CapturedAt: time.Now().UTC(),
+			Model:        model, Provider: provider, ChallengeNonce: r.config.ChallengeNonce,
+			CapturedAt: time.Now().UTC(),
 		}
 		return nil
 	}); err != nil {
@@ -427,6 +434,24 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		terminalErr = errors.Join(terminalErr, err)
 	}
 	return report, terminalErr
+}
+
+func (r *QualificationRunner) initialEnvironment() Environment {
+	provider, _ := splitModel(r.config.ModelOverride)
+	dockerTarget := ""
+	if r.config.Lab != nil {
+		dockerTarget = dockerTargetLabel(r.config.Lab.target)
+	}
+	return Environment{
+		GitSHA:         r.config.GitSHA,
+		GitDirty:       r.config.GitDirty,
+		PulseBaseURL:   r.config.Client.config.BaseURL,
+		DockerTarget:   dockerTarget,
+		Model:          strings.TrimSpace(r.config.ModelOverride),
+		Provider:       provider,
+		ChallengeNonce: r.config.ChallengeNonce,
+		CapturedAt:     time.Now().UTC(),
+	}
 }
 
 func validateCollectedScenarioProjection(manifest Manifest, resources map[string]Resource) error {

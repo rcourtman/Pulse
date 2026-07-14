@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	mode := flag.String("mode", "validate", "validate, list, live, replay, verify-replay, or compare")
+	mode := flag.String("mode", "validate", "validate, list, live, live-suite, replay, verify-replay, compare, or export-contribution")
 	catalogDir := flag.String("catalog", "tests/qualification/patrol/scenarios", "scenario manifest directory")
 	scenarioID := flag.String("scenario", "", "scenario id for live mode")
 	baseURL := flag.String("url", "http://127.0.0.1:7655", "Pulse API base URL")
@@ -40,8 +40,10 @@ func main() {
 	replayPath := flag.String("replay-report", "", "captured report.json for deterministic scorer replay")
 	replayBundlePath := flag.String("replay-bundle", "", "captured replay.json for ordered tool-transcript verification")
 	reportsRoot := flag.String("reports", "tmp/patrol-qualification", "report tree for model comparison")
-	qualificationTrack := flag.String("qualification-track", "", "optional launch gate for compare mode: watch, investigation, or remediation")
+	qualificationTrack := flag.String("qualification-track", "", "track for live-suite, export-contribution, or optional compare gates: watch, investigation, or remediation")
 	publicationDir := flag.String("publication-dir", "", "optional directory for comparison.json, comparison.md, and checksums")
+	contributionDir := flag.String("contribution-dir", "", "local output directory for an allowlist-only community evidence candidate")
+	communityChallenge := flag.String("community-challenge", "", "optional server-issued nonce bound into each live report before the run")
 	flag.Parse()
 
 	catalog, err := qualification.LoadCatalog(*catalogDir)
@@ -55,21 +57,16 @@ func main() {
 		for _, manifest := range catalog.Manifests {
 			fmt.Printf("%-44s %-14s %s\n", manifest.ID, manifest.Track, manifest.Title)
 		}
-	case "live":
+	case "live", "live-suite":
 		if !*authorizeLive {
-			fatal(fmt.Errorf("live mode requires --authorize-live-faults"))
+			fatal(fmt.Errorf("%s mode requires --authorize-live-faults", strings.ToLower(strings.TrimSpace(*mode))))
 		}
-		manifest, ok := catalog.ByID[*scenarioID]
-		if !ok {
-			fatal(fmt.Errorf("unknown scenario %q", *scenarioID))
-		}
-		repeatCount, err := liveRepeatCount(manifest, *repeats, *repeatProfile)
+		manifests, err := selectLiveManifests(catalog, *mode, *scenarioID, qualification.Track(strings.ToLower(strings.TrimSpace(*qualificationTrack))))
 		if err != nil {
 			fatal(err)
 		}
-		if manifest.Track == qualification.TrackRemediation && manifest.Remediation != nil &&
-			manifest.Remediation.Decision != "observe" && !*authorizeRemediation {
-			fatal(fmt.Errorf("scenario %q requires the separate --authorize-remediation gate", manifest.ID))
+		if err := qualification.ValidateContributionChallenge(*communityChallenge); err != nil {
+			fatal(err)
 		}
 		secret := *password
 		if value := strings.TrimSpace(os.Getenv(*passwordEnv)); value != "" {
@@ -88,25 +85,40 @@ func main() {
 		defer stop()
 		gitSHA, dirty := qualification.GitEnvironment(ctx, nil, ".")
 		failed := false
-		for i := 0; i < repeatCount; i++ {
-			runner, err := qualification.NewRunner(qualification.RunnerConfig{
-				Manifest: manifest, Lab: lab, Client: client, ArtifactRoot: *artifactRoot,
-				ModelOverride: *model, GitSHA: gitSHA, GitDirty: dirty,
-				AuthorizeRemediation: *authorizeRemediation,
-				ExpectedPulseVersion: *expectedPulseVersion,
-			})
+	liveLoop:
+		for _, manifest := range manifests {
+			repeatCount, err := liveRepeatCount(manifest, *repeats, *repeatProfile)
 			if err != nil {
 				fatal(err)
 			}
-			report, runErr := runner.Run(ctx)
-			verdict := "PASS"
-			if !report.Passed || runErr != nil {
-				verdict = "FAIL"
-				failed = true
+			if manifest.Track == qualification.TrackRemediation && manifest.Remediation != nil &&
+				manifest.Remediation.Decision != "observe" && !*authorizeRemediation {
+				fatal(fmt.Errorf("scenario %q requires the separate --authorize-remediation gate", manifest.ID))
 			}
-			fmt.Printf("[%s] %s model=%s recall=%.1f%% fp=%d artifacts=%s\n", verdict, report.RunID, report.Environment.Model, report.Score.Recall*100, report.Score.FalsePositives, filepath.Join(*artifactRoot, report.RunID))
-			if runErr != nil {
-				fmt.Fprintf(os.Stderr, "  error: %v\n", runErr)
+			for i := 0; i < repeatCount; i++ {
+				runner, err := qualification.NewRunner(qualification.RunnerConfig{
+					Manifest: manifest, Lab: lab, Client: client, ArtifactRoot: *artifactRoot,
+					ModelOverride: *model, GitSHA: gitSHA, GitDirty: dirty,
+					AuthorizeRemediation: *authorizeRemediation,
+					ExpectedPulseVersion: *expectedPulseVersion,
+					ChallengeNonce:       *communityChallenge,
+				})
+				if err != nil {
+					fatal(err)
+				}
+				report, runErr := runner.Run(ctx)
+				verdict := "PASS"
+				if !report.Passed || runErr != nil {
+					verdict = "FAIL"
+					failed = true
+				}
+				fmt.Printf("[%s] %s scenario=%s model=%s recall=%.1f%% fp=%d artifacts=%s\n", verdict, report.RunID, manifest.ID, report.Environment.Model, report.Score.Recall*100, report.Score.FalsePositives, filepath.Join(*artifactRoot, report.RunID))
+				if runErr != nil {
+					fmt.Fprintf(os.Stderr, "  error: %v\n", runErr)
+				}
+				if ctx.Err() != nil {
+					break liveLoop
+				}
 			}
 		}
 		if failed {
@@ -174,8 +186,53 @@ func main() {
 				os.Exit(1)
 			}
 		}
+	case "export-contribution":
+		output := strings.TrimSpace(*contributionDir)
+		if output == "" {
+			fatal(fmt.Errorf("export-contribution mode requires --contribution-dir"))
+		}
+		track := qualification.Track(strings.ToLower(strings.TrimSpace(*qualificationTrack)))
+		paths, err := findReports(*reportsRoot)
+		if err != nil {
+			fatal(err)
+		}
+		bundle, err := qualification.BuildContributionBundle(paths, catalog, track)
+		if err != nil {
+			fatal(err)
+		}
+		if err := qualification.WriteContributionBundle(output, bundle); err != nil {
+			fatal(err)
+		}
+		fmt.Printf("wrote local community evidence candidate with %d run(s) to %s; no network upload was performed\n", len(bundle.Runs), output)
 	default:
 		fatal(fmt.Errorf("unknown mode %q", *mode))
+	}
+}
+
+func selectLiveManifests(catalog qualification.Catalog, mode, scenarioID string, track qualification.Track) ([]qualification.Manifest, error) {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "live":
+		manifest, ok := catalog.ByID[strings.TrimSpace(scenarioID)]
+		if !ok {
+			return nil, fmt.Errorf("unknown scenario %q", scenarioID)
+		}
+		return []qualification.Manifest{manifest}, nil
+	case "live-suite":
+		if track != qualification.TrackWatch && track != qualification.TrackInvestigation && track != qualification.TrackRemediation {
+			return nil, fmt.Errorf("live-suite mode requires --qualification-track watch, investigation, or remediation")
+		}
+		var manifests []qualification.Manifest
+		for _, manifest := range catalog.Manifests {
+			if manifest.Track == track {
+				manifests = append(manifests, manifest)
+			}
+		}
+		if len(manifests) == 0 {
+			return nil, fmt.Errorf("no %s scenarios found in the catalogue", track)
+		}
+		return manifests, nil
+	default:
+		return nil, fmt.Errorf("unsupported live mode %q", mode)
 	}
 }
 
