@@ -5688,6 +5688,17 @@ relevant health, running-state, or restart-count condition; a stale healthy
 projection is a collection failure, never a model miss. These expectations are
 derived from manifest oracles before execution and never from Patrol tool
 selection, preserving non-circular scoring.
+Watch qualification must score the confirmed provider-visible symptom rather
+than require an unproved causal attribution. In the correlated Docker scenario,
+the stopped dependency remains the independently injected fault and the
+downstream unhealthy client is the required Watch finding; one finding proves
+symptom deduplication without teaching Watch that every stopped container is
+unexpected. Pro investigation separately owns the causal diagnosis and its
+evidence requirements. Ground-truth v2 therefore records the injected target
+and the independently declared expected-finding resource as separate resolved
+identities; an expected resource may differ only when the manifest declared it
+as related before execution. V1 replay artifacts retain target-as-expected
+semantics.
 Persisted Patrol tool inputs must retain complete structured finding calls up
 to the bounded 16 KiB record limit so normal evidence-rich findings remain
 deterministically replayable. If any captured input is nevertheless incomplete

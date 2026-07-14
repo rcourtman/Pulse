@@ -148,6 +148,34 @@ func TestScoreRunSeparatesCorrelatedSymptomFromFalsePositiveAndDedupGate(t *test
 	}
 }
 
+func TestScoreRunMatchesScenarioOwnedRelatedResourceExpectation(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Faults[0].RelatedResources = []string{"client"}
+	manifest.Faults[0].Expected.Resource = "client"
+	manifest.Faults[0].Expected.RequiredEvidence = []string{"unhealthy"}
+	manifest.Faults[0].Expected.AllowedAdvice = []string{"inspect"}
+	manifest.Gates = GateSpec{
+		MinRecall: 1, MaxFalsePositives: 0, MinResourceAccuracy: 1,
+		MinCategoryAccuracy: 1, MinSeverityAccuracy: 1, MinEvidenceGrounding: 1,
+		MaxFindingsPerCausalGroup: 1,
+	}
+	ground := GroundTruth{Faults: []FaultTruth{{
+		ID: "fault", CausalGroup: "outage", TargetAlias: "dependency", TargetName: "dependency",
+		ResourceID: "dependency-id", RelatedResourceIDs: []string{"client-id"},
+		ExpectedResourceAlias: "client", ExpectedResourceName: "client", ExpectedResourceID: "client-id",
+		ExpectedResourceType: "app-container", Active: true,
+	}}}
+	finding := Finding{
+		ID: "symptom", ResourceID: "client-id", ResourceName: "client", ResourceType: "app-container",
+		Category: "reliability", Severity: "warning", Evidence: "health check is unhealthy",
+		Recommendation: "inspect logs and dependency health",
+	}
+	score := ScoreRun(ScoringInput{Manifest: manifest, GroundTruth: ground, Findings: []Finding{finding}, FaultsIntact: true, NoMutation: true})
+	if !score.Passed || score.TruePositives != 1 || !score.Matches[0].ResourceCorrect {
+		t.Fatalf("scenario-owned related-resource expectation score = %+v", score)
+	}
+}
+
 func TestScoreRunEnforcesScenarioDetectionDeadline(t *testing.T) {
 	manifest := validTestManifest()
 	manifest.Faults[0].DetectWithin = "1m"

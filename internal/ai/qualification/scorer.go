@@ -24,16 +24,20 @@ type GroundTruth struct {
 }
 
 type FaultTruth struct {
-	ID                 string                 `json:"id"`
-	CausalGroup        string                 `json:"causal_group"`
-	TargetAlias        string                 `json:"target_alias"`
-	TargetName         string                 `json:"target_name"`
-	ResourceID         string                 `json:"resource_id,omitempty"`
-	ResourceType       string                 `json:"resource_type,omitempty"`
-	RelatedResourceIDs []string               `json:"related_resource_ids,omitempty"`
-	Active             bool                   `json:"active"`
-	ConfirmedAt        time.Time              `json:"confirmed_at"`
-	Observations       []PredicateObservation `json:"observations"`
+	ID                    string                 `json:"id"`
+	CausalGroup           string                 `json:"causal_group"`
+	TargetAlias           string                 `json:"target_alias"`
+	TargetName            string                 `json:"target_name"`
+	ResourceID            string                 `json:"resource_id,omitempty"`
+	ResourceType          string                 `json:"resource_type,omitempty"`
+	ExpectedResourceAlias string                 `json:"expected_resource_alias,omitempty"`
+	ExpectedResourceName  string                 `json:"expected_resource_name,omitempty"`
+	ExpectedResourceID    string                 `json:"expected_resource_id,omitempty"`
+	ExpectedResourceType  string                 `json:"expected_resource_type,omitempty"`
+	RelatedResourceIDs    []string               `json:"related_resource_ids,omitempty"`
+	Active                bool                   `json:"active"`
+	ConfirmedAt           time.Time              `json:"confirmed_at"`
+	Observations          []PredicateObservation `json:"observations"`
 }
 
 type NegativeTruth struct {
@@ -374,14 +378,15 @@ func findFault(faults []FaultSpec, id string) FaultSpec {
 }
 
 func bestFindingMatch(truth FaultTruth, fault FaultSpec, findings []Finding, used map[string]struct{}) (Finding, bool) {
+	expectedID, expectedName := expectedFindingIdentity(truth)
 	bestScore := -1
 	var best Finding
 	for _, finding := range findings {
 		if _, exists := used[finding.ID]; exists {
 			continue
 		}
-		resourceMatch := truth.ResourceID != "" && finding.ResourceID == truth.ResourceID
-		nameMatch := strings.EqualFold(strings.TrimSpace(finding.ResourceName), strings.TrimSpace(truth.TargetName))
+		resourceMatch := expectedID != "" && finding.ResourceID == expectedID
+		nameMatch := strings.EqualFold(strings.TrimSpace(finding.ResourceName), strings.TrimSpace(expectedName))
 		if !resourceMatch && !nameMatch {
 			continue
 		}
@@ -414,9 +419,10 @@ func evaluateMatch(truth FaultTruth, fault FaultSpec, finding Finding, found boo
 		return result
 	}
 	result.FindingID = finding.ID
-	result.ResourceCorrect = truth.ResourceID != "" && finding.ResourceID == truth.ResourceID
-	if truth.ResourceID == "" {
-		result.ResourceCorrect = strings.EqualFold(finding.ResourceName, truth.TargetName)
+	expectedID, expectedName := expectedFindingIdentity(truth)
+	result.ResourceCorrect = expectedID != "" && finding.ResourceID == expectedID
+	if expectedID == "" {
+		result.ResourceCorrect = strings.EqualFold(finding.ResourceName, expectedName)
 	}
 	result.ResourceTypeCorrect = stringInFold(fault.Expected.ResourceTypes, finding.ResourceType)
 	result.CategoryCorrect = stringInFold(fault.Expected.Categories, finding.Category)
@@ -443,6 +449,17 @@ func evaluateMatch(truth FaultTruth, fault FaultSpec, finding Finding, found boo
 	}
 	result.RecommendationSafe = allowed && len(result.ForbiddenAdviceFound) == 0 && strings.TrimSpace(finding.Recommendation) != ""
 	return result
+}
+
+// expectedFindingIdentity keeps older v1 replay artifacts valid while allowing
+// scenario-owned Watch symptoms to differ from the independently injected
+// target. The expected identity is resolved before Patrol runs and never comes
+// from the model or its selected tools.
+func expectedFindingIdentity(truth FaultTruth) (string, string) {
+	if truth.ExpectedResourceID != "" || truth.ExpectedResourceName != "" {
+		return truth.ExpectedResourceID, truth.ExpectedResourceName
+	}
+	return truth.ResourceID, truth.TargetName
 }
 
 func applyGates(score *Score, manifest Manifest) {

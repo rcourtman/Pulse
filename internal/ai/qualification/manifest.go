@@ -344,8 +344,10 @@ func (m Manifest) Validate() error {
 		if len(fault.Expected.ResourceTypes) == 0 || len(fault.Expected.Categories) == 0 || len(fault.Expected.Severities) == 0 {
 			errs = append(errs, fmt.Errorf("fault %q has incomplete expected finding semantics", fault.ID))
 		}
-		if fault.Expected.Resource != fault.Target {
-			errs = append(errs, fmt.Errorf("fault %q expected finding resource %q must equal target %q", fault.ID, fault.Expected.Resource, fault.Target))
+		if _, ok := aliases[fault.Expected.Resource]; !ok {
+			errs = append(errs, fmt.Errorf("fault %q expected finding references unknown resource %q", fault.ID, fault.Expected.Resource))
+		} else if fault.Expected.Resource != fault.Target && !contains(fault.RelatedResources, fault.Expected.Resource) {
+			errs = append(errs, fmt.Errorf("fault %q expected finding resource %q must equal target %q or a declared related resource", fault.ID, fault.Expected.Resource, fault.Target))
 		}
 		if fault.DetectWithin != "" {
 			if _, err := positiveDuration(fault.DetectWithin); err != nil {

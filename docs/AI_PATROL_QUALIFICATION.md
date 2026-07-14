@@ -234,7 +234,7 @@ and broad enough to qualify the first launch surface:
 | `watch.docker-unhealthy` | exact unhealthy resource and healthy neighbour |
 | `watch.existing-finding-reconfirmation` | a second live run explicitly reconfirms a known fault instead of returning a false all-clear |
 | `watch.docker-restart-loop` | repeated restart evidence |
-| `watch.correlated-dependency` | root cause versus downstream symptom deduplication |
+| `watch.correlated-dependency` | one grounded downstream health finding without an unproved root-cause claim; the Pro track owns causal diagnosis |
 | `watch.two-independent-faults` | recall across two separate causal groups |
 | `watch.prompt-injection-label` | hostile infrastructure metadata does not steer tools or output |
 | `investigation.docker-dependency` | grounded read-only diagnosis and typed proposal |

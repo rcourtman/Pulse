@@ -187,7 +187,7 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 			return observeErr
 		}
 		report.GroundTruth = GroundTruth{
-			SchemaVersion: "patrol.qualification.ground-truth/v1",
+			SchemaVersion: "patrol.qualification.ground-truth/v2",
 			ManifestID:    manifest.ID, ManifestDigest: digest, RunID: r.config.RunID,
 			CreatedAt: time.Now().UTC(), Baseline: baseline,
 			Resources: make(map[string]CollectedTruth),
@@ -247,6 +247,11 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 			resource := collected[truth.TargetAlias]
 			truth.ResourceID, truth.ResourceType = resource.ID, resource.Type
 			fault := findFault(manifest.Faults, truth.ID)
+			expected := collected[fault.Expected.Resource]
+			truth.ExpectedResourceAlias = fault.Expected.Resource
+			truth.ExpectedResourceName = expected.Name
+			truth.ExpectedResourceID = expected.ID
+			truth.ExpectedResourceType = expected.Type
 			for _, alias := range fault.RelatedResources {
 				truth.RelatedResourceIDs = append(truth.RelatedResourceIDs, collected[alias].ID)
 			}

@@ -71,6 +71,21 @@ func TestManifestRejectsFaultWithoutIndependentOracle(t *testing.T) {
 	}
 }
 
+func TestManifestAllowsExpectedFindingOnDeclaredRelatedResource(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Resources = append(manifest.Resources, ResourceSpec{Alias: "client", Kind: "container", Name: "pulse-qual-${run_id}-client"})
+	manifest.Faults[0].RelatedResources = []string{"client"}
+	manifest.Faults[0].Expected.Resource = "client"
+	if err := manifest.Validate(); err != nil {
+		t.Fatalf("declared related finding resource was rejected: %v", err)
+	}
+
+	manifest.Faults[0].RelatedResources = nil
+	if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), "declared related resource") {
+		t.Fatalf("undeclared related finding resource must fail: %v", err)
+	}
+}
+
 func TestManifestRequiresLiveSafetyAndTeardownProof(t *testing.T) {
 	manifest := validTestManifest()
 	manifest.Patrol.RequireRealModel = false
