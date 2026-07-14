@@ -1321,6 +1321,11 @@ hands-on Patrol modes, issue investigation, verified fixes, and longer history`.
     credential. Before self-service transitions are released, prove a scoped
     customer-safe authority that refreshes or clears paid state without giving
     any installation visibility into another customer's revocation events.
+27. Keep terminal Stripe event failure recoverable without bypassing ordering
+    safeguards. The authoritative 30-day Stripe backfill may reopen a `failed`
+    inbox event for one fresh retry cycle, but it must claim the event before
+    dispatch, retain the original payload, use the cursor-aware retry path, and
+    return to bounded backoff when the replay still fails.
 
 ## Current State
 
@@ -1331,7 +1336,12 @@ and a Pulse-owned quoted transition saga for Relay/Pro and cadence changes.
 Cancellation recovery is non-entitling, payment failure has a distinct
 functional grace, unknown or multi-price snapshots fail closed, and runtime
 downgrade state delays physical history/artifact cleanup while blocking paid
-background work immediately. The implementation is not yet a released self-
+background work immediately. Renewal retries now re-project authoritative
+Stripe state even when the requested flag already matches, newly created
+subscription schedules are durably attached to their quote before later Stripe
+or local completion steps, schedule-release retries repair the local quote, and
+the authoritative backfill can reopen a terminal inbox event through the
+cursor-aware retry path. The implementation is not yet a released self-
 service capability: the governed external Stripe transition matrix, event-
 order/reconciliation exercise, Relay version-floor proof, and production
 catalog/portal audit remain required by

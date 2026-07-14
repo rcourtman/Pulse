@@ -4745,7 +4745,19 @@
         },
         {
           "repo": "pulse-pro",
+          "path": "license-server/v6_reconcile_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
           "path": "license-server/v6_status_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/v6_store_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         },
@@ -8023,7 +8035,19 @@
         },
         {
           "repo": "pulse-pro",
+          "path": "license-server/v6_reconcile_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
           "path": "license-server/v6_status_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/v6_store_test.go",
           "kind": "file",
           "evidence_tier": "test-proof"
         },
@@ -8799,6 +8823,19 @@
       "work_item": {
         "kind": "release-gate",
         "id": "self-hosted-commercial-transition-coherence"
+      }
+    },
+    {
+      "id": "patrol-headless-agent-projection-lane-l13",
+      "agent_id": "patrol-headless-agent-projection",
+      "summary": "Keep canonical resources and Patrol ReadState current after headless agent reports so qualification observes the normal collection path.",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-14T15:56:34Z",
+      "heartbeat_at": "2026-07-14T15:56:34Z",
+      "expires_at": "2026-07-14T19:56:34Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L13"
       }
     }
   ],
