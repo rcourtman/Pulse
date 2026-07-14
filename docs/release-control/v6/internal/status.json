@@ -4787,6 +4787,12 @@
         },
         {
           "repo": "pulse-pro",
+          "path": "scripts/tests/test_license_runtime_config_contract.py",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
           "path": "scripts/tests/test_validate_stripe_catalog.py",
           "kind": "file",
           "evidence_tier": "test-proof"
@@ -8829,21 +8835,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "commercial-coherence-remediation-release-gate-self-hosted-commercial-transition-coherence",
-      "agent_id": "commercial-coherence-remediation",
-      "summary": "Close commercial transition convergence gaps, align customer-visible offer projections, and preserve the external proof gate.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-14T15:46:03Z",
-      "heartbeat_at": "2026-07-14T15:46:03Z",
-      "expires_at": "2026-07-14T21:46:03Z",
-      "work_item": {
-        "kind": "release-gate",
-        "id": "self-hosted-commercial-transition-coherence"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
