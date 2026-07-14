@@ -10,7 +10,6 @@ import {
 
 vi.mock('@/api/monitoring', () => ({
   MonitoringAPI: {
-    updateDockerContainer: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -38,7 +37,8 @@ describe('ContainerUpdateBadge', () => {
     expect(containerUpdateBadgeSource).not.toContain('markContainerQueued');
     expect(containerUpdateBadgeSource).not.toContain('createSignal');
 
-    expect(containerUpdateButtonStateSource).toContain(
+    expect(containerUpdateButtonStateSource).toContain('ResourceActionsAPI.planAction');
+    expect(containerUpdateButtonStateSource).not.toContain(
       'MonitoringAPI.updateDockerContainer',
     );
     expect(containerUpdateButtonStateSource).toContain('markContainerQueued');

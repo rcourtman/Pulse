@@ -317,7 +317,7 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerDockerActionsStateSource).toContain(
       'MonitoringAPI.checkDockerUpdates',
     );
-    expect(resourceDetailDrawerDockerActionsStateSource).toContain(
+    expect(resourceDetailDrawerDockerActionsStateSource).not.toContain(
       'MonitoringAPI.updateAllDockerContainers',
     );
   });

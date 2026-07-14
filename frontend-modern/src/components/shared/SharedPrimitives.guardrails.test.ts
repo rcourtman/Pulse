@@ -5085,7 +5085,8 @@ describe('shared primitive guardrails', () => {
     expect(containerUpdateBadgeSource).not.toContain('markContainerQueued');
     expect(containerUpdateBadgeSource).not.toContain('createSignal');
 
-    expect(containerUpdateButtonStateSource).toContain('MonitoringAPI.updateDockerContainer');
+    expect(containerUpdateButtonStateSource).toContain('ResourceActionsAPI.planAction');
+    expect(containerUpdateButtonStateSource).not.toContain('MonitoringAPI.updateDockerContainer');
     expect(containerUpdateButtonStateSource).toContain('markContainerQueued');
     expect(containerUpdateButtonStateSource).toContain('createSignal');
     expect(containerUpdateButtonStateSource).toContain(

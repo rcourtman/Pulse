@@ -57,31 +57,18 @@ export const useResourceDetailDrawerDockerActionsState = (
     }
   };
 
+  // Container updates now run as audited per-container actions; the legacy
+  // bulk endpoint is retired and there is no reviewed bulk flow yet, so this
+  // reports honestly instead of queuing something that cannot run.
   const queueDockerUpdateAll = async () => {
     resetDockerActionFeedback();
     const hostId = options.dockerHostSourceId();
     if (!hostId) return false;
-
-    if (!confirmUpdateAll()) {
-      setConfirmUpdateAll(true);
-      setDockerActionNote(
-        `Click again to update ${options.dockerUpdatesAvailable()} containers.`,
-      );
-      return false;
-    }
-
-    try {
-      setDockerActionBusy(true);
-      await MonitoringAPI.updateAllDockerContainers(hostId);
-      setDockerActionNote('Update queued.');
-      return true;
-    } catch (error) {
-      setDockerActionError(formatActionError(error, 'Failed to queue update'));
-      return false;
-    } finally {
-      setDockerActionBusy(false);
-      setConfirmUpdateAll(false);
-    }
+    setConfirmUpdateAll(false);
+    setDockerActionNote(
+      'Updates now run as reviewed per-container actions: use the Update button on each container.',
+    );
+    return false;
   };
 
   return {

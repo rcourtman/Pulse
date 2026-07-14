@@ -889,7 +889,7 @@ describe('frontend resource type boundaries', () => {
     expect(resourceDetailDrawerDockerActionsStateSource).toContain(
       'MonitoringAPI.checkDockerUpdates',
     );
-    expect(resourceDetailDrawerDockerActionsStateSource).toContain(
+    expect(resourceDetailDrawerDockerActionsStateSource).not.toContain(
       'MonitoringAPI.updateAllDockerContainers',
     );
     expect(guestDrawerSource).toContain('useGuestDrawerState');
@@ -2441,7 +2441,8 @@ describe('frontend resource type boundaries', () => {
     expect(containerUpdateBadgeSource).toContain('getUpdateButtonClass');
     expect(containerUpdateBadgeSource).not.toContain('MonitoringAPI.updateDockerContainer');
     expect(containerUpdateBadgeSource).not.toContain('markContainerQueued');
-    expect(containerUpdateButtonStateSource).toContain('MonitoringAPI.updateDockerContainer');
+    expect(containerUpdateButtonStateSource).toContain('ResourceActionsAPI.planAction');
+    expect(containerUpdateButtonStateSource).not.toContain('MonitoringAPI.updateDockerContainer');
     expect(containerUpdateButtonStateSource).toContain('markContainerQueued');
     expect(containerUpdateBadgeModelSource).toContain('getUpdateButtonClass');
     expect(containerUpdateBadgeModelSource).toContain('getUpdateButtonTooltip');

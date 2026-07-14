@@ -290,27 +290,8 @@ export class MonitoringAPI {
     return data;
   }
 
-  /**
-   * Triggers an update for a Docker container on a specific agent.
-   * The update will pull the latest image and recreate the container.
-   */
-  static async updateDockerContainer(
-    agentId: string,
-    containerId: string,
-    containerName: string,
-  ): Promise<UpdateDockerContainerResponse> {
-    const url = `${this.baseUrl}/agents/docker/containers/update`;
-    return triggerResourceCommand<UpdateDockerContainerResponse>(
-      url,
-      'Failed to parse update container response',
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ agentId, containerId, containerName }),
-      },
-    );
-  }
+  // Container updates run as audited actions through ResourceActionsAPI; the
+  // legacy direct-update and update-all endpoints are retired server-side.
 
   /**
    * Triggers an immediate update check for all containers on a specific Docker / Podman agent.
@@ -322,19 +303,6 @@ export class MonitoringAPI {
     return triggerResourceCommand<{ success: boolean; commandId?: string }>(
       url,
       'Failed to parse check updates response',
-    );
-  }
-
-  /**
-   * Triggers a batch update for all containers with updates available on a specific Docker / Podman agent.
-   */
-  static async updateAllDockerContainers(
-    agentId: string,
-  ): Promise<{ success: boolean; commandId?: string }> {
-    const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/update-all`;
-    return triggerResourceCommand<{ success: boolean; commandId?: string }>(
-      url,
-      'Failed to parse update all response',
     );
   }
 }

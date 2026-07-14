@@ -3,7 +3,6 @@ import { Route, Router } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { MonitoringAPI } from '@/api/monitoring';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import type { Resource } from '@/types/resource';
 import { DockerContainersTable } from '../DockerContainersTable';
@@ -16,12 +15,6 @@ import { DockerStorageUsageTable } from '../DockerStorageUsageTable';
 import { DockerSwarmNodesTable } from '../DockerSwarmNodesTable';
 import { DockerTasksTable } from '../DockerTasksTable';
 import { DockerVolumesTable } from '../DockerVolumesTable';
-
-vi.mock('@/api/monitoring', () => ({
-  MonitoringAPI: {
-    updateDockerContainer: vi.fn().mockResolvedValue({ success: true }),
-  },
-}));
 
 vi.mock('@/api/resourceActions', () => ({
   ResourceActionsAPI: {
@@ -728,12 +721,17 @@ describe('Docker native tables', () => {
     fireEvent.click(screen.getByRole('button', { name: /click again to confirm update/i }));
 
     await waitFor(() =>
-      expect(MonitoringAPI.updateDockerContainer).toHaveBeenCalledWith(
-        'agent-edge',
-        'native-container-1',
-        'edge-web',
+      expect(ResourceActionsAPI.planAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resourceId: 'container-1',
+          capabilityName: 'update',
+          requestedBy: 'ui:container-update',
+        }),
       ),
     );
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(ResourceActionsAPI.decideAction).not.toHaveBeenCalled();
+    expect(ResourceActionsAPI.executeAction).not.toHaveBeenCalled();
   });
 
   it('opens canonical review on the first Docker lifecycle click without auto-approving or executing', async () => {

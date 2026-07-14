@@ -600,6 +600,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                     containerId={updateAction().containerId}
                     containerName={updateAction().containerName}
                     updateStatus={updateAction().updateStatus}
+                    resourceId={resource.id}
                   />
                 )}
               </Show>

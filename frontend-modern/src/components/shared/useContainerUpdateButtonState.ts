@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createSignal } from 'solid-js';
-import { MonitoringAPI } from '@/api/monitoring';
+import { ResourceActionsAPI } from '@/api/resourceActions';
 import {
   clearContainerUpdateState,
   getContainerUpdateState,
@@ -9,6 +9,7 @@ import {
   updateStates,
 } from '@/stores/containerUpdates';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
+import type { ActionDetailResponse } from '@/types/actionAudit';
 import {
   getUpdateButtonLabel,
   getUpdateButtonTooltip,
@@ -19,9 +20,17 @@ import {
   type UpdateState,
 } from './containerUpdateBadgeModel';
 
+const newUpdateRequestId = (): string =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `container-update-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+const ACTION_TERMINAL_STATES = ['completed', 'failed', 'rejected', 'expired'];
+
 export function useContainerUpdateButtonState(props: UpdateButtonProps) {
-  const [localState, setLocalState] = createSignal<'idle' | 'confirming'>('idle');
+  const [localState, setLocalState] = createSignal<'idle' | 'confirming' | 'planning'>('idle');
   const [errorMessage, setErrorMessage] = createSignal('');
+  const [reviewDetail, setReviewDetail] = createSignal<ActionDetailResponse | null>(null);
 
   const settingsLoaded = () => areSystemSettingsLoaded();
   const shouldHideButton = () => shouldHideDockerUpdateActions();
@@ -47,7 +56,8 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
 
     if (props.externalState === 'updating' || props.externalState === 'queued') return 'updating';
     if (props.externalState === 'error') return 'error';
-    return localState();
+    const local = localState();
+    return local === 'planning' ? 'updating' : local;
   };
 
   createEffect(() => {
@@ -76,6 +86,40 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
         });
   const buttonLabel = () => getUpdateButtonLabel(currentState(), settingsLoaded());
 
+  // Updates run as audited actions: the confirming click plans an action for
+  // the container's update capability and opens the review dialog, which owns
+  // approval and execution. The legacy direct-update endpoint is retired.
+  const planUpdateReview = async () => {
+    const resourceId = (props.resourceId ?? '').trim();
+    if (!resourceId) {
+      const message = 'Container update action is unavailable for this row.';
+      setErrorMessage(message);
+      markContainerUpdateError(props.agentId, props.containerId, message);
+      return;
+    }
+    setLocalState('planning');
+    try {
+      const plan = await ResourceActionsAPI.planAction({
+        requestId: newUpdateRequestId(),
+        resourceId,
+        capabilityName: 'update',
+        params: {},
+        reason: `Update container ${props.containerName} to its latest image.`,
+        requestedBy: 'ui:container-update',
+      });
+      if (!plan.allowed) {
+        throw new Error(plan.message || 'Pulse refused the update plan.');
+      }
+      setReviewDetail(await ResourceActionsAPI.getAction(plan.actionId));
+      setLocalState('idle');
+    } catch (error) {
+      const message = (error as Error).message || 'Failed to plan the update';
+      setErrorMessage(message);
+      setLocalState('idle');
+      markContainerUpdateError(props.agentId, props.containerId, message);
+    }
+  };
+
   const handleClick = async (event: MouseEvent) => {
     event.stopPropagation();
     event.preventDefault();
@@ -89,21 +133,7 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     }
 
     if (state === 'confirming') {
-      markContainerQueued(props.agentId, props.containerId);
-      setLocalState('idle');
-
-      try {
-        await MonitoringAPI.updateDockerContainer(
-          props.agentId,
-          props.containerId,
-          props.containerName,
-        );
-        props.onUpdateTriggered?.();
-      } catch (error) {
-        const message = (error as Error).message || 'Failed to trigger update';
-        setErrorMessage(message);
-        markContainerUpdateError(props.agentId, props.containerId, message);
-      }
+      await planUpdateReview();
     }
   };
 
@@ -114,14 +144,40 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     clearContainerUpdateState(props.agentId, props.containerId);
   };
 
+  const handleReviewClosed = () => {
+    setReviewDetail(null);
+  };
+
+  const handleReviewChanged = (detail: ActionDetailResponse) => {
+    setReviewDetail(detail);
+    const state = detail.audit.state;
+    if (state === 'executing') {
+      markContainerQueued(props.agentId, props.containerId);
+      props.onUpdateTriggered?.();
+      return;
+    }
+    if (!ACTION_TERMINAL_STATES.includes(state)) return;
+    if (state === 'completed') {
+      markContainerQueued(props.agentId, props.containerId);
+      props.onUpdateTriggered?.();
+    } else if (state === 'failed') {
+      const message = 'The update action failed; open Actions for the audit trail.';
+      setErrorMessage(message);
+      markContainerUpdateError(props.agentId, props.containerId, message);
+    }
+  };
+
   return {
     buttonLabel,
     buttonTooltip,
     currentState,
     handleCancel,
     handleClick,
+    handleReviewChanged,
+    handleReviewClosed,
     hasUpdate,
     isButtonDisabled,
+    reviewDetail,
     settingsLoaded,
     shouldHideButton,
   };

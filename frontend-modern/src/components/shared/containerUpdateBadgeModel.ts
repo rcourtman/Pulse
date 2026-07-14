@@ -15,6 +15,9 @@ export interface UpdateButtonProps {
   agentId: string;
   containerId: string;
   containerName: string;
+  // Unified resource id used to plan the audited update action. Without it
+  // the button can only report that the update action is unavailable.
+  resourceId?: string;
   compact?: boolean;
   onUpdateTriggered?: () => void;
   externalState?: 'updating' | 'queued' | 'error';

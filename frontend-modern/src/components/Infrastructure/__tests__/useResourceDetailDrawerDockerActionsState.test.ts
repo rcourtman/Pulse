@@ -5,7 +5,6 @@ import { useResourceDetailDrawerDockerActionsState } from '@/components/Infrastr
 
 const monitoringMock = vi.hoisted(() => ({
   checkDockerUpdates: vi.fn(),
-  updateAllDockerContainers: vi.fn(),
 }));
 
 vi.mock('@/api/monitoring', () => ({
@@ -15,7 +14,6 @@ vi.mock('@/api/monitoring', () => ({
 describe('useResourceDetailDrawerDockerActionsState', () => {
   beforeEach(() => {
     monitoringMock.checkDockerUpdates.mockReset();
-    monitoringMock.updateAllDockerContainers.mockReset();
   });
 
   it('queues docker update checks through the dedicated action owner', async () => {
@@ -41,9 +39,7 @@ describe('useResourceDetailDrawerDockerActionsState', () => {
     scope.dispose();
   });
 
-  it('requires confirmation before queueing update-all mutations', async () => {
-    monitoringMock.updateAllDockerContainers.mockResolvedValue(undefined);
-
+  it('points update-all at the reviewed per-container action flow', async () => {
     const scope = createRoot((dispose) => {
       const [dockerHostSourceId] = createSignal<string | null>('host-1');
       const [dockerUpdatesAvailable] = createSignal(4);
@@ -56,40 +52,12 @@ describe('useResourceDetailDrawerDockerActionsState', () => {
       };
     });
 
-    await scope.state.queueDockerUpdateAll();
+    const queued = await scope.state.queueDockerUpdateAll();
 
-    expect(monitoringMock.updateAllDockerContainers).not.toHaveBeenCalled();
-    expect(scope.state.confirmUpdateAll()).toBe(true);
-    expect(scope.state.dockerActionNote()).toContain('Click again to update 4 containers.');
-
-    await scope.state.queueDockerUpdateAll();
-
-    expect(monitoringMock.updateAllDockerContainers).toHaveBeenCalledWith('host-1');
-    expect(scope.state.dockerActionNote()).toBe('Update queued.');
+    expect(queued).toBe(false);
     expect(scope.state.confirmUpdateAll()).toBe(false);
-    scope.dispose();
-  });
-
-  it('clears pending confirmation when docker actions are hidden', async () => {
-    const scope = createRoot((dispose) => {
-      const [dockerHostSourceId] = createSignal<string | null>('host-1');
-      const [dockerUpdatesAvailable] = createSignal(2);
-      return {
-        dispose,
-        state: useResourceDetailDrawerDockerActionsState({
-          dockerHostSourceId,
-          dockerUpdatesAvailable,
-        }),
-      };
-    });
-
-    scope.state.toggleDockerUpdateControls();
-    await scope.state.queueDockerUpdateAll();
-    expect(scope.state.confirmUpdateAll()).toBe(true);
-
-    scope.state.toggleDockerUpdateControls();
-
-    expect(scope.state.confirmUpdateAll()).toBe(false);
+    expect(scope.state.dockerActionNote()).toContain('per-container actions');
+    expect(scope.state.dockerActionError()).toBe('');
     scope.dispose();
   });
 });

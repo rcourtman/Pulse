@@ -8,7 +8,6 @@ import { DockerContainersTable } from '../DockerContainersTable';
 
 vi.mock('@/api/monitoring', () => ({
   MonitoringAPI: {
-    updateDockerContainer: vi.fn().mockResolvedValue({ success: true }),
   },
 }));
 

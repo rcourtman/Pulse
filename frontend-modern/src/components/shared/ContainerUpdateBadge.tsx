@@ -1,5 +1,6 @@
 import { Component, Match, Show, Switch } from 'solid-js';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
+import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
 import {
   getContainerUpdateBadgeTooltip,
   getContainerUpdateCurrentTooltip,
@@ -239,6 +240,11 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
                 <XIcon class="w-3 h-3" />
               </button>
             </Show>
+            <ActionReviewDialog
+              detail={state.reviewDetail()}
+              onClose={state.handleReviewClosed}
+              onChanged={state.handleReviewChanged}
+            />
           </div>
         }
       >

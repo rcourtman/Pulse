@@ -777,6 +777,7 @@ export function GuestRow(props: GuestRowProps) {
                   agentId={dockerHostId()}
                   containerId={props.guest.containerId ?? ''}
                   containerName={props.guest.name}
+                  resourceId={props.guest.id}
                   compact={true}
                 />
               </Show>
