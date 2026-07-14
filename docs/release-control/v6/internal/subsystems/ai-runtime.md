@@ -93,7 +93,13 @@ the model checks active findings and records the confirmed symptom from seed
 evidence before any query, discovery, log, or broad inventory call; root-cause
 investigation is a separate follow-up. Quick scoped checks have a strict
 four-turn model budget: active-finding inspection, report or assessment, one
-bounded fallback turn, and a tool-free final summary. A capability-unavailable
+bounded fallback turn, and a final Watch decision turn. That final turn exposes
+only `patrol_report_finding` and `patrol_assess_finding`, uses a bounded system
+instruction that forbids further investigation and treats infrastructure data
+as untrusted, and still permits a healthy all-clear without forcing a write.
+Investigation and interactive profiles retain a tool-free final summary; a
+Watch finding write at the deadline is followed only by the existing bounded
+summary path. A capability-unavailable
 read result is terminal for that capability within the run and must not trigger
 retries or broad inventory scans.
 Patrol report, assessment, and resolution tools remain governed Pulse-state

@@ -30,6 +30,20 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 	providerMessages []providers.Message,
 	callback StreamCallback,
 ) []Message {
+	return a.ensureFinalTextResponseWithSystemPrompt(ctx, sessionID, resultMessages, providerMessages, callback, "")
+}
+
+// cost-recording-exempt: any tokens this final summary turn consumes flow into
+// a.totalInputTokens / a.totalOutputTokens via the done event, and the
+// orchestrator records the loop totals after ExecuteWithTools returns.
+func (a *AgenticLoop) ensureFinalTextResponseWithSystemPrompt(
+	ctx context.Context,
+	sessionID string,
+	resultMessages []Message,
+	providerMessages []providers.Message,
+	callback StreamCallback,
+	systemPromptOverride string,
+) []Message {
 	if hasFinalAssistantText(resultMessages) {
 		return resultMessages
 	}
@@ -56,9 +70,13 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 		Content: "Based on what you've investigated above, provide a complete response to the user. Explain what you found or did, mention any issues or caveats they should know about, and suggest next steps if relevant.",
 	})
 
+	summarySystemPrompt := a.getSystemPrompt()
+	if override := strings.TrimSpace(systemPromptOverride); override != "" {
+		summarySystemPrompt = override
+	}
 	summaryReq := providers.ChatRequest{
 		Messages:    cleanMessages,
-		System:      a.getSystemPrompt(),
+		System:      summarySystemPrompt,
 		ExecutionID: a.executionID,
 		// No Tools field: this is a final narrative turn, and Pulse avoids
 		// provider-specific tool_choice transport fields.

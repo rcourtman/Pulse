@@ -138,6 +138,103 @@ func TestPatrolFindingLifecycleSummaryPromptIsBoundedAndNonAuthoritative(t *test
 	}
 }
 
+func TestPatrolFinalFindingDecisionRequestNarrowsWatchTools(t *testing.T) {
+	req := providers.ChatRequest{
+		System:     "full Patrol prompt",
+		ToolChoice: &providers.ToolChoice{Type: providers.ToolChoiceRequired},
+	}
+	available := []providers.Tool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PatrolGetFindingsToolName},
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+		{Name: agentcapabilities.PatrolAssessFindingToolName},
+		{Name: agentcapabilities.PatrolResolveFindingToolName},
+	}
+
+	if !applyPatrolFinalFindingDecisionRequest(&req, tools.ProfilePatrolDetection, available) {
+		t.Fatal("expected Watch detection to retain a final finding decision turn")
+	}
+	if req.System != patrolFinalFindingDecisionSystemPrompt {
+		t.Fatalf("final decision request retained full system prompt: %q", req.System)
+	}
+	if req.ToolChoice != nil {
+		t.Fatalf("final decision request must remain model-owned, got choice %+v", req.ToolChoice)
+	}
+	if len(req.Tools) != 2 || req.Tools[0].Name != agentcapabilities.PatrolReportFindingToolName || req.Tools[1].Name != agentcapabilities.PatrolAssessFindingToolName {
+		t.Fatalf("final decision tools = %+v, want report and assess only", req.Tools)
+	}
+
+	unchanged := providers.ChatRequest{System: "investigation", Tools: available}
+	if applyPatrolFinalFindingDecisionRequest(&unchanged, tools.ProfilePatrolInvestigation, available) {
+		t.Fatal("investigation profile must not gain finding write tools")
+	}
+	if unchanged.System != "investigation" || len(unchanged.Tools) != len(available) {
+		t.Fatalf("inapplicable helper mutated investigation request: %+v", unchanged)
+	}
+}
+
+func TestFinalPatrolFindingDecisionDoesNotOverrideSafetyOrCompletedWrites(t *testing.T) {
+	if !shouldOfferFinalPatrolFindingDecision(3, 4, false, false, false) {
+		t.Fatal("expected an otherwise unconstrained last turn to offer a finding decision")
+	}
+	for _, tc := range []struct {
+		name            string
+		patrolWriteDone bool
+		writeDone       bool
+		toolBlocked     bool
+	}{
+		{name: "finding lifecycle summary", patrolWriteDone: true},
+		{name: "write completion", writeDone: true},
+		{name: "safety brake", toolBlocked: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if shouldOfferFinalPatrolFindingDecision(3, 4, tc.patrolWriteDone, tc.writeDone, tc.toolBlocked) {
+				t.Fatal("final decision must not override higher-priority conclusion state")
+			}
+		})
+	}
+	if shouldOfferFinalPatrolFindingDecision(2, 4, false, false, false) {
+		t.Fatal("non-final turn must retain the normal tool projection")
+	}
+}
+
+func TestAgenticLoop_FinalWatchTurnRetainsOnlyFindingDecisions(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	loop := NewAgenticLoop(provider, nil, "full Patrol prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(1)
+
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		if req.System != patrolFinalFindingDecisionSystemPrompt {
+			t.Fatalf("final Watch system prompt = %q", req.System)
+		}
+		if len(req.Tools) != 2 || req.Tools[0].Name != agentcapabilities.PatrolReportFindingToolName || req.Tools[1].Name != agentcapabilities.PatrolAssessFindingToolName {
+			t.Fatalf("final Watch tools = %+v, want report and assess only", req.Tools)
+		}
+		callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "All clear."}})
+		callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{InputTokens: 1, OutputTokens: 1}})
+		return nil
+	}
+
+	result, err := loop.ExecuteWithTools(
+		context.Background(),
+		"final-watch-decision",
+		[]Message{{Role: "user", Content: "current scoped state"}},
+		[]providers.Tool{
+			{Name: agentcapabilities.PulseQueryToolName},
+			{Name: agentcapabilities.PatrolReportFindingToolName},
+			{Name: agentcapabilities.PatrolAssessFindingToolName},
+		},
+		func(event StreamEvent) {},
+	)
+	if err != nil {
+		t.Fatalf("ExecuteWithTools: %v", err)
+	}
+	if len(result) != 1 || result[0].Content != "All clear." {
+		t.Fatalf("final Watch result = %+v", result)
+	}
+}
+
 func TestPruneMessagesForModel_Stateless(t *testing.T) {
 	prev := StatelessContext
 	StatelessContext = true
@@ -290,6 +387,29 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 	// The fallback must not dump raw tool output / result snippets into the chat.
 	if strings.Contains(fallback3, "cpu ok") || strings.Contains(fallback3, "result snippet") {
 		t.Fatalf("fallback summary must not include raw tool output, got %q", fallback3)
+	}
+}
+
+func TestEnsureFinalTextResponseAcceptsBoundedPatrolSystemPrompt(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	loop := &AgenticLoop{provider: provider, baseSystemPrompt: "full Patrol prompt"}
+
+	result := loop.ensureFinalTextResponseWithSystemPrompt(
+		context.Background(),
+		"session-patrol-deadline-summary",
+		[]Message{{Role: "assistant", ToolCalls: []ToolCall{{ID: "report-1", Name: agentcapabilities.PatrolReportFindingToolName}}}},
+		[]providers.Message{{Role: "assistant", ToolCalls: []providers.ToolCall{{ID: "report-1", Name: agentcapabilities.PatrolReportFindingToolName}}}},
+		func(event StreamEvent) {},
+		patrolFindingLifecycleSummarySystemPrompt,
+	)
+	if len(result) != 2 {
+		t.Fatalf("expected summary message to be appended, got %+v", result)
+	}
+	if provider.lastRequest.System != patrolFindingLifecycleSummarySystemPrompt {
+		t.Fatalf("deadline summary used system prompt %q", provider.lastRequest.System)
+	}
+	if len(provider.lastRequest.Tools) != 0 || provider.lastRequest.ToolChoice != nil {
+		t.Fatalf("deadline summary retained tools or tool choice: %+v", provider.lastRequest)
 	}
 }
 
