@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 	"github.com/rs/zerolog"
 )
 
@@ -675,4 +676,24 @@ func decodeLastLogEntry(t *testing.T, logs *bytes.Buffer) map[string]interface{}
 	}
 
 	return entry
+}
+
+func TestNormalizePulseURLHonorsOperatorPlaintextConsent(t *testing.T) {
+	// pulse.example.com is a dotted public name with no local suffix, so the
+	// default posture refuses plain HTTP for it (resolution either fails or
+	// yields public addresses).
+	if _, err := normalizePulseURL("http://pulse.plaintext-consent.invalid:7655"); err == nil {
+		t.Fatal("plain HTTP to a non-local host was accepted without operator consent")
+	}
+
+	securityutil.SetOperatorPlaintextHTTPConsent(true)
+	t.Cleanup(func() { securityutil.SetOperatorPlaintextHTTPConsent(false) })
+
+	normalized, err := normalizePulseURL("http://pulse.plaintext-consent.invalid:7655")
+	if err != nil {
+		t.Fatalf("operator consent did not reach remote-config URL validation: %v", err)
+	}
+	if normalized != "http://pulse.plaintext-consent.invalid:7655" {
+		t.Fatalf("unexpected normalized URL %q", normalized)
+	}
 }

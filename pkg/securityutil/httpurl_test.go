@@ -126,3 +126,38 @@ func TestNormalizePulseWebSocketBaseURLWithOptionsAllowsResolvedCGNATDNS(t *test
 		t.Fatalf("NormalizePulseWebSocketBaseURLWithOptions() = %q", got.String())
 	}
 }
+
+func TestOperatorPlaintextHTTPOverrides(t *testing.T) {
+	const publicHTTP = "http://pulse.internal.example.com:7655"
+	resolvePublic := func(context.Context, string) ([]net.IPAddr, error) {
+		return []net.IPAddr{{IP: net.ParseIP("192.20.10.5")}}, nil
+	}
+
+	if _, err := NormalizePulseHTTPBaseURLWithOptions(publicHTTP, PulseURLValidationOptions{
+		AllowLocalNetworkHTTP: true,
+		ResolveIPAddrs:        resolvePublic,
+	}); err == nil {
+		t.Fatal("plain HTTP to a public-resolving host was accepted without operator consent")
+	}
+
+	if _, err := NormalizePulseHTTPBaseURLWithOptions(publicHTTP, PulseURLValidationOptions{
+		AllowOperatorPlaintextHTTP: true,
+		ResolveIPAddrs:             resolvePublic,
+	}); err != nil {
+		t.Fatalf("per-call operator consent was refused: %v", err)
+	}
+
+	SetOperatorPlaintextHTTPConsent(true)
+	t.Cleanup(func() { SetOperatorPlaintextHTTPConsent(false) })
+	if _, err := NormalizePulseHTTPBaseURLWithOptions(publicHTTP, PulseURLValidationOptions{
+		AllowLocalNetworkHTTP: true,
+		ResolveIPAddrs:        resolvePublic,
+	}); err != nil {
+		t.Fatalf("process-wide operator consent was refused: %v", err)
+	}
+	if _, err := NormalizePulseWebSocketBaseURLWithOptions("ws://pulse.internal.example.com:7655", PulseURLValidationOptions{
+		ResolveIPAddrs: resolvePublic,
+	}); err != nil {
+		t.Fatalf("operator consent did not extend to the websocket channel: %v", err)
+	}
+}

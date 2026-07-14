@@ -33,6 +33,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/remoteconfig"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 	"github.com/rs/zerolog"
 	gohost "github.com/shirou/gopsutil/v4/host"
 	"golang.org/x/sync/errgroup"
@@ -315,6 +316,12 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		Bool("proxmox_mode", cfg.EnableProxmox).
 		Bool("auto_update", !cfg.DisableAutoUpdate).
 		Msg("Starting Pulse Unified Agent")
+
+	if cfg.AllowPlaintextHTTP {
+		logger.Warn().
+			Str("pulse_url", cfg.PulseURL).
+			Msg("--allow-plaintext-http is set: the agent API token travels in cleartext to any non-loopback Pulse URL; only use this on a network you fully control")
+	}
 
 	// 5. Set prometheus info metric
 	agentInfo.WithLabelValues(
@@ -766,6 +773,7 @@ type Config struct {
 	AgentIDFile        string
 	Tags               []string
 	InsecureSkipVerify bool
+	AllowPlaintextHTTP bool
 	CACertPath         string
 	ServerFingerprint  string
 	DeploySSHUser      string
@@ -909,6 +917,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	agentIDFlag := fs.String("agent-id", envAgentID, "Override agent identifier")
 	agentIDFileFlag := fs.String("agent-id-file", envAgentIDFile, "Path to a file storing the agent identifier (read on start, written on first start). Mount this file as a volume to keep the agent identity stable across container recreation.")
 	insecureFlag := fs.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS verification")
+	allowPlaintextHTTPFlag := fs.Bool("allow-plaintext-http", utils.ParseBool(strings.TrimSpace(getenv("PULSE_AGENT_ALLOW_PLAINTEXT_HTTP"))), "Allow plain HTTP to a Pulse server that does not look local (sends the API token in cleartext; only for networks you fully control)")
 	caCertFlag := fs.String("cacert", envCACertPath, "Path to custom CA bundle for agent HTTPS transport")
 	serverFingerprintFlag := fs.String("server-fingerprint", envServerFingerprint, "Expected Pulse server TLS certificate fingerprint (SHA256)")
 	deploySSHUserFlag := fs.String("deploy-ssh-user", envDeploySSHUser, "SSH user for peer deploy fan-out (default: root; non-root requires passwordless sudo)")
@@ -961,6 +970,10 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	if pulseURL == "" {
 		pulseURL = "http://localhost:7655"
 	}
+
+	// Record operator plaintext consent before any module validates the Pulse
+	// URL; the startup warning is emitted once the logger exists in run().
+	securityutil.SetOperatorPlaintextHTTPConsent(*allowPlaintextHTTPFlag)
 
 	// Resolve token with priority: --token > --token-file > env > default file
 	token := resolveToken(*tokenFlag, *tokenFileFlag, envToken)
@@ -1041,6 +1054,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		AgentIDFile:               strings.TrimSpace(*agentIDFileFlag),
 		Tags:                      tags,
 		InsecureSkipVerify:        *insecureFlag,
+		AllowPlaintextHTTP:        *allowPlaintextHTTPFlag,
 		CACertPath:                strings.TrimSpace(*caCertFlag),
 		ServerFingerprint:         strings.TrimSpace(*serverFingerprintFlag),
 		DeploySSHUser:             deploySSHUser,

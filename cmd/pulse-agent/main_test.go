@@ -22,6 +22,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/kubernetesagent"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 	"github.com/rs/zerolog"
 )
 
@@ -2209,4 +2210,37 @@ func TestDockerAgentImplementsTypedContainerUpdater(t *testing.T) {
 	// The bridge installs by structural assertion; if the Docker module's
 	// method signature drifts, updates silently refuse at runtime. Pin it.
 	var _ hostagent.DockerContainerUpdater = (*dockeragent.Agent)(nil)
+}
+
+func TestAllowPlaintextHTTPFlagParsesAndDefaultsClosed(t *testing.T) {
+	t.Cleanup(func() { securityutil.SetOperatorPlaintextHTTPConsent(false) })
+
+	cfg, err := loadConfig([]string{"--url", "http://192.168.1.10:7655", "--token", "t"}, func(string) string { return "" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AllowPlaintextHTTP {
+		t.Fatal("plaintext override must default to false")
+	}
+
+	cfg, err = loadConfig([]string{"--url", "http://192.168.1.10:7655", "--token", "t", "--allow-plaintext-http"}, func(string) string { return "" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.AllowPlaintextHTTP {
+		t.Fatal("--allow-plaintext-http flag was not applied")
+	}
+
+	cfg, err = loadConfig([]string{"--url", "http://192.168.1.10:7655", "--token", "t"}, func(key string) string {
+		if key == "PULSE_AGENT_ALLOW_PLAINTEXT_HTTP" {
+			return "true"
+		}
+		return ""
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.AllowPlaintextHTTP {
+		t.Fatal("PULSE_AGENT_ALLOW_PLAINTEXT_HTTP env was not applied")
+	}
 }

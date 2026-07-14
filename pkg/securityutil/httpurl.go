@@ -10,6 +10,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -209,6 +210,26 @@ type PulseURLValidationOptions struct {
 	// AllowLocalNetworkHTTP may permit plaintext transport. When unset, the
 	// system resolver is used.
 	ResolveIPAddrs func(ctx context.Context, host string) ([]net.IPAddr, error)
+
+	// AllowOperatorPlaintextHTTP permits plain HTTP/WS to ANY host. This is
+	// the explicit operator override for self-hosted networks that number
+	// from nominally public IP space; it sends the agent API token in
+	// cleartext on that path and must never be a default.
+	AllowOperatorPlaintextHTTP bool
+}
+
+// operatorPlaintextHTTPConsent is process-wide operator consent to plaintext
+// transport regardless of how local the host looks. It exists because the
+// URL validation sites are leaf helpers spread across every agent module;
+// consent is set exactly once from the agent entrypoint's --allow-plaintext-http
+// flag before any module starts, and is never set by the Pulse server.
+var operatorPlaintextHTTPConsent atomic.Bool
+
+// SetOperatorPlaintextHTTPConsent records the operator's explicit choice to
+// allow plaintext HTTP/WS to hosts that do not look local. Call before any
+// URL validation runs; intended solely for agent entrypoints.
+func SetOperatorPlaintextHTTPConsent(allowed bool) {
+	operatorPlaintextHTTPConsent.Store(allowed)
 }
 
 // NormalizePulseHTTPBaseURL validates a Pulse control-plane base URL.
@@ -341,6 +362,9 @@ func normalizePulseBaseURL(raw string, websocket bool, opts PulseURLValidationOp
 
 func pulseURLAllowsPlaintextHost(host string, opts PulseURLValidationOptions) bool {
 	if IsLoopbackHost(host) {
+		return true
+	}
+	if opts.AllowOperatorPlaintextHTTP || operatorPlaintextHTTPConsent.Load() {
 		return true
 	}
 	if !(opts.AllowInsecureHTTP || opts.AllowLocalNetworkHTTP) {

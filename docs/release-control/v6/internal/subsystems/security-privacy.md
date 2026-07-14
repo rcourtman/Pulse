@@ -497,6 +497,11 @@ Docker/Podman, Kubernetes, remote configuration, commands, and self-update.
 Custom CA bundles and SHA-256 leaf-certificate pins are runtime trust inputs,
 not monitoring data, and malformed pins must fail during client construction
 instead of silently degrading to system roots or blanket skip-verification.
+Plaintext transport to a non-local-looking control plane is never implicit:
+it requires the operator's explicit `--allow-plaintext-http` consent recorded
+once at agent startup, is logged as a warning naming the cleartext token
+exposure, and cannot be enabled by the server, by remote configuration, or by
+generated install commands.
 Installer persistence may carry the non-secret pin into service arguments, but
 must not copy API tokens or certificate material into reports or diagnostics.
 
