@@ -157,6 +157,70 @@ Companion drill:
   legacy recurring price, or cancellation/reactivation leaves pricing and
   entitlement state inconsistent across Stripe, Pulse runtime, and customer UI.
 
+## Gate: `self-hosted-commercial-transition-coherence`
+
+- Why this is risky:
+  Relay/Pro and cadence changes cross Stripe proration and schedules, durable
+  webhook processing, grandfathering, local entitlement projection, license
+  versioning, Relay grant enforcement, downgrade preservation, and customer-
+  visible account state. The current implementation can update Stripe price
+  identifiers without atomically changing tier or features, which can charge
+  for one plan while granting another.
+- Primary runtime surfaces:
+  `pulse-pro/license-server/v6_checkout.go`
+  `pulse-pro/license-server/v6_stripe.go`
+  `pulse-pro/license-server/v6_reconcile.go`
+  `pulse-pro/license-server/v6_state.go`
+  `pulse-pro/license-server/v6_store.go`
+  `pulse-pro/license-server/v6_grants.go`
+  `pkg/licensing/...`
+  Pulse Account Billing and Stripe customer/subscription state
+- Automated proof:
+  Local unit and integration proof now covers the Community/Relay/Pro and
+  monthly/annual timing matrix, quote/apply parameter binding, idempotent
+  immediate retry convergence, schedule creation/reuse/cancellation ownership,
+  atomic commercial snapshot projection, payment-failure versus cancellation
+  grace, downgrade history timing, report entitlement denial, and safe artifact
+  purge. The remaining duplicate/reversed/missing external-event matrix and
+  restrictive Relay grant version-floor scenario require the governed Stripe
+  test-mode rehearsal; until that evidence is registered, the gate remains
+  blocked.
+- Manual scenario:
+  1. In Stripe test mode, create fresh Community-to-Relay and Community-to-Pro
+     acquisitions for monthly and annual plans.
+  2. Exercise immediate quoted/prorated Relay-to-Pro and monthly-to-annual
+     changes, including success, decline, timeout-after-success, duplicate
+     request, and replay.
+  3. Exercise renewal-bound Pro-to-Relay and annual-to-monthly changes,
+     including cancellation/resume before the effective timestamp.
+  4. Exercise voluntary paid-through expiry, recovery-only access, involuntary
+     payment-failure grace and recovery, grace expiry, refund/dispute, and
+     current-price re-entry after continuity ends.
+  5. Reverse, duplicate, suppress, and later replay Stripe events; reconcile
+     from the current Stripe snapshot and confirm the same final state.
+  6. Confirm every material entitlement reduction increments
+     `license_version`, rejects the old grant in Relay/runtime, and preserves
+     configuration, report definitions, audit records, and the governed
+     downgrade history window.
+  7. Exercise the buyer/account journey at desktop and phone width and confirm
+     the quoted amount, effective date, plan, cadence, cancellation state, and
+     recovery behavior match runtime truth.
+- Pass when:
+  Each scenario leaves exactly one billing contract and one entitlement
+  projection for the commercial subject; Stripe price, local plan, cadence,
+  runtime capabilities, license version, and customer-visible state agree;
+  replay/order variation does not change the result; and no downgrade or
+  cancellation deletes protected customer configuration or records.
+- Latest exercised record:
+  Local implementation and browser evidence is recorded in
+  `docs/release-control/v6/internal/records/commercial-offer-lifecycle-contract-2026-07-14.md`.
+  No qualifying real-external-e2e record exists yet.
+- Block release if:
+  Any supported transition can charge and grant different plans, mutate
+  entitlement without a version bump, restore ended grandfathering, rely on
+  mutable Customer Portal plan-switch configuration, or produce different
+  state under duplicate, missing, or reordered Stripe delivery.
+
 ## Gate: `known-rc-issue-closure-for-ga`
 
 - Why this is risky:

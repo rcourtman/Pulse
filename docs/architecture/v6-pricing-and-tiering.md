@@ -4,8 +4,8 @@
 > Primary v6 execution authority is `docs/release-control/v6/internal/SOURCE_OF_TRUTH.md` (+ `docs/release-control/v6/internal/status.json`).
 > This file remains the detailed pricing evidence/spec and must stay aligned with the release-control source.
 
-> **Status:** APPROVED — Final structure for v6 launch.
-> **Date:** 2026-02-25
+> **Status:** APPROVED — Current commercial contract.
+> **Date:** 2026-07-14
 > **Replaces:** All previous pricing documents and v5 pricing structure.
 
 This document is the single source of truth for Pulse v6 pricing, tiering, feature
@@ -186,6 +186,19 @@ marketing pitch focuses on three things:
 Relay connectivity and the team extras (RBAC, audit logging, reporting, and agent profiles)
 are bundled, but they are supporting entitlements rather than evidence of a product ladder.
 
+### Self-hosted license and support scope
+
+- One Relay or Pro subscription covers one owner-operated Pulse environment.
+- Monitored systems and child resources are not metered.
+- The subscription permits three concurrent activations inside that environment
+  for primary, migration, and recovery use. Independently operated client
+  environments require MSP.
+- Verified administrative ownership transfer is supported; resale, sharing,
+  and unverified third-party assignment are prohibited.
+- Relay and Pro include verified commercial support for billing, activation,
+  transfer, configuration, and diagnostics, typically within two business
+  days. This is not a contractual SLA or priority-support commitment.
+
 ### Pro+ — Legacy continuity tier only
 
 Existing Pro+ entitlements remain supported for continuity, but Pro+ is no longer part of
@@ -195,10 +208,14 @@ still preserve self-hosted monitoring and child-resource volume as not metered w
 
 ---
 
-## Cloud Tiers (Hosted — separate page)
+## Cloud Tiers (Hosted — unavailable)
 
-All Cloud tiers include everything in Pro + managed hosting + daily automated backups.
-Cloud launches alongside v6 (not behind a waitlist).
+Cloud is not currently offered. The prices and tier shapes below are dormant
+commercial proposals retained for implementation planning; they are not a
+signup promise, supported capacity contract, trial promise, or current support
+commitment. Cloud must not reopen until its economic unit/caps, card policy,
+support, retention, export, cancellation, reactivation, and runtime enforcement
+pass the governed Cloud reopening gate.
 
 ### Cloud Starter — $29/month or $249/year
 
@@ -242,7 +259,9 @@ Cloud launches alongside v6 (not behind a waitlist).
 
 Pulse MSP is not the shared-process organization model. The default MSP route is provider-hosted: the MSP runs a Stripe-free control plane that creates one isolated Pulse runtime/container per client workspace. A signed MSP license sets the plan version and client workspace cap. Pulse-hosted MSP is an optional request-assisted path where Pulse operates that provider stack.
 
-MSP is built and staged for assisted rollout, but it is not a public self-serve checkout path yet. Pricing, availability, and launch wording need owner review before publication.
+MSP is an assisted preview, not a public self-serve checkout path. Public copy
+may show the recorded monthly and annual prices, but fulfillment remains
+request-assisted and must not imply immediate Pulse-hosted provisioning.
 
 ### MSP Starter — $149/month or $1,490/year
 
@@ -349,9 +368,28 @@ There is no proactive self-hosted upsell cadence in v6 GA. If older compatibilit
 mention prompt reduction, treat them as legacy controls; the v6 default is already quiet unless
 the user enters an explicit commercial path or has an entitlement state that needs attention.
 
-### 9. Cloud launches with v6
-Not behind a waitlist. Real pricing, real signup. Captures convenience buyers who don't
-want to self-host.
+### 9. Cloud remains unavailable until reopening proof
+The public Cloud surface must state that signup is closed. Dormant Cloud prices,
+caps, trial language, and implementation paths remain non-public planning
+inputs until the governed reopening gate passes.
+
+### 10. Self-service lifecycle contract
+
+| Change | Effective time | Billing treatment |
+|---|---|---|
+| Community to Relay or Pro | After successful checkout | New subscription |
+| Relay to Pro | Immediate after explicit quote and successful payment | Prorated |
+| Monthly to annual, same tier | Immediate after explicit quote and successful payment | Prorated |
+| Pro to Relay | Current paid period end | No proration |
+| Annual to monthly, same tier | Current paid period end | No proration |
+| Voluntary cancellation | Current paid period end | No proration |
+
+Combined transitions use the most restrictive timing rule. Voluntary
+cancellation has a seven-day recovery-only window after paid entitlement ends;
+payment failure has a separate seven-day functional grace period. Downgrades
+preserve configuration, report definitions, and audit records. Out-of-tier
+history and generated artifacts soft-hide for 30 days and become
+purge-eligible after 60 days.
 
 ---
 

@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-07-02
+Last updated: 2026-07-14
 Status: ACTIVE
 
 This file is the stable human governance layer for the active v6 release
@@ -471,6 +471,13 @@ Assertion design rules:
     document bound to the audited SHA selected at runtime. The checker must
     never execute real-lab, device, relay, or other mutation-gated commands
     itself.
+24. Do not ship or expose self-service plan or cadence transitions unless the
+    authoritative Stripe subscription snapshot, local billing contract,
+    entitlement projection, continuity epoch, license version, and grant
+    revocation/outbox state converge through one idempotent transition
+    authority. A customer must never pay for one plan while Pulse grants
+    another, and duplicate, missing, or reordered webhook delivery must not
+    change the final commercial state.
 
 ## Locked Decisions
 
@@ -545,6 +552,40 @@ Assertion design rules:
     trust, or installer/update/rollback path changed, and the exact-SHA release
     dry run passed. Those risk conditions require RC lineage unless an active
     customer-harm emergency is recorded through the hotfix exception.
+16. The canonical self-hosted offer is job-based rather than a
+    good/better/best ladder: Community is the free local monitoring foundation,
+    Relay is remote access plus Pulse Mobile pairing, push, and 14-day history,
+    and Pro is Patrol-powered investigation and governed operations with
+    90-day history and Relay bundled. One Relay or Pro subscription covers one
+    owner-operated environment with unmetered monitored-system and child-
+    resource volume plus three concurrent primary/migration/recovery
+    activations. It does not cover independently operated client environments.
+17. Verified administrative ownership transfers are permitted, while resale,
+    sharing, and unverified third-party assignment are prohibited. Relay and
+    Pro include standard verified commercial support for billing, activation,
+    transfer, configuration, and diagnostics, normally targeted within two
+    business days without a contractual SLA or priority-support promise.
+18. Self-hosted subscription transitions follow the approved lifecycle matrix
+    in
+    `docs/release-control/v6/internal/records/commercial-offer-lifecycle-contract-2026-07-14.md`:
+    Relay-to-Pro and monthly-to-annual changes are immediate only after an
+    explicit prorated quote and successful payment; capability downgrades and
+    annual-to-monthly changes occur at renewal without proration; voluntary
+    cancellation ends paid capability at the paid-through timestamp; a
+    separate seven-day recovery-only window grants no paid capability; and
+    involuntary payment failure receives seven days of functional grace.
+    Configuration, report definitions, and audit records survive downgrade;
+    out-of-tier history and generated artifacts soft-hide for 30 days and
+    become purge-eligible after 60 days. Completed cancellation or a completed
+    tier/cadence change ends grandfathered recurring-price continuity.
+19. Cloud is unavailable until a governed reopening gate proves its economic
+    unit/caps, card policy, support, retention, export, cancellation,
+    reactivation, and runtime enforcement. Historical Cloud prices and caps
+    are dormant proposals, not a current offer. MSP remains an assisted
+    preview, provider-hosted by default, with 5/15/40 isolated client-
+    workspace limits; public copy may state the recorded monthly and annual
+    prices but must not promise immediate self-service checkout or Pulse-hosted
+    fulfillment.
 
 ## TrueNAS Support Floor
 

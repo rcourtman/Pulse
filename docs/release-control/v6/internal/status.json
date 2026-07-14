@@ -1,6 +1,6 @@
 {
   "version": "6.0",
-  "updated_at": "2026-07-02",
+  "updated_at": "2026-07-14",
   "scope": {
     "active_repos": [
       "pulse",
@@ -4676,6 +4676,55 @@
           "evidence_tier": "test-proof"
         }
       ]
+    },
+    {
+      "id": "RA41",
+      "summary": "Self-hosted commercial state remains coherent across the canonical offer, Stripe billing, Pulse Account, license-server persistence, runtime and Relay entitlements, support policy, and customer-visible lifecycle: Community, Relay, and Pro keep distinct jobs with Pro bundling Relay; every tier or cadence transition applies the approved timing and proration matrix through one idempotent transition authority; restrictive changes invalidate old grants; downgrade preserves governed customer data; and replay, cancellation, refund, grace, or re-entry cannot make billing and entitlement drift.",
+      "kind": "trust-gate",
+      "blocking_level": "release-ready",
+      "proof_type": "manual",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L12",
+        "L17"
+      ],
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "release_gate_ids": [
+        "self-hosted-commercial-transition-coherence"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/commercial-offer-lifecycle-contract-2026-07-14.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/cloud-paid.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/report_schedules_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/licensing/subscription_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/v6_commercial_transitions_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -4778,15 +4827,15 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Commercial readiness is coherent for explicit preview, checkout handoff, paid-user activation/recovery, hosted-mode paths, and the first Pulse Intelligence value-evidence reporting surface, while default self-hosted app surfaces stay free-first and non-promotional; because v6 is not publicly GA, production public checkout stays on v5 until explicit GA cutover approval, and the production public flip plus release-day rollout execution plus the broader governed Patrol control experience remain separate follow-ups.",
+        "summary": "The approved Community / Relay / Pro contract is now projected into local public/account copy, support and legal policy, atomic license-server entitlement state, quoted Relay/Pro and cadence transition sagas, and runtime downgrade preservation. Local Go, copy-model, and desktop/phone browser proof is green. Self-service remains unreleased until the governed Stripe test-mode event/reconciliation matrix, Relay version-floor proof, and production read-only catalog/portal audit satisfy the commercial transition gate.",
         "tracking": [
           {
             "kind": "lane-followup",
-            "id": "commercial-ga-promotion-package"
+            "id": "pulse-intelligence-pro-activation-loop"
           },
           {
-            "kind": "lane-followup",
-            "id": "pulse-intelligence-pro-activation-loop"
+            "kind": "release-gate",
+            "id": "self-hosted-commercial-transition-coherence"
           }
         ]
       },
@@ -4847,11 +4896,16 @@
       "name": "Cloud paid readiness",
       "target_score": 8,
       "current_score": 8,
-      "status": "target-met",
+      "status": "partial",
       "completion": {
-        "state": "complete",
-        "summary": "Cloud-paid runtime and billing surfaces are at the current tracked RC floor, including real cancellation/reactivation continuity across checkout, entitlement boundaries, and the shared commercial billing shell/model now used by both self-hosted Pulse Pro and hosted organization billing.",
-        "tracking": []
+        "state": "bounded-residual",
+        "summary": "The local commercial projection now changes Stripe catalog identity, tier, cadence, features, continuity epoch, license version, transition history, and revocation outbox atomically, with a quote-bound transition authority for self-hosted plan and cadence changes. Cloud remains unavailable and MSP remains an assisted preview. External Stripe event/reconciliation and Relay version-floor proof remain governed release residuals.",
+        "tracking": [
+          {
+            "kind": "release-gate",
+            "id": "self-hosted-commercial-transition-coherence"
+          }
+        ]
       },
       "blockers": [],
       "subsystems": [
@@ -5907,11 +5961,16 @@
       "name": "Customer account portal",
       "target_score": 6,
       "current_score": 6,
-      "status": "target-met",
+      "status": "partial",
       "completion": {
-        "state": "complete",
-        "summary": "Pulse Account is now a first-class governed customer-account surface at the current RC floor: hosted accounts land directly in Workspaces, the signed-in shell stays task-first across Workspaces, Access, Billing, and Support, and MSP plus self-serve commercial actions converge on one coherent authenticated account boundary.",
-        "tracking": []
+        "state": "bounded-residual",
+        "summary": "The self-hosted manage entry point is now Pulse-named and job-first, with verified invoice/payment access, quoted Relay/Pro and cadence changes, cancellation, reactivation, and scheduled-change cancellation. Retrieve, refund, and data-request utilities remain separate specialist jobs. The lane stays residual until real Stripe transition/reconciliation and Relay entitlement proofs satisfy the governed transition gate.",
+        "tracking": [
+          {
+            "kind": "release-gate",
+            "id": "self-hosted-commercial-transition-coherence"
+          }
+        ]
       },
       "blockers": [],
       "subsystems": [],
@@ -7875,6 +7934,46 @@
       ]
     },
     {
+      "id": "self-hosted-commercial-transition-coherence",
+      "summary": "Confirm the approved self-hosted offer and lifecycle remain coherent across public pricing, Stripe billing, Pulse Account, license-server state, runtime and Relay entitlements, support policy, and customer-visible transitions: quoted/prorated immediate upgrades, renewal-bound reductions, paid-through cancellation, distinct recovery and payment-failure grace, downgrade preservation, grant version invalidation, and current-price re-entry all converge under replay and reconciliation.",
+      "owner": "project-owner",
+      "blocking_level": "release-ready",
+      "minimum_evidence_tier": "real-external-e2e",
+      "status": "blocked",
+      "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L12",
+        "L17"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/commercial-offer-lifecycle-contract-2026-07-14.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/report_schedules_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/licensing/subscription_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/v6_commercial_transitions_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        }
+      ]
+    },
+    {
       "id": "settings-surface-layout-consistency",
       "summary": "Confirm comparable settings surfaces present the canonical page shell, with consistent header framing and no ad hoc top-level layout chrome.",
       "owner": "project-owner",
@@ -8077,17 +8176,6 @@
         "storage-recovery"
       ],
       "cross_repo": false
-    },
-    {
-      "id": "commercial-ga-promotion-package",
-      "summary": "Track the explicitly approved GA production public flip and release-day execution work for the self-hosted commercial package; until that work is active, production public checkout must remain on v5 with v6 approval disabled, and default self-hosted app surfaces must stay free-first and non-promotional.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-04-20",
-      "lane_ids": [
-        "L2"
-      ],
-      "subsystem_ids": []
     },
     {
       "id": "journey-post-ga-expansion",
@@ -8631,7 +8719,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-lane-l23",
+      "agent_id": "codex",
+      "summary": "Implement an independent-ground-truth Pulse Patrol qualification benchmark with disposable live-lab, replay, Watch, investigation, remediation, safety, statistical gates, and reporting support.",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-14T09:15:01Z",
+      "heartbeat_at": "2026-07-14T09:15:01Z",
+      "expires_at": "2026-07-14T11:15:01Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L23"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
@@ -9441,6 +9543,65 @@
       "subsystem_ids": [],
       "lane_ids": [
         "L5"
+      ]
+    },
+    {
+      "id": "cloud-msp-availability-contract",
+      "summary": "Cloud is unavailable; historical Cloud prices, caps, trial, and support labels are dormant proposals rather than a current offer, and reopening requires governed proof of card policy, economic unit/caps, support, retention, export, cancellation, reactivation, and runtime enforcement. MSP remains an assisted preview, provider-hosted by default, with 5/15/40 isolated client-workspace limits and recorded monthly/annual prices; this supersedes the earlier Starter self-serve buying motion until a later explicit decision reopens it.",
+      "kind": "pricing",
+      "decided_at": "2026-07-14",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L4",
+        "L17"
+      ]
+    },
+    {
+      "id": "self-hosted-commercial-scope-support-contract",
+      "summary": "One Relay or Pro subscription covers one owner-operated Pulse environment with unmetered monitored systems and child resources plus three concurrent primary/migration/recovery activations. Verified administrative transfer is permitted, resale/sharing/unverified assignment is prohibited, and Relay/Pro include standard verified commercial support typically within two business days without an SLA or priority-support promise.",
+      "kind": "contract",
+      "decided_at": "2026-07-14",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L17"
+      ]
+    },
+    {
+      "id": "self-hosted-commercial-transition-contract",
+      "summary": "Relay-to-Pro and monthly-to-annual changes are immediate only after an explicit prorated quote and successful payment; capability downgrades and annual-to-monthly changes occur at renewal without proration; voluntary cancellation ends paid capability at the paid-through timestamp with a seven-day recovery-only window, while payment failure receives seven days of functional grace. Downgrade preserves configuration, report definitions, and audit records; out-of-tier history/artifacts soft-hide for 30 days and become purge-eligible after 60 days; completed cancellation or tier/cadence change ends grandfathered recurring-price continuity.",
+      "kind": "contract",
+      "decided_at": "2026-07-14",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L12",
+        "L17"
+      ]
+    },
+    {
+      "id": "unified-commercial-offer-projection-contract",
+      "summary": "Community, Relay, and Pro remain distinct customer jobs with Pro explicitly bundling Relay; one versioned commercial offer contract must project into public pricing, Pulse Account, in-product plans, checkout, read-only Stripe catalog audit, support policy, billing persistence, and runtime entitlements. Stripe stays billing truth, while one Pulse-owned idempotent transition authority atomically owns the local commercial projection and every material entitlement change increments license_version.",
+      "kind": "architecture",
+      "decided_at": "2026-07-14",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L12",
+        "L17"
       ]
     }
   ]

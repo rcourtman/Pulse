@@ -236,19 +236,16 @@ user language should update the control plane.
 ## Current State
 
 1. v6 is the current active release profile.
-2. `v6-ga-promotion` is the current active engineering target.
-   The next public v6 release target is GA from the current
-   `pulse/v6-release` branch after accumulated post-RC7 fixes and final
-   current-branch validation. The published RC7 candidate must not be promoted
-   unchanged, and another RC is not planned by default unless a release-owner
-   decision changes that.
-3. `v6-product-lane-expansion` remains planned behind the GA launch target.
-   Its candidate-lane surface remains available in the linked
-   `candidate_lanes` and `coverage_gaps`, but it should not displace release
-   execution while GA is the current objective.
-4. The older RC line reached the historical `release_ready` floor, but the
-   current GA target now requires fresh current-branch validation because the
-   release will include accumulated fixes and changes after RC7.
+2. `v6-product-lane-expansion` is the current active engineering target.
+   Pulse v6 GA and the initial 6.0.x patch line have shipped; active
+   development and stable release preparation now run on `main`.
+3. `v6-ga-promotion` is complete. Its release records remain historical
+   evidence and must not keep pre-GA branch, checkout, or readiness posture
+   active in current lane state.
+4. Candidate lanes and coverage gaps now route post-GA product expansion.
+   Release-blocking correctness work may still override that default queue
+   when a shipped customer contract can drift across billing, entitlements,
+   runtime behavior, or public copy.
 5. `v6-rc-stabilization` is completed after the shipped RCs established the
    current monitored-first floor and the active objective moved to stable
    promotion.
@@ -256,8 +253,8 @@ user language should update the control plane.
 7. The existing v6 control surfaces are still live, but they now sit underneath
    an evergreen Pulse control plane rather than pretending to be the whole
    long-term system.
-8. Until the explicit post-GA branch cutover happens, both prerelease and
-   stable v6 promotions resolve to `pulse/v6-release` via `control_plane.json`.
+8. Both prerelease and stable v6 promotions resolve to `main` via
+   `control_plane.json`.
 9. Legacy maintenance releases that still feed governed automation outside the
    active v6 line must also resolve through `control_plane.json`.
    Right now the remaining `5.1.x` stable maintenance line resolves to `main`
