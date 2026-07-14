@@ -47,7 +47,7 @@ func TestTriggerAndWaitAssociatesExactNewScopedRun(t *testing.T) {
 	}
 }
 
-func TestValidateCollectedFaultProjectionUsesScenarioOracle(t *testing.T) {
+func TestValidateCollectedScenarioProjectionUsesFaultOracle(t *testing.T) {
 	manifest := validTestManifest()
 	manifest.Faults = []FaultSpec{
 		{ID: "stopped", Target: "dependency", Oracle: []Predicate{{Probe: "docker.running", Target: "dependency", Operator: "eq", Value: json.RawMessage("false")}}},
@@ -59,14 +59,30 @@ func TestValidateCollectedFaultProjectionUsesScenarioOracle(t *testing.T) {
 		"client":     {Docker: &DockerResource{Health: "healthy"}},
 		"worker":     {Docker: &DockerResource{RestartCount: 1}},
 	}
-	if err := validateCollectedFaultProjection(manifest, resources); err == nil {
+	if err := validateCollectedScenarioProjection(manifest, resources); err == nil {
 		t.Fatal("expected pre-fault collected projection to be rejected")
 	}
 	resources["dependency"] = Resource{Docker: &DockerResource{ContainerState: "exited"}}
 	resources["client"] = Resource{Docker: &DockerResource{Health: "unhealthy"}}
 	resources["worker"] = Resource{Docker: &DockerResource{RestartCount: 2}}
-	if err := validateCollectedFaultProjection(manifest, resources); err != nil {
+	if err := validateCollectedScenarioProjection(manifest, resources); err != nil {
 		t.Fatalf("expected collected projection to satisfy scenario-owned oracles: %v", err)
+	}
+}
+
+func TestValidateCollectedScenarioProjectionRequiresNegativeControlBaseline(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Faults = nil
+	manifest.NegativeControls = []NegativeControl{{Resource: "healthy", Reason: "healthy control"}}
+	manifest.Baseline = []Predicate{{Probe: "docker.health", Target: "healthy", Operator: "eq", Value: json.RawMessage(`"healthy"`)}}
+	resources := map[string]Resource{"healthy": {Docker: &DockerResource{ContainerState: "running", Health: "starting"}}}
+
+	if err := validateCollectedScenarioProjection(manifest, resources); err == nil {
+		t.Fatal("expected stale starting projection to be rejected for a healthy negative control")
+	}
+	resources["healthy"] = Resource{Docker: &DockerResource{ContainerState: "running", Health: "healthy"}}
+	if err := validateCollectedScenarioProjection(manifest, resources); err != nil {
+		t.Fatalf("expected collected negative control to satisfy scenario-owned baseline: %v", err)
 	}
 }
 

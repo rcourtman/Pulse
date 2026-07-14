@@ -5692,6 +5692,11 @@ relevant health, running-state, or restart-count condition; a stale healthy
 projection is a collection failure, never a model miss. These expectations are
 derived from manifest oracles before execution and never from Patrol tool
 selection, preserving non-circular scoring.
+Healthy negative controls use the same convergence rule in the opposite
+direction: their manifest-owned baseline predicates must be visible through
+the canonical resource projection before Patrol starts. A transient `starting`
+projection cannot force the model to spend a confirmation turn after the lab
+oracle has already established `healthy`.
 Watch qualification must score the confirmed provider-visible symptom rather
 than require an unproved causal attribution. In the correlated Docker scenario,
 the stopped dependency remains the independently injected fault and the
