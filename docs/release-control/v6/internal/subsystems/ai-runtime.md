@@ -5699,6 +5699,12 @@ and the independently declared expected-finding resource as separate resolved
 identities; an expected resource may differ only when the manifest declared it
 as related before execution. V1 replay artifacts retain target-as-expected
 semantics.
+The canonical `pulse_query` schema and executor must admit the same resource
+types. In particular, `action=get` accepts `docker-host`, returns a governed
+read-only host response when the identity resolves, and returns a successful
+typed `not_found` result when it does not; a model following the advertised
+schema must not incur a failed tool call because the executor used a narrower
+legacy type switch.
 Persisted Patrol tool inputs must retain complete structured finding calls up
 to the bounded 16 KiB record limit so normal evidence-rich findings remain
 deterministically replayable. If any captured input is nevertheless incomplete

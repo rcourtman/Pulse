@@ -659,7 +659,7 @@ type TopologySummary struct {
 // ResourceResponse is returned by pulse_get_resource
 type ResourceResponse struct {
 	GovernedResourceMetadata
-	Type            string            `json:"type"` // "agent", "vm", "system-container", "app-container", "storage"
+	Type            string            `json:"type"` // "agent", "vm", "system-container", "app-container", "docker-host", "storage"
 	ID              string            `json:"id"`
 	Name            string            `json:"name"`
 	Status          string            `json:"status"`

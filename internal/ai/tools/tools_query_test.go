@@ -1803,6 +1803,9 @@ func TestExecuteGetResourceErrorsAndContainer(t *testing.T) {
 		Containers: []models.Container{
 			{ID: "ct1", VMID: 200, Name: "ct1", Status: "running", Node: "node1"},
 		},
+		DockerHosts: []models.DockerHost{
+			{ID: "docker-source-1", Hostname: "docker-1", DisplayName: "Docker 1", Status: "online", OS: "linux", CPUs: 4},
+		},
 	}}
 
 	result, _ = executor.executeGetResource(context.Background(), map[string]interface{}{
@@ -1815,6 +1818,26 @@ func TestExecuteGetResourceErrorsAndContainer(t *testing.T) {
 	}
 	if res.Type != "system-container" || res.Name != "ct1" {
 		t.Fatalf("unexpected container response: %+v", res)
+	}
+
+	result, _ = executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "docker-host",
+		"resource_id":   "docker-1",
+	})
+	res = ResourceResponse{}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &res); err != nil {
+		t.Fatalf("decode Docker host response: %v", err)
+	}
+	if result.IsError || res.Type != "docker-host" || res.ID != "docker-source-1" || res.Name != "Docker 1" || res.Host != "docker-1" {
+		t.Fatalf("unexpected Docker host response: error=%v response=%+v", result.IsError, res)
+	}
+
+	result, _ = executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "docker-host",
+		"resource_id":   "missing",
+	})
+	if result.IsError || !strings.Contains(result.Content[0].Text, `"error":"not_found"`) {
+		t.Fatalf("missing Docker host must be a successful not-found query: %+v", result)
 	}
 
 	result, _ = executor.executeGetResource(context.Background(), map[string]interface{}{

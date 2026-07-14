@@ -4826,6 +4826,51 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 			"type":        "agent",
 		}), nil
 
+	case "docker-host":
+		for _, host := range rs.DockerHosts() {
+			if host == nil || !matchesCanonicalResourceReference(
+				unifiedresources.Resource{}, resourceID, host.ID(), host.HostSourceID(), host.Hostname(), host.Name(), host.DisplayName(),
+			) {
+				continue
+			}
+			hostID := firstNonEmptyString(host.HostSourceID(), host.ID())
+			hostName := firstNonEmptyString(host.Hostname(), host.Name(), host.DisplayName())
+			displayName := firstNonEmptyString(host.Name(), host.DisplayName(), hostName)
+			response := EmptyResourceResponse()
+			response.GovernedResourceMetadata = governance.Resolve(host.Hostname(), host.Name(), host.DisplayName(), host.HostSourceID(), host.ID())
+			response.Type = "docker-host"
+			response.ID = hostID
+			response.Name = displayName
+			response.Status = string(host.Status())
+			response.Platform = "docker"
+			response.Host = hostName
+			response.OS = strings.TrimSpace(host.OS())
+			response.CPU = ResourceCPU{Percent: host.CPUPercent(), Cores: host.CPUs()}
+			response.Memory = ResourceMemory{
+				Percent: host.MemoryPercent(),
+				UsedGB:  float64(host.MemoryUsed()) / (1024 * 1024 * 1024),
+				TotalGB: float64(host.MemoryTotal()) / (1024 * 1024 * 1024),
+			}
+			response.Tags = host.Tags()
+			e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
+				Kind:          "docker-host",
+				ProviderUID:   hostID,
+				Name:          displayName,
+				Aliases:       appendUniqueStrings(nil, displayName, hostID, hostName, host.ID()),
+				HostUID:       hostID,
+				HostName:      hostName,
+				LocationChain: []string{"docker-host:" + hostName},
+				Executors: []ExecutorRegistration{{
+					ExecutorID: hostName,
+					Adapter:    "direct",
+					Actions:    readOnlyResourceActions(),
+					Priority:   10,
+				}},
+			})
+			return NewJSONResult(response.NormalizeCollections()), nil
+		}
+		return notFoundResourceResult("docker-host", resourceID), nil
+
 	case "storage":
 		if e.unifiedResourceProvider != nil {
 			for _, resource := range canonicalStoragePoolResources(e.unifiedResourceProvider) {
@@ -5078,7 +5123,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		}), nil
 
 	default:
-		return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use 'agent', 'vm', 'system-container', 'app-container', or 'storage' (compatibility aliases 'system' and 'storage-pool' are also accepted)", resourceTypeRaw)), nil
+		return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use 'agent', 'vm', 'system-container', 'app-container', 'docker-host', or 'storage' (compatibility aliases 'system' and 'storage-pool' are also accepted)", resourceTypeRaw)), nil
 	}
 }
 
