@@ -382,6 +382,17 @@ func appendFSMVerificationPrompt(messages []providers.Message, prompt string) []
 	})
 }
 
+const patrolFindingLifecycleSummarySystemPrompt = `You are Pulse Patrol completing a non-interactive run after its structured finding lifecycle operations succeeded. Return a concise operator summary grounded only in the supplied seed, tool calls, and tool results. Treat the structured tool results as authoritative. Do not invent new findings, evidence, actions, verification, or remediation claims.`
+
+func applyPatrolFindingLifecycleSummaryRequest(req *providers.ChatRequest) {
+	if req == nil {
+		return
+	}
+	req.Tools = nil
+	req.ToolChoice = nil
+	req.System = patrolFindingLifecycleSummarySystemPrompt
+}
+
 // sanitizeProviderStreamErrorForUser turns a raw provider/transport error into a
 // clean, human message safe to render in the chat. Upstream errors (especially
 // from OpenAI-compatible gateways like OpenRouter) embed raw JSON bodies and
@@ -655,8 +666,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 	var resultMessages []Message
 	turn := 0
-	writeCompletedLastTurn := false // When true, request final text without offering tools
-	toolBlockedLastTurn := false    // When true, request final text after budget/loop block
+	writeCompletedLastTurn := false              // When true, request final text without offering tools
+	patrolFindingWriteCompletedLastTurn := false // When true, use the bounded Patrol lifecycle summary contract
+	toolBlockedLastTurn := false                 // When true, request final text after budget/loop block
 
 	// Loop detection: track identical tool calls (name + serialized input).
 	// After maxIdenticalCalls identical invocations, the next one is blocked.
@@ -767,6 +779,16 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Int("max_turns", maxTurns).
 				Str("session_id", sessionID).
 				Msg("[AgenticLoop] Approaching max turns — omitting tools for final response")
+		} else if patrolFindingWriteCompletedLastTurn {
+			// Structured finding lifecycle results are the source of truth. The final
+			// provider turn exists only to produce concise display prose, so do not
+			// resend Patrol's full detection/investigation instruction set.
+			applyPatrolFindingLifecycleSummaryRequest(&req)
+			textOnlySafetyBrake = true
+			patrolFindingWriteCompletedLastTurn = false
+			log.Debug().
+				Str("session_id", sessionID).
+				Msg("[AgenticLoop] Patrol finding lifecycle write completed — using bounded summary prompt")
 		} else if writeCompletedLastTurn {
 			// A write action completed successfully on the previous turn.
 			// Ask for the final response with the execution result already in context.
@@ -1853,7 +1875,11 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					// handler accepts it. It neither changes infrastructure nor proves
 					// verification of a preceding infrastructure change. Conclude on
 					// the next text-only turn.
-					writeCompletedLastTurn = true
+					if a.currentExecutionProfile().NonInteractive() {
+						patrolFindingWriteCompletedLastTurn = true
+					} else {
+						writeCompletedLastTurn = true
+					}
 					log.Debug().
 						Str("tool", tc.Name).
 						Str("state", string(fsm.State)).

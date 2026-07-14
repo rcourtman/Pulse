@@ -113,6 +113,31 @@ func TestAppendFSMVerificationPrompt_EndsWithUserInstruction(t *testing.T) {
 	}
 }
 
+func TestPatrolFindingLifecycleSummaryPromptIsBoundedAndNonAuthoritative(t *testing.T) {
+	prompt := patrolFindingLifecycleSummarySystemPrompt
+	for _, required := range []string{"structured tool results as authoritative", "Do not invent", "remediation claims"} {
+		if !strings.Contains(prompt, required) {
+			t.Fatalf("bounded Patrol summary prompt missing %q: %s", required, prompt)
+		}
+	}
+	if len(prompt) >= 500 {
+		t.Fatalf("bounded Patrol summary prompt unexpectedly large: %d bytes", len(prompt))
+	}
+
+	req := providers.ChatRequest{
+		System:     "full Patrol detection prompt",
+		Tools:      []providers.Tool{{Name: agentcapabilities.PatrolReportFindingToolName}},
+		ToolChoice: &providers.ToolChoice{Type: providers.ToolChoiceRequired},
+	}
+	applyPatrolFindingLifecycleSummaryRequest(&req)
+	if req.System != patrolFindingLifecycleSummarySystemPrompt {
+		t.Fatalf("summary request retained full system prompt: %q", req.System)
+	}
+	if len(req.Tools) != 0 || req.ToolChoice != nil {
+		t.Fatalf("summary request retained tools or tool choice: tools=%d choice=%+v", len(req.Tools), req.ToolChoice)
+	}
+}
+
 func TestPruneMessagesForModel_Stateless(t *testing.T) {
 	prev := StatelessContext
 	StatelessContext = true

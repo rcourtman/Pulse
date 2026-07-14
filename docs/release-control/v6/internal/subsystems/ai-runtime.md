@@ -5669,6 +5669,11 @@ routes use exact model IDs and model-specific review dates from the public
 OpenRouter Models API; aliases, fast variants, routers, and other unreviewed
 routes remain unknown and therefore fail any non-zero qualification cost
 budget until their actual route price is explicitly recorded.
+After a non-interactive Patrol finding lifecycle write succeeds, the structured
+tool result is authoritative and the remaining text-only provider turn is only
+for operator-facing summary prose. That turn must use a bounded summary system
+instruction rather than resending the full detection and investigation prompt;
+it may not invent findings, evidence, actions, verification, or remediation.
 Persisted Patrol tool inputs must retain complete structured finding calls up
 to the bounded 16 KiB record limit so normal evidence-rich findings remain
 deterministically replayable. If any captured input is nevertheless incomplete
