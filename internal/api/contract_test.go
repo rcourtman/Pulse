@@ -13807,7 +13807,7 @@ func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
 	}
 
 	const want = `{
-		"actionId":"act_4ccd0282616d29d9c1751617eaee44c7",
+		"actionId":"act_319ae18063fa391b17bc43998dd6a9cf",
 		"requestId":"agent-run-123",
 		"allowed":true,
 		"requiresApproval":true,
@@ -13818,13 +13818,13 @@ func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
 		"message":"Plan created for restart on web-42. Execution requires admin approval and is not performed by this endpoint.",
 		"plannedAt":"2026-05-03T10:00:00Z",
 		"expiresAt":"2026-05-03T10:05:00Z",
-		"resourceVersion":"resource:sha256:54fb6f0264f42e0f2724e513",
+		"resourceVersion":"resource:sha256:b051979f29e3818d9c1869b7",
 		"policyVersion":"policy:sha256:0bce3cd2df181ace685598eb",
 		"policyDecision":{
 			"version":1,
 			"status":"resolved",
-			"decisionId":"policy-decision:sha256:2a7de3214fdc8e7c083f5cddfcc5ecc26558b81d0818505d0e60e01deb2d6b08",
-			"actionId":"act_4ccd0282616d29d9c1751617eaee44c7",
+			"decisionId":"policy-decision:sha256:8609dfa771e53cdaa3bb5fd3cb873c21ea1b0ced7eb57f97281420e607f7ac0a",
+			"actionId":"act_319ae18063fa391b17bc43998dd6a9cf",
 			"scope":{"orgId":"default","resourceId":"vm:42","capabilityName":"restart"},
 			"authorities":[{
 				"kind":"capability_registry",
@@ -13839,7 +13839,7 @@ func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
 			"planningAllowed":true,
 			"requiresApproval":true
 		},
-		"planHash":"sha256:8e3686b062d158148a433e9d3fcd367388923992a44f4aa4d9730658a036f092",
+		"planHash":"sha256:f028ce06b9cb0f19d2c3dac041be5c904ceb60d55117f0c533f045bef48b4c02",
 		"preflight":{
 			"target":"vm:42",
 			"currentState":"web-42 is warning",
@@ -13854,7 +13854,7 @@ func TestContract_ActionPlanJSONSnapshot(t *testing.T) {
 			],
 			"verificationSteps":[
 				"Refresh the resource and confirm the expected state after execution.",
-				"Review /api/audit/actions/act_4ccd0282616d29d9c1751617eaee44c7/events for lifecycle evidence."
+				"Review /api/audit/actions/act_319ae18063fa391b17bc43998dd6a9cf/events for lifecycle evidence."
 			],
 			"generatedAt":"2026-05-03T10:00:00Z"
 		}
