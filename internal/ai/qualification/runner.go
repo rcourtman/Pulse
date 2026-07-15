@@ -22,7 +22,7 @@ type RunnerConfig struct {
 	Client               *PulseClient
 	ArtifactRoot         string
 	RunID                string
-	ModelOverride        string
+	ExpectedModel        string
 	GitSHA               string
 	GitDirty             bool
 	ExpectedPulseVersion string
@@ -89,15 +89,7 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 	}
 	artifactDir := filepath.Join(r.config.ArtifactRoot, r.config.RunID)
 	var prepared *PreparedLab
-	var restoreModel func(context.Context) error
 	finish := func() {
-		if restoreModel != nil {
-			restoreCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			if restoreErr := restoreModel(restoreCtx); restoreErr != nil {
-				report.Errors = append(report.Errors, "restore Patrol model: "+restoreErr.Error())
-			}
-		}
 		if prepared != nil {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
@@ -147,22 +139,9 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		if expected := strings.TrimSpace(manifest.Patrol.Mode); expected != "" && !strings.EqualFold(expected, autonomy.Effective()) {
 			return fmt.Errorf("scenario requires Patrol mode %q, effective mode is %q", expected, autonomy.Effective())
 		}
-		var overrideErr error
-		restoreModel, overrideErr = r.config.Client.OverridePatrolModel(ctx, r.config.ModelOverride)
-		if overrideErr != nil {
-			return overrideErr
-		}
-		if r.config.ModelOverride != "" {
-			settings, settingsErr = r.config.Client.Settings(ctx)
-			if settingsErr != nil {
-				return settingsErr
-			}
-			status, statusErr = r.config.Client.Status(ctx)
-			if statusErr != nil {
-				return statusErr
-			}
-			if !status.Readiness.Ready || strings.EqualFold(status.Readiness.Provider, "demo") {
-				return fmt.Errorf("overridden Patrol model is not ready: %s", status.Readiness.Summary)
+		if expected := strings.TrimSpace(r.config.ExpectedModel); expected != "" {
+			if err := validatePatrolRoute(expected, settings, status); err != nil {
+				return err
 			}
 		}
 		model := settings.EffectivePatrolModel()
@@ -438,7 +417,7 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 }
 
 func (r *QualificationRunner) initialEnvironment() Environment {
-	provider, _ := splitModel(r.config.ModelOverride)
+	provider, _ := splitModel(r.config.ExpectedModel)
 	dockerTarget := ""
 	if r.config.Lab != nil {
 		dockerTarget = dockerTargetLabel(r.config.Lab.target)
@@ -448,7 +427,7 @@ func (r *QualificationRunner) initialEnvironment() Environment {
 		GitDirty:       r.config.GitDirty,
 		PulseBaseURL:   r.config.Client.config.BaseURL,
 		DockerTarget:   dockerTarget,
-		Model:          strings.TrimSpace(r.config.ModelOverride),
+		Model:          strings.TrimSpace(r.config.ExpectedModel),
 		Provider:       provider,
 		InferenceRoute: inferenceRouteForProvider(provider),
 		ChallengeNonce: r.config.ChallengeNonce,

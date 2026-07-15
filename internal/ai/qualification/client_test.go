@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -159,6 +160,219 @@ func TestOverridePatrolModelTemporarilyEnablesAndRestoresSubscriptionRoute(t *te
 	}
 	if requests[1]["codex_subscription_enabled"] != false || requests[1]["patrol_model"] != "ollama:qwen3:8b" {
 		t.Fatalf("restore request = %#v", requests[1])
+	}
+}
+
+func TestAcquirePatrolModelSuitePinsOneRouteAndUsesFreshAsyncPreflight(t *testing.T) {
+	currentModel := "ollama:qwen3:8b"
+	codexEnabled := false
+	preflight := map[string]any{
+		"success": true, "provider": "ollama", "model": "qwen3:8b", "tool_call_observed": true,
+		"summary": "old preflight", "recorded_at_unix": int64(100),
+	}
+	var updates []map[string]any
+	preflightPosts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/settings/ai":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"enabled": true, "model": "ollama:qwen3:8b", "patrol_model": currentModel,
+				"patrol_enabled": true, "codex_subscription_enabled": codexEnabled,
+				"patrol_preflight": preflight,
+			})
+		case r.Method == http.MethodPut && r.URL.Path == "/api/settings/ai/update":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			updates = append(updates, body)
+			if value, ok := body["patrol_model"].(string); ok {
+				currentModel = value
+			}
+			if value, ok := body["codex_subscription_enabled"].(bool); ok {
+				codexEnabled = value
+			}
+			if currentModel == "codex-subscription:gpt-5.6-sol" {
+				preflight = map[string]any{
+					"success": true, "provider": "codex-subscription", "model": "gpt-5.6-sol", "tool_call_observed": true,
+					"summary": "tool calling verified", "recorded_at_unix": int64(200),
+				}
+			}
+			_, _ = w.Write([]byte(`{}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/ai/patrol/preflight":
+			preflightPosts++
+			_, _ = w.Write([]byte(`{"success":true,"provider":"codex-subscription","model":"gpt-5.6-sol","tool_call_observed":true}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/ai/patrol/status":
+			_ = json.NewEncoder(w).Encode(map[string]any{"readiness": map[string]any{
+				"ready": true, "provider": "codex-subscription", "model": "codex-subscription:gpt-5.6-sol",
+			}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := NewPulseClient(ClientConfig{BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := client.AcquirePatrolModelSuite(context.Background(), "codex-subscription:gpt-5.6-sol", time.Second, time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lease.Model != "codex-subscription:gpt-5.6-sol" || preflightPosts != 0 {
+		t.Fatalf("lease = %+v, synchronous preflight posts = %d", lease, preflightPosts)
+	}
+	if len(updates) != 1 {
+		t.Fatalf("route updates before close = %#v", updates)
+	}
+	if err := lease.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(updates) != 2 || updates[1]["patrol_model"] != "ollama:qwen3:8b" || updates[1]["codex_subscription_enabled"] != false {
+		t.Fatalf("route updates after close = %#v", updates)
+	}
+}
+
+func TestAcquirePatrolModelSuitePreflightsConfiguredRouteOnceWithoutSettingsWrite(t *testing.T) {
+	updates := 0
+	preflightPosts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/settings/ai":
+			_, _ = w.Write([]byte(`{"enabled":true,"model":"codex-subscription:gpt-5.6-sol","patrol_model":"codex-subscription:gpt-5.6-sol","patrol_enabled":true,"codex_subscription_enabled":true}`))
+		case r.Method == http.MethodPut && r.URL.Path == "/api/settings/ai/update":
+			updates++
+			_, _ = w.Write([]byte(`{}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/api/ai/patrol/preflight":
+			preflightPosts++
+			_, _ = w.Write([]byte(`{"success":true,"provider":"codex-subscription","model":"gpt-5.6-sol","tool_call_observed":true,"message":"verified"}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/ai/patrol/status":
+			_, _ = w.Write([]byte(`{"readiness":{"ready":true,"provider":"codex-subscription","model":"codex-subscription:gpt-5.6-sol"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := NewPulseClient(ClientConfig{BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := client.AcquirePatrolModelSuite(context.Background(), "", time.Second, time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updates != 0 || preflightPosts != 1 {
+		t.Fatalf("settings updates = %d, preflight posts = %d", updates, preflightPosts)
+	}
+	if err := lease.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if updates != 0 {
+		t.Fatalf("no-op lease close wrote settings %d time(s)", updates)
+	}
+}
+
+func TestAcquirePatrolModelSuiteRequiresFreshEvidenceWhenEnablingSameSubscriptionRoute(t *testing.T) {
+	codexEnabled := false
+	preflightSuccess := false
+	updates := 0
+	oldRecordedAt := time.Now().Add(-time.Second).Unix()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/settings/ai":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"enabled": true, "model": "codex-subscription:gpt-5.6-sol", "patrol_model": "codex-subscription:gpt-5.6-sol",
+				"patrol_enabled": true, "codex_subscription_enabled": codexEnabled,
+				"patrol_preflight": map[string]any{
+					"success": preflightSuccess, "provider": "codex-subscription", "model": "gpt-5.6-sol",
+					"tool_call_observed": preflightSuccess, "summary": "fresh result",
+					"recorded_at_unix": map[bool]int64{false: oldRecordedAt, true: time.Now().Unix()}[preflightSuccess],
+				},
+			})
+		case r.Method == http.MethodPut && r.URL.Path == "/api/settings/ai/update":
+			updates++
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if value, ok := body["codex_subscription_enabled"].(bool); ok {
+				codexEnabled = value
+				preflightSuccess = value
+			}
+			_, _ = w.Write([]byte(`{}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/api/ai/patrol/status":
+			_, _ = w.Write([]byte(`{"readiness":{"ready":true,"provider":"codex-subscription","model":"codex-subscription:gpt-5.6-sol"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := NewPulseClient(ClientConfig{BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := client.AcquirePatrolModelSuite(context.Background(), "codex-subscription:gpt-5.6-sol", time.Second, time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !lease.Preflight.Success || updates != 1 {
+		t.Fatalf("lease preflight = %+v, updates = %d", lease.Preflight, updates)
+	}
+	if err := lease.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if updates != 2 || codexEnabled {
+		t.Fatalf("restored updates = %d, codex enabled = %t", updates, codexEnabled)
+	}
+}
+
+func TestAcquirePatrolModelSuiteReturnsOneFreshFailureAndRestoresRoute(t *testing.T) {
+	currentModel := "ollama:qwen3:8b"
+	updates := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/settings/ai":
+			response := map[string]any{
+				"enabled": true, "model": "ollama:qwen3:8b", "patrol_model": currentModel,
+				"patrol_enabled": true, "codex_subscription_enabled": currentModel == "codex-subscription:gpt-5.6-sol",
+			}
+			if currentModel == "codex-subscription:gpt-5.6-sol" {
+				response["patrol_preflight"] = map[string]any{
+					"success": false, "provider": "codex-subscription", "model": "gpt-5.6-sol",
+					"cause": "provider_connection", "summary": "Provider connection issue",
+					"recorded_at_unix": int64(200),
+				}
+			}
+			_ = json.NewEncoder(w).Encode(response)
+		case r.Method == http.MethodPut && r.URL.Path == "/api/settings/ai/update":
+			updates++
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if value, ok := body["patrol_model"].(string); ok {
+				currentModel = value
+			}
+			_, _ = w.Write([]byte(`{}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	client, err := NewPulseClient(ClientConfig{BaseURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.AcquirePatrolModelSuite(context.Background(), "codex-subscription:gpt-5.6-sol", time.Second, time.Millisecond)
+	if err == nil || !strings.Contains(err.Error(), "Provider connection issue") {
+		t.Fatalf("acquire error = %v", err)
+	}
+	if updates != 2 || currentModel != "ollama:qwen3:8b" {
+		t.Fatalf("updates = %d, current model = %q", updates, currentModel)
 	}
 }
 

@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -27,7 +28,7 @@ func main() {
 	username := flag.String("user", "admin", "Pulse API username")
 	password := flag.String("password", "", "Pulse API password (prefer --password-env)")
 	passwordEnv := flag.String("password-env", "PULSE_QUALIFY_PASSWORD", "environment variable containing the Pulse password")
-	model := flag.String("model", "", "optional Patrol model override, restored after every run")
+	model := flag.String("model", "", "optional Patrol model override, pinned for and restored after the complete live suite")
 	expectedPulseVersion := flag.String("expected-pulse-version", "", "optional exact /api/version identity required from the tested Pulse runtime")
 	dockerContext := flag.String("docker-context", "", "explicit Docker context for disposable resources")
 	dockerSSHHost := flag.String("docker-ssh-host", "", "explicit SSH host whose Docker daemon holds disposable resources")
@@ -84,42 +85,16 @@ func main() {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		gitSHA, dirty := qualification.GitEnvironment(ctx, nil, ".")
-		failed := false
-	liveLoop:
-		for _, manifest := range manifests {
-			repeatCount, err := liveRepeatCount(manifest, *repeats, *repeatProfile)
-			if err != nil {
-				fatal(err)
-			}
-			if manifest.Track == qualification.TrackRemediation && manifest.Remediation != nil &&
-				manifest.Remediation.Decision != "observe" && !*authorizeRemediation {
-				fatal(fmt.Errorf("scenario %q requires the separate --authorize-remediation gate", manifest.ID))
-			}
-			for i := 0; i < repeatCount; i++ {
-				runner, err := qualification.NewRunner(qualification.RunnerConfig{
-					Manifest: manifest, Lab: lab, Client: client, ArtifactRoot: *artifactRoot,
-					ModelOverride: *model, GitSHA: gitSHA, GitDirty: dirty,
-					AuthorizeRemediation: *authorizeRemediation,
-					ExpectedPulseVersion: *expectedPulseVersion,
-					ChallengeNonce:       *communityChallenge,
-				})
-				if err != nil {
-					fatal(err)
-				}
-				report, runErr := runner.Run(ctx)
-				verdict := "PASS"
-				if !report.Passed || runErr != nil {
-					verdict = "FAIL"
-					failed = true
-				}
-				fmt.Printf("[%s] %s scenario=%s model=%s recall=%.1f%% fp=%d artifacts=%s\n", verdict, report.RunID, manifest.ID, report.Environment.Model, report.Score.Recall*100, report.Score.FalsePositives, filepath.Join(*artifactRoot, report.RunID))
-				if runErr != nil {
-					fmt.Fprintf(os.Stderr, "  error: %v\n", runErr)
-				}
-				if ctx.Err() != nil {
-					break liveLoop
-				}
-			}
+		failed, err := runLiveQualification(ctx, liveQualificationConfig{
+			Manifests: manifests, Client: client, Lab: lab,
+			Model: *model, Repeats: *repeats, RepeatProfile: *repeatProfile,
+			ArtifactRoot: *artifactRoot, GitSHA: gitSHA, GitDirty: dirty,
+			AuthorizeRemediation: *authorizeRemediation,
+			ExpectedPulseVersion: *expectedPulseVersion,
+			ChallengeNonce:       *communityChallenge,
+		})
+		if err != nil {
+			fatal(err)
 		}
 		if failed {
 			os.Exit(1)
@@ -207,6 +182,85 @@ func main() {
 	default:
 		fatal(fmt.Errorf("unknown mode %q", *mode))
 	}
+}
+
+type liveQualificationConfig struct {
+	Manifests            []qualification.Manifest
+	Client               *qualification.PulseClient
+	Lab                  *qualification.DockerLab
+	Model                string
+	Repeats              int
+	RepeatProfile        string
+	ArtifactRoot         string
+	GitSHA               string
+	GitDirty             bool
+	AuthorizeRemediation bool
+	ExpectedPulseVersion string
+	ChallengeNonce       string
+}
+
+func runLiveQualification(ctx context.Context, config liveQualificationConfig) (failed bool, terminalErr error) {
+	repeatCounts := make(map[string]int, len(config.Manifests))
+	requiresRealModel := false
+	for _, manifest := range config.Manifests {
+		count, err := liveRepeatCount(manifest, config.Repeats, config.RepeatProfile)
+		if err != nil {
+			return false, err
+		}
+		repeatCounts[manifest.ID] = count
+		requiresRealModel = requiresRealModel || manifest.Patrol.RequireRealModel
+		if manifest.Track == qualification.TrackRemediation && manifest.Remediation != nil &&
+			manifest.Remediation.Decision != "observe" && !config.AuthorizeRemediation {
+			return false, fmt.Errorf("scenario %q requires the separate --authorize-remediation gate", manifest.ID)
+		}
+	}
+
+	expectedModel := ""
+	var lease *qualification.PatrolModelSuiteLease
+	if requiresRealModel || strings.TrimSpace(config.Model) != "" {
+		var err error
+		lease, err = config.Client.AcquirePatrolModelSuite(ctx, config.Model, 45*time.Second, 250*time.Millisecond)
+		if err != nil {
+			return false, fmt.Errorf("establish Patrol qualification suite route: %w", err)
+		}
+		expectedModel = lease.Model
+		defer func() {
+			restoreCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := lease.Close(restoreCtx); err != nil {
+				terminalErr = errors.Join(terminalErr, fmt.Errorf("restore Patrol qualification suite route: %w", err))
+			}
+		}()
+	}
+
+	for _, manifest := range config.Manifests {
+		for i := 0; i < repeatCounts[manifest.ID]; i++ {
+			runner, err := qualification.NewRunner(qualification.RunnerConfig{
+				Manifest: manifest, Lab: config.Lab, Client: config.Client, ArtifactRoot: config.ArtifactRoot,
+				ExpectedModel: expectedModel, GitSHA: config.GitSHA, GitDirty: config.GitDirty,
+				AuthorizeRemediation: config.AuthorizeRemediation,
+				ExpectedPulseVersion: config.ExpectedPulseVersion,
+				ChallengeNonce:       config.ChallengeNonce,
+			})
+			if err != nil {
+				return failed, err
+			}
+			report, runErr := runner.Run(ctx)
+			verdict := "PASS"
+			if !report.Passed || runErr != nil {
+				verdict = "FAIL"
+				failed = true
+			}
+			fmt.Printf("[%s] %s scenario=%s model=%s recall=%.1f%% fp=%d artifacts=%s\n", verdict, report.RunID, manifest.ID, report.Environment.Model, report.Score.Recall*100, report.Score.FalsePositives, filepath.Join(config.ArtifactRoot, report.RunID))
+			if runErr != nil {
+				fmt.Fprintf(os.Stderr, "  error: %v\n", runErr)
+			}
+			if ctx.Err() != nil {
+				return failed, ctx.Err()
+			}
+		}
+	}
+	return failed, nil
 }
 
 func selectLiveManifests(catalog qualification.Catalog, mode, scenarioID string, track qualification.Track) ([]qualification.Manifest, error) {

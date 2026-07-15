@@ -636,7 +636,14 @@ component-local required-scope list.
 Patrol model qualification extends only through
 `internal/ai/qualification/`, `cmd/patrol-qualify/`, and reviewed manifests
 under `tests/qualification/patrol/`. `live-suite` may sequence every manifest
-for one explicit track, but it must retain the existing live-fault and separate
+for one explicit track, but it must acquire and freshly preflight one exact
+provider/model route before provisioning any scenario, retain that route for
+every repetition, and restore it once after the complete suite. Scenario
+runners assert the leased route and must not rewrite model settings or trigger
+their own provider preflights. A fresh suite preflight failure aborts setup once
+as qualification-infrastructure evidence; cached failure state must never be
+recounted as multiple model or scenario failures without independent provider
+invocations. `live-suite` must retain the existing live-fault and separate
 remediation authorization gates for every run. Voluntary community evidence
 must be a local, mode-0600, allowlist-only derivation: it may carry aggregate
 scores, safety booleans, cost/latency, exact model/provider, scenario and
@@ -3101,14 +3108,20 @@ Qualification floor: Patrol model launch and product-claim qualification must us
    must never manufacture faults in production infrastructure.
 
 Patrol autonomous-loop floor: Watch must preserve model-owned investigation
-   while requiring an accepted structured outcome for every active finding the
-   run presents or returns. New issues use `patrol_report_finding`; existing
+while requiring an accepted structured outcome for every active finding the
+run presents or returns. New issues use `patrol_report_finding`; existing
    issues use `patrol_assess_finding` with exactly one `present`, `resolved`, or
    `uncertain` verdict. Missing verdicts are run errors, not absence-based
-   resolution or all-clear evidence. `present` refreshes durable evidence and
-   run ownership, `resolved` remains behind deterministic fail-closed
-   verification, and `uncertain` keeps the finding active. Scoped Patrol must
-   resolve canonical/source IDs and unique aliases before collection, reject
+resolution or all-clear evidence. `present` refreshes durable evidence and
+run ownership, `resolved` remains behind deterministic fail-closed
+verification, and `uncertain` keeps the finding active. Scoped Patrol must
+use its trigger as the initial clue rather than an artificial reasoning
+boundary: within read-only authority the model may iteratively inspect related
+canonical resources, relationships, metrics, timelines, changes, and other
+governed evidence needed to test hypotheses. Governance constrains mutation
+authority, data policy, and resource access; it must not add approval-shaped
+friction to each safe investigative step. Scoped Patrol must still
+resolve canonical/source IDs and unique aliases before collection, reject
    ambiguous or unmatched API identities synchronously, persist an error run
    for runtime zero-match races, record requested and effective identities,
    and summarize only findings within the effective scope. Watch may mutate

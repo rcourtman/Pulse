@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -48,13 +49,63 @@ func NewPulseClient(config ClientConfig) (*PulseClient, error) {
 }
 
 type AISettings struct {
-	Enabled                   bool   `json:"enabled"`
-	Model                     string `json:"model"`
-	PatrolModel               string `json:"patrol_model"`
-	PatrolEnabled             bool   `json:"patrol_enabled"`
-	CodexSubscriptionEnabled  bool   `json:"codex_subscription_enabled"`
-	ClaudeSubscriptionEnabled bool   `json:"claude_subscription_enabled"`
-	ZaiBaseURL                string `json:"zai_base_url"`
+	Enabled                   bool                     `json:"enabled"`
+	Model                     string                   `json:"model"`
+	PatrolModel               string                   `json:"patrol_model"`
+	PatrolEnabled             bool                     `json:"patrol_enabled"`
+	CodexSubscriptionEnabled  bool                     `json:"codex_subscription_enabled"`
+	ClaudeSubscriptionEnabled bool                     `json:"claude_subscription_enabled"`
+	ZaiBaseURL                string                   `json:"zai_base_url"`
+	PatrolPreflight           *PatrolPreflightSnapshot `json:"patrol_preflight,omitempty"`
+}
+
+type PatrolPreflightSnapshot struct {
+	Success          bool   `json:"success"`
+	Provider         string `json:"provider"`
+	Model            string `json:"model"`
+	ToolCallObserved bool   `json:"tool_call_observed"`
+	DurationMs       int64  `json:"duration_ms"`
+	Cause            string `json:"cause"`
+	Title            string `json:"title"`
+	Summary          string `json:"summary"`
+	Recommendation   string `json:"recommendation"`
+	RecordedAt       string `json:"recorded_at"`
+	RecordedAtUnix   int64  `json:"recorded_at_unix"`
+}
+
+type PatrolPreflightResult struct {
+	Success          bool   `json:"success"`
+	Provider         string `json:"provider"`
+	Model            string `json:"model"`
+	ToolCallObserved bool   `json:"tool_call_observed"`
+	DurationMs       int64  `json:"duration_ms"`
+	Message          string `json:"message"`
+	Cause            string `json:"cause"`
+	Summary          string `json:"summary"`
+	Recommendation   string `json:"recommendation"`
+}
+
+// PatrolModelSuiteLease pins one configured Patrol route for a complete live
+// qualification suite. Individual scenario runners only observe and assert
+// this route; they never rewrite settings or retrigger provider preflight.
+type PatrolModelSuiteLease struct {
+	Model     string
+	Preflight PatrolPreflightResult
+	restore   func(context.Context) error
+	closeOnce sync.Once
+	closeErr  error
+}
+
+func (l *PatrolModelSuiteLease) Close(ctx context.Context) error {
+	if l == nil {
+		return nil
+	}
+	l.closeOnce.Do(func() {
+		if l.restore != nil {
+			l.closeErr = l.restore(ctx)
+		}
+	})
+	return l.closeErr
 }
 
 type PulseVersion struct {
@@ -266,17 +317,21 @@ func (c *PulseClient) OverridePatrolModel(ctx context.Context, model string) (fu
 	}
 	previous := settings.PatrolModel
 	provider, _ := splitModel(model)
-	payload := map[string]any{"patrol_model": model}
-	restorePayload := map[string]any{"patrol_model": previous}
-	if provider == "codex-subscription" {
+	payload := make(map[string]any)
+	restorePayload := make(map[string]any)
+	if previous != model {
+		payload["patrol_model"] = model
+		restorePayload["patrol_model"] = previous
+	}
+	if provider == "codex-subscription" && !settings.CodexSubscriptionEnabled {
 		payload["codex_subscription_enabled"] = true
 		restorePayload["codex_subscription_enabled"] = settings.CodexSubscriptionEnabled
 	}
-	if provider == "claude-subscription" {
+	if provider == "claude-subscription" && !settings.ClaudeSubscriptionEnabled {
 		payload["claude_subscription_enabled"] = true
 		restorePayload["claude_subscription_enabled"] = settings.ClaudeSubscriptionEnabled
 	}
-	if previous == model && len(payload) == 1 {
+	if len(payload) == 0 {
 		return func(context.Context) error { return nil }, nil
 	}
 	if err := c.request(ctx, http.MethodPut, "/api/settings/ai/update", payload, nil); err != nil {
@@ -285,6 +340,163 @@ func (c *PulseClient) OverridePatrolModel(ctx context.Context, model string) (fu
 	return func(restoreCtx context.Context) error {
 		return c.request(restoreCtx, http.MethodPut, "/api/settings/ai/update", restorePayload, nil)
 	}, nil
+}
+
+// AcquirePatrolModelSuite pins model for an entire live suite and obtains one
+// fresh tool-call preflight result before any scenario is provisioned. A model
+// change already triggers Pulse's asynchronous preflight, so acquisition waits
+// for that exact new cache record instead of issuing a duplicate provider call.
+// When the requested route is already configured, acquisition performs one
+// synchronous preflight to ensure the suite never relies on stale cache state.
+func (c *PulseClient) AcquirePatrolModelSuite(ctx context.Context, model string, timeout, poll time.Duration) (*PatrolModelSuiteLease, error) {
+	if timeout <= 0 {
+		timeout = 45 * time.Second
+	}
+	if poll <= 0 {
+		poll = 250 * time.Millisecond
+	}
+
+	before, err := c.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	target := strings.TrimSpace(model)
+	if target == "" {
+		target = before.EffectivePatrolModel()
+	}
+	provider, bareModel := splitModel(target)
+	if provider == "" || bareModel == "" {
+		return nil, fmt.Errorf("Patrol qualification requires a concrete provider:model route, got %q", target)
+	}
+
+	routeChanged := before.EffectivePatrolModel() != target ||
+		(provider == "codex-subscription" && !before.CodexSubscriptionEnabled) ||
+		(provider == "claude-subscription" && !before.ClaudeSubscriptionEnabled)
+	previousPreflightUnix := int64(0)
+	previousPreflightWasTarget := false
+	if before.PatrolPreflight != nil {
+		previousPreflightUnix = before.PatrolPreflight.RecordedAtUnix
+		previousPreflightWasTarget = strings.EqualFold(before.PatrolPreflight.Provider, provider) && before.PatrolPreflight.Model == bareModel
+	}
+	if routeChanged && previousPreflightWasTarget {
+		freshnessDeadline := time.Now().Add(timeout)
+		for time.Now().Unix() <= previousPreflightUnix {
+			if time.Now().After(freshnessDeadline) {
+				return nil, fmt.Errorf("Patrol qualification could not establish a fresh preflight clock boundary after %s", time.Unix(previousPreflightUnix, 0).UTC().Format(time.RFC3339))
+			}
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(50 * time.Millisecond):
+			}
+		}
+	}
+
+	restore, err := c.OverridePatrolModel(ctx, model)
+	if err != nil {
+		return nil, err
+	}
+	restoreOnError := func(acquireErr error) (*PatrolModelSuiteLease, error) {
+		restoreCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return nil, errors.Join(acquireErr, restore(restoreCtx))
+	}
+
+	var preflight PatrolPreflightResult
+	if routeChanged {
+		preflight, err = c.waitForPatrolPreflight(ctx, provider, bareModel, previousPreflightUnix, previousPreflightWasTarget, timeout, poll)
+	} else {
+		preflight, err = c.RunPatrolPreflight(ctx)
+	}
+	if err != nil {
+		return restoreOnError(err)
+	}
+	if err := validatePatrolPreflight(target, preflight); err != nil {
+		return restoreOnError(err)
+	}
+
+	settings, err := c.Settings(ctx)
+	if err != nil {
+		return restoreOnError(err)
+	}
+	status, err := c.Status(ctx)
+	if err != nil {
+		return restoreOnError(err)
+	}
+	if err := validatePatrolRoute(target, settings, status); err != nil {
+		return restoreOnError(err)
+	}
+
+	return &PatrolModelSuiteLease{Model: target, Preflight: preflight, restore: restore}, nil
+}
+
+func (c *PulseClient) RunPatrolPreflight(ctx context.Context) (PatrolPreflightResult, error) {
+	var result PatrolPreflightResult
+	err := c.request(ctx, http.MethodPost, "/api/ai/patrol/preflight", map[string]any{}, &result)
+	return result, err
+}
+
+func (c *PulseClient) waitForPatrolPreflight(ctx context.Context, provider, model string, afterUnix int64, requireNewer bool, timeout, poll time.Duration) (PatrolPreflightResult, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		settings, err := c.Settings(ctx)
+		if err == nil && settings.PatrolPreflight != nil {
+			snapshot := settings.PatrolPreflight
+			fresh := !requireNewer || snapshot.RecordedAtUnix > afterUnix
+			if fresh && strings.EqualFold(snapshot.Provider, provider) && snapshot.Model == model {
+				return PatrolPreflightResult{
+					Success: snapshot.Success, Provider: snapshot.Provider, Model: snapshot.Model,
+					ToolCallObserved: snapshot.ToolCallObserved, DurationMs: snapshot.DurationMs,
+					Message: snapshot.Summary, Cause: snapshot.Cause, Summary: snapshot.Title,
+					Recommendation: snapshot.Recommendation,
+				}, nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return PatrolPreflightResult{}, fmt.Errorf("Patrol qualification preflight did not publish fresh evidence for %s:%s before %s", provider, model, deadline.UTC().Format(time.RFC3339))
+		}
+		select {
+		case <-ctx.Done():
+			return PatrolPreflightResult{}, ctx.Err()
+		case <-time.After(poll):
+		}
+	}
+}
+
+func validatePatrolPreflight(target string, result PatrolPreflightResult) error {
+	provider, model := splitModel(target)
+	if !strings.EqualFold(result.Provider, provider) || result.Model != model {
+		return fmt.Errorf("Patrol qualification preflight resolved %s:%s, expected %s", result.Provider, result.Model, target)
+	}
+	if result.Success && result.ToolCallObserved {
+		return nil
+	}
+	summary := strings.TrimSpace(result.Message)
+	if summary == "" {
+		summary = strings.TrimSpace(result.Summary)
+	}
+	if summary == "" {
+		summary = "provider did not complete the tool-call preflight"
+	}
+	if cause := strings.TrimSpace(result.Cause); cause != "" {
+		return fmt.Errorf("Patrol qualification preflight failed for %s (%s): %s", target, cause, summary)
+	}
+	return fmt.Errorf("Patrol qualification preflight failed for %s: %s", target, summary)
+}
+
+func validatePatrolRoute(expected string, settings AISettings, status PatrolStatus) error {
+	expected = strings.TrimSpace(expected)
+	if actual := settings.EffectivePatrolModel(); actual != expected {
+		return fmt.Errorf("configured Patrol model %q does not match qualification suite route %q", actual, expected)
+	}
+	provider, model := splitModel(expected)
+	if !strings.EqualFold(status.Readiness.Provider, provider) || status.Readiness.Model != expected && status.Readiness.Model != model {
+		return fmt.Errorf("Patrol readiness resolved %s:%s, expected %s", status.Readiness.Provider, status.Readiness.Model, expected)
+	}
+	if !status.Readiness.Ready || strings.EqualFold(status.Readiness.Provider, "demo") {
+		return fmt.Errorf("Patrol qualification suite route is not ready: %s", status.Readiness.Summary)
+	}
+	return nil
 }
 
 func (c *PulseClient) Resources(ctx context.Context) ([]Resource, error) {

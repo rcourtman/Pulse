@@ -134,7 +134,7 @@ func TestRunnerBindsOnlyValidCommunityChallenge(t *testing.T) {
 	}
 	runner, err := NewRunner(RunnerConfig{
 		Manifest: manifest, Lab: lab, Client: client,
-		ModelOverride: "provider:model", ChallengeNonce: " challenge-1234567890 ",
+		ExpectedModel: "provider:model", ChallengeNonce: " challenge-1234567890 ",
 	})
 	if err != nil {
 		t.Fatal(err)
