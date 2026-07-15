@@ -8871,19 +8871,6 @@
         "kind": "release-gate",
         "id": "self-hosted-commercial-transition-coherence"
       }
-    },
-    {
-      "id": "root-lane-l6",
-      "agent_id": "root",
-      "summary": "Preserve canonical resource identity across Patrol query and finding contracts",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-15T08:07:38Z",
-      "heartbeat_at": "2026-07-15T08:07:38Z",
-      "expires_at": "2026-07-15T10:07:38Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L6"
-      }
     }
   ],
   "open_decisions": [],
