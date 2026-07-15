@@ -5891,7 +5891,13 @@ description uses at most three short sentences, impact one sentence, evidence
 three concrete facts, and recommendation two short sentences, without
 repeating the same state or caveat across fields. Concision must preserve the
 exact evidence needed to verify the finding rather than replacing it with a
-generic summary.
+generic summary. The provider-facing `patrol_report_finding` schema and its
+runtime handler both require non-empty evidence and a safe, actionable
+recommendation for every model-authored finding. A bounded investigation or
+verification step is a valid recommendation when remediation is not yet
+justified; impact remains optional so the contract never pressures the model
+to fabricate a consequence. Providers that omit either grounding field must
+receive a tool error and no partial finding may be persisted.
 Provider-facing `pulse_docker` calls are host-scoped: every advertised action
 requires a Docker host name or ID in the structured schema, matching the
 executor contract and preventing invalid hostless Swarm-state calls.

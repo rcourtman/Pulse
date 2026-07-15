@@ -87,14 +87,16 @@ func newPatrolTestExecutor(creator PatrolFindingCreator) *PulseToolExecutor {
 
 func validReportArgs() map[string]interface{} {
 	return map[string]interface{}{
-		"key":           "high-cpu",
-		"severity":      "warning",
-		"category":      "performance",
-		"resource_id":   "node/pve1",
-		"resource_name": "pve1",
-		"resource_type": "node",
-		"title":         "High CPU usage on pve1",
-		"description":   "CPU usage is at 92% for the last 15 minutes",
+		"key":            "high-cpu",
+		"severity":       "warning",
+		"category":       "performance",
+		"resource_id":    "node/pve1",
+		"resource_name":  "pve1",
+		"resource_type":  "node",
+		"title":          "High CPU usage on pve1",
+		"description":    "CPU usage is at 92% for the last 15 minutes",
+		"recommendation": "Inspect the busiest processes and rebalance workloads if the pressure persists.",
+		"evidence":       "CPU usage remained at 92% for 15 minutes.",
 	}
 }
 
@@ -237,6 +239,8 @@ func TestHandlePatrolReportFinding_MissingRequiredFields(t *testing.T) {
 		{"missing resource_type", "resource_type", "resource_type"},
 		{"missing title", "title", "title"},
 		{"missing description", "description", "description"},
+		{"missing recommendation", "recommendation", "recommendation"},
+		{"missing evidence", "evidence", "evidence"},
 	}
 
 	for _, tt := range tests {
@@ -263,8 +267,8 @@ func TestHandlePatrolReportFinding_AllRequiredFieldsMissing(t *testing.T) {
 
 	text := extractText(result)
 	assert.Contains(t, text, "missing required fields")
-	// Should mention all 8 required fields
-	for _, field := range []string{"key", "severity", "category", "resource_id", "resource_name", "resource_type", "title", "description"} {
+	// Should mention all required fields.
+	for _, field := range []string{"key", "severity", "category", "resource_id", "resource_name", "resource_type", "title", "description", "recommendation", "evidence"} {
 		assert.Contains(t, text, field)
 	}
 }
@@ -435,23 +439,21 @@ func TestHandlePatrolReportFinding_CreatorError(t *testing.T) {
 	assert.Contains(t, text, "validation failed")
 }
 
-func TestHandlePatrolReportFinding_OptionalFieldsOmitted(t *testing.T) {
-	creator := &mockPatrolFindingCreator{checked: true}
-	exec := newPatrolTestExecutor(creator)
+func TestHandlePatrolReportFinding_RejectsBlankGroundingFields(t *testing.T) {
+	for _, field := range []string{"recommendation", "evidence"} {
+		t.Run(field, func(t *testing.T) {
+			creator := &mockPatrolFindingCreator{checked: true}
+			exec := newPatrolTestExecutor(creator)
+			args := validReportArgs()
+			args[field] = "  \n\t"
 
-	// Only required fields, no recommendation or evidence
-	result, err := handlePatrolReportFinding(context.Background(), exec, validReportArgs())
-	require.NoError(t, err)
-
-	var parsed map[string]interface{}
-	text := extractText(result)
-	require.NoError(t, json.Unmarshal([]byte(text), &parsed))
-	assert.Equal(t, true, parsed["ok"])
-
-	// Verify optional fields are empty strings
-	require.Len(t, creator.createCalls, 1)
-	assert.Equal(t, "", creator.createCalls[0].Recommendation)
-	assert.Equal(t, "", creator.createCalls[0].Evidence)
+			result, err := handlePatrolReportFinding(context.Background(), exec, args)
+			require.NoError(t, err)
+			assert.Contains(t, extractText(result), "missing required fields")
+			assert.Contains(t, extractText(result), field)
+			assert.Empty(t, creator.createCalls)
+		})
+	}
 }
 
 // --- patrol_assess_finding tests ---
@@ -786,6 +788,10 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	require.NotEmpty(t, reportTool.Name)
 	assert.Contains(t, reportTool.Description, "failed health check")
 	assert.Contains(t, reportTool.Description, "root cause is unknown")
+	assert.Contains(t, reportTool.Description, "safe, actionable recommendation")
+	assert.Contains(t, reportTool.InputSchema.Required, "recommendation")
+	assert.Contains(t, reportTool.InputSchema.Required, "evidence")
+	assert.NotContains(t, reportTool.InputSchema.Required, "impact")
 	require.NotEmpty(t, getFindingsTool.Name)
 	assert.Contains(t, getFindingsTool.Description, "exactly once")
 }

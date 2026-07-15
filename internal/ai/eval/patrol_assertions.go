@@ -525,7 +525,10 @@ func PatrolAssertNoFindingWithKey(key string) PatrolAssertion {
 // PatrolAssertReportFindingFieldsPresent checks that every patrol_report_finding
 // tool call includes all required fields in input.
 func PatrolAssertReportFindingFieldsPresent() PatrolAssertion {
-	requiredFields := []string{"key", "severity", "title", "description", "resource_type"}
+	requiredFields := []string{
+		"key", "severity", "category", "resource_id", "resource_name",
+		"resource_type", "title", "description", "recommendation", "evidence",
+	}
 	return func(result *PatrolRunResult) AssertionResult {
 		reportCalls := 0
 		var issues []string
@@ -563,7 +566,7 @@ func PatrolAssertReportFindingFieldsPresent() PatrolAssertion {
 				val, ok := inputMap[field]
 				if !ok {
 					issues = append(issues, fmt.Sprintf("call %d missing '%s'", reportCalls, field))
-				} else if str, isStr := val.(string); isStr && str == "" {
+				} else if str, isStr := val.(string); isStr && strings.TrimSpace(str) == "" {
 					issues = append(issues, fmt.Sprintf("call %d has empty '%s'", reportCalls, field))
 				}
 			}

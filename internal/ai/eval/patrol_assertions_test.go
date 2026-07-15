@@ -295,7 +295,7 @@ func TestPatrolAssertions(t *testing.T) {
 			result: PatrolRunResult{ToolCalls: []ToolCallEvent{
 				{
 					Name:    "patrol_report_finding",
-					Input:   `{"key":"k","severity":"s","title":"t","description":"d","resource_type":"r"}`,
+					Input:   `{"key":"k","severity":"s","category":"c","resource_id":"id","resource_name":"name","resource_type":"r","title":"t","description":"d","recommendation":"inspect safely","evidence":"current state is unhealthy"}`,
 					Success: true,
 				},
 			}},

@@ -18,6 +18,7 @@ func (e *PulseToolExecutor) registerPatrolTools() {
 			Description: `Report an infrastructure finding discovered during patrol investigation.
 
 Call this tool to create a structured finding after you have gathered sufficient evidence. A provider-reported failed health check, failed backup, or broken replication state is sufficient evidence for the confirmed symptom even when optional logs or command execution are unavailable. Use warning/reliability for a failed health check unless the evidence establishes a critical consequence. Report the symptom and state that its root cause is unknown; do not fabricate a cause or suppress the finding while searching for one.
+Every finding must include concrete evidence and a safe, actionable recommendation grounded in that evidence. The recommendation may be a bounded investigation or verification step when remediation is not yet justified; never claim that an action was taken or verified when it was not.
 The finding will be validated against current metrics and deduplicated automatically.
 
 Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
@@ -76,7 +77,7 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 							"Always include the key evidence — if you gathered enough data to create this finding, you have evidence to report.",
 					},
 				},
-				Required: []string{"key", "severity", "category", "resource_id", "resource_name", "resource_type", "title", "description"},
+				Required: []string{"key", "severity", "category", "resource_id", "resource_name", "resource_type", "title", "description", "recommendation", "evidence"},
 			},
 		},
 		Handler: handlePatrolReportFinding,
@@ -264,7 +265,9 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 		return NewErrorResult(fmt.Errorf("call patrol_get_findings before reporting a finding")), nil
 	}
 
-	// Extract required fields
+	// Extract and normalize required fields. The provider schema is the first
+	// line of defence; this handler remains authoritative for providers that do
+	// not enforce JSON-schema required fields themselves.
 	key, _ := args["key"].(string)
 	severity, _ := args["severity"].(string)
 	category, _ := args["category"].(string)
@@ -274,6 +277,17 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 	resourceType = canonicalPatrolResourceType(resourceType)
 	title, _ := args["title"].(string)
 	description, _ := args["description"].(string)
+	recommendation, _ := args["recommendation"].(string)
+	evidence, _ := args["evidence"].(string)
+	key = strings.TrimSpace(key)
+	severity = strings.TrimSpace(severity)
+	category = strings.TrimSpace(category)
+	resourceID = strings.TrimSpace(resourceID)
+	resourceName = strings.TrimSpace(resourceName)
+	title = strings.TrimSpace(title)
+	description = strings.TrimSpace(description)
+	recommendation = strings.TrimSpace(recommendation)
+	evidence = strings.TrimSpace(evidence)
 
 	// Validate required fields
 	var missing []string
@@ -300,6 +314,12 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 	}
 	if description == "" {
 		missing = append(missing, "description")
+	}
+	if recommendation == "" {
+		missing = append(missing, "recommendation")
+	}
+	if evidence == "" {
+		missing = append(missing, "evidence")
 	}
 	if len(missing) > 0 {
 		return NewErrorResult(fmt.Errorf("missing required fields: %s", strings.Join(missing, ", "))), nil
@@ -332,10 +352,10 @@ func handlePatrolReportFinding(_ context.Context, e *PulseToolExecutor, args map
 		return NewErrorResult(fmt.Errorf("invalid category %q: must be performance, capacity, reliability, backup, security, or general", category)), nil
 	}
 
-	// Extract optional fields
+	// Impact remains optional: requiring a consequence when the available
+	// evidence cannot establish one would reward fabrication.
 	impact, _ := args["impact"].(string)
-	recommendation, _ := args["recommendation"].(string)
-	evidence, _ := args["evidence"].(string)
+	impact = strings.TrimSpace(impact)
 
 	input := PatrolFindingInput{
 		Key:            key,
