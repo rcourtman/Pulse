@@ -2171,7 +2171,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"resource_id": {
 						Type:        "string",
-						Description: "Resource identifier (VMID or name) (for action: get, config)",
+						Description: "Canonical resource identifier (for action: get, config). Provider-native IDs and names are accepted as lookup aliases, but canonical unified resources are returned with their canonical ID.",
 					},
 					"type": {
 						Type:        "string",
@@ -2474,11 +2474,18 @@ func resourceAgentConnected(resource unifiedresources.Resource, connected map[st
 	return false
 }
 
-func canonicalAppContainerID(resource unifiedresources.Resource) string {
+func appContainerProviderID(resource unifiedresources.Resource) string {
 	if resource.Docker != nil && strings.TrimSpace(resource.Docker.ContainerID) != "" {
 		return strings.TrimSpace(resource.Docker.ContainerID)
 	}
 	return strings.TrimSpace(resource.ID)
+}
+
+func canonicalAppContainerID(resource unifiedresources.Resource) string {
+	if resourceID := strings.TrimSpace(resource.ID); resourceID != "" {
+		return resourceID
+	}
+	return appContainerProviderID(resource)
 }
 
 func canonicalAppContainerState(resource unifiedresources.Resource) string {
@@ -2505,12 +2512,13 @@ func matchCanonicalAppContainerResource(resource unifiedresources.Resource, reso
 	if query == "" {
 		return "", false
 	}
-	containerID := canonicalAppContainerID(resource)
-	if strings.EqualFold(containerID, query) ||
+	canonicalID := canonicalAppContainerID(resource)
+	providerID := appContainerProviderID(resource)
+	if strings.EqualFold(canonicalID, query) ||
+		strings.EqualFold(providerID, query) ||
 		strings.EqualFold(resourceDisplayName(resource), query) ||
-		strings.EqualFold(strings.TrimSpace(resource.ID), query) ||
-		strings.HasPrefix(strings.ToLower(containerID), strings.ToLower(query)) {
-		return containerID, true
+		strings.HasPrefix(strings.ToLower(providerID), strings.ToLower(query)) {
+		return providerID, true
 	}
 	return "", false
 }
@@ -3411,7 +3419,7 @@ func canonicalAppContainerActions(resource unifiedresources.Resource) []string {
 }
 
 func resolvedAppContainerRegistration(resource unifiedresources.Resource) (ResourceRegistration, bool) {
-	containerID := strings.TrimSpace(canonicalAppContainerID(resource))
+	containerID := strings.TrimSpace(appContainerProviderID(resource))
 	name := strings.TrimSpace(resourceDisplayName(resource))
 	host := strings.TrimSpace(canonicalAppContainerHost(resource))
 	adapter := strings.TrimSpace(canonicalAppContainerAdapter(resource))
@@ -3865,7 +3873,7 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			}
 
 			summary := canonicalAppContainerSummaryFromResource(resource)
-			summary.GovernedResourceMetadata = governance.Resolve(resourceDisplayName(resource), resource.ID, canonicalAppContainerID(resource))
+			summary.GovernedResourceMetadata = governance.Resolve(resourceDisplayName(resource), canonicalAppContainerID(resource), appContainerProviderID(resource))
 			response.AppContainers = append(response.AppContainers, summary)
 			count++
 		}
@@ -4911,9 +4919,9 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 	case "app-container":
 		if resource, containerID, ok := findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceID); ok {
 			response := EmptyResourceResponse()
-			response.GovernedResourceMetadata = governance.Resolve(resourceDisplayName(resource), resource.ID, containerID)
+			response.GovernedResourceMetadata = governance.Resolve(resourceDisplayName(resource), canonicalAppContainerID(resource), containerID)
 			response.Type = "app-container"
-			response.ID = containerID
+			response.ID = canonicalAppContainerID(resource)
 			response.Name = resourceDisplayName(resource)
 			response.Status = canonicalAppContainerState(resource)
 			response.Platform = canonicalResourcePlatform(resource)
@@ -5720,10 +5728,11 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				continue
 			}
 
-			containerID := canonicalAppContainerID(resource)
+			canonicalID := canonicalAppContainerID(resource)
+			containerID := appContainerProviderID(resource)
 			candidates := []string{
 				resourceDisplayName(resource),
-				resource.ID,
+				canonicalID,
 				containerID,
 				canonicalAppContainerHost(resource),
 				canonicalResourcePlatform(resource),
@@ -5744,7 +5753,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 
 			summary := canonicalAppContainerSummaryFromResource(resource)
 			addMatch(ResourceMatch{
-				GovernedResourceMetadata: governance.Resolve(resourceDisplayName(resource), resource.ID, containerID),
+				GovernedResourceMetadata: governance.Resolve(resourceDisplayName(resource), canonicalID, containerID),
 				Type:                     "app-container",
 				ID:                       summary.ID,
 				Name:                     summary.Name,

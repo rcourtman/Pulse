@@ -3983,6 +3983,15 @@ transcript before the model recovers with the numeric id. The type is recovered
 from the trailing hex hash segment (no type word is all-hex); a bare numeric
 VMID still requires an explicit `resource_type`.
 
+For a resource resolved through the unified-resource provider, every
+`pulse_query` `get`, `list`, and `search` response must keep `id` equal to the
+canonical unified resource ID. Provider-native identifiers such as a Docker
+container ID remain accepted lookup aliases and internal execution targets,
+but they must not replace the canonical ID in model-visible resource results.
+Otherwise a model can faithfully copy Pulse-provided evidence into a Patrol
+finding and still mis-link that finding to a source record instead of the
+canonical resource selected by the operator or scorer.
+
 When the model runs tools but returns no final narrative, the deterministic
 fallback summary (`buildAutomaticFallbackSummary` in
 `internal/ai/chat/agentic_final.go`) must read as a clean operator message, not a

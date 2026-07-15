@@ -924,6 +924,16 @@ func TestExecuteGetResource(t *testing.T) {
 
 func TestExecuteQuery_UsesCanonicalTrueNASUnifiedResources(t *testing.T) {
 	provider := newTrueNASUnifiedQueryProvider(t)
+	expectedNextcloudID := ""
+	for _, resource := range provider.GetByType(unifiedresources.ResourceTypeAppContainer) {
+		if resourceDisplayName(resource) == "Nextcloud" {
+			expectedNextcloudID = resource.ID
+			break
+		}
+	}
+	if expectedNextcloudID == "" {
+		t.Fatal("expected canonical Nextcloud resource ID")
+	}
 	executor := NewPulseToolExecutor(ExecutorConfig{
 		UnifiedResourceProvider: provider,
 	})
@@ -964,7 +974,7 @@ func TestExecuteQuery_UsesCanonicalTrueNASUnifiedResources(t *testing.T) {
 			continue
 		}
 		foundNextcloud = true
-		if app.Platform != "truenas" || app.Host != "truenas-main" || app.ID != "nextcloud" {
+		if app.Platform != "truenas" || app.Host != "truenas-main" || app.ID != expectedNextcloudID {
 			t.Fatalf("unexpected Nextcloud summary: %+v", app)
 		}
 	}
@@ -1076,6 +1086,77 @@ func TestExecuteQuery_UsesCanonicalTrueNASUnifiedResources(t *testing.T) {
 	}
 	if appRes.Type != "app-container" || appRes.Name != "Nextcloud" || appRes.Platform != "truenas" || appRes.Host != "truenas-main" {
 		t.Fatalf("unexpected canonical app resource: %+v", appRes)
+	}
+}
+
+func TestExecuteQuery_AppContainerPreservesCanonicalResourceIDAcrossAliases(t *testing.T) {
+	const canonicalID = "app-container-e5593f5074d6cd7f"
+	providerID := strings.Repeat("3", 64)
+	provider := &stubUnifiedResourceProvider{resources: []unifiedresources.Resource{{
+		ID:         canonicalID,
+		Type:       unifiedresources.ResourceTypeAppContainer,
+		Technology: "docker",
+		Name:       "worker",
+		Status:     unifiedresources.StatusOnline,
+		ParentName: "colima",
+		Docker: &unifiedresources.DockerData{
+			ContainerID:    providerID,
+			ContainerState: "running",
+			Image:          "alpine:3.20",
+			RestartCount:   6,
+		},
+	}}}
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider:           &mockStateProvider{state: models.StateSnapshot{}},
+		UnifiedResourceProvider: provider,
+	})
+
+	for _, lookup := range []string{canonicalID, providerID, providerID[:12], "worker"} {
+		t.Run("get_"+lookup, func(t *testing.T) {
+			result, err := executor.executeGetResource(context.Background(), map[string]interface{}{
+				"resource_type": "app-container",
+				"resource_id":   lookup,
+			})
+			if err != nil {
+				t.Fatalf("get app-container by %q: %v", lookup, err)
+			}
+			var response ResourceResponse
+			if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+				t.Fatalf("decode app-container response: %v", err)
+			}
+			if response.ID != canonicalID {
+				t.Fatalf("response id = %q, want canonical id %q", response.ID, canonicalID)
+			}
+		})
+	}
+
+	listResult, err := executor.executeListInfrastructure(context.Background(), map[string]interface{}{
+		"type": "app-containers",
+	})
+	if err != nil {
+		t.Fatalf("list app-containers: %v", err)
+	}
+	var listResponse InfrastructureResponse
+	if err := json.Unmarshal([]byte(listResult.Content[0].Text), &listResponse); err != nil {
+		t.Fatalf("decode app-container list response: %v", err)
+	}
+	if len(listResponse.AppContainers) != 1 || listResponse.AppContainers[0].ID != canonicalID {
+		t.Fatalf("list response did not preserve canonical id: %+v", listResponse.AppContainers)
+	}
+
+	searchResult, err := executor.executeSearchResources(context.Background(), map[string]interface{}{
+		"query": providerID,
+		"type":  "app-container",
+	})
+	if err != nil {
+		t.Fatalf("search app-container by provider id: %v", err)
+	}
+	var searchResponse ResourceSearchResponse
+	if err := json.Unmarshal([]byte(searchResult.Content[0].Text), &searchResponse); err != nil {
+		t.Fatalf("decode app-container search response: %v", err)
+	}
+	if len(searchResponse.Matches) != 1 || searchResponse.Matches[0].ID != canonicalID {
+		t.Fatalf("search response did not preserve canonical id: %+v", searchResponse.Matches)
 	}
 }
 
