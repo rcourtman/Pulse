@@ -3118,6 +3118,20 @@ Qualification floor: Patrol model launch and product-claim qualification must us
    container ID or substitute a display name after `pulse_query` returns a
    canonical `app-container` ID; cross-tool identity translation is an AI
    runtime responsibility.
+   Investigation action-catalog and proposal tools inherit that identity
+   boundary in both directions: an exact, uniquely resolved Docker provider
+   coordinate may be translated back to its canonical `app-container` target,
+   and the catalog response plus captured proposal must carry that canonical
+   target. Unknown or ambiguous references still fail closed. The model is not
+   responsible for Pulse's provider-to-canonical identity plumbing.
+   Agentic context compaction is also evidence-preserving rather than merely
+   size-reducing. When a read tool returns structured safety-relevant state,
+   its deterministic knowledge projection must retain the bounded fields needed
+   for later diagnosis and action choice while excluding labels, environment
+   values, and other unrelated raw inspection content. Docker inspection
+   compaction therefore retains container state, running/OOM/dead flags, exit
+   and health results, restart count/policy, and image identity; it must not
+   collapse a valid inspection to punctuation or the first formatting lines.
 
 Patrol autonomous-loop floor: Watch must preserve model-owned investigation
 while requiring an accepted structured outcome for every active finding the

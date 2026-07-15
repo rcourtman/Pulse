@@ -847,19 +847,33 @@ func extractExecFacts(input map[string]interface{}, resultText string) []FactEnt
 		Error    string `json:"error"`
 	}
 
-	var value string
+	output := resultText
+	parsedCommandResponse := false
+	commandExitCode := 0
 	if err := json.Unmarshal([]byte(resultText), &cmdResp); err == nil && (cmdResp.Output != "" || cmdResp.Stdout != "" || cmdResp.Error != "") {
-		output := cmdResp.Output
+		output = cmdResp.Output
 		if output == "" {
 			output = cmdResp.Stdout
 		}
 		if output == "" {
 			output = cmdResp.Error
 		}
+		parsedCommandResponse = true
+		commandExitCode = cmdResp.ExitCode
+	}
+
+	var value string
+	if summary, ok := extractDockerInspectSummary(strFromMap(input, "command"), output); ok {
+		if parsedCommandResponse {
+			value = fmt.Sprintf("exit=%d, %s", commandExitCode, summary)
+		} else {
+			value = summary
+		}
+	} else if parsedCommandResponse {
 		// Take first 2 lines
 		lines := strings.SplitN(output, "\n", 3)
 		summary := strings.Join(lines[:min(2, len(lines))], "; ")
-		value = fmt.Sprintf("exit=%d, %s", cmdResp.ExitCode, summary)
+		value = fmt.Sprintf("exit=%d, %s", commandExitCode, summary)
 	} else {
 		// Fallback: use first 2 lines of raw result text
 		lines := strings.SplitN(resultText, "\n", 3)
@@ -872,6 +886,171 @@ func extractExecFacts(input map[string]interface{}, resultText string) []FactEnt
 		Key:      fmt.Sprintf("exec:%s:%s", host, cmdPrefix),
 		Value:    truncateValue(value),
 	}}
+}
+
+type dockerInspectState struct {
+	Status     string `json:"Status"`
+	Running    bool   `json:"Running"`
+	Paused     bool   `json:"Paused"`
+	Restarting bool   `json:"Restarting"`
+	OOMKilled  bool   `json:"OOMKilled"`
+	Dead       bool   `json:"Dead"`
+	ExitCode   int    `json:"ExitCode"`
+	Error      string `json:"Error"`
+	Health     *struct {
+		Status string `json:"Status"`
+		Log    []struct {
+			ExitCode int `json:"ExitCode"`
+		} `json:"Log"`
+	} `json:"Health"`
+}
+
+type dockerInspectObject struct {
+	State        *dockerInspectState `json:"State"`
+	RestartCount *int                `json:"RestartCount"`
+	HostConfig   *struct {
+		RestartPolicy struct {
+			Name string `json:"Name"`
+		} `json:"RestartPolicy"`
+	} `json:"HostConfig"`
+	Config *struct {
+		Image string `json:"Image"`
+	} `json:"Config"`
+}
+
+type dockerInspectSummary struct {
+	state         *dockerInspectState
+	restartCount  *int
+	restartPolicy string
+	image         string
+}
+
+func extractDockerInspectSummary(command, output string) (string, bool) {
+	if !isDockerInspectCommand(command) {
+		return "", false
+	}
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return "", false
+	}
+
+	var summary dockerInspectSummary
+	var objects []json.RawMessage
+	if err := json.Unmarshal([]byte(output), &objects); err != nil {
+		decoder := json.NewDecoder(strings.NewReader(output))
+		for {
+			var raw json.RawMessage
+			if err := decoder.Decode(&raw); err != nil {
+				break
+			}
+			objects = append(objects, raw)
+		}
+	}
+	for _, raw := range objects {
+		mergeDockerInspectObject(&summary, raw)
+	}
+	if summary.state == nil {
+		return "", false
+	}
+
+	state := summary.state
+	parts := []string{
+		"status=" + strings.TrimSpace(state.Status),
+		fmt.Sprintf("running=%t", state.Running),
+		fmt.Sprintf("paused=%t", state.Paused),
+		fmt.Sprintf("restarting=%t", state.Restarting),
+		fmt.Sprintf("oom=%t", state.OOMKilled),
+		fmt.Sprintf("dead=%t", state.Dead),
+		fmt.Sprintf("exit=%d", state.ExitCode),
+	}
+	if strings.TrimSpace(state.Error) == "" {
+		parts = append(parts, "error=none")
+	} else {
+		parts = append(parts, "error=present")
+	}
+	if state.Health != nil {
+		if health := strings.TrimSpace(state.Health.Status); health != "" {
+			parts = append(parts, "health="+health)
+		}
+		if logs := state.Health.Log; len(logs) > 0 {
+			parts = append(parts, fmt.Sprintf("last_health_exit=%d", logs[len(logs)-1].ExitCode))
+		}
+	}
+	if summary.restartCount != nil {
+		parts = append(parts, fmt.Sprintf("restarts=%d", *summary.restartCount))
+	}
+	if summary.restartPolicy != "" {
+		parts = append(parts, "restart_policy="+summary.restartPolicy)
+	}
+	if summary.image != "" {
+		parts = append(parts, "image="+truncateDockerInspectToken(summary.image, 48))
+	}
+	return truncateValue(strings.Join(parts, " ")), true
+}
+
+func isDockerInspectCommand(command string) bool {
+	fields := strings.Fields(strings.TrimSpace(command))
+	if len(fields) < 2 {
+		return false
+	}
+	if fields[0] == "sudo" {
+		fields = fields[1:]
+	}
+	return len(fields) >= 2 && fields[0] == "docker" && fields[1] == "inspect"
+}
+
+func mergeDockerInspectObject(summary *dockerInspectSummary, raw json.RawMessage) {
+	if summary == nil || len(raw) == 0 {
+		return
+	}
+
+	var object dockerInspectObject
+	if err := json.Unmarshal(raw, &object); err == nil && object.State != nil {
+		summary.state = object.State
+		summary.restartCount = object.RestartCount
+		if object.HostConfig != nil {
+			summary.restartPolicy = strings.TrimSpace(object.HostConfig.RestartPolicy.Name)
+		}
+		if object.Config != nil {
+			summary.image = strings.TrimSpace(object.Config.Image)
+		}
+		return
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return
+	}
+	if _, hasStatus := fields["Status"]; hasStatus {
+		var state dockerInspectState
+		if err := json.Unmarshal(raw, &state); err == nil {
+			summary.state = &state
+		}
+		return
+	}
+	if nameRaw, hasName := fields["Name"]; hasName {
+		var name string
+		if err := json.Unmarshal(nameRaw, &name); err == nil && isDockerRestartPolicy(name) {
+			summary.restartPolicy = strings.TrimSpace(name)
+		}
+	}
+}
+
+func isDockerRestartPolicy(value string) bool {
+	switch strings.TrimSpace(value) {
+	case "no", "always", "unless-stopped", "on-failure":
+		return true
+	default:
+		return false
+	}
+}
+
+func truncateDockerInspectToken(value string, maxLen int) string {
+	value = strings.Join(strings.Fields(value), "_")
+	if len(value) > maxLen {
+		return value[:maxLen]
+	}
+	return value
 }
 
 // --- pulse_metrics ---

@@ -230,6 +230,81 @@ func TestActionCapabilitiesCanFollowInvestigationToCausalResource(t *testing.T) 
 	assert.Zero(t, failed, "catalog reads must not consume proposal cardinality or count as failed proposals")
 }
 
+func TestActionCapabilitiesCanonicalizeResolvedDockerCoordinate(t *testing.T) {
+	const (
+		canonicalID = "app-container-abc123"
+		containerID = "92847aa6ab18fef9fc6e619f5b8350948"
+		agentID     = "agent-f4f64c6cc2cc062e"
+	)
+	catalog := func(_ context.Context, resourceID string) ([]unified.ResourceCapability, error) {
+		if resourceID != canonicalID {
+			return nil, errors.New("resource not found")
+		}
+		return []unified.ResourceCapability{{Name: "start"}}, nil
+	}
+	provider := &stubUnifiedResourceProvider{resources: []unified.Resource{{
+		ID:   canonicalID,
+		Type: unified.ResourceTypeAppContainer,
+		Docker: &unified.DockerData{
+			AgentID:     agentID,
+			ContainerID: containerID,
+		},
+	}}}
+	capture := NewProposalCapture(ProposalIdentity{}, catalog)
+	exec := NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: provider})
+	exec.ApplyExecutionProfile(ProfilePatrolInvestigation)
+	exec.SetProposalCapture(capture)
+	rawCoordinate := "docker:" + agentID + ":" + containerID
+
+	result, err := exec.ExecuteInvocation(context.Background(), ToolInvocation{
+		ID:        "catalog-docker",
+		Name:      agentcapabilities.PatrolActionCapabilitiesToolName,
+		Arguments: map[string]interface{}{"resource_id": rawCoordinate},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Content)
+	assert.Contains(t, result.Content[0].Text, `"resource_id":"`+canonicalID+`"`)
+	assert.Contains(t, result.Content[0].Text, `"name":"start"`)
+
+	proposalResult := executePropose(t, exec, "proposal-docker", map[string]interface{}{
+		"resource_id":     rawCoordinate,
+		"capability_name": "start",
+		"reason":          "restore the stopped worker",
+	})
+	assert.Contains(t, proposalResult.Content[0].Text, canonicalID)
+	proposal, failed, outcomeErr := capture.Outcome()
+	require.NoError(t, outcomeErr)
+	require.NotNil(t, proposal)
+	assert.Zero(t, failed)
+	assert.Equal(t, canonicalID, proposal.ResourceID)
+}
+
+func TestActionCapabilitiesDoNotCanonicalizeAmbiguousContainerID(t *testing.T) {
+	const containerID = "shared-container-id"
+	provider := &stubUnifiedResourceProvider{resources: []unified.Resource{
+		{ID: "app-container-a", Type: unified.ResourceTypeAppContainer, Docker: &unified.DockerData{ContainerID: containerID, AgentID: "agent-a"}},
+		{ID: "app-container-b", Type: unified.ResourceTypeAppContainer, Docker: &unified.DockerData{ContainerID: containerID, AgentID: "agent-b"}},
+	}}
+	capture := NewProposalCapture(ProposalIdentity{}, func(_ context.Context, resourceID string) ([]unified.ResourceCapability, error) {
+		if resourceID != containerID {
+			t.Fatalf("ambiguous reference was rewritten to %q", resourceID)
+		}
+		return nil, errors.New("ambiguous resource")
+	})
+	exec := NewPulseToolExecutor(ExecutorConfig{UnifiedResourceProvider: provider})
+	exec.ApplyExecutionProfile(ProfilePatrolInvestigation)
+	exec.SetProposalCapture(capture)
+
+	result, err := exec.ExecuteInvocation(context.Background(), ToolInvocation{
+		ID:        "catalog-ambiguous",
+		Name:      agentcapabilities.PatrolActionCapabilitiesToolName,
+		Arguments: map[string]interface{}{"resource_id": containerID},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Content)
+	assert.Contains(t, result.Content[0].Text, "capability catalog lookup failed")
+}
+
 func TestActionCapabilitiesRequiresInvestigationCatalog(t *testing.T) {
 	exec := newInvestigationExecutor(t, nil)
 	result, err := exec.ExecuteInvocation(context.Background(), ToolInvocation{

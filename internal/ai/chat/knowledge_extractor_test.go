@@ -245,6 +245,55 @@ func TestExtractFacts_Exec_FallbackRaw(t *testing.T) {
 	assert.Contains(t, facts[0].Value, "not json at all")
 }
 
+func TestExtractFacts_Exec_DockerInspectPreservesCriticalState(t *testing.T) {
+	input := map[string]interface{}{
+		"command":     "docker inspect patrol-worker",
+		"target_host": "lab-host",
+	}
+	result := `[{"State":{"Status":"exited","Running":false,"Paused":false,"Restarting":false,"OOMKilled":false,"Dead":false,"ExitCode":137,"Error":"","Health":{"Status":"unhealthy","Log":[{"ExitCode":0,"Output":""}]}},"RestartCount":0,"HostConfig":{"RestartPolicy":{"Name":"no"}},"Config":{"Image":"alpine:3.20","Env":["TOKEN=must-not-survive"],"Labels":{"secret":"must-not-survive"}}}]`
+
+	facts := ExtractFacts("pulse_read", input, result)
+	require.Len(t, facts, 1)
+	value := facts[0].Value
+	for _, expected := range []string{
+		"status=exited", "running=false", "oom=false", "exit=137",
+		"error=none", "health=unhealthy", "last_health_exit=0",
+		"restarts=0", "restart_policy=no", "image=alpine:3.20",
+	} {
+		assert.Contains(t, value, expected)
+	}
+	assert.NotContains(t, value, "TOKEN")
+	assert.NotContains(t, value, "secret")
+	assert.LessOrEqual(t, len(value), maxValueLen)
+}
+
+func TestExtractFacts_Exec_DockerInspectFormattedState(t *testing.T) {
+	input := map[string]interface{}{
+		"command":     "docker inspect patrol-worker --format '{{json .State}} {{json .HostConfig.RestartPolicy}}'",
+		"target_host": "lab-host",
+	}
+	result := `{"Status":"exited","Running":false,"Paused":false,"Restarting":false,"OOMKilled":false,"Dead":false,"ExitCode":137,"Error":"","Health":{"Status":"unhealthy","Log":[{"ExitCode":0}]}} {"Name":"no","MaximumRetryCount":0}`
+
+	facts := ExtractFacts("pulse_read", input, result)
+	require.Len(t, facts, 1)
+	assert.Contains(t, facts[0].Value, "status=exited")
+	assert.Contains(t, facts[0].Value, "last_health_exit=0")
+	assert.Contains(t, facts[0].Value, "restart_policy=no")
+}
+
+func TestExtractFacts_Exec_NonInspectJSONKeepsGenericSummary(t *testing.T) {
+	input := map[string]interface{}{
+		"command":     "docker ps --format '{{json .}}'",
+		"target_host": "lab-host",
+	}
+	result := `{"Status":"exited","Running":false,"OOMKilled":false,"ExitCode":137}`
+
+	facts := ExtractFacts("pulse_read", input, result)
+	require.Len(t, facts, 1)
+	assert.NotContains(t, facts[0].Value, "status=exited")
+	assert.Contains(t, facts[0].Value, `"Status":"exited"`)
+}
+
 func TestExtractFacts_Metrics(t *testing.T) {
 	input := map[string]interface{}{"action": "performance", "resource_id": "vm101"}
 	// Actual format: summary is map[string]ResourceMetricsSummary keyed by resource ID

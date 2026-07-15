@@ -356,6 +356,25 @@ func TestBuildCompactSummary_WithKAFacts(t *testing.T) {
 	assert.NotContains(t, result, "already been processed", "should use KA format, not generic format")
 }
 
+func TestBuildCompactSummary_PreservesDockerInspectState(t *testing.T) {
+	toolInput := map[string]interface{}{
+		"command":     "docker inspect patrol-worker",
+		"target_host": "lab-host",
+	}
+	content := `[{"State":{"Status":"exited","Running":false,"Paused":false,"Restarting":false,"OOMKilled":false,"Dead":false,"ExitCode":137,"Error":"","Health":{"Status":"unhealthy","Log":[{"ExitCode":0}]}},"RestartCount":0,"HostConfig":{"RestartPolicy":{"Name":"no"}},"Config":{"Image":"alpine:3.20"}}]`
+	ka := NewKnowledgeAccumulator()
+	for _, fact := range ExtractFacts("pulse_read", toolInput, content) {
+		ka.AddFactForTool("inspect-call", fact.Category, fact.Key, fact.Value)
+	}
+
+	result := buildCompactSummary("pulse_read", toolInput, content, ka, "inspect-call")
+	assert.Contains(t, result, "Key facts:")
+	assert.Contains(t, result, "status=exited")
+	assert.Contains(t, result, "exit=137")
+	assert.Contains(t, result, "oom=false")
+	assert.Contains(t, result, "restart_policy=no")
+}
+
 func TestBuildCompactSummary_WithKAFacts_NoFacts(t *testing.T) {
 	ka := NewKnowledgeAccumulator()
 	// No facts added for this tool ID — should fall back to generic format

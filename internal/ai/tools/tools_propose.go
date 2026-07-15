@@ -112,7 +112,7 @@ func (e *PulseToolExecutor) executeActionCapabilities(ctx context.Context, args 
 	if e.proposalCapture == nil {
 		return NewErrorResult(fmt.Errorf("action capabilities are not available in this run")), nil
 	}
-	resourceID := unified.CanonicalResourceID(stringArg(args, "resource_id"))
+	resourceID := e.canonicalProposalResourceID(stringArg(args, "resource_id"))
 	capabilities, err := e.proposalCapture.Capabilities(ctx, resourceID)
 	if err != nil {
 		return NewErrorResult(fmt.Errorf("capability catalog lookup failed for resource %q", resourceID)), nil
@@ -150,7 +150,7 @@ func (e *PulseToolExecutor) executeProposeAction(ctx context.Context, args map[s
 		return NewErrorResult(fmt.Errorf("action proposals are not available in this run")), nil
 	}
 
-	resourceID := unified.CanonicalResourceID(stringArg(args, "resource_id"))
+	resourceID := e.canonicalProposalResourceID(stringArg(args, "resource_id"))
 	capabilityName := strings.TrimSpace(stringArg(args, "capability_name"))
 	reason := strings.TrimSpace(stringArg(args, "reason"))
 	params, _ := args["params"].(map[string]interface{})
@@ -173,6 +173,58 @@ func (e *PulseToolExecutor) executeProposeAction(ctx context.Context, args map[s
 	return NewTextResult(fmt.Sprintf(
 		"Proposal recorded: capability %q on resource %q. It will be planned and routed for governed approval; nothing has executed. Conclude the investigation with your diagnosis.",
 		capabilityName, resourceID)), nil
+}
+
+// canonicalProposalResourceID keeps provider coordinates discovered during an
+// investigation from leaking into the governed action lifecycle. Only an exact,
+// unique app-container match is translated; ambiguous or unknown references
+// continue to the catalog unchanged and fail closed there.
+func (e *PulseToolExecutor) canonicalProposalResourceID(reference string) string {
+	reference = unified.CanonicalResourceID(reference)
+	if reference == "" || e.unifiedResourceProvider == nil {
+		return reference
+	}
+
+	resolvedID := ""
+	for _, resource := range e.unifiedResourceProvider.GetByType(unified.ResourceTypeAppContainer) {
+		if !matchesAppContainerActionReference(resource, reference) {
+			continue
+		}
+		candidateID := unified.CanonicalResourceID(resource.ID)
+		if candidateID == "" {
+			continue
+		}
+		if resolvedID != "" && resolvedID != candidateID {
+			return reference
+		}
+		resolvedID = candidateID
+	}
+	if resolvedID != "" {
+		return resolvedID
+	}
+	return reference
+}
+
+func matchesAppContainerActionReference(resource unified.Resource, reference string) bool {
+	reference = strings.TrimSpace(reference)
+	if reference == "" {
+		return false
+	}
+	canonicalID := unified.CanonicalResourceID(resource.ID)
+	providerID := appContainerProviderID(resource)
+	if strings.EqualFold(reference, canonicalID) || strings.EqualFold(reference, providerID) {
+		return true
+	}
+	if resource.Docker == nil || providerID == "" {
+		return false
+	}
+	for _, host := range []string{resource.Docker.AgentID, resource.Docker.HostSourceID, resource.Docker.Hostname} {
+		host = strings.TrimSpace(host)
+		if host != "" && strings.EqualFold(reference, "docker:"+host+":"+providerID) {
+			return true
+		}
+	}
+	return false
 }
 
 func stringArg(args map[string]interface{}, key string) string {
