@@ -405,8 +405,8 @@ func (m Manifest) Validate() error {
 			if m.Investigation.MinEvidenceIDs < 1 {
 				errs = append(errs, errors.New("investigation.min_evidence_ids must be positive"))
 			}
-			if len(m.Investigation.RequiredSummaryTerms) == 0 {
-				errs = append(errs, errors.New("investigation.required_summary_terms must not be empty"))
+			if len(m.Investigation.RequiredSummaryTerms) == 0 && len(m.Investigation.RequiredSummaryTermGroups) == 0 {
+				errs = append(errs, errors.New("investigation summary expectations must include required_summary_terms or required_summary_term_groups"))
 			}
 			for groupIndex, group := range m.Investigation.RequiredSummaryTermGroups {
 				if len(group) == 0 {

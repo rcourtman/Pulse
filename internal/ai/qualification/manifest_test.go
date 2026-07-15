@@ -117,6 +117,15 @@ func TestManifestValidatesTriggerScopeAndInvestigationResourceExpectations(t *te
 	if err := manifest.Validate(); err != nil {
 		t.Fatalf("semantic alternatives were rejected: %v", err)
 	}
+	manifest.Investigation.RequiredSummaryTerms = nil
+	if err := manifest.Validate(); err != nil {
+		t.Fatalf("semantic alternatives without a magic exact term were rejected: %v", err)
+	}
+	manifest.Investigation.RequiredSummaryTermGroups = nil
+	if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), "summary expectations") {
+		t.Fatalf("empty investigation summary oracle must fail validation: %v", err)
+	}
+	manifest.Investigation.RequiredSummaryTermGroups = [][]string{{"stopped", "exited"}}
 	manifest.Investigation.RequiredSummaryTermGroups = [][]string{{"stopped", ""}}
 	if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), "required_summary_term_groups") {
 		t.Fatalf("empty semantic alternative must fail validation: %v", err)

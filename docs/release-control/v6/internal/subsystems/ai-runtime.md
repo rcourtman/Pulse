@@ -3103,6 +3103,12 @@ Qualification floor: Patrol model launch and product-claim qualification must us
    action/finding/investigation/resource/capability/plan-hash binding, and an
    out-of-band postcondition. Scorer or tool-transcript replay is regression
    evidence only and cannot replace live normal-collection, real-model proof.
+   A live Docker remediation lab must opt in separately to a command-enabled
+   disposable agent with a short-lived `agent:exec` token; Watch and
+   investigation labs remain report-only. The scenario must expect the
+   state-dependent capability advertised by the canonical resource contract
+   (`start` for an exited container), and teardown must revoke the temporary
+   token as well as restore and remove the exact-run-labelled resources.
    Shared or remote labs must use exact-run-labelled disposable resources,
    two-pass cleanup, full Docker inventory comparison including images, and
    must never manufacture faults in production infrastructure.
