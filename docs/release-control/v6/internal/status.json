@@ -8858,7 +8858,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "commercial-production-remediation-release-gate-self-hosted-commercial-transition-coherence",
+      "agent_id": "commercial-production-remediation",
+      "summary": "Plan and execute explicitly approved bounded production Stripe catalog remediation, deploy the governed portal configuration, and re-audit read-only.",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-15T07:39:47Z",
+      "heartbeat_at": "2026-07-15T07:39:47Z",
+      "expires_at": "2026-07-15T09:39:47Z",
+      "work_item": {
+        "kind": "release-gate",
+        "id": "self-hosted-commercial-transition-coherence"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
