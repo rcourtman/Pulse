@@ -174,20 +174,21 @@ func TestProposeActionIsInvestigationProfileOnly(t *testing.T) {
 		// fabricated call before the handler.
 		exec.SetProposalCapture(NewProposalCapture(ProposalIdentity{}, testProposalCatalog()))
 
-		result, err := exec.ExecuteInvocation(context.Background(), ToolInvocation{
-			ID:        "call-x",
-			Name:      agentcapabilities.PatrolProposeActionToolName,
-			Arguments: proposeArgs(),
-		})
-		require.NoError(t, err)
-		require.NotEmpty(t, result.Content)
-		assert.Contains(t, result.Content[0].Text, "Invocation blocked",
-			"profile %d must reject patrol_propose_action at the registry boundary", profile)
+		for _, invocation := range []ToolInvocation{
+			{ID: "call-x", Name: agentcapabilities.PatrolProposeActionToolName, Arguments: proposeArgs()},
+			{ID: "call-y", Name: agentcapabilities.PatrolActionCapabilitiesToolName, Arguments: map[string]interface{}{"resource_id": "vm:42"}},
+		} {
+			result, err := exec.ExecuteInvocation(context.Background(), invocation)
+			require.NoError(t, err)
+			require.NotEmpty(t, result.Content)
+			assert.Contains(t, result.Content[0].Text, "Invocation blocked",
+				"profile %d must reject %s at the registry boundary", profile, invocation.Name)
+		}
 
 		// And it never appears in the projected manifest.
 		for _, tool := range exec.registry.ListTools(exec.invocationPolicy()) {
-			if tool.Name == agentcapabilities.PatrolProposeActionToolName {
-				t.Fatalf("profile %d must not offer patrol_propose_action", profile)
+			if isPatrolInvestigationOnlyTool(tool.Name) {
+				t.Fatalf("profile %d must not offer %s", profile, tool.Name)
 			}
 		}
 	}
@@ -204,6 +205,41 @@ func TestProposeActionIsInvestigationProfileOnly(t *testing.T) {
 	assert.True(t, offered, "investigation profile must offer patrol_propose_action")
 	result := executePropose(t, exec, "call-a", proposeArgs())
 	assert.Contains(t, result.Content[0].Text, "Proposal recorded")
+}
+
+func TestActionCapabilitiesCanFollowInvestigationToCausalResource(t *testing.T) {
+	capture := NewProposalCapture(ProposalIdentity{}, testProposalCatalog())
+	exec := newInvestigationExecutor(t, capture)
+
+	result, err := exec.ExecuteInvocation(context.Background(), ToolInvocation{
+		ID:        "catalog-a",
+		Name:      agentcapabilities.PatrolActionCapabilitiesToolName,
+		Arguments: map[string]interface{}{"resource_id": "vm:42"},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Content)
+	payload := result.Content[0].Text
+	assert.Contains(t, payload, `"resource_id":"vm:42"`)
+	assert.Contains(t, payload, `"name":"restart"`)
+	assert.Contains(t, payload, `"name":"join_token"`)
+	assert.Contains(t, payload, `"sensitive":true`)
+
+	proposal, failed, outcomeErr := capture.Outcome()
+	require.NoError(t, outcomeErr)
+	assert.Nil(t, proposal)
+	assert.Zero(t, failed, "catalog reads must not consume proposal cardinality or count as failed proposals")
+}
+
+func TestActionCapabilitiesRequiresInvestigationCatalog(t *testing.T) {
+	exec := newInvestigationExecutor(t, nil)
+	result, err := exec.ExecuteInvocation(context.Background(), ToolInvocation{
+		ID:        "catalog-a",
+		Name:      agentcapabilities.PatrolActionCapabilitiesToolName,
+		Arguments: map[string]interface{}{"resource_id": "vm:42"},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, result.Content)
+	assert.Contains(t, result.Content[0].Text, "not available")
 }
 
 func TestProposalExposureProjectorRedactsParams(t *testing.T) {

@@ -137,11 +137,11 @@ func (p InvocationPolicy) Allows(toolName string, class agentcapabilities.Invoca
 	if !p.Profile.Valid() || !class.Valid() {
 		return false
 	}
-	// patrol_propose_action is investigation-profile-only: a fabricated
-	// call under any other posture is rejected here, before the handler,
-	// and the same check keeps it out of every other profile's projected
-	// manifest.
-	if toolName == agentcapabilities.PatrolProposeActionToolName && p.Profile != ProfilePatrolInvestigation {
+	// Proposal and action-catalog tools are investigation-profile-only: a
+	// fabricated call under any other posture is rejected here, before the
+	// handler, and the same check keeps both out of every other profile's
+	// projected manifest.
+	if isPatrolInvestigationOnlyTool(toolName) && p.Profile != ProfilePatrolInvestigation {
 		return false
 	}
 	switch class.Mutation {
@@ -154,6 +154,15 @@ func (p InvocationPolicy) Allows(toolName string, class agentcapabilities.Invoca
 			return false
 		}
 		return agentcapabilities.ControlLevelAllowsControlTools(p.ControlLevel)
+	default:
+		return false
+	}
+}
+
+func isPatrolInvestigationOnlyTool(toolName string) bool {
+	switch toolName {
+	case agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolActionCapabilitiesToolName:
+		return true
 	default:
 		return false
 	}

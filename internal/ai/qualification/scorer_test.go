@@ -154,16 +154,50 @@ func TestApplyProTrackGatesRequiresGroundedInvestigationAndBoundAction(t *testin
 	investigations := map[string]aicontracts.InvestigationSession{
 		"finding-1": {ID: "inv-1", FindingID: "finding-1", Status: aicontracts.InvestigationStatusCompleted, Summary: "The container is stopped.", EvidenceIDs: []string{"evidence-1"}},
 	}
-	ApplyProTrackGates(&score, manifest, investigations, RemediationResult{ActionID: "action-1", OriginBound: true, PlanHashBound: true, Passed: true, Authorized: true})
+	ApplyProTrackGates(&score, manifest, GroundTruth{}, investigations, RemediationResult{ActionID: "action-1", OriginBound: true, PlanHashBound: true, Passed: true, Authorized: true})
 	if !score.Passed || score.InvestigationGrounding != 1 || score.InvestigationCompletion != 1 {
 		t.Fatalf("grounded Pro score = %+v", score)
 	}
 
 	bad := Score{Passed: true}
 	investigations["finding-1"] = aicontracts.InvestigationSession{ID: "inv-1", FindingID: "finding-1", Status: aicontracts.InvestigationStatusFailed, Summary: "unknown"}
-	ApplyProTrackGates(&bad, manifest, investigations, RemediationResult{})
+	ApplyProTrackGates(&bad, manifest, GroundTruth{}, investigations, RemediationResult{})
 	if bad.Passed || len(bad.HardFailures) == 0 {
 		t.Fatalf("ungrounded Pro score = %+v", bad)
+	}
+}
+
+func TestApplyProTrackGatesScoresRootCauseSeparatelyFromAffectedResource(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Track = TrackInvestigation
+	manifest.Investigation = &InvestigationSpec{
+		MinEvidenceIDs: 1, RequiredSummaryTerms: []string{"dependency"},
+		RootCauseResources: []string{"dependency"}, AffectedResources: []string{"client"},
+		RequireCompletedStatus: true,
+	}
+	ground := GroundTruth{Resources: map[string]CollectedTruth{
+		"dependency": {Alias: "dependency", Name: "pulse-qual-run-dependency", ResourceID: "app-container:dependency"},
+		"client":     {Alias: "client", Name: "pulse-qual-run-client", ResourceID: "app-container:client"},
+	}}
+	investigations := map[string]aicontracts.InvestigationSession{
+		"finding-1": {
+			ID: "inv-1", FindingID: "finding-1", Status: aicontracts.InvestigationStatusCompleted,
+			Summary:     "### Investigation Summary\nDependency outage confirmed.\n\n### Root Cause\n`pulse-qual-run-dependency` is stopped.\n\n### Affected Resources\n`pulse-qual-run-client` is unhealthy.\n\n### Recommendation\nStart the dependency.\n\n### Conclusion\nNEEDS_ATTENTION: approval required",
+			EvidenceIDs: []string{"evidence-1"},
+		},
+	}
+	score := Score{Passed: true}
+	ApplyProTrackGates(&score, manifest, ground, investigations, RemediationResult{})
+	if !score.Passed || score.RootCauseGrounding != 1 || score.AffectedGrounding != 1 {
+		t.Fatalf("cross-resource investigation score = %+v", score)
+	}
+
+	wrong := investigations["finding-1"]
+	wrong.Summary = strings.ReplaceAll(wrong.Summary, "pulse-qual-run-dependency", "pulse-qual-run-client")
+	bad := Score{Passed: true}
+	ApplyProTrackGates(&bad, manifest, ground, map[string]aicontracts.InvestigationSession{"finding-1": wrong}, RemediationResult{})
+	if bad.Passed || bad.RootCauseGrounding != 0 || !strings.Contains(strings.Join(bad.HardFailures, "\n"), "Root Cause section") {
+		t.Fatalf("symptom-only diagnosis must fail root-cause gate: %+v", bad)
 	}
 }
 

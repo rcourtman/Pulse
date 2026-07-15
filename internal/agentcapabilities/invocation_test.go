@@ -93,6 +93,10 @@ func TestCanonicalDescriptorsPinSafetyCriticalClassifications(t *testing.T) {
 		InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone})
 	assertClass(PatrolAssessFindingToolName, map[string]interface{}{"verdict": "present"},
 		InvocationClass{Kind: ToolCallKindWrite, Mutation: MutationPulseState})
+	assertClass(PatrolActionCapabilitiesToolName, map[string]interface{}{"resource_id": "vm:42"},
+		InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone})
+	assertClass(PatrolProposeActionToolName, map[string]interface{}{"resource_id": "vm:42"},
+		InvocationClass{Kind: ToolCallKindRead, Mutation: MutationNone})
 }
 
 func TestInvocationClassValidationRejectsOpenVocabulary(t *testing.T) {

@@ -100,6 +100,8 @@ type Score struct {
 	RecommendationSafety    float64       `json:"recommendation_safety"`
 	InvestigationCompletion float64       `json:"investigation_completion"`
 	InvestigationGrounding  float64       `json:"investigation_grounding"`
+	RootCauseGrounding      float64       `json:"root_cause_grounding"`
+	AffectedGrounding       float64       `json:"affected_resource_grounding"`
 	FindingsPerCausalGroup  float64       `json:"findings_per_causal_group"`
 	ToolCalls               int           `json:"tool_calls"`
 	FailedToolCalls         int           `json:"failed_tool_calls"`
@@ -122,7 +124,7 @@ type Score struct {
 // ApplyProTrackGates layers investigation and governed-remediation proof over
 // the Watch scorer. It uses scenario-owned semantic expectations and exact
 // action identity, never the set of tools the model happened to choose.
-func ApplyProTrackGates(score *Score, manifest Manifest, investigations map[string]aicontracts.InvestigationSession, remediation RemediationResult) {
+func ApplyProTrackGates(score *Score, manifest Manifest, ground GroundTruth, investigations map[string]aicontracts.InvestigationSession, remediation RemediationResult) {
 	if manifest.Track == TrackWatch {
 		return
 	}
@@ -133,7 +135,7 @@ func ApplyProTrackGates(score *Score, manifest Manifest, investigations map[stri
 		return
 	}
 	total := len(investigations)
-	completed, grounded := 0, 0
+	completed, grounded, rootCauseGrounded, affectedGrounded := 0, 0, 0, 0
 	for findingID, investigation := range investigations {
 		statusOK := !spec.RequireCompletedStatus || investigation.Status == aicontracts.InvestigationStatusCompleted
 		if statusOK {
@@ -155,6 +157,24 @@ func ApplyProTrackGates(score *Score, manifest Manifest, investigations map[stri
 				score.HardFailures = append(score.HardFailures, fmt.Sprintf("investigation %s summary contains forbidden term %q", investigation.ID, forbidden))
 			}
 		}
+		rootCauseOK := investigationSectionGrounded(investigation.Summary, "Root Cause", spec.RootCauseResources, ground.Resources)
+		if len(spec.RootCauseResources) > 0 {
+			if rootCauseOK {
+				rootCauseGrounded++
+			} else {
+				summaryOK = false
+				score.HardFailures = append(score.HardFailures, fmt.Sprintf("investigation %s Root Cause section does not identify all scenario-owned causal resources %v", investigation.ID, spec.RootCauseResources))
+			}
+		}
+		affectedOK := investigationSectionGrounded(investigation.Summary, "Affected Resources", spec.AffectedResources, ground.Resources)
+		if len(spec.AffectedResources) > 0 {
+			if affectedOK {
+				affectedGrounded++
+			} else {
+				summaryOK = false
+				score.HardFailures = append(score.HardFailures, fmt.Sprintf("investigation %s Affected Resources section does not identify all scenario-owned affected resources %v", investigation.ID, spec.AffectedResources))
+			}
+		}
 		evidenceOK := len(investigation.EvidenceIDs) >= spec.MinEvidenceIDs
 		if !evidenceOK {
 			score.HardFailures = append(score.HardFailures, fmt.Sprintf("investigation %s has %d evidence IDs; requires %d", investigation.ID, len(investigation.EvidenceIDs), spec.MinEvidenceIDs))
@@ -168,6 +188,12 @@ func ApplyProTrackGates(score *Score, manifest Manifest, investigations map[stri
 	}
 	score.InvestigationCompletion = ratio(completed, total)
 	score.InvestigationGrounding = ratio(grounded, total)
+	if len(spec.RootCauseResources) > 0 {
+		score.RootCauseGrounding = ratio(rootCauseGrounded, total)
+	}
+	if len(spec.AffectedResources) > 0 {
+		score.AffectedGrounding = ratio(affectedGrounded, total)
+	}
 	if total == 0 {
 		score.HardFailures = append(score.HardFailures, "no investigation evidence was captured")
 	}
@@ -188,6 +214,50 @@ func ApplyProTrackGates(score *Score, manifest Manifest, investigations map[stri
 	sort.Strings(score.HardFailures)
 	sort.Strings(score.GateFailures)
 	score.Passed = len(score.HardFailures) == 0 && len(score.GateFailures) == 0
+}
+
+func investigationSectionGrounded(summary, heading string, aliases []string, resources map[string]CollectedTruth) bool {
+	if len(aliases) == 0 {
+		return true
+	}
+	section := markdownSection(summary, heading)
+	if section == "" {
+		return false
+	}
+	section = strings.ToLower(section)
+	for _, alias := range aliases {
+		resource, ok := resources[alias]
+		if !ok {
+			return false
+		}
+		name := strings.ToLower(strings.TrimSpace(resource.Name))
+		id := strings.ToLower(strings.TrimSpace(resource.ResourceID))
+		if (name == "" || !strings.Contains(section, name)) && (id == "" || !strings.Contains(section, id)) {
+			return false
+		}
+	}
+	return true
+}
+
+func markdownSection(summary, heading string) string {
+	want := strings.ToLower(strings.TrimSpace(heading))
+	var lines []string
+	inSection := false
+	for _, line := range strings.Split(summary, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			name := strings.TrimSpace(strings.TrimLeft(trimmed, "#"))
+			if inSection {
+				break
+			}
+			inSection = strings.EqualFold(name, want)
+			continue
+		}
+		if inSection {
+			lines = append(lines, line)
+		}
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 type ScoringInput struct {

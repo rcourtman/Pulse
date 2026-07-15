@@ -1970,6 +1970,14 @@ a new API state machine, queue contract, or verification-accounting field.
    rejected by registry policy outside the investigation profile, with
    the model supplying only resource/capability/params/reason and all
    correlation identity injected from trusted orchestration context.
+   The companion investigation-only `patrol_action_capabilities` tool is
+   also statically read/mutation-none and profile-gated. It accepts a
+   canonical resource ID and projects the same tenant-bound
+   `Service.Capabilities` contract used by proposal validation, including
+   declared parameter schemas and sensitivity markers but no values. A
+   catalogue lookup neither creates a proposal nor grants plan, approval,
+   or execution authority, so an investigation can select a causal action
+   target beyond the initial finding without widening the mutation boundary.
    Proposal parameter values are redacted from durable transcripts and
    stream events by the shared exposure projector (including
    provider-streamed raw-input overrides, which are discarded for

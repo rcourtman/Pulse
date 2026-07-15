@@ -1128,6 +1128,11 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case agentcapabilities.PatrolReportFindingToolName, agentcapabilities.PatrolAssessFindingToolName, agentcapabilities.PatrolResolveFindingToolName, agentcapabilities.PatrolGetFindingsToolName:
 		// Always available when registered; handler checks patrolFindingCreator at runtime
 		return e.GetPatrolFindingCreator() != nil
+	case agentcapabilities.PatrolProposeActionToolName, agentcapabilities.PatrolActionCapabilitiesToolName:
+		// These investigation-only tools share the request-local proposal
+		// capture: it supplies both trusted correlation and the tenant-bound
+		// capability catalog. They must never appear without that boundary.
+		return e.proposalCapture != nil
 	default:
 		return e.hasReadState()
 	}

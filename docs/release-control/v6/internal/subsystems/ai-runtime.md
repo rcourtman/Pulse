@@ -3126,8 +3126,15 @@ resolve canonical/source IDs and unique aliases before collection, reject
    for runtime zero-match races, record requested and effective identities,
    and summarize only findings within the effective scope. Watch may mutate
    only finding lifecycle state; Pro investigation remains structurally
-   read-only and can leave only a side-effect-free typed action proposal for
-   the canonical approval, execution, and independent-verification lifecycle.
+   read-only. Its finding resource is an observation anchor, never a search
+   fence: the Pro prompt must explicitly require evidence-led expansion,
+   competing-hypothesis testing, and a distinction between affected and causal
+   resources. When evidence selects a different remediation target, the
+   investigation-only `patrol_action_capabilities` lookup exposes that exact
+   resource's current typed catalogue without authority or proposal side
+   effects; only then may `patrol_propose_action` leave one side-effect-free
+   typed proposal for the canonical approval, execution, and independent-
+   verification lifecycle.
 
 1. Update this contract when canonical AI runtime or transport entry points move, including transport-level provider request-shape changes such as OpenAI-compatible `tool_choice` handling, runtime-failure classification splits (for example separating tool-choice request rejection, no tool-capable endpoint, and generic model-level lack of tool support into distinct causes), Patrol-specific verification surfaces such as `POST /api/ai/patrol/preflight` that exercise the full chat-completions path with a minimal tool definition rather than only listing models, Patrol-preflight cache observability where the AI Service caches the most recent preflight outcome (success, soft warning, or classified failure) and the AI settings response surfaces it as `patrol_preflight` so the UI can hydrate a "last verified" indicator without forcing operators to re-run preflight on every page load, the auto-trigger contract on `HandleUpdateAISettings` where the save handler runs `TriggerPatrolPreflightAsync` only when the change actually moved Patrol transport (model swap, provider key for that model changed, or assistant just enabled with a Patrol model) so routine settings saves do not burn provider tokens, the startup-seed contract where the AI Service handler dispatches the same async preflight on Pulse boot when assistant is enabled and a Patrol model is configured so the cache is populated for the first `/api/settings/ai` poll after a restart instead of blanking back to "never verified", the readiness-integration contract where the `tools` check in the Patrol readiness payload consults the cached preflight and surfaces the classified evidence (success, soft warning, or failure with classified summary plus "last preflight <age>") for the configured provider+model when available (falling back to the static `PatrolToolReadinessForModel` classifier only when the cache is empty or holds a result for a different model), the preflight-runtime-recovery contract where a successful Patrol preflight with an observed tool call resolves the synthetic Patrol runtime failure finding while failed or no-tool-call preflights leave it active, the stateless-Patrol-input contract where `ExecutePatrolStream` must pass only the current run's user prompt into the agentic loop rather than reloading the persisted `patrol-main` session history (so a prior run that ended with orphan `tool_calls` cannot poison every subsequent run with malformed conversation structure), and the deterministic-resolve-gate contract where the `patrol_resolve_finding` tool adapter rejects LLM-driven resolves of event/persistent category findings (`backup`, `reliability`, `security`, `general`) when a deterministic verifier exists for the finding's key and that verifier either still detects the failure signal **or returns an inconclusive result** — preventing the LLM from optimistically resolving a finding its current investigation simply didn't re-surface, which was the source of the "Backup failed" flap (detected → auto-resolved → re-detected ten times in a day before this gate). The fail-closed-on-inconclusive policy treats verifier errors (timeouts, executor unavailability, transport faults) as "we don't know" rather than "go ahead": resolution of an event/persistent finding is effectively permanent (next detection registers as a regression and inflates counters), so the safe default is to refuse and require either a successful re-verification or operator action. The gate has a symmetric counterpart, the verified stale-resolve contract: `reconcileStaleFindings` (`internal/ai/patrol_ai.go`) may auto-resolve an event/persistent finding that was seeded but neither re-reported nor resolved ONLY when the finding's key has a deterministic verifier and that verifier affirmatively confirms the failure signal is gone — absence of a re-report remains insufficient evidence for these categories, "still present" or inconclusive verification leaves the finding active (the same fail-closed default), and verifications are capped per reconcile pass (`maxVerifiedStaleResolvesPerRun`) with deferred candidates logged and retried on the next successful full patrol. Without this counterpart the lifecycle was asymmetric: a genuinely fixed backup or recovered service stayed an active finding indefinitely unless the LLM happened to call `patrol_resolve_finding`. `hasDeterministicVerifierForKey` (`internal/ai/patrol_findings.go`) is the single source of truth for which keys have verifiers, consulted by both the gate and the reconcile pass, and must stay aligned with the dispatch switch in `verifyFixDeterministically` (it previously listed two of the seven dispatch keys, silently skipping verification that existed). Finding keys normalize onto the canonical verifier vocabulary in `normalizeFindingKey` via an alias map of unambiguous directional synonyms (`high-cpu` → `cpu-high`, `high-memory` → `memory-high`, `high-disk` → `disk-high`) so deduplication and deterministic verification meet on one key, and the `patrol_report_finding` key guidance (`internal/ai/tools/tools_patrol.go`) teaches the canonical vocabulary; semantically distinct keys (`pbs-job-failed`, `node-offline`) must not be aliased onto verifier keys whose resource model they do not match, the assessment-recovery contract where the overall-health "Recent Patrol errors" coverage factor in `summarizeRecentPatrolCoverage` suppresses the score penalty once three consecutive trailing successful full Patrol runs exist at the most-recent end of the recent-runs window — so the grade reflects current reality after a Patrol-affecting bug is fixed rather than dragging stale failures forward for the ~9 hours it takes scheduled runs to age them out of the trailing-10 ratio, the orphan-tool-call-repair contract where `convertToProviderMessages` injects synthetic is_error tool result messages for any `tool_call_id` in an assistant message that has no matching downstream tool result, so a chat session that ended mid-tool-call (network drop, ctx timeout, browser crash) cannot poison its next message with the structural-violation error the provider rejects — the synthetic content is marked is_error=true and explains the interruption so the model can retry the call or proceed without the data, and the patrol-session-bound contract where `ExecutePatrolStream` calls `SessionStore.TrimMessages` after persisting each run's messages to cap the patrol-main session at 200 messages (roughly two recent runs' worth) — without the bound the file grew unbounded at every scheduled run, reaching 16 MB and 3,593 messages within a month and making every `AddMessage` rewrite linearly more expensive; the canonical Patrol forensic log is the `PatrolRunRecord` history surfaced at `/api/ai/patrol/runs`, not the chat-session-shaped file
 2. Keep AI runtime and shared API proof routing aligned in `registry.json`
@@ -4988,10 +4995,15 @@ authority. The profile vocabulary is closed: unknown profile values are
 rejected at apply time and classify as non-interactive, never as the
 permissive interactive default.
 The typed proposal channel rides the investigation profile.
-`patrol_propose_action` (side-effect-free, mutation-none, read-kind) is
-projected and executable ONLY under the investigation profile: the
-registry policy rejects a fabricated call under any other posture
-before the handler runs. The model's tool schema carries only
+`patrol_action_capabilities` and `patrol_propose_action` are side-effect-free,
+mutation-none, read-kind tools projected and executable ONLY under the
+investigation profile: the registry policy rejects a fabricated call under any
+other posture before the handler runs. The capability lookup accepts one
+canonical resource ID and reads the same tenant-bound catalogue used by
+proposal validation without consuming proposal cardinality. This allows the
+model to inspect the typed actions of a causal resource discovered during the
+run instead of forcing the original finding resource to remain the action
+target. The proposal tool's model-authored schema carries only
 resource_id, capability_name, params, and reason; proposal, finding,
 investigation, and evidence identity are injected from trusted
 orchestration context through the request-local proposal capture sink
@@ -5804,6 +5816,15 @@ and the independently declared expected-finding resource as separate resolved
 identities; an expected resource may differ only when the manifest declared it
 as related before execution. V1 replay artifacts retain target-as-expected
 semantics.
+Pro cross-resource qualification must keep the initial trigger scope separate
+from the lab's collected/oracle resource set. A reviewed `scope_resources`
+alias list narrows only the Patrol trigger; it never removes related resources
+from collection or ground truth. Scenario-owned `root_cause_resources` and
+`affected_resources` aliases are resolved before execution and scored against
+the exact `Root Cause` and `Affected Resources` response sections using the
+collected canonical name or ID. The expected diagnosis therefore remains
+independent of the read-only tools Patrol chose, and merely repeating the
+downstream symptom cannot pass causal grounding.
 The canonical `pulse_query` schema and executor must admit the same resource
 types. In particular, `action=get` accepts `docker-host`, returns a governed
 read-only host response when the identity resolves, and returns a successful

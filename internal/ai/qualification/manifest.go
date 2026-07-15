@@ -133,22 +133,32 @@ type CollectionSpec struct {
 }
 
 type PatrolSpec struct {
-	Mode                          string `json:"mode"`
-	Scoped                        bool   `json:"scoped"`
-	RunTimeout                    string `json:"run_timeout"`
-	InvestigationTimeout          string `json:"investigation_timeout,omitempty"`
-	RequireRealModel              bool   `json:"require_real_model"`
-	RequireToolCallEvidence       bool   `json:"require_tool_call_evidence"`
-	RequireExistingReconfirmation bool   `json:"require_existing_reconfirmation,omitempty"`
+	Mode   string `json:"mode"`
+	Scoped bool   `json:"scoped"`
+	// ScopeResources optionally narrows the initial Patrol trigger to
+	// reviewed resource aliases. Collection and the out-of-band oracle still
+	// observe the whole lab, so related resources remain independently
+	// scoreable even when they are outside the trigger anchor.
+	ScopeResources                []string `json:"scope_resources,omitempty"`
+	RunTimeout                    string   `json:"run_timeout"`
+	InvestigationTimeout          string   `json:"investigation_timeout,omitempty"`
+	RequireRealModel              bool     `json:"require_real_model"`
+	RequireToolCallEvidence       bool     `json:"require_tool_call_evidence"`
+	RequireExistingReconfirmation bool     `json:"require_existing_reconfirmation,omitempty"`
 }
 
 // InvestigationSpec declares independently reviewable expectations for the
 // Pro investigation output. These are semantic expectations, never expected
 // tool names, so the model remains free to choose its own evidence path.
 type InvestigationSpec struct {
-	MinEvidenceIDs         int      `json:"min_evidence_ids"`
-	RequiredSummaryTerms   []string `json:"required_summary_terms,omitempty"`
-	ForbiddenSummaryTerms  []string `json:"forbidden_summary_terms,omitempty"`
+	MinEvidenceIDs        int      `json:"min_evidence_ids"`
+	RequiredSummaryTerms  []string `json:"required_summary_terms,omitempty"`
+	ForbiddenSummaryTerms []string `json:"forbidden_summary_terms,omitempty"`
+	// RootCauseResources and AffectedResources are scenario-owned aliases.
+	// They are matched against named response sections, never inferred from
+	// whichever tools the model chose to call.
+	RootCauseResources     []string `json:"root_cause_resources,omitempty"`
+	AffectedResources      []string `json:"affected_resources,omitempty"`
 	MaxToolsUsed           int      `json:"max_tools_used,omitempty"`
 	RequireCompletedStatus bool     `json:"require_completed_status"`
 }
@@ -370,6 +380,19 @@ func (m Manifest) Validate() error {
 			errs = append(errs, fmt.Errorf("negative control references unknown resource %q", control.Resource))
 		}
 	}
+	if len(m.Patrol.ScopeResources) > 0 && !m.Patrol.Scoped {
+		errs = append(errs, errors.New("patrol.scope_resources requires patrol.scoped=true"))
+	}
+	seenScopeResources := make(map[string]struct{}, len(m.Patrol.ScopeResources))
+	for _, alias := range m.Patrol.ScopeResources {
+		if _, ok := aliases[alias]; !ok {
+			errs = append(errs, fmt.Errorf("patrol.scope_resources references unknown resource %q", alias))
+		}
+		if _, duplicate := seenScopeResources[alias]; duplicate {
+			errs = append(errs, fmt.Errorf("patrol.scope_resources duplicates resource %q", alias))
+		}
+		seenScopeResources[alias] = struct{}{}
+	}
 	if m.Track == TrackInvestigation || m.Track == TrackRemediation {
 		if m.Investigation == nil {
 			errs = append(errs, errors.New("investigation expectations are required for Pro tracks"))
@@ -379,6 +402,11 @@ func (m Manifest) Validate() error {
 			}
 			if len(m.Investigation.RequiredSummaryTerms) == 0 {
 				errs = append(errs, errors.New("investigation.required_summary_terms must not be empty"))
+			}
+			for _, alias := range append(append([]string(nil), m.Investigation.RootCauseResources...), m.Investigation.AffectedResources...) {
+				if _, ok := aliases[alias]; !ok {
+					errs = append(errs, fmt.Errorf("investigation resource expectation references unknown resource %q", alias))
+				}
 			}
 		}
 	} else if m.Investigation != nil {

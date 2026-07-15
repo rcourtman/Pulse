@@ -17,6 +17,32 @@ import (
 func (e *PulseToolExecutor) registerProposeTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
+			Name:        agentcapabilities.PatrolActionCapabilitiesToolName,
+			Description: `Read the typed remediation capabilities currently advertised by a canonical resource. Use this after investigation evidence identifies the resource that should actually be changed; the causal resource may differ from the resource named by the original finding. Side-effect-free: this only reads capability names and parameter schemas.`,
+			InputSchema: InputSchema{
+				Type: "object",
+				Properties: map[string]PropertySchema{
+					"resource_id": {
+						Type:        "string",
+						Description: "Canonical resource ID whose advertised typed actions should be inspected",
+					},
+				},
+				Required: []string{"resource_id"},
+			},
+		},
+		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
+			return exec.executeActionCapabilities(ctx, args)
+		},
+		Governance: ToolGovernance{
+			ActionMode:      ToolActionRead,
+			ApprovalPolicy:  ToolApprovalScopeOnly,
+			ApprovalSummary: "side-effect-free lookup of the canonical resource capability catalog",
+			Summary:         "Reads typed actions advertised by an investigation-selected resource; it grants no planning, approval, or execution authority.",
+		},
+	})
+
+	e.registry.registerBuiltin(RegisteredTool{
+		Definition: Tool{
 			Name: agentcapabilities.PatrolProposeActionToolName,
 			Description: `Propose ONE typed remediation action for the finding under investigation. Side-effect-free: the proposal is validated and recorded for governed planning and approval; nothing executes now.
 
@@ -56,6 +82,64 @@ Submit at most one proposal per investigation. If no safe remediation exists, co
 			Summary:         "Records one validated typed action proposal during a Patrol investigation; planning, approval, and execution stay governed.",
 		},
 	})
+}
+
+type investigationCapabilityCatalogResponse struct {
+	ResourceID   string                            `json:"resource_id"`
+	Capabilities []investigationCapabilityResponse `json:"capabilities"`
+}
+
+type investigationCapabilityResponse struct {
+	Name                 string                                 `json:"name"`
+	Description          string                                 `json:"description,omitempty"`
+	MinimumApprovalLevel string                                 `json:"minimum_approval_level"`
+	AutoAuthorization    string                                 `json:"auto_authorization"`
+	Platform             string                                 `json:"platform,omitempty"`
+	Params               []investigationCapabilityParamResponse `json:"params"`
+}
+
+type investigationCapabilityParamResponse struct {
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`
+	Required    bool     `json:"required"`
+	Enum        []string `json:"enum"`
+	Pattern     string   `json:"pattern,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Sensitive   bool     `json:"sensitive"`
+}
+
+func (e *PulseToolExecutor) executeActionCapabilities(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	if e.proposalCapture == nil {
+		return NewErrorResult(fmt.Errorf("action capabilities are not available in this run")), nil
+	}
+	resourceID := unified.CanonicalResourceID(stringArg(args, "resource_id"))
+	capabilities, err := e.proposalCapture.Capabilities(ctx, resourceID)
+	if err != nil {
+		return NewErrorResult(fmt.Errorf("capability catalog lookup failed for resource %q", resourceID)), nil
+	}
+	response := investigationCapabilityCatalogResponse{
+		ResourceID:   resourceID,
+		Capabilities: make([]investigationCapabilityResponse, 0, len(capabilities)),
+	}
+	for _, capability := range capabilities {
+		item := investigationCapabilityResponse{
+			Name:                 capability.Name,
+			Description:          capability.Description,
+			MinimumApprovalLevel: string(capability.MinimumApprovalLevel),
+			AutoAuthorization:    string(unified.NormalizeActionAutoAuthorizationClass(capability.AutoAuthorization)),
+			Platform:             capability.Platform,
+			Params:               make([]investigationCapabilityParamResponse, 0, len(capability.Params)),
+		}
+		for _, param := range capability.Params {
+			item.Params = append(item.Params, investigationCapabilityParamResponse{
+				Name: param.Name, Type: param.Type, Required: param.Required,
+				Enum: append([]string(nil), param.Enum...), Pattern: param.Pattern,
+				Description: param.Description, Sensitive: param.IsSensitive,
+			})
+		}
+		response.Capabilities = append(response.Capabilities, item)
+	}
+	return NewJSONResult(response), nil
 }
 
 // executeProposeAction validates and captures a typed action proposal.

@@ -86,6 +86,33 @@ func TestManifestAllowsExpectedFindingOnDeclaredRelatedResource(t *testing.T) {
 	}
 }
 
+func TestManifestValidatesTriggerScopeAndInvestigationResourceExpectations(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Track = TrackInvestigation
+	manifest.Resources = append(manifest.Resources, ResourceSpec{Alias: "dependency", Kind: "container", Name: "pulse-qual-${run_id}-dependency"})
+	manifest.Patrol.Scoped = true
+	manifest.Patrol.ScopeResources = []string{"target"}
+	manifest.Investigation = &InvestigationSpec{
+		MinEvidenceIDs: 1, RequiredSummaryTerms: []string{"dependency"},
+		RootCauseResources: []string{"dependency"}, AffectedResources: []string{"target"},
+		RequireCompletedStatus: true,
+	}
+	if err := manifest.Validate(); err != nil {
+		t.Fatalf("valid cross-resource expectations were rejected: %v", err)
+	}
+
+	manifest.Patrol.ScopeResources = []string{"missing"}
+	if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), "scope_resources references unknown") {
+		t.Fatalf("unknown trigger anchor must fail validation: %v", err)
+	}
+
+	manifest.Patrol.ScopeResources = []string{"target"}
+	manifest.Investigation.RootCauseResources = []string{"missing"}
+	if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), "resource expectation references unknown") {
+		t.Fatalf("unknown root-cause resource must fail validation: %v", err)
+	}
+}
+
 func TestManifestRequiresLiveSafetyAndTeardownProof(t *testing.T) {
 	manifest := validTestManifest()
 	manifest.Patrol.RequireRealModel = false

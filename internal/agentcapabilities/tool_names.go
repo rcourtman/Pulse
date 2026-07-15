@@ -40,4 +40,10 @@ const (
 	// planning, approval, and execution stay on the canonical action
 	// lifecycle.
 	PatrolProposeActionToolName = "patrol_propose_action"
+	// PatrolActionCapabilitiesToolName is the investigation-only,
+	// side-effect-free lookup for the typed actions advertised by any
+	// canonical resource the investigation has identified. It lets the
+	// model choose an action target from evidence instead of pinning
+	// remediation to the finding's initial resource.
+	PatrolActionCapabilitiesToolName = "patrol_action_capabilities"
 )

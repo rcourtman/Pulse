@@ -29,6 +29,8 @@ func TestKnownToolNamesIncludesRegisteredTools(t *testing.T) {
 		agentcapabilities.PatrolResolveFindingToolName,
 		agentcapabilities.PatrolGetFindingsToolName,
 		agentcapabilities.PatrolAssessFindingToolName,
+		agentcapabilities.PatrolActionCapabilitiesToolName,
+		agentcapabilities.PatrolProposeActionToolName,
 	}
 	for _, name := range expected {
 		if !IsKnownToolName(name) {

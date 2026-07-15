@@ -89,6 +89,8 @@ type ContributionScore struct {
 	RecommendationSafety    float64      `json:"recommendation_safety"`
 	InvestigationCompletion float64      `json:"investigation_completion"`
 	InvestigationGrounding  float64      `json:"investigation_grounding"`
+	RootCauseGrounding      float64      `json:"root_cause_grounding"`
+	AffectedGrounding       float64      `json:"affected_resource_grounding"`
 	FindingsPerCausalGroup  float64      `json:"findings_per_causal_group"`
 	ToolCalls               int          `json:"tool_calls"`
 	FailedToolCalls         int          `json:"failed_tool_calls"`
@@ -280,6 +282,7 @@ func contributionRun(path string, report RunReport) (ContributionRun, error) {
 			SeverityAccuracy: report.Score.SeverityAccuracy, EvidenceGrounding: report.Score.EvidenceGrounding,
 			RecommendationSafety:    report.Score.RecommendationSafety,
 			InvestigationCompletion: report.Score.InvestigationCompletion, InvestigationGrounding: report.Score.InvestigationGrounding,
+			RootCauseGrounding: report.Score.RootCauseGrounding, AffectedGrounding: report.Score.AffectedGrounding,
 			FindingsPerCausalGroup: report.Score.FindingsPerCausalGroup,
 			ToolCalls:              report.Score.ToolCalls, FailedToolCalls: report.Score.FailedToolCalls,
 			DuplicateToolCalls: report.Score.DuplicateToolCalls, InputTokens: report.Score.InputTokens,

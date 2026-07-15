@@ -264,13 +264,7 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		if err != nil {
 			return err
 		}
-		resourceIDs := make([]string, 0, len(collected))
-		if manifest.Patrol.Scoped {
-			for _, resource := range collected {
-				resourceIDs = append(resourceIDs, resource.ID)
-			}
-			sort.Strings(resourceIDs)
-		}
+		resourceIDs := patrolScopeResourceIDs(manifest, collected)
 		if manifest.Patrol.RequireExistingReconfirmation {
 			warmupTriggeredAt := time.Now().UTC()
 			runTimeout, _ := positiveDuration(manifest.Patrol.RunTimeout)
@@ -385,7 +379,7 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		report.Score.HardFailures = append(report.Score.HardFailures, "no completed investigation evidence")
 		report.Score.Passed = false
 	}
-	ApplyProTrackGates(&report.Score, manifest, report.Investigation, report.Remediation)
+	ApplyProTrackGates(&report.Score, manifest, report.GroundTruth, report.Investigation, report.Remediation)
 
 	if err := r.phase(&report, "revert_and_verify", func() error {
 		for i := len(manifest.Faults) - 1; i >= 0; i-- {
@@ -414,6 +408,24 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		terminalErr = errors.Join(terminalErr, err)
 	}
 	return report, terminalErr
+}
+
+func patrolScopeResourceIDs(manifest Manifest, collected map[string]Resource) []string {
+	if !manifest.Patrol.Scoped {
+		return nil
+	}
+	resourceIDs := make([]string, 0, len(collected))
+	if len(manifest.Patrol.ScopeResources) > 0 {
+		for _, alias := range manifest.Patrol.ScopeResources {
+			resourceIDs = append(resourceIDs, collected[alias].ID)
+		}
+	} else {
+		for _, resource := range collected {
+			resourceIDs = append(resourceIDs, resource.ID)
+		}
+	}
+	sort.Strings(resourceIDs)
+	return resourceIDs
 }
 
 func (r *QualificationRunner) initialEnvironment() Environment {

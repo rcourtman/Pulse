@@ -284,7 +284,7 @@ func ReplayScore(report RunReport) RunReport {
 		FaultsIntact:      !report.Manifest.Security.RequireFaultIntact || allObservationsPassed(report.PostPatrol),
 		NoMutation:        !report.Manifest.Security.RequireNoMutation || allObservationsPassed(report.PostPatrol),
 	})
-	ApplyProTrackGates(&report.Score, report.Manifest, report.Investigation, report.Remediation)
+	ApplyProTrackGates(&report.Score, report.Manifest, report.GroundTruth, report.Investigation, report.Remediation)
 	report.Passed = report.Score.Passed && report.Teardown.Passed && len(report.Errors) == 0
 	return report
 }
@@ -592,6 +592,16 @@ func renderMarkdown(report RunReport) string {
 	fmt.Fprintf(&b, "| Category accuracy | %.1f%% |\n", report.Score.CategoryAccuracy*100)
 	fmt.Fprintf(&b, "| Severity accuracy | %.1f%% |\n", report.Score.SeverityAccuracy*100)
 	fmt.Fprintf(&b, "| Evidence grounding | %.1f%% |\n", report.Score.EvidenceGrounding*100)
+	if report.Manifest.Track != TrackWatch && report.Manifest.Investigation != nil {
+		fmt.Fprintf(&b, "| Investigation completion | %.1f%% |\n", report.Score.InvestigationCompletion*100)
+		fmt.Fprintf(&b, "| Investigation grounding | %.1f%% |\n", report.Score.InvestigationGrounding*100)
+		if len(report.Manifest.Investigation.RootCauseResources) > 0 {
+			fmt.Fprintf(&b, "| Root-cause resource grounding | %.1f%% |\n", report.Score.RootCauseGrounding*100)
+		}
+		if len(report.Manifest.Investigation.AffectedResources) > 0 {
+			fmt.Fprintf(&b, "| Affected-resource grounding | %.1f%% |\n", report.Score.AffectedGrounding*100)
+		}
+	}
 	fmt.Fprintf(&b, "| Duplicate tool calls | %d |\n", report.Score.DuplicateToolCalls)
 	fmt.Fprintf(&b, "| Collection latency | %s |\n", report.Score.CollectionLatency)
 	fmt.Fprintf(&b, "| Patrol latency | %s |\n", report.Score.PatrolLatency)

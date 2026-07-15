@@ -121,6 +121,22 @@ func NewProposalCapture(identity ProposalIdentity, catalog ProposalCatalog) *Pro
 	return &ProposalCapture{identity: identity.clone(), catalog: catalog}
 }
 
+// Capabilities resolves the current advertised action contract for a
+// canonical resource without changing proposal state. Investigations use
+// this to inspect a causal resource discovered after the run started; the
+// same catalog is used again when a proposal is validated, so lookup and
+// acceptance cannot drift.
+func (c *ProposalCapture) Capabilities(ctx context.Context, resourceID string) ([]unified.ResourceCapability, error) {
+	if c == nil || c.catalog == nil {
+		return nil, errors.New("no capability catalog is wired for this investigation")
+	}
+	resourceID = unified.CanonicalResourceID(resourceID)
+	if resourceID == "" {
+		return nil, errors.New("resource_id is required")
+	}
+	return c.catalog(ctx, resourceID)
+}
+
 // cloneParams deep-clones a parameter map via JSON round-trip (the values
 // arrived as decoded JSON, so the round-trip is lossless). The sink never
 // retains or returns the caller's map: mutation after validation must not
