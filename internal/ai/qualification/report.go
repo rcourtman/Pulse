@@ -19,6 +19,12 @@ import (
 
 const ReportSchemaVersion = "patrol.qualification.report/v1"
 
+// minimumQualificationWilsonLower is the shared statistical floor for launch
+// qualification. Scenario manifests must declare enough qualification repeats
+// for a perfect profile to reach this bound; otherwise the checked-in profile
+// could never qualify regardless of model behaviour.
+const minimumQualificationWilsonLower = 0.85
+
 type PhaseTiming struct {
 	Name      string        `json:"name"`
 	StartedAt time.Time     `json:"started_at"`
@@ -369,7 +375,6 @@ func ApplyQualificationGates(comparison *ComparisonReport, catalog Catalog, trac
 	if track != TrackWatch && track != TrackInvestigation && track != TrackRemediation {
 		return fmt.Errorf("unsupported qualification track %q", track)
 	}
-	const minimumWilsonLower = 0.85
 	globalComparabilityFailures := make([]string, 0)
 	if comparison.DirtyRuns > 0 {
 		globalComparabilityFailures = append(globalComparabilityFailures, fmt.Sprintf("%d run(s) were captured from a dirty worktree", comparison.DirtyRuns))
@@ -433,11 +438,11 @@ func ApplyQualificationGates(comparison *ComparisonReport, catalog Catalog, trac
 			if scenario.Passed != scenario.Runs {
 				scenario.Failures = append(scenario.Failures, fmt.Sprintf("only %d of %d runs passed", scenario.Passed, scenario.Runs))
 			}
-			if scenario.PassRate.Lower < minimumWilsonLower {
-				scenario.Failures = append(scenario.Failures, fmt.Sprintf("pass-rate Wilson lower bound %.3f below %.3f", scenario.PassRate.Lower, minimumWilsonLower))
+			if scenario.PassRate.Lower < minimumQualificationWilsonLower {
+				scenario.Failures = append(scenario.Failures, fmt.Sprintf("pass-rate Wilson lower bound %.3f below %.3f", scenario.PassRate.Lower, minimumQualificationWilsonLower))
 			}
-			if scenario.FaultRecall.Total > 0 && scenario.FaultRecall.Lower < minimumWilsonLower {
-				scenario.Failures = append(scenario.Failures, fmt.Sprintf("fault-recall Wilson lower bound %.3f below %.3f", scenario.FaultRecall.Lower, minimumWilsonLower))
+			if scenario.FaultRecall.Total > 0 && scenario.FaultRecall.Lower < minimumQualificationWilsonLower {
+				scenario.Failures = append(scenario.Failures, fmt.Sprintf("fault-recall Wilson lower bound %.3f below %.3f", scenario.FaultRecall.Lower, minimumQualificationWilsonLower))
 			}
 			if scenario.FalsePositives != 0 || scenario.HardFailureRuns != 0 {
 				scenario.Failures = append(scenario.Failures, fmt.Sprintf("false positives=%d hard-failure runs=%d", scenario.FalsePositives, scenario.HardFailureRuns))
@@ -464,6 +469,14 @@ func ApplyQualificationGates(comparison *ComparisonReport, catalog Catalog, trac
 	}
 	sort.Slice(comparison.Qualification, func(i, j int) bool { return comparison.Qualification[i].Model < comparison.Qualification[j].Model })
 	return nil
+}
+
+func minimumPerfectQualificationRuns() int {
+	for runs := 1; ; runs++ {
+		if WilsonInterval(runs, runs).Lower >= minimumQualificationWilsonLower {
+			return runs
+		}
+	}
 }
 
 func summarizeModel(model string, reports []RunReport) ModelSummary {

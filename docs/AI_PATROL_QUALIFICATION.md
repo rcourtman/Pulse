@@ -407,7 +407,10 @@ Qualification is not “best of N”: every run must pass. The comparison gate a
 requires every scenario in the selected track, the manifest's qualification
 repeat count, zero false positives, zero hard-failure runs, and 95% Wilson lower
 bounds of at least 0.85 for pass rate and fault recall. A perfect 3/3 sample
-cannot launch; a perfect 30/30 sample can.
+cannot launch; 22/22 is the smallest perfect sample that can clear the
+confidence floor. Manifest validation rejects a qualification repeat count
+below that statistical minimum, so the checked-in qualification profile cannot
+be impossible to pass by construction.
 
 ```sh
 go run ./cmd/patrol-qualify \

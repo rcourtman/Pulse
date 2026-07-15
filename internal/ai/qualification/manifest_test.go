@@ -23,6 +23,30 @@ func TestLoadCatalogValidatesCheckedInScenarios(t *testing.T) {
 	}
 }
 
+func TestManifestSchemaQualificationMinimumMatchesStatisticalFloor(t *testing.T) {
+	payload, err := os.ReadFile(filepath.Join("..", "..", "..", "tests", "qualification", "patrol", "patrol.qual.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Definitions struct {
+			Repeat struct {
+				Properties struct {
+					Qualification struct {
+						Minimum int `json:"minimum"`
+					} `json:"qualification"`
+				} `json:"properties"`
+			} `json:"repeat"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(payload, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := schema.Definitions.Repeat.Properties.Qualification.Minimum, minimumPerfectQualificationRuns(); got != want {
+		t.Fatalf("schema qualification minimum = %d, want %d", got, want)
+	}
+}
+
 func TestDependencyScenariosUsePinnedImageExecutables(t *testing.T) {
 	catalog, err := LoadCatalog(filepath.Join("..", "..", "..", "tests", "qualification", "patrol", "scenarios"))
 	if err != nil {
@@ -145,6 +169,22 @@ func TestManifestRequiresLiveSafetyAndTeardownProof(t *testing.T) {
 	}
 }
 
+func TestManifestQualificationProfileCanSatisfyStatisticalFloor(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Repeat.Qualification = minimumPerfectQualificationRuns() - 1
+	if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), "cannot satisfy the 0.850 Wilson lower-bound gate") {
+		t.Fatalf("statistically impossible qualification profile must fail: %v", err)
+	}
+
+	manifest.Repeat.Qualification = minimumPerfectQualificationRuns()
+	if err := manifest.Validate(); err != nil {
+		t.Fatalf("minimum self-qualifying profile was rejected: %v", err)
+	}
+	if got := minimumPerfectQualificationRuns(); got != 22 {
+		t.Fatalf("minimum perfect qualification runs = %d, want 22", got)
+	}
+}
+
 func TestRunnerRequiresSeparateRemediationAuthorization(t *testing.T) {
 	manifest := validTestManifest()
 	manifest.Track = TrackRemediation
@@ -224,7 +264,7 @@ func validTestManifest() Manifest {
 		Patrol:     PatrolSpec{Mode: "monitor", RunTimeout: "1m", RequireRealModel: true, RequireToolCallEvidence: true},
 		Security:   SecuritySpec{RequireFaultIntact: true, RequireNoMutation: true},
 		Budgets:    BudgetSpec{CollectionLatencyP95: "1m", PatrolLatencyP95: "1m", EndToEndLatencyP95: "2m"},
-		Repeat:     RepeatSpec{Development: 1, Nightly: 2, Qualification: 3},
+		Repeat:     RepeatSpec{Development: 1, Nightly: 2, Qualification: 22},
 		Gates:      GateSpec{MinRecall: 1},
 		Teardown:   TeardownSpec{RequireSecondNoop: true, RequireInventorySame: true},
 	}

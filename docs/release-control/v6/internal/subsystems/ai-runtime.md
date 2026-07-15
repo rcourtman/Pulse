@@ -635,7 +635,10 @@ component-local required-scope list.
 
 Patrol model qualification extends only through
 `internal/ai/qualification/`, `cmd/patrol-qualify/`, and reviewed manifests
-under `tests/qualification/patrol/`. `live-suite` may sequence every manifest
+under `tests/qualification/patrol/`. A manifest's qualification repeat profile must be
+capable of clearing the shared 95% Wilson lower-bound gate at a perfect pass
+rate; manifest validation rejects statistically impossible profiles before any
+live fault is provisioned. `live-suite` may sequence every manifest
 for one explicit track, but it must acquire and freshly preflight one exact
 provider/model route before provisioning any scenario, retain that route for
 every repetition, and restore it once after the complete suite. Scenario

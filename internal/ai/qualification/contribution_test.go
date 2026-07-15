@@ -13,7 +13,7 @@ func TestContributionExportIsAllowlistOnlyAndLocal(t *testing.T) {
 	const privateMarker = "PRIVATE-CANARY-tower.internal-10.0.0.42"
 	manifest := validTestManifest()
 	manifest.Description = privateMarker
-	manifest.Repeat = RepeatSpec{Development: 1, Nightly: 1, Qualification: 1}
+	manifest.Repeat = RepeatSpec{Development: 1, Nightly: 1, Qualification: 22}
 	report := RunReport{
 		SchemaVersion: ReportSchemaVersion,
 		RunID:         privateMarker,
@@ -123,7 +123,7 @@ func TestContributionChallengeValidation(t *testing.T) {
 
 func TestContributionExportRejectsSecretShapedAllowlistedIdentity(t *testing.T) {
 	manifest := validTestManifest()
-	manifest.Repeat = RepeatSpec{Development: 1, Nightly: 1, Qualification: 1}
+	manifest.Repeat = RepeatSpec{Development: 1, Nightly: 1, Qualification: 22}
 	report := RunReport{
 		SchemaVersion: ReportSchemaVersion,
 		Manifest:      manifest,

@@ -502,6 +502,17 @@ func (m Manifest) Validate() error {
 	if m.Repeat.Qualification < m.Repeat.Nightly || m.Repeat.Nightly < m.Repeat.Development {
 		errs = append(errs, errors.New("repeat counts must satisfy qualification >= nightly >= development"))
 	}
+	if m.Repeat.Qualification > 0 {
+		perfectLower := WilsonInterval(m.Repeat.Qualification, m.Repeat.Qualification).Lower
+		if perfectLower < minimumQualificationWilsonLower {
+			errs = append(errs, fmt.Errorf(
+				"repeat.qualification=%d cannot satisfy the %.3f Wilson lower-bound gate even with a perfect run; at least %d repeats are required",
+				m.Repeat.Qualification,
+				minimumQualificationWilsonLower,
+				minimumPerfectQualificationRuns(),
+			))
+		}
+	}
 	if m.Patrol.RequireRealModel && m.Lab.Driver == "replay" {
 		errs = append(errs, errors.New("a replay-only lab cannot require a real model"))
 	}
