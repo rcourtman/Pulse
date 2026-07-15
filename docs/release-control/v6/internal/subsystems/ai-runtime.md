@@ -5854,6 +5854,12 @@ the exact `Root Cause` and `Affected Resources` response sections using the
 collected canonical name or ID. The expected diagnosis therefore remains
 independent of the read-only tools Patrol chose, and merely repeating the
 downstream symptom cannot pass causal grounding.
+An existing-finding reconfirmation scenario may seed its scored run only from
+a successful prerequisite Patrol run that created a run-owned finding on every
+scenario-owned expected resource. An incidental provider, readiness, or other
+unrelated finding cannot satisfy setup, and the failed prerequisite remains in
+the report as diagnostic evidence rather than being converted into a model
+reconfirmation miss.
 Scenario-owned `required_summary_term_groups` may declare reviewed semantic
 alternatives for one independently known fact, such as Docker's injected
 `stopped` action and its normally collected `exited` state. Every group still

@@ -1,6 +1,7 @@
 package qualification
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -98,6 +99,45 @@ func TestPhaseDurationLinearScan(t *testing.T) {
 			got := phaseDuration(tc.phases, tc.lookup)
 			if got != tc.want {
 				t.Fatalf("phaseDuration(%v, %q) = %v, want %v", tc.phases, tc.lookup, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateExistingFindingPrerequisiteRejectsUnrelatedOrFailedWarmup(t *testing.T) {
+	manifest := Manifest{
+		Patrol: PatrolSpec{RequireExistingReconfirmation: true},
+		Faults: []FaultSpec{{
+			ID:       "container-health",
+			Target:   "target",
+			Required: true,
+			Expected: ExpectedFinding{Resource: "target"},
+		}},
+	}
+	collected := map[string]Resource{"target": {ID: "resource-target", Name: "target"}}
+
+	tests := []struct {
+		name     string
+		warmup   PatrolRun
+		findings []Finding
+		wantErr  string
+	}{
+		{name: "failed warmup cannot seed reconfirmation", warmup: PatrolRun{Status: "error", ErrorCount: 1}, findings: []Finding{{ResourceID: "resource-target"}}, wantErr: "prerequisite Patrol run failed"},
+		{name: "unrelated finding cannot satisfy target prerequisite", warmup: PatrolRun{Status: "issues_found"}, findings: []Finding{{ResourceID: "ai-service"}}, wantErr: "no finding for expected resource"},
+		{name: "successful target finding is accepted", warmup: PatrolRun{Status: "issues_found"}, findings: []Finding{{ResourceID: "resource-target"}}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateExistingFindingPrerequisite(manifest, collected, test.warmup, test.findings)
+			if test.wantErr == "" {
+				if err != nil {
+					t.Fatalf("expected valid prerequisite, got %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", test.wantErr, err)
 			}
 		})
 	}

@@ -272,15 +272,15 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 			if warmupErr != nil {
 				return fmt.Errorf("existing-finding prerequisite Patrol run: %w", warmupErr)
 			}
+			report.PrerequisitePatrolRun = &warmup
 			afterWarmup, findingsErr := r.config.Client.Findings(ctx)
 			if findingsErr != nil {
 				return findingsErr
 			}
 			warmupFindings := filterRunFindings(beforeFindings, afterWarmup, warmup, collected, warmupTriggeredAt)
-			if len(warmupFindings) == 0 {
-				return errors.New("existing-finding prerequisite run did not create a run-owned finding")
+			if err := validateExistingFindingPrerequisite(manifest, collected, warmup, warmupFindings); err != nil {
+				return err
 			}
-			report.PrerequisitePatrolRun = &warmup
 			beforeFindings = afterWarmup
 		}
 		triggeredAt = time.Now().UTC()
@@ -408,6 +408,42 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 		terminalErr = errors.Join(terminalErr, err)
 	}
 	return report, terminalErr
+}
+
+func validateExistingFindingPrerequisite(manifest Manifest, collected map[string]Resource, warmup PatrolRun, findings []Finding) error {
+	if strings.EqualFold(strings.TrimSpace(warmup.Status), "error") || warmup.ErrorCount > 0 {
+		return fmt.Errorf("existing-finding prerequisite Patrol run failed: status=%s errors=%d", warmup.Status, warmup.ErrorCount)
+	}
+	if len(findings) == 0 {
+		return errors.New("existing-finding prerequisite run did not create a run-owned finding")
+	}
+
+	foundResources := make(map[string]struct{}, len(findings))
+	for _, finding := range findings {
+		foundResources[finding.ResourceID] = struct{}{}
+	}
+	checkedAliases := make(map[string]struct{})
+	for _, fault := range manifest.Faults {
+		if !fault.Required {
+			continue
+		}
+		alias := strings.TrimSpace(fault.Expected.Resource)
+		if alias == "" {
+			alias = strings.TrimSpace(fault.Target)
+		}
+		if _, seen := checkedAliases[alias]; seen {
+			continue
+		}
+		checkedAliases[alias] = struct{}{}
+		resource, ok := collected[alias]
+		if !ok || strings.TrimSpace(resource.ID) == "" {
+			return fmt.Errorf("existing-finding prerequisite expected resource %q was not collected", alias)
+		}
+		if _, ok := foundResources[resource.ID]; !ok {
+			return fmt.Errorf("existing-finding prerequisite run created no finding for expected resource %q", alias)
+		}
+	}
+	return nil
 }
 
 func patrolScopeResourceIDs(manifest Manifest, collected map[string]Resource) []string {
