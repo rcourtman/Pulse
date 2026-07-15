@@ -8870,21 +8870,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "root-lane-l6",
-      "agent_id": "root",
-      "summary": "Make Patrol Pro investigations model-led across related read-only evidence and qualify downstream root-cause traversal",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-15T09:13:41Z",
-      "heartbeat_at": "2026-07-15T09:13:41Z",
-      "expires_at": "2026-07-15T13:13:41Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L6"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
