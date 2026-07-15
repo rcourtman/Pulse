@@ -8870,21 +8870,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "root-lane-l6",
-      "agent_id": "root",
-      "summary": "Preserve Patrol investigation evidence and canonical action targeting",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-15T14:31:52Z",
-      "heartbeat_at": "2026-07-15T14:51:38Z",
-      "expires_at": "2026-07-15T18:51:38Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L6"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
