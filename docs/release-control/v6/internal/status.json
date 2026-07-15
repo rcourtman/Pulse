@@ -8858,21 +8858,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "root-lane-l6",
-      "agent_id": "root",
-      "summary": "Normalize subscription model identities at the provider boundary and prove stable Patrol preflight qualification",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-14T22:40:11Z",
-      "heartbeat_at": "2026-07-14T22:40:11Z",
-      "expires_at": "2026-07-15T02:40:11Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L6"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
