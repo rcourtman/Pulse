@@ -98,7 +98,6 @@ func TestUpdateConfigClearsDockerContainerAlertsWhenDisabled(t *testing.T) {
 	}
 	manager.dockerStateConfirm[containerResourceID] = 2
 	manager.dockerRestartTracking[containerResourceID] = &dockerRestartRecord{}
-	manager.dockerLastExitCode[containerResourceID] = 137
 	manager.mu.Unlock()
 
 	config := manager.GetConfig()
@@ -119,9 +118,6 @@ func TestUpdateConfigClearsDockerContainerAlertsWhenDisabled(t *testing.T) {
 	}
 	if len(manager.dockerRestartTracking) != 0 {
 		t.Fatalf("expected dockerRestartTracking map to be cleared when DisableAllDockerContainers is enabled")
-	}
-	if len(manager.dockerLastExitCode) != 0 {
-		t.Fatalf("expected dockerLastExitCode map to be cleared when DisableAllDockerContainers is enabled")
 	}
 }
 

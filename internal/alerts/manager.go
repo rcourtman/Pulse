@@ -52,7 +52,6 @@ type Manager struct {
 	dockerOfflineCount           map[string]int                  // Track consecutive offline counts for Docker hosts
 	dockerStateConfirm           map[string]int                  // Track consecutive state confirmations for Docker containers
 	dockerRestartTracking        map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
-	dockerLastExitCode           map[string]int                  // Track last exit code for OOM detection
 	dockerUpdateFirstSeen        map[string]time.Time            // Track when image updates were first detected for alert delay
 	// Stable identity tracking prevents update-delay resets when host IDs churn.
 	dockerUpdateFirstSeenByIdentity map[string]time.Time
@@ -132,7 +131,6 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		dockerOfflineCount:              make(map[string]int),
 		dockerStateConfirm:              make(map[string]int),
 		dockerRestartTracking:           make(map[string]*dockerRestartRecord),
-		dockerLastExitCode:              make(map[string]int),
 		dockerUpdateFirstSeen:           make(map[string]time.Time),
 		dockerUpdateFirstSeenByIdentity: make(map[string]time.Time),
 		pmgQuarantineHistory:            make(map[string][]pmgQuarantineSnapshot),

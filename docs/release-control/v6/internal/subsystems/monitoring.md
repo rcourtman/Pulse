@@ -61,6 +61,14 @@ per-core CPU percent, but monitoring-owned history and alert threshold
 evaluation use host-capacity-normalized CPU percent when host CPU capacity is
 known. Raw runtime CPU remains alert/resource metadata, not the canonical
 threshold value.
+Docker and Podman container OOM state is runtime-authored evidence, not an
+exit-code inference. Current agents must publish Docker inspect's `OOMKilled`
+boolean for every inspected container, including explicit `false`; monitoring
+must preserve that nullable boolean through report ingest, internal/frontend
+models, and unified resources. An absent value means an older or reduced-fidelity
+report did not provide the evidence and must remain distinguishable from both
+confirmed OOM and confirmed non-OOM state. Exit code 137 proves only SIGKILL and
+must not be promoted into OOM truth by monitoring.
 Proxmox read-state rehydration is the inverse boundary: canonical
 unified-resource CPU metrics are 0..100 percentages, while legacy
 `models.Node.CPU`, `models.VM.CPU`, and `models.Container.CPU` remain Proxmox
@@ -216,6 +224,11 @@ resource health.
    and Docker container CPU alerts must pass through the shared normalized
    capacity helper so an 80% threshold means 80% of the reporting host capacity,
    not 0.8 of one core on a multi-core host.
+   Container OOM evidence must come from the inspected runtime state. The report
+   wire field is nullable for compatibility with older agents, but a current
+   collector must set it to the exact Docker inspect boolean even when false;
+   report ingest and model conversion must clone and preserve the pointer so
+   concurrent state replacement cannot alter previously accepted evidence.
 8. Add or change Proxmox Ceph compatibility payload decoding through `pkg/proxmox/ceph.go`
 9. Add or change Proxmox ZFS compatibility payload decoding and vdev-role normalization through `pkg/proxmox/zfs.go`
 10. Add or change mock chart synthesis, seeded history continuity, or mock-owned

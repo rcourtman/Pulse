@@ -908,6 +908,7 @@ type DockerContainer struct {
 	UptimeSeconds       int64                        `json:"uptimeSeconds"`
 	RestartCount        int                          `json:"restartCount"`
 	ExitCode            int                          `json:"exitCode"`
+	OOMKilled           *bool                        `json:"oomKilled,omitempty"`
 	CreatedAt           time.Time                    `json:"createdAt"`
 	StartedAt           *time.Time                   `json:"startedAt,omitempty"`
 	FinishedAt          *time.Time                   `json:"finishedAt,omitempty"`

@@ -2,6 +2,7 @@ package dockeragent
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -58,6 +59,7 @@ func TestReport_AgentKey(t *testing.T) {
 
 func TestReport_JSONMarshal(t *testing.T) {
 	now := time.Now()
+	oomKilled := false
 	report := Report{
 		Agent: AgentInfo{
 			ID:              "agent-docker-1",
@@ -73,10 +75,11 @@ func TestReport_JSONMarshal(t *testing.T) {
 		},
 		Containers: []Container{
 			{
-				ID:    "abc123",
-				Name:  "nginx",
-				Image: "nginx:latest",
-				State: "running",
+				ID:        "abc123",
+				Name:      "nginx",
+				Image:     "nginx:latest",
+				State:     "running",
+				OOMKilled: &oomKilled,
 			},
 		},
 		Timestamp: now,
@@ -98,6 +101,26 @@ func TestReport_JSONMarshal(t *testing.T) {
 	if len(decoded.Containers) != 1 {
 		t.Errorf("Containers count = %d, want 1", len(decoded.Containers))
 	}
+	if decoded.Containers[0].OOMKilled == nil || *decoded.Containers[0].OOMKilled {
+		t.Fatalf("OOMKilled = %v, want explicit false", decoded.Containers[0].OOMKilled)
+	}
+	if !json.Valid(data) || !containsJSONField(data, `"oomKilled":false`) {
+		t.Fatalf("expected false OOM evidence on the wire: %s", data)
+	}
+}
+
+func TestContainer_JSONOmitsUnknownOOMEvidence(t *testing.T) {
+	data, err := json.Marshal(Container{ID: "legacy-container"})
+	if err != nil {
+		t.Fatalf("marshal Container: %v", err)
+	}
+	if containsJSONField(data, `"oomKilled"`) {
+		t.Fatalf("unknown OOM evidence must remain absent: %s", data)
+	}
+}
+
+func containsJSONField(data []byte, field string) bool {
+	return strings.Contains(string(data), field)
 }
 
 func TestAgentInfo_Fields(t *testing.T) {

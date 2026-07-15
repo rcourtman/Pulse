@@ -621,6 +621,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		}
 	}
 
+	oomKilled := inspect.State.OOMKilled
 	container := agentsdocker.Container{
 		ID:                  summary.ID,
 		Name:                trimLeadingSlash(summary.Names),
@@ -637,6 +638,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		UptimeSeconds:       uptimeSeconds,
 		RestartCount:        inspect.RestartCount,
 		ExitCode:            inspect.State.ExitCode,
+		OOMKilled:           &oomKilled,
 		StartedAt:           startedPtr,
 		FinishedAt:          finishedPtr,
 		Ports:               ports,

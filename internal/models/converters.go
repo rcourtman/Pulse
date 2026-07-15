@@ -605,6 +605,7 @@ func (c DockerContainer) ToFrontend() DockerContainerFrontend {
 		UptimeSeconds:       c.UptimeSeconds,
 		RestartCount:        c.RestartCount,
 		ExitCode:            c.ExitCode,
+		OOMKilled:           cloneBoolPtr(c.OOMKilled),
 		CreatedAt:           c.CreatedAt.Unix() * 1000,
 		Labels:              nil,
 		WritableLayerBytes:  c.WritableLayerBytes,

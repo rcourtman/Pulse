@@ -21,6 +21,12 @@ Docker and Podman container CPU thresholds evaluate host-capacity-normalized
 CPU percent, not Docker's runtime-native per-core percent. Alert metadata may
 carry the raw per-core value and reporting host CPU count for evidence, but the
 threshold value and canonical `cpuPercent` metadata remain normalized.
+Docker and Podman OOM alerts require authoritative runtime evidence: the
+container must be stopped (`exited` or `dead`) and its reported `OOMKilled`
+state must be explicitly true. Exit code 137 alone is only SIGKILL evidence;
+explicit false and unavailable/legacy OOM state both fail closed without an OOM
+alert. Recovery clears an existing OOM alert when the authoritative predicate
+is no longer true.
 
 ## Canonical Files
 
@@ -421,7 +427,10 @@ Docker alert evaluation now lives in `internal/alerts/docker.go`. That file
 owns Docker host connectivity, container state and health, container metric
 projection, service gap/update-state checks, image-update timing, and Docker
 tracking cleanup; future Docker alert behavior should extend that resource
-checker owner rather than expanding the central Manager file.
+checker owner rather than expanding the central Manager file. It must not keep
+shadow last-exit-code state or infer an OOM kill from exit 137; the accepted
+container model's nullable runtime-authored `OOMKilled` field is the sole OOM
+classification input.
 PBS alert evaluation now lives in `internal/alerts/pbs.go`. That file owns PBS
 connectivity normalization, PBS metric projection, PBS metric cleanup, and PBS
 offline lifecycle handling; future PBS alert behavior should extend that

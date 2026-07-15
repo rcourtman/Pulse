@@ -3812,6 +3812,13 @@ func (v DockerContainerView) ExitCode() int {
 	return v.r.Docker.ExitCode
 }
 
+func (v DockerContainerView) OOMKilled() *bool {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return cloneBoolPtr(v.r.Docker.OOMKilled)
+}
+
 func (v DockerContainerView) CPUPercent() float64 {
 	if v.r == nil {
 		return 0

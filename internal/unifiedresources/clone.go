@@ -225,6 +225,7 @@ func cloneDockerData(in *DockerData) *DockerData {
 		return nil
 	}
 	out := *in
+	out.OOMKilled = cloneBoolPtr(in.OOMKilled)
 	out.Temperature = cloneFloat64Ptr(in.Temperature)
 	out.LoadAverage = cloneFloat64Slice(in.LoadAverage)
 	out.TokenLastUsedAt = cloneTimePtr(in.TokenLastUsedAt)

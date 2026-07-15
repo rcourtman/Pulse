@@ -228,7 +228,6 @@ func (m *Manager) CheckDockerHost(host models.DockerHost) {
 			m.clearAlert(fmt.Sprintf("docker-container-memory-limit-%s", resourceID))
 			m.mu.Lock()
 			delete(m.dockerRestartTracking, resourceID)
-			delete(m.dockerLastExitCode, resourceID)
 			m.mu.Unlock()
 			m.clearDockerContainerUpdateTracking(resourceID, updateTrackingKey)
 			continue
@@ -982,18 +981,13 @@ func (m *Manager) checkDockerContainerRestartLoop(host models.DockerHost, contai
 	}
 }
 
-// checkDockerContainerOOMKill detects when a container was killed due to out of memory
+// checkDockerContainerOOMKill detects when the runtime explicitly reports that
+// a container was killed due to out of memory.
 func (m *Manager) checkDockerContainerOOMKill(host models.DockerHost, container models.DockerContainer, resourceID, containerName, instanceName, nodeName string) {
 	alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 
-	// Exit code 137 means the container was killed by SIGKILL, often due to OOM
-	// Only alert if the container exited (not running) with exit code 137
 	state := strings.ToLower(strings.TrimSpace(container.State))
-	if (state == "exited" || state == "dead") && container.ExitCode == 137 {
-		m.mu.Lock()
-		m.dockerLastExitCode[resourceID] = 137
-		m.mu.Unlock()
-
+	if (state == "exited" || state == "dead") && container.OOMKilled != nil && *container.OOMKilled {
 		spec, err := buildCanonicalHealthAssessmentSpec(resourceID+"-oom-kill", resourceID, containerName, unifiedresources.ResourceTypeAppContainer, "docker-container-exit", []string{"oom-kill"}, false)
 		if err != nil {
 			log.Warn().
@@ -1006,6 +1000,7 @@ func (m *Manager) checkDockerContainerOOMKill(host models.DockerHost, container 
 
 		metadata := dockerContainerAlertMetadata(host, container, containerName)
 		metadata["exitCode"] = container.ExitCode
+		metadata["oomKilled"] = true
 		metadata["memoryUsageBytes"] = container.MemoryUsage
 		metadata["memoryLimitBytes"] = container.MemoryLimit
 
@@ -1038,13 +1033,8 @@ func (m *Manager) checkDockerContainerOOMKill(host models.DockerHost, container 
 			Int64("memoryLimit", container.MemoryLimit).
 			Msg("Docker container OOM killed")
 	} else {
-		// Update last exit code if it changed
-		if container.ExitCode != 0 {
-			m.mu.Lock()
-			m.dockerLastExitCode[resourceID] = container.ExitCode
-			m.mu.Unlock()
-		}
-		// Clear OOM alert if container is running or exited with different code
+		// Unknown reports from older agents and explicit false reports both fail
+		// closed. Exit code 137 proves SIGKILL only; it is not OOM evidence.
 		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-oom-kill"))
 	}
 }
@@ -1435,11 +1425,6 @@ func (m *Manager) clearDockerHostContainerAlerts(host models.DockerHost) {
 	for resourceID := range m.dockerRestartTracking {
 		if strings.HasPrefix(resourceID, prefix) {
 			delete(m.dockerRestartTracking, resourceID)
-		}
-	}
-	for resourceID := range m.dockerLastExitCode {
-		if strings.HasPrefix(resourceID, prefix) {
-			delete(m.dockerLastExitCode, resourceID)
 		}
 	}
 	for resourceID := range m.dockerUpdateFirstSeen {

@@ -1009,6 +1009,7 @@ type DockerData struct {
 	Health             string                      `json:"health,omitempty"`
 	RestartCount       int                         `json:"restartCount,omitempty"`
 	ExitCode           int                         `json:"exitCode,omitempty"`
+	OOMKilled          *bool                       `json:"oomKilled,omitempty"`
 	CPURawPercent      float64                     `json:"cpuRawPercent,omitempty"`
 	CPUCapacityPercent float64                     `json:"cpuCapacityPercent,omitempty"`
 	CPUCapacityCores   int                         `json:"cpuCapacityCores,omitempty"`

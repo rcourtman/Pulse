@@ -454,6 +454,7 @@ type DockerContainerFrontend struct {
 	UptimeSeconds       int64                                `json:"uptimeSeconds"`
 	RestartCount        int                                  `json:"restartCount"`
 	ExitCode            int                                  `json:"exitCode"`
+	OOMKilled           *bool                                `json:"oomKilled,omitempty"`
 	CreatedAt           int64                                `json:"createdAt"`
 	StartedAt           *int64                               `json:"startedAt,omitempty"`
 	FinishedAt          *int64                               `json:"finishedAt,omitempty"`

@@ -115,6 +115,11 @@ storage/recovery-adjacent only because `DockerData` is a shared resource
 payload. Raw per-core CPU evidence and normalized capacity CPU must not be used
 as backup coverage, restore readiness, storage-health, or recovery-point
 signals.
+The same dependency rule applies to nullable Docker `OOMKilled` evidence.
+Storage and recovery consumers may preserve and display it as runtime workload
+context, but must not reinterpret confirmed OOM, confirmed non-OOM, missing
+evidence, or exit code 137 as backup damage, protection health, restore
+readiness, or a recovery-point signal.
 
 Local subscription-agent settings in `internal/api/ai_handlers.go` remain an
 ai-runtime transport choice even when Patrol observes storage or recovery
@@ -1236,7 +1241,8 @@ recovery scope, or a storage/recovery-owned secret source.
     only; they must not reinterpret it as backup freshness, recovery
     point recency, or protection cadence.
     Docker / Podman `DockerData` container lifecycle, Podman metadata, and
-    cumulative block I/O totals remain unified-resource runtime context.
+    cumulative block I/O totals, including nullable runtime-authored OOM state,
+    remain unified-resource runtime context.
     Storage and recovery may use those fields only as workload description
     when linking to an owning runtime/platform page; they must not reinterpret
     container block I/O totals as backup throughput, recovery-point evidence,

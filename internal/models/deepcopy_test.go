@@ -24,6 +24,20 @@ func TestCloneBoolPtr_Value(t *testing.T) {
 	}
 }
 
+func TestCloneDockerContainer_PreservesIndependentOOMEvidence(t *testing.T) {
+	oomKilled := false
+	src := DockerContainer{ID: "container-1", OOMKilled: &oomKilled}
+
+	got := cloneDockerContainer(src)
+	if got.OOMKilled == nil || *got.OOMKilled {
+		t.Fatalf("OOMKilled = %v, want explicit false", got.OOMKilled)
+	}
+	oomKilled = true
+	if *got.OOMKilled {
+		t.Fatal("cloned Docker container must own its OOM evidence value")
+	}
+}
+
 func TestCloneFloat64Ptr_Nil(t *testing.T) {
 	if cloneFloat64Ptr(nil) != nil {
 		t.Error("nil should clone to nil")

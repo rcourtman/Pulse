@@ -581,6 +581,7 @@ func TestResourceFromDockerHostOmitsStandaloneInactiveSwarm(t *testing.T) {
 }
 
 func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
+	oomKilled := false
 	container := models.DockerContainer{
 		ID:            "aurora-3-abcdef123456",
 		Name:          "web",
@@ -589,6 +590,7 @@ func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
 		ImageDigest:   "sha256:current",
 		UptimeSeconds: 1234,
 		CPUPercent:    12.5,
+		OOMKilled:     &oomKilled,
 	}
 
 	host := models.DockerHost{
@@ -615,6 +617,13 @@ func TestResourceFromDockerContainerIncludesContainerID(t *testing.T) {
 	}
 	if got, want := resource.Docker.ImageID, container.ImageDigest; got != want {
 		t.Fatalf("imageId = %q, want %q", got, want)
+	}
+	if resource.Docker.OOMKilled == nil || *resource.Docker.OOMKilled {
+		t.Fatalf("oomKilled = %v, want explicit false", resource.Docker.OOMKilled)
+	}
+	oomKilled = true
+	if *resource.Docker.OOMKilled {
+		t.Fatal("unified resource must own an independent OOM evidence value")
 	}
 }
 

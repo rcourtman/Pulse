@@ -305,6 +305,9 @@ func TestCollectContainer(t *testing.T) {
 		if container.Health != "healthy" {
 			t.Fatalf("expected health status, got %q", container.Health)
 		}
+		if container.OOMKilled == nil || *container.OOMKilled {
+			t.Fatalf("expected authoritative non-OOM state, got %v", container.OOMKilled)
+		}
 		if container.BlockIO == nil {
 			t.Fatalf("expected block IO to be populated")
 		}

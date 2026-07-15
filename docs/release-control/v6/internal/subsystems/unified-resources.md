@@ -528,7 +528,10 @@ engine storage rows must stay host-scoped with table proof hooks so browser
 proof can distinguish a populated disk-usage tab from an empty fixture.
 Runtime container detail payloads must preserve the agent-reported lifecycle
 timestamps, Podman pod/compose/auto-update/user-namespace metadata, and
-cumulative block I/O totals on `DockerData`; frontend detail summaries and
+cumulative block I/O totals on `DockerData`. They must also preserve nullable,
+runtime-authored `OOMKilled` evidence without converting absent state or exit
+code 137 into a positive classification; typed Docker views must return an
+independent copy of that value. Frontend detail summaries and
 Docker page search consume those backend-authored fields before falling back to
 legacy labels.
 Docker network rows must consume canonical runtime attachment relationships,

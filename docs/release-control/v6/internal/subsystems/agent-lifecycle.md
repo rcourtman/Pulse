@@ -170,6 +170,12 @@ percent because that is the collector's source evidence. Lifecycle surfaces may
 transport that report, but must not reinterpret it as host-capacity utilization;
 monitoring and unified resources own the normalized CPU contract used by
 history, alerts, and canonical app-container metrics.
+The same module authors the container OOM evidence boundary from Docker inspect.
+Current agents must serialize a non-null `OOMKilled` boolean for inspected
+containers, preserving explicit false; absence is reserved for older or
+reduced-fidelity report producers. Lifecycle transport must not synthesize OOM
+state from exit code 137 or collapse absent and false, because monitoring and
+alerts depend on that distinction to fail closed.
 Inside-guest Docker / Podman visibility is also a privacy boundary: full
 Docker / Podman inventory may come from a guest-local agent or another explicit
 guest reporting path. LXC Docker inventory may also come from the Proxmox host

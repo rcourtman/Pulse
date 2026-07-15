@@ -264,6 +264,7 @@ func TestApplyDockerReportSkipsMetricsHistoryInMockMode(t *testing.T) {
 
 func TestApplyDockerReportIncludesContainerDiskDetails(t *testing.T) {
 	timestamp := time.Now().UTC()
+	oomKilled := false
 	report := agentsdocker.Report{
 		Agent: agentsdocker.AgentInfo{
 			ID:              "agent-1",
@@ -277,6 +278,7 @@ func TestApplyDockerReportIncludesContainerDiskDetails(t *testing.T) {
 			{
 				ID:                  "ctr-1",
 				Name:                "app",
+				OOMKilled:           &oomKilled,
 				WritableLayerBytes:  512 * 1024 * 1024,
 				RootFilesystemBytes: 2 * 1024 * 1024 * 1024,
 				BlockIO: &agentsdocker.ContainerBlockIO{
@@ -311,6 +313,13 @@ func TestApplyDockerReportIncludesContainerDiskDetails(t *testing.T) {
 	}
 
 	container := host.Containers[0]
+	if container.OOMKilled == nil || *container.OOMKilled {
+		t.Fatalf("expected explicit non-OOM state, got %v", container.OOMKilled)
+	}
+	oomKilled = true
+	if *container.OOMKilled {
+		t.Fatal("expected monitoring state to own an independent OOM evidence value")
+	}
 	if container.WritableLayerBytes != 512*1024*1024 {
 		t.Fatalf("expected writable layer bytes to match, got %d", container.WritableLayerBytes)
 	}

@@ -2162,6 +2162,7 @@ func resourceFromDockerContainer(ct models.DockerContainer, host models.DockerHo
 		Health:             ct.Health,
 		RestartCount:       ct.RestartCount,
 		ExitCode:           ct.ExitCode,
+		OOMKilled:          cloneBoolPtr(ct.OOMKilled),
 		CPURawPercent:      ct.CPUPercent,
 		CPUCapacityPercent: models.DockerContainerCPUCapacityPercent(ct, host.CPUs),
 		CPUCapacityCores:   host.CPUs,

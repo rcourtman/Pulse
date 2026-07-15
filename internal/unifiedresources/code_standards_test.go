@@ -177,6 +177,38 @@ func TestOperationReceiptProtocolRemainsInternalToIngestAndRuntime(t *testing.T)
 	}
 }
 
+func TestDockerOOMEvidenceRemainsAuthoritativeAcrossCanonicalIngest(t *testing.T) {
+	monitorSource, err := os.ReadFile(filepath.Join("..", "monitoring", "monitor_agents.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`OOMKilled:\s+cloneReportBoolPtr\(payload\.OOMKilled\)`).Match(monitorSource) {
+		t.Fatal("Docker report ingest must preserve and clone nullable runtime OOM evidence")
+	}
+
+	oomKilled := false
+	resource, _ := resourceFromDockerContainer(models.DockerContainer{
+		ID:        "container-oom-contract",
+		Name:      "contract-container",
+		State:     "exited",
+		ExitCode:  137,
+		OOMKilled: &oomKilled,
+	}, models.DockerHost{ID: "docker-host-contract"})
+	if resource.Docker == nil || resource.Docker.OOMKilled == nil || *resource.Docker.OOMKilled {
+		t.Fatalf("canonical DockerData lost explicit non-OOM evidence: %+v", resource.Docker)
+	}
+
+	oomKilled = true
+	viewEvidence := NewDockerContainerView(&resource).OOMKilled()
+	if viewEvidence == nil || *viewEvidence {
+		t.Fatalf("typed Docker view aliased its source evidence: %v", viewEvidence)
+	}
+	*viewEvidence = true
+	if got := NewDockerContainerView(&resource).OOMKilled(); got == nil || *got {
+		t.Fatalf("typed Docker view must return an independent OOM evidence value: %v", got)
+	}
+}
+
 func TestProductionActionLifecycleDoesNotUseRecordActionAuditAsUpsert(t *testing.T) {
 	paths := []string{"../actionlifecycle/service.go", "../ai/tools/action_audit.go", "../api/patrol_action_broker.go"}
 	for _, path := range paths {

@@ -107,7 +107,6 @@ func TestCleanupStaleMaps(t *testing.T) {
 
 	// Docker restart tracking
 	m.dockerRestartTracking["stale-restart"] = &dockerRestartRecord{lastChecked: oldTime}
-	m.dockerLastExitCode["stale-restart"] = 1
 	m.dockerRestartTracking["recent-restart"] = &dockerRestartRecord{lastChecked: recentTime}
 
 	// Alert rate limit
@@ -164,9 +163,6 @@ func TestCleanupStaleMaps(t *testing.T) {
 
 	if _, exists := m.dockerRestartTracking["stale-restart"]; exists {
 		t.Error("stale-restart should be removed")
-	}
-	if _, exists := m.dockerLastExitCode["stale-restart"]; exists {
-		t.Error("stale-restart exit code should be removed")
 	}
 	if _, exists := m.dockerRestartTracking["recent-restart"]; !exists {
 		t.Error("recent-restart should NOT be removed")

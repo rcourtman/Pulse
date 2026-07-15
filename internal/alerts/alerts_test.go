@@ -778,7 +778,6 @@ func TestHandleDockerHostRemovedClearsAlertsAndTracking(t *testing.T) {
 	m.dockerOfflineCount[host.ID] = 2
 	m.dockerStateConfirm[containerResourceID] = 1
 	m.dockerRestartTracking[containerResourceID] = &dockerRestartRecord{}
-	m.dockerLastExitCode[containerResourceID] = 137
 	m.mu.Unlock()
 
 	m.HandleDockerHostRemoved(host)
@@ -800,9 +799,6 @@ func TestHandleDockerHostRemovedClearsAlertsAndTracking(t *testing.T) {
 	}
 	if _, exists := m.dockerRestartTracking[containerResourceID]; exists {
 		t.Fatalf("expected restart tracking to be cleared")
-	}
-	if _, exists := m.dockerLastExitCode[containerResourceID]; exists {
-		t.Fatalf("expected last exit code tracking to be cleared")
 	}
 }
 
@@ -3424,7 +3420,6 @@ func TestCheckDockerHostIgnoredPrefixClearsExistingAlerts(t *testing.T) {
 	m.activeAlerts[restartAlertID] = &Alert{ID: restartAlertID, ResourceID: resourceID}
 	m.dockerStateConfirm[resourceID] = 2
 	m.dockerRestartTracking[resourceID] = &dockerRestartRecord{}
-	m.dockerLastExitCode[resourceID] = 137
 	m.mu.Unlock()
 
 	m.CheckDockerHost(host)
@@ -3446,9 +3441,6 @@ func TestCheckDockerHostIgnoredPrefixClearsExistingAlerts(t *testing.T) {
 	}
 	if _, exists := m.dockerRestartTracking[resourceID]; exists {
 		t.Fatalf("expected restart tracking cleared")
-	}
-	if _, exists := m.dockerLastExitCode[resourceID]; exists {
-		t.Fatalf("expected last exit code cleared")
 	}
 }
 
@@ -6853,7 +6845,6 @@ func TestClearActiveAlertsWithExistingAlerts(t *testing.T) {
 	m.dockerOfflineCount["docker-1"] = 1
 	m.dockerStateConfirm["docker-1"] = 1
 	m.dockerRestartTracking["docker-1"] = &dockerRestartRecord{}
-	m.dockerLastExitCode["docker-1"] = 137
 	m.dockerUpdateFirstSeen["docker-1"] = time.Now()
 	m.dockerUpdateFirstSeenByIdentity["docker-1"] = time.Now()
 	m.ackState["test-alert-1"] = ackRecord{acknowledged: true, user: "testuser", time: time.Now()}
@@ -6907,9 +6898,6 @@ func TestClearActiveAlertsWithExistingAlerts(t *testing.T) {
 	}
 	if len(m.dockerRestartTracking) != 0 {
 		t.Errorf("expected dockerRestartTracking to be empty, got %d", len(m.dockerRestartTracking))
-	}
-	if len(m.dockerLastExitCode) != 0 {
-		t.Errorf("expected dockerLastExitCode to be empty, got %d", len(m.dockerLastExitCode))
 	}
 	if len(m.dockerUpdateFirstSeen) != 0 {
 		t.Errorf("expected dockerUpdateFirstSeen to be empty, got %d", len(m.dockerUpdateFirstSeen))
@@ -7314,7 +7302,6 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		// Add tracking state
 		m.dockerStateConfirm["c1"] = 2
 		m.dockerRestartTracking["c1"] = &dockerRestartRecord{count: 5}
-		m.dockerLastExitCode["c1"] = 137
 
 		m.config.DisableAllDockerContainers = true
 
@@ -7339,9 +7326,6 @@ func TestApplyGlobalOfflineSettingsLocked(t *testing.T) {
 		}
 		if len(m.dockerRestartTracking) != 0 {
 			t.Errorf("expected dockerRestartTracking to be empty, got %d entries", len(m.dockerRestartTracking))
-		}
-		if len(m.dockerLastExitCode) != 0 {
-			t.Errorf("expected dockerLastExitCode to be empty, got %d entries", len(m.dockerLastExitCode))
 		}
 	})
 
@@ -12945,7 +12929,31 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 		}
 	})
 
-	t.Run("exited container with exit code 137 - critical OOM alert", func(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		oomKilled *bool
+	}{
+		{name: "explicitly not OOM killed", oomKilled: boolPtr(false)},
+		{name: "OOM state unavailable from older agent", oomKilled: nil},
+	} {
+		t.Run("exit code 137 without authoritative OOM evidence - "+tc.name, func(t *testing.T) {
+			m := newTestManager(t)
+			host := models.DockerHost{
+				ID: "host-sigkill", Containers: []models.DockerContainer{{
+					ID: "container-sigkill", Name: "sigkill-app", State: "exited", ExitCode: 137, OOMKilled: tc.oomKilled,
+				}},
+			}
+
+			m.CheckDockerHost(host)
+
+			resourceID := dockerResourceID(host.ID, host.Containers[0].ID)
+			if testHasActiveAlert(t, m, fmt.Sprintf("docker-container-oom-%s", resourceID)) {
+				t.Fatal("exit code 137 alone must not create an OOM alert")
+			}
+		})
+	}
+
+	t.Run("runtime-confirmed OOM kill - critical alert", func(t *testing.T) {
 		m := newTestManager(t)
 
 		host := models.DockerHost{
@@ -12959,6 +12967,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 					State:       "exited",
 					Status:      "Exited (137) 1 minute ago",
 					ExitCode:    137,
+					OOMKilled:   boolPtr(true),
 					MemoryUsage: 512 * 1024 * 1024,
 					MemoryLimit: 512 * 1024 * 1024,
 				},
@@ -12971,7 +12980,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 		alertID := fmt.Sprintf("docker-container-oom-%s", resourceID)
 		alert, exists := testLookupActiveAlert(t, m, alertID)
 		if !exists {
-			t.Fatal("expected OOM alert for container with exit code 137")
+			t.Fatal("expected OOM alert for runtime-confirmed OOM kill")
 		}
 		if alert.Level != AlertLevelCritical {
 			t.Fatalf("expected critical OOM alert, got %s", alert.Level)
@@ -12985,9 +12994,12 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 		if got := alert.Metadata["canonicalSpecID"]; got != resourceID+"-oom-kill" {
 			t.Fatalf("canonicalSpecID = %v, want %s", got, resourceID+"-oom-kill")
 		}
+		if got := alert.Metadata["oomKilled"]; got != true {
+			t.Fatalf("oomKilled metadata = %v, want true", got)
+		}
 	})
 
-	t.Run("dead container with exit code 137 - critical OOM alert", func(t *testing.T) {
+	t.Run("dead container with runtime-confirmed OOM kill - critical alert", func(t *testing.T) {
 		m := newTestManager(t)
 
 		host := models.DockerHost{
@@ -12996,11 +13008,12 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 			Hostname:    "docker.local",
 			Containers: []models.DockerContainer{
 				{
-					ID:       "container-dead",
-					Name:     "dead-oom-app",
-					State:    "dead",
-					Status:   "Dead",
-					ExitCode: 137,
+					ID:        "container-dead",
+					Name:      "dead-oom-app",
+					State:     "dead",
+					Status:    "Dead",
+					ExitCode:  137,
+					OOMKilled: boolPtr(true),
 				},
 			},
 		}
@@ -13018,7 +13031,7 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 		}
 	})
 
-	t.Run("repeated 137 exit code - no new alert", func(t *testing.T) {
+	t.Run("repeated runtime-confirmed OOM state - no new alert", func(t *testing.T) {
 		m := newTestManager(t)
 
 		hostID := "host-oom-4"
@@ -13030,11 +13043,12 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 			Hostname:    "docker.local",
 			Containers: []models.DockerContainer{
 				{
-					ID:       containerID,
-					Name:     "oom-killed-app",
-					State:    "exited",
-					Status:   "Exited (137) 1 minute ago",
-					ExitCode: 137,
+					ID:        containerID,
+					Name:      "oom-killed-app",
+					State:     "exited",
+					Status:    "Exited (137) 1 minute ago",
+					ExitCode:  137,
+					OOMKilled: boolPtr(true),
 				},
 			},
 		}
@@ -13075,11 +13089,12 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 			Hostname:    "docker.local",
 			Containers: []models.DockerContainer{
 				{
-					ID:       containerID,
-					Name:     "recovering-app",
-					State:    "exited",
-					Status:   "Exited (137) 1 minute ago",
-					ExitCode: 137,
+					ID:        containerID,
+					Name:      "recovering-app",
+					State:     "exited",
+					Status:    "Exited (137) 1 minute ago",
+					ExitCode:  137,
+					OOMKilled: boolPtr(true),
 				},
 			},
 		}
@@ -13128,11 +13143,12 @@ func TestDockerContainerOOMKillAlert(t *testing.T) {
 			Hostname:    "docker.local",
 			Containers: []models.DockerContainer{
 				{
-					ID:       containerID,
-					Name:     "multi-exit-app",
-					State:    "exited",
-					Status:   "Exited (137) 1 minute ago",
-					ExitCode: 137,
+					ID:        containerID,
+					Name:      "multi-exit-app",
+					State:     "exited",
+					Status:    "Exited (137) 1 minute ago",
+					ExitCode:  137,
+					OOMKilled: boolPtr(true),
 				},
 			},
 		}

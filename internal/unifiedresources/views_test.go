@@ -1186,6 +1186,7 @@ func TestView_StoragePoolViewUsesCanonicalMetricsTargetAndGenericNodeHints(t *te
 func TestView_DockerContainerViewMetricsTargetAccessor(t *testing.T) {
 	now := time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC)
 	parentID := "host-1"
+	oomKilled := false
 	r := &Resource{
 		ID:       "app-1",
 		Type:     ResourceTypeAppContainer,
@@ -1201,6 +1202,7 @@ func TestView_DockerContainerViewMetricsTargetAccessor(t *testing.T) {
 			ContainerID:    "nextcloud",
 			Image:          "docker.io/library/nextcloud:29.0.7",
 			ContainerState: "running",
+			OOMKilled:      &oomKilled,
 		},
 	}
 
@@ -1220,6 +1222,15 @@ func TestView_DockerContainerViewMetricsTargetAccessor(t *testing.T) {
 	target.ResourceID = "mutated"
 	if got := v.MetricsTarget(); got == nil || got.ResourceID != "nextcloud-web-1" {
 		t.Fatalf("expected cloned docker container metrics target, got %+v", got)
+	}
+
+	oom := v.OOMKilled()
+	if oom == nil || *oom {
+		t.Fatalf("expected explicit non-OOM view state, got %v", oom)
+	}
+	*oom = true
+	if got := v.OOMKilled(); got == nil || *got {
+		t.Fatalf("expected cloned OOM evidence, got %v", got)
 	}
 }
 

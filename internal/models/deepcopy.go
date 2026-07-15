@@ -422,6 +422,7 @@ func cloneDockerContainerUpdateStatus(src *DockerContainerUpdateStatus) *DockerC
 
 func cloneDockerContainer(src DockerContainer) DockerContainer {
 	dest := src
+	dest.OOMKilled = cloneBoolPtr(src.OOMKilled)
 	dest.StartedAt = cloneTimePtr(src.StartedAt)
 	dest.FinishedAt = cloneTimePtr(src.FinishedAt)
 	dest.Ports = append([]DockerContainerPort(nil), src.Ports...)

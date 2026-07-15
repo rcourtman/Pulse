@@ -413,6 +413,7 @@ func TestContainerToFrontend(t *testing.T) {
 func TestDockerContainerToFrontend(t *testing.T) {
 	now := time.Now()
 	startedAt := now.Add(-1 * time.Hour)
+	oomKilled := false
 
 	container := DockerContainer{
 		ID:            "abc123def456",
@@ -427,6 +428,7 @@ func TestDockerContainerToFrontend(t *testing.T) {
 		MemoryPercent: 50.0,
 		UptimeSeconds: 3600,
 		RestartCount:  0,
+		OOMKilled:     &oomKilled,
 		CreatedAt:     now.Add(-2 * time.Hour),
 		StartedAt:     &startedAt,
 		Ports: []DockerContainerPort{
@@ -478,6 +480,13 @@ func TestDockerContainerToFrontend(t *testing.T) {
 	}
 	if frontend.StartedAt == nil {
 		t.Error("StartedAt should not be nil")
+	}
+	if frontend.OOMKilled == nil || *frontend.OOMKilled {
+		t.Fatalf("OOMKilled = %v, want explicit false", frontend.OOMKilled)
+	}
+	oomKilled = true
+	if *frontend.OOMKilled {
+		t.Fatal("frontend OOMKilled must not alias the internal model")
 	}
 }
 

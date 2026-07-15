@@ -130,7 +130,6 @@ func (m *Manager) cleanupStaleMaps() {
 	for containerID, record := range m.dockerRestartTracking {
 		if record != nil && now.Sub(record.lastChecked) > staleThreshold {
 			delete(m.dockerRestartTracking, containerID)
-			delete(m.dockerLastExitCode, containerID)
 			cleaned++
 		}
 	}
