@@ -8870,7 +8870,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "root-lane-l13",
+      "agent_id": "root",
+      "summary": "Use authoritative Docker OOM state for alerts",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-15T16:38:35Z",
+      "heartbeat_at": "2026-07-15T16:38:35Z",
+      "expires_at": "2026-07-15T19:38:35Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L13"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
