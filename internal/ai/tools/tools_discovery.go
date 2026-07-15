@@ -31,7 +31,7 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 					},
 					"resource_id": {
 						Type:        "string",
-						Description: "For get/run: resource identifier (VMID, container name, hostname)",
+						Description: "For get/run: canonical resource ID or provider identifier (VMID, container ID/name, hostname); Pulse resolves canonical app-container IDs to the runtime identity",
 					},
 					"target_id": {
 						Type:        "string",
@@ -274,6 +274,21 @@ func (e *PulseToolExecutor) normalizeDiscoveryResourceRequest(args map[string]in
 	}
 	if targetID == "" {
 		return discoveryResourceRequest{}, NewErrorResult(fmt.Errorf("target_id is required - use the node/agent field from search or get_resource results")), false
+	}
+
+	// App-container identity is canonical at the model boundary, while the
+	// discovery provider is keyed by the runtime's stable container ID. Resolve
+	// that coordinate here so a model never has to reverse-engineer Pulse's
+	// canonical ID or substitute a display name. This mirrors pulse_query's
+	// app-container resolution and keeps read-only investigation tools
+	// composable when one tool feeds another.
+	if resourceType == "app-container" {
+		if resource, providerID, found := findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceID); found {
+			resourceID = providerID
+			if registration, ok := resolvedAppContainerRegistration(resource); ok {
+				e.registerResolvedResourceWithExplicitAccess(registration)
+			}
+		}
 	}
 
 	// For system-container and VM types, resourceID should be a numeric VMID.

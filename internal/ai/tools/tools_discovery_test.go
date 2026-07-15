@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -164,6 +166,7 @@ func TestPulseDiscoveryToolSchemaIncludesRunAction(t *testing.T) {
 	actionSchema := discoveryTool.InputSchema.Properties["action"]
 	assert.Contains(t, actionSchema.Enum, "run")
 	assert.Contains(t, discoveryTool.Description, `action="run" forces a fresh discovery run`)
+	assert.Contains(t, discoveryTool.InputSchema.Properties["resource_id"].Description, "canonical resource ID")
 }
 
 func TestCanonicalDiscoveryResourceType(t *testing.T) {
@@ -356,6 +359,44 @@ func TestExecuteGetDiscovery_CanonicalAppContainerUsesDockerProviderType(t *test
 	assert.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
 	assert.Equal(t, "app-container", payload["resource_type"])
 	assert.Equal(t, "http://192.0.2.10:8080", payload["suggested_url"])
+}
+
+func TestExecuteGetDiscovery_ResolvesCanonicalAppContainerIDForProvider(t *testing.T) {
+	const canonicalID = "app-container-e5593f5074d6cd7f"
+	providerID := strings.Repeat("3", 64)
+	discovery := &stubDiscoveryProvider{getResp: &ResourceDiscoveryInfo{
+		ID:           "docker:agent-1:" + providerID,
+		ResourceType: "docker",
+		ResourceID:   providerID,
+		TargetID:     "agent-1",
+		Hostname:     "docker-host-1",
+	}}
+	exec := NewPulseToolExecutor(ExecutorConfig{
+		DiscoveryProvider: discovery,
+		UnifiedResourceProvider: &stubUnifiedResourceProvider{resources: []unifiedresources.Resource{{
+			ID:         canonicalID,
+			Type:       unifiedresources.ResourceTypeAppContainer,
+			Technology: "docker",
+			Name:       "worker",
+			Status:     unifiedresources.StatusOffline,
+			ParentName: "docker-host-1",
+			Docker: &unifiedresources.DockerData{
+				ContainerID:    providerID,
+				ContainerState: "exited",
+			},
+		}}},
+	})
+
+	result, err := exec.executeGetDiscovery(context.Background(), map[string]interface{}{
+		"resource_type": "app-container",
+		"resource_id":   canonicalID,
+		"target_id":     "agent-1",
+	})
+	assert.NoError(t, err)
+	assert.False(t, result.IsError)
+	assert.Equal(t, "docker", discovery.lastGetResourceType)
+	assert.Equal(t, "agent-1", discovery.lastGetTargetID)
+	assert.Equal(t, providerID, discovery.lastGetResourceID)
 }
 
 func TestBuildDiscoveryToolResponse_IncludesBindMounts(t *testing.T) {

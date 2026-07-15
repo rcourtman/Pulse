@@ -3112,6 +3112,12 @@ Qualification floor: Patrol model launch and product-claim qualification must us
    Shared or remote labs must use exact-run-labelled disposable resources,
    two-pass cleanup, full Docker inventory comparison including images, and
    must never manufacture faults in production infrastructure.
+   Read-only investigation tools that accept canonical resource IDs must
+   resolve provider coordinates internally before calling provider-owned
+   discovery or inspection paths. A model must not need to infer a Docker
+   container ID or substitute a display name after `pulse_query` returns a
+   canonical `app-container` ID; cross-tool identity translation is an AI
+   runtime responsibility.
 
 Patrol autonomous-loop floor: Watch must preserve model-owned investigation
 while requiring an accepted structured outcome for every active finding the
