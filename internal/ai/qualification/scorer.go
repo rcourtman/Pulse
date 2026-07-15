@@ -151,6 +151,19 @@ func ApplyProTrackGates(score *Score, manifest Manifest, ground GroundTruth, inv
 				score.HardFailures = append(score.HardFailures, fmt.Sprintf("investigation %s summary lacks required ground-truth term %q", investigation.ID, required))
 			}
 		}
+		for _, alternatives := range spec.RequiredSummaryTermGroups {
+			matched := false
+			for _, alternative := range alternatives {
+				if alternative != "" && strings.Contains(summary, strings.ToLower(alternative)) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				summaryOK = false
+				score.HardFailures = append(score.HardFailures, fmt.Sprintf("investigation %s summary lacks every accepted ground-truth term in %q", investigation.ID, alternatives))
+			}
+		}
 		for _, forbidden := range spec.ForbiddenSummaryTerms {
 			if forbidden != "" && strings.Contains(summary, strings.ToLower(forbidden)) {
 				summaryOK = false

@@ -151,9 +151,14 @@ type PatrolSpec struct {
 // Pro investigation output. These are semantic expectations, never expected
 // tool names, so the model remains free to choose its own evidence path.
 type InvestigationSpec struct {
-	MinEvidenceIDs        int      `json:"min_evidence_ids"`
-	RequiredSummaryTerms  []string `json:"required_summary_terms,omitempty"`
-	ForbiddenSummaryTerms []string `json:"forbidden_summary_terms,omitempty"`
+	MinEvidenceIDs int `json:"min_evidence_ids"`
+	// RequiredSummaryTerms are facts with one canonical accepted expression.
+	// RequiredSummaryTermGroups are scenario-owned semantic alternatives; at
+	// least one non-empty term in every group must appear. This avoids teaching
+	// models a magic word when normal collection exposes an equivalent state.
+	RequiredSummaryTerms      []string   `json:"required_summary_terms,omitempty"`
+	RequiredSummaryTermGroups [][]string `json:"required_summary_term_groups,omitempty"`
+	ForbiddenSummaryTerms     []string   `json:"forbidden_summary_terms,omitempty"`
 	// RootCauseResources and AffectedResources are scenario-owned aliases.
 	// They are matched against named response sections, never inferred from
 	// whichever tools the model chose to call.
@@ -402,6 +407,17 @@ func (m Manifest) Validate() error {
 			}
 			if len(m.Investigation.RequiredSummaryTerms) == 0 {
 				errs = append(errs, errors.New("investigation.required_summary_terms must not be empty"))
+			}
+			for groupIndex, group := range m.Investigation.RequiredSummaryTermGroups {
+				if len(group) == 0 {
+					errs = append(errs, fmt.Errorf("investigation.required_summary_term_groups[%d] must not be empty", groupIndex))
+					continue
+				}
+				for termIndex, term := range group {
+					if strings.TrimSpace(term) == "" {
+						errs = append(errs, fmt.Errorf("investigation.required_summary_term_groups[%d][%d] must not be empty", groupIndex, termIndex))
+					}
+				}
 			}
 			for _, alias := range append(append([]string(nil), m.Investigation.RootCauseResources...), m.Investigation.AffectedResources...) {
 				if _, ok := aliases[alias]; !ok {

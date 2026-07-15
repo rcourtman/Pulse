@@ -5825,6 +5825,13 @@ the exact `Root Cause` and `Affected Resources` response sections using the
 collected canonical name or ID. The expected diagnosis therefore remains
 independent of the read-only tools Patrol chose, and merely repeating the
 downstream symptom cannot pass causal grounding.
+Scenario-owned `required_summary_term_groups` may declare reviewed semantic
+alternatives for one independently known fact, such as Docker's injected
+`stopped` action and its normally collected `exited` state. Every group still
+requires one match, but scoring must not fail an otherwise exact causal
+diagnosis merely because the model used the provider-visible equivalent rather
+than the injector's verb. These alternatives are fixed in the manifest before
+execution and never inferred from the model response or its tool path.
 The canonical `pulse_query` schema and executor must admit the same resource
 types. In particular, `action=get` accepts `docker-host`, returns a governed
 read-only host response when the identity resolves, and returns a successful

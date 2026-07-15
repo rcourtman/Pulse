@@ -111,6 +111,16 @@ func TestManifestValidatesTriggerScopeAndInvestigationResourceExpectations(t *te
 	if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), "resource expectation references unknown") {
 		t.Fatalf("unknown root-cause resource must fail validation: %v", err)
 	}
+
+	manifest.Investigation.RootCauseResources = []string{"dependency"}
+	manifest.Investigation.RequiredSummaryTermGroups = [][]string{{"stopped", "exited"}}
+	if err := manifest.Validate(); err != nil {
+		t.Fatalf("semantic alternatives were rejected: %v", err)
+	}
+	manifest.Investigation.RequiredSummaryTermGroups = [][]string{{"stopped", ""}}
+	if err := manifest.Validate(); err == nil || !strings.Contains(err.Error(), "required_summary_term_groups") {
+		t.Fatalf("empty semantic alternative must fail validation: %v", err)
+	}
 }
 
 func TestManifestRequiresLiveSafetyAndTeardownProof(t *testing.T) {

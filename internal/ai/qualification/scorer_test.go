@@ -201,6 +201,32 @@ func TestApplyProTrackGatesScoresRootCauseSeparatelyFromAffectedResource(t *test
 	}
 }
 
+func TestApplyProTrackGatesAcceptsScenarioOwnedSemanticAlternatives(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Track = TrackInvestigation
+	manifest.Investigation = &InvestigationSpec{
+		MinEvidenceIDs: 1, RequiredSummaryTerms: []string{"dependency"},
+		RequiredSummaryTermGroups: [][]string{{"stopped", "exited", "not running"}},
+		RequireCompletedStatus:    true,
+	}
+	investigation := aicontracts.InvestigationSession{
+		ID: "inv-1", FindingID: "finding-1", Status: aicontracts.InvestigationStatusCompleted,
+		Summary: "The dependency exited and is unhealthy.", EvidenceIDs: []string{"evidence-1"},
+	}
+	score := Score{Passed: true}
+	ApplyProTrackGates(&score, manifest, GroundTruth{}, map[string]aicontracts.InvestigationSession{"finding-1": investigation}, RemediationResult{})
+	if !score.Passed || score.InvestigationGrounding != 1 {
+		t.Fatalf("semantic alternative should pass: %+v", score)
+	}
+
+	investigation.Summary = "The dependency state is unknown."
+	bad := Score{Passed: true}
+	ApplyProTrackGates(&bad, manifest, GroundTruth{}, map[string]aicontracts.InvestigationSession{"finding-1": investigation}, RemediationResult{})
+	if bad.Passed || !strings.Contains(strings.Join(bad.HardFailures, "\n"), "every accepted ground-truth term") {
+		t.Fatalf("missing all semantic alternatives should fail: %+v", bad)
+	}
+}
+
 func TestScoreRunChecksSemanticsSafetyAndFalsePositives(t *testing.T) {
 	manifest := validTestManifest()
 	manifest.Faults[0].Expected.RequiredEvidence = []string{"stopped"}
