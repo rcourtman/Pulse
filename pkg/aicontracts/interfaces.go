@@ -26,6 +26,15 @@ type InvestigationOrchestrator interface {
 	Shutdown(ctx context.Context) error
 }
 
+// InvestigationExecutionLimitUpdater is the optional live-configuration
+// contract implemented by investigation orchestrators whose turn and timeout
+// limits can change without rebuilding the orchestrator. Autonomy settings
+// persistence must publish these limits before a newly triggered
+// investigation is admitted.
+type InvestigationExecutionLimitUpdater interface {
+	SetInvestigationExecutionLimits(maxTurns int, timeout time.Duration)
+}
+
 // InvestigationStoreMaintainer is an optional interface for orchestrators that
 // expose their investigation store for periodic maintenance.
 type InvestigationStoreMaintainer interface {

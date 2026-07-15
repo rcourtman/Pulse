@@ -1062,6 +1062,15 @@ func (s *Service) ApplyPatrolAutonomyConfig(cfg *config.AIConfig) error {
 		activation := *cfg.PatrolAutopilotActivation
 		s.cfg.PatrolAutopilotActivation = &activation
 	}
+	if s.patrolService != nil {
+		orchestrator := s.patrolService.GetInvestigationOrchestrator()
+		if updater, ok := orchestrator.(aicontracts.InvestigationExecutionLimitUpdater); ok {
+			updater.SetInvestigationExecutionLimits(
+				s.cfg.GetPatrolInvestigationBudget(),
+				s.cfg.GetPatrolInvestigationTimeout(),
+			)
+		}
+	}
 	return nil
 }
 

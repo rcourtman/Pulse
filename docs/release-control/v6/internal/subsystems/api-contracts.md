@@ -1995,6 +1995,11 @@ a new API state machine, queue contract, or verification-accounting field.
    (`orchestratorChatAdapter`) exposes only
    `ExecuteInvestigationStream` (returning the structured investigation
    result with its typed proposal errors) and `ListInvestigationTools`.
+   The shared optional `InvestigationExecutionLimitUpdater` contract carries
+   successful Patrol autonomy budget/timeout updates into the live enterprise
+   orchestrator. The API mutation is not complete if persistence and the
+   response advance while the execution boundary remains on stale defaults;
+   newly admitted investigations must snapshot the newly published limits.
    The retired command-execution, autonomy, and command-shaped approval
    adapters are removed, and the legacy `aiautofix` command-approval
    endpoints fail closed with `command_fix_retired`.

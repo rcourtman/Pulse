@@ -5897,6 +5897,15 @@ The open-source/free `PUT /api/ai/patrol/autonomy` adapter may persist
 findings-only `monitor` configuration and the governed investigation budget /
 timeout clamps, but it must continue to reject `approval`, `assisted`, and
 `full` autonomy with the canonical safe-remediation license response.
+Every successful autonomy mutation must publish the persisted investigation
+budget and timeout to the already-wired tenant investigation orchestrator
+before a newly triggered finding can be admitted. Requiring a server restart,
+or leaving the orchestrator on its construction-time defaults while the API
+reports the new values, is a contract violation: it silently turns the
+operator's model-led investigation allowance into a smaller framework-owned
+ceiling. A running investigation snapshots its limits when execution starts,
+so later settings changes affect subsequent runs without racing or rewriting
+an in-flight run.
 The same canonical findings store owns dismissal-reason semantics. The three
 `dismissed_reason` values must remain behaviorally distinct, not copy-only
 variants: `not_an_issue` flips `Suppressed=true`, `expected_behavior`

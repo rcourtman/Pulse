@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
 )
 
@@ -23,7 +24,10 @@ type mockForecastProvider struct{}
 
 func (m mockForecastProvider) FormatKeyForecasts() string { return "forecast" }
 
-type stubInvestigationOrchestrator struct{}
+type stubInvestigationOrchestrator struct {
+	maxTurns int
+	timeout  time.Duration
+}
 
 func (s *stubInvestigationOrchestrator) InvestigateFinding(ctx context.Context, finding *InvestigationFinding, autonomyLevel string) error {
 	return nil
@@ -44,6 +48,34 @@ func (s *stubInvestigationOrchestrator) ReinvestigateFinding(ctx context.Context
 }
 
 func (s *stubInvestigationOrchestrator) Shutdown(ctx context.Context) error { return nil }
+
+func (s *stubInvestigationOrchestrator) SetInvestigationExecutionLimits(maxTurns int, timeout time.Duration) {
+	s.maxTurns = maxTurns
+	s.timeout = timeout
+}
+
+func TestApplyPatrolAutonomyConfigPublishesInvestigationExecutionLimits(t *testing.T) {
+	orchestrator := &stubInvestigationOrchestrator{}
+	patrol := &PatrolService{investigationOrchestrator: orchestrator}
+	service := &Service{
+		cfg:           config.NewDefaultAIConfig(),
+		patrolService: patrol,
+	}
+	next := config.NewDefaultAIConfig()
+	next.PatrolAutonomyLevel = config.PatrolAutonomyApproval
+	next.PatrolInvestigationBudget = 27
+	next.PatrolInvestigationTimeoutSec = 420
+
+	if err := service.ApplyPatrolAutonomyConfig(next); err != nil {
+		t.Fatalf("ApplyPatrolAutonomyConfig: %v", err)
+	}
+	if orchestrator.maxTurns != 27 {
+		t.Fatalf("investigation max turns = %d, want 27", orchestrator.maxTurns)
+	}
+	if orchestrator.timeout != 7*time.Minute {
+		t.Fatalf("investigation timeout = %s, want 7m", orchestrator.timeout)
+	}
+}
 
 func TestPatrolService_SettersAndScopeHints(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
