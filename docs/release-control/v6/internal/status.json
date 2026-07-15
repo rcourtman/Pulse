@@ -8870,21 +8870,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "root-lane-l6",
-      "agent_id": "root",
-      "summary": "Align Patrol qualification repetitions with confidence gate",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-15T16:29:48Z",
-      "heartbeat_at": "2026-07-15T16:29:48Z",
-      "expires_at": "2026-07-15T19:29:48Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L6"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
