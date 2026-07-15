@@ -1360,8 +1360,7 @@ or local completion steps, schedule-release retries repair the local quote, and
 the authoritative backfill can reopen a terminal inbox event through the
 cursor-aware retry path. The implementation is not yet a released self-
 service capability: the governed external Stripe transition matrix, event-
-order/reconciliation exercise, Relay version-floor proof, and a passing
-production catalog/portal audit remain required by
+order/reconciliation exercise and Relay version-floor proof remain required by
 `self-hosted-commercial-transition-coherence`. Cloud remains unavailable and
 MSP remains an assisted preview.
 
@@ -1371,8 +1370,8 @@ provide a governed billing-portal configuration identifier and the public
 Relay/Pro Stripe products retained pre-contract descriptions. No Stripe object
 or customer record was mutated or inspected. The dated blocked record is
 `docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-production-audit-blocked-2026-07-14.md`;
-the gate stays blocked until separately approved remediation is deployed and
-the same read-only audit passes.
+at that point the gate stayed blocked until separately approved remediation
+was deployed and the same read-only audit passed.
 
 Repository-side remediation preparation now exists in
 `pulse-pro:scripts/remediate_stripe_commercial_state.py`. Offline proof covers
@@ -1380,8 +1379,21 @@ shared-product deduplication, strict price and mode preconditions, exact portal
 reuse, safe creation instead of mutation of a nonconforming portal, bounded
 write endpoints, and apply confirmation. The dormant new-environment price
 creation helper also uses the same canonical descriptions. This preparation
-does not change the production finding: no live apply or runtime deployment
-has been authorized or executed, and the gate remains blocked.
+did not change the production finding at that point: no live apply or runtime
+deployment had yet been authorized or executed.
+
+On 2026-07-15 the separately approved bounded production remediation converged
+the two public Relay/Pro product descriptions, created and deployed dedicated
+invoice/payment-method-only portal configuration
+`bpc_1TtNsxBrHBocJIGHTjRvG4Qf`, and passed the same GET-only production audit:
+all 25 governed prices resolved, the portal contract passed, and the only
+warnings were the already-governed inactive v1 legacy recurring prices. A
+second remediation plan returned no product updates and reused the dedicated
+portal, proving idempotent convergence. The production catalog/portal residual
+is closed, but `self-hosted-commercial-transition-coherence` remains blocked
+until the external Stripe lifecycle transition/event-reconciliation matrix and
+real Relay license-version-floor exercise pass. The evidence record is
+`docs/release-control/v6/internal/records/self-hosted-commercial-transition-coherence-production-remediation-2026-07-15.md`.
 
 The Relay side now fails closed on missing feed authority, drains the feed
 before serving, exposes feed staleness through readiness, and tears down stale
