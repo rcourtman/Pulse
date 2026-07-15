@@ -8870,7 +8870,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "root-lane-l6",
+      "agent_id": "root",
+      "summary": "Require grounded actionable Patrol findings",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-15T17:36:37Z",
+      "heartbeat_at": "2026-07-15T17:36:37Z",
+      "expires_at": "2026-07-15T20:36:37Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L6"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
