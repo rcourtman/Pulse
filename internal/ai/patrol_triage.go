@@ -72,6 +72,7 @@ func (p *PatrolService) runDeterministicTriageState(
 	flags = append(flags, triageBackupChecksState(snap, scopedSet)...)
 	flags = append(flags, triageDiskHealthChecksState(snap, scopedSet)...)
 	flags = append(flags, triageContainerHealthChecksState(snap, scopedSet)...)
+	flags = append(flags, triageContainerRestartChecksState(snap, scopedSet)...)
 	flags = append(flags, triageAlertChecksState(snap, scopedSet)...)
 	flags = append(flags, triageConnectivityChecksState(snap, guestIntel, scopedSet)...)
 	flags = append(flags, triageRecentChanges(intel)...)
@@ -99,6 +100,42 @@ func (p *PatrolService) runDeterministicTriageState(
 		GuestIntel: guestIntel,
 		FlaggedIDs: flaggedIDs,
 	}
+}
+
+const patrolRepeatedRestartWarningThreshold = 3
+
+func triageContainerRestartChecksState(snap patrolRuntimeState, scopedSet map[string]bool) []TriageFlag {
+	rows := patrolAppContainerRows(snap, scopedSet)
+	flags := make([]TriageFlag, 0)
+	for _, row := range rows {
+		if row.restartCount < patrolRepeatedRestartWarningThreshold {
+			continue
+		}
+
+		state := strings.ToLower(strings.TrimSpace(row.status))
+		detail := fmt.Sprintf("Provider reported %d restarts", row.restartCount)
+		if state != "" {
+			detail += fmt.Sprintf("; current sampled state is %s", state)
+		}
+		if state == "restarting" {
+			detail += "; active restart-loop state is confirmed"
+		} else {
+			detail += "; repeated exits are confirmed but this snapshot alone does not prove an active loop"
+		}
+
+		flags = append(flags, TriageFlag{
+			ResourceID:   row.id,
+			ResourceName: triageResourceName(row.name, row.id),
+			ResourceType: "app-container",
+			Category:     "reliability",
+			Severity:     "warning",
+			Reason:       detail,
+			Metric:       "restart_count",
+			Value:        float64(row.restartCount),
+			Threshold:    patrolRepeatedRestartWarningThreshold,
+		})
+	}
+	return flags
 }
 
 func triageContainerHealthChecksState(snap patrolRuntimeState, scopedSet map[string]bool) []TriageFlag {

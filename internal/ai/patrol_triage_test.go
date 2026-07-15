@@ -427,6 +427,69 @@ func TestTriageContainerHealthChecksState_UsesReadState(t *testing.T) {
 	}
 }
 
+func TestTriageContainerRestartChecksState_DistinguishesRepeatedRestartsFromActiveLoop(t *testing.T) {
+	state := patrolRuntimeState{
+		DockerHosts: []models.DockerHost{{
+			ID:       "docker-host-1",
+			Hostname: "tower",
+			Containers: []models.DockerContainer{
+				{ID: "app-container:tower:historical", Name: "historical", State: "running", RestartCount: 2},
+				{ID: "app-container:tower:repeated", Name: "repeated", State: "running", RestartCount: 3},
+				{ID: "app-container:tower:looping", Name: "looping", State: "restarting", RestartCount: 5},
+			},
+		}},
+	}
+
+	flags := triageContainerRestartChecksState(state, nil)
+	if len(flags) != 2 {
+		t.Fatalf("expected repeated and active restart flags only, got %#v", flags)
+	}
+	if flags[0].ResourceID != "app-container:tower:repeated" || flags[0].Category != "reliability" || flags[0].Severity != "warning" {
+		t.Fatalf("expected grounded repeated-restart warning, got %#v", flags[0])
+	}
+	if !strings.Contains(flags[0].Reason, "3 restarts") || !strings.Contains(flags[0].Reason, "does not prove an active loop") {
+		t.Fatalf("expected non-overstated repeated-restart evidence, got %#v", flags[0])
+	}
+	if flags[1].ResourceID != "app-container:tower:looping" || !strings.Contains(flags[1].Reason, "active restart-loop state is confirmed") {
+		t.Fatalf("expected confirmed active-loop evidence, got %#v", flags[1])
+	}
+}
+
+func TestTriageContainerRestartChecksState_UsesScopedReadState(t *testing.T) {
+	parentID := "docker-host-1"
+	repeated := unifiedresources.NewDockerContainerView(&unifiedresources.Resource{
+		ID:       "app-container:tower:worker",
+		Name:     "worker",
+		Type:     unifiedresources.ResourceTypeAppContainer,
+		Status:   unifiedresources.StatusOnline,
+		ParentID: &parentID,
+		Docker: &unifiedresources.DockerData{
+			ContainerState: "running",
+			RestartCount:   5,
+		},
+	})
+	other := unifiedresources.NewDockerContainerView(&unifiedresources.Resource{
+		ID:       "app-container:tower:other",
+		Name:     "other",
+		Type:     unifiedresources.ResourceTypeAppContainer,
+		Status:   unifiedresources.StatusOnline,
+		ParentID: &parentID,
+		Docker: &unifiedresources.DockerData{
+			ContainerState: "restarting",
+			RestartCount:   8,
+		},
+	})
+	state := patrolRuntimeState{readState: &mockReadState{dockerCtrs: []*unifiedresources.DockerContainerView{&repeated, &other}}}
+
+	flags := triageContainerRestartChecksState(state, map[string]bool{"app-container:tower:worker": true})
+	if len(flags) != 1 || flags[0].ResourceID != "app-container:tower:worker" {
+		t.Fatalf("expected one scoped read-state restart warning, got %#v", flags)
+	}
+	if flags[0].Metric != "restart_count" || flags[0].Value != 5 || flags[0].Threshold != patrolRepeatedRestartWarningThreshold {
+		t.Fatalf("expected exact restart evidence, got %#v", flags[0])
+	}
+}
+
 func TestTriageAlertChecks(t *testing.T) {
 	state := patrolRuntimeState{
 		ActiveAlerts: []models.Alert{

@@ -5880,12 +5880,16 @@ calm-day evidence and does not spend platform or inventory tool calls merely
 reconfirming the same state. Exact scoped app-container rows carry the canonical
 restart count from normal collection. A non-zero count is a concrete signal
 that prevents the calm-day shortcut and may justify one targeted current
-resource read. In Watch detection, a current `restarting` state or a count that
-increased from the scoped snapshot confirms the operational symptom. The model
-reports it immediately and does not spend logs, discovery, Docker-service, or
-other root-cause tool calls after confirmation; causal analysis belongs to the
-separate Pro investigation track. Quiet triage is not a deterministic
-replacement for model-owned assessment.
+resource read. A provider-observed count of at least three deterministically
+flags repeated exits as model context. The model may report that grounded
+reliability warning even when the sampled lifecycle state is `running`, but it
+must not call the container an active restart loop from that snapshot alone. A
+current `restarting` state or a count that increased from the scoped snapshot
+confirms the active-loop symptom. The model does not spend logs, discovery,
+Docker-service, or other root-cause tool calls after the repeated-restart
+symptom is established; causal analysis belongs to the separate Pro
+investigation track. Quiet triage is not a deterministic replacement for
+model-owned assessment.
 Model-authored structured findings remain concise for continuous operation:
 description uses at most three short sentences, impact one sentence, evidence
 three concrete facts, and recommendation two short sentences, without
