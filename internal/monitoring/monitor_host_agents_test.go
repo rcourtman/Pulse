@@ -3271,6 +3271,121 @@ func TestRemoveHostAgent_BlocksFutureReportsUntilAllowed(t *testing.T) {
 	}
 }
 
+// TestApplyHostReport_FreshTokenClearsRemovalBlock pins the #1581 re-enroll
+// path: a report presenting a token created after the removal is explicit
+// re-add intent and clears the block, while a pre-removal token stays blocked.
+func TestApplyHostReport_FreshTokenClearsRemovalBlock(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		removedHostAgents: make(map[string]time.Time),
+		rateTracker:       NewRateTracker(),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	hostID := "host-fresh-token"
+	monitor.state.UpsertHost(models.Host{
+		ID:       hostID,
+		Hostname: "fresh-token.local",
+	})
+	if _, err := monitor.RemoveHostAgent(hostID); err != nil {
+		t.Fatalf("remove host agent: %v", err)
+	}
+
+	report := agentshost.Report{
+		Host: agentshost.HostInfo{
+			ID:       hostID,
+			Hostname: "fresh-token.local",
+		},
+		Agent:     agentshost.AgentInfo{ID: hostID},
+		Timestamp: time.Now(),
+	}
+
+	staleToken := &config.APITokenRecord{
+		ID:        "token-old",
+		CreatedAt: time.Now().Add(-time.Hour),
+	}
+	if _, err := monitor.ApplyHostReport(report, staleToken); err == nil {
+		t.Fatal("expected report with pre-removal token to stay blocked")
+	}
+
+	freshToken := &config.APITokenRecord{
+		ID:        "token-new",
+		CreatedAt: time.Now().Add(time.Minute),
+	}
+	if _, err := monitor.ApplyHostReport(report, freshToken); err != nil {
+		t.Fatalf("expected report with post-removal token to clear the block, got %v", err)
+	}
+
+	if len(monitor.state.GetRemovedHostAgents()) != 0 {
+		t.Fatal("expected persisted removal block to be cleared")
+	}
+}
+
+// TestAllowHostAgentReenroll_ClearsPersistedBlockAfterRestart pins the #1581
+// restart hole: the in-memory map is empty after a restart, but the persisted
+// entry must still be found and cleared.
+func TestAllowHostAgentReenroll_ClearsPersistedBlockAfterRestart(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		removedHostAgents: make(map[string]time.Time),
+		rateTracker:       NewRateTracker(),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	hostID := "host-restart-block"
+	monitor.state.AddRemovedHostAgent(models.RemovedHostAgent{
+		ID:        hostID,
+		Hostname:  "restart-block.local",
+		RemovedAt: time.Now().Add(-time.Hour),
+	})
+
+	if err := monitor.AllowHostAgentReenroll(hostID); err != nil {
+		t.Fatalf("allow host reenroll: %v", err)
+	}
+	if len(monitor.state.GetRemovedHostAgents()) != 0 {
+		t.Fatal("expected persisted removal block to be cleared without an in-memory entry")
+	}
+}
+
+// TestCleanupRemovedHostAgents_ExpiresPersistedEntries pins the #1581 TTL
+// hole: persisted blocks must expire by their own RemovedAt even when the
+// in-memory map lost them across a restart.
+func TestCleanupRemovedHostAgents_ExpiresPersistedEntries(t *testing.T) {
+	monitor := &Monitor{
+		state:             models.NewState(),
+		hostTokenBindings: make(map[string]string),
+		removedHostAgents: make(map[string]time.Time),
+		config:            &config.Config{},
+	}
+
+	monitor.state.AddRemovedHostAgent(models.RemovedHostAgent{
+		ID:        "host-expired",
+		Hostname:  "expired.local",
+		RemovedAt: time.Now().Add(-25 * time.Hour),
+	})
+	monitor.state.AddRemovedHostAgent(models.RemovedHostAgent{
+		ID:        "host-recent",
+		Hostname:  "recent.local",
+		RemovedAt: time.Now().Add(-time.Hour),
+	})
+
+	monitor.cleanupRemovedHostAgents(time.Now())
+
+	remaining := monitor.state.GetRemovedHostAgents()
+	if len(remaining) != 1 {
+		t.Fatalf("expected exactly one persisted block to survive, got %d", len(remaining))
+	}
+	if remaining[0].ID != "host-recent" {
+		t.Fatalf("expected host-recent to survive, got %q", remaining[0].ID)
+	}
+}
+
 func TestApplyHostReport_MissingHostname(t *testing.T) {
 	monitor := &Monitor{
 		state:             models.NewState(),

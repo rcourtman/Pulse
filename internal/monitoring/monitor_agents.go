@@ -264,13 +264,22 @@ func (m *Monitor) AllowHostAgentReenroll(hostID string) error {
 	if m.removedHostAgents == nil {
 		m.removedHostAgents = make(map[string]time.Time)
 	}
-	_, exists := m.removedHostAgents[hostID]
-	if exists {
-		delete(m.removedHostAgents, hostID)
-	}
+	_, existsInMemory := m.removedHostAgents[hostID]
+	delete(m.removedHostAgents, hostID)
 	m.mu.Unlock()
 
-	if !exists {
+	// The in-memory map resets on restart while the persisted entry keeps
+	// blocking reports, so the persisted store must be checked and cleared
+	// independently of memory presence (#1581).
+	existsInState := false
+	for _, entry := range m.state.GetRemovedHostAgents() {
+		if strings.TrimSpace(entry.ID) == hostID {
+			existsInState = true
+			break
+		}
+	}
+
+	if !existsInMemory && !existsInState {
 		log.Info().
 			Str("hostID", hostID).
 			Msg("allow re-enroll requested but host agent was not blocked; ignoring")
@@ -286,7 +295,7 @@ func (m *Monitor) AllowHostAgentReenroll(hostID string) error {
 	return nil
 }
 
-func (m *Monitor) lookupRemovedHostAgent(identifier, hostname, machineID, tokenID string) (time.Time, bool) {
+func (m *Monitor) lookupRemovedHostAgent(identifier, hostname, machineID, tokenID string) (string, time.Time, bool) {
 	identifier = strings.TrimSpace(identifier)
 	machineID = sanitizeDockerHostSuffix(machineID)
 	tokenID = strings.TrimSpace(tokenID)
@@ -295,16 +304,16 @@ func (m *Monitor) lookupRemovedHostAgent(identifier, hostname, machineID, tokenI
 	removedAt, wasRemoved := m.removedHostAgents[identifier]
 	m.mu.RUnlock()
 	if wasRemoved {
-		return removedAt, true
+		return identifier, removedAt, true
 	}
 
 	for _, entry := range m.state.GetRemovedHostAgents() {
 		if removedHostAgentMatchesReport(entry, identifier, hostname, machineID, tokenID) {
-			return entry.RemovedAt, true
+			return strings.TrimSpace(entry.ID), entry.RemovedAt, true
 		}
 	}
 
-	return time.Time{}, false
+	return "", time.Time{}, false
 }
 
 func removedHostAgentMatchesReport(entry models.RemovedHostAgent, identifier, hostname, machineID, tokenID string) bool {
@@ -646,20 +655,23 @@ func (m *Monitor) AllowDockerHostReenroll(hostID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if host, resolvedHostID, found := m.resolveDockerCommandHostLocked(hostID); found {
+	if _, resolvedHostID, found := m.resolveDockerCommandHostLocked(hostID); found {
 		hostID = resolvedHostID
-		if _, exists := m.removedDockerHosts[hostID]; !exists {
-			event := log.Info().
-				Str("dockerHostID", hostID)
-			if hostname := strings.TrimSpace(host.Hostname()); hostname != "" {
-				event = event.Str("dockerHost", hostname)
-			}
-			event.Msg("allow re-enroll requested but host was not blocked; ignoring")
-			return nil
+	}
+
+	// The in-memory map resets on restart while the persisted entry keeps
+	// blocking reports, so the persisted store must be checked and cleared
+	// independently of memory presence (#1581).
+	_, existsInMemory := m.removedDockerHosts[hostID]
+	existsInState := false
+	for _, entry := range m.state.GetRemovedDockerHosts() {
+		if strings.TrimSpace(entry.ID) == hostID {
+			existsInState = true
+			break
 		}
 	}
 
-	if _, exists := m.removedDockerHosts[hostID]; !exists {
+	if !existsInMemory && !existsInState {
 		event := log.Info().
 			Str("dockerHostID", hostID)
 		if host, found := m.stateDockerHostByIDLocked(hostID); found {
@@ -1766,13 +1778,29 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	if tokenRecord != nil {
 		tokenID = strings.TrimSpace(tokenRecord.ID)
 	}
-	removedAt, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname, report.Host.MachineID, tokenID)
+	blockedID, removedAt, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname, report.Host.MachineID, tokenID)
+	if wasRemoved && tokenRecord != nil && !tokenRecord.CreatedAt.IsZero() && tokenRecord.CreatedAt.After(removedAt) {
+		// A token minted after the host was removed means the user generated a
+		// fresh install command for this machine: that is explicit re-enroll
+		// intent, so clear the block instead of rejecting until the TTL
+		// expires. A still-running old agent keeps presenting its pre-removal
+		// token and stays blocked (#1581).
+		if err := m.AllowHostAgentReenroll(blockedID); err == nil {
+			log.Info().
+				Str("hostID", identifier).
+				Str("blockedID", blockedID).
+				Time("removedAt", removedAt).
+				Time("tokenCreatedAt", tokenRecord.CreatedAt).
+				Msg("Cleared host agent removal block: report presented a token created after removal")
+			wasRemoved = false
+		}
+	}
 	if wasRemoved {
 		log.Info().
 			Str("hostID", identifier).
 			Time("removedAt", removedAt).
 			Msg("Rejecting report from deliberately removed host agent")
-		return models.Host{}, fmt.Errorf("host agent %q had monitoring stopped at %v and cannot report again. Use Allow reconnect in Settings -> Infrastructure before reconnecting this host", identifier, removedAt.Format(time.RFC3339))
+		return models.Host{}, fmt.Errorf("host agent %q had monitoring stopped at %v and cannot report again. Re-enroll by reinstalling the agent with a newly generated API token, or wait for the block to clear 24 hours after removal", identifier, removedAt.Format(time.RFC3339))
 	}
 
 	var previous *unifiedresources.HostView
@@ -2895,25 +2923,31 @@ func recoverFromPanic(goroutineName string) {
 	}
 }
 
-// cleanupRemovedDockerHosts removes entries from the removed hosts map that are older than 24 hours.
+// cleanupRemovedDockerHosts expires removed Docker host blocks older than 24
+// hours. Persisted entries are swept by their own RemovedAt because the
+// in-memory map resets on restart (see cleanupRemovedHostAgents, #1581).
 func (m *Monitor) cleanupRemovedDockerHosts(now time.Time) {
-	// Collect IDs to remove first to avoid holding lock during state update
-	var toRemove []string
+	expired := make(map[string]time.Time)
+
+	for _, entry := range m.state.GetRemovedDockerHosts() {
+		if now.Sub(entry.RemovedAt) > removedDockerHostsTTL {
+			expired[entry.ID] = entry.RemovedAt
+		}
+	}
 
 	m.mu.Lock()
 	for hostID, removedAt := range m.removedDockerHosts {
 		if now.Sub(removedAt) > removedDockerHostsTTL {
-			toRemove = append(toRemove, hostID)
+			expired[hostID] = removedAt
 		}
 	}
 	m.mu.Unlock()
 
 	// Remove from state and map without holding both locks
-	for _, hostID := range toRemove {
+	for hostID, removedAt := range expired {
 		m.state.RemoveRemovedDockerHost(hostID)
 
 		m.mu.Lock()
-		removedAt := m.removedDockerHosts[hostID]
 		delete(m.removedDockerHosts, hostID)
 		m.mu.Unlock()
 
@@ -2924,23 +2958,32 @@ func (m *Monitor) cleanupRemovedDockerHosts(now time.Time) {
 	}
 }
 
-// cleanupRemovedHostAgents removes entries from the removed host-agent map that are older than 24 hours.
+// cleanupRemovedHostAgents expires removed host-agent blocks older than 24 hours.
+// The persisted entries must be swept by their own RemovedAt, not via the
+// in-memory map: the map resets on restart while lookupRemovedHostAgent keeps
+// matching persisted entries, which made a deleted host's block immortal and
+// permanently rejected its agent's re-enrollment (#1581).
 func (m *Monitor) cleanupRemovedHostAgents(now time.Time) {
-	var toRemove []string
+	expired := make(map[string]time.Time)
+
+	for _, entry := range m.state.GetRemovedHostAgents() {
+		if now.Sub(entry.RemovedAt) > removedHostAgentsTTL {
+			expired[entry.ID] = entry.RemovedAt
+		}
+	}
 
 	m.mu.Lock()
 	for hostID, removedAt := range m.removedHostAgents {
 		if now.Sub(removedAt) > removedHostAgentsTTL {
-			toRemove = append(toRemove, hostID)
+			expired[hostID] = removedAt
 		}
 	}
 	m.mu.Unlock()
 
-	for _, hostID := range toRemove {
+	for hostID, removedAt := range expired {
 		m.state.RemoveRemovedHostAgent(hostID)
 
 		m.mu.Lock()
-		removedAt := m.removedHostAgents[hostID]
 		delete(m.removedHostAgents, hostID)
 		m.mu.Unlock()
 

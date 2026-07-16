@@ -2194,7 +2194,7 @@ func TestHostAgentRemovalGuardUsesResolvedIdentifier(t *testing.T) {
 	}
 	source := string(data)
 	requiredSnippets := []string{
-		"removedAt, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname, report.Host.MachineID, tokenID)",
+		"blockedID, removedAt, wasRemoved := m.lookupRemovedHostAgent(identifier, hostname, report.Host.MachineID, tokenID)",
 		"func removedHostAgentMatchesReport(entry models.RemovedHostAgent, identifier, hostname, machineID, tokenID string) bool {",
 		"entryTokenID == \"\" || tokenID == \"\" || entryTokenID != tokenID",
 		`Str("hostID", identifier)`,

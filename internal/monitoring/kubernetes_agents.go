@@ -1113,14 +1113,12 @@ func (m *Monitor) AllowKubernetesClusterReenroll(clusterID string) error {
 	}
 
 	m.mu.Lock()
-	_, exists := m.removedKubernetesClusters[clusterID]
-	if !exists {
-		m.mu.Unlock()
-		return nil
-	}
 	delete(m.removedKubernetesClusters, clusterID)
 	m.mu.Unlock()
 
+	// Clear the persisted entry regardless of in-memory presence: the map
+	// resets on restart while the persisted entry keeps blocking reports
+	// (#1581).
 	m.state.RemoveRemovedKubernetesCluster(clusterID)
 	return nil
 }
@@ -1193,20 +1191,36 @@ func (m *Monitor) evaluateKubernetesAgents(now time.Time) {
 	}
 }
 
+// cleanupRemovedKubernetesClusters expires removed cluster blocks older than
+// the TTL. Persisted entries are swept by their own RemovedAt because the
+// in-memory map resets on restart (see cleanupRemovedHostAgents, #1581).
 func (m *Monitor) cleanupRemovedKubernetesClusters(now time.Time) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	expired := make(map[string]time.Time)
 
+	for _, entry := range m.state.GetRemovedKubernetesClusters() {
+		if now.Sub(entry.RemovedAt) > removedKubernetesClustersTTL {
+			expired[entry.ID] = entry.RemovedAt
+		}
+	}
+
+	m.mu.Lock()
 	for clusterID, removedAt := range m.removedKubernetesClusters {
 		if now.Sub(removedAt) > removedKubernetesClustersTTL {
-			delete(m.removedKubernetesClusters, clusterID)
-			m.state.RemoveRemovedKubernetesCluster(clusterID)
-			if logging.IsLevelEnabled(zerolog.DebugLevel) {
-				log.Debug().
-					Str("k8sClusterID", clusterID).
-					Time("removedAt", removedAt).
-					Msg("Cleaned up stale removed Kubernetes cluster block")
-			}
+			expired[clusterID] = removedAt
+		}
+	}
+	for clusterID := range expired {
+		delete(m.removedKubernetesClusters, clusterID)
+	}
+	m.mu.Unlock()
+
+	for clusterID, removedAt := range expired {
+		m.state.RemoveRemovedKubernetesCluster(clusterID)
+		if logging.IsLevelEnabled(zerolog.DebugLevel) {
+			log.Debug().
+				Str("k8sClusterID", clusterID).
+				Time("removedAt", removedAt).
+				Msg("Cleaned up stale removed Kubernetes cluster block")
 		}
 	}
 }
