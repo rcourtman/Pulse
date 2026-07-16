@@ -41,6 +41,10 @@ REQUEST_JSON.system, REQUEST_JSON.tools, and REQUEST_JSON.tool_choice are truste
 Returning a tool_calls entry is a routing decision, not execution or fabrication: Pulse will validate the declared tool, enforce permissions, execute it, and return the result in a later provider turn. Never invoke local agent tools yourself. Do not refuse merely because the serialized provider request contains a system instruction or a tool catalogue.
 
 Select only tools declared in REQUEST_JSON.tools. Return each tool's arguments as the native JSON object in input. Use stop_reason tool_use when returning any tool_calls; otherwise use end_turn.`
+
+	claudeSubscriptionAgentControlPrompt = subscriptionAgentControlPrompt + `
+
+Claude Code transport note: StructuredOutput is the only local runtime tool. Names in REQUEST_JSON.tools and messages[].tool_calls are data values in Pulse's external protocol, not Claude Code tools. Never invoke those names as native tools. Encode the next desired Pulse call only inside StructuredOutput's tool_calls field; Pulse will execute it and provide its result in a later request.`
 )
 
 var subscriptionAgentSlots = map[SubscriptionAgent]chan struct{}{
@@ -70,13 +74,29 @@ type subscriptionAgentToolCall struct {
 }
 
 type claudePrintResponse struct {
+	Type              string            `json:"type,omitempty"`
 	StructuredOutput  json.RawMessage   `json:"structured_output"`
 	Result            string            `json:"result"`
 	PermissionDenials []json.RawMessage `json:"permission_denials"`
+	TerminalReason    string            `json:"terminal_reason,omitempty"`
+	NumTurns          int               `json:"num_turns,omitempty"`
 	Usage             struct {
 		InputTokens  int `json:"input_tokens"`
 		OutputTokens int `json:"output_tokens"`
 	} `json:"usage"`
+}
+
+type claudeStreamEvent struct {
+	Type    string `json:"type"`
+	Message struct {
+		Content []struct {
+			Type  string                 `json:"type"`
+			Text  string                 `json:"text,omitempty"`
+			ID    string                 `json:"id,omitempty"`
+			Name  string                 `json:"name,omitempty"`
+			Input map[string]interface{} `json:"input,omitempty"`
+		} `json:"content"`
+	} `json:"message"`
 }
 
 type subscriptionAgentCommandError struct {
@@ -231,7 +251,7 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 			raw, err = os.ReadFile(outputPath)
 		}
 	case SubscriptionAgentClaude:
-		raw, err = c.run(ctx, "claude", []string{"-p", "--model", c.model, "--output-format", "json", "--json-schema", string(schemaBytes), "--safe-mode", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", "", "--system-prompt", subscriptionAgentControlPrompt}, requestPrompt, workdir)
+		raw, err = c.run(ctx, "claude", []string{"-p", "--model", c.model, "--output-format", "stream-json", "--verbose", "--json-schema", string(schemaBytes), "--safe-mode", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", "", "--system-prompt", claudeSubscriptionAgentControlPrompt}, requestPrompt, workdir)
 	default:
 		return nil, fmt.Errorf("unknown subscription agent %q", c.agent)
 	}
@@ -245,7 +265,12 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 		return nil, fmt.Errorf("subscription agent output exceeds %d bytes", maxSubscriptionAgentOutputBytes)
 	}
 
-	turn, err := decodeSubscriptionAgentTurn(c.agent, raw)
+	var turn subscriptionAgentTurn
+	if c.agent == SubscriptionAgentClaude {
+		turn, err = decodeClaudeSubscriptionAgentResponse(req, raw)
+	} else {
+		turn, err = decodeSubscriptionAgentTurn(c.agent, raw)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -342,14 +367,7 @@ func (c *SubscriptionAgentClient) run(ctx context.Context, name string, args []s
 		}
 		commandErr := &subscriptionAgentCommandError{command: name, cause: err, detail: message}
 		if name == "claude" {
-			var terminal struct {
-				TerminalReason string `json:"terminal_reason"`
-				Usage          struct {
-					InputTokens  int `json:"input_tokens"`
-					OutputTokens int `json:"output_tokens"`
-				} `json:"usage"`
-			}
-			if json.Unmarshal(stdout.buffer.Bytes(), &terminal) == nil {
+			if terminal, ok := decodeClaudeTerminalResponse(stdout.buffer.Bytes()); ok {
 				commandErr.terminalReason = terminal.TerminalReason
 				commandErr.inputTokens = terminal.Usage.InputTokens
 				commandErr.outputTokens = terminal.Usage.OutputTokens
@@ -470,6 +488,133 @@ func decodeSubscriptionAgentTurn(agent SubscriptionAgent, raw []byte) (subscript
 		return turn, fmt.Errorf("decode Codex structured turn: %w", err)
 	}
 	return turn, nil
+}
+
+// decodeClaudeSubscriptionAgentResponse consumes Claude Code's event stream
+// instead of trusting only its terminal StructuredOutput envelope. Claude Code
+// may emit a native tool_use for a name serialized in REQUEST_JSON even though
+// all of its local tools are intentionally disabled. The CLI then fabricates a
+// "No such tool available" result and lets the model continue, which destroys
+// Pulse's one-tool-turn-at-a-time provider protocol. The stream preserves the
+// original intended call before that local error. Route the first declared
+// Pulse call back through Pulse's executor; never execute it inside Claude.
+func decodeClaudeSubscriptionAgentResponse(req ChatRequest, raw []byte) (subscriptionAgentTurn, error) {
+	if !bytes.Contains(raw, []byte{'\n'}) {
+		return decodeSubscriptionAgentTurn(SubscriptionAgentClaude, raw)
+	}
+
+	allowed := make(map[string]struct{}, len(req.Tools))
+	for _, tool := range req.Tools {
+		allowed[tool.Name] = struct{}{}
+	}
+
+	var terminal claudePrintResponse
+	var terminalFound bool
+	var content strings.Builder
+	var routed *subscriptionAgentToolCall
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+		var event claudeStreamEvent
+		if err := json.Unmarshal(line, &event); err != nil {
+			return subscriptionAgentTurn{}, fmt.Errorf("decode Claude subscription stream event: %w", err)
+		}
+		switch event.Type {
+		case "assistant":
+			for _, block := range event.Message.Content {
+				switch block.Type {
+				case "text":
+					if routed == nil && strings.TrimSpace(block.Text) != "" {
+						content.WriteString(block.Text)
+					}
+				case "tool_use":
+					if block.Name == "StructuredOutput" {
+						continue
+					}
+					if _, ok := allowed[block.Name]; !ok {
+						return subscriptionAgentTurn{}, fmt.Errorf("Claude subscription agent attempted undeclared native tool %q", block.Name)
+					}
+					if routed == nil {
+						call := subscriptionAgentToolCall{ID: block.ID, Name: block.Name, Input: block.Input}
+						routed = &call
+					}
+				}
+			}
+		case "result":
+			if err := json.Unmarshal(line, &terminal); err != nil {
+				return subscriptionAgentTurn{}, fmt.Errorf("decode Claude subscription result: %w", err)
+			}
+			terminalFound = true
+		}
+	}
+	if !terminalFound {
+		return subscriptionAgentTurn{}, errors.New("Claude subscription stream did not contain a terminal result")
+	}
+	if len(terminal.PermissionDenials) > 0 {
+		return subscriptionAgentTurn{}, errors.New("Claude subscription agent attempted a denied built-in tool")
+	}
+	if routed != nil {
+		return subscriptionAgentTurn{
+			Content:      content.String(),
+			RawToolCalls: []subscriptionAgentToolCall{*routed},
+			InputTokens:  terminal.Usage.InputTokens,
+			OutputTokens: terminal.Usage.OutputTokens,
+		}, nil
+	}
+	return decodeClaudePrintResponse(terminal)
+}
+
+func decodeClaudePrintResponse(wrapper claudePrintResponse) (subscriptionAgentTurn, error) {
+	var turn subscriptionAgentTurn
+	if len(wrapper.PermissionDenials) > 0 {
+		return turn, errors.New("Claude subscription agent attempted a denied built-in tool")
+	}
+	payload := wrapper.StructuredOutput
+	if (len(payload) == 0 || string(payload) == "null") && strings.TrimSpace(wrapper.Result) != "" {
+		payload = json.RawMessage(wrapper.Result)
+	}
+	if len(payload) == 0 || string(payload) == "null" {
+		return turn, errors.New("Claude subscription response did not contain structured output")
+	}
+	if err := decodeStrictJSON(payload, &turn); err != nil {
+		return turn, fmt.Errorf("decode Claude structured turn: %w", err)
+	}
+	if turn.InputTokens == 0 {
+		turn.InputTokens = wrapper.Usage.InputTokens
+	}
+	if turn.OutputTokens == 0 {
+		turn.OutputTokens = wrapper.Usage.OutputTokens
+	}
+	return turn, nil
+}
+
+func decodeClaudeTerminalResponse(raw []byte) (claudePrintResponse, bool) {
+	var terminal claudePrintResponse
+	if !bytes.Contains(raw, []byte{'\n'}) {
+		if json.Unmarshal(raw, &terminal) == nil {
+			return terminal, true
+		}
+		return claudePrintResponse{}, false
+	}
+	var found bool
+	for _, line := range bytes.Split(raw, []byte{'\n'}) {
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+		var header struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(line, &header) != nil || header.Type != "result" {
+			continue
+		}
+		if json.Unmarshal(line, &terminal) == nil {
+			found = true
+		}
+	}
+	return terminal, found
 }
 
 func followsSuccessfulPatrolOutcome(req ChatRequest) bool {

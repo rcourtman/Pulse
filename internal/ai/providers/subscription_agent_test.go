@@ -168,6 +168,11 @@ func TestSubscriptionAgentPromptSeparatesTrustedControlFromInfrastructureData(t 
 			t.Fatalf("adapter system prompt missing trust-boundary clause %q", expected)
 		}
 	}
+	for _, expected := range []string{"StructuredOutput is the only local runtime tool", "not Claude Code tools", "Pulse will execute it"} {
+		if !strings.Contains(claudeSubscriptionAgentControlPrompt, expected) {
+			t.Fatalf("Claude adapter system prompt missing native-tool clause %q", expected)
+		}
+	}
 }
 
 func TestSubscriptionAgentClientsUseStructuredSingleTurnProcess(t *testing.T) {
@@ -214,6 +219,8 @@ seen_system=false
 seen_json_schema=false
 seen_no_tools=false
 seen_dont_ask=false
+seen_stream_json=false
+seen_verbose=false
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 		--system-prompt)
@@ -239,6 +246,13 @@ while [ "$#" -gt 0 ]; do
 			shift
 			[ "$1" = "dontAsk" ] && seen_dont_ask=true
 			;;
+		--output-format)
+			shift
+			[ "$1" = "stream-json" ] && seen_stream_json=true
+			;;
+		--verbose)
+			seen_verbose=true
+			;;
 	esac
 	shift
 done
@@ -246,6 +260,8 @@ done
 [ "$seen_json_schema" = true ] || { echo "missing native output schema" >&2; exit 97; }
 [ "$seen_no_tools" = true ] || { echo "Claude built-in tools not disabled" >&2; exit 95; }
 [ "$seen_dont_ask" = true ] || { echo "unexpected permission mode" >&2; exit 96; }
+[ "$seen_stream_json" = true ] || { echo "Claude event stream not enabled" >&2; exit 98; }
+[ "$seen_verbose" = true ] || { echo "Claude verbose stream not enabled" >&2; exit 99; }
 printf '%s' '{"structured_output":{"content":"healthy","stop_reason":"end_turn","tool_calls":[]},"usage":{"input_tokens":12,"output_tokens":3}}'
 `)
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -337,6 +353,81 @@ func TestDecodeClaudeSubscriptionAgentRejectsNonJSONResult(t *testing.T) {
 	raw, _ := json.Marshal(claudePrintResponse{Result: "not-json"})
 	if _, err := decodeSubscriptionAgentTurn(SubscriptionAgentClaude, raw); err == nil {
 		t.Fatal("expected non-JSON structured result to be rejected")
+	}
+}
+
+func TestDecodeClaudeSubscriptionAgentRoutesNativePulseToolAttempt(t *testing.T) {
+	raw := []byte(strings.Join([]string{
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"Checking logs next."},{"type":"tool_use","id":"toolu-1","name":"pulse_read","input":{"action":"logs","resource_id":"resource-1"}}]}}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"toolu-1","is_error":true,"content":"No such tool available: pulse_read"}]}}`,
+		`{"type":"result","subtype":"success","num_turns":3,"structured_output":{"content":"Tool unavailable.","stop_reason":"end_turn","tool_calls":[]},"permission_denials":[],"usage":{"input_tokens":11,"output_tokens":17}}`,
+	}, "\n"))
+	req := ChatRequest{Tools: []Tool{{Name: "pulse_read"}}}
+	turn, err := decodeClaudeSubscriptionAgentResponse(req, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if turn.Content != "Checking logs next." || len(turn.RawToolCalls) != 1 {
+		t.Fatalf("routed turn = %#v", turn)
+	}
+	call := turn.RawToolCalls[0]
+	if call.ID != "toolu-1" || call.Name != "pulse_read" || call.Input["resource_id"] != "resource-1" {
+		t.Fatalf("routed tool call = %#v", call)
+	}
+	if turn.InputTokens != 11 || turn.OutputTokens != 17 {
+		t.Fatalf("routed usage = %d/%d", turn.InputTokens, turn.OutputTokens)
+	}
+}
+
+func TestDecodeClaudeSubscriptionAgentRoutesOnlyFirstNativePulseToolAttempt(t *testing.T) {
+	raw := []byte(strings.Join([]string{
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu-1","name":"pulse_read","input":{"action":"logs"}}]}}`,
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu-2","name":"patrol_propose_action","input":{"capability_name":"start"}}]}}`,
+		`{"type":"result","subtype":"success","structured_output":{"content":"Both unavailable.","stop_reason":"end_turn","tool_calls":[]},"permission_denials":[],"usage":{}}`,
+	}, "\n"))
+	req := ChatRequest{Tools: []Tool{{Name: "pulse_read"}, {Name: "patrol_propose_action"}}}
+	turn, err := decodeClaudeSubscriptionAgentResponse(req, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(turn.RawToolCalls) != 1 || turn.RawToolCalls[0].Name != "pulse_read" {
+		t.Fatalf("routed tool calls = %#v", turn.RawToolCalls)
+	}
+}
+
+func TestDecodeClaudeSubscriptionAgentRejectsUndeclaredNativeToolAttempt(t *testing.T) {
+	raw := []byte(strings.Join([]string{
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu-1","name":"Bash","input":{"command":"true"}}]}}`,
+		`{"type":"result","subtype":"success","structured_output":{"content":"done","stop_reason":"end_turn","tool_calls":[]},"permission_denials":[],"usage":{}}`,
+	}, "\n"))
+	_, err := decodeClaudeSubscriptionAgentResponse(ChatRequest{Tools: []Tool{{Name: "pulse_read"}}}, raw)
+	if err == nil || !strings.Contains(err.Error(), `undeclared native tool "Bash"`) {
+		t.Fatalf("undeclared native tool error = %v", err)
+	}
+}
+
+func TestDecodeClaudeSubscriptionAgentUsesTerminalStructuredOutput(t *testing.T) {
+	raw := []byte(strings.Join([]string{
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"structured-1","name":"StructuredOutput","input":{"content":"healthy","stop_reason":"end_turn","tool_calls":[]}}]}}`,
+		`{"type":"result","subtype":"success","num_turns":2,"structured_output":{"content":"healthy","stop_reason":"end_turn","tool_calls":[]},"permission_denials":[],"usage":{"input_tokens":5,"output_tokens":7}}`,
+	}, "\n"))
+	turn, err := decodeClaudeSubscriptionAgentResponse(ChatRequest{}, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if turn.Content != "healthy" || len(turn.RawToolCalls) != 0 || turn.InputTokens != 5 || turn.OutputTokens != 7 {
+		t.Fatalf("structured turn = %#v", turn)
+	}
+}
+
+func TestDecodeClaudeTerminalResponseUsesFinalStreamResult(t *testing.T) {
+	raw := []byte(strings.Join([]string{
+		`{"type":"system","subtype":"init"}`,
+		`{"type":"result","subtype":"error","terminal_reason":"structured_output_retry_exhausted","usage":{"input_tokens":19,"output_tokens":23}}`,
+	}, "\n"))
+	terminal, ok := decodeClaudeTerminalResponse(raw)
+	if !ok || terminal.TerminalReason != "structured_output_retry_exhausted" || terminal.Usage.InputTokens != 19 || terminal.Usage.OutputTokens != 23 {
+		t.Fatalf("terminal stream result = (%#v, %t)", terminal, ok)
 	}
 }
 

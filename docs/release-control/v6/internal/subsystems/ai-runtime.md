@@ -299,7 +299,18 @@ own subscription-provider prefix before CLI execution, and rejects foreign
 provider prefixes rather than forwarding an invalid or cross-provider model
 name to the local agent.
 Claude uses its native output-schema mode for every provider decision. Pulse
-decodes completed structured turns with unknown fields and trailing values
+consumes Claude Code's verbose JSON event stream but still buffers the whole
+process result before emitting provider events. Claude Code can mistake a tool
+name serialized in the Pulse request for a local native tool even though local
+tools are disabled; in that case it emits the intended `tool_use`, injects a
+synthetic `No such tool available` result, and lets the model continue toward a
+false `needs_attention` conclusion. The adapter must recover only the first
+such call when its name is in the current Pulse-owned offered-tool manifest,
+then return that call through the normal Pulse executor on the next provider
+turn. It must ignore later attempts made without real Pulse tool results,
+reject any undeclared native tool attempt, and never execute infrastructure
+tools inside Claude Code. When no recoverable native call occurred, Pulse
+decodes the terminal structured turn with unknown fields and trailing values
 rejected. Live qualification also proved that Claude's wrapper may exhaust its
 structured-output retries on the final turn after Pulse has already persisted
 a successful `patrol_report_finding`, `patrol_assess_finding`, or

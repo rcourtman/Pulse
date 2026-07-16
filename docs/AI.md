@@ -374,6 +374,13 @@ Pulse tool loop independently applies control level, license,
 protected-resource, approval, action, and verification policy. The CLI never
 executes a Patrol tool itself.
 
+Claude Code can occasionally express a requested Pulse tool as a local native
+tool call even though local tools are disabled. Pulse audits Claude's buffered
+event stream, accepts only the first call whose name was explicitly offered for
+that turn, and routes it back through Pulse's normal executor; undeclared local
+tool attempts fail closed. This does not grant Claude Code direct access to the
+infrastructure.
+
 This is still a local agent process, not a remote chat-completions API. Pulse
 rejects a turn if Codex reports command, file, MCP, web, computer, or image-tool
 activity, and Claude is launched with its built-in filesystem, shell, web, and
