@@ -35,7 +35,7 @@ export const buildVMwareConnectionFailurePresentation = (
         code,
         category,
         guidance:
-          'Use a supported vCenter release within the current VI JSON phase-1 floor, then retry this connection test.',
+          'Pulse supports vCenter 8.0U1 and newer. Upgrade vCenter, then retry this connection test.',
         message,
         title: 'Unsupported vCenter version',
         tone: 'warning',

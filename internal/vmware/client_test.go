@@ -1066,3 +1066,96 @@ func requireVISession(t *testing.T, r *http.Request) {
 		t.Fatalf("vi-json session header = %q, want vi-session", got)
 	}
 }
+
+func TestClientCreateAutomationSessionClassifiesLegacyCISVCenter(t *testing.T) {
+	// vSphere 6.x (#1585): /api/session fails because /api routes to the
+	// JSON-RPC servlet, while the legacy /rest CIS session API works. The
+	// failure must classify as unsupported_version, not a generic endpoint
+	// error.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/session", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "Missing Content-Type header", http.StatusInternalServerError)
+	})
+	legacyDeleted := false
+	mux.HandleFunc("/rest/com/vmware/cis/session", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			if _, _, ok := r.BasicAuth(); !ok {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			if _, err := w.Write([]byte(`{"value":"legacy-session"}`)); err != nil {
+				t.Fatalf("write legacy session response: %v", err)
+			}
+		case http.MethodDelete:
+			legacyDeleted = true
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	server := httptest.NewTLSServer(mux)
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:               server.URL,
+		Username:           "admin",
+		Password:           "secret",
+		InsecureSkipVerify: true,
+		Timeout:            5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, err = client.createAutomationSession(context.Background())
+	if err == nil {
+		t.Fatal("expected unsupported version error")
+	}
+	connectionErr, ok := err.(*ConnectionError)
+	if !ok {
+		t.Fatalf("expected ConnectionError, got %T", err)
+	}
+	if connectionErr.Category != "unsupported_version" {
+		t.Fatalf("connection error category = %q, want unsupported_version", connectionErr.Category)
+	}
+	if !strings.Contains(connectionErr.Message, "8.0U1") {
+		t.Fatalf("expected message to name the supported floor, got %q", connectionErr.Message)
+	}
+	if !legacyDeleted {
+		t.Fatal("expected probe to delete the legacy session it created")
+	}
+}
+
+func TestClientCreateAutomationSessionKeepsEndpointErrorWithoutLegacyCIS(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/session", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	})
+	server := httptest.NewTLSServer(mux)
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:               server.URL,
+		Username:           "admin",
+		Password:           "secret",
+		InsecureSkipVerify: true,
+		Timeout:            5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, err = client.createAutomationSession(context.Background())
+	if err == nil {
+		t.Fatal("expected endpoint error")
+	}
+	connectionErr, ok := err.(*ConnectionError)
+	if !ok {
+		t.Fatalf("expected ConnectionError, got %T", err)
+	}
+	if connectionErr.Category != "endpoint" {
+		t.Fatalf("connection error category = %q, want endpoint", connectionErr.Category)
+	}
+}

@@ -305,6 +305,12 @@ func (c *Client) createAutomationSession(ctx context.Context) (string, error) {
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 			return "", &ConnectionError{Category: "auth", Message: "VMware authentication failed while creating the Automation API session"}
 		}
+		if c.legacyCISSessionWorks(ctx) {
+			return "", &ConnectionError{
+				Category: "unsupported_version",
+				Message:  "This vCenter only answers the legacy /rest CIS API, which predates the JSON APIs Pulse uses. Pulse supports vCenter 8.0U1 and newer.",
+			}
+		}
 		return "", &ConnectionError{
 			Category: "endpoint",
 			Message:  fmt.Sprintf("VMware Automation API session request failed with HTTP %d", resp.StatusCode),
@@ -325,6 +331,41 @@ func (c *Client) listAutomationResources(
 	target any,
 ) error {
 	return c.getAutomationJSON(ctx, sessionID, path, label, target)
+}
+
+// legacyCISSessionWorks probes the pre-7.0 CIS REST session endpoint after an
+// /api/session failure. vSphere 6.x releases (EOL) only expose the legacy
+// /rest API, so a successful legacy login with the same credentials means the
+// target is an old release rather than a broken endpoint. The probe session is
+// deleted best-effort so it does not count against vCenter session limits.
+func (c *Client) legacyCISSessionWorks(ctx context.Context) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL.String()+"/rest/com/vmware/cis/session", nil)
+	if err != nil {
+		return false
+	}
+	req.SetBasicAuth(c.username, c.password)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return false
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return false
+	}
+	var payload struct {
+		Value string `json:"value"`
+	}
+	if err := json.Unmarshal(body, &payload); err == nil && strings.TrimSpace(payload.Value) != "" {
+		if delReq, delErr := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL.String()+"/rest/com/vmware/cis/session", nil); delErr == nil {
+			delReq.Header.Set("vmware-api-session-id", strings.TrimSpace(payload.Value))
+			if delResp, doErr := c.httpClient.Do(delReq); doErr == nil {
+				delResp.Body.Close()
+			}
+		}
+	}
+	return true
 }
 
 // getSessionScopedJSON fetches a session-authenticated vCenter JSON endpoint

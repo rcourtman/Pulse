@@ -92,7 +92,7 @@ describe('buildVMwareConnectionFailurePresentation — each named category switc
       title: 'Unsupported vCenter version',
       tone: 'warning',
       guidance:
-        'Use a supported vCenter release within the current VI JSON phase-1 floor, then retry this connection test.',
+        'Pulse supports vCenter 8.0U1 and newer. Upgrade vCenter, then retry this connection test.',
     },
     {
       category: 'tls',

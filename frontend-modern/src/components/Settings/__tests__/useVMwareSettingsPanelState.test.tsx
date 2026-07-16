@@ -283,7 +283,7 @@ describe('useVMwareSettingsPanelState', () => {
       category: 'unsupported_version',
       code: 'vmware_connection_failed',
       guidance:
-        'Use a supported vCenter release within the current VI JSON phase-1 floor, then retry this connection test.',
+        'Pulse supports vCenter 8.0U1 and newer. Upgrade vCenter, then retry this connection test.',
       message: 'VMware vCenter 6.7 is below the supported VI JSON release floor',
       title: 'Unsupported vCenter version',
       tone: 'warning',
