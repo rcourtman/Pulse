@@ -862,6 +862,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		// manifest unchanged. When a run must stop for safety or budget reasons,
 		// omit tools entirely rather than sending provider-specific tool_choice.
 		textOnlySafetyBrake := false
+		patrolSummaryOnlyTurn := false
 		patrolFindingRepairTurn := false
 		if patrolFindingRepairPending && !patrolFindingRepairAttempted {
 			if applyPatrolFindingLifecycleRepairRequest(&req, a.currentExecutionProfile(), tools) {
@@ -901,6 +902,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			// resend Patrol's full detection/investigation instruction set.
 			applyPatrolFindingLifecycleSummaryRequest(&req)
 			textOnlySafetyBrake = true
+			patrolSummaryOnlyTurn = true
 			patrolFindingSummaryPending = false
 			log.Debug().
 				Str("session_id", sessionID).
@@ -936,6 +938,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				req.System += investigationEvidenceBudgetExhaustedSystemPrompt
 			}
 		}
+		applyExecutionInferenceAllowance(&req, a.currentExecutionProfile(), patrolSummaryOnlyTurn, a.totalOutputTokens)
 
 		// Pre-request context validation: catch overflow from message history growth.
 		// Phase 2 handles first-turn overflow via seed budget; this catches
@@ -1307,10 +1310,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		// Create assistant message
 		// Clean tool call artifacts from the content before storing.
 		cleanedContent := cleanToolCallArtifacts(contentBuilder.String())
+		storedContent := cleanedContent
+		if a.currentExecutionProfile().NonInteractive() && len(toolCalls) > 0 {
+			// Tool-turn prose is intermediate model work, not the Patrol run's
+			// operator conclusion. Keep it in provider context so the model does
+			// not lose its train of thought, but do not concatenate it into the
+			// persisted run analysis; the bounded terminal summary owns that text.
+			storedContent = ""
+		}
 		assistantMsg := Message{
 			ID:               uuid.New().String(),
 			Role:             "assistant",
-			Content:          cleanedContent,
+			Content:          storedContent,
 			ReasoningContent: thinkingBuilder.String(),
 			Timestamp:        time.Now(),
 		}
@@ -1327,7 +1338,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		// Convert to provider format for next turn
 		providerAssistant := providers.Message{
 			Role:             "assistant",
-			Content:          assistantMsg.Content,
+			Content:          cleanedContent,
 			ReasoningContent: assistantMsg.ReasoningContent,
 		}
 		for _, tc := range toolCalls {

@@ -422,6 +422,11 @@ runs. Token counts depend on what the CLI exposes, and a subscription allowance
 is not represented as a zero-dollar API price. The report keeps its monetary
 cost unknown and marks the per-run metered-API budget as not applicable; plan
 limits, provider errors, latency, and any usage the CLI exposes remain visible.
+For automatic Watch checks, Pulse also sends a bounded output allowance and a
+low reasoning-effort hint to the local Codex or Claude transport. This limits
+routine structured routing and summary overhead; it does not reduce the tools
+available to Watch or change Pro investigation reasoning, which remains
+model-led and uses its normal reasoning depth.
 
 Z.ai requests sent through a configured `/api/coding/paas/` endpoint are
 recorded as `inference_route=coding_plan_allowance`. Qualification keeps their

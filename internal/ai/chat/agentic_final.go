@@ -81,6 +81,7 @@ func (a *AgenticLoop) ensureFinalTextResponseWithSystemPrompt(
 		// No Tools field: this is a final narrative turn, and Pulse avoids
 		// provider-specific tool_choice transport fields.
 	}
+	applyExecutionInferenceAllowance(&summaryReq, a.currentExecutionProfile(), true, a.totalOutputTokens)
 	a.mu.Lock()
 	requestSanitizer := a.requestSanitizer
 	a.mu.Unlock()

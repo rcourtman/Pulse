@@ -1,8 +1,39 @@
 package chat
 
 import (
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
+
+const (
+	// Watch is an automatic structured decision loop, not an open-ended
+	// investigation. Keep enough room for complete finding arguments while
+	// preventing a concise check from inheriting a provider's unbounded default.
+	patrolDetectionRunOutputAllowance  = 7_000
+	patrolDetectionTurnOutputAllowance = 2_048
+	patrolDetectionSummaryAllowance    = 1_024
+	patrolDetectionMinimumAllowance    = 512
+)
+
+func applyExecutionInferenceAllowance(req *providers.ChatRequest, profile tools.ExecutionProfile, summaryOnly bool, outputTokensUsed int) {
+	if req == nil || profile != tools.ProfilePatrolDetection {
+		return
+	}
+
+	allowance := patrolDetectionTurnOutputAllowance
+	if summaryOnly {
+		allowance = patrolDetectionSummaryAllowance
+	}
+	if remaining := patrolDetectionRunOutputAllowance - outputTokensUsed; remaining < allowance {
+		allowance = remaining
+	}
+	if allowance < patrolDetectionMinimumAllowance {
+		allowance = patrolDetectionMinimumAllowance
+	}
+
+	req.MaxTokens = allowance
+	req.ReasoningEffort = providers.ReasoningEffortLow
+}
 
 // Abort aborts an ongoing session.
 func (a *AgenticLoop) Abort(sessionID string) {

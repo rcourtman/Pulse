@@ -68,17 +68,39 @@ type ToolChoice struct {
 	Type ToolChoiceType `json:"type"`
 }
 
+// ReasoningEffort is a provider-neutral hint for transports that expose a
+// reasoning-depth control separately from their output-token allowance.
+// Providers without an equivalent control may ignore it; MaxTokens remains
+// the canonical hard output allowance where the provider supports one.
+type ReasoningEffort string
+
+const (
+	ReasoningEffortLow    ReasoningEffort = "low"
+	ReasoningEffortMedium ReasoningEffort = "medium"
+	ReasoningEffortHigh   ReasoningEffort = "high"
+)
+
+func (e ReasoningEffort) Valid() bool {
+	switch e {
+	case "", ReasoningEffortLow, ReasoningEffortMedium, ReasoningEffortHigh:
+		return true
+	default:
+		return false
+	}
+}
+
 // ChatRequest represents a request to the AI provider
 type ChatRequest struct {
-	Messages          []Message     `json:"messages"`
-	Model             string        `json:"model"`
-	ExecutionID       string        `json:"execution_id,omitempty"` // Stable higher-level run ID shared across related provider turns
-	MaxTokens         int           `json:"max_tokens,omitempty"`
-	Temperature       float64       `json:"temperature,omitempty"`
-	System            string        `json:"system,omitempty"`      // System prompt (Anthropic style)
-	Tools             []Tool        `json:"tools,omitempty"`       // Available tools
-	ToolChoice        *ToolChoice   `json:"tool_choice,omitempty"` // nil = model-owned automatic selection; none = text-only safety brake; required = provider-native forced tool use where supported
-	StreamIdleTimeout time.Duration `json:"-"`                     // Optional use-case-specific inter-chunk stall allowance; provider request payloads must not serialize it.
+	Messages          []Message       `json:"messages"`
+	Model             string          `json:"model"`
+	ExecutionID       string          `json:"execution_id,omitempty"` // Stable higher-level run ID shared across related provider turns
+	MaxTokens         int             `json:"max_tokens,omitempty"`
+	ReasoningEffort   ReasoningEffort `json:"reasoning_effort,omitempty"`
+	Temperature       float64         `json:"temperature,omitempty"`
+	System            string          `json:"system,omitempty"`      // System prompt (Anthropic style)
+	Tools             []Tool          `json:"tools,omitempty"`       // Available tools
+	ToolChoice        *ToolChoice     `json:"tool_choice,omitempty"` // nil = model-owned automatic selection; none = text-only safety brake; required = provider-native forced tool use where supported
+	StreamIdleTimeout time.Duration   `json:"-"`                     // Optional use-case-specific inter-chunk stall allowance; provider request payloads must not serialize it.
 }
 
 func (r ChatRequest) NormalizeCollections() ChatRequest {

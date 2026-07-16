@@ -78,6 +78,26 @@ func TestAgenticLoop_Setters(t *testing.T) {
 	}
 }
 
+func TestPatrolDetectionInferenceAllowanceDoesNotConstrainInvestigation(t *testing.T) {
+	detection := providers.ChatRequest{}
+	applyExecutionInferenceAllowance(&detection, tools.ProfilePatrolDetection, false, 0)
+	if detection.MaxTokens != patrolDetectionTurnOutputAllowance || detection.ReasoningEffort != providers.ReasoningEffortLow {
+		t.Fatalf("detection allowance = %+v", detection)
+	}
+
+	summary := providers.ChatRequest{}
+	applyExecutionInferenceAllowance(&summary, tools.ProfilePatrolDetection, true, patrolDetectionRunOutputAllowance-400)
+	if summary.MaxTokens != patrolDetectionMinimumAllowance || summary.ReasoningEffort != providers.ReasoningEffortLow {
+		t.Fatalf("summary allowance = %+v", summary)
+	}
+
+	investigation := providers.ChatRequest{MaxTokens: 4096, ReasoningEffort: providers.ReasoningEffortHigh}
+	applyExecutionInferenceAllowance(&investigation, tools.ProfilePatrolInvestigation, false, patrolDetectionRunOutputAllowance)
+	if investigation.MaxTokens != 4096 || investigation.ReasoningEffort != providers.ReasoningEffortHigh {
+		t.Fatalf("investigation allowance was changed: %+v", investigation)
+	}
+}
+
 func TestInvestigationEvidenceBudgetHelpers(t *testing.T) {
 	available := []providers.Tool{
 		{Name: agentcapabilities.PulseQueryToolName},
@@ -537,10 +557,14 @@ func TestAgenticLoopOrdersSameTurnPatrolFindingReadBeforeAssessment(t *testing.T
 	loop.SetMaxTurns(2)
 
 	providerCalls := 0
-	provider.chatStream = func(_ context.Context, _ providers.ChatRequest, callback providers.StreamCallback) error {
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 		providerCalls++
+		if req.MaxTokens <= 0 || req.ReasoningEffort != providers.ReasoningEffortLow {
+			t.Fatalf("Watch request %d missing inference allowance: %+v", providerCalls, req)
+		}
 		switch providerCalls {
 		case 1:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "intermediate routing prose that must not become the run summary"}})
 			getCall := providers.ToolCall{ID: "get-findings", Name: agentcapabilities.PatrolGetFindingsToolName, Input: map[string]interface{}{}}
 			assessCall := providers.ToolCall{ID: "assess-finding", Name: agentcapabilities.PatrolAssessFindingToolName, Input: map[string]interface{}{
 				"finding_id": "finding-existing",
@@ -566,7 +590,7 @@ func TestAgenticLoopOrdersSameTurnPatrolFindingReadBeforeAssessment(t *testing.T
 		{Name: agentcapabilities.PatrolAssessFindingToolName},
 	}
 	var toolEnds []ToolEndData
-	_, err := loop.ExecuteWithTools(context.Background(), "ordered-finding-lifecycle", []Message{{Role: "user", Content: "Reassess the active finding."}}, available, func(event StreamEvent) {
+	result, err := loop.ExecuteWithTools(context.Background(), "ordered-finding-lifecycle", []Message{{Role: "user", Content: "Reassess the active finding."}}, available, func(event StreamEvent) {
 		if event.Type != "tool_end" {
 			return
 		}
@@ -581,6 +605,15 @@ func TestAgenticLoopOrdersSameTurnPatrolFindingReadBeforeAssessment(t *testing.T
 	}
 	if providerCalls != 2 {
 		t.Fatalf("provider calls = %d, want lifecycle turn and summary", providerCalls)
+	}
+	var persistedText strings.Builder
+	for _, message := range result {
+		if message.Role == "assistant" {
+			persistedText.WriteString(message.Content)
+		}
+	}
+	if strings.Contains(persistedText.String(), "intermediate routing prose") || !strings.Contains(persistedText.String(), "Finding remains present.") {
+		t.Fatalf("persisted Patrol analysis = %q", persistedText.String())
 	}
 	if len(toolEnds) != 2 || !toolEnds[0].Success || !toolEnds[1].Success {
 		t.Fatalf("tool results = %+v, want ordered successful read and assessment", toolEnds)

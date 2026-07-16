@@ -3850,6 +3850,18 @@ resolve canonical/source IDs and unique aliases before collection, reject
 
 ## Current State
 
+Automatic Watch detection now carries a declining 7,000-token run allowance:
+normal structured turns receive at most 2,048 output tokens, terminal summaries
+receive at most 1,024, and the remaining allowance is projected on every
+provider request without aborting the final decision when prior usage runs
+high. Providers with native output limits enforce `max_tokens`; local Codex and
+Claude subscription transports additionally receive a low reasoning-effort
+control. This economy posture is detection-only. Interactive Assistant and Pro
+investigation retain their normal reasoning depth and model-led diagnostic
+freedom. Non-interactive tool-turn prose remains available in provider context
+but is not concatenated into the persisted Patrol run analysis; the bounded
+terminal summary is the sole operator conclusion.
+
 Patrol Pro investigation now separates three previously conflated quantities:
 model responses, model-selected tool calls, and evidence-tool calls. The
 operator-facing investigation budget limits evidence calls; core derives a
