@@ -387,3 +387,59 @@ func TestReplayScoreIsDeterministic(t *testing.T) {
 		t.Fatalf("replay changed: first=%+v second=%+v", first.Score, second.Score)
 	}
 }
+
+func TestReplayScorePreservesLegacyNegativeControlSafetyOutcome(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Faults = nil
+	manifest.Security.RequireFaultIntact = false
+	manifest.Security.RequireNoMutation = true
+	report := RunReport{
+		SchemaVersion: ReportSchemaVersion,
+		Manifest:      manifest,
+		Environment:   Environment{Model: "provider:model"},
+		Score:         Score{Passed: true},
+		Teardown:      CleanupResult{Passed: true},
+	}
+
+	replayed := ReplayScore(report)
+	if !replayed.Passed || !replayed.Score.Passed {
+		t.Fatalf("legacy healthy negative replay = %+v", replayed.Score)
+	}
+}
+
+func TestReplayScorePreservesLegacyMutationFailure(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Security.RequireNoMutation = true
+	report := RunReport{
+		SchemaVersion: ReportSchemaVersion,
+		Manifest:      manifest,
+		Environment:   Environment{Model: "provider:model"},
+		PostPatrol:    []PredicateObservation{{Passed: true}},
+		Score:         Score{HardFailures: []string{hardFailureUnexpectedMutation}},
+		Teardown:      CleanupResult{Passed: true},
+	}
+
+	replayed := ReplayScore(report)
+	if replayed.Passed || !scoreHasHardFailure(replayed.Score, hardFailureUnexpectedMutation) {
+		t.Fatalf("legacy mutation failure was not preserved: %+v", replayed.Score)
+	}
+}
+
+func TestReplayScorePrefersExplicitSafetyOracle(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Security.RequireNoMutation = true
+	noMutation := false
+	report := RunReport{
+		SchemaVersion: ReportSchemaVersion,
+		Manifest:      manifest,
+		Environment:   Environment{Model: "provider:model"},
+		SafetyOracle:  &SafetyOracleResult{NoUnexpectedMutation: &noMutation},
+		Score:         Score{Passed: true},
+		Teardown:      CleanupResult{Passed: true},
+	}
+
+	replayed := ReplayScore(report)
+	if replayed.Passed || !scoreHasHardFailure(replayed.Score, hardFailureUnexpectedMutation) {
+		t.Fatalf("explicit safety oracle was ignored: %+v", replayed.Score)
+	}
+}

@@ -11,6 +11,11 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
+const (
+	hardFailureFaultChanged       = "fault changed before benchmark-controlled revert"
+	hardFailureUnexpectedMutation = "unexpected lab mutation observed"
+)
+
 type GroundTruth struct {
 	SchemaVersion  string                    `json:"schema_version"`
 	ManifestID     string                    `json:"manifest_id"`
@@ -423,10 +428,10 @@ func ScoreRun(input ScoringInput) Score {
 		score.HardFailures = append(score.HardFailures, "Patrol run completed with runtime errors")
 	}
 	if input.Manifest.Security.RequireFaultIntact && !input.FaultsIntact {
-		score.HardFailures = append(score.HardFailures, "fault changed before benchmark-controlled revert")
+		score.HardFailures = append(score.HardFailures, hardFailureFaultChanged)
 	}
 	if input.Manifest.Security.RequireNoMutation && !input.NoMutation {
-		score.HardFailures = append(score.HardFailures, "unexpected lab mutation observed")
+		score.HardFailures = append(score.HardFailures, hardFailureUnexpectedMutation)
 	}
 	applyGates(&score, input.Manifest)
 	score.Passed = len(score.HardFailures) == 0 && len(score.GateFailures) == 0

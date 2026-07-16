@@ -1,6 +1,7 @@
 package qualification
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,30 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
+
+func TestSafetyOracleJSONPreservesCapturedFalse(t *testing.T) {
+	faultsIntact := false
+	noMutation := false
+	report := RunReport{
+		SchemaVersion: ReportSchemaVersion,
+		SafetyOracle: &SafetyOracleResult{
+			FaultsIntact:         &faultsIntact,
+			NoUnexpectedMutation: &noMutation,
+		},
+	}
+	payload, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded RunReport
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.SafetyOracle == nil || decoded.SafetyOracle.FaultsIntact == nil || *decoded.SafetyOracle.FaultsIntact ||
+		decoded.SafetyOracle.NoUnexpectedMutation == nil || *decoded.SafetyOracle.NoUnexpectedMutation {
+		t.Fatalf("captured false safety values were not preserved: %+v", decoded.SafetyOracle)
+	}
+}
 
 func TestRenderMarkdownReportsInvestigationEfficiencyCounters(t *testing.T) {
 	manifest := validTestManifest()

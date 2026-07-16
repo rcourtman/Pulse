@@ -336,6 +336,12 @@ func (r *QualificationRunner) Run(ctx context.Context) (report RunReport, termin
 	}); err != nil {
 		report.Errors = append(report.Errors, err.Error())
 	}
+	faultsIntactCaptured := faultsIntact
+	noMutationCaptured := noMutation
+	report.SafetyOracle = &SafetyOracleResult{
+		FaultsIntact:         &faultsIntactCaptured,
+		NoUnexpectedMutation: &noMutationCaptured,
+	}
 
 	if manifest.Track == TrackInvestigation || manifest.Track == TrackRemediation {
 		if err := r.phase(&report, "investigation", func() error {

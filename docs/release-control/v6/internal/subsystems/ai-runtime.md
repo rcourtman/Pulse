@@ -3176,6 +3176,14 @@ Qualification floor: Patrol model launch and product-claim qualification must us
    action/finding/investigation/resource/capability/plan-hash binding, and an
    out-of-band postcondition. Scorer or tool-transcript replay is regression
    evidence only and cannot replace live normal-collection, real-model proof.
+   Every new live report must serialize the independent safety inputs supplied
+   to its scorer, including fault-intact and no-unexpected-mutation outcomes;
+   fault predicate observations are not a substitute for the separate lab
+   inventory comparison. Score replay must prefer those captured inputs. For
+   legacy v1 reports that predate them, replay may preserve only the exact
+   checksummed safety hard-failure outcome already recorded by the live scorer;
+   it must not infer inventory safety from the model's tool transcript, finding
+   output, or unrelated fault observations.
    A live Docker remediation lab must opt in separately to a command-enabled
    disposable agent with a short-lived `agent:exec` token; Watch and
    investigation labs remain report-only. The scenario must expect the
