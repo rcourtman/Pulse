@@ -298,6 +298,13 @@ canonical qualified Pulse model identity from shared callers, strips only its
 own subscription-provider prefix before CLI execution, and rejects foreign
 provider prefixes rather than forwarding an invalid or cross-provider model
 name to the local agent.
+Claude receives that output schema through the trusted adapter system channel
+and returns one JSON result that Pulse decodes with unknown fields and trailing
+values rejected. Pulse does not use Claude Code's hidden `--json-schema`
+retry loop: live qualification proved that wrapper could exhaust retries after
+the model had already completed valid finding calls, incorrectly converting a
+durable Patrol outcome into a provider failure. Codex may continue to use its
+native output-schema file because its CLI exposes the completed turn directly.
 Patrol consumes the provider streaming interface, so the adapter projects each
 fully validated CLI turn into canonical buffered `content`, `tool_start`, and
 `done` events. It must emit nothing before the complete CLI response passes the

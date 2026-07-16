@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -178,7 +179,8 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 	if err != nil {
 		return nil, err
 	}
-	if len(subscriptionAgentControlPrompt)+len(requestPrompt) > maxSubscriptionAgentPromptBytes {
+	schemaBytes, _ := json.Marshal(subscriptionAgentOutputSchema(req))
+	if len(subscriptionAgentControlPrompt)+len(requestPrompt)+len(schemaBytes) > maxSubscriptionAgentPromptBytes {
 		return nil, fmt.Errorf("subscription agent prompt exceeds %d bytes", maxSubscriptionAgentPromptBytes)
 	}
 
@@ -196,7 +198,6 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 	}
 	defer os.RemoveAll(workdir)
 
-	schemaBytes, _ := json.Marshal(subscriptionAgentOutputSchema(req))
 	var raw []byte
 	switch c.agent {
 	case SubscriptionAgentCodex:
@@ -215,7 +216,13 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 			raw, err = os.ReadFile(outputPath)
 		}
 	case SubscriptionAgentClaude:
-		raw, err = c.run(ctx, "claude", []string{"-p", "--model", c.model, "--output-format", "json", "--json-schema", string(schemaBytes), "--safe-mode", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", "", "--system-prompt", subscriptionAgentControlPrompt}, requestPrompt, workdir)
+		// Claude Code's --json-schema mode may exhaust its hidden structured-
+		// output retries after already returning valid Pulse tool decisions on
+		// earlier provider turns. Keep the schema in the trusted system channel
+		// and validate the single JSON result locally instead; this avoids
+		// converting a completed Patrol finding into a terminal wrapper error.
+		claudeSystemPrompt := subscriptionAgentControlPrompt + "\n\nTRUSTED_OUTPUT_SCHEMA_JSON\n" + string(schemaBytes)
+		raw, err = c.run(ctx, "claude", []string{"-p", "--model", c.model, "--output-format", "json", "--safe-mode", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", "", "--system-prompt", claudeSystemPrompt}, requestPrompt, workdir)
 	default:
 		return nil, fmt.Errorf("unknown subscription agent %q", c.agent)
 	}
@@ -421,7 +428,7 @@ func decodeSubscriptionAgentTurn(agent SubscriptionAgent, raw []byte) (subscript
 		if len(payload) == 0 || string(payload) == "null" {
 			return turn, errors.New("Claude subscription response did not contain structured output")
 		}
-		if err := json.Unmarshal(payload, &turn); err != nil {
+		if err := decodeStrictJSON(payload, &turn); err != nil {
 			return turn, fmt.Errorf("decode Claude structured turn: %w", err)
 		}
 		if turn.InputTokens == 0 {
@@ -432,10 +439,29 @@ func decodeSubscriptionAgentTurn(agent SubscriptionAgent, raw []byte) (subscript
 		}
 		return turn, nil
 	}
-	if err := json.Unmarshal(raw, &turn); err != nil {
+	if err := decodeStrictJSON(raw, &turn); err != nil {
 		return turn, fmt.Errorf("decode Codex structured turn: %w", err)
 	}
 	return turn, nil
+}
+
+func decodeStrictJSON(raw []byte, target interface{}) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if decoder.More() {
+		return errors.New("subscription agent returned trailing JSON values")
+	}
+	var trailing interface{}
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("subscription agent returned trailing JSON values")
+		}
+		return err
+	}
+	return nil
 }
 
 func rejectCodexAgentToolActivity(events []byte) error {

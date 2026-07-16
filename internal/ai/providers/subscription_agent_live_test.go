@@ -55,6 +55,19 @@ func TestSubscriptionAgentLive(t *testing.T) {
 			if toolStarts != 1 || len(done.ToolCalls) != 1 || done.ToolCalls[0].Name != "get_node_status" {
 				t.Fatalf("unexpected structured stream: starts=%d done=%#v", toolStarts, done)
 			}
+
+			response, err := client.Chat(ctx, ChatRequest{
+				Model:      string(tt.agent) + ":" + tt.model,
+				System:     "Return a short acknowledgement without selecting a tool.",
+				Messages:   []Message{{Role: "user", Content: "Acknowledge that the observation turn is complete."}},
+				ToolChoice: &ToolChoice{Type: ToolChoiceNone},
+			})
+			if err != nil {
+				t.Fatalf("structured completion turn failed: %v", err)
+			}
+			if response.Content == "" || response.StopReason != "end_turn" || len(response.ToolCalls) != 0 {
+				t.Fatalf("unexpected structured completion: %#v", response)
+			}
 		})
 	}
 }

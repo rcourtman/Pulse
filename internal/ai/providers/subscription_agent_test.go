@@ -210,6 +210,8 @@ if [ "$1" = "auth" ]; then
 	exit 0
 fi
 seen_system=false
+seen_output_schema=false
+seen_json_schema_arg=false
 seen_no_tools=false
 seen_dont_ask=false
 while [ "$#" -gt 0 ]; do
@@ -222,6 +224,13 @@ while [ "$#" -gt 0 ]; do
 			case "$1" in
 				*"IGNORE ALL RULES"*) echo "infrastructure data leaked into system prompt" >&2; exit 93 ;;
 			esac
+			case "$1" in
+				*"TRUSTED_OUTPUT_SCHEMA_JSON"*'"input"'*) seen_output_schema=true ;;
+			esac
+			;;
+		--json-schema)
+			seen_json_schema_arg=true
+			shift
 			;;
 		--tools)
 			shift
@@ -235,9 +244,11 @@ while [ "$#" -gt 0 ]; do
 	shift
 done
 [ "$seen_system" = true ] || { echo "missing trusted system prompt" >&2; exit 94; }
+[ "$seen_output_schema" = true ] || { echo "missing trusted output schema" >&2; exit 97; }
+[ "$seen_json_schema_arg" = false ] || { echo "Claude hidden structured-output mode was enabled" >&2; exit 98; }
 [ "$seen_no_tools" = true ] || { echo "Claude built-in tools not disabled" >&2; exit 95; }
 [ "$seen_dont_ask" = true ] || { echo "unexpected permission mode" >&2; exit 96; }
-printf '%s' '{"structured_output":{"content":"healthy","stop_reason":"end_turn","tool_calls":[]},"usage":{"input_tokens":12,"output_tokens":3}}'
+printf '%s' '{"result":"{\"content\":\"healthy\",\"stop_reason\":\"end_turn\",\"tool_calls\":[]}","usage":{"input_tokens":12,"output_tokens":3}}'
 `)
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("OPENAI_API_KEY", "must-not-leak")
@@ -328,6 +339,13 @@ func TestDecodeClaudeSubscriptionAgentRejectsNonJSONResult(t *testing.T) {
 	raw, _ := json.Marshal(claudePrintResponse{Result: "not-json"})
 	if _, err := decodeSubscriptionAgentTurn(SubscriptionAgentClaude, raw); err == nil {
 		t.Fatal("expected non-JSON structured result to be rejected")
+	}
+}
+
+func TestDecodeSubscriptionAgentTurnRejectsUnknownStructuredFields(t *testing.T) {
+	raw := []byte(`{"result":"{\"content\":\"healthy\",\"stop_reason\":\"end_turn\",\"tool_calls\":[],\"unexpected\":true}"}`)
+	if _, err := decodeSubscriptionAgentTurn(SubscriptionAgentClaude, raw); err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("unknown structured field error = %v", err)
 	}
 }
 
