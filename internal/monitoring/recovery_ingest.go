@@ -12,32 +12,64 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// recoveryReconcileScope identifies one class of points for one polled
+// connection whose latest enumeration is authoritative: after the batch is
+// upserted, points in scope that were not part of the batch are deleted.
+type recoveryReconcileScope struct {
+	provider string
+	idPrefix string
+	instance string
+}
+
+// recoveryIngestBatch is one poll cycle's worth of recovery points, plus an
+// optional reconcile scope when the points are a complete enumeration.
+type recoveryIngestBatch struct {
+	points    []recovery.RecoveryPoint
+	reconcile *recoveryReconcileScope
+}
+
 func (m *Monitor) ingestRecoveryPointsAsync(points []recovery.RecoveryPoint) {
-	if m == nil || len(points) == 0 {
+	m.enqueueRecoveryIngest(recoveryIngestBatch{points: points})
+}
+
+// ingestAndReconcileRecoveryPointsAsync upserts a complete enumeration and
+// removes points in scope that the source no longer reports. An empty points
+// slice is meaningful here: it clears the scope entirely (#1580).
+func (m *Monitor) ingestAndReconcileRecoveryPointsAsync(points []recovery.RecoveryPoint, scope recoveryReconcileScope) {
+	m.enqueueRecoveryIngest(recoveryIngestBatch{points: points, reconcile: &scope})
+}
+
+func (m *Monitor) enqueueRecoveryIngest(batch recoveryIngestBatch) {
+	if m == nil || (len(batch.points) == 0 && batch.reconcile == nil) {
 		return
 	}
 
 	m.recoveryIngestMu.Lock()
 	if m.recoveryIngestRunning {
-		m.recoveryIngestPending = points
+		// Queue rather than replace: batches come from different sources (PVE
+		// storage, PBS, snapshots), and dropping one loses a full poll cycle
+		// for that source.
+		m.recoveryIngestPending = append(m.recoveryIngestPending, batch)
 		m.recoveryIngestMu.Unlock()
 		log.Debug().
-			Int("points", len(points)).
-			Msg("Coalesced recovery point ingest behind active batch")
+			Int("points", len(batch.points)).
+			Msg("Queued recovery point ingest behind active batch")
 		return
 	}
 	m.recoveryIngestRunning = true
 	m.recoveryIngestMu.Unlock()
 
-	go m.runRecoveryPointIngestLoop(points)
+	go m.runRecoveryPointIngestLoop([]recoveryIngestBatch{batch})
 }
 
-func (m *Monitor) runRecoveryPointIngestLoop(points []recovery.RecoveryPoint) {
-	for len(points) > 0 {
-		// SQLite upserts are usually quick, but allow a bit of time for large batches.
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		m.ingestRecoveryPointsBestEffort(ctx, points)
-		cancel()
+func (m *Monitor) runRecoveryPointIngestLoop(batches []recoveryIngestBatch) {
+	for len(batches) > 0 {
+		for _, batch := range batches {
+			// SQLite upserts are usually quick, but allow a bit of time for large batches.
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			m.ingestRecoveryPointsBestEffort(ctx, batch)
+			cancel()
+		}
 
 		m.recoveryIngestMu.Lock()
 		if len(m.recoveryIngestPending) == 0 {
@@ -45,7 +77,7 @@ func (m *Monitor) runRecoveryPointIngestLoop(points []recovery.RecoveryPoint) {
 			m.recoveryIngestMu.Unlock()
 			return
 		}
-		points = m.recoveryIngestPending
+		batches = m.recoveryIngestPending
 		m.recoveryIngestPending = nil
 		m.recoveryIngestMu.Unlock()
 	}
@@ -55,8 +87,8 @@ func (m *Monitor) runRecoveryPointIngestLoop(points []recovery.RecoveryPoint) {
 	m.recoveryIngestMu.Unlock()
 }
 
-func (m *Monitor) ingestRecoveryPointsBestEffort(ctx context.Context, points []recovery.RecoveryPoint) {
-	if m == nil || len(points) == 0 {
+func (m *Monitor) ingestRecoveryPointsBestEffort(ctx context.Context, batch recoveryIngestBatch) {
+	if m == nil || (len(batch.points) == 0 && batch.reconcile == nil) {
 		return
 	}
 
@@ -78,8 +110,27 @@ func (m *Monitor) ingestRecoveryPointsBestEffort(ctx context.Context, points []r
 		return
 	}
 
-	if err := store.UpsertPoints(ctx, points); err != nil {
-		log.Warn().Err(err).Str("org_id", orgID).Int("points", len(points)).Msg("Failed to upsert recovery points from backup polling")
+	if err := store.UpsertPoints(ctx, batch.points); err != nil {
+		log.Warn().Err(err).Str("org_id", orgID).Int("points", len(batch.points)).Msg("Failed to upsert recovery points from backup polling")
+		// Do not reconcile against a batch that failed to land; deleting on
+		// top of a failed upsert could drop points the source still reports.
+		return
+	}
+
+	if batch.reconcile == nil {
+		return
+	}
+	keepIDs := make([]string, 0, len(batch.points))
+	for _, p := range batch.points {
+		keepIDs = append(keepIDs, p.ID)
+	}
+	if _, err := store.ReconcileInstancePoints(ctx, batch.reconcile.provider, batch.reconcile.idPrefix, batch.reconcile.instance, keepIDs); err != nil {
+		log.Warn().
+			Err(err).
+			Str("org_id", orgID).
+			Str("instance", batch.reconcile.instance).
+			Str("idPrefix", batch.reconcile.idPrefix).
+			Msg("Failed to reconcile recovery points against source enumeration")
 	}
 }
 

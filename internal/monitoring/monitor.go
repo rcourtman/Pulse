@@ -25,7 +25,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
-	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -1052,7 +1051,7 @@ type Monitor struct {
 	recoveryManager           *recoverymanager.Manager // Optional recovery store manager for backup rollups
 	recoveryIngestMu          sync.Mutex
 	recoveryIngestRunning     bool
-	recoveryIngestPending     []recovery.RecoveryPoint
+	recoveryIngestPending     []recoveryIngestBatch
 	mockMetricsCancel         context.CancelFunc
 	mockMetricsWg             sync.WaitGroup
 	dockerChecker             DockerChecker            // Optional Docker checker for LXC containers

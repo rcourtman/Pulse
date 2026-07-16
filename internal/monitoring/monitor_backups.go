@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring/errors"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	proxmoxrecoverymapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/proxmox"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
@@ -381,7 +382,14 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	guestInfo := buildProxmoxGuestInfoIndex(readState)
-	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPVEStorageBackups(allBackups, guestInfo))
+	m.ingestAndReconcileRecoveryPointsAsync(
+		proxmoxrecoverymapper.FromPVEStorageBackups(allBackups, guestInfo),
+		recoveryReconcileScope{
+			provider: string(recovery.ProviderProxmoxPVE),
+			idPrefix: "pve-backup:",
+			instance: instanceName,
+		},
+	)
 
 	// Sync backup times to VMs/Containers and republish them to canonical resources.
 	m.syncGuestBackupTimesAndResourceStore()
@@ -1095,7 +1103,14 @@ func (m *Monitor) pollGuestSnapshots(ctx context.Context, instanceName string, c
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	guestInfo := buildProxmoxGuestInfoIndex(readState)
-	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPVEGuestSnapshots(allSnapshots, guestInfo))
+	m.ingestAndReconcileRecoveryPointsAsync(
+		proxmoxrecoverymapper.FromPVEGuestSnapshots(allSnapshots, guestInfo),
+		recoveryReconcileScope{
+			provider: string(recovery.ProviderProxmoxPVE),
+			idPrefix: "pve-snapshot:",
+			instance: instanceName,
+		},
+	)
 
 	if m.alertManager != nil {
 		m.alertManager.CheckSnapshotsForInstance(instanceName, allSnapshots, guestLookups)
@@ -1581,7 +1596,14 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	candidates := buildPBSGuestCandidates(m.GetUnifiedReadStateOrSnapshot())
-	m.ingestRecoveryPointsAsync(proxmoxrecoverymapper.FromPBSBackups(allBackups, candidates))
+	m.ingestAndReconcileRecoveryPointsAsync(
+		proxmoxrecoverymapper.FromPBSBackups(allBackups, candidates),
+		recoveryReconcileScope{
+			provider: string(recovery.ProviderProxmoxPBS),
+			idPrefix: "pbs-backup:",
+			instance: instanceName,
+		},
+	)
 
 	// Sync backup times to VMs/Containers and republish them to canonical resources.
 	m.syncGuestBackupTimesAndResourceStore()

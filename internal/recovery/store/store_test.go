@@ -69,6 +69,134 @@ func TestStore_UpsertAndList(t *testing.T) {
 	}
 }
 
+// TestStore_ReconcileInstancePoints pins the deleted-at-source cleanup (#1580):
+// points in the reconciled scope that are missing from the enumeration are
+// removed, while other instances, other point classes, and other providers
+// survive, and an empty enumeration clears the scope entirely.
+func TestStore_ReconcileInstancePoints(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "recovery.db")
+
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	pvePoint := func(id, instance string) recovery.RecoveryPoint {
+		return recovery.RecoveryPoint{
+			ID:          id,
+			Provider:    recovery.ProviderProxmoxPVE,
+			Kind:        recovery.KindBackup,
+			Mode:        recovery.ModeLocal,
+			Outcome:     recovery.OutcomeSuccess,
+			StartedAt:   &now,
+			CompletedAt: &now,
+			Details:     map[string]any{"instance": instance},
+		}
+	}
+	pbsPoint := func(id, instance string) recovery.RecoveryPoint {
+		return recovery.RecoveryPoint{
+			ID:          id,
+			Provider:    recovery.ProviderProxmoxPBS,
+			Kind:        recovery.KindBackup,
+			Mode:        recovery.ModeRemote,
+			Outcome:     recovery.OutcomeSuccess,
+			StartedAt:   &now,
+			CompletedAt: &now,
+			RepositoryRef: &recovery.ExternalRef{
+				Type:      "proxmox-pbs-datastore",
+				Namespace: instance,
+				Name:      "main",
+			},
+		}
+	}
+
+	seed := []recovery.RecoveryPoint{
+		pvePoint("pve-backup:pve1-vzdump-100", "pve1"),
+		pvePoint("pve-backup:pve1-vzdump-101", "pve1"),
+		pvePoint("pve-backup:pve2-vzdump-100", "pve2"),
+		pvePoint("pve-snapshot:pve1-snap-100", "pve1"),
+		pbsPoint("pbs-backup:pbs-pbs1-main-vm-100-1", "pbs1"),
+	}
+	if err := store.UpsertPoints(context.Background(), seed); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+
+	// vzdump-101 was deleted at the source; the enumeration keeps only vzdump-100.
+	deleted, err := store.ReconcileInstancePoints(
+		context.Background(),
+		string(recovery.ProviderProxmoxPVE), "pve-backup:", "pve1",
+		[]string{"pve-backup:pve1-vzdump-100"},
+	)
+	if err != nil {
+		t.Fatalf("ReconcileInstancePoints() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("deleted = %d, want 1", deleted)
+	}
+
+	remaining := map[string]bool{}
+	rows, err := store.db.Query(`SELECT id FROM recovery_points`)
+	if err != nil {
+		t.Fatalf("query ids: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			t.Fatalf("scan id: %v", err)
+		}
+		remaining[id] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("rows err: %v", err)
+	}
+
+	if remaining["pve-backup:pve1-vzdump-101"] {
+		t.Fatal("stale point pve-backup:pve1-vzdump-101 should have been removed")
+	}
+	for _, want := range []string{
+		"pve-backup:pve1-vzdump-100",        // still enumerated
+		"pve-backup:pve2-vzdump-100",        // other instance
+		"pve-snapshot:pve1-snap-100",        // other point class
+		"pbs-backup:pbs-pbs1-main-vm-100-1", // other provider
+	} {
+		if !remaining[want] {
+			t.Fatalf("point %q should have survived reconciliation", want)
+		}
+	}
+
+	// The source now reports zero backups (user deleted them all): the scope empties.
+	deleted, err = store.ReconcileInstancePoints(
+		context.Background(),
+		string(recovery.ProviderProxmoxPVE), "pve-backup:", "pve1",
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("ReconcileInstancePoints(empty) error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("deleted = %d, want 1 (the last pve1 backup point)", deleted)
+	}
+
+	// PBS scope reconciles via repository_ref_json namespace.
+	deleted, err = store.ReconcileInstancePoints(
+		context.Background(),
+		string(recovery.ProviderProxmoxPBS), "pbs-backup:", "pbs1",
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("ReconcileInstancePoints(pbs) error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("pbs deleted = %d, want 1", deleted)
+	}
+}
+
 func TestStore_ListPoints_IgnoresMalformedJSONFields(t *testing.T) {
 	t.Parallel()
 

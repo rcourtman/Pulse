@@ -416,6 +416,115 @@ func (s *Store) PurgeStalePVEPBSBackups(ctx context.Context) error {
 	return nil
 }
 
+// ReconcileInstancePoints removes recovery points of one class (idPrefix) for
+// one polled connection (instance) that are absent from the latest complete
+// enumeration (keepIDs). Ingest is otherwise upsert-only, so points for
+// backups or snapshots deleted at the source lingered until the retention
+// prune and kept re-raising age alerts (#1580). Callers must only pass
+// enumerations that fully succeeded (or carried forward unpolled entries).
+func (s *Store) ReconcileInstancePoints(ctx context.Context, provider, idPrefix, instance string, keepIDs []string) (int64, error) {
+	if err := s.ensureInitialized(); err != nil {
+		return 0, err
+	}
+	provider = strings.TrimSpace(provider)
+	idPrefix = strings.TrimSpace(idPrefix)
+	instance = strings.TrimSpace(instance)
+	if provider == "" || idPrefix == "" || instance == "" {
+		return 0, fmt.Errorf("reconcile requires provider, id prefix, and instance")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	keep := make(map[string]struct{}, len(keepIDs))
+	for _, id := range keepIDs {
+		if id = strings.TrimSpace(id); id != "" {
+			keep[id] = struct{}{}
+		}
+	}
+
+	// PVE points carry the connection in details_json.instance; PBS points in
+	// repository_ref_json.namespace. The id prefix keeps the classes apart, so
+	// matching either field never crosses providers.
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id FROM recovery_points
+		WHERE provider = ?
+		  AND id LIKE ? || '%'
+		  AND (
+			json_extract(details_json, '$.instance') = ?
+			OR json_extract(repository_ref_json, '$.namespace') = ?
+		  )
+	`, provider, idPrefix, instance, instance)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	var stale []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		if _, ok := keep[id]; !ok {
+			stale = append(stale, id)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if len(stale) == 0 {
+		return 0, nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	const chunkSize = 200
+	var deleted int64
+	for start := 0; start < len(stale); start += chunkSize {
+		end := start + chunkSize
+		if end > len(stale) {
+			end = len(stale)
+		}
+		chunk := stale[start:end]
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(chunk)), ",")
+		args := make([]any, len(chunk))
+		for i, id := range chunk {
+			args[i] = id
+		}
+		res, execErr := tx.ExecContext(ctx, "DELETE FROM recovery_points WHERE id IN ("+placeholders+")", args...)
+		if execErr != nil {
+			err = execErr
+			return 0, err
+		}
+		if n, raErr := res.RowsAffected(); raErr == nil {
+			deleted += n
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	if deleted > 0 {
+		log.Info().
+			Str("provider", provider).
+			Str("idPrefix", idPrefix).
+			Str("instance", instance).
+			Int64("deleted", deleted).
+			Msg("Reconciled recovery points against latest source enumeration")
+	}
+
+	return deleted, nil
+}
+
 func (s *Store) initSchema() error {
 	if err := s.ensureInitialized(); err != nil {
 		return err
