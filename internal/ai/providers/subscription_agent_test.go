@@ -349,6 +349,23 @@ func TestDecodeSubscriptionAgentTurnRejectsUnknownStructuredFields(t *testing.T)
 	}
 }
 
+func TestDecodeClaudePlainCompletionRejectsToolCallArtifacts(t *testing.T) {
+	req := ChatRequest{Tools: []Tool{{Name: "pulse_query"}}}
+	raw := []byte(`{"result":"Patrol completed without another tool call.","usage":{"input_tokens":4,"output_tokens":7}}`)
+	turn, err := decodeClaudePlainCompletion(req, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if turn.Content == "" || turn.StopReason != "end_turn" || turn.InputTokens != 4 || turn.OutputTokens != 7 {
+		t.Fatalf("plain completion = %#v", turn)
+	}
+
+	leaked := []byte(`{"result":"pulse_query({\"action\":\"list\"})"}`)
+	if _, err := decodeClaudePlainCompletion(req, leaked); err == nil || !strings.Contains(err.Error(), "leaked a tool call") {
+		t.Fatalf("plain tool-call leak error = %v", err)
+	}
+}
+
 func writeExecutable(t *testing.T, path, body string) {
 	t.Helper()
 	if err := os.WriteFile(path, []byte(body), 0700); err != nil {

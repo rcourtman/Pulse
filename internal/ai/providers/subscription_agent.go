@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
@@ -234,6 +235,9 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 	}
 
 	turn, err := decodeSubscriptionAgentTurn(c.agent, raw)
+	if err != nil && c.agent == SubscriptionAgentClaude {
+		turn, err = decodeClaudePlainCompletion(req, raw)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -442,6 +446,38 @@ func decodeSubscriptionAgentTurn(agent SubscriptionAgent, raw []byte) (subscript
 	if err := decodeStrictJSON(raw, &turn); err != nil {
 		return turn, fmt.Errorf("decode Codex structured turn: %w", err)
 	}
+	return turn, nil
+}
+
+func decodeClaudePlainCompletion(req ChatRequest, raw []byte) (subscriptionAgentTurn, error) {
+	var turn subscriptionAgentTurn
+	var wrapper claudePrintResponse
+	if err := json.Unmarshal(raw, &wrapper); err != nil {
+		return turn, fmt.Errorf("decode Claude subscription response: %w", err)
+	}
+	if len(wrapper.PermissionDenials) > 0 {
+		return turn, errors.New("Claude subscription agent attempted a denied built-in tool")
+	}
+	if len(wrapper.StructuredOutput) > 0 && string(wrapper.StructuredOutput) != "null" {
+		return turn, errors.New("Claude subscription response contained invalid structured output")
+	}
+	content := strings.TrimSpace(wrapper.Result)
+	if content == "" {
+		return turn, errors.New("Claude subscription response did not contain structured output or a plain completion")
+	}
+	toolNames := make([]string, 0, len(req.Tools))
+	for _, tool := range req.Tools {
+		toolNames = append(toolNames, tool.Name)
+	}
+	catalog := agentcapabilities.NewProviderToolNameCatalog(toolNames)
+	if agentcapabilities.ProviderToolCallArtifactIndex(content, catalog) >= 0 {
+		return turn, errors.New("Claude subscription response leaked a tool call through plain content")
+	}
+	turn.Content = content
+	turn.StopReason = "end_turn"
+	turn.RawToolCalls = []subscriptionAgentToolCall{}
+	turn.InputTokens = wrapper.Usage.InputTokens
+	turn.OutputTokens = wrapper.Usage.OutputTokens
 	return turn, nil
 }
 
