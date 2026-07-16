@@ -41,6 +41,10 @@ func TestAgenticLoop_Setters(t *testing.T) {
 	if loop.maxTurns != 7 {
 		t.Fatalf("expected maxTurns=7, got %d", loop.maxTurns)
 	}
+	loop.SetMaxEvidenceCalls(5)
+	if loop.maxEvidenceCalls != 5 {
+		t.Fatalf("expected maxEvidenceCalls=5, got %d", loop.maxEvidenceCalls)
+	}
 
 	loop.SetProviderInfo("provider", "model")
 	if loop.providerName != "provider" || loop.modelName != "model" {
@@ -71,6 +75,85 @@ func TestAgenticLoop_Setters(t *testing.T) {
 	loop.SetExecutionProfile(tools.ProfileInteractiveAssistant)
 	if loop.streamIdleTimeout != 0 {
 		t.Fatalf("interactive stream idle timeout=%s want provider default", loop.streamIdleTimeout)
+	}
+}
+
+func TestInvestigationEvidenceBudgetHelpers(t *testing.T) {
+	available := []providers.Tool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PatrolProposeActionToolName},
+		{Name: agentcapabilities.PatrolActionCapabilitiesToolName},
+	}
+	terminal := investigationTerminalTools(available)
+	if len(terminal) != 1 || terminal[0].Name != agentcapabilities.PatrolProposeActionToolName {
+		t.Fatalf("terminal tools = %+v, want only patrol_propose_action", terminal)
+	}
+	if !isInvestigationEvidenceTool(agentcapabilities.PulseQueryToolName) {
+		t.Fatal("read-only query must consume evidence budget")
+	}
+	if isInvestigationEvidenceTool(agentcapabilities.PatrolProposeActionToolName) {
+		t.Fatal("terminal proposal must not consume evidence budget")
+	}
+	if got := investigationEvidenceCheckpoint(15); got != 8 {
+		t.Fatalf("checkpoint(15) = %d, want 8", got)
+	}
+}
+
+func TestAgenticLoopPatrolInvestigationEnforcesEvidenceBudget(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	var requests []providers.ChatRequest
+	turn := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		requests = append(requests, req)
+		turn++
+		switch turn {
+		case 1:
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "evidence-1", Name: agentcapabilities.PulseQueryToolName, Input: map[string]interface{}{"query": "containers"}}}}})
+		case 2:
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{{ID: "evidence-2", Name: agentcapabilities.PulseReadToolName, Input: map[string]interface{}{"operation": "resource"}}}}})
+		default:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "final investigation summary"}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		}
+		return nil
+	}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop := NewAgenticLoop(provider, executor, "system")
+	loop.SetExecutionProfile(tools.ProfilePatrolInvestigation)
+	loop.SetMaxEvidenceCalls(1)
+	loop.SetMaxTurns(4)
+
+	available := []providers.Tool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PulseReadToolName},
+		{Name: agentcapabilities.PatrolProposeActionToolName},
+	}
+	result, err := loop.ExecuteWithTools(context.Background(), "evidence-budget", []Message{{Role: "user", Content: "investigate"}}, available, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("ExecuteWithTools: %v", err)
+	}
+	if loop.GetTotalEvidenceCalls() != 1 {
+		t.Fatalf("evidence calls = %d, want 1", loop.GetTotalEvidenceCalls())
+	}
+	if loop.GetTotalToolCalls() != 2 {
+		t.Fatalf("model-selected tool calls = %d, want 2", loop.GetTotalToolCalls())
+	}
+	if loop.GetTotalModelTurns() != 3 {
+		t.Fatalf("model turns = %d, want 3", loop.GetTotalModelTurns())
+	}
+	if len(requests) != 3 {
+		t.Fatalf("provider requests = %d, want 3", len(requests))
+	}
+	if len(requests[2].Tools) != 1 || requests[2].Tools[0].Name != agentcapabilities.PatrolProposeActionToolName {
+		t.Fatalf("post-budget tools = %+v, want only patrol_propose_action", requests[2].Tools)
+	}
+	if !strings.Contains(requests[2].System, "evidence-call budget is exhausted") {
+		t.Fatalf("post-budget system prompt missing completion contract: %q", requests[2].System)
+	}
+	if len(result) == 0 || !strings.Contains(result[len(result)-1].Content, "final investigation summary") {
+		t.Fatalf("final result = %+v", result)
 	}
 }
 
@@ -636,6 +719,9 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 	if provider.lastRequest.ToolChoice != nil || len(provider.lastRequest.Tools) != 0 {
 		t.Fatalf("expected summary call to omit tools and tool_choice, got tools=%d choice=%+v", len(provider.lastRequest.Tools), provider.lastRequest.ToolChoice)
 	}
+	if loop.GetTotalModelTurns() != 1 {
+		t.Fatalf("successful final summary model turns = %d, want 1", loop.GetTotalModelTurns())
+	}
 
 	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
 		return errors.New("boom")
@@ -655,6 +741,9 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 	}
 	if !strings.Contains(result2[len(result2)-1].Content, "didn't return a written summary") {
 		t.Fatalf("expected deterministic fallback summary, got %q", result2[len(result2)-1].Content)
+	}
+	if loop.GetTotalModelTurns() != 1 {
+		t.Fatalf("failed final summary changed model turns to %d", loop.GetTotalModelTurns())
 	}
 
 	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
@@ -681,6 +770,9 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 	// The fallback must not dump raw tool output / result snippets into the chat.
 	if strings.Contains(fallback3, "cpu ok") || strings.Contains(fallback3, "result snippet") {
 		t.Fatalf("fallback summary must not include raw tool output, got %q", fallback3)
+	}
+	if loop.GetTotalModelTurns() != 2 {
+		t.Fatalf("empty completed final summary model turns = %d, want 2 cumulative", loop.GetTotalModelTurns())
 	}
 }
 

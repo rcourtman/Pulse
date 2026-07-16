@@ -119,6 +119,9 @@ func (a *AgenticLoop) ensureFinalTextResponseWithSystemPrompt(
 			}
 		}
 	})
+	if summaryErr == nil {
+		a.totalModelTurns++
+	}
 
 	if summaryErr == nil && !suppressLeakedToolContent {
 		if visibleText := flushPendingVisibleContent(&summaryBuilder, &pendingVisibleContent); visibleText != "" {

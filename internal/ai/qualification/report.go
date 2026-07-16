@@ -614,6 +614,31 @@ func renderMarkdown(report RunReport) string {
 		if len(report.Manifest.Investigation.AffectedResources) > 0 {
 			fmt.Fprintf(&b, "| Affected-resource grounding | %.1f%% |\n", report.Score.AffectedGrounding*100)
 		}
+		modelTurns := 0
+		evidenceCalls := 0
+		toolCalls := 0
+		distinctTools := 0
+		for _, investigation := range report.Investigation {
+			modelTurns += investigation.TurnCount
+			calls := investigation.EvidenceCallCount
+			if calls == 0 {
+				calls = len(investigation.EvidenceIDs)
+			}
+			evidenceCalls += calls
+			selected := investigation.ToolCallCount
+			if selected == 0 {
+				selected = len(investigation.EvidenceIDs)
+			}
+			toolCalls += selected
+			distinctTools += len(investigation.ToolsUsed)
+		}
+		fmt.Fprintf(&b, "| Investigation model turns | %d |\n", modelTurns)
+		fmt.Fprintf(&b, "| Investigation evidence calls | %d |\n", evidenceCalls)
+		fmt.Fprintf(&b, "| Investigation tool calls | %d |\n", toolCalls)
+		fmt.Fprintf(&b, "| Distinct investigation tools | %d |\n", distinctTools)
+		if report.Manifest.Investigation.MaxEvidenceCalls > 0 {
+			fmt.Fprintf(&b, "| Scenario evidence-call ceiling | %d |\n", report.Manifest.Investigation.MaxEvidenceCalls)
+		}
 	}
 	fmt.Fprintf(&b, "| Duplicate tool calls | %d |\n", report.Score.DuplicateToolCalls)
 	fmt.Fprintf(&b, "| Collection latency | %s |\n", report.Score.CollectionLatency)

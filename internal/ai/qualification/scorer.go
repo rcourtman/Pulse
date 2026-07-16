@@ -188,9 +188,19 @@ func ApplyProTrackGates(score *Score, manifest Manifest, ground GroundTruth, inv
 				score.HardFailures = append(score.HardFailures, fmt.Sprintf("investigation %s Affected Resources section does not identify all scenario-owned affected resources %v", investigation.ID, spec.AffectedResources))
 			}
 		}
-		evidenceOK := len(investigation.EvidenceIDs) >= spec.MinEvidenceIDs
+		evidenceCalls := investigation.EvidenceCallCount
+		if evidenceCalls == 0 {
+			// Backward-compatible replay for reports captured before the
+			// explicit evidence-call counter was added.
+			evidenceCalls = len(investigation.EvidenceIDs)
+		}
+		minimumEvidenceCalls := spec.minimumEvidenceCalls()
+		evidenceOK := evidenceCalls >= minimumEvidenceCalls
 		if !evidenceOK {
-			score.HardFailures = append(score.HardFailures, fmt.Sprintf("investigation %s has %d evidence IDs; requires %d", investigation.ID, len(investigation.EvidenceIDs), spec.MinEvidenceIDs))
+			score.HardFailures = append(score.HardFailures, fmt.Sprintf("investigation %s made %d evidence calls; requires %d", investigation.ID, evidenceCalls, minimumEvidenceCalls))
+		}
+		if spec.MaxEvidenceCalls > 0 && evidenceCalls > spec.MaxEvidenceCalls {
+			score.GateFailures = append(score.GateFailures, fmt.Sprintf("investigation %s made %d evidence calls; maximum is %d", investigation.ID, evidenceCalls, spec.MaxEvidenceCalls))
 		}
 		if spec.MaxToolsUsed > 0 && len(investigation.ToolsUsed) > spec.MaxToolsUsed {
 			score.GateFailures = append(score.GateFailures, fmt.Sprintf("investigation %s used %d tools; maximum is %d", investigation.ID, len(investigation.ToolsUsed), spec.MaxToolsUsed))

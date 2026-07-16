@@ -3850,6 +3850,22 @@ resolve canonical/source IDs and unique aliases before collection, reject
 
 ## Current State
 
+Patrol Pro investigation now separates three previously conflated quantities:
+model responses, model-selected tool calls, and evidence-tool calls. The
+operator-facing investigation budget limits evidence calls; core derives a
+separate model-response ceiling with reserved completion capacity, and the
+terminal `patrol_propose_action` call does not consume evidence budget. The
+investigation execution profile injects an evidence-completion checkpoint,
+then structurally removes evidence tools at exhaustion while retaining only the
+typed proposal route and final prose. This remains model-led: Pulse defines the
+four completion questions (symptom, root cause or uncertainty, affected scope,
+safe next action), not a prescribed diagnostic tool sequence. Structured run
+results and persisted investigation records carry truthful model-turn and
+evidence-call counters. Qualification `max_evidence_calls` gates actual call
+volume independently of `max_tools_used`, which continues to measure distinct
+tool-name diversity; replay falls back to historical evidence IDs only for old
+reports that predate the explicit counter.
+
 Assistant compatibility audit writers no longer use whole-record action-audit
 replacement. Fresh approval and direct-action records use atomic creation with
 their initial events, while decisions, refusals, execution starts, and results

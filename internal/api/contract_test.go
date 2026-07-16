@@ -765,6 +765,9 @@ func TestContract_AssistantFindingContextUsesModelOnlyHandoff(t *testing.T) {
 		"ActionBroker:  h.actionBrokerFor(approval.NormalizeOrgID(orgID))",
 		"catalog: h.proposalCatalogFor(orgID)",
 		"func (a *orchestratorChatAdapter) ExecuteInvestigationStream(",
+		"MaxEvidenceCalls: req.MaxEvidenceCalls",
+		"ModelTurns:             runResult.ModelTurns",
+		"EvidenceCalls:          runResult.EvidenceCalls",
 	} {
 		if !strings.Contains(settingsHandlerText, required) {
 			t.Fatalf("ai_handlers.go must wire the typed investigation proposal channel: missing %q", required)

@@ -3444,6 +3444,16 @@ successful targeted check from a queued response alone.
 
 ## Current State
 
+The public Patrol investigation boundary now carries independent
+`max_turns` and `max_evidence_calls` request limits and returns `model_turns`,
+`evidence_calls`, and total `tool_calls`. Persisted investigation sessions keep
+`turn_count` as completed model responses and expose `evidence_call_count`
+separately, so API, audit, qualification, and enterprise consumers no longer
+infer provider turns from tool events. The existing `investigation_budget`
+settings payload remains wire-compatible but is now defined as an evidence-call
+budget; the server derives the model-response safety ceiling and reserves
+terminal proposal/final-summary capacity.
+
 Unified Agent connections now carry agent-authored lifecycle evidence through
 the shared host model and `/api/connections` contract. The payload may include
 the applied managed-config fingerprint, self-update state and timestamps, and

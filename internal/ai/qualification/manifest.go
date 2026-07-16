@@ -151,7 +151,11 @@ type PatrolSpec struct {
 // Pro investigation output. These are semantic expectations, never expected
 // tool names, so the model remains free to choose its own evidence path.
 type InvestigationSpec struct {
-	MinEvidenceIDs int `json:"min_evidence_ids"`
+	MinEvidenceCalls int `json:"min_evidence_calls,omitempty"`
+	// MinEvidenceIDs is the report-v1 replay compatibility name. New
+	// manifests use MinEvidenceCalls; both score the same scenario-owned
+	// evidence-call quantity.
+	MinEvidenceIDs int `json:"min_evidence_ids,omitempty"`
 	// RequiredSummaryTerms are facts with one canonical accepted expression.
 	// RequiredSummaryTermGroups are scenario-owned semantic alternatives; at
 	// least one non-empty term in every group must appear. This avoids teaching
@@ -162,10 +166,20 @@ type InvestigationSpec struct {
 	// RootCauseResources and AffectedResources are scenario-owned aliases.
 	// They are matched against named response sections, never inferred from
 	// whichever tools the model chose to call.
-	RootCauseResources     []string `json:"root_cause_resources,omitempty"`
-	AffectedResources      []string `json:"affected_resources,omitempty"`
-	MaxToolsUsed           int      `json:"max_tools_used,omitempty"`
-	RequireCompletedStatus bool     `json:"require_completed_status"`
+	RootCauseResources []string `json:"root_cause_resources,omitempty"`
+	AffectedResources  []string `json:"affected_resources,omitempty"`
+	MaxToolsUsed       int      `json:"max_tools_used,omitempty"`
+	// MaxEvidenceCalls gates actual evidence-call volume. MaxToolsUsed is a
+	// separate diversity/load signal counting distinct tool names.
+	MaxEvidenceCalls       int  `json:"max_evidence_calls,omitempty"`
+	RequireCompletedStatus bool `json:"require_completed_status"`
+}
+
+func (s InvestigationSpec) minimumEvidenceCalls() int {
+	if s.MinEvidenceCalls > 0 {
+		return s.MinEvidenceCalls
+	}
+	return s.MinEvidenceIDs
 }
 
 // RemediationSpec governs the optional decision/execution portion of a Pro
@@ -402,8 +416,8 @@ func (m Manifest) Validate() error {
 		if m.Investigation == nil {
 			errs = append(errs, errors.New("investigation expectations are required for Pro tracks"))
 		} else {
-			if m.Investigation.MinEvidenceIDs < 1 {
-				errs = append(errs, errors.New("investigation.min_evidence_ids must be positive"))
+			if m.Investigation.minimumEvidenceCalls() < 1 {
+				errs = append(errs, errors.New("investigation.min_evidence_calls must be positive"))
 			}
 			if len(m.Investigation.RequiredSummaryTerms) == 0 && len(m.Investigation.RequiredSummaryTermGroups) == 0 {
 				errs = append(errs, errors.New("investigation summary expectations must include required_summary_terms or required_summary_term_groups"))

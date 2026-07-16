@@ -248,7 +248,8 @@ MaybeInvestigateFinding()
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `MaxTurns` | 15 | Maximum agentic turns per investigation |
+| `MaxEvidenceCalls` | 15 | Maximum evidence-tool calls per investigation; the terminal typed proposal is reserved separately |
+| `MaxTurns` | 17 | Internal provider-response safety ceiling derived from the evidence budget (budget + proposal + final summary) |
 | `Timeout` | 10 min | Maximum duration per investigation |
 | `MaxConcurrent` | 3 | Maximum concurrent investigations |
 | `MaxAttemptsPerFinding` | 3 | Maximum investigation attempts per finding |

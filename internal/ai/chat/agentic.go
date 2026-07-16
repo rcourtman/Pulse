@@ -612,6 +612,7 @@ type AgenticLoop struct {
 	tools             []providers.Tool
 	baseSystemPrompt  string // Base prompt without mode context
 	maxTurns          int
+	maxEvidenceCalls  int
 	orgID             string
 	executionID       string
 	streamIdleTimeout time.Duration
@@ -621,9 +622,11 @@ type AgenticLoop struct {
 	modelName    string
 
 	// Token accumulation across all turns
-	totalInputTokens  int
-	totalOutputTokens int
-	totalToolCalls    int
+	totalInputTokens   int
+	totalOutputTokens  int
+	totalToolCalls     int
+	totalModelTurns    int
+	totalEvidenceCalls int
 
 	// State for ongoing executions
 	mu             sync.Mutex
@@ -755,6 +758,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	patrolFindingRepairPending := false   // A mixed-success lifecycle batch needs one repair-only turn
 	patrolFindingRepairAttempted := false // The repair-only extension is bounded to one provider turn
 	toolBlockedLastTurn := false          // When true, request final text after budget/loop block
+	investigationProposalCompleted := false
 
 	// Loop detection: track identical tool calls (name + serialized input).
 	// After maxIdenticalCalls identical invocations, the next one is blocked.
@@ -767,13 +771,16 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	const compactionMinChars = 300                 // Only compact results longer than this
 	currentTurnStartIndex := len(providerMessages) // Initial messages are never compacted
 
-	// Wrap-up nudge: after this many cumulative tool calls, hint the model to start wrapping up.
+	// Generic Assistant/Watch wrap-up nudge. Patrol investigation has a
+	// separate evidence budget and completion checkpoint below.
 	const wrapUpNudgeAfterCalls = 12
 	const wrapUpEscalateAfterCalls = 18
 	const maxConsecutiveToolOnlyTurns = 4
 	totalToolCalls := 0
 	wrapUpNudgeFired := false
 	wrapUpEscalateFired := false
+	investigationCheckpointFired := false
+	investigationBudgetWarningFired := false
 	consecutiveToolOnlyTurns := 0
 	consecutiveAllErrorTurns := 0
 
@@ -916,6 +923,18 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			log.Debug().
 				Str("session_id", sessionID).
 				Msg("[AgenticLoop] Tool calls blocked last turn — omitting tools for final response")
+		}
+		if isPatrolInvestigationExecution(a.currentExecutionProfile()) {
+			switch {
+			case investigationProposalCompleted:
+				req.Tools = nil
+				textOnlySafetyBrake = true
+				req.System += investigationProposalCompletedSystemPrompt
+			case a.maxEvidenceCalls > 0 && a.totalEvidenceCalls >= a.maxEvidenceCalls:
+				req.Tools = investigationTerminalTools(tools)
+				textOnlySafetyBrake = len(req.Tools) == 0
+				req.System += investigationEvidenceBudgetExhaustedSystemPrompt
+			}
 		}
 
 		// Pre-request context validation: catch overflow from message history growth.
@@ -1262,6 +1281,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Msg("[AgenticLoop] Provider error")
 			return resultMessages, fmt.Errorf("provider error: %w", err)
 		}
+		a.totalModelTurns++
 
 		// Guard: if a safety brake omitted tools but the model still returned tool
 		// calls from conversation history, strip them so the model's text content
@@ -1644,6 +1664,20 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			// === FSM ENFORCEMENT GATE 1: Check if tool is allowed in current state ===
 			toolKind := ClassifyToolCall(tc.Name, tc.Input)
 
+			if isPatrolInvestigationExecution(a.currentExecutionProfile()) && isInvestigationEvidenceTool(tc.Name) {
+				if a.maxEvidenceCalls > 0 && a.totalEvidenceCalls >= a.maxEvidenceCalls {
+					budgetMsg := fmt.Sprintf("EVIDENCE_BUDGET_EXHAUSTED: the investigation has used its %d evidence calls. Use the evidence already collected and either propose one supported typed action or conclude with the required summary.", a.maxEvidenceCalls)
+					emitToolStartIfNeeded(tc)
+					emitToolEndEvent(callback, tc.ID, tc.Name, tc.Input, budgetMsg, false)
+					projection := newProviderToolResultContextProjection(tc.ID, budgetMsg, true)
+					resultMessages = append(resultMessages, Message{ID: uuid.New().String(), Role: "user", Timestamp: time.Now(), ToolResult: &projection.Transcript})
+					providerMessages = append(providerMessages, providers.Message{Role: "user", ToolResult: &projection.Model})
+					budgetBlockedThisTurn++
+					continue
+				}
+				a.totalEvidenceCalls++
+			}
+
 			if blockMsg, blocked := a.currentResourcePlaceholderBlock(tc); blocked {
 				log.Warn().
 					Str("tool", tc.Name).
@@ -1988,6 +2022,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 			if !isError {
 				anyToolSucceededThisTurn = true
+				if isPatrolInvestigationExecution(a.currentExecutionProfile()) && tc.Name == agentcapabilities.PatrolProposeActionToolName {
+					investigationProposalCompleted = true
+				}
 			}
 
 			// Send tool_end event
@@ -2091,6 +2128,21 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			})
 		}
 
+		if isPatrolInvestigationExecution(a.currentExecutionProfile()) && a.maxEvidenceCalls > 0 {
+			remaining := a.maxEvidenceCalls - a.totalEvidenceCalls
+			checkpoint := investigationEvidenceCheckpoint(a.maxEvidenceCalls)
+			if !investigationCheckpointFired && a.totalEvidenceCalls >= checkpoint {
+				if maybeInjectInvestigationEvidenceCheckpoint(providerMessages, a.totalEvidenceCalls, remaining) {
+					investigationCheckpointFired = true
+				}
+			}
+			if !investigationBudgetWarningFired && remaining <= 2 {
+				if maybeInjectInvestigationEvidenceBudgetWarning(providerMessages, a.totalEvidenceCalls, remaining) {
+					investigationBudgetWarningFired = true
+				}
+			}
+		}
+
 		if patrolFindingLifecycleCompletedThisTurn < patrolFindingLifecycleCallsThisTurn {
 			patrolFindingLifecycleFailedThisTurn = true
 		}
@@ -2154,12 +2206,14 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				Msg("[AgenticLoop] Consecutive tool-only turns exceeded threshold — next turn omits tools")
 		}
 
-		// Track cumulative tool calls and inject wrap-up nudge/escalation if threshold exceeded
+		// Track cumulative tool calls and inject the generic wrap-up
+		// nudge/escalation outside Patrol investigation, whose evidence budget
+		// has its own earlier completion contract.
 		totalToolCalls += len(toolCalls)
-		if !wrapUpNudgeFired && totalToolCalls >= wrapUpNudgeAfterCalls {
+		if !isPatrolInvestigationExecution(a.currentExecutionProfile()) && !wrapUpNudgeFired && totalToolCalls >= wrapUpNudgeAfterCalls {
 			maybeInjectWrapUpNudge(providerMessages, totalToolCalls, maxTurns, turn, wrapUpNudgeAfterCalls)
 			wrapUpNudgeFired = true
-		} else if wrapUpNudgeFired && !wrapUpEscalateFired && totalToolCalls >= wrapUpEscalateAfterCalls {
+		} else if !isPatrolInvestigationExecution(a.currentExecutionProfile()) && wrapUpNudgeFired && !wrapUpEscalateFired && totalToolCalls >= wrapUpEscalateAfterCalls {
 			maybeInjectWrapUpEscalation(providerMessages, totalToolCalls)
 			wrapUpEscalateFired = true
 		}

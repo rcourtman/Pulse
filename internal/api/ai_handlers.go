@@ -2076,7 +2076,8 @@ func (h *AISettingsHandler) setupInvestigationOrchestrator(orgID string, svc *ai
 	cfg := svc.GetConfig()
 	invConfig := aicontracts.DefaultInvestigationConfig()
 	if cfg != nil {
-		invConfig.MaxTurns = cfg.GetPatrolInvestigationBudget()
+		invConfig.MaxEvidenceCalls = cfg.GetPatrolInvestigationBudget()
+		invConfig.MaxTurns = aicontracts.InvestigationModelTurnLimit(invConfig.MaxEvidenceCalls)
 		invConfig.Timeout = cfg.GetPatrolInvestigationTimeout()
 	}
 
@@ -2165,11 +2166,12 @@ func (a *orchestratorChatAdapter) ExecuteInvestigationStream(ctx context.Context
 		return nil, fmt.Errorf("chat service is not running")
 	}
 	runResult, err := a.svc.ExecuteInvestigationStream(ctx, chat.InvestigationRunRequest{
-		SessionID:    req.SessionID,
-		Prompt:       req.Prompt,
-		SystemPrompt: req.SystemPrompt,
-		MaxTurns:     req.MaxTurns,
-		ExecutionID:  req.ExecutionID,
+		SessionID:        req.SessionID,
+		Prompt:           req.Prompt,
+		SystemPrompt:     req.SystemPrompt,
+		MaxTurns:         req.MaxTurns,
+		MaxEvidenceCalls: req.MaxEvidenceCalls,
+		ExecutionID:      req.ExecutionID,
 		Identity: tools.ProposalIdentity{
 			ProposalID:      req.ProposalID,
 			FindingID:       req.FindingID,
@@ -2191,6 +2193,9 @@ func (a *orchestratorChatAdapter) ExecuteInvestigationStream(ctx context.Context
 		FailedProposalAttempts: runResult.FailedProposalAttempts,
 		InputTokens:            runResult.InputTokens,
 		OutputTokens:           runResult.OutputTokens,
+		ModelTurns:             runResult.ModelTurns,
+		EvidenceCalls:          runResult.EvidenceCalls,
+		ToolCalls:              runResult.ToolCalls,
 	}
 	if runResult.Proposal != nil {
 		captured := runResult.Proposal
@@ -7637,7 +7642,7 @@ type PatrolAutonomySettings struct {
 	AutonomyLevel           string `json:"autonomy_level"`               // "monitor", "approval", "assisted", "full"
 	FullModeUnlocked        *bool  `json:"full_mode_unlocked,omitempty"` // Deprecated compatibility label (nil = preserve existing)
 	AcknowledgementID       string `json:"acknowledgement_id,omitempty"`
-	InvestigationBudget     int    `json:"investigation_budget"`      // Max turns per investigation (5-30)
+	InvestigationBudget     int    `json:"investigation_budget"`      // Max evidence calls per investigation (5-30)
 	InvestigationTimeoutSec int    `json:"investigation_timeout_sec"` // Max seconds per investigation (60-1800)
 }
 

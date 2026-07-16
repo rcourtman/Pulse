@@ -1786,6 +1786,12 @@ must not treat starter
 
 ## Current State
 
+Shared `internal/api/ai_handlers.go` now projects separate Patrol investigation
+evidence-call and model-response budgets/counters. Storage and recovery may use
+those values only as investigation cost/load evidence; they do not establish
+storage health, backup completion, recovery-point validity, restore authority,
+or post-action verification.
+
 ### Canonical mutation-plane dependency
 
 Infrastructure rollback is a declared lifecycle property, not executable model

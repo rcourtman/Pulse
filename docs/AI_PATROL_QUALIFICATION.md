@@ -491,5 +491,8 @@ catalogue. Docker Watch qualification does not justify a claim about arbitrary
 Kubernetes, storage, Proxmox, or autonomous repair. “Verified fix” requires the
 governed action plus independent postcondition, not model narration or command
 success. Inference allowances should be set from measured p95 tokens, latency,
-and cost with headroom, while hard tool-call and investigation-turn ceilings
-remain product safety limits rather than billing targets.
+and cost with headroom. Qualification reports distinct tool-name diversity,
+actual evidence-call volume, and completed model responses separately. Scenario
+gates use `max_evidence_calls` for infrastructure-query load; the product's
+evidence-call and model-response ceilings remain safety limits rather than
+billing targets. The terminal typed proposal does not count as evidence.

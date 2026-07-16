@@ -19,11 +19,12 @@ import (
 // investigation profile, and correlation identity comes from trusted
 // orchestration context, never from the model or a transport payload.
 type InvestigationRunRequest struct {
-	SessionID    string
-	Prompt       string
-	SystemPrompt string
-	MaxTurns     int
-	ExecutionID  string
+	SessionID        string
+	Prompt           string
+	SystemPrompt     string
+	MaxTurns         int
+	MaxEvidenceCalls int
+	ExecutionID      string
 	// Identity is the trusted correlation identity injected into any
 	// captured proposal.
 	Identity tools.ProposalIdentity
@@ -46,6 +47,9 @@ type InvestigationRunResult struct {
 	FailedProposalAttempts int
 	InputTokens            int
 	OutputTokens           int
+	ModelTurns             int
+	EvidenceCalls          int
+	ToolCalls              int
 }
 
 // InvestigationRunError preserves the two independent failure channels from
@@ -162,6 +166,9 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 	if req.MaxTurns > 0 {
 		loop.SetMaxTurns(req.MaxTurns)
 	}
+	if req.MaxEvidenceCalls > 0 {
+		loop.SetMaxEvidenceCalls(req.MaxEvidenceCalls)
+	}
 	if parts := strings.SplitN(investigationModel, ":", 2); len(parts) == 2 {
 		loop.SetProviderInfo(parts[0], parts[1])
 	}
@@ -220,6 +227,9 @@ func (s *Service) ExecuteInvestigationStream(ctx context.Context, req Investigat
 		FailedProposalAttempts: failedAttempts,
 		InputTokens:            loop.GetTotalInputTokens(),
 		OutputTokens:           loop.GetTotalOutputTokens(),
+		ModelTurns:             loop.GetTotalModelTurns(),
+		EvidenceCalls:          loop.GetTotalEvidenceCalls(),
+		ToolCalls:              loop.GetTotalToolCalls(),
 	}
 	if runErr != nil || proposalErr != nil {
 		// A proposal is actionable only from a completely successful

@@ -256,7 +256,7 @@ func TestApplyProTrackGatesBranchCoverage(t *testing.T) {
 				return m, proTrackBaseGround(), map[string]aicontracts.InvestigationSession{"finding-1": proTrackBaseInvestigation()}, RemediationResult{}
 			},
 			wantPassed: false,
-			hardHas:    []string{"has 1 evidence IDs; requires 2"},
+			hardHas:    []string{"made 1 evidence calls; requires 2"},
 		},
 		{
 			name: "max tools used exceeded records gate failure",
@@ -288,6 +288,24 @@ func TestApplyProTrackGatesBranchCoverage(t *testing.T) {
 			},
 			wantPassed: true,
 			gateNone:   []string{"tools"},
+		},
+		{
+			name: "max evidence calls gates actual call volume independently of tool diversity",
+			setup: func() (Manifest, GroundTruth, map[string]aicontracts.InvestigationSession, RemediationResult) {
+				m := validTestManifest()
+				m.Track = TrackInvestigation
+				spec := proTrackBaseSpec()
+				spec.MaxEvidenceCalls = 2
+				m.Investigation = spec
+				inv := proTrackBaseInvestigation()
+				inv.EvidenceCallCount = 3
+				inv.EvidenceIDs = []string{"e1", "e2", "e3"}
+				inv.ToolsUsed = []string{"one-tool-name"}
+				return m, proTrackBaseGround(), map[string]aicontracts.InvestigationSession{"finding-1": inv}, RemediationResult{}
+			},
+			wantPassed: false,
+			gateHas:    []string{"made 3 evidence calls; maximum is 2"},
+			gateNone:   []string{"used 3 tools"},
 		},
 		{
 			name: "remediation missing action id hard fails",

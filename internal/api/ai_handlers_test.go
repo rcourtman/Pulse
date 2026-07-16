@@ -221,6 +221,7 @@ func TestAISettingsHandler_PatrolAutonomyMonitorOnlyAllowsMonitor(t *testing.T) 
 	require.False(t, resp.Settings.FullModeUnlocked)
 	require.Equal(t, 5, resp.Settings.InvestigationBudget)
 	require.Equal(t, 60, resp.Settings.InvestigationTimeoutSec)
+	require.NotContains(t, rec.Body.String(), "max_turns", "wire-compatible investigation_budget must not expose the derived model-turn ceiling")
 
 	saved, err := persistence.LoadAIConfig()
 	require.NoError(t, err)

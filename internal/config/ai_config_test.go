@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -1327,5 +1328,19 @@ func TestAIConfig_GetDiscoveryModelFallbackChain(t *testing.T) {
 	cfg.DiscoveryModel = "ollama:qwen3:8b"
 	if got := cfg.GetDiscoveryModel(); got != "ollama:qwen3:8b" {
 		t.Fatalf("with an explicit discovery override set, GetDiscoveryModel() = %q, want the discovery override", got)
+	}
+}
+
+func TestAIConfigPatrolInvestigationBudgetIsAnEvidenceCallBudget(t *testing.T) {
+	cfg := AIConfig{PatrolInvestigationBudget: 12}
+	if got := cfg.GetPatrolInvestigationBudget(); got != 12 {
+		t.Fatalf("evidence-call budget = %d, want 12", got)
+	}
+	payload, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("marshal AI config: %v", err)
+	}
+	if !strings.Contains(string(payload), `"patrol_investigation_budget":12`) {
+		t.Fatalf("AI config lost investigation evidence budget: %s", payload)
 	}
 }

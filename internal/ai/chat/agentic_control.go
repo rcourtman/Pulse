@@ -67,6 +67,15 @@ func (a *AgenticLoop) SetMaxTurns(n int) {
 	a.mu.Unlock()
 }
 
+// SetMaxEvidenceCalls bounds model-selected evidence gathering for a Patrol
+// investigation. The terminal patrol_propose_action call is not evidence and
+// remains available after this budget is exhausted.
+func (a *AgenticLoop) SetMaxEvidenceCalls(n int) {
+	a.mu.Lock()
+	a.maxEvidenceCalls = n
+	a.mu.Unlock()
+}
+
 // SetProviderInfo sets the provider/model info for telemetry.
 func (a *AgenticLoop) SetProviderInfo(provider, model string) {
 	a.mu.Lock()
@@ -103,6 +112,17 @@ func (a *AgenticLoop) GetTotalOutputTokens() int {
 // GetTotalToolCalls returns the accepted model-selected tool call count across all turns.
 func (a *AgenticLoop) GetTotalToolCalls() int {
 	return a.totalToolCalls
+}
+
+// GetTotalModelTurns returns completed provider responses for this loop.
+func (a *AgenticLoop) GetTotalModelTurns() int {
+	return a.totalModelTurns
+}
+
+// GetTotalEvidenceCalls returns model-selected Patrol investigation calls
+// other than the terminal typed action proposal.
+func (a *AgenticLoop) GetTotalEvidenceCalls() int {
+	return a.totalEvidenceCalls
 }
 
 // ResetTokenCounts resets the accumulated token counts (for reuse across executions).

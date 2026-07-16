@@ -39,15 +39,16 @@ type OrchestratorChatService interface {
 // identity is injected here by the orchestrator from trusted context; the
 // model's proposal tool schema never carries it.
 type OrchestratorInvestigationRequest struct {
-	SessionID       string   `json:"session_id,omitempty"`
-	Prompt          string   `json:"prompt"`
-	SystemPrompt    string   `json:"system_prompt,omitempty"`
-	MaxTurns        int      `json:"max_turns,omitempty"`
-	ExecutionID     string   `json:"execution_id,omitempty"`
-	ProposalID      string   `json:"proposal_id"`
-	FindingID       string   `json:"finding_id"`
-	InvestigationID string   `json:"investigation_id"`
-	EvidenceIDs     []string `json:"evidence_ids,omitempty"`
+	SessionID        string   `json:"session_id,omitempty"`
+	Prompt           string   `json:"prompt"`
+	SystemPrompt     string   `json:"system_prompt,omitempty"`
+	MaxTurns         int      `json:"max_turns,omitempty"`
+	MaxEvidenceCalls int      `json:"max_evidence_calls,omitempty"`
+	ExecutionID      string   `json:"execution_id,omitempty"`
+	ProposalID       string   `json:"proposal_id"`
+	FindingID        string   `json:"finding_id"`
+	InvestigationID  string   `json:"investigation_id"`
+	EvidenceIDs      []string `json:"evidence_ids,omitempty"`
 }
 
 // OrchestratorInvestigationResult is the structured outcome of one
@@ -62,6 +63,9 @@ type OrchestratorInvestigationResult struct {
 	FailedProposalAttempts int             `json:"failed_proposal_attempts,omitempty"`
 	InputTokens            int             `json:"input_tokens"`
 	OutputTokens           int             `json:"output_tokens"`
+	ModelTurns             int             `json:"model_turns"`
+	EvidenceCalls          int             `json:"evidence_calls"`
+	ToolCalls              int             `json:"tool_calls"`
 }
 
 // Typed investigation proposal errors surfaced across the contract

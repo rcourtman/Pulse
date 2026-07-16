@@ -5,7 +5,37 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
+
+func TestRenderMarkdownReportsInvestigationEfficiencyCounters(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Track = TrackInvestigation
+	manifest.Investigation = &InvestigationSpec{MinEvidenceIDs: 1, MaxEvidenceCalls: 10, RequireCompletedStatus: true}
+	report := RunReport{
+		Manifest: manifest,
+		Passed:   true,
+		Investigation: map[string]aicontracts.InvestigationSession{
+			"finding-1": {
+				TurnCount: 4, EvidenceCallCount: 6, ToolCallCount: 7,
+				ToolsUsed: []string{"pulse_query", "pulse_read", "patrol_propose_action"},
+			},
+		},
+	}
+	markdown := renderMarkdown(report)
+	for _, row := range []string{
+		"| Investigation model turns | 4 |",
+		"| Investigation evidence calls | 6 |",
+		"| Investigation tool calls | 7 |",
+		"| Distinct investigation tools | 3 |",
+		"| Scenario evidence-call ceiling | 10 |",
+	} {
+		if !strings.Contains(markdown, row) {
+			t.Fatalf("qualification report missing %q:\n%s", row, markdown)
+		}
+	}
+}
 
 func TestApplyQualificationGatesRequiresCatalogCoverageAndStatisticalFloor(t *testing.T) {
 	manifest := validTestManifest()

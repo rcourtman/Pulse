@@ -158,7 +158,7 @@
     "require_tool_call_evidence": true
   },
   "investigation": {
-    "min_evidence_ids": 1,
+    "min_evidence_calls": 1,
     "required_summary_term_groups": [
       [
         "unhealthy",
@@ -172,6 +172,7 @@
       "delete"
     ],
     "max_tools_used": 12,
+    "max_evidence_calls": 10,
     "require_completed_status": true
   },
   "remediation": {

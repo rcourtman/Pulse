@@ -105,7 +105,7 @@ When Patrol mode is `approval`, `assisted`, or `full`, Patrol investigates findi
 
 | Setting | Default | Range | Description |
 |---------|---------|-------|-------------|
-| `patrol_investigation_budget` | 15 | 5–30 | Maximum agentic turns per investigation |
+| `patrol_investigation_budget` | 15 | 5–30 | Maximum evidence-tool calls per investigation; Patrol derives a separate model-response safety ceiling |
 | `patrol_investigation_timeout_sec` | 600 | 60–1800 | Maximum seconds per investigation |
 | `max_concurrent_investigations` | 3 | — | Parallel investigation limit |
 | `max_attempts_per_finding` | 3 | — | Retries before marking as `needs_attention` |

@@ -113,7 +113,7 @@ type AIConfig struct {
 	PatrolAutopilotRevocations      []unifiedresources.PatrolAutopilotRevocation      `json:"patrol_autopilot_revocations,omitempty"`
 	PatrolAutopilotActivation       *unifiedresources.PatrolAutopilotActivation       `json:"patrol_autopilot_activation,omitempty"`
 	PatrolActionEmergencyStop       bool                                              `json:"patrol_action_emergency_stop"`               // Blocks new human and policy action admission; does not imply rollback
-	PatrolInvestigationBudget       int                                               `json:"patrol_investigation_budget,omitempty"`      // Max turns per investigation (default: 15)
+	PatrolInvestigationBudget       int                                               `json:"patrol_investigation_budget,omitempty"`      // Max evidence calls per investigation (default: 15)
 	PatrolInvestigationTimeoutSec   int                                               `json:"patrol_investigation_timeout_sec,omitempty"` // Max seconds per investigation (default: 300)
 
 	// Discovery settings - controls automatic infrastructure discovery
@@ -911,7 +911,7 @@ func (c *AIConfig) IsPatrolFullModeActive(orgID string, now time.Time) bool {
 	return level == PatrolAutonomyFull && status.Active
 }
 
-// GetPatrolInvestigationBudget returns the max turns per investigation
+// GetPatrolInvestigationBudget returns the maximum evidence calls per investigation.
 func (c *AIConfig) GetPatrolInvestigationBudget() int {
 	if c.PatrolInvestigationBudget <= 0 {
 		return DefaultPatrolInvestigationBudget

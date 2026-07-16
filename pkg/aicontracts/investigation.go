@@ -140,14 +140,19 @@ type FindingOperationalMemory struct {
 
 // InvestigationSession represents an AI investigation of a finding.
 type InvestigationSession struct {
-	ID          string               `json:"id"`
-	FindingID   string               `json:"finding_id"`
-	SessionID   string               `json:"session_id"` // Chat session ID
-	Status      InvestigationStatus  `json:"status"`
-	StartedAt   time.Time            `json:"started_at"`
-	CompletedAt *time.Time           `json:"completed_at,omitempty"`
-	TurnCount   int                  `json:"turn_count"`
-	Outcome     InvestigationOutcome `json:"outcome,omitempty"`
+	ID          string              `json:"id"`
+	FindingID   string              `json:"finding_id"`
+	SessionID   string              `json:"session_id"` // Chat session ID
+	Status      InvestigationStatus `json:"status"`
+	StartedAt   time.Time           `json:"started_at"`
+	CompletedAt *time.Time          `json:"completed_at,omitempty"`
+	// TurnCount is the number of completed model responses. Evidence gathering
+	// is recorded separately because one model response may contain several
+	// tool calls.
+	TurnCount         int                  `json:"turn_count"`
+	EvidenceCallCount int                  `json:"evidence_call_count"`
+	ToolCallCount     int                  `json:"tool_call_count"`
+	Outcome           InvestigationOutcome `json:"outcome,omitempty"`
 	// ProposedFix and ApprovalID are migration-only: persisted legacy
 	// command-shaped fixes stay readable as non-executable narrative, but
 	// new investigations never populate them. Typed remediation lives in
@@ -332,7 +337,11 @@ func (f Fix) NormalizeCollections() Fix {
 
 // InvestigationConfig holds configuration for investigations.
 type InvestigationConfig struct {
+	// MaxTurns is a provider-response safety ceiling. Operators configure the
+	// independent MaxEvidenceCalls budget; normal completion should reach a
+	// conclusion before this ceiling.
 	MaxTurns                int
+	MaxEvidenceCalls        int
 	Timeout                 time.Duration
 	MaxConcurrent           int
 	MaxAttemptsPerFinding   int
@@ -343,8 +352,10 @@ type InvestigationConfig struct {
 
 // DefaultInvestigationConfig returns the default investigation configuration.
 func DefaultInvestigationConfig() InvestigationConfig {
+	const defaultEvidenceCalls = 15
 	return InvestigationConfig{
-		MaxTurns:                15,
+		MaxTurns:                InvestigationModelTurnLimit(defaultEvidenceCalls),
+		MaxEvidenceCalls:        defaultEvidenceCalls,
 		Timeout:                 10 * time.Minute,
 		MaxConcurrent:           3,
 		MaxAttemptsPerFinding:   3,
@@ -352,4 +363,14 @@ func DefaultInvestigationConfig() InvestigationConfig {
 		TimeoutCooldownDuration: 10 * time.Minute,
 		VerificationDelay:       30 * time.Second,
 	}
+}
+
+// InvestigationModelTurnLimit reserves one provider response for a terminal
+// typed proposal and one for final prose after the evidence-call budget. It is
+// a safety ceiling, not a target for how long an investigation should run.
+func InvestigationModelTurnLimit(maxEvidenceCalls int) int {
+	if maxEvidenceCalls <= 0 {
+		maxEvidenceCalls = 15
+	}
+	return maxEvidenceCalls + 2
 }

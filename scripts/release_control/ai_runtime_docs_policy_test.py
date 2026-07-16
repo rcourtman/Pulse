@@ -189,6 +189,21 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
             "Only Pulse-certified models may become the default hosted route",
             normalized_content,
         )
+        self.assertIn("`max_evidence_calls`", content)
+        self.assertIn("actual evidence-call volume", normalized_content)
+        self.assertIn("completed model responses separately", normalized_content)
+        self.assertIn("terminal typed proposal does not count as evidence", normalized_content)
+
+    def test_public_patrol_docs_separate_evidence_and_model_turn_budgets(self) -> None:
+        overview = read_repo_text("docs/AI.md")
+        control_doc = read_repo_text("docs/AI_AUTONOMY.md")
+        normalized_control = " ".join(control_doc.split())
+
+        self.assertIn("| `MaxEvidenceCalls` | 15 |", overview)
+        self.assertIn("| `MaxTurns` | 17 |", overview)
+        self.assertIn("terminal typed proposal is reserved separately", overview)
+        self.assertIn("Maximum evidence-tool calls per investigation", normalized_control)
+        self.assertIn("separate model-response safety ceiling", normalized_control)
 
     def test_public_ai_docs_use_current_surface_naming(self) -> None:
         for doc_path in PUBLIC_AI_DOC_PATHS:

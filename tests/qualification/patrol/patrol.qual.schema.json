@@ -86,8 +86,10 @@
     },
     "investigation": {
       "type": "object", "additionalProperties": false,
-      "required": ["min_evidence_ids", "required_summary_terms", "require_completed_status"],
+      "required": ["required_summary_terms", "require_completed_status"],
+      "anyOf": [{"required": ["min_evidence_calls"]}, {"required": ["min_evidence_ids"]}],
       "properties": {
+        "min_evidence_calls": {"type": "integer", "minimum": 1},
         "min_evidence_ids": {"type": "integer", "minimum": 1},
         "required_summary_terms": {"type": "array", "minItems": 1, "items": {"type": "string"}},
         "required_summary_term_groups": {"type": "array", "minItems": 1, "items": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}},
@@ -95,6 +97,7 @@
         "root_cause_resources": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
         "affected_resources": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
         "max_tools_used": {"type": "integer", "minimum": 0},
+        "max_evidence_calls": {"type": "integer", "minimum": 0},
         "require_completed_status": {"type": "boolean"}
       }
     },

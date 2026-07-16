@@ -361,3 +361,30 @@ func TestInvestigationResultCarriesStructuredProposal(t *testing.T) {
 		t.Fatalf("Proposal field type = %v, want *ActionProposal", field.Type)
 	}
 }
+
+func TestInvestigationBudgetSeparatesEvidenceCallsFromModelTurns(t *testing.T) {
+	requestType := reflect.TypeOf(OrchestratorInvestigationRequest{})
+	for _, name := range []string{"MaxTurns", "MaxEvidenceCalls"} {
+		if _, ok := requestType.FieldByName(name); !ok {
+			t.Fatalf("investigation request missing %s", name)
+		}
+	}
+	resultType := reflect.TypeOf(OrchestratorInvestigationResult{})
+	for _, name := range []string{"ModelTurns", "EvidenceCalls", "ToolCalls"} {
+		if _, ok := resultType.FieldByName(name); !ok {
+			t.Fatalf("investigation result missing %s", name)
+		}
+	}
+	if got := InvestigationModelTurnLimit(15); got != 17 {
+		t.Fatalf("InvestigationModelTurnLimit(15) = %d, want 17", got)
+	}
+	sessionPayload, err := json.Marshal(InvestigationSession{TurnCount: 3, EvidenceCallCount: 7, ToolCallCount: 8}.NormalizeCollections())
+	if err != nil {
+		t.Fatalf("marshal investigation counters: %v", err)
+	}
+	for _, fragment := range []string{`"turn_count":3`, `"evidence_call_count":7`, `"tool_call_count":8`} {
+		if !strings.Contains(string(sessionPayload), fragment) {
+			t.Fatalf("investigation session missing %s: %s", fragment, sessionPayload)
+		}
+	}
+}

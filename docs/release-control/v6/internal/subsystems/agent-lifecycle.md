@@ -1899,6 +1899,12 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+Shared `internal/api/ai_handlers.go` now projects separate Patrol investigation
+evidence-call and model-response budgets/counters. Those fields remain adjacent
+AI-runtime/API evidence only: agent enrollment, dispatch attempts, liveness,
+and command-delivery accounting must not infer agent lifecycle progress or
+capacity from investigation call counts.
+
 ### Canonical mutation-plane dependency
 
 Agent deployment remains an explicit Pulse-administrative exception in the
