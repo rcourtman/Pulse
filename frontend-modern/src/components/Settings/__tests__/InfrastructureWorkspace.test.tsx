@@ -171,6 +171,52 @@ vi.mock('../AgentProfilesPanel', () => ({
   AgentProfilesPanel: () => <div data-testid="agent-profiles">profiles</div>,
 }));
 
+const wsStore = vi.hoisted(() => ({
+  state: { connectedInfrastructure: [] as unknown[] },
+}));
+
+const monitoringApiMocks = vi.hoisted(() => ({
+  allowHostAgentReenroll: vi.fn(() => Promise.resolve()),
+  allowDockerRuntimeReenroll: vi.fn(() => Promise.resolve()),
+  allowKubernetesClusterReenroll: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock('@/contexts/appRuntime', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/contexts/appRuntime')>('@/contexts/appRuntime');
+  return {
+    ...actual,
+    useWebSocket: () => wsStore,
+  };
+});
+
+vi.mock('@/api/monitoring', () => ({
+  MonitoringAPI: monitoringApiMocks,
+}));
+
+const removedInfrastructureItem = (overrides: Record<string, unknown> = {}) => ({
+  id: 'ignored:agent:agent-123',
+  name: 'deleted-host',
+  displayName: 'deleted-host',
+  hostname: 'deleted-host',
+  status: 'ignored',
+  removedAt: Date.now() - 60_000,
+  upgradePlatform: 'linux',
+  surfaces: [
+    {
+      id: 'agent:agent-123',
+      kind: 'agent',
+      label: 'Host telemetry',
+      detail: 'Pulse is blocking host telemetry from this machine.',
+      controlId: 'agent-123',
+      action: 'allow-reconnect',
+      idLabel: 'Agent ID',
+      idValue: 'agent-123',
+    },
+  ],
+  ...overrides,
+});
+
 const connectionFixture = (overrides: Partial<Connection> = {}): Connection => ({
   id: 'pve:zeus',
   type: 'pve',
@@ -270,6 +316,10 @@ describe('InfrastructureWorkspace', () => {
     routeState.search = '';
     connectionState.connections = [connectionFixture()];
     connectionState.rows = null;
+    wsStore.state.connectedInfrastructure = [];
+    monitoringApiMocks.allowHostAgentReenroll.mockClear();
+    monitoringApiMocks.allowDockerRuntimeReenroll.mockClear();
+    monitoringApiMocks.allowKubernetesClusterReenroll.mockClear();
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
       writable: true,
@@ -1169,5 +1219,89 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByTestId('install-section')).toBeNull();
     expect(screen.getByText('Connected systems')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Monitored systems' })).not.toBeInTheDocument();
+  });
+
+  it('does not render the removed systems band when nothing is removed', async () => {
+    renderWorkspace();
+
+    await waitFor(() => expect(screen.getByText('Connected systems')).toBeInTheDocument());
+    expect(screen.queryByText('Removed systems')).toBeNull();
+  });
+
+  it('lists removed hosts in a collapsed band and allows reconnect', async () => {
+    wsStore.state.connectedInfrastructure = [removedInfrastructureItem()];
+    renderWorkspace();
+
+    const toggle = await screen.findByRole('button', { name: /Removed systems/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('deleted-host')).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(screen.getByText('deleted-host')).toBeInTheDocument();
+    expect(screen.getByText('Host agent')).toBeInTheDocument();
+    expect(screen.getByText(/Monitoring stopped/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Allow host reconnect/ }));
+    await waitFor(() =>
+      expect(monitoringApiMocks.allowHostAgentReenroll).toHaveBeenCalledWith('agent-123'),
+    );
+    // The row hides optimistically once reconnect is allowed.
+    await waitFor(() => expect(screen.queryByText('deleted-host')).toBeNull());
+  });
+
+  it('dispatches docker and kubernetes reconnects to their own endpoints', async () => {
+    wsStore.state.connectedInfrastructure = [
+      removedInfrastructureItem({
+        id: 'ignored:docker:runtime-9',
+        name: 'docker-box',
+        displayName: 'docker-box',
+        hostname: 'docker-box',
+        surfaces: [
+          {
+            id: 'docker:runtime-9',
+            kind: 'docker',
+            label: 'Docker runtime data',
+            controlId: 'runtime-9',
+            action: 'allow-reconnect',
+          },
+        ],
+      }),
+      removedInfrastructureItem({
+        id: 'ignored:kubernetes:cluster-7',
+        name: 'prod-cluster',
+        displayName: 'prod-cluster',
+        hostname: '',
+        surfaces: [
+          {
+            id: 'kubernetes:cluster-7',
+            kind: 'kubernetes',
+            label: 'Kubernetes cluster data',
+            controlId: 'cluster-7',
+            action: 'allow-reconnect',
+          },
+        ],
+      }),
+    ];
+    renderWorkspace();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Removed systems/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Allow Docker reconnect/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Allow Kubernetes reconnect/ }));
+
+    await waitFor(() => {
+      expect(monitoringApiMocks.allowDockerRuntimeReenroll).toHaveBeenCalledWith('runtime-9');
+      expect(monitoringApiMocks.allowKubernetesClusterReenroll).toHaveBeenCalledWith('cluster-7');
+    });
+    expect(monitoringApiMocks.allowHostAgentReenroll).not.toHaveBeenCalled();
+  });
+
+  it('shows removed systems without reconnect controls in read-only mode', async () => {
+    presentationPolicyIsReadOnlyMock.mockReturnValue(true);
+    wsStore.state.connectedInfrastructure = [removedInfrastructureItem()];
+    renderWorkspace();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Removed systems/ }));
+    expect(screen.getByText('deleted-host')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /reconnect/i })).toBeNull();
   });
 });

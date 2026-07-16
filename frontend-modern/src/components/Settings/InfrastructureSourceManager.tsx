@@ -41,6 +41,8 @@ import {
   type InfrastructureSystemRow,
 } from './connectionsTableModel';
 import type { DiscoveredServer, DiscoveryScanStatus } from './infrastructureSettingsModel';
+import { InfrastructureRemovedSystemsSection } from './InfrastructureRemovedSystemsSection';
+import type { UnifiedAgentRow } from './infrastructureOperationsModel';
 import {
   getInfrastructureCoverageCompleteActionPresentation,
   getInfrastructureEmptyStateDetail,
@@ -55,10 +57,12 @@ import { getAgentHostProfileFamily } from '@/utils/platformSupportManifest';
 
 interface InfrastructureSourceManagerProps {
   rows: Accessor<readonly InfrastructureSystemRow[]>;
+  removedRows?: Accessor<readonly UnifiedAgentRow[]>;
   discoveredNodes: Accessor<readonly DiscoveredServer[]>;
   discoveryEnabled: boolean;
   discoveryScanStatus: Accessor<DiscoveryScanStatus>;
   readOnly: boolean;
+  onAllowReconnect?: (row: UnifiedAgentRow) => Promise<void>;
   onAddSource?: (type: InfrastructureOnboardingConnectionType) => void;
   onAddSourceStep?: (step: InfrastructureSourcePickerRouteStep) => void;
   onAddInfrastructure?: () => void;
@@ -1609,6 +1613,15 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               </div>
             </Show>
           </div>
+        </Show>
+        <Show when={props.removedRows}>
+          {(removedRows) => (
+            <InfrastructureRemovedSystemsSection
+              rows={removedRows()}
+              readOnly={props.readOnly}
+              onAllowReconnect={props.onAllowReconnect}
+            />
+          )}
         </Show>
         {discoveryMonitorBand()}
       </SettingsPanel>

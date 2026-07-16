@@ -1,6 +1,8 @@
 import { Component, Match, Show, Switch, createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import X from 'lucide-solid/icons/x';
+import { useWebSocket } from '@/contexts/appRuntime';
+import { MonitoringAPI } from '@/api/monitoring';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { copyToClipboard } from '@/utils/clipboard';
@@ -41,6 +43,16 @@ import {
   type InfrastructurePanelStep,
 } from './infrastructureWorkspaceModel';
 import { collectInfrastructureAgentUpdateTargets } from './infrastructureAgentUpdateCommandsModel';
+import {
+  rowFromConnectedInfrastructureItem,
+  type UnifiedAgentRow,
+} from './infrastructureOperationsModel';
+import {
+  getInventorySubjectLabel,
+  getUnifiedAgentAllowReconnectErrorMessage,
+  getUnifiedAgentAllowReconnectSuccessMessage,
+} from '@/utils/unifiedAgentInventoryPresentation';
+import { logger } from '@/utils/logger';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 import { useConnectionsLedger } from './useConnectionsLedger';
 import { useConnectionRowActions } from './useConnectionRowActions';
@@ -113,12 +125,62 @@ const describeManagedSourceType = (type: ConnectionType | null): string => {
   return type;
 };
 
+const REMOVED_ROW_SCOPE: UnifiedAgentRow['scope'] = { label: 'Removed', category: 'na' };
+
 const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
   const ledger = useConnectionsLedger();
   const operations = useInfrastructureOperationsContext();
   const rowActions = useConnectionRowActions({ onMutated: () => ledger.reload() });
+  const { state: wsState } = useWebSocket();
+
+  // rowKey → removedAt of items whose reconnect was just allowed. Hides them
+  // ahead of the next state broadcast; keying on removedAt means a system
+  // that is removed again later (new removedAt) reappears immediately.
+  const [reconnectAllowedRows, setReconnectAllowedRows] = createSignal<ReadonlyMap<string, number>>(
+    new Map(),
+  );
+
+  const removedAgentRows = createMemo<readonly UnifiedAgentRow[]>(() =>
+    (wsState.connectedInfrastructure ?? [])
+      .filter((item) => item.status === 'ignored')
+      .map((item) => rowFromConnectedInfrastructureItem(item, REMOVED_ROW_SCOPE))
+      .filter((row) => reconnectAllowedRows().get(row.rowKey) !== (row.removedAt ?? 0))
+      .sort((left, right) => (right.removedAt ?? 0) - (left.removedAt ?? 0)),
+  );
+
+  const handleAllowReconnect = async (row: UnifiedAgentRow) => {
+    const subject = getInventorySubjectLabel(row.name, row.hostname);
+    const surfaces = row.surfaces.filter(
+      (surface) => surface.action === 'allow-reconnect' && surface.controlId?.trim(),
+    );
+    if (surfaces.length === 0) {
+      notificationStore.error(getUnifiedAgentAllowReconnectErrorMessage(subject));
+      return;
+    }
+    try {
+      for (const surface of surfaces) {
+        const controlId = surface.controlId!.trim();
+        if (surface.kind === 'agent') {
+          await MonitoringAPI.allowHostAgentReenroll(controlId);
+        } else if (surface.kind === 'docker') {
+          await MonitoringAPI.allowDockerRuntimeReenroll(controlId);
+        } else if (surface.kind === 'kubernetes') {
+          await MonitoringAPI.allowKubernetesClusterReenroll(controlId);
+        }
+      }
+      setReconnectAllowedRows((current) => {
+        const next = new Map(current);
+        next.set(row.rowKey, row.removedAt ?? 0);
+        return next;
+      });
+      notificationStore.success(getUnifiedAgentAllowReconnectSuccessMessage(subject));
+    } catch (err) {
+      logger.error('Failed to allow reconnect', err);
+      notificationStore.error(getUnifiedAgentAllowReconnectErrorMessage(subject));
+    }
+  };
 
   const [showAgentProfiles, setShowAgentProfiles] = createSignal(false);
   const [editingRow, setEditingRow] = createSignal<InfrastructureSystemRow | null>(null);
@@ -886,6 +948,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     <div class="space-y-6">
       <InfrastructureSourceManager
         rows={rows}
+        removedRows={removedAgentRows}
+        onAllowReconnect={readOnly() ? undefined : handleAllowReconnect}
         discoveredNodes={visibleDiscoveredNodes}
         discoveryEnabled={props.discoveryEnabled()}
         discoveryScanStatus={props.discoveryScanStatus}

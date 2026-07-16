@@ -482,6 +482,9 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
     expect(screen.queryAllByRole('combobox')).toHaveLength(0);
   });
 
+  // Removed/blocked agents are deliberately excluded from profile assignment.
+  // They surface in the Infrastructure workspace's "Removed systems" band
+  // (InfrastructureRemovedSystemsSection), where Allow reconnect lives.
   it('excludes monitoring-stopped docker runtimes from agent assignments', async () => {
     mockResources = [makeDockerRuntimeResource()];
     mockWsStore.state.connectedInfrastructure = [
