@@ -253,6 +253,7 @@ func cloneDockerData(in *DockerData) *DockerData {
 	out.ObjectUpdatedAt = cloneTimePtr(in.ObjectUpdatedAt)
 	out.Command = cloneDockerHostCommandStatus(in.Command)
 	out.Security = cloneDockerHostSecurity(in.Security)
+	out.IdentityConflict = cloneDockerHostIdentityConflict(in.IdentityConflict)
 	out.Swarm = cloneDockerSwarmInfo(in.Swarm)
 	out.NetworkInterfaces = cloneNetworkInterfaces(in.NetworkInterfaces)
 	out.Disks = cloneDiskInfos(in.Disks)
@@ -798,6 +799,16 @@ func cloneDockerHostSecurity(in *models.DockerHostSecurity) *models.DockerHostSe
 	}
 	out := *in
 	out.AuthorizationPlugins = append([]string(nil), in.AuthorizationPlugins...)
+	return &out
+}
+
+func cloneDockerHostIdentityConflict(in *models.DockerHostIdentityConflict) *models.DockerHostIdentityConflict {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.Hostnames = append([]string(nil), in.Hostnames...)
+	out.MachineIDs = append([]string(nil), in.MachineIDs...)
 	return &out
 }
 

@@ -707,6 +707,14 @@ export interface ResourceDockerMeta {
     mutatingCommandsBlocked?: boolean;
     mutatingCommandsBlockedReason?: string;
   };
+  // Set while the server sees reports from more than one machine folded into
+  // this host identity (usually cloned VMs sharing the same /etc/machine-id).
+  identityConflict?: {
+    hostnames?: string[];
+    machineIds?: string[];
+    firstSeen?: string;
+    lastSeen?: string;
+  };
   image?: string;
   imageId?: string;
   repoTags?: string[];

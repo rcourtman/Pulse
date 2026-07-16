@@ -492,6 +492,35 @@ func TestCloneResourceClonesDockerSecurityPosture(t *testing.T) {
 	}
 }
 
+func TestCloneResourceClonesDockerIdentityConflict(t *testing.T) {
+	original := Resource{
+		ID:   "agent:docker-host-1",
+		Type: ResourceTypeAgent,
+		Docker: &DockerData{
+			HostSourceID: "docker-host-1",
+			Runtime:      "docker",
+			IdentityConflict: &models.DockerHostIdentityConflict{
+				Hostnames:  []string{"clone-a", "clone-b"},
+				MachineIDs: []string{"machine-shared"},
+			},
+		},
+	}
+
+	cloned := cloneResource(&original)
+	if cloned.Docker == nil || cloned.Docker.IdentityConflict == nil {
+		t.Fatalf("clone lost docker identity conflict evidence: %#v", cloned.Docker)
+	}
+	if !reflect.DeepEqual(cloned.Docker.IdentityConflict, original.Docker.IdentityConflict) {
+		t.Fatalf("identity conflict clone = %#v, want %#v",
+			cloned.Docker.IdentityConflict, original.Docker.IdentityConflict)
+	}
+
+	cloned.Docker.IdentityConflict.Hostnames[0] = "changed"
+	if got := original.Docker.IdentityConflict.Hostnames[0]; got != "clone-a" {
+		t.Fatalf("identity conflict was aliased through clone, original hostname = %q", got)
+	}
+}
+
 func TestCloneResourcePreservesDockerCPUCapacityMetadata(t *testing.T) {
 	original := Resource{
 		ID:   "app-container:docker-host-1:web",

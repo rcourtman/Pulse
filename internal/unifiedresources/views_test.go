@@ -958,10 +958,13 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 			IsLegacy:          true,
 			Command:           command,
 			Swarm:             swarm,
-			NetInRate:         101.5,
-			NetOutRate:        102.5,
-			DiskReadRate:      103.5,
-			DiskWriteRate:     104.5,
+			IdentityConflict: &models.DockerHostIdentityConflict{
+				Hostnames: []string{"docker-host-1", "docker-host-1-clone"},
+			},
+			NetInRate:     101.5,
+			NetOutRate:    102.5,
+			DiskReadRate:  103.5,
+			DiskWriteRate: 104.5,
 			NetworkInterfaces: []NetworkInterface{
 				{Name: "eno1", Addresses: []string{"10.0.0.40/24"}, SpeedMbps: &speed},
 			},
@@ -1005,6 +1008,14 @@ func TestView_DockerHostViewAccessors(t *testing.T) {
 	}
 	if v.Swarm() == nil || v.Swarm().ClusterID != "swarm-1" || v.Swarm().NodeRole != "manager" {
 		t.Fatalf("expected swarm info, got %+v", v.Swarm())
+	}
+	conflict := v.IdentityConflict()
+	if conflict == nil || len(conflict.Hostnames) != 2 || conflict.Hostnames[1] != "docker-host-1-clone" {
+		t.Fatalf("expected identity conflict evidence, got %+v", conflict)
+	}
+	conflict.Hostnames[0] = "mutated"
+	if r.Docker.IdentityConflict.Hostnames[0] != "docker-host-1" {
+		t.Fatal("IdentityConflict accessor must return an independent copy")
 	}
 	if len(v.NetworkInterfaces()) != 1 || v.NetworkInterfaces()[0].Name != "eno1" {
 		t.Fatalf("expected network interface data, got %+v", v.NetworkInterfaces())

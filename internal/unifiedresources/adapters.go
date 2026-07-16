@@ -1329,6 +1329,7 @@ func resourceFromDockerHost(host models.DockerHost) (Resource, ResourceIdentity)
 		IsLegacy:              host.IsLegacy,
 		Command:               cloneDockerHostCommandStatus(host.Command),
 		Security:              cloneDockerHostSecurity(host.Security),
+		IdentityConflict:      cloneDockerHostIdentityConflict(host.IdentityConflict),
 		Swarm:                 convertSwarm(host.Swarm),
 		NetworkInterfaces:     convertInterfaces(host.NetworkInterfaces),
 		Disks:                 convertDisks(host.Disks),

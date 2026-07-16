@@ -778,6 +778,10 @@ type DockerHost struct {
 	PendingUninstall  bool                     `json:"pendingUninstall"`
 	Command           *DockerHostCommandStatus `json:"command,omitempty"`
 	IsLegacy          bool                     `json:"isLegacy,omitempty"`
+	// IdentityConflict is set while multiple distinct machines appear to be
+	// reporting under this host's identity (e.g. cloned VMs sharing the same
+	// /etc/machine-id). Nil when no conflict is active.
+	IdentityConflict *DockerHostIdentityConflict `json:"identityConflict,omitempty"`
 
 	// Computed I/O rates (bytes/sec), populated by monitoring pipeline when available.
 	NetInRate     float64 `json:"netInRate,omitempty"`
@@ -854,7 +858,29 @@ func (h DockerHost) NormalizeCollections() DockerHost {
 		security := h.Security.NormalizeCollections()
 		h.Security = &security
 	}
+	if h.IdentityConflict != nil {
+		conflict := h.IdentityConflict.NormalizeCollections()
+		h.IdentityConflict = &conflict
+	}
 	return h
+}
+
+// DockerHostIdentityConflict records evidence that reports from more than one
+// physical machine are being folded into a single Docker host record. The
+// usual cause is cloned VMs that still share the same /etc/machine-id, which
+// the agent uses as its identity in unified mode.
+type DockerHostIdentityConflict struct {
+	Hostnames  []string  `json:"hostnames"`
+	MachineIDs []string  `json:"machineIds,omitempty"`
+	FirstSeen  time.Time `json:"firstSeen"`
+	LastSeen   time.Time `json:"lastSeen"`
+}
+
+func (c DockerHostIdentityConflict) NormalizeCollections() DockerHostIdentityConflict {
+	if c.Hostnames == nil {
+		c.Hostnames = []string{}
+	}
+	return c
 }
 
 // DockerHostSecurity describes security-relevant runtime posture for a Docker host.

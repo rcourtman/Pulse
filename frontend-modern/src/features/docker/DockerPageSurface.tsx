@@ -41,6 +41,8 @@ import {
   formatAgentVersionDisplay,
 } from '@/features/platformPage/agentVersion';
 import { PlatformOutdatedAgentNotice } from '@/features/platformPage/PlatformOutdatedAgentNotice';
+import { collectIdentityConflictHosts } from './dockerIdentityConflict';
+import { DockerIdentityConflictNotice } from './DockerIdentityConflictNotice';
 import { updateStore } from '@/stores/updates';
 import {
   buildInfrastructureAgentUpdatesPath,
@@ -83,6 +85,7 @@ export function DockerPageSurface() {
   const outdatedAgentHosts = createMemo(() =>
     collectOutdatedAgentHosts(model().hosts, agentUpdateTargetVersion()),
   );
+  const identityConflictHosts = createMemo(() => collectIdentityConflictHosts(model().hosts));
   const outdatedAgentUpdatePath = createMemo(() =>
     buildInfrastructureAgentUpdatesPath(outdatedAgentHosts().map((host) => host.agentId)),
   );
@@ -141,6 +144,7 @@ export function DockerPageSurface() {
               />
             }
           >
+            <DockerIdentityConflictNotice hosts={identityConflictHosts()} />
             <PlatformOutdatedAgentNotice
               hosts={outdatedAgentHosts()}
               targetVersion={serverVersionDisplay()}

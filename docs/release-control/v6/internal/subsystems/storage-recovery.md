@@ -120,6 +120,12 @@ Storage and recovery consumers may preserve and display it as runtime workload
 context, but must not reinterpret confirmed OOM, confirmed non-OOM, missing
 evidence, or exit code 137 as backup damage, protection health, restore
 readiness, or a recovery-point signal.
+It also applies to monitoring-authored `DockerData.IdentityConflict`
+duplicate-identity evidence: storage and recovery consumers may surface it as
+runtime workload context explaining unreliable host rows, but must not
+reinterpret cloned-machine identity flapping as backup coverage gaps,
+protection drift, restore readiness, or a recovery-point signal, and must not
+mint additional storage or recovery rows for the flapping hostnames.
 
 Local subscription-agent settings in `internal/api/ai_handlers.go` remain an
 ai-runtime transport choice even when Patrol observes storage or recovery

@@ -354,6 +354,36 @@ describe('DockerPageSurface', () => {
     );
   });
 
+  it('warns when a host carries server-authored duplicate-identity evidence', () => {
+    mocks.useUnifiedResources.mockReturnValue({
+      error: () => null,
+      loading: () => false,
+      refetch: vi.fn(),
+      resources: () => [
+        makeDockerHost({
+          name: 'clone-a',
+          docker: {
+            runtime: 'docker',
+            identityConflict: { hostnames: ['clone-a', 'clone-b'] },
+          } as NonNullable<Resource['docker']>,
+        }),
+      ],
+    });
+
+    render(() => <DockerPageSurface />);
+
+    const notice = screen.getByTestId('docker-identity-conflict-notice');
+    expect(notice).toHaveTextContent('Two machines appear to share the identity of clone-a');
+    expect(notice).toHaveTextContent('clone-a, clone-b');
+    expect(notice).toHaveTextContent('/etc/machine-id');
+  });
+
+  it('does not warn about identity conflicts on healthy hosts', () => {
+    render(() => <DockerPageSurface />);
+
+    expect(screen.queryByTestId('docker-identity-conflict-notice')).toBeNull();
+  });
+
   it('shows Docker object tabs only when the matching inventory exists', () => {
     mocks.useUnifiedResources.mockReturnValue({
       error: () => null,

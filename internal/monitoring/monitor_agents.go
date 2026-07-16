@@ -77,6 +77,7 @@ func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 		delete(m.dockerCommandIndex, cmd.status.ID)
 	}
 	delete(m.dockerCommands, hostID)
+	m.clearDockerHostIdentityTrackingLocked(hostID)
 	m.mu.Unlock()
 
 	m.state.AddRemovedDockerHost(models.RemovedDockerHost{
@@ -1079,6 +1080,7 @@ func (m *Monitor) ClearUnauthenticatedAgents() (int, int) {
 	m.mu.Lock()
 	m.dockerTokenBindings = make(map[string]string)
 	m.hostTokenBindings = make(map[string]string)
+	m.dockerIdentityFlaps = make(map[string]*dockerIdentityFlapTracker)
 	m.mu.Unlock()
 
 	if hostCount > 0 || dockerCount > 0 {
@@ -1454,6 +1456,18 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		agentVersion = normalizeAgentVersion(previous.AgentVersion())
 	}
 
+	// Detect distinct machines flapping under one identity (e.g. cloned VMs
+	// sharing /etc/machine-id, #1584) so the UI can warn instead of silently
+	// letting the reports overwrite each other.
+	identityConflict := m.trackDockerHostIdentity(identifier, hostname, strings.TrimSpace(report.Host.MachineID), receivedAt)
+	if identityConflict != nil {
+		log.Warn().
+			Str("dockerHostID", identifier).
+			Strs("hostnames", identityConflict.Hostnames).
+			Strs("machineIDs", identityConflict.MachineIDs).
+			Msg("Multiple machines appear to report under one Docker host identity (cloned VMs sharing /etc/machine-id?)")
+	}
+
 	host := models.DockerHost{
 		ID:                identifier,
 		AgentID:           agentID,
@@ -1491,6 +1505,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		Swarm:             swarmInfo,
 		Security:          security,
 		IsLegacy:          isLegacyAgent(report.Agent.Type),
+		IdentityConflict:  identityConflict,
 	}
 
 	if hasPrevious {

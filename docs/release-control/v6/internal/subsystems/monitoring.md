@@ -69,6 +69,20 @@ models, and unified resources. An absent value means an older or reduced-fidelit
 report did not provide the evidence and must remain distinguishable from both
 confirmed OOM and confirmed non-OOM state. Exit code 137 proves only SIGKILL and
 must not be promoted into OOM truth by monitoring.
+Docker host identity collapse must be surfaced, not silently absorbed. Docker
+report ingest keys host identity on the agent-reported machine ID in unified
+mode, so cloned VMs that still share `/etc/machine-id` fold into one
+`models.DockerHost` whose reports alternately overwrite each other (#1584).
+Ingest must watch each resolved host identity for identity-field revisits: a
+reported hostname (or machine ID) that switches away and returns to a value
+already observed inside the monitoring-owned flap window proves two machines
+share the identity, while a one-time hostname rename never revisits and must
+not be flagged. An active conflict is published as
+`models.DockerHost.IdentityConflict` carrying the flapping values so
+downstream surfaces can warn, and it must clear on its own once only one
+machine keeps reporting for the window. Monitoring must not auto-split the
+collapsed identity: the machine ID is the identity key, and the remedy
+(regenerating the clone's machine-id) belongs to the operator.
 Proxmox read-state rehydration is the inverse boundary: canonical
 unified-resource CPU metrics are 0..100 percentages, while legacy
 `models.Node.CPU`, `models.VM.CPU`, and `models.Container.CPU` remain Proxmox

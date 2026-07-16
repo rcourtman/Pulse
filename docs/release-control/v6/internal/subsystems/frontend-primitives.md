@@ -381,6 +381,14 @@ canonical `agent` resource type. Kubernetes is cluster-agent-backed: canonical
 rows, so the unified-resource owner must project the cluster agent identity and
 cluster-scoped agent version onto those node rows before the shared stale-agent
 collector can decide whether the node inventory is gated by an older agent.
+The Docker duplicate-identity warning follows the same shared notice boundary:
+it composes `InlineNotice`, is driven only by server-authored
+`DockerData.identityConflict` evidence (never by page-local hostname
+comparison), and names the flapping hostnames with the machine-id remedy in
+the notice copy because the fix happens on the operator's machines, not on a
+Pulse settings surface, so it carries no action link. Unlike stale-agent cues
+it is a data-reliability warning and is not gated on the read-only
+presentation policy.
 Global dismissible notice bars are also part of the shared `InlineNotice`
 boundary. `frontend-modern/src/components/DemoBanner.tsx` and
 `frontend-modern/src/components/CommercialMigrationBanner.tsx` must compose

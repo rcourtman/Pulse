@@ -1012,12 +1012,13 @@ type Monitor struct {
 	nodeRRDMemCache            map[string]rrdMemCacheEntry
 	vmRRDMemCache              map[string]rrdMemCacheEntry
 	vmAgentMemCache            map[string]agentMemCacheEntry
-	removedDockerHosts         map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
-	dockerTokenBindings        map[string]string    // Track token ID -> Docker host identity bindings to enforce uniqueness
-	removedKubernetesClusters  map[string]time.Time // Track deliberately removed Kubernetes clusters (ID -> removal time)
-	kubernetesTokenBindings    map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
-	removedHostAgents          map[string]time.Time // Track deliberately removed host agents (ID -> removal time)
-	hostTokenBindings          map[string]string    // Track tokenID:hostname -> host identity bindings
+	removedDockerHosts         map[string]time.Time                  // Track deliberately removed Docker hosts (ID -> removal time)
+	dockerTokenBindings        map[string]string                     // Track token ID -> Docker host identity bindings to enforce uniqueness
+	dockerIdentityFlaps        map[string]*dockerIdentityFlapTracker // Track per-host identity flapping (cloned VMs sharing machine-id)
+	removedKubernetesClusters  map[string]time.Time                  // Track deliberately removed Kubernetes clusters (ID -> removal time)
+	kubernetesTokenBindings    map[string]string                     // Track token ID -> agent ID bindings to enforce uniqueness
+	removedHostAgents          map[string]time.Time                  // Track deliberately removed host agents (ID -> removal time)
+	hostTokenBindings          map[string]string                     // Track tokenID:hostname -> host identity bindings
 	dockerCommands             map[string]*dockerHostCommand
 	dockerCommandIndex         map[string]string
 	guestMetadataMu            sync.RWMutex
@@ -1574,6 +1575,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		vmAgentMemCache:            make(map[string]agentMemCacheEntry),
 		removedDockerHosts:         make(map[string]time.Time),
 		dockerTokenBindings:        make(map[string]string),
+		dockerIdentityFlaps:        make(map[string]*dockerIdentityFlapTracker),
 		removedKubernetesClusters:  make(map[string]time.Time),
 		kubernetesTokenBindings:    make(map[string]string),
 		removedHostAgents:          make(map[string]time.Time),
@@ -3698,6 +3700,7 @@ func dockerHostFromReadStateView(view *unifiedresources.DockerHostView) models.D
 		PendingUninstall:  view.PendingUninstall(),
 		Command:           view.Command(),
 		IsLegacy:          view.IsLegacy(),
+		IdentityConflict:  view.IdentityConflict(),
 		NetInRate:         view.NetInRate(),
 		NetOutRate:        view.NetOutRate(),
 		DiskReadRate:      view.DiskReadRate(),

@@ -981,28 +981,29 @@ type DockerData struct {
 	DiskWriteRate     float64   `json:"diskWriteRate,omitempty"`
 
 	// Host-level summary fields (populated when Resource.Type == ResourceTypeAgent and Docker != nil)
-	ContainerCount        int                             `json:"containerCount,omitempty"`
-	ImageCount            int                             `json:"imageCount,omitempty"`
-	VolumeCount           int                             `json:"volumeCount,omitempty"`
-	NetworkCount          int                             `json:"networkCount,omitempty"`
-	NodeCount             int                             `json:"nodeCount,omitempty"`
-	SecretCount           int                             `json:"secretCount,omitempty"`
-	ConfigCount           int                             `json:"configCount,omitempty"`
-	UpdatesAvailableCount int                             `json:"updatesAvailableCount,omitempty"`
-	UpdatesLastCheckedAt  *time.Time                      `json:"updatesLastCheckedAt,omitempty"`
-	ImagesUsage           *DockerStorageUsageMeta         `json:"imagesUsage,omitempty"`
-	ContainersUsage       *DockerStorageUsageMeta         `json:"containersUsage,omitempty"`
-	VolumesUsage          *DockerStorageUsageMeta         `json:"volumesUsage,omitempty"`
-	BuildCacheUsage       *DockerStorageUsageMeta         `json:"buildCacheUsage,omitempty"`
-	TokenID               string                          `json:"tokenId,omitempty"`
-	TokenName             string                          `json:"tokenName,omitempty"`
-	TokenHint             string                          `json:"tokenHint,omitempty"`
-	TokenLastUsedAt       *time.Time                      `json:"tokenLastUsedAt,omitempty"`
-	Hidden                bool                            `json:"hidden,omitempty"`
-	PendingUninstall      bool                            `json:"pendingUninstall,omitempty"`
-	IsLegacy              bool                            `json:"isLegacy,omitempty"`
-	Command               *models.DockerHostCommandStatus `json:"command,omitempty"`
-	Security              *models.DockerHostSecurity      `json:"security,omitempty"`
+	ContainerCount        int                                `json:"containerCount,omitempty"`
+	ImageCount            int                                `json:"imageCount,omitempty"`
+	VolumeCount           int                                `json:"volumeCount,omitempty"`
+	NetworkCount          int                                `json:"networkCount,omitempty"`
+	NodeCount             int                                `json:"nodeCount,omitempty"`
+	SecretCount           int                                `json:"secretCount,omitempty"`
+	ConfigCount           int                                `json:"configCount,omitempty"`
+	UpdatesAvailableCount int                                `json:"updatesAvailableCount,omitempty"`
+	UpdatesLastCheckedAt  *time.Time                         `json:"updatesLastCheckedAt,omitempty"`
+	ImagesUsage           *DockerStorageUsageMeta            `json:"imagesUsage,omitempty"`
+	ContainersUsage       *DockerStorageUsageMeta            `json:"containersUsage,omitempty"`
+	VolumesUsage          *DockerStorageUsageMeta            `json:"volumesUsage,omitempty"`
+	BuildCacheUsage       *DockerStorageUsageMeta            `json:"buildCacheUsage,omitempty"`
+	TokenID               string                             `json:"tokenId,omitempty"`
+	TokenName             string                             `json:"tokenName,omitempty"`
+	TokenHint             string                             `json:"tokenHint,omitempty"`
+	TokenLastUsedAt       *time.Time                         `json:"tokenLastUsedAt,omitempty"`
+	Hidden                bool                               `json:"hidden,omitempty"`
+	PendingUninstall      bool                               `json:"pendingUninstall,omitempty"`
+	IsLegacy              bool                               `json:"isLegacy,omitempty"`
+	Command               *models.DockerHostCommandStatus    `json:"command,omitempty"`
+	Security              *models.DockerHostSecurity         `json:"security,omitempty"`
+	IdentityConflict      *models.DockerHostIdentityConflict `json:"identityConflict,omitempty"`
 
 	// Container-specific fields (populated when Resource.Type == ResourceTypeAppContainer)
 	ContainerState     string                      `json:"containerState,omitempty"`

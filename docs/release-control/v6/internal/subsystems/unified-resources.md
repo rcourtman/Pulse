@@ -534,6 +534,15 @@ code 137 into a positive classification; typed Docker views must return an
 independent copy of that value. Frontend detail summaries and
 Docker page search consume those backend-authored fields before falling back to
 legacy labels.
+Docker host duplicate-identity evidence is monitoring-authored and rides
+`DockerData.IdentityConflict` unchanged: the adapter, resource clone, and
+typed `DockerHostView` accessor must each hand out an independent copy so
+concurrent snapshot replacement cannot alias the conflict's hostname and
+machine-ID lists, and read-state reconstruction back to `models.DockerHost`
+must preserve the field rather than dropping it. Consumers render the
+conflict as a warning about cloned machines sharing `/etc/machine-id`; they
+must not reinterpret it as staleness, or synthesize a second host row from
+the flapping values.
 Docker network rows must consume canonical runtime attachment relationships,
 not page-local topology inference, when the unified-resource snapshot provides
 them. Runtime container-to-network membership is represented as active

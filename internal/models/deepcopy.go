@@ -599,6 +599,16 @@ func cloneDockerHostSecurity(src *DockerHostSecurity) *DockerHostSecurity {
 	return &dest
 }
 
+func cloneDockerHostIdentityConflict(src *DockerHostIdentityConflict) *DockerHostIdentityConflict {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	dest.Hostnames = append([]string(nil), src.Hostnames...)
+	dest.MachineIDs = append([]string(nil), src.MachineIDs...)
+	return &dest
+}
+
 func cloneDockerHostCommandStatus(src *DockerHostCommandStatus) *DockerHostCommandStatus {
 	if src == nil {
 		return nil
@@ -632,6 +642,7 @@ func cloneDockerHost(src DockerHost) DockerHost {
 	dest.Temperature = cloneFloat64Ptr(src.Temperature)
 	dest.TokenLastUsedAt = cloneTimePtr(src.TokenLastUsedAt)
 	dest.Command = cloneDockerHostCommandStatus(src.Command)
+	dest.IdentityConflict = cloneDockerHostIdentityConflict(src.IdentityConflict)
 	return dest.NormalizeCollections()
 }
 

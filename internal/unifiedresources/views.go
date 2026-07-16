@@ -1770,6 +1770,13 @@ func (v DockerHostView) Security() *models.DockerHostSecurity {
 	return &copied
 }
 
+func (v DockerHostView) IdentityConflict() *models.DockerHostIdentityConflict {
+	if v.r == nil || v.r.Docker == nil {
+		return nil
+	}
+	return cloneDockerHostIdentityConflict(v.r.Docker.IdentityConflict)
+}
+
 // StoragePoolView wraps a storage resource.
 type StoragePoolView struct{ r *Resource }
 
