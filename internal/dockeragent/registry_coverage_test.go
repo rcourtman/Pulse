@@ -532,3 +532,115 @@ func TestRegistryChecker_FetchAuthToken(t *testing.T) {
 		}
 	})
 }
+
+func TestRegistryChecker_FetchDigest_ChallengeNegotiation(t *testing.T) {
+	// lscr.io-style flow (#1583): anonymous HEAD gets 401 with a Bearer
+	// challenge naming the token endpoint; the checker must negotiate a
+	// token and retry.
+	t.Run("negotiates token from challenge", func(t *testing.T) {
+		var tokenRequestURL string
+		var retryAuth string
+		headCalls := 0
+		checker := &RegistryChecker{
+			httpClient: &http.Client{
+				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					if req.Method == http.MethodGet && req.URL.Host == "ghcr.example" {
+						tokenRequestURL = req.URL.String()
+						return newStringResponse(http.StatusOK, nil, `{"token":"negotiated"}`), nil
+					}
+					headCalls++
+					if req.Header.Get("Authorization") == "" {
+						return newStringResponse(http.StatusUnauthorized, map[string]string{
+							"Www-Authenticate": `Bearer realm="https://ghcr.example/token",service="ghcr.example",scope="repository:linuxserver/sonarr:pull"`,
+						}, ""), nil
+					}
+					retryAuth = req.Header.Get("Authorization")
+					return newStringResponse(http.StatusOK, map[string]string{
+						"Docker-Content-Digest": "sha256:abc",
+					}, ""), nil
+				}),
+			},
+		}
+
+		digest, headDigest, err := checker.fetchDigest(context.Background(), "lscr.example", "linuxserver/sonarr", "latest", "", "", "")
+		if err != nil {
+			t.Fatalf("Expected success, got %v", err)
+		}
+		if digest != "sha256:abc" || headDigest != "sha256:abc" {
+			t.Fatalf("Expected sha256:abc, got %q / %q", digest, headDigest)
+		}
+		if headCalls != 2 {
+			t.Fatalf("Expected 2 HEAD calls, got %d", headCalls)
+		}
+		if retryAuth != "Bearer negotiated" {
+			t.Fatalf("Expected negotiated bearer token on retry, got %q", retryAuth)
+		}
+		if !strings.Contains(tokenRequestURL, "service=ghcr.example") ||
+			!strings.Contains(tokenRequestURL, "scope=repository%3Alinuxserver%2Fsonarr%3Apull") {
+			t.Fatalf("Token request missing service/scope: %q", tokenRequestURL)
+		}
+	})
+
+	t.Run("challenge without scope falls back to repository pull scope", func(t *testing.T) {
+		var tokenRequestURL string
+		checker := &RegistryChecker{
+			httpClient: &http.Client{
+				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					if req.Method == http.MethodGet && req.URL.Host == "auth.example" {
+						tokenRequestURL = req.URL.String()
+						return newStringResponse(http.StatusOK, nil, `{"access_token":"fallback"}`), nil
+					}
+					if req.Header.Get("Authorization") == "" {
+						return newStringResponse(http.StatusUnauthorized, map[string]string{
+							"Www-Authenticate": `Bearer realm="https://auth.example/token"`,
+						}, ""), nil
+					}
+					return newStringResponse(http.StatusOK, map[string]string{
+						"Docker-Content-Digest": "sha256:def",
+					}, ""), nil
+				}),
+			},
+		}
+
+		digest, _, err := checker.fetchDigest(context.Background(), "reg.example", "some/repo", "latest", "", "", "")
+		if err != nil {
+			t.Fatalf("Expected success, got %v", err)
+		}
+		if digest != "sha256:def" {
+			t.Fatalf("Expected sha256:def, got %q", digest)
+		}
+		if !strings.Contains(tokenRequestURL, "scope=repository%3Asome%2Frepo%3Apull") {
+			t.Fatalf("Expected fallback pull scope, got %q", tokenRequestURL)
+		}
+	})
+
+	t.Run("non-https realm is rejected", func(t *testing.T) {
+		checker := &RegistryChecker{
+			httpClient: &http.Client{
+				Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+					return newStringResponse(http.StatusUnauthorized, map[string]string{
+						"Www-Authenticate": `Bearer realm="http://auth.example/token"`,
+					}, ""), nil
+				}),
+			},
+		}
+
+		_, _, err := checker.fetchDigest(context.Background(), "reg.example", "some/repo", "latest", "", "", "")
+		if err == nil || err.Error() != "authentication required" {
+			t.Fatalf("Expected authentication required, got %v", err)
+		}
+	})
+}
+
+func TestParseBearerChallenge(t *testing.T) {
+	params := parseBearerChallenge(`Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:linuxserver/sonarr:pull"`)
+	if params["realm"] != "https://ghcr.io/token" || params["service"] != "ghcr.io" || params["scope"] != "repository:linuxserver/sonarr:pull" {
+		t.Fatalf("Unexpected params: %#v", params)
+	}
+	if len(parseBearerChallenge(`Basic realm="x"`)) != 0 {
+		t.Fatalf("Expected empty params for non-bearer challenge")
+	}
+	if len(parseBearerChallenge("")) != 0 {
+		t.Fatalf("Expected empty params for empty header")
+	}
+}

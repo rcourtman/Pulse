@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -261,26 +262,26 @@ func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository,
 	// Construct the manifest URL
 	manifestURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry, repository, tag)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodHead, manifestURL, nil)
+	resp, err := r.headManifest(ctx, manifestURL, token)
 	if err != nil {
-		return "", "", fmt.Errorf("create request: %w", err)
+		return "", "", err
 	}
 
-	// Accept headers for multi-arch manifest support
-	req.Header.Set("Accept", strings.Join([]string{
-		"application/vnd.docker.distribution.manifest.list.v2+json",
-		"application/vnd.docker.distribution.manifest.v2+json",
-		"application/vnd.oci.image.manifest.v1+json",
-		"application/vnd.oci.image.index.v1+json",
-	}, ", "))
-
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-
-	resp, err := r.httpClient.Do(req)
-	if err != nil {
-		return "", "", fmt.Errorf("request: %w", err)
+	if resp.StatusCode == http.StatusUnauthorized && token == "" {
+		// Registries without a hardcoded token endpoint (lscr.io, quay.io, ...)
+		// advertise it in the WWW-Authenticate Bearer challenge. Negotiate a
+		// pull token and retry once.
+		challenge := resp.Header.Get("Www-Authenticate")
+		resp.Body.Close()
+		negotiated, negErr := r.tokenFromChallenge(ctx, challenge, repository)
+		if negErr != nil {
+			return "", "", fmt.Errorf("authentication required")
+		}
+		token = negotiated
+		resp, err = r.headManifest(ctx, manifestURL, token)
+		if err != nil {
+			return "", "", err
+		}
 	}
 	defer resp.Body.Close()
 
@@ -322,6 +323,76 @@ func (r *RegistryChecker) fetchDigest(ctx context.Context, registry, repository,
 	}
 
 	return digest, digest, nil
+}
+
+// headManifest issues a manifest HEAD request with the multi-arch Accept set.
+func (r *RegistryChecker) headManifest(ctx context.Context, manifestURL, token string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, manifestURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	// Accept headers for multi-arch manifest support
+	req.Header.Set("Accept", strings.Join([]string{
+		"application/vnd.docker.distribution.manifest.list.v2+json",
+		"application/vnd.docker.distribution.manifest.v2+json",
+		"application/vnd.oci.image.manifest.v1+json",
+		"application/vnd.oci.image.index.v1+json",
+	}, ", "))
+
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request: %w", err)
+	}
+	return resp, nil
+}
+
+// tokenFromChallenge negotiates an anonymous pull token from the token
+// endpoint named in a registry's WWW-Authenticate Bearer challenge
+// (Docker registry v2 token auth).
+func (r *RegistryChecker) tokenFromChallenge(ctx context.Context, challenge, repository string) (string, error) {
+	params := parseBearerChallenge(challenge)
+	realm := params["realm"]
+	if realm == "" {
+		return "", fmt.Errorf("no bearer challenge")
+	}
+	realmURL, err := url.Parse(realm)
+	if err != nil || realmURL.Scheme != "https" {
+		return "", fmt.Errorf("invalid token realm")
+	}
+	query := realmURL.Query()
+	if service := params["service"]; service != "" {
+		query.Set("service", service)
+	}
+	scope := params["scope"]
+	if scope == "" {
+		scope = fmt.Sprintf("repository:%s:pull", repository)
+	}
+	query.Set("scope", scope)
+	realmURL.RawQuery = query.Encode()
+	return r.fetchAuthToken(ctx, realmURL.String())
+}
+
+// parseBearerChallenge extracts the key="value" parameters from a
+// WWW-Authenticate Bearer challenge header.
+func parseBearerChallenge(header string) map[string]string {
+	params := map[string]string{}
+	rest, ok := strings.CutPrefix(strings.TrimSpace(header), "Bearer ")
+	if !ok {
+		return params
+	}
+	for _, part := range strings.Split(rest, ",") {
+		key, value, found := strings.Cut(strings.TrimSpace(part), "=")
+		if !found {
+			continue
+		}
+		params[strings.ToLower(strings.TrimSpace(key))] = strings.Trim(strings.TrimSpace(value), `"`)
+	}
+	return params
 }
 
 // resolveManifestList fetches the manifest list and finds the matching digest for the architecture.
@@ -449,13 +520,17 @@ func (r *RegistryChecker) fetchAuthToken(ctx context.Context, tokenURL string) (
 	}
 
 	var tokenResp struct {
-		Token string `json:"token"`
+		Token       string `json:"token"`
+		AccessToken string `json:"access_token"`
 	}
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
 		return "", fmt.Errorf("decode token response: %w", err)
 	}
 
-	return tokenResp.Token, nil
+	if tokenResp.Token != "" {
+		return tokenResp.Token, nil
+	}
+	return tokenResp.AccessToken, nil
 }
 
 func (r *RegistryChecker) getCached(key string) *cacheEntry {
