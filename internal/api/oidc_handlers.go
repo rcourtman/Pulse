@@ -581,9 +581,21 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 
 	idToken, err := service.verifier.Verify(ctx, rawIDToken)
 	if err != nil {
+		// Distinguish the verification failure modes so the login page can
+		// name the actual problem. The generic code used to render issuer
+		// advice for every failure, sending users with audience or clock
+		// problems down the wrong path (#1533).
 		errorCode := "invalid_id_token"
-		if strings.Contains(err.Error(), "unexpected signature algorithm") {
+		errMsg := err.Error()
+		switch {
+		case strings.Contains(errMsg, "unexpected signature algorithm"):
 			errorCode = "invalid_signature_alg"
+		case strings.Contains(errMsg, "issued by a different provider"):
+			errorCode = "issuer_mismatch"
+		case strings.Contains(errMsg, "expected audience"):
+			errorCode = "audience_mismatch"
+		case strings.Contains(errMsg, "token is expired"):
+			errorCode = "token_expired"
 		}
 		log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to verify ID token")
 		LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", "", GetClientIP(req), req.URL.Path, false, "ID token verification failed: "+err.Error())
