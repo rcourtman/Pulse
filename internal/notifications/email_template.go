@@ -80,7 +80,7 @@ func singleAlertTemplate(alert *alerts.Alert) (subject, htmlBody, textBody strin
 	escapedAlertType := html.EscapeString(alertType)
 	escapedNode := html.EscapeString(alertNodeDisplay(alert))
 	escapedInstance := html.EscapeString(alert.Instance)
-	escapedStarted := html.EscapeString(alert.StartTime.Format("Jan 2, 2006 at 3:04 PM"))
+	escapedStarted := html.EscapeString(formatAlertStartTime(alert.StartTime))
 	escapedDuration := html.EscapeString(formatDuration(time.Since(alert.StartTime)))
 
 	htmlBody = fmt.Sprintf(`<!DOCTYPE html>
@@ -218,7 +218,7 @@ View alerts and configure settings in your Pulse dashboard.`,
 		alert.Message,
 		alertNodeDisplay(alert),
 		alert.Instance,
-		alert.StartTime.Format("Jan 2, 2006 at 3:04 PM"),
+		formatAlertStartTime(alert.StartTime),
 		formatDuration(time.Since(alert.StartTime)),
 	)
 
@@ -404,6 +404,13 @@ func groupedAlertTemplate(alertList []*alerts.Alert) (subject, htmlBody, textBod
 
 	textBody = textBuilder.String()
 	return subject, htmlBody, textBody
+}
+
+// formatAlertStartTime renders in the server's local zone with the zone name
+// visible. Alert start times are stored in UTC; without the conversion and
+// label the email showed a bare UTC clock that read as local time (#1582).
+func formatAlertStartTime(t time.Time) string {
+	return t.Local().Format("Jan 2, 2006 at 3:04 PM MST")
 }
 
 func formatDuration(d time.Duration) string {
