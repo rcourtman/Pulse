@@ -656,6 +656,13 @@ model output, tool identity or payloads, action identity or payloads, or error
 prose, and creating it must never perform a network upload. Community evidence
 may shortlist models but cannot satisfy Pulse certification or hosted-model
 selection without a separately reproduced controlled-lab campaign.
+Patrol finding-report authoring guidance extends through the registered
+`patrol_report_finding` schema's required-argument list. Normal and bounded
+final-decision prompts must render that shared list and require every parallel
+report call to be independently complete; they must not maintain a second
+hand-written field list. Runtime may let a model recover after a rejected call,
+but formal qualification continues to reject every unsuccessful tool call,
+including a recovered schema-validation lapse.
 
 Assistant control wording must identify the effective scope as Assistant chat
 only. Patrol autonomy and global Actions remain separate authority surfaces;
