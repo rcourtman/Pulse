@@ -111,11 +111,18 @@ retries or broad inventory scans.
 Patrol report, assessment, and resolution tools remain governed Pulse-state
 writes for invocation authorization, but accepting one does not represent an
 infrastructure mutation and must not enter or satisfy the infrastructure
-read-after-write FSM. A successful finding-lifecycle write moves the loop to a
-text-only conclusion. When a real infrastructure write does require another
-verification turn, the internal verification constraint is appended to the
-provider conversation as a user-role instruction; the request must never end
-in an assistant prefill that compatible providers reject before verification.
+read-after-write FSM. A successful finding-lifecycle write closes investigation
+authority but does not force an immediate text-only conclusion. Watch retains
+bounded report and assessment tools so a provider that emits independent
+findings sequentially can finish the remaining structured decisions without
+restarting collection; accepted lifecycle results are authoritative and may
+not be repeated. A tool-free response ends that completion phase, while the
+existing max-turn fallback still produces bounded text-only summary prose when
+the final allowed turn contains a write. When a real infrastructure write does
+require another verification turn, the internal verification constraint is
+appended to the provider conversation as a user-role instruction; the request
+must never end in an assistant prefill that compatible providers reject before
+verification.
 Patrol finding storage must consolidate equivalent active storage-capacity
 siblings before they reach browser surfaces: a broader storage risk and a
 generic usage/capacity finding for the same normalized storage identity are one
@@ -5928,10 +5935,14 @@ OpenRouter model is an unprefixed slash route such as
 `anthropic/claude-sonnet-5`; scorer replay persists and reuses that resolved
 provider so the same captured report prices deterministically.
 After a non-interactive Patrol finding lifecycle write succeeds, the structured
-tool result is authoritative and the remaining text-only provider turn is only
-for operator-facing summary prose. That turn must use a bounded summary system
-instruction rather than resending the full detection and investigation prompt;
-it may not invent findings, evidence, actions, verification, or remediation.
+tool result is authoritative and investigation remains closed. Watch first
+offers a bounded lifecycle-completion request containing only report and
+assessment tools so providers may record independent findings sequentially
+without repeating accepted calls. A tool-free response is the operator-facing
+summary. Mixed-success repair remains a separate single repair-only extension,
+and a write on the final allowed turn falls back to the bounded text-only
+summary system instruction. Neither completion nor summary may invent findings,
+evidence, actions, verification, or remediation.
 Docker dependency qualification fixtures must use only executables present in
 the catalogue's pinned image and must reach a healthy dependency/client
 baseline before fault injection. The Watch correlation and Pro investigation

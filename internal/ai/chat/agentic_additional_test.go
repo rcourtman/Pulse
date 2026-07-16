@@ -305,6 +305,31 @@ func TestPatrolFinalFindingDecisionRequestNarrowsWatchTools(t *testing.T) {
 	}
 }
 
+func TestPatrolFindingLifecycleContinuationRequestNarrowsWatchTools(t *testing.T) {
+	req := providers.ChatRequest{System: "full Patrol prompt"}
+	available := []providers.Tool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+		{Name: agentcapabilities.PatrolAssessFindingToolName},
+		{Name: agentcapabilities.PatrolResolveFindingToolName},
+	}
+
+	if !applyPatrolFindingLifecycleContinuationRequest(&req, tools.ProfilePatrolDetection, available) {
+		t.Fatal("expected Watch detection to retain a finding completion turn")
+	}
+	if req.System != patrolFindingLifecycleContinuationSystemPrompt {
+		t.Fatalf("continuation system prompt = %q", req.System)
+	}
+	for _, required := range []string{"Accepted lifecycle results are authoritative", "do not repeat them", "another operational symptom", "Do not investigate further"} {
+		if !strings.Contains(req.System, required) {
+			t.Fatalf("continuation prompt missing %q: %s", required, req.System)
+		}
+	}
+	if len(req.Tools) != 2 || req.Tools[0].Name != agentcapabilities.PatrolReportFindingToolName || req.Tools[1].Name != agentcapabilities.PatrolAssessFindingToolName {
+		t.Fatalf("continuation tools = %+v, want report and assess only", req.Tools)
+	}
+}
+
 func TestPatrolFindingLifecycleRepairRequestAllowsOnlyRejectedCallRepair(t *testing.T) {
 	req := providers.ChatRequest{
 		System:     "full Patrol prompt",
@@ -362,6 +387,21 @@ func TestFinalPatrolFindingDecisionDoesNotOverrideSafetyOrCompletedWrites(t *tes
 	}
 	if shouldOfferFinalPatrolFindingDecision(2, 4, false, false, false) {
 		t.Fatal("non-final turn must retain the normal tool projection")
+	}
+}
+
+func TestPatrolFindingLifecycleContinuationDoesNotOverrideSafetyOrWrites(t *testing.T) {
+	if !shouldOfferPatrolFindingLifecycleContinuation(true, false, false) {
+		t.Fatal("expected an unconstrained pending lifecycle continuation")
+	}
+	if shouldOfferPatrolFindingLifecycleContinuation(false, false, false) {
+		t.Fatal("continuation must require a pending lifecycle decision")
+	}
+	if shouldOfferPatrolFindingLifecycleContinuation(true, true, false) {
+		t.Fatal("continuation must not override write completion")
+	}
+	if shouldOfferPatrolFindingLifecycleContinuation(true, false, true) {
+		t.Fatal("continuation must not override a safety brake")
 	}
 }
 
@@ -731,6 +771,85 @@ func TestAgenticLoopRepairsRejectedSiblingAfterMixedPatrolFindingBatch(t *testin
 		t.Fatalf("failed tool calls = %d, want original rejected sibling preserved", failedCalls)
 	}
 	if len(result) == 0 || result[len(result)-1].Content != "Two findings reported." {
+		t.Fatalf("final result = %+v", result)
+	}
+}
+
+func TestAgenticLoopAllowsSequentialIndependentWatchFindings(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	creator := &repairTestPatrolFindingCreator{}
+	executor.SetPatrolFindingCreator(creator)
+	loop := NewAgenticLoop(provider, executor, "full Patrol prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(4)
+
+	completeReport := func(resourceID, resourceName, title string) map[string]interface{} {
+		return map[string]interface{}{
+			"key":            "container-health-failed",
+			"severity":       "warning",
+			"category":       "reliability",
+			"resource_id":    resourceID,
+			"resource_name":  resourceName,
+			"resource_type":  "app-container",
+			"title":          title,
+			"description":    "Container is running but its health check is unhealthy.",
+			"recommendation": "Inspect the health endpoint and recent logs.",
+			"evidence":       "Provider state reports running and unhealthy with zero restarts.",
+		}
+	}
+
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		switch providerCalls {
+		case 1:
+			call := providers.ToolCall{ID: "get-findings", Name: agentcapabilities.PatrolGetFindingsToolName, Input: map[string]interface{}{}}
+			callback(providers.StreamEvent{Type: "tool_start", Data: providers.ToolStartEvent{ID: call.ID, Name: call.Name, Input: call.Input}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{call}}})
+		case 2:
+			call := providers.ToolCall{ID: "report-api", Name: agentcapabilities.PatrolReportFindingToolName, Input: completeReport("app-container-api", "api", "API health check failing")}
+			callback(providers.StreamEvent{Type: "tool_start", Data: providers.ToolStartEvent{ID: call.ID, Name: call.Name, Input: call.Input}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{call}}})
+		case 3:
+			if req.System != patrolFindingLifecycleContinuationSystemPrompt {
+				t.Fatalf("first completion request system = %q", req.System)
+			}
+			call := providers.ToolCall{ID: "report-worker", Name: agentcapabilities.PatrolReportFindingToolName, Input: completeReport("app-container-worker", "worker", "Worker health check failing")}
+			callback(providers.StreamEvent{Type: "tool_start", Data: providers.ToolStartEvent{ID: call.ID, Name: call.Name, Input: call.Input}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{call}}})
+		case 4:
+			if req.System != patrolFindingLifecycleContinuationSystemPrompt {
+				t.Fatalf("second completion request system = %q", req.System)
+			}
+			if len(req.Tools) != 2 {
+				t.Fatalf("second completion request tools = %+v", req.Tools)
+			}
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "Two independent unhealthy containers were recorded."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		default:
+			t.Fatalf("unexpected provider call %d", providerCalls)
+		}
+		return nil
+	}
+
+	available := []providers.Tool{
+		{Name: agentcapabilities.PatrolGetFindingsToolName},
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+		{Name: agentcapabilities.PatrolAssessFindingToolName},
+	}
+	result, err := loop.ExecuteWithTools(context.Background(), "sequential-independent-findings", []Message{{Role: "user", Content: "check both containers"}}, available, func(StreamEvent) {})
+	if err != nil {
+		t.Fatalf("sequential independent finding run failed: %v", err)
+	}
+	if providerCalls != 4 {
+		t.Fatalf("provider calls = %d, want read, first report, second report, summary", providerCalls)
+	}
+	if len(creator.created) != 2 || creator.created[0].ResourceID != "app-container-api" || creator.created[1].ResourceID != "app-container-worker" {
+		t.Fatalf("created findings = %+v, want both independent resources exactly once", creator.created)
+	}
+	if len(result) == 0 || result[len(result)-1].Content != "Two independent unhealthy containers were recorded." {
 		t.Fatalf("final result = %+v", result)
 	}
 }
