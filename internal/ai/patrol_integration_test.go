@@ -19,6 +19,7 @@ type integrationOrchestrator struct {
 	canStart      bool
 	investigated  []string // finding IDs passed to InvestigateFinding
 	investigateCh chan string
+	canStartCh    chan struct{}
 	runningCount  int32
 }
 
@@ -26,6 +27,7 @@ func newIntegrationOrchestrator(canStart bool) *integrationOrchestrator {
 	return &integrationOrchestrator{
 		canStart:      canStart,
 		investigateCh: make(chan string, 10),
+		canStartCh:    make(chan struct{}, 10),
 	}
 }
 
@@ -42,6 +44,10 @@ func (o *integrationOrchestrator) GetRunningCount() int {
 }
 func (o *integrationOrchestrator) GetFixedCount() int { return 0 }
 func (o *integrationOrchestrator) CanStartInvestigation() bool {
+	select {
+	case o.canStartCh <- struct{}{}:
+	default:
+	}
 	return o.canStart
 }
 func (o *integrationOrchestrator) ReinvestigateFinding(_ context.Context, _, _ string) error {
@@ -69,6 +75,7 @@ func TestIntegration_PatrolRunCreatesFindings(t *testing.T) {
 	svc.provider = &mockProvider{}
 
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	orch := newIntegrationOrchestrator(true)
 	mockCS := &patrolMockChatService{
 		executor: executor,
 		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
@@ -90,6 +97,11 @@ func TestIntegration_PatrolRunCreatesFindings(t *testing.T) {
 			})
 			if err != nil {
 				return nil, fmt.Errorf("create finding: %w", err)
+			}
+			select {
+			case <-orch.canStartCh:
+				return nil, fmt.Errorf("investigation admission started before the Watch model turn completed")
+			default:
 			}
 			return &PatrolStreamResponse{Content: "Found high CPU on web-server"}, nil
 		},
@@ -116,7 +128,6 @@ func TestIntegration_PatrolRunCreatesFindings(t *testing.T) {
 	})
 
 	// Set up orchestrator to record investigation triggers
-	orch := newIntegrationOrchestrator(true)
 	ps.SetInvestigationOrchestrator(orch)
 
 	// Provide a mock config that returns "approval" autonomy level
@@ -160,8 +171,14 @@ func TestIntegration_PatrolRunCreatesFindings(t *testing.T) {
 		if findingID == "" {
 			t.Fatal("investigation triggered with empty finding ID")
 		}
+		if creator := executor.GetPatrolFindingCreator(); creator != nil {
+			t.Fatal("investigation inherited the completed Watch run's finding adapter")
+		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("expected investigation to be triggered within 3 seconds")
+	}
+	if ps.runHistoryStore.Count() == 0 {
+		t.Fatal("investigation was dispatched before the Watch run record was stored")
 	}
 }
 

@@ -38,6 +38,19 @@ func patrolRuntimeFindingManualActionError(action string) error {
 
 // recordFinding stores a finding, syncs it to the unified store, and triggers follow-up actions.
 func (p *PatrolService) recordFinding(f *Finding) bool {
+	return p.recordFindingWithInvestigation(f, true)
+}
+
+// recordFindingDuringPatrol records a model-reported finding without starting
+// Pro investigation while the Watch run's finding adapter is still installed
+// on the shared chat executor. The completed run dispatches investigation only
+// after its durable run record has been written and the adapter has been
+// cleared.
+func (p *PatrolService) recordFindingDuringPatrol(f *Finding) bool {
+	return p.recordFindingWithInvestigation(f, false)
+}
+
+func (p *PatrolService) recordFindingWithInvestigation(f *Finding, investigate bool) bool {
 	if p == nil || p.findings == nil || f == nil {
 		return false
 	}
@@ -83,8 +96,10 @@ func (p *PatrolService) recordFinding(f *Finding) bool {
 		p.unifiedFindingCallback(stored)
 	}
 
-	// Trigger autonomous investigation if enabled and finding warrants it
-	p.MaybeInvestigateFinding(stored)
+	if investigate {
+		// Trigger autonomous investigation if enabled and finding warrants it.
+		p.MaybeInvestigateFinding(stored)
+	}
 
 	return isNew
 }
@@ -552,7 +567,7 @@ func (a *patrolFindingCreatorAdapter) CreateFinding(input tools.PatrolFindingInp
 	}
 
 	// Record finding via PatrolService
-	isNew := a.patrol.recordFinding(finding)
+	isNew := a.patrol.recordFindingDuringPatrol(finding)
 
 	// Track for run stats
 	a.trackCollectedFinding(finding)
@@ -995,6 +1010,25 @@ func (a *patrolFindingCreatorAdapter) getQueriedFindingIDs() []string {
 	result := make([]string, len(a.queriedFindingIDs))
 	copy(result, a.queriedFindingIDs)
 	return result
+}
+
+// dispatchPatrolInvestigations advances model-reported findings from the
+// completed Watch stage into Pro investigation. It must be called only after
+// the Watch run record is durable and run-scoped executor state has unwound.
+func (p *PatrolService) dispatchPatrolInvestigations(result *AIAnalysisResult) {
+	if p == nil || p.findings == nil || result == nil {
+		return
+	}
+	seen := make(map[string]bool, len(result.Findings))
+	for _, candidate := range result.Findings {
+		if candidate == nil || candidate.ID == "" || seen[candidate.ID] {
+			continue
+		}
+		seen[candidate.ID] = true
+		if stored := p.findings.Get(candidate.ID); stored != nil {
+			p.MaybeInvestigateFinding(stored)
+		}
+	}
 }
 
 // findingKeyAliases maps directional synonyms the LLM plausibly assigns onto

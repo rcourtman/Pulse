@@ -3214,7 +3214,13 @@ resolve canonical/source IDs and unique aliases before collection, reject
    for runtime zero-match races, record requested and effective identities,
    and summarize only findings within the effective scope. Watch may mutate
    only finding lifecycle state; Pro investigation remains structurally
-   read-only. Its finding resource is an observation anchor, never a search
+   read-only. A Watch model-reported finding must not dispatch Pro
+   investigation from inside the finding tool call: Pulse first persists the
+   completed Watch run and unwinds its run-scoped finding adapter, then
+   dispatches the accepted findings into Pro investigation. Investigation may
+   clone the shared executor only after that boundary; it must never inherit or
+   mutate the active Watch run's finding-lifecycle adapter. Its finding resource
+   is an observation anchor, never a search
    fence: the Pro prompt must explicitly require evidence-led expansion,
    competing-hypothesis testing, and a distinction between affected and causal
    resources. When evidence selects a different remediation target, the

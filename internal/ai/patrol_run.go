@@ -743,6 +743,8 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		Int("warning", summary.Warning).
 		Int("watch", summary.Watch).
 		Msg("AI Patrol: Completed patrol run")
+
+	p.dispatchPatrolInvestigations(runStats.aiAnalysis)
 }
 
 func patrolFindingSummaryForState(findings []*Finding, state patrolRuntimeState) FindingsSummary {
@@ -1137,6 +1139,8 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		Int("resources", resourceCount).
 		Str("reason", string(scope.Reason)).
 		Msg("AI Patrol: Scoped patrol complete")
+
+	p.dispatchPatrolInvestigations(runStats.aiAnalysis)
 }
 
 func (p *PatrolService) recordScopedPatrolScopeFailure(start time.Time, runID string, scope PatrolScope, resolution PatrolScopeResolution, summary, detail string) {
