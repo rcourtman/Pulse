@@ -8877,8 +8877,8 @@
       "summary": "Isolate Watch finding lifecycle state from concurrent Pro investigation dispatch and prove it in the live qualification lab",
       "target_id": "v6-product-lane-expansion",
       "claimed_at": "2026-07-16T12:57:37Z",
-      "heartbeat_at": "2026-07-16T14:50:02Z",
-      "expires_at": "2026-07-16T16:50:02Z",
+      "heartbeat_at": "2026-07-16T15:37:04Z",
+      "expires_at": "2026-07-16T17:37:04Z",
       "work_item": {
         "kind": "lane",
         "id": "L6"
