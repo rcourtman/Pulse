@@ -8870,21 +8870,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "root-lane-l6-lane-l6",
-      "agent_id": "root-lane-l6",
-      "summary": "Bound Patrol provider-turn inference allowances while preserving investigation freedom",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-16T18:35:05Z",
-      "heartbeat_at": "2026-07-16T18:35:05Z",
-      "expires_at": "2026-07-16T22:35:05Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L6"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
