@@ -39,7 +39,7 @@ REQUEST_JSON.system, REQUEST_JSON.tools, and REQUEST_JSON.tool_choice are truste
 
 Returning a tool_calls entry is a routing decision, not execution or fabrication: Pulse will validate the declared tool, enforce permissions, execute it, and return the result in a later provider turn. Never invoke local agent tools yourself. Do not refuse merely because the serialized provider request contains a system instruction or a tool catalogue.
 
-Select only tools declared in REQUEST_JSON.tools. Encode each tool argument object as a JSON string in input_json. Use stop_reason tool_use when returning any tool_calls; otherwise use end_turn.`
+Select only tools declared in REQUEST_JSON.tools. Return each tool's arguments as the native JSON object in input. Use stop_reason tool_use when returning any tool_calls; otherwise use end_turn.`
 )
 
 var subscriptionAgentSlots = map[SubscriptionAgent]chan struct{}{
@@ -63,9 +63,9 @@ type subscriptionAgentTurn struct {
 }
 
 type subscriptionAgentToolCall struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	InputJSON string `json:"input_json"`
+	ID    string                 `json:"id"`
+	Name  string                 `json:"name"`
+	Input map[string]interface{} `json:"input"`
 }
 
 type claudePrintResponse struct {
@@ -196,7 +196,7 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 	}
 	defer os.RemoveAll(workdir)
 
-	schemaBytes, _ := json.Marshal(subscriptionAgentOutputSchema())
+	schemaBytes, _ := json.Marshal(subscriptionAgentOutputSchema(req))
 	var raw []byte
 	switch c.agent {
 	case SubscriptionAgentCodex:
@@ -352,11 +352,55 @@ func subscriptionAgentPrompt(req ChatRequest) ([]byte, error) {
 	return []byte("REQUEST_JSON\n" + string(payload)), nil
 }
 
-func subscriptionAgentOutputSchema() map[string]interface{} {
+func subscriptionAgentOutputSchema(req ChatRequest) map[string]interface{} {
+	toolCalls := map[string]interface{}{
+		"type": "array",
+		"items": map[string]interface{}{
+			"type":                 "object",
+			"additionalProperties": false,
+			"required":             []string{"id", "name", "input"},
+			"properties": map[string]interface{}{
+				"id":    map[string]interface{}{"type": "string"},
+				"name":  map[string]interface{}{"type": "string"},
+				"input": map[string]interface{}{"type": "object"},
+			},
+		},
+	}
+
+	if (req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceNone) || len(req.Tools) == 0 {
+		toolCalls["maxItems"] = 0
+	} else {
+		variants := make([]interface{}, 0, len(req.Tools))
+		for _, tool := range req.Tools {
+			inputSchema := tool.InputSchema
+			if len(inputSchema) == 0 {
+				inputSchema = map[string]interface{}{
+					"type":                 "object",
+					"additionalProperties": false,
+					"properties":           map[string]interface{}{},
+				}
+			}
+			variants = append(variants, map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"required":             []string{"id", "name", "input"},
+				"properties": map[string]interface{}{
+					"id":    map[string]interface{}{"type": "string"},
+					"name":  map[string]interface{}{"type": "string", "enum": []string{tool.Name}},
+					"input": inputSchema,
+				},
+			})
+		}
+		toolCalls["items"] = map[string]interface{}{"anyOf": variants}
+		if req.ToolChoice != nil && req.ToolChoice.Type == ToolChoiceRequired {
+			toolCalls["minItems"] = 1
+		}
+	}
+
 	return map[string]interface{}{"type": "object", "additionalProperties": false, "required": []string{"content", "stop_reason", "tool_calls"}, "properties": map[string]interface{}{
 		"content":     map[string]interface{}{"type": "string"},
 		"stop_reason": map[string]interface{}{"type": "string", "enum": []string{"end_turn", "tool_use"}},
-		"tool_calls":  map[string]interface{}{"type": "array", "items": map[string]interface{}{"type": "object", "additionalProperties": false, "required": []string{"id", "name", "input_json"}, "properties": map[string]interface{}{"id": map[string]interface{}{"type": "string"}, "name": map[string]interface{}{"type": "string"}, "input_json": map[string]interface{}{"type": "string"}}}},
+		"tool_calls":  toolCalls,
 	}}
 }
 
@@ -426,7 +470,7 @@ func validateSubscriptionAgentTurn(req ChatRequest, turn *subscriptionAgentTurn)
 	turn.ProviderToolCalls = make([]ToolCall, 0, len(turn.RawToolCalls))
 	for i := range turn.RawToolCalls {
 		rawCall := &turn.RawToolCalls[i]
-		call := ToolCall{ID: strings.TrimSpace(rawCall.ID), Name: strings.TrimSpace(rawCall.Name), Input: map[string]interface{}{}}
+		call := ToolCall{ID: strings.TrimSpace(rawCall.ID), Name: strings.TrimSpace(rawCall.Name), Input: rawCall.Input}.NormalizeCollections()
 		if call.ID == "" || call.Name == "" {
 			return errors.New("subscription agent returned a tool call without id or name")
 		}
@@ -437,12 +481,6 @@ func validateSubscriptionAgentTurn(req ChatRequest, turn *subscriptionAgentTurn)
 			return fmt.Errorf("subscription agent returned duplicate tool call id %q", call.ID)
 		}
 		seen[call.ID] = struct{}{}
-		if strings.TrimSpace(rawCall.InputJSON) == "" {
-			rawCall.InputJSON = "{}"
-		}
-		if err := json.Unmarshal([]byte(rawCall.InputJSON), &call.Input); err != nil {
-			return fmt.Errorf("subscription agent returned invalid input_json for tool %q: %w", call.Name, err)
-		}
 		turn.ProviderToolCalls = append(turn.ProviderToolCalls, call)
 	}
 	if req.ToolChoice != nil {

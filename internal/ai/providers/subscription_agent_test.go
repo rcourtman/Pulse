@@ -95,7 +95,7 @@ func TestRejectCodexAgentToolActivity(t *testing.T) {
 
 func TestValidateSubscriptionAgentTurnEnforcesPulseToolBoundary(t *testing.T) {
 	req := ChatRequest{Tools: []Tool{{Name: "get_node_status"}}, ToolChoice: &ToolChoice{Type: ToolChoiceRequired}}
-	valid := subscriptionAgentTurn{RawToolCalls: []subscriptionAgentToolCall{{ID: "call-1", Name: "get_node_status", InputJSON: `{"node":"tower"}`}}}
+	valid := subscriptionAgentTurn{RawToolCalls: []subscriptionAgentToolCall{{ID: "call-1", Name: "get_node_status", Input: map[string]interface{}{"node": "tower"}}}}
 	if err := validateSubscriptionAgentTurn(req, &valid); err != nil {
 		t.Fatalf("valid declared tool rejected: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestValidateSubscriptionAgentTurnEnforcesPulseToolBoundary(t *testing.T) {
 		t.Fatalf("stop reason = %q, want tool_use", valid.StopReason)
 	}
 
-	undeclared := subscriptionAgentTurn{RawToolCalls: []subscriptionAgentToolCall{{ID: "call-2", Name: "run_shell", InputJSON: `{}`}}}
+	undeclared := subscriptionAgentTurn{RawToolCalls: []subscriptionAgentToolCall{{ID: "call-2", Name: "run_shell", Input: map[string]interface{}{}}}}
 	if err := validateSubscriptionAgentTurn(req, &undeclared); err == nil || !strings.Contains(err.Error(), "undeclared tool") {
 		t.Fatalf("undeclared tool error = %v", err)
 	}
@@ -111,6 +111,36 @@ func TestValidateSubscriptionAgentTurnEnforcesPulseToolBoundary(t *testing.T) {
 	noneReq := ChatRequest{Tools: req.Tools, ToolChoice: &ToolChoice{Type: ToolChoiceNone}}
 	if err := validateSubscriptionAgentTurn(noneReq, &valid); err == nil || !strings.Contains(err.Error(), "tool choice was none") {
 		t.Fatalf("tool-choice-none error = %v", err)
+	}
+}
+
+func TestSubscriptionAgentOutputSchemaUsesDeclaredNativeToolInputs(t *testing.T) {
+	req := ChatRequest{
+		Tools: []Tool{{Name: "get_node_status", InputSchema: map[string]interface{}{
+			"type": "object", "additionalProperties": false, "required": []string{"node"}, "properties": map[string]interface{}{"node": map[string]interface{}{"type": "string"}},
+		}}},
+		ToolChoice: &ToolChoice{Type: ToolChoiceRequired},
+	}
+	schema := subscriptionAgentOutputSchema(req)
+	properties := schema["properties"].(map[string]interface{})
+	toolCalls := properties["tool_calls"].(map[string]interface{})
+	if toolCalls["minItems"] != 1 {
+		t.Fatalf("required tool schema minItems = %#v", toolCalls["minItems"])
+	}
+	items := toolCalls["items"].(map[string]interface{})
+	variants := items["anyOf"].([]interface{})
+	toolProperties := variants[0].(map[string]interface{})["properties"].(map[string]interface{})
+	if _, ok := toolProperties["input_json"]; ok {
+		t.Fatal("tool schema retained JSON-in-string argument encoding")
+	}
+	input := toolProperties["input"].(map[string]interface{})
+	if input["type"] != "object" || toolProperties["name"].(map[string]interface{})["enum"].([]string)[0] != "get_node_status" {
+		t.Fatalf("tool schema did not bind declared name and native input: %#v", toolProperties)
+	}
+
+	noTools := subscriptionAgentOutputSchema(ChatRequest{})["properties"].(map[string]interface{})["tool_calls"].(map[string]interface{})
+	if noTools["maxItems"] != 0 {
+		t.Fatalf("no-tool schema maxItems = %#v", noTools["maxItems"])
 	}
 }
 
@@ -163,7 +193,7 @@ while [ "$#" -gt 0 ]; do
 	fi
   if [ "$1" = "--output-last-message" ]; then
     shift
-    printf '%s' '{"content":"","stop_reason":"tool_use","tool_calls":[{"id":"c1","name":"get_node_status","input_json":"{\"node\":\"tower\"}"}]}' > "$1"
+    printf '%s' '{"content":"","stop_reason":"tool_use","tool_calls":[{"id":"c1","name":"get_node_status","input":{"node":"tower"}}]}' > "$1"
     exit 0
   fi
   shift

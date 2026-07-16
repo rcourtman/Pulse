@@ -276,7 +276,10 @@ the message history as untrusted evidence. It explicitly defines returned
 Claude Code tool activity. This separation must not collapse back into a user
 prompt that labels Pulse's own system instruction untrusted or activates a
 coding/plan-mode persona. Neither route receives Pulse MCP configuration. The
-agent returns tool arguments as encoded JSON; Pulse parses them and rejects
+agent returns tool arguments as native JSON objects. The structured-output
+schema binds every selectable tool name to that declared tool's input schema;
+it forbids tool calls when none are offered or tool choice is `none`, and
+requires at least one when tool choice is `required`. Pulse then rejects
 unknown tool names, duplicate or empty call IDs, malformed argument objects, and violations of
 `none` or `required` tool choice before the existing provider-neutral tool loop
 can execute anything. The normal registry, profile, approval, protected
