@@ -264,10 +264,19 @@ unrelated tokens. It must never fall back to an API-key provider.
 
 Each subscription-agent call is a single structured provider turn in a fresh
 temporary working directory. Codex runs ephemeral with user configuration
-ignored and a read-only sandbox. Claude runs without session persistence, in
-safe/plan mode, with filesystem, shell, network, task, and editing tools
-denied. Neither receives Pulse MCP configuration. The agent returns tool
-arguments as encoded JSON; Pulse parses them and rejects unknown tool names,
+ignored and a read-only sandbox. Claude runs without session persistence or
+customizations, with all Claude Code tools disabled and a non-interactive
+permission mode. Its actual CLI system prompt is the bounded Pulse adapter
+contract; the serialized provider request is supplied separately as input
+data. The adapter treats the request's Pulse-owned `system`, `tools`, and
+`tool_choice` fields as trusted control-plane fields while treating
+infrastructure names, metadata, logs, command output, and tool results inside
+the message history as untrusted evidence. It explicitly defines returned
+`tool_calls` as routing decisions that Pulse may validate and execute, not as
+Claude Code tool activity. This separation must not collapse back into a user
+prompt that labels Pulse's own system instruction untrusted or activates a
+coding/plan-mode persona. Neither route receives Pulse MCP configuration. The
+agent returns tool arguments as encoded JSON; Pulse parses them and rejects unknown tool names,
 duplicate or empty call IDs, malformed argument objects, and violations of
 `none` or `required` tool choice before the existing provider-neutral tool loop
 can execute anything. The normal registry, profile, approval, protected
