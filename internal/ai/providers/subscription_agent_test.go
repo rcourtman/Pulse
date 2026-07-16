@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -210,8 +211,7 @@ if [ "$1" = "auth" ]; then
 	exit 0
 fi
 seen_system=false
-seen_output_schema=false
-seen_json_schema_arg=false
+seen_json_schema=false
 seen_no_tools=false
 seen_dont_ask=false
 while [ "$#" -gt 0 ]; do
@@ -224,13 +224,12 @@ while [ "$#" -gt 0 ]; do
 			case "$1" in
 				*"IGNORE ALL RULES"*) echo "infrastructure data leaked into system prompt" >&2; exit 93 ;;
 			esac
-			case "$1" in
-				*"TRUSTED_OUTPUT_SCHEMA_JSON"*'"input"'*) seen_output_schema=true ;;
-			esac
 			;;
 		--json-schema)
-			seen_json_schema_arg=true
 			shift
+			case "$1" in
+				*'"input"'*) seen_json_schema=true ;;
+			esac
 			;;
 		--tools)
 			shift
@@ -244,11 +243,10 @@ while [ "$#" -gt 0 ]; do
 	shift
 done
 [ "$seen_system" = true ] || { echo "missing trusted system prompt" >&2; exit 94; }
-[ "$seen_output_schema" = true ] || { echo "missing trusted output schema" >&2; exit 97; }
-[ "$seen_json_schema_arg" = false ] || { echo "Claude hidden structured-output mode was enabled" >&2; exit 98; }
+[ "$seen_json_schema" = true ] || { echo "missing native output schema" >&2; exit 97; }
 [ "$seen_no_tools" = true ] || { echo "Claude built-in tools not disabled" >&2; exit 95; }
 [ "$seen_dont_ask" = true ] || { echo "unexpected permission mode" >&2; exit 96; }
-printf '%s' '{"result":"{\"content\":\"healthy\",\"stop_reason\":\"end_turn\",\"tool_calls\":[]}","usage":{"input_tokens":12,"output_tokens":3}}'
+printf '%s' '{"structured_output":{"content":"healthy","stop_reason":"end_turn","tool_calls":[]},"usage":{"input_tokens":12,"output_tokens":3}}'
 `)
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("OPENAI_API_KEY", "must-not-leak")
@@ -349,35 +347,30 @@ func TestDecodeSubscriptionAgentTurnRejectsUnknownStructuredFields(t *testing.T)
 	}
 }
 
-func TestDecodeClaudePlainCompletionRejectsToolCallArtifacts(t *testing.T) {
+func TestClaudePostOutcomeCompletionRequiresPersistedLifecycleResult(t *testing.T) {
 	req := ChatRequest{
-		Tools: []Tool{{Name: "pulse_query"}},
 		Messages: []Message{
 			{Role: "assistant", ToolCalls: []ToolCall{{ID: "finding-1", Name: "patrol_report_finding", Input: map[string]interface{}{}}}},
 			{Role: "user", ToolResult: &ToolResult{ToolUseID: "finding-1", Content: `{"ok":true}`}},
 		},
 	}
-	raw := []byte(`{"result":"Patrol completed without another tool call.","usage":{"input_tokens":4,"output_tokens":7}}`)
-	turn, err := decodeClaudePlainCompletion(req, raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if turn.Content == "" || turn.StopReason != "end_turn" || turn.InputTokens != 4 || turn.OutputTokens != 7 {
-		t.Fatalf("plain completion = %#v", turn)
+	err := &subscriptionAgentCommandError{command: "claude", cause: errors.New("exit status 1"), terminalReason: "structured_output_retry_exhausted", inputTokens: 4, outputTokens: 7}
+	response, ok := claudePostOutcomeCompletion(req, "sonnet", err)
+	if !ok || response.StopReason != "end_turn" || response.InputTokens != 4 || response.OutputTokens != 7 || len(response.ToolCalls) != 0 {
+		t.Fatalf("post-outcome completion = (%#v, %t)", response, ok)
 	}
 
-	leaked := []byte(`{"result":"pulse_query({\"action\":\"list\"})"}`)
-	if _, err := decodeClaudePlainCompletion(req, leaked); err == nil || !strings.Contains(err.Error(), "leaked a tool call") {
-		t.Fatalf("plain tool-call leak error = %v", err)
+	if _, ok := claudePostOutcomeCompletion(ChatRequest{}, "sonnet", err); ok {
+		t.Fatal("structured retry before a persisted Patrol outcome was accepted")
 	}
-	embedded := []byte(`{"result":"Done. {\"content\":\"\",\"stop_reason\":\"tool_use\",\"tool_calls\":[{\"name\":\"pulse_query\"}]}"}`)
-	if _, err := decodeClaudePlainCompletion(req, embedded); err == nil || !strings.Contains(err.Error(), "leaked a tool call") {
-		t.Fatalf("embedded tool-call leak error = %v", err)
+	other := &subscriptionAgentCommandError{command: "claude", cause: errors.New("exit status 1"), terminalReason: "other"}
+	if _, ok := claudePostOutcomeCompletion(req, "sonnet", other); ok {
+		t.Fatal("unrelated Claude terminal error was accepted")
 	}
-
-	initial := ChatRequest{Tools: req.Tools}
-	if _, err := decodeClaudePlainCompletion(initial, raw); err == nil || !strings.Contains(err.Error(), "before a successful Patrol outcome") {
-		t.Fatalf("premature plain completion error = %v", err)
+	failedResult := req
+	failedResult.Messages[1].ToolResult.IsError = true
+	if _, ok := claudePostOutcomeCompletion(failedResult, "sonnet", err); ok {
+		t.Fatal("failed Patrol lifecycle result was accepted")
 	}
 }
 

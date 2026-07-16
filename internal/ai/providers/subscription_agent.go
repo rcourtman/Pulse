@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
@@ -79,6 +78,21 @@ type claudePrintResponse struct {
 		OutputTokens int `json:"output_tokens"`
 	} `json:"usage"`
 }
+
+type subscriptionAgentCommandError struct {
+	command        string
+	cause          error
+	detail         string
+	terminalReason string
+	inputTokens    int
+	outputTokens   int
+}
+
+func (e *subscriptionAgentCommandError) Error() string {
+	return fmt.Sprintf("%s subscription agent failed: %v: %s", e.command, e.cause, e.detail)
+}
+
+func (e *subscriptionAgentCommandError) Unwrap() error { return e.cause }
 
 type cappedBuffer struct {
 	buffer   bytes.Buffer
@@ -217,17 +231,14 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 			raw, err = os.ReadFile(outputPath)
 		}
 	case SubscriptionAgentClaude:
-		// Claude Code's --json-schema mode may exhaust its hidden structured-
-		// output retries after already returning valid Pulse tool decisions on
-		// earlier provider turns. Keep the schema in the trusted system channel
-		// and validate the single JSON result locally instead; this avoids
-		// converting a completed Patrol finding into a terminal wrapper error.
-		claudeSystemPrompt := subscriptionAgentControlPrompt + "\n\nTRUSTED_OUTPUT_SCHEMA_JSON\n" + string(schemaBytes)
-		raw, err = c.run(ctx, "claude", []string{"-p", "--model", c.model, "--output-format", "json", "--safe-mode", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", "", "--system-prompt", claudeSystemPrompt}, requestPrompt, workdir)
+		raw, err = c.run(ctx, "claude", []string{"-p", "--model", c.model, "--output-format", "json", "--json-schema", string(schemaBytes), "--safe-mode", "--no-session-persistence", "--permission-mode", "dontAsk", "--tools", "", "--system-prompt", subscriptionAgentControlPrompt}, requestPrompt, workdir)
 	default:
 		return nil, fmt.Errorf("unknown subscription agent %q", c.agent)
 	}
 	if err != nil {
+		if response, ok := claudePostOutcomeCompletion(req, c.model, err); ok {
+			return response.NormalizeCollectionsPtr(), nil
+		}
 		return nil, err
 	}
 	if len(raw) > maxSubscriptionAgentOutputBytes {
@@ -235,9 +246,6 @@ func (c *SubscriptionAgentClient) Chat(ctx context.Context, req ChatRequest) (*C
 	}
 
 	turn, err := decodeSubscriptionAgentTurn(c.agent, raw)
-	if err != nil && c.agent == SubscriptionAgentClaude {
-		turn, err = decodeClaudePlainCompletion(req, raw)
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +340,22 @@ func (c *SubscriptionAgentClient) run(ctx context.Context, name string, args []s
 		if len(message) > 2000 {
 			message = message[len(message)-2000:]
 		}
-		return nil, fmt.Errorf("%s subscription agent failed: %w: %s", name, err, message)
+		commandErr := &subscriptionAgentCommandError{command: name, cause: err, detail: message}
+		if name == "claude" {
+			var terminal struct {
+				TerminalReason string `json:"terminal_reason"`
+				Usage          struct {
+					InputTokens  int `json:"input_tokens"`
+					OutputTokens int `json:"output_tokens"`
+				} `json:"usage"`
+			}
+			if json.Unmarshal(stdout.buffer.Bytes(), &terminal) == nil {
+				commandErr.terminalReason = terminal.TerminalReason
+				commandErr.inputTokens = terminal.Usage.InputTokens
+				commandErr.outputTokens = terminal.Usage.OutputTokens
+			}
+		}
+		return nil, commandErr
 	}
 	if stdout.exceeded || stderr.exceeded {
 		return nil, fmt.Errorf("%s subscription agent output exceeded %d bytes", name, maxSubscriptionAgentOutputBytes)
@@ -449,41 +472,6 @@ func decodeSubscriptionAgentTurn(agent SubscriptionAgent, raw []byte) (subscript
 	return turn, nil
 }
 
-func decodeClaudePlainCompletion(req ChatRequest, raw []byte) (subscriptionAgentTurn, error) {
-	var turn subscriptionAgentTurn
-	if !followsSuccessfulPatrolOutcome(req) {
-		return turn, errors.New("Claude subscription response returned plain content before a successful Patrol outcome")
-	}
-	var wrapper claudePrintResponse
-	if err := json.Unmarshal(raw, &wrapper); err != nil {
-		return turn, fmt.Errorf("decode Claude subscription response: %w", err)
-	}
-	if len(wrapper.PermissionDenials) > 0 {
-		return turn, errors.New("Claude subscription agent attempted a denied built-in tool")
-	}
-	if len(wrapper.StructuredOutput) > 0 && string(wrapper.StructuredOutput) != "null" {
-		return turn, errors.New("Claude subscription response contained invalid structured output")
-	}
-	content := strings.TrimSpace(wrapper.Result)
-	if content == "" {
-		return turn, errors.New("Claude subscription response did not contain structured output or a plain completion")
-	}
-	toolNames := make([]string, 0, len(req.Tools))
-	for _, tool := range req.Tools {
-		toolNames = append(toolNames, tool.Name)
-	}
-	catalog := agentcapabilities.NewProviderToolNameCatalog(toolNames)
-	if strings.Contains(content, `"tool_calls"`) || agentcapabilities.ProviderToolCallArtifactIndex(content, catalog) >= 0 {
-		return turn, errors.New("Claude subscription response leaked a tool call through plain content")
-	}
-	turn.Content = content
-	turn.StopReason = "end_turn"
-	turn.RawToolCalls = []subscriptionAgentToolCall{}
-	turn.InputTokens = wrapper.Usage.InputTokens
-	turn.OutputTokens = wrapper.Usage.OutputTokens
-	return turn, nil
-}
-
 func followsSuccessfulPatrolOutcome(req ChatRequest) bool {
 	if len(req.Messages) < 2 {
 		return false
@@ -506,6 +494,21 @@ func followsSuccessfulPatrolOutcome(req ChatRequest) bool {
 		}
 	}
 	return false
+}
+
+func claudePostOutcomeCompletion(req ChatRequest, model string, err error) (*ChatResponse, bool) {
+	var commandErr *subscriptionAgentCommandError
+	if !errors.As(err, &commandErr) || commandErr.command != "claude" || commandErr.terminalReason != "structured_output_retry_exhausted" || !followsSuccessfulPatrolOutcome(req) {
+		return nil, false
+	}
+	return &ChatResponse{
+		Content:      "",
+		Model:        model,
+		StopReason:   "end_turn",
+		ToolCalls:    []ToolCall{},
+		InputTokens:  commandErr.inputTokens,
+		OutputTokens: commandErr.outputTokens,
+	}, true
 }
 
 func decodeStrictJSON(raw []byte, target interface{}) error {

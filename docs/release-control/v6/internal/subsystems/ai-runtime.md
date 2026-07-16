@@ -298,21 +298,17 @@ canonical qualified Pulse model identity from shared callers, strips only its
 own subscription-provider prefix before CLI execution, and rejects foreign
 provider prefixes rather than forwarding an invalid or cross-provider model
 name to the local agent.
-Claude receives that output schema through the trusted adapter system channel
-and returns one JSON result that Pulse decodes with unknown fields and trailing
-values rejected whenever the model selects tools. After a successful
-`patrol_report_finding`, `patrol_assess_finding`, or `patrol_resolve_finding`
-result, the next non-required turn may end with ordinary assistant prose;
-Pulse accepts that as a no-tool completion only after rejecting provider
-tool-call artifacts against the offered tool catalogue. Plain content before a
-successful Patrol outcome remains an error, so prose wrapped around an
-unexecuted tool decision cannot silently turn a faulty run healthy.
-Required-tool turns still fail when no structured call is returned. Pulse does
-not use Claude Code's hidden `--json-schema`
-retry loop: live qualification proved that wrapper could exhaust retries after
-the model had already completed valid finding calls, incorrectly converting a
-durable Patrol outcome into a provider failure. Codex may continue to use its
-native output-schema file because its CLI exposes the completed turn directly.
+Claude uses its native output-schema mode for every provider decision. Pulse
+decodes completed structured turns with unknown fields and trailing values
+rejected. Live qualification also proved that Claude's wrapper may exhaust its
+structured-output retries on the final turn after Pulse has already persisted
+a successful `patrol_report_finding`, `patrol_assess_finding`, or
+`patrol_resolve_finding` result. Only that typed terminal reason immediately
+after that successful lifecycle result is normalized to a no-tool completion;
+its reported usage is retained. The same wrapper failure before a durable
+outcome, after a failed tool result, or for any other terminal reason remains a
+provider error. This keeps the governed finding as source of truth without
+turning prose-wrapped or incomplete tool decisions into healthy runs.
 Patrol consumes the provider streaming interface, so the adapter projects each
 fully validated CLI turn into canonical buffered `content`, `tool_start`, and
 `done` events. It must emit nothing before the complete CLI response passes the
