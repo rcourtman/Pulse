@@ -8872,13 +8872,13 @@
   ],
   "work_claims": [
     {
-      "id": "root-patrol-lifecycle-tool-order-l6-lane-l6",
-      "agent_id": "root-patrol-lifecycle-tool-order-l6",
-      "summary": "Honor read-before-write ordering for same-turn Patrol finding lifecycle calls",
+      "id": "root-patrol-subscription-object-schema-l6-lane-l6",
+      "agent_id": "root-patrol-subscription-object-schema-l6",
+      "summary": "Use native object schemas for subscription-agent Patrol tool routing",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-16T10:31:03Z",
-      "heartbeat_at": "2026-07-16T10:31:03Z",
-      "expires_at": "2026-07-16T14:31:03Z",
+      "claimed_at": "2026-07-16T11:24:35Z",
+      "heartbeat_at": "2026-07-16T11:24:35Z",
+      "expires_at": "2026-07-16T15:24:35Z",
       "work_item": {
         "kind": "lane",
         "id": "L6"
