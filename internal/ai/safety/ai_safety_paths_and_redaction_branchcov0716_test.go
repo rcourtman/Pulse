@@ -373,7 +373,9 @@ func TestBranchCovRedactSensitiveText(t *testing.T) {
 			{"aws access key", "id=AKIAIOSFODNN7EXAMPLE"},
 			{"jwt", "tok=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"},
 			{"openai key", "k=sk-abcdef123456"},
-			{"google api key", "k=AIzaSyABCdefghIJKlmnoPQRstuVWxyz1234567"},
+			// Deliberately shorter than the real 39-char key shape so secret
+			// scanners don't flag the fixture; the redactor only needs 10+ chars.
+			{"google api key", "k=AIzaSyTestFixture00"},
 			{"github token", "t=ghp_abcdefghijklmnopqrstuvwxyz"},
 		}
 		for _, c := range cases {
@@ -401,13 +403,13 @@ func TestBranchCovRedactSensitiveText(t *testing.T) {
 			`x-api-key: somekeyvalue`,
 			`https://user:pass@example.test/`,
 			`{"secret":"shh"}`,
-			`GET https://example.test/v1?key=AIzaSyAbcDefGhiJklMnoPqrStuVwxYz1234567`,
+			`GET https://example.test/v1?key=AIzaSyUrlFixture99`,
 		}, "\n")
 		out, n := RedactSensitiveText(input)
 		if n == 0 {
 			t.Fatalf("expected redactions, got 0")
 		}
-		for _, leak := range []string{"abc123def456", "somekeyvalue", "user:pass@", "shh", "AIzaSyAbcDefGhiJklMnoPqrStuVwxYz1234567"} {
+		for _, leak := range []string{"abc123def456", "somekeyvalue", "user:pass@", "shh", "AIzaSyUrlFixture99"} {
 			if strings.Contains(out, leak) {
 				t.Errorf("leaked %q in %q", leak, out)
 			}
