@@ -278,7 +278,10 @@ minimum request allowance for local subscription turns. Patrol tool-call
 preflight owns one route-aware outer deadline: API providers retain the
 30-second budget, while local subscription agents receive a bounded two-minute
 budget for CLI startup and complete structured-output assembly. A caller's
-earlier cancellation still wins. The native provider boundary accepts the
+earlier cancellation still wins. Qualification waits through that complete
+subscription-agent deadline plus bounded cache-publication grace before it may
+classify missing fresh preflight evidence; its shorter API-provider wait must
+not truncate a healthy local CLI turn. The native provider boundary accepts the
 canonical qualified Pulse model identity from shared callers, strips only its
 own subscription-provider prefix before CLI execution, and rejects foreign
 provider prefixes rather than forwarding an invalid or cross-provider model

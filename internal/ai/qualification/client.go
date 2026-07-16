@@ -14,9 +14,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
+
+const subscriptionAgentPreflightEvidenceGrace = 15 * time.Second
 
 type ClientConfig struct {
 	BaseURL  string
@@ -120,6 +123,17 @@ func (s AISettings) EffectivePatrolModel() string {
 		return value
 	}
 	return strings.TrimSpace(s.Model)
+}
+
+func patrolModelSuiteAcquisitionTimeout(provider string, requested time.Duration) time.Duration {
+	if provider != string(providers.SubscriptionAgentCodex) && provider != string(providers.SubscriptionAgentClaude) {
+		return requested
+	}
+	minimum := providers.SubscriptionAgentMinimumRequestTimeout + subscriptionAgentPreflightEvidenceGrace
+	if requested < minimum {
+		return minimum
+	}
+	return requested
 }
 
 type PatrolReadiness struct {
@@ -368,6 +382,7 @@ func (c *PulseClient) AcquirePatrolModelSuite(ctx context.Context, model string,
 	if provider == "" || bareModel == "" {
 		return nil, fmt.Errorf("Patrol qualification requires a concrete provider:model route, got %q", target)
 	}
+	timeout = patrolModelSuiteAcquisitionTimeout(provider, timeout)
 
 	routeChanged := before.EffectivePatrolModel() != target ||
 		(provider == "codex-subscription" && !before.CodexSubscriptionEnabled) ||

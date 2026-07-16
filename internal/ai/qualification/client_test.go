@@ -234,6 +234,23 @@ func TestAcquirePatrolModelSuitePinsOneRouteAndUsesFreshAsyncPreflight(t *testin
 	}
 }
 
+func TestPatrolModelSuiteAcquisitionTimeoutIsRouteAware(t *testing.T) {
+	requested := 45 * time.Second
+	if got := patrolModelSuiteAcquisitionTimeout("openai", requested); got != requested {
+		t.Fatalf("API route acquisition timeout = %s, want %s", got, requested)
+	}
+	wantSubscription := 2*time.Minute + subscriptionAgentPreflightEvidenceGrace
+	for _, provider := range []string{"codex-subscription", "claude-subscription"} {
+		if got := patrolModelSuiteAcquisitionTimeout(provider, requested); got != wantSubscription {
+			t.Fatalf("%s acquisition timeout = %s, want %s", provider, got, wantSubscription)
+		}
+	}
+	longer := 4 * time.Minute
+	if got := patrolModelSuiteAcquisitionTimeout("claude-subscription", longer); got != longer {
+		t.Fatalf("long configured acquisition timeout = %s, want %s", got, longer)
+	}
+}
+
 func TestAcquirePatrolModelSuitePreflightsConfiguredRouteOnceWithoutSettingsWrite(t *testing.T) {
 	updates := 0
 	preflightPosts := 0
