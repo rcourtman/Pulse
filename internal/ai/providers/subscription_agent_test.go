@@ -350,7 +350,13 @@ func TestDecodeSubscriptionAgentTurnRejectsUnknownStructuredFields(t *testing.T)
 }
 
 func TestDecodeClaudePlainCompletionRejectsToolCallArtifacts(t *testing.T) {
-	req := ChatRequest{Tools: []Tool{{Name: "pulse_query"}}}
+	req := ChatRequest{
+		Tools: []Tool{{Name: "pulse_query"}},
+		Messages: []Message{
+			{Role: "assistant", ToolCalls: []ToolCall{{ID: "finding-1", Name: "patrol_report_finding", Input: map[string]interface{}{}}}},
+			{Role: "user", ToolResult: &ToolResult{ToolUseID: "finding-1", Content: `{"ok":true}`}},
+		},
+	}
 	raw := []byte(`{"result":"Patrol completed without another tool call.","usage":{"input_tokens":4,"output_tokens":7}}`)
 	turn, err := decodeClaudePlainCompletion(req, raw)
 	if err != nil {
@@ -363,6 +369,15 @@ func TestDecodeClaudePlainCompletionRejectsToolCallArtifacts(t *testing.T) {
 	leaked := []byte(`{"result":"pulse_query({\"action\":\"list\"})"}`)
 	if _, err := decodeClaudePlainCompletion(req, leaked); err == nil || !strings.Contains(err.Error(), "leaked a tool call") {
 		t.Fatalf("plain tool-call leak error = %v", err)
+	}
+	embedded := []byte(`{"result":"Done. {\"content\":\"\",\"stop_reason\":\"tool_use\",\"tool_calls\":[{\"name\":\"pulse_query\"}]}"}`)
+	if _, err := decodeClaudePlainCompletion(req, embedded); err == nil || !strings.Contains(err.Error(), "leaked a tool call") {
+		t.Fatalf("embedded tool-call leak error = %v", err)
+	}
+
+	initial := ChatRequest{Tools: req.Tools}
+	if _, err := decodeClaudePlainCompletion(initial, raw); err == nil || !strings.Contains(err.Error(), "before a successful Patrol outcome") {
+		t.Fatalf("premature plain completion error = %v", err)
 	}
 }
 

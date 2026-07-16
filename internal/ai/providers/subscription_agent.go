@@ -451,6 +451,9 @@ func decodeSubscriptionAgentTurn(agent SubscriptionAgent, raw []byte) (subscript
 
 func decodeClaudePlainCompletion(req ChatRequest, raw []byte) (subscriptionAgentTurn, error) {
 	var turn subscriptionAgentTurn
+	if !followsSuccessfulPatrolOutcome(req) {
+		return turn, errors.New("Claude subscription response returned plain content before a successful Patrol outcome")
+	}
 	var wrapper claudePrintResponse
 	if err := json.Unmarshal(raw, &wrapper); err != nil {
 		return turn, fmt.Errorf("decode Claude subscription response: %w", err)
@@ -470,7 +473,7 @@ func decodeClaudePlainCompletion(req ChatRequest, raw []byte) (subscriptionAgent
 		toolNames = append(toolNames, tool.Name)
 	}
 	catalog := agentcapabilities.NewProviderToolNameCatalog(toolNames)
-	if agentcapabilities.ProviderToolCallArtifactIndex(content, catalog) >= 0 {
+	if strings.Contains(content, `"tool_calls"`) || agentcapabilities.ProviderToolCallArtifactIndex(content, catalog) >= 0 {
 		return turn, errors.New("Claude subscription response leaked a tool call through plain content")
 	}
 	turn.Content = content
@@ -479,6 +482,30 @@ func decodeClaudePlainCompletion(req ChatRequest, raw []byte) (subscriptionAgent
 	turn.InputTokens = wrapper.Usage.InputTokens
 	turn.OutputTokens = wrapper.Usage.OutputTokens
 	return turn, nil
+}
+
+func followsSuccessfulPatrolOutcome(req ChatRequest) bool {
+	if len(req.Messages) < 2 {
+		return false
+	}
+	last := req.Messages[len(req.Messages)-1]
+	if last.ToolResult == nil || last.ToolResult.IsError || strings.TrimSpace(last.ToolResult.ToolUseID) == "" {
+		return false
+	}
+	for i := len(req.Messages) - 2; i >= 0; i-- {
+		for _, call := range req.Messages[i].ToolCalls {
+			if call.ID != last.ToolResult.ToolUseID {
+				continue
+			}
+			switch call.Name {
+			case "patrol_report_finding", "patrol_assess_finding", "patrol_resolve_finding":
+				return true
+			default:
+				return false
+			}
+		}
+	}
+	return false
 }
 
 func decodeStrictJSON(raw []byte, target interface{}) error {

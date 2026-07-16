@@ -300,11 +300,15 @@ provider prefixes rather than forwarding an invalid or cross-provider model
 name to the local agent.
 Claude receives that output schema through the trusted adapter system channel
 and returns one JSON result that Pulse decodes with unknown fields and trailing
-values rejected whenever the model selects tools. A non-required turn may end
-with ordinary assistant prose instead; Pulse accepts that as a no-tool
-completion only after rejecting provider tool-call artifacts against the
-offered tool catalogue. Required-tool turns still fail when no structured call
-is returned. Pulse does not use Claude Code's hidden `--json-schema`
+values rejected whenever the model selects tools. After a successful
+`patrol_report_finding`, `patrol_assess_finding`, or `patrol_resolve_finding`
+result, the next non-required turn may end with ordinary assistant prose;
+Pulse accepts that as a no-tool completion only after rejecting provider
+tool-call artifacts against the offered tool catalogue. Plain content before a
+successful Patrol outcome remains an error, so prose wrapped around an
+unexecuted tool decision cannot silently turn a faulty run healthy.
+Required-tool turns still fail when no structured call is returned. Pulse does
+not use Claude Code's hidden `--json-schema`
 retry loop: live qualification proved that wrapper could exhaust retries after
 the model had already completed valid finding calls, incorrectly converting a
 durable Patrol outcome into a provider failure. Codex may continue to use its
