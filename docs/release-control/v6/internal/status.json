@@ -8870,21 +8870,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "root-lane-l6-lane-l6",
-      "agent_id": "root-lane-l6",
-      "summary": "Harden Patrol multi-finding reporting reliability without weakening qualification safety gates",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-16T05:32:42Z",
-      "heartbeat_at": "2026-07-16T05:32:42Z",
-      "expires_at": "2026-07-16T11:32:42Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L6"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
