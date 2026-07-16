@@ -466,7 +466,12 @@ lifecycle executor resolves a command agent by Docker source ID or canonical
 host name and dispatches a trusted internal container command after action
 approval, storage and recovery consumers may observe only the resulting action
 audit and verification evidence; they must not reinterpret that trusted command
-path as recovery authority or a storage-owned action transport.
+path as recovery authority or a storage-owned action transport. Canonical
+Docker action evidence may bind a raw, freshness-validated agent observation
+that is slightly ahead of the server clock to the server receipt boundary;
+storage/recovery consumers must preserve that evidence rather than treating
+normal bounded clock skew as recovery failure, and must not apply the same
+clamp to observations outside the API-owned freshness window.
 Container restart declares rollback unavailable. Its canonical
 `ActionResultV2.compensation` therefore records support `unavailable` and status
 `not_available`; neither same-agent readback nor a distinct direct-daemon

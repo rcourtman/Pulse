@@ -25,10 +25,11 @@ func dockerContainerExecutionResult(resourceID, agentID string, req agentexec.Do
 			verification.ReasonCode = "stale_agent_readback"
 			verification.Summary = "The agent readback was stale, skewed, or had invalid mutation chronology."
 		} else {
+			evidenceObservedAt, evidenceReceivedAt := dockerActionEvidenceTimes(facts.After.ObservedAt, receivedAt)
 			evidence, err := unified.NormalizeActionEvidence(unified.ActionEvidence{
 				Version: unified.ActionEvidenceVersion, ID: req.Operation + "-agent-readback", ObserverID: agentID,
 				ObserverKind: "unified_agent", ObserverTrustDomain: "agent:" + agentID, ExecutorTrustDomain: "agent:" + agentID,
-				Method: "typed_container_read_after_write", SubjectID: resourceID, ObservedAt: facts.After.ObservedAt.UTC(), ReceivedAt: receivedAt.UTC(), Summary: summary,
+				Method: "typed_container_read_after_write", SubjectID: resourceID, ObservedAt: evidenceObservedAt, ReceivedAt: evidenceReceivedAt, Summary: summary,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("normalize docker lifecycle evidence: %w", err)
@@ -43,6 +44,7 @@ func dockerContainerExecutionResult(resourceID, agentID string, req agentexec.Do
 		}
 	}
 	if independent != nil && freshDockerLifecycleObservation(facts.Before.ObservedAt, independent.Snapshot.ObservedAt, independent.ReceivedAt) && strings.TrimSpace(independent.TrustDomain) != "" && strings.TrimSpace(independent.TrustDomain) != "agent:"+agentID && strings.EqualFold(independent.Snapshot.ContainerID, facts.ContainerID) {
+		evidenceObservedAt, evidenceReceivedAt := dockerActionEvidenceTimes(independent.Snapshot.ObservedAt, independent.ReceivedAt)
 		observationDigest, err := operationreceipt.DigestCanonicalJSON(struct {
 			ActionID  string                                     `json:"action_id"`
 			SubjectID string                                     `json:"subject_id"`
@@ -56,7 +58,7 @@ func dockerContainerExecutionResult(resourceID, agentID string, req agentexec.Do
 		evidence, err := unified.NormalizeActionEvidence(unified.ActionEvidence{
 			Version: unified.ActionEvidenceVersion, ID: req.ActionID + "-direct-daemon-observation", ObserverID: independent.ObserverID,
 			ObserverKind: "docker_daemon_observer", ObserverTrustDomain: independent.TrustDomain, ExecutorTrustDomain: "agent:" + agentID,
-			Method: independent.Method, SubjectID: resourceID, ObservedAt: independent.Snapshot.ObservedAt, ReceivedAt: independent.ReceivedAt,
+			Method: independent.Method, SubjectID: resourceID, ObservedAt: evidenceObservedAt, ReceivedAt: evidenceReceivedAt,
 			Summary: independentSummary, Refs: []unified.ActionEvidenceRef{{ID: req.ActionID, Kind: "docker_before_after", Digest: observationDigest}},
 		})
 		if err != nil {
@@ -99,10 +101,11 @@ func dockerContainerUpdateExecutionResult(resourceID, agentID string, facts agen
 			verification.ReasonCode = "stale_agent_readback"
 			verification.Summary = "The agent readback was stale or skewed."
 		} else {
+			evidenceObservedAt, evidenceReceivedAt := dockerActionEvidenceTimes(facts.After.ObservedAt, receivedAt)
 			evidence, err := unified.NormalizeActionEvidence(unified.ActionEvidence{
 				Version: unified.ActionEvidenceVersion, ID: facts.Operation + "-agent-readback", ObserverID: agentID,
 				ObserverKind: "unified_agent", ObserverTrustDomain: "agent:" + agentID, ExecutorTrustDomain: "agent:" + agentID,
-				Method: "typed_container_read_after_write", SubjectID: resourceID, ObservedAt: facts.After.ObservedAt.UTC(), ReceivedAt: receivedAt.UTC(), Summary: summary,
+				Method: "typed_container_read_after_write", SubjectID: resourceID, ObservedAt: evidenceObservedAt, ReceivedAt: evidenceReceivedAt, Summary: summary,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("normalize docker update evidence: %w", err)
@@ -117,6 +120,7 @@ func dockerContainerUpdateExecutionResult(resourceID, agentID string, facts agen
 		}
 	}
 	if independent != nil && facts.NewContainerID != "" && freshDockerUpdateObservation(independent.Snapshot.ObservedAt, independent.ReceivedAt) && strings.TrimSpace(independent.TrustDomain) != "" && strings.TrimSpace(independent.TrustDomain) != "agent:"+agentID {
+		evidenceObservedAt, evidenceReceivedAt := dockerActionEvidenceTimes(independent.Snapshot.ObservedAt, independent.ReceivedAt)
 		observationDigest, err := operationreceipt.DigestCanonicalJSON(struct {
 			ActionID       string                                     `json:"action_id"`
 			SubjectID      string                                     `json:"subject_id"`
@@ -130,7 +134,7 @@ func dockerContainerUpdateExecutionResult(resourceID, agentID string, facts agen
 		evidence, err := unified.NormalizeActionEvidence(unified.ActionEvidence{
 			Version: unified.ActionEvidenceVersion, ID: facts.ActionID + "-direct-daemon-observation", ObserverID: independent.ObserverID,
 			ObserverKind: "docker_daemon_observer", ObserverTrustDomain: independent.TrustDomain, ExecutorTrustDomain: "agent:" + agentID,
-			Method: independent.Method, SubjectID: resourceID, ObservedAt: independent.Snapshot.ObservedAt, ReceivedAt: independent.ReceivedAt,
+			Method: independent.Method, SubjectID: resourceID, ObservedAt: evidenceObservedAt, ReceivedAt: evidenceReceivedAt,
 			Summary: independentSummary, Refs: []unified.ActionEvidenceRef{{ID: facts.ActionID, Kind: "docker_update_replacement", Digest: observationDigest}},
 		})
 		if err != nil {
@@ -215,6 +219,20 @@ func freshDockerUpdateObservation(observedAt, receivedAt time.Time) bool {
 		return false
 	}
 	return !observedAt.Before(receivedAt.UTC().Add(-30*time.Minute)) && !observedAt.After(receivedAt.UTC().Add(5*time.Minute))
+}
+
+// dockerActionEvidenceTimes preserves the server receipt boundary required by
+// canonical evidence while tolerating bounded positive clock skew already
+// admitted by the Docker freshness checks. The raw timestamps are validated
+// before this helper is called, so an excessively future or stale observation
+// still fails closed instead of being made fresh by clamping.
+func dockerActionEvidenceTimes(observedAt, receivedAt time.Time) (time.Time, time.Time) {
+	observedAt = observedAt.UTC()
+	receivedAt = receivedAt.UTC()
+	if observedAt.After(receivedAt) {
+		observedAt = receivedAt
+	}
+	return observedAt, receivedAt
 }
 
 // dockerUpdateFactsMatch confirms the observed container is the replacement

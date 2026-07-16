@@ -20159,6 +20159,28 @@ func TestContract_DockerLifecycleActionsResolveCommandAgentAndDispatchOneTypedOp
 	}
 }
 
+func TestContract_DockerActionEvidenceBoundsPositiveAgentClockSkewAtReceipt(t *testing.T) {
+	source, err := os.ReadFile("docker_container_action_result.go")
+	if err != nil {
+		t.Fatalf("read docker_container_action_result.go: %v", err)
+	}
+	src := string(source)
+	for _, snippet := range []string{
+		"freshDockerLifecycleObservation(facts.Before.ObservedAt, facts.After.ObservedAt, receivedAt)",
+		"freshDockerUpdateObservation(facts.After.ObservedAt, receivedAt)",
+		"func dockerActionEvidenceTimes(observedAt, receivedAt time.Time) (time.Time, time.Time)",
+		"if observedAt.After(receivedAt) {",
+		"observedAt = receivedAt",
+	} {
+		if !strings.Contains(src, snippet) {
+			t.Fatalf("Docker action evidence must preserve bounded clock-skew handling snippet %q", snippet)
+		}
+	}
+	if calls := strings.Count(src, "dockerActionEvidenceTimes("); calls != 5 {
+		t.Fatalf("Docker lifecycle/update agent and independent evidence must all use the receipt-boundary helper; calls = %d, want 5", calls)
+	}
+}
+
 func TestContract_ProxmoxLifecycleActionsResolveNodeCommandAgentAndVerifyState(t *testing.T) {
 	source, err := os.ReadFile("proxmox_guest_action_executor.go")
 	if err != nil {

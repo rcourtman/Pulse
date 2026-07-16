@@ -51,6 +51,56 @@ func TestDockerContainerExecutionResultStaleReadbackIsInconclusive(t *testing.T)
 	}
 }
 
+func TestDockerContainerExecutionResultClampsBoundedPositiveAgentClockSkew(t *testing.T) {
+	receivedAt := time.Now().UTC()
+	facts := dockerResultFacts(receivedAt.Add(2*time.Second), true, true, true, true)
+	result, err := dockerContainerExecutionResult("app-container:fixture", "agent-1", agentexec.DockerContainerLifecyclePayload{Operation: agentexec.DockerContainerOperationRestart}, facts, nil, receivedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verification := result.ActionResultV2.Verification
+	if verification.Status != unified.ActionVerificationConfirmed || len(verification.Evidence) != 1 {
+		t.Fatalf("verification = %#v", verification)
+	}
+	if !verification.Evidence[0].ObservedAt.Equal(receivedAt) || !verification.Evidence[0].ReceivedAt.Equal(receivedAt) {
+		t.Fatalf("evidence timestamps = observed %s received %s, want receipt boundary %s", verification.Evidence[0].ObservedAt, verification.Evidence[0].ReceivedAt, receivedAt)
+	}
+}
+
+func TestDockerContainerExecutionResultRejectsExcessivePositiveAgentClockSkew(t *testing.T) {
+	receivedAt := time.Now().UTC()
+	facts := dockerResultFacts(receivedAt.Add(6*time.Minute), true, true, true, true)
+	result, err := dockerContainerExecutionResult("app-container:fixture", "agent-1", agentexec.DockerContainerLifecyclePayload{Operation: agentexec.DockerContainerOperationRestart}, facts, nil, receivedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verification := result.ActionResultV2.Verification
+	if verification.Status != unified.ActionVerificationInconclusive || verification.ReasonCode != "stale_agent_readback" || len(verification.Evidence) != 0 {
+		t.Fatalf("verification = %#v", verification)
+	}
+}
+
+func TestDockerContainerUpdateExecutionResultClampsBoundedPositiveAgentClockSkew(t *testing.T) {
+	receivedAt := time.Now().UTC()
+	observedAt := receivedAt.Add(2 * time.Second)
+	facts := agentexec.DockerContainerUpdateResultPayload{
+		Operation: agentexec.DockerContainerOperationUpdate, ActionID: "action-update", ExecutionPhase: agentexec.DockerContainerPhaseComplete,
+		MutationStarted: true, MutationCompleted: true, ReadbackRan: true, NewContainerID: dockerLifecycleTestID,
+		After: agentexec.DockerContainerLifecycleSnapshot{ContainerID: dockerLifecycleTestID, State: "running", Running: true, ObservedAt: observedAt},
+	}
+	result, err := dockerContainerUpdateExecutionResult("app-container:fixture", "agent-1", facts, nil, receivedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verification := result.ActionResultV2.Verification
+	if verification.Status != unified.ActionVerificationConfirmed || len(verification.Evidence) != 1 {
+		t.Fatalf("verification = %#v", verification)
+	}
+	if !verification.Evidence[0].ObservedAt.Equal(receivedAt) || !verification.Evidence[0].ReceivedAt.Equal(receivedAt) {
+		t.Fatalf("evidence timestamps = observed %s received %s, want receipt boundary %s", verification.Evidence[0].ObservedAt, verification.Evidence[0].ReceivedAt, receivedAt)
+	}
+}
+
 func TestDockerContainerExecutionResultClassifiesDistinctDaemonObserverAsIndependent(t *testing.T) {
 	now := time.Now().UTC()
 	facts := dockerResultFacts(now, true, true, true, true)

@@ -471,7 +471,12 @@ or canonical Docker host name and may mark its vetted container lifecycle
 dispatch as a trusted agent command after the API action has entered
 execution; lifecycle surfaces still consume only the resource payload, action
 readiness, and action-audit result rather than issuing or approving
-command-agent grants themselves.
+command-agent grants themselves. Because the agent and Pulse server have
+independent clocks, the API-owned Docker result projector validates raw
+lifecycle/update chronology within its bounded skew window and then binds a
+slightly future valid observation to the server receipt boundary for canonical
+evidence. Agent lifecycle consumers must not reject that bounded case, widen
+the skew window, or clamp stale/excessively future evidence into validity.
 
 Docker / Podman container image updates are a fourth typed operation on that
 same closed channel, not an extension of the raw command path and not a

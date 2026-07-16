@@ -2025,7 +2025,12 @@ a new API state machine, queue contract, or verification-accounting field.
    the executor may dispatch the vetted container lifecycle and verification
    commands as trusted agent commands; the host-agent hard-block policy still
    applies, and the action audit remains the approval and lifecycle source of
-   truth.
+   truth. Docker lifecycle and image-update result evidence must validate raw
+   agent chronology against the bounded freshness/skew window before canonical
+   normalization. When that valid raw observation is slightly ahead of the
+   server clock, the API conservatively binds its canonical `ObservedAt` to the
+   server `ReceivedAt` boundary; stale or excessively future observations stay
+   inconclusive and must never be made fresh by clamping.
    Proxmox QEMU VM and LXC lifecycle execution is part of that same API-owned
    action contract. Proxmox guest resources may expose only conservative
    lifecycle operations (`start`, `shutdown`, `reboot`, `stop`) and execution
