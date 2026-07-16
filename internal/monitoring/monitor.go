@@ -1740,6 +1740,13 @@ func (m *Monitor) effectivePVEPollingInterval() time.Duration {
 	return effectivePVEPollingIntervalForConfig(m.config)
 }
 
+func (m *Monitor) fixedIntervalForInstance(instanceType InstanceType, instanceName string) time.Duration {
+	if provider, ok := m.getPollProvider(instanceType).(FixedIntervalPollProvider); ok && provider != nil {
+		return provider.FixedInstanceInterval(m, instanceName)
+	}
+	return 0
+}
+
 func (m *Monitor) baseIntervalForInstanceType(instanceType InstanceType) time.Duration {
 	if provider := m.getPollProvider(instanceType); provider != nil {
 		if interval := provider.BaseInterval(m); interval > 0 {
@@ -2174,11 +2181,15 @@ func (m *Monitor) rescheduleTask(task ScheduledTask) {
 		return
 	}
 
+	fixedInterval := m.fixedIntervalForInstance(task.InstanceType, task.InstanceName)
+
 	if m.scheduler == nil {
-		baseInterval := m.baseIntervalForInstanceType(task.InstanceType)
-		nextInterval := task.Interval
+		nextInterval := fixedInterval
 		if nextInterval <= 0 {
-			nextInterval = baseInterval
+			nextInterval = task.Interval
+		}
+		if nextInterval <= 0 {
+			nextInterval = m.baseIntervalForInstanceType(task.InstanceType)
 		}
 		if nextInterval <= 0 {
 			nextInterval = DefaultSchedulerConfig().BaseInterval
@@ -2195,6 +2206,7 @@ func (m *Monitor) rescheduleTask(task ScheduledTask) {
 		Type:          task.InstanceType,
 		LastInterval:  task.Interval,
 		LastScheduled: task.NextRun,
+		FixedInterval: fixedInterval,
 	}
 	if m.stalenessTracker != nil {
 		if snap, ok := m.stalenessTracker.snapshot(task.InstanceType, task.InstanceName); ok {

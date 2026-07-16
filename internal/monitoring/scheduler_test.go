@@ -1862,6 +1862,42 @@ func TestBuildPlan_SingleInstance(t *testing.T) {
 	}
 }
 
+// TestBuildPlan_FixedInterval pins the user-configured cadence contract:
+// a descriptor with FixedInterval bypasses the adaptive selector and the
+// scheduler's min/max clamps entirely (#1582).
+func TestBuildPlan_FixedInterval(t *testing.T) {
+	t.Parallel()
+
+	cfg := SchedulerConfig{
+		BaseInterval: 10 * time.Second,
+		MinInterval:  5 * time.Second,
+		MaxInterval:  60 * time.Second,
+	}
+
+	// Selector would pick 5s (failing endpoint pushed to the floor); staleness
+	// is high. The fixed interval must win anyway, even above MaxInterval.
+	staleness := mockStalenessSource{scores: map[string]float64{"availability:check1": 1.0}}
+	scheduler := NewAdaptiveScheduler(cfg, staleness, mockIntervalSelector{interval: 5 * time.Second}, nil)
+
+	now := time.Now()
+	inventory := []InstanceDescriptor{
+		{
+			Name:          "check1",
+			Type:          InstanceTypeAvailability,
+			FixedInterval: 120 * time.Second,
+		},
+	}
+
+	tasks := scheduler.BuildPlan(now, inventory, 0)
+
+	if len(tasks) != 1 {
+		t.Fatalf("expected 1 task, got %d", len(tasks))
+	}
+	if tasks[0].Interval != 120*time.Second {
+		t.Errorf("expected fixed interval 120s to bypass the selector, got %v", tasks[0].Interval)
+	}
+}
+
 // TestBuildPlan_MultipleInstances tests scheduling multiple instances and ordering
 func TestBuildPlan_MultipleInstances(t *testing.T) {
 	t.Parallel()

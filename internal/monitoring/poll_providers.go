@@ -48,6 +48,13 @@ type ConnectionHealthKeyPollProvider interface {
 	ConnectionHealthKey(m *Monitor, instanceName string) string
 }
 
+// FixedIntervalPollProvider is an optional PollProvider extension for providers
+// whose instances carry a user-configured poll cadence that must be honored
+// exactly, bypassing adaptive interval selection.
+type FixedIntervalPollProvider interface {
+	FixedInstanceInterval(m *Monitor, instanceName string) time.Duration
+}
+
 // SupplementalRecordsPollProvider is an optional PollProvider extension for
 // providers that can emit source-native unified ingest records.
 type SupplementalRecordsPollProvider interface {

@@ -64,6 +64,11 @@ type InstanceDescriptor struct {
 	LastFailure   time.Time
 	LastScheduled time.Time
 	LastInterval  time.Duration
+	// FixedInterval pins the instance to a user-configured cadence. When set,
+	// the adaptive selector is bypassed entirely: availability checks promise
+	// pollInterval x failureThreshold as the detection window, so the
+	// scheduler must not probe faster on failure or slower when idle.
+	FixedInterval time.Duration
 	ErrorCount    int
 	Metadata      TaskMetadata
 }
@@ -181,15 +186,20 @@ func (s *AdaptiveScheduler) BuildPlan(now time.Time, inventory []InstanceDescrip
 			InstanceType:   inst.Type,
 		}
 
-		nextInterval := s.interval.SelectInterval(req)
-		if nextInterval <= 0 {
-			nextInterval = s.cfg.BaseInterval
-		}
-		if nextInterval < s.cfg.MinInterval {
-			nextInterval = s.cfg.MinInterval
-		}
-		if nextInterval > s.cfg.MaxInterval {
-			nextInterval = s.cfg.MaxInterval
+		var nextInterval time.Duration
+		if inst.FixedInterval > 0 {
+			nextInterval = inst.FixedInterval
+		} else {
+			nextInterval = s.interval.SelectInterval(req)
+			if nextInterval <= 0 {
+				nextInterval = s.cfg.BaseInterval
+			}
+			if nextInterval < s.cfg.MinInterval {
+				nextInterval = s.cfg.MinInterval
+			}
+			if nextInterval > s.cfg.MaxInterval {
+				nextInterval = s.cfg.MaxInterval
+			}
 		}
 
 		nextRun := now

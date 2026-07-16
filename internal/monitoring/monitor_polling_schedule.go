@@ -35,10 +35,14 @@ func (m *Monitor) describeInstancesForScheduler() []InstanceDescriptor {
 		sort.Strings(names)
 
 		providerType := provider.Type()
+		fixedProvider, _ := provider.(FixedIntervalPollProvider)
 		for _, name := range names {
 			desc := InstanceDescriptor{
 				Name: name,
 				Type: providerType,
+			}
+			if fixedProvider != nil {
+				desc.FixedInterval = fixedProvider.FixedInstanceInterval(m, name)
 			}
 			if m.scheduler != nil {
 				if last, ok := m.scheduler.LastScheduled(providerType, name); ok {
@@ -74,7 +78,10 @@ func (m *Monitor) buildScheduledTasks(now time.Time) []ScheduledTask {
 	if m.scheduler == nil {
 		tasks := make([]ScheduledTask, 0, len(descriptors))
 		for _, desc := range descriptors {
-			interval := m.baseIntervalForInstanceType(desc.Type)
+			interval := desc.FixedInterval
+			if interval <= 0 {
+				interval = m.baseIntervalForInstanceType(desc.Type)
+			}
 			if interval <= 0 {
 				interval = DefaultSchedulerConfig().BaseInterval
 			}

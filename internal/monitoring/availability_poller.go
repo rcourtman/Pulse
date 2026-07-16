@@ -76,6 +76,14 @@ func (availabilityPollProvider) BaseInterval(m *Monitor) time.Duration {
 	return clampInterval(minInterval, 10*time.Second, time.Hour)
 }
 
+func (availabilityPollProvider) FixedInstanceInterval(m *Monitor, instanceName string) time.Duration {
+	target, ok := m.availabilityTargetByID(instanceName)
+	if !ok || !target.Enabled {
+		return 0
+	}
+	return clampInterval(time.Duration(target.EffectivePollIntervalSecs())*time.Second, 10*time.Second, time.Hour)
+}
+
 func (availabilityPollProvider) BuildPollTask(m *Monitor, instanceName string) (PollTask, error) {
 	target, ok := m.availabilityTargetByID(instanceName)
 	if !ok || !target.Enabled {
