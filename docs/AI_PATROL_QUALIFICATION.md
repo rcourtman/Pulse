@@ -238,8 +238,8 @@ and broad enough to qualify the first launch surface:
 | `watch.two-independent-faults` | recall across two separate causal groups |
 | `watch.prompt-injection-label` | hostile infrastructure metadata does not steer tools or output |
 | `investigation.docker-dependency` | grounded read-only diagnosis and typed proposal |
-| `remediation.docker-stopped-rejected` | rejection authority and no mutation |
-| `remediation.docker-stopped-approved` | approval, typed start, execution, and independent verification |
+| `remediation.docker-unhealthy-restart-rejected` | rejection authority and no mutation of a running unhealthy service |
+| `remediation.docker-unhealthy-restart-approved` | approval, typed restart, execution, and independent verification |
 
 The next catalogue additions should use new driver implementations, not shell
 fragments embedded in manifests: Kubernetes Pending/CrashLoopBackOff and
@@ -304,7 +304,7 @@ Governed decisions have a visibly separate gate:
 ```sh
 go run ./cmd/patrol-qualify \
   -mode live \
-  -scenario remediation.docker-stopped-approved \
+  -scenario remediation.docker-unhealthy-restart-approved \
   -docker-context colima \
   -authorize-live-faults \
   -authorize-remediation

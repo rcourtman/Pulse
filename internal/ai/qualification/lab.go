@@ -301,6 +301,10 @@ func (l *DockerLab) ApplyFault(ctx context.Context, manifest Manifest, lab *Prep
 		if err := l.setMarker(ctx, manifest, lab, resource, true); err != nil {
 			return err
 		}
+	case "health_process_stop":
+		if _, err := l.docker(ctx, "exec", name, "/bin/sh", "-c", `kill "$(cat /tmp/pulse-qual-health.pid)"`); err != nil {
+			return fmt.Errorf("stop disposable health process for %s: %w", resource, err)
+		}
 	case "stop":
 		if _, err := l.docker(ctx, "stop", "--time", "5", name); err != nil {
 			return err
@@ -329,6 +333,10 @@ func (l *DockerLab) RevertFault(ctx context.Context, manifest Manifest, lab *Pre
 			return err
 		}
 		_, _ = l.docker(ctx, "start", name)
+	case "health_process_stop":
+		if _, err := l.docker(ctx, "restart", name); err != nil {
+			return fmt.Errorf("restart disposable health process fixture for %s: %w", resource, err)
+		}
 	case "stop", "kill":
 		if _, err := l.docker(ctx, "start", name); err != nil {
 			return err

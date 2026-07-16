@@ -276,3 +276,11 @@ func validTestManifest() Manifest {
 		Teardown:   TeardownSpec{RequireSecondNoop: true, RequireInventorySame: true},
 	}
 }
+
+func TestManifestAcceptsDriverOwnedHealthProcessFault(t *testing.T) {
+	manifest := validTestManifest()
+	manifest.Faults[0].Injector.Kind = "health_process_stop"
+	if err := manifest.Validate(); err != nil {
+		t.Fatalf("health_process_stop manifest rejected: %v", err)
+	}
+}

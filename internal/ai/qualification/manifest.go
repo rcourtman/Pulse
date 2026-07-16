@@ -335,7 +335,7 @@ func (m Manifest) Validate() error {
 			errs = append(errs, fmt.Errorf("fault %q injector targets unknown resource %q", fault.ID, fault.Injector.Resource))
 		}
 		switch fault.Injector.Kind {
-		case "marker_enable", "stop", "disconnect_network", "kill":
+		case "marker_enable", "health_process_stop", "stop", "disconnect_network", "kill":
 		default:
 			errs = append(errs, fmt.Errorf("fault %q has unsupported injector %q", fault.ID, fault.Injector.Kind))
 		}

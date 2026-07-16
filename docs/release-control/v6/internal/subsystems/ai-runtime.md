@@ -5897,6 +5897,19 @@ baseline before fault injection. The Watch correlation and Pro investigation
 fixtures use Alpine's `nc` applet for the disposable HTTP dependency; a missing
 optional daemon must fail baseline convergence and never be scored as a model
 miss.
+Governed Docker remediation qualification must not define a deliberate
+container stop as a required Watch finding. Patrol intentionally suppresses an
+ordinary stopped workload unless independent evidence establishes that it was
+expected to remain online and failed, so treating every runner-issued stop as
+ground truth would contradict the product's noise policy and make model scores
+depend on an ambiguity hidden from the model. The approval and rejection
+canaries instead keep a representative service running, stop a driver-owned
+internal health sentinel, require the normal collection path to expose the
+resulting failed health check, and score an exact typed `restart` action.
+Approval must independently prove that restart restores running/healthy state;
+rejection must independently prove the service remains running/unhealthy with
+no execution event until runner-owned teardown. The injector command is fixed
+inside the Docker lab driver rather than supplied as manifest shell text.
 Live qualification collection convergence must require both exact scenario
 resource names and the scenario-owned Docker oracle state projected by Pulse's
 canonical resources API. A direct lab oracle may prove the fault exists, but

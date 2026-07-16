@@ -74,3 +74,32 @@ func TestDockerInventoryIncludesImagesAndUsesSetSemantics(t *testing.T) {
 		t.Fatal("image drift must fail teardown inventory comparison")
 	}
 }
+
+func TestHealthProcessFaultUsesBoundedDriverOwnedCommands(t *testing.T) {
+	runner := &recordingCommandRunner{}
+	labDriver := NewDockerLab(runner, DockerTarget{Context: "colima"})
+	manifest := validTestManifest()
+	fault := manifest.Faults[0]
+	fault.Injector.Kind = "health_process_stop"
+	lab := &PreparedLab{
+		RunID:         "q-20260716-health",
+		ResourceNames: map[string]string{"target": "inventory-api-a1b2c3d4e5f6"},
+	}
+
+	if err := labDriver.ApplyFault(context.Background(), manifest, lab, fault); err != nil {
+		t.Fatalf("apply health-process fault: %v", err)
+	}
+	if err := labDriver.RevertFault(context.Background(), manifest, lab, fault); err != nil {
+		t.Fatalf("revert health-process fault: %v", err)
+	}
+
+	if len(runner.calls) != 2 {
+		t.Fatalf("driver calls = %d, want 2: %v", len(runner.calls), runner.calls)
+	}
+	if got, want := runner.calls[0], `docker --context colima exec inventory-api-a1b2c3d4e5f6 /bin/sh -c kill "$(cat /tmp/pulse-qual-health.pid)"`; got != want {
+		t.Fatalf("apply command = %q, want %q", got, want)
+	}
+	if got, want := runner.calls[1], "docker --context colima restart inventory-api-a1b2c3d4e5f6"; got != want {
+		t.Fatalf("revert command = %q, want %q", got, want)
+	}
+}
