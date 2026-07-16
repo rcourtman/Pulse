@@ -20872,13 +20872,15 @@ func TestContract_ProxyAuthConfiguredRoleHeaderMissingIsNonAdmin(t *testing.T) {
 }
 
 // TestContract_LocalAuthConfigReadsUseSharedLock pins the shared mutable-config
-// boundary for local username/password checks. Auth handlers may snapshot
-// credentials under the config lock, but must not read mutable auth fields
-// directly while hashing passwords or mutating sessions.
+// boundary for local username/password checks. checkAuth holds the shared read
+// lock across its decision, so its credential snapshot must not recursively
+// acquire that RWMutex while an API-token validation may be waiting to write.
 func TestContract_LocalAuthConfigReadsUseSharedLock(t *testing.T) {
 	expectations := map[string][]string{
 		"auth.go": {
-			"config.Mu.RLock()\n\t\t\t\t\t\tcfgAuthUser := cfg.AuthUser\n\t\t\t\t\t\tcfgAuthPass := cfg.AuthPass\n\t\t\t\t\t\tconfig.Mu.RUnlock()",
+			"config.Mu.RLock()\n\tdefer config.Mu.RUnlock()",
+			"func snapshotLocalAuthCredentialsLocked(cfg *config.Config) (string, string) {\n\treturn cfg.AuthUser, cfg.AuthPass\n}",
+			"cfgAuthUser, cfgAuthPass := snapshotLocalAuthCredentialsLocked(cfg)",
 			"constantTimeStringEqual(parts[0], cfgAuthUser)",
 			"internalauth.CheckPasswordHash(parts[1], cfgAuthPass)",
 		},
@@ -20901,6 +20903,14 @@ func TestContract_LocalAuthConfigReadsUseSharedLock(t *testing.T) {
 				t.Fatalf("%s must contain %q", file, snippet)
 			}
 		}
+	}
+
+	authSourceBytes, err := os.ReadFile("auth.go")
+	if err != nil {
+		t.Fatalf("read auth.go: %v", err)
+	}
+	if strings.Contains(string(authSourceBytes), "config.Mu.RLock()\n\t\t\t\t\t\tcfgAuthUser") {
+		t.Fatal("auth.go must not recursively acquire config.Mu while snapshotting local credentials")
 	}
 }
 

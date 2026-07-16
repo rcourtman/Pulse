@@ -4588,3 +4588,11 @@ adjacent entitlement boundary, not agent authority. It may stop a background
 report before generation when the current license lacks `advanced_reporting`,
 but it must not mint agent credentials, dispatch agent work, reinterpret an
 agent receipt, or expand any lifecycle capability.
+
+The adjacent shared authentication boundary must also preserve agent liveness
+while an operator or qualification client uses local Basic authentication.
+Agent API-token validation may update the token usage record under the global
+configuration write lock; a simultaneous local credential check must not take
+a recursive read lock while already inside `checkAuth`'s read-locked decision.
+The server must continue accepting reports and command registrations under
+that mixed-auth load rather than allowing a queued writer to freeze the API.

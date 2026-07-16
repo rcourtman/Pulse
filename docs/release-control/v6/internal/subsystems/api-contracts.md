@@ -7709,3 +7709,14 @@ license service as the HTTP reporting routes. `runReportSchedule` must check
 missing resolver service fails closed in the routed runtime. Downgrade cleanup
 is an internal scheduled side effect only: it does not add a public report API,
 change report payload schemas, or delete schedule definitions.
+
+Local Basic authentication and agent API-token authentication share the global
+mutable configuration boundary. `checkAuth` holds one read lock across an
+authentication decision; a credential snapshot inside that boundary must use
+a lock-free, caller-locked helper and must not recursively acquire `config.Mu`.
+API-token validation may temporarily release its read lock and queue for the
+write lock to update token usage. A second Basic-auth read lock behind that
+queued writer would create a circular wait and freeze every API consumer,
+including live agent reporting and Patrol qualification. Contract proof pins
+the single-lock boundary, and concurrency proof queues the writer before
+exercising the local credential snapshot.

@@ -650,6 +650,15 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	return checkAuth(cfg, w, r, true)
 }
 
+// snapshotLocalAuthCredentialsLocked returns the local credentials while the
+// caller holds config.Mu for reading or writing. It deliberately does not take
+// the lock itself: checkAuth keeps a read lock across its authentication
+// decision, and recursively taking an RWMutex read lock can deadlock once an
+// API-token validation is waiting to upgrade to the write lock.
+func snapshotLocalAuthCredentialsLocked(cfg *config.Config) (string, string) {
+	return cfg.AuthUser, cfg.AuthPass
+}
+
 func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, writeDefaultFailure bool) bool {
 	// Dev mode bypass for all auth (disabled by default)
 	if adminBypassEnabled() {
@@ -866,10 +875,7 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 							}
 							return false
 						}
-						config.Mu.RLock()
-						cfgAuthUser := cfg.AuthUser
-						cfgAuthPass := cfg.AuthPass
-						config.Mu.RUnlock()
+						cfgAuthUser, cfgAuthPass := snapshotLocalAuthCredentialsLocked(cfg)
 						userMatch := constantTimeStringEqual(parts[0], cfgAuthUser)
 						passMatch := internalauth.CheckPasswordHash(parts[1], cfgAuthPass)
 

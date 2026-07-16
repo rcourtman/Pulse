@@ -2132,6 +2132,14 @@ while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
 
+The adjacent shared authentication boundary must remain live when storage or
+recovery browser reads authenticated with local credentials overlap agent
+API-token reports. Local credential snapshots inside `checkAuth` use the
+already-held global configuration read lock and must not recursively acquire
+it, because token usage validation may be waiting for the corresponding write
+lock. This concurrency rule changes no storage/recovery payload, authority, or
+support claim; it prevents mixed-auth traffic from stalling those surfaces.
+
 Storage and recovery consumers must not treat confirmed agent-attested action
 readback as independently verified restoration. The canonical result retains
 its confirmation and evidence class, while the legacy Patrol finding outcome

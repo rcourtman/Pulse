@@ -3,12 +3,69 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
+
+func TestSnapshotLocalAuthCredentialsLockedDoesNotReenterConfigLock(t *testing.T) {
+	cfg := &config.Config{AuthUser: "admin", AuthPass: "hash"}
+
+	// Hold the same outer read lock as checkAuth, then queue a writer exactly as
+	// API-token validation does. Go's RWMutex blocks any new reader behind that
+	// writer, so a recursive RLock in the snapshot would never return.
+	config.Mu.RLock()
+	outerLocked := true
+	defer func() {
+		if outerLocked {
+			config.Mu.RUnlock()
+		}
+	}()
+
+	writerAttempting := make(chan struct{})
+	writerAcquired := make(chan struct{})
+	writerDone := make(chan struct{})
+	go func() {
+		close(writerAttempting)
+		config.Mu.Lock()
+		close(writerAcquired)
+		config.Mu.Unlock()
+		close(writerDone)
+	}()
+	<-writerAttempting
+	runtime.Gosched()
+
+	snapshotDone := make(chan [2]string, 1)
+	go func() {
+		user, pass := snapshotLocalAuthCredentialsLocked(cfg)
+		snapshotDone <- [2]string{user, pass}
+	}()
+
+	select {
+	case got := <-snapshotDone:
+		if got != [2]string{"admin", "hash"} {
+			t.Fatalf("credential snapshot = %#v, want admin/hash", got)
+		}
+	case <-writerAcquired:
+		t.Fatal("writer acquired config.Mu while the outer read lock was held")
+	case <-time.After(250 * time.Millisecond):
+		config.Mu.RUnlock()
+		outerLocked = false
+		<-writerDone
+		t.Fatal("credential snapshot blocked behind a pending config writer; recursive RLock deadlock regressed")
+	}
+
+	config.Mu.RUnlock()
+	outerLocked = false
+	select {
+	case <-writerDone:
+	case <-time.After(time.Second):
+		t.Fatal("queued config writer did not complete after releasing outer read lock")
+	}
+}
 
 func TestCheckAuth_APIOnlyModeRequiresToken(t *testing.T) {
 	record, err := config.NewAPITokenRecord("token-required-123.12345678", "api", []string{config.ScopeMonitoringRead})
