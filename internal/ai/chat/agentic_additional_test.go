@@ -160,6 +160,9 @@ func TestPatrolFinalFindingDecisionRequestNarrowsWatchTools(t *testing.T) {
 	if !strings.Contains(req.System, "concrete evidence") || !strings.Contains(req.System, "safe, actionable recommendation") {
 		t.Fatalf("final decision prompt does not require a grounded actionable finding: %q", req.System)
 	}
+	if !strings.Contains(req.System, strings.Join(tools.PatrolReportFindingRequiredArguments(), ", ")) || !strings.Contains(req.System, "reporting several findings in parallel") {
+		t.Fatalf("final decision prompt does not require independently complete report calls: %q", req.System)
+	}
 	if req.ToolChoice != nil {
 		t.Fatalf("final decision request must remain model-owned, got choice %+v", req.ToolChoice)
 	}

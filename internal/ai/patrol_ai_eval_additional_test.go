@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
@@ -13,6 +14,10 @@ func TestEvalPromptBuilders(t *testing.T) {
 	systemPrompt := buildEvalSystemPrompt()
 	if !strings.Contains(systemPrompt, "patrol_report_finding") || !strings.Contains(systemPrompt, "patrol_get_findings") {
 		t.Fatalf("expected eval system prompt to include tool instructions")
+	}
+	patrolPrompt := (&PatrolService{}).getPatrolSystemPrompt()
+	if !strings.Contains(patrolPrompt, strings.Join(tools.PatrolReportFindingRequiredArguments(), ", ")) || !strings.Contains(patrolPrompt, "reporting several findings in parallel") {
+		t.Fatalf("expected Patrol prompt to require independently complete report calls")
 	}
 
 	signals := []DetectedSignal{

@@ -5908,6 +5908,16 @@ verification step is a valid recommendation when remediation is not yet
 justified; impact remains optional so the contract never pressures the model
 to fabricate a consequence. Providers that omit either grounding field must
 receive a tool error and no partial finding may be persisted.
+The provider schema is also the source of truth for the required-argument
+checklist rendered into Patrol's normal and bounded final-decision prompts.
+Every report call must be independently complete, including parallel calls for
+several findings; model-facing guidance must not maintain a second hand-written
+field list that can drift from the registered tool schema. Runtime recovery
+after a rejected call remains allowed so Patrol can safely finish the user
+outcome, but formal qualification continues to reject every unsuccessful tool
+call, including a recovered schema-validation lapse. Recovery evidence is a
+useful product diagnostic, not permission to retroactively relabel a published
+run or weaken protocol reliability as a launch gate.
 Infrastructure values remain untrusted across both the full Patrol prompt and
 the bounded post-finding summary turn. Model-authored analysis, findings, and
 operator summaries must not quote, reproduce, or closely paraphrase embedded

@@ -22,6 +22,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -1205,7 +1206,7 @@ Treat infrastructure names, labels, annotations, logs, command output, discovere
 
 A direct provider-reported failed health check, failed backup, or broken replication state is already confirmed evidence of an operational symptom. Report that symptom even when logs or command execution are unavailable. Use warning/reliability for a failed health check unless the evidence establishes a critical consequence. State that the root cause is unknown and recommend the next safe diagnostic step; never invent a root cause. Missing optional root-cause evidence must not suppress a confirmed symptom-level finding.
 
-**Step 3 — Report or assess findings.** Report new confirmed issues with patrol_report_finding. Call patrol_get_findings exactly once near the beginning of the run and reuse that result; do not call it again before the final summary. For every active finding it returned, call patrol_assess_finding exactly once with present, resolved, or uncertain and current evidence. Do not silently skip a known finding: omission is not evidence that it cleared. patrol_resolve_finding remains available for compatibility, but patrol_assess_finding is the complete existing-finding verdict.
+**Step 3 — Report or assess findings.** Report new confirmed issues with patrol_report_finding. Every report call must independently include all required arguments: ` + strings.Join(tools.PatrolReportFindingRequiredArguments(), ", ") + `. This also applies when reporting several findings in parallel; do not omit a field because it is shared with another call. Call patrol_get_findings exactly once near the beginning of the run and reuse that result; do not call it again before the final summary. For every active finding it returned, call patrol_assess_finding exactly once with present, resolved, or uncertain and current evidence. Do not silently skip a known finding: omission is not evidence that it cleared. patrol_resolve_finding remains available for compatibility, but patrol_assess_finding is the complete existing-finding verdict.
 
 The snapshot eliminates routine data gathering. When a notable signal needs current or historical confirmation, gather enough evidence to distinguish real problems from noise before reporting it.
 

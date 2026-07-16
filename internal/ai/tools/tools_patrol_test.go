@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
@@ -789,11 +790,21 @@ func TestPatrolToolsRegistered(t *testing.T) {
 	assert.Contains(t, reportTool.Description, "failed health check")
 	assert.Contains(t, reportTool.Description, "root cause is unknown")
 	assert.Contains(t, reportTool.Description, "safe, actionable recommendation")
+	assert.Equal(t, PatrolReportFindingRequiredArguments(), reportTool.InputSchema.Required)
+	assert.Contains(t, reportTool.Description, strings.Join(PatrolReportFindingRequiredArguments(), ", "))
+	assert.Contains(t, reportTool.Description, "reporting several findings in parallel")
 	assert.Contains(t, reportTool.InputSchema.Required, "recommendation")
 	assert.Contains(t, reportTool.InputSchema.Required, "evidence")
 	assert.NotContains(t, reportTool.InputSchema.Required, "impact")
 	require.NotEmpty(t, getFindingsTool.Name)
 	assert.Contains(t, getFindingsTool.Description, "exactly once")
+}
+
+func TestPatrolReportFindingRequiredArgumentsReturnsCopy(t *testing.T) {
+	first := PatrolReportFindingRequiredArguments()
+	first[0] = "mutated"
+	second := PatrolReportFindingRequiredArguments()
+	assert.Equal(t, "key", second[0])
 }
 
 func TestPatrolToolsAvailability(t *testing.T) {

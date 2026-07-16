@@ -8,6 +8,25 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 )
 
+// PatrolReportFindingRequiredArguments returns the schema-owned argument list
+// used by both provider projection and Patrol's model-facing authoring
+// guidance. Each caller receives its own slice so prompt construction cannot
+// mutate the registered provider contract.
+func PatrolReportFindingRequiredArguments() []string {
+	return []string{
+		"key",
+		"severity",
+		"category",
+		"resource_id",
+		"resource_name",
+		"resource_type",
+		"title",
+		"description",
+		"recommendation",
+		"evidence",
+	}
+}
+
 // registerPatrolTools registers the patrol-specific finding lifecycle tools.
 // These tools are only functional during a patrol run when patrolFindingCreator is set.
 func (e *PulseToolExecutor) registerPatrolTools() {
@@ -15,13 +34,14 @@ func (e *PulseToolExecutor) registerPatrolTools() {
 	e.registry.registerBuiltin(RegisteredTool{
 		Definition: Tool{
 			Name: agentcapabilities.PatrolReportFindingToolName,
-			Description: `Report an infrastructure finding discovered during patrol investigation.
+			Description: fmt.Sprintf(`Report an infrastructure finding discovered during patrol investigation.
 
 Call this tool to create a structured finding after you have gathered sufficient evidence. A provider-reported failed health check, failed backup, or broken replication state is sufficient evidence for the confirmed symptom even when optional logs or command execution are unavailable. Use warning/reliability for a failed health check unless the evidence establishes a critical consequence. Report the symptom and state that its root cause is unknown; do not fabricate a cause or suppress the finding while searching for one.
+Every call must independently include all required arguments: %s. This also applies when reporting several findings in parallel; do not omit a field because it is shared with another call.
 Every finding must include concrete evidence and a safe, actionable recommendation grounded in that evidence. The recommendation may be a bounded investigation or verification step when remediation is not yet justified; never claim that an action was taken or verified when it was not.
 The finding will be validated against current metrics and deduplicated automatically.
 
-Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
+Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`, strings.Join(PatrolReportFindingRequiredArguments(), ", ")),
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -77,7 +97,7 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 							"Always include the key evidence — if you gathered enough data to create this finding, you have evidence to report.",
 					},
 				},
-				Required: []string{"key", "severity", "category", "resource_id", "resource_name", "resource_type", "title", "description", "recommendation", "evidence"},
+				Required: PatrolReportFindingRequiredArguments(),
 			},
 		},
 		Handler: handlePatrolReportFinding,
