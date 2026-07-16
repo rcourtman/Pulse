@@ -24,6 +24,12 @@ const (
 	SubscriptionAgentCodex  SubscriptionAgent = "codex-subscription"
 	SubscriptionAgentClaude SubscriptionAgent = "claude-subscription"
 
+	// SubscriptionAgentMinimumRequestTimeout accounts for local CLI startup,
+	// subscription-plan routing, and non-streaming structured-output assembly.
+	// Caller cancellation still wins, and Patrol preflight applies its own
+	// route-aware outer deadline.
+	SubscriptionAgentMinimumRequestTimeout = 2 * time.Minute
+
 	maxSubscriptionAgentPromptBytes = 4 << 20
 	maxSubscriptionAgentOutputBytes = 8 << 20
 )
@@ -86,7 +92,18 @@ func (b *cappedBuffer) Write(p []byte) (int, error) {
 }
 
 func NewSubscriptionAgentClient(agent SubscriptionAgent, model string, timeout time.Duration) *SubscriptionAgentClient {
-	return &SubscriptionAgentClient{agent: agent, model: strings.TrimSpace(model), timeout: timeout}
+	return &SubscriptionAgentClient{
+		agent:   agent,
+		model:   strings.TrimSpace(model),
+		timeout: subscriptionAgentRequestTimeout(timeout),
+	}
+}
+
+func subscriptionAgentRequestTimeout(configured time.Duration) time.Duration {
+	if configured < SubscriptionAgentMinimumRequestTimeout {
+		return SubscriptionAgentMinimumRequestTimeout
+	}
+	return configured
 }
 
 func (c *SubscriptionAgentClient) Name() string { return string(c.agent) }

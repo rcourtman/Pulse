@@ -6,6 +6,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -42,6 +45,80 @@ func newPatrolPreflightTestService(t *testing.T, model string, handler http.Hand
 		OpenAIBaseURL: server.URL,
 	}
 	return &patrolPreflightTestService{svc: svc, server: server}
+}
+
+func TestPatrolPreflightTimeoutIsRouteAware(t *testing.T) {
+	tests := []struct {
+		provider string
+		want     time.Duration
+	}{
+		{provider: config.AIProviderOpenAI, want: 30 * time.Second},
+		{provider: config.AIProviderAnthropic, want: 30 * time.Second},
+		{provider: config.AIProviderCodexSubscription, want: 2 * time.Minute},
+		{provider: config.AIProviderClaudeSubscription, want: 2 * time.Minute},
+		{provider: "", want: 30 * time.Second},
+		{provider: "future-provider", want: 30 * time.Second},
+	}
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			if got := patrolPreflightTimeout(tt.provider); got != tt.want {
+				t.Fatalf("patrolPreflightTimeout(%q) = %s, want %s", tt.provider, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunPatrolToolPreflightSubscriptionRoutePreservesCallerCancellation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fake subscription CLI uses a POSIX shell script")
+	}
+	binDir := t.TempDir()
+	claudePath := filepath.Join(binDir, "claude")
+	if err := os.WriteFile(claudePath, []byte(`#!/bin/sh
+while :; do :; done
+`), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	svc := NewService(config.NewConfigPersistence(t.TempDir()), nil)
+	svc.cfg = &config.AIConfig{
+		Enabled:                   true,
+		Model:                     "claude-subscription:opus",
+		PatrolModel:               "claude-subscription:opus",
+		ClaudeSubscriptionEnabled: true,
+		RequestTimeoutSeconds:     1,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	result := svc.RunPatrolToolPreflight(ctx, "", "")
+	if result.Success {
+		t.Fatalf("expected caller cancellation to fail subscription preflight, got %+v", result)
+	}
+	if elapsed := time.Since(started); elapsed > 500*time.Millisecond {
+		t.Fatalf("subscription caller cancellation took %s", elapsed)
+	}
+}
+
+func TestRunPatrolToolPreflightPreservesCallerCancellation(t *testing.T) {
+	h := newPatrolPreflightTestService(t, "openai:gpt-4o-mini", func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(200 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"late","model":"gpt-4o-mini","choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"late"}}]}`))
+	})
+	defer h.close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	result := h.svc.RunPatrolToolPreflight(ctx, "", "")
+	if result.Success {
+		t.Fatalf("expected caller cancellation to fail preflight, got %+v", result)
+	}
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("caller cancellation took %s", elapsed)
+	}
 }
 
 func TestRunPatrolToolPreflight_Success_ToolCallObserved(t *testing.T) {

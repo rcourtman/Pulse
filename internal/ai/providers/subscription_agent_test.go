@@ -40,6 +40,16 @@ func TestCappedBufferBoundsChildOutput(t *testing.T) {
 	}
 }
 
+func TestSubscriptionAgentRequestTimeout(t *testing.T) {
+	if got := subscriptionAgentRequestTimeout(30 * time.Second); got != SubscriptionAgentMinimumRequestTimeout {
+		t.Fatalf("short configured timeout = %s, want %s", got, SubscriptionAgentMinimumRequestTimeout)
+	}
+	configured := 3 * time.Minute
+	if got := subscriptionAgentRequestTimeout(configured); got != configured {
+		t.Fatalf("long configured timeout = %s, want %s", got, configured)
+	}
+}
+
 func TestNormalizeSubscriptionAgentModel(t *testing.T) {
 	tests := []struct {
 		name      string

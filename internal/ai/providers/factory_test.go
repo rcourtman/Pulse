@@ -3,6 +3,7 @@ package providers
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -472,6 +473,37 @@ func TestNewForProvider_AnthropicOAuthUnsupported(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "OAuth subscription authentication is unsupported") {
 		t.Fatalf("expected unsupported OAuth error, got %v", err)
+	}
+}
+
+func TestNewForProvider_SubscriptionAgentsReceiveMinimumRequestAllowance(t *testing.T) {
+	cfg := &config.AIConfig{
+		Enabled:                   true,
+		RequestTimeoutSeconds:     30,
+		CodexSubscriptionEnabled:  true,
+		ClaudeSubscriptionEnabled: true,
+	}
+	tests := []struct {
+		provider string
+		model    string
+	}{
+		{provider: config.AIProviderCodexSubscription, model: "gpt-5.6-luna"},
+		{provider: config.AIProviderClaudeSubscription, model: "opus"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			provider, err := NewForProvider(cfg, tt.provider, tt.model)
+			if err != nil {
+				t.Fatal(err)
+			}
+			client, ok := provider.(*SubscriptionAgentClient)
+			if !ok {
+				t.Fatalf("provider = %T, want *SubscriptionAgentClient", provider)
+			}
+			if client.timeout != 2*time.Minute {
+				t.Fatalf("timeout = %s, want 2m", client.timeout)
+			}
+		})
 	}
 }
 

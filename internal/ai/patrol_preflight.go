@@ -42,6 +42,17 @@ type PatrolPreflightResult struct {
 // outside preflight has no operational meaning.
 const patrolPreflightToolName = "verify_pulse_patrol"
 
+const defaultPatrolPreflightTimeout = 30 * time.Second
+
+func patrolPreflightTimeout(provider string) time.Duration {
+	switch strings.TrimSpace(provider) {
+	case config.AIProviderCodexSubscription, config.AIProviderClaudeSubscription:
+		return providers.SubscriptionAgentMinimumRequestTimeout
+	default:
+		return defaultPatrolPreflightTimeout
+	}
+}
+
 // patrolPreflightCache holds the most recent PatrolPreflightResult plus
 // the wall-clock time it was recorded. Surfaced through the AI settings
 // response so the UI can render a "last verified" indicator without
@@ -81,14 +92,11 @@ func (s *Service) recordPatrolPreflight(result PatrolPreflightResult, at time.Ti
 // background so callers (notably the settings save handler) don't block
 // on a 5-10 second LLM round-trip. The result populates the preflight
 // cache and the next /api/settings/ai poll surfaces it through the
-// patrol_preflight snapshot. The 30s timeout matches the manual
-// preflight handler so a stuck provider can't pin the goroutine
-// indefinitely.
+// patrol_preflight snapshot. RunPatrolToolPreflight owns the route-aware
+// deadline so the asynchronous and manual entrypoints cannot drift.
 func (s *Service) TriggerPatrolPreflightAsync(provider, model string) {
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		s.RunPatrolToolPreflight(ctx, provider, model)
+		s.RunPatrolToolPreflight(context.Background(), provider, model)
 	}()
 }
 
@@ -176,6 +184,8 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 	parsedProvider, parsedModel := config.ParseModelString(modelStr)
 	result.Provider = parsedProvider
 	result.Model = parsedModel
+	preflightCtx, cancel := context.WithTimeout(ctx, patrolPreflightTimeout(parsedProvider))
+	defer cancel()
 
 	provider, err := providers.NewForModel(cfg, modelStr)
 	if err != nil {
@@ -216,7 +226,7 @@ func (s *Service) RunPatrolToolPreflight(ctx context.Context, providerName, mode
 		req.ToolChoice = &providers.ToolChoice{Type: providers.ToolChoiceRequired}
 	}
 
-	resp, err := provider.Chat(ctx, req)
+	resp, err := provider.Chat(preflightCtx, req)
 	result.DurationMs = time.Since(started).Milliseconds()
 
 	if err != nil {

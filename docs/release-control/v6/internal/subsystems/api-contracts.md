@@ -1503,7 +1503,12 @@ payload shape change when the portal presents compact client rows.
     provider-test and Patrol-preflight endpoints remain the authority for
     binary, login, model-access, and structured-tool readiness. No API response
     may expose CLI credential material, and no failure may silently substitute
-    the corresponding metered API provider.
+    the corresponding metered API provider. The manual Patrol-preflight handler
+    and settings-triggered asynchronous preflight must delegate deadline
+    ownership to the AI runtime so route policy cannot drift at the API edge:
+    API providers retain the 30-second preflight budget, local subscription
+    agents receive the bounded two-minute preflight budget, and an earlier
+    request cancellation still wins.
     Legacy Assistant SSE routes in this handler that still use the older
     execute envelope, including `/api/ai/execute/stream` and
     `/api/ai/investigate-alert`, must preserve their existing top-level

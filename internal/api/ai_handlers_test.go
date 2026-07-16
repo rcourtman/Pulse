@@ -3608,6 +3608,21 @@ func TestAISettingsHandler_PatrolPreflight_RejectsInvalidProviderName(t *testing
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+func TestAISettingsHandler_PatrolPreflight_DelegatesDeadlineToAIRuntime(t *testing.T) {
+	source, err := os.ReadFile("ai_handlers.go")
+	require.NoError(t, err)
+	text := string(source)
+	start := strings.Index(text, "func (h *AISettingsHandler) HandlePatrolPreflight(")
+	require.NotEqual(t, -1, start)
+	end := strings.Index(text[start:], "\nfunc ")
+	if end < 0 {
+		end = len(text) - start
+	}
+	body := text[start : start+end]
+	require.Contains(t, body, "RunPatrolToolPreflight(r.Context(), body.Provider, body.Model)")
+	require.NotContains(t, body, "context.WithTimeout")
+}
+
 // TestOrchestratorAndChatAdaptersMapTheSameMessageFields keeps the deliberate
 // GetMessages mirror between orchestratorChatAdapter (ai_handlers.go) and
 // chatServiceAdapter (chat_service_adapter.go) honest: both convert the same

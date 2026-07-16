@@ -6076,13 +6076,10 @@ func (h *AISettingsHandler) HandlePatrolPreflight(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Tight timeout: preflight is a single round-trip, not a Patrol pass.
-	// 30s matches the per-provider connection-test budget; in practice
-	// this completes in well under 10s for any healthy provider.
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-	defer cancel()
-
-	preflight := aiService.RunPatrolToolPreflight(ctx, body.Provider, body.Model)
+	// The service owns the route-aware deadline. API providers keep the tight
+	// preflight budget while local subscription agents receive enough time for
+	// bounded CLI startup and structured-output assembly.
+	preflight := aiService.RunPatrolToolPreflight(r.Context(), body.Provider, body.Model)
 
 	response := aiPatrolPreflightResponse{
 		Success:          preflight.Success && preflight.ToolCallObserved,
