@@ -999,9 +999,9 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
-The active support prerelease `v6.1.0-rc.1` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.1.0-rc.2` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.1.0-rc.1` release
+fallback, and Helm chart release metadata to the same `6.1.0-rc.2` release
 version. This support prerelease keeps `rollback_version=v6.0.5`, publishes a
 versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and
 does not move stable/latest install pointers or stable semver aliases. It puts
@@ -1009,7 +1009,11 @@ the expanded Pulse Intelligence action and verification lifecycle, the
 operator-facing Actions inbox, monitor-first product workflows, governed host
 and storage operations, native-agent update safety, Windows logged-readiness
 and recovery proof, OIDC callback recovery, and fail-closed security hardening
-behind RC validation before the next stable minor release.
+behind RC validation before the next stable minor release. The second candidate
+extends that cumulative scope with model-led Patrol qualification,
+subscription-backed Claude transport, typed Docker update and restart recovery,
+a governed commercial lifecycle, and additional fail-closed authentication and
+installer hardening.
 The companion evidence for this cut is Pulse Mobile iOS build 10 and Android
 versionCode 8 on TestFlight and Google Play internal testing only. The release
 packet must not describe either candidate as a public store rollout.
@@ -1072,8 +1076,8 @@ compose image default, standalone installer fallback constant, and packaged
 Helm metadata. A draft release workflow failure caused by stale image or chart
 pins is a release-packet blocker until the defaults, tests, and evidence
 record are refreshed from the new branch head.
-For the active support prerelease `v6.1.0-rc.1` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.1.0-rc.1`
+For the active support prerelease `v6.1.0-rc.2` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.1.0-rc.2`
 until the next governed stable cut moves them forward. The stable promotion
 guard remains in force and must reject leftover `-rc.` defaults when the
 governed `VERSION` returns to a stable release.

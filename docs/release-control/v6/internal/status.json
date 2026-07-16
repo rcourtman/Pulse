@@ -8870,7 +8870,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-lane-l1",
+      "agent_id": "codex",
+      "summary": "Prepare and publish the governed v6.1.0-rc.2 release packet",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-16T22:37:38Z",
+      "heartbeat_at": "2026-07-16T22:37:38Z",
+      "expires_at": "2026-07-17T02:37:38Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L1"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
