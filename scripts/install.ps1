@@ -873,7 +873,10 @@ try {
     $DownloadedVersion = ""
 }
 
-if (-not [string]::IsNullOrWhiteSpace($ServerVersion) -and -not [string]::IsNullOrWhiteSpace($DownloadedVersion) -and $DownloadedVersion -ne $ServerVersion) {
+$DownloadedVersionNormalized = $DownloadedVersion.TrimStart('v')
+$ServerVersionNormalized = $ServerVersion.TrimStart('v')
+
+if (-not [string]::IsNullOrWhiteSpace($ServerVersion) -and -not [string]::IsNullOrWhiteSpace($DownloadedVersion) -and $DownloadedVersionNormalized -ne $ServerVersionNormalized) {
     Write-Host "Warning: downloaded agent version ($DownloadedVersion) does not match Pulse server version ($ServerVersion). Check that Pulse is upgraded and that any reverse proxy is not serving a stale cached binary." -ForegroundColor Yellow
 }
 
