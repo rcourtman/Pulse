@@ -3386,6 +3386,46 @@ func TestCleanupRemovedHostAgents_ExpiresPersistedEntries(t *testing.T) {
 	}
 }
 
+// TestMatchHostConfigContinuity pins the #1570 config-fetch fallback: after a
+// monitor reload wipes live state, a report-scoped token still resolves its
+// bound host from the persisted continuity store, other tokens do not, and a
+// manage-scoped (empty token) lookup resolves by host ID.
+func TestMatchHostConfigContinuity(t *testing.T) {
+	dir := t.TempDir()
+	monitor := &Monitor{
+		hostContinuityStore: config.NewHostContinuityStore(dir, nil),
+	}
+
+	entry := config.HostContinuityEntry{
+		HostID:    "host-cont-1",
+		Hostname:  "cont.local",
+		MachineID: "machine-cont-1",
+		TokenID:   "token-cont-1",
+		LastSeen:  time.Now().UTC(),
+	}
+	if err := monitor.hostContinuityStore.Upsert(entry); err != nil {
+		t.Fatalf("upsert continuity entry: %v", err)
+	}
+
+	host, ok := monitor.MatchHostConfigContinuity("host-cont-1", "token-cont-1")
+	if !ok || host.ID != "host-cont-1" {
+		t.Fatalf("expected token-bound continuity match, got ok=%v host=%q", ok, host.ID)
+	}
+
+	if _, ok := monitor.MatchHostConfigContinuity("host-cont-1", "token-other"); ok {
+		t.Fatal("expected no match for a token the host is not bound to")
+	}
+
+	host, ok = monitor.MatchHostConfigContinuity("host-cont-1", "")
+	if !ok || host.ID != "host-cont-1" {
+		t.Fatalf("expected ID-based continuity match for manage scope, got ok=%v host=%q", ok, host.ID)
+	}
+
+	if _, ok := monitor.MatchHostConfigContinuity("host-unknown", ""); ok {
+		t.Fatal("expected no ID-based match for an unknown host")
+	}
+}
+
 func TestApplyHostReport_MissingHostname(t *testing.T) {
 	monitor := &Monitor{
 		state:             models.NewState(),

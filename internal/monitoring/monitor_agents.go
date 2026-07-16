@@ -852,6 +852,43 @@ func (m *Monitor) matchPersistedHostContinuity(
 	)
 }
 
+// MatchHostConfigContinuity resolves a host identity for agent config fetches
+// from the persisted continuity store. Live state loses agent-reported hosts
+// across monitor reloads and restarts until the next report lands, and config
+// fetches in that window 404ed with a valid token (#1570). Mirrors the live
+// resolution semantics: a report-scoped token resolves by its binding, a
+// manage-scoped (or absent) token resolves by host ID.
+func (m *Monitor) MatchHostConfigContinuity(agentID, tokenID string) (models.Host, bool) {
+	if m == nil || m.hostContinuityStore == nil {
+		return models.Host{}, false
+	}
+	agentID = strings.TrimSpace(agentID)
+	tokenID = strings.TrimSpace(tokenID)
+
+	// RecentEntries is sorted newest-first, so the first match wins.
+	for _, entry := range m.hostContinuityStore.RecentEntries(m.hostContinuitySince(time.Now().UTC())) {
+		if tokenID != "" {
+			if strings.TrimSpace(entry.TokenID) != tokenID {
+				continue
+			}
+		} else if agentID == "" ||
+			(entry.HostID != agentID && entry.ReportHostID != agentID && entry.AgentReportedID != agentID) {
+			continue
+		}
+		return models.Host{
+			ID:          entry.HostID,
+			Hostname:    entry.Hostname,
+			DisplayName: entry.DisplayName,
+			MachineID:   entry.MachineID,
+			TokenID:     entry.TokenID,
+			Platform:    entry.Platform,
+			IsLegacy:    entry.IsLegacy,
+		}, true
+	}
+
+	return models.Host{}, false
+}
+
 func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Report) {
 	if m == nil || m.hostContinuityStore == nil {
 		return

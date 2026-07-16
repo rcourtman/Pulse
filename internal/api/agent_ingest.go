@@ -363,7 +363,8 @@ func (h *UnifiedAgentHandlers) canReadConfig(record *config.APITokenRecord) bool
 func (h *UnifiedAgentHandlers) resolveConfigAgent(ctx context.Context, agentID string, record *config.APITokenRecord) (models.Host, bool) {
 	// Use the live host snapshot so agents can still fetch config while
 	// Pulse is running in mock/demo mode.
-	hosts := h.getMonitor(ctx).GetLiveHostsSnapshot()
+	monitor := h.getMonitor(ctx)
+	hosts := monitor.GetLiveHostsSnapshot()
 
 	if record == nil || record.HasScope(config.ScopeSettingsWrite) || record.HasScope(config.ScopeAgentManage) {
 		for _, candidate := range hosts {
@@ -371,7 +372,10 @@ func (h *UnifiedAgentHandlers) resolveConfigAgent(ctx context.Context, agentID s
 				return candidate, true
 			}
 		}
-		return models.Host{}, false
+		// Live state loses agent-reported hosts across monitor reloads and
+		// restarts until the next report lands; fall back to the persisted
+		// continuity store so config fetches in that window do not 404 (#1570).
+		return monitor.MatchHostConfigContinuity(agentID, "")
 	}
 
 	for _, candidate := range hosts {
@@ -380,7 +384,7 @@ func (h *UnifiedAgentHandlers) resolveConfigAgent(ctx context.Context, agentID s
 		}
 	}
 
-	return models.Host{}, false
+	return monitor.MatchHostConfigContinuity(agentID, record.ID)
 }
 
 func (h *UnifiedAgentHandlers) signAgentConfig(agentID string, cfg monitoring.HostAgentConfig) (monitoring.HostAgentConfig, error) {
