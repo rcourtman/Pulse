@@ -8870,21 +8870,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "root-patrol-subscription-timeout-l6-lane-l6",
-      "agent_id": "root-patrol-subscription-timeout-l6",
-      "summary": "Give local subscription routes a bounded Patrol preflight timeout and requalify Claude Opus",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-16T08:35:29Z",
-      "heartbeat_at": "2026-07-16T08:35:29Z",
-      "expires_at": "2026-07-16T12:35:29Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L6"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
