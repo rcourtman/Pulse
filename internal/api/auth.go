@@ -891,6 +891,14 @@ func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, write
 							ClearFailedLogins(parts[0])
 							ClearFailedLogins(GetClientIP(r))
 
+							// Authentication response headers are presentation metadata, not
+							// an identity channel. Persist the independently verified Basic
+							// auth subject on the request itself so downstream RBAC and action
+							// governance checks authorize the same principal that checkAuth
+							// accepted. Mutating the request in place is required because
+							// RequireAuth passes the original request pointer to its handler.
+							*r = *attachUserContext(r, parts[0])
+
 							// Valid credentials - create session
 							if w != nil {
 								// Invalidate any pre-existing session to prevent session fixation attacks.

@@ -61,6 +61,47 @@ import (
 	tmock "github.com/stretchr/testify/mock"
 )
 
+type basicActionContractAuthorizer struct {
+	wantUser string
+}
+
+func (a basicActionContractAuthorizer) Authorize(ctx context.Context, action, resource string) (bool, error) {
+	return authpkg.GetUser(ctx) == a.wantUser && action == authpkg.ActionApprove && resource == authpkg.ResourceActions, nil
+}
+
+func TestContract_BasicAuthenticatedAdminReachesActionAuthorizationAsVerifiedPrincipal(t *testing.T) {
+	dataPath := t.TempDir()
+	InitSessionStore(dataPath)
+	InitCSRFStore(dataPath)
+	hashedPassword, err := authpkg.HashPassword("correct-password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{AuthUser: "admin", AuthPass: hashedPassword}
+
+	reachedActionHandler := false
+	handler := RequireAuth(cfg, requireActionCapability(
+		basicActionContractAuthorizer{wantUser: "admin"},
+		authpkg.ActionApprove,
+		func(w http.ResponseWriter, _ *http.Request) {
+			reachedActionHandler = true
+			w.WriteHeader(http.StatusNoContent)
+		},
+	))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/actions/act_contract_basic_identity", nil)
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("admin:correct-password")))
+	recorder := httptest.NewRecorder()
+	handler(recorder, req)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("Basic-authenticated action detail status = %d, want 204: %s", recorder.Code, recorder.Body.String())
+	}
+	if !reachedActionHandler {
+		t.Fatal("verified Basic admin did not reach the governed action handler")
+	}
+}
+
 func TestContract_ActionLifecycleReplayIsCreateOnceAndMonotonic(t *testing.T) {
 	service, err := os.ReadFile("../actionlifecycle/service.go")
 	if err != nil {

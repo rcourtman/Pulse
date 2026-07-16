@@ -7720,3 +7720,13 @@ queued writer would create a circular wait and freeze every API consumer,
 including live agent reporting and Patrol qualification. Contract proof pins
 the single-lock boundary, and concurrency proof queues the writer before
 exercising the local credential snapshot.
+
+Successful local Basic authentication must also attach the independently
+verified configured username to the request context before the protected
+handler runs. The response `X-Authenticated-User` header is presentation
+metadata and must not be used as the authorization identity. RBAC and action
+governance therefore authorize the exact principal accepted by `checkAuth`;
+invalid Basic credentials attach no principal and fail before the handler.
+This is required for qualification clients and local operators to read,
+approve, reject, and execute governed actions without weakening the same
+capability checks for sessions, proxy users, or API tokens.

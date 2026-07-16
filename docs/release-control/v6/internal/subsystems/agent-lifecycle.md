@@ -4596,3 +4596,9 @@ configuration write lock; a simultaneous local credential check must not take
 a recursive read lock while already inside `checkAuth`'s read-locked decision.
 The server must continue accepting reports and command registrations under
 that mixed-auth load rather than allowing a queued writer to freeze the API.
+Once that local credential check succeeds, the verified operator identity must
+travel in the request context into action-governance authorization. A response
+header alone is not identity. This lets a Basic-authenticated qualification
+operator approve or reject an agent action while preserving the agent token's
+separate reporting and command authority; invalid credentials must never reach
+the action handler or acquire an operator principal.

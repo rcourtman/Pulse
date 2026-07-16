@@ -1971,6 +1971,11 @@ clients on error (now the agent-stable envelope rather than the
 platform-wide `APIError` shape). Recovery posture is identical:
 when the action audit store rehydrates on startup, the action
 endpoints recover the same lifecycle records they always did.
+Local Basic-auth identity propagation into those handlers remains an API
+authorization concern: successful verification attaches the operator to the
+request context, while invalid credentials fail before any action audit write.
+It does not add recovery storage, alter `ActionAuditRecord`, or let response
+headers participate in approval identity.
 
 The Patrol finding lifecycle endpoints advertised in the agent
 capabilities manifest (`acknowledge_finding`, `snooze_finding`,

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -178,6 +179,69 @@ func TestExtractAndStoreAuthContext_ProxyAuth(t *testing.T) {
 
 	if internalauth.GetUser(req.Context()) != "proxyuser" {
 		t.Fatalf("expected proxy user context, got %q", internalauth.GetUser(req.Context()))
+	}
+}
+
+func TestRequireAuthBasicCredentialsAttachVerifiedUserContext(t *testing.T) {
+	dataPath := t.TempDir()
+	InitSessionStore(dataPath)
+	InitCSRFStore(dataPath)
+	hash, err := internalauth.HashPassword("correct-password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{AuthUser: "admin", AuthPass: hash}
+
+	var observedUser string
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, req *http.Request) {
+		observedUser = internalauth.GetUser(req.Context())
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/actions/example", nil)
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("admin:correct-password")))
+	recorder := httptest.NewRecorder()
+
+	handler(recorder, req)
+
+	if recorder.Code != http.StatusNoContent {
+		t.Fatalf("expected authenticated handler response, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if observedUser != "admin" {
+		t.Fatalf("expected verified Basic auth user in handler context, got %q", observedUser)
+	}
+}
+
+func TestRequireAuthInvalidBasicCredentialsDoNotAttachUserContext(t *testing.T) {
+	dataPath := t.TempDir()
+	InitSessionStore(dataPath)
+	InitCSRFStore(dataPath)
+	hash, err := internalauth.HashPassword("correct-password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+	cfg := &config.Config{AuthUser: "admin", AuthPass: hash}
+
+	called := false
+	handler := RequireAuth(cfg, func(w http.ResponseWriter, req *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/actions/example", nil)
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("admin:wrong-password")))
+	recorder := httptest.NewRecorder()
+
+	handler(recorder, req)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected invalid Basic auth to fail closed, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if called {
+		t.Fatal("protected handler ran with invalid Basic credentials")
+	}
+	if user := internalauth.GetUser(req.Context()); user != "" {
+		t.Fatalf("invalid Basic credentials attached user %q", user)
 	}
 }
 
