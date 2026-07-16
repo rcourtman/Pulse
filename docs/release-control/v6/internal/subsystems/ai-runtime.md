@@ -97,6 +97,12 @@ bounded fallback turn, and a final Watch decision turn. That final turn exposes
 only `patrol_report_finding` and `patrol_assess_finding`, uses a bounded system
 instruction that forbids further investigation and treats infrastructure data
 as untrusted, and still permits a healthy all-clear without forcing a write.
+The only permitted extension is one repair-only provider turn after a parallel
+finding lifecycle batch contains both accepted and rejected siblings. Accepted
+calls remain authoritative and must not be repeated; the repair projection
+contains only finding lifecycle tools and may correct only the rejected calls
+from the returned validation evidence. A repair attempt never erases the
+original failed call from run history or qualification scoring.
 Investigation and interactive profiles retain a tool-free final summary; a
 Watch finding write at the deadline is followed only by the existing bounded
 summary path. A capability-unavailable
@@ -662,7 +668,12 @@ final-decision prompts must render that shared list and require every parallel
 report call to be independently complete; they must not maintain a second
 hand-written field list. Runtime may let a model recover after a rejected call,
 but formal qualification continues to reject every unsuccessful tool call,
-including a recovered schema-validation lapse.
+including a recovered schema-validation lapse. When one parallel lifecycle
+batch has both accepted and rejected siblings, the accepted writes must not
+force the normal text-only summary before one bounded repair-only turn. That
+turn may use only the lifecycle tools needed to correct rejected calls, must
+preserve accepted calls without repetition, and may extend the normal Watch
+turn budget by at most one provider call.
 
 Assistant control wording must identify the effective scope as Assistant chat
 only. Patrol autonomy and global Actions remain separate authority surfaces;

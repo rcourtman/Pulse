@@ -179,6 +179,41 @@ func TestPatrolFinalFindingDecisionRequestNarrowsWatchTools(t *testing.T) {
 	}
 }
 
+func TestPatrolFindingLifecycleRepairRequestAllowsOnlyRejectedCallRepair(t *testing.T) {
+	req := providers.ChatRequest{
+		System:     "full Patrol prompt",
+		ToolChoice: &providers.ToolChoice{Type: providers.ToolChoiceRequired},
+	}
+	available := []providers.Tool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PatrolGetFindingsToolName},
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+		{Name: agentcapabilities.PatrolAssessFindingToolName},
+		{Name: agentcapabilities.PatrolResolveFindingToolName},
+	}
+
+	if !applyPatrolFindingLifecycleRepairRequest(&req, tools.ProfilePatrolDetection, available) {
+		t.Fatal("expected Patrol detection to allow one lifecycle repair turn")
+	}
+	if req.System != patrolFindingLifecycleRepairSystemPrompt {
+		t.Fatalf("repair request system prompt = %q", req.System)
+	}
+	if !strings.Contains(req.System, "do not repeat them") || !strings.Contains(req.System, strings.Join(tools.PatrolReportFindingRequiredArguments(), ", ")) {
+		t.Fatalf("repair prompt does not preserve accepted calls and require complete retries: %q", req.System)
+	}
+	if req.ToolChoice != nil {
+		t.Fatalf("repair request must remain model-owned, got choice %+v", req.ToolChoice)
+	}
+	if len(req.Tools) != 3 || req.Tools[0].Name != agentcapabilities.PatrolReportFindingToolName || req.Tools[1].Name != agentcapabilities.PatrolAssessFindingToolName || req.Tools[2].Name != agentcapabilities.PatrolResolveFindingToolName {
+		t.Fatalf("repair tools = %+v, want finding lifecycle tools only", req.Tools)
+	}
+
+	interactive := providers.ChatRequest{System: "interactive", Tools: available}
+	if applyPatrolFindingLifecycleRepairRequest(&interactive, tools.ProfileInteractiveAssistant, available) {
+		t.Fatal("interactive Assistant must not gain Patrol lifecycle repair authority")
+	}
+}
+
 func TestFinalPatrolFindingDecisionDoesNotOverrideSafetyOrCompletedWrites(t *testing.T) {
 	if !shouldOfferFinalPatrolFindingDecision(3, 4, false, false, false) {
 		t.Fatal("expected an otherwise unconstrained last turn to offer a finding decision")
@@ -310,6 +345,25 @@ type stubStreamingProvider struct {
 	chatStream  func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error
 }
 
+type repairTestPatrolFindingCreator struct {
+	checked bool
+	created []tools.PatrolFindingInput
+}
+
+func (c *repairTestPatrolFindingCreator) CreateFinding(input tools.PatrolFindingInput) (string, bool, error) {
+	c.created = append(c.created, input)
+	return "finding-" + input.ResourceID, true, nil
+}
+
+func (c *repairTestPatrolFindingCreator) ResolveFinding(string, string) error { return nil }
+
+func (c *repairTestPatrolFindingCreator) GetActiveFindings(string, string) []tools.PatrolFindingInfo {
+	c.checked = true
+	return nil
+}
+
+func (c *repairTestPatrolFindingCreator) HasCheckedFindings() bool { return c.checked }
+
 func (s *stubStreamingProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
 	return &providers.ChatResponse{Content: "ok"}, nil
 }
@@ -329,6 +383,116 @@ func (s *stubStreamingProvider) TestConnection(ctx context.Context) error { retu
 func (s *stubStreamingProvider) Name() string                             { return "stub" }
 func (s *stubStreamingProvider) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
 	return nil, nil
+}
+
+func TestAgenticLoopRepairsRejectedSiblingAfterMixedPatrolFindingBatch(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	creator := &repairTestPatrolFindingCreator{}
+	executor.SetPatrolFindingCreator(creator)
+	loop := NewAgenticLoop(provider, executor, "full Patrol prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(2)
+
+	completeReport := func(resourceID, resourceName, title string) map[string]interface{} {
+		return map[string]interface{}{
+			"key":            "container-health-failed",
+			"severity":       "warning",
+			"category":       "reliability",
+			"resource_id":    resourceID,
+			"resource_name":  resourceName,
+			"resource_type":  "app-container",
+			"title":          title,
+			"description":    "Container is running but its health check is unhealthy.",
+			"recommendation": "Inspect the health endpoint and recent logs.",
+			"evidence":       "Provider state reports running and unhealthy with zero restarts.",
+		}
+	}
+
+	var repairRequest providers.ChatRequest
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		switch providerCalls {
+		case 1:
+			call := providers.ToolCall{ID: "get-findings", Name: agentcapabilities.PatrolGetFindingsToolName, Input: map[string]interface{}{}}
+			callback(providers.StreamEvent{Type: "tool_start", Data: providers.ToolStartEvent{ID: call.ID, Name: call.Name, Input: call.Input}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{call}}})
+		case 2:
+			if req.System != patrolFinalFindingDecisionSystemPrompt {
+				t.Fatalf("second turn system prompt = %q, want final finding decision", req.System)
+			}
+			accepted := providers.ToolCall{ID: "report-api", Name: agentcapabilities.PatrolReportFindingToolName, Input: completeReport("app-container-api", "api", "API health check failing")}
+			rejectedInput := completeReport("app-container-worker", "worker", "Worker health check failing")
+			delete(rejectedInput, "title")
+			rejected := providers.ToolCall{ID: "report-worker-invalid", Name: agentcapabilities.PatrolReportFindingToolName, Input: rejectedInput}
+			for _, call := range []providers.ToolCall{accepted, rejected} {
+				callback(providers.StreamEvent{Type: "tool_start", Data: providers.ToolStartEvent{ID: call.ID, Name: call.Name, Input: call.Input}})
+			}
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{accepted, rejected}}})
+		case 3:
+			repairRequest = req
+			repaired := providers.ToolCall{ID: "report-worker-repaired", Name: agentcapabilities.PatrolReportFindingToolName, Input: completeReport("app-container-worker", "worker", "Worker health check failing")}
+			callback(providers.StreamEvent{Type: "tool_start", Data: providers.ToolStartEvent{ID: repaired.ID, Name: repaired.Name, Input: repaired.Input}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{repaired}}})
+		case 4:
+			if req.System != patrolFindingLifecycleSummarySystemPrompt || len(req.Tools) != 0 {
+				t.Fatalf("post-repair summary request = %+v", req)
+			}
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "Two findings reported."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		default:
+			t.Fatalf("unexpected provider call %d", providerCalls)
+		}
+		return nil
+	}
+
+	available := []providers.Tool{
+		{Name: agentcapabilities.PulseQueryToolName},
+		{Name: agentcapabilities.PatrolGetFindingsToolName},
+		{Name: agentcapabilities.PatrolReportFindingToolName},
+		{Name: agentcapabilities.PatrolAssessFindingToolName},
+		{Name: agentcapabilities.PatrolResolveFindingToolName},
+	}
+	var toolEnds []ToolEndData
+	result, err := loop.ExecuteWithTools(context.Background(), "mixed-finding-repair", []Message{{Role: "user", Content: "check both containers"}}, available, func(event StreamEvent) {
+		if event.Type != "tool_end" {
+			return
+		}
+		var data ToolEndData
+		if err := json.Unmarshal(event.Data, &data); err != nil {
+			t.Fatalf("decode tool_end: %v", err)
+		}
+		toolEnds = append(toolEnds, data)
+	})
+	if err != nil {
+		t.Fatalf("mixed finding repair failed: %v", err)
+	}
+	if providerCalls != 4 {
+		t.Fatalf("provider calls = %d, want get/findings, mixed batch, repair, summary; tool ends = %+v; created = %+v", providerCalls, toolEnds, creator.created)
+	}
+	if repairRequest.System != patrolFindingLifecycleRepairSystemPrompt {
+		t.Fatalf("repair system prompt = %q", repairRequest.System)
+	}
+	if len(repairRequest.Tools) != 3 {
+		t.Fatalf("repair request tools = %+v, want lifecycle-only projection", repairRequest.Tools)
+	}
+	if len(creator.created) != 2 || creator.created[0].ResourceID != "app-container-api" || creator.created[1].ResourceID != "app-container-worker" {
+		t.Fatalf("created findings = %+v, want each resource exactly once", creator.created)
+	}
+	failedCalls := 0
+	for _, event := range toolEnds {
+		if !event.Success {
+			failedCalls++
+		}
+	}
+	if failedCalls != 1 {
+		t.Fatalf("failed tool calls = %d, want original rejected sibling preserved", failedCalls)
+	}
+	if len(result) == 0 || result[len(result)-1].Content != "Two findings reported." {
+		t.Fatalf("final result = %+v", result)
+	}
 }
 
 func TestEnsureFinalTextResponse(t *testing.T) {
