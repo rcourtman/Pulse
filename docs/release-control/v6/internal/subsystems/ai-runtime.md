@@ -3171,7 +3171,12 @@ Qualification floor: Patrol model launch and product-claim qualification must us
    `cmd/patrol-qualify` against reviewed scenario-owned ground truth. Expected
    faults and independent postconditions must be declared before the run and
    must not derive from Patrol-selected tools, deterministic signal extraction,
-   or model output. Watch, investigation, and remediation are separate tracks;
+   or model output. A live scenario oracle must not mature before the canonical
+   deterministic triage or alert threshold that supplies Patrol's normal evidence. In
+   particular, threshold-based faults must converge beyond the configured
+   trigger boundary before model invocation so a faster model cannot receive
+   weaker evidence than a slower model.
+   Watch, investigation, and remediation are separate tracks;
    remediation decisions require the runner's second authorization gate, exact
    action/finding/investigation/resource/capability/plan-hash binding, and an
    out-of-band postcondition. Scorer or tool-transcript replay is regression

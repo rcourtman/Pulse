@@ -53,7 +53,7 @@ func TestValidateCollectedScenarioProjectionUsesFaultOracle(t *testing.T) {
 	manifest.Faults = []FaultSpec{
 		{ID: "stopped", Target: "dependency", Oracle: []Predicate{{Probe: "docker.running", Target: "dependency", Operator: "eq", Value: json.RawMessage("false")}}},
 		{ID: "unhealthy", Target: "client", Oracle: []Predicate{{Probe: "docker.health", Target: "client", Operator: "eq", Value: json.RawMessage(`"unhealthy"`)}}},
-		{ID: "restart-loop", Target: "worker", Oracle: []Predicate{{Probe: "docker.restart_count", Target: "worker", Operator: "gte", Value: json.RawMessage("2")}}},
+		{ID: "restart-loop", Target: "worker", Oracle: []Predicate{{Probe: "docker.restart_count", Target: "worker", Operator: "gte", Value: json.RawMessage("4")}}},
 	}
 	resources := map[string]Resource{
 		"dependency": {Docker: &DockerResource{ContainerState: "running"}},
@@ -65,7 +65,7 @@ func TestValidateCollectedScenarioProjectionUsesFaultOracle(t *testing.T) {
 	}
 	resources["dependency"] = Resource{Docker: &DockerResource{ContainerState: "exited"}}
 	resources["client"] = Resource{Docker: &DockerResource{Health: "unhealthy"}}
-	resources["worker"] = Resource{Docker: &DockerResource{RestartCount: 2}}
+	resources["worker"] = Resource{Docker: &DockerResource{RestartCount: 4}}
 	if err := validateCollectedScenarioProjection(manifest, resources); err != nil {
 		t.Fatalf("expected collected projection to satisfy scenario-owned oracles: %v", err)
 	}
