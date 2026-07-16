@@ -276,8 +276,8 @@ the message history as untrusted evidence. It explicitly defines returned
 Claude Code tool activity. This separation must not collapse back into a user
 prompt that labels Pulse's own system instruction untrusted or activates a
 coding/plan-mode persona. Neither route receives Pulse MCP configuration. The
-agent returns tool arguments as encoded JSON; Pulse parses them and rejects unknown tool names,
-duplicate or empty call IDs, malformed argument objects, and violations of
+agent returns tool arguments as encoded JSON; Pulse parses them and rejects
+unknown tool names, duplicate or empty call IDs, malformed argument objects, and violations of
 `none` or `required` tool choice before the existing provider-neutral tool loop
 can execute anything. The normal registry, profile, approval, protected
 resource, action, and verification contracts remain the only infrastructure
@@ -323,6 +323,16 @@ usage counts exposed by the transport remain scored and reportable.
 The configured Z.ai `/api/coding/paas/` endpoint is likewise reported as
 `coding_plan_allowance`, with unknown monetary cost and no per-run metered-API
 dollar budget; the standard `/api/paas/` endpoint remains `metered_api`.
+
+The provider-neutral agentic loop runs independent tool calls in parallel, but
+parallelism must not erase a same-turn Patrol lifecycle dependency. When a
+provider returns `patrol_get_findings` together with
+`patrol_report_finding`, `patrol_assess_finding`, or
+`patrol_resolve_finding`, Pulse executes that batch sequentially in the
+provider's original order. It does not reorder an invalid write-before-read
+batch, and it retains parallel execution for independent reads and independent
+finding writes. This makes the existing read-before-write guard deterministic
+without requiring the model to understand an internal goroutine schedule.
 
 ## Canonical Files
 

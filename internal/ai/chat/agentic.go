@@ -364,6 +364,25 @@ func isPatrolFindingLifecycleWrite(toolName string) bool {
 	}
 }
 
+// requiresOrderedPatrolFindingLifecycleExecution identifies a same-turn
+// read-before-write dependency. Independent reads and independent finding
+// writes may still run in parallel, but a lifecycle write cannot race the
+// patrol_get_findings call that establishes its deduplication/assessment
+// precondition. The provider's original call order remains authoritative.
+func requiresOrderedPatrolFindingLifecycleExecution(toolCalls []providers.ToolCall) bool {
+	hasFindingsRead := false
+	hasLifecycleWrite := false
+	for _, tc := range toolCalls {
+		switch {
+		case strings.TrimSpace(tc.Name) == agentcapabilities.PatrolGetFindingsToolName:
+			hasFindingsRead = true
+		case isPatrolFindingLifecycleWrite(tc.Name):
+			hasLifecycleWrite = true
+		}
+	}
+	return hasFindingsRead && hasLifecycleWrite
+}
+
 func applySuccessfulToolFSM(fsm *SessionFSM, toolKind ToolKind, toolName string) bool {
 	if fsm == nil {
 		return false
@@ -1726,9 +1745,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			pendingExec = append(pendingExec, pendingToolExec{tc: tc, toolKind: toolKind})
 		}
 
-		// --- Phase 2: Execute pending tools (parallel if multiple) ---
-		// Tool execution is stateless I/O — safe to parallelize.
-		// Cap concurrency at 4 to avoid overwhelming infrastructure.
+		// --- Phase 2: Execute pending tools ---
+		// Independent calls run in parallel with concurrency capped at four.
+		// Ordered Patrol finding lifecycle batches run sequentially so their
+		// read-before-write precondition cannot race within one provider turn.
 		execResults := make([]parallelToolResult, len(pendingExec))
 		if len(pendingExec) > 0 {
 			for _, pe := range pendingExec {
@@ -1755,7 +1775,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			emitWorkflowState(callback, "execute", executeMessage, sessionFSMState(fsm), workflowTool)
 		}
 
-		if len(pendingExec) > 1 {
+		orderedPatrolLifecycle := requiresOrderedPatrolFindingLifecycleExecution(toolCalls)
+		if len(pendingExec) > 1 && !orderedPatrolLifecycle {
 			log.Info().
 				Int("tool_count", len(pendingExec)).
 				Str("session_id", sessionID).
@@ -1775,9 +1796,17 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				}(j, pe.tc)
 			}
 			wg.Wait()
-		} else if len(pendingExec) == 1 {
-			r, e := a.executeToolSafely(ctx, pendingExec[0].tc.ID, pendingExec[0].tc.Name, pendingExec[0].tc.Input)
-			execResults[0] = parallelToolResult{Result: r, Err: e}
+		} else {
+			if orderedPatrolLifecycle && len(pendingExec) > 1 {
+				log.Debug().
+					Int("tool_count", len(pendingExec)).
+					Str("session_id", sessionID).
+					Msg("[AgenticLoop] Executing ordered Patrol finding lifecycle batch")
+			}
+			for j, pe := range pendingExec {
+				r, e := a.executeToolSafely(ctx, pe.tc.ID, pe.tc.Name, pe.tc.Input)
+				execResults[j] = parallelToolResult{Result: r, Err: e}
+			}
 		}
 
 		// --- Phase 3: Post-process results in original order (sequential) ---

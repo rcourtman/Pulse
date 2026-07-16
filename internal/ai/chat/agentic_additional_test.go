@@ -5,12 +5,35 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 )
+
+func TestRequiresOrderedPatrolFindingLifecycleExecution(t *testing.T) {
+	tests := []struct {
+		name  string
+		calls []providers.ToolCall
+		want  bool
+	}{
+		{name: "independent reads stay parallel", calls: []providers.ToolCall{{Name: agentcapabilities.PulseQueryToolName}, {Name: agentcapabilities.PulseReadToolName}}},
+		{name: "independent finding reports stay parallel", calls: []providers.ToolCall{{Name: agentcapabilities.PatrolReportFindingToolName}, {Name: agentcapabilities.PatrolReportFindingToolName}}},
+		{name: "findings read before assessment is ordered", calls: []providers.ToolCall{{Name: agentcapabilities.PatrolGetFindingsToolName}, {Name: agentcapabilities.PatrolAssessFindingToolName}}, want: true},
+		{name: "findings read before report is ordered", calls: []providers.ToolCall{{Name: agentcapabilities.PatrolGetFindingsToolName}, {Name: agentcapabilities.PatrolReportFindingToolName}}, want: true},
+		{name: "provider order remains relevant even when reversed", calls: []providers.ToolCall{{Name: agentcapabilities.PatrolResolveFindingToolName}, {Name: agentcapabilities.PatrolGetFindingsToolName}}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := requiresOrderedPatrolFindingLifecycleExecution(tt.calls); got != tt.want {
+				t.Fatalf("requiresOrderedPatrolFindingLifecycleExecution() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestAgenticLoop_Setters(t *testing.T) {
 	loop := &AgenticLoop{}
@@ -350,6 +373,41 @@ type repairTestPatrolFindingCreator struct {
 	created []tools.PatrolFindingInput
 }
 
+type orderedPatrolFindingCreator struct {
+	mu          sync.Mutex
+	checked     bool
+	assessments []tools.PatrolFindingAssessmentInput
+}
+
+func (c *orderedPatrolFindingCreator) CreateFinding(tools.PatrolFindingInput) (string, bool, error) {
+	return "finding-existing", false, nil
+}
+
+func (c *orderedPatrolFindingCreator) ResolveFinding(string, string) error { return nil }
+
+func (c *orderedPatrolFindingCreator) GetActiveFindings(string, string) []tools.PatrolFindingInfo {
+	// Make the historical parallel-execution race deterministic: an assessment
+	// started alongside this read observes checked=false and is rejected.
+	time.Sleep(25 * time.Millisecond)
+	c.mu.Lock()
+	c.checked = true
+	c.mu.Unlock()
+	return []tools.PatrolFindingInfo{{ID: "finding-existing", Severity: "warning", Category: "reliability", ResourceID: "app-container-existing", ResourceName: "existing", ResourceType: "app-container", Title: "Container unhealthy"}}
+}
+
+func (c *orderedPatrolFindingCreator) HasCheckedFindings() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.checked
+}
+
+func (c *orderedPatrolFindingCreator) AssessFinding(input tools.PatrolFindingAssessmentInput) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.assessments = append(c.assessments, input)
+	return nil
+}
+
 func (c *repairTestPatrolFindingCreator) CreateFinding(input tools.PatrolFindingInput) (string, bool, error) {
 	c.created = append(c.created, input)
 	return "finding-" + input.ResourceID, true, nil
@@ -383,6 +441,72 @@ func (s *stubStreamingProvider) TestConnection(ctx context.Context) error { retu
 func (s *stubStreamingProvider) Name() string                             { return "stub" }
 func (s *stubStreamingProvider) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
 	return nil, nil
+}
+
+func TestAgenticLoopOrdersSameTurnPatrolFindingReadBeforeAssessment(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	executor.ApplyExecutionProfile(tools.ProfilePatrolDetection)
+	creator := &orderedPatrolFindingCreator{}
+	executor.SetPatrolFindingCreator(creator)
+	loop := NewAgenticLoop(provider, executor, "full Patrol prompt")
+	loop.SetExecutionProfile(tools.ProfilePatrolDetection)
+	loop.SetMaxTurns(2)
+
+	providerCalls := 0
+	provider.chatStream = func(_ context.Context, _ providers.ChatRequest, callback providers.StreamCallback) error {
+		providerCalls++
+		switch providerCalls {
+		case 1:
+			getCall := providers.ToolCall{ID: "get-findings", Name: agentcapabilities.PatrolGetFindingsToolName, Input: map[string]interface{}{}}
+			assessCall := providers.ToolCall{ID: "assess-finding", Name: agentcapabilities.PatrolAssessFindingToolName, Input: map[string]interface{}{
+				"finding_id": "finding-existing",
+				"verdict":    "present",
+				"evidence":   "Current provider state remains unhealthy.",
+				"reason":     "The current health check still fails.",
+			}}
+			for _, call := range []providers.ToolCall{getCall, assessCall} {
+				callback(providers.StreamEvent{Type: "tool_start", Data: providers.ToolStartEvent{ID: call.ID, Name: call.Name, Input: call.Input}})
+			}
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{ToolCalls: []providers.ToolCall{getCall, assessCall}}})
+		case 2:
+			callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "Finding remains present."}})
+			callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{}})
+		default:
+			t.Fatalf("unexpected provider call %d", providerCalls)
+		}
+		return nil
+	}
+
+	available := []providers.Tool{
+		{Name: agentcapabilities.PatrolGetFindingsToolName},
+		{Name: agentcapabilities.PatrolAssessFindingToolName},
+	}
+	var toolEnds []ToolEndData
+	_, err := loop.ExecuteWithTools(context.Background(), "ordered-finding-lifecycle", []Message{{Role: "user", Content: "Reassess the active finding."}}, available, func(event StreamEvent) {
+		if event.Type != "tool_end" {
+			return
+		}
+		var data ToolEndData
+		if err := json.Unmarshal(event.Data, &data); err != nil {
+			t.Fatalf("decode tool_end: %v", err)
+		}
+		toolEnds = append(toolEnds, data)
+	})
+	if err != nil {
+		t.Fatalf("ordered Patrol finding lifecycle failed: %v", err)
+	}
+	if providerCalls != 2 {
+		t.Fatalf("provider calls = %d, want lifecycle turn and summary", providerCalls)
+	}
+	if len(toolEnds) != 2 || !toolEnds[0].Success || !toolEnds[1].Success {
+		t.Fatalf("tool results = %+v, want ordered successful read and assessment", toolEnds)
+	}
+	creator.mu.Lock()
+	defer creator.mu.Unlock()
+	if len(creator.assessments) != 1 || creator.assessments[0].FindingID != "finding-existing" {
+		t.Fatalf("assessments = %+v, want one existing-finding verdict", creator.assessments)
+	}
 }
 
 func TestAgenticLoopRepairsRejectedSiblingAfterMixedPatrolFindingBatch(t *testing.T) {
