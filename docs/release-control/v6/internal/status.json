@@ -8870,7 +8870,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "root-patrol-subscription-trust-boundary-l6-lane-l6",
+      "agent_id": "root-patrol-subscription-trust-boundary-l6",
+      "summary": "Separate trusted Patrol control instructions from untrusted infrastructure data in subscription model adapters",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-16T09:39:10Z",
+      "heartbeat_at": "2026-07-16T09:39:10Z",
+      "expires_at": "2026-07-16T13:39:10Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L6"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
