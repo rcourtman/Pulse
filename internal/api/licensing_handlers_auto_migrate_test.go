@@ -64,17 +64,28 @@ func TestGetTenantComponents_AutoExchangesPersistedLegacyJWT(t *testing.T) {
 
 	var exchangeCalled atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if handleTestInstallationStatus(w, r, 1) {
+			return
+		}
 		if r.URL.Path != "/v1/licenses/exchange" {
-			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodPost {
+			t.Errorf("exchange method = %q, want POST", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
 		}
 		exchangeCalled.Add(1)
 
 		var req pkglicensing.ExchangeLegacyLicenseRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Fatalf("decode exchange request: %v", err)
+			t.Errorf("decode exchange request: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
 		}
 		if req.LegacyLicenseKey == "" {
-			t.Fatal("expected legacy license key in exchange request")
+			t.Error("expected legacy license key in exchange request")
 		}
 
 		w.WriteHeader(http.StatusCreated)

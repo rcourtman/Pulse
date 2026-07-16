@@ -8872,16 +8872,16 @@
   ],
   "work_claims": [
     {
-      "id": "codex-lane-l1",
-      "agent_id": "codex",
-      "summary": "Prepare and publish the governed v6.1.0-rc.2 release packet",
+      "id": "release-manager-lane-l3",
+      "agent_id": "release-manager",
+      "summary": "Stabilize the v6.1.0-rc.2 legacy license exchange release gate",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-16T22:37:38Z",
-      "heartbeat_at": "2026-07-16T22:37:38Z",
-      "expires_at": "2026-07-17T02:37:38Z",
+      "claimed_at": "2026-07-16T23:27:45Z",
+      "heartbeat_at": "2026-07-16T23:27:45Z",
+      "expires_at": "2026-07-17T03:27:45Z",
       "work_item": {
         "kind": "lane",
-        "id": "L1"
+        "id": "L3"
       }
     }
   ],
