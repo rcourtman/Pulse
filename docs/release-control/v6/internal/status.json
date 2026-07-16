@@ -8872,13 +8872,13 @@
   ],
   "work_claims": [
     {
-      "id": "root-patrol-subscription-trust-boundary-l6-lane-l6",
-      "agent_id": "root-patrol-subscription-trust-boundary-l6",
-      "summary": "Separate trusted Patrol control instructions from untrusted infrastructure data in subscription model adapters",
+      "id": "root-patrol-lifecycle-tool-order-l6-lane-l6",
+      "agent_id": "root-patrol-lifecycle-tool-order-l6",
+      "summary": "Honor read-before-write ordering for same-turn Patrol finding lifecycle calls",
       "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-16T09:39:10Z",
-      "heartbeat_at": "2026-07-16T09:39:10Z",
-      "expires_at": "2026-07-16T13:39:10Z",
+      "claimed_at": "2026-07-16T10:31:03Z",
+      "heartbeat_at": "2026-07-16T10:31:03Z",
+      "expires_at": "2026-07-16T14:31:03Z",
       "work_item": {
         "kind": "lane",
         "id": "L6"
