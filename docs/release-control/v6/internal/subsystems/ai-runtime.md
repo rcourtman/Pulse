@@ -6409,3 +6409,15 @@ node-agent dispatch, canonical action audit, and server-side Proxmox API
 observation. Only confirmed independent evidence projects the originating
 finding to `fix_verified`; command success or same-agent status alone cannot
 produce the green terminal state.
+
+Qualification fixtures must not disclose benchmark intent to the tested model
+through model-visible infrastructure identity. Docker resource names use a
+representative service identity plus an opaque run token; ownership, scenario,
+and teardown selectors use opaque hashed label values. Exact run/scenario truth
+remains in the runner-owned manifest and artifact mapping, outside the model's
+tool transcript. The shared-host safety boundary still requires an explicit
+target, dual authorization, exact owner-label cleanup, a second no-op cleanup,
+and pre/post inventory equality. Legacy `pulse-qual-${run_id}` names remain
+accepted for external manifest compatibility, but governed remediation
+qualification uses neutral identities so a model is scored on infrastructure
+evidence rather than recognizing that it is inside a benchmark.

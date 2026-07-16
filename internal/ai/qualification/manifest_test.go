@@ -234,7 +234,7 @@ func TestRunnerBindsOnlyValidCommunityChallenge(t *testing.T) {
 	}
 }
 
-func TestRenderResourceNameRequiresRunScopedPrefix(t *testing.T) {
+func TestRenderResourceNameRequiresRunScopedIdentity(t *testing.T) {
 	if _, err := renderResourceName("customer-database", "db", "q-20260714-abcdef"); err == nil {
 		t.Fatal("expected non-lab name to be rejected")
 	}
@@ -244,6 +244,13 @@ func TestRenderResourceNameRequiresRunScopedPrefix(t *testing.T) {
 	}
 	if got != "pulse-qual-q-20260714-abcdef-db" {
 		t.Fatalf("rendered name = %q", got)
+	}
+	neutral, err := renderResourceName("customer-database-${run_token}", "db", "q-20260714-abcdef")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if neutral != "customer-database-"+labRunToken("q-20260714-abcdef") {
+		t.Fatalf("neutral rendered name = %q", neutral)
 	}
 }
 

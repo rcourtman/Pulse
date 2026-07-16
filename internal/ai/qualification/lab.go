@@ -2,6 +2,7 @@ package qualification
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,9 +15,9 @@ import (
 )
 
 const (
-	labRunLabel      = "com.pulse.intelligence-lab.run"
-	labScenarioLabel = "com.pulse.patrol-qualification.scenario"
-	labNamePrefix    = "pulse-qual-"
+	labRunLabel      = "io.pulse.owner"
+	labScenarioLabel = "io.pulse.profile"
+	labAliasLabel    = "io.pulse.component"
 )
 
 type CommandResult struct {
@@ -178,14 +179,14 @@ func (l *DockerLab) Prepare(ctx context.Context, manifest Manifest, runID string
 	lab := &PreparedLab{
 		RunID:          runID,
 		ScenarioID:     manifest.ID,
-		NetworkName:    labNamePrefix + runID,
+		NetworkName:    "backend-" + labRunToken(runID),
 		ResourceNames:  make(map[string]string, len(manifest.Resources)),
 		ResourceIDs:    make(map[string]string, len(manifest.Resources)),
 		FaultVolumes:   make(map[string]string),
 		PreInventory:   pre,
 		BaselineStates: make(map[string]DockerState),
 	}
-	labels := []string{"--label", labRunLabel + "=" + runID, "--label", labScenarioLabel + "=" + manifest.ID}
+	labels := []string{"--label", labRunLabel + "=" + labRunToken(runID), "--label", labScenarioLabel + "=" + labOpaqueToken("scenario", manifest.ID)}
 	if _, err := l.docker(ctx, append([]string{"network", "create"}, append(labels, lab.NetworkName)...)...); err != nil {
 		return lab, fmt.Errorf("create lab network: %w", err)
 	}
@@ -213,7 +214,7 @@ func (l *DockerLab) Prepare(ctx context.Context, manifest Manifest, runID string
 		}
 		args := []string{"run", "-d", "--name", name, "--network", lab.NetworkName}
 		args = append(args, labels...)
-		args = append(args, "--label", "com.pulse.patrol-qualification.alias="+resource.Alias)
+		args = append(args, "--label", labAliasLabel+"="+resource.Alias)
 		for key, value := range resource.Labels {
 			args = append(args, "--label", key+"="+renderText(value, resource.Alias, runID))
 		}
@@ -264,17 +265,27 @@ func (l *DockerLab) Prepare(ctx context.Context, manifest Manifest, runID string
 func renderResourceName(template, alias, runID string) (string, error) {
 	name := renderText(template, alias, runID)
 	if name == "" {
-		name = labNamePrefix + runID + "-" + alias
+		name = alias + "-" + labRunToken(runID)
 	}
-	if !strings.HasPrefix(name, labNamePrefix) || !strings.Contains(name, runID) || !safeID.MatchString(name) {
-		return "", fmt.Errorf("resource %q renders unsafe name %q; qualification resources must use prefix %q and include the run id", alias, name, labNamePrefix)
+	if (!strings.Contains(name, runID) && !strings.Contains(name, labRunToken(runID))) || !safeID.MatchString(name) {
+		return "", fmt.Errorf("resource %q renders unsafe name %q; qualification resources must include the full run id or its opaque run token", alias, name)
 	}
 	return name, nil
 }
 
 func renderText(value, alias, runID string) string {
 	value = strings.ReplaceAll(value, "${run_id}", runID)
+	value = strings.ReplaceAll(value, "${run_token}", labRunToken(runID))
 	return strings.ReplaceAll(value, "${alias}", alias)
+}
+
+func labRunToken(runID string) string {
+	return labOpaqueToken("run", runID)
+}
+
+func labOpaqueToken(namespace, value string) string {
+	sum := sha256.Sum256([]byte(namespace + "\x00" + value))
+	return fmt.Sprintf("%x", sum[:6])
 }
 
 func (l *DockerLab) ApplyFault(ctx context.Context, manifest Manifest, lab *PreparedLab, fault FaultSpec) error {
@@ -347,7 +358,7 @@ func (l *DockerLab) setMarker(ctx context.Context, manifest Manifest, lab *Prepa
 	if !enabled {
 		operation = "rm -f /pulse-qual-fault/enabled"
 	}
-	_, err := l.docker(ctx, "run", "--rm", "--label", labRunLabel+"="+lab.RunID, "--mount", "source="+volume+",target=/pulse-qual-fault", image, "/bin/sh", "-c", operation)
+	_, err := l.docker(ctx, "run", "--rm", "--label", labRunLabel+"="+labRunToken(lab.RunID), "--mount", "source="+volume+",target=/pulse-qual-fault", image, "/bin/sh", "-c", operation)
 	return err
 }
 
@@ -592,7 +603,7 @@ func (l *DockerLab) Cleanup(ctx context.Context, manifest Manifest, lab *Prepare
 	cleanup := func() (DockerInventory, []string) {
 		var removed DockerInventory
 		var errs []string
-		label := labRunLabel + "=" + lab.RunID
+		label := labRunLabel + "=" + labRunToken(lab.RunID)
 		if result, err := l.docker(ctx, "ps", "-aq", "--filter", "label="+label); err == nil {
 			for _, id := range strings.Fields(result.Stdout) {
 				if _, err := l.docker(ctx, "rm", "-f", id); err != nil {

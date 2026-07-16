@@ -48,7 +48,7 @@ func TestCleanupDiscoversResourcesOnlyByExactRunLabel(t *testing.T) {
 	if !result.Passed {
 		t.Fatalf("empty exact-label cleanup failed: %+v", result)
 	}
-	want := "--filter label=" + labRunLabel + "=" + lab.RunID
+	want := "--filter label=" + labRunLabel + "=" + labRunToken(lab.RunID)
 	filteredLists := 0
 	for _, call := range runner.calls {
 		if strings.Contains(call, " --filter ") {
