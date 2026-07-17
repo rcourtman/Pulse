@@ -291,6 +291,22 @@ describe('settings architecture guardrails', () => {
     );
   });
 
+  it('keeps the external-agent (MCP) connector setup findable from sidebar search', () => {
+    // The Assistant page hosts the pulse-mcp connector setup, but its label and
+    // copy can't carry every term users search for. The nav item's search-only
+    // keywords are the canonical bridge; losing them regresses "mcp"/"claude"
+    // searches back to "No settings found".
+    const assistantNavBlock = settingsNavCatalogSource.match(
+      /id: 'system-ai-assistant',[\s\S]*?},/,
+    );
+    for (const keyword of ['mcp', 'external agent', 'claude', 'opencode', 'connector']) {
+      expect(assistantNavBlock?.[0]).toContain(`'${keyword}'`);
+    }
+    expect(settingsHeaderMetaSource).toContain(
+      'Configure Assistant chat behavior, chat action permissions, sessions, and external agent (MCP) connectors.',
+    );
+  });
+
   it('keeps resource privacy route-backed instead of sidebar-promoted', () => {
     expect(settingsNavCatalogSource).toMatch(
       /id: 'security-data-handling',[\s\S]*label: 'Resource Privacy',[\s\S]*hideFromSidebar: true/,

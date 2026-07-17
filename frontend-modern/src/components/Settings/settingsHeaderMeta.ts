@@ -42,7 +42,8 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   'system-ai-assistant': {
     title: 'Assistant',
-    description: 'Configure Assistant chat behavior, chat action permissions, and sessions.',
+    description:
+      'Configure Assistant chat behavior, chat action permissions, sessions, and external agent (MCP) connectors.',
   },
   'system-ai-discovery': {
     title: 'Service Context',

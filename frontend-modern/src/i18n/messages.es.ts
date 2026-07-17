@@ -395,7 +395,7 @@ export const ES_MESSAGE_OVERRIDES = {
     'Configura proveedores, modelos predeterminados, salud de proveedores, presupuesto y uso para Pulse Intelligence.',
   'settings.header.systemAi.title': 'Proveedores y modelos',
   'settings.header.systemAiAssistant.description':
-    'Configura el comportamiento del chat, los permisos de acciones y las sesiones del Assistant.',
+    'Configura el comportamiento del chat, los permisos de acciones, las sesiones y los conectores de agentes externos (MCP) del Assistant.',
   'settings.header.systemAiAssistant.title': 'Assistant',
   'settings.header.systemAiDiscovery.description':
     'Configura el contexto de servicio asistido por IA que usan Assistant y Patrol. El descubrimiento y onboarding de infraestructura permanecen en Infraestructura.',

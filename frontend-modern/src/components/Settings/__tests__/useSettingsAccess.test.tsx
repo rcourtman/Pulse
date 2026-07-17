@@ -130,4 +130,28 @@ describe('useSettingsAccess', () => {
       expect(setActiveTabSpy).not.toHaveBeenCalled();
     });
   });
+
+  it.each(['mcp', 'claude', 'opencode', 'connector', 'external agent'])(
+    'sidebar search %j surfaces the Assistant page hosting the external-agent connector setup',
+    async (query) => {
+      shouldHideSettingsNavItemMock.mockReturnValue(false);
+      let access!: ReturnType<typeof useSettingsAccess>;
+      render(() => {
+        const [activeTab, setActiveTab] = createSignal('system-ai-assistant' as never);
+        access = useSettingsAccess({
+          activeTab,
+          setActiveTab: setActiveTab as never,
+          searchQuery: () => query,
+        });
+        return null;
+      });
+
+      await waitFor(() => {
+        const matchedIds = access
+          .filteredTabGroups()
+          .flatMap((group) => group.items.map((item) => item.id));
+        expect(matchedIds).toContain('system-ai-assistant');
+      });
+    },
+  );
 });

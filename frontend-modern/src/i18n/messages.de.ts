@@ -403,7 +403,7 @@ export const DE_MESSAGE_OVERRIDES = {
     'Konfigurieren Sie Anbieter, Standardmodelle, Anbieterzustand, Budget und Nutzung fuer Pulse Intelligence.',
   'settings.header.systemAi.title': 'Anbieter & Modelle',
   'settings.header.systemAiAssistant.description':
-    'Konfigurieren Sie Chatverhalten, Aktionsrechte und Sitzungen des Assistant.',
+    'Konfigurieren Sie Chatverhalten, Aktionsrechte, Sitzungen und externe Agent-Verbindungen (MCP) des Assistant.',
   'settings.header.systemAiAssistant.title': 'Assistant',
   'settings.header.systemAiDiscovery.description':
     'Konfigurieren Sie den KI-gestuetzten Service-Kontext fuer Assistant und Patrol. Infrastruktur-Erkennung und Onboarding bleiben unter Infrastruktur.',

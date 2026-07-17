@@ -71,6 +71,10 @@ export type SettingsNavGroupId =
 export interface SettingsNavItem {
   id: SettingsTab;
   label: string;
+  // Search-only aliases (never rendered). Lets sidebar search find a page by
+  // terms its label/description can't carry, e.g. "mcp" or "claude" for the
+  // Assistant page's external-agent connector setup.
+  keywords?: string[];
   icon: Component<{ class?: string; strokeWidth?: number }>;
   iconProps?: { strokeWidth?: number };
   hideFromSidebar?: boolean;

@@ -149,7 +149,8 @@ describe('getSettingsHeaderMeta', () => {
     it('localizes system-ai-assistant to the English baseline (sibling only pinned es/de)', () => {
       expect(en['system-ai-assistant']).toEqual({
         title: 'Assistant',
-        description: 'Configure Assistant chat behavior, chat action permissions, and sessions.',
+        description:
+          'Configure Assistant chat behavior, chat action permissions, sessions, and external agent (MCP) connectors.',
       });
     });
 

@@ -81,7 +81,7 @@ describe('settings localization catalog', () => {
     expect(spanishMeta['system-ai-assistant']).toEqual({
       title: 'Assistant',
       description:
-        'Configura el comportamiento del chat, los permisos de acciones y las sesiones del Assistant.',
+        'Configura el comportamiento del chat, los permisos de acciones, las sesiones y los conectores de agentes externos (MCP) del Assistant.',
     });
     expect(spanishMeta['system-billing']).toEqual({
       title: 'Planes y facturacion',
@@ -99,7 +99,8 @@ describe('settings localization catalog', () => {
     });
     expect(getSettingsHeaderMeta('de')['system-ai-assistant']).toEqual({
       title: 'Assistant',
-      description: 'Konfigurieren Sie Chatverhalten, Aktionsrechte und Sitzungen des Assistant.',
+      description:
+        'Konfigurieren Sie Chatverhalten, Aktionsrechte, Sitzungen und externe Agent-Verbindungen (MCP) des Assistant.',
     });
     expect(getSettingsHeaderMeta('de')['system-billing']).toEqual({
       title: 'Plaene & Abrechnung',

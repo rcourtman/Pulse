@@ -2307,6 +2307,21 @@ default` instead of fusing provider and badge text such as
     `frontend-modern/src/components/shared/DiscoveryProvenanceMarker.tsx`, so
     operators can distinguish opt-in Discovery context from API-owned resource
     facts without reading a drawer-specific explanation.
+41. Keep settings sidebar search able to find pages by the vocabulary users
+    actually type, not only by rendered copy. `SettingsNavItem.keywords` in
+    `frontend-modern/src/components/Settings/settingsNavigationModel.ts` is the
+    canonical search-only alias channel, matched alongside labels and header
+    descriptions in
+    `frontend-modern/src/components/Settings/useSettingsAccess.ts`; keywords
+    are never rendered and must not become a second copy surface. The
+    Assistant nav item must keep the external-agent connector aliases
+    (`mcp`, `model context protocol`, `external agent`, `claude`, `opencode`,
+    `connector`, `pulse-mcp`) so the pulse-mcp setup hosted on that page stays
+    reachable from search, and the Assistant header description must continue
+    to name external agent (MCP) connectors across locales. Proof lives in
+    `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+    and the parameterized search cases in
+    `frontend-modern/src/components/Settings/__tests__/useSettingsAccess.test.tsx`.
 
 ## Current State
 

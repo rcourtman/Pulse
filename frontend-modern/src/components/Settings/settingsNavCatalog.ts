@@ -78,6 +78,16 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       {
         id: 'system-ai-assistant',
         label: 'Assistant',
+        keywords: [
+          'mcp',
+          'model context protocol',
+          'external agent',
+          'external agents',
+          'claude',
+          'opencode',
+          'connector',
+          'pulse-mcp',
+        ],
         icon: Terminal,
         iconProps: { strokeWidth: 2 },
       },

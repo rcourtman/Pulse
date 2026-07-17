@@ -55,6 +55,14 @@ func PulseIntelligenceAssistantContextEvent(event config.AIUsageEventRecord) boo
 
 // PulseIntelligenceExternalAgentEvidence is the content-free subset of
 // authenticated agent/MCP route activity used to prove external collaboration.
+//
+// Interpretation constraint: the agent_api surface counts any suitably scoped
+// API-token request to manifest-listed routes — including plain REST consumers
+// like scripts and dashboards hitting GET /api/config/nodes or
+// /api/ai/patrol/findings — so Used does NOT imply a BYO AI agent. Only
+// MCPAdapterUsed (the pulse_mcp surface header) certainly identifies an MCP
+// client. Do not read Used-vs-MCPAdapterUsed as an adoption funnel of the
+// same population.
 type PulseIntelligenceExternalAgentEvidence struct {
 	Used                  bool
 	MCPAdapterUsed        bool

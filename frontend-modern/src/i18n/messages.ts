@@ -388,7 +388,7 @@ export const EN_MESSAGES = {
     'Configure providers, default models, provider health, budget, and usage for Pulse Intelligence.',
   'settings.header.systemAi.title': 'Provider & Models',
   'settings.header.systemAiAssistant.description':
-    'Configure Assistant chat behavior, chat action permissions, and sessions.',
+    'Configure Assistant chat behavior, chat action permissions, sessions, and external agent (MCP) connectors.',
   'settings.header.systemAiAssistant.title': 'Assistant',
   'settings.header.systemAiDiscovery.description':
     'Configure the model-backed service context Assistant and Patrol use. Infrastructure discovery and onboarding stay under Infrastructure.',

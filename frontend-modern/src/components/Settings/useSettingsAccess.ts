@@ -144,7 +144,10 @@ export function useSettingsAccess({
           const matchLabel = item.label.toLowerCase().includes(q);
           const description = settingsHeaderMeta()[item.id]?.description?.toLowerCase() || '';
           const matchDesc = description.includes(q);
-          return matchLabel || matchDesc;
+          const matchKeyword = (item.keywords ?? []).some((keyword) =>
+            keyword.toLowerCase().includes(q),
+          );
+          return matchLabel || matchDesc || matchKeyword;
         });
         return { ...group, items: filteredItems };
       })

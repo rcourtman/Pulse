@@ -299,7 +299,12 @@ the `white_label` branding entitlement.
    Pulse Intelligence Provider & Models, Patrol, Assistant, and Service Context
    settings labels may use the same localized catalog boundary, but those edits
    must stay product-settings copy only and must not change token scope names,
-   preset ids, privacy disclosures, or security control terminology. Self-hosted
+   preset ids, privacy disclosures, or security control terminology. The
+   Assistant settings header naming external agent (MCP) connectors across
+   locales is such product-settings copy: it describes what the page hosts and
+   does not alter the scoped-token model, connector token handling, or any
+   security/privacy disclosure. `MCP` stays untranslated as a protocol
+   identifier. Self-hosted
    Plans & Billing header and navigation localization may share that same catalog
    boundary when it frames Pro setup as choosing Patrol autonomy; it must not
    alter API Access, authentication, privacy, or token-management terminology in
