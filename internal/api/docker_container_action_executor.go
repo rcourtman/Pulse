@@ -326,7 +326,7 @@ func (e dockerContainerActionExecutor) CheckActionAvailable(ctx context.Context,
 	agentID, _ := e.connectedDockerCommandAgentID(resource)
 	liveCapability, supported := e.agents.(agentOperationReceiptCapability)
 	if !supported || liveCapability.AgentOperationReceiptVersion(agentID) != operationreceipt.ProtocolVersion {
-		return unavailableDockerActionReadiness(operation, "operation_receipt_unsupported", "This agent does not support durable typed-operation receipts.")
+		return unavailableDockerActionReadiness(operation, "operation_receipt_unsupported", "The Pulse agent on this host is still on an older version that cannot run reviewed actions. Wait for the agent to update itself or update it manually, then retry.")
 	}
 	return readiness
 }
