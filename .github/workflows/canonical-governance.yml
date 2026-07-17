@@ -79,22 +79,52 @@ jobs:
           fi
           echo "range=${range}" >> "$GITHUB_OUTPUT"
 
-      - name: Run canonical completion guard against changed files
+      - name: Run canonical completion guard against changed commits
         shell: bash
         run: |
           set -euo pipefail
           range="${{ steps.diff.outputs.range }}"
-          if [ -n "${range}" ]; then
-            # Pass the range base so the guard compares contract texts
-            # base-vs-HEAD; the CI index equals HEAD, so the default
-            # index comparison would misreport every contract update
-            # in the range as insubstantial.
-            git diff --name-only "${range}" \
-              | python3 scripts/release_control/canonical_completion_guard.py \
-                  --files-from-stdin --diff-base "${range%%...*}"
-          else
+          if [ -z "${range}" ]; then
             printf '' | python3 scripts/release_control/canonical_completion_guard.py --files-from-stdin
+            exit 0
           fi
+          base="${range%%...*}"
+          head_sha="${range##*...}"
+          # Evaluate each commit the way the commit-time hook did: its own
+          # file list against its own parent. A range-wide evaluation
+          # cannot honor per-commit Contract-Neutral trailers (recorded by
+          # .husky/prepare-commit-msg when the author sets
+          # PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT), so bypassed commits that
+          # passed locally would fail here.
+          if ! commits=$(git rev-list --reverse --no-merges "${base}..${head_sha}" 2>/dev/null); then
+            echo "Range base ${base} unavailable (force push?); evaluating ${head_sha} against its parent."
+            commits="${head_sha}"
+          fi
+          if [ -z "${commits}" ]; then
+            echo "No commits to evaluate in range ${range}."
+            exit 0
+          fi
+          status=0
+          for commit in ${commits}; do
+            if ! git rev-parse --verify --quiet "${commit}^" >/dev/null; then
+              echo "Skipping root commit ${commit} (no parent to diff against)."
+              continue
+            fi
+            reason=$(git log -1 --format='%(trailers:key=Contract-Neutral,valueonly,separator=; )' "${commit}" | tr '\n' ' ')
+            echo "::group::canonical completion guard @ ${commit}"
+            # Pass the parent as the diff base so the guard compares
+            # contract texts parent-vs-commit; the CI index equals HEAD,
+            # so the default index comparison would misreport contract
+            # updates in earlier commits as insubstantial.
+            if ! git diff-tree --no-commit-id --name-only -r "${commit}" \
+              | PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT="${reason}" python3 scripts/release_control/canonical_completion_guard.py \
+                  --files-from-stdin --diff-base "${commit}^"; then
+              echo "Canonical completion guard failed for commit ${commit}."
+              status=1
+            fi
+            echo "::endgroup::"
+          done
+          exit ${status}
 
       - name: Run status audit
         env:

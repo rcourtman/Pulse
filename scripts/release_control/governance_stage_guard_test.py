@@ -27,6 +27,7 @@ class GovernanceStageGuardTest(unittest.TestCase):
 
     def test_is_worktree_sensitive_governance_path_matches_expected_scope(self) -> None:
         self.assertTrue(is_worktree_sensitive_governance_path(".husky/pre-commit"))
+        self.assertTrue(is_worktree_sensitive_governance_path(".husky/prepare-commit-msg"))
         self.assertTrue(is_worktree_sensitive_governance_path("docs/release-control/control_plane.json"))
         self.assertTrue(is_worktree_sensitive_governance_path("scripts/release_control/status_audit.py"))
         self.assertFalse(

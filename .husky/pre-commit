@@ -135,7 +135,15 @@ python3 scripts/release_control/subsystem_lookup_test.py
 unset PULSE_READ_STAGED_GOVERNANCE
 
 elif [ -f "docs/release-control/v6/internal/status.json" ]; then
-echo "Skipping governance checks (no staged governance, Go, repoctl, or hook changes)."
+# The completion guard still runs on frontend-only commits: subsystem
+# contracts name canonical frontend files (alerts, platform pages, ...),
+# and the canonical-governance workflow re-runs this guard per commit in
+# CI. Skipping it here lets a frontend commit land locally and then fail
+# CI on the very same check. The guard itself is cheap (seconds); only
+# the Go test + audit battery above stays gated on governance paths.
+echo "Running canonical completion guard..."
+python3 scripts/release_control/canonical_completion_guard.py
+echo "Skipping remaining governance checks (no staged governance, Go, repoctl, or hook changes)."
 else
 echo "Governance files not present, skipping governance checks."
 fi

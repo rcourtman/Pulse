@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+
+set -eu
+
+# Record the contract-neutral bypass in the commit itself. The canonical
+# completion guard re-runs per commit on GitHub Actions, where the
+# PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT env var from the local commit shell
+# does not exist; this trailer is the auditable, machine-readable carrier
+# the canonical-governance workflow reads back for each commit in the
+# pushed range. Without it, every legitimately bypassed commit fails CI.
+msg_file="$1"
+reason="${PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT:-}"
+reason=$(printf '%s' "$reason" | tr '\n' ' ' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+if [ -n "$reason" ]; then
+    git interpret-trailers --in-place --if-exists replace \
+        --trailer "Contract-Neutral: $reason" "$msg_file"
+fi

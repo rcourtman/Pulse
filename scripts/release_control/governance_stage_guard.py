@@ -17,6 +17,7 @@ WORKTREE_SENSITIVE_PREFIXES = (
 )
 WORKTREE_SENSITIVE_EXACT_FILES = (
     ".husky/pre-commit",
+    ".husky/prepare-commit-msg",
     CONTROL_PLANE_REL,
 )
 STAGED_EXECUTION_EXACT_FILES = (
