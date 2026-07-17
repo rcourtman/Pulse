@@ -4947,7 +4947,9 @@ describe('AIChat', () => {
           aiSafeSummary: 'storage resource; status online; redacted for cloud summary',
         },
       ];
-      mockByType.mockImplementation((type: string) => (type === 'storage' ? governedResources : []));
+      mockByType.mockImplementation((type: string) =>
+        type === 'storage' ? governedResources : [],
+      );
       mockResources.mockReturnValue(governedResources);
 
       renderChat();
