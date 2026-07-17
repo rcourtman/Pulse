@@ -5,13 +5,12 @@ import tempfile
 import unittest
 
 from contract_audit import audit_contract_payload, parse_args, repo_roots_for_status
+from repo_file_io import strip_local_git_env
 
 
 class ContractAuditTest(unittest.TestCase):
     def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
-        env = os.environ.copy()
-        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
-            env.pop(name, None)
+        env = strip_local_git_env(os.environ.copy())
         return subprocess.run(
             ["git", *args],
             cwd=repo_root,
