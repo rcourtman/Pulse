@@ -627,26 +627,10 @@ func (c *CommandClient) handleMessages(ctx context.Context, conn *websocket.Conn
 
 func (c *CommandClient) handleHostUpdate(ctx context.Context, conn *websocket.Conn, payload agentexec.HostUpdatePayload) {
 	identity := agentexec.HostUpdateOperationIdentity(c.agentID, payload)
-	record, admitted, err := c.admitOperation(identity)
-	if err != nil {
-		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Host update durable admission refused")
+	updateCtx, cancel, ok := c.beginHostAPTOperation(ctx, conn, identity, payload.RequestID, "Host update", 15*time.Minute, payload.Timeout, c.replayHostUpdate)
+	if !ok {
 		return
 	}
-	if !admitted {
-		if record.State == operationreceipt.StateTerminal {
-			c.replayHostUpdate(conn, record)
-		}
-		return
-	}
-	if _, err := c.operationReceipts.MarkStarted(identity); err != nil {
-		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Host update durable start refused")
-		return
-	}
-	timeout := time.Duration(payload.Timeout) * time.Second
-	if timeout <= 0 {
-		timeout = 15 * time.Minute
-	}
-	updateCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	result := agentexec.HostUpdateResultPayload{
@@ -658,16 +642,50 @@ func (c *CommandClient) handleHostUpdate(ctx context.Context, conn *websocket.Co
 	} else {
 		result = c.packageUpdates.Apply(updateCtx, payload)
 	}
-	result = sanitizeHostUpdateReceipt(result)
+	completeHostAPTOperation(c, conn, identity, sanitizeHostUpdateReceipt(result), agentexec.HostUpdateReceiptKind, payload.RequestID, "Failed to persist host update terminal receipt", c.sendHostUpdateResult)
+}
+
+// beginHostAPTOperation runs the shared durable admission prefix of the typed
+// host APT operation handlers: admit → replay-if-terminal → mark started →
+// derive the bounded execution context. ok is false when the handler must
+// return without executing.
+func (c *CommandClient) beginHostAPTOperation(ctx context.Context, conn *websocket.Conn, identity operationreceipt.Identity, requestID, logLabel string, defaultTimeout time.Duration, payloadTimeout int, replay func(*websocket.Conn, operationreceipt.Record)) (context.Context, context.CancelFunc, bool) {
+	record, admitted, err := c.admitOperation(identity)
+	if err != nil {
+		c.logger.Warn().Err(err).Str("request_id", requestID).Msg(logLabel + " durable admission refused")
+		return nil, nil, false
+	}
+	if !admitted {
+		if record.State == operationreceipt.StateTerminal {
+			replay(conn, record)
+		}
+		return nil, nil, false
+	}
+	if _, err := c.operationReceipts.MarkStarted(identity); err != nil {
+		c.logger.Warn().Err(err).Str("request_id", requestID).Msg(logLabel + " durable start refused")
+		return nil, nil, false
+	}
+	timeout := time.Duration(payloadTimeout) * time.Second
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+	opCtx, cancel := context.WithTimeout(ctx, timeout)
+	return opCtx, cancel, true
+}
+
+// completeHostAPTOperation persists the sanitized terminal receipt and sends
+// the result over the live connection, sharing the terminal suffix of the
+// typed host APT operation handlers.
+func completeHostAPTOperation[Res any](c *CommandClient, conn *websocket.Conn, identity operationreceipt.Identity, result Res, receiptKind string, requestID, persistFailureMsg string, send func(*websocket.Conn, Res)) {
 	encoded, err := json.Marshal(result)
 	if err != nil {
 		return
 	}
-	if _, err := c.operationReceipts.Complete(identity, operationreceipt.TerminalEnvelope{Kind: agentexec.HostUpdateReceiptKind, Version: agentexec.HostAPTReceiptVersion, Payload: encoded}); err != nil {
-		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to persist host update terminal receipt")
+	if _, err := c.operationReceipts.Complete(identity, operationreceipt.TerminalEnvelope{Kind: receiptKind, Version: agentexec.HostAPTReceiptVersion, Payload: encoded}); err != nil {
+		c.logger.Error().Err(err).Str("request_id", requestID).Msg(persistFailureMsg)
 		return
 	}
-	c.sendHostUpdateResult(conn, result)
+	send(conn, result)
 }
 
 func (c *CommandClient) sendHostUpdateResult(conn *websocket.Conn, result agentexec.HostUpdateResultPayload) {
@@ -692,26 +710,10 @@ func (c *CommandClient) sendHostUpdateResult(conn *websocket.Conn, result agente
 
 func (c *CommandClient) handleHostStorageCleanup(ctx context.Context, conn *websocket.Conn, payload agentexec.HostStorageCleanupPayload) {
 	identity := agentexec.HostStorageCleanupOperationIdentity(c.agentID, payload)
-	record, admitted, err := c.admitOperation(identity)
-	if err != nil {
-		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Host cleanup durable admission refused")
+	cleanupCtx, cancel, ok := c.beginHostAPTOperation(ctx, conn, identity, payload.RequestID, "Host cleanup", 5*time.Minute, payload.Timeout, c.replayHostStorageCleanup)
+	if !ok {
 		return
 	}
-	if !admitted {
-		if record.State == operationreceipt.StateTerminal {
-			c.replayHostStorageCleanup(conn, record)
-		}
-		return
-	}
-	if _, err := c.operationReceipts.MarkStarted(identity); err != nil {
-		c.logger.Warn().Err(err).Str("request_id", payload.RequestID).Msg("Host cleanup durable start refused")
-		return
-	}
-	timeout := time.Duration(payload.Timeout) * time.Second
-	if timeout <= 0 {
-		timeout = 5 * time.Minute
-	}
-	cleanupCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	result := agentexec.HostStorageCleanupResultPayload{
@@ -723,16 +725,7 @@ func (c *CommandClient) handleHostStorageCleanup(ctx context.Context, conn *webs
 	} else {
 		result = c.storageCleanup.Apply(cleanupCtx, payload)
 	}
-	result = sanitizeHostStorageCleanupReceipt(result)
-	encoded, err := json.Marshal(result)
-	if err != nil {
-		return
-	}
-	if _, err := c.operationReceipts.Complete(identity, operationreceipt.TerminalEnvelope{Kind: agentexec.HostStorageCleanupReceiptKind, Version: agentexec.HostAPTReceiptVersion, Payload: encoded}); err != nil {
-		c.logger.Error().Err(err).Str("request_id", payload.RequestID).Msg("Failed to persist host cleanup terminal receipt")
-		return
-	}
-	c.sendHostStorageCleanupResult(conn, result)
+	completeHostAPTOperation(c, conn, identity, sanitizeHostStorageCleanupReceipt(result), agentexec.HostStorageCleanupReceiptKind, payload.RequestID, "Failed to persist host cleanup terminal receipt", c.sendHostStorageCleanupResult)
 }
 
 func (c *CommandClient) handleDockerContainerLifecycle(ctx context.Context, conn *websocket.Conn, payload agentexec.DockerContainerLifecyclePayload) {
