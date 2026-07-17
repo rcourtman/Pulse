@@ -72,6 +72,16 @@ func TestEvaluatePatrolConfigReadiness_AssignsStableCause(t *testing.T) {
 			},
 		},
 		{
+			name:      "ollama suggested patrol model is ready",
+			wantCause: PatrolFailureCauseNone,
+			wantReady: true,
+			configure: func(cfg *config.AIConfig) {
+				cfg.Enabled = true
+				cfg.OllamaBaseURL = "http://127.0.0.1:11434"
+				cfg.PatrolModel = "ollama:" + config.OllamaSuggestedPatrolModel
+			},
+		},
+		{
 			name:      "deepseek v4 flash ready",
 			wantCause: PatrolFailureCauseNone,
 			wantReady: true,

@@ -243,10 +243,10 @@ func (e *PulseToolExecutor) summarizeFleet(
 	rawIDs, _ := args["resource_ids"].(string)
 	rawIDs = strings.TrimSpace(rawIDs)
 	if rawIDs == "" {
-		return NewErrorResult(fmt.Errorf("resource_ids (comma-separated) is required for action=fleet")), nil
+		return NewErrorResult(fmt.Errorf("resource_ids (comma-separated) is required for action=fleet. Do not ask the operator for identifiers: enumerate resources yourself first (e.g. pulse_query) and retry with their ids, or use action=resource for a single resource")), nil
 	}
 	if canonicalDefault == "" {
-		return NewErrorResult(fmt.Errorf("resource_type is required for action=fleet")), nil
+		return NewErrorResult(fmt.Errorf("resource_type is required for action=fleet. Use the type shared by the listed resources (e.g. vm, node, docker-host); enumerate resources yourself if unsure — do not ask the operator")), nil
 	}
 	parts := strings.Split(rawIDs, ",")
 	if len(parts) > summarizeFleetMaxResources {

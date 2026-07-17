@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { Route, Router } from '@solidjs/router';
 
 import { PULSE_MCP_TOKEN_SETUP_PATH } from '@/routing/resourceLinks';
+import { aiChatStore } from '@/stores/aiChat';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import type { AISettings as AISettingsType } from '@/types/ai';
 import {
@@ -1105,6 +1106,7 @@ describe('AISettings provider setup flow', () => {
 
   afterEach(() => {
     cleanup();
+    aiChatStore.close();
   });
 
   it('warns from setup when the saved provider leaves Patrol not ready', async () => {
@@ -1161,8 +1163,50 @@ describe('AISettings provider setup flow', () => {
     expect(message).toContain('Model: openrouter:deepseek/deepseek-r1');
     expect(message).toContain('reasoning-only model family');
     expect(notificationSuccessMock).not.toHaveBeenCalledWith(
-      'Pulse Intelligence enabled. You can customize settings below.',
+      expect.stringContaining('Pulse Intelligence enabled. This is the Assistant'),
     );
+  });
+
+  it('opens the Assistant and points at it after a successful first-time setup', async () => {
+    updateSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      enabled: true,
+      configured: true,
+      anthropic_configured: true,
+      configured_providers: ['anthropic'],
+      patrol_readiness: {
+        status: 'ready',
+        ready: true,
+        cause: 'none',
+        summary: 'Patrol is ready to run tool-backed verification.',
+        provider: 'anthropic',
+        model: 'anthropic:claude-sonnet-5',
+        checks: [],
+      },
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(getSettingsMock).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /enable pulse intelligence/i }));
+    const setupDialog = await screen.findByRole('dialog', {
+      name: 'Set up Pulse Intelligence',
+    });
+    fireEvent.click(within(setupDialog).getByRole('button', { name: /Anthropic/i }));
+    fireEvent.input(within(setupDialog).getByPlaceholderText('sk-ant-...'), {
+      target: { value: 'sk-ant-test' },
+    });
+    fireEvent.click(within(setupDialog).getByRole('button', { name: 'Enable Pulse Intelligence' }));
+
+    await waitFor(() => {
+      expect(notificationSuccessMock).toHaveBeenCalledWith(
+        'Pulse Intelligence enabled. This is the Assistant — ask it anything about your infrastructure.',
+      );
+    });
+    expect(aiChatStore.isOpen).toBe(true);
   });
 
   it('names the setup provider when provider setup save fails generically', async () => {

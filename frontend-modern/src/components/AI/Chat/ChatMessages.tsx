@@ -41,7 +41,17 @@ interface ChatMessagesProps {
   // Dashboard props
   recentSessions?: ChatSession[];
   onLoadSession?: (sessionId: string) => void;
+  // Empty-state affordance: sends the example prompt as a chat turn.
+  onSuggestedPrompt?: (prompt: string) => void;
 }
+
+// Plain-language example prompts for the empty transcript. These teach a
+// first-run user what the Assistant is for; each sends as a real turn.
+export const ASSISTANT_SUGGESTED_PROMPTS = [
+  'How is my infrastructure looking right now?',
+  'Are there any alerts I should look at?',
+  "What's using the most CPU?",
+] as const;
 
 /**
  * ChatMessages - Renders the scrollable message list.
@@ -265,6 +275,30 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
         data-testid="assistant-message-list"
         onScroll={updatePinnedToBottom}
       >
+        <Show when={props.messages.length === 0 && props.onSuggestedPrompt}>
+          <section class="mb-4 w-full" aria-label="Assistant welcome" data-testid="assistant-welcome">
+            <p class="text-sm text-base-content">
+              Ask about your infrastructure. The Assistant sees your live inventory, metrics, and
+              alerts, and can dig into problems with you.
+            </p>
+            <div class="mt-2 text-[11px] font-semibold uppercase text-muted">Try one</div>
+            <div class="mt-1.5 space-y-1.5">
+              <For each={ASSISTANT_SUGGESTED_PROMPTS}>
+                {(prompt) => (
+                  <button
+                    type="button"
+                    class="w-full rounded-md border border-border bg-surface px-3 py-2 text-left text-sm text-base-content transition-colors hover:border-blue-300 hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                    onClick={() => props.onSuggestedPrompt?.(prompt)}
+                    data-testid="assistant-suggested-prompt"
+                  >
+                    {prompt}
+                  </button>
+                )}
+              </For>
+            </div>
+          </section>
+        </Show>
+
         <Show
           when={props.messages.length === 0 && recentSessions().length > 0 && props.onLoadSession}
         >

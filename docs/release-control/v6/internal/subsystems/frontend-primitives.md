@@ -2304,6 +2304,14 @@ default` instead of fusing provider and badge text such as
 
 ## Current State
 
+Assistant availability in the app shell is derived from the
+`sessionCapabilities.assistantEnabled` security-status capability, and
+`aiChatStore.refreshEnabledFromServer()` is the canonical way to re-derive it
+mid-session. AI settings save paths (setup modal, enable toggle, Provider &
+Models save) must call it after a successful save so assistant entry points
+appear or disappear without a full reload; no surface may flip
+`aiChatStore.setEnabled` from settings state directly.
+
 Patrol `fix_rejected` presentation is owned by the Patrol/AI finding surfaces
 that render the governed-action loop, while the surrounding badge, button,
 loading, and icon composition still uses shared frontend primitives. Shared

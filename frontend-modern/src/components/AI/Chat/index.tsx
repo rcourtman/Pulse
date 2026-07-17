@@ -4894,6 +4894,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
             onUseModelRoute={switchToModelRoute}
             queuedFollowUps={chat.queuedFollowUps()}
             queuedFollowUpsPaused={chat.queuedFollowUpsPaused()}
+            onSuggestedPrompt={(prompt) => {
+              void chat.sendMessage(prompt, undefined, undefined);
+            }}
             onEditQueuedFollowUp={editQueuedFollowUp}
             onCancelQueuedFollowUp={(id) => {
               chat.cancelQueuedFollowUp(id);

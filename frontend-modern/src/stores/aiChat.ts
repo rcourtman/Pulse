@@ -283,6 +283,20 @@ export const aiChatStore = {
     setAiEnabled(enabled);
   },
 
+  // Re-derive assistant availability from the canonical session
+  // capability. The bootstrap only reads it on page load, so AI
+  // settings saves call this to reveal (or hide) the assistant entry
+  // points without a full reload.
+  async refreshEnabledFromServer() {
+    try {
+      const { SecurityAPI } = await import('@/api/security');
+      const status = await SecurityAPI.getStatus();
+      setAiEnabled(status?.sessionCapabilities?.assistantEnabled === true);
+    } catch (error) {
+      logger.error('[aiChat] Failed to refresh assistant availability', error);
+    }
+  },
+
   // Set messages (for persistence from AIChat component)
   setMessages(msgs: Message[]) {
     setMessages(msgs);

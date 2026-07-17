@@ -3870,6 +3870,24 @@ resolve canonical/source IDs and unique aliases before collection, reject
 
 ## Current State
 
+First-session assistant discoverability is now a contract concern. Successful
+first-time provider setup (the Provider & Models setup modal) must open the
+Assistant drawer and refresh the session `assistantEnabled` capability in
+place, so the launcher and per-surface handoff buttons appear without a page
+reload; the enable/save toasts point at the Assistant rather than back at
+settings. The Assistant's empty transcript owns a plain-language welcome plus
+static suggested prompts (`ASSISTANT_SUGGESTED_PROMPTS` in `ChatMessages.tsx`)
+that dispatch as real chat turns; server-driven workflow starters remain a
+separate composer affordance. Patrol static readiness treats the blessed
+Ollama Patrol model (`config.OllamaSuggestedPatrolModel`) as Ready — the
+recommended free path must not report itself degraded — while other Ollama
+models keep the unverified-tool-support warning, which now names the selected
+model instead of instructing the operator to pull the model they already
+selected. `pulse_summarize` fleet-mode argument errors instruct the model to
+enumerate resources itself rather than interrogate the operator for resource
+IDs; assistant-facing tool errors must prefer self-recovery guidance over
+operator questions.
+
 Automatic Watch detection now carries a declining 7,000-token run allowance:
 normal structured turns receive at most 2,048 output tokens, terminal summaries
 receive at most 1,024, and the remaining allowance is projected on every

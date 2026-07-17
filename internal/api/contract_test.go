@@ -1785,7 +1785,7 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 			"status":"warning",
 			"ready":true,
 			"cause":"model_tool_support_unverified",
-			"summary":"Ollama connectivity alone does not prove tool support. qwen3:8b passes Patrol's tool check; run ollama pull qwen3:8b and select it as the Patrol model.",
+			"summary":"Ollama connectivity alone does not prove tool support, and llama3:latest has not passed Patrol's tool check. qwen3:8b is the verified Patrol model: run ollama pull qwen3:8b and select it as the Patrol model.",
 			"provider":"ollama",
 			"model":"ollama:llama3:latest",
 			"checks":[{
@@ -1793,7 +1793,7 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 				"status":"warning",
 				"cause":"model_tool_support_unverified",
 				"label":"Patrol control",
-				"message":"Ollama connectivity alone does not prove tool support. qwen3:8b passes Patrol's tool check; run ollama pull qwen3:8b and select it as the Patrol model."
+				"message":"Ollama connectivity alone does not prove tool support, and llama3:latest has not passed Patrol's tool check. qwen3:8b is the verified Patrol model: run ollama pull qwen3:8b and select it as the Patrol model."
 			}]
 		}
 	}`, ollama.URL)

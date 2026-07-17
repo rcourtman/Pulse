@@ -700,6 +700,21 @@ describe('settings architecture guardrails', () => {
     expect(aiSettingsStateSource).not.toContain('OpenRouter returned 401');
   });
 
+  it('reveals the Assistant after AI settings saves without a page reload', () => {
+    // Every successful AI settings save path must re-derive the session
+    // assistantEnabled capability so the launcher and handoff buttons
+    // appear (or disappear) mid-session, and first-time setup must open
+    // the Assistant drawer at the moment of maximum intent.
+    const refreshCalls = aiSettingsStateSource.match(
+      /aiChatStore\.refreshEnabledFromServer\(\)/g,
+    );
+    expect(refreshCalls?.length ?? 0).toBeGreaterThanOrEqual(3);
+    expect(aiSettingsStateSource).toContain('aiChatStore.open()');
+    expect(aiSettingsStateSource).not.toContain(
+      'Pulse Intelligence enabled. You can customize settings below.',
+    );
+  });
+
   it('keeps Assistant and Patrol provider-specific fields model-driven', () => {
     expect(aiSettingsModelSource).toContain('export const AI_PROVIDERS: AIProvider[] = [');
     for (const provider of ['zai', 'groq', 'mistral', 'cerebras', 'together', 'fireworks']) {

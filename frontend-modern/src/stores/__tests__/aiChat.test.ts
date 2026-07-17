@@ -1,8 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { aiChatStore } from '@/stores/aiChat';
 import { eventBus } from '@/stores/events';
+
+const getSecurityStatusMock = vi.fn();
+
+vi.mock('@/api/security', () => ({
+  SecurityAPI: {
+    getStatus: (...args: unknown[]) => getSecurityStatusMock(...args),
+  },
+}));
 
 const aiChatSource = readFileSync(
   resolve(process.cwd(), 'src/components/AI/Chat/index.tsx'),
@@ -67,6 +75,27 @@ describe('aiChatStore', () => {
 
     aiChatStore.requestCommand('providers');
     expect(aiChatStore.commandRequest).toMatchObject({ action: 'providers' });
+  });
+
+  it('re-derives enabled from the session assistantEnabled capability', async () => {
+    getSecurityStatusMock.mockResolvedValue({
+      sessionCapabilities: { assistantEnabled: true },
+    });
+    await aiChatStore.refreshEnabledFromServer();
+    expect(aiChatStore.enabled).toBe(true);
+
+    getSecurityStatusMock.mockResolvedValue({
+      sessionCapabilities: { assistantEnabled: false },
+    });
+    await aiChatStore.refreshEnabledFromServer();
+    expect(aiChatStore.enabled).toBe(false);
+  });
+
+  it('keeps the current enabled state when the capability refresh fails', async () => {
+    aiChatStore.setEnabled(true);
+    getSecurityStatusMock.mockRejectedValue(new Error('offline'));
+    await aiChatStore.refreshEnabledFromServer();
+    expect(aiChatStore.enabled).toBe(true);
   });
 
   it('uses native Assistant terminology for browser-owned chat shell state', () => {

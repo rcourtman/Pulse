@@ -95,10 +95,26 @@ func PatrolToolReadinessForModel(provider, model string) (string, PatrolFailureC
 	case providerDefinitionIsGateway(provider):
 		return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, fmt.Sprintf("%s routes vary by model and endpoint. Patrol will fail closed if the routed model rejects tools or tool_choice.", config.AIProviderDisplayName(provider))
 	case provider == config.AIProviderOllama:
-		return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, fmt.Sprintf("Ollama connectivity alone does not prove tool support. %s passes Patrol's tool check; run ollama pull %s and select it as the Patrol model.", config.OllamaSuggestedPatrolModel, config.OllamaSuggestedPatrolModel)
+		if patrolOllamaModelIsSuggested(normalizedModel) {
+			return PatrolReadinessReady, PatrolFailureCauseNone, fmt.Sprintf("%s passes Patrol's tool check on Ollama.", config.OllamaSuggestedPatrolModel)
+		}
+		return PatrolReadinessWarning, PatrolFailureCauseModelToolSupportUnverified, fmt.Sprintf("Ollama connectivity alone does not prove tool support, and %s has not passed Patrol's tool check. %s is the verified Patrol model: run ollama pull %s and select it as the Patrol model.", patrolOllamaModelName(normalizedModel), config.OllamaSuggestedPatrolModel, config.OllamaSuggestedPatrolModel)
 	default:
 		return PatrolReadinessReady, PatrolFailureCauseNone, "The selected provider path supports Patrol's tool-backed analysis contract."
 	}
+}
+
+// patrolOllamaModelName strips the ollama provider prefix so readiness
+// copy names the model the way the operator selected it.
+func patrolOllamaModelName(normalizedModel string) string {
+	return strings.TrimPrefix(normalizedModel, string(config.AIProviderOllama)+":")
+}
+
+// patrolOllamaModelIsSuggested reports whether the selected Ollama model
+// is the blessed Patrol model, which has passed the tool check and must
+// not be reported as unverified.
+func patrolOllamaModelIsSuggested(normalizedModel string) bool {
+	return patrolOllamaModelName(normalizedModel) == strings.ToLower(config.OllamaSuggestedPatrolModel)
 }
 
 func providerDefinitionIsGateway(provider string) bool {

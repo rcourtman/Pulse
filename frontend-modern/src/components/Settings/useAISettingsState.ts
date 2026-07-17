@@ -22,6 +22,7 @@ import {
 import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
+import { aiChatStore } from '@/stores/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod, ModelInfo } from '@/types/ai';
 import { normalizeAIControlLevel, type AIControlLevel } from '@/utils/aiControlLevelPresentation';
@@ -839,6 +840,12 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       hydratePatrolPreflightFromSettings(updated);
       void runProviderPreflight(updated);
       handleCloseSetupModal();
+      // First-time configuration is the moment of maximum intent:
+      // reveal the assistant entry points (the bootstrap only reads
+      // the capability on page load) and open the Assistant so the
+      // user meets the feature they just enabled.
+      void aiChatStore.refreshEnabledFromServer();
+      aiChatStore.open();
       const patrolReadinessMessage = getAISettingsPatrolReadinessSaveMessage(
         updated.patrol_readiness,
         'Pulse Intelligence enabled',
@@ -846,7 +853,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       if (patrolReadinessMessage) {
         notificationStore.warning(patrolReadinessMessage);
       } else {
-        notificationStore.success('Pulse Intelligence enabled. You can customize settings below.');
+        notificationStore.success(
+          'Pulse Intelligence enabled. This is the Assistant — ask it anything about your infrastructure.',
+        );
       }
     } catch (error) {
       logger.error('[AISettings] Setup failed:', error);
@@ -1074,6 +1083,7 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       syncModelCatalogForSettings(updated);
       hydratePatrolPreflightFromSettings(updated);
       void runProviderPreflight(updated);
+      void aiChatStore.refreshEnabledFromServer();
       const savedLabel = options.savedLabel ?? 'Provider & Models settings saved';
       const patrolReadinessMessage = getAISettingsPatrolReadinessSaveMessage(
         updated.patrol_readiness,
@@ -1263,8 +1273,11 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       setSettings(updated);
       syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
+      void aiChatStore.refreshEnabledFromServer();
       notificationStore.success(
-        newValue ? 'Pulse Intelligence enabled' : 'Pulse Intelligence disabled',
+        newValue
+          ? 'Pulse Intelligence enabled. Ask the Assistant anything from the sparkles button on the right edge.'
+          : 'Pulse Intelligence disabled',
       );
     } catch (error) {
       setForm('enabled', !newValue);

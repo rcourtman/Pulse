@@ -131,6 +131,28 @@ describe('ChatMessages', () => {
       expect(screen.queryByText('Ask about your infrastructure')).not.toBeInTheDocument();
     });
 
+    it('shows the welcome and suggested prompts in an empty transcript when wired', () => {
+      const onSuggestedPrompt = vi.fn();
+      render(() => (
+        <ChatMessages messages={[]} {...makeHandlers()} onSuggestedPrompt={onSuggestedPrompt} />
+      ));
+
+      expect(screen.getByTestId('assistant-welcome')).toBeInTheDocument();
+      const prompts = screen.getAllByTestId('assistant-suggested-prompt');
+      expect(prompts).toHaveLength(3);
+
+      fireEvent.click(prompts[0]);
+      expect(onSuggestedPrompt).toHaveBeenCalledWith('How is my infrastructure looking right now?');
+    });
+
+    it('hides the welcome once messages exist', () => {
+      render(() => (
+        <ChatMessages messages={[makeMessage()]} {...makeHandlers()} onSuggestedPrompt={vi.fn()} />
+      ));
+
+      expect(screen.queryByTestId('assistant-welcome')).not.toBeInTheDocument();
+    });
+
     it('shows recent sessions as resume actions in an empty transcript', () => {
       const onLoadSession = vi.fn();
       render(() => (
