@@ -153,7 +153,9 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`subject-path: release/*`,
 		`gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate`,
 		`git push origin "refs/tags/${TAG}" --force`,
-		`-F target_commitish="${HEAD_SHA}"`,
+		`--rawfile body "$NOTES_FILE"`,
+		`--input "$RELEASE_PAYLOAD"`,
+		`--expected-body-file "$NOTES_FILE"`,
 		`historical_asset_backfill_only=${HISTORICAL_ASSET_BACKFILL_ONLY}`,
 		`if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}`,
 		`candidate_manifest_artifact: ${{ needs.build_release_candidate.outputs.manifest_artifact_name }}`,
@@ -161,8 +163,8 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`permissions:`,
 		`issues: write`,
 		`statuses: write`,
-		`ACTUAL_RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name // empty')`,
-		`ACTUAL_TARGET_COMMITISH=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // empty')`,
+		`ACTUAL_RELEASE_TAG=$(jq -r '.tag_name // empty' "$RELEASE_JSON_FILE")`,
+		`ACTUAL_TARGET_COMMITISH=$(jq -r '.target_commitish // empty' "$RELEASE_JSON_FILE")`,
 		`Draft release ${RELEASE_ID} is bound to tag ${ACTUAL_RELEASE_TAG}, expected ${TAG}.`,
 		`Draft release ${RELEASE_ID} target_commitish is ${ACTUAL_TARGET_COMMITISH}, expected ${HEAD_SHA}.`,
 		`./scripts/backfill-release-assets.sh --tag "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}"`,
@@ -237,6 +239,11 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`{draft: true, tag_name: $tag, target_commitish: $target_commitish}`,
 		`Validation release body update detached release tag`,
 		`Validation release body update changed target_commitish`,
+		`Validate release body integrity`,
+		`--validate-body-file "$RELEASE_BODY_FILE"`,
+		`--expected-body-file "$CLEAN_BODY_FILE"`,
+		`Quarantine malformed release body`,
+		`The release was quarantined as a draft without deleting its assets.`,
 	}
 	for _, needle := range validationRequired {
 		if !strings.Contains(validationWorkflow, needle) {

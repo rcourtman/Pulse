@@ -119,15 +119,78 @@ jobs:
           cat context.env >> "$GITHUB_OUTPUT"
           cat context.env
 
+      - name: Validate release body integrity
+        id: body_integrity
+        if: steps.context.outputs.should_run == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          RELEASE_JSON_FILE=$(mktemp)
+          RELEASE_BODY_FILE=$(mktemp)
+          gh api "repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
+            > "$RELEASE_JSON_FILE"
+          jq -r '.body // ""' "$RELEASE_JSON_FILE" > "$RELEASE_BODY_FILE"
+          python3 scripts/release_control/render_release_body.py \
+            --version "${{ steps.context.outputs.version }}" \
+            --validate-body-file "$RELEASE_BODY_FILE"
+
+      - name: Quarantine malformed release body
+        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PATCH_PAYLOAD=$(mktemp)
+          RELEASE_JSON_FILE=$(mktemp)
+
+          jq -n \
+            --arg tag "${{ steps.context.outputs.tag }}" \
+            --arg target_commitish "${{ steps.context.outputs.target_commitish }}" \
+            '{draft: true, tag_name: $tag, target_commitish: $target_commitish}' \
+            > "$PATCH_PAYLOAD"
+
+          gh api "repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
+            -X PATCH \
+            --input "$PATCH_PAYLOAD" > "$RELEASE_JSON_FILE"
+
+          ACTUAL_RELEASE_TAG=$(jq -r '.tag_name // empty' "$RELEASE_JSON_FILE")
+          ACTUAL_TARGET_COMMITISH=$(jq -r '.target_commitish // empty' "$RELEASE_JSON_FILE")
+          ACTUAL_DRAFT=$(jq -r '.draft // false' "$RELEASE_JSON_FILE")
+          if [ "$ACTUAL_RELEASE_TAG" != "${{ steps.context.outputs.tag }}" ]; then
+            echo "::error::Body-integrity quarantine detached release tag ${ACTUAL_RELEASE_TAG}; expected ${{ steps.context.outputs.tag }}."
+            exit 1
+          fi
+          if [ "$ACTUAL_TARGET_COMMITISH" != "${{ steps.context.outputs.target_commitish }}" ]; then
+            echo "::error::Body-integrity quarantine changed target_commitish ${ACTUAL_TARGET_COMMITISH}; expected ${{ steps.context.outputs.target_commitish }}."
+            exit 1
+          fi
+          if [ "$ACTUAL_DRAFT" != "true" ]; then
+            echo "::error::Malformed release body was not quarantined as a draft."
+            exit 1
+          fi
+
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/statuses/${{ steps.context.outputs.target_commitish }}" \
+            -d '{
+              "state": "failure",
+              "target_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "description": "Release body integrity failed",
+              "context": "Release Asset Validation"
+            }'
+
       - name: Download immutable candidate manifest
-        if: steps.context.outputs.should_run == 'true' && inputs.candidate_manifest_artifact != ''
+        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && inputs.candidate_manifest_artifact != ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ inputs.candidate_manifest_artifact }}
           path: release-candidate-manifest
 
       - name: Fetch release asset metadata
-        if: steps.context.outputs.should_run == 'true'
+        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -143,7 +206,7 @@ jobs:
           echo "Found ${count} published release assets."
 
       - name: Download all release assets for legacy validation
-        if: steps.context.outputs.should_run == 'true' && inputs.candidate_manifest_artifact == ''
+        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && inputs.candidate_manifest_artifact == ''
         id: download
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -189,11 +252,11 @@ jobs:
           ls -lh
 
       - name: Install Docker
-        if: steps.context.outputs.should_run == 'true' && inputs.candidate_manifest_artifact == ''
+        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && inputs.candidate_manifest_artifact == ''
         run: docker --version
 
       - name: Pull Docker image (with retry logic)
-        if: steps.context.outputs.should_run == 'true' && inputs.candidate_manifest_artifact == ''
+        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && inputs.candidate_manifest_artifact == ''
         id: docker
         continue-on-error: true
         run: |
@@ -235,7 +298,7 @@ jobs:
           echo "image_available=false" >> $GITHUB_OUTPUT
 
       - name: Run validation script
-        if: steps.context.outputs.should_run == 'true'
+        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success'
         id: validate
         env:
           CANDIDATE_MANIFEST_ARTIFACT: ${{ inputs.candidate_manifest_artifact }}
@@ -282,7 +345,7 @@ jobs:
           exit $VALIDATION_EXIT_CODE
 
       - name: Set commit status - Success
-        if: steps.context.outputs.should_run == 'true' && steps.validate.outputs.validation_passed == 'true'
+        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && steps.validate.outputs.validation_passed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -298,10 +361,11 @@ jobs:
             }'
 
       - name: Update release body - Success
-        if: steps.context.outputs.should_run == 'true' && steps.validate.outputs.validation_passed == 'true'
+        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && steps.validate.outputs.validation_passed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           echo "✅ Validation passed - updating release description"
 
           INITIAL_STATE="${{ steps.context.outputs.draft }}"
@@ -315,11 +379,21 @@ jobs:
               INTRO_LINE="Assets were revalidated after publication due to a release edit."
           fi
 
-          CURRENT_BODY=$(curl -s -H "Authorization: token $GH_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
-            | jq -r '.body // ""')
+          CURRENT_RELEASE_JSON=$(mktemp)
+          CURRENT_BODY_FILE=$(mktemp)
+          CLEAN_BODY_FILE=$(mktemp)
+          NEW_BODY_FILE=$(mktemp)
+          PATCH_PAYLOAD=$(mktemp)
+          PATCH_RESPONSE=$(mktemp)
+          PATCHED_BODY_FILE=$(mktemp)
 
-          CURRENT_BODY=$(echo "$CURRENT_BODY" | sed '/<!-- VALIDATION_STATUS_START -->/,/<!-- VALIDATION_STATUS_END -->/d')
+          gh api "repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
+            > "$CURRENT_RELEASE_JSON"
+          jq -r '.body // ""' "$CURRENT_RELEASE_JSON" > "$CURRENT_BODY_FILE"
+          python3 scripts/release_control/render_release_body.py \
+            --version "${{ steps.context.outputs.version }}" \
+            --validate-body-file "$CURRENT_BODY_FILE" \
+            --output "$CLEAN_BODY_FILE"
 
           read -r -d '' VALIDATION_BLOCK <<'EOF' || true
           <!-- VALIDATION_STATUS_START -->
@@ -346,22 +420,23 @@ jobs:
           VALIDATION_BLOCK="${VALIDATION_BLOCK//TIMESTAMP_PLACEHOLDER/$(date -u +"%Y-%m-%d %H:%M:%S UTC")}"
           VALIDATION_BLOCK="${VALIDATION_BLOCK//WORKFLOW_LINK_PLACEHOLDER/[${{ github.workflow }} #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})}"
 
-          NEW_BODY="$VALIDATION_BLOCK
+          printf '%s\n\n' "$VALIDATION_BLOCK" > "$NEW_BODY_FILE"
+          cat "$CLEAN_BODY_FILE" >> "$NEW_BODY_FILE"
+          jq -n \
+            --rawfile body "$NEW_BODY_FILE" \
+            --arg tag "${{ steps.context.outputs.tag }}" \
+            --arg target_commitish "${{ steps.context.outputs.target_commitish }}" \
+            '{body: $body, tag_name: $tag, target_commitish: $target_commitish}' \
+            > "$PATCH_PAYLOAD"
 
-          $CURRENT_BODY"
-
-          RELEASE_JSON=$(curl --fail-with-body --silent --show-error -X PATCH \
+          curl --fail-with-body --silent --show-error -X PATCH \
             -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
-            -d "$(jq -n \
-              --arg body "$NEW_BODY" \
-              --arg tag "${{ steps.context.outputs.tag }}" \
-              --arg target_commitish "${{ steps.context.outputs.target_commitish }}" \
-              '{body: $body, tag_name: $tag, target_commitish: $target_commitish}')")
+            --data-binary "@$PATCH_PAYLOAD" > "$PATCH_RESPONSE"
 
-          ACTUAL_RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name // empty')
-          ACTUAL_TARGET_COMMITISH=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // empty')
+          ACTUAL_RELEASE_TAG=$(jq -r '.tag_name // empty' "$PATCH_RESPONSE")
+          ACTUAL_TARGET_COMMITISH=$(jq -r '.target_commitish // empty' "$PATCH_RESPONSE")
           if [ "$ACTUAL_RELEASE_TAG" != "${{ steps.context.outputs.tag }}" ]; then
             echo "::error::Validation release body update detached release tag ${ACTUAL_RELEASE_TAG}; expected ${{ steps.context.outputs.tag }}."
             exit 1
@@ -370,9 +445,14 @@ jobs:
             echo "::error::Validation release body update changed target_commitish ${ACTUAL_TARGET_COMMITISH}; expected ${{ steps.context.outputs.target_commitish }}."
             exit 1
           fi
+          jq -r '.body // ""' "$PATCH_RESPONSE" > "$PATCHED_BODY_FILE"
+          python3 scripts/release_control/render_release_body.py \
+            --version "${{ steps.context.outputs.version }}" \
+            --validate-body-file "$PATCHED_BODY_FILE" \
+            --expected-body-file "$CLEAN_BODY_FILE"
 
       - name: Set commit status - Failure
-        if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
+        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && (failure() || steps.validate.outputs.validation_passed == 'false')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -388,7 +468,7 @@ jobs:
             }'
 
       - name: Delete all release assets on failure
-        if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
+        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && (failure() || steps.validate.outputs.validation_passed == 'false')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -438,10 +518,11 @@ jobs:
           fi
 
       - name: Update release body - Failure
-        if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
+        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && (failure() || steps.validate.outputs.validation_passed == 'false')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           echo "❌ Validation failed - updating release description"
 
           INITIAL_STATE="${{ steps.context.outputs.draft }}"
@@ -455,11 +536,21 @@ jobs:
               INTRO_LINE="A published release edit introduced invalid assets. The release has been reverted to draft and assets were deleted to stop further downloads."
           fi
 
-          CURRENT_BODY=$(curl -s -H "Authorization: token $GH_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
-            | jq -r '.body // ""')
+          CURRENT_RELEASE_JSON=$(mktemp)
+          CURRENT_BODY_FILE=$(mktemp)
+          CLEAN_BODY_FILE=$(mktemp)
+          NEW_BODY_FILE=$(mktemp)
+          PATCH_PAYLOAD=$(mktemp)
+          PATCH_RESPONSE=$(mktemp)
+          PATCHED_BODY_FILE=$(mktemp)
 
-          CURRENT_BODY=$(echo "$CURRENT_BODY" | sed '/<!-- VALIDATION_STATUS_START -->/,/<!-- VALIDATION_STATUS_END -->/d')
+          gh api "repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
+            > "$CURRENT_RELEASE_JSON"
+          jq -r '.body // ""' "$CURRENT_RELEASE_JSON" > "$CURRENT_BODY_FILE"
+          python3 scripts/release_control/render_release_body.py \
+            --version "${{ steps.context.outputs.version }}" \
+            --validate-body-file "$CURRENT_BODY_FILE" \
+            --output "$CLEAN_BODY_FILE"
 
           VALIDATION_OUTPUT="${{ steps.validate.outputs.VALIDATION_OUTPUT }}"
           if [ -n "$VALIDATION_OUTPUT" ]; then
@@ -509,22 +600,23 @@ jobs:
           VALIDATION_BLOCK="${VALIDATION_BLOCK//WORKFLOW_URL_PLACEHOLDER/${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}}"
           VALIDATION_BLOCK="${VALIDATION_BLOCK//ERRORS_PLACEHOLDER/$ERRORS}"
 
-          NEW_BODY="$VALIDATION_BLOCK
+          printf '%s\n\n' "$VALIDATION_BLOCK" > "$NEW_BODY_FILE"
+          cat "$CLEAN_BODY_FILE" >> "$NEW_BODY_FILE"
+          jq -n \
+            --rawfile body "$NEW_BODY_FILE" \
+            --arg tag "${{ steps.context.outputs.tag }}" \
+            --arg target_commitish "${{ steps.context.outputs.target_commitish }}" \
+            '{body: $body, tag_name: $tag, target_commitish: $target_commitish}' \
+            > "$PATCH_PAYLOAD"
 
-          $CURRENT_BODY"
-
-          RELEASE_JSON=$(curl --fail-with-body --silent --show-error -X PATCH \
+          curl --fail-with-body --silent --show-error -X PATCH \
             -H "Authorization: token $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/releases/${{ steps.context.outputs.release_id }}" \
-            -d "$(jq -n \
-              --arg body "$NEW_BODY" \
-              --arg tag "${{ steps.context.outputs.tag }}" \
-              --arg target_commitish "${{ steps.context.outputs.target_commitish }}" \
-              '{body: $body, tag_name: $tag, target_commitish: $target_commitish}')")
+            --data-binary "@$PATCH_PAYLOAD" > "$PATCH_RESPONSE"
 
-          ACTUAL_RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name // empty')
-          ACTUAL_TARGET_COMMITISH=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // empty')
+          ACTUAL_RELEASE_TAG=$(jq -r '.tag_name // empty' "$PATCH_RESPONSE")
+          ACTUAL_TARGET_COMMITISH=$(jq -r '.target_commitish // empty' "$PATCH_RESPONSE")
           if [ "$ACTUAL_RELEASE_TAG" != "${{ steps.context.outputs.tag }}" ]; then
             echo "::error::Validation failure body update detached release tag ${ACTUAL_RELEASE_TAG}; expected ${{ steps.context.outputs.tag }}."
             exit 1
@@ -533,9 +625,20 @@ jobs:
             echo "::error::Validation failure body update changed target_commitish ${ACTUAL_TARGET_COMMITISH}; expected ${{ steps.context.outputs.target_commitish }}."
             exit 1
           fi
+          jq -r '.body // ""' "$PATCH_RESPONSE" > "$PATCHED_BODY_FILE"
+          python3 scripts/release_control/render_release_body.py \
+            --version "${{ steps.context.outputs.version }}" \
+            --validate-body-file "$PATCHED_BODY_FILE" \
+            --expected-body-file "$CLEAN_BODY_FILE"
 
       - name: Fail the workflow
-        if: steps.context.outputs.should_run == 'true' && (failure() || steps.validate.outputs.validation_passed == 'false')
+        if: steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'success' && (failure() || steps.validate.outputs.validation_passed == 'false')
         run: |
           echo "::error::Release asset validation failed. All assets have been deleted."
+          exit 1
+
+      - name: Fail malformed release body
+        if: always() && steps.context.outputs.should_run == 'true' && steps.body_integrity.outcome == 'failure'
+        run: |
+          echo "::error::Release body integrity failed. The release was quarantined as a draft without deleting its assets."
           exit 1

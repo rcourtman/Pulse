@@ -537,6 +537,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         candidate_workflow = read(".github/workflows/build-release-candidate.yml")
         release_validator = read("scripts/validate-release.sh")
         helper = read("scripts/trigger-release.sh")
+        stable_patch_helper = read("scripts/trigger-stable-patch.sh")
         renderer = read("scripts/release_control/render_release_body.py")
         policy = read("docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md")
         source_of_truth = read("docs/release-control/v6/internal/SOURCE_OF_TRUTH.md")
@@ -558,6 +559,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("hardcoded `image: rcourtman/pulse:...`", normalize_ws(contract))
         self.assertIn("Resolving governed promotion metadata...", helper)
         self.assertIn("--release-notes-file \"$NOTES_FILE\"", helper)
+        self.assertIn("--validate-notes-file \"$NOTES_FILE\"", helper)
+        self.assertIn("--rawfile release_notes \"$NOTES_FILE\"", helper)
+        self.assertIn("gh workflow run create-release.yml --ref \"$CURRENT_BRANCH\" --json", helper)
+        self.assertNotIn('-f release_notes="$(cat "$NOTES_FILE")"', helper)
+        self.assertIn("--validate-notes-file \"$NOTES_FILE\"", stable_patch_helper)
+        self.assertIn("--rawfile release_notes \"$NOTES_FILE\"", stable_patch_helper)
+        self.assertIn("gh workflow run create-release.yml --ref \"$CURRENT_BRANCH\" --json", stable_patch_helper)
         self.assertIn("blank for hotfix with no RC lineage", helper)
         self.assertIn('if [ -z "$PROMOTED_FROM_TAG" ] && [ "$HOTFIX_EXCEPTION" != "true" ]; then', helper)
         self.assertIn("control_plane.py --branch-for-version", content)
@@ -572,6 +580,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertNotIn('gh workflow run publish-docker.yml --ref "${REQUIRED_BRANCH}"', content)
         self.assertNotIn('gh workflow run update-demo-server.yml --ref "${REQUIRED_BRANCH}"', content)
         self.assertIn("sanitize_release_notes", renderer)
+        self.assertIn("validate_release_notes_shape", renderer)
+        self.assertIn("validate_release_body_shape", renderer)
+        self.assertIn("GitHub's stored release body does not exactly match", renderer)
         self.assertIn("Do not treat this as published", renderer)
         self.assertIn("_DRAFT.md", renderer)
         self.assertIn("rollback target and exact reinstall command recorded", policy)
@@ -590,7 +601,9 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate', content)
         self.assertIn('git push origin "refs/tags/${TAG}" --force', content)
         self.assertIn('Retargeting existing draft tag ${TAG}', content)
-        self.assertIn('-F target_commitish="${HEAD_SHA}"', content)
+        self.assertIn('--rawfile body "$NOTES_FILE"', content)
+        self.assertIn('--input "$RELEASE_PAYLOAD"', content)
+        self.assertIn('--expected-body-file "$NOTES_FILE"', content)
         self.assertIn('historical_asset_backfill_only=${HISTORICAL_ASSET_BACKFILL_ONLY}', content)
         self.assertIn(
             "if: ${{ always() && needs.prepare.result == 'success' && needs.build_release_candidate.result == 'success' && needs.create_release.result == 'success' && needs.prepare.outputs.historical_asset_backfill_only != 'true' }}",
@@ -610,9 +623,19 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("{draft: true, tag_name: $tag, target_commitish: $target_commitish}", validation_workflow)
         self.assertIn("Validation release body update detached release tag", validation_workflow)
         self.assertIn("Validation release body update changed target_commitish", validation_workflow)
-        self.assertIn('ACTUAL_RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r \'.tag_name // empty\')', content)
+        self.assertIn("--validate-body-file \"$RELEASE_BODY_FILE\"", validation_workflow)
+        self.assertIn("--expected-body-file \"$CLEAN_BODY_FILE\"", validation_workflow)
+        self.assertIn("Quarantine malformed release body", validation_workflow)
         self.assertIn(
-            'ACTUAL_TARGET_COMMITISH=$(echo "$RELEASE_JSON" | jq -r \'.target_commitish // empty\')',
+            "The release was quarantined as a draft without deleting its assets.",
+            validation_workflow,
+        )
+        self.assertIn(
+            'ACTUAL_RELEASE_TAG=$(jq -r \'.tag_name // empty\' "$RELEASE_JSON_FILE")',
+            content,
+        )
+        self.assertIn(
+            'ACTUAL_TARGET_COMMITISH=$(jq -r \'.target_commitish // empty\' "$RELEASE_JSON_FILE")',
             content,
         )
         self.assertIn('./scripts/backfill-release-assets.sh --tag "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}"', content)
@@ -743,7 +766,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Derived rollback command:", helper)
         self.assertIn("./scripts/install.sh --version", helper)
         self.assertIn("v6 GA date to publish with GA", helper)
-        self.assertIn("-f ga_date", helper)
+        self.assertIn("--arg ga_date \"$GA_DATE\"", helper)
         self.assertIn("Planned GA date", renderer)
         self.assertIn("Planned v5 end-of-support date", renderer)
         self.assertIn("Stable v6.0.0 requires v5_eos_date in YYYY-MM-DD form", resolver)
@@ -796,9 +819,17 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         if rc_packet_paths_for_version(current_version) is not None:
             self.assertIn(f'export RC_VERSION="{current_version}"', runbook)
         self.assertIn("printf '%s\\n' \"$RC_VERSION\" > VERSION", runbook)
-        self.assertIn("markdown text from the current release-notes packet", runbook)
+        self.assertIn("canonical file-backed helper", runbook)
+        self.assertIn(
+            './scripts/trigger-release.sh "$RC_VERSION" "$RELEASE_NOTES_FILE"',
+            runbook,
+        )
+        self.assertIn("Do not paste multiline release notes", runbook)
+        self.assertIn("compares GitHub's stored body byte-for-byte", runbook)
         self.assertIn("Keep the current release-notes, changelog, and operator-support packet in", runbook)
         self.assertIn("Published release bodies must also stay publication-safe", contract)
+        self.assertIn("Release-note transport is file-backed and fail-closed", contract)
+        self.assertIn("malformed edited body is quarantined", contract)
         self.assertIn("must state the continuity impact explicitly", normalize_ws(contract))
         self.assertIn(
             "append the standardized installation and promotion metadata sections exactly once",

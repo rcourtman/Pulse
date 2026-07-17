@@ -182,9 +182,12 @@ jobs:
 
           git fetch --prune origin main "${REQUIRED_BRANCH}" --tags
 
-          RELEASE_NOTES_INPUT="$(jq -r '.inputs.release_notes // ""' "$GITHUB_EVENT_PATH")"
           NOTES_FILE="$(mktemp)"
-          printf '%s\n' "$RELEASE_NOTES_INPUT" > "$NOTES_FILE"
+          if ! jq -er '.inputs.release_notes | select(type == "string" and length > 0)' \
+            "$GITHUB_EVENT_PATH" > "$NOTES_FILE"; then
+            echo "::error::release_notes must be a non-empty Markdown string"
+            exit 1
+          fi
 
           HELPER_ARGS=(
             --version "${VERSION}"
@@ -697,17 +700,13 @@ jobs:
       - name: Prepare release notes
         id: generate_notes
         run: |
+          set -euo pipefail
           VERSION="${{ needs.prepare.outputs.version }}"
-          RELEASE_NOTES_INPUT=$(jq -r '.inputs.release_notes // ""' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "")
-
           NOTES_FILE=$(mktemp)
-
-          if [ -n "$RELEASE_NOTES_INPUT" ]; then
-            printf "%s\n" "$RELEASE_NOTES_INPUT" > "$NOTES_FILE"
-          else
-            echo "# Pulse v${VERSION} Release Notes" > "$NOTES_FILE"
-            echo "" >> "$NOTES_FILE"
-            echo "See commit history for changes." >> "$NOTES_FILE"
+          if ! jq -er '.inputs.release_notes | select(type == "string" and length > 0)' \
+            "$GITHUB_EVENT_PATH" > "$NOTES_FILE"; then
+            echo "::error::release_notes must be a non-empty Markdown string"
+            exit 1
           fi
 
           RENDERED_NOTES_FILE=$(mktemp)
@@ -795,6 +794,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           TAG="${{ needs.prepare.outputs.tag }}"
           NOTES_FILE="${{ steps.generate_notes.outputs.notes_file }}"
           IS_PRERELEASE="${{ needs.prepare.outputs.is_prerelease }}"
@@ -804,41 +804,51 @@ jobs:
           RELEASE_URL="${{ steps.existing_release.outputs.release_url }}"
           IS_DRAFT="${{ steps.existing_release.outputs.release_is_draft }}"
           PUBLISHED_AT="${{ steps.existing_release.outputs.release_published_at }}"
+          RELEASE_PAYLOAD=$(mktemp)
+          RELEASE_JSON_FILE=$(mktemp)
+          ACTUAL_BODY_FILE=$(mktemp)
+
+          jq -n \
+            --arg tag_name "$TAG" \
+            --arg target_commitish "$HEAD_SHA" \
+            --arg name "Pulse ${TAG}" \
+            --rawfile body "$NOTES_FILE" \
+            --argjson draft true \
+            --argjson prerelease "$IS_PRERELEASE" \
+            '{
+              tag_name: $tag_name,
+              target_commitish: $target_commitish,
+              name: $name,
+              body: $body,
+              draft: $draft,
+              prerelease: $prerelease
+            }' > "$RELEASE_PAYLOAD"
 
           if [ -n "$RELEASE_ID" ]; then
             if [ "$IS_DRAFT" = "true" ] && [ -z "$PUBLISHED_AT" ]; then
               echo "Updating existing draft release for ${TAG}"
               gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
                 -X PATCH \
-                -F tag_name="${TAG}" \
-                -F target_commitish="${HEAD_SHA}" \
-                -F name="Pulse ${TAG}" \
-                -F body="$(cat "$NOTES_FILE")" \
-                -F draft=true \
-                -F prerelease=${IS_PRERELEASE} > /dev/null
+                --input "$RELEASE_PAYLOAD" > "$RELEASE_JSON_FILE"
             else
               echo "::error::Published release already exists for ${TAG}."
               exit 1
             fi
           else
             echo "Creating draft release for ${TAG}..."
-            RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" \
+            gh api "repos/${{ github.repository }}/releases" \
               -X POST \
-              -F tag_name="${TAG}" \
-              -F target_commitish="${HEAD_SHA}" \
-              -F name="Pulse ${TAG}" \
-              -F body="$(cat "$NOTES_FILE")" \
-              -F draft=true \
-              -F prerelease=${IS_PRERELEASE})
+              --input "$RELEASE_PAYLOAD" > "$RELEASE_JSON_FILE"
 
-            RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
-            RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
+            RELEASE_ID=$(jq -r '.id' "$RELEASE_JSON_FILE")
+            RELEASE_URL=$(jq -r '.html_url' "$RELEASE_JSON_FILE")
           fi
 
-          RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}")
-          ACTUAL_RELEASE_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name // empty')
-          ACTUAL_TARGET_COMMITISH=$(echo "$RELEASE_JSON" | jq -r '.target_commitish // empty')
-          RELEASE_URL=$(echo "$RELEASE_JSON" | jq -r '.html_url')
+          gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" > "$RELEASE_JSON_FILE"
+          ACTUAL_RELEASE_TAG=$(jq -r '.tag_name // empty' "$RELEASE_JSON_FILE")
+          ACTUAL_TARGET_COMMITISH=$(jq -r '.target_commitish // empty' "$RELEASE_JSON_FILE")
+          RELEASE_URL=$(jq -r '.html_url' "$RELEASE_JSON_FILE")
+          jq -r '.body // ""' "$RELEASE_JSON_FILE" > "$ACTUAL_BODY_FILE"
 
           if [ "$ACTUAL_RELEASE_TAG" != "$TAG" ]; then
             echo "::error::Draft release ${RELEASE_ID} is bound to tag ${ACTUAL_RELEASE_TAG}, expected ${TAG}."
@@ -850,7 +860,12 @@ jobs:
             exit 1
           fi
 
-          rm -f "$NOTES_FILE"
+          python3 scripts/release_control/render_release_body.py \
+            --version "${{ needs.prepare.outputs.version }}" \
+            --validate-body-file "$ACTUAL_BODY_FILE" \
+            --expected-body-file "$NOTES_FILE"
+
+          rm -f "$NOTES_FILE" "$RELEASE_PAYLOAD" "$RELEASE_JSON_FILE" "$ACTUAL_BODY_FILE"
 
           echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
           echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT

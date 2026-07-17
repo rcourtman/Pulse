@@ -111,28 +111,37 @@ git push origin pulse/v6-release
      - `version`: `RC_VERSION`
      - optional `note`
 
-3. Create draft prerelease:
-   - Run workflow: `Pulse Release Pipeline`
-   - Ref: `pulse/v6-release`
-   - Inputs:
-     - `version`: `RC_VERSION`
-     - `release_notes`: markdown text from the current release-notes packet
-     - `draft_only`: `true`
+3. Dispatch through the canonical file-backed helper:
+
+   ```bash
+   RELEASE_NOTES_FILE="docs/releases/RELEASE_NOTES_v${RC_VERSION}.md"
+   ./scripts/trigger-release.sh "$RC_VERSION" "$RELEASE_NOTES_FILE"
+   ```
+
    - Keep the current release-notes, changelog, and operator-support packet in
      sync. Do not update only one of them and treat the packet as ready.
+   - Do not paste multiline release notes into the GitHub workflow form as the
+     normal operator path. The helper sends the file through JSON transport so
+     line breaks are preserved.
+   - The workflow independently rejects flattened Markdown before it creates a
+     tag or draft, then compares GitHub's stored body byte-for-byte with the
+     rendered file before asset upload.
 
-4. Validate draft outputs:
+4. Validate the integrated release result:
+   - Treat `Definitive Release Verdict` as the release result.
    - Confirm assets exist and checksums match.
-   - Confirm GitHub release is marked prerelease.
+   - Confirm GitHub marks the release as a prerelease.
+   - Confirm the rendered release body retains its standalone headings, lists,
+     code fences, Installation section, and Promotion Metadata section.
    - Smoke install on a test host/container.
 
-5. Publish prerelease:
-   - Re-run `Pulse Release Pipeline` on `pulse/v6-release`
-   - Same `version` and release-notes packet
-   - `draft_only`: `false`
+5. Retry an unpublished draft only through the same helper:
+   - Use the same version and exact release-notes file.
    - Existing unpublished draft releases for the same tag are updated in place
-     and their tag is retargeted to the current governed `pulse/v6-release`
-     head automatically. Do not delete the tag manually just to retry publish.
+     and their tag is retargeted to the current governed release-line head
+     automatically. Do not delete the tag manually just to retry publication.
+   - A malformed body edit is quarantined back to draft without deleting valid
+     assets; correct the notes file and rerun the canonical helper.
    - Historical prerelease publications used a separate preview demo runtime
      while v5 remained the public stable demo.
    - Prerelease public demo deployment is retired after v6 GA; future

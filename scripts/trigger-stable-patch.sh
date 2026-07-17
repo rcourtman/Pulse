@@ -167,6 +167,10 @@ if [ "$MODE" = "dry-run" ]; then
     -f mobile_release_decision="$MOBILE_RELEASE_DECISION" \
     -f mobile_release_evidence="$MOBILE_RELEASE_EVIDENCE"
 else
+  python3 scripts/release_control/render_release_body.py \
+    --version "$VERSION" \
+    --validate-notes-file "$NOTES_FILE"
+
   python3 scripts/check-workflow-dispatch-inputs.py \
     --workflow-path .github/workflows/create-release.yml \
     --branch "$CURRENT_BRANCH" \
@@ -182,19 +186,32 @@ else
     --require mobile_release_decision \
     --require mobile_release_evidence
 
-  gh workflow run create-release.yml \
-    --ref "$CURRENT_BRANCH" \
-    -f version="$VERSION" \
-    -f release_notes="$(<"$NOTES_FILE")" \
-    -f promoted_from_tag="" \
-    -f rollback_version="$ROLLBACK_TAG" \
-    -f ga_date="" \
-    -f v5_eos_date="" \
-    -f hotfix_exception="$HOTFIX_EXCEPTION" \
-    -f hotfix_reason="$HOTFIX_REASON" \
-    -f draft_only=false \
-    -f mobile_release_decision="$MOBILE_RELEASE_DECISION" \
-    -f mobile_release_evidence="$MOBILE_RELEASE_EVIDENCE"
+  jq -n \
+    --arg version "$VERSION" \
+    --rawfile release_notes "$NOTES_FILE" \
+    --arg promoted_from_tag "" \
+    --arg rollback_version "$ROLLBACK_TAG" \
+    --arg ga_date "" \
+    --arg v5_eos_date "" \
+    --argjson hotfix_exception "$HOTFIX_EXCEPTION" \
+    --arg hotfix_reason "$HOTFIX_REASON" \
+    --argjson draft_only false \
+    --arg mobile_release_decision "$MOBILE_RELEASE_DECISION" \
+    --arg mobile_release_evidence "$MOBILE_RELEASE_EVIDENCE" \
+    '{
+      version: $version,
+      release_notes: $release_notes,
+      promoted_from_tag: $promoted_from_tag,
+      rollback_version: $rollback_version,
+      ga_date: $ga_date,
+      v5_eos_date: $v5_eos_date,
+      hotfix_exception: $hotfix_exception,
+      hotfix_reason: $hotfix_reason,
+      draft_only: $draft_only,
+      mobile_release_decision: $mobile_release_decision,
+      mobile_release_evidence: $mobile_release_evidence
+    }' |
+    gh workflow run create-release.yml --ref "$CURRENT_BRANCH" --json
 
 fi
 

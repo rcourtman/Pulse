@@ -66,7 +66,9 @@ Old metadata section.
             notes_file.write_text(
                 "# Pulse v6.0.0-rc.2 Draft Release Notes\n\n"
                 "_Draft only. Do not treat this as published until the governed `v6.0.0-rc.2` tag and GitHub prerelease exist._\n\n"
-                "Body.\n",
+                "Body.\n\n"
+                "## Fixed\n\n"
+                "- Corrected a release issue.\n",
                 encoding="utf-8",
             )
 
@@ -111,6 +113,91 @@ Old metadata section.
             )
             self.assertIn("https://pulserelay.pro/download.html", body)
             self.assertIn("- Rollback target: v5.1.28", body)
+            render_release_body.validate_release_body_shape(body, "6.0.0-rc.2")
+
+    def test_flattened_release_notes_fail_closed(self) -> None:
+        flattened = (
+            "# Pulse v6.1.0-rc.2 Release Notes"
+            "`v6.1.0-rc.2` is a release candidate."
+            "## Highlights"
+            "- Patrol findings stay governed."
+            "## Upgrade Notes"
+            "Use the RC channel."
+        )
+
+        with self.assertRaisesRegex(
+            render_release_body.ReleaseBodyIntegrityError,
+            "standalone release title",
+        ):
+            render_release_body.validate_release_notes_shape(
+                flattened,
+                "6.1.0-rc.2",
+            )
+
+    def test_stored_release_body_must_match_expected_rendered_markdown(self) -> None:
+        expected = """# Pulse v6.1.0-rc.2 Release Notes
+
+Intro.
+
+## Highlights
+
+- Patrol findings stay governed.
+
+## Installation
+
+Install details.
+
+## Promotion Metadata
+
+- Promotion channel: rc
+"""
+        validation_block = """<!-- VALIDATION_STATUS_START -->
+## Release Asset Validation: PASSED
+
+Assets passed.
+<!-- VALIDATION_STATUS_END -->
+
+"""
+        stored = validation_block + expected
+
+        clean = render_release_body.validate_release_body_shape(
+            stored,
+            "6.1.0-rc.2",
+            expected_body=expected,
+        )
+        self.assertEqual(clean, expected)
+
+        with self.assertRaisesRegex(
+            render_release_body.ReleaseBodyIntegrityError,
+            "does not exactly match",
+        ):
+            render_release_body.validate_release_body_shape(
+                stored,
+                "6.1.0-rc.2",
+                expected_body=expected.replace("Patrol", "Assistant"),
+            )
+
+    def test_stored_release_body_rejects_inline_headings(self) -> None:
+        flattened = """# Pulse v6.1.0-rc.2 Release Notes
+
+Intro.## Highlights- Patrol findings stay governed.
+
+## Installation
+
+Install details.
+
+## Promotion Metadata
+
+- Promotion channel: rc
+"""
+        with self.assertRaisesRegex(
+            render_release_body.ReleaseBodyIntegrityError,
+            "flattened Markdown",
+        ):
+            render_release_body.validate_release_body_shape(
+                flattened,
+                "6.1.0-rc.2",
+            )
 
     def test_current_release_packets_use_pulse_mobile_handoff_copy(self) -> None:
         repo_root = _REPO_ROOT

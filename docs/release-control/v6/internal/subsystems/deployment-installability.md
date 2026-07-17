@@ -1288,6 +1288,15 @@ When operators pass draft packet markdown to `.github/workflows/create-release.y
 the workflow must sanitize draft-only framing and append the standardized
 installation and promotion metadata sections exactly once, rather than trusting
 raw packet text to already be publish-safe.
+Release-note transport is file-backed and fail-closed: operator helpers must
+send the Markdown through JSON input rather than multiline form-field
+substitution, the renderer must reject missing standalone title/section
+structure before any tag or draft mutation, and draft creation must compare
+GitHub's stored body with the exact rendered file before asset upload.
+`validate-release-assets.yml` must repeat the structural check before validating
+assets, preserve the authored body through validation-status edits, and compare
+the API response with the pre-edit body. A malformed edited body is quarantined
+as a draft without deleting otherwise valid assets.
 That same frontend-release boundary also owns shared header-composition proof.
 `.github/workflows/release-dry-run.yml` and `.github/workflows/create-release.yml`
 must both run the same `lint:headers` audit so a branch that would be rejected

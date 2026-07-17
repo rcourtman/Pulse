@@ -5,11 +5,127 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 from pathlib import Path
+
+
+class ReleaseBodyIntegrityError(ValueError):
+    """Raised when release-note Markdown is not safe to publish."""
+
+
+_VALIDATION_STATUS_BLOCK_RE = re.compile(
+    r"(?:^|\n)<!-- VALIDATION_STATUS_START -->.*?"
+    r"<!-- VALIDATION_STATUS_END -->(?:\n{0,2}|$)",
+    re.DOTALL,
+)
 
 
 def _normalize_newlines(text: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _canonical_body(text: str) -> str:
+    return _normalize_newlines(text).rstrip("\n") + "\n"
+
+
+def _find_inline_markdown_markers(text: str) -> list[str]:
+    markers: list[str] = []
+    for line_number, line in enumerate(_normalize_newlines(text).splitlines(), start=1):
+        heading_markers = re.finditer(r"#{2,6}[ \t]+\S", line)
+        if any(match.start() != 0 for match in heading_markers):
+            markers.append(f"inline heading marker on line {line_number}")
+        fence_markers = re.finditer(r"```(?:[A-Za-z0-9_-]+)?", line)
+        if any(match.start() != 0 for match in fence_markers):
+            markers.append(f"inline code-fence marker on line {line_number}")
+    return markers
+
+
+def validate_release_notes_shape(raw_text: str, version: str) -> None:
+    """Fail closed when authored release-note Markdown has lost its structure."""
+
+    text = _normalize_newlines(raw_text).strip()
+    if not text:
+        raise ReleaseBodyIntegrityError("release notes are empty")
+
+    lines = text.splitlines()
+    expected_title = re.compile(
+        rf"^# Pulse v{re.escape(version)} (?:Draft )?Release Notes$"
+    )
+    if not expected_title.fullmatch(lines[0]):
+        raise ReleaseBodyIntegrityError(
+            "the first line must be the standalone release title "
+            f"'# Pulse v{version} Release Notes' (or its Draft form)"
+        )
+
+    level_two_headings = [
+        line for line in lines if re.fullmatch(r"##[ \t]+\S.*", line)
+    ]
+    if not level_two_headings:
+        raise ReleaseBodyIntegrityError(
+            "release notes must contain at least one standalone level-two section"
+        )
+
+    inline_markers = _find_inline_markdown_markers(text)
+    if inline_markers:
+        raise ReleaseBodyIntegrityError(
+            "release notes contain flattened Markdown: " + ", ".join(inline_markers)
+        )
+
+
+def strip_validation_status_block(text: str) -> str:
+    """Remove the workflow-owned validation annotation from a release body."""
+
+    stripped = _VALIDATION_STATUS_BLOCK_RE.sub("\n", _normalize_newlines(text), count=1)
+    return _canonical_body(stripped.lstrip("\n"))
+
+
+def validate_release_body_shape(
+    body: str,
+    version: str,
+    *,
+    expected_body: str | None = None,
+) -> str:
+    """Validate a stored GitHub release body and return its authored body."""
+
+    clean_body = strip_validation_status_block(body)
+    validate_release_notes_shape(clean_body, version)
+
+    if clean_body.count("## Installation\n") != 1:
+        raise ReleaseBodyIntegrityError(
+            "published release body must contain exactly one Installation section"
+        )
+    if clean_body.count("## Promotion Metadata\n") != 1:
+        raise ReleaseBodyIntegrityError(
+            "published release body must contain exactly one Promotion Metadata section"
+        )
+    if "Draft Release Notes" in clean_body or "_DRAFT.md" in clean_body:
+        raise ReleaseBodyIntegrityError(
+            "published release body still contains draft-only framing"
+        )
+
+    installation_index = clean_body.index("## Installation\n")
+    promotion_index = clean_body.index("## Promotion Metadata\n")
+    if installation_index >= promotion_index:
+        raise ReleaseBodyIntegrityError(
+            "Installation must precede Promotion Metadata in the published body"
+        )
+
+    authored_prefix = clean_body[:installation_index]
+    authored_sections = re.findall(r"(?m)^##[ \t]+\S.*$", authored_prefix)
+    if not authored_sections:
+        raise ReleaseBodyIntegrityError(
+            "published release body has no authored section before Installation"
+        )
+
+    if expected_body is not None:
+        expected_clean = strip_validation_status_block(expected_body)
+        if clean_body != expected_clean:
+            raise ReleaseBodyIntegrityError(
+                "GitHub's stored release body does not exactly match the expected "
+                "rendered Markdown"
+            )
+
+    return clean_body
 
 
 def _replace_draft_heading(text: str, version: str) -> str:
@@ -109,31 +225,91 @@ def build_promotion_metadata_section(args: argparse.Namespace) -> str:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True)
-    parser.add_argument("--release-notes-file", required=True)
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--promotion-channel", required=True)
-    parser.add_argument("--candidate-tag", required=True)
+    parser.add_argument("--release-notes-file")
+    parser.add_argument("--validate-notes-file")
+    parser.add_argument("--validate-body-file")
+    parser.add_argument("--expected-body-file")
+    parser.add_argument("--output")
+    parser.add_argument("--promotion-channel")
+    parser.add_argument("--candidate-tag")
     parser.add_argument("--promoted-prerelease-tag", default="")
-    parser.add_argument("--rollback-target", required=True)
-    parser.add_argument("--rollback-command", required=True)
+    parser.add_argument("--rollback-target")
+    parser.add_argument("--rollback-command")
     parser.add_argument("--planned-ga-date", default="")
     parser.add_argument("--planned-v5-eos-date", default="")
-    parser.add_argument("--hotfix-exception", required=True)
+    parser.add_argument("--hotfix-exception")
     parser.add_argument("--hotfix-reason", default="")
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.validate_notes_file or args.validate_body_file:
+        if args.release_notes_file:
+            parser.error(
+                "validation modes cannot be combined with --release-notes-file"
+            )
+        if args.validate_notes_file and args.validate_body_file:
+            parser.error(
+                "--validate-notes-file cannot be combined with --validate-body-file"
+            )
+        if args.validate_notes_file and (args.expected_body_file or args.output):
+            parser.error(
+                "--validate-notes-file cannot use --expected-body-file or --output"
+            )
+        return args
+
+    required_render_args = {
+        "--release-notes-file": args.release_notes_file,
+        "--output": args.output,
+        "--promotion-channel": args.promotion_channel,
+        "--candidate-tag": args.candidate_tag,
+        "--rollback-target": args.rollback_target,
+        "--rollback-command": args.rollback_command,
+        "--hotfix-exception": args.hotfix_exception,
+    }
+    missing = [name for name, value in required_render_args.items() if value is None]
+    if missing:
+        parser.error("render mode requires " + ", ".join(missing))
+    if args.expected_body_file:
+        parser.error("--expected-body-file requires --validate-body-file")
+    return args
 
 
 def main() -> int:
     args = parse_args()
-    raw_text = Path(args.release_notes_file).read_text(encoding="utf-8")
-    sanitized = sanitize_release_notes(raw_text, args.version).rstrip("\n")
-    sections = [
-        sanitized,
-        build_installation_section(args.version),
-        build_promotion_metadata_section(args),
-    ]
-    Path(args.output).write_text("\n\n".join(sections) + "\n", encoding="utf-8")
-    return 0
+    try:
+        if args.validate_notes_file:
+            raw_text = Path(args.validate_notes_file).read_text(encoding="utf-8")
+            validate_release_notes_shape(raw_text, args.version)
+            return 0
+
+        if args.validate_body_file:
+            body = Path(args.validate_body_file).read_text(encoding="utf-8")
+            expected_body = None
+            if args.expected_body_file:
+                expected_body = Path(args.expected_body_file).read_text(encoding="utf-8")
+            clean_body = validate_release_body_shape(
+                body,
+                args.version,
+                expected_body=expected_body,
+            )
+            if args.output:
+                Path(args.output).write_text(clean_body, encoding="utf-8")
+            return 0
+
+        raw_text = Path(args.release_notes_file).read_text(encoding="utf-8")
+        validate_release_notes_shape(raw_text, args.version)
+        sanitized = sanitize_release_notes(raw_text, args.version).rstrip("\n")
+        sections = [
+            sanitized,
+            build_installation_section(args.version),
+            build_promotion_metadata_section(args),
+        ]
+        rendered = "\n\n".join(sections) + "\n"
+        validate_release_body_shape(rendered, args.version)
+        Path(args.output).write_text(rendered, encoding="utf-8")
+        return 0
+    except ReleaseBodyIntegrityError as exc:
+        print(f"release body integrity check failed: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

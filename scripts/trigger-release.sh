@@ -2,9 +2,10 @@
 set -euo pipefail
 
 # Helper script to trigger a release with pre-flight validation
-# Usage: ./scripts/trigger-release.sh 4.30.0
+# Usage: ./scripts/trigger-release.sh 4.30.0 [release-notes-file]
 
 VERSION="${1:-}"
+NOTES_FILE_ARG="${2:-}"
 
 if [ -z "$VERSION" ]; then
   echo "Error: Version number required"
@@ -128,8 +129,8 @@ echo ""
 echo "Next: Provide release notes when prompted"
 echo ""
 
-# Check 5: Release notes file (optional)
-NOTES_FILE="/tmp/release_notes_${VERSION}.md"
+# Check 5: Release notes file
+NOTES_FILE="${NOTES_FILE_ARG:-/tmp/release_notes_${VERSION}.md}"
 if [ -f "$NOTES_FILE" ]; then
   echo "Found release notes file: ${NOTES_FILE}"
   echo ""
@@ -181,6 +182,11 @@ if [ -z "$NOTES_FILE" ]; then
     echo ""
     exit 1
 fi
+
+python3 scripts/release_control/render_release_body.py \
+  --version "$VERSION" \
+  --validate-notes-file "$NOTES_FILE"
+echo "✓ Release-note Markdown structure validated"
 
 ROLLBACK_VERSION=""
 ROLLBACK_COMMAND=""
@@ -279,18 +285,32 @@ cat /tmp/pulse-release-metadata.out
 echo ""
 echo "Triggering release workflow..."
 if [ -n "$NOTES_FILE" ]; then
-  gh workflow run create-release.yml \
-    --ref "$CURRENT_BRANCH" \
-    -f version="${VERSION}" \
-    -f release_notes="$(cat "$NOTES_FILE")" \
-    -f rollback_version="${ROLLBACK_VERSION}" \
-    -f promoted_from_tag="${PROMOTED_FROM_TAG}" \
-    -f ga_date="${GA_DATE}" \
-    -f v5_eos_date="${V5_EOS_DATE}" \
-    -f hotfix_exception="${HOTFIX_EXCEPTION}" \
-    -f hotfix_reason="${HOTFIX_REASON}" \
-    -f mobile_release_decision="${MOBILE_RELEASE_DECISION}" \
-    -f mobile_release_evidence="${MOBILE_RELEASE_EVIDENCE}"
+  jq -n \
+    --arg version "$VERSION" \
+    --rawfile release_notes "$NOTES_FILE" \
+    --arg rollback_version "$ROLLBACK_VERSION" \
+    --arg promoted_from_tag "$PROMOTED_FROM_TAG" \
+    --arg ga_date "$GA_DATE" \
+    --arg v5_eos_date "$V5_EOS_DATE" \
+    --argjson hotfix_exception "$HOTFIX_EXCEPTION" \
+    --arg hotfix_reason "$HOTFIX_REASON" \
+    --argjson draft_only false \
+    --arg mobile_release_decision "$MOBILE_RELEASE_DECISION" \
+    --arg mobile_release_evidence "$MOBILE_RELEASE_EVIDENCE" \
+    '{
+      version: $version,
+      release_notes: $release_notes,
+      rollback_version: $rollback_version,
+      promoted_from_tag: $promoted_from_tag,
+      ga_date: $ga_date,
+      v5_eos_date: $v5_eos_date,
+      hotfix_exception: $hotfix_exception,
+      hotfix_reason: $hotfix_reason,
+      draft_only: $draft_only,
+      mobile_release_decision: $mobile_release_decision,
+      mobile_release_evidence: $mobile_release_evidence
+    }' |
+    gh workflow run create-release.yml --ref "$CURRENT_BRANCH" --json
 else
   # This should be unreachable due to check above, but kept for safety
   echo "❌ Error: Release notes are required"
