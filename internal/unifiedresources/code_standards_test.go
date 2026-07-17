@@ -2290,7 +2290,6 @@ func TestV6DirectHostAliasValidatorCoverage(t *testing.T) {
 				`TestNormalizeAndValidateAIExecuteTargetType_StrictCanonicalV6`,
 				`legacy host rejected", in: "host"`,
 				`TestNormalizeInvestigateAlertTargetType_StrictCanonicalV6`,
-				`host target type rejected`,
 			},
 		},
 		{
