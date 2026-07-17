@@ -39,11 +39,10 @@ test.describe('TrueNAS AI chat mentions', () => {
   test.setTimeout(180_000);
 
   test('surfaces TrueNAS apps as canonical assistant mention targets', async ({ page }) => {
-    // Real product regression, not spec rot: Docker app-containers appear in
-    // the @-mention autocomplete but TrueNAS app-containers no longer do,
-    // despite living in websocket state with the same resource type.
-    // Re-enable once TrueNAS apps regain mention targeting (tracked).
-    test.fixme(true, 'TrueNAS apps missing from assistant mention targets (tracked)');
+    // Regression context: TrueNAS resources classify as policy-sensitive, and
+    // the mention builder once applied governed (redacted) display labels,
+    // which made every TrueNAS app un-searchable in the autocomplete. Mention
+    // labels now use the ungoverned infrastructure display name.
     await page.route('**/api/truenas/connections', async (route) => {
       if (route.request().method() !== 'GET') {
         await route.continue();
@@ -175,10 +174,10 @@ test.describe('TrueNAS AI chat mentions', () => {
     await textarea.pressSequentially('@document');
 
     const mentionSurface = page.locator('[data-mention-autocomplete]');
-    await expect(mentionSurface.getByRole('button', { name: /document-hub/ })).toBeVisible();
+    await expect(mentionSurface.getByRole('option', { name: /document-hub/ })).toBeVisible();
     await expect(mentionSurface).toContainText('truenas-main');
 
-    await mentionSurface.getByRole('button', { name: /document-hub/ }).click();
+    await mentionSurface.getByRole('option', { name: /document-hub/ }).click();
     await expect(textarea).toHaveValue('@document-hub ');
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });

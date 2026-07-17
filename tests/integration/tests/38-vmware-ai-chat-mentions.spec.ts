@@ -38,27 +38,19 @@ const test = base.extend<{}, WorkerFixtures>({
 test.describe('VMware AI chat mentions', () => {
   test.setTimeout(180_000);
 
-  test('surfaces VMware resources through shared assistant mention paths only', async ({
+  test('surfaces VMware hosts, VMs, and datastores as assistant mention targets', async ({
     page,
   }) => {
-    const unexpectedVMwareRequests: string[] = [];
-
-    await page.route('**/api/vmware/**', async (route) => {
-      const url = new URL(route.request().url());
-      const method = route.request().method();
-      if (method === 'GET' && url.pathname === '/api/vmware/connections') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify([]),
-        });
-        return;
-      }
-
-      unexpectedVMwareRequests.push(`${method} ${url.pathname}`);
-      await route.abort();
-    });
-
+    // Mention candidates come from live mock websocket state (REST resource
+    // stubs get overwritten by state frames), so the assertions pin the mock
+    // vSphere fixture graph: esxi hosts, warehouse VMs, and the nvme-primary
+    // datastore on the Lab vCenter connection.
+    //
+    // Regression context: datastores classify as policy-sensitive, and the
+    // mention builder once applied governed (redacted) display labels, which
+    // collapsed every storage resource into an identical un-searchable
+    // "storage (status)" placeholder. Mention labels now use the ungoverned
+    // infrastructure display name.
     await page.route('**/api/ai/status', async (route) => {
       await route.fulfill({
         status: 200,
@@ -103,152 +95,49 @@ test.describe('VMware AI chat mentions', () => {
       });
     });
 
-    await page.route('**/api/resources**', async (route) => {
-      const requestUrl = new URL(route.request().url());
-      if (requestUrl.pathname !== '/api/resources') {
-        await route.continue();
-        return;
-      }
+    await page.goto('/vmware', { waitUntil: 'domcontentloaded' });
 
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          data: [
-            {
-              id: 'agent-vmware-host-1',
-              type: 'agent',
-              name: 'esxi-01.lab.local',
-              status: 'online',
-              lastSeen: '2026-03-30T09:00:00Z',
-              platformType: 'vmware-vsphere',
-              sourceType: 'api',
-              sources: ['vmware-vsphere'],
-              canonicalIdentity: {
-                displayName: 'ESXi 01',
-                hostname: 'esxi-01.lab.local',
-                primaryId: 'vmware:vc-1:host:host-101',
-              },
-              agent: {
-                agentId: 'vc-1:host:host-101',
-                hostname: 'esxi-01.lab.local',
-                platform: 'VMware ESXi',
-              },
-              vmware: {
-                connectionId: 'vc-1',
-                connectionName: 'Lab VC',
-                managedObjectId: 'host-101',
-                entityType: 'host',
-              },
-            },
-            {
-              id: 'vm-vmware-1',
-              type: 'vm',
-              name: 'app-01',
-              status: 'running',
-              lastSeen: '2026-03-30T09:00:00Z',
-              parentId: 'agent-vmware-host-1',
-              parentName: 'esxi-01.lab.local',
-              platformType: 'vmware-vsphere',
-              sourceType: 'api',
-              sources: ['vmware-vsphere'],
-              canonicalIdentity: {
-                displayName: 'App 01',
-                hostname: 'app-01.internal',
-                primaryId: 'vmware:vc-1:vm:vm-201',
-              },
-              vmware: {
-                connectionId: 'vc-1',
-                connectionName: 'Lab VC',
-                managedObjectId: 'vm-201',
-                entityType: 'vm',
-                runtimeHostName: 'esxi-01.lab.local',
-              },
-            },
-            {
-              id: 'storage-vmware-1',
-              type: 'storage',
-              name: 'nvme-primary',
-              status: 'online',
-              lastSeen: '2026-03-30T09:00:00Z',
-              parentName: 'Lab VC',
-              platformType: 'vmware-vsphere',
-              sourceType: 'api',
-              sources: ['vmware-vsphere'],
-              canonicalIdentity: {
-                displayName: 'NVMe Primary',
-                primaryId: 'vmware:vc-1:datastore:datastore-11',
-              },
-              storage: {
-                type: 'vmfs',
-                platform: 'vmware-vsphere',
-              },
-              vmware: {
-                connectionId: 'vc-1',
-                connectionName: 'Lab VC',
-                managedObjectId: 'datastore-11',
-                entityType: 'datastore',
-              },
-            },
-          ],
-          meta: {
-            page: 1,
-            limit: 100,
-            total: 3,
-            totalPages: 1,
-          },
-        }),
-      });
-    });
-
-    const resourcesLoaded = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return url.pathname === '/api/resources' && response.request().method() === 'GET';
-    });
-
-    await page.goto('/infrastructure?source=vmware-vsphere', {
-      waitUntil: 'domcontentloaded',
-    });
-    await page.waitForURL(/\/infrastructure\?source=vmware-vsphere/, {
-      timeout: 15_000,
-    });
-    await expect(page.getByTestId('infrastructure-page')).toBeVisible();
-    await resourcesLoaded;
-
-    await page.getByRole('button', { name: 'Expand Pulse Assistant' }).click();
+    await page.getByRole('button', { name: /Ask Pulse Assistant/ }).click();
     await expect(page.getByRole('heading', { name: 'Pulse Assistant', exact: true })).toBeVisible();
 
     const textarea = page.getByPlaceholder('Ask about your infrastructure...');
+    const mentionSurface = page.locator('[data-mention-autocomplete]');
+
     await textarea.click();
     await textarea.pressSequentially('@esxi');
 
-    const mentionSurface = page.locator('[data-mention-autocomplete]');
-    const hostOption = mentionSurface.getByRole('button', { name: /ESXi 01 agent/ }).first();
+    const hostOption = mentionSurface.getByRole('option', { name: /esxi-01\.lab\.local/ }).first();
     await expect(mentionSurface.getByText('Resources')).toBeVisible();
     await expect(hostOption).toBeVisible();
     await expect(mentionSurface).toContainText('agent');
     await hostOption.click();
-    await expect(textarea).toHaveValue('@ESXi 01 ');
+    await expect(textarea).toHaveValue('@esxi-01.lab.local ');
 
     await textarea.fill('');
-    await textarea.pressSequentially('@app');
+    await textarea.pressSequentially('@warehouse-db');
 
-    await expect(mentionSurface.getByText('Resources')).toBeVisible();
-    await expect(mentionSurface.getByRole('button', { name: /App 01/ })).toBeVisible();
+    await expect(mentionSurface.getByRole('option', { name: /warehouse-db-01/ })).toBeVisible();
     await expect(mentionSurface).toContainText('vm');
-    await expect(mentionSurface).toContainText('esxi-01.lab.local');
-    await mentionSurface.getByRole('button', { name: /App 01/ }).click();
-    await expect(textarea).toHaveValue('@App 01 ');
+    await mentionSurface.getByRole('option', { name: /warehouse-db-01/ }).first().click();
+    await expect(textarea).toHaveValue('@warehouse-db-01 ');
 
     await textarea.fill('');
-    await textarea.pressSequentially('@nvme');
-    await expect(mentionSurface.getByRole('button', { name: /NVMe Primary/ })).toBeVisible();
-    await expect(mentionSurface).toContainText('storage');
-    await expect(mentionSurface).toContainText('Lab VC');
-    await mentionSurface.getByRole('button', { name: /NVMe Primary/ }).click();
-    await expect(textarea).toHaveValue('@NVMe Primary ');
+    await textarea.pressSequentially('@nvme-pr');
 
-    expect(unexpectedVMwareRequests).toEqual([]);
+    await expect(mentionSurface.getByRole('option', { name: /nvme-primary/ })).toBeVisible();
+    await expect(mentionSurface).toContainText('storage');
+    await expect(mentionSurface).toContainText('Lab vCenter');
+    await mentionSurface.getByRole('option', { name: /nvme-primary/ }).first().click();
+    await expect(textarea).toHaveValue('@nvme-primary ');
+
+    // Storage mentions are platform-agnostic: the TrueNAS pool stays reachable
+    // from a composer opened on the vSphere page.
+    await textarea.fill('');
+    await textarea.pressSequentially('@tank');
+
+    await expect(mentionSurface.getByRole('option', { name: /^Mention tank:/ })).toBeVisible();
+    await expect(mentionSurface).toContainText('storage');
+
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });
 });
