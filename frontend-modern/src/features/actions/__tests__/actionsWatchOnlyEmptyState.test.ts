@@ -12,9 +12,7 @@ const base = {
 
 describe('getActionsWatchOnlyEmptyState', () => {
   it('returns nothing when Patrol is not in Watch only', () => {
-    expect(
-      getActionsWatchOnlyEmptyState({ ...base, patrolWatchOnly: false }),
-    ).toBeUndefined();
+    expect(getActionsWatchOnlyEmptyState({ ...base, patrolWatchOnly: false })).toBeUndefined();
     expect(
       getActionsWatchOnlyEmptyState({
         ...base,
