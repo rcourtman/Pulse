@@ -2098,7 +2098,7 @@ func TestService_ExecuteStream_AutonomousRawCommandRequiresApproval(t *testing.T
 			}
 		}
 	})
-	requireServiceToolLoopFailure(t, err, ServiceToolLoopFailureRepeatedDenied)
+	_ = requireServiceToolLoopFailure(t, err, ServiceToolLoopFailureRepeatedDenied)
 	if dispatches != 0 {
 		t.Fatalf("agent dispatches = %d, want 0", dispatches)
 	}

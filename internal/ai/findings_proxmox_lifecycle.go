@@ -215,30 +215,45 @@ func proxmoxGuestLifecycleSnapshots(readState unifiedresources.ReadState) map[st
 		return snapshots
 	}
 	for _, vm := range readState.VMs() {
-		if vm == nil || strings.TrimSpace(vm.ID()) == "" {
-			continue
-		}
-		freshness, ok := vm.SourceStatus(unifiedresources.SourceProxmox)
-		snapshots[strings.TrimSpace(vm.ID())] = proxmoxGuestLifecycleSnapshot{
-			id: strings.TrimSpace(vm.ID()), name: strings.TrimSpace(vm.Name()), resourceType: unifiedresources.ResourceTypeVM,
-			kind: "VM", status: vm.Status(), node: vm.Node(), instance: vm.Instance(), vmid: vm.VMID(), template: vm.Template(), lock: strings.TrimSpace(vm.Lock()),
-			observedAt: freshness.LastSeen.UTC(), sourceFresh: ok && strings.EqualFold(strings.TrimSpace(freshness.Status), "online") && !freshness.LastSeen.IsZero(),
-			capabilities: vm.Capabilities(),
+		if vm != nil {
+			recordProxmoxGuestLifecycleSnapshot(snapshots, vm, unifiedresources.ResourceTypeVM, "VM")
 		}
 	}
 	for _, container := range readState.Containers() {
-		if container == nil || strings.TrimSpace(container.ID()) == "" {
-			continue
-		}
-		freshness, ok := container.SourceStatus(unifiedresources.SourceProxmox)
-		snapshots[strings.TrimSpace(container.ID())] = proxmoxGuestLifecycleSnapshot{
-			id: strings.TrimSpace(container.ID()), name: strings.TrimSpace(container.Name()), resourceType: unifiedresources.ResourceTypeSystemContainer,
-			kind: "LXC", status: container.Status(), node: container.Node(), instance: container.Instance(), vmid: container.VMID(), template: container.Template(), lock: strings.TrimSpace(container.Lock()),
-			observedAt: freshness.LastSeen.UTC(), sourceFresh: ok && strings.EqualFold(strings.TrimSpace(freshness.Status), "online") && !freshness.LastSeen.IsZero(),
-			capabilities: container.Capabilities(),
+		if container != nil {
+			recordProxmoxGuestLifecycleSnapshot(snapshots, container, unifiedresources.ResourceTypeSystemContainer, "LXC")
 		}
 	}
 	return snapshots
+}
+
+// proxmoxGuestView is the read surface shared by VM and LXC container views
+// that guest lifecycle snapshots are built from.
+type proxmoxGuestView interface {
+	ID() string
+	Name() string
+	Status() unifiedresources.ResourceStatus
+	Node() string
+	Instance() string
+	VMID() int
+	Template() bool
+	Lock() string
+	Capabilities() []unifiedresources.ResourceCapability
+	SourceStatus(unifiedresources.DataSource) (unifiedresources.SourceStatus, bool)
+}
+
+func recordProxmoxGuestLifecycleSnapshot(snapshots map[string]proxmoxGuestLifecycleSnapshot, guest proxmoxGuestView, resourceType unifiedresources.ResourceType, kind string) {
+	id := strings.TrimSpace(guest.ID())
+	if id == "" {
+		return
+	}
+	freshness, ok := guest.SourceStatus(unifiedresources.SourceProxmox)
+	snapshots[id] = proxmoxGuestLifecycleSnapshot{
+		id: id, name: strings.TrimSpace(guest.Name()), resourceType: resourceType,
+		kind: kind, status: guest.Status(), node: guest.Node(), instance: guest.Instance(), vmid: guest.VMID(), template: guest.Template(), lock: strings.TrimSpace(guest.Lock()),
+		observedAt: freshness.LastSeen.UTC(), sourceFresh: ok && strings.EqualFold(strings.TrimSpace(freshness.Status), "online") && !freshness.LastSeen.IsZero(),
+		capabilities: guest.Capabilities(),
+	}
 }
 
 func sortedProxmoxGuestLifecycleIDs(snapshots map[string]proxmoxGuestLifecycleSnapshot) []string {
