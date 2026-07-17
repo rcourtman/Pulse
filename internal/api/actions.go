@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -512,7 +513,12 @@ func (h *ResourceHandlers) HandleExecuteAction(w http.ResponseWriter, r *http.Re
 			return
 		}
 	}
-	completed, err := h.ActionLifecycle().Execute(r.Context(), orgID, actionID, actor, execution.Reason)
+	// Detach dispatch from the client connection: reverse proxies and browsers
+	// drop long requests well before slow operations (e.g. docker image pulls)
+	// finish, and a cancelled request context would abandon the committed
+	// dispatch mid-flight and strand the action in executing. The transport
+	// wait stays bounded by the per-operation timeout and server shutdown.
+	completed, err := h.ActionLifecycle().Execute(context.WithoutCancel(r.Context()), orgID, actionID, actor, execution.Reason)
 	if err != nil {
 		writeActionLifecycleReadError(w, err, func() {
 			writeActionExecuteError(w, err)

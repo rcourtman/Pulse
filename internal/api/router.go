@@ -1345,6 +1345,9 @@ func (r *Router) StartBackgroundWorkers() {
 		r.startLifecycleWorker(func() {
 			r.recoverExecutingActions("system:restart-recovery")
 		})
+		r.startLifecycleWorker(func() {
+			r.runPeriodicExecutingActionRecovery(r.lifecycleCtx)
+		})
 		if r.reportingHandlers != nil {
 			r.startLifecycleWorker(func() {
 				r.reportingHandlers.RunReportScheduleScheduler(r.lifecycleCtx)
@@ -1357,6 +1360,36 @@ func (r *Router) StartBackgroundWorkers() {
 // per org. Recovery re-runs on every agent (re)registration, so a bounded
 // pass still converges when more actions are stuck than one batch covers.
 const maxExecutingActionRecoveryBatch = 100
+
+// executingActionRecoveryInterval paces the standing recovery loop. Restart
+// and agent-reconnect passes cover their own triggers, but an abandoned
+// dispatch (client disconnect, transport timeout, send failure) otherwise
+// waits for the owning agent to reconnect — which may never happen while the
+// agent stays healthily connected. The periodic pass reconciles those from
+// the durable agent receipt within one interval. A pass over zero executing
+// actions is one indexed query per org.
+const executingActionRecoveryInterval = 2 * time.Minute
+
+// runPeriodicExecutingActionRecovery re-drives the durable-dispatch recovery
+// pass on a fixed interval until the router lifecycle context ends.
+func (r *Router) runPeriodicExecutingActionRecovery(ctx context.Context) {
+	if r == nil || r.resourceHandlers == nil || mock.IsMockEnabled() {
+		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ticker := time.NewTicker(executingActionRecoveryInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			r.recoverExecutingActions("system:periodic-recovery")
+		}
+	}
+}
 
 // recoverExecutingActions reconciles actions left in the executing state by a
 // server restart or a lost agent callback. Every org routes through
