@@ -142,6 +142,11 @@ Every field is listed below with the reason it exists. Nothing else is included 
 | Pulse Intelligence approved action decisions 30d | `1` | Count approved governed action decisions in the current 30-day telemetry window without sending approvers, reasons, command text, targets, or action IDs |
 | Pulse Intelligence approved action attempts 30d | `1` | Count approved governed action attempts in the current 30-day telemetry window without sending action output, command text, or verification detail |
 | Pulse Intelligence approved action successes 30d | `1` | Count approved governed actions that completed successfully in the current 30-day telemetry window without sending action output, command text, resource IDs, actors, reasons, or verification detail |
+| Pulse Intelligence approved action failures (pre-dispatch) 30d | `1` | Count approved governed actions refused before dispatch (for example an expired or drifted plan) in the current 30-day telemetry window without sending action output, command text, resource IDs, actors, or reasons |
+| Pulse Intelligence approved action failures (execution) 30d | `1` | Count approved governed actions whose dispatched execution failed in the current 30-day telemetry window without sending action output, error text, command text, resource IDs, or actors |
+| Pulse Intelligence approved action failures (unverified) 30d | `1` | Count approved governed actions that executed but whose outcome verification was not confirmed in the current 30-day telemetry window without sending verification evidence, action output, command text, resource IDs, or actors |
+| Pulse Intelligence approved action stuck executing 30d | `1` | Count approved governed actions abandoned in the executing state in the current 30-day telemetry window without sending action output, command text, resource IDs, or actors |
+| Pulse Intelligence approved action last failure reason 30d | `plan_drift` | See one fixed machine reason code for the most recent approved-action failure in the current 30-day telemetry window without sending error text, action output, command text, resource IDs, or actors |
 
 #### Server-side handling and retention
 

@@ -361,11 +361,13 @@ func TestRefuseActionExecutionRecordsPermanentRefusal(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		reason     error
+		wantCode   string
 		wantPrefix string
 	}{
-		{name: "plan drift", reason: ErrActionPlanDrift, wantPrefix: "plan_drift:"},
-		{name: "expired", reason: ErrActionPlanExpired, wantPrefix: "action_plan_expired:"},
-		{name: "dry run only", reason: ErrActionDryRunOnly, wantPrefix: "action_dry_run_only:"},
+		{name: "plan drift", reason: ErrActionPlanDrift, wantCode: "plan_drift", wantPrefix: "plan_drift:"},
+		{name: "expired", reason: ErrActionPlanExpired, wantCode: "action_plan_expired", wantPrefix: "action_plan_expired:"},
+		{name: "dry run only", reason: ErrActionDryRunOnly, wantCode: "action_dry_run_only", wantPrefix: "action_dry_run_only:"},
+		{name: "emergency stop", reason: ErrActionEmergencyStop, wantCode: "action_emergency_stop", wantPrefix: "action_emergency_stop:"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			updated, event, err := RefuseActionExecution(record, tc.reason, " operator@example.com ", now)
@@ -377,6 +379,10 @@ func TestRefuseActionExecutionRecordsPermanentRefusal(t *testing.T) {
 			}
 			if !strings.HasPrefix(updated.Result.ErrorMessage, tc.wantPrefix) {
 				t.Fatalf("ErrorMessage = %q, want prefix %q", updated.Result.ErrorMessage, tc.wantPrefix)
+			}
+			truth := CanonicalActionResultV2(updated)
+			if truth.Execution.Status != ActionExecutionNotRun || truth.Execution.ReasonCode != tc.wantCode {
+				t.Fatalf("execution truth = %+v, want not_run with reason code %q", truth.Execution, tc.wantCode)
 			}
 			if event.ActionID != updated.ID || event.State != ActionStateFailed || event.Actor != "operator@example.com" || event.Message != updated.Result.ErrorMessage {
 				t.Fatalf("lifecycle event = %#v, updated result = %#v", event, updated.Result)

@@ -261,6 +261,22 @@ PULSE_INTELLIGENCE_COUNT_FIELDS = (
     ("pulse_intelligence_approved_action_decisions_30d", "Approved action decisions 30d"),
     ("pulse_intelligence_approved_action_attempts_30d", "Approved action attempts 30d"),
     ("pulse_intelligence_approved_action_successes_30d", "Approved action successes 30d"),
+    (
+        "pulse_intelligence_approved_action_failures_pre_dispatch_30d",
+        "Approved action failures (pre-dispatch refusal) 30d",
+    ),
+    (
+        "pulse_intelligence_approved_action_failures_execution_30d",
+        "Approved action failures (execution) 30d",
+    ),
+    (
+        "pulse_intelligence_approved_action_failures_unverified_30d",
+        "Approved action failures (completed unverified) 30d",
+    ),
+    (
+        "pulse_intelligence_approved_action_stuck_executing_30d",
+        "Approved action attempts stuck executing 30d",
+    ),
 )
 PULSE_INTELLIGENCE_OUTCOME_COHORTS = (
     (

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"regexp"
 	"strings"
 	"time"
 
@@ -41,7 +42,11 @@ func (r *Router) GetPulseIntelligenceActionTelemetry(since time.Time) telemetry.
 			log.Warn().Err(err).Str("org_id", orgID).Msg("Unable to query action audit telemetry summary")
 			continue
 		}
+		recordsByID := make(map[string]unifiedresources.ActionAuditRecord, len(records))
 		for _, record := range records {
+			if actionID := strings.TrimSpace(record.ID); actionID != "" {
+				recordsByID[actionID] = record
+			}
 			snapshot.ActionPlans30d++
 			if pulseIntelligenceActionRequiresApproval(record) {
 				snapshot.ApprovalRequests30d++
@@ -71,9 +76,93 @@ func (r *Router) GetPulseIntelligenceActionTelemetry(since time.Time) telemetry.
 		snapshot.ApprovedActionDecisions30d += len(approvedDecisionIDs)
 		snapshot.ApprovedActionAttempts30d += len(approvedAttemptIDs)
 		snapshot.ApprovedActionSuccesses30d += len(approvedSuccessIDs)
+		accumulatePulseIntelligenceApprovedActionFailures(&snapshot, store, orgID, approvedAttemptIDs, approvedSuccessIDs, recordsByID, time.Now().UTC())
 	}
 
 	return snapshot
+}
+
+// pulseIntelligenceStuckExecutingThreshold separates an in-flight dispatch
+// from an abandoned one. The longest legitimate typed dispatch transport wait
+// is 30 minutes, so an executing record untouched for longer is stuck.
+const pulseIntelligenceStuckExecutingThreshold = time.Hour
+
+// pulseIntelligenceReasonCodePattern bounds exported failure reason codes to
+// closed machine-code shape so telemetry stays content-free even if a future
+// executor misuses the reason-code field.
+var pulseIntelligenceReasonCodePattern = regexp.MustCompile(`^[a-z0-9_.-]{1,64}$`)
+
+// accumulatePulseIntelligenceApprovedActionFailures attributes every approved
+// attempt that is not a success to one cause bucket, and records the machine
+// reason code of the most recent failure.
+func accumulatePulseIntelligenceApprovedActionFailures(snapshot *telemetry.PulseIntelligenceActionSnapshot, store unifiedresources.ResourceStore, orgID string, attemptIDs, successIDs map[string]struct{}, recordsByID map[string]unifiedresources.ActionAuditRecord, now time.Time) {
+	var lastFailureAt time.Time
+	for actionID := range attemptIDs {
+		if _, ok := successIDs[actionID]; ok {
+			continue
+		}
+		record, ok := recordsByID[actionID]
+		if !ok {
+			fetched, found, err := store.GetActionAudit(actionID)
+			if err != nil || !found {
+				if err != nil {
+					log.Warn().Err(err).Str("org_id", orgID).Msg("Unable to resolve action audit for failure-cause telemetry summary")
+				}
+				continue
+			}
+			record = fetched
+		}
+		cause, reason := pulseIntelligenceApprovedActionFailureCause(record, now)
+		switch cause {
+		case "pre_dispatch":
+			snapshot.ApprovedActionFailuresPreDispatch30d++
+		case "execution":
+			snapshot.ApprovedActionFailuresExecution30d++
+		case "unverified":
+			snapshot.ApprovedActionFailuresUnverified30d++
+		case "stuck_executing":
+			snapshot.ApprovedActionStuckExecuting30d++
+		default:
+			continue
+		}
+		if record.UpdatedAt.After(lastFailureAt) {
+			lastFailureAt = record.UpdatedAt
+			snapshot.ApprovedActionLastFailureReason30d = reason
+		}
+	}
+}
+
+// pulseIntelligenceApprovedActionFailureCause classifies an approved attempt
+// that is not a verified success into a coarse cause bucket plus the specific
+// machine reason code. A recently-executing record returns no cause: it is
+// still in flight and may yet succeed.
+func pulseIntelligenceApprovedActionFailureCause(record unifiedresources.ActionAuditRecord, now time.Time) (string, string) {
+	switch record.State {
+	case unifiedresources.ActionStateExecuting:
+		if record.UpdatedAt.IsZero() || now.Sub(record.UpdatedAt) >= pulseIntelligenceStuckExecutingThreshold {
+			return "stuck_executing", "stuck_executing"
+		}
+		return "", ""
+	case unifiedresources.ActionStateFailed:
+		truth := unifiedresources.CanonicalActionResultV2(record)
+		if truth.Execution.Status == unifiedresources.ActionExecutionNotRun {
+			return "pre_dispatch", pulseIntelligenceSanitizedReasonCode(truth.Execution.ReasonCode, "pre_dispatch_refused")
+		}
+		return "execution", pulseIntelligenceSanitizedReasonCode(truth.Execution.ReasonCode, "execution_failed")
+	case unifiedresources.ActionStateCompleted:
+		truth := unifiedresources.CanonicalActionResultV2(record)
+		return "unverified", pulseIntelligenceSanitizedReasonCode(truth.Verification.ReasonCode, "verification_unconfirmed")
+	default:
+		return "", ""
+	}
+}
+
+func pulseIntelligenceSanitizedReasonCode(code, fallback string) string {
+	code = strings.TrimSpace(code)
+	if pulseIntelligenceReasonCodePattern.MatchString(code) {
+		return code
+	}
+	return fallback
 }
 
 func (r *Router) pulseIntelligenceTelemetryOrgIDs() []string {

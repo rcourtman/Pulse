@@ -241,6 +241,136 @@ func TestGetPulseIntelligenceActionTelemetry_RequiresVerifiedOutcomeForApprovedS
 	}
 }
 
+func TestGetPulseIntelligenceActionTelemetry_AttributesApprovedActionFailureCauses(t *testing.T) {
+	// Cause classification measures staleness against the wall clock, so this
+	// test anchors records to real time instead of a fixed date.
+	now := time.Now().UTC()
+	since := now.Add(-telemetry.PulseIntelligenceTelemetryWindow)
+	dataDir := t.TempDir()
+	router := &Router{
+		resourceHandlers: NewResourceHandlers(&config.Config{DataPath: dataDir}),
+	}
+	store, err := router.resourceHandlers.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+
+	approvedAt := func(at time.Time) []unifiedresources.ActionApprovalRecord {
+		return []unifiedresources.ActionApprovalRecord{{
+			Outcome:   unifiedresources.OutcomeApproved,
+			Method:    unifiedresources.MethodUI,
+			Timestamp: at,
+			Actor:     "operator",
+		}}
+	}
+
+	// Approved, then terminally refused before dispatch (plan drift).
+	refused := pulseTelemetryActionRecord("refused-pre-dispatch", now.Add(-3*time.Hour), unifiedresources.ActionStateApproved, true, approvedAt(now.Add(-3*time.Hour)))
+	refused.Plan.ExpiresAt = now.Add(time.Hour)
+	if err := store.RecordActionAudit(refused); err != nil {
+		t.Fatalf("RecordActionAudit(refused): %v", err)
+	}
+	if _, err := actionlifecycle.RecordRefusedExecution(store, refused, "operator", now.Add(-170*time.Minute), unifiedresources.ErrActionPlanDrift); err != nil {
+		t.Fatalf("RecordRefusedExecution(refused): %v", err)
+	}
+
+	// Approved, dispatched, execution failed on the agent.
+	execFailed := pulseTelemetryActionRecord("exec-failed", now.Add(-2*time.Hour), unifiedresources.ActionStateFailed, true, approvedAt(now.Add(-2*time.Hour)))
+	execFailed.Result = &unifiedresources.ExecutionResult{Success: false, ErrorMessage: "image pull failed"}
+	if err := store.RecordActionAudit(execFailed); err != nil {
+		t.Fatalf("RecordActionAudit(execFailed): %v", err)
+	}
+
+	// Approved, execution succeeded, but no verification evidence confirmed it.
+	unverified := pulseTelemetryActionRecord("completed-unverified", now.Add(-100*time.Minute), unifiedresources.ActionStateCompleted, true, approvedAt(now.Add(-100*time.Minute)))
+	unverified.Result = &unifiedresources.ExecutionResult{Success: true}
+	if err := store.RecordActionAudit(unverified); err != nil {
+		t.Fatalf("RecordActionAudit(unverified): %v", err)
+	}
+
+	// Approved and abandoned in executing state well past the dispatch window.
+	stuck := pulseTelemetryActionRecord("stuck-executing", now.Add(-5*time.Hour), unifiedresources.ActionStateExecuting, true, approvedAt(now.Add(-5*time.Hour)))
+	if err := store.RecordActionAudit(stuck); err != nil {
+		t.Fatalf("RecordActionAudit(stuck): %v", err)
+	}
+
+	// Approved and still legitimately in flight: no failure bucket.
+	inFlight := pulseTelemetryActionRecord("in-flight", now.Add(-5*time.Minute), unifiedresources.ActionStateExecuting, true, approvedAt(now.Add(-5*time.Minute)))
+	if err := store.RecordActionAudit(inFlight); err != nil {
+		t.Fatalf("RecordActionAudit(inFlight): %v", err)
+	}
+
+	// Approved and verified success: not a failure.
+	verified := pulseTelemetryActionRecord("verified-success", now.Add(-90*time.Minute), unifiedresources.ActionStateCompleted, true, approvedAt(now.Add(-90*time.Minute)))
+	verified.Result = &unifiedresources.ExecutionResult{Success: true}
+	verified.VerificationOutcome = unifiedresources.VerificationOutcome{Status: unifiedresources.VerificationVerified}
+	if err := store.RecordActionAudit(verified); err != nil {
+		t.Fatalf("RecordActionAudit(verified): %v", err)
+	}
+
+	got := router.GetPulseIntelligenceActionTelemetry(since)
+
+	if got.ApprovedActionAttempts30d != 6 {
+		t.Fatalf("ApprovedActionAttempts30d = %d, want 6", got.ApprovedActionAttempts30d)
+	}
+	if got.ApprovedActionSuccesses30d != 1 {
+		t.Fatalf("ApprovedActionSuccesses30d = %d, want 1", got.ApprovedActionSuccesses30d)
+	}
+	if got.ApprovedActionFailuresPreDispatch30d != 1 {
+		t.Fatalf("ApprovedActionFailuresPreDispatch30d = %d, want 1", got.ApprovedActionFailuresPreDispatch30d)
+	}
+	if got.ApprovedActionFailuresExecution30d != 1 {
+		t.Fatalf("ApprovedActionFailuresExecution30d = %d, want 1", got.ApprovedActionFailuresExecution30d)
+	}
+	if got.ApprovedActionFailuresUnverified30d != 1 {
+		t.Fatalf("ApprovedActionFailuresUnverified30d = %d, want 1", got.ApprovedActionFailuresUnverified30d)
+	}
+	if got.ApprovedActionStuckExecuting30d != 1 {
+		t.Fatalf("ApprovedActionStuckExecuting30d = %d, want 1", got.ApprovedActionStuckExecuting30d)
+	}
+	// The completed-unverified record is the most recent failure; the legacy
+	// row carries no canonical reason code, so the sanitized fallback applies.
+	if got.ApprovedActionLastFailureReason30d != "verification_unconfirmed" {
+		t.Fatalf("ApprovedActionLastFailureReason30d = %q, want %q", got.ApprovedActionLastFailureReason30d, "verification_unconfirmed")
+	}
+}
+
+func TestGetPulseIntelligenceActionTelemetry_LastFailureReasonUsesCanonicalReasonCode(t *testing.T) {
+	now := time.Now().UTC()
+	since := now.Add(-telemetry.PulseIntelligenceTelemetryWindow)
+	dataDir := t.TempDir()
+	router := &Router{
+		resourceHandlers: NewResourceHandlers(&config.Config{DataPath: dataDir}),
+	}
+	store, err := router.resourceHandlers.getStore("default")
+	if err != nil {
+		t.Fatalf("getStore: %v", err)
+	}
+
+	refused := pulseTelemetryActionRecord("refused-plan-drift", now.Add(-time.Hour), unifiedresources.ActionStateApproved, true, []unifiedresources.ActionApprovalRecord{{
+		Outcome:   unifiedresources.OutcomeApproved,
+		Method:    unifiedresources.MethodUI,
+		Timestamp: now.Add(-time.Hour),
+		Actor:     "operator",
+	}})
+	refused.Plan.ExpiresAt = now.Add(time.Hour)
+	if err := store.RecordActionAudit(refused); err != nil {
+		t.Fatalf("RecordActionAudit(refused): %v", err)
+	}
+	if _, err := actionlifecycle.RecordRefusedExecution(store, refused, "operator", now.Add(-30*time.Minute), unifiedresources.ErrActionPlanDrift); err != nil {
+		t.Fatalf("RecordRefusedExecution(refused): %v", err)
+	}
+
+	got := router.GetPulseIntelligenceActionTelemetry(since)
+
+	if got.ApprovedActionFailuresPreDispatch30d != 1 {
+		t.Fatalf("ApprovedActionFailuresPreDispatch30d = %d, want 1", got.ApprovedActionFailuresPreDispatch30d)
+	}
+	if got.ApprovedActionLastFailureReason30d != "plan_drift" {
+		t.Fatalf("ApprovedActionLastFailureReason30d = %q, want %q", got.ApprovedActionLastFailureReason30d, "plan_drift")
+	}
+}
+
 func pulseTelemetryActionRecord(
 	id string,
 	createdAt time.Time,

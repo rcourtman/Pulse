@@ -1004,7 +1004,7 @@ func RefuseActionExecution(record ActionAuditRecord, reason error, actor string,
 	} else {
 		now = now.UTC()
 	}
-	message, ok := permanentActionExecutionRefusalMessage(reason)
+	code, message, ok := permanentActionExecutionRefusalMessage(reason)
 	if !ok {
 		return ActionAuditRecord{}, ActionLifecycleEvent{}, fmt.Errorf("%w: %v", ErrActionExecutionRefusal, reason)
 	}
@@ -1015,7 +1015,7 @@ func RefuseActionExecution(record ActionAuditRecord, reason error, actor string,
 
 	record.State = ActionStateFailed
 	record.UpdatedAt = now
-	record.Result = KnownNoEffectResult("pre_dispatch_refused", message, record.Plan.RollbackAvailable)
+	record.Result = KnownNoEffectResult(code, message, record.Plan.RollbackAvailable)
 	normalized, err := NormalizeActionAuditRecord(record)
 	if err != nil {
 		return ActionAuditRecord{}, ActionLifecycleEvent{}, err
@@ -1037,32 +1037,36 @@ func RefuseActionExecution(record ActionAuditRecord, reason error, actor string,
 // IsPermanentActionExecutionRefusal reports whether err represents a
 // non-dispatchable execution attempt that should terminally fail the audit.
 func IsPermanentActionExecutionRefusal(err error) bool {
-	_, ok := permanentActionExecutionRefusalMessage(err)
+	_, _, ok := permanentActionExecutionRefusalMessage(err)
 	return ok
 }
 
-func permanentActionExecutionRefusalMessage(reason error) (string, bool) {
+// permanentActionExecutionRefusalMessage returns the stable machine reason
+// code and the human refusal message for a permanent pre-dispatch refusal.
+// The code is persisted as the canonical execution reason code, so telemetry
+// and audit consumers can distinguish refusal causes without message parsing.
+func permanentActionExecutionRefusalMessage(reason error) (string, string, bool) {
 	switch {
 	case errors.Is(reason, ErrActionPlanDrift):
-		return "plan_drift: action plan no longer matches the current resource contract; re-plan before executing", true
+		return "plan_drift", "plan_drift: action plan no longer matches the current resource contract; re-plan before executing", true
 	case errors.Is(reason, ErrActionPlanExpired):
-		return "action_plan_expired: action plan has expired; re-plan before executing", true
+		return "action_plan_expired", "action_plan_expired: action plan has expired; re-plan before executing", true
 	case errors.Is(reason, ErrActionDryRunOnly):
-		return "action_dry_run_only: action plan is dry-run only and cannot be executed", true
+		return "action_dry_run_only", "action_dry_run_only: action plan is dry-run only and cannot be executed", true
 	case errors.Is(reason, ErrResourceRemediationLocked):
-		return "resource_remediation_locked: resource is operator-locked against automated remediation", true
+		return "resource_remediation_locked", "resource_remediation_locked: resource is operator-locked against automated remediation", true
 	case errors.Is(reason, ErrActionPolicyAuthorizationExpired):
-		return "policy_authorization_expired: automatic authority expired before dispatch", true
+		return "policy_authorization_expired", "policy_authorization_expired: automatic authority expired before dispatch", true
 	case errors.Is(reason, ErrActionPolicyAuthorizationInvalid):
-		return "policy_authorization_invalid: automatic authority is missing, unreadable, or malformed", true
+		return "policy_authorization_invalid", "policy_authorization_invalid: automatic authority is missing, unreadable, or malformed", true
 	case errors.Is(reason, ErrActionPolicyAuthorizationRevoked):
-		return "policy_authorization_revoked: automatic authority changed before dispatch", true
+		return "policy_authorization_revoked", "policy_authorization_revoked: automatic authority changed before dispatch", true
 	case errors.Is(reason, ErrActionEmergencyStop):
-		return "action_emergency_stop: action dispatch is stopped by the operator", true
+		return "action_emergency_stop", "action_emergency_stop: action dispatch is stopped by the operator", true
 	case errors.Is(reason, ErrActionReplanRequired):
-		return "action_replan_required: legacy action authority is unbound; re-plan before deciding or executing", true
+		return "action_replan_required", "action_replan_required: legacy action authority is unbound; re-plan before deciding or executing", true
 	default:
-		return "", false
+		return "", "", false
 	}
 }
 

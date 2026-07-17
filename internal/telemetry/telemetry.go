@@ -237,6 +237,15 @@ type Ping struct {
 	PulseIntelligenceApprovedActionDecisions30d                    int  `json:"pulse_intelligence_approved_action_decisions_30d"`
 	PulseIntelligenceApprovedActionAttempts30d                     int  `json:"pulse_intelligence_approved_action_attempts_30d"`
 	PulseIntelligenceApprovedActionSuccesses30d                    int  `json:"pulse_intelligence_approved_action_successes_30d"`
+
+	// Cause-coded approved-action failure counters. Together with successes
+	// and still-in-flight attempts these partition the attempt count, so the
+	// attempt/success gap is attributable without exporting action content.
+	PulseIntelligenceApprovedActionFailuresPreDispatch30d int    `json:"pulse_intelligence_approved_action_failures_pre_dispatch_30d"`
+	PulseIntelligenceApprovedActionFailuresExecution30d   int    `json:"pulse_intelligence_approved_action_failures_execution_30d"`
+	PulseIntelligenceApprovedActionFailuresUnverified30d  int    `json:"pulse_intelligence_approved_action_failures_unverified_30d"`
+	PulseIntelligenceApprovedActionStuckExecuting30d      int    `json:"pulse_intelligence_approved_action_stuck_executing_30d"`
+	PulseIntelligenceApprovedActionLastFailureReason30d   string `json:"pulse_intelligence_approved_action_last_failure_reason_30d,omitempty"`
 }
 
 // Snapshot holds the dynamic state gathered at ping time.
@@ -338,11 +347,18 @@ type Snapshot struct {
 	PulseIntelligenceApprovedActionDecisions30d                    int
 	PulseIntelligenceApprovedActionAttempts30d                     int
 	PulseIntelligenceApprovedActionSuccesses30d                    int
+	PulseIntelligenceApprovedActionFailuresPreDispatch30d          int
+	PulseIntelligenceApprovedActionFailuresExecution30d            int
+	PulseIntelligenceApprovedActionFailuresUnverified30d           int
+	PulseIntelligenceApprovedActionStuckExecuting30d               int
+	PulseIntelligenceApprovedActionLastFailureReason30d            string
 }
 
 // PulseIntelligenceActionSnapshot is the action-governance portion of the
 // Pulse Intelligence telemetry loop. It is intentionally count-only so callers
-// can aggregate local audit records without exporting action details.
+// can aggregate local audit records without exporting action details. The
+// failure-cause fields carry only closed machine reason codes, never command
+// text, resource identifiers, or output.
 type PulseIntelligenceActionSnapshot struct {
 	ActionPlans30d             int
 	ApprovalRequests30d        int
@@ -350,6 +366,23 @@ type PulseIntelligenceActionSnapshot struct {
 	ApprovedActionDecisions30d int
 	ApprovedActionAttempts30d  int
 	ApprovedActionSuccesses30d int
+
+	// ApprovedActionFailuresPreDispatch30d counts approved attempts refused
+	// terminally before dispatch (plan drift, expiry, emergency stop, policy
+	// authorization).
+	ApprovedActionFailuresPreDispatch30d int
+	// ApprovedActionFailuresExecution30d counts approved attempts whose
+	// dispatched execution failed or ended inconclusive.
+	ApprovedActionFailuresExecution30d int
+	// ApprovedActionFailuresUnverified30d counts approved attempts that
+	// completed execution but whose outcome verification was not confirmed.
+	ApprovedActionFailuresUnverified30d int
+	// ApprovedActionStuckExecuting30d counts approved attempts still in the
+	// executing state well past any legitimate dispatch window.
+	ApprovedActionStuckExecuting30d int
+	// ApprovedActionLastFailureReason30d is the machine reason code of the
+	// most recent approved-action failure, sanitized to a closed code shape.
+	ApprovedActionLastFailureReason30d string
 }
 
 // ApplyUpdateTelemetrySnapshot adds content-free update funnel counters from
@@ -833,6 +866,11 @@ func applySnapshot(base Ping, fn SnapshotFunc) Ping {
 	ping.PulseIntelligenceApprovedActionDecisions30d = s.PulseIntelligenceApprovedActionDecisions30d
 	ping.PulseIntelligenceApprovedActionAttempts30d = s.PulseIntelligenceApprovedActionAttempts30d
 	ping.PulseIntelligenceApprovedActionSuccesses30d = s.PulseIntelligenceApprovedActionSuccesses30d
+	ping.PulseIntelligenceApprovedActionFailuresPreDispatch30d = s.PulseIntelligenceApprovedActionFailuresPreDispatch30d
+	ping.PulseIntelligenceApprovedActionFailuresExecution30d = s.PulseIntelligenceApprovedActionFailuresExecution30d
+	ping.PulseIntelligenceApprovedActionFailuresUnverified30d = s.PulseIntelligenceApprovedActionFailuresUnverified30d
+	ping.PulseIntelligenceApprovedActionStuckExecuting30d = s.PulseIntelligenceApprovedActionStuckExecuting30d
+	ping.PulseIntelligenceApprovedActionLastFailureReason30d = s.PulseIntelligenceApprovedActionLastFailureReason30d
 	return ping
 }
 
