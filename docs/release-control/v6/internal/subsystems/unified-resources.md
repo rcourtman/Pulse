@@ -1811,6 +1811,16 @@ remain in the row's accessible name and title, while the visual row prefers the
 API-supplied name and type and falls back to the bounded ID-derived type plus
 short suffix only when the resource projection is unavailable. Read-only demo
 posture is quiet supporting context rather than a page-level callout. The
+empty Open queue must explain producer state rather than promising content:
+when the effective Patrol mode is Watch only (read via the canonical
+`/api/ai/patrol/autonomy` settings read, failing closed to the generic calm
+copy when that read is unavailable), the calm state names that Watch only
+never queues proposed fixes and routes unlocked installs to the Patrol mode
+switch, while plan-locked installs get the presentation-policy-aware Pro
+capability line from `actionPresentation.getActionsWatchOnlyEmptyState` with
+the upgrade action suppressed whenever upgrade prompts are hidden. That
+guidance is presentation-only: Actions must not gain a second Patrol mode
+mutation surface. The
 governed review dialog continues to own the full exact resource ID, plan,
 policy evidence, lifecycle, authority, and outcome truth. Its first layer keeps
 intent plus safety/authority facts visible while the immutable planning-time

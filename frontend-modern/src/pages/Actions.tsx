@@ -1,11 +1,21 @@
-import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import { useLocation, useSearchParams } from '@solidjs/router';
 import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import EyeIcon from 'lucide-solid/icons/eye';
 import RefreshCwIcon from 'lucide-solid/icons/refresh-cw';
+import { getPatrolAutonomySettings } from '@/api/patrol';
 import { ResourceActionsAPI } from '@/api/resourceActions';
-import { Button } from '@/components/shared/Button';
+import { Button, ButtonLink } from '@/components/shared/Button';
 import { Card } from '@/components/shared/Card';
+import { UpgradeButtonLink } from '@/components/shared/UpgradeLink';
+import { PATROL_AUTONOMY_FEATURE_KEY } from '@/features/patrol/patrolAutonomyAvailability';
+import { PATROL_PATH } from '@/routing/resourceLinks';
+import { hasFeature } from '@/stores/license';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyHidesUpgradePrompts,
+} from '@/stores/sessionPresentationPolicy';
 import { MetadataBadge } from '@/components/shared/MetadataBadge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
@@ -15,6 +25,7 @@ import {
   formatActionName,
   getActionInboxStatePresentation,
   getActionResourcePresentation,
+  getActionsWatchOnlyEmptyState,
   sortOpenActionsForReview,
 } from '@/features/actions/actionPresentation';
 import type {
@@ -40,6 +51,26 @@ export function Actions() {
   const [loading, setLoading] = createSignal(true);
   const [loadError, setLoadError] = createSignal('');
   const [readOnly, setReadOnly] = createSignal(false);
+  const [patrolWatchOnly, setPatrolWatchOnly] = createSignal(false);
+
+  // The Open tab is where users land wondering why nothing is queued. When
+  // Patrol runs Watch only it never proposes fixes, so the calm state must say
+  // that instead of implying actions will eventually show up on their own.
+  onMount(() => {
+    void getPatrolAutonomySettings()
+      .then((settings) => setPatrolWatchOnly(settings.effective_autonomy_level === 'monitor'))
+      .catch(() => {});
+  });
+
+  const watchOnlyGuidance = createMemo(() =>
+    getActionsWatchOnlyEmptyState({
+      patrolWatchOnly: patrolWatchOnly(),
+      patrolModesUnlocked: hasFeature(PATROL_AUTONOMY_FEATURE_KEY),
+      commercialSurfacesHidden: presentationPolicyHidesCommercialSurfaces(),
+      upgradePromptsHidden: presentationPolicyHidesUpgradePrompts(),
+      upgradeDestination: getUpgradeActionDestination('ai_autofix'),
+    }),
+  );
 
   const loadActions = async () => {
     setLoading(true);
@@ -176,11 +207,41 @@ export function Actions() {
           <h2 class="text-lg font-semibold">
             {view() === 'pending' ? 'No actions need attention' : 'No action history yet'}
           </h2>
-          <p class="mt-2 text-sm text-muted">
-            {view() === 'pending'
-              ? 'Pulse will place proposed or in-progress changes here for review.'
-              : 'Completed, rejected, expired, and failed actions will appear here.'}
-          </p>
+          <Show
+            when={view() === 'pending' ? watchOnlyGuidance() : undefined}
+            keyed
+            fallback={
+              <p class="mt-2 text-sm text-muted">
+                {view() === 'pending'
+                  ? 'Pulse will place proposed or in-progress changes here for review.'
+                  : 'Completed, rejected, expired, and failed actions will appear here.'}
+              </p>
+            }
+          >
+            {(guidance) => (
+              <>
+                <p class="mx-auto mt-2 max-w-xl text-sm text-muted">{guidance.body}</p>
+                <Show when={guidance.kind === 'switch'}>
+                  <ButtonLink href={PATROL_PATH} variant="primary" size="sm" class="mt-4">
+                    {guidance.actionLabel}
+                  </ButtonLink>
+                </Show>
+                <Show when={guidance.kind === 'upgrade' ? guidance.destination : undefined} keyed>
+                  {(destination) => (
+                    <div class="mt-4 flex justify-center">
+                      <UpgradeButtonLink
+                        destination={destination}
+                        size="sm"
+                        mobileFullWidth={false}
+                      >
+                        {guidance.actionLabel}
+                      </UpgradeButtonLink>
+                    </div>
+                  )}
+                </Show>
+              </>
+            )}
+          </Show>
         </div>
       </Show>
       <Show when={actions().length > 0}>

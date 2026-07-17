@@ -681,6 +681,13 @@ For Patrol, that includes the Open work description: it may use concise
 row-level guidance such as review evidence, approve a change, inspect automatic
 actions, or review verification results, but it must remain descriptive copy
 rather than another card, strip, or proof counter above the findings list.
+Watch-only forward-path guidance follows the same rule: the finding-row
+`Switch to Ask first` nudge and the Actions inbox Watch-only calm-state copy
+live in their governed presentation helpers
+(`patrolControlPresentation.getPatrolWatchOnlyInvestigationNudge`,
+`actionPresentation.getActionsWatchOnlyEmptyState`) and render as descriptive
+copy plus a single shared-primitive action inside the existing expanded-row
+and calm-state layouts rather than as new cards, banners, or proof strips.
 Feature-owned runtime hooks may also own non-visual side effects when those
 effects are part of the governed feature workflow. For Patrol, current-work
 action chrome must keep active findings in the Patrol findings workflow first;

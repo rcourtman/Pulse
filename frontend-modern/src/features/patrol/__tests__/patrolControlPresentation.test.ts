@@ -4,6 +4,7 @@ import type { PatrolAutonomyLevel } from '@/api/patrol';
 import {
   getPatrolProInvestigationHandoff,
   getPatrolQueueWorkspaceDescription,
+  getPatrolWatchOnlyInvestigationNudge,
   getMonitorContextPatrolProtectionPosture,
   getPatrolReadyWorkDetail,
   getPatrolSetupIssueReason,
@@ -470,5 +471,46 @@ describe('patrolControlPresentation', () => {
     });
     expect(handoff).not.toHaveProperty('actionLabel');
     expect(handoff).not.toHaveProperty('destination');
+  });
+
+  it('nudges unlocked Watch only installs toward Ask first on actionable findings', () => {
+    const nudge = getPatrolWatchOnlyInvestigationNudge({
+      autoFixLocked: false,
+      autonomyLevel: 'monitor',
+      severity: 'critical',
+      status: 'active',
+    });
+    expect(nudge).toEqual({
+      detail:
+        'Watch only reports issues without preparing fixes. In Ask first mode, Patrol investigates and queues each fix for your approval.',
+      actionLabel: 'Switch to Ask first',
+    });
+    expect(
+      getPatrolWatchOnlyInvestigationNudge({
+        autoFixLocked: false,
+        autonomyLevel: 'monitor',
+        severity: 'warning',
+        status: 'active',
+      }),
+    ).toBeDefined();
+  });
+
+  it('keeps the Ask first nudge out of locked installs, non-monitor modes, and non-actionable findings', () => {
+    const base = {
+      autoFixLocked: false,
+      autonomyLevel: 'monitor' as PatrolAutonomyLevel,
+      severity: 'critical',
+      status: 'active',
+    };
+    expect(getPatrolWatchOnlyInvestigationNudge({ ...base, autoFixLocked: true })).toBeUndefined();
+    expect(
+      getPatrolWatchOnlyInvestigationNudge({ ...base, autonomyLevel: 'approval' }),
+    ).toBeUndefined();
+    expect(
+      getPatrolWatchOnlyInvestigationNudge({ ...base, autonomyLevel: undefined }),
+    ).toBeUndefined();
+    expect(getPatrolWatchOnlyInvestigationNudge({ ...base, severity: 'info' })).toBeUndefined();
+    expect(getPatrolWatchOnlyInvestigationNudge({ ...base, severity: undefined })).toBeUndefined();
+    expect(getPatrolWatchOnlyInvestigationNudge({ ...base, status: 'resolved' })).toBeUndefined();
   });
 });

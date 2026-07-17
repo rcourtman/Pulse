@@ -836,6 +836,19 @@ fix`, or `Explain` based on current finding state), while secondary
    per-finding "Create rule from this" action must remain disabled unless the
    finding has both a concrete resource and category for a scoped suppression
    rule.
+   An actionable active finding must always expose a forward path into the
+   governed action loop at its own expanded row. Above Watch only, that is the
+   inline `Investigate` intent. In Watch only, the same expanded-row slot
+   instead carries a mode handoff owned by `patrolControlPresentation.ts`:
+   `getPatrolProInvestigationHandoff` for plan-locked installs, and
+   `getPatrolWatchOnlyInvestigationNudge` for installs whose paid Patrol modes
+   are already unlocked. The unlocked nudge names the Watch only boundary and
+   offers a one-click `Switch to Ask first` that routes through the same
+   `handleAutonomyChange` save path as the header mode selector, never a
+   second mode mutation surface. Both handoffs stay limited to active
+   critical/warning findings, are mutually exclusive by lock state, and the
+   unlocked nudge must yield to the `Investigate` intent once the effective
+   mode leaves `monitor`.
    The Patrol store owns the sticky expanded-history state for Resolved/All
    views and must keep that data bounded: once resolved findings are requested,
    subsequent Patrol finding loads continue to request include-resolved history

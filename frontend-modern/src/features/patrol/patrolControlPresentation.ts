@@ -503,3 +503,37 @@ export function getPatrolProInvestigationHandoff(
   }
   return handoff;
 }
+
+export interface PatrolWatchOnlyInvestigationNudge {
+  detail: string;
+  actionLabel: string;
+}
+
+export interface PatrolWatchOnlyInvestigationNudgeInput {
+  autoFixLocked: boolean;
+  autonomyLevel?: PatrolAutonomyLevel;
+  severity?: string;
+  status?: string;
+}
+
+// Counterpart to the Pro handoff for installs where Patrol modes are already
+// unlocked but the install still runs Watch only: without this, an actionable
+// finding offers no forward path at all (the Investigate button requires a
+// non-monitor mode), so the detect → investigate → propose → approve loop can
+// never start.
+export function getPatrolWatchOnlyInvestigationNudge(
+  input: PatrolWatchOnlyInvestigationNudgeInput,
+): PatrolWatchOnlyInvestigationNudge | undefined {
+  if (input.autoFixLocked) return undefined;
+  if (input.autonomyLevel !== 'monitor') return undefined;
+  if (input.status && input.status !== 'active') return undefined;
+  if (!input.severity || !PATROL_PRO_HANDOFF_ACTIONABLE_SEVERITIES.has(input.severity)) {
+    return undefined;
+  }
+
+  return {
+    detail:
+      'Watch only reports issues without preparing fixes. In Ask first mode, Patrol investigates and queues each fix for your approval.',
+    actionLabel: 'Switch to Ask first',
+  };
+}

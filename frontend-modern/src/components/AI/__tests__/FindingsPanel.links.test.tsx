@@ -660,4 +660,48 @@ describe('FindingsPanel investigate action gating', () => {
     expandRow();
     expect(screen.queryByRole('button', { name: /^Investigate$/ })).toBeNull();
   });
+
+  it('renders the Watch-only mode nudge in the expanded row and fires its switch callback', async () => {
+    const onSwitch = vi.fn();
+    render(() => (
+      <FindingsPanel
+        findingsSource="patrol"
+        autonomyLevel="monitor"
+        patrolModeNudge={() => ({
+          detail:
+            'Watch only reports issues without preparing fixes. In Ask first mode, Patrol investigates and queues each fix for your approval.',
+          actionLabel: 'Switch to Ask first',
+        })}
+        onPatrolModeNudgeAction={onSwitch}
+      />
+    ));
+    await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
+    expandRow();
+    const switchButton = screen.getByRole('button', { name: 'Switch to Ask first' });
+    expect(
+      screen.getByText(
+        'Watch only reports issues without preparing fixes. In Ask first mode, Patrol investigates and queues each fix for your approval.',
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(switchButton);
+    expect(onSwitch).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the Watch-only mode nudge button while the switch is in flight', async () => {
+    render(() => (
+      <FindingsPanel
+        findingsSource="patrol"
+        autonomyLevel="monitor"
+        patrolModeNudge={() => ({
+          detail: 'Watch only reports issues without preparing fixes.',
+          actionLabel: 'Switch to Ask first',
+        })}
+        patrolModeNudgeBusy
+      />
+    ));
+    await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
+    expandRow();
+    const busyButton = screen.getByRole('button', { name: 'Switching…' });
+    expect(busyButton).toBeDisabled();
+  });
 });

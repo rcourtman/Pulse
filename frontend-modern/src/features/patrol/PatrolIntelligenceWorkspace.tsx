@@ -24,6 +24,7 @@ import { StatusIndicatorBadge } from '@/components/shared/StatusIndicatorBadge';
 import { getPatrolSetupAction, getPatrolSetupHint } from '@/utils/patrolRuntimeActions';
 import {
   getPatrolProInvestigationHandoff,
+  getPatrolWatchOnlyInvestigationNudge,
   getPatrolQueueWorkspaceDescription,
   getPatrolWorkspaceWorkGroups,
   isPatrolCoverageStale,
@@ -274,6 +275,16 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
                   status: finding.status,
                 })
               }
+              patrolModeNudge={(finding) =>
+                getPatrolWatchOnlyInvestigationNudge({
+                  autoFixLocked: state.autoFixLocked(),
+                  autonomyLevel: state.autonomyLevel(),
+                  severity: finding.severity,
+                  status: finding.status,
+                })
+              }
+              onPatrolModeNudgeAction={() => void state.handleAutonomyChange('approval')}
+              patrolModeNudgeBusy={state.isUpdatingAutonomy()}
             />
           }
         >

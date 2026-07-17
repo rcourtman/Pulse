@@ -8,6 +8,7 @@ import type {
   ActionVerificationTruthStatus,
 } from '@/types/actionAudit';
 import type { MetadataBadgeTone } from '@/components/shared/MetadataBadge';
+import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 
 export const formatActionName = (value: string): string =>
   value === 'install_os_updates'
@@ -78,6 +79,44 @@ export const getActionApprovalBadgePresentation = (
     count: normalized,
     label: `${normalized} ${normalized === 1 ? 'action awaits' : 'actions await'} approval`,
   };
+};
+
+export interface ActionsWatchOnlyEmptyStateInput {
+  patrolWatchOnly: boolean;
+  patrolModesUnlocked: boolean;
+  commercialSurfacesHidden: boolean;
+  upgradePromptsHidden: boolean;
+  upgradeDestination: UpgradeDestination;
+}
+
+export type ActionsWatchOnlyEmptyStatePresentation =
+  | { kind: 'switch'; body: string; actionLabel: string }
+  | { kind: 'upgrade'; body: string; actionLabel?: string; destination?: UpgradeDestination };
+
+// Guidance for the empty Open inbox: while Patrol runs Watch only nothing ever
+// lands here, so the calm state has to name the mode that keeps the queue empty
+// and point at the dial (or the entitlement) that changes it.
+export const getActionsWatchOnlyEmptyState = (
+  input: ActionsWatchOnlyEmptyStateInput,
+): ActionsWatchOnlyEmptyStatePresentation | undefined => {
+  if (!input.patrolWatchOnly) return undefined;
+  if (input.patrolModesUnlocked) {
+    return {
+      kind: 'switch',
+      body: 'Patrol runs in Watch only mode, so it reports issues without preparing fixes. Switch Patrol to Ask first and proposed fixes will wait here for your approval.',
+      actionLabel: 'Open Patrol',
+    };
+  }
+  if (input.commercialSurfacesHidden) return undefined;
+  const presentation: ActionsWatchOnlyEmptyStatePresentation = {
+    kind: 'upgrade',
+    body: 'Patrol runs in Watch only mode. Pulse Pro lets Patrol investigate issues and prepare fixes that wait here for your approval.',
+  };
+  if (!input.upgradePromptsHidden) {
+    presentation.actionLabel = 'Learn about Pulse Pro';
+    presentation.destination = input.upgradeDestination;
+  }
+  return presentation;
 };
 
 export interface ActionResourcePresentation {

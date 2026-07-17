@@ -147,6 +147,11 @@ interface FindingsPanelProps {
   patrolProHandoff?: (
     finding: UnifiedFinding,
   ) => { detail: string; actionLabel?: string; destination?: UpgradeDestination } | undefined;
+  patrolModeNudge?: (
+    finding: UnifiedFinding,
+  ) => { detail: string; actionLabel: string } | undefined;
+  onPatrolModeNudgeAction?: () => void;
+  patrolModeNudgeBusy?: boolean;
   runSnapshot?: Pick<
     PatrolRunRecord,
     | 'resources_checked'
@@ -1371,6 +1376,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const shouldShowAssistantPrimaryAction = !isPatrolFindingsSource();
     const shouldShowAssistantManageAction = isPatrolFindingsSource() && !primaryAction;
     const proHandoff = !primaryAction ? props.patrolProHandoff?.(finding) : undefined;
+    const modeNudge = !primaryAction ? props.patrolModeNudge?.(finding) : undefined;
     const shouldShowExpandedManageMenu =
       !primaryAction ||
       manualControls.acknowledge ||
@@ -1654,6 +1660,23 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                   </UpgradeButtonLink>
                 )}
               </Show>
+            </div>
+          </Show>
+          <Show when={modeNudge}>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-muted">{modeNudge!.detail}</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onPatrolModeNudgeAction?.();
+                }}
+                disabled={props.patrolModeNudgeBusy}
+                class="inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                title="Switch Patrol to Ask first so it can investigate and prepare fixes for your approval"
+              >
+                {props.patrolModeNudgeBusy ? 'Switching…' : modeNudge!.actionLabel}
+              </button>
             </div>
           </Show>
 

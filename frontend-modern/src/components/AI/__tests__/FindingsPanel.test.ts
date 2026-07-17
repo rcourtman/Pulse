@@ -418,6 +418,21 @@ describe('FindingsPanel assistant handoff', () => {
   });
 });
 
+describe('FindingsPanel Watch-only mode nudge slot', () => {
+  // An actionable active finding on an unlocked Watch-only install must offer
+  // a forward path into the governed action loop from its own expanded row.
+  // The nudge lives in the same slot as the plan-locked Pro handoff, and the
+  // switch must reuse the canonical autonomy save path (handleAutonomyChange)
+  // rather than introducing a second mode mutation surface.
+  it('renders the mode nudge in the expanded row and keeps the switch on the shared autonomy save path', () => {
+    expect(findingsPanelSource).toContain('props.patrolModeNudge?.(finding)');
+    expect(findingsPanelSource).toContain('props.onPatrolModeNudgeAction?.()');
+    expect(findingsPanelSource).toContain("'Switching…'");
+    expect(patrolWorkspaceSource).toContain('getPatrolWatchOnlyInvestigationNudge');
+    expect(patrolWorkspaceSource).toContain("handleAutonomyChange('approval')");
+  });
+});
+
 describe('aiFindingPresentation', () => {
   describe('severity presentation', () => {
     it('has correct sort order for critical', () => {
