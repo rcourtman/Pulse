@@ -155,6 +155,12 @@ strings at send time. The same SSRF guard must reject unspecified direct
 targets such as `0.0.0.0` and `::` before delivery and must not allow webhook
 private-CIDR allowlists to include networks that contain those unspecified
 addresses.
+The DNS-rebinding pin in the secure webhook dialer is part of that same guard:
+hostname dials may connect only to resolver-validated IPs, and the dialer must
+try every permitted resolved address in resolution order rather than pinning
+the first, so an IPv6-first resolution (`::1` ahead of `127.0.0.1`) or a dead
+leading A record cannot fail delivery to a host that is reachable on a later
+permitted address.
 That same ownership includes webhook retry classification. The canonical
 retry gate in `webhook_enhanced.go` must parse provider failures from both
 `status 429`-style and `HTTP 429`-style error strings before it decides

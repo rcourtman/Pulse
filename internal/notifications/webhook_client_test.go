@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -253,6 +254,45 @@ func TestSecureWebhookClientDialContextAllowsHostnameWithAllowlist(t *testing.T)
 		t.Fatalf("expected request to succeed with allowlist, got: %v", err)
 	}
 	resp.Body.Close()
+}
+
+// TestSecureWebhookClientDialContextTriesAllPermittedResolvedIPs pins the
+// multi-IP dial behavior: a host that resolves to ::1 first while the webhook
+// receiver listens only on 127.0.0.1 must still connect via the next permitted
+// IP instead of failing on the first (regression for the first-permitted-IP
+// pin, same defect class fixed in pkg/securityutil).
+func TestSecureWebhookClientDialContextTriesAllPermittedResolvedIPs(t *testing.T) {
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	_, port, err := net.SplitHostPort(strings.TrimPrefix(server.URL, "http://"))
+	if err != nil {
+		t.Fatalf("failed to parse test server address: %v", err)
+	}
+
+	nm := &NotificationManager{
+		lastNotified:      make(map[string]notificationRecord),
+		webhookRateLimits: make(map[string]*webhookRateLimit),
+	}
+	// Permit both loopback families so ::1 survives filtering and is dialed first.
+	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.0/8,::1/128"); err != nil {
+		t.Fatalf("failed to set allowlist: %v", err)
+	}
+	nm.resolveWebhookIPs = func(host string) ([]net.IP, error) {
+		return []net.IP{net.ParseIP("::1"), net.ParseIP("127.0.0.1")}, nil
+	}
+
+	client := nm.createSecureWebhookClient(WebhookTimeout)
+	resp, err := client.Get("http://ipv6-first.test:" + port + "/")
+	if err != nil {
+		t.Fatalf("expected fallback to the second permitted IP to succeed, got: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
 }
 
 func TestSecureWebhookClientDialContextAllowsPublicIP(t *testing.T) {

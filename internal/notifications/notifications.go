@@ -130,21 +130,20 @@ func (n *NotificationManager) createSecureWebhookClientWithTLS(timeout time.Dura
 			}
 
 			// Resolve hostname
-			ips, err := net.LookupIP(host)
+			ips, err := n.lookupWebhookHostIPs(host)
 			if err != nil {
 				return nil, fmt.Errorf("resolve webhook host %q: %w", host, err)
 			}
 
-			// Find first permitted IP
-			var permittedIP net.IP
+			// Collect every permitted IP in resolution order
+			var permittedIPs []net.IP
 			for _, ip := range ips {
 				if !isPrivateIP(ip) || n.isIPInAllowlist(ip) {
-					permittedIP = ip
-					break
+					permittedIPs = append(permittedIPs, ip)
 				}
 			}
 
-			if permittedIP == nil {
+			if len(permittedIPs) == 0 {
 				return nil, fmt.Errorf("hostname %s resolves to blocked private IPs", host)
 			}
 
@@ -152,13 +151,29 @@ func (n *NotificationManager) createSecureWebhookClientWithTLS(timeout time.Dura
 			if len(ips) > 1 {
 				log.Debug().
 					Str("host", host).
-					Str("selected_ip", permittedIP.String()).
+					Int("resolved", len(ips)).
+					Int("permitted", len(permittedIPs)).
 					Msg("dns resolution pinned for webhook security")
 			}
 
-			// Dial the permitted IP
+			// Try every permitted IP from the validating resolution, not just the
+			// first: a hostname can resolve to ::1 ahead of 127.0.0.1 while the
+			// webhook receiver listens only on one loopback family, and a
+			// multi-A-record host can lead with a dead address. Each candidate was
+			// validated above, so rebinding protection is unchanged.
 			d := net.Dialer{Timeout: 10 * time.Second}
-			return d.DialContext(ctx, network, net.JoinHostPort(permittedIP.String(), port))
+			var dialErr error
+			for _, permittedIP := range permittedIPs {
+				conn, err := d.DialContext(ctx, network, net.JoinHostPort(permittedIP.String(), port))
+				if err == nil {
+					return conn, nil
+				}
+				dialErr = err
+				if ctx.Err() != nil {
+					break
+				}
+			}
+			return nil, dialErr
 		},
 		ForceAttemptHTTP2:     true,
 		MaxIdleConns:          100,
@@ -233,15 +248,16 @@ type NotificationManager struct {
 	webhookRateMu      sync.Mutex                   // Separate mutex for webhook rate limiting
 	webhookRateCleanup time.Time                    // Last cleanup time for webhook rate limit entries
 	appriseExec        appriseExecFunc
-	queue              *NotificationQueue              // Persistent notification queue
-	tenantID           string                          // Tenant identity stamped into webhook payloads (env default)
-	tenantName         string                          // Tenant display name stamped into webhook payloads (env default)
-	tenantResolver     func() (id string, name string) // Org-backed tenant identity override (multi-tenant)
-	webhookClient      *http.Client                    // Shared HTTP client for webhooks
-	stopCleanup        chan struct{}                   // Signal to stop cleanup goroutine
-	cleanupDone        chan struct{}                   // Signals cleanup goroutine exit during shutdown
-	allowedPrivateNets []*net.IPNet                    // Parsed CIDR ranges allowed for private webhook targets
-	allowedPrivateMu   sync.RWMutex                    // Protects allowedPrivateNets
+	queue              *NotificationQueue                  // Persistent notification queue
+	tenantID           string                              // Tenant identity stamped into webhook payloads (env default)
+	tenantName         string                              // Tenant display name stamped into webhook payloads (env default)
+	tenantResolver     func() (id string, name string)     // Org-backed tenant identity override (multi-tenant)
+	webhookClient      *http.Client                        // Shared HTTP client for webhooks
+	stopCleanup        chan struct{}                       // Signal to stop cleanup goroutine
+	cleanupDone        chan struct{}                       // Signals cleanup goroutine exit during shutdown
+	allowedPrivateNets []*net.IPNet                        // Parsed CIDR ranges allowed for private webhook targets
+	allowedPrivateMu   sync.RWMutex                        // Protects allowedPrivateNets
+	resolveWebhookIPs  func(host string) ([]net.IP, error) // Test seam for webhook dialer DNS resolution; nil means net.LookupIP
 }
 
 type webhookHTTPResult struct {
@@ -3117,6 +3133,14 @@ func (n *NotificationManager) UpdateAllowedPrivateCIDRs(cidrsString string) erro
 	}
 	n.ApplyAllowedPrivateCIDRs(cidrsString, nets)
 	return nil
+}
+
+// lookupWebhookHostIPs resolves a webhook hostname for the SSRF-pinned dialer.
+func (n *NotificationManager) lookupWebhookHostIPs(host string) ([]net.IP, error) {
+	if n.resolveWebhookIPs != nil {
+		return n.resolveWebhookIPs(host)
+	}
+	return net.LookupIP(host)
 }
 
 // isIPInAllowlist checks if an IP is in the configured allowlist
