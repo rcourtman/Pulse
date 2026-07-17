@@ -2785,8 +2785,11 @@ a new API state machine, queue contract, or verification-accounting field.
     to block unauthenticated SSRF against internal hosts. That same probe path
     must also validate user-supplied addresses before probing, reject metadata,
     link-local, multicast, and unspecified destinations, and pin each outbound
-    dial to the first permitted resolved IP so DNS rebinding cannot swap the
-    target between validation and connect time. That same `/api/connections`
+    dial to the permitted IPs from the validating resolution so DNS rebinding
+    cannot swap the target between validation and connect time. Within that
+    pinned set the dialer tries each permitted IP in resolution order, so a
+    host whose first address family is unreachable (e.g. `localhost` resolving
+    to `::1` while the service listens only on `127.0.0.1`) still connects. That same `/api/connections`
     payload now also owns the additive `systems[]` grouping contract for the
     infrastructure settings source manager. Those grouped rows must stay
     source-oriented and backend-authored: one primary source row may carry
