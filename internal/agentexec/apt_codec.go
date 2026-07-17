@@ -343,24 +343,47 @@ func ValidateHostUpdateResultForRequest(req HostUpdatePayload, result HostUpdate
 // bearing results additionally prove the original before-state by deriving the
 // digest from their matching observation.
 func ValidateHostUpdateReceiptForIdentity(identity operationreceipt.Identity, result HostUpdateResultPayload) error {
+	return validateHostAPTReceiptForIdentity(
+		identity, HostUpdateOperationInstall, result.RequestID, result.ActionID,
+		func() error { return ValidateHostUpdateResultPayload(&result) },
+		result.Verification == HostUpdateVerificationVerified || result.Verification == HostUpdateVerificationFailed,
+		func() error {
+			req := HostUpdatePayload{RequestID: identity.AttemptID, ActionID: identity.ActionID, Operation: identity.OperationKind, OperationVersion: identity.OperationVersion, RequestDigest: identity.RequestDigest, ExpectedInventoryHash: result.Before.InventoryHash}
+			if err := ValidateHostUpdatePayload(&req); err != nil {
+				return err
+			}
+			return ValidateHostUpdateResultForRequest(req, result)
+		},
+	)
+}
+
+// validateHostAPTReceiptForIdentity is the shared receipt-binding core of the
+// per-operation ReceiptForIdentity validators: bind the terminal result to the
+// exact admitted identity, validate the result payload, and — only for
+// evidence-bearing verifications — re-validate against a request reconstructed
+// from the admitted identity.
+func validateHostAPTReceiptForIdentity(
+	identity operationreceipt.Identity,
+	operationKind string,
+	resultRequestID, resultActionID string,
+	validateResultPayload func() error,
+	evidenceBearing bool,
+	validateEvidence func() error,
+) error {
 	normalized, err := operationreceipt.NormalizeIdentity(identity)
 	if err != nil || normalized != identity {
 		return operationreceipt.ErrBindingConflict
 	}
-	if identity.OperationKind != HostUpdateOperationInstall || identity.OperationVersion != HostAPTOperationVersion || result.RequestID != identity.AttemptID || result.ActionID != identity.ActionID {
+	if identity.OperationKind != operationKind || identity.OperationVersion != HostAPTOperationVersion || resultRequestID != identity.AttemptID || resultActionID != identity.ActionID {
 		return operationreceipt.ErrBindingConflict
 	}
-	if err := ValidateHostUpdateResultPayload(&result); err != nil {
+	if err := validateResultPayload(); err != nil {
 		return err
 	}
-	if result.Verification != HostUpdateVerificationVerified && result.Verification != HostUpdateVerificationFailed {
+	if !evidenceBearing {
 		return nil
 	}
-	req := HostUpdatePayload{RequestID: identity.AttemptID, ActionID: identity.ActionID, Operation: identity.OperationKind, OperationVersion: identity.OperationVersion, RequestDigest: identity.RequestDigest, ExpectedInventoryHash: result.Before.InventoryHash}
-	if err := ValidateHostUpdatePayload(&req); err != nil {
-		return err
-	}
-	return ValidateHostUpdateResultForRequest(req, result)
+	return validateEvidence()
 }
 
 func ValidateHostUpdateResultForRequestAt(req HostUpdatePayload, result HostUpdateResultPayload, receivedAt time.Time) error {
@@ -393,24 +416,18 @@ func ValidateHostStorageCleanupResultForRequest(req HostStorageCleanupPayload, r
 // inconclusive evidence and may report a different observed Before value while
 // the generic store continues to bind the receipt to the admitted digest.
 func ValidateHostStorageCleanupReceiptForIdentity(identity operationreceipt.Identity, result HostStorageCleanupResultPayload) error {
-	normalized, err := operationreceipt.NormalizeIdentity(identity)
-	if err != nil || normalized != identity {
-		return operationreceipt.ErrBindingConflict
-	}
-	if identity.OperationKind != HostStorageCleanupOperationPackageCache || identity.OperationVersion != HostAPTOperationVersion || result.RequestID != identity.AttemptID || result.ActionID != identity.ActionID {
-		return operationreceipt.ErrBindingConflict
-	}
-	if err := ValidateHostStorageCleanupResultPayload(&result); err != nil {
-		return err
-	}
-	if result.Verification != HostStorageCleanupVerificationVerified && result.Verification != HostStorageCleanupVerificationFailed {
-		return nil
-	}
-	req := HostStorageCleanupPayload{RequestID: identity.AttemptID, ActionID: identity.ActionID, Operation: identity.OperationKind, OperationVersion: identity.OperationVersion, RequestDigest: identity.RequestDigest, ExpectedFingerprint: result.Before.Fingerprint}
-	if err := ValidateHostStorageCleanupPayload(&req); err != nil {
-		return err
-	}
-	return ValidateHostStorageCleanupResultForRequest(req, result)
+	return validateHostAPTReceiptForIdentity(
+		identity, HostStorageCleanupOperationPackageCache, result.RequestID, result.ActionID,
+		func() error { return ValidateHostStorageCleanupResultPayload(&result) },
+		result.Verification == HostStorageCleanupVerificationVerified || result.Verification == HostStorageCleanupVerificationFailed,
+		func() error {
+			req := HostStorageCleanupPayload{RequestID: identity.AttemptID, ActionID: identity.ActionID, Operation: identity.OperationKind, OperationVersion: identity.OperationVersion, RequestDigest: identity.RequestDigest, ExpectedFingerprint: result.Before.Fingerprint}
+			if err := ValidateHostStorageCleanupPayload(&req); err != nil {
+				return err
+			}
+			return ValidateHostStorageCleanupResultForRequest(req, result)
+		},
+	)
 }
 
 func ValidateHostStorageCleanupResultForRequestAt(req HostStorageCleanupPayload, result HostStorageCleanupResultPayload, receivedAt time.Time) error {
