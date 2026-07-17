@@ -9,6 +9,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { apiFetch } from '@/utils/apiClient';
 import {
   PlatformErrorState,
+  PlatformResourceCounter,
   PlatformTableLoadingState,
 } from '@/features/platformPage/sharedPlatformPage';
 import {
@@ -465,70 +466,48 @@ export const ProxmoxBackupsTable: Component<{
             <ProxmoxBackupServersTable servers={props.servers ?? []} backups={pbsArtifacts()} />
           </Show>
 
-          <Show
-            when={view() === 'coverage'}
-            fallback={
-              <div class="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[11px] text-muted">
-                <span class="font-semibold uppercase tracking-[0.18em]">Backup health</span>
-                <span class="text-base-content tabular-nums">{liveTotalCount()} targets</span>
-                <span aria-hidden="true">·</span>
-                <span class="tabular-nums">
-                  {recoveryModel().coverageSummary.recoverableArtifacts} restore points
-                </span>
-                <Show when={liveHealthSummary().attention > 0}>
-                  <span aria-hidden="true">·</span>
-                  <span class="text-amber-600 tabular-nums dark:text-amber-300">
-                    {liveHealthSummary().attention} need attention
-                  </span>
+          {/* The health strip renders identically in both views so the view
+              toggle below it never shifts under the cursor when clicked. */}
+          <ProxmoxBackupsCoverageStrip
+            title="Backup health"
+            tail={
+              <span>
+                {liveTotalCount()} targets ·{' '}
+                {recoveryModel().coverageSummary.recoverableArtifacts} restore points
+                <Show when={recoveryModel().coverageSummary.withPBS > 0}>
+                  {' · '}
+                  {recoveryModel().coverageSummary.withPBS} with{' '}
+                  {getProxmoxBackupSourcePresentation('pbs').filterLabel}
                 </Show>
                 <Show when={orphanedTotalCount() > 0}>
-                  <span aria-hidden="true">·</span>
-                  <span class="tabular-nums">{orphanedTotalCount()} orphaned</span>
+                  {' · '}
+                  {orphanedTotalCount()} orphaned
                 </Show>
-              </div>
+              </span>
             }
-          >
-            <ProxmoxBackupsCoverageStrip
-              title="Backup health"
-              tail={
-                <span>
-                  {liveTotalCount()} targets ·{' '}
-                  {recoveryModel().coverageSummary.recoverableArtifacts} restore points
-                  <Show when={recoveryModel().coverageSummary.withPBS > 0}>
-                    {' · '}
-                    {recoveryModel().coverageSummary.withPBS} with{' '}
-                    {getProxmoxBackupSourcePresentation('pbs').filterLabel}
-                  </Show>
-                  <Show when={orphanedTotalCount() > 0}>
-                    {' · '}
-                    {orphanedTotalCount()} orphaned
-                  </Show>
-                </span>
-              }
-              segments={[
-                {
-                  key: 'current',
-                  value: liveHealthSummary().current,
-                  label: 'current',
-                  toneClass: 'bg-emerald-500',
-                },
-                {
-                  key: 'attention',
-                  value: liveHealthSummary().attention,
-                  label: 'attention',
-                  toneClass: 'bg-amber-500',
-                  muted: liveHealthSummary().attention === 0,
-                },
-                {
-                  key: 'uncovered',
-                  value: liveHealthSummary().uncovered,
-                  label: 'uncovered',
-                  toneClass: 'bg-red-500',
-                  muted: liveHealthSummary().uncovered === 0,
-                },
-              ]}
-            />
-          </Show>
+            segments={[
+              {
+                key: 'current',
+                value: liveHealthSummary().current,
+                label: 'current',
+                toneClass: 'bg-emerald-500',
+              },
+              {
+                key: 'attention',
+                value: liveHealthSummary().attention,
+                label: 'attention',
+                toneClass: 'bg-amber-500',
+                muted: liveHealthSummary().attention === 0,
+              },
+              {
+                key: 'uncovered',
+                value: liveHealthSummary().uncovered,
+                label: 'uncovered',
+                toneClass: 'bg-red-500',
+                muted: liveHealthSummary().uncovered === 0,
+              },
+            ]}
+          />
 
           <FilterSegmentedControl
             aria-label="Backups view"
@@ -630,26 +609,11 @@ export const ProxmoxBackupsTable: Component<{
               </Show>
             }
             viewOptionsTrailing={
-              <span class="whitespace-nowrap text-xs font-medium text-muted">
-                <Show
-                  when={view() === 'date'}
-                  fallback={
-                    <Show
-                      when={visibleLiveCount() !== liveTotalCount()}
-                      fallback={<>{liveTotalCount()} targets</>}
-                    >
-                      {visibleLiveCount()} of {liveTotalCount()} targets
-                    </Show>
-                  }
-                >
-                  <Show
-                    when={visibleRecoverableCount() !== totalRecoverableCount()}
-                    fallback={<>{totalRecoverableCount()} backups</>}
-                  >
-                    {visibleRecoverableCount()} of {totalRecoverableCount()} backups
-                  </Show>
-                </Show>
-              </span>
+              <PlatformResourceCounter
+                visible={view() === 'date' ? visibleRecoverableCount() : visibleLiveCount()}
+                total={view() === 'date' ? totalRecoverableCount() : liveTotalCount()}
+                rowNoun={view() === 'date' ? 'backups' : 'targets'}
+              />
             }
           />
 
