@@ -456,6 +456,31 @@ const defaultAgentCapabilitiesManifest = () => ({
   capabilities: [],
 });
 
+const defaultPatrolAutonomySettings = (overrides: Record<string, unknown> = {}) => ({
+  autonomy_level: 'monitor',
+  requested_autonomy_level: 'monitor',
+  effective_autonomy_level: 'monitor',
+  full_mode_unlocked: false,
+  autopilot_acknowledgement: {
+    code: 'not_requested',
+    active: false,
+    currentVersion: 1,
+    acceptedScope: [],
+    acceptedLimits: {
+      policyAllowlistRequired: true,
+      emergencyStopHonored: true,
+      approvalFloorsHonored: true,
+      verificationReconciledWhenSupported: true,
+      evidenceClassDisclosed: true,
+      inconclusiveOutcomeAllowed: true,
+      executionSuccessIsNotOutcomeTruth: true,
+    },
+  },
+  investigation_budget: 15,
+  investigation_timeout_sec: 300,
+  ...overrides,
+});
+
 const defaultOperationsLoopStatus = (overrides: Record<string, unknown> = {}) => ({
   nextAction: 'run_patrol',
   progressLabel: 'Run Patrol to produce actionable issue evidence.',
@@ -547,17 +572,9 @@ describe('AIIntelligence entitlement gating', () => {
     getCorrelationsMock.mockReset();
 
     getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus());
-    getPatrolAutonomySettingsMock.mockResolvedValue({
-      autonomy_level: 'monitor',
-      full_mode_unlocked: false,
-      investigation_budget: 15,
-      investigation_timeout_sec: 300,
-    });
+    getPatrolAutonomySettingsMock.mockResolvedValue(defaultPatrolAutonomySettings());
     updatePatrolAutonomySettingsMock.mockResolvedValue({
-      settings: {
-        autonomy_level: 'monitor',
-        full_mode_unlocked: false,
-      },
+      settings: defaultPatrolAutonomySettings(),
     });
     triggerPatrolRunMock.mockResolvedValue(undefined);
     getPatrolRunHistoryMock.mockResolvedValue([]);
@@ -1205,13 +1222,11 @@ describe('AIIntelligence entitlement gating', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Autopilot' }));
 
-    await waitFor(() => {
-      expect(
-        screen.getByText(
-          'Patrol can act automatically within policy and still asks when approval is required.',
-        ),
-      ).toBeInTheDocument();
-    });
+    // Autopilot no longer switches directly; it opens the acknowledgement
+    // dialog and the mode stays where it was until the user records one.
+    expect(await screen.findByRole('dialog', { name: 'Activate Autopilot' })).toBeInTheDocument();
+    expect(updatePatrolAutonomySettingsMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Close Autopilot acknowledgement' }));
 
     expect(screen.getByRole('link', { name: 'Open Patrol settings' })).toHaveAttribute(
       'href',
@@ -1248,10 +1263,11 @@ describe('AIIntelligence entitlement gating', () => {
       return {};
     });
     updatePatrolAutonomySettingsMock.mockResolvedValue({
-      settings: {
+      settings: defaultPatrolAutonomySettings({
         autonomy_level: 'approval',
-        full_mode_unlocked: false,
-      },
+        requested_autonomy_level: 'approval',
+        effective_autonomy_level: 'approval',
+      }),
     });
 
     render(() => <AIIntelligence />);
@@ -1268,7 +1284,8 @@ describe('AIIntelligence entitlement gating', () => {
       expect(updatePatrolAutonomySettingsMock).toHaveBeenCalledWith(
         expect.objectContaining({
           autonomy_level: 'approval',
-          full_mode_unlocked: false,
+          investigation_budget: 15,
+          investigation_timeout_sec: 300,
         }),
       );
     });

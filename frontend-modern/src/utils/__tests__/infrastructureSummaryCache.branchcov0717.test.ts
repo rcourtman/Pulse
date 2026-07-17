@@ -324,13 +324,20 @@ describe('readInfrastructureSummaryCache — hit / miss / expiry / empty boundar
   it('returns a cache hit when age equals maxAgeMs exactly (strict > boundary)', () => {
     // `Date.now() - parsed.cachedAt > maxAgeMs` uses strict >, so an entry that
     // is exactly maxAgeMs old must still be a hit (boundary is inclusive).
-    const maxAge = 60_000;
-    const cachedAt = now() - maxAge;
-    storePayload(
-      '1h',
-      buildPayload({ cachedAt, charts: undefined }),
-    );
-    expect(readInfrastructureSummaryCache('1h', maxAge)).not.toBeNull();
+    // Frozen clock: with real timers a millisecond tick between the write and
+    // the read pushes the age past maxAgeMs and flips the verdict.
+    vi.useFakeTimers();
+    try {
+      const maxAge = 60_000;
+      const cachedAt = now() - maxAge;
+      storePayload(
+        '1h',
+        buildPayload({ cachedAt, charts: undefined }),
+      );
+      expect(readInfrastructureSummaryCache('1h', maxAge)).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('returns an empty map (cache hit, but empty) when charts is absent', () => {

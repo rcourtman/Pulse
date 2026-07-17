@@ -53,6 +53,42 @@ vi.mock('@/api/resourceActions', () => ({
       state: 'completed',
       result: { success: true },
     }),
+    getAction: vi.fn().mockResolvedValue({
+      audit: {
+        id: 'detail-action-1',
+        createdAt: '2026-06-12T20:00:00Z',
+        updatedAt: '2026-06-12T20:00:00Z',
+        state: 'pending_approval',
+        decisionRevision: 0,
+        request: {
+          requestId: 'detail-request-1',
+          resourceId: 'app-container-web',
+          capabilityName: 'restart',
+          reason: 'restart Docker container edge-web from the resource details.',
+          requestedBy: 'ui:resource-detail',
+        },
+        plan: {
+          actionId: 'detail-action-1',
+          requestId: 'detail-request-1',
+          allowed: true,
+          requiresApproval: true,
+          approvalPolicy: 'admin',
+          rollbackAvailable: false,
+          expiresAt: '2026-06-12T20:05:00Z',
+          policyDecision: {
+            version: 0,
+            status: 'legacy_unknown',
+            scope: { orgId: '', resourceId: '', capabilityName: '' },
+            authorities: [],
+            approvalRequirement: { version: 0, floor: 'admin', quorum: 1, disallowRequester: false },
+            planningAllowed: false,
+            requiresApproval: true,
+          },
+        },
+        verificationOutcome: { status: 'unknown' },
+      },
+      events: [],
+    }),
   },
 }));
 
@@ -115,7 +151,7 @@ describe('ResourceDetailDrawer for Docker containers', () => {
     ));
 
     const restartButton = screen.getByRole('button', {
-      name: 'Restart edge-web through governed action',
+      name: 'Review restart for edge-web',
     });
     expect(restartButton.closest('[data-docker-container-actions-surface]')).toHaveAttribute(
       'data-docker-container-actions-surface',
@@ -123,29 +159,21 @@ describe('ResourceDetailDrawer for Docker containers', () => {
     );
 
     fireEvent.click(restartButton);
-    fireEvent.click(screen.getByRole('button', { name: 'Click again to restart edge-web' }));
 
     await waitFor(() =>
       expect(ResourceActionsAPI.planAction).toHaveBeenCalledWith(
         expect.objectContaining({
           resourceId: 'app-container-web',
           capabilityName: 'restart',
+          reason: expect.stringContaining('from the resource details'),
           requestedBy: 'ui:resource-detail',
         }),
       ),
     );
-    await waitFor(() =>
-      expect(ResourceActionsAPI.executeAction).toHaveBeenCalledWith(
-        'detail-action-1',
-        expect.stringContaining('from the resource details'),
-      ),
-    );
-    expect(ResourceActionsAPI.decideAction).toHaveBeenCalledWith(
-      'detail-action-1',
-      'approved',
-      expect.stringContaining('restart Docker container edge-web'),
-    );
-    await waitFor(() => expect(onResourceActionSettled).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('dialog', { name: 'Restart' })).toBeInTheDocument();
+    expect(ResourceActionsAPI.decideAction).not.toHaveBeenCalled();
+    expect(ResourceActionsAPI.executeAction).not.toHaveBeenCalled();
+    expect(onResourceActionSettled).not.toHaveBeenCalled();
   });
 
   it('adds a metrics history tab for app-containers with a metrics target', async () => {

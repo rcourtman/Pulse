@@ -149,7 +149,7 @@ describe('API error-status guardrails', () => {
         /const response = await apiFetch\(url,\s*\{\s*method: 'POST',\s*\}\);/g,
       ) ?? [],
     ).toHaveLength(1);
-    expect(monitoringSource.match(/return triggerResourceCommand</g) ?? []).toHaveLength(3);
+    expect(monitoringSource.match(/return triggerResourceCommand</g) ?? []).toHaveLength(1);
     expect(monitoringSource.match(/await runResourceAction\(url\);/g) ?? []).toHaveLength(3);
     expect(monitoringSource.match(/parseOptionalSuccessAPIResponse</g) ?? []).toHaveLength(1);
     expect(discoverySource).toContain('assertAPIResponseOK(response,');
