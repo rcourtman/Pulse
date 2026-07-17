@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 import status_audit
+from repo_file_io import strip_local_git_env
 from status_audit import (
     RC_READY_ASSERTIONS_BLOCKER,
     RC_RELEASE_GATES_BLOCKER,
@@ -323,9 +324,7 @@ def base_payload(
 
 class StatusAuditTest(unittest.TestCase):
     def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
-        env = os.environ.copy()
-        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
-            env.pop(name, None)
+        env = strip_local_git_env(os.environ.copy())
         return subprocess.run(
             ["git", *args],
             cwd=repo_root,

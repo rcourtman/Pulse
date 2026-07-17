@@ -13,11 +13,19 @@ from typing import Iterable
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_REPO_ROOT = REPO_ROOT
 HOOK_PATH = REPO_ROOT / ".husky" / "pre-commit"
 
 
 def git_env(index_path: Path) -> dict[str, str]:
     env = os.environ.copy()
+    # Unit tests patch REPO_ROOT to a temporary repository. In that case, the
+    # inherited hook environment (the absolute GIT_DIR a pre-commit run from a
+    # linked worktree exports) must not point git plumbing at a different
+    # repository than the patched one.
+    if REPO_ROOT != DEFAULT_REPO_ROOT:
+        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
+            env.pop(name, None)
     env["GIT_INDEX_FILE"] = str(index_path)
     return env
 
