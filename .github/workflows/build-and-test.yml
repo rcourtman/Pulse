@@ -14,9 +14,14 @@ on:
 permissions:
   contents: read
 
+# Let the in-progress run finish (pushes land here every few minutes on a
+# busy day, and cancelling would mean main never completes a verdict — four
+# consecutive runs were cancelled on 2026-07-17 alone); queued runs collapse
+# to the newest pending one, so intermediate pushes skip. Mirrors the Core
+# E2E workflow's concurrency policy.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   secret-scan:
