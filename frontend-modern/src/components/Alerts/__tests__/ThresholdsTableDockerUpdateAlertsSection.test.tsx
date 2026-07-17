@@ -18,11 +18,9 @@ function renderSection(initialDelayHours: number) {
     updateAlertDelayHours: initialDelayHours,
   });
   const setHasUnsavedChanges = vi.fn();
-  const setDockerDefaults = vi.fn(
-    (update: (prev: DockerDefaultsShape) => DockerDefaultsShape) => {
-      setDockerDefaultsSignal((prev) => update(prev));
-    },
-  );
+  const setDockerDefaults = vi.fn((update: (prev: DockerDefaultsShape) => DockerDefaultsShape) => {
+    setDockerDefaultsSignal((prev) => update(prev));
+  });
 
   const props = {
     state: {
