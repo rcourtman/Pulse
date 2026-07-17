@@ -19,6 +19,7 @@ import {
 } from '@/utils/resourceIdentity';
 import type { WorkloadGuest } from '@/types/workloads';
 import type {
+  ResourceActionReadiness,
   ResourceAvailabilityMeta,
   ResourceDiscoveryReadiness,
   ResourceDiscoveryTarget,
@@ -154,6 +155,7 @@ type APIResource = {
   };
   discoveryReadiness?: ResourceDiscoveryReadiness;
   availability?: ResourceAvailabilityMeta;
+  actionReadiness?: ResourceActionReadiness[];
 };
 
 type APIListResponse = {
@@ -547,6 +549,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         ? (resource.docker?.runtime || '').trim() || undefined
         : undefined,
     updateStatus: resource.docker?.updateStatus as WorkloadGuest['updateStatus'] | undefined,
+    actionReadiness: resource.actionReadiness,
     dockerHostId: dockerManagedAppContainer ? resource.docker?.hostSourceId : undefined,
     dockerHostName:
       workloadType === 'app-container'

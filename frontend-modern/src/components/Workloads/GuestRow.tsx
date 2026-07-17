@@ -778,6 +778,7 @@ export function GuestRow(props: GuestRowProps) {
                   containerId={props.guest.containerId ?? ''}
                   containerName={props.guest.name}
                   resourceId={props.guest.id}
+                  actionReadiness={props.guest.actionReadiness}
                   compact={true}
                 />
               </Show>

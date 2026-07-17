@@ -1,4 +1,5 @@
 import type { Resource, ResourceCapability } from '@/types/resource';
+import { getActionReadinessRefusal } from '@/utils/actionReadiness';
 import { asTrimmedString } from '@/utils/stringUtils';
 
 export type DockerContainerLifecycleAction = 'start' | 'stop' | 'restart';
@@ -92,28 +93,7 @@ const stateDisabledReason = (
 const actionReadinessDisabledReason = (
   resource: Resource,
   action: DockerContainerLifecycleAction,
-): string | undefined => {
-  const readiness = resource.actionReadiness?.find(
-    (item) => normalizeToken(item.name) === action && item.available === false,
-  );
-  if (!readiness) return undefined;
-  const reason = asTrimmedString(readiness.reason);
-  if (reason) return reason;
-  switch (normalizeToken(readiness.reasonCode)) {
-    case 'command_agent_disconnected':
-      return 'Docker / Podman command agent is not connected.';
-    case 'command_agent_unavailable':
-      return 'Docker / Podman command execution is not available.';
-    case 'stale_inventory':
-      return 'Docker / Podman inventory is not fresh enough to run lifecycle actions.';
-    case 'host_policy_blocked':
-      return 'Docker / Podman host policy blocks mutating lifecycle actions.';
-    case 'unsupported_handler':
-      return 'This container action is not routed through the supported lifecycle executor.';
-    default:
-      return undefined;
-  }
-};
+): string | undefined => getActionReadinessRefusal(resource.actionReadiness, action);
 
 export const getDockerContainerLifecycleDisabledReason = (
   resource: Resource,

@@ -601,6 +601,7 @@ export const DockerContainersTable: Component<DockerContainersTableProps> = (pro
                     containerName={updateAction().containerName}
                     updateStatus={updateAction().updateStatus}
                     resourceId={resource.id}
+                    actionReadiness={resource.actionReadiness}
                   />
                 )}
               </Show>

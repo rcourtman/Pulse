@@ -190,7 +190,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
           <div class="inline-flex items-center gap-1" data-prevent-toggle>
             <button
               type="button"
-              class={getUpdateButtonClass(state.currentState())}
+              class={getUpdateButtonClass(state.currentState(), state.isUpdateUnavailable())}
               onClick={state.handleClick}
               onMouseDown={(e) => {
                 e.stopPropagation();

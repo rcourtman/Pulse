@@ -86,6 +86,57 @@ describe('ContainerUpdateBadge', () => {
     expect(screen.getByRole('button', { name: /update/i })).toBeInTheDocument();
   });
 
+  it('disables the button with the refusal reason when the server refuses the update capability', () => {
+    render(() => (
+      <UpdateButton
+        agentId="agent-1"
+        containerId="container-1"
+        containerName="web"
+        resourceId="resource-1"
+        actionReadiness={[
+          {
+            name: 'update',
+            available: false,
+            reasonCode: 'command_agent_disconnected',
+            reason: 'The Pulse agent on this host is still on an older version.',
+          },
+        ]}
+        updateStatus={{
+          updateAvailable: true,
+          currentDigest: 'sha256:current',
+          latestDigest: 'sha256:latest',
+          lastChecked: 0,
+        }}
+      />
+    ));
+
+    const button = screen.getByRole('button', { name: /update unavailable/i });
+    expect(button).toBeDisabled();
+    expect(button.getAttribute('aria-label')).toContain(
+      'The Pulse agent on this host is still on an older version.',
+    );
+  });
+
+  it('keeps the button enabled when the update readiness entry is available', () => {
+    render(() => (
+      <UpdateButton
+        agentId="agent-1"
+        containerId="container-1"
+        containerName="web"
+        resourceId="resource-1"
+        actionReadiness={[{ name: 'restart', available: false, reason: 'restart refused' }]}
+        updateStatus={{
+          updateAvailable: true,
+          currentDigest: 'sha256:current',
+          latestDigest: 'sha256:latest',
+          lastChecked: 0,
+        }}
+      />
+    ));
+
+    expect(screen.getByRole('button', { name: /update/i })).not.toBeDisabled();
+  });
+
   it('renders a visible current state when the checked image is up to date', () => {
     render(() => (
       <UpdateButton

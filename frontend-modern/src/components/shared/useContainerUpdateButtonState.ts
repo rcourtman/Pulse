@@ -9,6 +9,7 @@ import {
   updateStates,
 } from '@/stores/containerUpdates';
 import { areSystemSettingsLoaded, shouldHideDockerUpdateActions } from '@/stores/systemSettings';
+import { getActionReadinessRefusal } from '@/utils/actionReadiness';
 import type { ActionDetailResponse } from '@/types/actionAudit';
 import {
   getUpdateButtonLabel,
@@ -75,16 +76,32 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     hasContainerUpdateError(props.updateStatus) ||
     hasContainerUpdateCurrent(props.updateStatus) ||
     currentState() !== 'idle';
-  const isButtonDisabled = () => currentState() === 'updating' || !settingsLoaded();
-  const buttonTooltip = () =>
-    !settingsLoaded()
-      ? 'Loading settings...'
-      : getUpdateButtonTooltip({
-          state: currentState(),
-          updateStatus: props.updateStatus,
-          storeState: storeState(),
-          errorMessage: errorMessage(),
-        });
+
+  // Server-evaluated refusal for the update capability (agent disconnected,
+  // agent too old, stale inventory). Mirrors the lifecycle buttons: render
+  // disabled with the reason instead of letting the click fail at plan time.
+  // Only gates the actionable states; in-flight and settled states keep their
+  // own presentation.
+  const updateUnavailableReason = (): string | undefined => {
+    const state = currentState();
+    if (state !== 'idle' && state !== 'confirming') return undefined;
+    return getActionReadinessRefusal(props.actionReadiness, 'update');
+  };
+  const isUpdateUnavailable = () => Boolean(updateUnavailableReason());
+
+  const isButtonDisabled = () =>
+    currentState() === 'updating' || !settingsLoaded() || isUpdateUnavailable();
+  const buttonTooltip = () => {
+    if (!settingsLoaded()) return 'Loading settings...';
+    const refusal = updateUnavailableReason();
+    if (refusal) return `Update unavailable: ${refusal}`;
+    return getUpdateButtonTooltip({
+      state: currentState(),
+      updateStatus: props.updateStatus,
+      storeState: storeState(),
+      errorMessage: errorMessage(),
+    });
+  };
   const buttonLabel = () => getUpdateButtonLabel(currentState(), settingsLoaded());
 
   // Updates run as audited actions: the confirming click plans an action for
@@ -127,6 +144,7 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
 
     const state = currentState();
     if (state === 'updating' || state === 'success' || state === 'error') return;
+    if (isUpdateUnavailable()) return;
 
     if (state === 'idle') {
       setLocalState('confirming');
@@ -178,6 +196,7 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     handleReviewClosed,
     hasUpdate,
     isButtonDisabled,
+    isUpdateUnavailable,
     reviewDetail,
     settingsLoaded,
     shouldHideButton,

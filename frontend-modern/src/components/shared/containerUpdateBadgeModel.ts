@@ -1,4 +1,5 @@
 import type { DockerContainerUpdateStatus } from '@/types/api';
+import type { ResourceActionReadiness } from '@/types/resource';
 
 export interface ContainerUpdateBadgeProps {
   updateStatus?: DockerContainerUpdateStatus;
@@ -18,6 +19,10 @@ export interface UpdateButtonProps {
   // Unified resource id used to plan the audited update action. Without it
   // the button can only report that the update action is unavailable.
   resourceId?: string;
+  // Server-evaluated readiness from the unified resource. When it carries an
+  // unavailable 'update' entry the button renders disabled with the refusal
+  // reason, instead of letting the click fail at POST /api/actions/plan.
+  actionReadiness?: ResourceActionReadiness[];
   compact?: boolean;
   onUpdateTriggered?: () => void;
   externalState?: 'updating' | 'queued' | 'error';
@@ -80,7 +85,10 @@ export function getUpdateIconTooltip(updateStatus?: DockerContainerUpdateStatus)
   return `Update available\nCurrent: ${current}...\nLatest: ${latest}...`;
 }
 
-export function getUpdateButtonClass(state: UpdateState): string {
+export function getUpdateButtonClass(state: UpdateState, unavailable = false): string {
+  if (unavailable && (state === 'idle' || state === 'confirming')) {
+    return `${UPDATE_BUTTON_BASE_CLASS} bg-surface-alt text-muted cursor-not-allowed opacity-70`;
+  }
   switch (state) {
     case 'confirming':
       return `${UPDATE_BUTTON_BASE_CLASS} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-900`;

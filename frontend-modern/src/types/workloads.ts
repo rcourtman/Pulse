@@ -1,5 +1,6 @@
 import type { VM, Container, DockerContainerUpdateStatus } from './api';
 import type {
+  ResourceActionReadiness,
   ResourceAvailabilityMeta,
   ResourceDiscoveryReadiness,
   ResourceDiscoveryTarget,
@@ -28,6 +29,10 @@ export type WorkloadGuest = (VM | Container) & {
   // ("docker", "podman", etc.), not the owning platform.
   containerRuntime?: string;
   updateStatus?: DockerContainerUpdateStatus;
+  // Server-evaluated capability refusals from the unified resource. The
+  // update button reads this to disable itself with the refusal reason
+  // (agent disconnected, agent too old, stale inventory) before the click.
+  actionReadiness?: ResourceActionReadiness[];
   // Agent-managed Docker runtime host ID for Docker-specific update actions.
   // API-backed platforms such as TrueNAS must not populate this field.
   dockerHostId?: string;
