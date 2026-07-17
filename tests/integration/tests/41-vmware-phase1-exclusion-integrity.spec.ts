@@ -7,8 +7,6 @@ import { createAuthenticatedStorageState } from './helpers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCREENSHOT_PATH = '/tmp/vmware-phase1-exclusion-integrity.png';
-const RESOURCE_ID = 'vc-1:vm:vm-201';
-const RESOURCE_ID_ENCODED = encodeURIComponent(RESOURCE_ID);
 
 type WorkerFixtures = {
   authStorageStatePath: string;
@@ -25,7 +23,7 @@ const test = base.extend<{}, WorkerFixtures>({
       '..',
       'tmp',
       'playwright-auth',
-      `vmware-phase1-exclusion-integrity-${workerInfo.project.name}.json`,
+      `vmware-phase1-exclusion-${workerInfo.project.name}.json`,
     );
     fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
     await createAuthenticatedStorageState(browser, storageStatePath);
@@ -37,6 +35,10 @@ const test = base.extend<{}, WorkerFixtures>({
   }, { scope: 'worker' }],
 });
 
+// Phase-1 VMware coverage is read-only vCenter context on the vSphere
+// platform page. The guest drawer for an API-backed VM must not offer
+// provider-local admin actions or recovery cross-links, and the browser
+// must stay off vmware/recovery provider endpoints while rendering it.
 test.describe('VMware phase-1 exclusion integrity', () => {
   test.setTimeout(180_000);
 
@@ -56,121 +58,28 @@ test.describe('VMware phase-1 exclusion integrity', () => {
       await route.abort();
     });
 
-    await page.route('**/api/resources**', async (route) => {
-      const requestUrl = new URL(route.request().url());
+    await page.goto('/vmware', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-testid="vmware-page"]')).toBeVisible();
 
-      if (requestUrl.pathname === '/api/resources') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            data: [
-              {
-                id: RESOURCE_ID,
-                type: 'vm',
-                name: 'app-01.lab.local',
-                displayName: 'App 01',
-                platformId: RESOURCE_ID,
-                platformType: 'vmware-vsphere',
-                sourceType: 'api',
-                sources: ['vmware-vsphere'],
-                status: 'running',
-                lastSeen: '2026-03-30T21:10:00Z',
-                canonicalIdentity: {
-                  displayName: 'App 01',
-                  hostname: 'app-01.lab.local',
-                  platformId: RESOURCE_ID,
-                },
-                vmware: {
-                  connectionId: 'vc-1',
-                  connectionName: 'Lab VC',
-                  vcenterHost: 'vc.lab.local',
-                  managedObjectId: 'vm-201',
-                  entityType: 'VirtualMachine',
-                  overallStatus: 'green',
-                  powerState: 'poweredOn',
-                  runtimeHostName: 'esxi-01.lab.local',
-                  guestOsFamily: 'ubuntu64Guest',
-                  snapshotCount: 2,
-                },
-                platformData: {
-                  sources: ['vmware-vsphere'],
-                },
-              },
-            ],
-            meta: {
-              page: 1,
-              limit: 100,
-              total: 1,
-              totalPages: 1,
-            },
-          }),
-        });
-        return;
-      }
+    // First websocket state frame can lag on a freshly booted backend.
+    const expandButton = page.getByRole('button', { name: 'Expand warehouse-api-01' });
+    await expect(expandButton).toBeVisible({ timeout: 30_000 });
+    await expandButton.click();
 
-      if (requestUrl.pathname === `/api/resources/${RESOURCE_ID_ENCODED}/facets`) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            capabilities: [],
-            relationships: [],
-            recentChanges: [],
-            counts: {
-              recentChanges: 0,
-            },
-          }),
-        });
-        return;
-      }
+    const drawer = page.getByRole('region', { name: 'warehouse-api-01' });
+    await expect(drawer).toBeVisible();
 
-      await route.continue();
-    });
-
-    await page.route('**/api/ai/intelligence**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          resource_id: RESOURCE_ID,
-          resource_name: 'App 01',
-          resource_type: 'vm',
-          health: {
-            score: 90,
-            grade: 'A',
-            trend: 'stable',
-            factors: [],
-            prediction: 'Phase-1 VMware context remains read-only.',
-          },
-          dependencies: [],
-          dependents: [],
-          correlations: [],
-          recent_changes: [],
-          note_count: 0,
-        }),
-      });
-    });
-
-    await page.goto(
-      `/infrastructure?source=vmware-vsphere&resource=${encodeURIComponent(RESOURCE_ID)}`,
-      {
-        waitUntil: 'domcontentloaded',
-      },
-    );
-
-    await expect(page.getByTestId('infrastructure-page')).toBeVisible();
-    await expect(page.getByTestId('resource-vmware-details-section')).toContainText(
-      'Read-only vCenter context',
-    );
-
-    await page.getByRole('button', { name: 'Show access' }).click();
+    // The action surface points at agent onboarding instead of offering
+    // native lifecycle controls for an API-backed VM.
+    await expect(
+      drawer.getByRole('link', { name: 'Add agent for AI actions' }),
+    ).toBeVisible();
 
     await expect(page.getByRole('link', { name: /Open related recovery/i })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /Open in Recovery/i })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /^Restart$/ })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /^Stop$/ })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /^Shutdown$/ })).toHaveCount(0);
+    await expect(drawer.getByRole('button', { name: /^Restart$/ })).toHaveCount(0);
+    await expect(drawer.getByRole('button', { name: /^Stop$/ })).toHaveCount(0);
+    await expect(drawer.getByRole('button', { name: /^Shutdown$/ })).toHaveCount(0);
 
     expect(unexpectedVmwareApiCall).toBeNull();
     expect(unexpectedRecoveryApiCall).toBeNull();

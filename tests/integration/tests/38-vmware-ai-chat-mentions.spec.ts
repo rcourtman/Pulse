@@ -1,8 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test as base } from '@playwright/test';
-
+import { test as base, expect } from '@playwright/test';
 import { createAuthenticatedStorageState } from './helpers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,6 +34,9 @@ const test = base.extend<{}, WorkerFixtures>({
   }, { scope: 'worker' }],
 });
 
+// Mention candidates come from live websocket state, so the assertions pin
+// the mock scenario's vSphere inventory (esxi hosts and warehouse VMs)
+// instead of stubbed REST payloads from the retired /infrastructure IA.
 test.describe('VMware AI chat mentions', () => {
   test.setTimeout(180_000);
 
@@ -47,208 +49,52 @@ test.describe('VMware AI chat mentions', () => {
       const url = new URL(route.request().url());
       const method = route.request().method();
       if (method === 'GET' && url.pathname === '/api/vmware/connections') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify([]),
-        });
+        await route.continue();
         return;
       }
-
       unexpectedVMwareRequests.push(`${method} ${url.pathname}`);
       await route.abort();
     });
 
-    await page.route('**/api/ai/status', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ running: true, engine: 'test' }),
-      });
-    });
+    await page.goto('/vmware', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-testid="vmware-page"]')).toBeVisible();
 
-    await page.route('**/api/ai/sessions', async (route) => {
-      if (route.request().method() !== 'GET') {
-        await route.continue();
-        return;
-      }
-
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([]),
-      });
-    });
-
-    await page.route('**/api/ai/settings', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          model: 'openai:gpt-4o-mini',
-          chat_model: '',
-          control_level: 'read_only',
-          discovery_enabled: true,
-        }),
-      });
-    });
-
-    await page.route('**/api/ai/models', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          models: [{ id: 'openai:gpt-4o-mini', name: 'GPT-4o mini' }],
-        }),
-      });
-    });
-
-    await page.route('**/api/resources**', async (route) => {
-      const requestUrl = new URL(route.request().url());
-      if (requestUrl.pathname !== '/api/resources') {
-        await route.continue();
-        return;
-      }
-
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          data: [
-            {
-              id: 'agent-vmware-host-1',
-              type: 'agent',
-              name: 'esxi-01.lab.local',
-              status: 'online',
-              lastSeen: '2026-03-30T09:00:00Z',
-              platformType: 'vmware-vsphere',
-              sourceType: 'api',
-              sources: ['vmware-vsphere'],
-              canonicalIdentity: {
-                displayName: 'ESXi 01',
-                hostname: 'esxi-01.lab.local',
-                primaryId: 'vmware:vc-1:host:host-101',
-              },
-              agent: {
-                agentId: 'vc-1:host:host-101',
-                hostname: 'esxi-01.lab.local',
-                platform: 'VMware ESXi',
-              },
-              vmware: {
-                connectionId: 'vc-1',
-                connectionName: 'Lab VC',
-                managedObjectId: 'host-101',
-                entityType: 'host',
-              },
-            },
-            {
-              id: 'vm-vmware-1',
-              type: 'vm',
-              name: 'app-01',
-              status: 'running',
-              lastSeen: '2026-03-30T09:00:00Z',
-              parentId: 'agent-vmware-host-1',
-              parentName: 'esxi-01.lab.local',
-              platformType: 'vmware-vsphere',
-              sourceType: 'api',
-              sources: ['vmware-vsphere'],
-              canonicalIdentity: {
-                displayName: 'App 01',
-                hostname: 'app-01.internal',
-                primaryId: 'vmware:vc-1:vm:vm-201',
-              },
-              vmware: {
-                connectionId: 'vc-1',
-                connectionName: 'Lab VC',
-                managedObjectId: 'vm-201',
-                entityType: 'vm',
-                runtimeHostName: 'esxi-01.lab.local',
-              },
-            },
-            {
-              id: 'storage-vmware-1',
-              type: 'storage',
-              name: 'nvme-primary',
-              status: 'online',
-              lastSeen: '2026-03-30T09:00:00Z',
-              parentName: 'Lab VC',
-              platformType: 'vmware-vsphere',
-              sourceType: 'api',
-              sources: ['vmware-vsphere'],
-              canonicalIdentity: {
-                displayName: 'NVMe Primary',
-                primaryId: 'vmware:vc-1:datastore:datastore-11',
-              },
-              storage: {
-                type: 'vmfs',
-                platform: 'vmware-vsphere',
-              },
-              vmware: {
-                connectionId: 'vc-1',
-                connectionName: 'Lab VC',
-                managedObjectId: 'datastore-11',
-                entityType: 'datastore',
-              },
-            },
-          ],
-          meta: {
-            page: 1,
-            limit: 100,
-            total: 3,
-            totalPages: 1,
-          },
-        }),
-      });
-    });
-
-    const resourcesLoaded = page.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return url.pathname === '/api/resources' && response.request().method() === 'GET';
-    });
-
-    await page.goto('/infrastructure?source=vmware-vsphere', {
-      waitUntil: 'domcontentloaded',
-    });
-    await page.waitForURL(/\/infrastructure\?source=vmware-vsphere/, {
-      timeout: 15_000,
-    });
-    await expect(page.getByTestId('infrastructure-page')).toBeVisible();
-    await resourcesLoaded;
-
-    await page.getByRole('button', { name: 'Expand Pulse Assistant' }).click();
-    await expect(page.getByRole('heading', { name: 'Pulse Assistant', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Ask Pulse Assistant about vSphere' }).click();
+    await expect(
+      page.getByPlaceholder('Ask about your infrastructure...'),
+    ).toBeVisible();
 
     const textarea = page.getByPlaceholder('Ask about your infrastructure...');
+    const mentionListbox = page.getByRole('listbox', { name: 'Assistant resources' });
+
+    // ESXi hosts surface as shared agent mention targets.
+    // First websocket state frame can lag on a freshly booted backend, and
+    // the candidate list refreshes as state arrives.
     await textarea.click();
     await textarea.pressSequentially('@esxi');
-
-    const mentionSurface = page.locator('[data-mention-autocomplete]');
-    const hostOption = mentionSurface.getByRole('button', { name: /ESXi 01 agent/ }).first();
-    await expect(mentionSurface.getByText('Resources')).toBeVisible();
-    await expect(hostOption).toBeVisible();
-    await expect(mentionSurface).toContainText('agent');
+    await expect(mentionListbox).toBeVisible({ timeout: 30_000 });
+    const hostOption = mentionListbox
+      .getByRole('option', { name: /esxi-01\.lab\.local: agent/ })
+      .first();
+    await expect(hostOption).toBeVisible({ timeout: 30_000 });
     await hostOption.click();
-    await expect(textarea).toHaveValue('@ESXi 01 ');
+    await expect(textarea).toHaveValue('@esxi-01.lab.local ');
 
+    // API-backed vSphere VMs use the same shared mention contract, carrying
+    // their runtime host as the mention node.
     await textarea.fill('');
-    await textarea.pressSequentially('@app');
-
-    await expect(mentionSurface.getByText('Resources')).toBeVisible();
-    await expect(mentionSurface.getByRole('button', { name: /App 01/ })).toBeVisible();
-    await expect(mentionSurface).toContainText('vm');
-    await expect(mentionSurface).toContainText('esxi-01.lab.local');
-    await mentionSurface.getByRole('button', { name: /App 01/ }).click();
-    await expect(textarea).toHaveValue('@App 01 ');
-
-    await textarea.fill('');
-    await textarea.pressSequentially('@nvme');
-    await expect(mentionSurface.getByRole('button', { name: /NVMe Primary/ })).toBeVisible();
-    await expect(mentionSurface).toContainText('storage');
-    await expect(mentionSurface).toContainText('Lab VC');
-    await mentionSurface.getByRole('button', { name: /NVMe Primary/ }).click();
-    await expect(textarea).toHaveValue('@NVMe Primary ');
+    await textarea.pressSequentially('@warehouse');
+    await expect(mentionListbox).toBeVisible();
+    const vmOption = mentionListbox
+      .getByRole('option', { name: /warehouse-api-01: vm on esxi-01\.lab\.local/ })
+      .first();
+    await expect(vmOption).toBeVisible({ timeout: 30_000 });
+    await vmOption.click();
+    await expect(textarea).toHaveValue('@warehouse-api-01 ');
 
     expect(unexpectedVMwareRequests).toEqual([]);
-    await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+    // Viewport-only: full-page capture can hang while the assistant panel
+    // animates, and the screenshot is an artifact rather than an assertion.
+    await page.screenshot({ path: SCREENSHOT_PATH });
   });
 });

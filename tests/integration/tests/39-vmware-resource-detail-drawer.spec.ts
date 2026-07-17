@@ -7,8 +7,6 @@ import { createAuthenticatedStorageState } from './helpers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCREENSHOT_PATH = '/tmp/vmware-resource-detail-drawer.png';
-const RESOURCE_ID = 'vc-1:vm:vm-201';
-const RESOURCE_ID_ENCODED = encodeURIComponent(RESOURCE_ID);
 
 type WorkerFixtures = {
   authStorageStatePath: string;
@@ -37,10 +35,13 @@ const test = base.extend<{}, WorkerFixtures>({
   }, { scope: 'worker' }],
 });
 
+// The retired /infrastructure resource deep-link was replaced by the vSphere
+// platform page: expanding a VM row opens the shared guest drawer, which
+// carries the read-only vCenter placement context from live websocket state.
 test.describe('VMware resource detail drawer', () => {
   test.setTimeout(180_000);
 
-  test('surfaces VMware read-only context through the shared drawer path', async ({ page }) => {
+  test('surfaces VMware read-only context through the shared guest drawer', async ({ page }) => {
     let unexpectedVmwareApiCall: string | null = null;
 
     await page.route('**/api/vmware/**', async (route) => {
@@ -48,145 +49,32 @@ test.describe('VMware resource detail drawer', () => {
       await route.abort();
     });
 
-    await page.route('**/api/resources**', async (route) => {
-      const requestUrl = new URL(route.request().url());
+    await page.goto('/vmware', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-testid="vmware-page"]')).toBeVisible();
 
-      if (requestUrl.pathname === '/api/resources') {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            data: [
-              {
-                id: RESOURCE_ID,
-                type: 'vm',
-                name: 'app-01.lab.local',
-                displayName: 'App 01',
-                platformId: RESOURCE_ID,
-                platformType: 'vmware-vsphere',
-                sourceType: 'api',
-                sources: ['vmware-vsphere'],
-                status: 'running',
-                lastSeen: '2026-03-30T18:25:00Z',
-                canonicalIdentity: {
-                  displayName: 'App 01',
-                  hostname: 'app-01.lab.local',
-                  platformId: RESOURCE_ID,
-                },
-                vmware: {
-                  connectionId: 'vc-1',
-                  connectionName: 'Lab VC',
-                  vcenterHost: 'vc.lab.local',
-                  managedObjectId: 'vm-201',
-                  entityType: 'VirtualMachine',
-                  overallStatus: 'green',
-                  powerState: 'poweredOn',
-                  datacenterName: 'Lab DC',
-                  clusterName: 'Compute Cluster',
-                  resourcePoolName: 'Production',
-                  runtimeHostName: 'esxi-01.lab.local',
-                  datastoreNames: ['shared-vsan'],
-                  guestOsFamily: 'ubuntu64Guest',
-                  guestHostname: 'app-01.lab.local',
-                  guestIpAddresses: ['192.0.2.50'],
-                  activeAlarmCount: 1,
-                  activeAlarmSummary: 'Host fan degraded',
-                  recentTaskCount: 1,
-                  recentTaskSummary: 'Create snapshot (success)',
-                  snapshotCount: 2,
-                },
-                platformData: {
-                  sources: ['vmware-vsphere'],
-                },
-              },
-            ],
-            meta: {
-              page: 1,
-              limit: 100,
-              total: 1,
-              totalPages: 1,
-            },
-          }),
-        });
-        return;
-      }
+    // First websocket state frame can lag on a freshly booted backend.
+    const expandButton = page.getByRole('button', { name: 'Expand warehouse-api-01' });
+    await expect(expandButton).toBeVisible({ timeout: 30_000 });
+    await expandButton.click();
 
-      if (requestUrl.pathname === `/api/resources/${RESOURCE_ID_ENCODED}/facets`) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({
-            capabilities: [],
-            relationships: [],
-            recentChanges: [],
-            counts: {
-              recentChanges: 0,
-            },
-          }),
-        });
-        return;
-      }
-
-      await route.continue();
-    });
-
-    await page.route('**/api/ai/intelligence**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          resource_id: RESOURCE_ID,
-          resource_name: 'App 01',
-          resource_type: 'vm',
-          health: {
-            score: 88,
-            grade: 'B',
-            trend: 'stable',
-            factors: [],
-            prediction: 'VMware placement and signal context is available on the shared drawer.',
-          },
-          dependencies: [],
-          dependents: [],
-          correlations: [],
-          recent_changes: [],
-          note_count: 0,
-        }),
-      });
-    });
-
-    await page.goto(
-      `/infrastructure?source=vmware-vsphere&resource=${encodeURIComponent(RESOURCE_ID)}`,
-      {
-        waitUntil: 'domcontentloaded',
-      },
-    );
-
-    const vmwareSection = page.getByTestId('resource-vmware-details-section');
-
-    await expect(page.getByTestId('infrastructure-page')).toBeVisible();
-    await expect(page.locator('#infra-source-filter')).toHaveValue('vmware-vsphere');
+    const drawer = page.getByRole('region', { name: 'warehouse-api-01' });
+    await expect(drawer).toBeVisible();
     await expect(
-      page.locator('div[title="App 01"]').filter({ hasText: 'App 01' }).first(),
+      drawer.getByRole('heading', { level: 2, name: 'warehouse-api-01' }),
     ).toBeVisible();
-    await expect(vmwareSection).toBeVisible();
-    await expect(vmwareSection).toContainText(
-      'Lab VC · Read-only vCenter context · 2 snapshots · 1 alarm · 1 task',
-    );
 
-    await vmwareSection.getByRole('button', { name: 'Show vSphere' }).click();
+    // Placement context comes from the vCenter inventory, rendered read-only.
+    await expect(drawer.getByRole('heading', { name: 'vSphere' })).toBeVisible();
+    await expect(drawer.getByText('Lab vCenter', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('Primary DC', { exact: true })).toBeVisible();
+    await expect(drawer.getByText('Production Cluster', { exact: true })).toBeVisible();
 
-    await expect(vmwareSection.getByText('State', { exact: true })).toBeVisible();
-    await expect(vmwareSection.getByText('Placement', { exact: true })).toBeVisible();
-    await expect(vmwareSection.getByText('Guest', { exact: true })).toBeVisible();
-    await expect(vmwareSection.getByText('Signals', { exact: true })).toBeVisible();
-    await expect(vmwareSection.getByText('vc.lab.local')).toBeVisible();
-    await expect(vmwareSection.getByText('Compute Cluster')).toBeVisible();
-    await expect(vmwareSection.getByText('esxi-01.lab.local')).toBeVisible();
-    await expect(vmwareSection.getByText('ubuntu64Guest')).toBeVisible();
-    await expect(vmwareSection.getByText('Create snapshot (success)')).toBeVisible();
-    await expect(vmwareSection.getByText('Host fan degraded')).toBeVisible();
-    await expect(vmwareSection.getByText('2 snapshots', { exact: true })).toBeVisible();
+    // Host placement and guest identity surface alongside.
+    await expect(drawer.getByText('esxi-01.lab.local')).toBeVisible();
+    await expect(drawer.getByRole('heading', { name: 'Guest Info' })).toBeVisible();
 
+    // Phase-1 VMware stays on shared read paths: the browser never talks to
+    // provider-local vmware endpoints for drawer context.
     expect(unexpectedVmwareApiCall).toBeNull();
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
