@@ -2,7 +2,7 @@ import { For, Show, type Accessor, type JSX } from 'solid-js';
 
 import { InlineDetailTableRow } from '@/components/shared/InlineDetailTableRow';
 import { StatusDot } from '@/components/shared/StatusDot';
-import { TableCell, TableRow } from '@/components/shared/Table';
+import { TableCell, TableHead, TableRow } from '@/components/shared/Table';
 import {
   formatPlatformTableBytesValue,
   getPlatformTableCellClassForKind,
@@ -59,7 +59,9 @@ const taskWordVariant = (label: string): StatusIndicatorVariant => {
 // expanding to its restore evidence. Presentational — the parent owns the
 // filtered+sorted memo, shared filters, and the expansion set. table-fixed + a
 // colgroup keeps the columns from ballooning; the inner evidence table stays
-// content-sized.
+// content-sized. Rows are single-line with one datum per column — identity
+// (Type / Target ID / Node) gets its own columns, mirroring the by-date
+// recoverable table, instead of stacking under the workload name.
 export function ProxmoxCoverageTable(props: {
   rows: WorkloadCoverageRow[];
   hasAnyRows: boolean;
@@ -82,13 +84,16 @@ export function ProxmoxCoverageTable(props: {
   // Weighted column set; the conditional source/task columns drop out when
   // empty fleet-wide, and table-fixed re-normalizes the rest.
   const visibleColumns = () => [
-    { id: 'workload', weight: 25 },
-    { id: 'posture', weight: 12 },
-    { id: 'latest', weight: 12 },
-    ...(props.showPbsColumn ? [{ id: 'pbs', weight: 14 }] : []),
-    ...(props.showArchiveColumn ? [{ id: 'archive', weight: 12 }] : []),
-    ...(props.showSnapshotColumn ? [{ id: 'snapshot', weight: 15 }] : []),
-    ...(props.showTaskColumn ? [{ id: 'task', weight: 10 }] : []),
+    { id: 'workload', weight: 18 },
+    { id: 'type', weight: 6 },
+    { id: 'targetId', weight: 7 },
+    { id: 'node', weight: 9 },
+    { id: 'posture', weight: 11 },
+    { id: 'latest', weight: 10 },
+    ...(props.showPbsColumn ? [{ id: 'pbs', weight: 11 }] : []),
+    ...(props.showArchiveColumn ? [{ id: 'archive', weight: 10 }] : []),
+    ...(props.showSnapshotColumn ? [{ id: 'snapshot', weight: 11 }] : []),
+    ...(props.showTaskColumn ? [{ id: 'task', weight: 8 }] : []),
   ];
   const totalColumnWeight = () => visibleColumns().reduce((sum, c) => sum + c.weight, 0);
   const columnCount = () => visibleColumns().length;
@@ -114,7 +119,7 @@ export function ProxmoxCoverageTable(props: {
       }
     >
       <PlatformTableShell
-        tableClass="min-w-[1000px] table-fixed text-xs"
+        tableClass="min-w-[1080px] table-fixed text-xs"
         colgroup={
           <colgroup>
             <For each={visibleColumns()}>
@@ -135,6 +140,11 @@ export function ProxmoxCoverageTable(props: {
               align="left"
               headClass={getPlatformTableHeadClassForKind('name')}
             />
+            <TableHead class={getPlatformTableHeadClassForKind('text')}>Type</TableHead>
+            <TableHead class={getPlatformTableHeadClassForKind('text')}>
+              {PROXMOX_BACKUP_COLUMN_LABELS.targetId}
+            </TableHead>
+            <TableHead class={getPlatformTableHeadClassForKind('text')}>Node</TableHead>
             <SortableHead
               label="Posture"
               sortKey="posture"
@@ -215,35 +225,41 @@ export function ProxmoxCoverageTable(props: {
                       <TableCell
                         class={`${getPlatformTableCellClassForKind('name')} text-base-content`}
                       >
-                        <div class="flex min-w-0 items-start gap-2">
+                        <div class="flex min-w-0 items-center gap-2">
                           <PlatformResourceDetailToggleButton
                             expanded={isExpanded()}
                             resourceLabel={row.workload.label}
                             controlsId={detailRowId()}
                             onToggle={() => props.onToggleExpand(row.key)}
                           />
-                          <div class="min-w-0">
-                            <span class="block truncate font-semibold">
-                              {row.workload.name || row.workload.label}
-                            </span>
-                            <div class="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[10px] leading-4 text-muted">
-                              <ProxmoxBackupWorkloadTypeBadge
-                                type={row.workload.type}
-                                label={row.workload.typeLabel}
-                              />
-                              <span class="font-mono tabular-nums">
-                                ID {row.workload.vmid || '—'}
-                              </span>
-                              <Show when={row.workload.node}>
-                                {(node) => (
-                                  <span class="truncate font-mono" title={node()}>
-                                    Node {node()}
-                                  </span>
-                                )}
-                              </Show>
-                            </div>
-                          </div>
+                          <span class="min-w-0 truncate font-semibold">
+                            {row.workload.name || row.workload.label}
+                          </span>
                         </div>
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <ProxmoxBackupWorkloadTypeBadge
+                          type={row.workload.type}
+                          label={row.workload.typeLabel}
+                        />
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-muted font-mono text-[11px] tabular-nums`}
+                      >
+                        {row.workload.vmid || '—'}
+                      </TableCell>
+                      <TableCell
+                        class={`${getPlatformTableCellClassForKind('text')} text-base-content`}
+                      >
+                        <Show when={row.workload.node} fallback={<span class="text-muted">—</span>}>
+                          {(node) => (
+                            <span class="inline-block max-w-full truncate" title={node()}>
+                              {node()}
+                            </span>
+                          )}
+                        </Show>
                       </TableCell>
                       <TableCell class={getPlatformTableCellClassForKind('text')}>
                         <div class="flex items-center gap-2">
