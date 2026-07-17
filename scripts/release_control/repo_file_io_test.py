@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -248,6 +249,29 @@ class RepoFileIoTest(unittest.TestCase):
             self.assertEqual(canonical_repo_root(linked_worktree), repo_root.resolve())
             self.assertEqual(canonical_repo_id(linked_worktree), "pulse")
             self.assertEqual(canonical_workspace_repos_root(linked_worktree), (workspace / "repos").resolve())
+
+    def test_scratch_git_init_tests_scrub_env_through_shared_helper(self) -> None:
+        # Running "git init" in a scratch directory while the pre-commit hook
+        # environment from a linked worktree (absolute GIT_DIR et al.) is still
+        # exported re-initializes the REAL repository with core.bare=true,
+        # breaking git for every checkout. Two rounds of per-file fixes each
+        # missed a straggler, so every release-control test that creates
+        # scratch repos must route its git env through strip_local_git_env.
+        release_control_dir = Path(__file__).resolve().parent
+        scratch_init = re.compile(r"\.git\([^)]*\"init\"|\[\s*\"git\",\s*\"init\"")
+        offenders = []
+        for test_file in sorted(release_control_dir.rglob("*_test.py")):
+            source = test_file.read_text(encoding="utf-8")
+            if not scratch_init.search(source):
+                continue
+            if "strip_local_git_env" not in source:
+                offenders.append(test_file.relative_to(release_control_dir).as_posix())
+        self.assertEqual(
+            offenders,
+            [],
+            "these test files run scratch 'git init' without scrubbing the "
+            "inherited hook git env via repo_file_io.strip_local_git_env",
+        )
 
 
 if __name__ == "__main__":

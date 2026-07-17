@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 import readiness_assertion_guard
+from repo_file_io import strip_local_git_env
 
 
 def write_status(repo_root: Path, payload: dict) -> None:
@@ -35,12 +36,10 @@ def base_payload() -> dict:
 
 class ReadinessAssertionGuardTest(unittest.TestCase):
     def git(self, repo_root: Path, *args: str) -> subprocess.CompletedProcess:
-        env = os.environ.copy()
         # Scrub the full hook environment: with only GIT_INDEX_FILE removed, a
         # pre-commit run from a linked worktree exports an absolute GIT_DIR and
         # "git init" here re-initializes the REAL repository as bare.
-        for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"):
-            env.pop(name, None)
+        env = strip_local_git_env(os.environ.copy())
         return subprocess.run(
             ["git", *args],
             cwd=repo_root,

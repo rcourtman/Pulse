@@ -8,16 +8,21 @@ from unittest.mock import patch
 
 
 INTERNAL_DIR = Path(__file__).resolve().parent
-if str(INTERNAL_DIR) not in sys.path:
-    sys.path.insert(0, str(INTERNAL_DIR))
+RELEASE_CONTROL_DIR = INTERNAL_DIR.parent
+for extra_dir in (INTERNAL_DIR, RELEASE_CONTROL_DIR):
+    if str(extra_dir) not in sys.path:
+        sys.path.insert(0, str(extra_dir))
 
+from repo_file_io import strip_local_git_env
 from verify_commit_slice import main, repo_relative_path
 
 
 class VerifyCommitSliceTest(unittest.TestCase):
     def git(self, repo_root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-        env = os.environ.copy()
-        env.pop("GIT_INDEX_FILE", None)
+        # Scrub the full hook environment: with only GIT_INDEX_FILE removed, a
+        # pre-commit run from a linked worktree exports an absolute GIT_DIR and
+        # "git init" here re-initializes the REAL repository as bare.
+        env = strip_local_git_env(os.environ.copy())
         return subprocess.run(
             ["git", *args],
             cwd=repo_root,
@@ -100,6 +105,42 @@ class VerifyCommitSliceTest(unittest.TestCase):
                 "verify_commit_slice.HOOK_PATH", hook
             ):
                 self.assertEqual(main(["--add-updated"]), 7)
+
+    def test_scratch_git_init_under_worktree_hook_env_leaves_hook_repo_intact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base = Path(tmpdir)
+            canary = base / "canary"
+            linked_worktree = base / "canary-worktree"
+            scratch = base / "scratch"
+            canary.mkdir()
+            scratch.mkdir()
+
+            self.init_repo(canary)
+            (canary / "tracked.txt").write_text("tracked\n", encoding="utf-8")
+            self.git(canary, "add", "tracked.txt")
+            self.git(canary, "commit", "--no-verify", "-m", "initial")
+            self.git(canary, "worktree", "add", str(linked_worktree), "-b", "hook-branch")
+
+            git_dir = self.git(
+                linked_worktree, "rev-parse", "--path-format=absolute", "--git-dir"
+            ).stdout.strip()
+            # A pre-commit run from a linked worktree exports exactly this
+            # shape: absolute GIT_DIR plus GIT_INDEX_FILE, no GIT_WORK_TREE.
+            # (With GIT_WORK_TREE also set, "git init" keeps bare=false and
+            # the corruption does not reproduce.)
+            hook_env = {
+                "GIT_DIR": git_dir,
+                "GIT_INDEX_FILE": str(Path(git_dir) / "index"),
+            }
+
+            with patch.dict(os.environ, hook_env, clear=False):
+                self.git(scratch, "init")
+
+            self.assertTrue((scratch / ".git").is_dir())
+            config_text = (canary / ".git" / "config").read_text(encoding="utf-8")
+            self.assertNotIn("bare = true", config_text)
+            self.git(canary, "status")
+            self.git(linked_worktree, "status")
 
 
 if __name__ == "__main__":
