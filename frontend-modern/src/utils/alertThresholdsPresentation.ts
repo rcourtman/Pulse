@@ -63,6 +63,15 @@ export const ALERT_THRESHOLDS_DOCKER_SERVICES_CRITICAL_GAP_DESCRIPTION =
   'Raise a critical alert when the missing replica gap meets or exceeds this value.';
 export const ALERT_THRESHOLDS_DOCKER_SERVICES_GAP_VALIDATION_MESSAGE =
   'Critical gap must be greater than or equal to the warning gap when enabled.';
+export const ALERT_THRESHOLDS_DOCKER_UPDATES_TITLE = 'Container update alerts';
+export const ALERT_THRESHOLDS_DOCKER_UPDATES_DESCRIPTION =
+  'Pulse raises a warning when a container image update has been available for longer than the delay below. Turn this off to stop update alerts without affecting other container alerts.';
+export const ALERT_THRESHOLDS_DOCKER_UPDATES_TOGGLE_LABEL = 'Alerts';
+export const ALERT_THRESHOLDS_DOCKER_UPDATES_TOGGLE_DESCRIPTION =
+  'Toggle container image update alerts';
+export const ALERT_THRESHOLDS_DOCKER_UPDATES_DELAY_LABEL = 'Delay (hours)';
+export const ALERT_THRESHOLDS_DOCKER_UPDATES_DELAY_DESCRIPTION =
+  'Wait this many hours after an update is first seen before alerting.';
 export const ALERT_THRESHOLDS_SECTION_TITLE_NODES = 'Virtualization Hosts';
 export const ALERT_THRESHOLDS_SECTION_TITLE_PBS = 'PBS Servers';
 export const ALERT_THRESHOLDS_SECTION_TITLE_GUESTS = 'VMs & Containers';
@@ -146,6 +155,17 @@ export function getAlertThresholdsDockerServicePresentation() {
     criticalGapLabel: ALERT_THRESHOLDS_DOCKER_SERVICES_CRITICAL_GAP_LABEL,
     criticalGapDescription: ALERT_THRESHOLDS_DOCKER_SERVICES_CRITICAL_GAP_DESCRIPTION,
     gapValidationMessage: ALERT_THRESHOLDS_DOCKER_SERVICES_GAP_VALIDATION_MESSAGE,
+  } as const;
+}
+
+export function getAlertThresholdsDockerUpdatePresentation() {
+  return {
+    title: ALERT_THRESHOLDS_DOCKER_UPDATES_TITLE,
+    description: ALERT_THRESHOLDS_DOCKER_UPDATES_DESCRIPTION,
+    toggleLabel: ALERT_THRESHOLDS_DOCKER_UPDATES_TOGGLE_LABEL,
+    toggleDescription: ALERT_THRESHOLDS_DOCKER_UPDATES_TOGGLE_DESCRIPTION,
+    delayLabel: ALERT_THRESHOLDS_DOCKER_UPDATES_DELAY_LABEL,
+    delayDescription: ALERT_THRESHOLDS_DOCKER_UPDATES_DELAY_DESCRIPTION,
   } as const;
 }
 

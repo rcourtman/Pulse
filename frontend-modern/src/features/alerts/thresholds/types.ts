@@ -156,6 +156,7 @@ export interface ThresholdsTableProps {
     memoryCriticalPct: number;
     serviceWarnGapPercent: number;
     serviceCriticalGapPercent: number;
+    updateAlertDelayHours: number;
   };
   dockerDisableConnectivity: () => boolean;
   setDockerDisableConnectivity: (value: boolean) => void;
@@ -173,6 +174,7 @@ export interface ThresholdsTableProps {
           memoryCriticalPct: number;
           serviceWarnGapPercent: number;
           serviceCriticalGapPercent: number;
+          updateAlertDelayHours: number;
         }
       | ((prev: {
           cpu: number;
@@ -184,6 +186,7 @@ export interface ThresholdsTableProps {
           memoryCriticalPct: number;
           serviceWarnGapPercent: number;
           serviceCriticalGapPercent: number;
+          updateAlertDelayHours: number;
         }) => {
           cpu: number;
           memory: number;
@@ -194,6 +197,7 @@ export interface ThresholdsTableProps {
           memoryCriticalPct: number;
           serviceWarnGapPercent: number;
           serviceCriticalGapPercent: number;
+          updateAlertDelayHours: number;
         }),
   ) => void;
   dockerIgnoredPrefixes: () => string[];

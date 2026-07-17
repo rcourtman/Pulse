@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from '@solidjs/router';
 
 import type { PMGThresholdDefaults, SnapshotAlertConfig, BackupAlertConfig } from '@/types/alerts';
 import { useAlertsActivation } from '@/stores/alertsActivation';
+import { isTrueNASSystemResource } from '@/utils/agentResources';
 import { logger } from '@/utils/logger';
 import {
   AGENT_DISKS_EMPTY_STATE,
@@ -13,6 +14,7 @@ import {
   getAlertThresholdsHelpDismissLabel,
   getAlertThresholdsBackupOrphanedPresentation,
   getAlertThresholdsDockerServicePresentation,
+  getAlertThresholdsDockerUpdatePresentation,
   getAlertThresholdsDockerIgnoredPrefixesPresentation,
   getAlertThresholdsSearchPlaceholder,
   getAlertThresholdsSectionTitles,
@@ -87,6 +89,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   const guestFilterPresentation = getAlertThresholdsGuestFilterPresentation();
   const backupOrphanedPresentation = getAlertThresholdsBackupOrphanedPresentation();
   const dockerServicePresentation = getAlertThresholdsDockerServicePresentation();
+  const dockerUpdatePresentation = getAlertThresholdsDockerUpdatePresentation();
   const dockerIgnoredPrefixesPresentation = getAlertThresholdsDockerIgnoredPrefixesPresentation();
 
   const { isCollapsed, toggleSection, setCollapsed, expandAll, collapseAll } =
@@ -120,6 +123,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
 
   const serviceWarnInputId = 'docker-service-warn-gap';
   const serviceCriticalInputId = 'docker-service-critical-gap';
+  const dockerUpdateDelayInputId = 'docker-update-alert-delay';
 
   createEffect(() => {
     const remote = props.dockerIgnoredPrefixes();
@@ -143,7 +147,14 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     return '';
   });
 
-  const hasDockerSpecificControls = createMemo(() => (props.dockerHosts?.length ?? 0) > 0);
+  // Docker-only cards (ignored prefixes, update alerts, swarm gaps) stay hidden for
+  // TrueNAS-only setups, but must show for unified-agent Docker hosts, which are not
+  // typed 'docker-host' and only appear in the runtime list via their app-containers.
+  const hasDockerSpecificControls = createMemo(
+    () =>
+      (props.dockerHosts?.length ?? 0) > 0 ||
+      (props.containerRuntimes ?? []).some((runtime) => !isTrueNASSystemResource(runtime)),
+  );
 
   const getActiveTabFromRoute = (): ThresholdsActiveTab => {
     const path = location.pathname;
@@ -848,6 +859,8 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     dockerIgnoredInput,
     dockerIgnoredPrefixesPresentation,
     dockerServicePresentation,
+    dockerUpdatePresentation,
+    dockerUpdateDelayInputId,
     editingId,
     editingNote,
     editingThresholds,

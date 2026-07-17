@@ -1406,3 +1406,76 @@ describe('cloneBackupDefaults (via createDefaultAlertsConfigurationSnapshot)', (
     });
   });
 });
+
+// ===========================================================================
+// dockerDefaults.updateAlertDelayHours (read + save round-trip)
+// ===========================================================================
+
+describe('dockerDefaults.updateAlertDelayHours', () => {
+  it('defaults to 24 when the config omits the field', () => {
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ dockerDefaults: {} }));
+    expect(snapshot.dockerDefaults.updateAlertDelayHours).toBe(24);
+  });
+
+  it('preserves a custom positive delay and the -1 off state on read', () => {
+    const custom = readAlertsConfigurationSnapshot(
+      cfg({ dockerDefaults: { updateAlertDelayHours: 48 } }),
+    );
+    expect(custom.dockerDefaults.updateAlertDelayHours).toBe(48);
+
+    const off = readAlertsConfigurationSnapshot(
+      cfg({ dockerDefaults: { updateAlertDelayHours: -1 } }),
+    );
+    expect(off.dockerDefaults.updateAlertDelayHours).toBe(-1);
+  });
+
+  it('maps 0 (backend "unset") to the factory 24 on read', () => {
+    const snapshot = readAlertsConfigurationSnapshot(
+      cfg({ dockerDefaults: { updateAlertDelayHours: 0 } }),
+    );
+    expect(snapshot.dockerDefaults.updateAlertDelayHours).toBe(24);
+  });
+
+  it('round-trips -1 and custom delays through buildAlertsConfigurationPayload', () => {
+    for (const value of [-1, 6, 24, 72]) {
+      const snapshot = createDefaultAlertsConfigurationSnapshot();
+      snapshot.dockerDefaults.updateAlertDelayHours = value;
+
+      const { alertConfig } = buildAlertsConfigurationPayload({
+        snapshot,
+        rawOverridesConfig: {},
+        alertsActivationState: null,
+        alertsActivationConfig: null,
+      });
+
+      expect(alertConfig?.dockerDefaults?.updateAlertDelayHours).toBe(value);
+    }
+  });
+
+  it('never emits 0 on save (the backend would reset it to 24)', () => {
+    const snapshot = createDefaultAlertsConfigurationSnapshot();
+    snapshot.dockerDefaults.updateAlertDelayHours = 0;
+
+    const { alertConfig } = buildAlertsConfigurationPayload({
+      snapshot,
+      rawOverridesConfig: {},
+      alertsActivationState: null,
+      alertsActivationConfig: null,
+    });
+
+    expect(alertConfig?.dockerDefaults?.updateAlertDelayHours).toBe(24);
+  });
+
+  it('keeps the field when saving unrelated settings (default snapshot save)', () => {
+    const snapshot = createDefaultAlertsConfigurationSnapshot();
+
+    const { alertConfig } = buildAlertsConfigurationPayload({
+      snapshot,
+      rawOverridesConfig: {},
+      alertsActivationState: null,
+      alertsActivationConfig: null,
+    });
+
+    expect(alertConfig?.dockerDefaults?.updateAlertDelayHours).toBe(24);
+  });
+});

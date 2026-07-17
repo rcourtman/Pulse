@@ -71,6 +71,7 @@ export interface DockerThresholdConfig {
   memoryCriticalPct?: number;
   serviceWarnGapPercent?: number;
   serviceCriticalGapPercent?: number;
+  updateAlertDelayHours?: number;
   stateDisableConnectivity?: boolean;
   statePoweredOffSeverity?: 'warning' | 'critical';
 }

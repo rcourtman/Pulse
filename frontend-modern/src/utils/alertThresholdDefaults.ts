@@ -83,6 +83,8 @@ export const FACTORY_DOCKER_DEFAULTS = {
   memoryCriticalPct: 95,
   serviceWarnGapPercent: 10,
   serviceCriticalGapPercent: 50,
+  // Hours before an available image update raises an alert; -1 disables update alerts.
+  updateAlertDelayHours: 24,
 };
 
 export const FACTORY_DOCKER_STATE_DISABLE_CONNECTIVITY = false;

@@ -186,6 +186,20 @@ const normalizeGap = (value: unknown, fallback: number) => {
   return Math.max(0, Math.min(100, numeric));
 };
 
+// -1 disables update alerts; the backend treats 0 as unset and resets it to 24,
+// so never emit 0. Anything non-finite or non-positive falls back to the factory delay.
+const normalizeUpdateAlertDelayHours = (value: unknown): number => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return FACTORY_DOCKER_DEFAULTS.updateAlertDelayHours;
+  }
+  if (numeric < 0) {
+    return -1;
+  }
+  const rounded = Math.round(numeric);
+  return rounded > 0 ? rounded : FACTORY_DOCKER_DEFAULTS.updateAlertDelayHours;
+};
+
 const normalizeWarningCriticalPair = (
   warning: number | undefined,
   critical: number | undefined,
@@ -445,6 +459,9 @@ export function readAlertsConfigurationSnapshot(config: AlertConfig): AlertsConf
         config.dockerDefaults.memoryCriticalPct ?? FACTORY_DOCKER_DEFAULTS.memoryCriticalPct,
       serviceWarnGapPercent: serviceWarnGap,
       serviceCriticalGapPercent: serviceCriticalGap,
+      updateAlertDelayHours: normalizeUpdateAlertDelayHours(
+        config.dockerDefaults.updateAlertDelayHours,
+      ),
     };
     snapshot.dockerDisableConnectivity = Boolean(config.dockerDefaults.stateDisableConnectivity);
     snapshot.dockerPoweredOffSeverity =
@@ -772,6 +789,9 @@ export function buildAlertsConfigurationPayload({
         memoryCriticalPct: snapshot.dockerDefaults.memoryCriticalPct,
         serviceWarnGapPercent: snapshot.dockerDefaults.serviceWarnGapPercent,
         serviceCriticalGapPercent: snapshot.dockerDefaults.serviceCriticalGapPercent,
+        updateAlertDelayHours: normalizeUpdateAlertDelayHours(
+          snapshot.dockerDefaults.updateAlertDelayHours,
+        ),
         stateDisableConnectivity: snapshot.dockerDisableConnectivity,
         statePoweredOffSeverity: snapshot.dockerPoweredOffSeverity,
       },

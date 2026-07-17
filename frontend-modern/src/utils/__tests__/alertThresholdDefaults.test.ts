@@ -162,6 +162,7 @@ describe('alertThresholdDefaults', () => {
         memoryCriticalPct: 95,
         serviceWarnGapPercent: 10,
         serviceCriticalGapPercent: 50,
+        updateAlertDelayHours: 24,
       });
     });
 

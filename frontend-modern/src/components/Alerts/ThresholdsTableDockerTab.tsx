@@ -4,6 +4,7 @@ import { ThresholdsTableDockerContainersSection } from './ThresholdsTableDockerC
 import { ThresholdsTableDockerHostsSection } from './ThresholdsTableDockerHostsSection';
 import { ThresholdsTableDockerIgnoredPrefixesSection } from './ThresholdsTableDockerIgnoredPrefixesSection';
 import { ThresholdsTableDockerServiceGapSection } from './ThresholdsTableDockerServiceGapSection';
+import { ThresholdsTableDockerUpdateAlertsSection } from './ThresholdsTableDockerUpdateAlertsSection';
 import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/thresholdsTableSectionProps';
 
 export function ThresholdsTableDockerTab(props: ThresholdsTableSectionProps) {
@@ -11,6 +12,7 @@ export function ThresholdsTableDockerTab(props: ThresholdsTableSectionProps) {
     <>
       <Show when={props.state.hasDockerSpecificControls()}>
         <ThresholdsTableDockerIgnoredPrefixesSection {...props} />
+        <ThresholdsTableDockerUpdateAlertsSection {...props} />
         <ThresholdsTableDockerServiceGapSection {...props} />
       </Show>
       <ThresholdsTableDockerHostsSection {...props} />
