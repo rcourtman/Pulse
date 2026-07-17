@@ -412,9 +412,7 @@ describe('ChatMessages', () => {
         makeMessage({ id: 'u2', role: 'user', content: 'second prompt' }),
         makeMessage({ id: 'a2', role: 'assistant', content: 'second answer' }),
       ];
-      render(() => (
-        <ChatMessages messages={messages} {...handlers} onRegenerate={onRegenerate} />
-      ));
+      render(() => <ChatMessages messages={messages} {...handlers} onRegenerate={onRegenerate} />);
 
       const earlier = capturedMessageItemProps.find((p) => p.message.id === 'a1');
       const last = capturedMessageItemProps.find((p) => p.message.id === 'a2');
@@ -465,9 +463,7 @@ describe('ChatMessages', () => {
         makeMessage({ id: 'a2', role: 'assistant', content: 'second answer' }),
         makeMessage({ id: 'q1', role: 'user', content: 'queued follow-up', delivery: 'queued' }),
       ];
-      render(() => (
-        <ChatMessages messages={messages} {...handlers} onEditPrompt={onEditPrompt} />
-      ));
+      render(() => <ChatMessages messages={messages} {...handlers} onEditPrompt={onEditPrompt} />);
 
       const earlier = capturedMessageItemProps.find((p) => p.message.id === 'u1');
       const latest = capturedMessageItemProps.find((p) => p.message.id === 'u2');

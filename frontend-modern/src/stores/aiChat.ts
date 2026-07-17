@@ -80,14 +80,7 @@ export interface AIChatContext {
 }
 
 export type AIChatCommandRequestAction =
-  | 'help'
-  | 'new'
-  | 'sessions'
-  | 'models'
-  | 'providers'
-  | 'status'
-  | 'undo'
-  | 'redo';
+  'help' | 'new' | 'sessions' | 'models' | 'providers' | 'status' | 'undo' | 'redo';
 
 export interface AIChatCommandRequest {
   id: number;
@@ -175,8 +168,9 @@ const saveMessagesToStorage = (msgs: Message[]) => {
 // Global state for the AI chat drawer
 const [isAIChatOpen, setIsAIChatOpen] = createSignal(false);
 const [aiChatContext, setAIChatContext] = createSignal<AIChatContext>({});
-const [aiChatCommandRequest, setAIChatCommandRequest] =
-  createSignal<AIChatCommandRequest | null>(null);
+const [aiChatCommandRequest, setAIChatCommandRequest] = createSignal<AIChatCommandRequest | null>(
+  null,
+);
 const [contextItems, setContextItems] = createSignal<ContextItem[]>([]);
 const [messages, setMessages] = createSignal<Message[]>(loadMessagesFromStorage());
 const [aiEnabled, setAiEnabled] = createSignal<boolean | null>(null); // null = not checked yet

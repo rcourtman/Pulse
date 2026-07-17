@@ -705,9 +705,7 @@ describe('settings architecture guardrails', () => {
     // assistantEnabled capability so the launcher and handoff buttons
     // appear (or disappear) mid-session, and first-time setup must open
     // the Assistant drawer at the moment of maximum intent.
-    const refreshCalls = aiSettingsStateSource.match(
-      /aiChatStore\.refreshEnabledFromServer\(\)/g,
-    );
+    const refreshCalls = aiSettingsStateSource.match(/aiChatStore\.refreshEnabledFromServer\(\)/g);
     expect(refreshCalls?.length ?? 0).toBeGreaterThanOrEqual(3);
     expect(aiSettingsStateSource).toContain('aiChatStore.open()');
     expect(aiSettingsStateSource).not.toContain(

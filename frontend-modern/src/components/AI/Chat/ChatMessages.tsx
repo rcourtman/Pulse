@@ -276,7 +276,11 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
         onScroll={updatePinnedToBottom}
       >
         <Show when={props.messages.length === 0 && props.onSuggestedPrompt}>
-          <section class="mb-4 w-full" aria-label="Assistant welcome" data-testid="assistant-welcome">
+          <section
+            class="mb-4 w-full"
+            aria-label="Assistant welcome"
+            data-testid="assistant-welcome"
+          >
             <p class="text-sm text-base-content">
               Ask about your infrastructure. The Assistant sees your live inventory, metrics, and
               alerts, and can dig into problems with you.

@@ -233,9 +233,7 @@ describe('AISettings model loading error states', () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Show connector setup' })).toBeInTheDocument();
-    expect(
-      screen.queryByRole('heading', { name: 'Connector setup' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Connector setup' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Create token' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show connector setup' }));
@@ -312,9 +310,7 @@ describe('AISettings model loading error states', () => {
 
     expect(await screen.findByText('Patrol mode')).toBeInTheDocument();
     expect(screen.getByText(/This install runs Watch only/i)).toBeInTheDocument();
-    expect(
-      screen.queryByText(/Choose a Patrol mode on the Patrol page/i),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Choose a Patrol mode on the Patrol page/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Open Patrol/i })).toBeInTheDocument();
   });
 
@@ -574,7 +570,9 @@ describe('AISettings model loading error states', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    expect(screen.queryByRole('option', { name: /Allow chat-only actions/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: /Allow chat-only actions/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('keeps an existing autonomous setting visible even when upgrade prompts are hidden', async () => {
@@ -680,9 +678,7 @@ describe('AISettings service context persistence', () => {
     renderComponent('discovery');
 
     await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /Service Context Auto 24h/i }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Service Context Auto 24h/i })).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole('button', { name: /Service Context Auto 24h/i }));
     const intervalSelect = screen.getByLabelText('Scan Interval');
@@ -854,10 +850,7 @@ describe('AISettings OpenRouter flow', () => {
 
     await waitFor(() => {
       expect(testProviderMock).toHaveBeenCalledTimes(1);
-      expect(testProviderMock).toHaveBeenCalledWith(
-        'openrouter',
-        'openrouter:openai/gpt-4o-mini',
-      );
+      expect(testProviderMock).toHaveBeenCalledWith('openrouter', 'openrouter:openai/gpt-4o-mini');
     });
   });
 
