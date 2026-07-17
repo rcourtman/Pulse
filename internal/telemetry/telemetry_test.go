@@ -16,6 +16,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/testutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 )
 
@@ -897,6 +898,55 @@ func TestJitteredHeartbeat_NotConstant(t *testing.T) {
 	}
 	if len(seen) < 2 {
 		t.Fatal("jitteredHeartbeat() returned the same value 100 times — jitter is not working")
+	}
+}
+
+func TestSendEvent_SuppressedWhileMockModeEnabled(t *testing.T) {
+	var received atomic.Int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		received.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer ts.Close()
+
+	origEndpoint := pingEndpoint
+	pingEndpoint = ts.URL
+	defer func() { pingEndpoint = origEndpoint }()
+
+	testutil.SetMockMode(t, true)
+
+	sendEvent(context.Background(), Ping{InstallID: uuid.New().String()}, nil, "startup")
+	sendEvent(context.Background(), Ping{InstallID: uuid.New().String()}, nil, "heartbeat")
+
+	if got := received.Load(); got != 0 {
+		t.Fatalf("expected no telemetry pings while mock mode is enabled, got %d", got)
+	}
+}
+
+func TestSendEvent_SendsWhenMockModeDisabled(t *testing.T) {
+	var received atomic.Int32
+	var lastPing Ping
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &lastPing)
+		received.Add(1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer ts.Close()
+
+	origEndpoint := pingEndpoint
+	pingEndpoint = ts.URL
+	defer func() { pingEndpoint = origEndpoint }()
+
+	testutil.SetMockMode(t, false)
+
+	sendEvent(context.Background(), Ping{InstallID: uuid.New().String()}, nil, "heartbeat")
+
+	if got := received.Load(); got != 1 {
+		t.Fatalf("expected 1 telemetry ping with mock mode disabled, got %d", got)
+	}
+	if lastPing.Event != "heartbeat" {
+		t.Errorf("event = %q, want %q", lastPing.Event, "heartbeat")
 	}
 }
 

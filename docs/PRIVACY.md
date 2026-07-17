@@ -18,6 +18,8 @@ Pulse includes outbound usage telemetry that is **enabled by default**. It sends
 
 The telemetry payload does not include hostnames, credentials, infrastructure identifiers, IP addresses, prompts, chat messages, command text, action output, token values, names, email addresses, or account identifiers. See the full field list below.
 
+While mock/demo fixture mode is enabled, Pulse suppresses outbound telemetry entirely: a mock-mode instance reports a synthetic fixture fleet rather than a real installation, so it never pings.
+
 #### How to disable
 
 - **Settings → System → General → Outbound usage telemetry** (toggle off), or

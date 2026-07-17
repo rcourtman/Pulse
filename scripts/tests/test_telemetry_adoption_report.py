@@ -1250,6 +1250,55 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertEqual(stages["approved_action_success"]["observed_signal_free_starts"], 1)
         self.assertEqual(stages["approved_action_success"]["observed_signal_free_to_paid"], 1)
 
+    def test_is_mock_fleet_row_matches_scaled_fixture_signature(self) -> None:
+        self.assertTrue(report.is_mock_fleet_row({"kubernetes_pods": 120, "vmware_hosts": 7}))
+        self.assertTrue(report.is_mock_fleet_row({"kubernetes_pods": 600, "vmware_hosts": 35}))
+        self.assertFalse(report.is_mock_fleet_row({"kubernetes_pods": 120, "vmware_hosts": 4}))
+        self.assertFalse(report.is_mock_fleet_row({"kubernetes_pods": 119, "vmware_hosts": 7}))
+        self.assertFalse(report.is_mock_fleet_row({"kubernetes_pods": 0, "vmware_hosts": 0}))
+        self.assertFalse(report.is_mock_fleet_row({}))
+
+    def test_summarize_rows_excludes_mock_fleet_rows_by_default(self) -> None:
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        real_row = {
+            "install_id": "install-real",
+            "version": "v6.1.0-rc.2",
+            "platform": "binary",
+            "received_at": (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),
+            "event": "heartbeat",
+            "kubernetes_pods": 37,
+            "vmware_hosts": 2,
+        }
+        mock_row = {
+            "install_id": "install-mock",
+            "version": "v6.1.0-rc.2",
+            "platform": "docker",
+            "received_at": (now - timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S"),
+            "event": "heartbeat",
+            "kubernetes_pods": 240,
+            "vmware_hosts": 14,
+            "pve_nodes": 10,
+        }
+        db_stats = {"latest_ping": real_row["received_at"], "total_rows": 2, "total_distinct_installs": 2}
+
+        summary = report.summarize_rows(db_stats, [real_row, mock_row], published_versions=set())
+        self.assertEqual(summary["active_latest"]["active_24h"], 1)
+        self.assertEqual(
+            summary["mock_fleet_exclusions"],
+            {"enabled": True, "rows": 1, "installs": 1},
+        )
+        text = report.format_text(summary, "rcourtman/Pulse", 7)
+        self.assertIn("mock fixture fleet excluded from window: 1 row(s) across 1 install(s)", text)
+
+        included = report.summarize_rows(
+            db_stats, [real_row, mock_row], published_versions=set(), include_mock_fleet=True
+        )
+        self.assertEqual(included["active_latest"]["active_24h"], 2)
+        self.assertEqual(
+            included["mock_fleet_exclusions"],
+            {"enabled": False, "rows": 0, "installs": 0},
+        )
+
     def test_format_text_includes_latest_install_windows(self) -> None:
         summary = {
             "db_stats": {

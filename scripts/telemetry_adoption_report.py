@@ -962,6 +962,25 @@ def parse_optional_nonnegative_int(value: Any) -> int:
     return max(parsed, 0)
 
 
+# Mock fixture fleet signature: the internal/mock defaults ship 120 Kubernetes
+# pods (3 clusters × 40) alongside 7 VMware hosts (4 lab + 3 edge), and scaled
+# fixture configs multiply both together. Versions before client-side mock
+# suppression (6.1.0-rc.2 and earlier) sent telemetry from mock-mode boots
+# (e2e, CI, qual runs, demo containers), so matching rows are excluded from
+# adoption reads by default.
+MOCK_FLEET_KUBERNETES_PODS_PER_SCALE = 120
+MOCK_FLEET_VMWARE_HOSTS_PER_SCALE = 7
+
+
+def is_mock_fleet_row(row: dict[str, Any]) -> bool:
+    pods = parse_optional_nonnegative_int(row.get("kubernetes_pods"))
+    if pods <= 0 or pods % MOCK_FLEET_KUBERNETES_PODS_PER_SCALE != 0:
+        return False
+    scale = pods // MOCK_FLEET_KUBERNETES_PODS_PER_SCALE
+    vmware_hosts = parse_optional_nonnegative_int(row.get("vmware_hosts"))
+    return vmware_hosts == scale * MOCK_FLEET_VMWARE_HOSTS_PER_SCALE
+
+
 def classify_row_version(row: dict[str, Any], published_versions: set[str]) -> ClassifiedVersion:
     raw_version = str(row.get("version") or "")
     identity = classify_reported_version(raw_version, published_versions)
@@ -1774,8 +1793,18 @@ def summarize_rows(
     rows: Iterable[dict[str, Any]],
     published_versions: set[str],
     target_version: str | None = None,
+    include_mock_fleet: bool = False,
 ) -> dict[str, Any]:
-    row_list = list(rows)
+    row_list: list[dict[str, Any]] = []
+    mock_fleet_rows = 0
+    mock_fleet_installs: set[str] = set()
+    for row in rows:
+        if not include_mock_fleet and is_mock_fleet_row(row):
+            mock_fleet_rows += 1
+            mock_fleet_installs.add(str(row["install_id"]))
+            continue
+        row_list.append(row)
+
     latest_by_install: dict[str, dict[str, Any]] = {}
     for row in row_list:
         install_id = str(row["install_id"])
@@ -1794,6 +1823,11 @@ def summarize_rows(
 
     return {
         "db_stats": db_stats,
+        "mock_fleet_exclusions": {
+            "enabled": not include_mock_fleet,
+            "rows": mock_fleet_rows,
+            "installs": len(mock_fleet_installs),
+        },
         "latest_install_windows": latest_install_windows,
         "deep_signal_sources_7d": summarize_deep_signal_sources(
             latest_by_install,
@@ -1889,6 +1923,16 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
         f"total rows: {summary['db_stats'].get('total_rows', 0)}",
         f"total distinct installs: {summary['db_stats'].get('total_distinct_installs', 0)}",
     ]
+
+    exclusions = summary.get("mock_fleet_exclusions")
+    if exclusions:
+        if exclusions.get("enabled"):
+            lines.append(
+                "mock fixture fleet excluded from window: "
+                f"{exclusions['rows']} row(s) across {exclusions['installs']} install(s)"
+            )
+        else:
+            lines.append("mock fixture fleet rows INCLUDED (--include-mock-fleet)")
 
     for label, _ in DEFAULT_LATEST_INSTALL_WINDOWS:
         window_summary = summary["latest_install_windows"][label]
@@ -2061,6 +2105,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="release version to highlight for per-signal coverage; defaults to the latest published RC",
     )
     parser.add_argument(
+        "--include-mock-fleet",
+        action="store_true",
+        help=(
+            "keep mock fixture fleet rows (120×N Kubernetes pods with 7×N VMware hosts) "
+            "instead of excluding them from adoption reads"
+        ),
+    )
+    parser.add_argument(
         "--format",
         choices=("text", "json"),
         default="text",
@@ -2082,7 +2134,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.ssh_host
         else fetch_rows_local(args.db_path, args.since_days)
     )
-    summary = summarize_rows(source["db_stats"], source["rows"], published_versions, target_version=target_version)
+    summary = summarize_rows(
+        source["db_stats"],
+        source["rows"],
+        published_versions,
+        target_version=target_version,
+        include_mock_fleet=args.include_mock_fleet,
+    )
 
     if args.format == "json":
         print(json.dumps(summary, indent=2, sort_keys=True))

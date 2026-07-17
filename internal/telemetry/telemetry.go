@@ -52,6 +52,12 @@
 //
 // Set the environment variable PULSE_TELEMETRY=false, or toggle off
 // "Outbound usage telemetry" in Settings → System → General.
+//
+// # Mock mode
+//
+// While mock/demo fixture mode is enabled, outbound pings are suppressed
+// entirely: a mock-mode boot (e2e, CI, qual runs, demo containers) would
+// otherwise report the synthetic fixture fleet as a real installation.
 package telemetry
 
 import (
@@ -69,6 +75,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
 )
@@ -639,9 +646,7 @@ func Start(ctx context.Context, cfg Config) {
 		}
 
 		// Send startup ping with current snapshot.
-		ping := applySnapshot(base, cfg.GetSnapshot)
-		ping.Event = "startup"
-		send(ctx, ping)
+		sendEvent(ctx, base, cfg.GetSnapshot, "startup")
 
 		// Daily heartbeat with jitter.
 		for {
@@ -651,9 +656,7 @@ func Start(ctx context.Context, cfg Config) {
 				timer.Stop()
 				return
 			case <-timer.C:
-				ping = applySnapshot(base, cfg.GetSnapshot)
-				ping.Event = "heartbeat"
-				send(ctx, ping)
+				sendEvent(ctx, base, cfg.GetSnapshot, "heartbeat")
 			}
 		}
 	}()
@@ -916,6 +919,21 @@ func shouldKeepInstallIDRecord(record installIDRecord, now time.Time) bool {
 		return false
 	}
 	return now.Sub(issuedAt) < installIDRotationWindow
+}
+
+// sendEvent builds and sends one ping for the given event unless mock mode is
+// active. A mock-mode snapshot describes the synthetic fixture fleet, not a
+// real installation, so it must never reach the telemetry endpoint. The check
+// runs per event (not once at Start) because mock mode can be toggled at
+// runtime.
+func sendEvent(ctx context.Context, base Ping, fn SnapshotFunc, event string) {
+	if mock.IsMockEnabled() {
+		log.Debug().Str("event", event).Msg("Suppressing outbound telemetry ping while mock mode is enabled")
+		return
+	}
+	ping := applySnapshot(base, fn)
+	ping.Event = event
+	send(ctx, ping)
 }
 
 // send posts a ping to the telemetry endpoint. Failures are silently ignored

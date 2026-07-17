@@ -187,6 +187,12 @@ creation, unauthenticated delivery, raw SMTP secret exposure, or bypasses for
 the `white_label` branding entitlement.
 
 1. Change privacy disclosures, usage-data vocabulary, or outbound-data guarantees through `docs/PRIVACY.md`, `frontend-modern/public/docs/PRIVACY.md`, `internal/telemetry/telemetry.go`, and `pkg/server/telemetry_pulse_intelligence.go` together.
+   Mock/demo fixture mode is a hard suppression boundary for outbound usage
+   telemetry: while `internal/mock.IsMockEnabled()` reports true,
+   `internal/telemetry` must not send startup or heartbeat pings — the check
+   runs per event so runtime mock toggles take effect immediately — because a
+   mock-mode snapshot describes the synthetic fixture fleet rather than a real
+   installation.
    Pulse Intelligence external-agent/MCP telemetry may expose only content-free
    adapter-origin usage and capability-class counters for context, event
    stream, provisioning, operator state, finding, and action requests. It must
@@ -303,6 +309,12 @@ the `white_label` branding entitlement.
    security/privacy disclosures, token names, API field names, route/query keys,
    and purchase-return state exactly.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
+   The adoption report excludes mock-fixture-fleet-signature rows (120×N
+   Kubernetes pods with 7×N VMware hosts, the `internal/mock` template) from
+   adoption reads by default and must disclose the excluded row/install
+   counts, because versions that predate client-side mock suppression keep
+   pinging the synthetic fleet until upgraded; `--include-mock-fleet` remains
+   the audit path.
 7. Change data-at-rest encryption-key or control-plane magic-link HMAC key and storage-root hardening semantics through `internal/crypto/crypto.go`, `internal/cloudcp/auth/magiclink.go`, `internal/cloudcp/auth/magiclink_store.go`, and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.
    Control-plane portal session lifetime rides on that same service: the auth
    service session TTL is configurable (`CP_SESSION_TTL`, longer
