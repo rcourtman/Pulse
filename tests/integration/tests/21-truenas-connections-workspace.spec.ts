@@ -178,13 +178,15 @@ test.describe("TrueNAS connections in the consolidated workspace", () => {
       page.getByRole("heading", { level: 2, name: "Connected systems" }),
     ).toBeVisible();
 
+    // The consolidated table no longer shows the address column; rows carry
+    // source, surfaces, connection state, and freshness instead.
     const towerRow = page.locator("tr").filter({ hasText: "Tower NAS" }).first();
     await expect(towerRow).toBeVisible();
-    await expect(towerRow).toContainText("tower.local");
+    await expect(towerRow).toContainText("Active");
 
     const vaultRow = page.locator("tr").filter({ hasText: "Backup Vault" }).first();
     await expect(vaultRow).toBeVisible();
-    await expect(vaultRow).toContainText("vault.local");
+    await expect(vaultRow).toContainText("Unauthorized");
 
     await expect(
       towerRow.getByRole("button", { name: "Manage" }),

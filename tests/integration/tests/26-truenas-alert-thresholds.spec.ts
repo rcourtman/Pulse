@@ -35,132 +35,20 @@ const test = base.extend<{}, WorkerFixtures>({
   }, { scope: 'worker' }],
 });
 
+// The thresholds page renders live websocket state, so REST stubs of
+// /api/resources get overwritten by the next state frame. The assertions
+// pin the mock scenario's TrueNAS fixture (truenas-main with pool tank,
+// tank/* datasets, and physical disks) instead of stubbed payloads.
 test.describe('TrueNAS alert thresholds', () => {
   test.setTimeout(180_000);
 
-  test('surfaces TrueNAS systems, disks, and apps under the TrueNAS thresholds scope', async ({
+  test('surfaces TrueNAS systems, pools, datasets, and disks under the TrueNAS thresholds scope', async ({
     page,
   }) => {
-    await page.route('**/api/resources**', async (route) => {
-      const requestUrl = new URL(route.request().url());
-      if (requestUrl.pathname !== '/api/resources') {
-        await route.continue();
-        return;
-      }
-
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          data: [
-            {
-              id: 'truenas-resource',
-              type: 'agent',
-              name: 'truenas-main',
-              displayName: 'TrueNAS Main',
-              platformId: 'truenas-main',
-              platformType: 'truenas',
-              sourceType: 'hybrid',
-              sources: ['agent', 'truenas'],
-              status: 'online',
-              lastSeen: '2026-03-29T22:00:00Z',
-              canonicalIdentity: {
-                displayName: 'TrueNAS Main',
-                hostname: 'truenas-main',
-                platformId: 'truenas-main',
-              },
-              identity: {
-                hostname: 'truenas-main',
-              },
-              agent: {
-                agentId: 'truenas-main',
-                hostname: 'truenas-main',
-                platform: 'TrueNAS SCALE',
-                disks: [
-                  {
-                    mountpoint: '/mnt/tank',
-                    type: 'zfs',
-                    used: 50 * 1024 * 1024 * 1024,
-                    total: 100 * 1024 * 1024 * 1024,
-                  },
-                ],
-              },
-              platformData: {
-                sources: ['agent', 'truenas'],
-                agent: {
-                  agentId: 'truenas-main',
-                  disks: [
-                    {
-                      mountpoint: '/mnt/tank',
-                      type: 'zfs',
-                      used: 50 * 1024 * 1024 * 1024,
-                      total: 100 * 1024 * 1024 * 1024,
-                    },
-                  ],
-                },
-              },
-            },
-            {
-              id: 'ix-nextcloud',
-              type: 'app-container',
-              name: 'nextcloud',
-              displayName: 'Nextcloud',
-              parentId: 'truenas-resource',
-              parentName: 'TrueNAS Main',
-              platformId: 'truenas-main',
-              platformType: 'truenas',
-              sourceType: 'api',
-              sources: ['truenas'],
-              status: 'running',
-              lastSeen: '2026-03-29T22:00:00Z',
-              canonicalIdentity: {
-                displayName: 'Nextcloud',
-                platformId: 'truenas-main',
-              },
-              platformData: {
-                sources: ['truenas'],
-              },
-            },
-            {
-              id: 'storage-truenas-tank',
-              type: 'storage',
-              name: 'tank',
-              displayName: 'tank',
-              parentId: 'truenas-resource',
-              parentName: 'TrueNAS Main',
-              platformId: 'truenas-storage-1',
-              platformType: 'truenas',
-              sourceType: 'api',
-              sources: ['truenas'],
-              status: 'online',
-              lastSeen: '2026-03-29T22:00:00Z',
-              canonicalIdentity: {
-                displayName: 'tank',
-                platformId: 'truenas-storage-1',
-              },
-              storage: {
-                platform: 'truenas',
-                type: 'zfs-pool',
-                topology: 'pool',
-                isZfs: true,
-              },
-              platformData: {
-                node: 'truenas-main',
-                instance: 'tank',
-                sources: ['truenas'],
-              },
-            },
-          ],
-          meta: {
-            page: 1,
-            limit: 200,
-            total: 3,
-            totalPages: 1,
-          },
-        }),
-      });
-    });
-
+    // Fresh test backends boot with alerts deactivated, which gates the
+    // thresholds route behind the Alerts Overview activation screen. The
+    // config endpoint is REST-fed and stubable (same pattern as the Ceph
+    // thresholds spec); entity data below still comes from live mock state.
     await page.route('**/api/alerts/config', async (route) => {
       await route.fulfill({
         status: 200,
@@ -173,43 +61,6 @@ test.describe('TrueNAS alert thresholds', () => {
       });
     });
 
-    await page.route('**/api/alerts/active', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([]),
-      });
-    });
-
-    await page.route('**/api/notifications/email', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          enabled: false,
-          provider: '',
-          server: '',
-          port: 587,
-          username: '',
-          password: '',
-          from: '',
-          to: [],
-          tls: false,
-          startTLS: false,
-        }),
-      });
-    });
-
-    await page.route('**/api/notifications/apprise', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          enabled: false,
-        }),
-      });
-    });
-
     await page.goto('/alerts/thresholds/infrastructure', {
       waitUntil: 'domcontentloaded',
     });
@@ -217,15 +68,16 @@ test.describe('TrueNAS alert thresholds', () => {
     await expect(page).toHaveURL(/\/alerts\/thresholds/);
     await expect(page.getByRole('heading', { name: 'Alert Thresholds' })).toBeVisible();
 
-    // Threshold scopes are platform-first now; TrueNAS entities live under
+    // Threshold scopes are platform-first; TrueNAS entities live under
     // their own scope instead of the retired neutral groupings.
     await page.getByRole('button', { name: 'TrueNAS', exact: true }).click();
     await expect(page).toHaveURL(/\/alerts\/thresholds\/truenas/);
-    await expect(page.getByText('tank', { exact: true }).first()).toBeVisible();
-    await expect(page.getByText('TrueNAS Main', { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Systems' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Datasets' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Disks' })).toBeVisible();
+    await expect(page.getByText('truenas-main', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('tank', { exact: true }).first()).toBeVisible();
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });
