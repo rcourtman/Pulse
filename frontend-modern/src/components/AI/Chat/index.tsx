@@ -148,7 +148,7 @@ import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getAssistantTurnSummary } from './assistantTurnSummary';
 import {
-  getPreferredResourceDisplayName,
+  getPreferredInfrastructureDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -2899,8 +2899,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   const dedupeMentionResources = (resources: MentionResource[]) => {
-    // Only dedupe agent mentions, and use the stable mention id so redacted labels
-    // do not collapse distinct resources into one suggestion.
+    // Only dedupe agent mentions, and use the stable mention id so duplicate
+    // labels do not collapse distinct resources into one suggestion.
     const byKey = new Map<string, { resource: MentionResource; index: number }>();
     const out: MentionResource[] = [];
 
@@ -2928,7 +2928,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return out;
   };
 
-  // Build resources for @ mention autocomplete from unified selectors
+  // Build resources for @ mention autocomplete from unified selectors.
+  // Labels intentionally use the ungoverned infrastructure display name:
+  // the composer is a local admin surface where every platform table already
+  // shows real names, and cloud redaction is enforced at the backend context
+  // layer. Governed labels here collapse whole classes (storage, TrueNAS,
+  // PBS) into identical un-searchable placeholders.
   createEffect(() => {
     const readPlatformData = (resource: Resource): Record<string, unknown> | undefined => {
       return resource.platformData
@@ -3068,7 +3073,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const node = getVMMentionNode(vm);
       mentionCandidates.push({
         id: getVMMentionId(vm),
-        label: getPreferredResourceDisplayName(vm),
+        label: getPreferredInfrastructureDisplayName(vm),
         type: 'vm',
         status: vm.status === 'running' ? 'running' : 'stopped',
         node,
@@ -3081,7 +3086,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       const node = asString(platformData?.node) || container.parentName || '';
       mentionCandidates.push({
         id: getSystemContainerMentionId(container),
-        label: getPreferredResourceDisplayName(container),
+        label: getPreferredInfrastructureDisplayName(container),
         type: 'system-container',
         status: container.status === 'running' ? 'running' : 'stopped',
         node,
@@ -3091,7 +3096,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // Add container runtimes
     for (const runtime of dockerHosts) {
       const dockerActionId = getDockerActionId(runtime);
-      const label = getPreferredResourceDisplayName(runtime);
+      const label = getPreferredInfrastructureDisplayName(runtime);
       const runtimeStatus =
         runtime.status === 'online' || runtime.status === 'running'
           ? 'online'
@@ -3110,7 +3115,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     for (const container of appContainers) {
       mentionCandidates.push({
         id: getAppContainerMentionId(container),
-        label: getPreferredResourceDisplayName(container),
+        label: getPreferredInfrastructureDisplayName(container),
         type: 'app-container',
         status: container.status === 'running' ? 'running' : 'exited',
         node: getAppContainerMentionHost(container),
@@ -3120,7 +3125,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     for (const storage of storageResources) {
       mentionCandidates.push({
         id: storage.id,
-        label: getPreferredResourceDisplayName(storage),
+        label: getPreferredInfrastructureDisplayName(storage),
         type: 'storage',
         status: storage.status,
         node: getStorageMentionNode(storage),
@@ -3131,7 +3136,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     for (const node of nodes) {
       mentionCandidates.push({
         id: `node:${node.platformId || ''}:${node.name}`,
-        label: getPreferredResourceDisplayName(node),
+        label: getPreferredInfrastructureDisplayName(node),
         type: 'agent',
         status: node.status,
       });
@@ -3140,7 +3145,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // Add standalone agents
     for (const agentResource of agentResources) {
       const agentActionId = getAgentActionId(agentResource);
-      const label = getPreferredResourceDisplayName(agentResource);
+      const label = getPreferredInfrastructureDisplayName(agentResource);
       const agentStatus =
         agentResource.status === 'online' || agentResource.status === 'running'
           ? 'online'
@@ -5263,7 +5268,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   rows={1}
                   class="max-h-40 min-h-[54px] flex-1 resize-none bg-transparent px-3.5 py-3.5 pr-14 text-sm leading-5 text-base-content placeholder-slate-400 focus:outline-none"
                 />
-                <div data-mention-autocomplete>
+                <div>
                   <MentionAutocomplete
                     query={mentionQuery()}
                     resources={mentionResources()}

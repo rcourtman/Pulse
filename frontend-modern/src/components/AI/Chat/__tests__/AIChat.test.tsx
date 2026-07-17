@@ -4919,32 +4919,35 @@ describe('AIChat', () => {
       expect(autocomplete).toHaveAttribute('data-visible', 'false');
     });
 
-    it('uses policy-aware labels and preserves distinct governed mention candidates', async () => {
+    it('keeps real infrastructure labels for governed resources so they stay searchable', async () => {
+      // Mention labels are a local admin surface: governed (sensitive/redacted)
+      // resources must keep their real names or they collapse into identical
+      // placeholders and become un-mentionable. Cloud redaction is enforced at
+      // the backend context layer, not in the composer autocomplete.
       const governedPolicy = {
-        sensitivity: 'restricted' as const,
-        routing: { scope: 'local-only' as const, redact: ['hostname'] as const },
+        sensitivity: 'sensitive' as const,
+        routing: { scope: 'local-first' as const, redact: ['hostname'] as const },
       };
       const governedResources = [
         {
-          id: 'agent-1',
-          name: 'secret-node-1',
-          label: 'redacted by policy',
-          type: 'agent' as const,
+          id: 'storage-1',
+          name: 'nvme-primary',
+          type: 'storage' as const,
           status: 'online',
+          parentName: 'Lab VC',
           policy: governedPolicy,
-          aiSafeSummary: 'redacted by policy',
+          aiSafeSummary: 'storage resource; status online; redacted for cloud summary',
         },
         {
-          id: 'agent-2',
-          name: 'secret-node-2',
-          label: 'redacted by policy',
-          type: 'agent' as const,
+          id: 'storage-2',
+          name: 'tank',
+          type: 'storage' as const,
           status: 'online',
           policy: governedPolicy,
-          aiSafeSummary: 'redacted by policy',
+          aiSafeSummary: 'storage resource; status online; redacted for cloud summary',
         },
       ];
-      mockByType.mockImplementation((type: string) => (type === 'agent' ? governedResources : []));
+      mockByType.mockImplementation((type: string) => (type === 'storage' ? governedResources : []));
       mockResources.mockReturnValue(governedResources);
 
       renderChat();
@@ -4956,10 +4959,7 @@ describe('AIChat', () => {
 
       const autocomplete = await screen.findByTestId('mention-autocomplete');
       expect(autocomplete).toHaveAttribute('data-resource-count', '2');
-      expect(autocomplete).toHaveAttribute(
-        'data-resource-labels',
-        'redacted by policy|redacted by policy',
-      );
+      expect(autocomplete).toHaveAttribute('data-resource-labels', 'nvme-primary|tank');
     });
 
     it('surfaces TrueNAS app containers through canonical app-container mention IDs', async () => {
@@ -5171,7 +5171,7 @@ describe('AIChat', () => {
       });
     });
 
-    it('inserts the governed display label into the prompt when a mention is selected', async () => {
+    it('inserts the real resource name into the prompt when a governed mention is selected', async () => {
       const governedPolicy = {
         sensitivity: 'restricted' as const,
         routing: { scope: 'local-only' as const, redact: ['hostname'] as const },
@@ -5180,7 +5180,6 @@ describe('AIChat', () => {
         {
           id: 'agent-1',
           name: 'secret-node-1',
-          label: 'redacted by policy',
           type: 'agent' as const,
           status: 'online',
           policy: governedPolicy,
@@ -5206,17 +5205,17 @@ describe('AIChat', () => {
 
       fireEvent.click(screen.getByTestId('mention-select-first'));
       await waitFor(() => {
-        expect(textarea.value).toBe('@redacted by policy ');
+        expect(textarea.value).toBe('@secret-node-1 ');
       });
 
       await waitForProviderCheckSettled();
       fireEvent.keyDown(textarea, { key: 'Enter' });
       expect(mockChat.sendMessage).toHaveBeenCalledWith(
-        '@redacted by policy',
+        '@secret-node-1',
         [
           expect.objectContaining({
             id: 'node::secret-node-1',
-            name: 'redacted by policy',
+            name: 'secret-node-1',
             type: 'agent',
           }),
         ],
