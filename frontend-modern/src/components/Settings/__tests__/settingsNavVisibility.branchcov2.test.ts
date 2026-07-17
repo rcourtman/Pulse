@@ -363,21 +363,18 @@ describe('shouldBlockSettingsRouteItem', () => {
       'security-users',
       'security-audit',
       'security-webhooks',
-    ] as const)(
-      'does NOT block panel-owned tab %s even when its features are missing',
-      (tab) => {
-        expect(
-          shouldBlockSettingsRouteItem(
-            tab,
-            createContext({
-              hasFeature: hasFeatures([]),
-              presentationPolicyResolved: true,
-              settingsCapabilitiesResolved: false,
-            }),
-          ),
-        ).toBe(false);
-      },
-    );
+    ] as const)('does NOT block panel-owned tab %s even when its features are missing', (tab) => {
+      expect(
+        shouldBlockSettingsRouteItem(
+          tab,
+          createContext({
+            hasFeature: hasFeatures([]),
+            presentationPolicyResolved: true,
+            settingsCapabilitiesResolved: false,
+          }),
+        ),
+      ).toBe(false);
+    });
   });
 
   describe('non-panel-owned hideWhenUnavailable tabs are feature-gated for routing', () => {
@@ -456,8 +453,17 @@ describe('isSettingsNavItemLocked', () => {
     expect(
       isSettingsNavItemLocked('security-roles', createContext({ hasFeature: hasFeatures([]) })),
     ).toBe(false);
+  });
+
+  it('reports system-relay as locked for free installs (visible nav item, panel-owned gate)', () => {
     expect(
       isSettingsNavItemLocked('system-relay', createContext({ hasFeature: hasFeatures([]) })),
+    ).toBe(true);
+    expect(
+      isSettingsNavItemLocked(
+        'system-relay',
+        createContext({ hasFeature: hasFeatures(['relay']) }),
+      ),
     ).toBe(false);
   });
 
@@ -476,11 +482,11 @@ describe('isSettingsNavItemLocked', () => {
     ).toBe(false);
   });
 
-  it('never reports a real catalog tab as locked (every feature-gated tab also has hideWhenUnavailable)', () => {
-    // See GLM_REPORT: the `return isTabLocked(...)` -> true outcome is unreachable
-    // for real catalog items, so every real tab resolves to false here.
+  it('never reports other real catalog tabs as locked (their feature gates also carry hideWhenUnavailable)', () => {
+    // system-relay is the one deliberate exception: it stays visible without the
+    // relay feature and reports locked (see the dedicated test above). Every
+    // other feature-gated tab still hides instead of locking.
     const tabs: SettingsTab[] = [
-      'system-relay',
       'security-webhooks',
       'organization-overview',
       'organization-access',
@@ -492,9 +498,9 @@ describe('isSettingsNavItemLocked', () => {
       'support-diagnostics',
     ];
     for (const tab of tabs) {
-      expect(
-        isSettingsNavItemLocked(tab, createContext({ hasFeature: hasFeatures([]) })),
-      ).toBe(false);
+      expect(isSettingsNavItemLocked(tab, createContext({ hasFeature: hasFeatures([]) }))).toBe(
+        false,
+      );
     }
   });
 });

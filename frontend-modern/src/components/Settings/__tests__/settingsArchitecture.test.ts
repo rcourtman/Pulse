@@ -275,6 +275,14 @@ describe('settings architecture guardrails', () => {
     expect(settingsNavCatalogSource).toContain("features: ['relay']");
     expect(settingsNavCatalogSource).toContain("features: ['advanced_reporting']");
     expect(settingsNavCatalogSource).toContain('hideWhenUnavailable: true');
+    // system-relay deliberately stays visible without the relay feature so
+    // Relay remains discoverable to free installs; the panel-owned upgrade
+    // gate communicates the paid boundary instead of nav hiding.
+    const systemRelayNavBlock = settingsNavCatalogSource.match(
+      /id: 'system-relay',[\s\S]*?requiredCapability: 'relayRead',\n\s*},/,
+    );
+    expect(systemRelayNavBlock?.[0]).toContain("features: ['relay']");
+    expect(systemRelayNavBlock?.[0]).not.toContain('hideWhenUnavailable');
     expect(settingsHeaderMetaSource).toContain(
       'title: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle',
     );

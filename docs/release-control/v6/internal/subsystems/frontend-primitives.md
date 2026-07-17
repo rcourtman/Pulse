@@ -192,6 +192,12 @@ must be reachable through the sidebar unless it is explicitly a hidden
 deep-link flow. The self-hosted `Plans` page is not a deep-link-only flow:
 `system-billing` stays visible whenever commercial presentation is allowed,
 while demo or commercial-suppressed sessions may still hide it.
+`system-relay` (Remote Access) is likewise not a deep-link-only flow: its nav
+item stays visible without the `relay` feature so Relay remains discoverable
+to free installs, and the panel-owned feature gate — not nav hiding —
+communicates the paid boundary. Capability-based hiding (`relayRead`) still
+applies; feature-based `hideWhenUnavailable` must not be reintroduced on that
+item.
 
 Candidate import-plan presentation inside the Infrastructure settings dialog is
 a shared primitive composition boundary. `NodeCandidateImportPlan.tsx` may use

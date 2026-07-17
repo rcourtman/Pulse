@@ -1,11 +1,18 @@
 import { Show } from 'solid-js';
+import { hasFeature } from '@/stores/license';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { AlertAppriseDestinationsSection } from '../AlertAppriseDestinationsSection';
 import { AlertDestinationsLoadErrorCard } from '../AlertDestinationsLoadErrorCard';
 import { AlertDestinationsLoadingState } from '../AlertDestinationsLoadingState';
 import { AlertEmailDestinationsSection } from '../AlertEmailDestinationsSection';
+import { AlertPushDestinationsSection } from '../AlertPushDestinationsSection';
 import { AlertWebhookDestinationsSection } from '../AlertWebhookDestinationsSection';
 
-import { useAlertDestinationsTabState, type AlertDestinationsTabStateProps } from '../useAlertDestinationsTabState';
+import {
+  useAlertDestinationsTabState,
+  type AlertDestinationsTabStateProps,
+} from '../useAlertDestinationsTabState';
 
 export interface DestinationsTabProps extends AlertDestinationsTabStateProps {
   setHasUnsavedChanges: (value: boolean) => void;
@@ -17,10 +24,7 @@ export function DestinationsTab(props: DestinationsTabProps) {
 
   return (
     <div class="flex w-full max-w-full flex-col gap-6 md:gap-8">
-      <Show
-        when={!state.isLoading()}
-        fallback={<AlertDestinationsLoadingState />}
-      >
+      <Show when={!state.isLoading()} fallback={<AlertDestinationsLoadingState />}>
         <Show when={state.hasLoadError()}>
           <AlertDestinationsLoadErrorCard
             error={props.configLoadError() || state.webhookLoadError() || ''}
@@ -52,6 +56,12 @@ export function DestinationsTab(props: DestinationsTabProps) {
           deleteWebhook={state.deleteWebhook}
           testWebhook={state.testWebhook}
           testingWebhook={state.testingWebhook()}
+        />
+
+        <AlertPushDestinationsSection
+          relayLicensed={hasFeature('relay')}
+          showUpgradePrompts={!presentationPolicyHidesUpgradePrompts()}
+          upgradeDestination={getUpgradeActionDestination('relay')}
         />
       </Show>
     </div>

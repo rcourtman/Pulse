@@ -97,7 +97,7 @@ export const DE_MESSAGE_OVERRIDES = {
     'Pruefen Sie aktive Vorfaelle, Warnungsverlauf, Schwellwerte, Benachrichtigungen und Zeitplaene.',
   'alerts.page.default.title': 'Warnmeldungen',
   'alerts.page.destinations.description':
-    'Leiten Sie Warnmeldungen an E-Mail-, Apprise- und Webhook-Ziele weiter.',
+    'Leiten Sie Warnmeldungen an E-Mail-, Apprise-, Webhook- und Mobile-Push-Ziele weiter.',
   'alerts.page.destinations.title': 'Benachrichtigungen',
   'alerts.page.history.description':
     'Suchen Sie fruehere Warnmeldungen, pruefen Sie Vorfall-Zeitleisten und beobachten Sie Warnungshaeufigkeit ueber Zeit.',
@@ -423,7 +423,7 @@ export const DE_MESSAGE_OVERRIDES = {
     'Verwalten Sie Backup-/Snapshot-Abfragen sowie Export- und Importablaeufe der Konfiguration.',
   'settings.header.systemRecovery.title': 'Wiederherstellung',
   'settings.header.systemRelay.description':
-    'Konfigurieren Sie Pulse-Relay-Konnektivitaet fuer sicheren Remote-Zugriff und Pulse-Mobile-Kopplung.',
+    'Behalten Sie Ihre Systeme von ueberall im Blick und erhalten Sie Alarm-Push-Benachrichtigungen ueber die Pulse-Mobile-App — ohne Portfreigaben oder VPN.',
   'settings.header.systemRelay.title': 'Remote-Zugriff',
   'settings.header.systemUpdates.description':
     'Verwalten Sie Versionspruefungen, Update-Kanaele und automatisches Update-Verhalten.',

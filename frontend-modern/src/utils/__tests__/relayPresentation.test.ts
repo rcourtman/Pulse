@@ -104,13 +104,22 @@ describe('relayPresentation', () => {
   });
 
   it('centralizes relay availability copy', () => {
-    expect(RELAY_SETTINGS_DESCRIPTION).toContain('Pulse Mobile pairing');
-    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('supported Pulse Mobile clients');
-    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('available with Relay and higher plans');
+    // Value-first copy: every surface states the user job (push notifications
+    // through the Pulse Mobile app, no port forwarding/VPN), not transport
+    // mechanics.
+    expect(RELAY_SETTINGS_DESCRIPTION).toContain('Pulse Mobile app');
+    expect(RELAY_SETTINGS_DESCRIPTION).toContain('push notifications');
+    expect(RELAY_SETTINGS_DESCRIPTION).toContain('no port forwarding or VPN');
+    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('Pulse Mobile app');
+    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('push notifications');
+    expect(RELAY_LICENSE_REQUIRED_MESSAGE).toContain('Available with Relay and Pro plans');
     expect(RELAY_LICENSE_REQUIRED_MESSAGE).not.toContain('Relay or Pro');
     expect(RELAY_PAIRING_AVAILABILITY_TITLE).toBe('Pair Pulse Mobile through Relay');
-    expect(RELAY_PAIRING_AVAILABILITY_MESSAGE).toContain('QR code or deep link');
-    expect(RELAY_ENABLE_HELP_TEXT).toContain('Pulse Mobile pairing');
+    expect(RELAY_PAIRING_AVAILABILITY_MESSAGE).toContain('QR code');
+    expect(RELAY_PAIRING_AVAILABILITY_MESSAGE).toContain('deep link');
+    expect(RELAY_PAIRING_AVAILABILITY_MESSAGE).toContain('push notifications');
+    expect(RELAY_ENABLE_HELP_TEXT).toContain('Pulse Mobile devices');
+    expect(RELAY_ENABLE_HELP_TEXT).toContain('No inbound ports');
     expect(RELAY_ACTIVATION_REQUIRED_LABEL).toBe('Activation required');
     expect(RELAY_ACTIVATION_REQUIRED_MESSAGE).toContain('active Relay token');
     expect(RELAY_ACTIVATION_REQUIRED_MESSAGE).toContain('Relay-capable plan');

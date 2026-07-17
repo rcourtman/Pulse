@@ -49,6 +49,24 @@ describe('settings localization catalog', () => {
     expect(getSettingsNavItem('support-diagnostics', 'es')?.label).toBe('Diagnóstico y salud');
   });
 
+  it('localizes the value-first Remote Access header in every catalog locale', () => {
+    expect(SETTINGS_HEADER_META['system-relay']).toEqual({
+      title: 'Remote Access',
+      description:
+        'Check on your systems and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required.',
+    });
+    expect(getSettingsHeaderMeta('es')['system-relay']).toEqual({
+      title: 'Acceso remoto',
+      description:
+        'Consulta tus sistemas y recibe notificaciones push de alertas desde cualquier lugar con la aplicación Pulse Mobile — sin abrir puertos ni VPN.',
+    });
+    expect(getSettingsHeaderMeta('de')['system-relay']).toEqual({
+      title: 'Remote-Zugriff',
+      description:
+        'Behalten Sie Ihre Systeme von ueberall im Blick und erhalten Sie Alarm-Push-Benachrichtigungen ueber die Pulse-Mobile-App — ohne Portfreigaben oder VPN.',
+    });
+  });
+
   it('localizes settings header metadata and read-only infrastructure copy', () => {
     const spanishMeta = getSettingsHeaderMeta('es');
     expect(spanishMeta['system-network']).toEqual({

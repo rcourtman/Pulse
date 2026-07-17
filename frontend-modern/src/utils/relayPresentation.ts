@@ -7,7 +7,8 @@ export interface RelayConnectionPresentation {
   pulse: boolean;
 }
 
-const RELAY_MISSING_TOKEN_ERROR = /\b(?:no license token available|license token provider not configured)\b/i;
+const RELAY_MISSING_TOKEN_ERROR =
+  /\b(?:no license token available|license token provider not configured)\b/i;
 
 export const RELAY_READONLY_NOTICE_CLASS =
   'border border-blue-200 text-xs text-blue-800 dark:border-blue-800 dark:text-blue-200';
@@ -29,19 +30,19 @@ export const RELAY_QR_IMAGE_CLASS = 'rounded-md border border-border p-2';
 export const RELAY_DIAGNOSTICS_WRAP_CLASS = 'space-y-2';
 export const RELAY_DIAGNOSTICS_TITLE_CLASS = 'text-xs font-semibold text-base-content';
 export const RELAY_SETTINGS_DESCRIPTION =
-  'Configure Pulse relay connectivity for secure remote access and Pulse Mobile pairing.';
+  'Check on your systems and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required.';
 export const RELAY_LICENSE_REQUIRED_MESSAGE =
-  'Remote access is available with Relay and higher plans. Pair supported Pulse Mobile clients with this instance using a QR code or deep link.';
+  'See your infrastructure and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required. Available with Relay and Pro plans.';
 export const RELAY_PAIRING_AVAILABILITY_TITLE = 'Pair Pulse Mobile through Relay';
 export const RELAY_PAIRING_AVAILABILITY_MESSAGE =
-  'Supported Pulse Mobile clients connect to this Pulse instance with a QR code or deep link over end-to-end encrypted relay connectivity.';
+  'Install the Pulse Mobile app on your phone, then scan a QR code or open a deep link here to securely link it to this Pulse instance. Paired devices receive alert push notifications over an end-to-end encrypted connection.';
 export const RELAY_ENABLE_HELP_TEXT =
-  'Connect this Pulse instance to the relay server for secure remote access and Pulse Mobile pairing.';
+  'Open a secure outbound connection so paired Pulse Mobile devices can reach this instance from anywhere. No inbound ports needed.';
 export const RELAY_ACTIVATION_REQUIRED_LABEL = 'Activation required';
 export const RELAY_ACTIVATION_REQUIRED_MESSAGE =
   'Remote Access is enabled, but this instance does not have an active Relay token. Activate a Relay-capable plan or turn Remote Access off before pairing mobile clients.';
 export const RELAY_PAIRING_APP_AVAILABILITY_TEXT =
-  'Pulse Mobile is in early access; install links for Relay and Pro plans are on';
+  'Pulse Mobile is in early access for iOS and Android; to get the install links, enter your activation key on';
 export const RELAY_PAIRING_APP_DOWNLOAD_LINK_LABEL = 'your download page';
 export const RELAY_PAIRING_APP_DOWNLOAD_LINK_CLASS =
   'font-medium text-blue-600 underline-offset-2 hover:underline dark:text-blue-400';

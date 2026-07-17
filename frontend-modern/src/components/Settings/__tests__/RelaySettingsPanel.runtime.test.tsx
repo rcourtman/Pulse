@@ -189,7 +189,7 @@ describe('RelaySettingsPanel runtime', () => {
 
     expect(
       screen.getByText(
-        'Remote access is available with Relay and higher plans. Pair supported Pulse Mobile clients with this instance using a QR code or deep link.',
+        'See your infrastructure and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required. Available with Relay and Pro plans.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View plans' })).toHaveAttribute(
@@ -208,7 +208,7 @@ describe('RelaySettingsPanel runtime', () => {
     expect(screen.getByText('Pair Pulse Mobile through Relay')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Supported Pulse Mobile clients connect to this Pulse instance with a QR code or deep link over end-to-end encrypted relay connectivity.',
+        'Install the Pulse Mobile app on your phone, then scan a QR code or open a deep link here to securely link it to this Pulse instance. Paired devices receive alert push notifications over an end-to-end encrypted connection.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('Connected')).toBeInTheDocument();

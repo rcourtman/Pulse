@@ -98,8 +98,7 @@ describe('getSettingsHeaderMeta', () => {
     it('localizes monitoring-availability to the English baseline', () => {
       expect(en['monitoring-availability']).toEqual({
         title: 'Availability checks',
-        description:
-          'Monitor endpoint-only devices and services with ping, TCP, and HTTP probes.',
+        description: 'Monitor endpoint-only devices and services with ping, TCP, and HTTP probes.',
       });
     });
 
@@ -113,8 +112,7 @@ describe('getSettingsHeaderMeta', () => {
     it('localizes system-network to the English baseline (sibling only pinned es/de)', () => {
       expect(en['system-network']).toEqual({
         title: 'Network',
-        description:
-          'Configure the public URL, CORS, embedding, and webhook network boundaries.',
+        description: 'Configure the public URL, CORS, embedding, and webhook network boundaries.',
       });
     });
 
@@ -167,7 +165,7 @@ describe('getSettingsHeaderMeta', () => {
       expect(en['system-relay']).toEqual({
         title: 'Remote Access',
         description:
-          'Configure Pulse relay connectivity for secure remote access and Pulse Mobile pairing.',
+          'Check on your systems and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required.',
       });
     });
 
@@ -442,7 +440,7 @@ describe('getSettingsHeaderMeta', () => {
       expect(de['system-relay']).toEqual({
         title: 'Remote-Zugriff',
         description:
-          'Konfigurieren Sie Pulse-Relay-Konnektivitaet fuer sicheren Remote-Zugriff und Pulse-Mobile-Kopplung.',
+          'Behalten Sie Ihre Systeme von ueberall im Blick und erhalten Sie Alarm-Push-Benachrichtigungen ueber die Pulse-Mobile-App — ohne Portfreigaben oder VPN.',
       });
     });
 
@@ -535,8 +533,7 @@ describe('getSettingsHeaderMeta', () => {
     it('localizes security-auth', () => {
       expect(de['security-auth']).toEqual({
         title: 'Authentifizierung',
-        description:
-          'Verwalten Sie passwortbasierte Authentifizierung und Zugangsdatenrotation.',
+        description: 'Verwalten Sie passwortbasierte Authentifizierung und Zugangsdatenrotation.',
       });
     });
 
@@ -642,7 +639,7 @@ describe('getSettingsHeaderMeta', () => {
       expect(es['system-relay']).toEqual({
         title: 'Acceso remoto',
         description:
-          'Configura la conectividad de relay de Pulse para acceso remoto seguro y vinculación con Pulse Mobile.',
+          'Consulta tus sistemas y recibe notificaciones push de alertas desde cualquier lugar con la aplicación Pulse Mobile — sin abrir puertos ni VPN.',
       });
     });
 
@@ -757,8 +754,7 @@ describe('getSettingsHeaderMeta', () => {
     it('localizes security-users', () => {
       expect(es['security-users']).toEqual({
         title: 'Acceso de usuarios',
-        description:
-          'Asigna roles a usuarios y consulta permisos efectivos en tu infraestructura.',
+        description: 'Asigna roles a usuarios y consulta permisos efectivos en tu infraestructura.',
       });
     });
 
@@ -818,15 +814,15 @@ describe('getInfrastructureReadOnlyHeaderDescription', () => {
   });
 
   it('normalizes an explicit null locale to DEFAULT_LOCALE', () => {
-    expect(
-      getInfrastructureReadOnlyHeaderDescription(null as unknown as SupportedLocale),
-    ).toBe(getInfrastructureReadOnlyHeaderDescription('en'));
+    expect(getInfrastructureReadOnlyHeaderDescription(null as unknown as SupportedLocale)).toBe(
+      getInfrastructureReadOnlyHeaderDescription('en'),
+    );
   });
 
   it('normalizes an unsupported locale string to DEFAULT_LOCALE', () => {
     // 'fr' is not yet a SupportedLocale, so normalizeLocale falls back to en.
-    expect(
-      getInfrastructureReadOnlyHeaderDescription('fr' as unknown as SupportedLocale),
-    ).toBe(getInfrastructureReadOnlyHeaderDescription('en'));
+    expect(getInfrastructureReadOnlyHeaderDescription('fr' as unknown as SupportedLocale)).toBe(
+      getInfrastructureReadOnlyHeaderDescription('en'),
+    );
   });
 });

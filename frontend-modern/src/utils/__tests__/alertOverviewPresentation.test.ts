@@ -147,7 +147,7 @@ describe('alertOverviewPresentation', () => {
       'Tune thresholds and scoped overrides for infrastructure, workloads, and integrations.',
     );
     expect(ALERTS_PAGE_DESTINATIONS_DESCRIPTION).toBe(
-      'Route alert notifications to email, Apprise, and webhook destinations.',
+      'Route alert notifications to email, Apprise, webhook, and mobile push destinations.',
     );
     expect(ALERTS_PAGE_SCHEDULE_DESCRIPTION).toBe(
       'Define quiet hours, grouping, cooldowns, recovery, and escalation behavior for alert delivery.',
@@ -168,7 +168,8 @@ describe('alertOverviewPresentation', () => {
       },
       destinations: {
         title: 'Notifications',
-        description: 'Route alert notifications to email, Apprise, and webhook destinations.',
+        description:
+          'Route alert notifications to email, Apprise, webhook, and mobile push destinations.',
       },
       schedule: {
         title: 'Maintenance Schedule',

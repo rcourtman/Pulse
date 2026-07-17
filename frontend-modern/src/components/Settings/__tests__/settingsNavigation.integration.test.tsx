@@ -135,9 +135,32 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(false);
   });
 
+  it('keeps the Remote Access tab visible to free installs so Relay stays discoverable', () => {
+    // system-relay deliberately omits hideWhenUnavailable: the panel renders its
+    // own upgrade gate, so free installs see the entry instead of never learning
+    // the capability exists.
+    expect(
+      shouldHideSettingsNavItem('system-relay', {
+        hasFeature: hasFeatures([]),
+        runtimeCapabilitiesLoaded: () => true,
+        hostedModeEnabled: false,
+        settingsCapabilitiesResolved: true,
+        settingsCapabilities: { relayRead: true },
+      }),
+    ).toBe(false);
+    expect(
+      shouldBlockSettingsRouteItem('system-relay', {
+        hasFeature: hasFeatures([]),
+        runtimeCapabilitiesLoaded: () => true,
+        hostedModeEnabled: false,
+        settingsCapabilitiesResolved: true,
+        settingsCapabilities: { relayRead: true },
+      }),
+    ).toBe(false);
+  });
+
   it('hides paid-only self-hosted tabs from free installs', () => {
     for (const tab of [
-      'system-relay',
       'security-roles',
       'security-users',
       'security-audit',
@@ -186,7 +209,6 @@ describe('settingsNavigation integration scaffold', () => {
 
   it('keeps direct panel-owned feature gates routeable even when hidden from navigation', () => {
     for (const tab of [
-      'system-relay',
       'support-reporting',
       'security-roles',
       'security-users',

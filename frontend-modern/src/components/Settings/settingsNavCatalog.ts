@@ -280,7 +280,9 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: RadioTower,
         iconProps: { strokeWidth: 2 },
         features: ['relay'],
-        hideWhenUnavailable: true,
+        // Deliberately visible without the relay feature: the panel renders its
+        // own upgrade gate, and hiding the item made Relay undiscoverable for
+        // free installs.
         requiredCapability: 'relayRead',
       },
     ],

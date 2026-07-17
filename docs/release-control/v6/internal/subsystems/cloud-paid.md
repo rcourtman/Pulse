@@ -243,6 +243,12 @@ avoids a cloud-control-plane report data path across clients.
    settings surface must preserve API-owned diagnostics and clean up the
    temporary server-minted mobile token; it must not downgrade that response
    into a generic paid-state prompt or create browser-owned relay credentials.
+   Relay presentation on the settings surface is value-first: Remote Access
+   panel and pairing copy must state the user job (alert push notifications
+   and remote monitoring through the Pulse Mobile app with no inbound ports or
+   VPN), name iOS and Android early access, and state that download-page
+   install links appear only after activation-key entry, rather than
+   describing relay transport mechanics alone.
 2. `frontend-modern/src/components/Settings/MonitoredSystemImpactPreview.tsx` shared with `agent-lifecycle`: the monitored-system impact preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
 3. `frontend-modern/src/useAppRuntimeState.ts` shared with `performance-and-scalability`: the authenticated app runtime bootstrap is both a hosted commercial org-context boundary and a protected app-shell performance boundary.
    The app runtime may use `ssoSessionDisplayName` from security status for

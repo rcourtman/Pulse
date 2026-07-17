@@ -164,6 +164,17 @@ inline SVG shells in alert-owned runtime components.
    `frontend-modern/src/utils/alertTargetTypes.ts`. Supported target types
    must share the unified evaluator, the canonical threshold/override identity
    chain, and the standard notification delivery path.
+10. Add or change the alert notification destinations catalog through
+    `frontend-modern/src/features/alerts/tabs/DestinationsTab.tsx` and
+    `frontend-modern/src/utils/alertDestinationsPresentation.ts`. The
+    destinations surface presents mobile push (Pulse Mobile paired through
+    Relay) alongside email, Apprise, and webhooks so phone delivery is
+    discoverable where alert routing is configured. It stays a pointer
+    surface: it routes setup to the canonical `/settings/system-relay` Remote
+    Access panel rather than duplicating relay pairing state or relay API
+    calls, and when the `relay` feature is absent it gates through the shared
+    `FeatureGateSection` and upgrade-navigation contract, rendering no upgrade
+    call-to-action when prompt suppression applies.
 
 ## Forbidden Paths
 

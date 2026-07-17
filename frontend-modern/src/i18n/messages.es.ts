@@ -92,7 +92,7 @@ export const ES_MESSAGE_OVERRIDES = {
     'Revisa incidentes activos, el historial de alertas, umbrales, notificaciones y programaciones.',
   'alerts.page.default.title': 'Alertas',
   'alerts.page.destinations.description':
-    'Enruta notificaciones de alerta a destinos de email, Apprise y webhook.',
+    'Enruta notificaciones de alerta a destinos de email, Apprise, webhook y push móvil.',
   'alerts.page.destinations.title': 'Notificaciones',
   'alerts.page.history.description':
     'Busca alertas anteriores, revisa lineas de tiempo de incidentes e inspecciona la frecuencia de alertas.',
@@ -416,7 +416,7 @@ export const ES_MESSAGE_OVERRIDES = {
     'Administra sondeos de copias/snapshots y flujos de exportación e importación de configuración.',
   'settings.header.systemRecovery.title': 'Recuperación',
   'settings.header.systemRelay.description':
-    'Configura la conectividad de relay de Pulse para acceso remoto seguro y vinculación con Pulse Mobile.',
+    'Consulta tus sistemas y recibe notificaciones push de alertas desde cualquier lugar con la aplicación Pulse Mobile — sin abrir puertos ni VPN.',
   'settings.header.systemRelay.title': 'Acceso remoto',
   'settings.header.systemUpdates.description':
     'Administra comprobaciones de versión, canales de actualización y comportamiento de actualización automática.',

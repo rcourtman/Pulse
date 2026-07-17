@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   ALERT_DESTINATIONS_CONFIG_LOAD_ERROR,
+  ALERT_DESTINATIONS_PUSH_GATE_MESSAGE,
+  ALERT_DESTINATIONS_PUSH_GATE_TITLE,
+  ALERT_DESTINATIONS_PUSH_PANEL_DESCRIPTION,
+  ALERT_DESTINATIONS_PUSH_PANEL_TITLE,
+  ALERT_DESTINATIONS_PUSH_READY_MESSAGE,
+  ALERT_DESTINATIONS_PUSH_SETUP_LINK_LABEL,
   ALERT_DESTINATIONS_APPRISE_API_KEY_HEADER_HELP,
   ALERT_DESTINATIONS_APPRISE_ENABLE_FOR_TEST_ERROR,
   ALERT_DESTINATIONS_APPRISE_MISSING_TARGETS_ERROR,
@@ -106,5 +112,19 @@ describe('alertDestinationsPresentation', () => {
     expect(getAlertDestinationsAppriseTestFailure()).toBe(
       'Unable to send the test notification.',
     );
+  });
+
+  it('returns canonical mobile push destination copy', () => {
+    expect(ALERT_DESTINATIONS_PUSH_PANEL_TITLE).toBe('Mobile push notifications');
+    expect(ALERT_DESTINATIONS_PUSH_PANEL_DESCRIPTION).toBe(
+      'Deliver alerts to your phone through the Pulse Mobile app.',
+    );
+    expect(ALERT_DESTINATIONS_PUSH_READY_MESSAGE).toContain('Pulse Mobile devices paired');
+    expect(ALERT_DESTINATIONS_PUSH_READY_MESSAGE).toContain('Remote Access settings');
+    expect(ALERT_DESTINATIONS_PUSH_SETUP_LINK_LABEL).toBe('Open Remote Access settings');
+    expect(ALERT_DESTINATIONS_PUSH_GATE_TITLE).toBe('Get alerts on your phone');
+    expect(ALERT_DESTINATIONS_PUSH_GATE_MESSAGE).toContain('Pulse Mobile app');
+    expect(ALERT_DESTINATIONS_PUSH_GATE_MESSAGE).toContain('no port forwarding or VPN');
+    expect(ALERT_DESTINATIONS_PUSH_GATE_MESSAGE).toContain('Available with Relay and Pro plans');
   });
 });

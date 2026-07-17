@@ -181,7 +181,7 @@ export const EN_MESSAGES = {
     'Review active incidents, inspect alert history, and manage thresholds, notifications, and schedules.',
   'alerts.page.default.title': 'Alerts',
   'alerts.page.destinations.description':
-    'Route alert notifications to email, Apprise, and webhook destinations.',
+    'Route alert notifications to email, Apprise, webhook, and mobile push destinations.',
   'alerts.page.destinations.title': 'Notifications',
   'alerts.page.history.description':
     'Search prior alerts, review incident timelines, and inspect alert frequency over time.',
@@ -408,7 +408,7 @@ export const EN_MESSAGES = {
     'Manage backup/snapshot polling plus configuration export and import workflows.',
   'settings.header.systemRecovery.title': 'Recovery',
   'settings.header.systemRelay.description':
-    'Configure Pulse relay connectivity for secure remote access and Pulse Mobile pairing.',
+    'Check on your systems and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required.',
   'settings.header.systemRelay.title': 'Remote Access',
   'settings.header.systemUpdates.description':
     'Manage version checks, update channels, and automatic update behavior.',

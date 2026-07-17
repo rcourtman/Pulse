@@ -61,13 +61,19 @@ export const ALERT_DESTINATIONS_APPRISE_MISSING_TARGETS_ERROR =
   'Add at least one Apprise target to test CLI delivery.';
 export const ALERT_DESTINATIONS_APPRISE_MISSING_SERVER_URL_ERROR =
   'Enter an Apprise API server URL to test API delivery.';
-export const ALERT_DESTINATIONS_EMAIL_TEST_SUCCESS =
-  'Test email sent. Check your inbox.';
+export const ALERT_DESTINATIONS_EMAIL_TEST_SUCCESS = 'Test email sent. Check your inbox.';
 export const ALERT_DESTINATIONS_EMAIL_TEST_FAILURE = 'Unable to send the test email.';
-export const ALERT_DESTINATIONS_APPRISE_TEST_SUCCESS =
-  'Test Apprise notification sent.';
-export const ALERT_DESTINATIONS_APPRISE_TEST_FAILURE =
-  'Unable to send the test notification.';
+export const ALERT_DESTINATIONS_PUSH_PANEL_TITLE = 'Mobile push notifications';
+export const ALERT_DESTINATIONS_PUSH_PANEL_DESCRIPTION =
+  'Deliver alerts to your phone through the Pulse Mobile app.';
+export const ALERT_DESTINATIONS_PUSH_READY_MESSAGE =
+  'Alerts are pushed to Pulse Mobile devices paired with this instance. Manage pairing and connectivity in Remote Access settings.';
+export const ALERT_DESTINATIONS_PUSH_SETUP_LINK_LABEL = 'Open Remote Access settings';
+export const ALERT_DESTINATIONS_PUSH_GATE_TITLE = 'Get alerts on your phone';
+export const ALERT_DESTINATIONS_PUSH_GATE_MESSAGE =
+  'Pair the Pulse Mobile app to receive alert push notifications and check on your systems from anywhere — no port forwarding or VPN required. Available with Relay and Pro plans.';
+export const ALERT_DESTINATIONS_APPRISE_TEST_SUCCESS = 'Test Apprise notification sent.';
+export const ALERT_DESTINATIONS_APPRISE_TEST_FAILURE = 'Unable to send the test notification.';
 
 export function getAlertDestinationsConfigLoadError() {
   return ALERT_DESTINATIONS_CONFIG_LOAD_ERROR;

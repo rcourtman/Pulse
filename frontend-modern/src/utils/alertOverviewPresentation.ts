@@ -31,7 +31,7 @@ export const ALERTS_PAGE_OVERVIEW_DESCRIPTION =
 export const ALERTS_PAGE_THRESHOLDS_DESCRIPTION =
   'Tune thresholds and scoped overrides for infrastructure, workloads, and integrations.';
 export const ALERTS_PAGE_DESTINATIONS_DESCRIPTION =
-  'Route alert notifications to email, Apprise, and webhook destinations.';
+  'Route alert notifications to email, Apprise, webhook, and mobile push destinations.';
 export const ALERTS_PAGE_SCHEDULE_DESCRIPTION =
   'Define quiet hours, grouping, cooldowns, recovery, and escalation behavior for alert delivery.';
 export const ALERTS_PAGE_HISTORY_DESCRIPTION =
