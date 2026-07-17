@@ -55,6 +55,15 @@ jobs:
       - name: Run deterministic qualification regression
         run: go test ./internal/ai/qualification ./cmd/patrol-qualify -count=1
 
+      - name: Stub embedded frontend dist so internal/api compiles
+        # internal/api/frontend_embed.go has `//go:embed all:frontend-modern/dist`,
+        # which fails the build when the directory is absent. These tests exercise
+        # Go logic only, so an empty index.html satisfies the embed without paying
+        # for a frontend build.
+        run: |
+          mkdir -p internal/api/frontend-modern/dist
+          printf '<!doctype html><html><head><title>Pulse CI stub</title></head><body></body></html>\n' > internal/api/frontend-modern/dist/index.html
+
       - name: Prove Patrol lifecycle and permission boundaries
         run: >-
           go test ./internal/ai ./internal/ai/tools ./internal/agentcapabilities ./internal/api
