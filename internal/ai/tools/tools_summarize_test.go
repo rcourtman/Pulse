@@ -3,11 +3,14 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentcapabilities"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
@@ -368,6 +371,249 @@ func TestSummarizeTool_FleetUsesFleetNarratorWhenConfigured(t *testing.T) {
 	}
 	if len(parsed.Outliers) != 1 || parsed.Outliers[0].ResourceName != "alpha" {
 		t.Errorf("Outliers = %#v", parsed.Outliers)
+	}
+}
+
+// The production unified provider (the monitor adapter) must satisfy the
+// on-demand metrics-target resolver, or fleet enumeration silently degrades
+// to fixture-populated targets only.
+var _ summarizeMetricsTargetResolver = (*unifiedresources.MonitorAdapter)(nil)
+
+// stubSummarizeResourceProvider implements UnifiedResourceProvider plus the
+// on-demand metrics-target resolver the production monitor adapter exposes.
+type stubSummarizeResourceProvider struct {
+	byType  map[unifiedresources.ResourceType][]unifiedresources.Resource
+	targets map[string]*unifiedresources.MetricsTarget
+}
+
+func (s *stubSummarizeResourceProvider) GetByType(t unifiedresources.ResourceType) []unifiedresources.Resource {
+	return s.byType[t]
+}
+
+func (s *stubSummarizeResourceProvider) MetricsTargetForResource(resourceID string) *unifiedresources.MetricsTarget {
+	return s.targets[resourceID]
+}
+
+func newSummarizeStubProvider() *stubSummarizeResourceProvider {
+	return &stubSummarizeResourceProvider{
+		byType: map[unifiedresources.ResourceType][]unifiedresources.Resource{
+			unifiedresources.ResourceTypeAgent: {
+				{
+					ID:      "host-abc123",
+					Type:    unifiedresources.ResourceTypeAgent,
+					Name:    "delly",
+					Status:  unifiedresources.StatusOnline,
+					Proxmox: &unifiedresources.ProxmoxData{},
+				},
+			},
+			unifiedresources.ResourceTypeVM: {
+				{
+					ID:     "vm-def456",
+					Type:   unifiedresources.ResourceTypeVM,
+					Name:   "media-server",
+					Status: unifiedresources.StatusOnline,
+				},
+			},
+		},
+		targets: map[string]*unifiedresources.MetricsTarget{
+			"host-abc123": {ResourceType: "agent", ResourceID: "delly-node-id"},
+			"vm-def456":   {ResourceType: "vm", ResourceID: "pve1:node:101"},
+		},
+	}
+}
+
+func TestSummarizeTool_FleetEnumeratesWhenIDsOmitted(t *testing.T) {
+	exec, cleanup := newSummarizeTestEnvironment(t)
+	defer cleanup()
+	exec.SetUnifiedResourceProvider(newSummarizeStubProvider())
+
+	res, err := exec.executeSummarize(context.Background(), map[string]interface{}{
+		"action": "fleet",
+	})
+	if err != nil {
+		t.Fatalf("executeSummarize: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("expected omitted resource_ids to self-enumerate, got error: %+v", res.Content)
+	}
+	var parsed summarizeFleetResponse
+	if err := json.Unmarshal([]byte(res.Content[0].Text), &parsed); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !parsed.Enumerated {
+		t.Error("expected enumerated=true")
+	}
+	if len(parsed.ResourceIDs) != 2 {
+		t.Fatalf("expected 2 enumerated resources, got %v", parsed.ResourceIDs)
+	}
+	// Infrastructure enumerates before guests.
+	if parsed.ResourceIDs[0] != "host-abc123" || parsed.ResourceIDs[1] != "vm-def456" {
+		t.Errorf("ResourceIDs = %v, want infrastructure first", parsed.ResourceIDs)
+	}
+	if len(parsed.Resources) != 2 || parsed.Resources[0].Name != "delly" || parsed.Resources[1].Type != "vm" {
+		t.Errorf("Resources = %+v", parsed.Resources)
+	}
+	// Pure Proxmox node classification keeps the "node" reporting type even
+	// though the metrics target labels the agent family.
+	if parsed.Resources[0].Type != "node" {
+		t.Errorf("host entry type = %q, want node", parsed.Resources[0].Type)
+	}
+}
+
+func TestSummarizeTool_FleetEnumerationHonorsTypeFilter(t *testing.T) {
+	exec, cleanup := newSummarizeTestEnvironment(t)
+	defer cleanup()
+	exec.SetUnifiedResourceProvider(newSummarizeStubProvider())
+
+	res, err := exec.executeSummarize(context.Background(), map[string]interface{}{
+		"action":        "fleet",
+		"resource_type": "vm",
+	})
+	if err != nil {
+		t.Fatalf("executeSummarize: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error: %+v", res.Content)
+	}
+	var parsed summarizeFleetResponse
+	if err := json.Unmarshal([]byte(res.Content[0].Text), &parsed); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(parsed.ResourceIDs) != 1 || parsed.ResourceIDs[0] != "vm-def456" {
+		t.Errorf("ResourceIDs = %v, want only the VM", parsed.ResourceIDs)
+	}
+}
+
+func TestSummarizeTool_FleetEnumerationCapsAndNotes(t *testing.T) {
+	exec, cleanup := newSummarizeTestEnvironment(t)
+	defer cleanup()
+	provider := newSummarizeStubProvider()
+	var vms []unifiedresources.Resource
+	for i := 0; i < summarizeFleetMaxResources+10; i++ {
+		vms = append(vms, unifiedresources.Resource{
+			ID:   fmt.Sprintf("vm-%03d", i),
+			Type: unifiedresources.ResourceTypeVM,
+			Name: fmt.Sprintf("guest-%03d", i),
+		})
+	}
+	provider.byType[unifiedresources.ResourceTypeVM] = vms
+	exec.SetUnifiedResourceProvider(provider)
+
+	res, err := exec.executeSummarize(context.Background(), map[string]interface{}{
+		"action": "fleet",
+	})
+	if err != nil {
+		t.Fatalf("executeSummarize: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error: %+v", res.Content)
+	}
+	var parsed summarizeFleetResponse
+	if err := json.Unmarshal([]byte(res.Content[0].Text), &parsed); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(parsed.ResourceIDs) != summarizeFleetMaxResources {
+		t.Errorf("expected cap at %d resources, got %d", summarizeFleetMaxResources, len(parsed.ResourceIDs))
+	}
+	if parsed.Note == "" {
+		t.Error("expected truncation note when the enumeration exceeds the cap")
+	}
+}
+
+func TestSummarizeTool_FleetEnumerationEmptyFleetErrorForbidsAskingOperator(t *testing.T) {
+	exec, cleanup := newSummarizeTestEnvironment(t)
+	defer cleanup()
+
+	res, err := exec.executeSummarize(context.Background(), map[string]interface{}{
+		"action": "fleet",
+	})
+	if err != nil {
+		t.Fatalf("executeSummarize: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected error when no resources are known")
+	}
+	if len(res.Content) == 0 || !strings.Contains(res.Content[0].Text, "do not ask the operator") {
+		t.Errorf("empty-fleet error must steer the model away from operator questions, got %+v", res.Content)
+	}
+}
+
+func TestSummarizeTool_FleetResolvesNamesAndTranslatesMetricsIDs(t *testing.T) {
+	exec, cleanup := newSummarizeTestEnvironment(t)
+	defer cleanup()
+	exec.SetUnifiedResourceProvider(newSummarizeStubProvider())
+
+	fleet := &stubFleetReportNarrator{
+		response: reporting.FleetNarrative{Source: reporting.NarrativeSourceAI},
+	}
+	exec.reportFleetNarrator = fleet
+
+	res, err := exec.executeSummarize(context.Background(), map[string]interface{}{
+		"action":       "fleet",
+		"resource_ids": "delly, media-server",
+	})
+	if err != nil {
+		t.Fatalf("executeSummarize: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("unexpected error: %+v", res.Content)
+	}
+	var parsed summarizeFleetResponse
+	if err := json.Unmarshal([]byte(res.Content[0].Text), &parsed); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(parsed.ResourceIDs) != 2 || parsed.ResourceIDs[0] != "host-abc123" || parsed.ResourceIDs[1] != "vm-def456" {
+		t.Errorf("names should resolve to canonical IDs, got %v", parsed.ResourceIDs)
+	}
+	if parsed.Enumerated {
+		t.Error("explicit resource_ids must not report enumerated=true")
+	}
+}
+
+func TestSummarizeTool_FleetUnresolvedIDsWithoutTypeErrorsWithRecoveryPath(t *testing.T) {
+	exec, cleanup := newSummarizeTestEnvironment(t)
+	defer cleanup()
+	exec.SetUnifiedResourceProvider(newSummarizeStubProvider())
+
+	res, err := exec.executeSummarize(context.Background(), map[string]interface{}{
+		"action":       "fleet",
+		"resource_ids": "no-such-thing",
+	})
+	if err != nil {
+		t.Fatalf("executeSummarize: %v", err)
+	}
+	if !res.IsError {
+		t.Fatal("expected error for unresolvable IDs without a resource_type")
+	}
+	if !strings.Contains(res.Content[0].Text, "no resource_ids to enumerate the fleet automatically") {
+		t.Errorf("error must point at the self-enumeration path, got %q", res.Content[0].Text)
+	}
+}
+
+func TestSummarizeTool_ResourceResolvesNameWithoutType(t *testing.T) {
+	exec, cleanup := newSummarizeTestEnvironment(t)
+	defer cleanup()
+	exec.SetUnifiedResourceProvider(newSummarizeStubProvider())
+
+	res, err := exec.executeSummarize(context.Background(), map[string]interface{}{
+		"action":      "resource",
+		"resource_id": "delly",
+	})
+	if err != nil {
+		t.Fatalf("executeSummarize: %v", err)
+	}
+	if res.IsError {
+		t.Fatalf("known resource name should not require resource_type, got %+v", res.Content)
+	}
+	var parsed summarizeResourceResponse
+	if err := json.Unmarshal([]byte(res.Content[0].Text), &parsed); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if parsed.ResourceID != "host-abc123" {
+		t.Errorf("ResourceID = %q, want canonical host-abc123", parsed.ResourceID)
+	}
+	if parsed.ResourceType != "node" {
+		t.Errorf("ResourceType = %q, want node", parsed.ResourceType)
 	}
 }
 

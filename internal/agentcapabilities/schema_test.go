@@ -629,6 +629,9 @@ func TestNewPulseQuestionProviderToolBuildsSharedAssistantTool(t *testing.T) {
 	if !strings.Contains(tool.Description, "Ask the user for missing information") {
 		t.Fatalf("question provider tool description = %q", tool.Description)
 	}
+	if !strings.Contains(tool.Description, "Never use it to ask for internal identifiers") {
+		t.Fatalf("question provider tool description must forbid asking for internal identifiers, got %q", tool.Description)
+	}
 	if tool.InputSchema["type"] != "object" {
 		t.Fatalf("question provider input_schema type = %v, want object", tool.InputSchema["type"])
 	}

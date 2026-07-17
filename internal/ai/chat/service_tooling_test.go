@@ -373,6 +373,11 @@ func TestBuildSystemPrompt_CurrentResourceRequiresResourceHandoff(t *testing.T) 
 		"Ask for the target only when several plausible targets remain after looking, or when the action changes state",
 		"Never guess a target you did not resolve",
 		"Do not attempt a tool call with current_resource or another placeholder",
+		// Tool-argument recovery: a missing/invalid-argument tool failure is
+		// self-recovered (enumerate, then retry), never converted into a user
+		// question about internal identifiers a first-run operator cannot know.
+		"when a tool call fails because an argument is missing or invalid, recover yourself",
+		"Never ask the user for internal identifiers such as resource IDs, UUIDs, or metric keys",
 	} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("expected current_resource boundary %q in system prompt, got %q", expected, prompt)

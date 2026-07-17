@@ -226,7 +226,7 @@ func NormalizeProviderToolCallsForExecution(calls []ProviderToolCall) []Provider
 func NewPulseQuestionProviderTool() ProviderTool {
 	return ProviderTool{
 		Name:        PulseQuestionToolName,
-		Description: "Ask the user for missing information using a structured prompt. Use this when you must clarify before proceeding (e.g., choose a target, confirm a risky action, or select among options).",
+		Description: "Ask the user for missing information using a structured prompt. Use this when you must clarify before proceeding (e.g., choose a target, confirm a risky action, or select among options). Never use it to ask for internal identifiers such as resource IDs or UUIDs — resolve those yourself with read-only tools and retry.",
 		InputSchema: PulseQuestionProviderInputSchema(),
 	}.NormalizeCollections()
 }

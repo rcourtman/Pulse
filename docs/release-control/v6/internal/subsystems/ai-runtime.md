@@ -4081,6 +4081,21 @@ target. `TestBuildSystemPrompt_CurrentResourceRequiresResourceHandoff` pins
 the boundary strings; the full Extension-Points entry sits beside the
 model-owned tool-manifest rule.
 
+Resolve-before-asking extends to tool-argument recovery: when a tool call
+fails because an argument is missing or invalid, the prompt directs the model
+to recover itself — enumerate the missing values with read-only tools or
+retry with the arguments the error names — rather than converting the
+failure into a user question. Internal identifiers (resource IDs, UUIDs,
+metric keys) are never valid things to ask the operator for; the
+`pulse_question` provider-tool description carries the same prohibition so
+the structured clarification surface cannot be used as an identifier
+elicitation channel (observed on small local models: a first-run
+`pulse_summarize` failure became a "comma-separated resource IDs" question
+to a brand-new user). Questions stay reserved for preferences, risky
+choices, and genuine ambiguity between named options. The same prompt-pin
+test and `TestNewPulseQuestionProviderToolBuildsSharedAssistantTool` hold
+both strings.
+
 The per-turn Assistant system prompt carries the current wall-clock time (the
 Pulse server clock) so the Assistant answers "what time/date is it" directly
 instead of deflecting ("I don't have access to a real-time clock") or demanding
@@ -6268,7 +6283,40 @@ points (single-resource and fleet modes selected by an `action`
 parameter) so an operator can ask "what's been happening with
 pve1 this week" or "where should I look across my fleet" and get
 a structured retrospective answer in chat rather than having to
-generate, download, and read a PDF. The tool is read-only (no
+generate, download, and read a PDF.
+
+The tool is self-targeting: `action=fleet` with `resource_ids`
+omitted enumerates the known fleet from the executor's unified
+resource provider itself (infrastructure parents first, then
+guests, then storage; deduped; bounded by the same 50-resource cap
+as the API, with an explicit truncation note in the response)
+instead of erroring. This exists because the natural first-session
+question — "how is my machine doing?" on a fresh install with a
+small local model — produced a `resource_ids is required` failure
+that the agentic loop converted into a jargon elicitation asking
+the operator for "comma-separated resource IDs" (the GitHub
+discussion #1042 funnel-killer). Both modes also resolve the
+references models actually pass: canonical unified IDs and plain
+resource names (unambiguous, case-insensitive) are translated onto
+the reporting request shape the way the API report path's
+`resolveReportSubject` does — the canonical ID stays the request
+`ResourceID` (Patrol findings and recovery points key on it) while
+the resolved metrics target rides `MetricsResourceID`, so the
+engine's store queries actually find data instead of silently
+returning zero points. Reporting types are classified from the
+unified resource (agent-backed hosts as `agent`, pure Proxmox
+nodes as `node` — the documented exception where the metrics
+target labels the agent family but node metrics live under the
+`node` store type — pure Docker hosts as `docker-host`), and the
+resolved target's type wins elsewhere. `resource_type` is now an
+optional filter/default for fleet mode and only required for
+`action=resource` when the identifier is not a known resource.
+Every remaining error path in the tool tells the model to
+enumerate or retry and explicitly forbids asking the operator for
+resource IDs. `TestSummarizeTool_FleetEnumeratesWhenIDsOmitted`,
+`TestSummarizeTool_FleetResolvesNamesAndTranslatesMetricsIDs`, and
+the compile-time `summarizeMetricsTargetResolver` pin on the
+monitor adapter hold this behavior. The tool is read-only (no
 approval gate, no control-level requirement) and returns a JSON
 envelope carrying the narrative source, health status, observations
 or outliers, recommendations, and provenance disclaimer. v1 always

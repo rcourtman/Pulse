@@ -467,7 +467,15 @@ than a UI or adapter inference. `internal/agentcapabilities.SurfaceToolContract`
 and `ProjectPulseIntelligenceSurfaceToolContracts` must describe Pulse
 Assistant tools as `assistant_registry` sourced provider tools, splitting
 registry-backed tools from Assistant-native interaction tools such as
-`pulse_question`, while manifest-declared external-adapter tools are
+`pulse_question`. The shared `pulse_question` declaration
+(`NewPulseQuestionProviderTool`) must keep its scope boundary in the tool
+description itself: structured clarification is for preferences, risky
+choices, and ambiguity between named options, and must never be used to ask
+the operator for internal identifiers (resource IDs, UUIDs) that read-only
+tools can resolve — small local models otherwise convert
+missing-required-argument tool failures into identifier elicitations aimed
+at first-run users (`TestNewPulseQuestionProviderToolBuildsSharedAssistantTool`
+pins the prohibition string). Manifest-declared external-adapter tools are
 `capability_manifest` sourced request/response capabilities projected from
 `Manifest.Capabilities` by `ProjectManifestSurfaceToolContracts` and published
 on `Manifest.SurfaceToolContracts`. External surfaces, including Pulse MCP,
