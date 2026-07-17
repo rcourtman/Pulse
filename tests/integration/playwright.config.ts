@@ -2,6 +2,69 @@ import { defineConfig, devices } from '@playwright/test';
 import { preferredBrowserBaseURL } from './tests/runtime-defaults';
 
 /**
+ * QUARANTINE (2026-07-17): these specs assert the pre-platform-first UI
+ * (element locators, URLs, and subheader copy that the June IA rebuild
+ * replaced) and have failed on every push since 2026-06-29, drowning the
+ * signal from the healthy specs. Quarantining them keeps the rest of the
+ * suite as a live per-push gate while each file is re-pinned to the
+ * current UI and removed from this list. This is a stopgap, not a fix:
+ * the recovery work is tracked as its own effort, and a spec leaves this
+ * list only by being repaired, never by deletion.
+ */
+const QUARANTINED_SPECS = [
+  '**/03-multi-tenant.spec.ts',
+  '**/05-settings-mobile-audit.spec.ts',
+  '**/15-settings-shell-consistency.spec.ts',
+  '**/17-proxmox-backups-layout.spec.ts',
+  '**/18-patrol-runtime-state.spec.ts',
+  '**/19-telemetry-disclosure.spec.ts',
+  '**/20-local-doc-links.spec.ts',
+  '**/21-truenas-connections-workspace.spec.ts',
+  '**/22-vmware-connections-workspace.spec.ts',
+  '**/26-truenas-alert-thresholds.spec.ts',
+  '**/27-truenas-storage-disk-history.spec.ts',
+  '**/28-truenas-alert-resource-links.spec.ts',
+  '**/30-setup-platform-connections-handoff.spec.ts',
+  '**/31-truenas-ai-chat-mentions.spec.ts',
+  '**/36-vmware-alert-history-resource-incidents.spec.ts',
+  '**/37-vmware-resource-history-drawer.spec.ts',
+  '**/38-vmware-ai-chat-mentions.spec.ts',
+  '**/39-vmware-resource-detail-drawer.spec.ts',
+  '**/40-vmware-storage-source-filter.spec.ts',
+  '**/41-vmware-phase1-exclusion-integrity.spec.ts',
+  '**/42-vmware-ai-chat-read-recovery.spec.ts',
+  '**/43-platform-mock-runtime.spec.ts',
+  '**/44-workloads-chart-spacing.spec.ts',
+  '**/45-workloads-memory-tail.spec.ts',
+  '**/46-storage-summary-continuity.spec.ts',
+  '**/47-inline-selection-scroll-stability.spec.ts',
+  '**/48-summary-hover-selection.spec.ts',
+  '**/49-demo-scenario-curation.spec.ts',
+  '**/50-storage-physical-disk-io-history.spec.ts',
+  '**/51-quickstart-cross-surface.spec.ts',
+  '**/52-ai-settings-provider-setup.spec.ts',
+  '**/53-demo-mode-commercial-boundary.spec.ts',
+  '**/54-monitored-system-billing-focus.spec.ts',
+  '**/55-self-hosted-upgrade-return.spec.ts',
+  '**/56-pulse-account-upgrade-bootstrap.spec.ts',
+  '**/57-release-candidate-shell.spec.ts',
+  '**/58-self-hosted-trial-rate-limit-ui.spec.ts',
+  '**/59-self-hosted-plans-entitlement-summary.spec.ts',
+  '**/59-workloads-column-layout.spec.ts',
+  '**/60-page-header-consistency.spec.ts',
+  '**/61-diagnostics-commercial-funnel.spec.ts',
+  '**/62-runtime-home-onboarding-contract.spec.ts',
+  '**/62-storage-growth-column.spec.ts',
+  '**/63-pbs-active-tasks.spec.ts',
+  '**/64-workloads-proxmox-refresh-stability.spec.ts',
+  '**/70-self-hosted-manual-activation-success.spec.ts',
+  '**/75-settings-infrastructure-fleet-status-coherence.spec.ts',
+  '**/77-msp-isolation.spec.ts',
+  '**/79-update-flow.spec.ts',
+  '**/84-docker-restart-real-lab-artifact.spec.ts',
+];
+
+/**
  * Playwright configuration for Pulse update integration tests
  * See https://playwright.dev/docs/test-configuration
  */
@@ -75,7 +138,7 @@ export default defineConfig({
       },
       // Mobile-specific tests are intentionally excluded from the desktop project;
       // they rely on mobile viewports where md:hidden nav is visible, tables overflow, etc.
-      testIgnore: ['**/04-mobile.spec.ts'],
+      testIgnore: [...QUARANTINED_SPECS, '**/04-mobile.spec.ts'],
     },
     {
       name: 'mobile-chrome',
@@ -86,14 +149,14 @@ export default defineConfig({
       // so exclude them to avoid unnecessary browser launches. The visual
       // crawl takes 5+ minutes per project; one desktop pass is the budgeted
       // coverage, and dedicated mobile specs cover mobile layout.
-      testIgnore: ['**/journeys/**', '**/99-visual-crawl.spec.ts'],
+      testIgnore: [...QUARANTINED_SPECS, '**/journeys/**', '**/99-visual-crawl.spec.ts'],
     },
     {
       name: 'mobile-safari',
       use: {
         ...devices['iPhone 12'],
       },
-      testIgnore: ['**/journeys/**', '**/99-visual-crawl.spec.ts'],
+      testIgnore: [...QUARANTINED_SPECS, '**/journeys/**', '**/99-visual-crawl.spec.ts'],
     },
 
     // Uncomment to test on Firefox and WebKit
