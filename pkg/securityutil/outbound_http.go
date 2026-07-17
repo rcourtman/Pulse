@@ -72,7 +72,12 @@ func resolveOutboundIPAddrs(ctx context.Context, host string, opts RestrictedOut
 	return resolveOutboundFetchIPs(ctx, host)
 }
 
-func resolvePermittedOutboundIP(ctx context.Context, host string, opts RestrictedOutboundHTTPOptions) (net.IP, error) {
+// resolvePermittedOutboundIPs resolves host and returns every permitted IP in
+// resolution order. Callers that dial must try each returned IP: a host like
+// "localhost" can resolve to ::1 first while the service listens only on
+// 127.0.0.1, so pinning the first permitted IP alone turns an address-family
+// mismatch into a hard connection failure.
+func resolvePermittedOutboundIPs(ctx context.Context, host string, opts RestrictedOutboundHTTPOptions) ([]net.IP, error) {
 	host = strings.TrimSpace(host)
 	if host == "" {
 		return nil, fmt.Errorf("URL hostname is required")
@@ -87,7 +92,7 @@ func resolvePermittedOutboundIP(ctx context.Context, host string, opts Restricte
 		if err := validateOutboundIP(ip, opts); err != nil {
 			return nil, err
 		}
-		return ip, nil
+		return []net.IP{ip}, nil
 	}
 
 	baseCtx := ctx
@@ -105,19 +110,31 @@ func resolvePermittedOutboundIP(ctx context.Context, host string, opts Restricte
 		return nil, fmt.Errorf("hostname %s did not resolve", host)
 	}
 
+	var permitted []net.IP
 	var blockedErr error
 	for _, addr := range addrs {
 		if err := validateOutboundIP(addr.IP, opts); err != nil {
 			blockedErr = err
 			continue
 		}
-		return addr.IP, nil
+		permitted = append(permitted, addr.IP)
+	}
+	if len(permitted) > 0 {
+		return permitted, nil
 	}
 
 	if blockedErr != nil {
 		return nil, fmt.Errorf("hostname %s resolves only to blocked addresses: %w", host, blockedErr)
 	}
 	return nil, fmt.Errorf("hostname %s did not resolve", host)
+}
+
+func resolvePermittedOutboundIP(ctx context.Context, host string, opts RestrictedOutboundHTTPOptions) (net.IP, error) {
+	ips, err := resolvePermittedOutboundIPs(ctx, host, opts)
+	if err != nil {
+		return nil, err
+	}
+	return ips[0], nil
 }
 
 // ValidateOutboundFetchURL validates a fully-qualified HTTP(S) URL against the restricted outbound policy.
@@ -233,7 +250,7 @@ func (r *restrictedRoundTripper) RoundTrip(req *http.Request) (*http.Response, e
 }
 
 // NewRestrictedOutboundHTTPClient returns an HTTP client that validates redirects and pins direct outbound dials
-// to the first permitted resolved IP for the requested host.
+// to the permitted resolved IPs for the requested host, trying each in resolution order until one connects.
 func NewRestrictedOutboundHTTPClient(timeout time.Duration, opts RestrictedOutboundHTTPOptions) *http.Client {
 	transport := cloneRestrictedTransport(opts.TLSConfig)
 	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -242,13 +259,30 @@ func NewRestrictedOutboundHTTPClient(timeout time.Duration, opts RestrictedOutbo
 			return nil, fmt.Errorf("parse outbound address %q: %w", addr, err)
 		}
 
-		permittedIP, err := resolvePermittedOutboundIP(ctx, host, opts)
+		permittedIPs, err := resolvePermittedOutboundIPs(ctx, host, opts)
 		if err != nil {
 			return nil, err
 		}
 
+		// Try every permitted IP from the validating resolution, not just the
+		// first: "localhost" commonly resolves to ::1 ahead of 127.0.0.1, and a
+		// service bound only to one loopback family (e.g. Ollama on 127.0.0.1)
+		// would otherwise be unreachable even though curl and browsers connect
+		// fine. Each candidate was validated above, so rebinding protection is
+		// unchanged.
 		dialer := net.Dialer{Timeout: 10 * time.Second}
-		return dialer.DialContext(ctx, network, net.JoinHostPort(permittedIP.String(), port))
+		var dialErr error
+		for _, permittedIP := range permittedIPs {
+			conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(permittedIP.String(), port))
+			if err == nil {
+				return conn, nil
+			}
+			dialErr = err
+			if ctx.Err() != nil {
+				break
+			}
+		}
+		return nil, dialErr
 	}
 
 	client := &http.Client{
