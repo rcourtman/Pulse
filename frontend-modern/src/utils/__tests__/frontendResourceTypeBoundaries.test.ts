@@ -3576,10 +3576,11 @@ describe('frontend resource type boundaries', () => {
     expect(patrolSummaryPresentationSource).toContain('badgeVariant:');
     expect(patrolSummaryPresentationSource).not.toContain('badgeClass:');
     expect(patrolIntelligenceWorkspaceSource).toContain('MetadataBadge');
-    expect(patrolIntelligenceWorkspaceSource).toContain('findingsBadgePresentation().tone');
-    expect(patrolIntelligenceWorkspaceSource).not.toContain(
-      'findingsBadgePresentation().toneClasses',
-    );
+    // Work-group badge tones resolve in the patrolControlPresentation adapter
+    // (getPatrolWorkspaceWorkGroups), never inline in the workspace component.
+    expect(patrolIntelligenceWorkspaceSource).toContain('getPatrolWorkspaceWorkGroups');
+    expect(patrolIntelligenceWorkspaceSource).toContain('tone={group.tone}');
+    expect(patrolIntelligenceWorkspaceSource).not.toContain('findingsBadgePresentation');
     expect(patrolIntelligenceWorkspaceSource).not.toContain(
       'ml-1.5 px-1.5 py-0.5 text-xs rounded-full',
     );
