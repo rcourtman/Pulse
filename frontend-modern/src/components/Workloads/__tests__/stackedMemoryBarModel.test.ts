@@ -17,9 +17,6 @@ describe('buildStackedMemoryBarPresentation', () => {
     ]);
     expect(presentation.segments[1].leftPercent).toBeCloseTo(25);
     expect(presentation.segments[1].widthPercent).toBeCloseTo(37.5);
-    // Cache is textured so it never blends into a warning-yellow used segment.
-    expect(presentation.segments[1].striped).toBe(true);
-    expect(presentation.segments[0].striped).toBeUndefined();
 
     const rows = Object.fromEntries(presentation.tooltipRows.map((row) => [row.label, row.value]));
     expect(rows['Used']).toBe('4.00 GB');
@@ -88,10 +85,7 @@ describe('buildStackedMemoryBarPresentation', () => {
   });
 
   it('matches the pre-cache layout when no cache is reported', () => {
-    const presentation = buildStackedMemoryBarPresentation(
-      { used: 4 * GiB, total: 16 * GiB },
-      400,
-    );
+    const presentation = buildStackedMemoryBarPresentation({ used: 4 * GiB, total: 16 * GiB }, 400);
 
     expect(presentation.segments.map((segment) => segment.label)).toEqual(['Active']);
     const labels = presentation.tooltipRows.map((row) => row.label);

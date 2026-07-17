@@ -93,6 +93,17 @@ describe('StackedMemoryBar', () => {
     expect(segments[0]).toHaveAttribute('x', '0');
   });
 
+  it('renders reclaimable cache as a solid segment so the value label stays legible', () => {
+    const { container } = render(() => (
+      <StackedMemoryBar used={6 * 1024 ** 3} total={8 * 1024 ** 3} cache={1 * 1024 ** 3} />
+    ));
+
+    const segments = getSegments(container);
+    expect(segments).toHaveLength(2);
+    expect(segments[1].getAttribute('fill')).toContain('251, 191, 36');
+    expect(container.querySelector('pattern')).not.toBeInTheDocument();
+  });
+
   it('renders balloon segment when active ballooning is in effect', () => {
     // used=2GB, total=8GB, balloon=4GB — active ballooning
     const { container } = render(() => (

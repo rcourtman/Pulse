@@ -1,4 +1,4 @@
-import { Show, For, createUniqueId } from 'solid-js';
+import { Show, For } from 'solid-js';
 import { AnimatedNumber } from '@/components/shared/AnimatedNumber';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
 import { formatPercent } from '@/utils/format';
@@ -8,7 +8,6 @@ import { useStackedMemoryBarState } from './useStackedMemoryBarState';
 export function StackedMemoryBar(props: StackedMemoryBarProps) {
   const state = useStackedMemoryBarState(props);
   const presentation = state.presentation;
-  const stripePatternId = createUniqueId();
   const swapBarWidth = () => String(Math.max(0, Math.min(presentation().swapBarPercent, 100)));
   const segmentEdge = (leftPercent: number, widthPercent: number) =>
     String(Math.max(0, Math.min(leftPercent + widthPercent, 100)));
@@ -29,19 +28,6 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
         >
-          {/* Vertical stripes only: the non-uniform viewBox scaling would
-              shear any diagonal texture. Keeps the reclaimable-cache segment
-              distinguishable from a warning-yellow used segment. */}
-          <defs>
-            <pattern
-              id={stripePatternId}
-              patternUnits="userSpaceOnUse"
-              width="2.5"
-              height="100"
-            >
-              <rect x="0" y="0" width="1.25" height="100" fill="rgba(217, 119, 6, 0.5)" />
-            </pattern>
-          </defs>
           <For each={presentation().segments}>
             {(segment, idx) => (
               <>
@@ -55,18 +41,6 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
                   rx="3"
                   fill={segment.color}
                 />
-                <Show when={segment.striped}>
-                  <rect
-                    data-stacked-memory-stripes="true"
-                    class="metric-fill-geometry"
-                    x={String(Math.max(0, Math.min(segment.leftPercent, 100)))}
-                    y="0"
-                    width={String(Math.max(0, segment.widthPercent))}
-                    height="100"
-                    rx="3"
-                    fill={`url(#${stripePatternId})`}
-                  />
-                </Show>
                 <Show when={idx() < presentation().segments.length - 1}>
                   <line
                     class="metric-fill-divider"
