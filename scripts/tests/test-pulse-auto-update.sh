@@ -61,6 +61,57 @@ test_wait_for_service_active_times_out_when_never_active() {
   return 0
 }
 
+test_pick_highest_stable_tag_ignores_list_order_and_prereleases() {
+  local picked
+  picked=$(pick_highest_stable_tag <<'EOF'
+v5.1.37
+helm-chart-6.0.5
+v6.0.5-rc.4
+v6.0.5
+v6.0.4
+v6.0.0-rc.7
+EOF
+)
+  if [[ "$picked" != "v6.0.5" ]]; then
+    echo "pick_highest_stable_tag picked ${picked:-<empty>}, want v6.0.5" >&2
+    return 1
+  fi
+  return 0
+}
+
+test_get_latest_stable_version_prefers_highest_over_created_order() {
+  # A v5-line maintenance release created after v6.0.5 sits first in the
+  # /releases list and is what /releases/latest would point at; the updater
+  # must still pick v6.0.5.
+  curl() {
+    local url="${*: -1}"
+    if [[ "$url" == *"/releases?per_page="* ]]; then
+      cat <<'EOF'
+[
+  { "tag_name": "v5.1.37", "prerelease": false },
+  { "tag_name": "helm-chart-6.0.5", "prerelease": true },
+  { "tag_name": "v6.0.5", "prerelease": false },
+  { "tag_name": "v6.0.5-rc.4", "prerelease": true },
+  { "tag_name": "v6.0.4", "prerelease": false }
+]
+EOF
+      return 0
+    fi
+    echo "unexpected curl call in test: $*" >&2
+    return 1
+  }
+
+  local got
+  got=$(get_latest_stable_version)
+  unset -f curl
+
+  if [[ "$got" != "v6.0.5" ]]; then
+    echo "get_latest_stable_version returned ${got:-<empty>}, want v6.0.5" >&2
+    return 1
+  fi
+  return 0
+}
+
 test_perform_update_restores_backup_when_service_stays_down() {
   local tmpdir
   tmpdir="$(mktemp -d)"
@@ -151,6 +202,8 @@ INSTALLER
 main() {
   assert_success "wait_for_service_active retries until active" test_wait_for_service_active_succeeds_after_retry
   assert_success "wait_for_service_active times out when never active" test_wait_for_service_active_times_out_when_never_active
+  assert_success "pick_highest_stable_tag ignores list order and prereleases" test_pick_highest_stable_tag_ignores_list_order_and_prereleases
+  assert_success "get_latest_stable_version prefers highest version over created order" test_get_latest_stable_version_prefers_highest_over_created_order
   assert_success "perform_update restores backup when service stays down" test_perform_update_restores_backup_when_service_stays_down
 
   if (( failures > 0 )); then

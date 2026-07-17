@@ -173,6 +173,8 @@ curl() {
 EOF
 }
 ` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
+` + extractAutoUpdateFunction(t, "version_greater_than") + `
+` + extractAutoUpdateFunction(t, "pick_highest_stable_tag") + `
 ` + extractAutoUpdateFunction(t, "get_latest_stable_version") + `
 result=$(get_latest_stable_version)
 echo "RESULT=[$result]"
@@ -207,6 +209,8 @@ curl() {
 EOF
 }
 ` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
+` + extractAutoUpdateFunction(t, "version_greater_than") + `
+` + extractAutoUpdateFunction(t, "pick_highest_stable_tag") + `
 ` + extractAutoUpdateFunction(t, "get_latest_stable_version") + `
 result=$(get_latest_stable_version)
 echo "RESULT=[$result]"
@@ -239,6 +243,8 @@ curl() {
 EOF
 }
 ` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
+` + extractAutoUpdateFunction(t, "version_greater_than") + `
+` + extractAutoUpdateFunction(t, "pick_highest_stable_tag") + `
 ` + extractAutoUpdateFunction(t, "get_latest_stable_version") + `
 result=$(get_latest_stable_version)
 echo "RESULT=[$result]"
@@ -251,6 +257,76 @@ echo "RESULT=[$result]"
 	got := string(out)
 	if !strings.Contains(got, "RESULT=[v5.1.28]") {
 		t.Fatalf("get_latest_stable_version did not return expected stable tag:\n%s", got)
+	}
+}
+
+// TestGetLatestStableVersionPrefersHighestVersion asserts that the updater
+// selects the highest stable version from the release list rather than the
+// most recently created one. This repo interleaves v5-line maintenance
+// releases with v6 releases (v5.1.36 was created the day before v6.0.5), so
+// GitHub's created_at ordering — and its /releases/latest pointer — can name
+// an older version line, which would strand v6 installs until the next v6
+// release ships. Draft releases, metadata-flagged prereleases, and
+// prerelease- or non-semver-shaped tags (helm-chart-*) must all be ignored.
+func TestGetLatestStableVersionPrefersHighestVersion(t *testing.T) {
+	script := `
+set -u
+GITHUB_REPO="rcourtman/Pulse"
+log() { echo "[$1] $2" >&2; }
+# Stub curl: the /releases list in GitHub's created_at ordering, with the
+# v5-line release first. Any fallback call (e.g. /releases/latest) would
+# return the same list and must not be needed for selection.
+curl() {
+  cat <<'EOF'
+[
+  {
+    "tag_name": "v5.1.37",
+    "draft": false,
+    "prerelease": false
+  },
+  {
+    "tag_name": "v9.9.9",
+    "draft": true,
+    "prerelease": false
+  },
+  {
+    "tag_name": "helm-chart-6.0.5",
+    "draft": false,
+    "prerelease": true
+  },
+  {
+    "tag_name": "v6.0.5",
+    "draft": false,
+    "prerelease": false
+  },
+  {
+    "tag_name": "v6.0.5-rc.4",
+    "draft": false,
+    "prerelease": true
+  },
+  {
+    "tag_name": "v6.0.4",
+    "draft": false,
+    "prerelease": false
+  }
+]
+EOF
+}
+` + extractAutoUpdateFunction(t, "is_prerelease_tag") + `
+` + extractAutoUpdateFunction(t, "version_greater_than") + `
+` + extractAutoUpdateFunction(t, "pick_highest_stable_tag") + `
+` + extractAutoUpdateFunction(t, "get_latest_stable_version") + `
+result=$(get_latest_stable_version)
+echo "RESULT=[$result]"
+`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	if !strings.Contains(got, "RESULT=[v6.0.5]") {
+		t.Fatalf("get_latest_stable_version = %s, want v6.0.5 (highest stable, not most recently created)", got)
 	}
 }
 

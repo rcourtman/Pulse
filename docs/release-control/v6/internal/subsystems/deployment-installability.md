@@ -1421,6 +1421,22 @@ runtime copy: `install.sh`, `scripts/pulse-auto-update.sh`, and
 `internal/updates/manager.go` must present `rc`-tagged builds as prerelease or
 preview paths in menus, CLI help text, operator diagnostics, and runtime logs
 rather than as release-candidate promises.
+That same update-check boundary also owns release selection order: because
+v5-line maintenance releases interleave with v6 releases in the same GitHub
+repo (v5.1.36 was created the day before v6.0.5), `internal/updates/manager.go`
+— both the release-list path and the Atom feed fallback — and
+`scripts/pulse-auto-update.sh` must select the highest parseable version
+eligible for the channel rather than trusting GitHub's `created_at` ordering
+or the `/releases/latest` pointer, so a more recently created lower-version
+release can never mask the newest stable and strand installs until the next
+release ships. Stable-channel selection must keep excluding draft releases,
+metadata-flagged prereleases, and prerelease- or non-semver-shaped tags
+(`helm-chart-*`), and the `rc` channel must keep offering the newest stable to
+prerelease installs so an rc line that lands on stable (6.0.0-rc.x → 6.0.5)
+moves its installs forward instead of stranding them. Proof:
+`internal/updates/manager_stranded_upgrade_test.go` and
+`scripts/installtests/pulse_auto_update_test.go`
+(`TestGetLatestStableVersionPrefersHighestVersion`).
 Those same workflows must also fetch and dispatch the governed release branch
 derived from release-control metadata instead of hardcoding `pulse/v6`,
 `pulse/v6-release`, `main`, or any later branch literal inline; when a stable

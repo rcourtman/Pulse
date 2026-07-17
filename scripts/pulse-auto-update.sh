@@ -155,13 +155,67 @@ is_prerelease_tag() {
     return 1
 }
 
+# Select the highest stable version among a list of tags fed on stdin,
+# one per line. Tags are filtered through is_prerelease_tag (fail-closed),
+# which also drops non-semver tags like helm-chart-*.
+pick_highest_stable_tag() {
+    local best=""
+    local tag=""
+    while IFS= read -r tag; do
+        [[ -z "$tag" ]] && continue
+        if is_prerelease_tag "$tag"; then
+            continue
+        fi
+        if [[ -z "$best" ]] || version_greater_than "$tag" "$best"; then
+            best="$tag"
+        fi
+    done
+    echo "$best"
+}
+
 # Get latest stable release from GitHub
 get_latest_stable_version() {
     local latest_version=""
     local release_json=""
     local is_prerelease_flag=""
 
-    # Get latest stable release (not pre-releases). `/releases/latest`
+    # Primary: highest stable version across the release list. GitHub's
+    # /releases/latest points at the most recently *created* stable release,
+    # and this repo interleaves v5-line maintenance releases with v6 releases
+    # (v5.1.36 shipped the day before v6.0.5) — so "latest" can be an older
+    # version line, which would strand v6 installs until the next v6 release.
+    #
+    # Each tag is only a candidate when its own release object says
+    # draft=false and prerelease=false (field order per object is
+    # tag_name → draft → prerelease, with body last, so a pending tag is
+    # confirmed or discarded before the next object's tag_name resets it).
+    # pick_highest_stable_tag then re-applies the fail-closed shape check.
+    local releases_json=""
+    releases_json=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases?per_page=30" || true)
+    if [[ -n "$releases_json" ]] && [[ "$releases_json" != *"rate limit"* ]]; then
+        local line="" pending_tag="" stable_tags=""
+        while IFS= read -r line; do
+            if [[ "$line" == *'"tag_name":'* ]]; then
+                pending_tag=$(printf '%s' "$line" | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/')
+            fi
+            if [[ "$line" == *'"draft": true'* ]] || [[ "$line" == *'"draft":true'* ]]; then
+                pending_tag=""
+            fi
+            if [[ "$line" == *'"prerelease":'* ]]; then
+                if [[ -n "$pending_tag" ]] && { [[ "$line" == *'"prerelease": false'* ]] || [[ "$line" == *'"prerelease":false'* ]]; }; then
+                    stable_tags+="$pending_tag"$'\n'
+                fi
+                pending_tag=""
+            fi
+        done <<< "$releases_json"
+        latest_version=$(printf '%s' "$stable_tags" | pick_highest_stable_tag)
+        if [[ -n "$latest_version" ]]; then
+            echo "$latest_version"
+            return 0
+        fi
+    fi
+
+    # Fallback: latest stable release (not pre-releases). `/releases/latest`
     # already skips prereleases on GitHub's side, but we still parse and
     # enforce the `prerelease` flag ourselves as a second line of defense.
     release_json=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases/latest" || true)

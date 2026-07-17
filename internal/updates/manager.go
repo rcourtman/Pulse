@@ -912,125 +912,71 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 		return nil, fmt.Errorf("failed to decode releases: %w", err)
 	}
 
-	// Find latest release based on channel
-	// Prerelease channel: return newest release (prerelease or stable), even if not newer than current
-	// Stable channel: return newest stable release, even if not newer than current
+	// Find latest release based on channel, selecting by version rather than
+	// list position: GitHub returns releases sorted by created_at, and v5-line
+	// maintenance releases interleave with v6 releases in the same repo, so
+	// the most recently published stable is not necessarily the highest one.
+	// Prerelease channel: newest release (prerelease or stable), even if not newer than current
+	// Stable channel: newest stable release, even if not newer than current
 	// The caller will determine if it's actually an update by comparing versions
-	if channel == "rc" {
-		// For the prerelease channel: find newest release (prerelease or stable)
-		// Prerelease users should see both prereleases and stable releases
-		var newestRC *ReleaseInfo
-		var newestStable *ReleaseInfo
+	var newestRC, newestStable *ReleaseInfo
+	var newestRCVer, newestStableVer *Version
 
-		for i := range releases {
-			// Skip draft releases
-			if releases[i].Draft {
-				log.Debug().Str("tag", releases[i].TagName).Msg("Skipping draft release")
-				continue
-			}
-
-			releaseVer, err := ParseVersion(releases[i].TagName)
-			if err != nil {
-				log.Debug().Str("tag", releases[i].TagName).Err(err).Msg("Failed to parse release version")
-				continue
-			}
-
-			if releases[i].Prerelease {
-				// Track newest prerelease
-				if newestRC == nil {
-					newestRC = &releases[i]
-				} else {
-					newestRCVer, _ := ParseVersion(newestRC.TagName)
-					if releaseVer.IsNewerThan(newestRCVer) {
-						newestRC = &releases[i]
-					}
-				}
-			} else {
-				// Track newest stable
-				if newestStable == nil {
-					newestStable = &releases[i]
-				} else {
-					newestStableVer, _ := ParseVersion(newestStable.TagName)
-					if releaseVer.IsNewerThan(newestStableVer) {
-						newestStable = &releases[i]
-					}
-				}
-			}
+	for i := range releases {
+		// Skip draft releases
+		if releases[i].Draft {
+			log.Debug().Str("tag", releases[i].TagName).Msg("Skipping draft release")
+			continue
 		}
 
-		// Return the highest version among candidates
-		// Stable versions are considered higher than RCs (4.22.0 > 4.22.0-rc.3)
-		if newestStable != nil && newestRC != nil {
-			stableVer, _ := ParseVersion(newestStable.TagName)
-			rcVer, _ := ParseVersion(newestRC.TagName)
-			if stableVer.IsNewerThan(rcVer) {
-				isUpdate := stableVer.IsNewerThan(currentVer)
-				if isUpdate {
-					log.Info().Str("version", newestStable.TagName).Msg("Found stable update for prerelease user")
-				} else {
-					log.Info().Str("version", newestStable.TagName).Msg("On latest stable version")
-				}
-				return newestStable, nil
+		releaseVer, err := ParseVersion(releases[i].TagName)
+		if err != nil {
+			log.Debug().Str("tag", releases[i].TagName).Err(err).Msg("Failed to parse release version")
+			continue
+		}
+
+		// A release counts as prerelease when either GitHub metadata or the
+		// version tag itself says so (guards against metadata set incorrectly)
+		if releases[i].Prerelease || releaseVer.IsPrerelease() {
+			if newestRC == nil || releaseVer.IsNewerThan(newestRCVer) {
+				newestRC = &releases[i]
+				newestRCVer = releaseVer
 			}
-			isUpdate := rcVer.IsNewerThan(currentVer)
-			if isUpdate {
-				log.Info().Str("version", newestRC.TagName).Msg("Found prerelease update")
-			} else {
-				log.Info().Str("version", newestRC.TagName).Msg("On latest prerelease version")
+		} else {
+			if newestStable == nil || releaseVer.IsNewerThan(newestStableVer) {
+				newestStable = &releases[i]
+				newestStableVer = releaseVer
 			}
-			return newestRC, nil
-		} else if newestStable != nil {
-			isUpdate := newestStable.TagName != currentVer.String()
-			if isUpdate {
+		}
+	}
+
+	if channel == "rc" {
+		// For the prerelease channel: return the highest version among both
+		// candidates, so prerelease users are moved forward onto stable once
+		// the rc line lands (6.0.5 > 6.0.0-rc.7).
+		if newestStable != nil && (newestRC == nil || newestStableVer.IsNewerThan(newestRCVer)) {
+			if newestStableVer.IsNewerThan(currentVer) {
 				log.Info().Str("version", newestStable.TagName).Msg("Found stable update for prerelease user")
 			} else {
 				log.Info().Str("version", newestStable.TagName).Msg("On latest stable version")
 			}
 			return newestStable, nil
-		} else if newestRC != nil {
-			isUpdate := newestRC.TagName != currentVer.String()
-			if isUpdate {
+		}
+		if newestRC != nil {
+			if newestRCVer.IsNewerThan(currentVer) {
 				log.Info().Str("version", newestRC.TagName).Msg("Found prerelease update")
 			} else {
 				log.Info().Str("version", newestRC.TagName).Msg("On latest prerelease version")
 			}
 			return newestRC, nil
 		}
-	} else {
-		// For stable channel: find latest non-prerelease
-		for i := range releases {
-			// Skip draft releases
-			if releases[i].Draft {
-				log.Debug().Str("tag", releases[i].TagName).Msg("Skipping draft release")
-				continue
-			}
-
-			if releases[i].Prerelease {
-				continue
-			}
-
-			releaseVer, err := ParseVersion(releases[i].TagName)
-			if err != nil {
-				log.Debug().Str("tag", releases[i].TagName).Err(err).Msg("Failed to parse release version")
-				continue
-			}
-
-			// Also skip if the version tag itself indicates a prerelease
-			// (guards against GitHub metadata being set incorrectly)
-			if releaseVer.IsPrerelease() {
-				log.Debug().Str("tag", releases[i].TagName).Msg("Skipping release with prerelease version tag on stable channel")
-				continue
-			}
-
-			// Found the latest stable release
-			isUpdate := releaseVer.IsNewerThan(currentVer)
-			if isUpdate {
-				log.Info().Str("version", releases[i].TagName).Msg("Found stable update")
-			} else {
-				log.Info().Str("version", releases[i].TagName).Msg("On latest stable version")
-			}
-			return &releases[i], nil
+	} else if newestStable != nil {
+		if newestStableVer.IsNewerThan(currentVer) {
+			log.Info().Str("version", newestStable.TagName).Msg("Found stable update")
+		} else {
+			log.Info().Str("version", newestStable.TagName).Msg("On latest stable version")
 		}
+		return newestStable, nil
 	}
 
 	// No releases found at all for this channel
@@ -1102,7 +1048,11 @@ func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) 
 		return nil, fmt.Errorf("no version tags found in feed")
 	}
 
-	// Filter based on channel
+	// Pick the highest version matching the channel rather than the first
+	// entry: the feed is publication-ordered and v5-line maintenance releases
+	// interleave with v6 releases in the same repo.
+	var best *ReleaseInfo
+	var bestVer *Version
 	for _, match := range matches {
 		if len(match) < 2 {
 			continue
@@ -1122,20 +1072,26 @@ func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) 
 			continue
 		}
 
-		// Found a valid release for this channel
-		log.Debug().
-			Str("tag", tagName).
-			Bool("prerelease", isPrerelease).
-			Str("channel", channel).
-			Msg("Found release from feed")
-
-		return &ReleaseInfo{
+		if best != nil && !ver.IsNewerThan(bestVer) {
+			continue
+		}
+		best = &ReleaseInfo{
 			TagName:    tagName,
 			Name:       "Pulse " + tagName,
 			Prerelease: isPrerelease,
 			// Note: Feed doesn't include full release notes or asset info
 			// This is just for version checking - actual download still uses known URL patterns
-		}, nil
+		}
+		bestVer = ver
+	}
+
+	if best != nil {
+		log.Debug().
+			Str("tag", best.TagName).
+			Bool("prerelease", best.Prerelease).
+			Str("channel", channel).
+			Msg("Found release from feed")
+		return best, nil
 	}
 
 	return nil, fmt.Errorf("no suitable release found for channel %s", channel)
