@@ -92,6 +92,11 @@ func TestUpdateConfigClearsDockerContainerAlertsWhenDisabled(t *testing.T) {
 		"docker-container-memory-limit-" + containerResourceID,
 	}
 
+	// Canonical stateful alerts (e.g. the image-update alert) are stored under
+	// "<resourceID>::<specID>" state IDs rather than legacy prefixed IDs.
+	canonicalUpdateAlertID := buildCanonicalStateID(containerResourceID, containerResourceID+"-image-update")
+	containerAlertIDs = append(containerAlertIDs, canonicalUpdateAlertID)
+
 	manager.mu.Lock()
 	for _, id := range containerAlertIDs {
 		manager.activeAlerts[id] = &Alert{ID: id, ResourceID: containerResourceID}
@@ -126,9 +131,11 @@ func TestUpdateConfigClearsDockerServiceAlertsWhenDisabled(t *testing.T) {
 
 	serviceResourceID := "docker:host-2/service/frontend"
 	serviceAlertID := "docker-service-health-" + serviceResourceID
+	canonicalServiceAlertID := buildCanonicalStateID(serviceResourceID, serviceResourceID+"-replica-gap")
 
 	manager.mu.Lock()
 	manager.activeAlerts[serviceAlertID] = &Alert{ID: serviceAlertID, ResourceID: serviceResourceID}
+	manager.activeAlerts[canonicalServiceAlertID] = &Alert{ID: canonicalServiceAlertID, ResourceID: serviceResourceID}
 	manager.mu.Unlock()
 
 	config := manager.GetConfig()
@@ -141,5 +148,8 @@ func TestUpdateConfigClearsDockerServiceAlertsWhenDisabled(t *testing.T) {
 	defer manager.mu.RUnlock()
 	if _, exists := manager.activeAlerts[serviceAlertID]; exists {
 		t.Fatalf("expected docker service alert to be cleared when DisableAllDockerServices is enabled")
+	}
+	if _, exists := manager.activeAlerts[canonicalServiceAlertID]; exists {
+		t.Fatalf("expected canonical docker service alert to be cleared when DisableAllDockerServices is enabled")
 	}
 }
