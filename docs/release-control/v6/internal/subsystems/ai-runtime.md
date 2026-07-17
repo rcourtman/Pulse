@@ -5198,7 +5198,21 @@ question call returns a non-interactive error without emitting a
 waiting event and sibling tool calls from the same provider turn keep
 processing; approval waits never block (they queue), and the
 tool-only-turn wrap-up guardrail is interactive-profile-owned rather
-than keyed on autonomy. The system prompt describes detection and
+than keyed on autonomy. Interactive runs additionally enforce a
+look-before-asking gate: a `pulse_question` issued before the run has
+attempted any real tool call is refused with an error tool result that
+steers the model to read-only enumeration (the resolve-before-asking
+prompt policy made enforceable — small local models otherwise open
+natural first questions like "any alerts?" with a "which resource?"
+elicitation whose answer is derivable from enumeration). The refusal
+emits no question card or clarify event, sibling tool calls from the
+same provider turn keep processing rather than tripping the
+interactive-call-set skip path, any queued tool attempt (success or
+error) satisfies the gate for the rest of the run, and the gate fails
+open after `maxLookGateBlocks` refusals so a genuinely unanswerable
+prompt cannot livelock. The stream-boundary promise — a natural first
+question produces an answer, never a clarification card — is pinned in
+the interaction scenario corpus. The system prompt describes detection and
 investigation modes directly instead of claiming controlled or
 autonomous execution. Non-interactive operation grants no mutation
 authority. The profile vocabulary is closed: unknown profile values are

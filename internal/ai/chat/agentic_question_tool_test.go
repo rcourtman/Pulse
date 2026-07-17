@@ -14,6 +14,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// scriptLookTurn scripts one provider turn that issues a read-only
+// pulse_query call. The look-before-asking gate refuses a pulse_question
+// issued before any tool attempt in the run, so question-flow tests open
+// with a look turn the way real runs now must.
+func scriptLookTurn(mockProvider *MockProvider, matcher func(req providers.ChatRequest) bool) {
+	queryInput := map[string]interface{}{"action": "topology"}
+	mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(matcher), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
+		cb := args.Get(2).(providers.StreamCallback)
+		cb(providers.StreamEvent{
+			Type: "tool_start",
+			Data: providers.ToolStartEvent{ID: "t0", Name: "pulse_query", Input: queryInput},
+		})
+		cb(providers.StreamEvent{
+			Type: "done",
+			Data: providers.DoneEvent{
+				ToolCalls: []providers.ToolCall{{ID: "t0", Name: "pulse_query", Input: queryInput}},
+			},
+		})
+	}).Once()
+}
+
+// hasToolResult reports whether the request carries a tool result for the
+// given provider tool-call ID.
+func hasToolResult(req providers.ChatRequest, toolUseID string) bool {
+	for _, m := range req.Messages {
+		if m.ToolResult != nil && m.ToolResult.ToolUseID == toolUseID {
+			return true
+		}
+	}
+	return false
+}
+
 func TestAgenticLoop_PulseQuestionToolInteractiveFlow(t *testing.T) {
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	mockProvider := &MockProvider{}
@@ -25,9 +57,14 @@ func TestAgenticLoop_PulseQuestionToolInteractiveFlow(t *testing.T) {
 	sessionID := "question-session"
 	messages := []Message{{Role: "user", Content: "Do something but ask me first"}}
 
-	// Turn 1: model requests pulse_question
-	mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
+	// Turn 1: model looks with a read tool (satisfies the gate).
+	scriptLookTurn(mockProvider, func(req providers.ChatRequest) bool {
 		return len(req.Messages) == 1
+	})
+
+	// Turn 2: model requests pulse_question
+	mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
+		return hasToolResult(req, "t0") && !hasToolResult(req, "t1")
 	}), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 		cb := args.Get(2).(providers.StreamCallback)
 		cb(providers.StreamEvent{
@@ -76,7 +113,7 @@ func TestAgenticLoop_PulseQuestionToolInteractiveFlow(t *testing.T) {
 		})
 	}).Once()
 
-	// Turn 2: model sees tool result and replies.
+	// Turn 3: model sees the answered question and replies.
 	mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
 		// Expect tool result message for t1 to be present
 		for _, m := range req.Messages {

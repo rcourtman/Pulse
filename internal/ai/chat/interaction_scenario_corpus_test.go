@@ -78,6 +78,24 @@ func providerEmptyDone() scriptedProviderCall {
 	}}
 }
 
+func providerQuestionToolCall(callID string) scriptedProviderCall {
+	questionInput := map[string]interface{}{
+		"questions": []interface{}{
+			map[string]interface{}{
+				"id": "q1", "type": "select",
+				"question": "Which specific resource are you interested in checking?",
+				"options":  []interface{}{map[string]interface{}{"label": "Fleet", "value": "fleet"}},
+			},
+		},
+	}
+	return scriptedProviderCall{events: []providers.StreamEvent{
+		{Type: "tool_start", Data: providers.ToolStartEvent{ID: callID, Name: "pulse_question", Input: questionInput}},
+		{Type: "done", Data: providers.DoneEvent{
+			ToolCalls: []providers.ToolCall{{ID: callID, Name: "pulse_question", Input: questionInput}},
+		}},
+	}}
+}
+
 type interactionScenario struct {
 	name string
 	// promise states the user-visible behavior this scenario pins, in plain
@@ -166,6 +184,20 @@ func interactionScenarios() []interactionScenario {
 				"call_27f0f389aa",
 				`{"`,
 			},
+		},
+		{
+			name:    "natural first question produces an answer, not a question",
+			promise: "a first-action elicitation (\"which resource do you mean?\") issued before any tool attempt is refused invisibly and the model is steered to look with tools — the user asking a natural first question reads an answer, never a clarification card",
+			prompt:  "are there any alerts I should look at?",
+			calls: []scriptedProviderCall{
+				providerQuestionToolCall("call_q1"),
+				providerQueryToolCall("call_r1"),
+				providerContentDone("No active alerts right now — everything looks healthy."),
+			},
+			maxTurns:          6,
+			orderedTypes:      []string{"session", "tool_start", "tool_end", "content", "done"},
+			forbiddenTypes:    []string{"question", "error"},
+			answerMustContain: []string{"No active alerts"},
 		},
 		{
 			name:    "provider failure before events retries invisibly",

@@ -739,6 +739,16 @@ func (a *AgenticLoop) ExecuteWithTools(ctx context.Context, sessionID string, me
 	return a.executeWithTools(ctx, sessionID, messages, tools, callback)
 }
 
+// maxLookGateBlocks bounds the look-before-asking gate: the
+// resolve-before-asking policy lives in the system prompt, but small local
+// models ignore it and reach for pulse_question as their first action
+// ("which resource do you mean?") when the answer is derivable from
+// read-only enumeration. Until the model has attempted at least one real
+// tool call in the run, the gate refuses the elicitation with a steer back
+// to the tools. It fails open after this many refusals so a model with a
+// genuinely unanswerable prompt cannot livelock against the gate.
+const maxLookGateBlocks = 2
+
 // cost-recording-exempt: orchestrator (chat.Service or patrol caller)
 // records cost from the loop's GetTotal{Input,Output}Tokens after this
 // returns. See ExecuteWithTools above.
@@ -784,6 +794,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 	// After maxIdenticalCalls identical invocations, the next one is blocked.
 	const maxIdenticalCalls = 3
 	recentCallCounts := make(map[string]int)
+
+	// Look-before-asking gate state; see maxLookGateBlocks.
+	lookGateToolAttempted := false
+	lookGateBlocks := 0
 
 	// Track where each turn's messages begin in providerMessages for compaction.
 	// We keep the last N turns' tool results in full; older ones get compacted.
@@ -1537,6 +1551,52 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			}
 		}
 
+		// Look-before-asking gate (interactive profiles; non-interactive
+		// question calls were already answered above). A pulse_question
+		// issued before any real tool attempt is refused with an error
+		// result — the model keeps its sibling tool calls and is steered
+		// to enumerate instead of elicit. No stream event is emitted:
+		// pulse_question renders as a question card only when it actually
+		// waits for the user, and a refused elicitation should be
+		// invisible except as the tool attempt that follows it.
+		if !lookGateToolAttempted && lookGateBlocks < maxLookGateBlocks {
+			remaining := toolCalls[:0]
+			blockedQuestions := 0
+			for _, tc := range toolCalls {
+				if tc.Name != pulseQuestionToolName {
+					remaining = append(remaining, tc)
+					continue
+				}
+				blockedQuestions++
+				log.Warn().
+					Str("id", tc.ID).
+					Str("session_id", sessionID).
+					Int("gate_blocks", lookGateBlocks+1).
+					Msg("[AgenticLoop] Blocked first-action pulse_question (look-before-asking gate)")
+				projection := newProviderToolResultContextProjection(tc.ID,
+					"BLOCKED: you have not attempted a single tool call yet, so asking the user is premature. Do not ask the operator for information Pulse can enumerate — resource names, IDs, alert lists, and statuses are all discoverable with read-only tools. Look first: pulse_summarize {\"action\":\"fleet\"} answers \"how is my infrastructure doing?\" with no parameters, and the query/alert tools list resources and active alerts. Ask a question only if genuine ambiguity remains after looking.", true)
+				resultMessages = append(resultMessages, Message{
+					ID:         uuid.New().String(),
+					Role:       "user",
+					Timestamp:  time.Now(),
+					ToolResult: &projection.Transcript,
+				})
+				providerMessages = append(providerMessages, providers.Message{
+					Role:       "user",
+					ToolResult: &projection.Model,
+				})
+			}
+			if blockedQuestions > 0 {
+				lookGateBlocks++
+				toolCalls = remaining
+				if len(toolCalls) == 0 {
+					currentTurnStartIndex = len(providerMessages)
+					turn++
+					continue
+				}
+			}
+		}
+
 		// pulse_question is interactive and must not run in parallel with other tools.
 		// If the provider emits multiple tool calls alongside pulse_question, skip the
 		// others and let the model retry after receiving the user's answer.
@@ -1821,6 +1881,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 
 			// Tool passed all pre-checks — queue for execution
 			pendingExec = append(pendingExec, pendingToolExec{tc: tc, toolKind: toolKind})
+			// A real tool attempt satisfies the look-before-asking gate.
+			lookGateToolAttempted = true
 		}
 
 		// --- Phase 2: Execute pending tools ---

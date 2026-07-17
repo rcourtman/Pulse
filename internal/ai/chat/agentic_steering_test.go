@@ -31,9 +31,15 @@ func TestAgenticLoop_SteerInjectsAtNextTurnBoundary(t *testing.T) {
 	messages := []Message{{Role: "user", Content: "Do something but ask me first"}}
 	const steerPrompt = "actually check pve2 as well"
 
-	// Turn 1: model requests pulse_question (blocks until answered).
-	mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
+	// Turn 1: model looks with a read tool (the look-before-asking gate
+	// refuses a first-action pulse_question).
+	scriptLookTurn(mockProvider, func(req providers.ChatRequest) bool {
 		return len(req.Messages) == 1
+	})
+
+	// Turn 2: model requests pulse_question (blocks until answered).
+	mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
+		return hasToolResult(req, "t0") && !hasToolResult(req, "t1")
 	}), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 		cb := args.Get(2).(providers.StreamCallback)
 		toolInput := map[string]interface{}{
@@ -60,8 +66,8 @@ func TestAgenticLoop_SteerInjectsAtNextTurnBoundary(t *testing.T) {
 		})
 	}).Once()
 
-	// Turn 2: the request must carry the steer as a user message AFTER the
-	// tool result for t1.
+	// Final turn: the request must carry the steer as a user message AFTER
+	// the tool result for t1.
 	mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
 		toolResultIndex := -1
 		steerIndex := -1
@@ -237,8 +243,9 @@ func TestService_ExecuteStream_SteeredMessagePersists(t *testing.T) {
 	const steerPrompt = "steer: also check the replication lag"
 	sessionID := "sess-steer-persist"
 
-	// Turn 1: block on a question; the test steers through the SERVICE while
-	// blocked, then answers.
+	// Turn 1 looks with a read tool (the look-before-asking gate refuses a
+	// first-action pulse_question); turn 2 blocks on a question; the test
+	// steers through the SERVICE while blocked, then answers.
 	toolInput := map[string]interface{}{
 		"questions": []interface{}{
 			map[string]interface{}{
@@ -247,13 +254,16 @@ func TestService_ExecuteStream_SteeredMessagePersists(t *testing.T) {
 			},
 		},
 	}
+	scriptLookTurn(mockProvider, func(req providers.ChatRequest) bool {
+		return !hasToolResult(req, "t0")
+	})
 	mockProvider.On("ChatStream", mock.Anything, mock.MatchedBy(func(req providers.ChatRequest) bool {
 		for _, m := range req.Messages {
 			if m.Role == "user" && m.Content == steerPrompt {
 				return false
 			}
 		}
-		return true
+		return hasToolResult(req, "t0")
 	}), mock.Anything).Return(nil).Run(func(args mock.Arguments) {
 		cb := args.Get(2).(providers.StreamCallback)
 		cb(providers.StreamEvent{
