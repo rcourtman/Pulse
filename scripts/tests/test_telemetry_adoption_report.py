@@ -5,8 +5,11 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import json
+import subprocess
 import sys
 import unittest
+from unittest import mock
 
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1]
@@ -25,6 +28,26 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             report.normalize_reported_version("v6.0.0-rc.1-45-gABCDEF"),
             "6.0.0-rc.1+git.45.gabcdef",
         )
+
+    def test_fetch_rows_remote_parses_json_lines_stream(self) -> None:
+        db_stats = {"latest_ping": "2026-07-17 00:00:00", "total_rows": 2, "total_distinct_installs": 2}
+        rows = [
+            {"install_id": "a", "received_at": "2026-07-17 00:00:00"},
+            {"install_id": "b", "received_at": "2026-07-16 00:00:00"},
+        ]
+        stdout = "\n".join([json.dumps({"db_stats": db_stats}), *(json.dumps(row) for row in rows), ""])
+        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr="")
+        with mock.patch.object(report.subprocess, "run", return_value=completed) as run_mock:
+            result = report.fetch_rows_remote("pulse-license", "/opt/licenses.sqlite", 30)
+        self.assertEqual(result, {"db_stats": db_stats, "rows": rows})
+        remote_script = run_mock.call_args.kwargs["input"]
+        self.assertNotIn("fetchall", remote_script)
+
+    def test_fetch_rows_remote_rejects_empty_response(self) -> None:
+        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="\n", stderr="")
+        with mock.patch.object(report.subprocess, "run", return_value=completed):
+            with self.assertRaisesRegex(RuntimeError, "empty response"):
+                report.fetch_rows_remote("pulse-license", "/opt/licenses.sqlite", 30)
 
     def test_classify_reported_version_requires_real_published_tag(self) -> None:
         identity = report.classify_reported_version(

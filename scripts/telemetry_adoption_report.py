@@ -1138,6 +1138,8 @@ def fetch_rows_local(db_path: str, since_days: int) -> dict[str, Any]:
 
 
 def fetch_rows_remote(ssh_host: str, db_path: str, since_days: int) -> dict[str, Any]:
+    # Streams JSON-lines (db_stats header, then one row per line) so the remote
+    # process never holds the full result set — the license droplet has 1GB RAM.
     remote_script = """
 import json
 import sqlite3
@@ -1161,11 +1163,9 @@ rows_sql = (
 )
 try:
     db_stats = dict(conn.execute(db_stats_sql).fetchone())
-    rows = [
-        dict(row)
-        for row in conn.execute(rows_sql, (since_days,)).fetchall()
-    ]
-    print(json.dumps({"db_stats": db_stats, "rows": rows}))
+    print(json.dumps({"db_stats": db_stats}))
+    for row in conn.execute(rows_sql, (since_days,)):
+        print(json.dumps(dict(row)))
 finally:
     conn.close()
 """
@@ -1176,7 +1176,12 @@ finally:
         capture_output=True,
         check=True,
     )
-    return json.loads(result.stdout)
+    lines = (line for line in result.stdout.splitlines() if line.strip())
+    try:
+        header = json.loads(next(lines))
+    except StopIteration:
+        raise RuntimeError(f"empty response from remote telemetry fetch on {ssh_host}") from None
+    return {"db_stats": header["db_stats"], "rows": [json.loads(line) for line in lines]}
 
 
 def counter_entries(counter: Counter[str], key_name: str) -> list[dict[str, Any]]:
