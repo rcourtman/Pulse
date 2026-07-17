@@ -7,6 +7,7 @@ import {
   ContainerUpdateBadge,
   UpdateButton,
 } from '@/components/shared/ContainerUpdateBadge';
+import { getUpdatePlanErrorMessage } from '@/components/shared/containerUpdateBadgeModel';
 
 vi.mock('@/api/monitoring', () => ({
   MonitoringAPI: {
@@ -121,5 +122,31 @@ describe('ContainerUpdateBadge', () => {
 
     expect(screen.getByText('Check failed')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+});
+
+describe('getUpdatePlanErrorMessage', () => {
+  it('prefers the availability refusal reason over the generic message', () => {
+    const error = Object.assign(new Error('Action execution is unavailable'), {
+      details: {
+        reasonCode: 'operation_receipt_unsupported',
+        reason: 'The Pulse agent on this host is still on an older version.',
+      },
+    });
+
+    expect(getUpdatePlanErrorMessage(error)).toBe(
+      'The Pulse agent on this host is still on an older version.',
+    );
+  });
+
+  it('falls back to the error message when no reason detail exists', () => {
+    expect(getUpdatePlanErrorMessage(new Error('Pulse refused the update plan.'))).toBe(
+      'Pulse refused the update plan.',
+    );
+  });
+
+  it('falls back to a default when the error is empty', () => {
+    expect(getUpdatePlanErrorMessage(new Error(''))).toBe('Failed to plan the update');
+    expect(getUpdatePlanErrorMessage(null)).toBe('Failed to plan the update');
   });
 });

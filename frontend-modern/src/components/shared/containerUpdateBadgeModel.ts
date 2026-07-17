@@ -146,3 +146,17 @@ export function getUpdateButtonTooltip(options: {
       return `Click to update\nCurrent: ${current}...\nLatest: ${latest}...`;
   }
 }
+
+/**
+ * Pick the user-facing message for a failed update plan request.
+ *
+ * Availability refusals carry the actionable explanation (agent disconnected,
+ * agent too old, stale inventory) in the API error's details.reason; the
+ * top-level message is just "Action execution is unavailable".
+ */
+export function getUpdatePlanErrorMessage(error: unknown): string {
+  const apiError = error as (Error & { details?: Record<string, string> }) | null;
+  return (
+    apiError?.details?.reason?.trim() || apiError?.message?.trim() || 'Failed to plan the update'
+  );
+}

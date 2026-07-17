@@ -13,6 +13,7 @@ import type { ActionDetailResponse } from '@/types/actionAudit';
 import {
   getUpdateButtonLabel,
   getUpdateButtonTooltip,
+  getUpdatePlanErrorMessage,
   hasContainerUpdate,
   hasContainerUpdateCurrent,
   hasContainerUpdateError,
@@ -113,7 +114,7 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
       setReviewDetail(await ResourceActionsAPI.getAction(plan.actionId));
       setLocalState('idle');
     } catch (error) {
-      const message = (error as Error).message || 'Failed to plan the update';
+      const message = getUpdatePlanErrorMessage(error);
       setErrorMessage(message);
       setLocalState('idle');
       markContainerUpdateError(props.agentId, props.containerId, message);
