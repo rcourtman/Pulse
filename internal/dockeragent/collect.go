@@ -24,6 +24,16 @@ import (
 
 // buildReport gathers all system and container metrics into a single report
 func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
+	// Cycle-level containment: per-call deadlines below should bound every
+	// docker call, but one live exercise saw a call park for minutes with its
+	// deadline never firing, so the whole cycle gets its own ceiling plus an
+	// independent watchdog that dumps goroutines if even this deadline fails
+	// to abort the cycle.
+	ctx, cancel := context.WithTimeout(ctx, dockerCollectCycleTimeout)
+	defer cancel()
+	stopWatchdog := startCollectCycleWatchdog(a.logger, dockerCollectCycleTimeout+dockerCollectWatchdogGrace)
+	defer stopWatchdog()
+
 	info, err := dockerCallWithRetry(ctx, dockerInfoCallTimeout, func(callCtx context.Context) (systemtypes.Info, error) {
 		return a.docker.Info(callCtx)
 	})

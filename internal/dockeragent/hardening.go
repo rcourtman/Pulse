@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -19,9 +22,47 @@ const (
 	dockerUpdateCallTimeout        = 2 * time.Minute
 	dockerUpdateOverallTimeout     = 15 * time.Minute
 
+	// dockerCollectCycleTimeout bounds one whole collection cycle
+	// (buildReport). Every docker call inside the cycle already carries its
+	// own per-call timeout, so a healthy cycle finishes in seconds; this
+	// ceiling only trips when a call stalls without its deadline aborting it
+	// (observed once on 2026-07-17: a DiskUsage roundtrip parked 6+ minutes
+	// on a colima daemon with the 20s per-call deadline never firing).
+	dockerCollectCycleTimeout = 5 * time.Minute
+
+	// dockerCollectWatchdogGrace is how long past dockerCollectCycleTimeout
+	// the watchdog waits before concluding that the cycle context deadline
+	// failed to abort the cycle and dumping goroutines for diagnosis.
+	dockerCollectWatchdogGrace = 30 * time.Second
+
 	dockerCallRetryAttempts = 2
 	dockerRetryBaseDelay    = 200 * time.Millisecond
 )
+
+// startCollectCycleWatchdog arms an independent timer that fires only if a
+// collection cycle is still running after budget. The cycle context deadline
+// should abort the cycle well before then, so the watchdog firing means
+// context cancellation was swallowed or a runtime timer was lost; it logs the
+// full goroutine stack so a recurrence of the 2026-07-17 stall is diagnosable
+// in the field. The returned stop function must be called when the cycle ends.
+func startCollectCycleWatchdog(logger zerolog.Logger, budget time.Duration) (stop func()) {
+	done := make(chan struct{})
+	go func() {
+		timer := time.NewTimer(budget)
+		defer timer.Stop()
+		select {
+		case <-done:
+		case <-timer.C:
+			buf := make([]byte, 64*1024)
+			n := runtime.Stack(buf, true)
+			logger.Error().
+				Dur("budget", budget).
+				Str("goroutines", string(buf[:n])).
+				Msg("Docker collect cycle still running past its watchdog budget; the cycle context deadline did not abort it")
+		}
+	}()
+	return func() { close(done) }
+}
 
 func dockerCallWithRetry[T any](ctx context.Context, timeout time.Duration, call func(context.Context) (T, error)) (T, error) {
 	return dockerCallWithRetryAttempts(ctx, timeout, dockerCallRetryAttempts, call)

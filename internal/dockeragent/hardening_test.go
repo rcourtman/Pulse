@@ -1,13 +1,36 @@
 package dockeragent
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
 )
+
+// syncBuffer is a goroutine-safe bytes.Buffer for capturing watchdog log
+// output written from another goroutine.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
 
 func TestDockerCallWithRetryAttempts_RetriesTransientErrors(t *testing.T) {
 	t.Parallel()
@@ -78,5 +101,42 @@ func TestAnnotateDockerConnectionError(t *testing.T) {
 	timeoutErr := annotateDockerConnectionError(context.DeadlineExceeded)
 	if !strings.Contains(strings.ToLower(timeoutErr.Error()), "timed out") {
 		t.Fatalf("expected timeout hint, got %q", timeoutErr.Error())
+	}
+}
+
+func TestCollectCycleWatchdogFiresWhenNotStopped(t *testing.T) {
+	var out syncBuffer
+	logger := zerolog.New(&out)
+
+	stop := startCollectCycleWatchdog(logger, 20*time.Millisecond)
+	defer stop()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(out.String(), "watchdog budget") {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	logged := out.String()
+	if !strings.Contains(logged, "watchdog budget") {
+		t.Fatalf("watchdog did not log after budget elapsed: %q", logged)
+	}
+	if !strings.Contains(logged, "goroutine") {
+		t.Fatalf("watchdog log does not include a goroutine dump: %q", logged)
+	}
+}
+
+func TestCollectCycleWatchdogSilentWhenStopped(t *testing.T) {
+	var out syncBuffer
+	logger := zerolog.New(&out)
+
+	stop := startCollectCycleWatchdog(logger, 30*time.Millisecond)
+	stop()
+
+	time.Sleep(100 * time.Millisecond)
+	if logged := out.String(); logged != "" {
+		t.Fatalf("watchdog logged after being stopped: %q", logged)
 	}
 }
