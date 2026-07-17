@@ -417,6 +417,16 @@ affordance itself must compose
 `PlatformResourceDetailTableRow.tsx` contract. Future platform tables must not
 add page-local chevron buttons, bespoke `aria-expanded` handling, or local
 event-propagation variants for row detail expansion.
+Resource detail drawers declare their presentation context explicitly through
+`resourceDetailDrawerPresentation.ts`. The `table-row` presentation used by
+inline platform and resource table expansion presents current-state and
+identity details from the local resource payload and must not start remote
+history, intelligence, or action-audit reads on row expansion alone; those
+reads begin only when the user opens the drawer's History disclosure, which is
+the canonical (and, since the platform-first IA, the only) surface for
+per-resource change history and action audits. Once activated, the reads stay
+warm for the drawer's lifetime so collapsing the disclosure does not refetch.
+The default `full` presentation keeps those reads eager.
 Inline detail section content follows the same ownership split.
 Unified-resource consumers own the source-specific section rows, labels,
 resource identities, and severity/status semantics, but repeated section-row

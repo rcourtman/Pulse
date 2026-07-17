@@ -61,9 +61,20 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
   const [showPmgMailFlowDetail, setShowPmgMailFlowDetail] = createSignal(false);
   const [k8sDeploymentsPrefillNamespace, setK8sDeploymentsPrefillNamespace] = createSignal('');
 
+  // Table-row drawers defer the history/intelligence/action-audit reads
+  // until the user opens the History disclosure; activation latches so a
+  // later collapse keeps the loaded data instead of tearing the queries
+  // down and refetching on every toggle.
+  const [showRowHistory, setShowRowHistorySignal] = createSignal(false);
+  const [rowHistoryActivated, setRowHistoryActivated] = createSignal(false);
+  const setShowRowHistory = (next: boolean) => {
+    if (next) setRowHistoryActivated(true);
+    setShowRowHistorySignal(next);
+  };
+
   const history = useResourceDetailDrawerHistoryState({
     resource,
-    enableRemoteHistory: options.presentation !== 'table-row',
+    enableRemoteHistory: () => options.presentation !== 'table-row' || rowHistoryActivated(),
   });
   const derived = useResourceDetailDrawerDerivedState({
     resource,
@@ -184,6 +195,8 @@ export const useResourceDetailDrawerState = (options: UseResourceDetailDrawerSta
     setShowPmgMailFlowDetail,
     k8sDeploymentsPrefillNamespace,
     setK8sDeploymentsPrefillNamespace,
+    showRowHistory,
+    setShowRowHistory,
     ...history,
     ...derived,
     ...dockerActions,

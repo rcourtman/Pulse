@@ -16,7 +16,9 @@ import type { ActionAuditListResponse } from '@/types/actionAudit';
 
 interface UseResourceDetailDrawerHistoryStateOptions {
   resource: Resource;
-  enableRemoteHistory?: boolean;
+  // Accessor so presentations can activate remote history reactively
+  // (table-row drawers start fetches on explicit user expansion).
+  enableRemoteHistory?: () => boolean;
 }
 
 type ResourceFacetBundle = Awaited<ReturnType<typeof ResourceAPI.getFacetBundle>> | null;
@@ -36,7 +38,7 @@ export const useResourceDetailDrawerHistoryState = (
   options: UseResourceDetailDrawerHistoryStateOptions,
 ) => {
   const { resource } = options;
-  const enableRemoteHistory = options.enableRemoteHistory ?? true;
+  const enableRemoteHistory = () => options.enableRemoteHistory?.() ?? true;
 
   const resourceFacetId = createMemo(() => resource.id.trim());
   const [timelineKindFilter, setTimelineKindFilter] = createSignal<ResourceChangeKind | ''>('');
@@ -48,7 +50,7 @@ export const useResourceDetailDrawerHistoryState = (
   >('');
 
   const resourceFacetRequest = createMemo(() => {
-    if (!enableRemoteHistory) return null;
+    if (!enableRemoteHistory()) return null;
     const id = resourceFacetId();
     return id ? { id } : null;
   });
@@ -78,7 +80,7 @@ export const useResourceDetailDrawerHistoryState = (
   const resourceIntelligence = resourceIntelligenceState.value;
 
   const actionAuditRequest = createMemo(() => {
-    if (!enableRemoteHistory) return null;
+    if (!enableRemoteHistory()) return null;
     const id = resourceFacetId();
     return id ? { id, limit: 5 } : null;
   });
@@ -97,7 +99,7 @@ export const useResourceDetailDrawerHistoryState = (
   const actionAuditResponse = actionAuditState.value;
 
   const timelineFacetRequest = createMemo(() => {
-    if (!enableRemoteHistory) return null;
+    if (!enableRemoteHistory()) return null;
     const id = resourceFacetId();
     if (!id) return null;
     const kind = timelineKindFilter();

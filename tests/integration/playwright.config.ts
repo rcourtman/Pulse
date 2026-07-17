@@ -22,7 +22,6 @@ const QUARANTINED_SPECS = [
   '**/22-vmware-connections-workspace.spec.ts',
   '**/30-setup-platform-connections-handoff.spec.ts',
   '**/36-vmware-alert-history-resource-incidents.spec.ts',
-  '**/37-vmware-resource-history-drawer.spec.ts',
   '**/38-vmware-ai-chat-mentions.spec.ts',
   '**/39-vmware-resource-detail-drawer.spec.ts',
   '**/40-vmware-storage-source-filter.spec.ts',

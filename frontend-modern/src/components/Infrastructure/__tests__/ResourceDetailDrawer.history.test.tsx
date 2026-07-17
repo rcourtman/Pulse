@@ -342,10 +342,37 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.getByText('Current state')).toBeInTheDocument();
   });
 
-  it('keeps table-row presentation focused on local resource details', async () => {
+  it('keeps table-row presentation local until the history disclosure is opened', async () => {
     facetBundleMock.getFacetBundle.mockClear();
     aiIntelligenceMock.getResourceIntelligence.mockClear();
     actionAuditMock.listActionAudits.mockClear();
+    facetBundleMock.getFacetBundle.mockResolvedValue({
+      capabilities: [],
+      relationships: [],
+      recentChanges: [
+        {
+          id: 'change-row-1',
+          observedAt: '2026-03-18T12:06:00Z',
+          resourceId: 'agent:truenas-main',
+          kind: 'restart',
+          sourceType: 'platform_event',
+          sourceAdapter: 'truenas_adapter',
+          confidence: 'high',
+          reason: 'Service restart observed',
+        },
+      ],
+      counts: {
+        recentChanges: 1,
+        recentChangeKinds: { restart: 1 },
+        recentChangeSourceTypes: { platform_event: 1 },
+        recentChangeSourceAdapters: { truenas_adapter: 1 },
+      },
+    });
+    actionAuditMock.listActionAudits.mockResolvedValue({
+      audits: [],
+      count: 0,
+      available: true,
+    });
 
     render(() => (
       <ResourceDetailDrawer
@@ -365,6 +392,9 @@ describe('ResourceDetailDrawer change history section', () => {
 
     expect(screen.getByText('Current state')).toBeInTheDocument();
     expect(screen.getByText('Identity')).toBeInTheDocument();
+    // Collapsed disclosure is present, but nothing fetches and no history
+    // panels render until the user opens it.
+    expect(screen.getByTestId('resource-row-history-disclosure')).toBeInTheDocument();
     expect(screen.queryByText('Change history')).not.toBeInTheDocument();
     expect(screen.queryByText('Operator overrides')).not.toBeInTheDocument();
     expect(screen.queryByText('Maintenance verification')).not.toBeInTheDocument();
@@ -374,6 +404,35 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(facetBundleMock.getFacetBundle).not.toHaveBeenCalled();
     expect(aiIntelligenceMock.getResourceIntelligence).not.toHaveBeenCalled();
     expect(actionAuditMock.listActionAudits).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show history' }));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(facetBundleMock.getFacetBundle).toHaveBeenCalledWith('agent:truenas-main', {
+      limit: 25,
+    });
+    expect(actionAuditMock.listActionAudits).toHaveBeenCalledWith({
+      resourceId: 'agent:truenas-main',
+      limit: 5,
+    });
+    expect(screen.getByText('Change history')).toBeInTheDocument();
+    expect(await screen.findByText('Service restart observed')).toBeInTheDocument();
+    expect(screen.getByText('Action history')).toBeInTheDocument();
+    // Collapsing keeps the loaded data without refetching.
+    const fetchCount = facetBundleMock.getFacetBundle.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Hide history' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show history' }));
+    await Promise.resolve();
+    expect(facetBundleMock.getFacetBundle.mock.calls.length).toBe(fetchCount);
+    facetBundleMock.getFacetBundle.mockReset();
+    actionAuditMock.listActionAudits.mockReset();
+    actionAuditMock.listActionAudits.mockResolvedValue({
+      audits: [],
+      count: 0,
+      available: false,
+    });
   });
 
   it('keeps compact timeline summary chips in overview while showing one embedded change history section', async () => {
