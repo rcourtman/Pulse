@@ -3,12 +3,13 @@ package unifiedresources
 import (
 	"database/sql"
 	"errors"
-	_ "modernc.org/sqlite"
 	"os"
 	"path/filepath"
 	"sync"
 	"testing"
 	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 func TestSQLiteActionDispatchBindingMigrationKeepsLegacyReceiptPendingInert(t *testing.T) {
