@@ -132,6 +132,14 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 	}
 
 	receipts, receiptErr := operationreceipt.Open(filepath.Join(stateDir, "operation-receipts.db"), hostOperationReceiptConfig())
+	if receiptErr != nil {
+		// Without the durable receipt store the agent registers with operation
+		// receipt version 0 and Pulse refuses every reviewed action for this
+		// host. Surface the real cause loudly; otherwise the only symptom is a
+		// misleading "agent is too old" readiness message on the server.
+		logger.Warn().Err(receiptErr).Str("state_dir", stateDir).
+			Msg("Operation receipt store unavailable — Pulse will refuse reviewed actions for this agent until its state directory is writable")
+	}
 	return &CommandClient{
 		pulseURL:            strings.TrimRight(cfg.PulseURL, "/"),
 		apiToken:            cfg.APIToken,

@@ -272,7 +272,7 @@ func hostUpdateUnavailableReason(err error) string {
 	case "host_commands_disabled":
 		return "Typed host operations are disabled for this agent."
 	case "operation_receipt_unsupported":
-		return "The Pulse agent on this host is still on an older version that cannot run reviewed actions. Wait for the agent to update itself or update it manually, then retry."
+		return "The Pulse agent on this host cannot run reviewed actions: it is on an older version, or its durable state directory is unavailable. Update the agent, or check the agent logs if it is already current, then retry."
 	case "unsupported_package_manager":
 		return "This host does not expose a supported package manager."
 	case "package_inventory_error":
