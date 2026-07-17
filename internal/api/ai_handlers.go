@@ -1772,12 +1772,15 @@ func (h *AISettingsHandler) SetOnModelChange(callback func()) {
 	h.onModelChange = callback
 }
 
-func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
+// aiSettingsUpdateTouchesProviderConfig reports whether the update touches
+// enablement, model selection, auth, or provider credential/transport fields —
+// the settings shared by the AI chat restart check and the Patrol readiness
+// check.
+func aiSettingsUpdateTouchesProviderConfig(req AISettingsUpdateRequest) bool {
 	return req.Enabled != nil ||
 		req.Model != nil ||
 		req.ChatModel != nil ||
 		req.PatrolModel != nil ||
-		req.AutoFixModel != nil ||
 		req.AuthMethod != nil ||
 		req.AnthropicAPIKey != nil ||
 		req.OpenAIAPIKey != nil ||
@@ -1812,6 +1815,11 @@ func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
 		req.ClearOllamaPassword != nil ||
 		req.CodexSubscriptionEnabled != nil ||
 		req.ClaudeSubscriptionEnabled != nil
+}
+
+func shouldRestartAIChat(req AISettingsUpdateRequest) bool {
+	return req.AutoFixModel != nil ||
+		aiSettingsUpdateTouchesProviderConfig(req)
 }
 
 // aiSettingsUpdateRequiresPatrolPreflight reports whether the settings
@@ -1857,46 +1865,9 @@ func aiSettingsUpdateRequiresPatrolPreflight(oldCfg, newCfg *config.AIConfig) bo
 }
 
 func aiSettingsUpdateTouchesPatrolReadiness(req AISettingsUpdateRequest) bool {
-	return req.Enabled != nil ||
-		req.Model != nil ||
-		req.ChatModel != nil ||
-		req.PatrolModel != nil ||
-		req.PatrolEnabled != nil ||
+	return req.PatrolEnabled != nil ||
 		req.PatrolIntervalMinutes != nil ||
-		req.AuthMethod != nil ||
-		req.AnthropicAPIKey != nil ||
-		req.OpenAIAPIKey != nil ||
-		req.OpenRouterAPIKey != nil ||
-		req.DeepSeekAPIKey != nil ||
-		req.ZaiAPIKey != nil ||
-		req.GroqAPIKey != nil ||
-		req.MistralAPIKey != nil ||
-		req.CerebrasAPIKey != nil ||
-		req.TogetherAPIKey != nil ||
-		req.FireworksAPIKey != nil ||
-		req.GeminiAPIKey != nil ||
-		req.OllamaBaseURL != nil ||
-		req.OllamaUsername != nil ||
-		req.OllamaPassword != nil ||
-		req.OllamaKeepAlive != nil ||
-		req.OpenAIBaseURL != nil ||
-		req.ZaiBaseURL != nil ||
-		req.ClearAnthropicKey != nil ||
-		req.ClearOpenAIKey != nil ||
-		req.ClearOpenRouterKey != nil ||
-		req.ClearDeepSeekKey != nil ||
-		req.ClearZaiKey != nil ||
-		req.ClearGroqKey != nil ||
-		req.ClearMistralKey != nil ||
-		req.ClearCerebrasKey != nil ||
-		req.ClearTogetherKey != nil ||
-		req.ClearFireworksKey != nil ||
-		req.ClearGeminiKey != nil ||
-		req.ClearOllamaURL != nil ||
-		req.ClearOllamaUsername != nil ||
-		req.ClearOllamaPassword != nil ||
-		req.CodexSubscriptionEnabled != nil ||
-		req.ClaudeSubscriptionEnabled != nil
+		aiSettingsUpdateTouchesProviderConfig(req)
 }
 
 // SetOnControlSettingsChange sets a callback to be invoked when control settings change

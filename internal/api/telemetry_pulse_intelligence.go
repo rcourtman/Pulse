@@ -149,18 +149,18 @@ func pulseIntelligenceApprovedActionOutcomeIDs(store unifiedresources.ResourceSt
 	return attemptIDs, successIDs
 }
 
-func pulseIntelligenceRejectedActionDecisionIDs(store unifiedresources.ResourceStore, orgID string, since time.Time) map[string]struct{} {
+func pulseIntelligenceActionDecisionIDs(store unifiedresources.ResourceStore, orgID string, since time.Time, state unifiedresources.ActionState, decisionLabel string, matchesDecision func(unifiedresources.ActionAuditRecord) bool) map[string]struct{} {
 	decisionIDs := map[string]struct{}{}
 	if store == nil {
 		return decisionIDs
 	}
 	events, err := store.GetActionLifecycleEvents("", since, 0)
 	if err != nil {
-		log.Warn().Err(err).Str("org_id", orgID).Msg("Unable to query rejected action lifecycle telemetry summary")
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Unable to query " + decisionLabel + " action lifecycle telemetry summary")
 		return decisionIDs
 	}
 	for _, event := range events {
-		if event.State != unifiedresources.ActionStateRejected {
+		if event.State != state {
 			continue
 		}
 		actionID := strings.TrimSpace(event.ActionID)
@@ -169,44 +169,22 @@ func pulseIntelligenceRejectedActionDecisionIDs(store unifiedresources.ResourceS
 		}
 		record, ok, err := store.GetActionAudit(actionID)
 		if err != nil {
-			log.Warn().Err(err).Str("org_id", orgID).Msg("Unable to resolve rejected action audit for telemetry summary")
+			log.Warn().Err(err).Str("org_id", orgID).Msg("Unable to resolve " + decisionLabel + " action audit for telemetry summary")
 			continue
 		}
-		if ok && pulseIntelligenceActionWasRejected(record) {
+		if ok && matchesDecision(record) {
 			decisionIDs[actionID] = struct{}{}
 		}
 	}
 	return decisionIDs
 }
 
+func pulseIntelligenceRejectedActionDecisionIDs(store unifiedresources.ResourceStore, orgID string, since time.Time) map[string]struct{} {
+	return pulseIntelligenceActionDecisionIDs(store, orgID, since, unifiedresources.ActionStateRejected, "rejected", pulseIntelligenceActionWasRejected)
+}
+
 func pulseIntelligenceApprovedActionDecisionIDs(store unifiedresources.ResourceStore, orgID string, since time.Time) map[string]struct{} {
-	decisionIDs := map[string]struct{}{}
-	if store == nil {
-		return decisionIDs
-	}
-	events, err := store.GetActionLifecycleEvents("", since, 0)
-	if err != nil {
-		log.Warn().Err(err).Str("org_id", orgID).Msg("Unable to query approved action lifecycle telemetry summary")
-		return decisionIDs
-	}
-	for _, event := range events {
-		if event.State != unifiedresources.ActionStateApproved {
-			continue
-		}
-		actionID := strings.TrimSpace(event.ActionID)
-		if actionID == "" {
-			continue
-		}
-		record, ok, err := store.GetActionAudit(actionID)
-		if err != nil {
-			log.Warn().Err(err).Str("org_id", orgID).Msg("Unable to resolve approved action audit for telemetry summary")
-			continue
-		}
-		if ok && pulseIntelligenceActionWasApproved(record) {
-			decisionIDs[actionID] = struct{}{}
-		}
-	}
-	return decisionIDs
+	return pulseIntelligenceActionDecisionIDs(store, orgID, since, unifiedresources.ActionStateApproved, "approved", pulseIntelligenceActionWasApproved)
 }
 
 func pulseIntelligenceApprovedActionAttempt(record unifiedresources.ActionAuditRecord) bool {
