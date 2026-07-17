@@ -495,9 +495,7 @@ const ChangeHistoryCard: Component<{
                 <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px]">
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
-                      <div class="font-medium text-base-content">
-                        {kindPresentation.label}
-                      </div>
+                      <div class="font-medium text-base-content">{kindPresentation.label}</div>
                       <div class="mt-0.5 text-muted">
                         {formatRelativeTime(change.observedAt)}
                         <Show when={change.occurredAt}>
