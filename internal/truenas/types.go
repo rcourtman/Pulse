@@ -47,6 +47,24 @@ type Pool struct {
 	TotalBytes int64
 	UsedBytes  int64
 	FreeBytes  int64
+	// DiskMembers are the leaf disks of the pool's vdev topology with their
+	// per-member ZFS state. pool.query attaches topology unconditionally on
+	// both CORE and SCALE, which makes it the only API source for disk→pool
+	// membership and per-disk health: disk.query carries neither a status
+	// nor a SMART field, and only reports pool membership behind an extra
+	// option the REST bridge cannot pass (#1573).
+	DiskMembers []PoolDiskMember
+}
+
+// PoolDiskMember is a leaf disk in a pool's vdev topology.
+type PoolDiskMember struct {
+	// Disk is the whole-disk device name (da0, sda) middleware resolves for
+	// every path-bearing leaf; Device is the partition/label device (da0p2).
+	Disk   string
+	Device string
+	// Status is the per-member ZFS state: ONLINE, DEGRADED, FAULTED,
+	// OFFLINE, UNAVAIL, REMOVED (spares report AVAIL/INUSE).
+	Status string
 }
 
 // Dataset mirrors the subset of TrueNAS dataset fields needed for unified mapping.

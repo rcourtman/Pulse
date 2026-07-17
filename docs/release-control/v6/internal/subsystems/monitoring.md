@@ -375,8 +375,19 @@ resource health.
     unified-resources contract (record-declared succession, item 27).
     TrueNAS storage and alert inventory follow native query methods first:
     pools use `pool.query`, datasets use `pool.dataset.query`, disks use
-    `disk.query` with pool join options, and alerts use `alert.list`, with
-    legacy REST allowed only as compatibility fallback. Unhealthy pool state
+    `disk.query`, and alerts use `alert.list`, with legacy REST allowed only
+    as compatibility fallback. Inventory readers must only consume fields the
+    API actually serves on every supported TrueNAS line (CORE 13 REST-only
+    included): `pool.dataset.query` carries no `mounted` field, so a listed
+    dataset counts as mounted unless `locked` or an explicit value says
+    otherwise; `disk.query` carries no health/status field and its
+    `extra.pools` join cannot cross the REST bridge, so per-disk pool
+    membership and ZFS member state derive from the vdev topology that
+    `pool.query` attaches unconditionally; and `disk.temperatures` is a
+    parameterized method the REST bridge only serves as POST, tried after
+    native JSON-RPC reporting. Missing disk telemetry is reported as
+    unknown, never as a failure signal. Regression coverage:
+    `internal/truenas/client_api_shapes_test.go`. Unhealthy pool state
     from `pool.query` must emit a provider-native `zfs_pool_state` incident on
     the canonical pool resource when `alert.list` does not already provide a
     warning or critical pool alert for that same pool, so pool degradation does

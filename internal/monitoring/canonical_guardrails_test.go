@@ -2177,7 +2177,7 @@ func TestTrueNASSystemTelemetryUsesCanonicalHostTemperatureModel(t *testing.T) {
 	providerSnippets := []string{
 		`if temperature := maxTrueNASSystemTemperature(system); temperature != nil {`,
 		`agent.Temperature = temperature`,
-		`if sensors := sensorMetaFromTrueNASSystem(system); sensors != nil {`,
+		`if sensors := sensorMetaFromTrueNASSystem(system, disks); sensors != nil {`,
 		`agent.Sensors = sensors`,
 	}
 	for _, snippet := range providerSnippets {

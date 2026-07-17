@@ -626,7 +626,16 @@ const storageStatusRank = (resource: Resource): number => {
 const compareStorageResources = (left: Resource, right: Resource): number => {
   const rankDelta = storageStatusRank(left) - storageStatusRank(right);
   if (rankDelta !== 0) return rankDelta;
-  return resourceDisplayName(left).localeCompare(resourceDisplayName(right));
+  const nameDelta = resourceDisplayName(left).localeCompare(resourceDisplayName(right));
+  if (nameDelta !== 0) return nameDelta;
+  // Two systems can expose identically-named pools (a DR pair both named
+  // "tank"); without a deterministic tie-break their order tracked map
+  // iteration order and flipped between refreshes (#1573).
+  const parentDelta = (asTrimmedString(left.parentName) ?? '').localeCompare(
+    asTrimmedString(right.parentName) ?? '',
+  );
+  if (parentDelta !== 0) return parentDelta;
+  return left.id.localeCompare(right.id);
 };
 
 const serviceStatusRank = (row: TrueNASServiceRow): number => {
@@ -686,7 +695,13 @@ export function mapTrueNASStorageStatus(
   }
   if (['offline', 'stopped'].includes(status)) return 'offline';
   if (zfsState && zfsState !== 'online' && zfsState !== 'healthy') return 'attention';
-  if (diskHealth && diskHealth !== 'passed' && diskHealth !== 'healthy' && diskHealth !== 'ok') {
+  // The TrueNAS disk API carries no SMART/health field, so "unknown" is the
+  // normal state of a healthy disk, not a warning signal (#1573). Only an
+  // affirmatively bad health value earns the attention bucket.
+  if (
+    diskHealth &&
+    !['passed', 'healthy', 'ok', 'unknown', 'unavailable'].includes(diskHealth)
+  ) {
     return 'attention';
   }
   if (['online', 'running', 'healthy'].includes(status)) return 'healthy';

@@ -267,15 +267,69 @@ func (c *Client) getPoolsRPC(ctx context.Context) ([]Pool, error) {
 			id = name
 		}
 		pools = append(pools, Pool{
-			ID:         id,
-			Name:       name,
-			Status:     strings.TrimSpace(readStringAny(item, "status")),
-			TotalBytes: readInt64Any(item, "size", "total", "total_bytes", "totalBytes"),
-			UsedBytes:  readInt64Any(item, "allocated", "used", "used_bytes", "usedBytes"),
-			FreeBytes:  readInt64Any(item, "free", "free_bytes", "freeBytes", "available"),
+			ID:          id,
+			Name:        name,
+			Status:      strings.TrimSpace(readStringAny(item, "status")),
+			TotalBytes:  readInt64Any(item, "size", "total", "total_bytes", "totalBytes"),
+			UsedBytes:   readInt64Any(item, "allocated", "used", "used_bytes", "usedBytes"),
+			FreeBytes:   readInt64Any(item, "free", "free_bytes", "freeBytes", "available"),
+			DiskMembers: poolDiskMembersFromTopology(item["topology"]),
 		})
 	}
 	return pools, nil
+}
+
+// poolDiskMembersFromTopology collects the leaf disks of a pool.query
+// topology object across every vdev group, including detached/unavailable
+// members that only appear through their unavail_disk datastore row.
+func poolDiskMembersFromTopology(topology any) []PoolDiskMember {
+	groups, ok := topology.(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	var members []PoolDiskMember
+	var walk func(node any)
+	walk = func(node any) {
+		vdev, ok := node.(map[string]any)
+		if !ok {
+			return
+		}
+		if children, ok := vdev["children"].([]any); ok && len(children) > 0 {
+			for _, child := range children {
+				walk(child)
+			}
+			return
+		}
+
+		member := PoolDiskMember{
+			Disk:   strings.TrimSpace(readStringAny(vdev, "disk")),
+			Device: strings.TrimSpace(readStringAny(vdev, "device")),
+			Status: strings.TrimSpace(readStringAny(vdev, "status")),
+		}
+		if member.Disk == "" {
+			// A missing/faulted member's device path no longer resolves;
+			// middleware then attaches the disk's datastore row instead.
+			if unavail, ok := vdev["unavail_disk"].(map[string]any); ok {
+				member.Disk = strings.TrimSpace(readStringAny(unavail, "devname", "name"))
+			}
+		}
+		if member.Disk == "" && member.Device == "" {
+			return
+		}
+		members = append(members, member)
+	}
+
+	for _, group := range groups {
+		nodes, ok := group.([]any)
+		if !ok {
+			continue
+		}
+		for _, node := range nodes {
+			walk(node)
+		}
+	}
+	return members
 }
 
 func (c *Client) getPoolsREST(ctx context.Context) ([]Pool, error) {
@@ -290,13 +344,21 @@ func (c *Client) getPoolsREST(ctx context.Context) ([]Pool, error) {
 		if id == "0" && strings.TrimSpace(item.Name) != "" {
 			id = strings.TrimSpace(item.Name)
 		}
+		var topology any
+		if len(item.Topology) > 0 {
+			if err := json.Unmarshal(item.Topology, &topology); err != nil {
+				topology = nil
+			}
+		}
+
 		pools = append(pools, Pool{
-			ID:         id,
-			Name:       strings.TrimSpace(item.Name),
-			Status:     strings.TrimSpace(item.Status),
-			TotalBytes: item.Size,
-			UsedBytes:  item.Allocated,
-			FreeBytes:  item.Free,
+			ID:          id,
+			Name:        strings.TrimSpace(item.Name),
+			Status:      strings.TrimSpace(item.Status),
+			TotalBytes:  item.Size,
+			UsedBytes:   item.Allocated,
+			FreeBytes:   item.Free,
+			DiskMembers: poolDiskMembersFromTopology(topology),
 		})
 	}
 
@@ -342,8 +404,15 @@ func (c *Client) getDatasetsRPC(ctx context.Context) ([]Dataset, error) {
 			Pool:       poolName,
 			UsedBytes:  used,
 			AvailBytes: available,
-			Mounted:    readBoolAny(item, "mounted"),
-			ReadOnly:   readBoolAny(item, "readonly", "read_only", "readOnly"),
+			// pool.dataset.query has never returned a "mounted" field on any
+			// TrueNAS version (CORE 13 and SCALE both strip it from the
+			// property allowlist), so absence must not read as unmounted —
+			// that marked every dataset Offline (#1573). A dataset the API
+			// lists is treated as mounted unless it is locked (encrypted
+			// with the key unloaded), the one unmounted state the API does
+			// report. An explicit "mounted" value still wins when present.
+			Mounted:  readBoolAnyDefault(item, true, "mounted") && !readBoolAny(item, "locked"),
+			ReadOnly: readBoolAny(item, "readonly", "read_only", "readOnly"),
 		})
 	}
 	return datasets, nil
@@ -381,13 +450,21 @@ func (c *Client) getDatasetsREST(ctx context.Context) ([]Dataset, error) {
 			poolName = parentPoolFromDataset(name)
 		}
 
+		// See getDatasetsRPC: "mounted" does not exist in the API response,
+		// so a listed dataset counts as mounted unless locked or explicitly
+		// reported otherwise.
+		mounted := !item.Locked
+		if item.Mounted != nil {
+			mounted = *item.Mounted && !item.Locked
+		}
+
 		datasets = append(datasets, Dataset{
 			ID:         id,
 			Name:       name,
 			Pool:       poolName,
 			UsedBytes:  used,
 			AvailBytes: available,
-			Mounted:    item.Mounted,
+			Mounted:    mounted,
 			ReadOnly:   readOnly,
 		})
 	}
@@ -527,6 +604,52 @@ func (c *Client) disksFromMaps(ctx context.Context, response []map[string]any) (
 	return disks, nil
 }
 
+// enrichDisksFromPoolTopology fills each disk's pool membership and ZFS
+// member state from the pools' vdev topology. disk.query itself reports no
+// health/status field on any TrueNAS version and only names the pool behind
+// an extra option the REST bridge cannot pass, so without this every disk
+// rendered as an unparented "Unknown" (#1573).
+func enrichDisksFromPoolTopology(pools []Pool, disks []Disk) {
+	type membership struct {
+		pool   string
+		status string
+	}
+	byDevice := make(map[string]membership)
+	for _, pool := range pools {
+		for _, member := range pool.DiskMembers {
+			for _, device := range []string{member.Disk, member.Device} {
+				device = strings.TrimSpace(device)
+				if device == "" {
+					continue
+				}
+				if _, exists := byDevice[device]; !exists {
+					byDevice[device] = membership{pool: pool.Name, status: member.Status}
+				}
+			}
+		}
+	}
+	if len(byDevice) == 0 {
+		return
+	}
+
+	for i := range disks {
+		disk := &disks[i]
+		member, ok := byDevice[strings.TrimSpace(disk.Name)]
+		if !ok {
+			member, ok = byDevice[strings.TrimSpace(disk.ID)]
+		}
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(disk.Pool) == "" {
+			disk.Pool = member.pool
+		}
+		if strings.TrimSpace(disk.Status) == "" {
+			disk.Status = member.status
+		}
+	}
+}
+
 // GetDiskTemperatures returns the current temperature by TrueNAS disk name.
 func (c *Client) GetDiskTemperatures(ctx context.Context) (map[string]int, error) {
 	return c.getDiskTemperaturesWithFallback(ctx, nil)
@@ -554,15 +677,6 @@ func (c *Client) GetDiskTemperatureHistory(ctx context.Context, identifiers []st
 }
 
 func (c *Client) getDiskTemperaturesWithFallback(ctx context.Context, identifiers []string) (map[string]int, error) {
-	var response any
-	restErr := c.getJSON(ctx, http.MethodGet, "/disk/temperatures", &response)
-	if restErr == nil {
-		temperatures := parseDiskTemperatures(response)
-		if len(temperatures) > 0 {
-			return temperatures, nil
-		}
-	}
-
 	if len(identifiers) == 0 {
 		reportingIdentifiers, err := c.listDiskReportingIdentifiers(ctx)
 		if err == nil {
@@ -570,14 +684,30 @@ func (c *Client) getDiskTemperaturesWithFallback(ctx context.Context, identifier
 		}
 	}
 
+	// Native JSON-RPC reporting first: it is the supported surface on
+	// SCALE 25.04+ and avoids waking the deprecated REST bridge (#1550).
 	reportingTemperatures, reportingErr := c.getDiskTemperaturesFromReporting(ctx, identifiers)
 	if reportingErr == nil && len(reportingTemperatures) > 0 {
 		return reportingTemperatures, nil
 	}
 
+	// disk.temperatures takes parameters, so REST v2.0 serves it as POST
+	// with a body keyed by parameter name — on CORE 13.x (which has no
+	// JSON-RPC endpoint at all) this is the only path that can answer.
+	// An empty names list means "all disks eligible for temp monitoring";
+	// the remaining parameter (powermode on CORE, options on SCALE) is
+	// omitted so each version applies its own default.
+	var response any
+	restErr := c.postJSON(ctx, "/disk/temperatures", map[string]any{"names": []string{}}, &response)
+	if restErr == nil {
+		if temperatures := parseDiskTemperatures(response); len(temperatures) > 0 {
+			return temperatures, nil
+		}
+	}
+
 	if restErr != nil {
 		if reportingErr != nil {
-			return nil, fmt.Errorf("fetch truenas disk temperatures via rest and reporting: rest=%w reporting=%v", restErr, reportingErr)
+			return nil, fmt.Errorf("fetch truenas disk temperatures via reporting and rest: reporting=%w rest=%v", reportingErr, restErr)
 		}
 		return nil, restErr
 	}
@@ -1304,6 +1434,7 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetch truenas disks: %w", err)
 	}
+	enrichDisksFromPoolTopology(pools, disks)
 
 	alerts, err := c.GetAlerts(ctx)
 	if err != nil {
@@ -3408,7 +3539,23 @@ func dedupeStrings(values []string) []string {
 }
 
 func (c *Client) getJSON(ctx context.Context, method string, path string, destination any) (err error) {
-	request, err := c.newRequest(ctx, method, path)
+	return c.requestJSON(ctx, method, path, nil, destination)
+}
+
+// postJSON issues a POST with a JSON body. REST v2.0 exposes middleware
+// methods that take parameters (disk.temperatures, reporting.get_data) as
+// POST endpoints whose body is a dict keyed by parameter name; a GET on
+// those paths fails on every TrueNAS version.
+func (c *Client) postJSON(ctx context.Context, path string, payload any, destination any) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("encode truenas request body for POST %s: %w", path, err)
+	}
+	return c.requestJSON(ctx, http.MethodPost, path, bytes.NewReader(body), destination)
+}
+
+func (c *Client) requestJSON(ctx context.Context, method string, path string, body io.Reader, destination any) (err error) {
+	request, err := c.newRequestWithBody(ctx, method, path, body)
 	if err != nil {
 		return fmt.Errorf("build truenas request %s %s: %w", method, path, err)
 	}
@@ -3449,10 +3596,17 @@ func (c *Client) getJSON(ctx context.Context, method string, path string, destin
 }
 
 func (c *Client) newRequest(ctx context.Context, method string, path string) (*http.Request, error) {
+	return c.newRequestWithBody(ctx, method, path, nil)
+}
+
+func (c *Client) newRequestWithBody(ctx context.Context, method string, path string, body io.Reader) (*http.Request, error) {
 	url := c.endpoint(path)
-	request, err := http.NewRequestWithContext(ctx, method, url, nil)
+	request, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
 		return nil, fmt.Errorf("build truenas request %s %s: %w", method, path, err)
+	}
+	if body != nil {
+		request.Header.Set("Content-Type", "application/json")
 	}
 
 	request.Header.Set("Accept", "application/json")
@@ -3687,12 +3841,13 @@ func (f *int64ResponseField) UnmarshalJSON(data []byte) error {
 }
 
 type poolResponse struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	Status    string `json:"status"`
-	Size      int64  `json:"size"`
-	Allocated int64  `json:"allocated"`
-	Free      int64  `json:"free"`
+	ID        int64           `json:"id"`
+	Name      string          `json:"name"`
+	Status    string          `json:"status"`
+	Size      int64           `json:"size"`
+	Allocated int64           `json:"allocated"`
+	Free      int64           `json:"free"`
+	Topology  json.RawMessage `json:"topology"`
 }
 
 type datasetResponse struct {
@@ -3702,8 +3857,12 @@ type datasetResponse struct {
 	Used      nestedValue `json:"used"`
 	Available nestedValue `json:"available"`
 	ReadOnly  nestedValue `json:"readonly"`
-	Mounted   bool        `json:"mounted"`
-	MountPath string      `json:"mountpoint"`
+	// Mounted is a pointer because the real API never sends the field
+	// (see getDatasetsRPC); only fixtures and hypothetical future versions
+	// populate it, and absence must stay distinguishable from false.
+	Mounted   *bool  `json:"mounted"`
+	Locked    bool   `json:"locked"`
+	MountPath string `json:"mountpoint"`
 }
 
 type diskResponse struct {

@@ -95,3 +95,38 @@ func TestSystemStatusPromotesHealthySystemWhenStorageRiskExists(t *testing.T) {
 		t.Fatalf("systemStatus(healthy, nil risk) = %q, want %q", got, unifiedresources.StatusOnline)
 	}
 }
+
+// API-backed TrueNAS systems have no pulse-agent SMART sweep, so the provider
+// must surface API-reported disk temperatures as SMART sensor entries for the
+// host Thermals card (#1573).
+func TestSensorMetaIncludesDiskTemperatures(t *testing.T) {
+	system := SystemInfo{
+		TemperatureCelsius: map[string]float64{"cpu_package": 55},
+	}
+	disks := []Disk{
+		{Name: "ada0", Model: "WDC", Serial: "S1", Transport: "ata", SizeBytes: 100, Temperature: 34, Pool: "tank", Status: "ONLINE"},
+		{Name: "ada1", Model: "WDC", Serial: "S2", Transport: "ata", SizeBytes: 100, Temperature: 0, Pool: "tank"},
+	}
+
+	sensors := sensorMetaFromTrueNASSystem(system, disks)
+	if sensors == nil {
+		t.Fatal("expected sensors")
+	}
+	if len(sensors.SMART) != 1 {
+		t.Fatalf("expected only disks with a reading as SMART entries, got %+v", sensors.SMART)
+	}
+	entry := sensors.SMART[0]
+	if entry.Device != "ada0" || entry.Temperature != 34 || entry.Pool != "tank" || entry.Health != "PASSED" {
+		t.Fatalf("unexpected SMART entry: %+v", entry)
+	}
+
+	// Disk-only systems (no CPU sensor payload) still get a sensors object.
+	diskOnly := sensorMetaFromTrueNASSystem(SystemInfo{}, disks)
+	if diskOnly == nil || len(diskOnly.SMART) != 1 || len(diskOnly.TemperatureCelsius) != 0 {
+		t.Fatalf("expected disk-only sensors, got %+v", diskOnly)
+	}
+
+	if sensorMetaFromTrueNASSystem(SystemInfo{}, nil) != nil {
+		t.Fatal("expected nil sensors when there is nothing to report")
+	}
+}

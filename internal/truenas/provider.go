@@ -504,7 +504,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, connectionID string, 
 	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Apps)+len(snapshot.VMs)+len(snapshot.Shares)+len(snapshot.Disks))
 
 	totalCapacity, totalUsed := aggregatePoolUsage(snapshot.Pools)
-	systemAgent := agentDataFromTrueNASSystem(connectionID, snapshot.System, systemRisk, protectionReduced, protectionSummary, rebuildInProgress, rebuildSummary)
+	systemAgent := agentDataFromTrueNASSystem(connectionID, snapshot.System, snapshot.Disks, systemRisk, protectionReduced, protectionSummary, rebuildInProgress, rebuildSummary)
 	records = append(records, unifiedresources.IngestRecord{
 		SourceID:               systemSourceID,
 		SupersededCanonicalIDs: systemSupersededIDs,
@@ -913,7 +913,7 @@ func metricsFromTrueNASSystem(system SystemInfo, totalCapacity, totalUsed int64)
 	return metrics
 }
 
-func agentDataFromTrueNASSystem(connectionID string, system SystemInfo, storageRisk *unifiedresources.StorageRisk, protectionReduced bool, protectionSummary string, rebuildInProgress bool, rebuildSummary string) *unifiedresources.AgentData {
+func agentDataFromTrueNASSystem(connectionID string, system SystemInfo, disks []Disk, storageRisk *unifiedresources.StorageRisk, protectionReduced bool, protectionSummary string, rebuildInProgress bool, rebuildSummary string) *unifiedresources.AgentData {
 	agent := &unifiedresources.AgentData{
 		AgentID:               trueNASSystemMetricResourceID(connectionID, system),
 		Hostname:              strings.TrimSpace(system.Hostname),
@@ -955,7 +955,7 @@ func agentDataFromTrueNASSystem(connectionID string, system SystemInfo, storageR
 	if temperature := maxTrueNASSystemTemperature(system); temperature != nil {
 		agent.Temperature = temperature
 	}
-	if sensors := sensorMetaFromTrueNASSystem(system); sensors != nil {
+	if sensors := sensorMetaFromTrueNASSystem(system, disks); sensors != nil {
 		agent.Sensors = sensors
 	}
 
@@ -989,22 +989,51 @@ func maxTrueNASSystemTemperature(system SystemInfo) *float64 {
 	return &best
 }
 
-func sensorMetaFromTrueNASSystem(system SystemInfo) *unifiedresources.HostSensorMeta {
-	if len(system.TemperatureCelsius) == 0 {
-		return nil
+func sensorMetaFromTrueNASSystem(system SystemInfo, disks []Disk) *unifiedresources.HostSensorMeta {
+	sensors := &unifiedresources.HostSensorMeta{}
+
+	if len(system.TemperatureCelsius) > 0 {
+		sensors.TemperatureCelsius = make(map[string]float64, len(system.TemperatureCelsius))
+		for key, value := range system.TemperatureCelsius {
+			key = strings.TrimSpace(key)
+			if key == "" {
+				continue
+			}
+			sensors.TemperatureCelsius[key] = value
+		}
+		if len(sensors.TemperatureCelsius) == 0 {
+			sensors.TemperatureCelsius = nil
+		}
 	}
 
-	sensors := &unifiedresources.HostSensorMeta{
-		TemperatureCelsius: make(map[string]float64, len(system.TemperatureCelsius)),
-	}
-	for key, value := range system.TemperatureCelsius {
-		key = strings.TrimSpace(key)
-		if key == "" {
+	// Surface API-reported disk temperatures as SMART sensor entries so the
+	// host Thermals card lists disks next to the CPU sensors — API-backed
+	// TrueNAS systems have no pulse-agent SMART sweep to supply them (#1573).
+	// Disks without a reading are skipped rather than rendered as 0°C.
+	for _, disk := range disks {
+		if disk.Temperature <= 0 {
 			continue
 		}
-		sensors.TemperatureCelsius[key] = value
+		device := strings.TrimSpace(disk.Name)
+		if device == "" {
+			device = strings.TrimSpace(disk.ID)
+		}
+		if device == "" {
+			continue
+		}
+		sensors.SMART = append(sensors.SMART, unifiedresources.HostSMARTMeta{
+			Device:      device,
+			Model:       strings.TrimSpace(disk.Model),
+			Serial:      strings.TrimSpace(disk.Serial),
+			Type:        strings.TrimSpace(disk.Transport),
+			SizeBytes:   disk.SizeBytes,
+			Temperature: disk.Temperature,
+			Health:      healthFromDisk(disk),
+			Pool:        strings.TrimSpace(disk.Pool),
+		})
 	}
-	if len(sensors.TemperatureCelsius) == 0 {
+
+	if len(sensors.TemperatureCelsius) == 0 && len(sensors.SMART) == 0 {
 		return nil
 	}
 	return sensors

@@ -416,6 +416,18 @@ func TestGetDisksUsesNativeDiskQueryShape(t *testing.T) {
 			payload[0]["smart_status"] = "FAILED"
 			writeRPCResult(t, conn, request.ID, payload[:1])
 		case 2:
+			if request.Method != "reporting.get_data" {
+				t.Fatalf("expected reporting.get_data, got %q", request.Method)
+			}
+			writeRPCResult(t, conn, request.ID, []map[string]any{{
+				"name":       "disktemp",
+				"identifier": "sda",
+				"legend":     []string{"time", "temperature"},
+				"aggregations": map[string]any{
+					"mean": map[string]any{"temperature": 34.0},
+				},
+			}})
+		case 3:
 			if request.Method != "disk.temperature_agg" {
 				t.Fatalf("expected disk.temperature_agg, got %q", request.Method)
 			}
@@ -1336,6 +1348,12 @@ func TestGetDisksIncludesDiskTemperatureAggregatesFromRPC(t *testing.T) {
 				t.Fatalf("expected disk.query, got %q", aggregateReq.Method)
 			}
 			writeRPCResult(t, conn, aggregateReq.ID, defaultRoutePayloadMaps(t, "/api/v2.0/disk")[:1])
+			return
+		}
+		if aggregateReq.Method == "reporting.get_data" {
+			// Current-temperature reporting probe: answer empty so the
+			// client falls back to the REST POST /disk/temperatures route.
+			writeRPCResult(t, conn, aggregateReq.ID, []map[string]any{})
 			return
 		}
 		if aggregateReq.Method != "disk.temperature_agg" {

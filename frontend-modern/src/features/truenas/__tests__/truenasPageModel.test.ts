@@ -560,6 +560,28 @@ describe('truenasPageModel', () => {
     ).toEqual(['pool:pool-tank', 'disk:disk-sdb']);
   });
 
+  it('does not flag unknown disk health as attention', () => {
+    // The TrueNAS disk API has no SMART/health field, so "unknown" is the
+    // normal state of a healthy disk, not a warning signal (#1573).
+    const unknownDisk = makeResource({
+      id: 'disk-unknown',
+      type: 'physical_disk',
+      name: 'ada0',
+      status: 'unknown',
+      physicalDisk: { devPath: '/dev/ada0', serial: 'serial-unknown', health: 'UNKNOWN' },
+    });
+    expect(mapTrueNASStorageStatus(unknownDisk)).toBe('unknown');
+
+    const healthyByState = makeResource({
+      id: 'disk-online',
+      type: 'physical_disk',
+      name: 'ada1',
+      status: 'online',
+      physicalDisk: { devPath: '/dev/ada1', serial: 'serial-online', health: 'PASSED' },
+    });
+    expect(mapTrueNASStorageStatus(healthyByState)).toBe('healthy');
+  });
+
   it('filters apps using native TrueNAS app.query metadata', () => {
     const nextcloud = makeResource({
       id: 'app-nextcloud',
