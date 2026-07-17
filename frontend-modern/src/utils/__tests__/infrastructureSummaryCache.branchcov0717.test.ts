@@ -299,12 +299,15 @@ describe('readInfrastructureSummaryCache — hit / miss / expiry / empty boundar
   });
 
   it('returns a cache hit with the exact cachedAt timestamp on the happy path', () => {
+    // Capture both timestamps once: calling now() again in the assertion
+    // fails whenever a millisecond ticks between the write and the expect.
     const cachedAt = now() - 1_000;
+    const oldestDataTimestamp = now() - 5_000;
     storePayload(
       '1h',
       buildPayload({
         cachedAt,
-        oldestDataTimestamp: now() - 5_000,
+        oldestDataTimestamp,
         charts: {
           'node-1': { cpu: makeSeries(2), memory: [], disk: [], diskread: [], diskwrite: [], netin: [], netout: [] },
         },
@@ -313,7 +316,7 @@ describe('readInfrastructureSummaryCache — hit / miss / expiry / empty boundar
     const hit = readInfrastructureSummaryCache('1h');
     expect(hit).not.toBeNull();
     expect(hit?.cachedAt).toBe(cachedAt);
-    expect(hit?.oldestDataTimestamp).toBe(now() - 5_000);
+    expect(hit?.oldestDataTimestamp).toBe(oldestDataTimestamp);
     expect(hit?.map.get('node-1')?.cpu?.length).toBe(2);
   });
 
