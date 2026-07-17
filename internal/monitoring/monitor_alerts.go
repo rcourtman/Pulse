@@ -389,6 +389,15 @@ func (m *Monitor) checkMockAlerts() {
 		m.alertManager.CheckPMG(pmgInst)
 	}
 
+	// Check alerts for Docker hosts (container state/health/metrics/updates and
+	// swarm services). The mock estate deliberately includes degraded containers,
+	// so skipping this loop leaves the docker alert lifecycle unexercisable
+	// against mock data.
+	log.Debug().Int("dockerHostCount", len(state.DockerHosts)).Msg("checking docker alerts")
+	for _, dockerHost := range state.DockerHosts {
+		m.alertManager.CheckDockerHost(dockerHost)
+	}
+
 	// Cache the latest alert snapshots directly in the mock data so the API can serve
 	// mock state without needing to grab the alert manager lock again.
 	mock.UpdateAlertSnapshots(m.alertManager.GetActiveAlerts(), m.alertManager.GetRecentlyResolved())
