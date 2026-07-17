@@ -128,6 +128,9 @@ func TestV5PaidLicenseUpgrade_CommercialMigrationFailureMatrix(t *testing.T) {
 			require.NoError(t, persistence.Save(legacyLicense))
 
 			exchangeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if handleMigrationInstallationStatus(w, r) {
+					return
+				}
 				require.Equal(t, "/v1/licenses/exchange", r.URL.Path)
 
 				var req pkglicensing.ExchangeLegacyLicenseRequest
@@ -212,14 +215,15 @@ func TestV5PaidLicenseUpgrade_CommercialMigrationClearsAfterLocalRetry(t *testin
 	require.NoError(t, persistence.Save(legacyLicense))
 
 	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID: "lic_v5_retry_migrated",
-		Tier:      string(pkglicensing.TierPro),
-		PlanKey:   "v5_pro_monthly_grandfathered",
-		State:     "active",
-		Features:  append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
-		IssuedAt:  time.Now().Unix(),
-		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-		Email:     "legacy-retry@example.com",
+		LicenseID:      "lic_v5_retry_migrated",
+		LicenseVersion: 1,
+		Tier:           string(pkglicensing.TierPro),
+		PlanKey:        "v5_pro_monthly_grandfathered",
+		State:          "active",
+		Features:       append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
+		IssuedAt:       time.Now().Unix(),
+		ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+		Email:          "legacy-retry@example.com",
 	})
 	require.NoError(t, err)
 	pkglicensing.SetPublicKey(grantPublicKey)
@@ -227,6 +231,9 @@ func TestV5PaidLicenseUpgrade_CommercialMigrationClearsAfterLocalRetry(t *testin
 
 	var exchangeAvailable atomic.Bool
 	exchangeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if handleMigrationInstallationStatus(w, r) {
+			return
+		}
 		require.Equal(t, "/v1/licenses/exchange", r.URL.Path)
 
 		var req pkglicensing.ExchangeLegacyLicenseRequest
@@ -246,10 +253,11 @@ func TestV5PaidLicenseUpgrade_CommercialMigrationClearsAfterLocalRetry(t *testin
 		w.WriteHeader(http.StatusCreated)
 		require.NoError(t, json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
 			License: pkglicensing.ActivateResponseLicense{
-				LicenseID: "lic_v5_retry_migrated",
-				State:     "active",
-				Tier:      string(pkglicensing.TierPro),
-				Features:  append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
+				LicenseID:      "lic_v5_retry_migrated",
+				LicenseVersion: 1,
+				State:          "active",
+				Tier:           string(pkglicensing.TierPro),
+				Features:       append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
 			},
 			Installation: pkglicensing.ActivateResponseInstallation{
 				InstallationID:    "inst_v5_retry_migrated",

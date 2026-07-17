@@ -317,6 +317,7 @@ func startManagedLicenseServer(
 		"PULSE_LICENSE_PLANS="+plansJSON,
 		"PULSE_LICENSE_STRIPE_IPS_FILE="+stripeIPsPath,
 		"PULSE_LICENSE_STRIPE_IPS_ENFORCE=true",
+		"PULSE_LICENSE_RELAY_FEED_TOKEN=test-relay-feed-token",
 		"PULSE_LICENSE_V6_ENABLED=true",
 	)
 	cmd.Stdout = logBuf

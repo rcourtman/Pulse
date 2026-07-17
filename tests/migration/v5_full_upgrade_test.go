@@ -450,20 +450,24 @@ func TestV5FullUpgradeScenario(t *testing.T) {
 		require.NoError(t, persistence.Save(legacyLicense))
 
 		grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-			LicenseID: "lic_v5_migrated",
-			Tier:      string(pkglicensing.TierLifetime),
-			PlanKey:   "v5_lifetime_grandfathered",
-			State:     "active",
-			Features:  append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierLifetime]...),
-			IssuedAt:  time.Now().Unix(),
-			ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-			Email:     "legacy-lifetime@example.com",
+			LicenseID:      "lic_v5_migrated",
+			LicenseVersion: 1,
+			Tier:           string(pkglicensing.TierLifetime),
+			PlanKey:        "v5_lifetime_grandfathered",
+			State:          "active",
+			Features:       append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierLifetime]...),
+			IssuedAt:       time.Now().Unix(),
+			ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+			Email:          "legacy-lifetime@example.com",
 		})
 		require.NoError(t, err)
 		pkglicensing.SetPublicKey(grantPublicKey)
 		t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
 
 		exchangeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if handleMigrationInstallationStatus(w, r) {
+				return
+			}
 			require.Equal(t, "/v1/licenses/exchange", r.URL.Path)
 
 			var req pkglicensing.ExchangeLegacyLicenseRequest
@@ -473,10 +477,11 @@ func TestV5FullUpgradeScenario(t *testing.T) {
 			w.WriteHeader(http.StatusCreated)
 			require.NoError(t, json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
 				License: pkglicensing.ActivateResponseLicense{
-					LicenseID: "lic_v5_migrated",
-					State:     "active",
-					Tier:      string(pkglicensing.TierLifetime),
-					Features:  append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierLifetime]...),
+					LicenseID:      "lic_v5_migrated",
+					LicenseVersion: 1,
+					State:          "active",
+					Tier:           string(pkglicensing.TierLifetime),
+					Features:       append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierLifetime]...),
 				},
 				Installation: pkglicensing.ActivateResponseInstallation{
 					InstallationID:    "inst_v5_migrated",
@@ -587,20 +592,24 @@ func TestV5FullUpgradeScenario(t *testing.T) {
 				require.NoError(t, persistence.Save(legacyLicense))
 
 				grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-					LicenseID: tc.licenseID,
-					Tier:      string(pkglicensing.TierPro),
-					PlanKey:   tc.planKey,
-					State:     "active",
-					Features:  append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
-					IssuedAt:  time.Now().Unix(),
-					ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
-					Email:     tc.email,
+					LicenseID:      tc.licenseID,
+					LicenseVersion: 1,
+					Tier:           string(pkglicensing.TierPro),
+					PlanKey:        tc.planKey,
+					State:          "active",
+					Features:       append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
+					IssuedAt:       time.Now().Unix(),
+					ExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+					Email:          tc.email,
 				})
 				require.NoError(t, err)
 				pkglicensing.SetPublicKey(grantPublicKey)
 				t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
 
 				exchangeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if handleMigrationInstallationStatus(w, r) {
+						return
+					}
 					require.Equal(t, "/v1/licenses/exchange", r.URL.Path)
 
 					var req pkglicensing.ExchangeLegacyLicenseRequest
@@ -610,10 +619,11 @@ func TestV5FullUpgradeScenario(t *testing.T) {
 					w.WriteHeader(http.StatusCreated)
 					require.NoError(t, json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
 						License: pkglicensing.ActivateResponseLicense{
-							LicenseID: tc.licenseID,
-							State:     "active",
-							Tier:      string(pkglicensing.TierPro),
-							Features:  append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
+							LicenseID:      tc.licenseID,
+							LicenseVersion: 1,
+							State:          "active",
+							Tier:           string(pkglicensing.TierPro),
+							Features:       append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
 						},
 						Installation: pkglicensing.ActivateResponseInstallation{
 							InstallationID:    tc.installID,
