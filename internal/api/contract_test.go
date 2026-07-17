@@ -19819,7 +19819,7 @@ func TestContract_PulseIntelligenceApprovedDecisionTelemetryUsesActionDecisionEv
 	src := string(source)
 	for _, fragment := range []string{
 		`approvedDecisionIDs := pulseIntelligenceApprovedActionDecisionIDs(store, orgID, since)`,
-		`if event.State != unifiedresources.ActionStateApproved`,
+		`pulseIntelligenceActionDecisionIDs(store, orgID, since, unifiedresources.ActionStateApproved, "approved", pulseIntelligenceActionWasApproved)`,
 		`pulseIntelligenceActionWasApprovedSince(record, since)`,
 		`if approval.Outcome != unifiedresources.OutcomeApproved`,
 		`snapshot.ApprovedActionDecisions30d += len(approvedDecisionIDs)`,
@@ -19877,7 +19877,7 @@ func TestContract_PulseIntelligenceRejectedDecisionTelemetryUsesActionLifecycle(
 	src := string(source)
 	for _, fragment := range []string{
 		`rejectedDecisionIDs := pulseIntelligenceRejectedActionDecisionIDs(store, orgID, since)`,
-		`if event.State != unifiedresources.ActionStateRejected`,
+		`pulseIntelligenceActionDecisionIDs(store, orgID, since, unifiedresources.ActionStateRejected, "rejected", pulseIntelligenceActionWasRejected)`,
 		`store.GetActionAudit(actionID)`,
 		`pulseIntelligenceActionWasRejected(record)`,
 		`snapshot.RejectedActionDecisions30d += len(rejectedDecisionIDs)`,
