@@ -1386,28 +1386,6 @@ func TestHandleExecuteStream_RejectsLegacyHostTargetType(t *testing.T) {
 	require.Contains(t, rec.Body.String(), "Invalid target_type")
 }
 
-func TestNormalizeAIExecuteTargetType_StrictCanonicalV6(t *testing.T) {
-	tests := []struct {
-		in   string
-		want string
-	}{
-		{in: "system-container", want: "system-container"},
-		{in: "SYSTEM-CONTAINER", want: "system-container"},
-		{in: "container", want: "container"},
-		{in: "system_container", want: "system_container"},
-	}
-
-	for _, tt := range tests {
-		got := normalizeAIExecuteTargetType(tt.in)
-		if got != tt.want {
-			t.Fatalf("normalizeAIExecuteTargetType(%q) = %q, want %q", tt.in, got, tt.want)
-		}
-		if shared := agentcapabilities.NormalizeActionTargetType(tt.in); got != shared {
-			t.Fatalf("normalizeAIExecuteTargetType(%q) = %q, shared contract returned %q", tt.in, got, shared)
-		}
-	}
-}
-
 func TestNormalizeAndValidateAIExecuteTargetType_StrictCanonicalV6(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -2625,73 +2603,6 @@ func TestHandleRunCommand_InvalidBody(t *testing.T) {
 
 	if rec.Code != http.StatusGone {
 		t.Fatalf("expected status %d, got %d", http.StatusGone, rec.Code)
-	}
-}
-
-func TestNormalizeRunCommandApprovalTarget_CanonicalizesAgentTarget(t *testing.T) {
-	tests := []struct {
-		name    string
-		req     AIRunCommandRequest
-		wantTyp string
-		wantID  string
-		wantErr string
-	}{
-		{
-			name: "host target type rejected",
-			req: AIRunCommandRequest{
-				TargetType: "host",
-				TargetID:   "Node-1",
-			},
-			wantErr: "unsupported target_type",
-		},
-		{
-			name: "run_on_host forces agent target",
-			req: AIRunCommandRequest{
-				TargetType: "vm",
-				RunOnHost:  true,
-				TargetHost: "PVE-A",
-			},
-			wantTyp: "agent",
-			wantID:  "pve-a",
-		},
-		{
-			name: "system-container target preserved",
-			req: AIRunCommandRequest{
-				TargetType: "system-container",
-				TargetID:   "201",
-			},
-			wantTyp: "system-container",
-			wantID:  "201",
-		},
-		{
-			name: "legacy container alias rejected",
-			req: AIRunCommandRequest{
-				TargetType: "container",
-				TargetID:   "201",
-			},
-			wantErr: "unsupported target_type",
-		},
-		{
-			name: "missing target host when run_on_host",
-			req: AIRunCommandRequest{
-				RunOnHost: true,
-			},
-			wantErr: "target_host is required when run_on_host is true",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gotType, gotID, err := normalizeRunCommandApprovalTarget(tt.req)
-			if tt.wantErr != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.wantErr)
-				return
-			}
-			require.NoError(t, err)
-			require.Equal(t, tt.wantTyp, gotType)
-			require.Equal(t, tt.wantID, gotID)
-		})
 	}
 }
 

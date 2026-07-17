@@ -3584,10 +3584,6 @@ type AIExecuteRequest struct {
 	UseCase    string                  `json:"use_case,omitempty"` // "chat" or "patrol"
 }
 
-func normalizeAIExecuteTargetType(raw string) string {
-	return agentcapabilities.NormalizeActionTargetType(raw)
-}
-
 func normalizeAndValidateAIExecuteTargetType(raw string) (string, error) {
 	return agentcapabilities.NormalizeAndValidateOptionalActionTargetType(raw)
 }
@@ -4196,170 +4192,14 @@ func (h *AISettingsHandler) HandleExecuteStream(w http.ResponseWriter, r *http.R
 	// 'done' event is sent by the defer above
 }
 
-// AIRunCommandRequest is the request body for POST /api/ai/run-command
-type AIRunCommandRequest struct {
-	Command    string `json:"command"`
-	ApprovalID string `json:"approval_id"`
-	TargetType string `json:"target_type"`
-	TargetID   string `json:"target_id"`
-	RunOnHost  bool   `json:"run_on_host"`
-	VMID       string `json:"vmid,omitempty"`
-	TargetHost string `json:"target_host,omitempty"` // Explicit host for routing
-}
-
-// HandleRunCommand executes a single approved command (POST /api/ai/run-command)
+// HandleRunCommand is the retired raw-command endpoint (POST /api/ai/run-command).
+// It always answers 410 Gone; clients must use advertised typed resource actions.
 func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	writeJSONError(w, http.StatusGone, agentcapabilities.AgentErrCodeRawCommandRetired, "Raw command execution is retired. Use an advertised typed resource action.")
-	return
-
-	// Require authentication
-	if !CheckAuth(h.getConfig(r.Context()), w, r) {
-		return
-	}
-
-	// Parse request
-	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
-	bodyBytes, readErr := io.ReadAll(r.Body)
-	if readErr != nil {
-		log.Error().Err(readErr).Msg("Failed to read request body")
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-	log.Debug().Int("body_len", len(bodyBytes)).Msg("run-command request received")
-
-	var req AIRunCommandRequest
-	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		log.Error().Err(err).Msg("Failed to decode JSON body")
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if strings.TrimSpace(req.Command) == "" {
-		http.Error(w, "Command is required", http.StatusBadRequest)
-		return
-	}
-	if strings.TrimSpace(req.ApprovalID) == "" {
-		http.Error(w, "approval_id is required", http.StatusBadRequest)
-		return
-	}
-
-	approvalTargetType, approvalTargetID, targetErr := normalizeRunCommandApprovalTarget(req)
-	if targetErr != nil {
-		http.Error(w, targetErr.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Gated for Patrol fix actions (Pro feature). Request shape is validated before the
-	// entitlement check so clients get deterministic 400s for malformed calls.
-	if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-		WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Patrol fix actions require Pulse Pro")
-		return
-	}
-
-	store := approval.GetStore()
-	if store == nil {
-		http.Error(w, "Approval store not initialized", http.StatusServiceUnavailable)
-		return
-	}
-
-	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
-	approvalReq, ok := store.GetApproval(req.ApprovalID)
-	if !ok || !approval.BelongsToOrg(approvalReq, orgID) {
-		http.Error(w, "Approval request not found", http.StatusNotFound)
-		return
-	}
-	if approvalReq.Plan == nil || strings.TrimSpace(approvalReq.Plan.ActionID) == "" {
-		http.Error(w, "Approval authorization is incomplete", http.StatusConflict)
-		return
-	}
-	approvedHash := strings.TrimSpace(approvalReq.CommandHash)
-	if approvedHash == "" {
-		approvedHash = approval.ComputeCommandHash(approvalReq.Command, approvalReq.TargetType, approvalReq.TargetID)
-	}
-	if approvedHash != approval.ComputeCommandHash(req.Command, approvalTargetType, approvalTargetID) {
-		http.Error(w, "Approval command does not match", http.StatusConflict)
-		return
-	}
-
-	log.Info().
-		Str("command_hash", agentexec.ComputeCommandApprovalHash(req.Command, approvalTargetType, approvalTargetID)).
-		Str("approval_id", req.ApprovalID).
-		Str("target_type", approvalTargetType).
-		Str("target_id", approvalTargetID).
-		Bool("run_on_host", req.RunOnHost).
-		Str("target_host", req.TargetHost).
-		Msg("Executing approved command")
-
-	// Execute with timeout (5 minutes for long-running commands)
-	ctx, cancel := context.WithTimeout(r.Context(), 300*time.Second)
-	defer cancel()
-
-	resp, err := h.GetAIService(r.Context()).RunCommand(ctx, ai.RunCommandRequest{
-		Command:    req.Command,
-		ApprovalID: req.ApprovalID,
-		TargetType: approvalTargetType,
-		TargetID:   approvalTargetID,
-		RunOnHost:  req.RunOnHost,
-		VMID:       req.VMID,
-		TargetHost: strings.ToLower(strings.TrimSpace(req.TargetHost)),
-		OrgID:      orgID,
-		ActionID:   approvalReq.Plan.ActionID,
-	})
-
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to execute command")
-		http.Error(w, "Failed to execute command", http.StatusInternalServerError)
-		return
-	}
-
-	if err := utils.WriteJSONResponse(w, resp); err != nil {
-		log.Error().Err(err).Msg("Failed to write run command response")
-	}
-}
-
-func normalizeRunCommandApprovalTarget(req AIRunCommandRequest) (string, string, error) {
-	targetType := normalizeAIExecuteTargetType(req.TargetType)
-	targetID := strings.TrimSpace(req.TargetID)
-	targetHost := strings.ToLower(strings.TrimSpace(req.TargetHost))
-
-	if req.RunOnHost {
-		targetType = agentcapabilities.ActionTargetTypeAgent
-		if targetHost == "" {
-			return "", "", errors.New("target_host is required when run_on_host is true")
-		}
-		targetID = targetHost
-	}
-
-	if targetType == "" {
-		targetType = agentcapabilities.ActionTargetTypeAgent
-	}
-	if !agentcapabilities.IsActionTargetType(targetType) {
-		return "", "", fmt.Errorf("unsupported target_type %q (allowed: %s)", targetType, agentcapabilities.ActionTargetTypeAllowedDescription())
-	}
-
-	if (targetType == agentcapabilities.ActionTargetTypeSystemContainer || targetType == agentcapabilities.ActionTargetTypeVM) && strings.TrimSpace(req.VMID) != "" {
-		targetID = strings.TrimSpace(req.VMID)
-	}
-
-	if targetType == agentcapabilities.ActionTargetTypeAgent {
-		if targetID == "" {
-			targetID = targetHost
-		}
-		if targetID == "" {
-			return "", "", errors.New("target_id or target_host is required for agent commands")
-		}
-		targetID = strings.ToLower(targetID)
-	}
-
-	if targetID == "" {
-		return "", "", fmt.Errorf("target_id is required for target_type '%s'", targetType)
-	}
-
-	return targetType, targetID, nil
 }
 
 // maxGuestIDLength is the maximum allowed length for guest_id across all
