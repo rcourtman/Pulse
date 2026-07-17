@@ -31,7 +31,7 @@ const headerTexts = () =>
 afterEach(cleanup);
 
 describe('ProxmoxCoverageTable column visibility', () => {
-  it('renders only action columns and keeps identity context in the workload cell', () => {
+  it('renders single-line rows with identity columns matching the by-date table', () => {
     render(() => (
       <ProxmoxCoverageTable
         rows={[row]}
@@ -53,17 +53,20 @@ describe('ProxmoxCoverageTable column visibility', () => {
 
     const headers = headerTexts();
     expect(headers).toContain('Workload');
+    expect(headers).toContain('Type');
+    expect(headers).toContain('Target ID');
+    expect(headers).toContain('Node');
     expect(headers).toContain('Posture');
     expect(headers).toContain('Restore');
-    expect(headers).not.toContain('Type');
-    expect(headers).not.toContain('Target ID');
-    expect(headers).not.toContain('Node');
     expect(headers).toContain('PBS snapshot');
     expect(headers).toContain('Guest snapshot');
     expect(headers).not.toContain('PVE file');
     expect(headers).not.toContain('Task');
+    // Identity data lives in dedicated cells, not stacked under the name.
     expect(document.body.textContent).toContain('VM');
-    expect(document.body.textContent).toContain('ID 100');
-    expect(document.body.textContent).toContain('Node pve1');
+    expect(document.body.textContent).toContain('100');
+    expect(document.body.textContent).toContain('pve1');
+    expect(document.body.textContent).not.toContain('ID 100');
+    expect(document.body.textContent).not.toContain('Node pve1');
   });
 });
