@@ -2035,99 +2035,69 @@ func TestAlertResolutionHelpers_UseReadStateForAppContainer(t *testing.T) {
 	}
 }
 
-// --- shouldResolveAlert (model-owned, no local auto-resolution without AI) ---
+// --- alert auto-resolve review (model-owned, no local auto-resolution without AI) ---
 
-func TestShouldResolveAlert_StorageUsageDroppedDoesNotResolveWithoutAI(t *testing.T) {
+// Alerts whose trigger condition may have cleared go to model review; without
+// a model available, nothing resolves — local state never resolves an alert.
+func TestReviewAndResolveAlerts_ClearedConditionsDoNotResolveWithoutAI(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
-	state := models.StateSnapshot{
-		Storage: []models.Storage{
-			{ID: "s1", Name: "local", Usage: 70.0, Status: "active"},
+	resolver := &mockAlertResolver{
+		alerts: []AlertInfo{
+			{
+				ID:           "a-usage",
+				ResourceID:   "s1",
+				ResourceType: "usage",
+				Type:         "usage",
+				Threshold:    85.0,
+				Value:        88.0,
+				StartTime:    time.Now().Add(-1 * time.Hour),
+			},
+			{
+				ID:           "a-cpu",
+				ResourceID:   "n1",
+				ResourceType: "node",
+				Type:         "cpu",
+				Threshold:    90.0,
+				Value:        95.0,
+				StartTime:    time.Now().Add(-30 * time.Minute),
+			},
+			{
+				ID:           "a-offline",
+				ResourceID:   "n1",
+				ResourceType: "node",
+				Type:         "offline",
+				StartTime:    time.Now().Add(-1 * time.Hour),
+			},
+			{
+				ID:           "a-missing",
+				ResourceID:   "gone",
+				ResourceType: "node",
+				Type:         "cpu",
+				Threshold:    90.0,
+				Value:        95.0,
+				StartTime:    time.Now().Add(-30 * time.Minute),
+			},
 		},
 	}
+	ps.mu.Lock()
+	ps.alertResolver = resolver
+	ps.mu.Unlock()
 
-	alert := AlertInfo{
-		ID:           "a1",
-		ResourceID:   "s1",
-		ResourceType: "usage",
-		Type:         "usage",
-		Threshold:    85.0,
-		Value:        88.0,
-		StartTime:    time.Now().Add(-1 * time.Hour),
-	}
-
-	shouldResolve, reason := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
-	if shouldResolve || reason != "" {
-		t.Errorf("expected alert to remain unresolved without AI review, got resolved=%v reason=%q", shouldResolve, reason)
-	}
-}
-
-func TestShouldResolveAlert_CPUDroppedDoesNotResolveWithoutAI(t *testing.T) {
-	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
-		Nodes: []models.Node{
-			{ID: "n1", Name: "node-1", CPU: 0.5, Memory: models.Memory{Usage: 40.0}},
-		},
+		Storage: []models.Storage{{ID: "s1", Name: "local", Usage: 70.0, Status: "active"}},
+		Nodes:   []models.Node{{ID: "n1", Name: "node-1", CPU: 0.5, Memory: models.Memory{Usage: 40.0}, Status: "online"}},
 	}
 
-	alert := AlertInfo{
-		ID:           "a1",
-		ResourceID:   "n1",
-		ResourceType: "node",
-		Type:         "cpu",
-		Threshold:    90.0,
-		Value:        95.0,
-		StartTime:    time.Now().Add(-30 * time.Minute),
+	result := ps.reviewAndResolveAlertsState(nil, patrolRuntimeStateForTest(ps, state), true, "")
+	if result != 0 {
+		t.Errorf("expected no alerts resolved without AI review, got %d", result)
 	}
-
-	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
-	if shouldResolve {
-		t.Error("expected alert to remain unresolved without AI review")
+	if len(resolver.resolved) != 0 {
+		t.Errorf("expected no alerts resolved without AI review, got %v", resolver.resolved)
 	}
 }
 
-func TestShouldResolveAlert_OfflineNowOnlineDoesNotResolveWithoutAI(t *testing.T) {
-	ps := NewPatrolService(nil, nil)
-	state := models.StateSnapshot{
-		Nodes: []models.Node{
-			{ID: "n1", Name: "node-1", Status: "online"},
-		},
-	}
-
-	alert := AlertInfo{
-		ID:           "a1",
-		ResourceID:   "n1",
-		ResourceType: "node",
-		Type:         "offline",
-		StartTime:    time.Now().Add(-1 * time.Hour),
-	}
-
-	shouldResolve, reason := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
-	if shouldResolve || reason != "" {
-		t.Errorf("expected offline alert to remain unresolved without AI review, got resolved=%v reason=%q", shouldResolve, reason)
-	}
-}
-
-func TestShouldResolveAlert_NoMatch(t *testing.T) {
-	ps := NewPatrolService(nil, nil)
-	state := models.StateSnapshot{} // resource not in state
-
-	alert := AlertInfo{
-		ID:           "a1",
-		ResourceID:   "n1",
-		ResourceType: "node",
-		Type:         "cpu",
-		Threshold:    90.0,
-		Value:        95.0,
-		StartTime:    time.Now().Add(-30 * time.Minute),
-	}
-
-	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
-	if shouldResolve {
-		t.Error("expected alert NOT to be resolved when resource not found")
-	}
-}
-
-func TestShouldResolveAlert_StorageStillHigh(t *testing.T) {
+func TestAlertStillFiring_StorageStillHigh(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
 		Storage: []models.Storage{
@@ -2145,16 +2115,17 @@ func TestShouldResolveAlert_StorageStillHigh(t *testing.T) {
 		StartTime:    time.Now().Add(-1 * time.Hour),
 	}
 
-	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
-	if shouldResolve {
-		t.Error("expected alert NOT to be resolved (storage usage still above threshold)")
+	if !ps.alertStillFiringState(alert, patrolRuntimeStateForTest(ps, state)) {
+		t.Error("expected still-above-threshold storage alert to be treated as still firing")
 	}
 }
 
-// Regression test: CPU at 95% (0.95 raw) must NOT auto-resolve a 90% threshold alert.
-// Before the fix, getCurrentMetricValue returned 0.95 (raw fraction) which was always
-// below the 90.0 percentage threshold, causing every CPU alert to incorrectly auto-resolve.
-func TestShouldResolveAlert_CPUScaleRegression(t *testing.T) {
+// Regression test: node CPU is a 0-1 fraction in the model snapshot and must be
+// scaled to a percentage before threshold comparison. Before the fix,
+// getCurrentMetricValue returned 0.95 (raw fraction) which was always below the
+// 90.0 percentage threshold — under the still-firing gate that would send every
+// high-CPU alert to a pointless model review on every run.
+func TestAlertStillFiring_CPUScaleRegression(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{
 		Nodes: []models.Node{
@@ -2172,9 +2143,8 @@ func TestShouldResolveAlert_CPUScaleRegression(t *testing.T) {
 		StartTime:    time.Now().Add(-30 * time.Minute),
 	}
 
-	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
-	if shouldResolve {
-		t.Error("expected CPU alert NOT to be resolved (95% is still above 90% threshold)")
+	if !ps.alertStillFiringState(alert, patrolRuntimeStateForTest(ps, state)) {
+		t.Error("expected 95% CPU against a 90% threshold to be treated as still firing")
 	}
 }
 

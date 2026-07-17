@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -16,10 +17,12 @@ type mockPatrolProvider struct {
 	response string
 	err      error
 	lastReq  providers.ChatRequest
+	calls    int
 }
 
 func (m *mockPatrolProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
 	m.lastReq = req
+	m.calls++
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -43,7 +46,71 @@ type mockPatrolStateProvider struct {
 
 func (m mockPatrolStateProvider) ReadSnapshot() models.StateSnapshot { return m.state }
 
-func TestPatrolService_AskAIAboutAlert(t *testing.T) {
+func TestPatrolService_ReviewAlertBatch(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	provider := &mockPatrolProvider{response: "ALERT 1: RESOLVE: cpu back to normal\nALERT 2: KEEP: still high"}
+	aiSvc := &Service{
+		provider: provider,
+		cfg:      &config.AIConfig{PatrolModel: "mock:model"},
+	}
+
+	alertsToReview := []AlertInfo{
+		{
+			ID:           "a1",
+			Type:         "cpu",
+			ResourceName: "node1",
+			ResourceType: "node",
+			Message:      "high cpu",
+			Value:        90,
+			Threshold:    80,
+			Duration:     "5m",
+		},
+		{
+			ID:           "a-usage",
+			Type:         "usage",
+			ResourceName: "local",
+			ResourceType: "usage",
+			ResourceID:   "storage-1",
+			Message:      "high usage",
+			Value:        92,
+			Threshold:    90,
+			Duration:     "20m",
+		},
+	}
+	state := models.StateSnapshot{
+		Nodes:   []models.Node{{ID: "node1", Name: "node1", CPU: 10}},
+		Storage: []models.Storage{{ID: "storage-1", Name: "local", Usage: 91, Status: "active"}},
+	}
+
+	verdicts := ps.reviewAlertsWithModelState(context.Background(), alertsToReview, patrolRuntimeStateForTest(ps, state), aiSvc, "patrol-run-123")
+	if provider.calls != 1 {
+		t.Fatalf("expected one batched model call for two alerts, got %d", provider.calls)
+	}
+	if len(verdicts) != 2 {
+		t.Fatalf("expected one verdict per alert, got %d", len(verdicts))
+	}
+	if !verdicts[0].resolve {
+		t.Fatalf("expected first alert to resolve")
+	}
+	if !strings.Contains(verdicts[0].reason, "cpu back to normal") {
+		t.Fatalf("expected resolution reason, got %q", verdicts[0].reason)
+	}
+	if verdicts[1].resolve {
+		t.Fatalf("expected second alert to stay unresolved")
+	}
+	prompt := provider.lastReq.Messages[1].Content
+	if !strings.Contains(prompt, "Resource: node1 (node)") {
+		t.Fatalf("expected prompt to include canonical node resource type, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "Resource: local (storage)") {
+		t.Fatalf("expected prompt to normalize usage alerts to storage, got %q", prompt)
+	}
+	if provider.lastReq.ExecutionID != "patrol-run-123" {
+		t.Fatalf("execution_id=%q want patrol-run-123", provider.lastReq.ExecutionID)
+	}
+}
+
+func TestPatrolService_ReviewAlertBatch_SingleAlertBareResolveFallback(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	provider := &mockPatrolProvider{response: "RESOLVE: looks good"}
 	aiSvc := &Service{
@@ -56,55 +123,73 @@ func TestPatrolService_AskAIAboutAlert(t *testing.T) {
 		Type:         "cpu",
 		ResourceName: "node1",
 		ResourceType: "node",
-		Message:      "high cpu",
 		Value:        90,
 		Threshold:    80,
-		Duration:     "5m",
 	}
 	state := models.StateSnapshot{Nodes: []models.Node{{ID: "node1", Name: "node1", CPU: 10}}}
 
-	resolved, reason := ps.askAIAboutAlertState(context.Background(), alert, patrolRuntimeStateForTest(ps, state), aiSvc, "patrol-run-123")
-	if !resolved {
-		t.Fatalf("expected alert to resolve")
+	verdicts := ps.reviewAlertsWithModelState(context.Background(), []AlertInfo{alert}, patrolRuntimeStateForTest(ps, state), aiSvc, "patrol-run-bare")
+	if len(verdicts) != 1 || !verdicts[0].resolve {
+		t.Fatalf("expected bare RESOLVE response to resolve the single alert, got %+v", verdicts)
 	}
-	if reason == "" {
-		t.Fatalf("expected resolution reason")
-	}
-	if !strings.Contains(provider.lastReq.Messages[1].Content, "Resource: node1 (node)") {
-		t.Fatalf("expected prompt to include canonical node resource type, got %q", provider.lastReq.Messages[1].Content)
-	}
-	if provider.lastReq.ExecutionID != "patrol-run-123" {
-		t.Fatalf("execution_id=%q want patrol-run-123", provider.lastReq.ExecutionID)
+	if !strings.Contains(verdicts[0].reason, "looks good") {
+		t.Fatalf("expected resolution reason, got %q", verdicts[0].reason)
 	}
 }
 
-func TestPatrolService_AskAIAboutAlert_NormalizesUsageType(t *testing.T) {
+func TestPatrolService_ReviewAlertBatch_UnparseableKeepsAll(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
-	provider := &mockPatrolProvider{response: "KEEP: still high"}
+	provider := &mockPatrolProvider{response: "Everything appears to be operating within normal parameters."}
 	aiSvc := &Service{
 		provider: provider,
 		cfg:      &config.AIConfig{PatrolModel: "mock:model"},
 	}
 
-	alert := AlertInfo{
-		ID:           "a-usage",
-		Type:         "usage",
-		ResourceName: "local",
-		ResourceType: "usage",
-		ResourceID:   "storage-1",
-		Message:      "high usage",
-		Value:        92,
-		Threshold:    90,
-		Duration:     "20m",
+	alertsToReview := []AlertInfo{
+		{ID: "a1", Type: "cpu", ResourceName: "node1", ResourceType: "node"},
+		{ID: "a2", Type: "memory", ResourceName: "node1", ResourceType: "node"},
 	}
-	state := models.StateSnapshot{Storage: []models.Storage{{ID: "storage-1", Name: "local", Usage: 91, Status: "active"}}}
+	state := models.StateSnapshot{Nodes: []models.Node{{ID: "node1", Name: "node1"}}}
 
-	resolved, _ := ps.askAIAboutAlertState(context.Background(), alert, patrolRuntimeStateForTest(ps, state), aiSvc, "patrol-run-usage")
-	if resolved {
-		t.Fatalf("expected alert to stay unresolved")
+	verdicts := ps.reviewAlertsWithModelState(context.Background(), alertsToReview, patrolRuntimeStateForTest(ps, state), aiSvc, "")
+	for i, v := range verdicts {
+		if v.resolve {
+			t.Fatalf("expected unparseable response to keep alert %d, got %+v", i, v)
+		}
 	}
-	if !strings.Contains(provider.lastReq.Messages[1].Content, "Resource: local (storage)") {
-		t.Fatalf("expected prompt to normalize usage alerts to storage, got %q", provider.lastReq.Messages[1].Content)
+}
+
+func TestPatrolService_ReviewAlertBatch_ChunksLargeBacklogs(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	provider := &mockPatrolProvider{response: "ALERT 1: KEEP: still investigating"}
+	aiSvc := &Service{
+		provider: provider,
+		cfg:      &config.AIConfig{PatrolModel: "mock:model"},
+	}
+
+	alertsToReview := make([]AlertInfo, patrolAlertReviewBatchSize+1)
+	for i := range alertsToReview {
+		alertsToReview[i] = AlertInfo{ID: fmt.Sprintf("a%d", i), Type: "cpu", ResourceName: "node1", ResourceType: "node"}
+	}
+	state := models.StateSnapshot{Nodes: []models.Node{{ID: "node1", Name: "node1"}}}
+
+	verdicts := ps.reviewAlertsWithModelState(context.Background(), alertsToReview, patrolRuntimeStateForTest(ps, state), aiSvc, "")
+	if provider.calls != 2 {
+		t.Fatalf("expected %d alerts to review in 2 chunked calls, got %d calls", len(alertsToReview), provider.calls)
+	}
+	if len(verdicts) != len(alertsToReview) {
+		t.Fatalf("expected %d verdicts, got %d", len(alertsToReview), len(verdicts))
+	}
+}
+
+func TestApplyAlertReviewResponse_FirstLinePerAlertWins(t *testing.T) {
+	verdicts := []patrolAlertReviewVerdict{{alert: AlertInfo{ID: "a1"}}}
+	matched := applyAlertReviewResponse(verdicts, "ALERT 1: RESOLVE: fixed\nALERT 1: KEEP: on second thought\nALERT 9: RESOLVE: out of range")
+	if !matched {
+		t.Fatalf("expected verdict lines to match")
+	}
+	if !verdicts[0].resolve {
+		t.Fatalf("expected first verdict line to win, got %+v", verdicts[0])
 	}
 }
 

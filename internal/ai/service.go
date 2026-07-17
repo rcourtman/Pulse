@@ -214,6 +214,10 @@ type QuickAnalysisRequest struct {
 	Prompt      string `json:"prompt"`
 	ExecutionID string `json:"execution_id,omitempty"`
 	UseCase     string `json:"use_case,omitempty"`
+	// TargetType tags the recorded usage event so cost telemetry can
+	// distinguish sub-workloads sharing a use case (e.g. patrol alert
+	// auto-resolve reviews vs the main patrol pass).
+	TargetType string `json:"target_type,omitempty"`
 }
 
 // PatrolStreamResponse contains the results of a patrol execution via the chat service
@@ -1880,6 +1884,7 @@ func (s *Service) QuickAnalysis(ctx context.Context, req QuickAnalysisRequest) (
 			RequestModel:  model,
 			ResponseModel: resp.Model,
 			UseCase:       useCase,
+			TargetType:    strings.TrimSpace(req.TargetType),
 			InputTokens:   resp.InputTokens,
 			OutputTokens:  resp.OutputTokens,
 		})

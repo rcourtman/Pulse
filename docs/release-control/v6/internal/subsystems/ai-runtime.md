@@ -4523,6 +4523,30 @@ transition. Re-detections of an already-active finding update
 `TimesRaised` and `LastSeenAt` only — they must not append a `detected`
 lifecycle event, because a heartbeat is not a transition.
 
+Patrol's alert auto-resolve review (`reviewAndResolveAlertsState` in
+`internal/ai/patrol_run.go`) is model-owned in the resolve direction
+and cost-gated in the keep direction. Local state never resolves an
+alert: only a parsed model RESOLVE verdict (or operator action) clears
+one. But an aged active alert whose trigger condition demonstrably
+still holds in the current runtime snapshot — a metric alert whose
+looked-up current value is still at/above its positive threshold, or
+an offline-family alert whose node/agent/VM/system-container resource
+is present and still not online (`alertStillFiringState`) — must be
+skipped without a billed model call, because a correct review could
+only answer KEEP. Every uncertain case (unknown alert type, missing
+resource, unmapped metric, non-positive threshold, resource types the
+online check does not model) still goes to the model. The remaining
+candidates are reviewed in batched `QuickAnalysis` calls of at most
+`patrolAlertReviewBatchSize` alerts with numbered per-alert verdict
+lines; verdict parsing is fail-safe (unparseable or out-of-range
+verdicts default to KEEP, a bare `RESOLVE:` response is honored only
+for single-alert batches), and the recorded usage events carry use
+case `patrol` with `TargetType` `alert_autoresolve` so cost telemetry
+can decompose alert-review spend from the main Patrol analysis pass.
+This replaced the prior one-model-call-per-alert-per-run loop that
+re-asked the same question about standing alerts every interval and
+dominated Patrol's billed call volume in production telemetry.
+
 The findings store now consults a `ResourceOperatorStateProvider`
 during the new-finding path. The interface lives in `internal/ai` to
 avoid an import cycle with `internal/unifiedresources`; the API layer

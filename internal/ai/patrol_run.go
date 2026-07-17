@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -2156,6 +2157,15 @@ func (p *PatrolService) GetCurrentStreamOutput() (string, string) {
 // reviewAndResolveAlerts uses AI to review active alerts and resolve those where the issue is fixed.
 // This is the core of autonomous alert management - the AI looks at each alert, checks current state,
 // and determines if the underlying issue has been resolved.
+//
+// Two structural cost controls run before any model call:
+//   - alerts whose trigger condition demonstrably still holds in the current
+//     snapshot (metric still at/above threshold, resource still offline) are
+//     skipped — a correct review could only answer KEEP, so the question is
+//     not worth a billed call. Resolution stays model-owned: Pulse never
+//     locally decides that an issue HAS cleared.
+//   - the remaining candidates are reviewed in batched model calls instead
+//     of one call per alert.
 func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state patrolRuntimeState, llmAllowed bool, executionID string) int {
 	p.mu.RLock()
 	resolver := p.alertResolver
@@ -2171,44 +2181,58 @@ func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state p
 		return 0
 	}
 
+	aiSvc := aiService
+	if !llmAllowed {
+		aiSvc = nil
+	}
+	if aiSvc == nil || !aiSvc.IsEnabled() {
+		return 0
+	}
+
 	// Only review alerts that have been active for at least 10 minutes
 	// This avoids thrashing on transient alerts
 	minAge := 10 * time.Minute
 	var alertsToReview []AlertInfo
+	stillFiring := 0
 	for _, alert := range activeAlerts {
-		if time.Since(alert.StartTime) >= minAge {
-			alertsToReview = append(alertsToReview, alert)
+		if time.Since(alert.StartTime) < minAge {
+			continue
 		}
+		if p.alertStillFiringState(alert, state) {
+			stillFiring++
+			continue
+		}
+		alertsToReview = append(alertsToReview, alert)
 	}
 
 	if len(alertsToReview) == 0 {
+		if stillFiring > 0 {
+			log.Debug().
+				Int("still_firing", stillFiring).
+				Msg("AI Patrol: All aged alerts still demonstrably firing, skipping model review")
+		}
 		return 0
 	}
 
 	log.Info().
 		Int("total_active", len(activeAlerts)).
 		Int("to_review", len(alertsToReview)).
+		Int("still_firing_skipped", stillFiring).
 		Msg("AI Patrol: Reviewing alerts for auto-resolution")
 
 	resolvedCount := 0
-
-	aiSvc := aiService
-	if !llmAllowed {
-		aiSvc = nil
-	}
-
-	for _, alert := range alertsToReview {
-		shouldResolve, reason := p.shouldResolveAlertState(ctx, alert, state, aiSvc, executionID)
-		if shouldResolve {
-			if resolver.ResolveAlert(alert.ID) {
-				resolvedCount++
-				log.Info().
-					Str("alertID", alert.ID).
-					Str("resource", alert.ResourceName).
-					Str("reason", reason).
-					Dur("age", time.Since(alert.StartTime)).
-					Msg("AI Patrol: Auto-resolved alert - issue no longer detected")
-			}
+	for _, verdict := range p.reviewAlertsWithModelState(ctx, alertsToReview, state, aiSvc, executionID) {
+		if !verdict.resolve {
+			continue
+		}
+		if resolver.ResolveAlert(verdict.alert.ID) {
+			resolvedCount++
+			log.Info().
+				Str("alertID", verdict.alert.ID).
+				Str("resource", verdict.alert.ResourceName).
+				Str("reason", verdict.reason).
+				Dur("age", time.Since(verdict.alert.StartTime)).
+				Msg("AI Patrol: Auto-resolved alert - issue no longer detected")
 		}
 	}
 
@@ -2221,16 +2245,39 @@ func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state p
 	return resolvedCount
 }
 
-// shouldResolveAlert determines if an alert should be auto-resolved based on
-// model review of current state. Pulse can gather context and enforce the
-// resolution gate, but it must not use local alert-type heuristics to decide
-// that an infrastructure issue has cleared.
-func (p *PatrolService) shouldResolveAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service, executionID string) (bool, string) {
-	if aiService != nil && aiService.IsEnabled() {
-		return p.askAIAboutAlertState(ctx, alert, snap, aiService, executionID)
+// alertStillFiringState reports whether the current runtime snapshot still
+// demonstrably shows the alert's trigger condition — a metric alert whose
+// current value is still at or above its threshold, or an offline alert
+// whose resource is still not online. For these alerts a correct model
+// review can only answer KEEP, so Patrol skips the billed call and keeps
+// the alert. The gate never decides that an issue HAS cleared: anything
+// uncertain (unknown alert type, missing resource, unmapped metric)
+// returns false so the model still owns the resolution decision.
+func (p *PatrolService) alertStillFiringState(alert AlertInfo, snap patrolRuntimeState) bool {
+	switch alert.Type {
+	case "cpu", "memory", "usage", "disk":
+		if alert.Threshold <= 0 {
+			return false
+		}
+		// getCurrentMetricValueState returns -1 when the resource or metric
+		// is unknown, which can never satisfy a positive threshold.
+		return p.getCurrentMetricValueState(alert, snap) >= alert.Threshold
+	case "offline", "powered-off", "host-offline":
+		resource := lookupPatrolAlertResourceState(alert, snap)
+		if !resource.found {
+			// Resource is gone from the snapshot — the model should judge
+			// whether the alert resolves as removed.
+			return false
+		}
+		switch resource.resourceType {
+		case "node", "agent", "vm", "system-container":
+			return !p.isResourceOnlineState(alert, snap)
+		default:
+			return false
+		}
+	default:
+		return false
 	}
-
-	return false, ""
 }
 
 // getCurrentMetricValue gets the current value of the metric that triggered the alert
@@ -2462,13 +2509,78 @@ func (p *PatrolService) isResourceOnlineState(alert AlertInfo, snap patrolRuntim
 	}
 }
 
-// askAIAboutAlert uses the AI to determine if an alert should be resolved
-func (p *PatrolService) askAIAboutAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service, executionID string) (bool, string) {
-	alertType := patrolAlertLookupType(alert)
-	// Build a focused prompt for the AI
-	prompt := fmt.Sprintf(`Review this alert and determine if it should be auto-resolved based on current state.
+// patrolAlertReviewBatchSize caps how many alerts are reviewed per model
+// call so a large alert backlog cannot build an unbounded prompt.
+const patrolAlertReviewBatchSize = 20
 
-ALERT:
+type patrolAlertReviewVerdict struct {
+	alert   AlertInfo
+	resolve bool
+	reason  string
+}
+
+// patrolAlertVerdictLine matches one per-alert verdict line in a batched
+// alert-review model response, e.g. "ALERT 2: RESOLVE: usage back to 40%".
+var patrolAlertVerdictLine = regexp.MustCompile(`(?im)^\s*ALERT\s+(\d+)\s*:\s*(RESOLVE|KEEP)\b\s*:?\s*(.*)$`)
+
+// reviewAlertsWithModelState reviews the candidate alerts with the model in
+// batched calls and returns one verdict per alert, in order. Alerts whose
+// verdict cannot be parsed from the model response default to KEEP.
+func (p *PatrolService) reviewAlertsWithModelState(ctx context.Context, candidates []AlertInfo, snap patrolRuntimeState, aiService *Service, executionID string) []patrolAlertReviewVerdict {
+	verdicts := make([]patrolAlertReviewVerdict, 0, len(candidates))
+	for start := 0; start < len(candidates); start += patrolAlertReviewBatchSize {
+		end := min(start+patrolAlertReviewBatchSize, len(candidates))
+		verdicts = append(verdicts, p.reviewAlertBatchState(ctx, candidates[start:end], snap, aiService, executionID)...)
+	}
+	return verdicts
+}
+
+// reviewAlertBatchState asks the model for a RESOLVE/KEEP verdict on each
+// alert in one call. Any error or unparseable verdict keeps the alert —
+// the fail-safe direction matches the single-alert behavior this replaces.
+func (p *PatrolService) reviewAlertBatchState(ctx context.Context, batch []AlertInfo, snap patrolRuntimeState, aiService *Service, executionID string) []patrolAlertReviewVerdict {
+	verdicts := make([]patrolAlertReviewVerdict, len(batch))
+	for i, alert := range batch {
+		verdicts[i] = patrolAlertReviewVerdict{alert: alert}
+	}
+
+	// Use a quick, low-cost AI call
+	response, err := aiService.QuickAnalysis(ctx, QuickAnalysisRequest{
+		Prompt:      p.buildAlertReviewPromptState(batch, snap),
+		ExecutionID: executionID,
+		UseCase:     "patrol",
+		TargetType:  "alert_autoresolve",
+	})
+	if err != nil {
+		log.Debug().Err(err).Int("alerts", len(batch)).Msg("AI Patrol: Failed to get AI judgment on alert batch")
+		return verdicts
+	}
+
+	matched := applyAlertReviewResponse(verdicts, response)
+
+	// Single-alert fallback: accept a bare "RESOLVE: <reason>" response
+	// without the "ALERT 1:" prefix, matching the pre-batch prompt contract.
+	if len(batch) == 1 && !matched {
+		trimmed := strings.TrimSpace(response)
+		if strings.HasPrefix(strings.ToUpper(trimmed), "RESOLVE:") {
+			verdicts[0].resolve = true
+			verdicts[0].reason = patrolAlertResolveReason(strings.TrimPrefix(trimmed[len("RESOLVE:"):], " "))
+		}
+	}
+
+	return verdicts
+}
+
+// buildAlertReviewPromptState formats the batched alert-review prompt: one
+// numbered section per alert with its trigger details and current resource
+// state, plus strict per-line verdict output instructions.
+func (p *PatrolService) buildAlertReviewPromptState(batch []AlertInfo, snap patrolRuntimeState) string {
+	var sb strings.Builder
+	sb.WriteString("Review these active alerts and determine, for each, if it should be auto-resolved based on current state.\n")
+	for i, alert := range batch {
+		alertType := patrolAlertLookupType(alert)
+		sb.WriteString(fmt.Sprintf(`
+ALERT %d:
 - ID: %s
 - Type: %s
 - Resource: %s (%s)
@@ -2479,36 +2591,47 @@ ALERT:
 
 CURRENT STATE OF THIS RESOURCE:
 %s
-
-Should this alert be RESOLVED because the underlying issue is fixed?
-Respond with ONLY one of:
-- RESOLVE: <brief reason>
-- KEEP: <brief reason>`,
-		alert.ID, alert.Type, alert.ResourceName, alertType,
-		alert.Message, alert.Value, alert.Threshold, alert.Duration,
-		p.getResourceCurrentStateState(alert, snap))
-
-	// Use a quick, low-cost AI call
-	response, err := aiService.QuickAnalysis(ctx, QuickAnalysisRequest{
-		Prompt:      prompt,
-		ExecutionID: executionID,
-		UseCase:     "patrol",
-	})
-	if err != nil {
-		log.Debug().Err(err).Str("alertID", alert.ID).Msg("AI Patrol: Failed to get AI judgment on alert")
-		return false, ""
+`,
+			i+1, alert.ID, alert.Type, alert.ResourceName, alertType,
+			alert.Message, alert.Value, alert.Threshold, alert.Duration,
+			p.getResourceCurrentStateState(alert, snap)))
 	}
+	sb.WriteString(`
+For each alert, should it be RESOLVED because the underlying issue is fixed?
+Respond with EXACTLY one line per alert, in order, and nothing else:
+ALERT <number>: RESOLVE: <brief reason>
+or
+ALERT <number>: KEEP: <brief reason>`)
+	return sb.String()
+}
 
-	response = strings.TrimSpace(response)
-	if strings.HasPrefix(strings.ToUpper(response), "RESOLVE:") {
-		reason := strings.TrimSpace(strings.TrimPrefix(response, "RESOLVE:"))
-		if reason == "" {
-			reason = strings.TrimSpace(strings.TrimPrefix(strings.ToUpper(response), "RESOLVE:"))
+// applyAlertReviewResponse parses per-alert verdict lines from the model
+// response into verdicts. The first line seen for each alert number wins;
+// out-of-range numbers are ignored. Returns whether any line matched.
+func applyAlertReviewResponse(verdicts []patrolAlertReviewVerdict, response string) bool {
+	matched := false
+	seen := make(map[int]bool)
+	for _, m := range patrolAlertVerdictLine.FindAllStringSubmatch(response, -1) {
+		idx, err := strconv.Atoi(m[1])
+		if err != nil || idx < 1 || idx > len(verdicts) || seen[idx] {
+			continue
 		}
-		return true, "Patrol: " + reason
+		seen[idx] = true
+		matched = true
+		if strings.EqualFold(m[2], "RESOLVE") {
+			verdicts[idx-1].resolve = true
+			verdicts[idx-1].reason = patrolAlertResolveReason(m[3])
+		}
 	}
+	return matched
+}
 
-	return false, ""
+func patrolAlertResolveReason(raw string) string {
+	reason := strings.TrimSpace(raw)
+	if reason == "" {
+		reason = "issue no longer detected"
+	}
+	return "Patrol: " + reason
 }
 
 // getResourceCurrentState returns a description of the resource's current state
