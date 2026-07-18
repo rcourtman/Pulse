@@ -8870,21 +8870,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "claude-triage-lane-l1",
-      "agent_id": "claude-triage",
-      "summary": "Prepare and publish the governed v6.1.0-rc.3 release packet",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-18T15:52:00Z",
-      "heartbeat_at": "2026-07-18T15:52:00Z",
-      "expires_at": "2026-07-18T19:52:00Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L1"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
