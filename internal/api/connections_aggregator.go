@@ -1100,7 +1100,19 @@ func effectiveConnectionAgentConfig(cfg monitoring.HostAgentConfig, host models.
 	if tokenByID != nil {
 		record = tokenByID[strings.TrimSpace(host.TokenID)]
 	}
-	cfg = sanitizeHostAgentConfigForToken(cfg, record, host)
+	if record == nil && len(tokenByID) > 0 && cfg.CommandsEnabled != nil && *cfg.CommandsEnabled {
+		// API tokens exist but this host's TokenID resolves to none of them
+		// (stale after a token was revoked and the agent reinstalled, or an
+		// untracked binding). The runtime config served to such an agent can
+		// never enable commands, so the desired side must not either; leaving
+		// it enabled fabricates a command-policy mismatch the operator cannot
+		// fix from the profile. The contract requires desired to be the
+		// sanitized effective config, not the raw profile desire.
+		disabled := false
+		cfg.CommandsEnabled = &disabled
+	} else {
+		cfg = sanitizeHostAgentConfigForToken(cfg, record, host)
+	}
 
 	metadata, err := remoteconfig.BuildDesiredConfigMetadata(cfg.CommandsEnabled, cfg.Settings)
 	if err != nil {

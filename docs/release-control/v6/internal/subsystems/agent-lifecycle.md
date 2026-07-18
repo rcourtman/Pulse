@@ -153,7 +153,18 @@ truth. The desired side is the effective runtime config served to the agent
 after token scope and binding checks, not the unsanitized profile desire. If a
 profile enables commands but the agent runtime token cannot execute them,
 lifecycle surfaces must see desired-disabled/applied-disabled as in sync
-rather than a command-policy rollout failure.
+rather than a command-policy rollout failure. A host whose recorded token
+binding no longer resolves to a live API token is the same case; when API
+tokens exist, desired command policy fails closed to disabled for that host
+instead of reporting drift against a token that cannot execute.
+
+Install tokens for the generic host agent flow are minted server-side through
+the agent install command endpoint. The server decides the token's scopes from
+the operator's command-execution choice at mint time, because scopes are never
+upgraded on an existing token, and stamps the install-type and issuance
+metadata that make the token eligible for one first-use command-channel
+binding. Frontend surfaces may choose whether commands are requested but must
+not compose install-token scope lists themselves.
 
 PVE node setup shared boundaries that render or copy `PulseMonitor`
 permissions must treat `VM.GuestAgent.Audit` plus `VM.GuestAgent.FileRead` as
