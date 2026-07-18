@@ -698,10 +698,7 @@ export function mapTrueNASStorageStatus(
   // The TrueNAS disk API carries no SMART/health field, so "unknown" is the
   // normal state of a healthy disk, not a warning signal (#1573). Only an
   // affirmatively bad health value earns the attention bucket.
-  if (
-    diskHealth &&
-    !['passed', 'healthy', 'ok', 'unknown', 'unavailable'].includes(diskHealth)
-  ) {
+  if (diskHealth && !['passed', 'healthy', 'ok', 'unknown', 'unavailable'].includes(diskHealth)) {
     return 'attention';
   }
   if (['online', 'running', 'healthy'].includes(status)) return 'healthy';
