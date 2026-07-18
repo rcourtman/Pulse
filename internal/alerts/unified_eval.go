@@ -346,8 +346,14 @@ func buildCanonicalMetricSpec(resourceID, title string, resourceType unifiedreso
 			recovery := threshold.Clear
 			spec.MetricThreshold.Recovery = &recovery
 		}
-		critical := computeCriticalThreshold(threshold.Trigger, metricType)
-		spec.MetricThreshold.Critical = &critical
+		// A percentage trigger of 99+ collides with the 99 critical cap; a
+		// critical at or below the trigger fails spec validation and used to
+		// drop the whole metric from evaluation (silently unmonitored, plus a
+		// warn-log every cycle). Omit escalation instead so the warning-level
+		// threshold keeps working.
+		if critical := computeCriticalThreshold(threshold.Trigger, metricType); critical > threshold.Trigger {
+			spec.MetricThreshold.Critical = &critical
+		}
 	}
 
 	return spec, spec.Validate()
