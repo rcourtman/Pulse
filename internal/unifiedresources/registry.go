@@ -1634,6 +1634,17 @@ func (rr *ResourceRegistry) ingestStorage(storage models.Storage) {
 		// datastores stale between PBS polls. storage.Instance carries the
 		// PBS instance source ID ("pbs-<name>"), so parent them to the PBS
 		// instance, which IngestSnapshot ingests before storage.
+		// The PBS snapshot adapter already ingests this datastore under its
+		// canonical "<instance-id>/<name>" source ID (pbsDatastoreSourceID)
+		// with the richer pbs-datastore metadata. Ingesting the poller's
+		// storage conversion again under the legacy "<instance-id>-<name>"
+		// storage ID minted a second resource for the same datastore, which
+		// rendered duplicate threshold cards and split overrides across two
+		// key formats (#1591).
+		canonicalDatastoreID := normalizeSourceID(storage.Instance + "/" + storage.Name)
+		if _, ok := rr.bySource[SourcePBS][canonicalDatastoreID]; ok {
+			return
+		}
 		if parentID, ok := rr.bySource[SourcePBS][storage.Instance]; ok {
 			resource.ParentID = &parentID
 		}

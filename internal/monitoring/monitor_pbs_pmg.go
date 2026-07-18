@@ -457,7 +457,11 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 			// Create a storage entry for this PBS datastore
 			storageID := fmt.Sprintf("pbs-%s-%s", instanceName, ds.Name)
 			pbsStorage := models.Storage{
-				ID:       storageID,
+				ID: storageID,
+				// The unified registry and thresholds UI key this datastore by
+				// its canonical "<instance-id>/<name>" ID; carrying it as an
+				// alias lets alert override lookups accept either format (#1591).
+				AliasIDs: []string{pbsInst.ID + "/" + ds.Name},
 				Name:     ds.Name,
 				Node:     instanceName, // Use PBS instance name as "node"
 				Instance: "pbs-" + instanceName,
