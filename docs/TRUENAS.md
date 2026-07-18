@@ -18,7 +18,9 @@ On your TrueNAS system:
 2. Click **Add** and create a new key.
 3. Copy the key value and paste it into Pulse.
 
-> **Tip**: A read-only key is sufficient for monitoring. Native app control actions require a key with the corresponding TrueNAS app permissions.
+> **Tip**: A read-only key is sufficient for monitoring on most TrueNAS versions. Native app control actions require a key with the corresponding TrueNAS app permissions.
+>
+> **TrueNAS SCALE 25.10**: API keys are linked to a user, and keys for users with the Readonly Admin role can be rejected with 403 on endpoints Pulse polls (TrueNAS serves these through its deprecated REST bridge). Until Pulse moves to the TrueNAS WebSocket API, use a key linked to a Full Admin user on 25.10.
 
 ## What Gets Monitored
 
