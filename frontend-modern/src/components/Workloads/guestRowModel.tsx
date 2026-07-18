@@ -14,7 +14,13 @@ export type WorkloadTableLayoutMode = 'mobile' | 'tablet' | 'compact' | 'wide';
 
 export const WORKLOAD_TABLE_MOBILE_LAYOUT_WIDTH = 768;
 export const WORKLOAD_TABLE_TABLET_LAYOUT_WIDTH = 900;
-export const WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH = 1440;
+// Layout stages key off the viewport, but the table renders inside a shell
+// that is ~120px narrower (nav rail + page padding). The wide column set sums
+// to ~1370px, so engaging it at a 1440px viewport left the default layout
+// horizontally scrolling by ~50px. Horizontal scroll is reserved for columns
+// a user explicitly pins (see forcedColumnIds); the breakpoint default must
+// fit, so wide waits until the shell can actually hold the full set.
+export const WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH = 1536;
 
 const WORKLOAD_TABLE_LAYOUT_ORDER: Record<WorkloadTableLayoutMode, number> = {
   mobile: 0,

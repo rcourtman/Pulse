@@ -1046,8 +1046,11 @@ describe('GUEST_COLUMNS', () => {
     expect(getWorkloadTableLayoutMode(768)).toBe('tablet');
     expect(getWorkloadTableLayoutMode(899)).toBe('tablet');
     expect(getWorkloadTableLayoutMode(900)).toBe('compact');
-    expect(getWorkloadTableLayoutMode(1439)).toBe('compact');
-    expect(getWorkloadTableLayoutMode(1440)).toBe('wide');
+    // Wide waits for a shell that can hold the full column set without
+    // horizontal scroll (see WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH).
+    expect(getWorkloadTableLayoutMode(1440)).toBe('compact');
+    expect(getWorkloadTableLayoutMode(1535)).toBe('compact');
+    expect(getWorkloadTableLayoutMode(1536)).toBe('wide');
   });
 
   it('keeps CPU and memory fixed while allowing disk to be platform-scoped', () => {
