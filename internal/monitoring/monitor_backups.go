@@ -299,7 +299,11 @@ func (m *Monitor) pollStorageBackupsWithNodes(ctx context.Context, instanceName 
 					}
 					// If not found in map, fall back to queried node (shouldn't happen normally)
 				}
-				isPBSStorage := strings.HasPrefix(storage.Storage, "pbs-") || storage.Type == "pbs"
+				// Classify by storage type only. A dir/NFS storage is free to be
+				// NAMED "pbs-…" (e.g. "pbs-backup"), and treating the name prefix
+				// as PBS silently dropped its vzdump backups whenever a direct PBS
+				// connection was also configured (#1592).
+				isPBSStorage := storage.Type == "pbs"
 				if isPBSStorage && hasPBSDirectConnection {
 					log.Debug().
 						Str("instance", instanceName).
