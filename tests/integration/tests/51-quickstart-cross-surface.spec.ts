@@ -215,6 +215,17 @@ async function mockRetiredQuickstartSurface(
       contentType: "application/json",
       body: JSON.stringify({
         autonomy_level: "monitor",
+        requested_autonomy_level: "monitor",
+        effective_autonomy_level: "monitor",
+        autopilot_acknowledgement: {
+          code: "license_required",
+          active: false,
+          currentVersion: 1,
+          acceptedAt: "0001-01-01T00:00:00Z",
+          expiresAt: "0001-01-01T00:00:00Z",
+          acceptedScope: [],
+          acceptedLimits: {},
+        },
         full_mode_unlocked: false,
         investigation_budget: 15,
         investigation_timeout_sec: 300,
@@ -378,7 +389,7 @@ test.describe("Retired quickstart browser contract", () => {
 
     await page.goto(PATROL_ROUTE, { waitUntil: "domcontentloaded" });
 
-    await expect(page.getByText("Patrol Paused").first()).toBeVisible();
+    await expect(page.getByText("Patrol paused").first()).toBeVisible();
     await expect(
       page
         .getByText(

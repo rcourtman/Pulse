@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { waitForPulseReady } from './helpers';
+import { ensureAuthenticated, waitForPulseReady } from './helpers';
 
 const RC_VERSION_INFO = {
   version: '6.0.0-rc.2',
@@ -17,6 +17,8 @@ test.describe('Release candidate shell', () => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
 
     await waitForPulseReady(page);
+    // The brand lockup only renders in the authenticated shell.
+    await ensureAuthenticated(page);
 
     await page.route('**/api/security/status', (route) =>
       route.fulfill({

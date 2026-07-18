@@ -2,7 +2,7 @@ import { expect, test as base, type Page } from "@playwright/test";
 
 import {
   apiRequest,
-  ensureAuthenticated,
+  ensureSessionAuthenticated,
   getMockMode,
   setMockMode,
 } from "./helpers";
@@ -76,7 +76,7 @@ async function assertSettingsInfrastructureDoesNotBlank(
     while (performance.now() - startedAt < sampleDurationMs) {
       const root = document.getElementById("root");
       const summary = document.querySelector<HTMLElement>(
-        '[aria-label="Infrastructure setup summary"]',
+        '[aria-label="Connection posture"]',
       );
       const table = document.querySelector("table");
       const bodyText = (document.body?.innerText ?? "")
@@ -137,7 +137,9 @@ test.describe.serial("Settings Infrastructure fleet status coherence", () => {
       "Desktop settings runtime proof",
     );
 
-    await ensureAuthenticated(page);
+    // getMockMode/apiRequest ride page.request cookies; the token-auth path
+    // ensureAuthenticated can take leaves them unauthenticated.
+    await ensureSessionAuthenticated(page);
     await ensureMockModeEnabled(page);
 
     const { connections, systems } = await readConnections(page);
@@ -177,11 +179,13 @@ test.describe.serial("Settings Infrastructure fleet status coherence", () => {
       ).toBe(memberKeys.length);
     }
 
-    await page.goto("/settings/infrastructure/operations", {
+    // The operations sub-route was retired with the legacy aliases; the
+    // posture band lives on the consolidated infrastructure workspace.
+    await page.goto("/settings/infrastructure", {
       waitUntil: "domcontentloaded",
     });
     await expect(
-      page.getByRole("region", { name: "Infrastructure setup summary" }),
+      page.getByRole("region", { name: "Connection posture" }),
     ).toBeVisible();
     await expect(page.getByText("Connected systems", { exact: true })).toBeVisible();
     await expect(page.getByText("Config pending", { exact: true })).toHaveCount(0);

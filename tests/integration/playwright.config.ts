@@ -12,28 +12,13 @@ import { preferredBrowserBaseURL } from './tests/runtime-defaults';
  * list only by being repaired, never by deletion.
  */
 const QUARANTINED_SPECS = [
+  // Multi-tenant scenarios 6/7 have an unresolved org-resolution bug (see
+  // core-e2e-failure-taxonomy): after switchOrg+reload the UI still resolves
+  // the default org. CI runs a multi-tenant environment, so delisting this
+  // spec turns that open bug into a permanent red.
   '**/03-multi-tenant.spec.ts',
-  '**/05-settings-mobile-audit.spec.ts',
-  '**/15-settings-shell-consistency.spec.ts',
-  '**/17-proxmox-backups-layout.spec.ts',
-  '**/18-patrol-runtime-state.spec.ts',
-  '**/19-telemetry-disclosure.spec.ts',
-  '**/20-local-doc-links.spec.ts',
-  '**/30-setup-platform-connections-handoff.spec.ts',
-  '**/43-platform-mock-runtime.spec.ts',
   '**/47-inline-selection-scroll-stability.spec.ts',
   '**/48-summary-hover-selection.spec.ts',
-  '**/49-demo-scenario-curation.spec.ts',
-  '**/51-quickstart-cross-surface.spec.ts',
-  '**/52-ai-settings-provider-setup.spec.ts',
-  '**/57-release-candidate-shell.spec.ts',
-  '**/60-page-header-consistency.spec.ts',
-  '**/62-runtime-home-onboarding-contract.spec.ts',
-  '**/63-pbs-active-tasks.spec.ts',
-  '**/75-settings-infrastructure-fleet-status-coherence.spec.ts',
-  '**/77-msp-isolation.spec.ts',
-  '**/79-update-flow.spec.ts',
-  '**/84-docker-restart-real-lab-artifact.spec.ts',
 ];
 
 /**

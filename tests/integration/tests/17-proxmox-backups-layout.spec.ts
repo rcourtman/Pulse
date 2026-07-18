@@ -21,6 +21,9 @@ test.describe("Proxmox backups layout guards", () => {
     await ensureAuthenticated(page);
     await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
 
+    // The guest-centric Coverage view is the default whenever anything needs
+    // attention; the day-activity strip lives in the By date view.
+    await page.getByRole("button", { name: "By date" }).click();
     await expect(page.getByText("Backups per day").first()).toBeVisible();
     const dayButtons = page.getByRole("button", { name: /: \d+ backups?$/ });
     await expect.poll(() => dayButtons.count()).toBeGreaterThanOrEqual(7);
@@ -48,6 +51,8 @@ test.describe("Proxmox backups layout guards", () => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await ensureAuthenticated(page);
     await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
+
+    await page.getByRole("button", { name: "By date" }).click();
 
     await page
       .getByRole("group", { name: "Activity range" })

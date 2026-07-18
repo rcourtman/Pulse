@@ -53,6 +53,12 @@ const assertExactArtifactBindings = (artifact: LabArtifact): void => {
 };
 
 test("real Colima restart artifact renders one independently verified durable action", async ({ page }) => {
+  // Lab-artifact proof: only runnable where a captured canonical journey is
+  // provided; a missing artifact is a skip, not a failure.
+  test.skip(
+    !String(process.env.PULSE_INTELLIGENCE_LAB_ARTIFACT || "").trim(),
+    "PULSE_INTELLIGENCE_LAB_ARTIFACT not configured",
+  );
   const { artifact, artifactDir } = loadArtifact();
   assertExactArtifactBindings(artifact);
   await page.setViewportSize({ width: 1440, height: 1600 });

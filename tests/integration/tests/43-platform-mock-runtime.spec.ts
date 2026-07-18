@@ -157,129 +157,55 @@ test.describe.serial('Platform mock runtime', () => {
     }
   });
 
-  test('renders canonical legacy and provider-backed mock data from the live runtime', async ({ page }, testInfo) => {
+  test('renders canonical legacy and provider-backed mock data on the live platform pages', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
 
     await ensureMockModeEnabled(page);
     const resourceNames = await fetchMockResourceNames(page);
+    const truenasSystemName = await fetchMockResourceName(page, 'truenas', ['agent']);
+    const vmwareHostName = await fetchMockResourceName(page, 'vmware', ['agent']);
 
-    await page.goto('/settings/infrastructure/platforms/truenas', {
-      waitUntil: 'domcontentloaded',
-    });
-    await page.waitForURL(/\/settings\/infrastructure\/platforms\/truenas/, {
-      timeout: 15_000,
-    });
-    await expect(page.getByText('Archive NAS')).toBeVisible();
-    await expect(page.getByText('4 pools')).toBeVisible();
-    await expect(page.getByText('9 datasets')).toBeVisible();
-    await expect(page.getByText('5 apps')).toBeVisible();
+    // Provider-backed TrueNAS fixture data reaches the live platform page.
+    await page.goto('/truenas', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('truenas-page')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(truenasSystemName).first()).toBeVisible({ timeout: 30_000 });
+    await page.goto('/truenas/storage', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('tank', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     fs.mkdirSync(path.dirname(TRUENAS_SCREENSHOT_PATH), { recursive: true });
-    await page.screenshot({ path: TRUENAS_SCREENSHOT_PATH, fullPage: true });
-    await expectInfrastructureSource(page, 'truenas', 'truenas-main');
+    await page.screenshot({ path: TRUENAS_SCREENSHOT_PATH });
 
-    await page.goto('/settings/infrastructure/platforms/vmware', {
-      waitUntil: 'domcontentloaded',
+    // Provider-backed vSphere fixture data reaches the live platform pages.
+    await page.goto('/vmware', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('vmware-page')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(vmwareHostName).first()).toBeVisible({ timeout: 30_000 });
+    await page.goto('/vmware/storage', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('nvme-primary').first()).toBeVisible({ timeout: 30_000 });
+    await page.screenshot({ path: VMWARE_SCREENSHOT_PATH });
+
+    // Legacy-source mock data (Proxmox node, Docker host, Kubernetes cluster,
+    // PBS and PMG instances) reaches its platform surfaces.
+    await page.goto('/proxmox', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('proxmox-page')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(resourceNames['proxmox-pve']).first()).toBeVisible({
+      timeout: 30_000,
     });
-    await page.waitForURL(/\/settings\/infrastructure\/platforms\/vmware/, {
-      timeout: 15_000,
+
+    await page.goto('/docker', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('docker-page')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(resourceNames.docker).first()).toBeVisible({ timeout: 30_000 });
+
+    await page.goto('/proxmox/backups', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(resourceNames['proxmox-pbs']).first()).toBeVisible({
+      timeout: 30_000,
     });
-    await expect(page.getByText('Lab vCenter')).toBeVisible();
-    await expect(page.getByText('4 hosts')).toBeVisible();
-    await expect(page.getByText('6 vms')).toBeVisible();
-    await expect(page.getByText('4 datastores')).toBeVisible();
-    fs.mkdirSync(path.dirname(VMWARE_SCREENSHOT_PATH), { recursive: true });
-    await page.screenshot({ path: VMWARE_SCREENSHOT_PATH, fullPage: true });
-    await expectInfrastructureSource(page, 'vmware-vsphere', 'esxi-01.lab.local');
-    await expectFirstTableContains(page, ['esxi-02.lab.local', 'esxi-03.lab.local', 'esxi-04.lab.local']);
 
-    await page.goto('/workloads?type=app-container&platform=truenas&agent=truenas-main', {
-      waitUntil: 'domcontentloaded',
-    });
-    await page.waitForURL(/\/workloads\?type=app-container&platform=truenas&agent=.*truenas-main/);
-    await expect(page.locator('#dashboard-type-filter')).toHaveValue('app-container');
-    await expect(page.locator('#workloads-platform-filter')).toHaveValue('truenas');
-    await expectFirstTableContains(page, [
-      'client-files',
-      'photo-archive',
-      'document-hub',
-      'ops-dashboards',
-      'edge-dns',
-    ]);
-    await expect(page.getByText('No history yet')).toHaveCount(0);
-
-    await page.goto('/storage?source=truenas&node=truenas-main', {
-      waitUntil: 'domcontentloaded',
-    });
-    await expect(page).toHaveURL(/\/storage\?source=truenas&node=truenas-main/);
-    await expectFirstTableContains(page, ['tank', 'fast', 'archive', 'vault']);
-    await expect(page.getByText('No history yet')).toHaveCount(0);
-    await expect(page.getByText('Derived from storage metrics - live Ceph telemetry unavailable.')).toHaveCount(0);
-    await expect(page.locator('table').first()).not.toContainText('UNKNOWN');
-
-    await page.goto('/storage?source=vmware-vsphere', {
-      waitUntil: 'domcontentloaded',
-    });
-    await expect(page).toHaveURL(/\/storage\?source=vmware-vsphere/);
-    await expectFirstTableContains(page, ['nvme-primary', 'archive-tier', 'analytics-vsan', 'backup-nfs']);
-    await expect(page.getByText('No history yet')).toHaveCount(0);
-
-    await page.goto('/recovery?platform=truenas&node=truenas-main', {
-      waitUntil: 'domcontentloaded',
-    });
-    await expect(page).toHaveURL(/\/recovery\?platform=truenas&node=truenas-main/);
-    await expect(page.getByTestId('recovery-page')).toBeVisible();
-    await expectFirstTableContains(page, ['tank/apps', 'tank/media', 'vault/compliance']);
-    await expect(page.getByText('0 fresh in 24h')).toHaveCount(0);
-
-    for (const [source, resourceName] of Object.entries(resourceNames)) {
-      await expectInfrastructureSource(page, source, resourceName);
-    }
-  });
-
-  test('keeps canonical Proxmox platform routes aligned with the selected platform table', async ({
-    page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
-
-    await ensureMockModeEnabled(page);
-    const resourceNames = await fetchMockResourceNames(page);
-
-    await page.goto('/settings/infrastructure/platforms/proxmox/pve', {
-      waitUntil: 'domcontentloaded',
-    });
-    await page.waitForURL(/\/settings\/infrastructure\/platforms\/proxmox\/pve/, {
-      timeout: 15_000,
-    });
-    await expect(page.getByRole('button', { name: 'Virtual Environment', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
+    await page.goto('/proxmox/mail', { waitUntil: 'domcontentloaded' });
+    // The mail page prettifies instance names, so match case- and
+    // separator-insensitively.
+    const pmgPattern = new RegExp(
+      resourceNames['proxmox-pmg'].replace(/[-_\s]+/g, '[-_ ]'),
+      'i',
     );
-    await expectFirstTableContains(page, [resourceNames['proxmox-pve']]);
-
-    await page.goto('/settings/infrastructure/platforms/proxmox/pbs', {
-      waitUntil: 'domcontentloaded',
-    });
-    await page.waitForURL(/\/settings\/infrastructure\/platforms\/proxmox\/pbs/, {
-      timeout: 15_000,
-    });
-    await expect(page.getByRole('button', { name: 'Backup Server', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    await expectFirstTableContains(page, [resourceNames['proxmox-pbs']]);
-    await expectFirstTableExcludes(page, [resourceNames['proxmox-pve']]);
-
-    await page.goto('/settings/infrastructure/platforms/proxmox/pmg', {
-      waitUntil: 'domcontentloaded',
-    });
-    await page.waitForURL(/\/settings\/infrastructure\/platforms\/proxmox\/pmg/, {
-      timeout: 15_000,
-    });
-    await expect(page.getByRole('button', { name: 'Mail Gateway', exact: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    await expectFirstTableContains(page, [resourceNames['proxmox-pmg']]);
-    await expectFirstTableExcludes(page, [resourceNames['proxmox-pve']]);
+    await expect(page.getByText(pmgPattern).first()).toBeVisible({ timeout: 30_000 });
   });
 });

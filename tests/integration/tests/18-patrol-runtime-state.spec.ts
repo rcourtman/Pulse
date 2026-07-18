@@ -283,6 +283,17 @@ async function mockBlockedPatrolRuntimeState(
       contentType: "application/json",
       body: JSON.stringify({
         autonomy_level: "monitor",
+        requested_autonomy_level: "monitor",
+        effective_autonomy_level: "monitor",
+        autopilot_acknowledgement: {
+          code: "license_required",
+          active: false,
+          currentVersion: 1,
+          acceptedAt: "0001-01-01T00:00:00Z",
+          expiresAt: "0001-01-01T00:00:00Z",
+          acceptedScope: [],
+          acceptedLimits: {},
+        },
         full_mode_unlocked: false,
         investigation_budget: 15,
         investigation_timeout_sec: 300,
@@ -414,6 +425,17 @@ async function mockScopedTriggerPatrolRuntimeState(
       contentType: "application/json",
       body: JSON.stringify({
         autonomy_level: "monitor",
+        requested_autonomy_level: "monitor",
+        effective_autonomy_level: "monitor",
+        autopilot_acknowledgement: {
+          code: "license_required",
+          active: false,
+          currentVersion: 1,
+          acceptedAt: "0001-01-01T00:00:00Z",
+          expiresAt: "0001-01-01T00:00:00Z",
+          acceptedScope: [],
+          acceptedLimits: {},
+        },
         full_mode_unlocked: false,
         investigation_budget: 15,
         investigation_timeout_sec: 300,
@@ -561,7 +583,7 @@ test.describe("Patrol runtime-state browser contract", () => {
     await page.getByRole("tab", { name: "Patrol" }).click();
     await expect(page).toHaveURL(/\/patrol/);
 
-    await expect(page.getByText("Patrol Paused").first()).toBeVisible();
+    // Banner and badge both use sentence case now.
     await expect(page.getByText("Patrol paused").first()).toBeVisible();
     await expect(page.getByText(PATROL_BLOCK_REASON).first()).toBeVisible();
     await expect(
@@ -759,6 +781,17 @@ test.describe("Patrol runtime-state browser contract", () => {
         contentType: "application/json",
         body: JSON.stringify({
           autonomy_level: "full",
+          requested_autonomy_level: "full",
+          effective_autonomy_level: "full",
+          autopilot_acknowledgement: {
+            code: "ok",
+            active: true,
+            currentVersion: 1,
+            acceptedAt: "2026-07-01T00:00:00Z",
+            expiresAt: "2027-07-01T00:00:00Z",
+            acceptedScope: [],
+            acceptedLimits: {},
+          },
           full_mode_unlocked: true,
           investigation_budget: 15,
           investigation_timeout_sec: 300,

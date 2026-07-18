@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test as base, expect } from '@playwright/test';
-import { createAuthenticatedStorageState } from './helpers';
+import { createAuthenticatedStorageState, isMultiTenantEnabled } from './helpers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -22,22 +22,26 @@ const SETTINGS_SHELL_ROUTES = [
     route: '/settings/organization',
     title: 'Organization Overview',
     description: 'Review organization metadata, membership footprint, and ownership.',
+    requiresMultiTenant: true,
   },
   {
     route: '/settings/organization/access',
     title: 'Organization Access',
     description: 'Manage organization invitations, member roles, and ownership transfers.',
+    requiresMultiTenant: true,
   },
   {
     route: '/settings/organization/billing',
     title: 'Billing & Usage',
     description:
       'Review your organization plan, applicable usage policies, and subscription status for paid access.',
+    requiresMultiTenant: true,
   },
   {
     route: '/settings/system-relay',
     title: 'Remote Access',
-    description: 'Configure Pulse relay connectivity for secure remote access and Pulse Mobile pairing.',
+    description:
+      'Check on your systems and get alert push notifications anywhere with the Pulse Mobile app — no port forwarding or VPN required.',
   },
   {
     route: '/settings/security-auth',
@@ -90,6 +94,11 @@ test.describe('Settings shell consistency', () => {
 
   for (const panel of SETTINGS_SHELL_ROUTES) {
     test(`uses the canonical shell on ${panel.route}`, async ({ page, isMobile }) => {
+      if ('requiresMultiTenant' in panel && panel.requiresMultiTenant) {
+        // Organization panels only render when multi-tenant is enabled
+        // (single-tenant installs hide the whole organization group).
+        test.skip(!(await isMultiTenantEnabled(page)), 'Multi-tenant feature not enabled in this environment');
+      }
       await page.goto(panel.route, { waitUntil: 'domcontentloaded' });
       await page.waitForURL(/\/settings/, { timeout: 15_000 });
 

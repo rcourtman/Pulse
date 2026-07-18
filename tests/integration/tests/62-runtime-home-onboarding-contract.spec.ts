@@ -106,7 +106,7 @@ test.describe("runtime-home onboarding contract", () => {
     ).toHaveCount(0);
   });
 
-  test("normalizes legacy platform-management paths back to the inventory workspace", async ({
+  test("retires legacy platform-management paths to the not-found page", async ({
     page,
   }) => {
     await ensureAuthenticated(page);
@@ -114,21 +114,12 @@ test.describe("runtime-home onboarding contract", () => {
       waitUntil: "domcontentloaded",
     });
 
-    await page.waitForURL(/\/settings\/infrastructure$/, { timeout: 15_000 });
+    // The legacy aliases were deliberately retired (cfb16e6da); the contract
+    // is now a graceful not-found page with a workspace escape hatch rather
+    // than a silent redirect.
     await expect(
-      page.getByRole("heading", {
-        level: 1,
-        name: "Infrastructure",
-      }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Connected systems", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: /Probe API endpoint/i }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole("heading", { level: 2, name: "Install on a host" }),
-    ).toHaveCount(0);
+      page.getByText("No route matched /settings/infrastructure/platforms/truenas"),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Go to workspace" })).toBeVisible();
   });
 });

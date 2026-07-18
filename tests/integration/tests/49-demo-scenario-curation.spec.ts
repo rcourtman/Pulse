@@ -131,30 +131,37 @@ test.describe.serial("Demo scenario curation", () => {
 
     await ensureMockModeEnabled(page);
 
-    await page.goto("/infrastructure", { waitUntil: "domcontentloaded" });
+    // The retired /infrastructure, /workloads, /storage, and /recovery pages
+    // split into per-platform surfaces; the curated estate proof follows.
+    await page.goto("/proxmox", { waitUntil: "domcontentloaded" });
     await waitForAppRoute(page);
-    await expect(page.getByTestId("infrastructure-summary")).toBeVisible();
+    await expect(page.getByTestId("proxmox-page")).toBeVisible({ timeout: 60_000 });
     await expectSomeRowContains(page, "West Production A");
-    await expectSomeRowContains(page, "Prod Euw1 K8s 01");
+    await expectSomeRowContains(page, "checkout-web-01");
     await expectNoRowContains(page, "mock-cluster");
 
-    await page.goto("/workloads", { waitUntil: "domcontentloaded" });
+    await page.goto("/docker", { waitUntil: "domcontentloaded" });
     await waitForAppRoute(page);
-    await expect(page.getByTestId("workloads-summary")).toBeVisible();
+    await expect(page.getByTestId("docker-page")).toBeVisible({ timeout: 60_000 });
     await expectSomeRowContains(page, "customer-portal");
     await expectSomeRowContains(page, "backup-coordinator");
-    await expectSomeRowContains(page, "checkout-web-01");
 
-    await page.goto("/storage", { waitUntil: "domcontentloaded" });
+    await page.goto("/kubernetes", { waitUntil: "domcontentloaded" });
     await waitForAppRoute(page);
-    await expect(page.getByTestId("storage-summary")).toBeVisible();
+    await expect(page.getByTestId("kubernetes-page")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText('Production EU', { exact: true }).first()).toBeVisible({
+      timeout: 30_000,
+    });
+
+    await page.goto("/proxmox/storage", { waitUntil: "domcontentloaded" });
+    await waitForAppRoute(page);
+    await expect(page.getByTestId("storage-page")).toBeVisible({ timeout: 60_000 });
     await expectSomeRowContains(page, "shared-backup-fabric");
     await expectSomeRowContains(page, "west-a-service-pool");
-    await expectNoRowContains(page, "service-pool");
+    await expectNoRowContains(page, "mock-cluster");
 
-    await page.goto("/recovery", { waitUntil: "domcontentloaded" });
+    await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
     await waitForAppRoute(page);
     await expectSomeRowContains(page, "checkout-web-01");
-    await expectSomeRowContains(page, "production/monitoring/prometheus-pvc");
   });
 });
