@@ -15,13 +15,17 @@ import (
 // Lock Ordering Documentation:
 // The Manager uses two mutexes to prevent deadlocks:
 //  1. m.mu (primary lock) - protects most manager state
-//  2. m.resolvedMutex - protects only recentlyResolved map
+//  2. m.resolvedMutex - protects only the recentlyResolved and resolvedAlias maps
 //
 // Lock Ordering Rules:
-//   - NEVER hold m.mu when acquiring resolvedMutex
-//   - ALWAYS release m.mu before acquiring resolvedMutex
-//   - resolvedMutex can be held independently without m.mu
-//   - When both locks are needed, acquire m.mu first, then release it before acquiring resolvedMutex
+//   - resolvedMutex is subordinate to m.mu: it MAY be acquired while holding
+//     m.mu (the cleanup and canonical-eval paths do), but NEVER acquire m.mu
+//     while holding resolvedMutex
+//   - keep resolvedMutex critical sections to map access only; never call
+//     dispatch, history, or notification code while holding it
+//   - every access to recentlyResolved or resolvedAlias must hold
+//     resolvedMutex, and writers need the write lock: getResolvedAlertNoLock
+//     can backfill resolvedAlias, so even lookups are potential writes
 //
 // This ordering prevents deadlock scenarios where different goroutines acquire locks in different orders.
 type Manager struct {

@@ -294,8 +294,11 @@ func (m *Manager) GetRecentlyResolved() []models.ResolvedAlert {
 
 // GetResolvedAlert returns a copy of a recently resolved alert by ID.
 func (m *Manager) GetResolvedAlert(alertID string) *ResolvedAlert {
-	m.resolvedMutex.RLock()
-	defer m.resolvedMutex.RUnlock()
+	// Write lock: getResolvedAlertNoLock backfills the resolvedAlias map on a
+	// canonical-identity miss, so concurrent read-locked callers would race
+	// each other on that write.
+	m.resolvedMutex.Lock()
+	defer m.resolvedMutex.Unlock()
 
 	resolved, ok := m.getResolvedAlertNoLock(alertID)
 	if !ok || resolved == nil || resolved.Alert == nil {

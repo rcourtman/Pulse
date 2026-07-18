@@ -410,25 +410,35 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			return result, true
 		}
 
+		// The resolved maps are resolvedMutex-guarded; take it for the
+		// lookup/removal only and keep history/dispatch outside the lock.
+		var reactivatedAt time.Time
+		reactivated := false
+		m.resolvedMutex.Lock()
 		if resolved, ok := m.getResolvedAlertNoLock(storageKey); ok && resolved != nil && resolved.Alert != nil {
 			if resolved.ResolvedTime.After(time.Now().Add(-5 * time.Minute)) {
 				if !resolved.Alert.StartTime.IsZero() {
 					alert.StartTime = resolved.Alert.StartTime
 				}
 				m.removeResolvedAlertUnlocked(storageKey)
-				if params.AddToHistory {
-					m.historyManager.UpdateAlertLastSeenForAlert(alert, alert.LastSeen)
-				}
-				log.Debug().
-					Str("alertID", storageKey).
-					Time("resolvedAt", resolved.ResolvedTime).
-					Msg("Alert re-fired within cooldown, reactivated without new history entry")
-				if params.RateLimit && !m.checkRateLimit(trackingKey) {
-					return result, true
-				}
-				m.dispatchAlert(alert, params.DispatchAsync)
+				reactivated = true
+				reactivatedAt = resolved.ResolvedTime
+			}
+		}
+		m.resolvedMutex.Unlock()
+		if reactivated {
+			if params.AddToHistory {
+				m.historyManager.UpdateAlertLastSeenForAlert(alert, alert.LastSeen)
+			}
+			log.Debug().
+				Str("alertID", storageKey).
+				Time("resolvedAt", reactivatedAt).
+				Msg("Alert re-fired within cooldown, reactivated without new history entry")
+			if params.RateLimit && !m.checkRateLimit(trackingKey) {
 				return result, true
 			}
+			m.dispatchAlert(alert, params.DispatchAsync)
+			return result, true
 		}
 
 		if params.AddToHistory {
@@ -562,25 +572,35 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		}
 
 		if existing == nil {
+			// The resolved maps are resolvedMutex-guarded; take it for the
+			// lookup/removal only and keep history/dispatch outside the lock.
+			var reactivatedAt time.Time
+			reactivated := false
+			m.resolvedMutex.Lock()
 			if resolved, ok := m.getResolvedAlertNoLock(storageKey); ok && resolved != nil && resolved.Alert != nil {
 				if resolved.ResolvedTime.After(time.Now().Add(-5 * time.Minute)) {
 					if !resolved.Alert.StartTime.IsZero() {
 						alert.StartTime = resolved.Alert.StartTime
 					}
 					m.removeResolvedAlertUnlocked(storageKey)
-					if params.AddToHistory {
-						m.historyManager.UpdateAlertLastSeenForAlert(alert, alert.LastSeen)
-					}
-					log.Debug().
-						Str("alertID", storageKey).
-						Time("resolvedAt", resolved.ResolvedTime).
-						Msg("Stateful alert re-fired within cooldown, reactivated without new history entry")
-					if params.RateLimit && !m.checkRateLimit(trackingKey) {
-						return result, true
-					}
-					m.dispatchAlert(alert, params.DispatchAsync)
+					reactivated = true
+					reactivatedAt = resolved.ResolvedTime
+				}
+			}
+			m.resolvedMutex.Unlock()
+			if reactivated {
+				if params.AddToHistory {
+					m.historyManager.UpdateAlertLastSeenForAlert(alert, alert.LastSeen)
+				}
+				log.Debug().
+					Str("alertID", storageKey).
+					Time("resolvedAt", reactivatedAt).
+					Msg("Stateful alert re-fired within cooldown, reactivated without new history entry")
+				if params.RateLimit && !m.checkRateLimit(trackingKey) {
 					return result, true
 				}
+				m.dispatchAlert(alert, params.DispatchAsync)
+				return result, true
 			}
 
 			if params.AddToHistory {
