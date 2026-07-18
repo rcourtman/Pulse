@@ -148,6 +148,12 @@ import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getAssistantTurnSummary } from './assistantTurnSummary';
 import {
+  ASSISTANT_PANEL_DEFAULT_WIDTH,
+  clampAssistantPanelWidth,
+  loadStoredAssistantPanelWidth,
+  persistAssistantPanelWidth,
+} from './assistantPanelWidth';
+import {
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
@@ -2208,6 +2214,48 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   const isOverlayLayout = createMemo(() => width() < AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH);
+
+  const [panelWidth, setPanelWidth] = createSignal(
+    loadStoredAssistantPanelWidth(window.localStorage) ?? ASSISTANT_PANEL_DEFAULT_WIDTH,
+  );
+  const effectivePanelWidth = createMemo(() => clampAssistantPanelWidth(panelWidth(), width()));
+  // Below Tailwind's sm breakpoint the panel is w-full; the custom width only
+  // applies from sm up, matching the class fallbacks it overrides.
+  const panelWidthStyle = createMemo(() =>
+    isOpen() && width() >= 640 ? { width: `${effectivePanelWidth()}px` } : undefined,
+  );
+
+  const commitPanelWidth = (nextWidth: number) => {
+    const clamped = clampAssistantPanelWidth(nextWidth, window.innerWidth);
+    setPanelWidth(clamped);
+    persistAssistantPanelWidth(window.localStorage, clamped);
+  };
+
+  const stopPanelResize = () => {
+    window.removeEventListener('pointermove', handlePanelResizeMove);
+    window.removeEventListener('pointerup', stopPanelResize);
+    persistAssistantPanelWidth(window.localStorage, effectivePanelWidth());
+  };
+
+  const handlePanelResizeMove = (event: PointerEvent) => {
+    setPanelWidth(clampAssistantPanelWidth(window.innerWidth - event.clientX, window.innerWidth));
+  };
+
+  const startPanelResize = (event: PointerEvent) => {
+    event.preventDefault();
+    window.addEventListener('pointermove', handlePanelResizeMove);
+    window.addEventListener('pointerup', stopPanelResize);
+  };
+
+  const handlePanelResizeKeyDown = (event: KeyboardEvent) => {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault();
+      const delta = event.key === 'ArrowLeft' ? 32 : -32;
+      commitPanelWidth(effectivePanelWidth() + delta);
+    }
+  };
+
+  onCleanup(stopPanelResize);
   const rootClassName = createMemo(() => {
     if (isOverlayLayout()) {
       return `fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col bg-surface transition-transform duration-300 sm:w-[560px] sm:max-w-[calc(100vw-1rem)] ${
@@ -4181,8 +4229,25 @@ export const AIChat: Component<AIChatProps> = (props) => {
           aria-label="Close Pulse Assistant backdrop"
         />
       </Show>
-      <div class={rootClassName()} data-layout-mode={isOverlayLayout() ? 'overlay' : 'docked'}>
+      <div
+        class={rootClassName()}
+        style={panelWidthStyle()}
+        data-layout-mode={isOverlayLayout() ? 'overlay' : 'docked'}
+      >
         <Show when={isOpen()}>
+          {/* Drag handle to resize the panel (desktop widths only) */}
+          <div
+            class="absolute inset-y-0 left-0 z-50 hidden w-1.5 cursor-col-resize touch-none hover:bg-blue-400/40 focus:bg-blue-400/60 focus:outline-none sm:block"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize Assistant panel"
+            tabindex="0"
+            title="Drag to resize. Double-click to reset."
+            onPointerDown={startPanelResize}
+            onKeyDown={handlePanelResizeKeyDown}
+            onDblClick={() => commitPanelWidth(ASSISTANT_PANEL_DEFAULT_WIDTH)}
+            data-testid="assistant-panel-resize-handle"
+          />
           {/* Floating Close Handle (Desktop docked layout only) */}
           <Show when={!isOverlayLayout()}>
             <button
@@ -5303,7 +5368,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
               data-testid="assistant-composer-chrome"
             >
               <div
-                class="flex min-w-0 flex-wrap items-center gap-1.5 sm:flex-1 sm:flex-nowrap sm:overflow-hidden"
+                class="flex min-w-0 flex-wrap items-center gap-1.5 sm:flex-1"
                 data-testid="assistant-composer-route-controls"
               >
                 <ModelSelector
@@ -5391,7 +5456,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   <RotateCwIcon class="h-3.5 w-3.5" aria-hidden="true" />
                 </ActionIconButton>
 
-                <div class="relative" data-dropdown>
+                <div class="relative shrink-0" data-dropdown>
                   <button
                     type="button"
                     ref={controlModeButtonRef}
@@ -5407,7 +5472,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                     <span
                       class={`h-1.5 w-1.5 rounded-full ${controlPresentation().dotClassName}`}
                     />
-                    <span>Chat: {controlPresentation().label}</span>
+                    <span class="whitespace-nowrap">Chat: {controlPresentation().label}</span>
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         stroke-linecap="round"
