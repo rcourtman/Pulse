@@ -417,11 +417,24 @@ export function usePatrolIntelligenceState() {
     clearSafetyTimer();
     safetyTimerRef = setTimeout(() => {
       safetyTimerRef = undefined;
-      if (manualRunRequested() && !patrolStream.isStreaming()) {
-        setManualRunRequested(false);
-        notificationStore.error('Patrol run did not start — connection timed out');
-        loadAllData();
+      if (!manualRunRequested() || patrolStream.isStreaming()) {
+        return;
       }
+      // The trigger request already succeeded, so a quiet stream can also mean
+      // a slow provider (a self-hosted model cold-loading can take well over
+      // 15s to emit its first event). Only report a failure when the refreshed
+      // status confirms no run is in progress; otherwise let the running state
+      // carry the button.
+      void loadAllData()
+        .catch(() => undefined)
+        .then(() => {
+          setManualRunRequested(false);
+          if (!patrolStream.isStreaming() && !(patrolStatus()?.running ?? false)) {
+            notificationStore.error(
+              'Patrol run did not start. The provider did not respond; check the AI provider settings or run the Patrol preflight.',
+            );
+          }
+        });
     }, 15000);
 
     try {
