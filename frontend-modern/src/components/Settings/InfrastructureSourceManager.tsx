@@ -486,9 +486,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   });
   const setupConfidenceAction = createMemo<SetupConfidenceAction>(() => {
     if (connectedSystemCount() === 0) {
+      // Distinct from the page-header 'Add infrastructure' CTA, which is
+      // also visible in the zero-connected state; two identically named
+      // buttons on one page are ambiguous for assistive tech (and for
+      // accessible-name locators).
       return {
         kind: 'add',
-        label: 'Add infrastructure',
+        label: 'Add your first system',
         detail: 'Add a platform, host, NAS, or cluster to start monitoring.',
         onClick: props.onAddInfrastructure,
       };
