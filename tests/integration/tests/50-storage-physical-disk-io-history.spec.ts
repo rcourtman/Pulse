@@ -82,16 +82,24 @@ test.describe.serial('Storage physical disk drawer history', () => {
         return;
       }
 
-      const payload = (await response.json()) as { resourceId?: string; points?: unknown[] };
-      diskHistoryResponses.set(metric, {
-        resourceId: payload.resourceId || '',
-        points: Array.isArray(payload.points) ? payload.points.length : 0,
-      });
+      try {
+        const payload = (await response.json()) as { resourceId?: string; points?: unknown[] };
+        diskHistoryResponses.set(metric, {
+          resourceId: payload.resourceId || '',
+          points: Array.isArray(payload.points) ? payload.points.length : 0,
+        });
+      } catch {
+        // The drawer polls on an interval; a response can land while the page
+        // is tearing down, and json() on it must not fail the test.
+      }
     });
 
-    await page.goto('/storage?tab=disks&source=proxmox-pve', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('storage-summary')).toBeVisible();
-    await page.getByRole('textbox', { name: /search storage/i }).fill('nvme2');
+    // Physical disks moved onto the Proxmox platform page's storage section.
+    await page.goto('/proxmox/storage', { waitUntil: 'domcontentloaded' });
+    const disksTab = page.getByRole('tab', { name: 'Physical Disks' });
+    await expect(disksTab).toBeVisible({ timeout: 30_000 });
+    await disksTab.click();
+    await page.getByRole('textbox', { name: /Search Proxmox storage/ }).fill('nvme2');
 
     const row = page
       .locator('table tbody tr')
@@ -100,7 +108,7 @@ test.describe.serial('Storage physical disk drawer history', () => {
       .first();
 
     await expect(row).toBeVisible();
-    await row.getByRole('button', { name: /toggle details/i }).click();
+    await row.getByRole('button', { name: /^Expand / }).click();
 
     const detail = page.locator('[data-inline-detail-for]').filter({ has: page.getByText('Live I/O (30m)') }).first();
     await expect(detail).toBeVisible();
@@ -123,18 +131,31 @@ test.describe.serial('Storage physical disk drawer history', () => {
   test('keeps visible physical-disk drawers hydrated with live I/O history', async ({ page }) => {
     await ensureMockModeEnabled(page);
 
-    await page.goto('/storage?tab=disks', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('storage-summary')).toBeVisible();
+    await page.goto('/proxmox/storage', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('storage-page')).toBeVisible({ timeout: 60_000 });
+    const disksTab = page.getByRole('tab', { name: 'Physical Disks' });
+    await expect(disksTab).toBeVisible({ timeout: 30_000 });
+    await disksTab.click();
 
     const rows = page.locator('table tbody tr[data-row-id]');
-    const rowCount = await rows.count();
-    expect(rowCount).toBeGreaterThan(0);
+    await expect(rows.first()).toBeVisible({ timeout: 30_000 });
+    // Live metric updates re-sort the table, so pin rows by identity instead
+    // of index; an nth() locator chases a moving target between refreshes.
+    const rowIds = (
+      await rows.evaluateAll((elements) =>
+        elements.map((element) => element.getAttribute('data-row-id')),
+      )
+    ).filter((value): value is string => Boolean(value));
+    expect(rowIds.length).toBeGreaterThan(0);
 
     const failures: string[] = [];
-    const maxRows = Math.min(rowCount, 12);
 
-    for (let index = 0; index < maxRows; index += 1) {
-      const row = rows.nth(index);
+    for (const rowId of rowIds.slice(0, 12)) {
+      const row = page.locator(`tr[data-row-id="${rowId}"]`).first();
+      if ((await row.count()) === 0) {
+        // Mock state can rotate a disk out between refreshes; skip it.
+        continue;
+      }
       await row.scrollIntoViewIfNeeded();
 
       const rowText = (await row.innerText()).replace(/\s+/g, ' ').trim();
@@ -152,13 +173,17 @@ test.describe.serial('Storage physical disk drawer history', () => {
         const metric = parsed.searchParams.get('metric') || '';
         if (!['diskread', 'diskwrite', 'disk'].includes(metric)) return;
 
-        const payload = (await response.json()) as { points?: unknown[] };
-        detailResponsePoints.set(metric, Array.isArray(payload.points) ? payload.points.length : 0);
+        try {
+          const payload = (await response.json()) as { points?: unknown[] };
+          detailResponsePoints.set(metric, Array.isArray(payload.points) ? payload.points.length : 0);
+        } catch {
+          // Ignore responses that resolve while the page is tearing down.
+        }
       };
 
       page.on('response', responseHandler);
       try {
-        await row.getByRole('button', { name: /toggle details/i }).click();
+        await row.getByRole('button', { name: /^Expand / }).click();
 
         const detail = page.locator(`[data-inline-detail-for="${summarySeriesId}"]`);
         await expect(detail).toBeVisible();
@@ -180,7 +205,7 @@ test.describe.serial('Storage physical disk drawer history', () => {
           }
         }
 
-        await row.getByRole('button', { name: /toggle details/i }).click();
+        await row.getByRole('button', { name: /^Collapse / }).click();
       } finally {
         page.off('response', responseHandler);
       }

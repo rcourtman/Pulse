@@ -100,16 +100,17 @@ async function positionElementNearViewportBottom(
   return locator.evaluate((element) => element.getBoundingClientRect().top);
 }
 
-async function readGuestDrawerActiveTab(
-  detailRow: Locator,
-): Promise<"overview" | "discovery" | "unknown"> {
-  const panels = detailRow.locator('[style*="overflow-anchor"]');
-  const visiblePanelIndex = await panels.evaluateAll((nodes) =>
-    nodes.findIndex((node) => !node.classList.contains("hidden")),
-  );
-  if (visiblePanelIndex === 0) return "overview";
-  if (visiblePanelIndex === 1) return "discovery";
-  return "unknown";
+// The drawer tab strip (Overview | History | Discovery) marks the active tab
+// with aria-selected, so read that instead of panel order.
+async function readGuestDrawerActiveTab(detailRow: Locator): Promise<string> {
+  const buttons = detailRow.locator("[aria-selected]");
+  const active = await buttons.evaluateAll((nodes) => {
+    const selected = nodes.find(
+      (node) => node.getAttribute("aria-selected") === "true",
+    );
+    return selected?.textContent?.trim().toLowerCase() ?? "unknown";
+  });
+  return active;
 }
 
 test.describe.serial("Workloads Proxmox refresh stability", () => {
@@ -140,12 +141,14 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
 
     await ensureMockModeEnabled(page);
 
-    await page.goto("/workloads?type=vm&platform=proxmox-pve", {
+    // The workloads surface now lives on /proxmox; the type/platform filter
+    // params carry over unchanged.
+    await page.goto("/proxmox?type=vm&platform=proxmox-pve", {
       waitUntil: "domcontentloaded",
     });
 
     const rows = page.locator("tr[data-guest-id]");
-    await expect(rows.first()).toBeVisible();
+    await expect(rows.first()).toBeVisible({ timeout: 60_000 });
 
     const row = rows.first();
     const guestId = (await row.getAttribute("data-guest-id")) ?? "";
@@ -156,14 +159,13 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
 
     await row.click();
 
-    await expect
-      .poll(() => new URL(page.url()).searchParams.get("resource"))
-      .toBe(guestId);
-
+    // Row selection no longer writes a ?resource= deep link; the drawer row
+    // itself is the selection contract.
     const detailRow = page.locator(`tr[data-inline-detail-for="${guestId}"]`);
     await expect(detailRow).toBeVisible();
 
-    const discoveryButton = detailRow.getByRole("button", {
+    // The drawer tab strip exposes proper tab roles.
+    const discoveryButton = detailRow.getByRole("tab", {
       name: "Discovery",
       exact: true,
     });
@@ -177,9 +179,6 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
     await page.waitForTimeout(7_500);
 
     await expect(detailRow).toBeVisible();
-    await expect
-      .poll(() => new URL(page.url()).searchParams.get("resource"))
-      .toBe(guestId);
     await expect
       .poll(() => readGuestDrawerActiveTab(detailRow), { timeout: 15_000 })
       .toBe("discovery");

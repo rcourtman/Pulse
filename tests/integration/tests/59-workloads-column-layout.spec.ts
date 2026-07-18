@@ -135,15 +135,18 @@ test.describe.serial('Workloads column layout', () => {
     }
   });
 
-  test('keeps Type and I/O columns readable at 1440px', async ({ page }, testInfo) => {
+  test('keeps Type and I/O columns readable on wide desktops', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
 
-    await page.setViewportSize({ width: 1440, height: 1200 });
+    // The wide column set engages at WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH (1536);
+    // 1600 gives the shell room to hold it without horizontal scroll.
+    await page.setViewportSize({ width: 1600, height: 1200 });
 
     await ensureMockModeEnabled(page);
-    await page.goto('/workloads', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('workloads-table-surface')).toBeVisible();
-    await expect(page.locator('tr[data-guest-id]').first()).toBeVisible();
+    // The workloads surface now lives on /proxmox (embedded WorkloadsSurface).
+    await page.goto('/proxmox', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('workloads-table-surface')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('tr[data-guest-id]').first()).toBeVisible({ timeout: 30_000 });
     await page.waitForTimeout(1000);
 
     const layout = await readWorkloadsColumnLayout(page);
@@ -190,5 +193,28 @@ test.describe.serial('Workloads column layout', () => {
       overflowingValues,
       `Expected visible workload I/O values to render fully without ellipsis: ${JSON.stringify(overflowingValues)}`,
     ).toEqual([]);
+  });
+
+  test('keeps the 1440px compact default free of horizontal scroll', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
+
+    await page.setViewportSize({ width: 1440, height: 1200 });
+
+    await ensureMockModeEnabled(page);
+    await page.goto('/proxmox', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('workloads-table-surface')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('tr[data-guest-id]').first()).toBeVisible({ timeout: 30_000 });
+    await page.waitForTimeout(1000);
+
+    const layout = await readWorkloadsColumnLayout(page);
+    expect(layout.headers.length, 'Expected the compact column set to render').toBeGreaterThan(0);
+    expect(
+      layout.headers.map((header) => header.colId),
+      'Wide-only columns must stay gated below the wide breakpoint',
+    ).not.toContain('netIo');
+    expect(
+      layout.tableScrollWidth,
+      `Workloads table should fit a 1440px shell without horizontal scrolling (wrapper=${layout.wrapperClientWidth}, table=${layout.tableScrollWidth})`,
+    ).toBeLessThanOrEqual(layout.wrapperClientWidth + 1);
   });
 });

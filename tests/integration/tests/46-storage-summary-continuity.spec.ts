@@ -83,10 +83,18 @@ function worstTemperatureTailDelta(payload: StorageChartsResponse): number {
     .reduce((worst, delta) => Math.max(worst, delta), 0);
 }
 
+// The retired /storage page carried Pool Usage / Disk Temperature summary
+// charts with 1h/7d range buttons; storage now lives on /proxmox/storage where
+// per-pool history surfaces as the Growth column and row expansions. The
+// multi-range history-continuity proof this spec exists for lives in the
+// /api/storage-charts payload, so it is asserted directly. Point-count floors
+// reflect what a fresh seeded backend guarantees (15-minute minute-tier over
+// the last day, 2-hour hourly tier over the last week), not a long-lived dev
+// store.
 test.describe.serial('Storage summary chart continuity', () => {
   test.setTimeout(180_000);
 
-  test('renders coherent storage summary histories across the live storage page', async ({
+  test('serves coherent storage histories across ranges on the live storage page', async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
@@ -98,17 +106,15 @@ test.describe.serial('Storage summary chart continuity', () => {
 
     fs.mkdirSync(ARTIFACTS_DIR, { recursive: true });
 
-    await page.goto('/storage', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/storage/);
-    await expect(page.getByTestId('storage-summary')).toBeVisible();
-    await expect(page.getByText('Pool Usage')).toBeVisible();
-    await expect(page.getByText('Disk Temperature')).toBeVisible();
+    await page.goto('/proxmox/storage', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/proxmox\/storage/);
+    await expect(page.getByTestId('storage-page')).toBeVisible({ timeout: 60_000 });
 
-    await page.getByTestId('storage-summary').screenshot({
-      path: path.resolve(ARTIFACTS_DIR, 'storage-summary-1h.png'),
+    // A busy box can push a cold storage-charts read past the 10s request
+    // default; the payload itself is what matters, not its latency.
+    const oneHourResponse = await apiRequest(page, '/api/storage-charts?range=60', {
+      timeout: 60_000,
     });
-
-    const oneHourResponse = await apiRequest(page, '/api/storage-charts?range=60');
     expect(oneHourResponse.ok()).toBeTruthy();
     const oneHourPayload = (await oneHourResponse.json()) as StorageChartsResponse;
     const oneHourPools = Object.values(oneHourPayload.pools ?? {}) as StorageSeries[];
@@ -116,15 +122,17 @@ test.describe.serial('Storage summary chart continuity', () => {
     expect(oneHourPools.length).toBeGreaterThan(0);
     expect(oneHourDisks.length).toBeGreaterThan(0);
     for (const pool of oneHourPools) {
-      expect((pool.usage ?? []).length).toBeGreaterThanOrEqual(30);
-      expect((pool.used ?? []).length).toBeGreaterThanOrEqual(30);
-      expect((pool.avail ?? []).length).toBeGreaterThanOrEqual(30);
+      expect((pool.usage ?? []).length).toBeGreaterThanOrEqual(4);
+      expect((pool.used ?? []).length).toBeGreaterThanOrEqual(4);
+      expect((pool.avail ?? []).length).toBeGreaterThanOrEqual(4);
     }
     for (const disk of oneHourDisks) {
-      expect((disk.temperature ?? []).length).toBeGreaterThanOrEqual(30);
+      expect((disk.temperature ?? []).length).toBeGreaterThanOrEqual(4);
     }
 
-    const sevenDayResponse = await apiRequest(page, '/api/storage-charts?range=10080');
+    const sevenDayResponse = await apiRequest(page, '/api/storage-charts?range=10080', {
+      timeout: 60_000,
+    });
     expect(sevenDayResponse.ok()).toBeTruthy();
     const sevenDayPayload = (await sevenDayResponse.json()) as StorageChartsResponse;
     const sevenDayPools = Object.values(sevenDayPayload.pools ?? {}) as StorageSeries[];
@@ -132,26 +140,25 @@ test.describe.serial('Storage summary chart continuity', () => {
     expect(sevenDayPools.length).toBeGreaterThan(0);
     expect(sevenDayDisks.length).toBeGreaterThan(0);
     for (const pool of sevenDayPools) {
-      expect((pool.usage ?? []).length).toBeGreaterThanOrEqual(300);
-      expect((pool.used ?? []).length).toBeGreaterThanOrEqual(300);
-      expect((pool.avail ?? []).length).toBeGreaterThanOrEqual(300);
+      expect((pool.usage ?? []).length).toBeGreaterThanOrEqual(40);
+      expect((pool.used ?? []).length).toBeGreaterThanOrEqual(40);
+      expect((pool.avail ?? []).length).toBeGreaterThanOrEqual(40);
     }
     for (const disk of sevenDayDisks) {
-      expect((disk.temperature ?? []).length).toBeGreaterThanOrEqual(300);
+      expect((disk.temperature ?? []).length).toBeGreaterThanOrEqual(40);
     }
+
+    // The 7d window must actually be deeper history than the 1h window, and
+    // seeded temperature history must stay continuous at the live tail.
+    const longestOneHour = Math.max(...oneHourDisks.map((disk) => (disk.temperature ?? []).length));
+    const longestSevenDay = Math.max(
+      ...sevenDayDisks.map((disk) => (disk.temperature ?? []).length),
+    );
+    expect(longestSevenDay).toBeGreaterThan(longestOneHour);
     expect(worstTemperatureTailDelta(sevenDayPayload)).toBeLessThan(3);
 
-    const sevenDayResponsePromise = page.waitForResponse((response) => {
-      const url = response.url();
-      return response.request().method() === 'GET' &&
-        url.includes('/api/storage-charts?') &&
-        url.includes('range=10080');
-    });
-    await page.getByRole('button', { name: '7d', exact: true }).click();
-    await sevenDayResponsePromise;
-    await page.waitForTimeout(1000);
-    await page.getByTestId('storage-summary').screenshot({
-      path: path.resolve(ARTIFACTS_DIR, 'storage-summary-7d.png'),
+    await page.getByTestId('storage-page').screenshot({
+      path: path.resolve(ARTIFACTS_DIR, 'storage-page.png'),
     });
 
     fs.writeFileSync(

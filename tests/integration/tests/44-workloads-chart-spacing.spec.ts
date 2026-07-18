@@ -3,7 +3,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test as base } from '@playwright/test';
 
-import { createAuthenticatedStorageState, getMockMode, setMockMode } from './helpers';
+import {
+  apiRequest,
+  createAuthenticatedStorageState,
+  getMockMode,
+  setMockMode,
+} from './helpers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -30,7 +35,7 @@ const WORKLOADS_SCREENSHOT_PATH = path.resolve(
   '..',
   '..',
   'tmp',
-  'workloads-summary-7d-spacing.png',
+  'workloads-table-7d-spacing.png',
 );
 
 let mockModeWasEnabled: boolean | null = null;
@@ -68,11 +73,6 @@ async function ensureMockModeEnabled(page: import('@playwright/test').Page): Pro
   }
 }
 
-function average(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
 function longestCPUSeries(payload: WorkloadChartsResponse): MetricPoint[] {
   const candidates = [
     ...Object.values(payload.data || {}).map((chartData) => chartData.cpu || []),
@@ -81,6 +81,14 @@ function longestCPUSeries(payload: WorkloadChartsResponse): MetricPoint[] {
   return candidates.sort((a, b) => b.length - a.length)[0] || [];
 }
 
+// The retired /workloads page carried a summary chart strip with 1h/7d range
+// buttons; the workloads surface now lives on /proxmox with per-row trend
+// sparklines and no page-level range switch. The sparkline path maps x by
+// timestamp (workloadMetricHistoryModel), so rendering is time-proportional
+// by construction and the payload is adaptively downsampled (dense tail,
+// sparse seeded history). What the time-scaled renderer needs from the
+// endpoint is coverage: the 7d payload must actually span the window and
+// carry a fresh tail, which is what this spec asserts.
 test.describe.serial('Workloads chart spacing', () => {
   test.setTimeout(180_000);
 
@@ -101,40 +109,39 @@ test.describe.serial('Workloads chart spacing', () => {
     }
   });
 
-  test('keeps 7d workload charts time-proportional on the live page', async ({ page }, testInfo) => {
+  test('serves full-window 7d workload history for the time-scaled sparklines', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
 
     await ensureMockModeEnabled(page);
 
-    await page.goto('/workloads', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('workloads-summary')).toBeVisible();
+    await page.goto('/proxmox', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('workloads-table-surface')).toBeVisible({ timeout: 60_000 });
 
-    const responsePromise = page.waitForResponse((response) => {
-      const url = response.url();
-      return response.request().method() === 'GET' &&
-        url.includes('/api/charts/workloads?') &&
-        url.includes('range=7d');
-    });
+    let payload: WorkloadChartsResponse = {};
+    await expect
+      .poll(async () => {
+        const response = await apiRequest(page, '/api/charts/workloads?range=7d');
+        if (!response.ok()) return -1;
+        payload = (await response.json()) as WorkloadChartsResponse;
+        return longestCPUSeries(payload).length;
+      }, { timeout: 60_000 })
+      .toBeGreaterThan(40);
 
-    await page.getByRole('button', { name: '7d', exact: true }).click();
-    const response = await responsePromise;
-    expect(response.ok()).toBeTruthy();
-
-    const payload = (await response.json()) as WorkloadChartsResponse;
-    const cpuSeries = longestCPUSeries(payload);
-    expect(cpuSeries.length).toBeGreaterThan(40);
-
-    const deltas = cpuSeries
-      .slice(1)
-      .map((point, index) => point.timestamp - cpuSeries[index].timestamp)
-      .filter((delta) => delta > 0);
-    const firstAverage = average(deltas.slice(0, 10));
-    const lastAverage = average(deltas.slice(-10));
-
-    expect(lastAverage).toBeGreaterThan(firstAverage * 0.5);
-    expect(lastAverage).toBeLessThan(firstAverage * 1.5);
+    const cpuSeries = longestCPUSeries(payload).slice().sort((a, b) => a.timestamp - b.timestamp);
+    const spanMs = cpuSeries[cpuSeries.length - 1].timestamp - cpuSeries[0].timestamp;
+    const dayMs = 24 * 60 * 60 * 1000;
+    expect(spanMs, '7d history should cover most of the requested window').toBeGreaterThan(5 * dayMs);
+    expect(
+      Date.now() - cpuSeries[cpuSeries.length - 1].timestamp,
+      '7d history should end at a fresh tail',
+    ).toBeLessThan(60 * 60 * 1000);
+    const midpoint = cpuSeries[0].timestamp + spanMs / 2;
+    expect(
+      cpuSeries.filter((point) => point.timestamp < midpoint).length,
+      'history should not be compressed into the recent half of the window',
+    ).toBeGreaterThan(5);
 
     fs.mkdirSync(path.dirname(WORKLOADS_SCREENSHOT_PATH), { recursive: true });
-    await page.getByTestId('workloads-summary').screenshot({ path: WORKLOADS_SCREENSHOT_PATH });
+    await page.getByTestId('workloads-table-surface').screenshot({ path: WORKLOADS_SCREENSHOT_PATH });
   });
 });

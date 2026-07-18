@@ -30,7 +30,6 @@ type StorageChartsResponse = {
 };
 
 const ARTIFACTS_DIR = path.resolve(__dirname, '..', '..', 'tmp', 'storage-growth-column');
-const STORAGE_POOL_GROWTH_CELL_SELECTOR = 'td:nth-child(8)';
 
 const test = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
@@ -76,6 +75,8 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(precision)} ${sizes[unitIndex]}`;
 }
 
+// Mirrors computeStorageCapacityDelta / formatStorageCapacityDelta in
+// frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts.
 function computeStorageCapacityDelta(points: MetricPoint[]): number | null {
   const normalized = points
     .filter((point) => Number.isFinite(point.timestamp) && Number.isFinite(point.value))
@@ -117,28 +118,32 @@ function growthLabelForPool(series: StorageSeries | undefined): string {
   return formatStorageCapacityDelta(computeStorageCapacityDelta(series?.used ?? []));
 }
 
-async function firstVisibleGrowthExpectation(
+async function firstVisibleGrowthRow(
   page: Page,
   payload: StorageChartsResponse,
-): Promise<{ seriesId: string; label: string }> {
+): Promise<string> {
   for (const [seriesId, series] of Object.entries(payload.pools ?? {})) {
-    const label = growthLabelForPool(series);
-    if (label === '—') {
+    if (growthLabelForPool(series) === '—') {
       continue;
     }
     const row = page.locator(`tr[data-summary-series-id="${seriesId}"]`);
     if ((await row.count()) > 0 && await row.first().isVisible()) {
-      return { seriesId, label };
+      return seriesId;
     }
   }
 
-  throw new Error('Expected at least one visible storage pool growth label derived from used-capacity history.');
+  throw new Error('Expected at least one visible storage pool with used-capacity growth history.');
 }
 
+// The retired /storage page paired the Growth column with a 1h/7d range
+// switch; on /proxmox/storage the column is fixed to a 24h window (the header
+// is a sort control, not a range control). The proof: the rendered Growth
+// (24h) label for a pool matches the delta derived from the same 24h
+// used-capacity history the /api/storage-charts endpoint serves.
 test.describe.serial('Storage growth column', () => {
   test.setTimeout(120_000);
 
-  test('renders shared storage-history growth deltas for 24h and 7d', async ({
+  test('renders storage-history growth deltas for the 24h window', async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
@@ -150,51 +155,43 @@ test.describe.serial('Storage growth column', () => {
 
     fs.mkdirSync(ARTIFACTS_DIR, { recursive: true });
 
-    await page.goto('/storage', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/storage/);
-    await expect(page.getByTestId('storage-summary')).toBeVisible();
+    await page.goto('/proxmox/storage', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/proxmox\/storage/);
+    await expect(page.getByTestId('storage-page')).toBeVisible({ timeout: 60_000 });
+    await expect(
+      page.getByRole('button', { name: 'Sort Growth (24h) column' }).first(),
+    ).toBeVisible();
+    await expect(page.locator('tr[data-summary-series-id]').first()).toBeVisible({
+      timeout: 30_000,
+    });
 
-    const poolsTable = page.locator('table').first();
-    await expect(poolsTable.getByText('Growth (24h)', { exact: true })).toBeVisible();
+    const probeResponse = await apiRequest(page, '/api/storage-charts?range=1440');
+    expect(probeResponse.ok()).toBeTruthy();
+    const probePayload = (await probeResponse.json()) as StorageChartsResponse;
+    const seriesId = await firstVisibleGrowthRow(page, probePayload);
+    const growthCell = page
+      .locator(`tr[data-summary-series-id="${seriesId}"]`)
+      .locator('td')
+      .last();
 
-    const defaultResponse = await apiRequest(page, '/api/storage-charts?range=1440');
-    expect(defaultResponse.ok()).toBeTruthy();
-    const defaultPayload = (await defaultResponse.json()) as StorageChartsResponse;
-    const defaultGrowth = await firstVisibleGrowthExpectation(page, defaultPayload);
-    const defaultGrowthCell = page.locator(
-      `tr[data-summary-series-id="${defaultGrowth.seriesId}"] ${STORAGE_POOL_GROWTH_CELL_SELECTOR}`,
-    );
-    await expect(defaultGrowthCell).toHaveText(defaultGrowth.label);
+    // The live table refreshes its history on its own cadence, so recompute
+    // the expectation from a fresh payload on every poll attempt instead of
+    // racing a single snapshot against the render.
+    await expect
+      .poll(async () => {
+        const response = await apiRequest(page, '/api/storage-charts?range=1440');
+        if (!response.ok()) return 'payload-error';
+        const payload = (await response.json()) as StorageChartsResponse;
+        const expected = growthLabelForPool(payload.pools?.[seriesId]);
+        const rendered = ((await growthCell.textContent()) ?? '').trim();
+        return rendered === expected ? 'match' : `rendered=${rendered} expected=${expected}`;
+      }, { timeout: 30_000 })
+      .toBe('match');
 
+    // Viewport-only: full-page screenshots can hang while the assistant panel
+    // animates.
     await page.screenshot({
       path: path.resolve(ARTIFACTS_DIR, 'storage-growth-24h.png'),
-      fullPage: true,
-    });
-
-    const sevenDayPayloadPromise = apiRequest(page, '/api/storage-charts?range=10080');
-    const sevenDayResponsePromise = page.waitForResponse((response) => {
-      const url = response.url();
-      return response.request().method() === 'GET' &&
-        url.includes('/api/storage-charts?') &&
-        url.includes('range=10080');
-    });
-    await page.getByRole('button', { name: '7d', exact: true }).click();
-    const sevenDayResponse = await sevenDayPayloadPromise;
-    expect(sevenDayResponse.ok()).toBeTruthy();
-    const sevenDayPayload = (await sevenDayResponse.json()) as StorageChartsResponse;
-    await sevenDayResponsePromise;
-
-    await expect(poolsTable.getByText('Growth (7d)', { exact: true })).toBeVisible();
-    const sevenDayGrowthCell = page.locator(
-      `tr[data-summary-series-id="${defaultGrowth.seriesId}"] ${STORAGE_POOL_GROWTH_CELL_SELECTOR}`,
-    );
-    await expect(sevenDayGrowthCell).toHaveText(
-      growthLabelForPool(sevenDayPayload.pools?.[defaultGrowth.seriesId]),
-    );
-
-    await page.screenshot({
-      path: path.resolve(ARTIFACTS_DIR, 'storage-growth-7d.png'),
-      fullPage: true,
     });
   });
 });

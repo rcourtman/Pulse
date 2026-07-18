@@ -3,7 +3,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test as base } from '@playwright/test';
 
-import { createAuthenticatedStorageState, getMockMode, setMockMode } from './helpers';
+import {
+  apiRequest,
+  createAuthenticatedStorageState,
+  getMockMode,
+  setMockMode,
+} from './helpers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -30,7 +35,7 @@ const WORKLOADS_SCREENSHOT_PATH = path.resolve(
   '..',
   '..',
   'tmp',
-  'workloads-summary-1h-memory-tail.png',
+  'workloads-table-memory-tail.png',
 );
 
 let mockModeWasEnabled: boolean | null = null;
@@ -73,12 +78,15 @@ function average(values: number[]): number {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function memoryTailDeltas(payload: WorkloadChartsResponse): number[] {
+function memorySeries(payload: WorkloadChartsResponse): MetricPoint[][] {
   return [
     ...Object.values(payload.data || {}).map((chartData) => chartData.memory || []),
     ...Object.values(payload.dockerData || {}).map((chartData) => chartData.memory || []),
-  ]
-    .map((points) => points.slice().sort((a, b) => a.timestamp - b.timestamp))
+  ].map((points) => points.slice().sort((a, b) => a.timestamp - b.timestamp));
+}
+
+function memoryTailDeltas(payload: WorkloadChartsResponse): number[] {
+  return memorySeries(payload)
     .filter((points) => points.length >= 8)
     .map((points) => {
       const previous = points.slice(-8, -2).map((point) => point.value);
@@ -89,11 +97,7 @@ function memoryTailDeltas(payload: WorkloadChartsResponse): number[] {
 }
 
 function memoryAdjacentJumps(payload: WorkloadChartsResponse): number[] {
-  return [
-    ...Object.values(payload.data || {}).map((chartData) => chartData.memory || []),
-    ...Object.values(payload.dockerData || {}).map((chartData) => chartData.memory || []),
-  ]
-    .map((points) => points.slice().sort((a, b) => a.timestamp - b.timestamp))
+  return memorySeries(payload)
     .filter((points) => points.length >= 3)
     .map((points) => {
       let worst = 0;
@@ -115,6 +119,11 @@ function percentile(sortedValues: number[], ratio: number): number {
   return sortedValues[index];
 }
 
+// The retired /workloads page carried a summary chart strip whose reload
+// triggered a page-level 1h fetch; the workloads surface now lives on /proxmox
+// with per-row trend sparklines. The tail-stability proof this spec exists for
+// lives in the /api/charts/workloads payload, so it is asserted directly
+// against the endpoint the sparklines consume.
 test.describe.serial('Workloads memory tail', () => {
   test.setTimeout(180_000);
 
@@ -135,36 +144,35 @@ test.describe.serial('Workloads memory tail', () => {
     }
   });
 
-  test('keeps 1h workload memory tails visually stable on the live page', async ({ page }, testInfo) => {
+  test('keeps 1h workload memory tails stable', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
 
     await ensureMockModeEnabled(page);
 
-    await page.goto('/workloads', { waitUntil: 'domcontentloaded' });
-    await page.evaluate(() => window.localStorage.clear());
+    await page.goto('/proxmox', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('workloads-table-surface')).toBeVisible({ timeout: 60_000 });
 
-    const responsePromise = page.waitForResponse((response) => {
-      const url = response.url();
-      return response.request().method() === 'GET' &&
-        url.includes('/api/charts/workloads?') &&
-        url.includes('range=1h');
-    });
+    // A fresh backend seeds 15-minute history and fills the last hour from
+    // live polling, so wait until enough of the window exists to judge tails.
+    let payload: WorkloadChartsResponse = {};
+    await expect
+      .poll(async () => {
+        const response = await apiRequest(page, '/api/charts/workloads?range=1h');
+        if (!response.ok()) return -1;
+        payload = (await response.json()) as WorkloadChartsResponse;
+        return memoryTailDeltas(payload).length;
+      }, { timeout: 90_000 })
+      .toBeGreaterThan(0);
 
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('workloads-summary')).toBeVisible();
-
-    const response = await responsePromise;
-    expect(response.ok()).toBeTruthy();
-
-    const payload = (await response.json()) as WorkloadChartsResponse;
     const tailDeltas = memoryTailDeltas(payload);
     const adjacentJumps = memoryAdjacentJumps(payload);
+    expect(adjacentJumps.length).toBeGreaterThan(0);
     expect(percentile(tailDeltas, 0.95)).toBeLessThan(6);
     expect(tailDeltas[tailDeltas.length - 1]).toBeLessThan(8);
     expect(percentile(adjacentJumps, 0.95)).toBeLessThan(4);
     expect(adjacentJumps[adjacentJumps.length - 1]).toBeLessThan(6);
 
     fs.mkdirSync(path.dirname(WORKLOADS_SCREENSHOT_PATH), { recursive: true });
-    await page.getByTestId('workloads-summary').screenshot({ path: WORKLOADS_SCREENSHOT_PATH });
+    await page.getByTestId('workloads-table-surface').screenshot({ path: WORKLOADS_SCREENSHOT_PATH });
   });
 });
