@@ -224,6 +224,37 @@ func (e *ActionNotFoundError) Error() string {
 	return fmt.Sprintf("action %q not found", e.ActionID)
 }
 
+// lifecycleCapabilitySynonym maps interchangeable lifecycle verbs. Proxmox
+// guests advertise "reboot" while container platforms advertise "restart";
+// proposers (and Assistant models) use the words interchangeably.
+func lifecycleCapabilitySynonym(name string) (string, bool) {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "restart":
+		return "reboot", true
+	case "reboot":
+		return "restart", true
+	}
+	return "", false
+}
+
+// resolveAdvertisedCapabilityName follows the resource's own vocabulary when
+// the requested capability is not advertised but a lifecycle synonym of it
+// is. The rewritten name flows into the plan, the audit record, and the
+// executor, so every later stage sees the advertised verb.
+func resolveAdvertisedCapabilityName(capabilities []unified.ResourceCapability, requested string) string {
+	if _, found := actionplanner.FindCapability(capabilities, requested); found {
+		return requested
+	}
+	synonym, hasSynonym := lifecycleCapabilitySynonym(requested)
+	if !hasSynonym {
+		return requested
+	}
+	if _, found := actionplanner.FindCapability(capabilities, synonym); found {
+		return synonym
+	}
+	return requested
+}
+
 // CapabilityNotFoundError reports that the resource does not advertise the
 // requested capability. It unwraps to actionplanner.ErrCapabilityNotFound.
 type CapabilityNotFoundError struct {
@@ -371,6 +402,7 @@ func (s *Service) PlanWithOptions(ctx context.Context, orgID string, req unified
 	if !ok || resource == nil {
 		return unified.ActionPlan{}, &ResourceNotFoundError{ResourceID: req.ResourceID}
 	}
+	req.CapabilityName = resolveAdvertisedCapabilityName(resource.Capabilities, req.CapabilityName)
 
 	planner := actionplanner.Planner{}
 	var plan unified.ActionPlan

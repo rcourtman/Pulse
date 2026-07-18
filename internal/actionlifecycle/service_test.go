@@ -1010,6 +1010,35 @@ func TestPlanPersistsPendingAuditAndLifecycle(t *testing.T) {
 	}
 }
 
+func TestPlanFollowsAdvertisedLifecycleSynonym(t *testing.T) {
+	now := time.Now().UTC()
+	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
+
+	// The fixture advertises only "restart"; a request for the lifecycle
+	// synonym "reboot" must plan the advertised verb.
+	req := restartRequest()
+	req.CapabilityName = "reboot"
+	plan, err := env.service.Plan(context.Background(), "default", req, testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatalf("Plan with lifecycle synonym: %v", err)
+	}
+	record, ok, err := env.store.GetActionAudit(plan.ActionID)
+	if err != nil || !ok {
+		t.Fatalf("GetActionAudit: ok=%v err=%v", ok, err)
+	}
+	if record.Request.CapabilityName != "restart" {
+		t.Fatalf("persisted capability = %q, want the advertised verb %q", record.Request.CapabilityName, "restart")
+	}
+
+	// Verbs without an advertised synonym still fail closed.
+	unknown := restartRequest()
+	unknown.CapabilityName = "shutdown"
+	var capErr *CapabilityNotFoundError
+	if _, err := env.service.Plan(context.Background(), "default", unknown, testActionActor("requester", "default")); !errors.As(err, &capErr) {
+		t.Fatalf("non-synonym verb error = %v, want CapabilityNotFoundError", err)
+	}
+}
+
 func TestPlanFailsClosedOnUnknownResourceAndCapability(t *testing.T) {
 	now := time.Now().UTC()
 	env := newServiceEnv(t, testResource(now, unified.ApprovalAdmin))
