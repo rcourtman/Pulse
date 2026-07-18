@@ -257,6 +257,14 @@ func (p *PatrolService) SetPushNotifyCallback(cb PushNotifyCallback) {
 	p.pushNotifyCallback = cb
 }
 
+// SetFindingNotifyCallback sets the callback that routes newly detected
+// warning+ findings to the operator's alert notification channels.
+func (p *PatrolService) SetFindingNotifyCallback(cb FindingNotifyCallback) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.findingNotifyCallback = cb
+}
+
 // SetUnifiedFindingCallback sets the callback for pushing findings to the unified store
 // When set, it also syncs existing active findings to the unified store
 func (p *PatrolService) SetUnifiedFindingCallback(cb UnifiedFindingCallback) {

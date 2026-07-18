@@ -78,6 +78,7 @@ func (p *PatrolService) recordFindingWithInvestigation(f *Finding, investigate b
 		if stored.Severity == FindingSeverityCritical || stored.Severity == FindingSeverityWarning {
 			p.mu.RLock()
 			pushCb := p.pushNotifyCallback
+			notifyCb := p.findingNotifyCallback
 			p.mu.RUnlock()
 			if pushCb != nil {
 				pushCb(relay.NewPatrolFindingNotification(
@@ -86,6 +87,13 @@ func (p *PatrolService) recordFindingWithInvestigation(f *Finding, investigate b
 					string(stored.Category),
 					stored.Title,
 				))
+			}
+			// Route the finding to the operator's alert notification
+			// channels. Fires only here, on the genuinely-new path, so a
+			// finding notifies at most once per lifetime regardless of how
+			// many later runs re-detect it.
+			if notifyCb != nil {
+				notifyCb(stored)
 			}
 		}
 	}

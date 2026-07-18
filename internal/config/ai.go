@@ -75,6 +75,18 @@ type AIConfig struct {
 	UseProactiveThresholds bool   `json:"use_proactive_thresholds,omitempty"` // When true, patrol warns 5-15% BEFORE alert thresholds (default: false, use exact thresholds)
 	AutoFixModel           string `json:"auto_fix_model,omitempty"`           // Model for automatic remediation (defaults to PatrolModel, may want more capable model)
 
+	// Patrol finding notifications route each newly detected warning+ finding
+	// through the operator's alert notification channels (email, webhooks,
+	// Apprise). Findings are deduplicated upstream, so at most one
+	// notification fires per finding lifetime. The enabled flag is persisted
+	// without omitempty so an explicit opt-out survives reload; configs saved
+	// before the field existed inherit the default (enabled).
+	PatrolFindingNotificationsEnabled bool `json:"patrol_finding_notifications_enabled"`
+	// PatrolFindingNotifyMinSeverity is the minimum finding severity that
+	// warrants a notification ("warning" accepts warning+critical;
+	// "critical" accepts only critical; empty = "warning").
+	PatrolFindingNotifyMinSeverity string `json:"patrol_finding_notify_min_severity,omitempty"`
+
 	// Alert-triggered AI analysis - analyze specific resources when alerts fire
 	AlertTriggeredAnalysis bool `json:"alert_triggered_analysis"` // Enable AI analysis when alerts fire (token-efficient)
 
@@ -252,6 +264,10 @@ func NewDefaultAIConfig() *AIConfig {
 		// Default to critical-only so alert-triggered investigations stay
 		// token-conservative out of the box. Operators can opt warnings in.
 		PatrolAlertTriggerMinSeverity: AlertTriggerSeverityCritical,
+		// Finding notifications default on at warning+, matching the
+		// long-standing default for Patrol mobile push. Findings fire once
+		// per lifetime, so the volume is inherently low.
+		PatrolFindingNotificationsEnabled: true,
 	}
 }
 
@@ -292,6 +308,39 @@ func (c *AIConfig) AlertTriggersInvestigation(alertType, level string) bool {
 		return false
 	}
 	return true
+}
+
+// GetPatrolFindingNotifyMinSeverity returns the configured minimum finding
+// severity that warrants a notification, normalizing the empty default to
+// warning. Warning is the right floor here because most actionable findings
+// (data-loss risks, failing health checks) are reported at warning severity.
+func (c *AIConfig) GetPatrolFindingNotifyMinSeverity() string {
+	if c == nil {
+		return AlertTriggerSeverityWarning
+	}
+	min := strings.ToLower(strings.TrimSpace(c.PatrolFindingNotifyMinSeverity))
+	switch min {
+	case AlertTriggerSeverityWarning, AlertTriggerSeverityCritical:
+		return min
+	default:
+		return AlertTriggerSeverityWarning
+	}
+}
+
+// PatrolFindingTriggersNotification reports whether a newly detected finding
+// of the given severity should be routed to the operator's alert notification
+// channels. Only warning and critical findings ever qualify; info and watch
+// findings are UI-only detail.
+func (c *AIConfig) PatrolFindingTriggersNotification(severity string) bool {
+	if c == nil || !c.Enabled || !c.PatrolFindingNotificationsEnabled {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(severity)) {
+	case AlertTriggerSeverityWarning, AlertTriggerSeverityCritical:
+	default:
+		return false
+	}
+	return alertLevelMeetsMinimum(severity, c.GetPatrolFindingNotifyMinSeverity())
 }
 
 // alertLevelMeetsMinimum ranks warning < critical. An empty minimum defaults to

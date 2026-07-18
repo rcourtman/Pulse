@@ -2298,6 +2298,26 @@ func (r *Router) startPatrolForContext(ctx context.Context, orgID string) bool {
 				}
 			})
 
+			// Wire finding notifications: new warning+ patrol findings go to
+			// the operator's alert notification channels (email, webhooks,
+			// Apprise), so Patrol can reach operators who do not use the
+			// mobile push path. Config gating is read live per finding.
+			patrol.SetFindingNotifyCallback(func(f *ai.Finding) {
+				if f == nil || ai.IsDemoMode() {
+					return
+				}
+				cfg := aiService.GetAIConfig()
+				if cfg == nil || !cfg.PatrolFindingTriggersNotification(string(f.Severity)) {
+					return
+				}
+				if r.monitor == nil {
+					return
+				}
+				if nm := r.monitor.GetNotificationManager(); nm != nil {
+					nm.SendAlert(patrolFindingNotificationAlert(f))
+				}
+			})
+
 			log.Info().Msg("AI Intelligence: Patrol findings wired to unified store")
 
 			// Sync existing findings from persistence to the unified store

@@ -436,6 +436,11 @@ type UnifiedFindingCallback func(f *Finding) bool
 // PushNotifyCallback is called to send a push notification through the relay.
 type PushNotifyCallback func(notification relay.PushNotificationPayload)
 
+// FindingNotifyCallback delivers a newly stored finding to the operator's
+// alert notification channels (email, webhooks). The API layer owns config
+// gating and the projection into the notification payload shape.
+type FindingNotifyCallback func(f *Finding)
+
 // InvestigationOrchestrator is the interface for autonomous investigation of findings.
 // Re-exported from pkg/aicontracts for backwards compatibility.
 type InvestigationOrchestrator = aicontracts.InvestigationOrchestrator
@@ -532,6 +537,10 @@ type PatrolService struct {
 
 	// Push notification callback - sends push via relay to mobile devices
 	pushNotifyCallback PushNotifyCallback
+
+	// Finding notification callback - routes new warning+ findings to the
+	// operator's alert notification channels (email, webhooks)
+	findingNotifyCallback FindingNotifyCallback
 
 	// Cached thresholds (recalculated when thresholdProvider changes)
 	thresholds    PatrolThresholds
