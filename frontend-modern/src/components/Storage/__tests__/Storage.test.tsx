@@ -73,7 +73,7 @@ const reconnectSpy = vi.fn();
 let hookResources: Resource[] = [];
 let hookLoading = false;
 let hookError: unknown = undefined;
-let alertsActivationState: 'active' | 'pending_review' | 'snoozed' | null = 'active';
+let alertsDetectionEnabled = true;
 
 const setStorageFilter = (filterLabel: string, optionLabel: string) => {
   const existingChip = queryStorageChip(filterLabel);
@@ -312,7 +312,7 @@ vi.mock('@/contexts/appRuntime', () => ({
 
 vi.mock('@/stores/alertsActivation', () => ({
   useAlertsActivation: () => ({
-    activationState: () => alertsActivationState,
+    detectionEnabled: () => alertsDetectionEnabled,
     getMetricThresholds: () => ({ warning: 80, critical: 85 }),
   }),
 }));
@@ -391,7 +391,7 @@ describe('Storage', () => {
     wsInitialDataReceived = true;
     wsReconnecting = false;
     wsActiveAlerts = {};
-    alertsActivationState = 'active';
+    alertsDetectionEnabled = true;
     reconnectSpy.mockReset();
     wsState = {
       resources: [],
@@ -817,7 +817,10 @@ describe('Storage', () => {
     fireEvent.click(clearButton);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/proxmox/storage?group=node', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/proxmox/storage?group=node',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
     });
   });
 

@@ -251,6 +251,10 @@ filter semantics, drawer handoffs, and resource projections, while
 Future platform tables must keep that split: row data and platform semantics
 stay in the unified-resource consumer, and the repeated table shell stays in the
 shared frontend primitive.
+Alert decoration on those platform rows consumes the canonical active-alert
+read model and the detector-enabled accessor. External notification activation
+is not a resource-health field and must never suppress row alerts, change
+resource filtering, or create a parallel platform-local alert truth.
 The standalone Pulse Agent and Availability monitor may add one compact status
 summary immediately above its canonical table. That summary must be derived
 from the same already-loaded unified-resource slice, use canonical resource

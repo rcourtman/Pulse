@@ -7,16 +7,16 @@ export const DE_MESSAGE_OVERRIDES = {
   'pricing.handoff.link.pulseAccount': 'weiter zu Pulse Account',
   'pricing.handoff.title.publicPricing': 'Weiterleitung zu den Preisen',
   'pricing.handoff.title.pulseAccount': 'Weiterleitung zu Pulse Account',
-  'alerts.activation.label.enabled': 'Warnmeldungen aktiviert',
-  'alerts.activation.label.disabled': 'Warnmeldungen deaktiviert',
+  'alerts.activation.label.enabled': 'Benachrichtigungen aktiviert',
+  'alerts.activation.label.disabled': 'Benachrichtigungen pausiert',
   'alerts.activation.toast.activated':
-    'Warnmeldungen aktiviert. Sie erhalten jetzt Warnungen, wenn Probleme erkannt werden.',
+    'Benachrichtigungen aktiviert. Sie erhalten jetzt Hinweise, wenn Probleme erkannt werden.',
   'alerts.activation.toast.activateFailed':
-    'Warnmeldungen konnten nicht aktiviert werden. Bitte versuchen Sie es erneut.',
+    'Benachrichtigungen konnten nicht aktiviert werden. Bitte versuchen Sie es erneut.',
   'alerts.activation.toast.deactivated':
-    'Warnmeldungen deaktiviert. Es wird nichts gesendet, bis Sie sie wieder aktivieren.',
+    'Benachrichtigungen pausiert. Pulse erkennt und zeigt aktive Warnmeldungen weiterhin an.',
   'alerts.activation.toast.deactivateFailed':
-    'Warnmeldungen konnten nicht deaktiviert werden. Bitte versuchen Sie es erneut.',
+    'Benachrichtigungen konnten nicht pausiert werden. Bitte versuchen Sie es erneut.',
   'alerts.assistant.action.investigate': 'Warnmeldung {alertIdentifier} untersuchen',
   'alerts.assistant.button.full': 'Pulse Assistant zu dieser Warnmeldung fragen',
   'alerts.assistant.button.text': 'Pulse Assistant fragen',
@@ -56,7 +56,7 @@ export const DE_MESSAGE_OVERRIDES = {
   'alerts.nav.collapseSidebar': 'Seitenleiste einklappen',
   'alerts.nav.expandSidebar': 'Seitenleiste ausklappen',
   'alerts.nav.title': 'Warnmeldungen',
-  'alerts.nav.toggleAlerts': 'Warnmeldungen umschalten',
+  'alerts.nav.toggleAlerts': 'Externe Benachrichtigungen umschalten',
   'alerts.overview.action.acknowledge': 'Bestaetigen',
   'alerts.overview.action.acknowledgeAll': 'Alle bestaetigen ({count})',
   'alerts.overview.action.acknowledging': 'Wird bestaetigt...',
@@ -103,7 +103,7 @@ export const DE_MESSAGE_OVERRIDES = {
     'Suchen Sie fruehere Warnmeldungen, pruefen Sie Vorfall-Zeitleisten und beobachten Sie Warnungshaeufigkeit ueber Zeit.',
   'alerts.page.history.title': 'Warnungsverlauf',
   'alerts.page.overview.description':
-    'Pruefen Sie aktive Vorfaelle, Warnungsabdeckung und ob Warnmeldungen diese Installation aktiv ueberwachen.',
+    'Pruefen Sie aktive Vorfaelle und die aktuelle Warnungsabdeckung der ueberwachten Ressourcen.',
   'alerts.page.overview.title': 'Warnmeldungsuebersicht',
   'alerts.page.schedule.description':
     'Definieren Sie Ruhezeiten, Gruppierung, Abklingzeiten, Wiederherstellung und Eskalation fuer Warnmeldungen.',

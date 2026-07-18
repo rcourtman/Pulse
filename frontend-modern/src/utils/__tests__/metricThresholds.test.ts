@@ -224,6 +224,30 @@ describe('metricThresholds', () => {
       });
     });
 
+    it('does not treat external notification activation as detector state', () => {
+      const config = {
+        enabled: true,
+        activationState: 'pending_review',
+        guestDefaults: {
+          cpu: { trigger: 88, clear: 82 },
+        },
+        nodeDefaults: {},
+        storageDefault: { trigger: 85, clear: 80 },
+        overrides: {},
+      } as AlertConfig;
+
+      expect(resolveMetricDisplayThresholds(config, 'guest', 'cpu')).toEqual({
+        warning: 82,
+        critical: 88,
+      });
+
+      config.activationState = 'snoozed';
+      expect(resolveMetricDisplayThresholds(config, 'guest', 'cpu')).toEqual({
+        warning: 82,
+        critical: 88,
+      });
+    });
+
     it('uses default display coloring when alert thresholds are disabled', () => {
       const config = {
         enabled: true,

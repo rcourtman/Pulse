@@ -203,6 +203,11 @@ change may globally weaken the Task 03 lifecycle-state idempotency invariant.
    `frontend-modern/src/hooks/useWorkloads.ts` must consume canonical
    `platformScopes`; page surfaces must not rebuild platform membership with
    ad hoc source or runtime scans.
+   Workload active-alert decoration must consume the alerts store's existing
+   `detectionEnabled` accessor and websocket read model. External notification
+   activation may not trigger a second resource scan, clear cached active
+   alerts, or become a workload-table filter because delivery state is not
+   detector state.
    Page-owned workload-type exclusions are part of that same hot path:
    `useWorkloadsState` must apply them before dedupe, filter-option
    derivation, summary statistics, and row rendering so a platform overview

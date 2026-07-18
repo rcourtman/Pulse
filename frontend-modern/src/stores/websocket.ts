@@ -7,12 +7,11 @@ import type {
   ResolvedAlert,
   ConnectedInfrastructureItem,
 } from '@/types/api';
-import type { ActivationState as ActivationStateType } from '@/types/alerts';
 import { logger } from '@/utils/logger';
 import { POLLING_INTERVALS, WEBSOCKET } from '@/constants';
 import { notificationStore } from './notifications';
 import { eventBus } from './events';
-import { ALERTS_ACTIVATION_EVENT, isAlertsActivationEnabled } from '@/utils/alertsActivation';
+import { ALERTS_DETECTION_EVENT, isAlertsDetectionEnabled } from '@/utils/alertsActivation';
 import { syncWithAgentCommand } from './containerUpdates';
 import {
   getAgentDiscoveryResourceId,
@@ -162,7 +161,7 @@ export function createWebSocketStore(url: string) {
   const pendingAckChanges = new Map<string, { ack: boolean; previousAckTime?: string }>();
   const pendingAckTimeouts = new Map<string, number>();
 
-  let alertsEnabled = isAlertsActivationEnabled();
+  let alertsEnabled = isAlertsDetectionEnabled();
   let lastActiveAlertsPayload: Record<string, Alert> = {};
 
   const clearPendingAckTimeout = (alertIdentifier: string) => {
@@ -223,14 +222,14 @@ export function createWebSocketStore(url: string) {
     setState('activeAlerts', Object.values(alertsMap));
   };
 
-  const handleAlertsActivationEvent = (event: Event) => {
-    const detail = (event as CustomEvent<ActivationStateType | null>).detail;
-    alertsEnabled = detail === 'active';
+  const handleAlertsDetectionEvent = (event: Event) => {
+    const detail = (event as CustomEvent<boolean | null>).detail;
+    alertsEnabled = detail ?? true;
     applyActiveAlerts(alertsEnabled ? lastActiveAlertsPayload : {});
   };
 
   if (typeof window !== 'undefined') {
-    window.addEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivationEvent, {
+    window.addEventListener(ALERTS_DETECTION_EVENT, handleAlertsDetectionEvent, {
       passive: true,
     });
   }
@@ -302,7 +301,7 @@ export function createWebSocketStore(url: string) {
     pendingAckChanges.clear();
 
     if (typeof window !== 'undefined') {
-      window.removeEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivationEvent);
+      window.removeEventListener(ALERTS_DETECTION_EVENT, handleAlertsDetectionEvent);
     }
 
     if (ws) {
@@ -705,7 +704,7 @@ export function createWebSocketStore(url: string) {
     pendingAckTimeouts.forEach((t) => window.clearTimeout(t));
     pendingAckTimeouts.clear();
     if (typeof window !== 'undefined') {
-      window.removeEventListener(ALERTS_ACTIVATION_EVENT, handleAlertsActivationEvent);
+      window.removeEventListener(ALERTS_DETECTION_EVENT, handleAlertsDetectionEvent);
     }
     if (ws) {
       ws.close(1000, 'Component unmounting');

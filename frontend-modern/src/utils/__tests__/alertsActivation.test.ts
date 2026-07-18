@@ -1,63 +1,53 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  setGlobalActivationState,
-  isAlertsActivationEnabled,
-  ALERTS_ACTIVATION_EVENT,
+  ALERTS_DETECTION_EVENT,
+  isAlertsDetectionEnabled,
+  setGlobalAlertsDetectionEnabled,
 } from '@/utils/alertsActivation';
 
-describe('alertsActivation', () => {
+describe('alerts detection state', () => {
   beforeEach(() => {
-    // Reset global state before each test
-    if (typeof window !== 'undefined') {
-      window.__pulseAlertsActivationState = null;
-    }
+    window.__pulseAlertsDetectionEnabled = null;
   });
 
-  describe('isAlertsActivationEnabled', () => {
-    it('returns true by default in browser when no state is set', () => {
-      const result = isAlertsActivationEnabled();
-      expect(result).toBe(true);
+  describe('isAlertsDetectionEnabled', () => {
+    it('defaults to enabled before configuration loads', () => {
+      expect(isAlertsDetectionEnabled()).toBe(true);
     });
 
-    it('returns true when state is active', () => {
-      setGlobalActivationState('active');
-      const result = isAlertsActivationEnabled();
-      expect(result).toBe(true);
+    it('returns the explicit detection state', () => {
+      setGlobalAlertsDetectionEnabled(false);
+      expect(isAlertsDetectionEnabled()).toBe(false);
+
+      setGlobalAlertsDetectionEnabled(true);
+      expect(isAlertsDetectionEnabled()).toBe(true);
     });
 
-    it('returns false when state is not active', () => {
-      setGlobalActivationState('snoozed');
-      const result = isAlertsActivationEnabled();
-      expect(result).toBe(false);
-    });
-
-    it('returns true when state is undefined (default)', () => {
-      window.__pulseAlertsActivationState = undefined;
-      const result = isAlertsActivationEnabled();
-      expect(result).toBe(true);
+    it('defaults to enabled when state is undefined', () => {
+      window.__pulseAlertsDetectionEnabled = undefined;
+      expect(isAlertsDetectionEnabled()).toBe(true);
     });
   });
 
-  describe('setGlobalActivationState', () => {
-    it('sets the global activation state', () => {
-      setGlobalActivationState('pending_review');
-      expect(window.__pulseAlertsActivationState).toBe('pending_review');
+  describe('setGlobalAlertsDetectionEnabled', () => {
+    it('sets the global detection state', () => {
+      setGlobalAlertsDetectionEnabled(false);
+      expect(window.__pulseAlertsDetectionEnabled).toBe(false);
     });
 
-    it('dispatches custom event when state changes', () => {
+    it('dispatches the detection event with the exact state', () => {
       const dispatchEventSpy = vi.spyOn(window, 'dispatchEvent');
-      setGlobalActivationState('active');
+      setGlobalAlertsDetectionEnabled(true);
 
-      expect(dispatchEventSpy).toHaveBeenCalled();
-      const event = dispatchEventSpy.mock.calls[0][0] as CustomEvent;
-      expect(event.type).toBe(ALERTS_ACTIVATION_EVENT);
-      expect(event.detail).toBe('active');
+      const event = dispatchEventSpy.mock.calls[0][0] as CustomEvent<boolean>;
+      expect(event.type).toBe(ALERTS_DETECTION_EVENT);
+      expect(event.detail).toBe(true);
     });
 
-    it('can set state to null', () => {
-      setGlobalActivationState('active');
-      setGlobalActivationState(null);
-      expect(window.__pulseAlertsActivationState).toBeNull();
+    it('can reset state to null', () => {
+      setGlobalAlertsDetectionEnabled(false);
+      setGlobalAlertsDetectionEnabled(null);
+      expect(window.__pulseAlertsDetectionEnabled).toBeNull();
     });
   });
 });

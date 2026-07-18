@@ -7,16 +7,16 @@ export const ES_MESSAGE_OVERRIDES = {
   'pricing.handoff.link.pulseAccount': 'continua a Pulse Account',
   'pricing.handoff.title.publicPricing': 'Redirigiendo a precios',
   'pricing.handoff.title.pulseAccount': 'Redirigiendo a Pulse Account',
-  'alerts.activation.label.enabled': 'Alertas activadas',
-  'alerts.activation.label.disabled': 'Alertas desactivadas',
+  'alerts.activation.label.enabled': 'Notificaciones activadas',
+  'alerts.activation.label.disabled': 'Notificaciones pausadas',
   'alerts.activation.toast.activated':
-    'Alertas activadas. Ahora recibiras avisos cuando se detecten problemas.',
+    'Notificaciones activadas. Ahora recibiras avisos cuando se detecten problemas.',
   'alerts.activation.toast.activateFailed':
-    'No se pudieron activar las alertas. Intentalo de nuevo.',
+    'No se pudieron activar las notificaciones. Intentalo de nuevo.',
   'alerts.activation.toast.deactivated':
-    'Alertas desactivadas. No se enviara nada hasta que las vuelvas a activar.',
+    'Notificaciones pausadas. Pulse seguira detectando y mostrando alertas activas.',
   'alerts.activation.toast.deactivateFailed':
-    'No se pudieron desactivar las alertas. Intentalo de nuevo.',
+    'No se pudieron pausar las notificaciones. Intentalo de nuevo.',
   'alerts.assistant.action.investigate': 'Investigar alerta {alertIdentifier}',
   'alerts.assistant.button.full': 'Preguntar a Pulse Assistant sobre esta alerta',
   'alerts.assistant.button.text': 'Preguntar a Pulse Assistant',
@@ -55,7 +55,7 @@ export const ES_MESSAGE_OVERRIDES = {
   'alerts.nav.collapseSidebar': 'Contraer barra lateral',
   'alerts.nav.expandSidebar': 'Expandir barra lateral',
   'alerts.nav.title': 'Alertas',
-  'alerts.nav.toggleAlerts': 'Alternar alertas',
+  'alerts.nav.toggleAlerts': 'Alternar notificaciones externas',
   'alerts.overview.action.acknowledge': 'Reconocer',
   'alerts.overview.action.acknowledgeAll': 'Reconocer todas ({count})',
   'alerts.overview.action.acknowledging': 'Reconociendo...',
@@ -98,7 +98,7 @@ export const ES_MESSAGE_OVERRIDES = {
     'Busca alertas anteriores, revisa lineas de tiempo de incidentes e inspecciona la frecuencia de alertas.',
   'alerts.page.history.title': 'Historial de alertas',
   'alerts.page.overview.description':
-    'Revisa incidentes activos, confirma la cobertura de alertas y controla si las alertas monitorizan activamente esta instalacion.',
+    'Revisa incidentes activos y confirma la cobertura actual de alertas en los recursos monitorizados.',
   'alerts.page.overview.title': 'Resumen de alertas',
   'alerts.page.schedule.description':
     'Define horas de silencio, agrupacion, enfriamiento, recuperacion y escalado para la entrega de alertas.',

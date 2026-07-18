@@ -1,5 +1,5 @@
 import type { Alert } from '@/types/api';
-import { isAlertsActivationEnabled } from '@/utils/alertsActivation';
+import { isAlertsDetectionEnabled } from '@/utils/alertsActivation';
 
 const noAlertStyles = {
   rowClass: '',
@@ -23,7 +23,7 @@ const noAlertStyles = {
 export const getAlertStyles = (
   resourceId: string,
   activeAlerts: Record<string, Alert>,
-  alertsEnabled: boolean | undefined = isAlertsActivationEnabled(),
+  alertsEnabled: boolean | undefined = isAlertsDetectionEnabled(),
   nodeMatch?: string,
 ) => {
   if (!alertsEnabled) {
@@ -32,8 +32,7 @@ export const getAlertStyles = (
 
   const alertsForResource = Object.values(activeAlerts).filter(
     (alert) =>
-      alert.resourceId === resourceId ||
-      (nodeMatch !== undefined && alert.node === nodeMatch),
+      alert.resourceId === resourceId || (nodeMatch !== undefined && alert.node === nodeMatch),
   );
 
   const unacknowledgedAlerts = alertsForResource.filter((alert) => !alert.acknowledged);

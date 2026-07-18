@@ -1,30 +1,28 @@
-import type { ActivationState } from '@/types/alerts';
-
-export const ALERTS_ACTIVATION_EVENT = 'pulse-alerts-activation-change';
+export const ALERTS_DETECTION_EVENT = 'pulse-alerts-detection-change';
 
 declare global {
   interface Window {
-    __pulseAlertsActivationState?: ActivationState | null;
+    __pulseAlertsDetectionEnabled?: boolean | null;
   }
 }
 
 const isBrowser = typeof window !== 'undefined';
 
-export const setGlobalActivationState = (state: ActivationState | null): void => {
+export const setGlobalAlertsDetectionEnabled = (enabled: boolean | null): void => {
   if (!isBrowser) return;
-  window.__pulseAlertsActivationState = state;
+  window.__pulseAlertsDetectionEnabled = enabled;
   window.dispatchEvent(
-    new CustomEvent<ActivationState | null>(ALERTS_ACTIVATION_EVENT, {
-      detail: state,
+    new CustomEvent<boolean | null>(ALERTS_DETECTION_EVENT, {
+      detail: enabled,
     }),
   );
 };
 
-export const isAlertsActivationEnabled = (): boolean => {
+export const isAlertsDetectionEnabled = (): boolean => {
   if (!isBrowser) return true;
-  const state = window.__pulseAlertsActivationState;
-  if (state === undefined || state === null) {
+  const enabled = window.__pulseAlertsDetectionEnabled;
+  if (enabled === undefined || enabled === null) {
     return true;
   }
-  return state === 'active';
+  return enabled;
 };

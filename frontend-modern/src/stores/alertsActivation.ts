@@ -2,7 +2,7 @@ import { createSignal } from 'solid-js';
 import { AlertsAPI } from '@/api/alerts';
 import type { AlertConfig, ActivationState as ActivationStateType } from '@/types/alerts';
 import type { Alert } from '@/types/api';
-import { setGlobalActivationState } from '@/utils/alertsActivation';
+import { setGlobalAlertsDetectionEnabled } from '@/utils/alertsActivation';
 import { FACTORY_NODE_DEFAULTS } from '@/utils/alertThresholdDefaults';
 import { logger } from '@/utils/logger';
 import {
@@ -19,10 +19,11 @@ const [activationState, setActivationStateSignal] = createSignal<ActivationState
 const [isLoading, setIsLoading] = createSignal(false);
 const [activeAlerts, setActiveAlerts] = createSignal<Alert[]>([]);
 const [lastError, setLastError] = createSignal<string | null>(null);
+const detectionEnabled = () => config()?.enabled ?? true;
+const notificationDeliveryEnabled = () => detectionEnabled() && activationState() === 'active';
 
 const applyActivationState = (state: ActivationStateType | null) => {
   setActivationStateSignal(state);
-  setGlobalActivationState(state);
 };
 
 const ensureConfigLoaded = async (): Promise<AlertConfig | null> => {
@@ -41,6 +42,7 @@ const refreshConfig = async (): Promise<void> => {
     setLastError(null);
     const alertConfig = await AlertsAPI.getConfig();
     setConfig(alertConfig);
+    setGlobalAlertsDetectionEnabled(alertConfig.enabled);
     applyActivationState(alertConfig.activationState || 'active');
   } catch (error) {
     logger.error('Failed to fetch alert config:', error);
@@ -158,6 +160,7 @@ const getDiskTemperatureThresholds = (
 
 eventBus.on('org_switched', () => {
   setConfig(null);
+  setGlobalAlertsDetectionEnabled(null);
   applyActivationState(null);
   setActiveAlerts([]);
   setLastError(null);
@@ -169,6 +172,8 @@ export const useAlertsActivation = () => ({
   // Signals
   config,
   activationState,
+  detectionEnabled,
+  notificationDeliveryEnabled,
   isLoading,
   activeAlerts,
   lastError,

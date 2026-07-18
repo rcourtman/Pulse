@@ -124,7 +124,7 @@ export const VsphereHostsTable: Component<{
 }> = (props) => {
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
-  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+  const alertsEnabled = alertsActivation.detectionEnabled;
   const tableState = createPlatformTableFilterState({
     resources: () => props.hosts,
     initialStatus: 'all' as PlatformResourceStatusFilter,

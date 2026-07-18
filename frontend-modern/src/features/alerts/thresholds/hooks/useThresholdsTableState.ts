@@ -84,7 +84,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const alertsActivation = useAlertsActivation();
-  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+  const alertsEnabled = alertsActivation.detectionEnabled;
   const sectionTitles = getAlertThresholdsSectionTitles();
   const guestFilterPresentation = getAlertThresholdsGuestFilterPresentation();
   const backupOrphanedPresentation = getAlertThresholdsBackupOrphanedPresentation();

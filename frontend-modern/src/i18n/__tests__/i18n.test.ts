@@ -284,6 +284,26 @@ describe('i18n foundation', () => {
     }
   });
 
+  it('keeps external notification delivery distinct from alert detection', () => {
+    expect(I18N_MESSAGES.en['alerts.activation.label.enabled']).toBe('Notifications enabled');
+    expect(I18N_MESSAGES.en['alerts.activation.label.disabled']).toBe('Notifications paused');
+    expect(I18N_MESSAGES.en['alerts.activation.toast.deactivated']).toContain(
+      'keep detecting and showing active alerts',
+    );
+
+    expect(I18N_MESSAGES.de['alerts.activation.label.enabled']).toBe(
+      'Benachrichtigungen aktiviert',
+    );
+    expect(I18N_MESSAGES.de['alerts.activation.label.disabled']).toBe(
+      'Benachrichtigungen pausiert',
+    );
+    expect(I18N_MESSAGES.de['alerts.activation.toast.deactivated']).toContain('weiterhin');
+
+    expect(I18N_MESSAGES.es['alerts.activation.label.enabled']).toBe('Notificaciones activadas');
+    expect(I18N_MESSAGES.es['alerts.activation.label.disabled']).toBe('Notificaciones pausadas');
+    expect(I18N_MESSAGES.es['alerts.activation.toast.deactivated']).toContain('seguira');
+  });
+
   it('keeps machine-facing identifiers unchanged in alerts overview catalog copy', () => {
     for (const locale of FIRST_LOCALIZATION_LOCALES) {
       expect(I18N_MESSAGES[locale]['alerts.assistant.button.full']).toContain('Pulse Assistant');

@@ -6,7 +6,6 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import { logger } from '@/utils/logger';
 import { t } from '@/i18n';
 import { Card } from '@/components/shared/Card';
-import { Button } from '@/components/shared/Button';
 import { PageHeader } from '@/components/shared/PageHeader';
 
 import { notificationStore } from '@/stores/notifications';
@@ -35,7 +34,6 @@ import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
 import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
-import BellOff from 'lucide-solid/icons/bell-off';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';
 import { OverviewTab } from '@/features/alerts/OverviewTab';
@@ -50,12 +48,10 @@ export function Alerts() {
   const alertsActivation = useAlertsActivation();
   const [isSwitchingActivation, setIsSwitchingActivation] = createSignal(false);
   const readOnlySession = createMemo(() => presentationPolicyIsReadOnly());
-  const isAlertsActive = createMemo(() => alertsActivation.activationState() === 'active');
-  const areAlertsDisabled = createMemo(() => !isAlertsActive());
-  const alertsConfigurationLocked = createMemo(() => !readOnlySession() && areAlertsDisabled());
+  const isNotificationDeliveryActive = alertsActivation.notificationDeliveryEnabled;
   const alertActivationPresentation = createMemo(() =>
     getAlertActivationPresentation({
-      isActive: isAlertsActive(),
+      isActive: isNotificationDeliveryActive(),
       isBusy: alertsActivation.isLoading() || isSwitchingActivation(),
     }),
   );
@@ -131,16 +127,6 @@ export function Alerts() {
 
     if (currentPath !== expectedPath && !isThresholdsSubPath) {
       navigate(expectedPath, { replace: true });
-    }
-  });
-
-  createEffect(() => {
-    const activation = alertsActivation.activationState();
-    if (activation === null || readOnlySession()) {
-      return;
-    }
-    if (activation !== 'active' && activeTab() !== 'overview') {
-      handleTabChange('overview');
     }
   });
 
@@ -235,7 +221,7 @@ export function Alerts() {
                 <input
                   type="checkbox"
                   class="sr-only peer"
-                  checked={isAlertsActive()}
+                  checked={isNotificationDeliveryActive()}
                   disabled={alertsActivation.isLoading() || isSwitchingActivation()}
                   onChange={(event) => {
                     if (event.currentTarget.checked) {
@@ -254,205 +240,158 @@ export function Alerts() {
         }
       />
 
-      <Show
-        when={!alertsConfigurationLocked()}
-        fallback={
-          <Card padding="none" class="overflow-hidden">
-            <div class="grid gap-5 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
-              <div class="flex min-w-0 gap-4">
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                  <BellOff class="h-5 w-5" aria-hidden="true" />
-                </div>
-                <div class="min-w-0">
-                  <h2 class="text-base font-semibold text-base-content">Alerts are paused</h2>
-                  <p class="mt-1 text-sm leading-6 text-muted">
-                    Pulse is not evaluating thresholds or sending new alert notifications. Existing
-                    alert history and configuration are preserved.
-                  </p>
-                  <p class="mt-2 text-xs text-muted">
-                    Enable alerts to resume monitoring and unlock thresholds, notifications, and
-                    maintenance schedules.
-                  </p>
-                </div>
-              </div>
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
-                class="w-full justify-center sm:w-auto"
-                disabled={alertsActivation.isLoading() || isSwitchingActivation()}
-                onClick={() => void handleActivateAlerts()}
-              >
-                {alertsActivation.isLoading() || isSwitchingActivation()
-                  ? 'Enabling alerts…'
-                  : 'Enable alerts'}
-              </Button>
-            </div>
-          </Card>
-        }
-      >
-        <Card padding="none" class="relative lg:flex overflow-hidden">
+      <Card padding="none" class="relative lg:flex overflow-hidden">
+        <div
+          class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:align-top flex-shrink-0 transition-all duration-200`}
+          aria-label={t('alerts.nav.ariaLabel')}
+          aria-expanded={!sidebarCollapsed()}
+        >
           <div
-            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:align-top flex-shrink-0 transition-all duration-200`}
-            aria-label={t('alerts.nav.ariaLabel')}
-            aria-expanded={!sidebarCollapsed()}
+            class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
           >
-            <div
-              class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
-            >
-              <Show when={!sidebarCollapsed()}>
-                <div class="flex items-center justify-between pb-2 border-b border-border">
-                  <h2 class="text-sm font-semibold text-base-content">{t('alerts.nav.title')}</h2>
-                  <button
-                    type="button"
-                    onClick={() => setSidebarCollapsed(true)}
-                    class="p-1 rounded-md hover:bg-surface-hover transition-colors"
-                    aria-label={t('alerts.nav.collapseSidebar')}
-                  >
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </Show>
-              <Show when={sidebarCollapsed()}>
+            <Show when={!sidebarCollapsed()}>
+              <div class="flex items-center justify-between pb-2 border-b border-border">
+                <h2 class="text-sm font-semibold text-base-content">{t('alerts.nav.title')}</h2>
                 <button
                   type="button"
-                  onClick={() => setSidebarCollapsed(false)}
-                  class="w-full p-2 rounded-md hover:bg-surface-hover transition-colors"
-                  aria-label={t('alerts.nav.expandSidebar')}
+                  onClick={() => setSidebarCollapsed(true)}
+                  class="p-1 rounded-md hover:bg-surface-hover transition-colors"
+                  aria-label={t('alerts.nav.collapseSidebar')}
                 >
-                  <svg
-                    class="w-5 h-5 mx-auto"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
+                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
                       stroke-width="2"
-                      d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                      d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
                     />
                   </svg>
                 </button>
-              </Show>
-              <div id="alerts-sidebar-menu" class="space-y-5">
-                <For each={tabGroups()}>
-                  {(group) => (
-                    <div class="space-y-2">
-                      <Show when={!sidebarCollapsed()}>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-muted">
-                          {group.label}
-                        </p>
-                      </Show>
-                      <div class="space-y-1.5">
-                        <For each={group.items}>
-                          {(item) => (
-                            <button
-                              type="button"
-                              aria-current={activeTab() === item.id ? 'page' : undefined}
-                              aria-disabled={alertsConfigurationLocked()}
-                              disabled={alertsConfigurationLocked()}
-                              class={getAlertsSidebarTabClass({
-                                isActive: activeTab() === item.id,
-                                isDisabled: alertsConfigurationLocked(),
-                                collapsed: sidebarCollapsed(),
-                              })}
-                              onClick={() => handleTabChange(item.id)}
-                              title={getAlertsTabTitle({
-                                isDisabled: alertsConfigurationLocked(),
-                                collapsed: sidebarCollapsed(),
-                                label: item.label,
-                              })}
-                            >
-                              {item.icon}
-                              <Show when={!sidebarCollapsed()}>
-                                <span class="truncate">{item.label}</span>
-                              </Show>
-                            </button>
-                          )}
-                        </For>
-                      </div>
-                    </div>
-                  )}
-                </For>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex-1 overflow-hidden">
-            <Show when={flatTabs().length > 0}>
-              <div class="lg:hidden border-b border-border">
-                <div class="p-1">
-                  <div class="flex w-full overflow-x-auto rounded-md bg-surface-hover p-0.5 touch-scroll scrollbar-hide">
-                    <For each={flatTabs()}>
-                      {(tab) => (
-                        <button
-                          type="button"
-                          aria-disabled={alertsConfigurationLocked()}
-                          disabled={alertsConfigurationLocked()}
-                          class={getAlertsMobileTabClass({
-                            isActive: activeTab() === tab.id,
-                            isDisabled: alertsConfigurationLocked(),
-                          })}
-                          onClick={() => handleTabChange(tab.id)}
-                          title={getAlertsTabTitle({
-                            isDisabled: alertsConfigurationLocked(),
-                            label: tab.label,
-                          })}
-                        >
-                          <span class="w-full text-center truncate block">{tab.label}</span>
-                        </button>
-                      )}
-                    </For>
-                  </div>
-                </div>
               </div>
             </Show>
-
-            <div class="p-2 sm:p-6">
-              <Show when={activeTab() === 'overview'}>
-                <OverviewTab
-                  overrides={overviewOverrides()}
-                  activeAlerts={activeAlerts}
-                  updateAlert={updateAlert}
-                  showQuickTip={showQuickTip}
-                  dismissQuickTip={dismissQuickTip}
-                  showAcknowledged={showAcknowledged}
-                  setShowAcknowledged={setShowAcknowledged}
-                  alertsDisabled={alertsConfigurationLocked}
-                />
-              </Show>
-
-              <Show when={!readOnlySession()}>
-                <AlertsConfigurationSurface
-                  activeTab={activeTab}
-                  allResources={allResources}
-                  byType={byType}
-                  children={children}
-                  activeAlerts={activeAlerts}
-                  removeAlerts={removeAlerts}
-                  setOverviewOverrides={setOverviewOverrides}
-                  hasUnsavedChanges={hasUnsavedChanges}
-                  setHasUnsavedChanges={setHasUnsavedChanges}
-                  alertsActivationState={alertsActivation.activationState}
-                  alertsActivationConfig={alertsActivation.config}
-                />
-              </Show>
-
-              <Show when={activeTab() === 'history'}>
-                <HistoryTab getResource={getResource} allResources={allResources} />
-              </Show>
+            <Show when={sidebarCollapsed()}>
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed(false)}
+                class="w-full p-2 rounded-md hover:bg-surface-hover transition-colors"
+                aria-label={t('alerts.nav.expandSidebar')}
+              >
+                <svg class="w-5 h-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                  />
+                </svg>
+              </button>
+            </Show>
+            <div id="alerts-sidebar-menu" class="space-y-5">
+              <For each={tabGroups()}>
+                {(group) => (
+                  <div class="space-y-2">
+                    <Show when={!sidebarCollapsed()}>
+                      <p class="text-xs font-semibold uppercase tracking-wide text-muted">
+                        {group.label}
+                      </p>
+                    </Show>
+                    <div class="space-y-1.5">
+                      <For each={group.items}>
+                        {(item) => (
+                          <button
+                            type="button"
+                            aria-current={activeTab() === item.id ? 'page' : undefined}
+                            class={getAlertsSidebarTabClass({
+                              isActive: activeTab() === item.id,
+                              isDisabled: false,
+                              collapsed: sidebarCollapsed(),
+                            })}
+                            onClick={() => handleTabChange(item.id)}
+                            title={getAlertsTabTitle({
+                              isDisabled: false,
+                              collapsed: sidebarCollapsed(),
+                              label: item.label,
+                            })}
+                          >
+                            {item.icon}
+                            <Show when={!sidebarCollapsed()}>
+                              <span class="truncate">{item.label}</span>
+                            </Show>
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                )}
+              </For>
             </div>
           </div>
-        </Card>
-      </Show>
+        </div>
+
+        <div class="flex-1 overflow-hidden">
+          <Show when={flatTabs().length > 0}>
+            <div class="lg:hidden border-b border-border">
+              <div class="p-1">
+                <div class="flex w-full overflow-x-auto rounded-md bg-surface-hover p-0.5 touch-scroll scrollbar-hide">
+                  <For each={flatTabs()}>
+                    {(tab) => (
+                      <button
+                        type="button"
+                        class={getAlertsMobileTabClass({
+                          isActive: activeTab() === tab.id,
+                          isDisabled: false,
+                        })}
+                        onClick={() => handleTabChange(tab.id)}
+                        title={getAlertsTabTitle({
+                          isDisabled: false,
+                          label: tab.label,
+                        })}
+                      >
+                        <span class="w-full text-center truncate block">{tab.label}</span>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </div>
+          </Show>
+
+          <div class="p-2 sm:p-6">
+            <Show when={activeTab() === 'overview'}>
+              <OverviewTab
+                overrides={overviewOverrides()}
+                activeAlerts={activeAlerts}
+                updateAlert={updateAlert}
+                showQuickTip={showQuickTip}
+                dismissQuickTip={dismissQuickTip}
+                showAcknowledged={showAcknowledged}
+                setShowAcknowledged={setShowAcknowledged}
+                alertsDisabled={() => !alertsActivation.detectionEnabled()}
+              />
+            </Show>
+
+            <Show when={!readOnlySession()}>
+              <AlertsConfigurationSurface
+                activeTab={activeTab}
+                allResources={allResources}
+                byType={byType}
+                children={children}
+                activeAlerts={activeAlerts}
+                removeAlerts={removeAlerts}
+                setOverviewOverrides={setOverviewOverrides}
+                hasUnsavedChanges={hasUnsavedChanges}
+                setHasUnsavedChanges={setHasUnsavedChanges}
+                alertsActivationState={alertsActivation.activationState}
+                alertsActivationConfig={alertsActivation.config}
+              />
+            </Show>
+
+            <Show when={activeTab() === 'history'}>
+              <HistoryTab getResource={getResource} allResources={allResources} />
+            </Show>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }

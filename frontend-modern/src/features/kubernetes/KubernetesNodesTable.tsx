@@ -122,7 +122,7 @@ export const KubernetesNodesTable: Component<{
 }> = (props) => {
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
-  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+  const alertsEnabled = alertsActivation.detectionEnabled;
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as KubernetesResourceStatusFilter,
@@ -196,7 +196,12 @@ export const KubernetesNodesTable: Component<{
                     desktop gets extra room without forcing normal desktop
                     viewports to hide Capacity behind horizontal scroll.
                   */}
-                <PlatformSortableTableHead kind="name" sort={sort} sortKey="node" class="md:w-[15%]">
+                <PlatformSortableTableHead
+                  kind="name"
+                  sort={sort}
+                  sortKey="node"
+                  class="md:w-[15%]"
+                >
                   Node
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead

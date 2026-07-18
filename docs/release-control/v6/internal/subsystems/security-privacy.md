@@ -313,6 +313,11 @@ the `white_label` branding entitlement.
    only for redirect/manual-link copy and must preserve `Pulse Account`,
    security/privacy disclosures, token names, API field names, route/query keys,
    and purchase-return state exactly.
+   Alerts-owned localization may distinguish detector state, in-product alert
+   visibility, and external notification delivery, but it must preserve all
+   security/privacy terminology and destination confidentiality. Pausing
+   delivery changes no authorization, tenant boundary, destination secret, or
+   active-alert evidence access rule.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
    The adoption report excludes mock-fixture-fleet-signature rows (120×N
    Kubernetes pods with 7×N VMware hosts, the `internal/mock` template) from

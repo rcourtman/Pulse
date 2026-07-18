@@ -1904,6 +1904,7 @@
       "owned_files": [
         "frontend-modern/src/pages/Alerts.tsx",
         "frontend-modern/src/stores/alertsActivation.ts",
+        "frontend-modern/src/stores/websocket.ts",
         "frontend-modern/src/types/alerts.ts",
         "frontend-modern/src/utils/alertActivationPresentation.ts",
         "frontend-modern/src/utils/alertAdministrationPresentation.ts",
@@ -1917,6 +1918,8 @@
         "frontend-modern/src/utils/alertIncidentPresentation.ts",
         "frontend-modern/src/utils/alertOverviewPresentation.ts",
         "frontend-modern/src/utils/alertResourceTablePresentation.ts",
+        "frontend-modern/src/utils/alerts.ts",
+        "frontend-modern/src/utils/alertsActivation.ts",
         "frontend-modern/src/utils/alertSchedulePresentation.ts",
         "frontend-modern/src/utils/alertSeverityPresentation.ts",
         "frontend-modern/src/utils/alertTabsPresentation.ts",
@@ -1938,6 +1941,23 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "alert-state-ownership-boundary",
+            "label": "alert detection and notification state proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/stores/websocket.ts",
+              "frontend-modern/src/utils/alerts.ts",
+              "frontend-modern/src/utils/alertsActivation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/stores/__tests__/websocket-resilience.test.ts",
+              "frontend-modern/src/utils/__tests__/alertsActivation.branchcov0712c.test.ts",
+              "frontend-modern/src/utils/__tests__/alertsActivation.test.ts"
+            ]
+          },
           {
             "id": "alert-specs",
             "label": "alert spec proof",

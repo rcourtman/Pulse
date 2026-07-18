@@ -13,7 +13,7 @@ vi.mock('@solidjs/router', () => ({
 }));
 
 vi.mock('@/stores/alertsActivation', () => ({
-  useAlertsActivation: () => ({ activationState: () => 'active' }),
+  useAlertsActivation: () => ({ detectionEnabled: () => true }),
 }));
 
 vi.mock('@/components/Alerts/Thresholds/hooks/useCollapsedSections', () => ({

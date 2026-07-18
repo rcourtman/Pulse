@@ -144,7 +144,7 @@ export const TrueNASSystemsTable: Component<{
 }> = (props) => {
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
-  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+  const alertsEnabled = alertsActivation.detectionEnabled;
   const tableState = createPlatformTableFilterState({
     resources: () => props.systems,
     initialStatus: 'all' as PlatformResourceStatusFilter,
@@ -248,7 +248,11 @@ export const TrueNASSystemsTable: Component<{
                 >
                   Temp
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden lg:table-cell lg:w-[15%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden lg:table-cell lg:w-[15%]"
+                >
                   Inventory
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -259,7 +263,11 @@ export const TrueNASSystemsTable: Component<{
                 >
                   Shares
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden lg:table-cell lg:w-[10%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden lg:table-cell lg:w-[10%]"
+                >
                   VMs / Apps
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead

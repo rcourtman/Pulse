@@ -126,7 +126,7 @@ export function useWorkloadsState(props: WorkloadsSurfaceProps) {
   const ws = useWebSocket();
   const { connected, activeAlerts, initialDataReceived, reconnecting, reconnect } = ws;
   const alertsActivation = useAlertsActivation();
-  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+  const alertsEnabled = alertsActivation.detectionEnabled;
 
   const kioskMode = useKioskMode();
 

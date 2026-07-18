@@ -94,6 +94,12 @@ a recovery-provider read helper or compatibility alias.
 3. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `api-contracts`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
 4. `internal/proxmoxidentity/backup_identity.go` shared with `alerts`, `monitoring`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
 
+Storage resource projections may show alert indicators from the canonical
+active-alert read model only while detector evaluation is enabled. They must
+not hide storage or recovery alerts when external notification delivery is
+pending, paused, snoozed, unavailable, or destination-disabled; those delivery
+states do not change the underlying storage evidence or active lifecycle.
+
 ## Extension Points
 
 Commercial v5-to-v6 migration posture may be carried by `internal/api/`

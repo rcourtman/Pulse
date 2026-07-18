@@ -14,7 +14,7 @@ export const useStoragePageResources = () => {
   const nodes = createMemo(() => byType('agent'));
   const physicalDisks = createMemo(() => byType('physical_disk'));
   const cephResources = createMemo(() => byType('ceph'));
-  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+  const alertsEnabled = alertsActivation.detectionEnabled;
 
   return {
     state,

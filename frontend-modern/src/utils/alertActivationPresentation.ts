@@ -13,11 +13,11 @@ export interface AlertActivationPresentation {
 }
 
 export const ALERT_ACTIVATION_SUCCESS =
-  "Alerts activated! You'll now receive alerts when issues are detected.";
-export const ALERT_ACTIVATION_FAILURE = 'Unable to activate alerts. Please try again.';
+  "Notifications enabled. You'll now receive notifications when issues are detected.";
+export const ALERT_ACTIVATION_FAILURE = 'Unable to enable notifications. Please try again.';
 export const ALERT_DEACTIVATION_SUCCESS =
-  'Alerts deactivated. Nothing will be sent until you activate them again.';
-export const ALERT_DEACTIVATION_FAILURE = 'Unable to deactivate alerts. Please try again.';
+  'Notifications paused. Pulse will keep detecting and showing active alerts.';
+export const ALERT_DEACTIVATION_FAILURE = 'Unable to pause notifications. Please try again.';
 
 export function getAlertActivationPresentation({
   isActive,

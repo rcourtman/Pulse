@@ -13,7 +13,7 @@ vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({ activeAlerts: {} as Record<string, never> }),
 }));
 vi.mock('@/stores/alertsActivation', () => ({
-  useAlertsActivation: () => ({ activationState: () => 'active' }),
+  useAlertsActivation: () => ({ detectionEnabled: () => true }),
 }));
 
 import { TrueNASSystemsTable } from '@/features/truenas/TrueNASSystemsTable';

@@ -8691,16 +8691,22 @@
         "L6",
         "L8",
         "L13",
+        "L14",
+        "L15",
         "L20",
         "L22",
         "L23"
       ],
       "subsystem_ids": [
         "ai-runtime",
+        "alerts",
         "api-contracts",
         "frontend-primitives",
         "monitoring",
+        "notifications",
         "patrol-intelligence",
+        "security-privacy",
+        "storage-recovery",
         "unified-resources"
       ],
       "proposed_resolution": "lane-expansion",
@@ -8709,6 +8715,16 @@
         {
           "repo": "pulse",
           "path": "docs/AI.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/OPERATIONAL_TRUST_IMPLEMENTATION_SPEC.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/operational-trust-alert-state-boundary-2026-07-18.md",
           "kind": "file"
         },
         {
@@ -8833,6 +8849,8 @@
         "L6",
         "L8",
         "L13",
+        "L14",
+        "L15",
         "L20",
         "L22",
         "L23"
@@ -8842,10 +8860,14 @@
       ],
       "subsystem_ids": [
         "ai-runtime",
+        "alerts",
         "api-contracts",
         "frontend-primitives",
         "monitoring",
+        "notifications",
         "patrol-intelligence",
+        "security-privacy",
+        "storage-recovery",
         "unified-resources"
       ]
     },
@@ -8870,7 +8892,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-operational-trust-candidate-lane-protection-posture-attention-queue",
+      "agent_id": "codex-operational-trust",
+      "summary": "Canonical operational trust and protection evidence implementation specification",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-18T21:46:08Z",
+      "heartbeat_at": "2026-07-18T21:46:08Z",
+      "expires_at": "2026-07-19T05:46:08Z",
+      "work_item": {
+        "kind": "candidate-lane",
+        "id": "protection-posture-attention-queue"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

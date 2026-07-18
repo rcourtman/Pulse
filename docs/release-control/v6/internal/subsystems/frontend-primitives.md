@@ -2969,6 +2969,13 @@ thresholds from the table state, but threshold selection itself remains
 alerts-owned through `frontend-modern/src/stores/alertsActivation.ts` and
 `frontend-modern/src/utils/metricThresholds.ts`; shared primitive cells and rows
 must only pass resolved warning/critical values into metric presentation.
+That alerts-owned boundary distinguishes detector state from external
+notification delivery. Shared tables, cells, navigation, and localized copy
+may use `detectionEnabled` to decide whether in-product alert evidence is
+applicable, but they must not derive visibility or threshold presentation from
+`activationState`. The activation control is presented as notification
+delivery only, and its localized paused copy must state that detection and
+in-product active-alert visibility continue.
 The shared infrastructure selector now follows that same owner split.
 `frontend-modern/src/components/shared/InfrastructureSelector.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useInfrastructureSelectorState.ts`

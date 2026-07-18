@@ -22,10 +22,10 @@ const migratedAlertsSurfaceSources = [
 ] as const;
 
 const migratedAlertsOverviewCopy = [
-  'Alerts enabled',
-  'Alerts disabled',
+  'Notifications enabled',
+  'Notifications paused',
   'Alerts navigation',
-  'Toggle alerts',
+  'Toggle external notifications',
   'Active Alerts',
   'Alerting is paused',
   'Toggle alerts on to resume monitoring and unlock configuration tabs',

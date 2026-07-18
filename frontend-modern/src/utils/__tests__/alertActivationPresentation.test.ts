@@ -21,9 +21,9 @@ describe('getAlertActivationPresentation', () => {
     setActiveLocale(DEFAULT_LOCALE);
   });
 
-  it('returns the active alerts presentation', () => {
+  it('returns the enabled notification presentation', () => {
     expect(getAlertActivationPresentation({ isActive: true })).toEqual({
-      label: 'Alerts enabled',
+      label: 'Notifications enabled',
       labelClass: 'text-green-600 dark:text-green-400',
       trackClass: 'relative h-6 w-11 rounded-full transition bg-blue-600',
       thumbClass:
@@ -31,9 +31,9 @@ describe('getAlertActivationPresentation', () => {
     });
   });
 
-  it('returns the inactive busy alerts presentation', () => {
+  it('returns the paused busy notification presentation', () => {
     expect(getAlertActivationPresentation({ isActive: false, isBusy: true })).toEqual({
-      label: 'Alerts disabled',
+      label: 'Notifications paused',
       labelClass: 'text-muted',
       trackClass: 'relative h-6 w-11 rounded-full transition bg-surface-hover opacity-50',
       thumbClass:
@@ -43,13 +43,13 @@ describe('getAlertActivationPresentation', () => {
 
   it('returns canonical activation feedback copy', () => {
     expect(ALERT_ACTIVATION_SUCCESS).toBe(
-      "Alerts activated! You'll now receive alerts when issues are detected.",
+      "Notifications enabled. You'll now receive notifications when issues are detected.",
     );
-    expect(ALERT_ACTIVATION_FAILURE).toBe('Unable to activate alerts. Please try again.');
+    expect(ALERT_ACTIVATION_FAILURE).toBe('Unable to enable notifications. Please try again.');
     expect(ALERT_DEACTIVATION_SUCCESS).toBe(
-      'Alerts deactivated. Nothing will be sent until you activate them again.',
+      'Notifications paused. Pulse will keep detecting and showing active alerts.',
     );
-    expect(ALERT_DEACTIVATION_FAILURE).toBe('Unable to deactivate alerts. Please try again.');
+    expect(ALERT_DEACTIVATION_FAILURE).toBe('Unable to pause notifications. Please try again.');
     expect(getAlertActivationSuccess()).toBe(ALERT_ACTIVATION_SUCCESS);
     expect(getAlertActivationFailure()).toBe(ALERT_ACTIVATION_FAILURE);
     expect(getAlertDeactivationSuccess()).toBe(ALERT_DEACTIVATION_SUCCESS);
@@ -59,19 +59,23 @@ describe('getAlertActivationPresentation', () => {
   it('localizes activation labels and feedback through the active locale', () => {
     setActiveLocale('es');
 
-    expect(getAlertActivationPresentation({ isActive: true }).label).toBe('Alertas activadas');
-    expect(getAlertActivationPresentation({ isActive: false }).label).toBe('Alertas desactivadas');
+    expect(getAlertActivationPresentation({ isActive: true }).label).toBe(
+      'Notificaciones activadas',
+    );
+    expect(getAlertActivationPresentation({ isActive: false }).label).toBe(
+      'Notificaciones pausadas',
+    );
     expect(getAlertActivationSuccess()).toBe(
-      'Alertas activadas. Ahora recibiras avisos cuando se detecten problemas.',
+      'Notificaciones activadas. Ahora recibiras avisos cuando se detecten problemas.',
     );
     expect(getAlertActivationFailure()).toBe(
-      'No se pudieron activar las alertas. Intentalo de nuevo.',
+      'No se pudieron activar las notificaciones. Intentalo de nuevo.',
     );
     expect(getAlertDeactivationSuccess()).toBe(
-      'Alertas desactivadas. No se enviara nada hasta que las vuelvas a activar.',
+      'Notificaciones pausadas. Pulse seguira detectando y mostrando alertas activas.',
     );
     expect(getAlertDeactivationFailure()).toBe(
-      'No se pudieron desactivar las alertas. Intentalo de nuevo.',
+      'No se pudieron pausar las notificaciones. Intentalo de nuevo.',
     );
   });
 });

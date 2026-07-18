@@ -111,10 +111,7 @@ const DOCKER_HOST_SORT_KEYS = [
 
 type DockerHostSortKey = (typeof DOCKER_HOST_SORT_KEYS)[number];
 
-const getDockerHostSortValue = (
-  host: Resource,
-  key: DockerHostSortKey,
-): PlatformTableSortValue => {
+const getDockerHostSortValue = (host: Resource, key: DockerHostSortKey): PlatformTableSortValue => {
   switch (key) {
     case 'host':
       return asTrimmedString(host.name) || host.id;
@@ -160,7 +157,7 @@ export const DockerHostsTable: Component<{
 }> = (props) => {
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
-  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+  const alertsEnabled = alertsActivation.detectionEnabled;
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as DockerResourceStatusFilter,
@@ -174,7 +171,9 @@ export const DockerHostsTable: Component<{
     sortKeys: DOCKER_HOST_SORT_KEYS,
     descendingFirst: ['containers', 'cpu', 'memory', 'disk', 'uptime', 'temp'],
   });
-  const sortedHosts = createMemo(() => sort.sortRows(tableState.filtered(), getDockerHostSortValue));
+  const sortedHosts = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getDockerHostSortValue),
+  );
 
   const hasFilteredSourceRows = () => (props.sourceCount ?? props.resources.length) > 0;
 
@@ -474,9 +473,7 @@ export const DockerHostsTable: Component<{
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}
                           >
-                            {formatPlatformTableUptimeValue(
-                              host.uptime ?? docker()?.uptimeSeconds,
-                            )}
+                            {formatPlatformTableUptimeValue(host.uptime ?? docker()?.uptimeSeconds)}
                           </TableCell>
                           <TableCell
                             class={`${getPlatformTableCellClassForKind('numeric-value')} hidden text-base-content md:table-cell`}

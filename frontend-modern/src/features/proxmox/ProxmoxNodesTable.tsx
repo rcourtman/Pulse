@@ -196,7 +196,7 @@ export const ProxmoxNodesTable: Component<{
   const breakpoint = useBreakpoint();
   const { activeAlerts } = useWebSocket();
   const alertsActivation = useAlertsActivation();
-  const alertsEnabled = createMemo(() => alertsActivation.activationState() === 'active');
+  const alertsEnabled = alertsActivation.detectionEnabled;
   const [selectedNodeId, setSelectedNodeId] = createSignal<string | null>(null);
   const layoutMode = createMemo(() => getWorkloadTableLayoutMode(breakpoint.width()));
   const visibleColumns = createMemo(() => getProxmoxHostVisibleColumnsForLayout(layoutMode()));

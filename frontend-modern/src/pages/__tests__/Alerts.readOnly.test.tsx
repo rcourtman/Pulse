@@ -68,6 +68,8 @@ vi.mock('@/stores/aiChat', () => ({
 vi.mock('@/stores/alertsActivation', () => ({
   useAlertsActivation: () => ({
     activationState: () => activationStateMock(),
+    detectionEnabled: () => true,
+    notificationDeliveryEnabled: () => activationStateMock() === 'active',
     isLoading: () => false,
     activate: vi.fn(async () => true),
     deactivate: vi.fn(async () => true),
@@ -131,7 +133,7 @@ describe('Alerts read-only presentation', () => {
       expect(screen.getByTestId('overview-tab')).toBeInTheDocument();
     });
 
-    expect(screen.queryByLabelText('Toggle alerts')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Toggle external notifications')).not.toBeInTheDocument();
     expect(screen.getAllByText('Overview').length).toBeGreaterThan(0);
     expect(screen.getAllByText('History').length).toBeGreaterThan(0);
     expect(screen.queryByText('Thresholds')).not.toBeInTheDocument();
@@ -165,24 +167,23 @@ describe('Alerts read-only presentation', () => {
     await waitFor(() => {
       expect(screen.getByTestId('alerts-config-surface')).toBeInTheDocument();
     });
-    expect(screen.queryByLabelText('Toggle alerts')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Toggle external notifications')).not.toBeInTheDocument();
     expect(screen.getAllByText('Thresholds').length).toBeGreaterThan(0);
     expect(navigateSpy).not.toHaveBeenCalledWith('/alerts/overview', { replace: true });
   });
 
-  it('replaces the disabled navigation shell with one clear activation task', async () => {
+  it('keeps alert truth and configuration visible while external notifications are paused', async () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
     activationStateMock.mockReturnValue('pending_review');
 
     render(() => <Alerts />);
 
-    expect(await screen.findByRole('heading', { name: 'Alerts are paused' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Enable alerts' })).toBeInTheDocument();
-    expect(
-      screen.getByText(/not evaluating thresholds or sending new alert notifications/i),
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId('overview-tab')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('alerts-config-surface')).not.toBeInTheDocument();
-    expect(screen.queryByText('Thresholds')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('overview-tab')).toBeInTheDocument();
+    expect(screen.getByTestId('alerts-config-surface')).toBeInTheDocument();
+    expect(screen.getByLabelText('Toggle external notifications')).not.toBeChecked();
+    expect(screen.getByText('Notifications paused')).toBeInTheDocument();
+    expect(screen.getAllByText('Thresholds').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Alerts are paused')).not.toBeInTheDocument();
+    expect(overviewTabSpy.mock.calls.at(-1)?.[0].alertsDisabled()).toBe(false);
   });
 });

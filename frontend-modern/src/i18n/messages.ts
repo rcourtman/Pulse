@@ -100,14 +100,14 @@ export const EN_MESSAGES = {
   'setup.step.security': 'Security',
   'setup.step.unlockServer': 'Unlock server',
   'setup.wizard.ariaLabel': 'Pulse Setup Wizard',
-  'alerts.activation.label.enabled': 'Alerts enabled',
-  'alerts.activation.label.disabled': 'Alerts disabled',
+  'alerts.activation.label.enabled': 'Notifications enabled',
+  'alerts.activation.label.disabled': 'Notifications paused',
   'alerts.activation.toast.activated':
-    "Alerts activated! You'll now receive alerts when issues are detected.",
-  'alerts.activation.toast.activateFailed': 'Unable to activate alerts. Please try again.',
+    "Notifications enabled. You'll now receive notifications when issues are detected.",
+  'alerts.activation.toast.activateFailed': 'Unable to enable notifications. Please try again.',
   'alerts.activation.toast.deactivated':
-    'Alerts deactivated. Nothing will be sent until you activate them again.',
-  'alerts.activation.toast.deactivateFailed': 'Unable to deactivate alerts. Please try again.',
+    'Notifications paused. Pulse will keep detecting and showing active alerts.',
+  'alerts.activation.toast.deactivateFailed': 'Unable to pause notifications. Please try again.',
   'alerts.assistant.action.investigate': 'Investigate alert {alertIdentifier}',
   'alerts.assistant.button.full': 'Ask Pulse Assistant about this alert',
   'alerts.assistant.button.text': 'Ask Pulse Assistant',
@@ -144,7 +144,7 @@ export const EN_MESSAGES = {
   'alerts.nav.collapseSidebar': 'Collapse sidebar',
   'alerts.nav.expandSidebar': 'Expand sidebar',
   'alerts.nav.title': 'Alerts',
-  'alerts.nav.toggleAlerts': 'Toggle alerts',
+  'alerts.nav.toggleAlerts': 'Toggle external notifications',
   'alerts.overview.action.acknowledge': 'Acknowledge',
   'alerts.overview.action.acknowledgeAll': 'Acknowledge all ({count})',
   'alerts.overview.action.acknowledging': 'Acknowledging...',
@@ -187,7 +187,7 @@ export const EN_MESSAGES = {
     'Search prior alerts, review incident timelines, and inspect alert frequency over time.',
   'alerts.page.history.title': 'Alert History',
   'alerts.page.overview.description':
-    'Review active incidents, confirm alert coverage, and control whether alerts are actively monitoring this install.',
+    'Review active incidents and confirm current alert coverage across monitored resources.',
   'alerts.page.overview.title': 'Alerts Overview',
   'alerts.page.schedule.description':
     'Define quiet hours, grouping, cooldowns, recovery, and escalation behavior for alert delivery.',

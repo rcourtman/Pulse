@@ -100,6 +100,9 @@ is no longer true.
 68. `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsPlatformData.ts`
 69. `frontend-modern/src/utils/alertTargetTypes.ts`
 70. `frontend-modern/src/types/alerts.ts`
+71. `frontend-modern/src/stores/websocket.ts`
+72. `frontend-modern/src/utils/alerts.ts`
+73. `frontend-modern/src/utils/alertsActivation.ts`
 
 ## Shared Boundaries
 
@@ -114,6 +117,14 @@ frontend-primitives: row, mobile-card, global-default, and bulk-selection
 icon-only actions must compose `ActionIconButton` for shared size, tone, focus,
 title, and accessible-name behavior instead of rendering local `<button>` plus
 inline SVG shells in alert-owned runtime components.
+Alert runtime state has one explicit ownership boundary: `AlertConfig.enabled`
+controls detector evaluation and in-product alert visibility, while
+`AlertConfig.activationState` controls external notification delivery only.
+The websocket store, resource-row presentation, navigation counts, and Alerts
+overview must preserve active alert truth while notification delivery is
+pending review or snoozed. Notification activation must not clear the browser
+active-alert store, suppress resource indicators, lock threshold/history
+configuration, or claim that monitoring has stopped.
 
 ## Extension Points
 
