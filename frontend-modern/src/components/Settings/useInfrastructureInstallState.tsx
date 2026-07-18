@@ -1,16 +1,11 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { MonitoringAPI } from '@/api/monitoring';
+import { NodesAPI } from '@/api/nodes';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { notificationStore } from '@/stores/notifications';
 import type { AgentLookupResponse, ConnectedInfrastructureItem } from '@/types/api';
 import type { SecurityStatus } from '@/types/config';
-import {
-  AGENT_CONFIG_READ_SCOPE,
-  AGENT_REPORT_SCOPE,
-  DOCKER_REPORT_SCOPE,
-  KUBERNETES_REPORT_SCOPE,
-} from '@/constants/apiScopes';
 import { copyToClipboard } from '@/utils/clipboard';
 import { getPulseBaseUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
@@ -256,14 +251,16 @@ Pulse prepares the first-host install token from setup so you can move straight 
   ) => {
     setIsGeneratingToken(true);
     try {
+      // The server owns install-token semantics. It decides the scopes from
+      // the command-execution choice at mint time (scopes cannot be upgraded
+      // on an existing token) and stamps the metadata the command channel
+      // needs for first-use binding (#1586).
+      const withCommands = enableCommands();
       const desiredName = tokenName().trim() || buildDefaultTokenName();
-      const scopes = [
-        AGENT_REPORT_SCOPE,
-        AGENT_CONFIG_READ_SCOPE,
-        DOCKER_REPORT_SCOPE,
-        KUBERNETES_REPORT_SCOPE,
-      ];
-      const { token, record } = await SecurityAPI.createToken(desiredName, scopes);
+      const { token, record } = await NodesAPI.createHostAgentInstallToken({
+        enableCommands: withCommands,
+        name: desiredName,
+      });
 
       if (disposed) {
         return;
@@ -276,7 +273,9 @@ Pulse prepares the first-host install token from setup so you can move straight 
       setSetupHandoffAutoTokenFailed(false);
       if (options.notifySuccess) {
         notificationStore.success(
-          'Token generated with Agent config, reporting, Docker, and Kubernetes permissions.',
+          withCommands
+            ? 'Token generated with Agent config, reporting, Docker, Kubernetes, and command execution permissions.'
+            : 'Token generated with Agent config, reporting, Docker, and Kubernetes permissions.',
           4000,
         );
       }
@@ -307,6 +306,34 @@ Pulse prepares the first-host install token from setup so you can move straight 
     if (isGeneratingToken()) return;
 
     await generateInstallToken('manual', { notifySuccess: true });
+  };
+
+  // Toggling command execution changes which scopes the token needs, and an
+  // already-minted token cannot be upgraded. Regenerate it so the copied
+  // command always carries a token that matches the checkbox (#1586).
+  const handleEnableCommandsChange = (value: boolean) => {
+    if (value === enableCommands()) return;
+    setEnableCommands(value);
+    if (currentToken() && !isGeneratingToken()) {
+      const source = latestTokenSource() ?? 'manual';
+      const supersededTokenId = latestRecord()?.id;
+      void generateInstallToken(source, { notifySuccess: false }).then(() => {
+        if (disposed || !currentToken()) return;
+        notificationStore.info(
+          value
+            ? 'Token regenerated with command execution permission. Copy the install command again.'
+            : 'Token regenerated without command execution permission. Copy the install command again.',
+          5000,
+        );
+        // The superseded token was never handed to an agent; revoke it so
+        // toggling does not accumulate orphaned install tokens.
+        if (supersededTokenId && supersededTokenId !== latestRecord()?.id) {
+          SecurityAPI.deleteToken(supersededTokenId).catch((err) => {
+            logger.warn('Failed to revoke superseded install token', err);
+          });
+        }
+      });
+    }
   };
 
   const resolvedCommandToken = () => {
@@ -545,7 +572,7 @@ Pulse prepares the first-host install token from setup so you can move straight 
     selectedAgentUrl,
     setCustomAgentUrl,
     setCustomCaPath,
-    setEnableCommands,
+    setEnableCommands: handleEnableCommandsChange,
     setInsecureMode,
     setLookupValue,
     setTokenName,

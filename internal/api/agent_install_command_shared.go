@@ -16,6 +16,10 @@ import (
 const (
 	proxmoxInstallTypePVE = "pve"
 	proxmoxInstallTypePBS = "pbs"
+	// agentInstallTypeHost marks install tokens minted for the generic unified
+	// host agent flow (Settings > Infrastructure > Add Pulse Agent), as opposed
+	// to the Proxmox-specific pve/pbs installer.
+	agentInstallTypeHost = "host"
 )
 
 var (
@@ -41,11 +45,33 @@ func proxmoxAgentInstallScopes() []string {
 	}
 }
 
+// hostAgentInstallScopes returns the scopes for a generic unified host agent
+// install token. The exec scope is included only when the operator asked for
+// command execution, because the token is minted before the agent enrols and
+// scopes cannot be upgraded on an existing token.
+func hostAgentInstallScopes(enableCommands bool) []string {
+	scopes := []string{
+		config.ScopeAgentReport,
+		config.ScopeAgentConfigRead,
+		config.ScopeAgentManage,
+		config.ScopeDockerReport,
+		config.ScopeKubernetesReport,
+	}
+	if enableCommands {
+		scopes = append(scopes, config.ScopeAgentExec)
+	}
+	return scopes
+}
+
 type issueAgentInstallTokenOptions struct {
 	TokenName   string
 	OrgID       string
 	OwnerUserID string
 	Metadata    map[string]string
+	// Scopes overrides the default Proxmox install scope set when non-empty
+	// (used by the generic host agent flow, which honours the operator's
+	// command-execution choice instead of always granting exec).
+	Scopes []string
 }
 
 func issueAndPersistAgentInstallToken(cfg *config.Config, persistence *config.ConfigPersistence, opts issueAgentInstallTokenOptions) (string, *config.APITokenRecord, error) {
@@ -58,7 +84,11 @@ func issueAndPersistAgentInstallToken(cfg *config.Config, persistence *config.Co
 		return "", nil, fmt.Errorf("%w: %w", errAgentInstallTokenGeneration, err)
 	}
 
-	record, err := config.NewAPITokenRecord(rawToken, opts.TokenName, proxmoxAgentInstallScopes())
+	scopes := opts.Scopes
+	if len(scopes) == 0 {
+		scopes = proxmoxAgentInstallScopes()
+	}
+	record, err := config.NewAPITokenRecord(rawToken, opts.TokenName, scopes)
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: %w", errAgentInstallTokenRecord, err)
 	}

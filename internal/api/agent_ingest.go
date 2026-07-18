@@ -551,7 +551,7 @@ func commandConfigAllowedForToken(record *config.APITokenRecord, host models.Hos
 		return true
 	}
 
-	return boundID == "" && boundHost == "" && canBindProxmoxAgentInstallExecToken(record, requestedID, requestedHost)
+	return boundID == "" && boundHost == "" && canBindAgentInstallExecToken(record, requestedID, requestedHost)
 }
 
 func (h *UnifiedAgentHandlers) ensureAgentTokenMatch(w http.ResponseWriter, r *http.Request, agentID string) bool {

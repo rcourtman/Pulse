@@ -1791,14 +1791,16 @@ func (h *ConfigHandlers) generateOrLoadSSHKey(sshDir, privateKeyPath, publicKeyP
 
 // AgentInstallCommandRequest represents a request for an agent install command
 type AgentInstallCommandRequest struct {
-	Type           string `json:"type"` // "pve" or "pbs"
+	Type           string `json:"type"` // "pve", "pbs", or "host"
 	EnableCommands bool   `json:"enableCommands,omitempty"`
+	Name           string `json:"name,omitempty"` // optional token name (host installs)
 }
 
 // AgentInstallCommandResponse contains the generated install command
 type AgentInstallCommandResponse struct {
-	Command string `json:"command"`
-	Token   string `json:"token"`
+	Command string       `json:"command"`
+	Token   string       `json:"token"`
+	Record  *apiTokenDTO `json:"record,omitempty"`
 }
 
 // HandleAgentInstallCommand generates an API token and install command for agent-based Proxmox setup
@@ -1811,6 +1813,11 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 	var req AgentInstallCommandRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if strings.EqualFold(strings.TrimSpace(req.Type), agentInstallTypeHost) {
+		h.handleHostAgentInstallToken(w, r, req)
 		return
 	}
 
@@ -1872,5 +1879,54 @@ func (h *ConfigHandlers) handleAgentInstallCommand(w http.ResponseWriter, r *htt
 	json.NewEncoder(w).Encode(AgentInstallCommandResponse{
 		Command: command,
 		Token:   rawToken,
+	})
+}
+
+// handleHostAgentInstallToken mints an install token for the generic unified
+// host agent flow (Settings > Infrastructure > Add Pulse Agent). The exec
+// scope must be decided here at mint time, because scopes cannot be upgraded
+// on an existing token; the frontend regenerates the token when the operator
+// toggles command execution. The install_type metadata makes the token
+// eligible for first-use binding in canBindAgentInstallExecToken, without
+// which the command channel rejects it even with the scope present (#1586).
+func (h *ConfigHandlers) handleHostAgentInstallToken(w http.ResponseWriter, r *http.Request, req AgentInstallCommandRequest) {
+	cfg := h.getConfig(r.Context())
+	persistence := h.getPersistence(r.Context())
+
+	if !authConfiguredForAgentLifecycle(cfg) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(AgentInstallCommandResponse{})
+		return
+	}
+
+	tokenName := strings.TrimSpace(req.Name)
+	if tokenName == "" {
+		tokenName = fmt.Sprintf("host-agent-%d", time.Now().Unix())
+	}
+	rawToken, record, err := issueAndPersistAgentInstallToken(cfg, persistence, issueAgentInstallTokenOptions{
+		TokenName:   tokenName,
+		OwnerUserID: apiTokenOwnerUserIDForRequest(cfg, r),
+		Scopes:      hostAgentInstallScopes(req.EnableCommands),
+		Metadata: map[string]string{
+			"install_type": agentInstallTypeHost,
+			"issued_via":   agentInstallIssuedViaConfig,
+		},
+	})
+	if err != nil {
+		log.Error().Err(err).Str("token_name", tokenName).Msg("Failed to create host agent install token")
+		http.Error(w, "Failed to generate API token", http.StatusInternalServerError)
+		return
+	}
+
+	log.Info().
+		Str("type", agentInstallTypeHost).
+		Bool("enable_commands", req.EnableCommands).
+		Msg("Generated host agent install token")
+
+	dto := toAPITokenDTO(*record)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(AgentInstallCommandResponse{
+		Token:  rawToken,
+		Record: &dto,
 	})
 }

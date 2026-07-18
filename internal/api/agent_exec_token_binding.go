@@ -47,7 +47,7 @@ func (r *Router) validateAgentExecToken(token string, agentID string, hostname s
 
 	boundID := strings.TrimSpace(record.Metadata["bound_agent_id"])
 	boundHost := strings.TrimSpace(record.Metadata["bound_hostname"])
-	if boundID == "" && boundHost == "" && canBindProxmoxAgentInstallExecToken(record, requestedID, requestedHost) {
+	if boundID == "" && boundHost == "" && canBindAgentInstallExecToken(record, requestedID, requestedHost) {
 		issuedVia := strings.TrimSpace(record.Metadata["issued_via"])
 		installType := strings.TrimSpace(record.Metadata["install_type"])
 		if record.Metadata == nil {
@@ -75,7 +75,7 @@ func (r *Router) validateAgentExecToken(token string, agentID string, hostname s
 			Str("hostname", requestedHost).
 			Str("issued_via", issuedVia).
 			Str("install_type", installType).
-			Msg("Bound Proxmox agent install token to first command agent registration")
+			Msg("Bound agent install token to first command agent registration")
 		return true
 	}
 
@@ -108,7 +108,7 @@ func (r *Router) validateAgentExecToken(token string, agentID string, hostname s
 	return false
 }
 
-func canBindProxmoxAgentInstallExecToken(record *config.APITokenRecord, agentID string, hostname string) bool {
+func canBindAgentInstallExecToken(record *config.APITokenRecord, agentID string, hostname string) bool {
 	if record == nil || strings.TrimSpace(agentID) == "" || strings.TrimSpace(hostname) == "" {
 		return false
 	}
@@ -118,7 +118,7 @@ func canBindProxmoxAgentInstallExecToken(record *config.APITokenRecord, agentID 
 	}
 
 	switch strings.TrimSpace(record.Metadata["install_type"]) {
-	case proxmoxInstallTypePVE, proxmoxInstallTypePBS:
+	case proxmoxInstallTypePVE, proxmoxInstallTypePBS, agentInstallTypeHost:
 	default:
 		return false
 	}

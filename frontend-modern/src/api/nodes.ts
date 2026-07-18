@@ -1,4 +1,5 @@
 import type { ClusterEndpoint, NodeConfig } from '../types/nodes';
+import type { APITokenRecord } from '../types/api';
 import { apiFetch, apiFetchJSON } from '@/utils/apiClient';
 import {
   arrayOrUndefined,
@@ -50,6 +51,16 @@ type RawAgentInstallCommandResponse = {
 
 export type AgentInstallCommandResponse = {
   command: string;
+};
+
+type RawHostAgentInstallTokenResponse = {
+  token?: unknown;
+  record?: APITokenRecord | null;
+};
+
+export type HostAgentInstallTokenResponse = {
+  token: string;
+  record: APITokenRecord;
 };
 
 type RawProxmoxSetupCommandResponse = {
@@ -244,6 +255,34 @@ export class NodesAPI {
       body: JSON.stringify(params),
     });
     return normalizeAgentInstallCommandResponse(response);
+  }
+
+  /**
+   * Mint an install token for the generic unified host agent flow. The server
+   * decides the scopes from enableCommands at mint time (scopes cannot be
+   * upgraded on an existing token) and stamps the metadata that makes the
+   * token eligible for first-use command-channel binding.
+   */
+  static async createHostAgentInstallToken(params: {
+    enableCommands: boolean;
+    name?: string;
+  }): Promise<HostAgentInstallTokenResponse> {
+    const response = await apiFetchJSON<RawHostAgentInstallTokenResponse>(
+      '/api/agent-install-command',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'host',
+          enableCommands: params.enableCommands,
+          ...(params.name ? { name: params.name } : {}),
+        }),
+      },
+    );
+    const token = trimmedString(response.token);
+    if (!token || !response.record) {
+      throw new Error('Invalid host agent install token response');
+    }
+    return { token, record: response.record };
   }
 
   static async getProxmoxSetupCommand(params: {
