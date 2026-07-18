@@ -90,7 +90,25 @@ type AIService interface {
 
 func assistantExecuteAuthority(ctx context.Context) bool {
 	token := pulsauth.GetAPIToken(ctx)
-	return token == nil || token.HasScope(config.ScopeAIExecute)
+	if token == nil || token.HasScope(config.ScopeAIExecute) {
+		return true
+	}
+	// Relay-mobile callers may propose actions. Their sessions are pinned to
+	// approval-required mode at the chat entrypoint, so this authority never
+	// lets a mobile-originated action run unattended.
+	return token.HasScope(config.ScopeRelayMobileAccess)
+}
+
+// assistantApprovalBoundExecuteAuthority reports whether the caller's execute
+// authority exists only by virtue of relay-mobile access. Such sessions must
+// never run autonomously; every action they propose stays on the approval
+// queue, where the mobile app's own approval surface decides it.
+func assistantApprovalBoundExecuteAuthority(ctx context.Context) bool {
+	token := pulsauth.GetAPIToken(ctx)
+	if token == nil || token.HasScope(config.ScopeAIExecute) {
+		return false
+	}
+	return token.HasScope(config.ScopeRelayMobileAccess)
 }
 
 type aiServiceRuntimeConfigReader interface {
@@ -2692,6 +2710,10 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	// Stream from AI chat service
 	serviceSentDone := false
 	serviceSentError := false
+	autonomousMode := chatAutonomousModeForFindingHandoff(nil, findingID, handoffContext, handoffResources, handoffActions, handoffMetadata)
+	if assistantApprovalBoundExecuteAuthority(ctx) {
+		autonomousMode = chatApprovalRequiredAutonomousMode()
+	}
 	err := svc.ExecuteStream(ctx, chat.ExecuteRequest{
 		Prompt:               req.Prompt,
 		SessionID:            req.SessionID,
@@ -2702,7 +2724,7 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 		HandoffResources:     handoffResources,
 		HandoffActions:       handoffActions,
 		HandoffMetadata:      handoffMetadata,
-		AutonomousMode:       chatAutonomousModeForFindingHandoff(nil, findingID, handoffContext, handoffResources, handoffActions, handoffMetadata),
+		AutonomousMode:       autonomousMode,
 		HasExecuteAuthority:  assistantExecuteAuthority(ctx),
 		SuppressSessionEvent: true,
 	}, func(event chat.StreamEvent) {
