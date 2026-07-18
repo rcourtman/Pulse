@@ -2930,8 +2930,19 @@ func (h *AIHandler) HandleMessages(w http.ResponseWriter, r *http.Request, sessi
 			messages = messages[len(messages)-limit:]
 		}
 	}
+	compact := r.URL.Query().Get("compact") == "1"
 	for i := range messages {
 		messages[i] = messages[i].ClientSafe()
+		if compact {
+			messages[i] = compactChatMessageForTransport(messages[i])
+		}
+	}
+	// Optional byte budget — the relay proxy caps responses at 47KB, so
+	// constrained clients ask for the newest messages that fit.
+	if budgetStr := r.URL.Query().Get("max_bytes"); budgetStr != "" {
+		if budget, err := strconv.Atoi(budgetStr); err == nil && budget > 0 {
+			messages = trimChatMessagesToByteBudget(messages, budget)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
