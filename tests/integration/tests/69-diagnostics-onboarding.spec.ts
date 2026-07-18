@@ -336,7 +336,12 @@ async function auditHorizontalOverflow(page: Page): Promise<OverflowAudit> {
 test.describe('Diagnostics onboarding analytics', () => {
   test.setTimeout(180_000);
 
-  test('desktop diagnostics renders the onboarding analytics card in the shared settings shell', async ({
+  // The Commercial Funnel and Infrastructure Onboarding analytics cards were
+  // deliberately removed from the user-facing diagnostics page (c6bcad255,
+  // "Remove internal analytics from diagnostics"); the UI strips
+  // commercialFunnel and infrastructureOnboarding from the payload before both
+  // rendering and export. These specs pin that boundary.
+  test('keeps internal onboarding analytics out of the rendered diagnostics page', async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only diagnostics shell coverage');
@@ -349,16 +354,14 @@ test.describe('Diagnostics onboarding analytics', () => {
     await expect(page.getByRole('heading', { name: 'Diagnostics & Health' })).toBeVisible();
     await page.getByRole('button', { name: 'Run Diagnostics', exact: true }).first().click();
 
-    await expect(page.getByText('Commercial Funnel', { exact: true })).toBeVisible();
-    await expect(page.getByText('Infrastructure Onboarding', { exact: true })).toBeVisible();
-    await expect(page.getByText('Credentials Opened', { exact: true })).toBeVisible();
-    await expect(page.getByText('TrueNAS SCALE', { exact: true })).toBeVisible();
-    await expect(page.getByText('API', { exact: true })).toBeVisible();
-    await expect(
-      page.getByText('More probed addresses miss than detect a supported API-backed platform.', {
-        exact: true,
-      }),
-    ).toBeVisible();
+    // The run completed and the payload rendered (metrics-store card proves it).
+    await expect(page.getByText('Metrics Store', { exact: false }).first()).toBeVisible({
+      timeout: 30_000,
+    });
+
+    await expect(page.getByText('Commercial Funnel', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Infrastructure Onboarding', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Credentials Opened', { exact: true })).toHaveCount(0);
   });
 
   test('desktop diagnostics exports full and sanitized onboarding analytics JSON', async ({
@@ -372,7 +375,10 @@ test.describe('Diagnostics onboarding analytics', () => {
     await page.waitForURL(/\/settings\/support\/diagnostics$/, { timeout: 15_000 });
 
     await page.getByRole('button', { name: 'Run Diagnostics', exact: true }).first().click();
-    await expect(page.getByText('Infrastructure Onboarding', { exact: true })).toBeVisible();
+    // Wait for a rendered card that survives the analytics strip.
+    await expect(page.getByText('Metrics Store', { exact: false }).first()).toBeVisible({
+      timeout: 30_000,
+    });
 
     const [fullDownload] = await Promise.all([
       page.waitForEvent('download'),
@@ -389,14 +395,12 @@ test.describe('Diagnostics onboarding analytics', () => {
 
     expect(fullPayload.nodes[0]?.host).toBe('10.0.0.5');
     expect(fullPayload.discovery?.configuredSubnet).toBe('10.0.0.0/24');
-    expect(fullPayload.infrastructureOnboarding?.summary.credentials_opened).toBe(1);
-    expect(fullPayload.infrastructureOnboarding?.platforms).toEqual([
-      expect.objectContaining({
-        key: 'truenas',
-        catalog_selected: 2,
-        credentials_opened: 1,
-      }),
-    ]);
+    // Internal analytics are stripped from the full export too, not just the
+    // rendered card.
+    expect(fullPayload.infrastructureOnboarding).toBeUndefined();
+    expect(
+      (fullPayload as Record<string, unknown>).commercialFunnel,
+    ).toBeUndefined();
 
     const [sanitizedDownload] = await Promise.all([
       page.waitForEvent('download'),
@@ -426,13 +430,10 @@ test.describe('Diagnostics onboarding analytics', () => {
       }),
     );
     expect(sanitizedPayload.errors).toEqual(['probe failed for [REDACTED_IP] after timeout']);
-    expect(sanitizedPayload.infrastructureOnboarding?.summary).toEqual(
-      expect.objectContaining({
-        opened: 4,
-        api_path_selected: 2,
-        credentials_opened: 1,
-      }),
-    );
+    expect(sanitizedPayload.infrastructureOnboarding).toBeUndefined();
+    expect(
+      (sanitizedPayload as Record<string, unknown>).commercialFunnel,
+    ).toBeUndefined();
   });
 
   test('mobile diagnostics keeps the populated onboarding analytics page inside the viewport', async ({
@@ -446,7 +447,9 @@ test.describe('Diagnostics onboarding analytics', () => {
     await page.waitForURL(/\/settings\/support\/diagnostics$/, { timeout: 15_000 });
 
     await page.getByRole('button', { name: 'Run', exact: true }).click();
-    await expect(page.getByText('Infrastructure Onboarding', { exact: true })).toBeVisible();
+    await expect(page.getByText('Metrics Store', { exact: false }).first()).toBeVisible({
+      timeout: 30_000,
+    });
 
     await scrollToBottom(page);
     const audit = await auditHorizontalOverflow(page);

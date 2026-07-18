@@ -49,11 +49,13 @@ type PlatformPageCase = {
   // empty under the default mock fixtures.
   populatedTabPaths?: readonly string[];
   populatedRowSelectors?: Partial<Record<string, string>>;
+  emptyStateTitle: string;
 };
 
 const PLATFORM_PAGES: readonly PlatformPageCase[] = [
   {
     id: 'kubernetes',
+    emptyStateTitle: 'No Kubernetes clusters',
     rootPath: '/kubernetes',
     testId: 'kubernetes-page',
     ariaLabel: 'Kubernetes sections',
@@ -78,6 +80,7 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
   },
   {
     id: 'truenas',
+    emptyStateTitle: 'No TrueNAS systems',
     rootPath: '/truenas',
     testId: 'truenas-page',
     ariaLabel: 'TrueNAS sections',
@@ -111,6 +114,7 @@ const PLATFORM_PAGES: readonly PlatformPageCase[] = [
   },
   {
     id: 'vmware',
+    emptyStateTitle: 'No vSphere hosts',
     rootPath: '/vmware',
     testId: 'vmware-page',
     ariaLabel: 'VMware sections',
@@ -161,11 +165,22 @@ test.describe('Platform pages shell', () => {
       const pageRoot = page.getByTestId(platform.testId);
       await expect(pageRoot).toBeVisible({ timeout: 30_000 });
 
+      // Sub-tabs are inventory-gated (64cbdd6e4 "Gate platform workflow tabs
+      // by inventory"). Platforms whose fixtures reach the store over the
+      // websocket still render the full sub-tab chrome; a platform with no
+      // connected instance (e.g. TrueNAS with no configured connection) shows
+      // the empty-state card instead of chrome. Accept either, but require the
+      // page to land in one coherent state, not blank.
       const sectionNav = page.getByRole('navigation', { name: platform.ariaLabel });
-      await expect(sectionNav).toBeVisible();
+      const emptyState = pageRoot.getByText(platform.emptyStateTitle, { exact: true });
+      await expect(sectionNav.or(emptyState).first()).toBeVisible({ timeout: 30_000 });
 
-      for (const tabPath of platform.tabPaths) {
-        await expect(sectionNav.locator(`a[href="${tabPath}"]`)).toBeVisible();
+      if ((await sectionNav.count()) > 0 && (await sectionNav.isVisible())) {
+        for (const tabPath of platform.tabPaths) {
+          await expect(sectionNav.locator(`a[href="${tabPath}"]`)).toBeVisible();
+        }
+      } else {
+        await expect(emptyState).toBeVisible();
       }
     });
 
@@ -212,9 +227,11 @@ test.describe('Platform pages shell', () => {
       name: 'Container runtime sections',
     });
     await expect(sectionNav).toBeVisible();
+    // Containers collapsed into Overview (1f66a2f93 "Collapse Docker page to
+    // single unified surface"); Overview owns runtime hosts plus primary
+    // container workloads.
     for (const tabPath of [
       '/docker/overview',
-      '/docker/containers',
       '/docker/images',
       '/docker/storage',
       '/docker/networks',

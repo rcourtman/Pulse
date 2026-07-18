@@ -220,15 +220,16 @@ test.describe("TLS verification warning banners", () => {
   }) => {
     await mockVMwareConnections(page);
 
-    await page.goto("/settings/infrastructure", {
+    // The add dialog\'s per-platform buttons were replaced by a
+    // detect-or-agent chooser; ?add=vmware deep-links straight to the VMware
+    // credential slot (ADD_STEP_TO_TYPE in infrastructureWorkspaceModel).
+    await page.goto("/settings/infrastructure?add=vmware", {
       waitUntil: "domcontentloaded",
     });
-    await page.waitForURL(/\/settings\/infrastructure/, {
+    await page.waitForURL(/\/settings\/infrastructure\?add=vmware/, {
       timeout: 15_000,
     });
 
-    await page.getByRole("button", { name: "Add infrastructure" }).click();
-    await page.getByRole("button", { name: "VMware" }).click();
     await page.getByLabel("Skip TLS verification").check();
 
     const warning = page.getByRole("alert").filter({
@@ -248,15 +249,13 @@ test.describe("TLS verification warning banners", () => {
   }) => {
     await mockTrueNASConnections(page);
 
-    await page.goto("/settings/infrastructure", {
+    await page.goto("/settings/infrastructure?add=truenas", {
       waitUntil: "domcontentloaded",
     });
-    await page.waitForURL(/\/settings\/infrastructure/, {
+    await page.waitForURL(/\/settings\/infrastructure\?add=truenas/, {
       timeout: 15_000,
     });
 
-    await page.getByRole("button", { name: "Add infrastructure" }).click();
-    await page.getByRole("button", { name: "TrueNAS" }).click();
     await page.getByLabel("Skip TLS verification").check();
 
     const warning = page.getByRole("alert").filter({
@@ -282,7 +281,7 @@ test.describe("TLS verification warning banners", () => {
     await page.waitForURL(/\/alerts\/destinations/, { timeout: 15_000 });
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Notification Destinations" }),
+      page.getByRole("heading", { level: 1, name: "Notifications" }),
     ).toBeVisible();
 
     await page.getByLabel("Allow self-signed certificates").check();
