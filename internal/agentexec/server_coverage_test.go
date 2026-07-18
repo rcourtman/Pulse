@@ -201,7 +201,7 @@ func TestHandleWebSocket_RejectionMessageIsActionable(t *testing.T) {
 	if payload.Message == "Invalid token" {
 		t.Fatalf("rejection message must not be the bare opaque 'Invalid token'")
 	}
-	if !strings.Contains(payload.Message, "re-run the agent installer") {
+	if !strings.Contains(payload.Message, "generate a fresh install command with commands enabled") {
 		t.Fatalf("rejection message should point the operator at re-enrollment, got: %q", payload.Message)
 	}
 }

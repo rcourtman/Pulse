@@ -731,7 +731,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		// bound to this agent) are both fixed by re-enrolling, while a token
 		// that exists but lacks the scope is named explicitly. Avoids the silent
 		// retry loop that previously gave operators nothing to act on.
-		rejectedMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "agent token not authorized for command execution — re-run the agent installer to enroll an agent:exec-scoped token"})
+		rejectedMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "agent token not authorized for command execution — generate a fresh install command with commands enabled (Settings > Infrastructure > Add Pulse Agent) and re-run it on this host; the existing token cannot be upgraded in place"})
 		if err != nil {
 			log.Warn().Err(err).Str("agent_id", reg.AgentID).Msg("Failed to encode rejection message")
 			conn.Close()
