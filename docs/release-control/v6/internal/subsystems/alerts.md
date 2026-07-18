@@ -103,10 +103,13 @@ is no longer true.
 71. `frontend-modern/src/stores/websocket.ts`
 72. `frontend-modern/src/utils/alerts.ts`
 73. `frontend-modern/src/utils/alertsActivation.ts`
+74. `internal/operationaltrust/contracts.go`
+75. `internal/alerts/operational_contract.go`
 
 ## Shared Boundaries
 
-1. `internal/proxmoxidentity/backup_identity.go` shared with `monitoring`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
+1. `internal/operationaltrust/contracts.go` shared with `notifications`: the operational trust contract is jointly consumed by canonical alert lifecycle ownership and notification delivery linkage without making delivery state operational truth.
+2. `internal/proxmoxidentity/backup_identity.go` shared with `monitoring`, `storage-recovery`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
 Alert multiline field presentation is shared with frontend-primitives:
 notification, timeline, threshold ignored-prefix, and resource threshold note
 editors must compose the shared `FormTextarea` primitive for label/id/help
@@ -125,6 +128,16 @@ overview must preserve active alert truth while notification delivery is
 pending review or snoozed. Notification activation must not clear the browser
 active-alert store, suppress resource indicators, lock threshold/history
 configuration, or claim that monitoring has stopped.
+Operational evidence and lifecycle identity are typed through
+`internal/operationaltrust`. Evidence envelopes distinguish completeness,
+confidence, permissions, freshness, correlation, and bounded provider detail.
+Evidence and transition identifiers are deterministic under retry. Active and
+resolved alert compatibility payloads carry an additive canonical operational
+record, latest transition, and bounded evidence envelopes; legacy alert paths
+must migrate through `internal/alerts/operational_contract.go` and name their
+limited provenance honestly rather than inventing confirmed provider evidence.
+Acknowledgement remains distinct from resolution, and every resolution
+transition references recovery evidence separate from its trigger evidence.
 
 ## Extension Points
 

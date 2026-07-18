@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
@@ -518,6 +519,18 @@ func TestNewNotificationQueue_MigratesAuditAlertIdentifiersColumn(t *testing.T) 
 			columns,
 		)
 	}
+	queueColumns, err := nq.tableColumns("notification_queue")
+	if err != nil {
+		t.Fatalf("tableColumns(notification_queue) failed: %v", err)
+	}
+	if !queueColumns[notificationOperationalLinksColumn] ||
+		!columns[notificationOperationalLinksColumn] {
+		t.Fatalf(
+			"expected migrated operational link columns, queue=%#v audit=%#v",
+			queueColumns,
+			columns,
+		)
+	}
 }
 
 func TestCancelByAlertIdentifiers_MatchingNotificationCancelled(t *testing.T) {
@@ -644,16 +657,35 @@ func TestCancelByAlertIdentifiers_MultipleAlertsPartialMatch(t *testing.T) {
 	// Enqueue a notification with multiple alerts (far future NextRetryAt so background processor doesn't pick it up)
 	futureRetry := time.Now().Add(1 * time.Hour)
 	notif := &QueuedNotification{
-		ID:          "notif-multi",
-		Type:        "webhook",
-		Status:      QueueStatusPending,
-		MaxAttempts: 3,
-		Config:      []byte(`{"url":"https://hooks.example.test"}`),
-		NextRetryAt: &futureRetry,
+		ID:            "notif-multi",
+		Type:          "webhook",
+		DestinationID: "webhook:primary",
+		Status:        QueueStatusPending,
+		MaxAttempts:   3,
+		Config:        []byte(`{"url":"https://hooks.example.test"}`),
+		NextRetryAt:   &futureRetry,
 		Alerts: []*alerts.Alert{
-			{ID: "alert-1"},
-			{ID: "alert-2"},
-			{ID: "alert-3"},
+			{
+				ID:                "alert-1",
+				OperationalRecord: &operationaltrust.OperationalRecord{ID: "record-1"},
+				LatestTransition: &operationaltrust.LifecycleTransition{
+					ID: "transition-1", To: operationaltrust.OperationalOpen, CauseKey: "cause-1",
+				},
+			},
+			{
+				ID:                "alert-2",
+				OperationalRecord: &operationaltrust.OperationalRecord{ID: "record-2"},
+				LatestTransition: &operationaltrust.LifecycleTransition{
+					ID: "transition-2", To: operationaltrust.OperationalOpen, CauseKey: "cause-2",
+				},
+			},
+			{
+				ID:                "alert-3",
+				OperationalRecord: &operationaltrust.OperationalRecord{ID: "record-3"},
+				LatestTransition: &operationaltrust.LifecycleTransition{
+					ID: "transition-3", To: operationaltrust.OperationalOpen, CauseKey: "cause-3",
+				},
+			},
 		},
 	}
 	if err := nq.Enqueue(notif); err != nil {
@@ -681,12 +713,13 @@ func TestCancelByAlertIdentifiers_MultipleAlertsPartialMatch(t *testing.T) {
 
 	var notifType string
 	var alertsJSON string
+	var linksJSON string
 	var configJSON string
 	var nextRetryAt sql.NullInt64
 	if err := nq.db.QueryRow(
-		`SELECT type, alerts, config, next_retry_at FROM notification_queue WHERE id = ?`,
+		`SELECT type, alerts, operational_links, config, next_retry_at FROM notification_queue WHERE id = ?`,
 		notif.ID,
-	).Scan(&notifType, &alertsJSON, &configJSON, &nextRetryAt); err != nil {
+	).Scan(&notifType, &alertsJSON, &linksJSON, &configJSON, &nextRetryAt); err != nil {
 		t.Fatalf("Failed to query rewritten notification row: %v", err)
 	}
 	if notifType != notif.Type {
@@ -705,6 +738,15 @@ func TestCancelByAlertIdentifiers_MultipleAlertsPartialMatch(t *testing.T) {
 	}
 	if len(remaining) != 1 || remaining[0].ID != "alert-2" {
 		t.Fatalf("remaining alerts = %#v, want only alert-2", remaining)
+	}
+	var remainingLinks []operationaltrust.NotificationLink
+	if err := json.Unmarshal([]byte(linksJSON), &remainingLinks); err != nil {
+		t.Fatalf("failed to unmarshal rewritten operational links: %v", err)
+	}
+	if len(remainingLinks) != 1 ||
+		remainingLinks[0].OperationalRecordID != "record-2" ||
+		remainingLinks[0].TransitionID != "transition-2" {
+		t.Fatalf("remaining operational links = %#v, want only alert-2 link", remainingLinks)
 	}
 }
 
@@ -1575,5 +1617,141 @@ func TestSetProcessorTriggersPendingDelivery(t *testing.T) {
 			t.Fatalf("notification status = %q after processor wakeup, want %q", status, QueueStatusSent)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestNotificationQueuePersistsGroupedOperationalLinksAcrossDeliveryStates(t *testing.T) {
+	nq, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewNotificationQueue() error = %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	makeAlert := func(id, recordID, transitionID string) *alerts.Alert {
+		return &alerts.Alert{
+			ID: id,
+			OperationalRecord: &operationaltrust.OperationalRecord{
+				ID: recordID,
+			},
+			LatestTransition: &operationaltrust.LifecycleTransition{
+				ID:                  transitionID,
+				OperationalRecordID: recordID,
+				To:                  operationaltrust.OperationalOpen,
+				CauseKey:            id + "-cause",
+			},
+		}
+	}
+	createdAt := time.Date(2026, 7, 18, 20, 0, 0, 123, time.UTC)
+	notif := &QueuedNotification{
+		Type:          "email",
+		DestinationID: "destination-primary-email",
+		Alerts: []*alerts.Alert{
+			makeAlert("alert-1", "record-1", "transition-1"),
+			makeAlert("alert-2", "record-2", "transition-2"),
+		},
+		Config:      json.RawMessage(`{}`),
+		CreatedAt:   createdAt,
+		MaxAttempts: 3,
+	}
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Enqueue() error = %v", err)
+	}
+	if notif.ID == "" {
+		t.Fatal("notification id is empty")
+	}
+	if len(notif.Links) != 2 {
+		t.Fatalf("queued link count = %d, want 2", len(notif.Links))
+	}
+	for _, link := range notif.Links {
+		if link.NotificationID != notif.ID ||
+			link.DestinationID != notif.DestinationID ||
+			link.DeliveryState != operationaltrust.NotificationQueued {
+			t.Fatalf("queued link = %+v", link)
+		}
+		if err := link.Validate(); err != nil {
+			t.Fatalf("queued link Validate() error = %v", err)
+		}
+	}
+
+	if err := nq.IncrementAttemptAndSetStatus(
+		notif.ID,
+		QueueStatusSending,
+	); err != nil {
+		t.Fatalf("IncrementAttemptAndSetStatus() error = %v", err)
+	}
+	delivering, err := nq.getNotificationLinks(notif.ID)
+	if err != nil {
+		t.Fatalf("get delivering links error = %v", err)
+	}
+	for _, link := range delivering {
+		if link.DeliveryState != operationaltrust.NotificationDelivering ||
+			link.AttemptedAt == nil ||
+			link.CompletedAt != nil {
+			t.Fatalf("delivering link = %+v", link)
+		}
+	}
+
+	if err := nq.ScheduleRetry(notif.ID, 1); err != nil {
+		t.Fatalf("ScheduleRetry() error = %v", err)
+	}
+	retrying, err := nq.getNotificationLinks(notif.ID)
+	if err != nil {
+		t.Fatalf("get retrying links error = %v", err)
+	}
+	for index, link := range retrying {
+		if link.NotificationID != notif.ID ||
+			link.TransitionID != delivering[index].TransitionID ||
+			link.DeliveryState != operationaltrust.NotificationRetrying ||
+			link.AttemptedAt == nil ||
+			link.CompletedAt != nil {
+			t.Fatalf("retrying link = %+v", link)
+		}
+	}
+
+	if err := nq.UpdateStatus(notif.ID, QueueStatusSent, ""); err != nil {
+		t.Fatalf("UpdateStatus(sent) error = %v", err)
+	}
+	delivered, err := nq.getNotificationLinks(notif.ID)
+	if err != nil {
+		t.Fatalf("get delivered links error = %v", err)
+	}
+	for _, link := range delivered {
+		if link.NotificationID != notif.ID ||
+			link.DeliveryState != operationaltrust.NotificationDelivered ||
+			link.AttemptedAt == nil ||
+			link.CompletedAt == nil {
+			t.Fatalf("delivered link = %+v", link)
+		}
+		if err := link.Validate(); err != nil {
+			t.Fatalf("delivered link Validate() error = %v", err)
+		}
+	}
+
+	notif.Status = QueueStatusSent
+	notif.Attempts = 1
+	notif.Links = delivered
+	if err := nq.RecordAudit(notif, true, ""); err != nil {
+		t.Fatalf("RecordAudit() error = %v", err)
+	}
+	var auditLinksJSON string
+	if err := nq.db.QueryRow(
+		`SELECT operational_links FROM notification_audit WHERE notification_id = ?`,
+		notif.ID,
+	).Scan(&auditLinksJSON); err != nil {
+		t.Fatalf("query audit links: %v", err)
+	}
+	var auditLinks []operationaltrust.NotificationLink
+	if err := json.Unmarshal([]byte(auditLinksJSON), &auditLinks); err != nil {
+		t.Fatalf("unmarshal audit links: %v", err)
+	}
+	if len(auditLinks) != 2 {
+		t.Fatalf("audit link count = %d, want 2", len(auditLinks))
+	}
+	for index := range auditLinks {
+		if auditLinks[index].NotificationID != delivered[index].NotificationID ||
+			auditLinks[index].TransitionID != delivered[index].TransitionID ||
+			auditLinks[index].DeliveryState != operationaltrust.NotificationDelivered {
+			t.Fatalf("audit link[%d] = %+v, want %+v", index, auditLinks[index], delivered[index])
+		}
 	}
 }

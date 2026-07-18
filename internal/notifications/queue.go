@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
@@ -24,6 +25,7 @@ const defaultQueueMaxAttempts = 3
 const (
 	notificationAuditAlertIdentifiersColumn       = "alert_identifiers"
 	legacyNotificationAuditAlertIdentifiersColumn = "alert_ids"
+	notificationOperationalLinksColumn            = "operational_links"
 	notificationQueueDirName                      = "notifications"
 	notificationQueueFileName                     = "notification_queue.db"
 )
@@ -42,20 +44,22 @@ const (
 
 // QueuedNotification represents a notification in the persistent queue
 type QueuedNotification struct {
-	ID           string                  `json:"id"`
-	Type         string                  `json:"type"` // email, webhook, apprise
-	Method       string                  `json:"method,omitempty"`
-	Status       NotificationQueueStatus `json:"status"`
-	Alerts       []*alerts.Alert         `json:"alerts"`
-	Config       json.RawMessage         `json:"config"` // EmailConfig, WebhookConfig, or AppriseConfig
-	Attempts     int                     `json:"attempts"`
-	MaxAttempts  int                     `json:"maxAttempts"`
-	LastAttempt  *time.Time              `json:"lastAttempt,omitempty"`
-	LastError    *string                 `json:"lastError,omitempty"`
-	CreatedAt    time.Time               `json:"createdAt"`
-	NextRetryAt  *time.Time              `json:"nextRetryAt,omitempty"`
-	CompletedAt  *time.Time              `json:"completedAt,omitempty"`
-	PayloadBytes *int                    `json:"payloadBytes,omitempty"`
+	ID            string                              `json:"id"`
+	Type          string                              `json:"type"` // email, webhook, apprise
+	Method        string                              `json:"method,omitempty"`
+	DestinationID string                              `json:"destinationId,omitempty"`
+	Status        NotificationQueueStatus             `json:"status"`
+	Alerts        []*alerts.Alert                     `json:"alerts"`
+	Links         []operationaltrust.NotificationLink `json:"links,omitempty"`
+	Config        json.RawMessage                     `json:"config"` // EmailConfig, WebhookConfig, or AppriseConfig
+	Attempts      int                                 `json:"attempts"`
+	MaxAttempts   int                                 `json:"maxAttempts"`
+	LastAttempt   *time.Time                          `json:"lastAttempt,omitempty"`
+	LastError     *string                             `json:"lastError,omitempty"`
+	CreatedAt     time.Time                           `json:"createdAt"`
+	NextRetryAt   *time.Time                          `json:"nextRetryAt,omitempty"`
+	CompletedAt   *time.Time                          `json:"completedAt,omitempty"`
+	PayloadBytes  *int                                `json:"payloadBytes,omitempty"`
 }
 
 // NotificationQueue manages persistent notification delivery with retries and DLQ
@@ -192,9 +196,10 @@ func (nq *NotificationQueue) initSchema() error {
 		id TEXT PRIMARY KEY,
 		type TEXT NOT NULL,
 		method TEXT,
-		status TEXT NOT NULL,
-		alerts TEXT NOT NULL,
-		config TEXT NOT NULL,
+			status TEXT NOT NULL,
+			alerts TEXT NOT NULL,
+			operational_links TEXT NOT NULL DEFAULT '[]',
+			config TEXT NOT NULL,
 		attempts INTEGER NOT NULL DEFAULT 0,
 		max_attempts INTEGER NOT NULL DEFAULT 3,
 		last_attempt INTEGER,
@@ -215,10 +220,11 @@ func (nq *NotificationQueue) initSchema() error {
 		notification_id TEXT NOT NULL,
 		type TEXT NOT NULL,
 		method TEXT,
-		status TEXT NOT NULL,
-		alert_identifiers TEXT,
-		alert_count INTEGER,
-		attempts INTEGER,
+			status TEXT NOT NULL,
+			alert_identifiers TEXT,
+			alert_count INTEGER,
+			operational_links TEXT NOT NULL DEFAULT '[]',
+			attempts INTEGER,
 		success BOOLEAN,
 		error_message TEXT,
 		payload_size INTEGER,
@@ -235,7 +241,19 @@ func (nq *NotificationQueue) initSchema() error {
 		return err
 	}
 
-	return nq.migrateAlertIdentifierColumns()
+	if err := nq.migrateAlertIdentifierColumns(); err != nil {
+		return err
+	}
+	if err := nq.ensureJSONColumn(
+		"notification_queue",
+		notificationOperationalLinksColumn,
+	); err != nil {
+		return err
+	}
+	return nq.ensureJSONColumn(
+		"notification_audit",
+		notificationOperationalLinksColumn,
+	)
 }
 
 func (nq *NotificationQueue) migrateAlertIdentifierColumns() error {
@@ -293,6 +311,98 @@ func (nq *NotificationQueue) tableColumns(table string) (map[string]bool, error)
 	return columns, nil
 }
 
+func (nq *NotificationQueue) ensureJSONColumn(table, column string) error {
+	columns, err := nq.tableColumns(table)
+	if err != nil {
+		return err
+	}
+	if columns[column] {
+		return nil
+	}
+	if _, err := nq.db.Exec(
+		`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` TEXT NOT NULL DEFAULT '[]'`,
+	); err != nil {
+		return fmt.Errorf("add %s.%s: %w", table, column, err)
+	}
+	return nil
+}
+
+func notificationLinksForAlerts(
+	alertsToLink []*alerts.Alert,
+	destinationID string,
+) []operationaltrust.NotificationLink {
+	destinationID = strings.TrimSpace(destinationID)
+	if destinationID == "" {
+		return nil
+	}
+	links := make([]operationaltrust.NotificationLink, 0, len(alertsToLink))
+	for _, alert := range alertsToLink {
+		if alert == nil ||
+			alert.OperationalRecord == nil ||
+			alert.LatestTransition == nil {
+			continue
+		}
+		links = append(links, operationaltrust.NotificationLink{
+			OperationalRecordID: alert.OperationalRecord.ID,
+			TransitionID:        alert.LatestTransition.ID,
+			LifecycleState:      alert.LatestTransition.To,
+			CauseKey:            alert.LatestTransition.CauseKey,
+			DestinationID:       destinationID,
+			DeliveryState:       operationaltrust.NotificationQueued,
+		})
+	}
+	return links
+}
+
+func notificationTransitionIDs(
+	links []operationaltrust.NotificationLink,
+) []string {
+	ids := make([]string, 0, len(links))
+	for _, link := range links {
+		if id := strings.TrimSpace(link.TransitionID); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+func normalizeNotificationLinks(
+	notificationID string,
+	destinationID string,
+	links []operationaltrust.NotificationLink,
+	state operationaltrust.NotificationDeliveryState,
+	attemptedAt *time.Time,
+	completedAt *time.Time,
+) ([]operationaltrust.NotificationLink, error) {
+	if len(links) == 0 {
+		return nil, nil
+	}
+	normalized := make([]operationaltrust.NotificationLink, 0, len(links))
+	seen := make(map[string]struct{}, len(links))
+	for _, link := range links {
+		link = link.Clone()
+		link.NotificationID = notificationID
+		if strings.TrimSpace(link.DestinationID) == "" {
+			link.DestinationID = strings.TrimSpace(destinationID)
+		}
+		link.DeliveryState = state
+		link.AttemptedAt = attemptedAt
+		link.CompletedAt = completedAt
+		if err := link.Validate(); err != nil {
+			return nil, err
+		}
+		key := link.OperationalRecordID + "\x00" +
+			link.TransitionID + "\x00" +
+			link.DestinationID
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, link)
+	}
+	return normalized, nil
+}
+
 // Enqueue adds a notification to the queue
 func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
 	if notif == nil {
@@ -310,8 +420,34 @@ func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
 		return fmt.Errorf("notification config cannot be empty")
 	}
 
+	if notif.CreatedAt.IsZero() {
+		notif.CreatedAt = time.Now()
+	}
+	if len(notif.Links) == 0 {
+		notif.Links = notificationLinksForAlerts(
+			notif.Alerts,
+			notif.DestinationID,
+		)
+	}
+	if strings.TrimSpace(notif.DestinationID) == "" && len(notif.Links) > 0 {
+		notif.DestinationID = strings.TrimSpace(notif.Links[0].DestinationID)
+	}
 	if notif.ID == "" {
-		notif.ID = fmt.Sprintf("%s-%d", notif.Type, time.Now().UnixNano())
+		transitionIDs := notificationTransitionIDs(notif.Links)
+		if len(transitionIDs) > 0 && strings.TrimSpace(notif.DestinationID) != "" {
+			id, err := operationaltrust.NewNotificationID(
+				notif.DestinationID,
+				notif.Type,
+				notif.CreatedAt,
+				transitionIDs,
+			)
+			if err != nil {
+				return fmt.Errorf("build notification id: %w", err)
+			}
+			notif.ID = id
+		} else {
+			notif.ID = fmt.Sprintf("%s-%d", notif.Type, notif.CreatedAt.UnixNano())
+		}
 	}
 	if notif.Status == "" {
 		notif.Status = QueueStatusPending
@@ -322,13 +458,26 @@ func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
 	if notif.Attempts < 0 {
 		notif.Attempts = 0
 	}
-	if notif.CreatedAt.IsZero() {
-		notif.CreatedAt = time.Now()
+	var err error
+	notif.Links, err = normalizeNotificationLinks(
+		notif.ID,
+		notif.DestinationID,
+		notif.Links,
+		notificationDeliveryStateForQueueStatus(notif.Status),
+		nil,
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("normalize notification links: %w", err)
 	}
 
 	alertsJSON, err := json.Marshal(notif.Alerts)
 	if err != nil {
 		return fmt.Errorf("failed to marshal alerts: %w", err)
+	}
+	linksJSON, err := json.Marshal(notif.Links)
+	if err != nil {
+		return fmt.Errorf("failed to marshal operational links: %w", err)
 	}
 
 	nq.mu.Lock()
@@ -336,8 +485,8 @@ func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
 
 	query := `
 		INSERT INTO notification_queue
-		(id, type, method, status, alerts, config, attempts, max_attempts, created_at, next_retry_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(id, type, method, status, alerts, operational_links, config, attempts, max_attempts, created_at, next_retry_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	var nextRetryAt *int64
@@ -352,6 +501,7 @@ func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
 		notif.Method,
 		notif.Status,
 		string(alertsJSON),
+		string(linksJSON),
 		string(notif.Config),
 		notif.Attempts,
 		notif.MaxAttempts,
@@ -383,19 +533,54 @@ func (nq *NotificationQueue) UpdateStatus(id string, status NotificationQueueSta
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
 
-	now := time.Now().Unix()
-	var completedAt *int64
-	if status == QueueStatusSent || status == QueueStatusFailed || status == QueueStatusDLQ || status == QueueStatusCancelled {
-		completedAt = &now
-	}
+	return nq.updateNotificationStatusNoLock(id, status, errorMsg, time.Now())
+}
 
+func (nq *NotificationQueue) updateNotificationStatusNoLock(
+	id string,
+	status NotificationQueueStatus,
+	errorMsg string,
+	now time.Time,
+) error {
+	links, err := nq.readNotificationLinksNoLock(id)
+	if err != nil {
+		return err
+	}
+	links = transitionNotificationLinks(
+		links,
+		notificationDeliveryStateForQueueStatus(status),
+		now,
+	)
+	linksJSON, err := json.Marshal(links)
+	if err != nil {
+		return fmt.Errorf("marshal notification links for status update: %w", err)
+	}
+	nowUnix := now.Unix()
+	var completedAt *int64
+	if status == QueueStatusSent ||
+		status == QueueStatusFailed ||
+		status == QueueStatusDLQ ||
+		status == QueueStatusCancelled {
+		completedAt = &nowUnix
+	}
 	query := `
 		UPDATE notification_queue
-		SET status = ?, last_attempt = ?, last_error = ?, completed_at = ?
+		SET status = ?, last_attempt = ?, last_error = ?, completed_at = ?,
+		    operational_links = ?,
+		    next_retry_at = CASE WHEN ? THEN NULL ELSE next_retry_at END
 		WHERE id = ?
 	`
 
-	result, err := nq.db.Exec(query, status, now, errorMsg, completedAt, id)
+	result, err := nq.db.Exec(
+		query,
+		status,
+		nowUnix,
+		errorMsg,
+		completedAt,
+		string(linksJSON),
+		completedAt != nil,
+		id,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to update notification status: %w", err)
 	}
@@ -406,6 +591,85 @@ func (nq *NotificationQueue) UpdateStatus(id string, status NotificationQueueSta
 	}
 
 	return nil
+}
+
+func (nq *NotificationQueue) readNotificationLinksNoLock(
+	id string,
+) ([]operationaltrust.NotificationLink, error) {
+	var raw string
+	if err := nq.db.QueryRow(
+		`SELECT operational_links FROM notification_queue WHERE id = ?`,
+		id,
+	).Scan(&raw); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("notification not found: %s", id)
+		}
+		return nil, fmt.Errorf("read notification links: %w", err)
+	}
+	var links []operationaltrust.NotificationLink
+	if err := json.Unmarshal([]byte(raw), &links); err != nil {
+		return nil, fmt.Errorf("unmarshal notification links: %w", err)
+	}
+	return links, nil
+}
+
+func (nq *NotificationQueue) getNotificationLinks(
+	id string,
+) ([]operationaltrust.NotificationLink, error) {
+	nq.mu.RLock()
+	defer nq.mu.RUnlock()
+	return nq.readNotificationLinksNoLock(id)
+}
+
+func notificationDeliveryStateForQueueStatus(
+	status NotificationQueueStatus,
+) operationaltrust.NotificationDeliveryState {
+	switch status {
+	case QueueStatusSending:
+		return operationaltrust.NotificationDelivering
+	case QueueStatusSent:
+		return operationaltrust.NotificationDelivered
+	case QueueStatusFailed:
+		return operationaltrust.NotificationFailed
+	case QueueStatusDLQ:
+		return operationaltrust.NotificationDeadLetter
+	case QueueStatusCancelled:
+		return operationaltrust.NotificationCancelled
+	default:
+		return operationaltrust.NotificationQueued
+	}
+}
+
+func transitionNotificationLinks(
+	links []operationaltrust.NotificationLink,
+	state operationaltrust.NotificationDeliveryState,
+	at time.Time,
+) []operationaltrust.NotificationLink {
+	transitioned := make([]operationaltrust.NotificationLink, len(links))
+	for index := range links {
+		transitioned[index] = links[index].Clone()
+		transitioned[index].DeliveryState = state
+		switch state {
+		case operationaltrust.NotificationQueued:
+			transitioned[index].AttemptedAt = nil
+			transitioned[index].CompletedAt = nil
+		case operationaltrust.NotificationDelivering:
+			attemptedAt := at
+			transitioned[index].AttemptedAt = &attemptedAt
+			transitioned[index].CompletedAt = nil
+		case operationaltrust.NotificationRetrying:
+			transitioned[index].CompletedAt = nil
+		case operationaltrust.NotificationDelivered,
+			operationaltrust.NotificationFailed,
+			operationaltrust.NotificationDeadLetter,
+			operationaltrust.NotificationCancelled:
+			if transitioned[index].AttemptedAt != nil {
+				completedAt := at
+				transitioned[index].CompletedAt = &completedAt
+			}
+		}
+	}
+	return transitioned
 }
 
 // IncrementAttempt increments the attempt counter for a notification
@@ -426,14 +690,29 @@ func (nq *NotificationQueue) IncrementAttemptAndSetStatus(id string, status Noti
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
 
+	now := time.Now()
+	links, err := nq.readNotificationLinksNoLock(id)
+	if err != nil {
+		return err
+	}
+	links = transitionNotificationLinks(
+		links,
+		notificationDeliveryStateForQueueStatus(status),
+		now,
+	)
+	linksJSON, err := json.Marshal(links)
+	if err != nil {
+		return fmt.Errorf("marshal notification links for attempt: %w", err)
+	}
 	query := `
 		UPDATE notification_queue
 		SET attempts = attempts + 1,
 		    status = ?,
-		    last_attempt = ?
+		    last_attempt = ?,
+		    operational_links = ?
 		WHERE id = ?
 	`
-	_, err := nq.db.Exec(query, status, time.Now().Unix(), id)
+	_, err = nq.db.Exec(query, status, now.Unix(), string(linksJSON), id)
 	if err != nil {
 		return fmt.Errorf("failed to increment attempt and set status: %w", err)
 	}
@@ -447,7 +726,8 @@ func (nq *NotificationQueue) GetPending(limit int) ([]*QueuedNotification, error
 
 	query := `
 		SELECT id, type, method, status, alerts, config, attempts, max_attempts,
-		       last_attempt, last_error, created_at, next_retry_at, completed_at, payload_bytes
+		       last_attempt, last_error, created_at, next_retry_at, completed_at, payload_bytes,
+		       operational_links
 		FROM notification_queue
 		WHERE status = 'pending'
 		  AND (next_retry_at IS NULL OR next_retry_at <= ?)
@@ -484,7 +764,7 @@ func (nq *NotificationQueue) GetPending(limit int) ([]*QueuedNotification, error
 // scanNotification scans a database row into a QueuedNotification
 func (nq *NotificationQueue) scanNotification(rows *sql.Rows) (*QueuedNotification, error) {
 	var notif QueuedNotification
-	var alertsJSON, configJSON string
+	var alertsJSON, configJSON, linksJSON string
 	var lastAttempt, nextRetryAt, completedAt *int64
 	var createdAtUnix int64
 
@@ -503,6 +783,7 @@ func (nq *NotificationQueue) scanNotification(rows *sql.Rows) (*QueuedNotificati
 		&nextRetryAt,
 		&completedAt,
 		&notif.PayloadBytes,
+		&linksJSON,
 	)
 	if err != nil {
 		return nil, err
@@ -528,6 +809,12 @@ func (nq *NotificationQueue) scanNotification(rows *sql.Rows) (*QueuedNotificati
 	}
 
 	notif.Config = json.RawMessage(configJSON)
+	if err := json.Unmarshal([]byte(linksJSON), &notif.Links); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal operational links: %w", err)
+	}
+	if len(notif.Links) > 0 {
+		notif.DestinationID = notif.Links[0].DestinationID
+	}
 
 	return &notif, nil
 }
@@ -540,13 +827,33 @@ func (nq *NotificationQueue) ScheduleRetry(id string, attempt int) error {
 	nq.mu.Lock()
 	defer nq.mu.Unlock()
 
+	links, err := nq.readNotificationLinksNoLock(id)
+	if err != nil {
+		return err
+	}
+	links = transitionNotificationLinks(
+		links,
+		operationaltrust.NotificationRetrying,
+		time.Now(),
+	)
+	linksJSON, err := json.Marshal(links)
+	if err != nil {
+		return fmt.Errorf("marshal notification links for retry: %w", err)
+	}
 	query := `
 		UPDATE notification_queue
-		SET status = 'pending', next_retry_at = ?, last_attempt = ?
+		SET status = 'pending', next_retry_at = ?, last_attempt = ?,
+		    operational_links = ?, completed_at = NULL, last_error = NULL
 		WHERE id = ?
 	`
 
-	_, err := nq.db.Exec(query, nextRetry.Unix(), time.Now().Unix(), id)
+	_, err = nq.db.Exec(
+		query,
+		nextRetry.Unix(),
+		time.Now().Unix(),
+		string(linksJSON),
+		id,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to schedule retry: %w", err)
 	}
@@ -573,7 +880,8 @@ func (nq *NotificationQueue) GetDLQ(limit int) ([]*QueuedNotification, error) {
 
 	query := `
 		SELECT id, type, method, status, alerts, config, attempts, max_attempts,
-		       last_attempt, last_error, created_at, next_retry_at, completed_at, payload_bytes
+		       last_attempt, last_error, created_at, next_retry_at, completed_at, payload_bytes,
+		       operational_links
 		FROM notification_queue
 		WHERE status = 'dlq'
 		ORDER BY completed_at DESC
@@ -616,20 +924,25 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 		alertIdentifiers[i] = alert.ID
 	}
 	alertIdentifiersJSON, _ := json.Marshal(alertIdentifiers)
+	linksJSON, err := json.Marshal(notif.Links)
+	if err != nil {
+		return fmt.Errorf("failed to marshal notification links for audit: %w", err)
+	}
 
 	query := `
 		INSERT INTO notification_audit
-		(notification_id, type, method, status, alert_identifiers, alert_count, attempts, success, error_message, payload_size, timestamp)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		(notification_id, type, method, status, alert_identifiers, alert_count, operational_links, attempts, success, error_message, payload_size, timestamp)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := nq.db.Exec(query,
+	_, err = nq.db.Exec(query,
 		notif.ID,
 		notif.Type,
 		notif.Method,
 		notif.Status,
 		string(alertIdentifiersJSON),
 		len(notif.Alerts),
+		string(linksJSON),
 		notif.Attempts,
 		success,
 		errorMsg,
@@ -781,6 +1094,15 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 			Msg("Failed to increment attempt and set status")
 		return
 	}
+	attemptedAt := time.Now()
+	notif.Attempts++
+	notif.Status = QueueStatusSending
+	notif.LastAttempt = &attemptedAt
+	notif.Links = transitionNotificationLinks(
+		notif.Links,
+		operationaltrust.NotificationDelivering,
+		attemptedAt,
+	)
 
 	// Call processor if set
 	nq.mu.RLock()
@@ -792,23 +1114,10 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 
 	err := processor(notif)
 
-	// Record audit
 	success := err == nil
 	errorMsg := ""
 	if err != nil {
 		errorMsg = err.Error()
-	}
-
-	if auditErr := nq.RecordAudit(notif, success, errorMsg); auditErr != nil {
-		log.Error().
-			Err(auditErr).
-			Str("component", "notification_queue").
-			Str("action", "record_audit").
-			Str("id", notif.ID).
-			Str("type", notif.Type).
-			Int("attempt", notif.Attempts+1).
-			Int("maxAttempts", notif.MaxAttempts).
-			Msg("Failed to record audit")
 	}
 
 	if success {
@@ -820,20 +1129,29 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 				Str("action", "mark_sent").
 				Str("id", notif.ID).
 				Str("type", notif.Type).
-				Int("attempt", notif.Attempts+1).
+				Int("attempt", notif.Attempts).
 				Msg("Failed to update notification status to sent")
+		} else {
+			completedAt := time.Now()
+			notif.Status = QueueStatusSent
+			notif.CompletedAt = &completedAt
+			notif.Links = transitionNotificationLinks(
+				notif.Links,
+				operationaltrust.NotificationDelivered,
+				completedAt,
+			)
 		}
 		log.Info().
 			Str("component", "notification_queue").
 			Str("action", "send_success").
 			Str("id", notif.ID).
 			Str("type", notif.Type).
-			Int("attempt", notif.Attempts+1).
+			Int("attempt", notif.Attempts).
 			Int("maxAttempts", notif.MaxAttempts).
 			Msg("Notification sent successfully")
 	} else {
 		// Check if we should retry or move to DLQ
-		if notif.Attempts+1 >= notif.MaxAttempts {
+		if notif.Attempts >= notif.MaxAttempts {
 			// Move to DLQ
 			if dlqErr := nq.MoveToDLQ(notif.ID, errorMsg); dlqErr != nil {
 				log.Error().
@@ -842,44 +1160,80 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 					Str("action", "move_to_dlq").
 					Str("id", notif.ID).
 					Str("type", notif.Type).
-					Int("attempt", notif.Attempts+1).
+					Int("attempt", notif.Attempts).
 					Int("maxAttempts", notif.MaxAttempts).
 					Msg("Failed to move notification to DLQ")
 			} else {
+				completedAt := time.Now()
+				notif.Status = QueueStatusDLQ
+				notif.CompletedAt = &completedAt
+				notif.Links = transitionNotificationLinks(
+					notif.Links,
+					operationaltrust.NotificationDeadLetter,
+					completedAt,
+				)
 				log.Warn().
 					Str("component", "notification_queue").
 					Str("action", "move_to_dlq").
 					Str("id", notif.ID).
 					Str("type", notif.Type).
-					Int("attempts", notif.Attempts+1).
+					Int("attempts", notif.Attempts).
 					Int("maxAttempts", notif.MaxAttempts).
 					Str("error", errorMsg).
 					Msg("notification moved to DLQ after max retries")
 			}
 		} else {
 			// Schedule retry
-			if retryErr := nq.ScheduleRetry(notif.ID, notif.Attempts+1); retryErr != nil {
+			if retryErr := nq.ScheduleRetry(notif.ID, notif.Attempts); retryErr != nil {
 				log.Error().
 					Err(retryErr).
 					Str("component", "notification_queue").
 					Str("action", "schedule_retry").
 					Str("id", notif.ID).
 					Str("type", notif.Type).
-					Int("attempt", notif.Attempts+1).
+					Int("attempt", notif.Attempts).
 					Int("maxAttempts", notif.MaxAttempts).
 					Msg("Failed to schedule retry")
 			} else {
+				notif.Status = QueueStatusPending
+				notif.Links = transitionNotificationLinks(
+					notif.Links,
+					operationaltrust.NotificationRetrying,
+					time.Now(),
+				)
 				log.Warn().
 					Str("component", "notification_queue").
 					Str("action", "schedule_retry").
 					Str("id", notif.ID).
 					Str("type", notif.Type).
-					Int("attempt", notif.Attempts+1).
+					Int("attempt", notif.Attempts).
 					Int("maxAttempts", notif.MaxAttempts).
 					Str("error", errorMsg).
 					Msg("notification failed, scheduled for retry")
 			}
 		}
+	}
+
+	if persistedLinks, linksErr := nq.getNotificationLinks(notif.ID); linksErr != nil {
+		log.Error().
+			Err(linksErr).
+			Str("component", "notification_queue").
+			Str("action", "read_links_for_audit").
+			Str("id", notif.ID).
+			Msg("Failed to read persisted notification links for audit")
+	} else {
+		notif.Links = persistedLinks
+	}
+	if auditErr := nq.RecordAudit(notif, success, errorMsg); auditErr != nil {
+		log.Error().
+			Err(auditErr).
+			Str("component", "notification_queue").
+			Str("action", "record_audit").
+			Str("id", notif.ID).
+			Str("type", notif.Type).
+			Int("attempt", notif.Attempts).
+			Int("maxAttempts", notif.MaxAttempts).
+			Msg("Failed to record audit")
 	}
 }
 
@@ -1047,7 +1401,7 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 	defer nq.mu.Unlock()
 
 	query := `
-		SELECT id, type, status, alerts
+		SELECT id, type, status, alerts, operational_links
 		FROM notification_queue
 		WHERE status IN ('pending', 'sending')
 	`
@@ -1074,6 +1428,7 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 	type queuedAlertCancellation struct {
 		notificationID string
 		remaining      []*alerts.Alert
+		remainingLinks []operationaltrust.NotificationLink
 	}
 
 	var toCancelIDs []string
@@ -1086,7 +1441,14 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 		var notifType string
 		var notifStatus string
 		var alertsJSON []byte
-		if err := rows.Scan(&notifID, &notifType, &notifStatus, &alertsJSON); err != nil {
+		var linksJSON []byte
+		if err := rows.Scan(
+			&notifID,
+			&notifType,
+			&notifStatus,
+			&alertsJSON,
+			&linksJSON,
+		); err != nil {
 			log.Error().
 				Err(err).
 				Str("component", "notification_queue").
@@ -1108,8 +1470,19 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 				Msg("Failed to unmarshal alerts for cancellation check")
 			continue
 		}
+		var links []operationaltrust.NotificationLink
+		if err := json.Unmarshal(linksJSON, &links); err != nil {
+			log.Error().
+				Err(err).
+				Str("component", "notification_queue").
+				Str("action", "cancel_unmarshal_links").
+				Str("notifID", notifID).
+				Msg("Failed to unmarshal operational links for cancellation check")
+			continue
+		}
 
 		remainingAlerts := make([]*alerts.Alert, 0, len(queuedAlerts))
+		removedLinkKeys := make(map[string]struct{})
 		matchedAlertCount := 0
 		for _, alert := range queuedAlerts {
 			if alert == nil {
@@ -1118,6 +1491,9 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 			}
 			if _, exists := alertIdentifierSet[alert.ID]; exists {
 				matchedAlertCount++
+				if alert.OperationalRecord != nil && alert.LatestTransition != nil {
+					removedLinkKeys[alert.OperationalRecord.ID+"\x00"+alert.LatestTransition.ID] = struct{}{}
+				}
 				continue
 			}
 			remainingAlerts = append(remainingAlerts, alert)
@@ -1134,9 +1510,18 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 			toCancelIDs = append(toCancelIDs, notifID)
 			continue
 		}
+		remainingLinks := make([]operationaltrust.NotificationLink, 0, len(links))
+		for _, link := range links {
+			key := link.OperationalRecordID + "\x00" + link.TransitionID
+			if _, removed := removedLinkKeys[key]; removed {
+				continue
+			}
+			remainingLinks = append(remainingLinks, link)
+		}
 		toRewrite = append(toRewrite, queuedAlertCancellation{
 			notificationID: notifID,
 			remaining:      remainingAlerts,
+			remainingLinks: remainingLinks,
 		})
 	}
 
@@ -1149,7 +1534,7 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 	if len(toRewrite) > 0 {
 		updateAlertsQuery := `
 			UPDATE notification_queue
-			SET alerts = ?
+			SET alerts = ?, operational_links = ?
 			WHERE id = ?
 		`
 		for _, rewrite := range toRewrite {
@@ -1157,21 +1542,29 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 			if err != nil {
 				return 0, fmt.Errorf("failed to marshal remaining alerts for %s: %w", rewrite.notificationID, err)
 			}
-			if _, err := nq.db.Exec(updateAlertsQuery, string(alertsJSON), rewrite.notificationID); err != nil {
+			linksJSON, err := json.Marshal(rewrite.remainingLinks)
+			if err != nil {
+				return 0, fmt.Errorf("failed to marshal remaining links for %s: %w", rewrite.notificationID, err)
+			}
+			if _, err := nq.db.Exec(
+				updateAlertsQuery,
+				string(alertsJSON),
+				string(linksJSON),
+				rewrite.notificationID,
+			); err != nil {
 				return 0, fmt.Errorf("failed to rewrite queued notification %s after alert resolution: %w", rewrite.notificationID, err)
 			}
 		}
 	}
 
 	if len(toCancelIDs) > 0 {
-		now := time.Now().Unix()
-		updateQuery := `
-			UPDATE notification_queue
-			SET status = ?, last_attempt = ?, last_error = ?, completed_at = ?, next_retry_at = NULL
-			WHERE id = ?
-		`
 		for _, notifID := range toCancelIDs {
-			if _, err := nq.db.Exec(updateQuery, QueueStatusCancelled, now, "Alert resolved", now, notifID); err != nil {
+			if err := nq.updateNotificationStatusNoLock(
+				notifID,
+				QueueStatusCancelled,
+				"Alert resolved",
+				time.Now(),
+			); err != nil {
 				log.Error().
 					Err(err).
 					Str("component", "notification_queue").
@@ -1222,28 +1615,47 @@ func (nq *NotificationQueue) CancelByTypes(types []string, reason string) error 
 	}
 
 	query := fmt.Sprintf(`
-		UPDATE notification_queue
-		SET status = ?, last_attempt = ?, last_error = ?, completed_at = ?, next_retry_at = NULL
+		SELECT id
+		FROM notification_queue
 		WHERE status IN ('pending', 'sending')
 		  AND type IN (%s)
 	`, strings.Join(placeholders, ","))
 
-	now := time.Now().Unix()
-	updateArgs := make([]any, 0, 4+len(args))
-	updateArgs = append(updateArgs, QueueStatusCancelled, now, reason, now)
-	updateArgs = append(updateArgs, args...)
-
-	result, err := nq.db.Exec(query, updateArgs...)
+	rows, err := nq.db.Query(query, args...)
 	if err != nil {
-		return fmt.Errorf("failed to cancel notifications by type: %w", err)
+		return fmt.Errorf("failed to query notifications by type: %w", err)
+	}
+	var notificationIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan notification by type: %w", err)
+		}
+		notificationIDs = append(notificationIDs, id)
+	}
+	rowsErr := rows.Err()
+	_ = rows.Close()
+	if rowsErr != nil {
+		return fmt.Errorf("iterate notifications by type: %w", rowsErr)
 	}
 
-	rows, _ := result.RowsAffected()
-	if rows > 0 {
+	for _, id := range notificationIDs {
+		if err := nq.updateNotificationStatusNoLock(
+			id,
+			QueueStatusCancelled,
+			reason,
+			time.Now(),
+		); err != nil {
+			return fmt.Errorf("cancel notification %s by type: %w", id, err)
+		}
+	}
+
+	if len(notificationIDs) > 0 {
 		log.Info().
 			Str("component", "notification_queue").
 			Str("action", "cancel_types").
-			Int64("count", rows).
+			Int("count", len(notificationIDs)).
 			Strs("types", types).
 			Str("reason", reason).
 			Msg("cancelled queued notifications by type")

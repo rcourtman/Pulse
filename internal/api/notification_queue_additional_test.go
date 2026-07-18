@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
 
 func newNotificationQueueHandlers(t *testing.T) (*NotificationQueueHandlers, *notifications.NotificationQueue) {
@@ -38,10 +39,23 @@ func enqueueDLQNotification(t *testing.T, queue *notifications.NotificationQueue
 	t.Helper()
 
 	notification := &notifications.QueuedNotification{
-		ID:     id,
-		Type:   "webhook",
-		Status: notifications.QueueStatusDLQ,
-		Alerts: []*alerts.Alert{{ID: "alert-1", Type: "test"}},
+		ID:            id,
+		Type:          "webhook",
+		DestinationID: "webhook:primary",
+		Status:        notifications.QueueStatusDLQ,
+		Alerts: []*alerts.Alert{{
+			ID:   "alert-1",
+			Type: "test",
+			OperationalRecord: &operationaltrust.OperationalRecord{
+				ID: "record-1",
+			},
+			LatestTransition: &operationaltrust.LifecycleTransition{
+				ID:                  "transition-1",
+				OperationalRecordID: "record-1",
+				To:                  operationaltrust.OperationalOpen,
+				CauseKey:            "alert-1",
+			},
+		}},
 		Config: json.RawMessage(`{}`),
 	}
 	if err := queue.Enqueue(notification); err != nil {
@@ -66,6 +80,11 @@ func TestNotificationQueueHandlers_GetDLQAndStats(t *testing.T) {
 	}
 	if len(dlq) != 1 || dlq[0].ID != "notif-1" {
 		t.Fatalf("DLQ = %+v, want notif-1", dlq)
+	}
+	if len(dlq[0].Links) != 1 ||
+		dlq[0].Links[0].TransitionID != "transition-1" ||
+		dlq[0].Links[0].DeliveryState != operationaltrust.NotificationDeadLetter {
+		t.Fatalf("DLQ operational links = %+v", dlq[0].Links)
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/notifications/queue/stats", nil)

@@ -1,5 +1,7 @@
 package alerts
 
+import "time"
+
 func activeAlertStorageKey(alert *Alert, fallback string) string {
 	if fallback == "" && alert == nil {
 		return ""
@@ -103,6 +105,7 @@ func (m *Manager) setActiveAlertNoLock(storageKey string, alert *Alert) {
 		return
 	}
 	backfillCanonicalIdentity(alert)
+	ensureOperationalContract(alert, time.Now())
 	requestedKey := storageKey
 	storageKey = activeAlertStorageKey(alert, storageKey)
 	for _, staleKey := range []string{requestedKey, alert.ID, alert.CanonicalState} {
@@ -116,6 +119,9 @@ func (m *Manager) setActiveAlertNoLock(storageKey string, alert *Alert) {
 	}
 	m.activeAlerts[storageKey] = alert
 	m.registerActiveAlertAliasNoLock(storageKey, alert)
+	if m.historyManager != nil {
+		m.historyManager.UpdateAlertOperationalContractForAlert(alert)
+	}
 }
 
 func (m *Manager) unregisterActiveAlertAliasNoLock(storageKey string, alert *Alert) {

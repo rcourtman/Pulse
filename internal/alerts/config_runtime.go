@@ -549,10 +549,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 
 	for _, alertID := range alertsToResolve {
 		if alert, exists := m.getActiveAlertNoLock(alertID); exists {
-			resolvedAlert := &ResolvedAlert{
-				Alert:        alert,
-				ResolvedTime: time.Now(),
-			}
+			resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
 
 			trackingKey := canonicalTrackingKeyForAlert(alert)
 			if _, isPending := m.pendingAlerts[trackingKey]; isPending {

@@ -239,10 +239,7 @@ func (m *Manager) clearConnectionDegradedAlert(snap ConnectionSnapshot) {
 
 	m.removeActiveAlertNoLock(alertID)
 
-	resolvedAlert := &ResolvedAlert{
-		Alert:        alert,
-		ResolvedTime: time.Now(),
-	}
+	resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
 	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 	m.safeCallResolvedAlertCallback(alert, alertID, true)
 

@@ -441,10 +441,7 @@ func (m *Manager) clearGuestPoweredOffAlert(guestID, name string) {
 	m.removeActiveAlertNoLock(alertID)
 
 	downtime := time.Since(alert.StartTime)
-	resolvedAlert := &ResolvedAlert{
-		Alert:        alert,
-		ResolvedTime: time.Now(),
-	}
+	resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
 	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 
 	// Send recovery notification (async to avoid deadlock because callback acquires m.mu.RLock

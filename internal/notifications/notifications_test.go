@@ -55,6 +55,47 @@ func flushPending(n *NotificationManager) {
 	n.sendGroupedAlerts()
 }
 
+func TestNotificationDestinationIDIgnoresCredentialsAndTracksRouting(t *testing.T) {
+	base := notificationDeliveryJob{
+		Type: "email",
+		EmailConfig: &EmailConfig{
+			Provider: "smtp",
+			SMTPHost: "mail.example.test",
+			SMTPPort: 587,
+			From:     "pulse@example.test",
+			To:       []string{"ops-b@example.test", "ops-a@example.test"},
+			Username: "operator",
+			Password: "secret-a",
+		},
+	}
+	first := notificationDestinationIDForJob(base)
+
+	credentialsChanged := base
+	credentials := *base.EmailConfig
+	credentials.Username = "other-operator"
+	credentials.Password = "secret-b"
+	credentialsChanged.EmailConfig = &credentials
+	if got := notificationDestinationIDForJob(credentialsChanged); got != first {
+		t.Fatalf("credential-only destination id = %q, want %q", got, first)
+	}
+
+	orderChanged := base
+	reordered := *base.EmailConfig
+	reordered.To = []string{"ops-a@example.test", "ops-b@example.test"}
+	orderChanged.EmailConfig = &reordered
+	if got := notificationDestinationIDForJob(orderChanged); got != first {
+		t.Fatalf("recipient-order destination id = %q, want %q", got, first)
+	}
+
+	routeChanged := base
+	differentRoute := *base.EmailConfig
+	differentRoute.To = []string{"security@example.test"}
+	routeChanged.EmailConfig = &differentRoute
+	if got := notificationDestinationIDForJob(routeChanged); got == first {
+		t.Fatalf("routing change kept destination id %q", got)
+	}
+}
+
 func TestNormalizeAppriseConfig(t *testing.T) {
 	original := AppriseConfig{
 		Enabled:        true,

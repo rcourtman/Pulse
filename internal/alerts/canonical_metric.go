@@ -6,6 +6,7 @@ import (
 	"time"
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rs/zerolog/log"
 )
 
@@ -173,7 +174,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		delete(m.pendingAlerts, trackingKey)
 	}
 
-	result, err := alertspecs.Evaluate(spec, metricPreviousState(spec, existingAlert), alertspecs.AlertEvidence{
+	evidence := alertspecs.AlertEvidence{
 		ObservedAt: observedAt,
 		MetricThreshold: &alertspecs.MetricThresholdEvidence{
 			Metric:    metricType,
@@ -183,7 +184,8 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			Recovery:  spec.MetricThreshold.Recovery,
 			Critical:  spec.MetricThreshold.Critical,
 		},
-	})
+	}
+	result, err := alertspecs.Evaluate(spec, metricPreviousState(spec, existingAlert), evidence)
 	if err != nil {
 		log.Warn().
 			Err(err).
@@ -235,6 +237,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			}
 
 			applyCanonicalIdentity(alert, spec.ID, string(spec.Kind))
+			applyCanonicalOperationalEvidence(alert, spec, evidence, time.Now())
 			m.preserveAlertState(storageKey, alert)
 			m.setActiveAlertNoLock(storageKey, alert)
 			m.recentAlerts[trackingKey] = alert
@@ -291,6 +294,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			existingAlert.Metadata[k] = v
 		}
 		applyCanonicalIdentity(existingAlert, spec.ID, string(spec.Kind))
+		applyCanonicalOperationalEvidence(existingAlert, spec, evidence, time.Now())
 
 		shouldRenotify := false
 		if existingAlert.Acknowledged {
@@ -313,10 +317,17 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 			return
 		}
 
-		resolvedAlert := &ResolvedAlert{
-			Alert:        existingAlert,
-			ResolvedTime: observedAt,
+		recoveryEvidence, hasRecoveryEvidence := canonicalAlertEvidenceEnvelope(
+			spec,
+			evidence,
+			existingAlert.Instance,
+			time.Now(),
+		)
+		var recoveryEvidenceRef *operationaltrust.EvidenceEnvelope
+		if hasRecoveryEvidence {
+			recoveryEvidenceRef = &recoveryEvidence
 		}
+		resolvedAlert := m.newResolvedAlert(existingAlert, observedAt, recoveryEvidenceRef)
 		m.removeActiveAlertNoLock(storageKey)
 		m.saveActiveAlertsAsync("canonical metric resolution")
 		m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)

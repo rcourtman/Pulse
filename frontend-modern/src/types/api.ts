@@ -1,6 +1,7 @@
 // Properly typed TypeScript interfaces for Pulse API
 
 import type { Resource } from './resource';
+import type { EvidenceEnvelope, LifecycleTransition, OperationalRecord } from './operationalTrust';
 
 export interface APITokenRecord {
   id: string;
@@ -1208,6 +1209,9 @@ export interface Alert {
   type: string;
   level: 'warning' | 'critical';
   resourceId: string;
+  canonicalSpecId?: string;
+  canonicalKind?: string;
+  canonicalState?: string;
   resourceName: string;
   node: string;
   nodeDisplayName?: string;
@@ -1221,6 +1225,10 @@ export interface Alert {
   ackTime?: string;
   ackUser?: string;
   metadata?: Record<string, unknown>;
+  operationalRecord?: OperationalRecord;
+  latestTransition?: LifecycleTransition;
+  transitions?: LifecycleTransition[];
+  evidence?: EvidenceEnvelope[];
 }
 
 export interface ResolvedAlert extends Alert {

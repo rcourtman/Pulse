@@ -193,6 +193,63 @@ func (hm *HistoryManager) UpdateAlertLastSeenForAlert(alert *Alert, lastSeen tim
 	}
 }
 
+// UpdateAlertOperationalContractForAlert updates the most recent history
+// entry with the durable evidence and lifecycle state from the active alert.
+// This keeps incident history and notification linkage on the same record and
+// transition identities as the runtime alert.
+func (hm *HistoryManager) UpdateAlertOperationalContractForAlert(alert *Alert) {
+	if alert == nil {
+		return
+	}
+
+	snapshot := alert.Clone()
+	if snapshot == nil {
+		return
+	}
+	matchKey := historyIdentityKey(snapshot)
+	matchID := snapshot.ID
+
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+
+	for i := len(hm.history) - 1; i >= 0; i-- {
+		entry := hm.history[i].Alert.Clone()
+		entryKey := historyIdentityKey(entry)
+		if (matchKey != "" && entryKey == matchKey) ||
+			(matchID != "" && hm.history[i].Alert.ID == matchID) {
+			hm.history[i].Alert.OperationalRecord = snapshot.OperationalRecord
+			hm.history[i].Alert.LatestTransition = snapshot.LatestTransition
+			hm.history[i].Alert.Transitions = snapshot.Transitions
+			hm.history[i].Alert.Evidence = snapshot.Evidence
+			return
+		}
+	}
+}
+
+// LatestAlertForAlert returns a clone of the newest history entry matching
+// the alert's canonical identity, with legacy alert ID as the compatibility
+// fallback.
+func (hm *HistoryManager) LatestAlertForAlert(alert *Alert) *Alert {
+	if alert == nil {
+		return nil
+	}
+	matchKey := historyIdentityKey(alert)
+	matchID := alert.ID
+
+	hm.mu.RLock()
+	defer hm.mu.RUnlock()
+
+	for i := len(hm.history) - 1; i >= 0; i-- {
+		entry := hm.history[i].Alert.Clone()
+		entryKey := historyIdentityKey(entry)
+		if (matchKey != "" && entryKey == matchKey) ||
+			(matchID != "" && hm.history[i].Alert.ID == matchID) {
+			return entry
+		}
+	}
+	return nil
+}
+
 // MigrateActiveAlert updates the most recent history entry for an in-flight
 // alert when its canonical runtime identity changes, such as a guest metric
 // alert moving from one node-scoped resource key to another after a VM move.

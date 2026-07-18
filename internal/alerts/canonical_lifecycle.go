@@ -4,6 +4,7 @@ import (
 	"time"
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -399,7 +400,7 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 			alert.Metadata["resourceType"] = string(params.Spec.ResourceType)
 		}
 		applyCanonicalIdentity(alert, params.Spec.ID, string(params.Spec.Kind))
-
+		applyCanonicalOperationalEvidence(alert, params.Spec, params.Evidence, time.Now())
 		m.preserveAlertState(storageKey, alert)
 		m.setActiveAlertNoLock(storageKey, alert)
 		if params.AddToRecent {
@@ -462,10 +463,21 @@ func (m *Manager) evaluateCanonicalLifecycleAlert(params canonicalLifecycleAlert
 		}
 
 		m.removeActiveAlertNoLock(storageKey)
-		resolvedAlert := &ResolvedAlert{
-			Alert:        existing,
-			ResolvedTime: params.Evidence.ObservedAt,
+		recoveryEvidence, hasRecoveryEvidence := canonicalAlertEvidenceEnvelope(
+			params.Spec,
+			params.Evidence,
+			existing.Instance,
+			time.Now(),
+		)
+		var recoveryEvidenceRef *operationaltrust.EvidenceEnvelope
+		if hasRecoveryEvidence {
+			recoveryEvidenceRef = &recoveryEvidence
 		}
+		resolvedAlert := m.newResolvedAlert(
+			existing,
+			params.Evidence.ObservedAt,
+			recoveryEvidenceRef,
+		)
 		m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 		m.safeCallResolvedAlertCallback(existing, storageKey, true)
 		return result, true
@@ -564,7 +576,7 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 			alert.Metadata["resourceType"] = string(params.Spec.ResourceType)
 		}
 		applyCanonicalIdentity(alert, params.Spec.ID, string(params.Spec.Kind))
-
+		applyCanonicalOperationalEvidence(alert, params.Spec, params.Evidence, time.Now())
 		m.preserveAlertState(storageKey, alert)
 		m.setActiveAlertNoLock(storageKey, alert)
 		if params.AddToRecent {
@@ -640,10 +652,21 @@ func (m *Manager) evaluateCanonicalStatefulAlert(params canonicalStatefulAlertPa
 		}
 
 		m.removeActiveAlertNoLock(storageKey)
-		resolvedAlert := &ResolvedAlert{
-			Alert:        existing,
-			ResolvedTime: params.Evidence.ObservedAt,
+		recoveryEvidence, hasRecoveryEvidence := canonicalAlertEvidenceEnvelope(
+			params.Spec,
+			params.Evidence,
+			existing.Instance,
+			time.Now(),
+		)
+		var recoveryEvidenceRef *operationaltrust.EvidenceEnvelope
+		if hasRecoveryEvidence {
+			recoveryEvidenceRef = &recoveryEvidence
 		}
+		resolvedAlert := m.newResolvedAlert(
+			existing,
+			params.Evidence.ObservedAt,
+			recoveryEvidenceRef,
+		)
 		m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 		m.safeCallResolvedAlertCallback(existing, storageKey, true)
 		return result, true

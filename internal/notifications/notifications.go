@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1387,6 +1388,51 @@ func configJSONForNotificationDeliveryJob(job notificationDeliveryJob) ([]byte, 
 	}
 }
 
+func notificationDestinationIDForJob(job notificationDeliveryJob) string {
+	parts := []string{job.Type}
+	switch job.Type {
+	case "email":
+		if job.EmailConfig != nil {
+			recipients := append([]string(nil), job.EmailConfig.To...)
+			sort.Strings(recipients)
+			parts = append(
+				parts,
+				job.EmailConfig.Provider,
+				job.EmailConfig.SMTPHost,
+				strconv.Itoa(job.EmailConfig.SMTPPort),
+				job.EmailConfig.From,
+				strings.Join(recipients, "\x00"),
+			)
+		}
+	case "webhook":
+		if job.WebhookConfig != nil {
+			if id := strings.TrimSpace(job.WebhookConfig.ID); id != "" {
+				return "webhook:" + id
+			}
+			parts = append(
+				parts,
+				job.WebhookConfig.Name,
+				job.WebhookConfig.Service,
+				job.WebhookConfig.URL,
+			)
+		}
+	case "apprise":
+		if job.AppriseConfig != nil {
+			targets := append([]string(nil), job.AppriseConfig.Targets...)
+			sort.Strings(targets)
+			parts = append(
+				parts,
+				string(job.AppriseConfig.Mode),
+				job.AppriseConfig.ServerURL,
+				job.AppriseConfig.ConfigKey,
+				strings.Join(targets, "\x00"),
+			)
+		}
+	}
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\x00")))
+	return "destination:" + hex.EncodeToString(sum[:16])
+}
+
 func (n *NotificationManager) enqueueNotificationJobs(queue *NotificationQueue, jobs []notificationDeliveryJob) bool {
 	if queue == nil {
 		return false
@@ -1402,11 +1448,12 @@ func (n *NotificationManager) enqueueNotificationJobs(queue *NotificationQueue, 
 
 		for _, bucket := range notificationQueueBucketsForJob(job, time.Now()) {
 			notif := &QueuedNotification{
-				Type:        queueTypeForNotificationDeliveryJob(bucket.job),
-				Alerts:      bucket.job.Alerts,
-				Config:      configJSON,
-				MaxAttempts: 3,
-				NextRetryAt: bucket.nextRetryAt,
+				Type:          queueTypeForNotificationDeliveryJob(bucket.job),
+				DestinationID: notificationDestinationIDForJob(bucket.job),
+				Alerts:        bucket.job.Alerts,
+				Config:        configJSON,
+				MaxAttempts:   3,
+				NextRetryAt:   bucket.nextRetryAt,
 			}
 			if err := queue.Enqueue(notif); err != nil {
 				anyFailed = true

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -631,10 +632,11 @@ func (s DiscreteStateSpec) Validate() error {
 }
 
 type AlertEvidence struct {
-	ObservedAt      time.Time         `json:"observedAt"`
-	Summary         string            `json:"summary,omitempty"`
-	Attributes      map[string]string `json:"attributes,omitempty"`
-	ParentConnected *bool             `json:"parentConnected,omitempty"`
+	ObservedAt      time.Time                          `json:"observedAt"`
+	Summary         string                             `json:"summary,omitempty"`
+	Attributes      map[string]string                  `json:"attributes,omitempty"`
+	ParentConnected *bool                              `json:"parentConnected,omitempty"`
+	Envelope        *operationaltrust.EvidenceEnvelope `json:"envelope,omitempty"`
 
 	MetricThreshold        *MetricThresholdEvidence        `json:"metricThreshold,omitempty"`
 	SeverityThreshold      *SeverityThresholdEvidence      `json:"severityThreshold,omitempty"`
@@ -653,6 +655,14 @@ type AlertEvidence struct {
 func (e AlertEvidence) validateForKind(kind AlertSpecKind) error {
 	if e.ObservedAt.IsZero() {
 		return fmt.Errorf("observed at is required")
+	}
+	if e.Envelope != nil {
+		if err := e.Envelope.Validate(); err != nil {
+			return fmt.Errorf("evidence envelope: %w", err)
+		}
+		if !e.Envelope.ObservedAt.Equal(e.ObservedAt) {
+			return fmt.Errorf("evidence envelope observation time does not match detector evidence")
+		}
 	}
 
 	payloads := 0

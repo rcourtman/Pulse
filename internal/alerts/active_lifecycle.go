@@ -80,10 +80,7 @@ func (m *Manager) clearAlert(alertID string) {
 	}
 
 	publicID := effectiveAlertID(alert, alertID)
-	resolvedAlert := &ResolvedAlert{
-		Alert:        alert,
-		ResolvedTime: time.Now(),
-	}
+	resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
 
 	m.addRecentlyResolvedUnlocked(resolvedAlert)
 
@@ -203,6 +200,23 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 		} else {
 			updated.EscalationTimes = nil
 		}
+		if existing.OperationalRecord != nil {
+			value := existing.OperationalRecord.Clone()
+			updated.OperationalRecord = &value
+		}
+		if existing.LatestTransition != nil {
+			value := existing.LatestTransition.Clone()
+			updated.LatestTransition = &value
+		}
+		for _, transition := range existing.Transitions {
+			updated.Transitions = appendOperationalTransition(
+				updated.Transitions,
+				transition.Clone(),
+			)
+		}
+		for _, envelope := range existing.Evidence {
+			updated.Evidence = appendOperationalEvidence(updated.Evidence, envelope.Clone())
+		}
 
 		log.Debug().
 			Str("alertID", alertID).
@@ -210,6 +224,19 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 			Dur("currentDuration", time.Since(existing.StartTime)).
 			Msg("Preserving alert state including StartTime")
 		return
+	}
+
+	if m.historyManager != nil {
+		previous := m.historyManager.LatestAlertForAlert(updated)
+		if previous != nil &&
+			previous.OperationalRecord != nil &&
+			previous.OperationalRecord.ResolvedAt != nil &&
+			previous.OperationalRecord.ResolvedAt.After(time.Now().Add(-recentlyResolvedRetention)) {
+			if !previous.StartTime.IsZero() {
+				updated.StartTime = previous.StartTime
+			}
+			mergeOperationalRecurrence(updated, previous, updated.LastSeen)
+		}
 	}
 
 	if record, ok := m.getAckRecordNoLock(updated, alertID); ok && record.acknowledged {
@@ -301,10 +328,7 @@ func (m *Manager) clearResourceOfflineAlert(resourceID, resourceName, host, reso
 
 	m.removeActiveAlertNoLock(alertID)
 
-	resolvedAlert := &ResolvedAlert{
-		Alert:        alert,
-		ResolvedTime: time.Now(),
-	}
+	resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
 	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 
 	m.safeCallResolvedAlertCallback(alert, alertID, true)
@@ -356,10 +380,7 @@ func (m *Manager) clearAlertNoLock(alertID string) {
 	}
 
 	m.removeActiveAlertNoLock(alertID)
-	resolvedAlert := &ResolvedAlert{
-		Alert:        alert,
-		ResolvedTime: time.Now(),
-	}
+	resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
 
 	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 

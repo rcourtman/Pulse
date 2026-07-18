@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -677,6 +678,56 @@ func TestAlertTransitionValidateRequiresKindSpecificEvidence(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 	if !strings.Contains(err.Error(), "provider incident evidence is required") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestAlertTransitionValidateRequiresEnvelopeObservationMatch(t *testing.T) {
+	t.Parallel()
+
+	observedAt := time.Now().UTC()
+	transition := AlertTransition{
+		SpecID:     "tank-zfs-health",
+		ResourceID: "storage:tank",
+		Kind:       AlertSpecKindProviderIncident,
+		From:       AlertStateClear,
+		To:         AlertStateFiring,
+		At:         observedAt,
+		Evidence: AlertEvidence{
+			ObservedAt: observedAt,
+			Envelope: &operationaltrust.EvidenceEnvelope{
+				ID: "evidence:provider-alert-1",
+				Source: operationaltrust.EvidenceSource{
+					Provider:  "truenas",
+					Collector: "canonical-alert-evaluator",
+				},
+				Subject: operationaltrust.EvidenceSubject{
+					ResourceID: "storage:tank",
+				},
+				ObservedAt:   observedAt,
+				IngestedAt:   observedAt,
+				Completeness: operationaltrust.EvidenceComplete,
+				Confidence:   operationaltrust.EvidenceConfirmed,
+				Permissions:  operationaltrust.EvidencePermissionsSufficient,
+			},
+			ProviderIncident: &ProviderIncidentEvidence{
+				Provider: "truenas",
+				Code:     "truenas_volume_status",
+				NativeID: "provider-alert-1",
+			},
+		},
+	}
+
+	if err := transition.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+
+	transition.Evidence.Envelope.ObservedAt = observedAt.Add(time.Minute)
+	err := transition.Validate()
+	if err == nil {
+		t.Fatal("expected envelope observation mismatch")
+	}
+	if !strings.Contains(err.Error(), "observation time does not match") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

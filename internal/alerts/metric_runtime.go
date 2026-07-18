@@ -490,10 +490,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 
 			if value <= clearThreshold {
 				// Threshold cleared with hysteresis - auto resolve
-				resolvedAlert := &ResolvedAlert{
-					Alert:        existingAlert,
-					ResolvedTime: time.Now(),
-				}
+				resolvedAlert := m.newResolvedAlert(existingAlert, time.Now(), nil)
 
 				// Remove from active alerts
 				m.removeActiveAlertNoLock(alertID)

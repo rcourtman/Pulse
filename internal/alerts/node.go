@@ -314,10 +314,7 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 	// Remove from active alerts
 	m.removeActiveAlertNoLock(alertID)
 
-	resolvedAlert := &ResolvedAlert{
-		Alert:        alert,
-		ResolvedTime: time.Now(),
-	}
+	resolvedAlert := m.newResolvedAlert(alert, time.Now(), nil)
 	m.addRecentlyResolvedWithPrimaryLock(resolvedAlert)
 
 	// Send recovery notification (async to avoid deadlock — callback acquires m.mu.RLock

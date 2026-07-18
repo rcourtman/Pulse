@@ -26,11 +26,15 @@ notification-management API surfaces.
 4. `internal/notifications/webhook_enhanced.go`
 5. `internal/api/notifications.go`
 6. `frontend-modern/src/api/notifications.ts`
+7. `internal/operationaltrust/contracts.go`
+8. `internal/api/notification_queue.go`
 
 ## Shared Boundaries
 
 1. `frontend-modern/src/api/notifications.ts` shared with `api-contracts`: the notifications frontend client is both a notification delivery control surface and a canonical API payload contract boundary.
-2. `internal/api/notifications.go` shared with `api-contracts`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
+2. `internal/api/notification_queue.go` shared with `api-contracts`: the notification queue and DLQ handler is both a notification delivery consequence surface and a canonical API payload boundary for operational transition links.
+3. `internal/api/notifications.go` shared with `api-contracts`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
+4. `internal/operationaltrust/contracts.go` shared with `alerts`: the operational trust contract is jointly consumed by canonical alert lifecycle ownership and notification delivery linkage without making delivery state operational truth.
 
 ## Extension Points
 
@@ -49,6 +53,17 @@ notification-management API surfaces.
 1. Update this contract when canonical notification entry points move
 2. Keep notification API transport and backend delivery proofs aligned in `registry.json`
 3. Preserve explicit queue, webhook-security, and provider-delivery coverage when notification behavior changes
+
+The persistent queue and audit log carry typed `NotificationLink` entries for
+every linked alert in a grouped delivery. A link keeps one notification id,
+operational record id, lifecycle transition id, cause key, destination id, and
+delivery state across queue retries. Queue state is delivery evidence only:
+it must never create, resolve, acknowledge, suppress, or count operational
+records. Resolution notifications link to the recovery-evidence transition.
+Partial cancellation of a grouped firing delivery removes only the links for
+the resolved alerts, while retry, failure, cancellation, and dead-letter state
+remain inspectable in the queue and audit records. Destination identities are
+stable opaque routing identities and must not expose credentials.
 
 ## Current State
 

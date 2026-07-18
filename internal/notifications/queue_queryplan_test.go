@@ -31,7 +31,8 @@ func TestNotificationQueueQueryPlansUseIndexes(t *testing.T) {
 			name: "get pending uses status index",
 			query: `
 				SELECT id, type, method, status, alerts, config, attempts, max_attempts,
-				       last_attempt, last_error, created_at, next_retry_at, completed_at, payload_bytes
+				       last_attempt, last_error, created_at, next_retry_at, completed_at, payload_bytes,
+				       operational_links
 				FROM notification_queue
 				WHERE status = 'pending'
 				  AND (next_retry_at IS NULL OR next_retry_at <= ?)
@@ -48,7 +49,8 @@ func TestNotificationQueueQueryPlansUseIndexes(t *testing.T) {
 			name: "get dlq uses status completed index",
 			query: `
 				SELECT id, type, method, status, alerts, config, attempts, max_attempts,
-				       last_attempt, last_error, created_at, next_retry_at, completed_at, payload_bytes
+				       last_attempt, last_error, created_at, next_retry_at, completed_at, payload_bytes,
+				       operational_links
 				FROM notification_queue
 				WHERE status = 'dlq'
 				ORDER BY completed_at DESC

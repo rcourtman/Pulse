@@ -1,32 +1,40 @@
 package alerts
 
-import "time"
+import (
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
+)
 
 // Alert represents an active alert
 type Alert struct {
-	ID              string                 `json:"id"`
-	Type            string                 `json:"type"` // cpu, memory, disk, etc.
-	Level           AlertLevel             `json:"level"`
-	ResourceID      string                 `json:"resourceId"` // guest or node ID
-	CanonicalSpecID string                 `json:"canonicalSpecId,omitempty"`
-	CanonicalKind   string                 `json:"canonicalKind,omitempty"`
-	CanonicalState  string                 `json:"canonicalState,omitempty"`
-	ResourceName    string                 `json:"resourceName"`
-	Node            string                 `json:"node"`
-	NodeDisplayName string                 `json:"nodeDisplayName,omitempty"`
-	Instance        string                 `json:"instance"`
-	Message         string                 `json:"message"`
-	Value           float64                `json:"value"`
-	Threshold       float64                `json:"threshold"`
-	StartTime       time.Time              `json:"startTime"`
-	LastSeen        time.Time              `json:"lastSeen"`
-	Acknowledged    bool                   `json:"acknowledged"`
-	AckTime         *time.Time             `json:"ackTime,omitempty"`
-	AckUser         string                 `json:"ackUser,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	LastNotified    *time.Time             `json:"lastNotified,omitempty"`
-	LastEscalation  int                    `json:"lastEscalation,omitempty"`
-	EscalationTimes []time.Time            `json:"escalationTimes,omitempty"`
+	ID                string                                 `json:"id"`
+	Type              string                                 `json:"type"` // cpu, memory, disk, etc.
+	Level             AlertLevel                             `json:"level"`
+	ResourceID        string                                 `json:"resourceId"` // guest or node ID
+	CanonicalSpecID   string                                 `json:"canonicalSpecId,omitempty"`
+	CanonicalKind     string                                 `json:"canonicalKind,omitempty"`
+	CanonicalState    string                                 `json:"canonicalState,omitempty"`
+	ResourceName      string                                 `json:"resourceName"`
+	Node              string                                 `json:"node"`
+	NodeDisplayName   string                                 `json:"nodeDisplayName,omitempty"`
+	Instance          string                                 `json:"instance"`
+	Message           string                                 `json:"message"`
+	Value             float64                                `json:"value"`
+	Threshold         float64                                `json:"threshold"`
+	StartTime         time.Time                              `json:"startTime"`
+	LastSeen          time.Time                              `json:"lastSeen"`
+	Acknowledged      bool                                   `json:"acknowledged"`
+	AckTime           *time.Time                             `json:"ackTime,omitempty"`
+	AckUser           string                                 `json:"ackUser,omitempty"`
+	Metadata          map[string]interface{}                 `json:"metadata,omitempty"`
+	LastNotified      *time.Time                             `json:"lastNotified,omitempty"`
+	LastEscalation    int                                    `json:"lastEscalation,omitempty"`
+	EscalationTimes   []time.Time                            `json:"escalationTimes,omitempty"`
+	OperationalRecord *operationaltrust.OperationalRecord    `json:"operationalRecord,omitempty"`
+	LatestTransition  *operationaltrust.LifecycleTransition  `json:"latestTransition,omitempty"`
+	Transitions       []operationaltrust.LifecycleTransition `json:"transitions,omitempty"`
+	Evidence          []operationaltrust.EvidenceEnvelope    `json:"evidence,omitempty"`
 }
 
 // Clone returns a deep copy of the alert so it can be safely shared across goroutines.
@@ -53,6 +61,30 @@ func (a *Alert) Clone() *Alert {
 
 	if a.Metadata != nil {
 		clone.Metadata = cloneMetadata(a.Metadata)
+	}
+
+	if a.OperationalRecord != nil {
+		value := a.OperationalRecord.Clone()
+		clone.OperationalRecord = &value
+	}
+
+	if a.LatestTransition != nil {
+		value := a.LatestTransition.Clone()
+		clone.LatestTransition = &value
+	}
+
+	if len(a.Transitions) > 0 {
+		clone.Transitions = make([]operationaltrust.LifecycleTransition, len(a.Transitions))
+		for index := range a.Transitions {
+			clone.Transitions[index] = a.Transitions[index].Clone()
+		}
+	}
+
+	if len(a.Evidence) > 0 {
+		clone.Evidence = make([]operationaltrust.EvidenceEnvelope, len(a.Evidence))
+		for index := range a.Evidence {
+			clone.Evidence[index] = a.Evidence[index].Clone()
+		}
 	}
 
 	return &clone

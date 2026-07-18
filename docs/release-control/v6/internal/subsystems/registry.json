@@ -780,6 +780,14 @@
       ]
     },
     {
+      "path": "internal/api/notification_queue.go",
+      "rationale": "the notification queue and DLQ handler is both a notification delivery consequence surface and a canonical API payload boundary for operational transition links",
+      "subsystems": [
+        "api-contracts",
+        "notifications"
+      ]
+    },
+    {
       "path": "internal/api/notifications.go",
       "rationale": "notification handlers are both a notification delivery control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -954,6 +962,14 @@
       "subsystems": [
         "agent-lifecycle",
         "monitoring"
+      ]
+    },
+    {
+      "path": "internal/operationaltrust/contracts.go",
+      "rationale": "the operational trust contract is jointly consumed by canonical alert lifecycle ownership and notification delivery linkage without making delivery state operational truth",
+      "subsystems": [
+        "alerts",
+        "notifications"
       ]
     },
     {
@@ -1899,7 +1915,8 @@
       "owned_prefixes": [
         "frontend-modern/src/components/Alerts/",
         "frontend-modern/src/features/alerts/",
-        "internal/alerts/"
+        "internal/alerts/",
+        "internal/operationaltrust/"
       ],
       "owned_files": [
         "frontend-modern/src/pages/Alerts.tsx",
@@ -1988,9 +2005,26 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/alerts/migration_characterization_test.go",
+              "internal/alerts/operational_contract_test.go",
               "internal/alerts/unified_eval_parity_test.go",
               "internal/alerts/unified_eval_test.go",
               "internal/alerts/unified_incidents_test.go"
+            ]
+          },
+          {
+            "id": "operational-trust-contracts",
+            "label": "operational evidence and lifecycle contract proof",
+            "match_prefixes": [
+              "internal/operationaltrust/"
+            ],
+            "match_files": [
+              "internal/alerts/operational_contract.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/alerts/operational_contract_test.go",
+              "internal/operationaltrust/contracts_test.go"
             ]
           },
           {
@@ -2174,6 +2208,7 @@
               "internal/alerts/guest_snapshot_test.go",
               "internal/alerts/history_concurrency_test.go",
               "internal/alerts/history_test.go",
+              "internal/alerts/operational_contract_test.go",
               "internal/alerts/synology_test.go",
               "internal/alerts/threshold_resolution_shared_test.go",
               "internal/alerts/update_alerts_test.go"
@@ -2236,6 +2271,7 @@
         "frontend-modern/src/constants/apiScopes.ts",
         "frontend-modern/src/types/actionAudit.ts",
         "frontend-modern/src/types/api.ts",
+        "frontend-modern/src/types/operationalTrust.ts",
         "frontend-modern/src/utils/agentInstallCommand.ts",
         "frontend-modern/src/utils/apiTokenPresentation.ts",
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
@@ -2667,6 +2703,19 @@
             "test_prefixes": [
               "frontend-modern/src/api/__tests__/"
             ],
+            "exact_files": [
+              "frontend-modern/src/types/api.ts"
+            ]
+          },
+          {
+            "id": "frontend-operational-trust-types",
+            "label": "frontend operational trust type sync proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/types/operationalTrust.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/types/api.ts"
             ]
@@ -5131,7 +5180,9 @@
       ],
       "owned_files": [
         "frontend-modern/src/api/notifications.ts",
-        "internal/api/notifications.go"
+        "internal/api/notification_queue.go",
+        "internal/api/notifications.go",
+        "internal/operationaltrust/contracts.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -5145,14 +5196,31 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/api/notifications.ts",
+              "internal/api/notification_queue.go",
               "internal/api/notifications.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/api/__tests__/notifications.test.ts",
+              "internal/api/notification_queue_additional_test.go",
+              "internal/api/notification_queue_error_test.go",
               "internal/api/notifications_scope_test.go",
               "internal/api/notifications_test.go"
+            ]
+          },
+          {
+            "id": "notification-operational-trust-contract",
+            "label": "notification operational trust linkage proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/operationaltrust/contracts.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/notifications/queue_test.go",
+              "internal/operationaltrust/contracts_test.go"
             ]
           },
           {

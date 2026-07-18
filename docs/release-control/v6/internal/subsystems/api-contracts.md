@@ -47,6 +47,7 @@ product API routes free of maintainer commercial analytics.
 10. `pkg/pulsecli/fleet.go`
 11. `pkg/pulsecli/root.go`
 12. `frontend-modern/src/types/api.ts`
+    12a. `frontend-modern/src/types/operationalTrust.ts`
 13. `frontend-modern/src/types/actionAudit.ts`
 14. `frontend-modern/src/api/actionAudit.ts`
     7a. `frontend-modern/src/api/resourceActions.ts`
@@ -140,6 +141,16 @@ product API routes free of maintainer commercial analytics.
     73b. `pkg/extensions/ai_autofix.go`
 83. `scripts/generate-types.go`
     83a. `internal/api/agent_fleet_doctor.go`
+84. `internal/api/notification_queue.go`
+
+The alert and notification transports expose the operational-trust contract
+additively. Alert payloads may carry a typed operational record, latest
+transition, bounded transition timeline, and evidence envelopes. Notification
+queue and DLQ payloads may carry typed links back to those records and exact
+transitions. Older payloads without these optional fields remain readable;
+frontend consumers use `frontend-modern/src/types/operationalTrust.ts` as the
+single TypeScript projection rather than recreating lifecycle or evidence
+enums locally.
 
 ## Shared Boundaries
 
@@ -1601,11 +1612,12 @@ payload shape change when the portal presents compact client rows.
     Pulse-Pro-as-page-name copy in callback titles, actions, or retry
     guidance.
 71. `internal/api/licensing_legacy_retry.go` shared with `cloud-paid`: the background legacy-exchange retry loop carries both API payload contract and cloud-paid entitlement boundary ownership.
-72. `internal/api/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
-73. `internal/api/org_handlers.go` shared with `organization-settings`: organization management handlers are both an organization settings control surface and a canonical API payload contract boundary.
-74. `internal/api/org_lifecycle_handlers.go` shared with `organization-settings`: organization lifecycle handlers are both an organization settings control surface and a canonical API payload contract boundary.
-75. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
-76. `internal/api/public_signup_handlers.go` shared with `cloud-paid`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
+72. `internal/api/notification_queue.go` shared with `notifications`: the notification queue and DLQ handler is both a notification delivery consequence surface and a canonical API payload boundary for operational transition links.
+73. `internal/api/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
+74. `internal/api/org_handlers.go` shared with `organization-settings`: organization management handlers are both an organization settings control surface and a canonical API payload contract boundary.
+75. `internal/api/org_lifecycle_handlers.go` shared with `organization-settings`: organization lifecycle handlers are both an organization settings control surface and a canonical API payload contract boundary.
+76. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
+77. `internal/api/public_signup_handlers.go` shared with `cloud-paid`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
     That same shared boundary also owns public hosted-signup response privacy:
     syntactically valid `/api/public/signup` requests must return one generic
     `202 Accepted` Pulse Account message whether provisioning/email side effects
