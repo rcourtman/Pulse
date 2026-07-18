@@ -42,6 +42,12 @@ const test = base.extend<{}, WorkerFixtures>({
 test.describe('TrueNAS alert thresholds', () => {
   test.setTimeout(180_000);
 
+  // Desktop presentation spec. The mobile layout collapses the platform
+  // scope filter into the FilterBar sheet, so the 'TrueNAS' scope button
+  // this spec clicks does not exist there and the click falls through to
+  // the platform nav tab; mobile coverage lives in 04-mobile.spec.ts.
+  test.skip(({ isMobile }) => Boolean(isMobile), 'desktop-presentation spec');
+
   test('surfaces TrueNAS systems, pools, datasets, and disks under the TrueNAS thresholds scope', async ({
     page,
   }) => {

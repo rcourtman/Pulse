@@ -41,6 +41,11 @@ const test = base.extend<{}, WorkerFixtures>({
 test.describe('VMware datastores platform section', () => {
   test.setTimeout(180_000);
 
+  // Desktop presentation spec. The mobile layout renders platform tables
+  // as cards, so the tr-row locators this spec asserts on do not exist
+  // there; mobile coverage lives in 04-mobile.spec.ts.
+  test.skip(({ isMobile }) => Boolean(isMobile), 'desktop-presentation spec');
+
   test('surfaces VMware datastores on the platform storage tab without backup semantics', async ({
     page,
   }) => {
