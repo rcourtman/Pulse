@@ -2355,10 +2355,13 @@ type AISettingsResponse struct {
 	PatrolAlertTriggersEnabled   bool `json:"patrol_alert_triggers_enabled"`   // true if alert-driven scoped Patrol triggers are enabled
 	PatrolAnomalyTriggersEnabled bool `json:"patrol_anomaly_triggers_enabled"` // true if anomaly-driven scoped Patrol triggers are enabled
 	// Per-rule policy for alert-driven scoped Patrol triggers.
-	PatrolAlertTriggerMinSeverity string                `json:"patrol_alert_trigger_min_severity"` // "warning" | "critical"; minimum alert level that warrants investigation
-	PatrolAlertTriggerTypes       []string              `json:"patrol_alert_trigger_types"`        // optional allowlist of alert types (empty = all types)
-	UseProactiveThresholds        bool                  `json:"use_proactive_thresholds"`          // true if patrol warns before thresholds (false = use exact thresholds)
-	AvailableModels               []providers.ModelInfo `json:"available_models"`                  // List of models for current provider
+	PatrolAlertTriggerMinSeverity string   `json:"patrol_alert_trigger_min_severity"` // "warning" | "critical"; minimum alert level that warrants investigation
+	PatrolAlertTriggerTypes       []string `json:"patrol_alert_trigger_types"`        // optional allowlist of alert types (empty = all types)
+	// Finding notification routing (email, webhooks, Apprise)
+	PatrolFindingNotificationsEnabled bool                  `json:"patrol_finding_notifications_enabled"` // true if new warning+ findings notify the alert channels
+	PatrolFindingNotifyMinSeverity    string                `json:"patrol_finding_notify_min_severity"`   // "warning" | "critical"; minimum finding severity that notifies
+	UseProactiveThresholds            bool                  `json:"use_proactive_thresholds"`             // true if patrol warns before thresholds (false = use exact thresholds)
+	AvailableModels                   []providers.ModelInfo `json:"available_models"`                     // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
 	AnthropicConfigured       bool                           `json:"anthropic_configured"`      // true if Anthropic API key is set
 	OpenAIConfigured          bool                           `json:"openai_configured"`         // true if OpenAI API key is set
@@ -2520,7 +2523,10 @@ type AISettingsUpdateRequest struct {
 	// Per-rule policy for alert-driven scoped Patrol triggers.
 	PatrolAlertTriggerMinSeverity *string   `json:"patrol_alert_trigger_min_severity,omitempty"` // "warning" | "critical"
 	PatrolAlertTriggerTypes       *[]string `json:"patrol_alert_trigger_types,omitempty"`        // allowlist of alert types (empty slice = all types)
-	UseProactiveThresholds        *bool     `json:"use_proactive_thresholds,omitempty"`          // true if patrol warns before thresholds (default: false = exact thresholds)
+	// Finding notification routing (email, webhooks, Apprise)
+	PatrolFindingNotificationsEnabled *bool   `json:"patrol_finding_notifications_enabled,omitempty"` // true if new warning+ findings notify the alert channels
+	PatrolFindingNotifyMinSeverity    *string `json:"patrol_finding_notify_min_severity,omitempty"`   // "warning" | "critical"
+	UseProactiveThresholds            *bool   `json:"use_proactive_thresholds,omitempty"`             // true if patrol warns before thresholds (default: false = exact thresholds)
 	// Multi-provider credentials
 	AnthropicAPIKey           *string `json:"anthropic_api_key,omitempty"`  // Set Anthropic API key
 	OpenAIAPIKey              *string `json:"openai_api_key,omitempty"`     // Set OpenAI API key
@@ -2663,17 +2669,19 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		AuthMethod:     authMethod,
 		OAuthConnected: settings.OAuthAccessToken != "",
 		// Patrol settings
-		PatrolIntervalMinutes:         settings.PatrolIntervalMinutes,
-		PatrolEnabled:                 settings.PatrolEnabled,
-		PatrolAutoFix:                 settings.PatrolAutoFix && hasAutoFixFeature,
-		AlertTriggeredAnalysis:        settings.AlertTriggeredAnalysis && hasAlertAnalysisFeature,
-		PatrolEventTriggersEnabled:    triggerSettings.AlertTriggersEnabled || triggerSettings.AnomalyTriggersEnabled,
-		PatrolAlertTriggersEnabled:    triggerSettings.AlertTriggersEnabled,
-		PatrolAnomalyTriggersEnabled:  triggerSettings.AnomalyTriggersEnabled,
-		PatrolAlertTriggerMinSeverity: settings.GetPatrolAlertTriggerMinSeverity(),
-		PatrolAlertTriggerTypes:       settings.PatrolAlertTriggerTypes,
-		UseProactiveThresholds:        settings.UseProactiveThresholds,
-		AvailableModels:               nil, // Now populated via /api/ai/models endpoint
+		PatrolIntervalMinutes:             settings.PatrolIntervalMinutes,
+		PatrolEnabled:                     settings.PatrolEnabled,
+		PatrolAutoFix:                     settings.PatrolAutoFix && hasAutoFixFeature,
+		AlertTriggeredAnalysis:            settings.AlertTriggeredAnalysis && hasAlertAnalysisFeature,
+		PatrolEventTriggersEnabled:        triggerSettings.AlertTriggersEnabled || triggerSettings.AnomalyTriggersEnabled,
+		PatrolAlertTriggersEnabled:        triggerSettings.AlertTriggersEnabled,
+		PatrolAnomalyTriggersEnabled:      triggerSettings.AnomalyTriggersEnabled,
+		PatrolAlertTriggerMinSeverity:     settings.GetPatrolAlertTriggerMinSeverity(),
+		PatrolAlertTriggerTypes:           settings.PatrolAlertTriggerTypes,
+		PatrolFindingNotificationsEnabled: settings.PatrolFindingNotificationsEnabled,
+		PatrolFindingNotifyMinSeverity:    settings.GetPatrolFindingNotifyMinSeverity(),
+		UseProactiveThresholds:            settings.UseProactiveThresholds,
+		AvailableModels:                   nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
 		AnthropicConfigured:       settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:          settings.HasProvider(config.AIProviderOpenAI),
@@ -3014,6 +3022,19 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.PatrolAlertTriggerTypes = cleaned
 	}
 
+	// Handle finding notification routing
+	if req.PatrolFindingNotificationsEnabled != nil {
+		settings.PatrolFindingNotificationsEnabled = *req.PatrolFindingNotificationsEnabled
+	}
+	if req.PatrolFindingNotifyMinSeverity != nil {
+		sev := strings.ToLower(strings.TrimSpace(*req.PatrolFindingNotifyMinSeverity))
+		if sev != config.AlertTriggerSeverityWarning && sev != config.AlertTriggerSeverityCritical {
+			http.Error(w, "patrol_finding_notify_min_severity must be 'warning' or 'critical'", http.StatusBadRequest)
+			return
+		}
+		settings.PatrolFindingNotifyMinSeverity = sev
+	}
+
 	// Handle request timeout (for slow hardware)
 	if req.RequestTimeoutSeconds != nil {
 		if *req.RequestTimeoutSeconds < 0 {
@@ -3156,26 +3177,28 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 
 	// Return updated settings
 	response := AISettingsResponse{
-		Enabled:                       settings.Enabled,
-		Model:                         settings.GetModel(),
-		ChatModel:                     config.NormalizeQuickstartModelString(settings.ChatModel),
-		PatrolModel:                   config.NormalizeQuickstartModelString(settings.PatrolModel),
-		AutoFixModel:                  config.NormalizeQuickstartModelString(settings.AutoFixModel),
-		Configured:                    settings.IsConfigured(),
-		CustomContext:                 settings.CustomContext,
-		AuthMethod:                    authMethod,
-		OAuthConnected:                settings.OAuthAccessToken != "",
-		PatrolIntervalMinutes:         settings.PatrolIntervalMinutes,
-		PatrolEnabled:                 settings.PatrolEnabled,
-		PatrolAutoFix:                 settings.PatrolAutoFix && hasAutoFixFeature,
-		AlertTriggeredAnalysis:        settings.AlertTriggeredAnalysis && hasAlertAnalysisFeature,
-		PatrolEventTriggersEnabled:    triggerSettings.AlertTriggersEnabled || triggerSettings.AnomalyTriggersEnabled,
-		PatrolAlertTriggersEnabled:    triggerSettings.AlertTriggersEnabled,
-		PatrolAnomalyTriggersEnabled:  triggerSettings.AnomalyTriggersEnabled,
-		PatrolAlertTriggerMinSeverity: settings.GetPatrolAlertTriggerMinSeverity(),
-		PatrolAlertTriggerTypes:       settings.PatrolAlertTriggerTypes,
-		UseProactiveThresholds:        settings.UseProactiveThresholds,
-		AvailableModels:               nil, // Now populated via /api/ai/models endpoint
+		Enabled:                           settings.Enabled,
+		Model:                             settings.GetModel(),
+		ChatModel:                         config.NormalizeQuickstartModelString(settings.ChatModel),
+		PatrolModel:                       config.NormalizeQuickstartModelString(settings.PatrolModel),
+		AutoFixModel:                      config.NormalizeQuickstartModelString(settings.AutoFixModel),
+		Configured:                        settings.IsConfigured(),
+		CustomContext:                     settings.CustomContext,
+		AuthMethod:                        authMethod,
+		OAuthConnected:                    settings.OAuthAccessToken != "",
+		PatrolIntervalMinutes:             settings.PatrolIntervalMinutes,
+		PatrolEnabled:                     settings.PatrolEnabled,
+		PatrolAutoFix:                     settings.PatrolAutoFix && hasAutoFixFeature,
+		AlertTriggeredAnalysis:            settings.AlertTriggeredAnalysis && hasAlertAnalysisFeature,
+		PatrolEventTriggersEnabled:        triggerSettings.AlertTriggersEnabled || triggerSettings.AnomalyTriggersEnabled,
+		PatrolAlertTriggersEnabled:        triggerSettings.AlertTriggersEnabled,
+		PatrolAnomalyTriggersEnabled:      triggerSettings.AnomalyTriggersEnabled,
+		PatrolAlertTriggerMinSeverity:     settings.GetPatrolAlertTriggerMinSeverity(),
+		PatrolAlertTriggerTypes:           settings.PatrolAlertTriggerTypes,
+		PatrolFindingNotificationsEnabled: settings.PatrolFindingNotificationsEnabled,
+		PatrolFindingNotifyMinSeverity:    settings.GetPatrolFindingNotifyMinSeverity(),
+		UseProactiveThresholds:            settings.UseProactiveThresholds,
+		AvailableModels:                   nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
 		AnthropicConfigured:       settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:          settings.HasProvider(config.AIProviderOpenAI),

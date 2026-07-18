@@ -94,6 +94,8 @@ export interface AISettings {
   patrol_anomaly_triggers_enabled?: boolean; // true if anomaly-driven scoped Patrol triggers are enabled
   patrol_alert_trigger_min_severity?: 'warning' | 'critical'; // minimum alert level that triggers a scoped investigation
   patrol_alert_trigger_types?: string[]; // optional allowlist of alert types (empty = all types)
+  patrol_finding_notifications_enabled?: boolean; // true if new findings notify the alert channels (email, webhooks)
+  patrol_finding_notify_min_severity?: 'warning' | 'critical'; // minimum finding severity that notifies
   patrol_auto_fix?: boolean; // true if Patrol can remediate without approval
   // Multi-provider configuration
   anthropic_configured: boolean; // true if Anthropic API key is set
@@ -173,6 +175,8 @@ export interface AISettingsUpdateRequest {
   patrol_anomaly_triggers_enabled?: boolean; // true if anomaly-driven scoped Patrol triggers are enabled
   patrol_alert_trigger_min_severity?: 'warning' | 'critical'; // minimum alert level that triggers a scoped investigation
   patrol_alert_trigger_types?: string[]; // optional allowlist of alert types (empty = all types)
+  patrol_finding_notifications_enabled?: boolean; // true if new findings notify the alert channels (email, webhooks)
+  patrol_finding_notify_min_severity?: 'warning' | 'critical'; // minimum finding severity that notifies
   patrol_auto_fix?: boolean; // true if Patrol can remediate without approval
   // Multi-provider credentials
   anthropic_api_key?: string; // Set Anthropic API key

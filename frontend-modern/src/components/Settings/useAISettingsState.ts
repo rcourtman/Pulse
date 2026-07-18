@@ -314,6 +314,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
     patrolAlertTriggers: true,
     patrolAnomalyTriggers: true,
     patrolAlertTriggerMinSeverity: 'critical' as 'warning' | 'critical',
+    patrolFindingNotifications: true,
+    patrolFindingNotifyMinSeverity: 'warning' as 'warning' | 'critical',
     patrolAutoFix: false,
     anthropicApiKey: '',
     openaiApiKey: '',
@@ -410,6 +412,8 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         patrolAlertTriggers: true,
         patrolAnomalyTriggers: true,
         patrolAlertTriggerMinSeverity: 'critical',
+        patrolFindingNotifications: true,
+        patrolFindingNotifyMinSeverity: 'warning',
         patrolAutoFix: false,
         anthropicApiKey: '',
         openaiApiKey: '',
@@ -455,6 +459,9 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
       patrolAnomalyTriggers: data.patrol_anomaly_triggers_enabled ?? legacyEventTriggersEnabled,
       patrolAlertTriggerMinSeverity:
         data.patrol_alert_trigger_min_severity === 'warning' ? 'warning' : 'critical',
+      patrolFindingNotifications: data.patrol_finding_notifications_enabled !== false,
+      patrolFindingNotifyMinSeverity:
+        data.patrol_finding_notify_min_severity === 'critical' ? 'critical' : 'warning',
       patrolAutoFix: data.patrol_auto_fix || false,
       anthropicApiKey: '',
       openaiApiKey: '',
@@ -973,6 +980,18 @@ export const useAISettingsState = (options: AISettingsStateOptions = {}) => {
         (settings()?.patrol_alert_trigger_min_severity ?? 'critical')
       ) {
         payload.patrol_alert_trigger_min_severity = form.patrolAlertTriggerMinSeverity;
+      }
+      if (
+        form.patrolFindingNotifications !==
+        (settings()?.patrol_finding_notifications_enabled ?? true)
+      ) {
+        payload.patrol_finding_notifications_enabled = form.patrolFindingNotifications;
+      }
+      if (
+        form.patrolFindingNotifyMinSeverity !==
+        (settings()?.patrol_finding_notify_min_severity ?? 'warning')
+      ) {
+        payload.patrol_finding_notify_min_severity = form.patrolFindingNotifyMinSeverity;
       }
       if (form.patrolAutoFix !== settings()?.patrol_auto_fix) {
         payload.patrol_auto_fix = form.patrolAutoFix;

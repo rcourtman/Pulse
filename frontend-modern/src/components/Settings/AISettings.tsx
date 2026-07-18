@@ -253,6 +253,49 @@ const PatrolSettingsContent: Component<{ state: ReturnType<typeof useAISettingsS
       </div>
 
       <div class="space-y-3">
+        <h3 class="text-sm font-semibold text-base-content">Notifications</h3>
+        <div class="rounded-md border border-border bg-surface-alt p-3">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <p class="text-sm font-medium text-base-content">Finding notifications</p>
+              <p class="mt-1 text-xs text-muted">
+                Send new findings to your alert notification channels (email, webhooks).
+              </p>
+            </div>
+            <Toggle
+              checked={props.state.form.patrolFindingNotifications}
+              onChange={(event) =>
+                props.state.setForm('patrolFindingNotifications', event.currentTarget.checked)
+              }
+              disabled={props.state.saving()}
+              ariaLabel="Enable finding notifications"
+            />
+          </div>
+
+          <Show when={props.state.form.patrolFindingNotifications}>
+            <FormSelect
+              id="ai-patrol-finding-notify-min-severity"
+              label="Notify for findings at or above"
+              value={props.state.form.patrolFindingNotifyMinSeverity}
+              onChange={(event) =>
+                props.state.setForm(
+                  'patrolFindingNotifyMinSeverity',
+                  event.currentTarget.value === 'critical' ? 'critical' : 'warning',
+                )
+              }
+              disabled={props.state.saving()}
+              fieldClass="mt-3 gap-2"
+              labelClass="text-xs font-medium text-muted"
+              selectBaseClass="w-full min-h-10 rounded-md border border-border bg-surface px-3 py-2 text-sm"
+            >
+              <option value="warning">Warning and critical</option>
+              <option value="critical">Critical only</option>
+            </FormSelect>
+          </Show>
+        </div>
+      </div>
+
+      <div class="space-y-3">
         <h3 class="text-sm font-semibold text-base-content">Model readiness</h3>
         <AIModelOverrideField state={props.state} kind="patrol" includePatrolPreflight />
       </div>
