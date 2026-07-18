@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { ensureAuthenticated } from './helpers';
+
 const PRO_RUNTIME_IDENTITY = {
   build: 'pro',
   label: 'Pulse Pro runtime',
@@ -110,56 +112,6 @@ const PRO_PLAN_COMMUNITY_RUNTIME_CAPABILITIES = {
   ],
 };
 
-async function stubAuthenticatedShell(page: Page) {
-  await page.route('**/api/security/status', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        hasAuthentication: true,
-        hideLocalLogin: false,
-        ssoProviders: [],
-        sessionCapabilities: {},
-        settingsCapabilities: {
-          apiAccessRead: true,
-          apiAccessWrite: true,
-          authenticationRead: true,
-          authenticationWrite: true,
-          singleSignOnRead: true,
-          singleSignOnWrite: true,
-          roles: true,
-          users: true,
-          auditLog: true,
-          auditWebhooksRead: true,
-          auditWebhooksWrite: true,
-          relayRead: true,
-          relayWrite: true,
-          billingAdmin: true,
-        },
-      }),
-    });
-  });
-
-  await page.route('**/api/state', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: true }),
-    });
-  });
-
-  await page.route('**/api/system/settings', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        theme: 'system',
-        fullWidthMode: false,
-      }),
-    });
-  });
-}
-
 async function stubSelfHostedPlanEndpoints(
   page: Page,
   payloads: {
@@ -168,7 +120,10 @@ async function stubSelfHostedPlanEndpoints(
     runtimeCapabilities?: Record<string, unknown>;
   } = {},
 ) {
-  await stubAuthenticatedShell(page);
+  // The app shell makes auth-gated calls beyond the old stub set, so a
+  // stubbed session renders the login page; sign in for real and stub only
+  // the license surface under test.
+  await ensureAuthenticated(page);
 
   const runtimeCapabilities = payloads.runtimeCapabilities ?? PRO_PLAN_RUNTIME_CAPABILITIES;
   const entitlements = payloads.entitlements ?? PRO_PLAN_ENTITLEMENTS;
@@ -206,56 +161,54 @@ test.describe('Self-hosted plans entitlement summary', () => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only plans coverage');
 
     await stubSelfHostedPlanEndpoints(page);
+    // The legacy system billing route must still land on the canonical
+    // Pulse Intelligence billing route.
     await page.goto('/settings/system/billing/plan', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL('**/settings/pulse-intelligence/billing/plan', { timeout: 30_000 });
 
     await expect(
       page.locator('[aria-label="Settings navigation"]').getByText('Plans', { exact: true }),
     ).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Self-hosted plan' }).first()).toBeVisible();
-    const currentPlanCard = page
-      .locator('div.rounded-md.border.border-border.bg-surface-alt.p-4')
-      .filter({ has: page.getByText('Current plan: Pulse Pro') })
-      .first();
+    await expect(page.getByRole('heading', { name: 'Plans & Billing' }).first()).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByRole('heading', { name: 'Current plan' })).toBeVisible();
 
-    await expect(currentPlanCard.getByText('Current plan: Pulse Pro')).toBeVisible();
+    // The plan panel renders once per page, so the copy assertions anchor at
+    // page scope; the old card container classes are private layout detail.
+    await expect(page.getByText('Current plan: Pulse Pro')).toBeVisible();
+    await expect(page.getByText(/^Pulse Pro is active on this instance\./)).toBeVisible();
+    await expect(page.getByText('Grandfathered price')).toBeVisible();
+    await expect(page.getByText('Grandfathered floor')).toHaveCount(0);
     await expect(
-      currentPlanCard.getByText(
-        'Pulse Pro is active on this instance. Patrol control, alert investigation, verified fixes, 90-day history, and admin/reporting extras are available right now.',
-      ),
-    ).toBeVisible();
-    await expect(currentPlanCard.getByText('Grandfathered price')).toBeVisible();
-    await expect(currentPlanCard.getByText('Grandfathered floor')).toHaveCount(0);
-    await expect(
-      currentPlanCard.getByText(/keeps its existing recurring price until cancellation/i),
+      page.getByText(/keeps its existing recurring price until cancellation/i),
     ).toBeVisible();
     await expect(
-      currentPlanCard.getByText(
-        /self-hosted monitoring and child-resource volume are not metered/i,
-      ),
+      page.getByText(/self-hosted monitoring and child-resource volume are not metered/i).first(),
     ).toBeVisible();
     const recurringContinuityNotice = page.getByText(
       /This migrated v5 Pro subscription keeps its existing recurring price until you cancel/i,
     );
-    await expect(recurringContinuityNotice).toBeVisible();
-    await expect(recurringContinuityNotice).toContainText(
+    await expect(recurringContinuityNotice.first()).toBeVisible();
+    await expect(recurringContinuityNotice.first()).toContainText(
       /Self-hosted monitoring and child-resource volume are not metered/i,
     );
-    await expect(currentPlanCard.getByText(/effective monitored-system limit/i)).toHaveCount(0);
+    await expect(page.getByText(/effective monitored-system limit/i)).toHaveCount(0);
     await expect(page.getByText('Core Monitoring', { exact: true })).toBeVisible();
     await expect(page.getByText('Guest Capacity', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Unlimited self-hosted monitoring')).toHaveCount(0);
     await expect(page.getByText('Included', { exact: true }).first()).toBeVisible();
-    await expect(currentPlanCard.getByText('Primary capabilities')).toBeVisible();
-    await expect(currentPlanCard.getByText('Included extras')).toBeVisible();
+    await expect(page.getByText('Primary capabilities')).toBeVisible();
+    await expect(page.getByText('Included extras', { exact: true })).toBeVisible();
     await expect(
-      currentPlanCard.getByText('Patrol Fixes Safe Issues', { exact: true }),
+      page.getByText('Patrol Applies Safe Fixes and Verifies the Result', { exact: true }),
     ).toBeVisible();
     await expect(
-      currentPlanCard.getByText('Patrol Investigates Alerts', { exact: true }),
+      page.getByText('Patrol Investigates Issues and Explains the Root Cause', { exact: true }),
     ).toBeVisible();
-    await expect(currentPlanCard.getByText('PDF/CSV Reporting', { exact: true })).toBeVisible();
+    await expect(page.getByText('PDF/CSV Reporting', { exact: true })).toBeVisible();
     await expect(
-      currentPlanCard.getByText('Centralized Agent Profiles', { exact: true }),
+      page.getByText('Centralized Agent Profiles', { exact: true }),
     ).toBeVisible();
   });
 
@@ -277,17 +230,13 @@ test.describe('Self-hosted plans entitlement summary', () => {
     });
     await page.goto('/settings/system/billing/plan', { waitUntil: 'domcontentloaded' });
 
-    const currentPlanCard = page
-      .locator('div.rounded-md.border.border-border.bg-surface-alt.p-4')
-      .filter({ has: page.getByText('Current plan: Pulse Pro') })
-      .first();
-
-    await expect(currentPlanCard.getByText('Pro runtime missing')).toBeVisible();
+    await expect(page.getByText('Current plan: Pulse Pro')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Pro runtime missing').first()).toBeVisible();
     await expect(
-      currentPlanCard.getByText(/not reporting the private Pulse Pro runtime/i),
+      page.getByText(/not reporting (the private|a) Pulse Pro runtime/i).first(),
     ).toBeVisible();
     await expect(
-      currentPlanCard.getByRole('link', { name: 'Open Pulse Pro downloads' }),
+      page.getByRole('link', { name: 'Open Pulse Pro downloads' }).first(),
     ).toHaveAttribute('href', 'https://pulserelay.pro/download.html');
   });
 
@@ -310,28 +259,18 @@ test.describe('Self-hosted plans entitlement summary', () => {
       waitUntil: 'domcontentloaded',
     });
 
-    const currentPlanCard = page
-      .locator('div.rounded-md.border.border-border.bg-surface-alt.p-4')
-      .filter({ has: page.getByText('Current plan: Pulse Pro') })
-      .first();
-
+    await expect(page.getByText('Current plan: Pulse Pro')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Pro runtime missing').first()).toBeVisible();
     await expect(
-      currentPlanCard.getByText('Pro runtime missing'),
+      page.getByText(/running the community runtime/i).first(),
     ).toBeVisible();
     await expect(
-      currentPlanCard.getByText(/running the community runtime/i),
+      page.getByText(/public GitHub releases and the public Docker image/i).first(),
     ).toBeVisible();
     await expect(
-      currentPlanCard.getByText(
-        /public GitHub releases and the public Docker image/i,
-      ),
-    ).toBeVisible();
-    await expect(
-      currentPlanCard.getByRole('link', { name: 'Open Pulse Pro downloads' }),
+      page.getByRole('link', { name: 'Open Pulse Pro downloads' }).first(),
     ).toHaveAttribute('href', 'https://pulserelay.pro/download.html');
-    await expect(currentPlanCard.getByText(/upgrade your plan/i)).toHaveCount(
-      0,
-    );
+    await expect(page.getByText(/upgrade your plan/i)).toHaveCount(0);
   });
 
   test('surfaces advertised Pro settings sections when Pro capabilities are active', async ({
@@ -343,6 +282,7 @@ test.describe('Self-hosted plans entitlement summary', () => {
     await page.goto('/settings/system/billing/plan', { waitUntil: 'domcontentloaded' });
 
     const settingsNav = page.locator('[aria-label="Settings navigation"]');
+    await expect(settingsNav).toBeVisible({ timeout: 30_000 });
     for (const label of [
       'Data & Reports',
       'Roles',

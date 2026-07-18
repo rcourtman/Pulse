@@ -88,7 +88,10 @@ test.describe.serial('Self-hosted paid prompt visibility', () => {
 
     await expect(page.getByRole('heading', { level: 1, name: 'Roles' })).toBeVisible();
     await expect(page.getByText('Custom Roles (Pro)')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Remote Access' })).toHaveCount(0);
+    // Remote Access stays in the nav without the relay feature on purpose:
+    // the panel renders its own upgrade gate, and hiding the item made Relay
+    // undiscoverable for free installs (settingsNavCatalog system-relay).
+    await expect(page.getByRole('button', { name: 'Remote Access' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Roles' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Users' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Audit Log' })).toHaveCount(0);

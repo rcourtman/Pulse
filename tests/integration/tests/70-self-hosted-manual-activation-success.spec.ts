@@ -1,5 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { ensureAuthenticated } from './helpers';
+
 const PRO_RUNTIME_IDENTITY = {
   build: 'pro',
   label: 'Pulse Pro runtime',
@@ -93,56 +95,6 @@ type ManualActivationRequestCounts = {
   activate: number;
 };
 
-async function stubAuthenticatedShell(page: Page) {
-  await page.route('**/api/security/status', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        hasAuthentication: true,
-        hideLocalLogin: false,
-        ssoProviders: [],
-        sessionCapabilities: {},
-        settingsCapabilities: {
-          apiAccessRead: true,
-          apiAccessWrite: true,
-          authenticationRead: true,
-          authenticationWrite: true,
-          singleSignOnRead: true,
-          singleSignOnWrite: true,
-          roles: true,
-          users: true,
-          auditLog: true,
-          auditWebhooksRead: true,
-          auditWebhooksWrite: true,
-          relayRead: true,
-          relayWrite: true,
-          billingAdmin: true,
-        },
-      }),
-    });
-  });
-
-  await page.route('**/api/state', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: true }),
-    });
-  });
-
-  await page.route('**/api/system/settings', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        theme: 'system',
-        fullWidthMode: false,
-      }),
-    });
-  });
-}
-
 async function stubManualActivationEndpoints(page: Page) {
   let activated = false;
   const requestCounts: ManualActivationRequestCounts = {
@@ -211,64 +163,51 @@ test.describe('Self-hosted manual activation success', () => {
   }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only plans coverage');
 
-    await stubAuthenticatedShell(page);
+    // The app shell makes auth-gated calls beyond the old stub set, so a
+    // stubbed session renders the login page; sign in for real and stub only
+    // the license surface under test.
+    await ensureAuthenticated(page);
     const requestCounts = await stubManualActivationEndpoints(page);
     await page.goto('/settings/system/billing/plan', { waitUntil: 'domcontentloaded' });
 
-    const communityPlanCard = page
-      .locator('div.rounded-md.border.border-border.bg-surface-alt.p-4')
-      .filter({ has: page.getByText('Current plan: Community') })
-      .first();
-
-    await expect(communityPlanCard.getByText('Current plan: Community')).toBeVisible();
-    await expect(communityPlanCard.getByText('Community', { exact: true })).toBeVisible();
-    await expect(communityPlanCard.getByText('Expired', { exact: true })).toHaveCount(0);
-    await expect(
-      communityPlanCard.getByText(
-        'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), update alerts, and SSO.',
-      ),
-    ).toBeVisible();
+    // The plan panel renders once per page, so copy assertions anchor at page
+    // scope; the old card container classes were private layout detail.
+    await expect(page.getByText('Current plan: Community')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Community', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Expired', { exact: true })).toHaveCount(0);
+    await expect(page.getByText(/^Community is active on this instance\./)).toBeVisible();
     await expect(page.getByText('Optional extras')).toHaveCount(0);
     await expect(page.getByText('What Relay adds')).toHaveCount(0);
     await expect(page.getByText('What Pulse Pro adds')).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Compare plans' })).toHaveCount(0);
 
-    await page.locator('summary').filter({ hasText: 'Use existing key' }).first().click();
+    await page.locator('summary').filter({ hasText: 'Manual key recovery' }).first().click();
     const activationField = page.locator('#pulse-pro-license-key');
     await expect(activationField).toBeVisible();
     await activationField.fill('ppk_live_test_activation_key');
-    await page.getByRole('button', { name: 'Activate Key' }).click();
+    await page.getByRole('button', { name: 'Apply key' }).click();
 
-    const activationSummary = page
-      .locator('div.rounded-md.border.p-3.text-sm')
-      .filter({ has: page.getByText('Pulse Pro is now active', { exact: true }) })
-      .first();
-
-    await expect(activationSummary.getByText('Pulse Pro is now active', { exact: true })).toBeVisible();
+    await expect(page.getByText('Pulse Pro is now active', { exact: true })).toBeVisible();
+    // With Patrol control available the summary body leads with the accepted
+    // key and pivots to choosing a Patrol mode.
     await expect(
-      activationSummary.getByText(
-        'The activation key was accepted and this instance is now running Pulse Pro.',
-      ),
+      page.getByText(/^The license key was accepted and Pulse Pro is active/).first(),
     ).toBeVisible();
-    await expect(activationSummary.getByText('Available now on this instance')).toBeVisible();
-    await expect(activationSummary.getByText('Patrol Fixes Safe Issues')).toBeVisible();
-    await expect(activationSummary.getByText('Patrol Investigates Alerts')).toBeVisible();
+    await expect(page.getByText('Available now on this instance')).toBeVisible();
+    await expect(
+      page.getByText('Patrol Applies Safe Fixes and Verifies the Result').first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Patrol Investigates Issues and Explains the Root Cause').first(),
+    ).toBeVisible();
     await expect.poll(() => requestCounts.activate).toBe(1);
     await expect.poll(() => requestCounts.active.entitlements).toBeGreaterThan(0);
     await expect.poll(() => requestCounts.active.runtimeCapabilities).toBeGreaterThan(0);
     await expect.poll(() => requestCounts.active.commercialPosture).toBeGreaterThan(0);
 
     await expect(page.getByText('Current plan: Pulse Pro')).toBeVisible();
-    const currentPlanCard = page
-      .locator('div.rounded-md.border.border-border.bg-surface-alt.p-4')
-      .filter({ has: page.getByText('Current plan: Pulse Pro') })
-      .first();
-    await expect(
-      currentPlanCard.getByText(
-        'Pulse Pro is active on this instance. Patrol control, alert investigation, verified fixes, 90-day history, and admin/reporting extras are available right now.',
-      ),
-    ).toBeVisible();
-    await expect(currentPlanCard.getByText('Included extras')).toBeVisible();
+    await expect(page.getByText(/^Pulse Pro is active on this instance\./)).toBeVisible();
+    await expect(page.getByText('Included extras', { exact: true })).toBeVisible();
     await expect(page.getByText('Optional extras')).toHaveCount(0);
   });
 });

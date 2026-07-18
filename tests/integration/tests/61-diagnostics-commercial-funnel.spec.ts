@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { ensureAuthenticated } from "./helpers";
+
 const COMMERCIAL_DIAGNOSTICS_PAYLOAD = {
   version: "6.0.0",
   runtime: "go",
@@ -153,51 +155,18 @@ const COMMERCIAL_DIAGNOSTICS_PAYLOAD = {
   errors: [],
 };
 
-test("renders the commercial funnel diagnostics card in the browser", async ({
+// The Commercial Funnel diagnostics card was deliberately removed from the
+// user-facing diagnostics page (c6bcad255, "Remove internal analytics from
+// diagnostics"); the UI strips commercialFunnel and infrastructureOnboarding
+// from the payload before rendering. This spec pins that boundary: even when
+// the API serves funnel analytics, none of it may render in the browser.
+test("keeps internal commercial-funnel analytics out of the diagnostics page", async ({
   page,
 }, testInfo) => {
-  await page.addInitScript(() => {
-    sessionStorage.setItem(
-      "pulse_auth",
-      JSON.stringify({
-        type: "token",
-        value: "playwright-token",
-      }),
-    );
-    sessionStorage.setItem("pulse_auth_user", "admin");
-  });
-
-  await page.route("**/api/security/status", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        hasAuthentication: true,
-        hideLocalLogin: false,
-        ssoProviders: [],
-        sessionCapabilities: {},
-      }),
-    });
-  });
-
-  await page.route("**/api/state", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ ok: true }),
-    });
-  });
-
-  await page.route("**/api/system/settings", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        theme: "system",
-        fullWidthMode: false,
-      }),
-    });
-  });
+  // The app shell makes auth-gated calls beyond the old stub set, so a
+  // stubbed session renders the login page; sign in for real and stub only
+  // the license and diagnostics surfaces under test.
+  await ensureAuthenticated(page);
 
   for (const path of [
     "**/api/license/runtime-capabilities",
@@ -236,22 +205,31 @@ test("renders the commercial funnel diagnostics card in the browser", async ({
     });
   });
 
-  await page.goto("/operations/diagnostics", { waitUntil: "domcontentloaded" });
+  // Diagnostics moved from the retired /operations shell onto the settings
+  // support group.
+  await page.goto("/settings/support/diagnostics", { waitUntil: "domcontentloaded" });
 
   const runDiagnosticsButton = page
     .locator("button")
     .filter({ hasText: /^Run Diagnostics$/ })
     .first();
 
-  await expect(runDiagnosticsButton).toBeVisible();
+  await expect(runDiagnosticsButton).toBeVisible({ timeout: 30_000 });
   await runDiagnosticsButton.click();
 
-  await expect(page.getByText("Commercial Funnel", { exact: true })).toBeVisible();
-  await expect(page.getByText("Self Hosted Plan", { exact: true })).toBeVisible();
+  // The stubbed payload rendered: the metrics-store card proves the run
+  // completed and the response was consumed.
+  await expect(page.getByText("Metrics Store", { exact: false }).first()).toBeVisible({
+    timeout: 30_000,
+  });
+
+  // None of the internal funnel analytics may surface.
+  await expect(page.getByText("Commercial Funnel", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Self Hosted Plan", { exact: true })).toHaveCount(0);
   await expect(
     page.getByText("Settings Self Hosted Billing Compare Prompt", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText(/Pricing 4/i).first()).toBeVisible();
+  ).toHaveCount(0);
+  await expect(page.getByText(/pricing_viewed/i)).toHaveCount(0);
 
   const screenshotPath = testInfo.outputPath("diagnostics-commercial-funnel.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });

@@ -145,6 +145,7 @@ async function probeDemoCommercialBoundaryFromBrowser(
       vmwareDraftPreview: await probe('/api/vmware/connections/preview', postEmptyJSON),
       vmwareSavedPreview: await probe('/api/vmware/connections/conn-1/preview', postEmptyJSON),
       checkoutStart: await probe('/auth/license-purchase-start'),
+      trialActivate: await probe('/api/license/trial/activate', postEmptyJSON),
     };
   });
 }
@@ -305,7 +306,9 @@ base.describe('Demo mode commercial boundary', () => {
     await page.goto('/settings/system/billing/usage?details=counting-rules', {
       waitUntil: 'domcontentloaded',
     });
-    await page.waitForURL('**/settings/infrastructure/install', { timeout: 15_000 });
+    // The demo shell now redirects hidden billing routes to the settings
+    // infrastructure root (the /install sub-route was retired).
+    await page.waitForURL('**/settings/infrastructure', { timeout: 15_000 });
 
     await expect
       .poll(() => runtimeCapabilitiesRequests, {
@@ -392,6 +395,7 @@ base.describe('Demo mode commercial boundary', () => {
       await hiddenNotFound('**/api/license/clear');
       // Demo mode must keep the retired trial-start route closed.
       await hiddenNotFound('**/api/license/trial/start');
+      await hiddenNotFound('**/api/license/trial/activate');
       await hiddenNotFound('**/api/license/monitored-system-ledger**');
       await hiddenNotFound('**/api/admin/orgs/**/billing-state');
       await hiddenNotFound('**/api/upgrade-metrics/**');
@@ -401,7 +405,7 @@ base.describe('Demo mode commercial boundary', () => {
       await hiddenNotFound('**/api/vmware/connections/*/preview');
       await hiddenNotFound('**/auth/license-purchase-start**');
 
-      await page.goto('/settings/infrastructure/install', { waitUntil: 'domcontentloaded' });
+      await page.goto('/settings/infrastructure', { waitUntil: 'domcontentloaded' });
 
       const responses = await probeDemoCommercialBoundaryFromBrowser(page);
       expectPublicDemoRuntimeCapabilities(responses.runtimeCapabilities);
@@ -430,7 +434,7 @@ base.describe('Managed demo runtime commercial boundary', () => {
         await page.goto('/settings/system/billing/usage?details=counting-rules', {
           waitUntil: 'domcontentloaded',
         });
-        await page.waitForURL('**/settings/infrastructure/install', { timeout: 15_000 });
+        await page.waitForURL('**/settings/infrastructure', { timeout: 15_000 });
 
         await expect(
           page.getByText('Demo instance with mock data (read-only)', { exact: true }),
