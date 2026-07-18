@@ -2180,7 +2180,10 @@ find_connection_state_file() {
     local conn_env=""
     local qnap_state_dir=""
 
-    for conn_env in /var/lib/pulse-agent/connection.env /boot/config/plugins/pulse-agent/connection.env "$TRUENAS_STATE_DIR/connection.env"; do
+    # The operator's --state-dir takes precedence: a second agent instance keeps
+    # its state in a custom directory, and recovering the default instance's
+    # connection.env would resurrect the wrong instance's token and identity.
+    for conn_env in "${STATE_DIR%/}/connection.env" /var/lib/pulse-agent/connection.env /boot/config/plugins/pulse-agent/connection.env "$TRUENAS_STATE_DIR/connection.env"; do
         if [[ -f "$conn_env" ]]; then
             printf '%s\n' "$conn_env"
             return 0
@@ -2199,7 +2202,7 @@ find_connection_state_file() {
 recover_agent_id_from_state_file() {
     local aid_path=""
     local qnap_state_dir=""
-    local aid_paths=(/var/lib/pulse-agent/agent-id /boot/config/plugins/pulse-agent/agent-id "$TRUENAS_STATE_DIR/agent-id")
+    local aid_paths=("${STATE_DIR%/}/agent-id" /var/lib/pulse-agent/agent-id /boot/config/plugins/pulse-agent/agent-id "$TRUENAS_STATE_DIR/agent-id")
 
     qnap_state_dir=$(find_qnap_state_dir || true)
     if [[ -n "$qnap_state_dir" ]]; then
@@ -2554,7 +2557,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
         # Priority: agent-id file (canonical) > hostname API lookup (fallback)
         if [[ -z "$AGENT_ID" ]]; then
             local aid_path=""
-            local aid_paths=(/var/lib/pulse-agent/agent-id /boot/config/plugins/pulse-agent/agent-id "$TRUENAS_STATE_DIR/agent-id")
+            local aid_paths=("${STATE_DIR%/}/agent-id" /var/lib/pulse-agent/agent-id /boot/config/plugins/pulse-agent/agent-id "$TRUENAS_STATE_DIR/agent-id")
             qnap_state_dir=$(find_qnap_state_dir || true)
             if [[ -n "$qnap_state_dir" ]]; then
                 aid_paths+=("$qnap_state_dir/agent-id")

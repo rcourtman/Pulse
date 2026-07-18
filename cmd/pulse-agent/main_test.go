@@ -797,6 +797,9 @@ func TestResolveToken(t *testing.T) {
 		if path == "/var/lib/pulse-agent/token" {
 			return []byte("default-token"), nil
 		}
+		if path == filepath.Join("/var/lib/pulse-agent-custom", "token") {
+			return []byte("custom-state-token"), nil
+		}
 		if path == "valid-file" {
 			return []byte("file-token"), nil
 		}
@@ -808,13 +811,16 @@ func TestResolveToken(t *testing.T) {
 		tokenFlag     string
 		tokenFileFlag string
 		envToken      string
+		stateDir      string
 		expected      string
 	}{
-		{"flag priority", "flag-token", "valid-file", "env-token", "flag-token"},
-		{"file priority", "", "valid-file", "env-token", "file-token"},
-		{"env priority", "", "", "env-token", "env-token"},
-		{"default file priority", "", "", "", "default-token"},
-		{"missing returns empty", "", "", "", "default-token"}, // Wait, default-token will be returned if nothing else is provided
+		{"flag priority", "flag-token", "valid-file", "env-token", "", "flag-token"},
+		{"file priority", "", "valid-file", "env-token", "", "file-token"},
+		{"env priority", "", "", "env-token", "", "env-token"},
+		{"default file priority", "", "", "", "", "default-token"},
+		{"missing returns empty", "", "", "", "", "default-token"}, // Wait, default-token will be returned if nothing else is provided
+		{"custom state dir beats default file", "", "", "", "/var/lib/pulse-agent-custom", "custom-state-token"},
+		{"custom state dir without token falls back to default file", "", "", "", "/var/lib/pulse-agent-empty", "default-token"},
 	}
 
 	// Update the test cases to avoid the default file if we want to test empty
@@ -827,7 +833,7 @@ func TestResolveToken(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := resolveTokenInternal(tc.tokenFlag, tc.tokenFileFlag, tc.envToken, fakeReadFile)
+			got := resolveTokenInternal(tc.tokenFlag, tc.tokenFileFlag, tc.envToken, tc.stateDir, fakeReadFile)
 			if got != tc.expected {
 				t.Fatalf("%s: expected %q, got %q", tc.name, tc.expected, got)
 			}
@@ -835,7 +841,7 @@ func TestResolveToken(t *testing.T) {
 	}
 
 	t.Run("truly empty", func(t *testing.T) {
-		got := resolveTokenInternal("", "", "", fakeReadFileNoDefault)
+		got := resolveTokenInternal("", "", "", "", fakeReadFileNoDefault)
 		if got != "" {
 			t.Fatalf("expected empty, got %q", got)
 		}

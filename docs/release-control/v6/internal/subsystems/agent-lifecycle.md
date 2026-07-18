@@ -371,7 +371,12 @@ that Pulse already sees, the copied stale-agent update command must use
 `scripts/install.sh --update` and recover URL, token, identity, custom CA, and
 insecure transport from installer-owned saved state instead of asking the
 operator to mint a fresh install token or exposing agent IDs in the copied
-command. If saved state is missing and the Unix shell installer falls back to
+command. When the operator supplies a custom `--state-dir`, installer-owned
+saved-state recovery, agent-id recovery, and runtime token placement must
+resolve against that state directory before the default `/var/lib/pulse-agent`
+and platform paths, so a second agent instance with its own state directory
+recovers and stores its own token and identity instead of adopting the default
+instance's. If saved state is missing and the Unix shell installer falls back to
 legacy running-process or service-unit recovery, recovered connection state is
 usable only when both the control-plane URL and token are present. A URL-only
 process or unit may seed later recovery attempts, but it must not be logged or

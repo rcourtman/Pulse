@@ -301,6 +301,11 @@ TLS floor in the dynamic config.
    settings, insecure flag, and persisted agent id from the local installed
    agent state, must fail closed when no existing installation or connection
    state is present, and must refuse to silently become a new install command.
+   When the operator supplies a custom `--state-dir`, saved-state recovery and
+   runtime token placement must resolve against that state directory before
+   the default `/var/lib/pulse-agent` and platform paths, so a second agent
+   instance with its own state directory recovers its own connection state and
+   receives its token in its own state dir instead of the default instance's.
    That recovery must not depend only on a v6 `connection.env`: v5.1.x agents
    that predate persisted connection state may recover the existing URL, token,
    feature flags, identity, and trust posture from the running `pulse-agent`

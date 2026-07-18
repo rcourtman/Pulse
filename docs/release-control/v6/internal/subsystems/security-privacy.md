@@ -323,6 +323,10 @@ the `white_label` branding entitlement.
     retain that sink when remote configuration changes log level, and never
     place runtime tokens or enrollment secrets in the service command or log
     output.
+    Runtime token resolution is instance-scoped: an agent started with a
+    custom `--state-dir` must prefer that directory's token file over the
+    implicit `/var/lib/pulse-agent/token` fallback, so one agent instance
+    never silently authenticates with another instance's credential.
     Global resource timeline reads through `/api/resources/timeline` are
     adjacent monitoring-read surfaces, not a privacy bypass. Provider activity
     filters may expose backend-authored task/event metadata, but the endpoint

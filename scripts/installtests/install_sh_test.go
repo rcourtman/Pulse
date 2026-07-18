@@ -2228,6 +2228,108 @@ func TestStateDirFlagIsAcceptedByInstallerParser(t *testing.T) {
 	}
 }
 
+// TestInstallSHWritesRuntimeTokenToCustomStateDir covers issue #1586: the
+// runtime token must be written to the operator's --state-dir, not the default
+// /var/lib/pulse-agent, so a second agent instance running against a custom
+// state dir can start with the token the installer just stored.
+func TestInstallSHWritesRuntimeTokenToCustomStateDir(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "pulse-agent-nucstack")
+
+	script := `
+		fail() { echo "FAIL:$1"; exit 99; }
+		log_info() { :; }
+		PULSE_URL=""
+		PULSE_TOKEN=""
+		INTERVAL="30s"
+		ENABLE_HOST="true"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBERNETES_EXPLICIT="false"
+		ENABLE_PROXMOX=""
+		PROXMOX_EXPLICIT="false"
+		PROXMOX_TYPE=""
+		UNINSTALL="false"
+		INSECURE="false"
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		ENABLE_COMMANDS="false"
+		ENROLL="false"
+		KUBECONFIG_PATH=""
+		KUBE_INCLUDE_ALL_PODS="false"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+		DISK_EXCLUDES=()
+		STATE_DIR="/var/lib/pulse-agent"
+		CURL_CA_BUNDLE=""
+		NON_INTERACTIVE="false"
+		TOKEN_FILE_PATH=""
+		OUTPUT_FORMAT="text"
+		PREFLIGHT_ONLY="false"
+		RUNTIME_TOKEN_FILE=""
+` + extractInstallShellFunction(t, "ensure_runtime_token_file") + `
+		set -- --url https://pulse.example.com --token deadbeef --state-dir ` + stateDir + ` --non-interactive
+` + extractInstallShellSection(t, "# --- Parse Arguments ---", "# Read token from file if --token-file was provided") + `
+		ensure_runtime_token_file "$STATE_DIR"
+		printf 'RUNTIME_TOKEN_FILE=%s\n' "$RUNTIME_TOKEN_FILE"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	wantTokenFile := filepath.Join(stateDir, "token")
+	if !strings.Contains(string(out), "RUNTIME_TOKEN_FILE="+wantTokenFile) {
+		t.Fatalf("runtime token file not derived from custom --state-dir:\n%s", out)
+	}
+
+	content, err := os.ReadFile(wantTokenFile)
+	if err != nil {
+		t.Fatalf("token was not written to the custom state dir: %v", err)
+	}
+	if string(content) != "deadbeef" {
+		t.Fatalf("token content = %q, want %q", content, "deadbeef")
+	}
+
+	info, err := os.Stat(wantTokenFile)
+	if err != nil {
+		t.Fatalf("stat token file: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("token file mode = %o, want 600", perm)
+	}
+}
+
+// TestInstallSHConnectionStateRecoveryPrefersCustomStateDir pins the second
+// half of issue #1586: update/uninstall recovery must look for connection.env
+// in the operator's --state-dir before the default instance paths, so a
+// custom-state-dir agent recovers its own identity and token instead of the
+// default instance's.
+func TestInstallSHConnectionStateRecoveryPrefersCustomStateDir(t *testing.T) {
+	stateDir := t.TempDir()
+	connEnv := filepath.Join(stateDir, "connection.env")
+	if err := os.WriteFile(connEnv, []byte("PULSE_URL='https://pulse.example.com'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	script := `
+		TRUENAS_STATE_DIR="/data/pulse-agent"
+		STATE_DIR="` + stateDir + `"
+		find_qnap_state_dir() { return 1; }
+` + extractInstallShellFunction(t, "find_connection_state_file") + `
+		find_connection_state_file
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	if got := strings.TrimSpace(string(out)); got != connEnv {
+		t.Fatalf("find_connection_state_file = %q, want %q", got, connEnv)
+	}
+}
+
 func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 	tmpDir := t.TempDir()
 	updatePath := filepath.Join(tmpDir, "update")

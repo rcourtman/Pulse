@@ -975,13 +975,13 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	// URL; the startup warning is emitted once the logger exists in run().
 	securityutil.SetOperatorPlaintextHTTPConsent(*allowPlaintextHTTPFlag)
 
-	// Resolve token with priority: --token > --token-file > env > default file
-	token := resolveToken(*tokenFlag, *tokenFileFlag, envToken)
+	// Resolve token with priority: --token > --token-file > env > state-dir file
+	stateDir := strings.TrimSpace(*stateDirFlag)
+	token := resolveToken(*tokenFlag, *tokenFileFlag, envToken, stateDir)
 
 	// When --enroll is set and a runtime token already exists from a previous
 	// enrollment, use it instead of the bootstrap token embedded in the service
 	// config. This ensures the agent survives restarts after enrollment.
-	stateDir := strings.TrimSpace(*stateDirFlag)
 	if *enrollFlag {
 		enrollStateDir := stateDir
 		if enrollStateDir == "" {
@@ -1199,17 +1199,19 @@ func resolveEnableCommands(enableFlag, disableFlag bool, envEnable, envDisable s
 }
 
 // resolveToken resolves the API token with priority:
-// 1. --token flag (direct value)
-// 2. --token-file flag (read from file)
-// 3. PULSE_TOKEN environment variable
-// 4. Default token file at /var/lib/pulse-agent/token
+//  1. --token flag (direct value)
+//  2. --token-file flag (read from file)
+//  3. PULSE_TOKEN environment variable
+//  4. Token file in --state-dir (a second instance with a custom state dir must
+//     not fall through to the default instance's token)
+//  5. Default token file at /var/lib/pulse-agent/token
 //
 // Reading from a file is more secure than CLI args as tokens won't appear in `ps` output.
-func resolveToken(tokenFlag, tokenFileFlag, envToken string) string {
-	return resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, os.ReadFile)
+func resolveToken(tokenFlag, tokenFileFlag, envToken, stateDir string) string {
+	return resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir, os.ReadFile)
 }
 
-func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken string, readFile func(string) ([]byte, error)) string {
+func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir string, readFile func(string) ([]byte, error)) string {
 	// 1. Direct token from --token flag
 	if t := strings.TrimSpace(tokenFlag); t != "" {
 		return t
@@ -1229,7 +1231,16 @@ func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken string, readFile fu
 		return t
 	}
 
-	// 4. Default token file (most secure method for systemd services)
+	// 4. Token file in the configured state directory
+	if stateDir != "" {
+		if content, err := readFile(filepath.Join(stateDir, "token")); err == nil {
+			if t := strings.TrimSpace(string(content)); t != "" {
+				return t
+			}
+		}
+	}
+
+	// 5. Default token file (most secure method for systemd services)
 	defaultTokenFile := "/var/lib/pulse-agent/token"
 	if content, err := readFile(defaultTokenFile); err == nil {
 		if t := strings.TrimSpace(string(content)); t != "" {
