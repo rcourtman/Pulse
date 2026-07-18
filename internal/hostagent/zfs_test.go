@@ -2,6 +2,8 @@ package hostagent
 
 import (
 	"testing"
+
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
 
 func TestParseZpoolStatusMembers(t *testing.T) {
@@ -80,6 +82,56 @@ func TestNormalizeZFSMemberKeysCoverage(t *testing.T) {
 	for _, want := range expected {
 		if _, ok := gotSet[want]; !ok {
 			t.Fatalf("missing key %q in %v", want, got)
+		}
+	}
+}
+
+func TestNormalizeZFSMemberKeysNVMeEUI(t *testing.T) {
+	got := normalizeZFSMemberKeys("/dev/disk/by-id/nvme-eui.0025385b91501234-part3")
+	expected := []string{
+		"/dev/disk/by-id/nvme-eui.0025385b91501234-part3",
+		"nvme-eui.0025385b91501234-part3",
+		"nvme-eui.0025385b91501234",
+		"0025385b91501234",
+	}
+	gotSet := map[string]struct{}{}
+	for _, k := range got {
+		gotSet[k] = struct{}{}
+	}
+	for _, want := range expected {
+		if _, ok := gotSet[want]; !ok {
+			t.Fatalf("missing key %q in %v", want, got)
+		}
+	}
+}
+
+func TestNormalizeZFSMemberKeysNVMeNamespaceSuffix(t *testing.T) {
+	// systemd nvme by-id links may carry a trailing _<n> namespace suffix; the
+	// serial key must be the real serial, not the namespace digit (#1540).
+	got := normalizeZFSMemberKeys(
+		"/dev/disk/by-id/nvme-Samsung_SSD_990_PRO_4TB_S7DPNF0Y316714T_1-part1",
+	)
+	gotSet := map[string]struct{}{}
+	for _, k := range got {
+		gotSet[k] = struct{}{}
+	}
+	if _, ok := gotSet["s7dpnf0y316714t"]; !ok {
+		t.Fatalf("missing serial key in %v", got)
+	}
+}
+
+func TestPoolForSMARTEntryMatchesEUIWWN(t *testing.T) {
+	pools := map[string]string{}
+	for _, key := range normalizeZFSMemberKeys("/dev/disk/by-id/nvme-eui.0025385b91501234-part3") {
+		pools[key] = "local-zfs"
+	}
+	cases := []agentshost.DiskSMART{
+		{Device: "/dev/nvme1n1", WWN: "eui.0025385B91501234"},
+		{Device: "/dev/nvme1n1", WWN: "0x0025385b91501234"},
+	}
+	for _, entry := range cases {
+		if got := poolForSMARTEntry(pools, entry); got != "local-zfs" {
+			t.Fatalf("poolForSMARTEntry(WWN=%q) = %q, want local-zfs", entry.WWN, got)
 		}
 	}
 }

@@ -184,6 +184,7 @@ func poolForSMARTEntry(pools map[string]string, entry agentshost.DiskSMART) stri
 	}
 	if entry.WWN != "" {
 		wwn := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(entry.WWN)), "0x")
+		wwn = strings.TrimPrefix(wwn, "eui.")
 		if pool := try(wwn); pool != "" {
 			return pool
 		}
@@ -283,6 +284,14 @@ func zfsSerialFromByID(name string) string {
 	if idx := strings.LastIndex(n, "-part"); idx > 0 {
 		n = n[:idx]
 	}
+	// nvme-eui.<hex> references carry the device's WWN/EUI rather than a
+	// serial; smartctl reports the same value as "eui.<hex>" or "0x<hex>".
+	if strings.HasPrefix(n, "nvme-eui.") {
+		return strings.TrimPrefix(n, "nvme-eui.")
+	}
+	// systemd's nvme by-id links can carry a trailing _<n> namespace suffix
+	// (nvme-MODEL_SERIAL_1); the serial is the token before it (#1540).
+	n = stripZFSNVMeNamespaceSuffix(n)
 	if idx := strings.LastIndex(n, "_"); idx > 0 {
 		return n[idx+1:]
 	}
@@ -293,6 +302,28 @@ func zfsSerialFromByID(name string) string {
 		return strings.TrimPrefix(n, "wwn-")
 	}
 	return ""
+}
+
+// stripZFSNVMeNamespaceSuffix removes the trailing _<n> namespace token
+// systemd appends to nvme by-id link names (nvme-MODEL_SERIAL_1). Only short
+// all-digit tokens are stripped, and only when another underscore token
+// remains, so a genuine serial is never truncated.
+func stripZFSNVMeNamespaceSuffix(name string) string {
+	if !strings.HasPrefix(name, "nvme-") {
+		return name
+	}
+	idx := strings.LastIndex(name, "_")
+	if idx <= 0 {
+		return name
+	}
+	suffix := name[idx+1:]
+	if len(suffix) == 0 || len(suffix) > 3 || !allZFSDigits(suffix) {
+		return name
+	}
+	if !strings.Contains(name[:idx], "_") {
+		return name
+	}
+	return name[:idx]
 }
 
 func allZFSDigits(s string) bool {
