@@ -204,6 +204,9 @@ func serialFromByID(raw string) string {
 	if strings.HasPrefix(name, "nvme-eui.") {
 		return strings.TrimPrefix(name, "nvme-eui.")
 	}
+	// systemd's nvme by-id links can carry a trailing _<n> namespace suffix
+	// (nvme-MODEL_SERIAL_1); the serial is the token before it (#1540).
+	name = stripNVMeNamespaceSuffix(name)
 	// The last underscore-separated token is typically the serial.
 	if idx := strings.LastIndex(name, "_"); idx > 0 {
 		return name[idx+1:]
@@ -215,6 +218,28 @@ func serialFromByID(raw string) string {
 		return strings.TrimPrefix(name, "wwn-")
 	}
 	return ""
+}
+
+// stripNVMeNamespaceSuffix removes the trailing _<n> namespace token systemd
+// appends to nvme by-id link names (nvme-MODEL_SERIAL_1). Only short all-digit
+// tokens are stripped, and only when another underscore token remains, so a
+// genuine serial is never truncated.
+func stripNVMeNamespaceSuffix(name string) string {
+	if !strings.HasPrefix(name, "nvme-") {
+		return name
+	}
+	idx := strings.LastIndex(name, "_")
+	if idx <= 0 {
+		return name
+	}
+	suffix := name[idx+1:]
+	if len(suffix) == 0 || len(suffix) > 3 || !allDigits(suffix) {
+		return name
+	}
+	if !strings.Contains(name[:idx], "_") {
+		return name
+	}
+	return name[:idx]
 }
 
 func allDigits(s string) bool {

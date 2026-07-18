@@ -40,6 +40,14 @@ func TestDiskPoolAssignmentLookup(t *testing.T) {
 				{Name: "/dev/disk/by-id/nvme-eui.0025385b91501234-part3", Leaf: 1},
 			},
 		},
+		{
+			Name: "local-zfs",
+			Devices: []proxmox.ZFSPoolDevice{
+				// systemd nvme by-id link with a trailing _1 namespace suffix,
+				// as reported on #1540's pve01.
+				{Name: "/dev/disk/by-id/nvme-Samsung_SSD_990_PRO_4TB_S7DPNF0Y316714T_1-part1", Leaf: 1},
+			},
+		},
 	}
 
 	assignment := buildDiskPoolAssignment(pools)
@@ -63,6 +71,11 @@ func TestDiskPoolAssignmentLookup(t *testing.T) {
 			label: "nvme-eui by-id leaf matches disk WWN in 0x form",
 			disk:  models.PhysicalDisk{DevPath: "/dev/nvme0n1", WWN: "0x0025385b91501234"},
 			want:  "flash",
+		},
+		{
+			label: "nvme by-id leaf with namespace suffix matches disk serial",
+			disk:  models.PhysicalDisk{DevPath: "/dev/nvme2n1", Serial: "S7DPNF0Y316714T"},
+			want:  "local-zfs",
 		},
 		{
 			label: "short leaf name matches partition-stripped devpath",
