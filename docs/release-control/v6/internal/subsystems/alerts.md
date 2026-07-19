@@ -377,10 +377,16 @@ changes must not reintroduce raw `filepath.Join(dataDir, ...)` joins from
 caller-supplied directories or ad hoc history filenames.
 Agentless availability incidents now enter alerts through the same unified
 resource incident bridge as storage, PBS, VM, and host resource incidents.
-`network-endpoint` resources with `SourceAvailability` incidents must create
-canonical `resource-incident` alerts with provider display `Availability`;
-availability alerting must not introduce a second endpoint-only evaluator or
-alert identity family outside `internal/alerts/unified_incidents.go`.
+Standalone `network-endpoint` resources and any canonical resource carrying an
+attached availability facet must create canonical `resource-incident` alerts
+with provider display `Availability`; availability alerting must not introduce
+a second endpoint-only evaluator or alert identity family outside
+`internal/alerts/unified_incidents.go`. When a resource carries multiple
+checks, the incident `NativeID` selects the exact check evidence envelope that
+is copied into the alert and its `OperationalRecord`; the singular
+compatibility summary must never substitute evidence from a different target.
+The same lifecycle transition then projects into Patrol like every other
+canonical operational record.
 
 Notification transport, provider delivery, queue safety, and notification API
 transport now live under the explicit `notifications` subsystem inside the

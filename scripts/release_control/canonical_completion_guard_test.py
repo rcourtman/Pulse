@@ -244,6 +244,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "internal/monitoring/availability_poller_test.go",
                         "internal/monitoring/canonical_guardrails_test.go",
                         "internal/monitoring/monitor_backups_readstate_test.go",
                         "internal/monitoring/monitor_host_agents_test.go",

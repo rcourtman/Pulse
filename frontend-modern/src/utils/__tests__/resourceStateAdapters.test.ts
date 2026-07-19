@@ -402,6 +402,58 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect((resource.platformData as Record<string, unknown>).sources).toEqual(['availability']);
   });
 
+  it('preserves plural attached availability facets across thin realtime merges', () => {
+    const availabilityChecks = [
+      {
+        targetId: 'ops-api',
+        linkedResourceId: 'docker-host-1',
+        protocol: 'tcp',
+        address: '192.0.2.18',
+        port: 8007,
+        available: true,
+        correlationState: 'attached' as const,
+      },
+      {
+        targetId: 'ops-web',
+        linkedResourceId: 'docker-host-1',
+        protocol: 'https',
+        address: 'ops.example.test',
+        path: '/health',
+        available: true,
+        correlationState: 'attached' as const,
+      },
+    ];
+    const existing = {
+      id: 'docker-host-1',
+      type: 'docker-host',
+      name: 'Operations Docker',
+      displayName: 'Operations Docker',
+      platformId: 'docker-host-1',
+      platformType: 'docker',
+      sourceType: 'api',
+      sources: ['docker', 'availability'],
+      status: 'online',
+      lastSeen: Date.now() - 1_000,
+      availability: availabilityChecks[0],
+      availabilityChecks,
+    } as Resource;
+
+    const [resource] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          ...existing,
+          lastSeen: Date.now(),
+          availability: undefined,
+          availabilityChecks: undefined,
+        } as Resource,
+      ],
+      [existing],
+    );
+
+    expect(resource.availability).toEqual(availabilityChecks[0]);
+    expect(resource.availabilityChecks).toEqual(availabilityChecks);
+  });
+
   it('canonicalizes native TrueNAS share resources with the TrueNAS facet intact', () => {
     const [resource] = mergeCanonicalResourceSnapshot(
       [

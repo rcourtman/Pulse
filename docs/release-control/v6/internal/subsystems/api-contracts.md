@@ -7315,6 +7315,15 @@ Mock availability fixtures must still behave like saved targets: `/api/connectio
 reports them as availability rows, `/api/availability-targets` lists them with
 probe status, and saved-test calls return the synthetic probe result instead of
 attempting live network I/O against demo-only addresses.
+Unified-resource transport adds typed availability trust fields without
+changing the saved-target CRUD owner. `availability` remains the singular
+compatibility summary; `availabilityChecks` is the complete attached set; each
+entry may carry `correlationState`, `correlationRule`,
+`correlationReason`, `correlationCandidates`, and an operational-trust
+`evidence` envelope. Attached resources also expose one `checks` relationship
+per saved target. REST, websocket, mock, and workload projections must preserve
+those additive fields unchanged, and frontend consumers must not reconstruct
+correlation or evidence from `/api/availability-targets`.
 That same shared metrics-history contract now also owns physical-disk live I/O
 windows. `internal/api/router.go` must accept `resourceType=disk` on
 `/api/metrics-store/history`, keep `30m` as a valid compact live range, and
@@ -7785,6 +7794,16 @@ invalid Basic credentials attach no principal and fail before the handler.
 This is required for qualification clients and local operators to read,
 approve, reject, and execute governed actions without weakening the same
 capability checks for sessions, proxy users, or API tokens.
+
+### Unified Agent observer report boundary
+
+Existing host, Docker, and Kubernetes report endpoints accept observer reports
+under the observer instance's own API token without a new wire payload shape.
+Authority is an agent-side topology property: only the configured primary
+destination may have its report response interpreted as configuration or
+commands. Proxmox auto-registration remains one destination per request and
+must answer a check-registration request before the agent mutates a local PVE
+or PBS token.
 
 ### Protection posture transport
 

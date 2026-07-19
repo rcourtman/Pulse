@@ -14,6 +14,7 @@ const (
 	RelExposedBy  RelationshipType = "exposed_by"  // e.g., container exposed_by ingress
 	RelOwnedBy    RelationshipType = "owned_by"    // e.g., pod owned_by deployment
 	RelAttachedTo RelationshipType = "attached_to" // e.g., container attached_to network
+	RelChecks     RelationshipType = "checks"      // e.g., availability check checks resource
 )
 
 // ResourceRelationship represents a typed relationship edge between two unified resources.

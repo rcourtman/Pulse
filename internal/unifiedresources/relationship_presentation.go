@@ -34,6 +34,8 @@ func RelationshipTypeLabel(t RelationshipType) string {
 		return "Owned by"
 	case RelAttachedTo:
 		return "Attached to"
+	case RelChecks:
+		return "Checks"
 	default:
 		raw := strings.TrimSpace(strings.ReplaceAll(string(t), "_", " "))
 		if raw == "" {

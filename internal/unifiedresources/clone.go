@@ -44,6 +44,7 @@ func cloneResource(in *Resource) Resource {
 	out.TrueNAS = cloneTrueNASData(in.TrueNAS)
 	out.VMware = cloneVMwareData(in.VMware)
 	out.Availability = cloneAvailabilityData(in.Availability)
+	out.AvailabilityChecks = cloneAvailabilityDataSlice(in.AvailabilityChecks)
 	out.FacetCounts = resourceFacetCounts(out)
 	RefreshCanonicalMetadata(&out)
 	return out
@@ -51,7 +52,8 @@ func cloneResource(in *Resource) Resource {
 
 func resourceFacetCounts(resource Resource) ResourceFacetCounts {
 	return ResourceFacetCounts{
-		RecentChanges: len(resource.RecentChanges),
+		RecentChanges:      len(resource.RecentChanges),
+		AvailabilityChecks: len(AvailabilityChecksForResource(resource)),
 	}
 }
 
@@ -327,7 +329,25 @@ func cloneAvailabilityData(in *AvailabilityData) *AvailabilityData {
 	out := *in
 	out.LastChecked = cloneTimePtr(in.LastChecked)
 	out.LastSuccess = cloneTimePtr(in.LastSuccess)
+	if in.Evidence != nil {
+		evidence := in.Evidence.Clone()
+		out.Evidence = &evidence
+	}
 	return &out
+}
+
+func cloneAvailabilityDataSlice(in []AvailabilityData) []AvailabilityData {
+	if in == nil {
+		return nil
+	}
+	out := make([]AvailabilityData, 0, len(in))
+	for index := range in {
+		cloned := cloneAvailabilityData(&in[index])
+		if cloned != nil {
+			out = append(out, *cloned)
+		}
+	}
+	return out
 }
 
 func cloneVMwareData(in *VMwareData) *VMwareData {

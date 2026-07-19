@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
@@ -79,12 +80,16 @@ type Resource struct {
 	TrueNAS      *TrueNASData      `json:"truenas,omitempty"`
 	VMware       *VMwareData       `json:"vmware,omitempty"`
 	Availability *AvailabilityData `json:"availability,omitempty"`
+	// AvailabilityChecks is the canonical plural facet. Availability remains
+	// the compatibility summary chosen from this set for existing consumers.
+	AvailabilityChecks []AvailabilityData `json:"availabilityChecks,omitempty"`
 }
 
 // ResourceFacetCounts captures the total count of each resource facet that
 // may be surfaced in row summaries or detail drawers.
 type ResourceFacetCounts struct {
 	RecentChanges              int                         `json:"recentChanges"`
+	AvailabilityChecks         int                         `json:"availabilityChecks,omitempty"`
 	RecentChangeKinds          map[ChangeKind]int          `json:"recentChangeKinds,omitempty"`
 	RecentChangeSourceTypes    map[ChangeSourceType]int    `json:"recentChangeSourceTypes,omitempty"`
 	RecentChangeSourceAdapters map[ChangeSourceAdapter]int `json:"recentChangeSourceAdapters,omitempty"`
@@ -1585,26 +1590,43 @@ type TrueNASShare struct {
 	MapAllGroup            string   `json:"mapAllGroup,omitempty"`
 }
 
+// AvailabilityCorrelationState records whether an agentless check has a
+// trustworthy canonical owner. It is deliberately separate from probe health:
+// a reachable endpoint can still have ambiguous identity.
+type AvailabilityCorrelationState string
+
+const (
+	AvailabilityCorrelationAttached   AvailabilityCorrelationState = "attached"
+	AvailabilityCorrelationStandalone AvailabilityCorrelationState = "standalone"
+	AvailabilityCorrelationAmbiguous  AvailabilityCorrelationState = "ambiguous"
+	AvailabilityCorrelationUnresolved AvailabilityCorrelationState = "unresolved"
+)
+
 // AvailabilityData contains agentless endpoint probe metadata for a resource.
 type AvailabilityData struct {
-	TargetID            string     `json:"targetId,omitempty"`
-	LinkedResourceID    string     `json:"linkedResourceId,omitempty"`
-	Name                string     `json:"name,omitempty"`
-	TargetKind          string     `json:"targetKind,omitempty"`
-	Address             string     `json:"address,omitempty"`
-	Protocol            string     `json:"protocol,omitempty"`
-	Port                int        `json:"port,omitempty"`
-	Path                string     `json:"path,omitempty"`
-	Enabled             bool       `json:"enabled"`
-	Available           bool       `json:"available"`
-	LastChecked         *time.Time `json:"lastChecked,omitempty"`
-	LastSuccess         *time.Time `json:"lastSuccess,omitempty"`
-	LatencyMillis       int64      `json:"latencyMillis,omitempty"`
-	ConsecutiveFailures int        `json:"consecutiveFailures,omitempty"`
-	LastError           string     `json:"lastError,omitempty"`
-	FailureThreshold    int        `json:"failureThreshold,omitempty"`
-	PollIntervalSeconds int        `json:"pollIntervalSeconds,omitempty"`
-	TimeoutMillis       int        `json:"timeoutMillis,omitempty"`
+	TargetID              string                             `json:"targetId,omitempty"`
+	LinkedResourceID      string                             `json:"linkedResourceId,omitempty"`
+	Name                  string                             `json:"name,omitempty"`
+	TargetKind            string                             `json:"targetKind,omitempty"`
+	Address               string                             `json:"address,omitempty"`
+	Protocol              string                             `json:"protocol,omitempty"`
+	Port                  int                                `json:"port,omitempty"`
+	Path                  string                             `json:"path,omitempty"`
+	Enabled               bool                               `json:"enabled"`
+	Available             bool                               `json:"available"`
+	LastChecked           *time.Time                         `json:"lastChecked,omitempty"`
+	LastSuccess           *time.Time                         `json:"lastSuccess,omitempty"`
+	LatencyMillis         int64                              `json:"latencyMillis,omitempty"`
+	ConsecutiveFailures   int                                `json:"consecutiveFailures,omitempty"`
+	LastError             string                             `json:"lastError,omitempty"`
+	FailureThreshold      int                                `json:"failureThreshold,omitempty"`
+	PollIntervalSeconds   int                                `json:"pollIntervalSeconds,omitempty"`
+	TimeoutMillis         int                                `json:"timeoutMillis,omitempty"`
+	CorrelationState      AvailabilityCorrelationState       `json:"correlationState,omitempty"`
+	CorrelationRule       string                             `json:"correlationRule,omitempty"`
+	CorrelationReason     string                             `json:"correlationReason,omitempty"`
+	CorrelationCandidates int                                `json:"correlationCandidates,omitempty"`
+	Evidence              *operationaltrust.EvidenceEnvelope `json:"evidence,omitempty"`
 }
 
 // K8sMetricCapabilities describes which Kubernetes metric families are available

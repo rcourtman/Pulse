@@ -1484,6 +1484,11 @@ the intentionally sparse public response.
     `/api/resources/dashboard-summary` as a compatibility read; lifecycle
     surfaces must continue to use install inventory, enrollment proof, and
     fleet freshness truth from their owning contracts.
+    Those routes may now seed the availability provider from canonical plural
+    `availabilityChecks` facets so attached checks survive startup
+    rehydration. Lifecycle surfaces must not reinterpret an attached check,
+    its compatibility `availability` summary, or its evidence freshness as
+    agent enrollment, heartbeat, command reachability, or fleet liveness.
     The same presentation-only boundary now covers compact storage summary
     chart reads as well. Shared `/api/charts/storage-summary` transport may
     request only the canonical `used` and `avail` storage series needed for the

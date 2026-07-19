@@ -1614,6 +1614,13 @@ result text across the resource identity cell and metric cells.
 That text must derive from the existing resource payload and shared
 presentation helper instead of adding a per-row fetch, extra hydration pass, or
 unbounded badge stack.
+The canonical payload may carry multiple attached checks in
+`availabilityChecks`; `availability` remains the bounded compatibility summary
+selected from that already-hydrated set. Resource rows render one compact
+summary and detail surfaces iterate the bounded attached set from the same
+payload. Neither plural presentation nor freshness evaluation may issue a
+check-specific request, reconstruct the set from the settings API, or add a
+second websocket hydration path.
 The infrastructure summary hot path is now explicit shared ownership too:
 `InfrastructureSummary.tsx` stays a render shell,
 `useInfrastructureSummaryState.ts` owns chart polling and cache lifecycle, and

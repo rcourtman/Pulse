@@ -1,12 +1,12 @@
 # Pulse v6 Operational Trust Implementation Spec
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 Status: ACTIVE
 Primary governance surface:
 - `status.json.candidate_lanes.protection-posture-attention-queue`
 
-Related governed surface:
-- `status.json.candidate_lanes.availability-as-resource-facet`
+Resolved related governed surface:
+- `internal/records/operational-trust-availability-resource-facet-2026-07-19.md`
 
 ## Intent
 
@@ -889,9 +889,10 @@ Primary candidate:
 
 - `protection-posture-attention-queue`
 
-Sequential related candidate:
+Resolved sequential related candidate:
 
-- `availability-as-resource-facet`
+- `availability-as-resource-facet`, closed by
+  `internal/records/operational-trust-availability-resource-facet-2026-07-19.md`
 
 The primary candidate's subsystem mapping must include the canonical owners
 that this implementation touches, including alerts, notifications, storage and

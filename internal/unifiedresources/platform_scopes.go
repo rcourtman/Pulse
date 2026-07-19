@@ -96,7 +96,7 @@ func addPlatformScopesForFacets(scopes map[string]struct{}, resource Resource) {
 	if resource.VMware != nil {
 		addPlatformScope(scopes, "vmware-vsphere")
 	}
-	if resource.Availability != nil || CanonicalResourceType(resource.Type) == ResourceTypeNetworkEndpoint {
+	if len(AvailabilityChecksForResource(resource)) > 0 || CanonicalResourceType(resource.Type) == ResourceTypeNetworkEndpoint {
 		addPlatformScope(scopes, "availability")
 	}
 }

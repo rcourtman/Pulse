@@ -8813,41 +8813,6 @@
           "kind": "file"
         }
       ]
-    },
-    {
-      "id": "availability-as-resource-facet",
-      "summary": "Agentless availability checks always mint a standalone network-endpoint resource and never attach to a known resource, so a check that monitors a Proxmox guest, Docker container, or Kubernetes workload appears as a disconnected duplicate on the Machines page instead of on the resource it actually monitors. The performance-and-scalability contract already requires agentless availability evidence to belong on the resource's bounded row path, but the ingest path has no cross-source attach: resolveLinkedResource only handles Proxmox<->agent links and findMatch is restricted to agent and physical_disk types, so SourceAvailability records always take the source-specific network-endpoint ID and the Availability facet never reaches an existing resource. The gap is the missing unambiguous attach (by explicit resource link or unique address/hostname correlation) plus platform-row surfacing of the attached facet.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-06-26",
-      "lane_ids": [
-        "L8",
-        "L13"
-      ],
-      "subsystem_ids": [
-        "frontend-primitives",
-        "monitoring",
-        "unified-resources"
-      ],
-      "proposed_resolution": "lane-expansion",
-      "coverage_impact": 7,
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/monitoring/availability_poller.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/unifiedresources/registry.go",
-          "kind": "file"
-        }
-      ]
     }
   ],
   "candidate_lanes": [
@@ -8905,43 +8870,9 @@
         "storage-recovery",
         "unified-resources"
       ]
-    },
-    {
-      "id": "availability-as-resource-facet",
-      "name": "Availability as Resource Facet",
-      "summary": "Promote availability-as-resource-facet into a governed lane expansion: extend unified-resource ingest so an availability check attaches as a facet on the known resource it monitors (explicit resource link first, unambiguous unique address/hostname correlation second, standalone network-endpoint fallback for genuinely unowned endpoints), keep the ingest on the existing unified-resource hot path with no per-row fetch, and surface the attached Availability facet on the platform resource row as a compact inline target/result readout with the protocol identity badge in the System column, per the performance-and-scalability bounded-row contract.",
-      "status": "planned",
-      "recorded_at": "2026-06-26",
-      "target_id": "v6-product-lane-expansion",
-      "current_lane_ids": [
-        "L8",
-        "L13"
-      ],
-      "coverage_gap_ids": [
-        "availability-as-resource-facet"
-      ],
-      "subsystem_ids": [
-        "frontend-primitives",
-        "monitoring",
-        "unified-resources"
-      ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "codex-operational-trust-candidate-lane-protection-posture-attention-queue",
-      "agent_id": "codex-operational-trust",
-      "summary": "Canonical operational trust and protection evidence implementation specification",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-07-18T21:46:08Z",
-      "heartbeat_at": "2026-07-18T21:46:08Z",
-      "expires_at": "2026-07-19T05:46:08Z",
-      "work_item": {
-        "kind": "candidate-lane",
-        "id": "protection-posture-attention-queue"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

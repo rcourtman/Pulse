@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -246,6 +247,10 @@ func TestAvailabilityFixtureRecordOmitsUnknownProbeTimes(t *testing.T) {
 	if record.Resource.Availability.LastSuccess != nil {
 		t.Fatalf("last success = %v, want nil before the first successful probe", record.Resource.Availability.LastSuccess)
 	}
+	if record.Resource.Availability.Evidence == nil ||
+		record.Resource.Availability.Evidence.Completeness != operationaltrust.EvidencePartial {
+		t.Fatalf("initial evidence = %+v, want partial envelope", record.Resource.Availability.Evidence)
+	}
 }
 
 func TestFixtureGraphAttachesServiceAvailabilityFixturesToServiceResources(t *testing.T) {
@@ -291,6 +296,21 @@ func TestFixtureGraphAttachesServiceAvailabilityFixturesToServiceResources(t *te
 	}
 	if !slices.Contains(dockerService.Sources, unifiedresources.SourceAvailability) {
 		t.Fatalf("expected Docker service sources to include availability, got %+v", dockerService.Sources)
+	}
+	if dockerService.Availability.CorrelationState != unifiedresources.AvailabilityCorrelationAttached ||
+		dockerService.Availability.Evidence == nil ||
+		dockerService.Availability.Evidence.Subject.ResourceID != dockerService.ID {
+		t.Fatalf("Docker service availability trust contract = %+v", dockerService.Availability)
+	}
+	hasChecksRelationship := false
+	for _, relationship := range dockerService.Relationships {
+		if relationship.Type == unifiedresources.RelChecks &&
+			relationship.TargetID == dockerService.ID {
+			hasChecksRelationship = true
+		}
+	}
+	if !hasChecksRelationship {
+		t.Fatalf("Docker service relationships = %+v, want checks edge", dockerService.Relationships)
 	}
 
 	if kubernetesService == nil {

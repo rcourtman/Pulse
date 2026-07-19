@@ -160,4 +160,54 @@ describe('availabilityProbePresentation', () => {
     expect(presentation?.resultLabel).toBe('3 ms');
     expect(presentation?.toneClassName).toContain('emerald');
   });
+
+  it('keeps freshness independent from a successful probe result', () => {
+    const now = new Date('2026-05-06T13:05:00Z');
+    const presentation = getAvailabilityProbePresentation(
+      makeAvailabilityResource({
+        availability: {
+          protocol: 'icmp',
+          available: true,
+          latencyMillis: 3,
+          lastChecked: '2026-05-06T13:00:00Z',
+          evidence: {
+            id: 'evidence-1',
+            source: { provider: 'availability', collector: 'availability-poller' },
+            subject: { resourceId: 'vm:100' },
+            observedAt: '2026-05-06T13:00:00Z',
+            ingestedAt: '2026-05-06T13:00:00Z',
+            validUntil: '2026-05-06T13:02:00Z',
+            completeness: 'complete',
+            confidence: 'confirmed',
+            permissions: 'sufficient',
+          },
+        },
+      }),
+      now,
+    );
+
+    expect(presentation).toMatchObject({
+      resultLabel: '3 ms',
+      freshnessLabel: 'stale',
+    });
+    expect(presentation?.detailLabel).toContain('stale');
+    expect(presentation?.toneClassName).toContain('amber');
+  });
+
+  it('names ambiguous resource identity without presenting it as an attachment', () => {
+    const presentation = getAvailabilityProbePresentation(
+      makeAvailabilityResource({
+        availability: {
+          protocol: 'icmp',
+          available: true,
+          correlationState: 'ambiguous',
+          correlationCandidates: 2,
+        },
+      }),
+    );
+
+    expect(presentation?.correlationLabel).toBe('2 possible resource matches');
+    expect(presentation?.detailLabel).toContain('2 possible resource matches');
+    expect(presentation?.toneClassName).toContain('amber');
+  });
 });

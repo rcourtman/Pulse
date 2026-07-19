@@ -1095,6 +1095,7 @@ describe('shared primitive guardrails', () => {
     };
     const expectedConsumers = [
       'src/components/Discovery/DiscoveryTab.tsx',
+      'src/components/Infrastructure/AvailabilityProbeStatusCard.tsx',
       'src/components/Infrastructure/ResourceActionHistory.tsx',
       'src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx',
       'src/components/shared/WebInterfaceUrlField.tsx',

@@ -147,4 +147,63 @@ describe('standalonePageModel', () => {
     expect(model.availabilityChecks.map((item) => item.id)).toEqual(['router-ping', 'endpoint-1']);
     expect(model.resources.map((item) => item.id)).toEqual(['mac-mini']);
   });
+
+  it('does not duplicate an attached resource in the availability-check inventory', () => {
+    const model = buildStandalonePageModel([
+      resource({
+        id: 'agent:docker-trust',
+        platformType: 'docker',
+        type: 'agent',
+        sources: ['agent', 'docker', 'availability'],
+        availability: {
+          targetId: 'tower-api',
+          correlationState: 'attached',
+          available: true,
+        },
+      }),
+      resource({
+        id: 'availability:orphan',
+        platformType: 'availability',
+        type: 'network-endpoint',
+        sources: ['availability'],
+        availability: {
+          targetId: 'orphan',
+          correlationState: 'standalone',
+          available: true,
+        },
+      }),
+    ]);
+
+    expect(model.availabilityChecks.map((item) => item.id)).toEqual(['availability:orphan']);
+  });
+
+  it('treats stale or unobserved availability evidence as attention', () => {
+    const now = Date.parse('2026-07-19T04:00:00Z');
+    const summary = buildStandalonePostureSummary(
+      [
+        resource({
+          id: 'availability:stale',
+          platformType: 'availability',
+          type: 'network-endpoint',
+          availability: {
+            targetId: 'stale',
+            available: true,
+            lastChecked: '2026-07-19T03:50:00Z',
+            pollIntervalSeconds: 60,
+          },
+        }),
+        resource({
+          id: 'availability:unobserved',
+          platformType: 'availability',
+          type: 'network-endpoint',
+          availability: { targetId: 'unobserved' },
+        }),
+      ],
+      now,
+    );
+
+    expect(summary.attention).toBe(2);
+    expect(summary.warning).toBe(2);
+    expect(summary.normal).toBe(0);
+  });
 });

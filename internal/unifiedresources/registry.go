@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 )
@@ -610,6 +611,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 			continue
 		}
 		resource.Type = CanonicalResourceType(resource.Type)
+		normalizeResourceAvailability(resource)
 		if resource.SourceStatus == nil && len(resource.Sources) > 0 {
 			resource.SourceStatus = make(map[DataSource]SourceStatus, len(resource.Sources))
 			for _, source := range resource.Sources {
@@ -670,6 +672,18 @@ func (rr *ResourceRegistry) seedSourceMappingsFromResourceLocked(resource *Resou
 	})
 
 	for _, source := range sources {
+		if source == SourceAvailability {
+			if _, ok := rr.bySource[source]; !ok {
+				rr.bySource[source] = make(map[string]string)
+			}
+			for _, check := range AvailabilityChecksForResource(*resource) {
+				sourceID := normalizeSourceID(check.TargetID)
+				if sourceID != "" {
+					rr.bySource[source][sourceID] = resource.ID
+				}
+			}
+			continue
+		}
 		sourceID := rr.seedSourceIDForResourceLocked(resource, source)
 		sourceID = normalizeSourceID(sourceID)
 		if sourceID == "" {
@@ -2379,24 +2393,33 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 		}
 	}
 
+	candidateID := rr.sourceSpecificID(resource.Type, source, sourceID)
+
 	// Agentless availability probes attach as a facet on the known resource
 	// they monitor instead of minting a parallel network-endpoint. An explicit
-	// linkedResourceId wins; otherwise an exact, unique IP match may attach.
-	// Lossy hostname-only correlation is intentionally avoided to prevent
-	// ambiguous one-sided merges, and the link is refused when it would
-	// overwrite a different target's already-attached facet or fold one probe
-	// into another.
+	// linkedResourceId wins; otherwise an exact, unique normalized IP or full
+	// hostname may attach. Ambiguous or invalid correlations remain explicit
+	// on the fallback endpoint and are never guessed.
+	var availabilityResolution availabilityLinkResolution
 	if source == SourceAvailability && resource.Type == ResourceTypeNetworkEndpoint {
-		if linked := rr.resolveAvailabilityLink(resource); linked != "" {
+		availabilityResolution = rr.resolveAvailabilityLink(resource)
+		applyAvailabilityResolution(resource.Availability, availabilityResolution)
+		if linked := availabilityResolution.ResourceID; linked != "" {
 			if existing := rr.resources[linked]; existing != nil {
+				bindAvailabilityEvidence(resource.Availability, existing.ID, availabilityResolution)
+				existing.Relationships = upsertAvailabilityCheckRelationship(
+					existing.Relationships,
+					candidateID,
+					existing.ID,
+					resource.Availability,
+					availabilityResolution,
+				)
 				rr.mergeInto(existing, resource, source)
 				rr.bySource[source][sourceID] = existing.ID
 				return existing.ID
 			}
 		}
 	}
-
-	candidateID := rr.sourceSpecificID(resource.Type, source, sourceID)
 
 	if resource.Type == ResourceTypeAgent || resource.Type == ResourceTypePhysicalDisk {
 		if match, excluded := rr.findMatch(identity, resource.Type, candidateID); match != nil {
@@ -2416,6 +2439,10 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	}
 
 	resource.ID = rr.chooseNewID(resource.Type, identity, source, sourceID)
+	if source == SourceAvailability && resource.Availability != nil {
+		bindAvailabilityEvidence(resource.Availability, resource.ID, availabilityResolution)
+		normalizeResourceAvailability(&resource)
+	}
 	if existing := rr.resources[resource.ID]; existing != nil {
 		rr.mergeInto(existing, resource, source)
 		rr.bySource[source][sourceID] = existing.ID
@@ -2530,42 +2557,139 @@ func (rr *ResourceRegistry) resolveLinkedResource(source DataSource, sourceID st
 	return ""
 }
 
+type availabilityLinkResolution struct {
+	ResourceID     string
+	State          AvailabilityCorrelationState
+	Rule           string
+	Reason         string
+	CandidateCount int
+	MatchedFields  map[string]string
+}
+
 // resolveAvailabilityLink attaches an agentless availability probe to the
-// known resource it monitors, instead of minting a parallel
-// network-endpoint. An explicit linkedResourceId wins unambiguously;
-// otherwise the probe address may attach on an exact, unique IP overlap.
-// Lossy hostname-only correlation is intentionally avoided, and the link is
-// refused when it would overwrite a different target's already-attached
-// availability facet or fold one probe into another.
-func (rr *ResourceRegistry) resolveAvailabilityLink(resource Resource) string {
+// known resource it monitors. Explicit links are authoritative and fail
+// closed. Automatic correlation accepts only one exact normalized IP or full
+// hostname candidate; ambiguous identity is preserved as such.
+func (rr *ResourceRegistry) resolveAvailabilityLink(resource Resource) availabilityLinkResolution {
 	if resource.Availability == nil {
-		return ""
+		return availabilityLinkResolution{
+			State:  AvailabilityCorrelationUnresolved,
+			Reason: "availability_metadata_missing",
+		}
 	}
 
 	if linkedID := strings.TrimSpace(resource.Availability.LinkedResourceID); linkedID != "" {
 		if resolved := rr.resolveAvailabilityLinkedResource(linkedID, resource); resolved != "" {
-			return resolved
+			return availabilityLinkResolution{
+				ResourceID:     resolved,
+				State:          AvailabilityCorrelationAttached,
+				Rule:           "explicit_resource_link",
+				Reason:         "explicit_resource_link",
+				CandidateCount: 1,
+				MatchedFields:  map[string]string{"linkedResourceId": linkedID},
+			}
+		}
+		return availabilityLinkResolution{
+			State:          AvailabilityCorrelationUnresolved,
+			Rule:           "explicit_resource_link",
+			Reason:         "explicit_resource_link_unresolved",
+			CandidateCount: 0,
+			MatchedFields:  map[string]string{"linkedResourceId": linkedID},
 		}
 	}
 
-	matchID := ""
-	for _, candidate := range rr.matcher.FindCandidates(resource.Identity) {
-		if candidate.Reason != "ip" && candidate.Reason != "hostname+ip" {
-			continue
+	rule, normalizedAddress, candidates := rr.availabilityAddressCandidates(resource.Identity)
+	switch len(candidates) {
+	case 0:
+		return availabilityLinkResolution{
+			State:          AvailabilityCorrelationStandalone,
+			Rule:           rule,
+			Reason:         "no_canonical_resource_match",
+			CandidateCount: 0,
 		}
-		existing := rr.resources[candidate.ID]
-		if existing == nil || isAvailabilityOwnedResource(*existing) {
-			continue
+	case 1:
+		return availabilityLinkResolution{
+			ResourceID:     candidates[0],
+			State:          AvailabilityCorrelationAttached,
+			Rule:           rule,
+			Reason:         "unique_canonical_resource_match",
+			CandidateCount: 1,
+			MatchedFields:  availabilityMatchedFields(rule, normalizedAddress),
 		}
-		if !availabilityFacetCompatible(existing, resource) {
-			continue
+	default:
+		return availabilityLinkResolution{
+			State:          AvailabilityCorrelationAmbiguous,
+			Rule:           rule,
+			Reason:         "multiple_canonical_resource_matches",
+			CandidateCount: len(candidates),
 		}
-		if matchID != "" && matchID != candidate.ID {
-			return ""
-		}
-		matchID = candidate.ID
 	}
-	return matchID
+}
+
+func (rr *ResourceRegistry) availabilityAddressCandidates(identity ResourceIdentity) (string, string, []string) {
+	for _, rawIP := range identity.IPAddresses {
+		normalizedIP := NormalizeIP(rawIP)
+		if normalizedIP == "" || isNonUniqueIP(normalizedIP) {
+			continue
+		}
+		return "normalized_ip", normalizedIP, rr.resourcesMatchingAvailabilityAddress(
+			func(existingIdentity ResourceIdentity) bool {
+				for _, candidateIP := range existingIdentity.IPAddresses {
+					if NormalizeIP(candidateIP) == normalizedIP {
+						return true
+					}
+				}
+				return false
+			},
+		)
+	}
+
+	for _, rawHostname := range identity.Hostnames {
+		normalizedHostname := NormalizeFullHostname(rawHostname)
+		if normalizedHostname == "" {
+			continue
+		}
+		return "normalized_hostname", normalizedHostname, rr.resourcesMatchingAvailabilityAddress(
+			func(existingIdentity ResourceIdentity) bool {
+				for _, candidateHostname := range existingIdentity.Hostnames {
+					if NormalizeFullHostname(candidateHostname) == normalizedHostname {
+						return true
+					}
+				}
+				return false
+			},
+		)
+	}
+
+	return "none", "", nil
+}
+
+func (rr *ResourceRegistry) resourcesMatchingAvailabilityAddress(
+	matches func(ResourceIdentity) bool,
+) []string {
+	resourceIDs := make([]string, 0)
+	for resourceID, existing := range rr.resources {
+		if existing == nil || isAvailabilityOwnedResource(*existing) || !matches(existing.Identity) {
+			continue
+		}
+		resourceIDs = append(resourceIDs, resourceID)
+	}
+	sort.Strings(resourceIDs)
+	return resourceIDs
+}
+
+func availabilityMatchedFields(rule string, normalizedAddress string) map[string]string {
+	if normalizedAddress == "" {
+		return nil
+	}
+	switch rule {
+	case "normalized_ip":
+		return map[string]string{"ipAddress": normalizedAddress}
+	case "normalized_hostname":
+		return map[string]string{"hostname": normalizedAddress}
+	default:
+		return nil
+	}
 }
 
 func (rr *ResourceRegistry) resolveAvailabilityLinkedResource(ref string, incoming Resource) string {
@@ -2576,7 +2700,7 @@ func (rr *ResourceRegistry) resolveAvailabilityLinkedResource(ref string, incomi
 
 	exactID := CanonicalResourceID(ref)
 	if existing := rr.resources[exactID]; existing != nil {
-		if !isAvailabilityOwnedResource(*existing) && availabilityFacetCompatible(existing, incoming) {
+		if !isAvailabilityOwnedResource(*existing) {
 			return exactID
 		}
 		return ""
@@ -2587,7 +2711,7 @@ func (rr *ResourceRegistry) resolveAvailabilityLinkedResource(ref string, incomi
 		rr.uniqueCanonicalIdentityResourceIDLocked(ref),
 	) {
 		existing := rr.resources[candidateID]
-		if existing != nil && !isAvailabilityOwnedResource(*existing) && availabilityFacetCompatible(existing, incoming) {
+		if existing != nil && !isAvailabilityOwnedResource(*existing) {
 			return candidateID
 		}
 	}
@@ -2613,19 +2737,122 @@ func isAvailabilityOwnedResource(r Resource) bool {
 	return true
 }
 
-// availabilityFacetCompatible reports whether an existing resource can accept
-// the incoming availability facet without silently overwriting a different
-// target's already-attached probe.
-func availabilityFacetCompatible(existing *Resource, incoming Resource) bool {
-	if existing == nil || existing.Availability == nil {
-		return true
+func applyAvailabilityResolution(
+	availability *AvailabilityData,
+	resolution availabilityLinkResolution,
+) {
+	if availability == nil {
+		return
 	}
-	current := strings.TrimSpace(existing.Availability.TargetID)
-	if current == "" {
-		return true
+	availability.CorrelationState = resolution.State
+	availability.CorrelationRule = resolution.Rule
+	availability.CorrelationReason = resolution.Reason
+	availability.CorrelationCandidates = resolution.CandidateCount
+}
+
+func bindAvailabilityEvidence(
+	availability *AvailabilityData,
+	resourceID string,
+	resolution availabilityLinkResolution,
+) {
+	if availability == nil || availability.Evidence == nil {
+		return
 	}
-	incomingID := strings.TrimSpace(incoming.Availability.TargetID)
-	return incomingID == "" || incomingID == current
+	resourceID = CanonicalResourceID(resourceID)
+	if resourceID == "" {
+		return
+	}
+
+	evidence := availability.Evidence.Clone()
+	evidence.Subject = operationaltrust.EvidenceSubject{ResourceID: resourceID}
+	evidence.Correlation = nil
+	if resolution.State == AvailabilityCorrelationAttached &&
+		resolution.CandidateCount == 1 &&
+		len(resolution.MatchedFields) > 0 {
+		evidence.Correlation = &operationaltrust.IdentityCorrelation{
+			Rule:           resolution.Rule,
+			MatchedFields:  cloneStringMap(resolution.MatchedFields),
+			CandidateCount: 1,
+		}
+	}
+	if (resolution.State == AvailabilityCorrelationAmbiguous ||
+		resolution.State == AvailabilityCorrelationUnresolved) &&
+		evidence.Reason == nil {
+		evidence.Reason = &operationaltrust.EvidenceReason{
+			Code:    resolution.Reason,
+			Message: "Pulse could not bind this observation to one canonical resource.",
+		}
+	}
+
+	sourceObservationID := strings.TrimSpace(availability.TargetID)
+	if evidence.PayloadRef != nil && strings.TrimSpace(evidence.PayloadRef.ID) != "" {
+		sourceObservationID = strings.TrimSpace(evidence.PayloadRef.ID)
+	}
+	evidenceID, err := operationaltrust.NewEvidenceID(
+		evidence.Source,
+		evidence.Subject,
+		evidence.ObservedAt,
+		sourceObservationID,
+	)
+	if err != nil {
+		return
+	}
+	evidence.ID = evidenceID
+	if err := evidence.Validate(); err != nil {
+		return
+	}
+	availability.Evidence = &evidence
+}
+
+func upsertAvailabilityCheckRelationship(
+	relationships []ResourceRelationship,
+	checkResourceID string,
+	targetResourceID string,
+	availability *AvailabilityData,
+	resolution availabilityLinkResolution,
+) []ResourceRelationship {
+	checkResourceID = CanonicalResourceID(checkResourceID)
+	targetResourceID = CanonicalResourceID(targetResourceID)
+	if availability == nil || checkResourceID == "" || targetResourceID == "" {
+		return relationships
+	}
+
+	observedAt := time.Time{}
+	if availability.LastChecked != nil {
+		observedAt = availability.LastChecked.UTC()
+	}
+	if observedAt.IsZero() && availability.Evidence != nil {
+		observedAt = availability.Evidence.ObservedAt
+	}
+	confidence := 0.95
+	if resolution.Rule == "explicit_resource_link" {
+		confidence = 1
+	}
+	relation := ResourceRelationship{
+		SourceID:   checkResourceID,
+		TargetID:   targetResourceID,
+		Type:       RelChecks,
+		Confidence: confidence,
+		Active:     true,
+		Discoverer: "availability_attachment",
+		ObservedAt: observedAt,
+		LastSeenAt: observedAt,
+		Metadata: map[string]any{
+			"targetId":        availability.TargetID,
+			"protocol":        availability.Protocol,
+			"correlationRule": resolution.Rule,
+		},
+	}
+
+	out := append([]ResourceRelationship(nil), relationships...)
+	for index := range out {
+		if out[index].Type == RelChecks &&
+			CanonicalResourceID(out[index].SourceID) == checkResourceID {
+			out[index] = relation
+			return out
+		}
+	}
+	return append(out, relation)
 }
 
 func (rr *ResourceRegistry) findCorroboratedOneSidedProxmoxLink(
@@ -2750,7 +2977,13 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	case SourceVMware:
 		existing.VMware = mergeVMwareData(existing.VMware, incoming.VMware)
 	case SourceAvailability:
-		existing.Availability = incoming.Availability
+		existing.AvailabilityChecks = mergeAvailabilityChecks(
+			existing.AvailabilityChecks,
+			existing.Availability,
+			incoming.AvailabilityChecks,
+			incoming.Availability,
+		)
+		existing.Availability = primaryAvailabilityCheck(existing.AvailabilityChecks)
 	}
 
 	existing.Sources = addSource(existing.Sources, source)

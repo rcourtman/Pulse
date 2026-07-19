@@ -5212,6 +5212,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/monitoring/availability_poller_test.go",
               "internal/monitoring/canonical_guardrails_test.go",
               "internal/monitoring/monitor_backups_readstate_test.go",
               "internal/monitoring/monitor_host_agents_test.go",
@@ -5732,6 +5733,7 @@
         "frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts",
         "frontend-modern/src/hooks/useWorkloads.ts",
         "frontend-modern/src/routing/routePreload.ts",
+        "frontend-modern/src/types/workloads.ts",
         "frontend-modern/src/useAppRuntimeState.ts",
         "frontend-modern/src/utils/thresholdSliderPresentation.ts",
         "frontend-modern/src/utils/workloadsSummaryCache.ts",
@@ -5873,6 +5875,7 @@
               "frontend-modern/src/components/Workloads/workloadTopology.ts",
               "frontend-modern/src/components/Workloads/workloadUrlSyncModel.ts",
               "frontend-modern/src/hooks/useWorkloads.ts",
+              "frontend-modern/src/types/workloads.ts",
               "frontend-modern/src/utils/thresholdSliderPresentation.ts",
               "frontend-modern/src/utils/workloadsSummaryCache.ts"
             ],
@@ -5881,6 +5884,7 @@
             "exact_files": [
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
+              "frontend-modern/src/components/Workloads/__tests__/AvailabilityProbeStatusCard.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/DiskList.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/EnhancedCPUBar.test.tsx",
               "frontend-modern/src/components/Workloads/__tests__/GuestRow.test.tsx",
@@ -6498,6 +6502,7 @@
         "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
         "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
         "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",
+        "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
         "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
         "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
         "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
@@ -6535,6 +6540,7 @@
         "frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx",
         "frontend-modern/src/features/docker/DockerContainersTable.tsx",
         "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
+        "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
         "frontend-modern/src/features/docker/DockerHostsTable.tsx",
         "frontend-modern/src/features/docker/DockerImagesTable.tsx",
         "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
@@ -6596,6 +6602,7 @@
         "frontend-modern/src/types/resource.ts",
         "frontend-modern/src/utils/actionAuditPresentation.ts",
         "frontend-modern/src/utils/agentResources.ts",
+        "frontend-modern/src/utils/availabilityProbePresentation.ts",
         "frontend-modern/src/utils/canonicalResourceTypes.ts",
         "frontend-modern/src/utils/platformSupportManifest.generated.ts",
         "frontend-modern/src/utils/resourceBadgePresentation.ts",
@@ -6678,6 +6685,7 @@
               "frontend-modern/src/components/Discovery/DiscoveryTab.tsx",
               "frontend-modern/src/components/Discovery/useDiscoveryTabState.ts",
               "frontend-modern/src/components/Docker/SwarmServicesDrawer.tsx",
+              "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
               "frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts",
               "frontend-modern/src/components/Infrastructure/ResourceActionHistory.tsx",
               "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
@@ -6715,6 +6723,7 @@
               "frontend-modern/src/features/docker/DockerContainerLifecycleControls.tsx",
               "frontend-modern/src/features/docker/DockerContainersTable.tsx",
               "frontend-modern/src/features/docker/dockerContainerTableModel.ts",
+              "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
               "frontend-modern/src/features/docker/DockerHostsTable.tsx",
               "frontend-modern/src/features/docker/DockerImagesTable.tsx",
               "frontend-modern/src/features/docker/DockerNativeTableShared.tsx",
@@ -6987,6 +6996,29 @@
             ]
           },
           {
+            "id": "availability-facet-presentation",
+            "label": "availability facet resource presentation proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Infrastructure/AvailabilityProbeStatusCard.tsx",
+              "frontend-modern/src/features/docker/DockerHostDrawerOverview.tsx",
+              "frontend-modern/src/features/standalone/AvailabilityChecksTable.tsx",
+              "frontend-modern/src/features/standalone/standalonePageModel.ts",
+              "frontend-modern/src/features/standalone/StandalonePageSurface.tsx",
+              "frontend-modern/src/utils/availabilityProbePresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Workloads/__tests__/AvailabilityProbeStatusCard.test.tsx",
+              "frontend-modern/src/features/docker/__tests__/DockerHostsTable.test.tsx",
+              "frontend-modern/src/features/standalone/__tests__/AvailabilityChecksTable.test.tsx",
+              "frontend-modern/src/features/standalone/__tests__/standalonePageModel.test.ts",
+              "frontend-modern/src/utils/__tests__/availabilityProbePresentation.test.ts",
+              "tests/integration/tests/92-operational-trust-availability-facet.spec.ts"
+            ]
+          },
+          {
             "id": "metrics-target-runtime",
             "label": "unified resource metrics target proof",
             "match_prefixes": [],
@@ -7017,6 +7049,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/unifiedresources/availability_link_test.go",
               "internal/unifiedresources/kubernetes_registry_test.go",
               "internal/unifiedresources/pbs_pmg_registry_test.go",
               "internal/unifiedresources/registry_merge_policy_test.go",
@@ -7064,7 +7097,9 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/unifiedresources/availability_link_test.go",
               "internal/unifiedresources/canonical_id_pins_test.go",
+              "internal/unifiedresources/clone_test.go",
               "internal/unifiedresources/code_standards_test.go",
               "internal/unifiedresources/kubernetes_registry_test.go",
               "internal/unifiedresources/metrics_targets_test.go",

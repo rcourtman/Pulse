@@ -58,4 +58,6 @@ export type WorkloadGuest = (VM | Container) & {
   };
   /** Availability probe facet from the unified resource model. */
   availability?: ResourceAvailabilityMeta;
+  /** Complete availability facet set; availability is its compatibility summary. */
+  availabilityChecks?: ResourceAvailabilityMeta[];
 };

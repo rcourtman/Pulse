@@ -137,7 +137,6 @@ export function StandalonePageSurface() {
   const setMachineStatusFilter = (status: PlatformResourceStatusFilter) => {
     setSearchParams({ status: status === 'all' ? null : status }, { replace: true });
   };
-  const machinePosture = createMemo(() => buildStandalonePostureSummary(model().machines));
   const availabilityPosture = createMemo(() =>
     buildStandalonePostureSummary(model().availabilityChecks),
   );
@@ -272,25 +271,6 @@ export function StandalonePageSurface() {
               }
             >
               <div class="space-y-4">
-                <Show when={model().machines.length > 0}>
-                  <StandalonePostureCard
-                    label="Pulse Agents"
-                    noun="machine"
-                    summary={machinePosture()}
-                    actions={
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        class="gap-2"
-                        onClick={() => navigate(buildInfrastructureOnboardingPath('pick'))}
-                      >
-                        <SettingsIcon class="h-3.5 w-3.5" />
-                        Add agent
-                      </Button>
-                    }
-                  />
-                </Show>
                 <PlatformOutdatedAgentNotice
                   hosts={outdatedAgentHosts()}
                   targetVersion={serverVersionDisplay()}

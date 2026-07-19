@@ -2,7 +2,9 @@ package alerts
 
 import (
 	"testing"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -73,16 +75,36 @@ func TestSyncUnifiedResourceIncidentsCreatesAndClearsAlerts(t *testing.T) {
 	assertAlertMissing(t, m, alertID)
 }
 
-func TestSyncUnifiedResourceIncidentsSupportsAvailabilityEndpoints(t *testing.T) {
+func TestSyncUnifiedResourceIncidentsRoutesAttachedAvailabilityEvidenceThroughLifecycle(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
 
+	observedAt := time.Date(2026, 7, 19, 2, 0, 0, 0, time.UTC)
+	source := operationaltrust.EvidenceSource{
+		Provider:  "availability",
+		Collector: "availability-poller",
+	}
+	subject := operationaltrust.EvidenceSubject{ResourceID: "docker-service:api"}
+	evidenceID, err := operationaltrust.NewEvidenceID(source, subject, observedAt, "energy-meter")
+	if err != nil {
+		t.Fatalf("NewEvidenceID() error = %v", err)
+	}
+	validUntil := observedAt.Add(2 * time.Minute)
 	resource := unifiedresources.Resource{
-		ID:      "availability:energy-meter",
-		Type:    unifiedresources.ResourceTypeNetworkEndpoint,
-		Name:    "Energy meter",
-		Sources: []unifiedresources.DataSource{unifiedresources.SourceAvailability},
+		ID:      "docker-service:api",
+		Type:    unifiedresources.ResourceTypeDockerService,
+		Name:    "API",
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker, unifiedresources.SourceAvailability},
 		Availability: &unifiedresources.AvailabilityData{
+			TargetID:         "api-health",
+			Address:          "192.0.2.45",
+			Protocol:         "http",
+			Port:             8080,
+			Enabled:          true,
+			Available:        true,
+			CorrelationState: unifiedresources.AvailabilityCorrelationAttached,
+		},
+		AvailabilityChecks: []unifiedresources.AvailabilityData{{
 			TargetID:            "energy-meter",
 			Address:             "192.0.2.44",
 			Protocol:            "icmp",
@@ -90,7 +112,23 @@ func TestSyncUnifiedResourceIncidentsSupportsAvailabilityEndpoints(t *testing.T)
 			Available:           false,
 			ConsecutiveFailures: 2,
 			FailureThreshold:    2,
-		},
+			CorrelationState:    unifiedresources.AvailabilityCorrelationAttached,
+			Evidence: &operationaltrust.EvidenceEnvelope{
+				ID:           evidenceID,
+				Source:       source,
+				Subject:      subject,
+				ObservedAt:   observedAt,
+				IngestedAt:   observedAt,
+				ValidUntil:   &validUntil,
+				Completeness: operationaltrust.EvidenceComplete,
+				Confidence:   operationaltrust.EvidenceConfirmed,
+				Permissions:  operationaltrust.EvidencePermissionsSufficient,
+				PayloadRef: &operationaltrust.EvidencePayloadRef{
+					Kind: "availability-target",
+					ID:   "energy-meter",
+				},
+			},
+		}},
 		Incidents: []unifiedresources.ResourceIncident{{
 			Provider: "availability",
 			NativeID: "energy-meter",
@@ -124,6 +162,14 @@ func TestSyncUnifiedResourceIncidentsSupportsAvailabilityEndpoints(t *testing.T)
 	}
 	if got := alert.Metadata["incidentProvider"]; got != "availability" {
 		t.Fatalf("incidentProvider = %v, want availability", got)
+	}
+	if len(alert.Evidence) != 1 || alert.Evidence[0].ID != evidenceID {
+		t.Fatalf("alert evidence = %+v, want %q", alert.Evidence, evidenceID)
+	}
+	if alert.OperationalRecord == nil ||
+		len(alert.OperationalRecord.EvidenceIDs) != 1 ||
+		alert.OperationalRecord.EvidenceIDs[0] != evidenceID {
+		t.Fatalf("operational record = %+v, want canonical availability evidence", alert.OperationalRecord)
 	}
 }
 

@@ -158,16 +158,25 @@ func TestCloneResource_MutateAvailabilityTimes(t *testing.T) {
 			LastChecked: &checkedAt,
 			LastSuccess: &succeededAt,
 		},
+		AvailabilityChecks: []AvailabilityData{{
+			TargetID:    "probe-1",
+			LastChecked: &checkedAt,
+			LastSuccess: &succeededAt,
+		}},
 	}
 	cloned := cloneResource(original)
 
 	*cloned.Availability.LastChecked = checkedAt.Add(time.Hour)
 	*cloned.Availability.LastSuccess = succeededAt.Add(time.Hour)
+	*cloned.AvailabilityChecks[0].LastChecked = checkedAt.Add(2 * time.Hour)
 	if !original.Availability.LastChecked.Equal(checkedAt) {
 		t.Error("mutating cloned availability LastChecked should not affect original")
 	}
 	if !original.Availability.LastSuccess.Equal(succeededAt) {
 		t.Error("mutating cloned availability LastSuccess should not affect original")
+	}
+	if !original.AvailabilityChecks[0].LastChecked.Equal(checkedAt) {
+		t.Error("mutating cloned AvailabilityChecks should not affect original")
 	}
 }
 

@@ -673,10 +673,10 @@ func TestAgentlessAvailabilityTargetKindStaysCanonical(t *testing.T) {
 		},
 		"types.go": {
 			"Availability *AvailabilityData `json:\"availability,omitempty\"`",
-			"TargetKind          string     `json:\"targetKind,omitempty\"`",
-			"LinkedResourceID    string     `json:\"linkedResourceId,omitempty\"`",
-			"LastChecked         *time.Time `json:\"lastChecked,omitempty\"`",
-			"LastSuccess         *time.Time `json:\"lastSuccess,omitempty\"`",
+			"TargetKind            string                             `json:\"targetKind,omitempty\"`",
+			"LinkedResourceID      string                             `json:\"linkedResourceId,omitempty\"`",
+			"LastChecked           *time.Time                         `json:\"lastChecked,omitempty\"`",
+			"LastSuccess           *time.Time                         `json:\"lastSuccess,omitempty\"`",
 		},
 		filepath.Join("..", "..", "frontend-modern", "src", "api", "availabilityTargets.ts"): {
 			"export type AvailabilityTargetKind = 'machine' | 'service' | 'device';",

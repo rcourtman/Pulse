@@ -18,13 +18,18 @@ import {
   PlatformTableShell,
 } from '@/features/platformPage/sharedPlatformPage';
 import type { Resource, ResourceAvailabilityMeta } from '@/types/resource';
-import { getAvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
-import { getSimpleStatusIndicator } from '@/utils/status';
+import {
+  getAvailabilityProbeEndpointLabel,
+  getAvailabilityProbePresentation,
+} from '@/utils/availabilityProbePresentation';
 import {
   buildAvailabilitySettingsPath,
   buildAvailabilityTargetAddPath,
 } from '@/components/Settings/availabilitySettingsModel';
-import { sortStandaloneResourcesByAttention } from './standalonePageModel';
+import {
+  getStandaloneResourceStatusIndicator,
+  sortStandaloneResourcesByAttention,
+} from './standalonePageModel';
 
 const settingsLinkClass =
   'inline-flex min-h-8 items-center justify-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover';
@@ -36,17 +41,7 @@ const availabilityFor = (resource: Resource): ResourceAvailabilityMeta | undefin
 const formatTarget = (resource: Resource): string => {
   const availability = availabilityFor(resource);
   if (!availability) return resource.name;
-  const address = (availability.address ?? '').trim();
-  if (!address) return resource.name;
-  const protocol = (availability.protocol ?? '').trim().toLowerCase();
-  if (protocol === 'tcp' && availability.port) return `${address}:${availability.port}`;
-  if ((protocol === 'http' || protocol === 'https') && availability.path) {
-    const path = availability.path.trim();
-    if (path && !address.endsWith(path)) {
-      return `${address.replace(/\/+$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
-    }
-  }
-  return address;
+  return getAvailabilityProbeEndpointLabel(availability) || resource.name;
 };
 
 const formatFailures = (availability: ResourceAvailabilityMeta | undefined): string => {
@@ -68,7 +63,13 @@ export const AvailabilityChecksTable: Component<{
   const tableState = createPlatformTableFilterState({
     resources: () => props.resources,
     initialStatus: 'all' as PlatformResourceStatusFilter,
-    filter: filterPlatformResources,
+    filter: (resources, search, status) =>
+      filterPlatformResources(resources, search, status, (resource) => {
+        const variant = getStandaloneResourceStatusIndicator(resource).variant;
+        if (variant === 'success') return 'online';
+        if (variant === 'danger') return 'offline';
+        return 'degraded';
+      }),
   });
   const orderedChecks = createMemo(() => sortStandaloneResourcesByAttention(tableState.filtered()));
 
@@ -175,7 +176,7 @@ export const AvailabilityChecksTable: Component<{
                   {(check) => {
                     const availability = () => availabilityFor(check);
                     const probe = () => getAvailabilityProbePresentation(check);
-                    const indicator = () => getSimpleStatusIndicator(check.status);
+                    const indicator = () => getStandaloneResourceStatusIndicator(check);
                     const method = () =>
                       probe()?.methodLabel ?? availability()?.protocol ?? 'Probe';
                     const result = () => probe()?.resultLabel ?? indicator().label;

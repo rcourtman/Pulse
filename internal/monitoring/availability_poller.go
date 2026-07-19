@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -534,6 +535,7 @@ func availabilityResourceFromTarget(target config.AvailabilityTarget, status Ava
 		PollIntervalSeconds: target.EffectivePollIntervalSecs(),
 		TimeoutMillis:       target.EffectiveTimeoutMillis(),
 	}
+	data.Evidence = availabilityEvidenceEnvelope(target, status, lastSeen, now)
 	resource := unifiedresources.Resource{
 		Type:         unifiedresources.ResourceTypeNetworkEndpoint,
 		Technology:   string(target.Protocol),
@@ -556,6 +558,74 @@ func availabilityResourceFromTarget(target config.AvailabilityTarget, status Ava
 		identity.Hostnames = []string{host}
 	}
 	return resource, identity
+}
+
+func availabilityEvidenceEnvelope(
+	target config.AvailabilityTarget,
+	status AvailabilityProbeStatus,
+	observedAt time.Time,
+	ingestedAt time.Time,
+) *operationaltrust.EvidenceEnvelope {
+	if observedAt.IsZero() {
+		return nil
+	}
+	if ingestedAt.IsZero() {
+		ingestedAt = observedAt
+	}
+
+	source := operationaltrust.EvidenceSource{
+		Provider:  string(unifiedresources.SourceAvailability),
+		Collector: "availability-poller",
+	}
+	subject := operationaltrust.EvidenceSubject{
+		ProviderRef:   target.ID,
+		ProviderScope: "availability-target",
+	}
+	evidenceID, err := operationaltrust.NewEvidenceID(
+		source,
+		subject,
+		observedAt,
+		target.ID,
+	)
+	if err != nil {
+		return nil
+	}
+
+	validUntil := observedAt.Add(
+		time.Duration(target.EffectivePollIntervalSecs()*2) * time.Second,
+	)
+	completeness := operationaltrust.EvidenceComplete
+	confidence := operationaltrust.EvidenceConfirmed
+	var reason *operationaltrust.EvidenceReason
+	if status.LastChecked.IsZero() {
+		completeness = operationaltrust.EvidencePartial
+		confidence = operationaltrust.EvidenceUnknown
+		reason = &operationaltrust.EvidenceReason{
+			Code:    "availability_not_observed",
+			Message: "The availability target has not completed its first probe.",
+		}
+	}
+
+	envelope := operationaltrust.EvidenceEnvelope{
+		ID:           evidenceID,
+		Source:       source,
+		Subject:      subject,
+		ObservedAt:   observedAt,
+		IngestedAt:   ingestedAt,
+		ValidUntil:   &validUntil,
+		Completeness: completeness,
+		Confidence:   confidence,
+		Reason:       reason,
+		Permissions:  operationaltrust.EvidencePermissionsSufficient,
+		PayloadRef: &operationaltrust.EvidencePayloadRef{
+			Kind: "availability-target",
+			ID:   target.ID,
+		},
+	}
+	if err := envelope.Validate(); err != nil {
+		return nil
+	}
+	return &envelope
 }
 
 func availabilityResourceTags(target config.AvailabilityTarget) []string {

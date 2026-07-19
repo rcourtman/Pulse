@@ -355,9 +355,9 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
             updateForm({ linkedResourceId: event.currentTarget.value })
           }
           fieldClass="sm:col-span-2"
-          help="Link this check to a known resource so its status appears on that resource's row. Leave empty to auto-detect by IP address."
+          help="Link this check to a known resource so its status appears on that resource's row. Leave empty to attach only when its IP address or full hostname has one exact match."
         >
-          <option value="">Auto-detect by IP (recommended)</option>
+          <option value="">Attach on one exact address match (recommended)</option>
           <Show when={linkedResourceMissing()}>
             <option value={form().linkedResourceId}>
               {form().linkedResourceId} (not currently discovered)

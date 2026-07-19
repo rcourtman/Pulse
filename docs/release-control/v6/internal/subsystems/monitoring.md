@@ -604,7 +604,14 @@ Supplemental records carry the saved target's optional `LinkedResourceID`
 forward into `AvailabilityData` so the unified-resource registry can attach
 the probe facet onto the referenced resource. Monitoring does not perform the
 attach decision itself; it only forwards the link hint for the registry to
-resolve.
+resolve. Every completed probe also authors an operational-trust
+`EvidenceEnvelope` with provider `availability`, collector
+`availability-poller`, the saved target as its provider reference, the exact
+observation/ingest times, and a validity window of twice the effective polling
+interval. Before the first completed probe, evidence is explicitly partial and
+unknown with reason `availability_not_observed`; monitoring must never encode
+that state as a confirmed failure or a healthy observation. The registry owns
+rebinding the envelope subject to a canonical resource after correlation.
 Availability target kind is monitoring-owned runtime metadata, not a frontend
 guess. Saved targets carry the bounded `targetKind` values `machine`, `service`,
 and `device`; monitoring must preserve that value in probe status, supplemental
@@ -1734,6 +1741,15 @@ delivery status and timestamp alongside guest power state. Downstream Patrol
 transition detection consumes that status instead of inventing a fixed stale
 window: a stopped guest can have fresh inventory, while a stale source cannot
 authoritatively prove either a stopped transition or recovery.
+
+### Unified Agent destination delivery metrics
+
+The local agent health listener exports
+`pulse_agent_destination_configured{module,destination,role}` and
+`pulse_agent_destination_delivery_up{module,destination,role}`. Role is bounded
+to `primary` or `observer`; destination names come from validated configuration.
+Observer delivery failure is visible but does not make the primary authority
+unready or merge observer retry state into primary delivery health.
 
 ### PBS protection evidence collection
 

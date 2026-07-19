@@ -412,10 +412,16 @@ function AvailabilityProbeCell(props: {
 
   const badgeText = createMemo(() => {
     const result = p().resultLabel;
-    if (/^\d+\s*ms$/.test(result)) return result.replace(/\s/, '');
-    if (result === 'reachable') return 'up';
-    if (result === 'not checked') return '';
-    return result;
+    const compactResult = /^\d+\s*ms$/.test(result)
+      ? result.replace(/\s/, '')
+      : result === 'reachable'
+        ? 'up'
+        : result === 'not checked'
+          ? 'pending'
+          : result;
+    const freshness =
+      p().freshnessLabel === 'freshness unknown' ? 'unknown' : p().freshnessLabel;
+    return `${compactResult} · ${freshness}`;
   });
 
   return (

@@ -155,6 +155,7 @@ type APIResource = {
   };
   discoveryReadiness?: ResourceDiscoveryReadiness;
   availability?: ResourceAvailabilityMeta;
+  availabilityChecks?: ResourceAvailabilityMeta[];
   actionReadiness?: ResourceActionReadiness[];
 };
 
@@ -570,6 +571,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
           }
         : undefined,
     availability: resource.availability as ResourceAvailabilityMeta | undefined,
+    availabilityChecks: resource.availabilityChecks as ResourceAvailabilityMeta[] | undefined,
   };
 };
 

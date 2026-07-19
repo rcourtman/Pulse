@@ -14,9 +14,13 @@ vi.mock('@/api/availabilityTargets', () => ({
   },
 }));
 
+const resourceMocks = vi.hoisted(() => ({
+  resources: [] as Array<Record<string, unknown>>,
+}));
+
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
-    resources: () => [],
+    resources: () => resourceMocks.resources,
   }),
 }));
 
@@ -25,6 +29,7 @@ const mockedCreate = vi.mocked(AvailabilityTargetsAPI.create);
 describe('AvailabilityTargetSlot', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resourceMocks.resources = [];
     mockedCreate.mockResolvedValue({
       id: 'target-1',
       name: 'Rack sensor',
@@ -104,5 +109,41 @@ describe('AvailabilityTargetSlot', () => {
       ),
     );
     expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it('binds an explicit canonical resource id in the saved target', async () => {
+    resourceMocks.resources = [
+      {
+        id: 'docker-service:api',
+        type: 'docker-service',
+        name: 'api',
+        displayName: 'Customer API',
+        platformId: 'docker-main',
+        platformType: 'docker',
+        sourceType: 'agent',
+        status: 'online',
+        lastSeen: Date.now(),
+      },
+    ];
+    render(() => <AvailabilityTargetSlot onCancel={vi.fn()} onSaved={vi.fn()} />);
+
+    fireEvent.input(screen.getByLabelText('Name'), {
+      target: { value: 'Customer API' },
+    });
+    fireEvent.input(screen.getByPlaceholderText('service.local'), {
+      target: { value: 'api.example.test' },
+    });
+    fireEvent.change(screen.getByLabelText('Link to resource (optional)'), {
+      target: { value: 'docker-service:api' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add service/device check' }));
+
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          linkedResourceId: 'docker-service:api',
+        }),
+      ),
+    );
   });
 });

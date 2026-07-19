@@ -1,4 +1,5 @@
 import type { Resource } from '@/types/resource';
+import { getAvailabilityProbePresentation } from '@/utils/availabilityProbePresentation';
 import { isPulseAgentPlatformResource } from '@/utils/agentResources';
 import { getSimpleStatusIndicator } from '@/utils/status';
 
@@ -22,15 +23,31 @@ export const isStandaloneMachineResource = (resource: Resource): boolean =>
   isPulseAgentPlatformResource(resource);
 
 export const isAgentlessAvailabilityResource = (resource: Resource): boolean =>
-  resource.type === 'network-endpoint' ||
-  resource.platformType === 'availability' ||
-  resource.sources?.includes('availability') === true;
+  resource.availability?.correlationState !== 'attached' &&
+  (resource.type === 'network-endpoint' || resource.platformType === 'availability');
 
 const AGENT_REPORT_STALE_AFTER_MS = 5 * 60 * 1000;
 
 export const getStandaloneResourceStatusIndicator = (resource: Resource, nowMs = Date.now()) => {
   const indicator = getSimpleStatusIndicator(resource.status);
   if (indicator.variant === 'danger') return indicator;
+  const availability = getAvailabilityProbePresentation(resource, new Date(nowMs));
+  if (
+    availability?.freshnessLabel === 'stale' ||
+    availability?.freshnessLabel === 'freshness unknown' ||
+    resource.availability?.correlationState === 'ambiguous' ||
+    resource.availability?.correlationState === 'unresolved'
+  ) {
+    return {
+      variant: 'warning' as const,
+      label:
+        availability?.freshnessLabel === 'stale'
+          ? 'Stale'
+          : availability?.freshnessLabel === 'freshness unknown'
+            ? 'Freshness unknown'
+            : 'Identity unresolved',
+    };
+  }
   if (
     resource.type === 'agent' &&
     (resource.agent?.stale === true ||

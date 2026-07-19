@@ -400,24 +400,8 @@ type APIResource = {
     recentTaskSummary?: string;
     snapshotCount?: number;
   };
-  availability?: {
-    targetId?: string;
-    name?: string;
-    address?: string;
-    protocol?: string;
-    port?: number;
-    path?: string;
-    enabled?: boolean;
-    available?: boolean;
-    lastChecked?: string;
-    lastSuccess?: string;
-    latencyMillis?: number;
-    consecutiveFailures?: number;
-    lastError?: string;
-    failureThreshold?: number;
-    pollIntervalSeconds?: number;
-    timeoutMillis?: number;
-  };
+  availability?: ResourceAvailabilityMeta;
+  availabilityChecks?: ResourceAvailabilityMeta[];
   recentChanges?: ResourceChange[];
   facetCounts?: ResourceFacetCounts;
   physicalDisk?: {
@@ -820,6 +804,7 @@ const toResource = (v2: APIResource): Resource => {
     vmware: v2.vmware as ResourceVMwareMeta | undefined,
     pbs: v2.pbs as ResourcePBSMeta | undefined,
     availability: v2.availability as ResourceAvailabilityMeta | undefined,
+    availabilityChecks: v2.availabilityChecks as ResourceAvailabilityMeta[] | undefined,
     physicalDisk: v2.physicalDisk,
     storage: v2.storage as ResourceStorageMeta | undefined,
     ceph: v2.ceph as ResourceCephMeta | undefined,
@@ -901,6 +886,7 @@ const toResource = (v2: APIResource): Resource => {
       kubernetes: v2.kubernetes,
       vmware: v2.vmware,
       availability: v2.availability,
+      availabilityChecks: v2.availabilityChecks,
       physicalDisk: v2.physicalDisk,
       ceph: v2.ceph,
       metrics: v2.metrics,

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -134,6 +135,19 @@ func TestAvailabilityPollProviderSupplementalRecordsProjectNetworkEndpointIncide
 	if resource.Availability.TargetKind != string(config.AvailabilityTargetDevice) {
 		t.Fatalf("availability target kind = %q, want %q", resource.Availability.TargetKind, config.AvailabilityTargetDevice)
 	}
+	if resource.Availability.Evidence == nil {
+		t.Fatal("availability evidence = nil")
+	}
+	if err := resource.Availability.Evidence.Validate(); err != nil {
+		t.Fatalf("availability evidence validation error = %v", err)
+	}
+	if resource.Availability.Evidence.Subject.ProviderRef != target.ID ||
+		resource.Availability.Evidence.Subject.ProviderScope != "availability-target" {
+		t.Fatalf("availability evidence subject = %+v", resource.Availability.Evidence.Subject)
+	}
+	if resource.Availability.Evidence.ObservedAt != checkedAt {
+		t.Fatalf("evidence observed at = %v, want %v", resource.Availability.Evidence.ObservedAt, checkedAt)
+	}
 	if len(resource.Incidents) != 1 || resource.Incidents[0].Code != "availability_unreachable" {
 		t.Fatalf("incidents = %+v, want availability_unreachable", resource.Incidents)
 	}
@@ -178,6 +192,13 @@ func TestAvailabilityResourceFromTargetOmitsUnsetProbeTimes(t *testing.T) {
 	}
 	if resource.Availability.LastSuccess != nil {
 		t.Fatalf("last success = %v, want nil before the first successful probe", resource.Availability.LastSuccess)
+	}
+	if resource.Availability.Evidence == nil {
+		t.Fatal("availability evidence = nil before first probe")
+	}
+	if resource.Availability.Evidence.Completeness != operationaltrust.EvidencePartial ||
+		resource.Availability.Evidence.Confidence != operationaltrust.EvidenceUnknown {
+		t.Fatalf("initial availability evidence = %+v, want partial/unknown", resource.Availability.Evidence)
 	}
 }
 

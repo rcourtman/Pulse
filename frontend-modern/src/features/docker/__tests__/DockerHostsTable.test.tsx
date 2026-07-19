@@ -135,6 +135,67 @@ describe('DockerHostsTable', () => {
     expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('type', 'button');
   });
 
+  it('keeps an attached availability check visible in the host detail', () => {
+    render(() => (
+      <DockerHostsTable
+        resources={[
+          makeDockerHost({
+            availability: {
+              targetId: 'tower-api',
+              address: '192.168.0.8',
+              port: 8007,
+              protocol: 'tcp',
+              enabled: true,
+              pollIntervalSeconds: 60,
+              available: true,
+              latencyMillis: 9,
+              lastChecked: new Date().toISOString(),
+              correlationState: 'attached',
+            },
+            availabilityChecks: [
+              {
+                targetId: 'tower-api',
+                address: '192.168.0.8',
+                port: 8007,
+                protocol: 'tcp',
+                enabled: true,
+                pollIntervalSeconds: 60,
+                available: true,
+                latencyMillis: 9,
+                lastChecked: new Date().toISOString(),
+                correlationState: 'attached',
+              },
+              {
+                targetId: 'tower-web',
+                address: 'tower.example.test',
+                protocol: 'https',
+                path: '/health',
+                enabled: true,
+                pollIntervalSeconds: 60,
+                available: true,
+                latencyMillis: 14,
+                lastChecked: new Date().toISOString(),
+                correlationState: 'attached',
+              },
+            ],
+          }),
+        ]}
+        emptyIcon={<span />}
+        emptyTitle="No Docker hosts"
+        emptyDescription="No hosts"
+        showToolbar={false}
+      />
+    ));
+
+    fireEvent.click(screen.getByText('docker-01').closest('tr')!);
+
+    const drawer = screen.getByTestId('docker-host-drawer');
+    expect(within(drawer).getAllByTestId('availability-probe-status')).toHaveLength(2);
+    expect(within(drawer).getByText('192.168.0.8:8007')).toBeInTheDocument();
+    expect(within(drawer).getByText('tower.example.test/health')).toBeInTheDocument();
+    expect(within(drawer).getAllByText('fresh')).toHaveLength(2);
+  });
+
   it('colors drawer host temperatures from configured thresholds', () => {
     render(() => (
       <DockerHostsTable

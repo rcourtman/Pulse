@@ -959,6 +959,15 @@ contextual Assistant handoff. Assistant is absent before selection and receives
 explanation-only typed context without action or approval authority. Browser
 proof is `tests/integration/tests/91-operational-trust-attention-workbench.spec.ts`.
 
+Attached availability failures use this same queue and detail contract. Their
+attention item keeps the owning canonical resource ID, the exact
+availability-poller evidence ID, freshness, impact, and resource deep link;
+Patrol must not create an endpoint-only finding family or route the operator to
+a duplicate standalone check. A disconnected or expired availability
+observation remains stale or unknown and must not be presented as recovered.
+The attached-facet browser proof is
+`tests/integration/tests/92-operational-trust-availability-facet.spec.ts`.
+
 ## Current State
 
 The active Patrol queue now uses compact severity-accented rows for

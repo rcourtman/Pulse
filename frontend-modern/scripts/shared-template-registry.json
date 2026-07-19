@@ -311,6 +311,7 @@
       },
       "requiredConsumers": [
         { "path": "src/components/Discovery/DiscoveryTab.tsx" },
+        { "path": "src/components/Infrastructure/AvailabilityProbeStatusCard.tsx" },
         { "path": "src/components/Infrastructure/ResourceActionHistory.tsx" },
         { "path": "src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx" },
         { "path": "src/components/shared/WebInterfaceUrlField.tsx" },

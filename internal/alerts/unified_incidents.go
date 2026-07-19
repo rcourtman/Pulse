@@ -6,6 +6,7 @@ import (
 	"time"
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -236,6 +237,9 @@ func containsCanonicalString(values []string, target string) bool {
 }
 
 func resourceSupportsUnifiedIncidentAlerts(resource unifiedresources.Resource) bool {
+	if len(unifiedresources.AvailabilityChecksForResource(resource)) > 0 && len(resource.Incidents) > 0 {
+		return true
+	}
 	switch resource.Type {
 	case unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypePhysicalDisk:
 		return true
@@ -283,7 +287,7 @@ func unifiedIncidentAlert(resource unifiedresources.Resource, incident unifiedre
 		startTime = now
 	}
 
-	return &Alert{
+	alert := &Alert{
 		ID:           alertID,
 		Type:         alertType,
 		Level:        level,
@@ -298,6 +302,12 @@ func unifiedIncidentAlert(resource unifiedresources.Resource, incident unifiedre
 		LastSeen:     now,
 		Metadata:     unifiedIncidentMetadata(resource, incident, alertType),
 	}
+	if availability := unifiedresources.AvailabilityCheckByTargetID(resource, incident.NativeID); availability != nil && availability.Evidence != nil {
+		alert.Evidence = []operationaltrust.EvidenceEnvelope{
+			availability.Evidence.Clone(),
+		}
+	}
+	return alert
 }
 
 func unifiedIncidentAlertID(resource unifiedresources.Resource, incident unifiedresources.ResourceIncident) string {
@@ -356,7 +366,7 @@ func unifiedIncidentInstance(resource unifiedresources.Resource) string {
 			return strings.TrimSpace(resource.VMware.VCenterHost)
 		}
 		return "vSphere"
-	case resource.Availability != nil:
+	case len(unifiedresources.AvailabilityChecksForResource(resource)) > 0:
 		return "Availability"
 	case resource.Storage != nil && strings.TrimSpace(resource.Storage.Platform) != "":
 		platform := strings.TrimSpace(resource.Storage.Platform)

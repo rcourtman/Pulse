@@ -99,6 +99,16 @@ const resource = (overrides: Partial<Resource>): Resource =>
     ...overrides,
   }) as Resource;
 
+const freshAvailability = (
+  overrides: NonNullable<Resource['availability']> = {},
+): NonNullable<Resource['availability']> => ({
+  available: true,
+  lastChecked: new Date().toISOString(),
+  pollIntervalSeconds: 60,
+  correlationState: 'standalone',
+  ...overrides,
+});
+
 beforeEach(() => {
   mocks.pathname = '/standalone/machines';
   mocks.searchParams = {};
@@ -113,14 +123,14 @@ beforeEach(() => {
         type: 'network-endpoint',
         platformType: 'availability',
         sources: ['availability'],
-        availability: { targetKind: 'machine' },
+        availability: freshAvailability({ targetKind: 'machine' }),
       }),
       resource({
         id: 'mqtt-meter',
         type: 'network-endpoint',
         platformType: 'availability',
         sources: ['availability'],
-        availability: { targetKind: 'service' },
+        availability: freshAvailability({ targetKind: 'service' }),
       }),
     ],
     loading: () => false,
@@ -158,10 +168,31 @@ describe('StandalonePageSurface', () => {
       'machines,availability',
     );
     expect(screen.getByTestId('agents-machines-table')).toHaveAttribute('data-resource-count', '1');
-    expect(screen.getByTestId('standalone-posture-summary')).toHaveTextContent(
-      'All 1 machine reporting normally',
-    );
+    expect(screen.queryByTestId('standalone-posture-summary')).not.toBeInTheDocument();
     expect(screen.queryByTestId('availability-checks-table')).not.toBeInTheDocument();
+  });
+
+  it('keeps machine attention in the table instead of adding a page-wide posture banner', () => {
+    mocks.useUnifiedResources.mockReturnValue({
+      resources: () => [
+        resource({
+          id: 'tower',
+          name: 'tower',
+          type: 'agent',
+          platformType: 'agent',
+          sources: ['agent'],
+          status: 'warning',
+        }),
+      ],
+      loading: () => false,
+      error: () => null,
+      refetch: vi.fn(),
+    });
+
+    render(() => <StandalonePageSurface />);
+
+    expect(screen.getByTestId('agents-machines-table')).toHaveAttribute('data-resource-count', '1');
+    expect(screen.queryByTestId('standalone-posture-summary')).not.toBeInTheDocument();
   });
 
   it('surfaces stale Pulse Agent binaries on the Machines page', () => {
@@ -243,7 +274,7 @@ describe('StandalonePageSurface', () => {
           platformType: 'availability',
           sources: ['availability'],
           status: 'offline',
-          availability: { targetKind: 'service', available: false },
+          availability: freshAvailability({ targetKind: 'service', available: false }),
         }),
         resource({
           id: 'healthy-check',
@@ -251,7 +282,7 @@ describe('StandalonePageSurface', () => {
           platformType: 'availability',
           sources: ['availability'],
           status: 'online',
-          availability: { targetKind: 'service', available: true },
+          availability: freshAvailability({ targetKind: 'service' }),
         }),
       ],
       loading: () => false,

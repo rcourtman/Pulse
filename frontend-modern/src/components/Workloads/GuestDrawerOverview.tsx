@@ -7,11 +7,11 @@ import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrast
 import { DiscoveryProvenanceMarker } from '@/components/shared/DiscoveryProvenanceMarker';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { WebInterfaceUrlField } from '@/components/shared/WebInterfaceUrlField';
+import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
 import type { DiscoveryIdentifiedSummary } from '@/utils/discoveryPresentation';
 import { formatBytes, formatUptime } from '@/utils/format';
 import type { MetricDisplayThresholds } from '@/utils/metricThresholds';
 
-import { AvailabilityProbeStatusCard } from './AvailabilityProbeStatusCard';
 import { AvailabilityProbeSuggestionCard } from './AvailabilityProbeSuggestionCard';
 import { DiskList } from './DiskList';
 import { getGuestDrawerMemoryRows, isGuestDrawerVM } from './guestDrawerModel';
@@ -475,15 +475,21 @@ export function GuestDrawerOverview(props: GuestDrawerOverviewProps) {
           suggestedUrlReasonTitle={props.discoveryIdentifiedSummary?.suggestedUrlReasonTitle}
           suggestedUrlDiagnostic={props.discoveryIdentifiedSummary?.suggestedUrlDiagnostic}
         />
-        <Show when={props.guest.availability}>
+        <Show when={props.guest.availability || props.guest.availabilityChecks?.length}>
           <div class="mt-3 max-w-sm">
-            <AvailabilityProbeStatusCard availability={props.guest.availability!} />
+            <div class="space-y-3">
+              <AvailabilityProbeStatusCards
+                availability={props.guest.availability}
+                checks={props.guest.availabilityChecks}
+              />
+            </div>
           </div>
         </Show>
         <Show
           when={
             props.discoveryIdentifiedSummary?.suggestedAvailabilityProbe &&
-            !props.guest.availability
+            !props.guest.availability &&
+            !props.guest.availabilityChecks?.length
           }
         >
           <div class="mt-3 max-w-sm">

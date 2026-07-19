@@ -594,6 +594,11 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                                       </>
                                     )}
                                   </Show>
+                                  <span
+                                    class={`hidden shrink-0 text-[9px] xl:inline ${probe().toneClassName}`}
+                                  >
+                                    {probe().freshnessLabel}
+                                  </span>
                                 </div>
                               )}
                             </Show>

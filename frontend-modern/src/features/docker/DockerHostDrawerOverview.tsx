@@ -5,6 +5,7 @@ import {
   buildDrawerDiskListItems,
   type DrawerDiskListItem,
 } from '@/components/Workloads/DrawerDiskListCard';
+import { AvailabilityProbeStatusCards } from '@/components/Infrastructure/AvailabilityProbeStatusCard';
 import { InfoCardFrame } from '@/components/shared/InfoCardFrame';
 import { useResourceDetailDrawerDockerActionsState } from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState';
 import { hostOverrideIdCandidates } from '@/features/alerts/alertOverridesModel';
@@ -346,6 +347,12 @@ export function DockerHostDrawerOverview(props: DockerHostDrawerOverviewProps) {
     <div class="flex flex-wrap gap-3 [&>*]:flex-1 [&>*]:basis-[calc(25%-0.75rem)] [&>*]:min-w-[200px] [&>*]:max-w-full [&>*]:overflow-hidden">
       <DetailCard title="System" rows={systemRows()} />
       <DetailCard title="Runtime" rows={runtimeRows()} />
+      <Show when={props.host.availability || props.host.availabilityChecks?.length}>
+        <AvailabilityProbeStatusCards
+          availability={props.host.availability}
+          checks={props.host.availabilityChecks}
+        />
+      </Show>
       <InfoCardFrame data-testid="docker-host-drawer-containers-card">
         <h3 class="mb-2 text-[11px] font-medium uppercase tracking-wide text-base-content">
           Containers

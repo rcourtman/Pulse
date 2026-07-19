@@ -678,6 +678,9 @@ export const canonicalizeRealtimeResource = (
     storage: resource.storage ?? (platformRecord?.storage as Resource['storage']),
     availability:
       resource.availability ?? (platformRecord?.availability as Resource['availability']),
+    availabilityChecks:
+      resource.availabilityChecks ??
+      (platformRecord?.availabilityChecks as Resource['availabilityChecks']),
     physicalDisk:
       resource.physicalDisk ?? (platformRecord?.physicalDisk as Resource['physicalDisk']),
   };
@@ -785,6 +788,11 @@ export const mergeCanonicalResource = (incoming: Resource, existing?: Resource):
       incomingSources,
       'availability',
     ) as Resource['availability'],
+    availabilityChecks:
+      incoming.availabilityChecks ??
+      (shouldKeepSourceFacet(incomingSources, 'availability')
+        ? existingCanonical.availabilityChecks
+        : undefined),
     storage: mergeRecord(
       incoming.storage as JsonRecord | undefined,
       existingCanonical.storage as JsonRecord | undefined,

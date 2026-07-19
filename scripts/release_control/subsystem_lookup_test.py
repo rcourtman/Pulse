@@ -4222,6 +4222,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "internal/unifiedresources/availability_link_test.go",
                 "internal/unifiedresources/kubernetes_registry_test.go",
                 "internal/unifiedresources/pbs_pmg_registry_test.go",
                 "internal/unifiedresources/registry_merge_policy_test.go",
@@ -4250,6 +4251,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "internal/unifiedresources/availability_link_test.go",
                 "internal/unifiedresources/kubernetes_registry_test.go",
                 "internal/unifiedresources/pbs_pmg_registry_test.go",
                 "internal/unifiedresources/registry_merge_policy_test.go",

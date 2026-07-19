@@ -5,6 +5,8 @@ export interface AvailabilityProbePresentation {
   methodLabel: string;
   targetLabel: string | null;
   resultLabel: string;
+  freshnessLabel: 'fresh' | 'stale' | 'freshness unknown';
+  correlationLabel: string | null;
   netIoLabel: string;
   rowLabel: string;
   detailLabel: string;
@@ -54,6 +56,29 @@ export const getAvailabilityProbeTargetLabel = (
   return null;
 };
 
+export const getAvailabilityProbeEndpointLabel = (
+  availability?: ResourceAvailabilityMeta | null,
+): string => {
+  const address = (availability?.address ?? '').trim();
+  const protocol = normalizeAvailabilityProtocol(availability?.protocol);
+  const port = availability?.port;
+  const addressWithPort =
+    address &&
+    typeof port === 'number' &&
+    Number.isFinite(port) &&
+    port > 0 &&
+    !address.endsWith(`:${port}`)
+      ? `${address}:${port}`
+      : address;
+  if ((protocol === 'http' || protocol === 'https') && availability?.path) {
+    const path = availability.path.trim();
+    if (path && !addressWithPort.endsWith(path)) {
+      return `${addressWithPort.replace(/\/+$/, '')}${path.startsWith('/') ? path : `/${path}`}`;
+    }
+  }
+  return addressWithPort;
+};
+
 const getAvailabilityProbeFailureLabel = (availability: ResourceAvailabilityMeta): string => {
   const lastError = (availability.lastError ?? '').trim();
   const normalizedError = lastError.toLowerCase();
@@ -88,18 +113,64 @@ const getAvailabilityProbeResultLabel = (
 const getAvailabilityProbeToneClassName = (
   resource: Pick<Resource, 'status'>,
   availability: ResourceAvailabilityMeta,
+  freshnessLabel: AvailabilityProbePresentation['freshnessLabel'],
 ): string => {
   const normalizedStatus = (resource.status ?? '').trim().toLowerCase();
   if (availability.available === false || normalizedStatus === 'offline') {
     return AVAILABILITY_PROBE_ERROR_CLASS;
   }
-  if (normalizedStatus === 'degraded') {
+  if (
+    normalizedStatus === 'degraded' ||
+    freshnessLabel === 'stale' ||
+    availability.correlationState === 'ambiguous' ||
+    availability.correlationState === 'unresolved'
+  ) {
     return AVAILABILITY_PROBE_WARNING_CLASS;
   }
   if (availability.available === true || normalizedStatus === 'online') {
     return AVAILABILITY_PROBE_SUCCESS_CLASS;
   }
   return AVAILABILITY_PROBE_UNKNOWN_CLASS;
+};
+
+const getAvailabilityFreshnessLabel = (
+  availability: ResourceAvailabilityMeta,
+  now: Date,
+): AvailabilityProbePresentation['freshnessLabel'] => {
+  const explicitValidUntil = availability.evidence?.validUntil;
+  const validUntilMillis = explicitValidUntil ? Date.parse(explicitValidUntil) : Number.NaN;
+  if (Number.isFinite(validUntilMillis)) {
+    return validUntilMillis >= now.getTime() ? 'fresh' : 'stale';
+  }
+
+  const checkedMillis = availability.lastChecked
+    ? Date.parse(availability.lastChecked)
+    : Number.NaN;
+  const pollIntervalSeconds = availability.pollIntervalSeconds;
+  if (
+    Number.isFinite(checkedMillis) &&
+    typeof pollIntervalSeconds === 'number' &&
+    Number.isFinite(pollIntervalSeconds) &&
+    pollIntervalSeconds > 0
+  ) {
+    return checkedMillis + pollIntervalSeconds * 2_000 >= now.getTime() ? 'fresh' : 'stale';
+  }
+  return 'freshness unknown';
+};
+
+const getAvailabilityCorrelationLabel = (availability: ResourceAvailabilityMeta): string | null => {
+  switch (availability.correlationState) {
+    case 'ambiguous':
+      return availability.correlationCandidates && availability.correlationCandidates > 1
+        ? `${availability.correlationCandidates} possible resource matches`
+        : 'Resource match is ambiguous';
+    case 'unresolved':
+      return 'Resource link is unresolved';
+    case 'standalone':
+      return 'Standalone endpoint';
+    default:
+      return null;
+  }
 };
 
 const getFailureCountLabel = (availability: ResourceAvailabilityMeta): string | null => {
@@ -116,10 +187,10 @@ const getFailureCountLabel = (availability: ResourceAvailabilityMeta): string | 
 
 export const getAvailabilityProbePresentation = (
   resource: AvailabilityProbeResource,
+  now = new Date(),
 ): AvailabilityProbePresentation | null => {
   const platformAvailability = resource.platformData?.availability as
-    | ResourceAvailabilityMeta
-    | undefined;
+    ResourceAvailabilityMeta | undefined;
   const availability = resource.availability ?? platformAvailability;
   if (!availability) {
     return null;
@@ -128,11 +199,14 @@ export const getAvailabilityProbePresentation = (
   const methodLabel = getAvailabilityProbeMethodLabel(availability);
   const targetLabel = getAvailabilityProbeTargetLabel(availability);
   const resultLabel = getAvailabilityProbeResultLabel(resource, availability);
+  const freshnessLabel = getAvailabilityFreshnessLabel(availability, now);
+  const correlationLabel = getAvailabilityCorrelationLabel(availability);
   const netIoLabel = targetLabel ? `${targetLabel}: ${resultLabel}` : resultLabel;
   const checked = formatRelativeTime(availability.lastChecked);
   const failures = getFailureCountLabel(availability);
-  const detailParts = [`${methodLabel} - ${resultLabel}`];
+  const detailParts = [`${methodLabel} - ${resultLabel}`, freshnessLabel];
   if (checked) detailParts.push(`checked ${checked}`);
+  if (correlationLabel) detailParts.push(correlationLabel);
   if (failures) detailParts.push(failures);
   if (availability.lastSuccess && availability.available === false) {
     const lastSuccess = formatRelativeTime(availability.lastSuccess);
@@ -146,9 +220,11 @@ export const getAvailabilityProbePresentation = (
     methodLabel,
     targetLabel,
     resultLabel,
+    freshnessLabel,
+    correlationLabel,
     netIoLabel,
     rowLabel,
     detailLabel: detailParts.join(' - '),
-    toneClassName: getAvailabilityProbeToneClassName(resource, availability),
+    toneClassName: getAvailabilityProbeToneClassName(resource, availability, freshnessLabel),
   };
 };

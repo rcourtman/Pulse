@@ -217,6 +217,20 @@ type resourceContractSnapshot struct {
 	Type string
 }
 
+func TestContract_UnifiedSeedSourcesIncludesPluralAvailabilityFacets(t *testing.T) {
+	sources := unifiedSeedSources([]unifiedresources.Resource{{
+		ID:   "docker-host:ops",
+		Type: unifiedresources.ResourceTypeAgent,
+		AvailabilityChecks: []unifiedresources.AvailabilityData{{
+			TargetID: "ops-api",
+		}},
+	}})
+
+	if _, ok := sources[unifiedresources.SourceAvailability]; !ok {
+		t.Fatalf("seed sources = %v, want availability from plural resource facet", sources)
+	}
+}
+
 func TestContract_AlertDeliveryDiagnosisRouteIsReadOnlyMonitoringRead(t *testing.T) {
 	source, err := os.ReadFile("alerts.go")
 	if err != nil {

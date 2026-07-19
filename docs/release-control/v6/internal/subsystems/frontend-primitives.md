@@ -5006,6 +5006,16 @@ and latest latency or failure result once, inline in the agentless endpoint's
 metric slot, while keeping recent check timing and fuller failure context in
 the tooltip or drawer so operators can understand what was measured without
 duplicated row chrome.
+Known platform resources use that same compact presentation when availability
+is attached. `AvailabilityProbeStatusCard` is the shared detail primitive for
+Workloads and Docker host drawers; it renders the complete target, protocol,
+latest result, latency when relevant, evidence freshness, and last observation.
+Plural attached checks render as repeated bounded cards from
+`availabilityChecks`, while the row keeps one compatibility summary. Expired
+successful evidence must render an amber `Stale` state with no green
+`Responding normally` copy, and a never-observed check must render
+`Not checked`. A resource whose correlation state is `attached` must not also
+appear as a primary row in the Machines `Availability checks` tab.
 Operational navigation for those agentless endpoints belongs to the
 frontend-primitives-owned Machines surface as a focused Availability checks tab
 rather than a new primary nav item. The page may show availability checks beside

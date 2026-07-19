@@ -36,7 +36,7 @@ func IncidentCategoryForResource(resource *Resource, incident ResourceIncident) 
 		return IncidentCategoryAvailability
 	}
 
-	if resource.Type == ResourceTypeNetworkEndpoint || resource.Availability != nil {
+	if resource.Type == ResourceTypeNetworkEndpoint || len(AvailabilityChecksForResource(*resource)) > 0 {
 		return IncidentCategoryAvailability
 	}
 	if resource.Type == ResourceTypePhysicalDisk {

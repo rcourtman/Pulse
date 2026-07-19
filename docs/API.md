@@ -115,6 +115,14 @@ Note: `GET /api/resources` is optimized for list views. Some large, platform-spe
 
 Note: guest disk usage percentages use `-1` as an "unknown" sentinel — reported when a VM is stopped or its guest agent is unavailable, so there is no filesystem view to measure. Consumers should treat negative values as "no data", not as a percentage; the accompanying `diskStatusReason` field (e.g. `vm-stopped`, `agent-disabled`) says why.
 
+Availability is an additive resource facet. `availability` is the compatibility
+summary used by existing clients; `availabilityChecks` contains every check
+attached to the resource. Each check can include `correlationState`
+(`attached`, `standalone`, `ambiguous`, or `unresolved`), its correlation
+rule/reason/candidate count, and an `evidence` envelope with observation and
+validity timestamps. Attached targets also add a `checks` relationship and do
+not appear as separate `network-endpoint` rows.
+
 `GET /api/resources/stats`
 Returns aggregations (counts + health rollups).
 
@@ -1324,6 +1332,11 @@ Target payload fields:
 - `timeoutMillis` - Minimum 250 milliseconds; defaults to 2000.
 - `failureThreshold` - Number of consecutive failures before alerting; defaults to 2.
 - `linkedResourceId` - Optional resource id hint for attaching the probe facet to an existing resource.
+
+An explicit `linkedResourceId` is authoritative and fails closed when it
+cannot resolve. Without it, Pulse attaches only on one exact normalized IP or
+hostname match. Zero matches remain standalone and multiple matches remain
+ambiguous; Pulse does not guess.
 
 Example ping-only target:
 

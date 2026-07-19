@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -346,6 +347,7 @@ func availabilityFixtureRecord(fixture AvailabilityFixture, now time.Time) (unif
 		PollIntervalSeconds: target.effectivePollIntervalSecs(),
 		TimeoutMillis:       target.effectiveTimeoutMillis(),
 	}
+	data.Evidence = mockAvailabilityEvidence(target, fixture, lastSeen, now)
 	resource := unifiedresources.Resource{
 		Type:         unifiedresources.ResourceTypeNetworkEndpoint,
 		Technology:   string(target.Protocol),
@@ -366,6 +368,60 @@ func availabilityFixtureRecord(fixture AvailabilityFixture, now time.Time) (unif
 		Resource: resource,
 		Identity: availabilityFixtureIdentity(target),
 	}, true
+}
+
+func mockAvailabilityEvidence(
+	target AvailabilityTargetFixture,
+	fixture AvailabilityFixture,
+	observedAt time.Time,
+	ingestedAt time.Time,
+) *operationaltrust.EvidenceEnvelope {
+	source := operationaltrust.EvidenceSource{
+		Provider:  string(unifiedresources.SourceAvailability),
+		Collector: "availability-poller",
+	}
+	subject := operationaltrust.EvidenceSubject{
+		ProviderRef:   target.ID,
+		ProviderScope: "availability-target",
+	}
+	id, err := operationaltrust.NewEvidenceID(source, subject, observedAt, target.ID)
+	if err != nil {
+		return nil
+	}
+	validUntil := observedAt.Add(
+		time.Duration(target.effectivePollIntervalSecs()*2) * time.Second,
+	)
+	completeness := operationaltrust.EvidenceComplete
+	confidence := operationaltrust.EvidenceConfirmed
+	var reason *operationaltrust.EvidenceReason
+	if fixture.LastChecked.IsZero() {
+		completeness = operationaltrust.EvidencePartial
+		confidence = operationaltrust.EvidenceUnknown
+		reason = &operationaltrust.EvidenceReason{
+			Code:    "availability_not_observed",
+			Message: "The availability target has not completed its first probe.",
+		}
+	}
+	envelope := operationaltrust.EvidenceEnvelope{
+		ID:           id,
+		Source:       source,
+		Subject:      subject,
+		ObservedAt:   observedAt,
+		IngestedAt:   ingestedAt,
+		ValidUntil:   &validUntil,
+		Completeness: completeness,
+		Confidence:   confidence,
+		Reason:       reason,
+		Permissions:  operationaltrust.EvidencePermissionsSufficient,
+		PayloadRef: &operationaltrust.EvidencePayloadRef{
+			Kind: "availability-target",
+			ID:   target.ID,
+		},
+	}
+	if err := envelope.Validate(); err != nil {
+		return nil
+	}
+	return &envelope
 }
 
 func availabilityFixtureTimePointer(value time.Time) *time.Time {

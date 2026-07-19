@@ -185,6 +185,15 @@ Unified Resources is now the canonical model and endpoint family:
 
 - Canonical: `/api/resources`
 
+Availability checks now attach to an existing canonical resource when an
+explicit `linkedResourceId` resolves or one normalized IP/hostname match is
+unambiguous. Attached checks disappear from the standalone Availability checks
+inventory and appear on the owning platform row/detail instead. API consumers
+should accept the additive `availabilityChecks`, correlation, evidence, and
+`checks` relationship fields; the existing singular `availability` field
+remains as a compatibility summary. Ambiguous or invalid links stay
+standalone/unresolved and are never guessed.
+
 ### License and Entitlements
 
 Pulse v6 feature gating is driven by the entitlements endpoint:

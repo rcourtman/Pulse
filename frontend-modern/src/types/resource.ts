@@ -29,6 +29,7 @@ import {
   PLATFORM_TYPE_KEYS as GENERATED_PLATFORM_TYPE_KEYS,
   type GeneratedPlatformType,
 } from '@/utils/platformSupportManifest.generated';
+import type { EvidenceEnvelope } from '@/types/operationalTrust';
 
 // Resource types - what kind of entity is being monitored
 export type ResourceType =
@@ -268,6 +269,7 @@ export type ResourceFacetSourceAdapter =
 
 export interface ResourceFacetCounts {
   recentChanges: number;
+  availabilityChecks?: number;
   recentChangeKinds?: Partial<Record<ResourceChangeKind, number>>;
   recentChangeSourceTypes?: Partial<Record<ResourceChangeSourceType, number>>;
   recentChangeSourceAdapters?: Partial<Record<ResourceFacetSourceAdapter, number>>;
@@ -280,6 +282,7 @@ export type ResourceRelationshipType =
   | 'exposed_by'
   | 'owned_by'
   | 'attached_to'
+  | 'checks'
   | string;
 
 export interface ResourceRelationship {
@@ -1388,6 +1391,11 @@ export interface ResourceAvailabilityMeta {
   failureThreshold?: number;
   pollIntervalSeconds?: number;
   timeoutMillis?: number;
+  correlationState?: 'attached' | 'standalone' | 'ambiguous' | 'unresolved';
+  correlationRule?: string;
+  correlationReason?: string;
+  correlationCandidates?: number;
+  evidence?: EvidenceEnvelope;
 }
 
 /**
@@ -1475,6 +1483,7 @@ export interface Resource {
   proxmox?: ResourceProxmoxMeta;
   pbs?: ResourcePBSMeta;
   availability?: ResourceAvailabilityMeta;
+  availabilityChecks?: ResourceAvailabilityMeta[];
   physicalDisk?: ResourcePhysicalDiskMeta;
   storage?: ResourceStorageMeta;
   ceph?: ResourceCephMeta;

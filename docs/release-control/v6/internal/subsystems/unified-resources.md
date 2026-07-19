@@ -255,16 +255,16 @@ Alert decoration on those platform rows consumes the canonical active-alert
 read model and the detector-enabled accessor. External notification activation
 is not a resource-health field and must never suppress row alerts, change
 resource filtering, or create a parallel platform-local alert truth.
-The standalone Pulse Agent and Availability monitor may add one compact status
-summary immediately above its canonical table. That summary must be derived
-from the same already-loaded unified-resource slice, use canonical resource
-status and `lastSeen` fields, keep the machine row indicator on that same
-freshness-aware presentation so an old agent cannot stay visually green while
-the summary warns, keep failed or degraded checks ahead of healthy
-checks, and route management back to the canonical infrastructure or
-availability settings paths. It must not introduce a page-local fetch, generic
-Home dashboard, decorative chart, shadow health model, or proof strip detached
-from the table it summarizes.
+The standalone Machines monitor keeps resource-specific health on the canonical
+table row and resource detail surface rather than duplicating row warnings in a
+page-wide posture banner. Its row indicator must use the same canonical resource
+status and `lastSeen` fields so an old agent cannot stay visually green.
+The Availability monitor may add one compact status summary immediately above
+its canonical table. That summary must be derived from the same already-loaded
+unified-resource slice, keep failed or degraded checks ahead of healthy checks,
+and route management back to the canonical availability settings path. It must
+not introduce a page-local fetch, generic Home dashboard, decorative chart,
+shadow health model, or proof strip detached from the table it summarizes.
 Availability timestamps must preserve absence as absence. Monitoring and mock
 adapters must project zero `LastChecked` or `LastSuccess` values as nil
 canonical facet pointers so REST and WebSocket consumers render `Not checked`
@@ -1745,39 +1745,53 @@ canonical resources expose to alerts, AI, and frontend consumers.
 Agentless availability checks are now canonical resources rather than
 connection-only status rows. `SourceAvailability` emits `network-endpoint`
 records with the saved target id, probe address, protocol, cadence, last check,
-failure count, and threshold in `AvailabilityData`. Registry merge policy must
-preserve that payload and incident state. An availability record attaches as a
-facet onto a known resource when (a) the target carries an explicit
-`LinkedResourceID` that resolves to a resource already in the registry by exact
-resource id, unique source id, or unique canonical identity alias, or (b) the
-probe address unambiguously matches exactly one known resource by IP through
-`FindCandidates` with reason `ip` or `hostname+ip` (confidence at or above the
-merge threshold). Fuzzy hostname-only correlation (reason `hostname`, confidence
-below threshold), ambiguous source/canonical references, and references to
-availability-owned resources must not attach. When attached, the known resource
-inherits the `AvailabilityData` facet and `SourceAvailability` in its source
-list, and no standalone `network-endpoint` is minted. When no link resolves, the
-record falls back to a standalone `network-endpoint` as before. A second probe
-must not overwrite a facet already attached by a different target; the second
-probe stays standalone in that case.
+failure count, threshold, correlation outcome, and evidence envelope in
+`AvailabilityData`. Registry merge policy must preserve that payload and
+incident state.
+
+Correlation is fail-closed and ordered. A non-empty `LinkedResourceID` is
+authoritative: it may resolve by exact canonical resource id, one unique source
+id, or one unique canonical identity alias, and an invalid or ambiguous
+explicit reference remains `unresolved` without falling back to address
+matching. Without an explicit reference, the registry may attach only when one
+normalized IP address or one exact normalized hostname matches exactly one
+non-availability-owned canonical resource. Zero matches are `standalone`;
+multiple matches are `ambiguous`; neither may be guessed. A genuinely
+standalone target keeps its `network-endpoint`. An attached target does not
+mint a duplicate endpoint.
+
+The attached resource carries every check in the canonical
+`availabilityChecks` facet, keyed by saved target id, while `availability`
+remains an additive singular compatibility summary selected from that set.
+Adding a second explicit or unambiguously correlated check must retain both
+checks on the same resource, emit one `checks` relationship per target, and
+must not force the later check into duplicate standalone inventory. Each
+attached check's evidence subject is rebound to the owning canonical resource
+and includes the exact correlation rule and matched field. Ambiguous and
+unresolved standalone evidence carries a typed reason instead.
 Frontend resource adapters must preserve that same availability identity on
 both REST and realtime paths: a thin `network-endpoint` update with
 availability data is still `platformType=availability`, `sourceType=api`, and
 must not regress to a generic platform badge in infrastructure rows or drawers.
 Infrastructure row presentation must also consume that availability payload as
 operator evidence, not only as badge identity. Any resource row carrying an
-`AvailabilityData` facet—whether a standalone `network-endpoint` or a known
+availability facet—whether a standalone `network-endpoint` or a known
 guest that inherited the facet through explicit link or IP correlation—must
 surface one visible probe readout from either the top-level availability field
 or the live-state `platformData.availability` mirror: the System column uses
 the probe protocol as the compact identity badge (`ICMP`, `TCP`, or `HTTP`),
 while the metric cell shows only the target detail and latest latency or
 failure result, such as `6053: 11 ms`, `/status: 503`, `3 ms`, or `timed out`.
+The owning detail renders protocol, full target, latest result, latency,
+freshness, and last observation for every attached check. Expired successful
+evidence is `stale`, not `Up` or `Responding normally`; an unobserved check is
+`Not checked`, not `Down`.
 Frontend primitives owns Machines as the operational presentation for those
 same agentless checks; unified resources owns the projection contract consumed
 there. `StandalonePageSurface.tsx` must fetch both `agent` and
 `network-endpoint` resources, keep standalone machines and availability checks
-as separate buckets in `standalonePageModel.ts`, and let
+as separate buckets in `standalonePageModel.ts`, exclude every resource whose
+availability correlation state is `attached`, and let
 `AvailabilityChecksTable.tsx` render saved probe method, target, latest result,
 check age, failure count, and cadence from the canonical availability payload.
 Recent check timing and fuller failure context may stay in tooltip or drawer

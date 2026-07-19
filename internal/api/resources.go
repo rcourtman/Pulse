@@ -1178,7 +1178,7 @@ func unifiedSeedSources(resources []unified.Resource) map[unified.DataSource]str
 			sources[unified.SourceTrueNAS] = struct{}{}
 		case resource.VMware != nil:
 			sources[unified.SourceVMware] = struct{}{}
-		case resource.Availability != nil:
+		case len(unified.AvailabilityChecksForResource(resource)) > 0:
 			sources[unified.SourceAvailability] = struct{}{}
 		}
 	}
