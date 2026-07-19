@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { expect, test as base } from '@playwright/test';
 
 import { createAuthenticatedStorageState } from './helpers';
+import { installVmwareWorkloadResourceRoute } from './vmware-workload-fixture';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCREENSHOT_PATH = '/tmp/vmware-resource-detail-drawer.png';
@@ -37,7 +38,8 @@ const test = base.extend<{}, WorkerFixtures>({
 
 // The retired /infrastructure resource deep-link was replaced by the vSphere
 // platform page: expanding a VM row opens the shared guest drawer, which
-// carries the read-only vCenter placement context from live websocket state.
+// carries the read-only vCenter placement context from the canonical resource
+// contract.
 test.describe('VMware resource detail drawer', () => {
   test.setTimeout(180_000);
 
@@ -48,11 +50,11 @@ test.describe('VMware resource detail drawer', () => {
       unexpectedVmwareApiCall = route.request().url();
       await route.abort();
     });
+    await installVmwareWorkloadResourceRoute(page);
 
     await page.goto('/vmware', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('[data-testid="vmware-page"]')).toBeVisible();
 
-    // First websocket state frame can lag on a freshly booted backend.
     const expandButton = page.getByRole('button', { name: 'Expand warehouse-api-01' });
     await expect(expandButton).toBeVisible({ timeout: 30_000 });
     await expandButton.click();
