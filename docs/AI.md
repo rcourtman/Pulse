@@ -96,6 +96,31 @@ model-reported findings ── validated, deduplicated, stored
 MaybeInvestigateFinding() ── model investigation + governed fix planning/execution
 ```
 
+### The Patrol attention queue
+
+The first thing Patrol shows is **Needs attention**, a single operator queue
+projected from Pulse's canonical alert lifecycle. It combines current
+operational state with evidence quality and protection context; it does not
+create a second finding lifecycle.
+
+- **Active** contains open work plus stale or unknown collection states that
+  still require a decision.
+- **Acknowledged** and **Suppressed** remain inspectable without being counted
+  as active work.
+- **Recent resolved** preserves the explanation and transition history without
+  presenting old work as live.
+- **Stale or unknown** means Pulse lacks current enough evidence. It is never
+  shown as healthy or resolved.
+- A calm message appears only when the lifecycle evaluation succeeded, coverage
+  is current, and no active item exists. An unavailable evaluation says so
+  explicitly.
+
+Select an item to see the affected resource, impact, next step, typed evidence,
+protection posture, and lifecycle timeline. **Explain with Assistant** appears
+only inside selected context and receives policy-shaped summaries and
+references. Assistant can explain the item, but it cannot create lifecycle
+truth, invent action authority, or hide uncertainty.
+
 ### What Patrol Sees
 
 Every patrol run passes the LLM comprehensive context about your environment:
@@ -500,7 +525,9 @@ Pulse includes a model-context layer that aggregates evidence from AI runtime su
 
 ### Health Scoring
 
-The Patrol UI can show an operational score (A-F) based on active findings, Patrol coverage, runtime errors, and structured evidence. This score is a presentation aid, not a replacement for model diagnosis.
+Historical Patrol checks and the legacy operational score remain available in
+the collapsed supporting-context section. They are not the primary daily
+monitoring answer and do not replace the canonical attention queue.
 
 ---
 

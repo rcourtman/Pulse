@@ -1916,7 +1916,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByTestId('patrol-status-bar')).not.toBeInTheDocument();
 
     expect(screen.queryByRole('heading', { name: 'Open work' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Active' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Active' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'All' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Resolved' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();

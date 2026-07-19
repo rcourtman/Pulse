@@ -2323,6 +2323,22 @@ default` instead of fusing provider and badge text such as
     and the parameterized search cases in
     `frontend-modern/src/components/Settings/__tests__/useSettingsAccess.test.tsx`.
 
+### Attention workbench shell contract
+
+The app shell and Patrol attention workbench share the same canonical summary
+for desktop and mobile accessible navigation counts. The label remains
+`Patrol`; its accessible description may add the active attention count.
+`frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx` uses native
+buttons, visible focus, selected-state semantics, focus restoration, narrow
+viewport ordering, and reduced-motion-safe behavior. Detail deep links use
+`frontend-modern/src/routing/resourceLinks.ts` and remain stable across reload.
+
+The default queue may show resource, impact, evidence, protection, next-step,
+and age facts. Provider evidence and lifecycle history belong in selected
+detail, while legacy Patrol analytics belong in collapsed supporting context.
+Unavailable and partial states must use explicit copy rather than success
+styling.
+
 ## Current State
 
 Assistant availability in the app shell is derived from the

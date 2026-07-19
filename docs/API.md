@@ -1038,6 +1038,29 @@ Kubernetes-specific analysis as a standalone plan pillar.
 Runs a focused investigation for an alert payload (used by the UI).
 
 ### Patrol
+- `GET /api/ai/patrol/attention`
+  - Returns the typed Patrol attention queue projected from canonical
+    operational lifecycle records. This is the active-count and queue source
+    used by both navigation and Patrol.
+  - Query params: `filter` (`active` | `open` | `acknowledged` | `suppressed` |
+    `stale_unknown` | `resolved` | `all`), `page` (minimum 1), and `limit`
+    (1–200).
+  - The response includes `data`, a lifecycle-wide `summary`, and bounded
+    pagination `meta`. Protection context is joined in one bounded batch, not
+    fetched per item.
+- `GET /api/ai/patrol/attention/summary`
+  - Returns the canonical active, open, acknowledged, suppressed,
+    stale/unknown, and recent-resolved counts plus `calm`, `coverageState`, and
+    `evaluatedAt`.
+  - A lifecycle-read failure returns a typed unavailable error. It never
+    returns a synthetic zero or healthy state.
+- `GET /api/ai/patrol/attention/{id}`
+  - Returns one attention item with its operational record, lifecycle
+    timeline, typed evidence, recommended next step, relationships, and
+    protection posture.
+- All three attention routes require `monitoring:read`. They are read-side
+  projections only; alert lifecycle mutations remain owned by the canonical
+  alert routes.
 - `GET /api/ai/patrol/autonomy`
 - `PUT /api/ai/patrol/autonomy`
 - `GET /api/ai/patrol/status`

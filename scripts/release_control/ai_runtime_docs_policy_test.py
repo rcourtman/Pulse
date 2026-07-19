@@ -59,6 +59,11 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
         self.assertIn("privacy-allowlisted community evidence export", normalized_content)
         self.assertIn("Every active finding shown or returned to a Patrol run", content)
         self.assertIn("Silence is not an all-clear signal", normalized_content)
+        self.assertIn("### The Patrol attention queue", content)
+        self.assertIn(
+            "it cannot create lifecycle truth, invent action authority, or hide uncertainty",
+            normalized_content,
+        )
         self.assertIn(
             "The Assistant model matrix below proves Assistant orchestration only",
             normalized_content,

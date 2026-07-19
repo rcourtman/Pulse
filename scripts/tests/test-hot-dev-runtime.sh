@@ -129,6 +129,16 @@ test_hot_dev_keeps_backend_launch_errors_in_debug_log() {
   assert_contains "backend LOG_FILE follows debug log override" "${output}" "LOG_FILE=\"\${BACKEND_DEBUG_LOG}\""
 }
 
+test_hot_dev_tolerates_missing_mock_mode_setting() {
+  local output
+  output="$(sed -n '360,420p' "${HOT_DEV}")"
+
+  assert_contains \
+    "hot-dev falls back when the canonical dev env has no mock-mode setting" \
+    "${output}" \
+    "tr -dc 'a-z' || true"
+}
+
 test_hot_dev_preserves_proxmox_guest_docker_env() {
   local output
   output="$(sed -n '1,760p' "${HOT_DEV}")"
@@ -328,6 +338,7 @@ test_pulse_process_count_handles_zero_matches_under_pipefail
 test_pulse_process_count_counts_matching_processes
 test_hot_dev_uses_resilient_backend_process_count
 test_hot_dev_keeps_backend_launch_errors_in_debug_log
+test_hot_dev_tolerates_missing_mock_mode_setting
 test_hot_dev_preserves_proxmox_guest_docker_env
 test_hot_dev_avoids_self_killing_npm_wrapper
 test_hot_dev_network_defaults_are_local_first_with_explicit_lan_opt_in

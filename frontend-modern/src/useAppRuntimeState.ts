@@ -28,6 +28,7 @@ import { updateStore } from '@/stores/updates';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { actionInboxStore } from '@/stores/actionInbox';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
+import { patrolAttentionStore } from '@/stores/patrolAttention';
 import {
   applyThemeClass,
   computeIsDark,
@@ -520,6 +521,7 @@ export const useAppRuntimeState = () => {
       void Promise.allSettled([
         aiIntelligenceStore.loadPatrolFindings(),
         aiIntelligenceStore.loadPendingApprovals(),
+        patrolAttentionStore.loadSummary(),
         actionInboxStore.loadPendingActionCount(),
       ]);
     };

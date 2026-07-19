@@ -52,7 +52,7 @@ import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
 import { getActionApprovalBadgePresentation } from '@/features/actions/actionPresentation';
 import { actionInboxStore } from '@/stores/actionInbox';
-import { aiIntelligenceStore } from '@/stores/aiIntelligence';
+import { patrolAttentionStore } from '@/stores/patrolAttention';
 import { isPro } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { getAssistantPageContext } from '@/utils/assistantPageContext';
@@ -401,11 +401,11 @@ export function AppLayout(props: AppLayoutProps) {
   const actionApprovalBadge = createMemo(() =>
     getActionApprovalBadgePresentation(actionInboxStore.pendingActionCount),
   );
-  const patrolOpenWorkCount = createMemo(() => aiIntelligenceStore.patrolOpenWorkCount);
-  const patrolOpenWorkCountLabel = createMemo(() => {
-    const count = patrolOpenWorkCount();
+  const patrolAttentionCount = createMemo(() => patrolAttentionStore.summary()?.activeCount ?? 0);
+  const patrolAttentionCountLabel = createMemo(() => {
+    const count = patrolAttentionCount();
     if (count <= 0) return undefined;
-    return `${count} open work ${count === 1 ? 'item' : 'items'}`;
+    return `${count} active attention ${count === 1 ? 'item' : 'items'}`;
   });
 
   // Platform/runtime nav is resource-admitted. A platform or runtime lens only
@@ -534,10 +534,10 @@ export function AppLayout(props: AppLayoutProps) {
         id: 'ai',
         label: 'Patrol',
         route: '/patrol',
-        tooltip: 'Review Patrol checks, findings, and approvals',
+        tooltip: 'Review active operational attention and recent Patrol checks',
         badge: null,
-        count: patrolOpenWorkCount() > 0 ? patrolOpenWorkCount() : undefined,
-        countLabel: patrolOpenWorkCountLabel(),
+        count: patrolAttentionCount() > 0 ? patrolAttentionCount() : undefined,
+        countLabel: patrolAttentionCountLabel(),
         breakdown: undefined,
         icon: PulsePatrolLogo,
       },

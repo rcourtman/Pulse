@@ -2,8 +2,10 @@ package ai
 
 import (
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
 
 // PatrolMetrics manages Prometheus instrumentation for patrol decisions.
@@ -22,6 +24,10 @@ type PatrolMetrics struct {
 	streamReplayEvents   prometheus.Counter
 	streamReplayBatch    prometheus.Histogram
 	streamSubscriberDrop *prometheus.CounterVec
+	attentionItems       *prometheus.GaugeVec
+	attentionOldestAge   prometheus.Gauge
+	attentionAckLatest   prometheus.Gauge
+	calmEvaluationTime   prometheus.Gauge
 }
 
 var (
@@ -160,6 +166,39 @@ func newPatrolMetrics() *PatrolMetrics {
 			},
 			[]string{"reason"},
 		),
+		attentionItems: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "pulse",
+				Subsystem: "patrol",
+				Name:      "attention_items",
+				Help:      "Current Patrol attention item count by canonical lifecycle state",
+			},
+			[]string{"state"},
+		),
+		attentionOldestAge: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: "pulse",
+				Subsystem: "patrol",
+				Name:      "attention_oldest_age_seconds",
+				Help:      "Age in seconds of the oldest active Patrol attention item",
+			},
+		),
+		attentionAckLatest: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: "pulse",
+				Subsystem: "patrol",
+				Name:      "attention_acknowledgement_latest_seconds",
+				Help:      "Elapsed seconds from first observation to the newest current acknowledgement",
+			},
+		),
+		calmEvaluationTime: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Namespace: "pulse",
+				Subsystem: "patrol",
+				Name:      "calm_evaluation_timestamp_seconds",
+				Help:      "Unix timestamp of the latest canonical Patrol calm-day evaluation",
+			},
+		),
 	}
 
 	prometheus.MustRegister(
@@ -177,6 +216,10 @@ func newPatrolMetrics() *PatrolMetrics {
 		m.streamReplayEvents,
 		m.streamReplayBatch,
 		m.streamSubscriberDrop,
+		m.attentionItems,
+		m.attentionOldestAge,
+		m.attentionAckLatest,
+		m.calmEvaluationTime,
 	)
 
 	return m
@@ -256,4 +299,58 @@ func (m *PatrolMetrics) RecordStreamSubscriberDrop(reason string) {
 		reason = "unknown"
 	}
 	m.streamSubscriberDrop.WithLabelValues(reason).Inc()
+}
+
+// ObserveAttentionProjection records bounded low-cardinality queue health.
+// Resource and record identifiers are deliberately excluded from labels.
+func (m *PatrolMetrics) ObserveAttentionProjection(
+	projection AttentionProjection,
+	now time.Time,
+) {
+	if m == nil {
+		return
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	states := []operationaltrust.OperationalState{
+		operationaltrust.OperationalObserving,
+		operationaltrust.OperationalOpen,
+		operationaltrust.OperationalAcknowledged,
+		operationaltrust.OperationalSuppressed,
+		operationaltrust.OperationalResolving,
+		operationaltrust.OperationalResolved,
+		operationaltrust.OperationalStale,
+		operationaltrust.OperationalUnknown,
+	}
+	counts := make(map[operationaltrust.OperationalState]int, len(states))
+	oldestAge := time.Duration(0)
+	latestAcknowledgementAt := time.Time{}
+	latestAcknowledgementElapsed := time.Duration(0)
+	for _, detail := range projection.Details {
+		counts[detail.Item.State]++
+		if attentionStateCountsAsActive(detail.Item.State) {
+			age := now.Sub(detail.Item.FirstObservedAt)
+			if age > oldestAge {
+				oldestAge = age
+			}
+		}
+		if detail.Item.State == operationaltrust.OperationalAcknowledged &&
+			detail.OperationalRecord.Acknowledgement != nil {
+			elapsed := detail.OperationalRecord.Acknowledgement.At.Sub(
+				detail.Item.FirstObservedAt,
+			)
+			if elapsed >= 0 &&
+				detail.OperationalRecord.Acknowledgement.At.After(latestAcknowledgementAt) {
+				latestAcknowledgementAt = detail.OperationalRecord.Acknowledgement.At
+				latestAcknowledgementElapsed = elapsed
+			}
+		}
+	}
+	for _, state := range states {
+		m.attentionItems.WithLabelValues(string(state)).Set(float64(counts[state]))
+	}
+	m.attentionOldestAge.Set(oldestAge.Seconds())
+	m.attentionAckLatest.Set(latestAcknowledgementElapsed.Seconds())
+	m.calmEvaluationTime.Set(float64(projection.Summary.EvaluatedAt.Unix()))
 }

@@ -32,6 +32,7 @@ product API routes free of maintainer commercial analytics.
 2. `internal/api/resources.go`
 3. `internal/api/discovery_handlers.go`
 4. `internal/api/alerts.go`
+   4a. `internal/api/attention_handlers.go`
 5. `internal/api/activity_audit_handlers.go`
 6. `internal/api/actions.go`
    5a. `internal/api/action_executor.go`
@@ -50,6 +51,7 @@ product API routes free of maintainer commercial analytics.
     12a. `frontend-modern/src/types/operationalTrust.ts`
 13. `frontend-modern/src/types/actionAudit.ts`
 14. `frontend-modern/src/api/actionAudit.ts`
+    14a. `frontend-modern/src/api/patrolAttention.ts`
     7a. `frontend-modern/src/api/resourceActions.ts`
     7b. `frontend-modern/src/api/agentCapabilities.ts`
     7c. `frontend-modern/src/api/generated/agentCapabilities.ts`
@@ -999,6 +1001,7 @@ payload shape change when the portal presents compact client rows.
     bounded freshness window, but it must not mint a second freshness endpoint,
     rewrite the stable Patrol payload, or present old run evidence as a current
     healthy all-clear.
+12. `frontend-modern/src/api/patrolAttention.ts` shared with `patrol-intelligence`: the Patrol attention client is both the Patrol read-model transport and a canonical typed API boundary.
 12. `frontend-modern/src/api/rbac.ts` shared with `organization-settings`: the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary.
 13. `frontend-modern/src/api/security.ts` shared with `security-privacy`: the security frontend client is both a security/privacy control surface and a canonical API payload contract boundary.
 14. `frontend-modern/src/api/updates.ts` shared with `deployment-installability`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.
@@ -3465,6 +3468,24 @@ successful targeted check from a queued response alone.
     after a successful import-triggered reload request, returning a controlled
     API outcome instead of panicking or leaving browser-visible state half
     rewired.
+
+### Patrol attention transport
+
+`internal/api/attention_handlers.go` and
+`frontend-modern/src/api/patrolAttention.ts` own the typed read transport for
+`GET /api/ai/patrol/attention`,
+`GET /api/ai/patrol/attention/summary`, and
+`GET /api/ai/patrol/attention/{id}`. All routes require `monitoring:read`.
+Lists use bounded pagination with a maximum of 200 records and one bounded
+protection-posture batch. The summary path does not read recovery history.
+
+Lifecycle read failure returns a typed unavailable response and never a
+synthetic zero or calm state. Protection lookup failure may return lifecycle
+work only with `coverageState: partial`; it cannot erase work. Alert lifecycle
+mutations remain on their canonical alert routes. Route, payload, and failure
+proof lives in `internal/api/attention_handlers_test.go`,
+`frontend-modern/src/api/__tests__/patrolAttention.test.ts`, and
+`internal/api/route_inventory_test.go`.
 
 ## Current State
 

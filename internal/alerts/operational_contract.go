@@ -89,6 +89,9 @@ func ensureOperationalContract(alert *Alert, ingestedAt time.Time) {
 	record.EvidenceIDs = evidenceIDs
 	record.CauseKey = causeKey
 	record.ImpactSummary = strings.TrimSpace(alert.Message)
+	if strings.TrimSpace(record.RecommendedNextStep) == "" {
+		record.RecommendedNextStep = operationalRecommendedNextStep(alert)
+	}
 	if state != operationaltrust.OperationalResolved {
 		record.ResolvedAt = nil
 	}
@@ -135,6 +138,18 @@ func ensureOperationalContract(alert *Alert, ingestedAt time.Time) {
 			alert.LatestTransition.Clone(),
 		)
 	}
+}
+
+func operationalRecommendedNextStep(alert *Alert) string {
+	if alert == nil {
+		return ""
+	}
+	if action, ok := alert.Metadata["incidentAction"].(string); ok {
+		if action = strings.TrimSpace(action); action != "" {
+			return action
+		}
+	}
+	return "Open the affected resource and verify its current state before making changes."
 }
 
 func mergeOperationalRecurrence(

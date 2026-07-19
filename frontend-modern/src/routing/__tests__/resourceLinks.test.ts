@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildPatrolAttentionPath,
   API_TOKEN_CREATE_ANCHOR,
   API_TOKEN_PRESET_QUERY_PARAM,
   DOCKER_PATH,
@@ -53,6 +54,7 @@ import {
   buildVmwarePath,
   buildWorkloadsRouteSearch,
   parseRecoveryLinkSearch,
+  parsePatrolAttentionItemId,
   parsePatrolControlStarter,
   parsePatrolOperationsLoopStarter,
   parseStorageLinkSearch,
@@ -414,5 +416,11 @@ describe('resource link routing contract', () => {
     expect(url.searchParams.get('platform')).toBe('proxmox-pve');
     expect(url.searchParams.get('range')).toBe('30');
     expect(parseRecoveryLinkSearch('?range=90')).toMatchObject({ range: '90' });
+  });
+
+  it('deep-links one stable Patrol attention item without changing the route owner', () => {
+    expect(buildPatrolAttentionPath('record/one')).toBe('/patrol?attention=record%2Fone');
+    expect(buildPatrolAttentionPath('')).toBe('/patrol');
+    expect(parsePatrolAttentionItemId('?attention=record%2Fone')).toBe('record/one');
   });
 });

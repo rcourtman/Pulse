@@ -1790,6 +1790,12 @@ through the canonical resource model, but unified-resource consumers must not
 reintroduce removed workload aliases or feature-local resource-type shims just
 to satisfy one table, drawer, or badge surface.
 
+Patrol attention resource navigation carries the canonical subject resource ID
+through shared route builders as an opaque query value. Attention deep links
+carry the canonical operational-record ID separately. Neither link may derive
+a replacement resource identity from display text, provider labels, or alert
+metadata.
+
 ### Protection posture identity consumer
 
 `ProxmoxCoverageTable` remains a unified-resource identity consumer while

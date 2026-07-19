@@ -369,6 +369,8 @@ without requiring the model to understand an internal goroutine schedule.
 ## Canonical Files
 
 1. `internal/ai/`
+   1e. `internal/ai/attention.go`
+   1f. `internal/ai/patrol_metrics.go`
    1a. `cmd/pulse-mcp/main.go`
    1b. `cmd/pulse-mcp/README.md`
    1c. `internal/agentcapabilities/`
@@ -3867,6 +3869,21 @@ resolve canonical/source IDs and unique aliases before collection, reject
     through compact source-named drawer state and the effective control label,
     so Patrol approval/finding handoffs and alert-investigation handoffs are
     named by their source rather than as generic dashboard briefs.
+
+### Operational attention projection boundary
+
+`internal/ai/attention.go` is the canonical Patrol attention read-model
+projection over alert-owned operational records, transition timelines,
+evidence envelopes, and recovery-owned protection postures. It may order,
+filter, paginate, summarize, and shape selected Assistant context, but it must
+not create a second writable lifecycle or infer a healthy state when lifecycle
+coverage is unavailable. `internal/ai/patrol_metrics.go` exports only
+low-cardinality lifecycle-state counts, queue age, acknowledgement time, and
+calm-evaluation age; raw resource IDs are forbidden as metric labels.
+
+Assistant receives a selected attention item only after the operator opens it.
+The handoff is explanation-only and cannot infer a capability, approve an
+action, or replace evidence and lifecycle truth.
 
 ## Current State
 

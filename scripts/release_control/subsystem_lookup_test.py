@@ -12,7 +12,9 @@ RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
 ]
 
 PATROL_PAGE_AND_STATE_EXACT_FILES = [
+    "frontend-modern/src/api/__tests__/patrolAttention.test.ts",
     "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
+    "frontend-modern/src/features/patrol/__tests__/PatrolAttentionWorkbench.test.tsx",
     "frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceHeader.test.ts",
     "frontend-modern/src/features/patrol/__tests__/patrolControlPresentation.test.ts",
     "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
@@ -24,6 +26,7 @@ PATROL_PAGE_AND_STATE_EXACT_FILES = [
     "tests/integration/tests/18-patrol-runtime-state.spec.ts",
     "tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts",
     "tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts",
+    "tests/integration/tests/91-operational-trust-attention-workbench.spec.ts",
 ]
 
 PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
@@ -2970,8 +2973,8 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Shared Boundaries",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 1244,
-                    "heading_line": 155,
+                    "line": 1247,
+                    "heading_line": 157,
                 }
             ],
         )

@@ -8734,6 +8734,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/operational-trust-patrol-attention-workbench-2026-07-19.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/operational-trust-protection-posture-2026-07-19.md",
           "kind": "file"
         },
@@ -8800,6 +8805,11 @@
         {
           "repo": "pulse",
           "path": "tests/integration/tests/90-operational-trust-protection-posture.spec.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/91-operational-trust-attention-workbench.spec.ts",
           "kind": "file"
         }
       ]

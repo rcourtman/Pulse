@@ -1511,6 +1511,11 @@ the shared monitored-system presentation helper instead of branching on
 demo/billing state inside settings panels or inventing a second mock-only
 license explanation path.
 
+The app-layout Patrol attention count is a license-neutral operational read.
+It may show canonical current work after authenticated bootstrap, but it must
+not infer a paid entitlement, expose an upgrade prompt, or convert missing
+commercial state into feature access.
+
 Hosted organization and Billing Admin browser clients must prefer an active
 `pulse_session` cookie when the same browser also retains an API token from
 first-run setup. Platform-admin and session-required organization operations

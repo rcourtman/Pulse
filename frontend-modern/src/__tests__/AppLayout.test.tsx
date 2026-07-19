@@ -10,15 +10,15 @@ import { aiChatStore } from '@/stores/aiChat';
 HTMLElement.prototype.scrollIntoView = vi.fn();
 window.scrollTo = vi.fn();
 
-const aiIntelligenceMockState = vi.hoisted(() => ({
-  patrolOpenWorkCount: 0,
+const patrolAttentionMockState = vi.hoisted(() => ({
+  activeCount: 0,
 }));
 
-vi.mock('@/stores/aiIntelligence', () => ({
-  aiIntelligenceStore: {
-    get patrolOpenWorkCount() {
-      return aiIntelligenceMockState.patrolOpenWorkCount;
-    },
+vi.mock('@/stores/patrolAttention', () => ({
+  patrolAttentionStore: {
+    summary: () => ({
+      activeCount: patrolAttentionMockState.activeCount,
+    }),
   },
 }));
 
@@ -30,7 +30,7 @@ describe('AppLayout navigation icons', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/settings/infrastructure');
     resetPrimaryNavigationRouteMemory();
-    aiIntelligenceMockState.patrolOpenWorkCount = 0;
+    patrolAttentionMockState.activeCount = 0;
     aiChatStore.close();
     aiChatStore.setEnabled(true);
   });
@@ -170,8 +170,8 @@ describe('AppLayout navigation icons', () => {
     expect(container).toHaveTextContent('Infrastructure body');
   });
 
-  it('surfaces Patrol open work as a count without renaming Patrol', () => {
-    aiIntelligenceMockState.patrolOpenWorkCount = 2;
+  it('surfaces canonical Patrol attention as a count without renaming Patrol', () => {
+    patrolAttentionMockState.activeCount = 2;
     renderLayout();
 
     const desktopNav = screen.getByRole('tablist', { name: 'Primary navigation' });
@@ -179,7 +179,7 @@ describe('AppLayout navigation icons', () => {
     expect(systemGroup).toBeTruthy();
 
     const desktopPatrolTab = within(systemGroup as HTMLElement).getByRole('tab', {
-      name: 'Patrol: 2 open work items',
+      name: 'Patrol: 2 active attention items',
     });
     expect(desktopPatrolTab).toHaveTextContent('Patrol');
     expect(desktopPatrolTab).toHaveTextContent('2');
@@ -187,7 +187,7 @@ describe('AppLayout navigation icons', () => {
 
     const mobileTablist = screen.getByRole('tablist', { name: 'Mobile navigation' });
     const mobilePatrolTab = within(mobileTablist).getByRole('button', {
-      name: 'Patrol: 2 open work items',
+      name: 'Patrol: 2 active attention items',
     });
     expect(mobilePatrolTab).toHaveTextContent('Patrol');
     expect(mobilePatrolTab).toHaveTextContent('2');

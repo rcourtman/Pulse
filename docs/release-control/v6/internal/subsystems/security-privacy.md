@@ -179,6 +179,12 @@ resource or alert metadata. Those fields are operational usage telemetry only;
 they must not be expanded into command lines, environment variables, secret
 material, or unbounded container inspection output at the API boundary.
 
+Patrol attention list, summary, and detail routes require `monitoring:read`.
+They expose bounded canonical evidence and resource references only; no route
+grants action authority, returns credentials, or turns Assistant explanation
+into approval. Canonical record IDs are compared as opaque identities even
+when their percent-encoded route representation contains `/`.
+
 Scheduled report management under `/api/admin/reports/schedules` is a
 settings/reporting control surface, not a new public data export. It must reuse
 the existing reporting feature gate and settings read/write scopes, persist

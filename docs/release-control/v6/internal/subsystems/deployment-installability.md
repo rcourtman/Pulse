@@ -1753,6 +1753,10 @@ same installability boundary.
 points for a coherent local Pulse runtime, so frontend shell health, proxy
 health, backend health, and listener ownership diagnostics may not drift into
 ad hoc shell snippets or undocumented operator lore outside those scripts.
+The managed launcher must tolerate a canonical dev environment file that does
+not yet contain `PULSE_MOCK_MODE`. Missing mock-mode configuration falls back
+to the existing environment/default instead of terminating under `set -e`;
+`scripts/tests/test-hot-dev-runtime.sh` pins this startup contract.
 Root and frontend workspace dependency manifests, their lockfiles, the
 frontend build config, and the Go module graph are canonical inputs to that
 developer/runtime bootstrap. Changes to `package.json`, `package-lock.json`,

@@ -90,6 +90,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/api/patrolAttention.ts",
+      "rationale": "the Patrol attention client is both the Patrol read-model transport and a canonical typed API boundary",
+      "subsystems": [
+        "api-contracts",
+        "patrol-intelligence"
+      ]
+    },
+    {
       "path": "frontend-modern/src/api/rbac.ts",
       "rationale": "the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -5461,6 +5469,7 @@
       "contract": "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
       "owned_prefixes": [],
       "owned_files": [
+        "frontend-modern/src/api/patrolAttention.ts",
         "frontend-modern/src/components/AI/FindingsPanel.tsx",
         "frontend-modern/src/components/Brand/PulsePatrolLogo.tsx",
         "frontend-modern/src/components/patrol/ApprovalBanner.tsx",
@@ -5473,6 +5482,7 @@
         "frontend-modern/src/components/patrol/RunHistoryEntry.tsx",
         "frontend-modern/src/components/patrol/RunHistoryPanel.tsx",
         "frontend-modern/src/components/patrol/RunToolCallTrace.tsx",
+        "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
         "frontend-modern/src/features/patrol/patrolAutonomyAvailability.ts",
         "frontend-modern/src/features/patrol/patrolControlPresentation.ts",
         "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx",
@@ -5484,6 +5494,7 @@
         "frontend-modern/src/pages/AIIntelligence.tsx",
         "frontend-modern/src/stores/aiIntelligence.ts",
         "frontend-modern/src/stores/aiIntelligenceSummaryModel.ts",
+        "frontend-modern/src/stores/patrolAttention.ts",
         "frontend-modern/src/types/aiIntelligence.ts",
         "frontend-modern/src/utils/aiFindingPresentation.ts",
         "frontend-modern/src/utils/aiPatrolSchedulePresentation.ts",
@@ -5515,8 +5526,10 @@
             "label": "patrol page and state proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/api/patrolAttention.ts",
               "frontend-modern/src/components/Brand/PulsePatrolLogo.tsx",
               "frontend-modern/src/components/patrol/index.ts",
+              "frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx",
               "frontend-modern/src/features/patrol/patrolAutonomyAvailability.ts",
               "frontend-modern/src/features/patrol/patrolControlPresentation.ts",
               "frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx",
@@ -5528,13 +5541,16 @@
               "frontend-modern/src/pages/AIIntelligence.tsx",
               "frontend-modern/src/stores/aiIntelligence.ts",
               "frontend-modern/src/stores/aiIntelligenceSummaryModel.ts",
+              "frontend-modern/src/stores/patrolAttention.ts",
               "frontend-modern/src/types/aiIntelligence.ts",
               "frontend-modern/src/utils/patrolPagePresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/api/__tests__/patrolAttention.test.ts",
               "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
+              "frontend-modern/src/features/patrol/__tests__/PatrolAttentionWorkbench.test.tsx",
               "frontend-modern/src/features/patrol/__tests__/patrolControlPresentation.test.ts",
               "frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceHeader.test.ts",
               "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
@@ -5545,7 +5561,8 @@
               "frontend-modern/src/utils/__tests__/patrolPagePresentation.test.ts",
               "tests/integration/tests/18-patrol-runtime-state.spec.ts",
               "tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts",
-              "tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts"
+              "tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts",
+              "tests/integration/tests/91-operational-trust-attention-workbench.spec.ts"
             ]
           },
           {

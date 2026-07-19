@@ -70,6 +70,35 @@ func TestEnsureOperationalContractBackfillsLegacyAlertHonestly(t *testing.T) {
 		alert.Transitions[0].ID != alert.LatestTransition.ID {
 		t.Fatalf("transition timeline = %+v, want initial transition", alert.Transitions)
 	}
+	if got, want := alert.OperationalRecord.RecommendedNextStep, "Open the affected resource and verify its current state before making changes."; got != want {
+		t.Fatalf("RecommendedNextStep = %q, want %q", got, want)
+	}
+}
+
+func TestEnsureOperationalContractUsesCanonicalIncidentAction(t *testing.T) {
+	now := time.Date(2026, 7, 19, 1, 0, 0, 0, time.UTC)
+	alert := &Alert{
+		ID:           "storage:pool-1",
+		Type:         "storage-incident",
+		Level:        AlertLevelCritical,
+		ResourceID:   "pool-1",
+		ResourceName: "Pool 1",
+		Message:      "Pool health is degraded",
+		StartTime:    now.Add(-time.Minute),
+		LastSeen:     now,
+		Metadata: map[string]interface{}{
+			"incidentAction": "Inspect the degraded devices and restore redundancy",
+		},
+	}
+
+	ensureOperationalContract(alert, now)
+
+	if alert.OperationalRecord == nil {
+		t.Fatal("expected operational record")
+	}
+	if got, want := alert.OperationalRecord.RecommendedNextStep, "Inspect the degraded devices and restore redundancy"; got != want {
+		t.Fatalf("RecommendedNextStep = %q, want %q", got, want)
+	}
 }
 
 func TestCanonicalAlertEvidenceBuildsConfirmedEnvelope(t *testing.T) {

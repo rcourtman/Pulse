@@ -30,6 +30,7 @@ export const VMWARE_PATH = '/vmware';
 export const VMWARE_DEFAULT_TAB = 'overview';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
 export const PATROL_PATH = '/patrol';
+export const PATROL_ATTENTION_QUERY_PARAM = 'attention';
 export const ACTIONS_PATH = '/actions';
 export const PATROL_CONTROL_ANCHOR = 'patrol-control';
 export const PATROL_CONTROL_STARTER_QUERY_PARAM = 'patrolControlStarter';
@@ -222,6 +223,18 @@ export const buildPatrolControlPath = (
 };
 
 export const buildPatrolOperationsLoopPath = buildPatrolControlPath;
+
+export const buildPatrolAttentionPath = (attentionItemId: string): string => {
+  const params = new URLSearchParams();
+  const normalized = normalizeQueryValue(attentionItemId);
+  if (normalized) {
+    params.set(PATROL_ATTENTION_QUERY_PARAM, normalized);
+  }
+  return `${PATROL_PATH}${serializedRouteSearch(params)}`;
+};
+
+export const parsePatrolAttentionItemId = (search: string): string =>
+  normalizeQueryValue(new URLSearchParams(search).get(PATROL_ATTENTION_QUERY_PARAM));
 
 export const PATROL_CONTROL_PATH_WITH_STARTER = buildPatrolControlPath({
   starter: PATROL_CONTROL_STARTER,

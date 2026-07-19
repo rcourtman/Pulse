@@ -213,6 +213,19 @@ transition references recovery evidence separate from its trigger evidence.
 3. Route runtime changes through the explicit alert proof policies in `registry.json`; default fallback proof routing is not allowed
 4. Tighten or add guardrails when an old alert path is removed
 
+### Attention projection source contract
+
+Canonical alert operational records, evidence envelopes, and lifecycle
+transitions are the only writable source for Patrol attention. The legacy alert
+adapter must preserve an existing provider-authored recommended next step, use
+the canonical `incidentAction` when present, and otherwise add the safe
+operator instruction to open the affected resource and verify current state
+before changing it. This is migration guidance, not action authority.
+
+The attention read model may project and filter alert lifecycle state, but it
+must not reinterpret acknowledgement as resolution, omit suppressed state from
+inspectability, or convert missing/stale evidence into health.
+
 ## Current State
 
 The alert resource-incident panel

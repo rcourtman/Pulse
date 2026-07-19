@@ -1920,3 +1920,8 @@ boundary. Exact retries do not append evidence or rewrite timestamps.
 This is a per-tenant, single-process serialized config boundary, not a claim of
 distributed multi-writer CAS. Provider-wide inheritance, distributed budgets,
 and cross-process policy mutation remain outside this backend prerequisite.
+
+The authenticated app bootstrap performs one bounded Patrol attention summary
+read and stores only low-cardinality counts. Queue list reads are paginated to
+at most 200 items, posture joins batch at 200 subjects, and the summary path
+does not scan recovery history or perform per-resource reads.

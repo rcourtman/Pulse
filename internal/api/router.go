@@ -106,6 +106,7 @@ type Router struct {
 	unifiedAgentHandlers            *UnifiedAgentHandlers
 	systemSettingsHandler           *SystemSettingsHandler
 	aiSettingsHandler               *AISettingsHandler
+	attentionHandlers               *AttentionHandlers
 	aiHandler                       *AIHandler // AI chat handler
 	discoveryHandlers               *DiscoveryHandlers
 	resourceHandlers                *ResourceHandlers
@@ -464,6 +465,7 @@ func (r *Router) setupRoutes() {
 	)
 	recoveryManager := recoverymanager.New(r.multiTenant)
 	r.recoveryHandlers = NewRecoveryHandlers(recoveryManager)
+	r.attentionHandlers = NewAttentionHandlers(r.configHandlers.getMonitor, recoveryManager)
 	if r.mtMonitor != nil {
 		r.mtMonitor.SetRecoveryManager(recoveryManager)
 	}

@@ -384,7 +384,7 @@ else
     # mock run) must NOT win here, or real mode would keep reading the mock dir.
     HOT_DEV_MOCK_FLAG=""
     if [[ -f "${ROOT_DIR}/tmp/dev-config/.env" ]]; then
-        HOT_DEV_MOCK_FLAG="$(grep -E '^[[:space:]]*PULSE_MOCK_MODE=' "${ROOT_DIR}/tmp/dev-config/.env" | tail -1 | cut -d= -f2 | tr -dc 'a-z')"
+        HOT_DEV_MOCK_FLAG="$(grep -E '^[[:space:]]*PULSE_MOCK_MODE=' "${ROOT_DIR}/tmp/dev-config/.env" | tail -1 | cut -d= -f2 | tr -dc 'a-z' || true)"
     fi
     if [[ -z "${HOT_DEV_MOCK_FLAG}" ]]; then
         HOT_DEV_MOCK_FLAG="${PULSE_MOCK_MODE:-}"

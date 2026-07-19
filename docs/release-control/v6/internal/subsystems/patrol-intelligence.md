@@ -52,10 +52,14 @@ Patrol-specific presentation helpers.
 29. `frontend-modern/src/utils/textPresentation.ts`
 30. `tests/integration/tests/73-patrol-assistant-operator-briefing.spec.ts`
 31. `tests/integration/tests/78-monitor-first-patrol-workbench.spec.ts`
+32. `frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx`
+33. `frontend-modern/src/stores/patrolAttention.ts`
+34. `tests/integration/tests/91-operational-trust-attention-workbench.spec.ts`
+35. `frontend-modern/src/api/patrolAttention.ts`
 
 ## Shared Boundaries
 
-1. None.
+1. `frontend-modern/src/api/patrolAttention.ts` shared with `api-contracts`: the Patrol attention client is both the Patrol read-model transport and a canonical typed API boundary.
 
 ## Extension Points
 
@@ -936,6 +940,24 @@ fix`, or `Explain` based on current finding state), while secondary
    explanation, verification detail, activity mix, and supporting metrics belong in the
    owning Findings, Runs, or `Details` surfaces
    instead of reopening the compact strip into a sparse status panel.
+
+### Canonical operational attention workbench
+
+The primary Patrol workspace is now
+`frontend-modern/src/features/patrol/PatrolAttentionWorkbench.tsx`. It consumes
+`frontend-modern/src/stores/patrolAttention.ts` and the typed attention API; it
+must not derive lifecycle state from legacy Patrol findings. Active, open,
+acknowledged, suppressed, stale/unknown, recent-resolved, calm, partial, and
+unavailable states all come from the same backend projection. Navigation and
+the queue consume the same active summary.
+
+The default view owns only the ordered action queue. Legacy Patrol checks,
+investigations, and run history remain available under collapsed supporting
+context. The selected detail owns impact, related resources, evidence quality,
+protection posture, timeline, next step, resource navigation, and the
+contextual Assistant handoff. Assistant is absent before selection and receives
+explanation-only typed context without action or approval authority. Browser
+proof is `tests/integration/tests/91-operational-trust-attention-workbench.spec.ts`.
 
 ## Current State
 

@@ -4625,3 +4625,8 @@ lifecycle boundary. Protection posture is a read-only `monitoring:read`
 projection over recovery points and provider collection evidence. It does not
 register agents, issue or rotate credentials, interpret observer responses,
 or grant backup, restore, command, or remote-configuration authority.
+
+The adjacent Patrol attention handlers and shared router registration also do
+not widen agent authority. They read the canonical alert lifecycle under
+`monitoring:read`; they do not accept agent reports, mint credentials, deliver
+commands, or reinterpret an observer response as configuration.

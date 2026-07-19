@@ -1802,6 +1802,19 @@ must not treat starter
     so adjacent browser surfaces inherit a fail-closed API response instead of
     a panic after the archive import succeeds.
 
+### Attention posture join
+
+Patrol attention reads protection posture through the canonical recovery store
+as a bounded subject-ID batch. Recovery remains the sole owner of protected,
+attention, unprotected, and unknown derivation and its provider evidence.
+Attention projection may order and display that posture but cannot recompute it
+or call the store once per item.
+
+If posture lookup fails, lifecycle work remains visible with partial coverage.
+If no subject-linked posture exists, the UI says protection is unknown rather
+than unprotected. The summary-only navigation path does not query recovery
+history.
+
 ## Current State
 
 Shared `internal/api/ai_handlers.go` now projects separate Patrol investigation
