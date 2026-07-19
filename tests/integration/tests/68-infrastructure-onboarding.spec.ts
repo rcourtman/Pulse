@@ -188,14 +188,17 @@ test.describe("Infrastructure onboarding", () => {
       page.getByText("Connected systems", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /Run discovery/i }),
-    ).toBeVisible();
-    await expect(
       page.getByRole("button", { name: /Add infrastructure/i }),
     ).toBeVisible();
+    // Discovery is disabled by default, so the empty state offers
+    // "Configure discovery" (which opens the Discovery settings dialog); the
+    // "Run discovery" scan button only appears once discovery is enabled.
     await expect(
-      page.getByRole("button", { name: /Discovery settings/i }),
+      page.getByRole("button", { name: /Configure discovery/i }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Run discovery/i }),
+    ).toHaveCount(0);
     await expect(page.getByText("VMware vCenter", { exact: true })).toHaveCount(
       0,
     );
@@ -237,7 +240,9 @@ test.describe("Infrastructure onboarding", () => {
       timeout: 15_000,
     });
 
-    await page.getByRole("button", { name: /Discovery settings/i }).click();
+    // With discovery disabled, the control that opens the Discovery settings
+    // dialog is labelled "Configure discovery".
+    await page.getByRole("button", { name: /Configure discovery/i }).click();
 
     const dialog = page.getByRole("dialog", { name: "Discovery settings" });
     await expect(dialog).toBeVisible();
@@ -311,6 +316,20 @@ test.describe("Infrastructure onboarding", () => {
     );
 
     await prepareOnboardingPage(page);
+
+    // The "Run discovery" scan button only renders when discovery is enabled.
+    // Enable it by passing the real system-settings response through with
+    // discoveryEnabled flipped on, so this test can exercise the scan flow.
+    await page.route("**/api/system/settings", async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      const response = await route.fetch();
+      const body = await response.json();
+      body.discoveryEnabled = true;
+      await route.fulfill({ response, json: body });
+    });
 
     await page.route("**/api/discover", async (route) => {
       const requestUrl = new URL(route.request().url());
