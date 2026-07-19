@@ -1,7 +1,23 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { ensureAuthenticated } from "./helpers";
 
 const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
+
+async function openDesktopProxmoxBackups(page: Page) {
+  const proxmoxTab = page.getByRole("tab", {
+    name: "Proxmox",
+    exact: true,
+  });
+  await expect(proxmoxTab).toBeVisible({ timeout: 30_000 });
+  await proxmoxTab.click();
+
+  const sections = page.getByRole("navigation", {
+    name: "Proxmox sections",
+  });
+  await expect(sections).toBeVisible({ timeout: 60_000 });
+  await sections.getByRole("link", { name: "Backups", exact: true }).click();
+  await expect(page).toHaveURL(/\/proxmox\/backups$/);
+}
 
 test.describe("Operational trust protection posture", () => {
   test.setTimeout(180_000);
@@ -23,7 +39,7 @@ test.describe("Operational trust protection posture", () => {
 
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await ensureAuthenticated(page);
-    await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
+    await openDesktopProxmoxBackups(page);
     const coverageButton = page.getByRole("button", { name: "Coverage" });
     await expect(coverageButton).toBeVisible({ timeout: 60_000 });
     await coverageButton.click();

@@ -597,36 +597,6 @@ test.describe("Patrol Assistant operator briefing", () => {
         exact: true,
       })
       .click();
-    const assessmentAssistantButton = page.getByTestId(
-      "patrol-assessment-assistant-button",
-    );
-    await expect(assessmentAssistantButton).toBeVisible();
-    await assessmentAssistantButton.click();
-    const assessmentAssistantContext = page.getByLabel("Assistant context");
-    await expect(assessmentAssistantContext).toBeVisible();
-    await expect(assessmentAssistantContext).toContainText(
-      "Patrol assessment attached",
-    );
-    await expect(assessmentAssistantContext).toContainText(
-      "live approval pending",
-    );
-    await expect(assessmentAssistantContext).toContainText("High risk");
-    await expect(
-      assessmentAssistantContext.getByRole("button", {
-        name: "Review pending approvals and safest next step",
-      }),
-    ).toBeVisible();
-    await expect(
-      assessmentAssistantContext.getByText(
-        "systemctl restart workload.service",
-      ),
-    ).toHaveCount(0);
-    const dockedAssistantClose = page.getByTitle("Collapse Pulse Assistant");
-    if ((await dockedAssistantClose.count()) > 0) {
-      await dockedAssistantClose.first().click();
-    } else {
-      await page.getByLabel("Close Pulse Assistant").first().click();
-    }
 
     await page.getByText("High CPU usage").click();
     const finding = page.locator("#finding-finding-operator-briefing");

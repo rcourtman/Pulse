@@ -130,7 +130,7 @@ test.describe("Agent integrations surface contract", () => {
       page.getByRole("heading", { level: 2, name: "Create token" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Pulse Intelligence agent" }),
+      page.getByRole("button", { name: "Patrol external agent" }),
     ).toBeVisible();
   });
 });

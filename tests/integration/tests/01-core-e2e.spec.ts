@@ -43,8 +43,8 @@ test.describe.serial('Core E2E flows', () => {
     await expect(alertsToggleOnOverview).toBeVisible();
     const alertsInitiallyEnabled = await alertsToggleOnOverview.isChecked();
     if (!alertsInitiallyEnabled) {
-      await alertsToggleOnOverview.click({ force: true });
-      await expect(page.getByText('Notifications enabled', { exact: true })).toBeVisible();
+      await alertsToggleOnOverview.locator('xpath=ancestor::label[1]').click();
+      await expect(alertsToggleOnOverview).toBeChecked({ timeout: 30_000 });
     }
 
     // Navigate to thresholds via in-app nav to avoid a full reload redirecting while activation is loading.

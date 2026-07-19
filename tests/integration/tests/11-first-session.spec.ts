@@ -178,11 +178,11 @@ test.describe.serial("First-session experience", () => {
     ] as const;
 
     const consoleErrors: string[] = [];
-    // The app shell polls Patrol open work (stored findings + pending
-    // approvals) on every authenticated route to drive the Patrol nav badge.
-    // Those are cheap reads, not AI invocations, so they are exempt here.
+    // The app shell polls Patrol open work and its compact attention summary
+    // on every authenticated route to drive the Patrol nav badge. Those are
+    // cheap reads, not AI invocations, so they are exempt here.
     const appShellPatrolPolling =
-      /\/api\/ai\/(?:patrol\/findings|approvals)(?:\?|$)/;
+      /\/api\/ai\/(?:patrol\/(?:findings|attention\/summary)|approvals)(?:\?|$)/;
     const aiRequests = trackBrowserRequests(page, /\/api\/ai(\/|$)/);
     page.on("console", (msg) => {
       if (msg.type() === "error") {

@@ -105,6 +105,11 @@ async function getVisibleSettingsNavigation(
       .getByRole('tablist', { name: 'Mobile navigation' })
       .getByRole('button', { name: 'Settings', exact: true })
       .click();
+    const settingsDrawerButton = page
+      .getByRole('main')
+      .getByRole('button', { name: 'Settings', exact: true });
+    await expect(settingsDrawerButton).toBeVisible();
+    await settingsDrawerButton.click();
   }
 
   const settingsNavigation = page.locator('[aria-label="Settings navigation"]');

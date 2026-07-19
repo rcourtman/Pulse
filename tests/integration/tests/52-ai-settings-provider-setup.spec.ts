@@ -164,7 +164,7 @@ test.describe("Pulse Intelligence settings provider setup", () => {
     // Per-model overrides moved into the section panels; the panel signals
     // enabled state and the backend-selected shared default model here.
     await expect(
-      page.getByRole("button", { name: "Enable Pulse Intelligence" }),
+      page.getByLabel("Enable Pulse Intelligence"),
     ).toHaveAttribute("aria-pressed", "true");
   });
 

@@ -210,7 +210,8 @@ type CompleteSetupWizardResult = {
   username?: string;
 };
 
-const AUTHENTICATED_URL = /\/(proxmox|nodes|hosts|docker|infrastructure)/;
+const AUTHENTICATED_URL =
+  /\/(proxmox|nodes|hosts|machines|docker|infrastructure)/;
 
 const SETUP_COMPLETION_HANDOFFS: Record<
   Exclude<SetupCompletionTarget, "none">,

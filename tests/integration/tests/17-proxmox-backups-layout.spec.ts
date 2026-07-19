@@ -1,7 +1,23 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { ensureAuthenticated } from "./helpers";
 
 const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
+
+async function openProxmoxBackups(page: Page) {
+  const proxmoxTab = page.getByRole("tab", {
+    name: "Proxmox",
+    exact: true,
+  });
+  await expect(proxmoxTab).toBeVisible({ timeout: 30_000 });
+  await proxmoxTab.click();
+
+  const sections = page.getByRole("navigation", {
+    name: "Proxmox sections",
+  });
+  await expect(sections).toBeVisible({ timeout: 60_000 });
+  await sections.getByRole("link", { name: "Backups", exact: true }).click();
+  await expect(page).toHaveURL(/\/proxmox\/backups$/);
+}
 
 // Layout guards for the Proxmox Backups section, which replaced the retired
 // standalone /recovery surface. Runs against the mock-mode dataset; counts
@@ -19,11 +35,13 @@ test.describe("Proxmox backups layout guards", () => {
 
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await ensureAuthenticated(page);
-    await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
+    await openProxmoxBackups(page);
 
     // The guest-centric Coverage view is the default whenever anything needs
     // attention; the day-activity strip lives in the By date view.
-    await page.getByRole("button", { name: "By date" }).click();
+    const byDateButton = page.getByRole("button", { name: "By date" });
+    await expect(byDateButton).toBeVisible({ timeout: 60_000 });
+    await byDateButton.click();
     await expect(page.getByText("Backups per day").first()).toBeVisible();
     const dayButtons = page.getByRole("button", { name: /: \d+ backups?$/ });
     await expect.poll(() => dayButtons.count()).toBeGreaterThanOrEqual(7);
@@ -50,9 +68,11 @@ test.describe("Proxmox backups layout guards", () => {
 
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await ensureAuthenticated(page);
-    await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
+    await openProxmoxBackups(page);
 
-    await page.getByRole("button", { name: "By date" }).click();
+    const byDateButton = page.getByRole("button", { name: "By date" });
+    await expect(byDateButton).toBeVisible({ timeout: 60_000 });
+    await byDateButton.click();
 
     await page
       .getByRole("group", { name: "Activity range" })

@@ -222,15 +222,27 @@ test.describe("Mobile viewport flows", () => {
     await expect(primaryRail).toBeVisible();
     await expect(utilityRail).toBeVisible();
 
-    const railGeometry = await primaryRail.evaluate((element) => ({
-      clientWidth: element.clientWidth,
-      scrollWidth: element.scrollWidth,
-      overflowX: window.getComputedStyle(element).overflowX,
-    }));
-    expect(["auto", "scroll"]).toContain(railGeometry.overflowX);
-    expect(railGeometry.scrollWidth).toBeGreaterThanOrEqual(
-      railGeometry.clientWidth,
-    );
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const element = document.querySelector<HTMLElement>(
+              '[data-mobile-nav-rail="primary"]',
+            );
+            if (!element) return null;
+            return {
+              hasScrollableOverflow: ["auto", "scroll"].includes(
+                window.getComputedStyle(element).overflowX,
+              ),
+              preservesRailWidth: element.scrollWidth >= element.clientWidth,
+            };
+          }),
+        { timeout: 30_000 },
+      )
+      .toEqual({
+        hasScrollableOverflow: true,
+        preservesRailWidth: true,
+      });
 
     const viewportWidth = await getViewportWidth(page);
     for (const tabId of ["alerts", "ai", "settings"]) {
