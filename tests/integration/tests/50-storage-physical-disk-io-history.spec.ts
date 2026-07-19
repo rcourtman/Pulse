@@ -197,7 +197,15 @@ test.describe.serial('Storage physical disk drawer history', () => {
           failures.push(`${rowText} [overlay]`);
         } else {
           for (const metric of ['diskread', 'diskwrite', 'disk'] as const) {
-            const points = detailResponsePoints.get(metric) || 0;
+            let points = 0;
+            try {
+              await expect.poll(() => detailResponsePoints.get(metric) || 0, {
+                timeout: 10_000,
+              }).toBeGreaterThan(0);
+              points = detailResponsePoints.get(metric) || 0;
+            } catch {
+              // Report every drawer without aborting at the first slow series.
+            }
             if (points <= 0) {
               failures.push(`${rowText} [${metric}:0 points via ${summarySeriesId || 'no-series-id'}]`);
               break;

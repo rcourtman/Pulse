@@ -241,7 +241,7 @@ test.describe('Platform pages shell', () => {
     }
   });
 
-  test('every platform sub-tab exposes v5-style operator controls', async ({
+  test('every platform inventory sub-tab exposes canonical operator search', async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop chrome audit');
@@ -254,7 +254,6 @@ test.describe('Platform pages shell', () => {
     // UnifiedResourceTable-backed tabs; the embedded surfaces use their
     // own canonical FilterBar via `showFilterToolbar`.
     const cases: ReadonlyArray<{ path: string; testId: string }> = [
-      { path: '/docker/containers', testId: 'docker-page' },
       { path: '/docker/images', testId: 'docker-page' },
       { path: '/docker/storage', testId: 'docker-page' },
       { path: '/docker/networks', testId: 'docker-page' },

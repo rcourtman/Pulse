@@ -189,7 +189,7 @@ test.describe("Mobile viewport flows", () => {
   test("shared Workloads table preserves readable mobile column widths", async ({
     page,
   }) => {
-    await page.goto("/vmware/overview");
+    await page.goto("/proxmox/workloads");
 
     const table = page.locator("table.workload-table--mobile");
     await expect(table).toBeVisible({ timeout: 30_000 });

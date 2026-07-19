@@ -778,20 +778,23 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
         name: "Open High CPU pressure on pve-main",
       })
       .click();
+    const attentionDetail = page.getByRole("complementary", {
+      name: "High CPU pressure on pve-main",
+    });
+    await expect(attentionDetail).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "High CPU pressure on pve-main" }),
-    ).toBeVisible();
-    await expect(
-      page.getByText(
+      attentionDetail.getByText(
         "CPU stayed above the configured warning threshold during the scheduled Patrol check.",
       ),
     ).toBeVisible();
     await expect(
-      page.getByText(
+      attentionDetail.getByText(
         "Sustained CPU pressure can slow hosted workloads on this Proxmox host.",
       ),
     ).toBeVisible();
-    await expect(page.getByRole("button", { name: "Review action" })).toBeVisible();
+    await expect(
+      attentionDetail.getByRole("button", { name: "Review action" }),
+    ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: /^Pulse Assistant$/ }),
     ).toHaveCount(0);
@@ -991,7 +994,7 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
         exact: true,
       })
       .click();
-    await page.getByRole("button", { name: "Resolved" }).click();
+    await page.getByRole("button", { name: "Resolved", exact: true }).click();
     const resolvedTitle = page
       .getByText("Operating system updates confirmed complete")
       .first();

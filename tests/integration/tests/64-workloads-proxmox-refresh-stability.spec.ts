@@ -141,9 +141,9 @@ test.describe.serial("Workloads Proxmox refresh stability", () => {
 
     await ensureMockModeEnabled(page);
 
-    // The workloads surface now lives on /proxmox; the type/platform filter
-    // params carry over unchanged.
-    await page.goto("/proxmox?type=vm&platform=proxmox-pve", {
+    // Workloads are owned by the Proxmox workloads sub-route; preserve the
+    // canonical type/platform scope while exercising its polling behavior.
+    await page.goto("/proxmox/workloads?type=vm&platform=proxmox-pve", {
       waitUntil: "domcontentloaded",
     });
 

@@ -87,7 +87,7 @@ test("Assistant makes the read-only promise literal in the current browser build
   await expect(page.getByText("Observes only")).toBeVisible();
 
   const closeAssistant = testInfo.project.name.startsWith("mobile-")
-    ? page.getByRole("button", { name: "Close Pulse Assistant" })
+    ? page.getByTestId("assistant-close-button")
     : page.getByRole("button", { name: "Collapse Pulse Assistant" });
   await closeAssistant.click();
   await page.goto("/settings/security/api", { waitUntil: "domcontentloaded" });

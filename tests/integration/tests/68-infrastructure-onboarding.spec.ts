@@ -501,9 +501,11 @@ test.describe("Infrastructure onboarding", () => {
     await expect(
       page.getByText("Connected systems", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("Pulse Agent hosts", { exact: true })).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /Add Pulse Agent/i }),
+      page.getByRole("button", { name: "Add infrastructure", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Supported source types include .*Pulse Agent hosts\./),
     ).toBeVisible();
 
     await scrollToBottom(page);

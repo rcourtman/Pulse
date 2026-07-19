@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import {
+  ensureAuthenticated,
   ensureFirstRunExperience,
   navigateToSettings,
   apiRequest,
@@ -105,7 +106,7 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureFirstRunExperience(page, { completionTarget: "none" });
+    await ensureAuthenticated(page);
 
     // The Settings tab is rendered as a div[role="tab"] in the top utility bar.
     const settingsTab = page
@@ -126,7 +127,7 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureFirstRunExperience(page, { completionTarget: "none" });
+    await ensureAuthenticated(page);
     await navigateToSettings(page);
 
     // The settings sidebar (div[aria-label="Settings navigation"]) lists category
@@ -136,7 +137,14 @@ test.describe.serial("First-session experience", () => {
     await expect(sidebar).toBeVisible({ timeout: 10_000 });
 
     const requiredCategories = ["Infrastructure", "System", "Security"];
-    if (process.env.PULSE_MULTI_TENANT_ENABLED === "true") {
+    const runtimeRes = await apiRequest(
+      page,
+      "/api/license/runtime-capabilities",
+    );
+    expect(runtimeRes.ok()).toBeTruthy();
+    const runtimeCapabilities =
+      (await runtimeRes.json()) as RuntimeCapabilitiesPayload;
+    if (runtimeCapabilities.capabilities?.includes("multi_tenant")) {
       requiredCategories.splice(1, 0, "Organization");
     }
 
@@ -155,7 +163,7 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureFirstRunExperience(page, { completionTarget: "none" });
+    await ensureAuthenticated(page);
     await page.waitForLoadState("domcontentloaded");
     await page.waitForTimeout(750);
 
@@ -246,7 +254,7 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureFirstRunExperience(page, { completionTarget: "none" });
+    await ensureAuthenticated(page);
 
     // Query runtime capabilities to check feature access per-route without
     // depending on billing-only entitlements.
@@ -383,7 +391,7 @@ test.describe.serial("First-session experience", () => {
       "Desktop-only first-session coverage",
     );
 
-    await ensureFirstRunExperience(page, { completionTarget: "none" });
+    await ensureAuthenticated(page);
     await page.goto("/settings/system-pro", { waitUntil: "domcontentloaded" });
     await page.waitForURL(/\/settings/, { timeout: 10_000 });
 

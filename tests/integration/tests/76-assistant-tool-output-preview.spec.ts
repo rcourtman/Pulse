@@ -181,9 +181,15 @@ test.describe('Assistant tool output preview', () => {
     });
     await expect(sessionsButton).toBeInViewport();
     await sessionsButton.click();
-    await page
-      .getByRole('option', { name: /Resume Tool output preview proof/ })
-      .click();
+    const sessionDialog = page.getByRole('dialog', {
+      name: 'Pulse Assistant sessions',
+    });
+    const sessionOption = sessionDialog.getByRole('option', {
+      name: /Resume Tool output preview proof/,
+    });
+    await expect(sessionDialog).toBeInViewport();
+    await expect(sessionOption).toBeInViewport();
+    await sessionOption.click();
 
     // The tool row now renders the human summary (with the target) and the raw
     // command preview as two separate lines, rather than one combined string.

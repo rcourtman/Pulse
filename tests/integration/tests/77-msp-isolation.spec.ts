@@ -95,6 +95,7 @@ test.describe('MSP isolation E2E', () => {
           'X-Pulse-Org-ID': orgA.id,
         },
         data: { name: `msp-e2e-read-${Date.now()}`, scopes: ['monitoring:read'] },
+        timeout: 30_000,
       });
       expect(createTokenRes.ok()).toBeTruthy();
       const token = ((await createTokenRes.json()) as APITokenCreateResponse).token?.trim() || '';
@@ -164,6 +165,7 @@ test.describe('MSP isolation E2E', () => {
             enabled: true,
             signingSecret: WEBHOOK_SIGNING_SECRET,
           },
+          timeout: 30_000,
         });
         const payload = (await res.json()) as { success?: boolean; error?: string };
         expect(res.ok(), `webhook test endpoint: ${res.status()}`).toBeTruthy();

@@ -82,7 +82,7 @@ test.describe("Agent integrations surface contract", () => {
     await expect(page.getByText("Create a scoped token", { exact: true })).toBeVisible();
     await expect(page.getByText("Connect the agent", { exact: true })).toBeVisible();
 
-    await page.getByText("Client config", { exact: true }).click();
+    await page.locator("summary").filter({ hasText: "Client config" }).click();
     await expect(page.getByText("PULSE_API_TOKEN").first()).toBeVisible();
     await expect(
       page.getByRole("heading", { level: 4, name: /OpenCode.*opencode\.json/ }),
@@ -91,18 +91,18 @@ test.describe("Agent integrations surface contract", () => {
       page.getByRole("heading", { level: 4, name: /mcpServers/ }),
     ).toBeVisible();
 
-    await page.getByText("Developer details", { exact: true }).click();
+    await page.locator("summary").filter({ hasText: "Developer details" }).click();
     await expect(
       page.getByText(
         "Only open this when you are building or debugging a client",
         { exact: false },
       ),
     ).toBeVisible();
-    await page.getByText("Live manifest details", { exact: true }).click();
+    await page.locator("summary").filter({ hasText: "Live manifest details" }).click();
     await expect(
       page.getByText("/api/agent/capabilities", { exact: true }),
     ).toBeVisible();
-    await page.getByText("Failure codes", { exact: true }).click();
+    await page.locator("summary").filter({ hasText: "Failure codes" }).click();
     await expect(page.getByText("resource_not_found").first()).toBeVisible();
 
     const panel = page.locator("#external-agent-setup");

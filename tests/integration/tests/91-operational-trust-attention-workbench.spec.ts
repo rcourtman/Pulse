@@ -667,15 +667,18 @@ async function mockAttention(
 
 test("starts from the normal monitor shell and reaches the canonical attention queue", async ({
   page,
-}) => {
+}, testInfo) => {
   await mockAttention(page, "active");
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
-  await page
-    .getByRole("tab", { name: /Patrol/ })
-    .or(page.getByRole("button", { name: /Patrol/ }))
-    .or(page.getByRole("link", { name: /Patrol/ }))
-    .click();
+  const patrolNavigation = testInfo.project.name.startsWith("mobile-")
+    ? page
+        .getByRole("tablist", { name: "Mobile navigation" })
+        .getByRole("button", { name: /Patrol/ })
+    : page
+        .getByRole("tab", { name: /Patrol/ })
+        .or(page.getByRole("link", { name: /Patrol/ }));
+  await patrolNavigation.click();
 
   await expect(page).toHaveURL(/\/patrol/);
   await expect(

@@ -220,6 +220,9 @@ import { formatIdentifierLabel } from '@/utils/textPresentation';
 const MODEL_SESSION_STORAGE_KEY = 'pulse:ai_chat_models_by_session';
 const MODEL_RECENT_STORAGE_KEY = 'pulse:ai_chat_recent_models';
 const SESSION_PINNED_STORAGE_KEY = 'pulse:ai_chat_pinned_sessions';
+const SESSION_PICKER_MAX_WIDTH_PX = 320;
+const SESSION_PICKER_VIEWPORT_GUTTER_PX = 8;
+const SESSION_PICKER_MIN_HEIGHT_PX = 160;
 const PROMPT_HISTORY_STORAGE_KEY = 'pulse:ai_chat_prompt_history';
 const DEFAULT_SESSION_KEY = '__default__';
 const AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH = 1200;
@@ -697,7 +700,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [renamingSessionId, setRenamingSessionId] = createSignal('');
   const [sessionRenameDraft, setSessionRenameDraft] = createSignal('');
   const [sessionRenameSaving, setSessionRenameSaving] = createSignal(false);
-  const [sessionDropdownPosition, setSessionDropdownPosition] = createSignal({ top: 0, right: 0 });
+  const [sessionDropdownPosition, setSessionDropdownPosition] = createSignal({
+    top: 0,
+    right: SESSION_PICKER_VIEWPORT_GUTTER_PX,
+    maxHeight: SESSION_PICKER_MIN_HEIGHT_PX,
+  });
   const [forkingSession, setForkingSession] = createSignal(false);
   const [compactingSession, setCompactingSession] = createSignal(false);
   const [undoingLastTurn, setUndoingLastTurn] = createSignal(false);
@@ -3954,9 +3961,26 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const openSessionPicker = async (initialSearchQuery = '') => {
     if (sessionButtonRef) {
       const rect = sessionButtonRef.getBoundingClientRect();
+      const top = rect.bottom + 4;
+      const pickerWidth = Math.min(
+        SESSION_PICKER_MAX_WIDTH_PX,
+        Math.max(0, window.innerWidth - SESSION_PICKER_VIEWPORT_GUTTER_PX * 2),
+      );
+      const maximumLeft = Math.max(
+        SESSION_PICKER_VIEWPORT_GUTTER_PX,
+        window.innerWidth - pickerWidth - SESSION_PICKER_VIEWPORT_GUTTER_PX,
+      );
+      const left = Math.min(
+        Math.max(SESSION_PICKER_VIEWPORT_GUTTER_PX, rect.right - pickerWidth),
+        maximumLeft,
+      );
       setSessionDropdownPosition({
-        top: rect.bottom + 4,
-        right: window.innerWidth - rect.right,
+        top,
+        right: Math.max(SESSION_PICKER_VIEWPORT_GUTTER_PX, window.innerWidth - left - pickerWidth),
+        maxHeight: Math.max(
+          SESSION_PICKER_MIN_HEIGHT_PX,
+          window.innerHeight - top - SESSION_PICKER_VIEWPORT_GUTTER_PX,
+        ),
       });
     }
 
@@ -4457,12 +4481,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
                 <Show when={showSessions()}>
                   <div
-                    class="fixed w-80 max-h-[28rem] bg-surface rounded-md shadow-sm border border-border z-[9999] overflow-hidden"
+                    class="fixed w-[min(20rem,calc(100vw-1rem))] bg-surface rounded-md shadow-sm border border-border z-[9999] overflow-hidden"
                     role="dialog"
                     aria-label={AI_CHAT_SESSION_MENU_TITLE}
                     style={{
                       top: `${sessionDropdownPosition().top}px`,
                       right: `${sessionDropdownPosition().right}px`,
+                      'max-height': `${Math.min(448, sessionDropdownPosition().maxHeight)}px`,
                     }}
                   >
                     <button

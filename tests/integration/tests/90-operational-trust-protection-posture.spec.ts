@@ -24,7 +24,9 @@ test.describe("Operational trust protection posture", () => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await ensureAuthenticated(page);
     await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Coverage" }).click();
+    const coverageButton = page.getByRole("button", { name: "Coverage" });
+    await expect(coverageButton).toBeVisible({ timeout: 60_000 });
+    await coverageButton.click();
 
     const coverageTable = page
       .locator("div.overflow-x-auto")
@@ -67,7 +69,9 @@ test.describe("Operational trust protection posture", () => {
 
     await ensureAuthenticated(page);
     await page.goto("/proxmox/backups", { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Coverage" }).click();
+    const coverageButton = page.getByRole("button", { name: "Coverage" });
+    await expect(coverageButton).toBeVisible({ timeout: 60_000 });
+    await coverageButton.click();
     await expect(page.locator('th:has-text("Posture")').first()).toBeVisible();
 
     const viewport = await page.evaluate(() => ({

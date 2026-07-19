@@ -351,10 +351,47 @@ test.describe("Patrol Assistant operator briefing", () => {
         contentType: "application/json",
         body: JSON.stringify({
           autonomy_level: "monitor",
+          requested_autonomy_level: "monitor",
+          effective_autonomy_level: "monitor",
           full_mode_unlocked: false,
+          autopilot_acknowledgement: {
+            code: "acknowledgement_required",
+            active: false,
+            currentVersion: 1,
+            acceptedScope: [],
+            acceptedLimits: {},
+          },
           investigation_budget: 15,
           investigation_timeout_sec: 300,
         }),
+      });
+    });
+
+    await page.route("**/api/ai/patrol/attention**", async (route) => {
+      const requestUrl = new URL(route.request().url());
+      const summary = {
+        activeCount: 0,
+        openCount: 0,
+        acknowledgedCount: 0,
+        suppressedCount: 0,
+        uncertainCount: 0,
+        resolvedCount: 0,
+        calm: true,
+        coverageState: "current",
+        evaluatedAt: "2026-05-06T12:06:00Z",
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          requestUrl.pathname.endsWith("/summary")
+            ? summary
+            : {
+                data: [],
+                summary,
+                meta: { page: 1, limit: 50, total: 0, totalPages: 0 },
+              },
+        ),
       });
     });
 

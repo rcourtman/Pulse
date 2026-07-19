@@ -508,6 +508,14 @@ function setViewportWidth(width: number) {
   window.dispatchEvent(new Event('resize'));
 }
 
+function setViewportHeight(height: number) {
+  Object.defineProperty(window, 'innerHeight', {
+    value: height,
+    writable: true,
+    configurable: true,
+  });
+}
+
 async function waitForProviderCheckSettled() {
   await waitFor(() => {
     expect(mockAIAPI.testProvider).toHaveBeenCalled();
@@ -537,6 +545,7 @@ beforeEach(() => {
   mockNavigate.mockReset();
   resetAIChatComposerDraftStashForTests();
   setViewportWidth(1440);
+  setViewportHeight(900);
   resetAIRuntimeState();
   mockAiChatStore.isOpenSignal.mockReturnValue(true);
   mockAiChatStore.commandRequestSignal.mockReturnValue(null);
@@ -3849,6 +3858,38 @@ describe('AIChat', () => {
         ).toBeInTheDocument();
         expect(screen.getByText('New session')).toBeInTheDocument();
         expect(document.activeElement).toBe(screen.getByPlaceholderText('Search sessions...'));
+      });
+    });
+
+    it('keeps the session picker inside a compact mobile viewport', async () => {
+      setViewportWidth(320);
+      setViewportHeight(568);
+
+      renderChat();
+      const sessionButton = screen.getByRole('button', {
+        name: 'Pulse Assistant sessions',
+      });
+      vi.spyOn(sessionButton, 'getBoundingClientRect').mockReturnValue({
+        x: 40,
+        y: 80,
+        width: 40,
+        height: 40,
+        top: 80,
+        right: 80,
+        bottom: 120,
+        left: 40,
+        toJSON: () => ({}),
+      });
+
+      fireEvent.click(sessionButton);
+
+      const sessionDialog = await screen.findByRole('dialog', {
+        name: 'Pulse Assistant sessions',
+      });
+      expect(sessionDialog).toHaveStyle({
+        top: '124px',
+        right: '8px',
+        'max-height': '436px',
       });
     });
 

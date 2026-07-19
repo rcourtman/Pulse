@@ -85,20 +85,20 @@ test.describe.serial('update flow against the mock update server', () => {
     expect(info.downloadUrl).toContain(`pulse-v${MOCK_RC_VERSION}-linux-amd64.tar.gz`);
   });
 
-  test('update plan reports manual instructions for the docker deployment', async ({ page }) => {
-    // The test image is a release build, where PULSE_MOCK_MODE fails closed
-    // for deployment-type detection: the container is honestly a "docker"
-    // deployment, which cannot replace its own image, so the plan offers
-    // instructions with readiness attached instead of an auto update.
+  test('update plan reports the simulated mock-mode execution contract', async ({ page }) => {
+    // This stack deliberately enables mock mode, whose registered updater
+    // reports a deterministic simulated plan while retaining real readiness
+    // evidence from the integration fixture.
     const res = await apiRequest(
       page,
       `/api/updates/plan?version=${MOCK_STABLE_VERSION}&channel=stable`,
     );
     expect(res.ok(), await res.text()).toBeTruthy();
     const plan = await res.json();
-    expect(plan.canAutoUpdate, JSON.stringify(plan)).toBeFalsy();
+    expect(plan.canAutoUpdate, JSON.stringify(plan)).toBeTruthy();
     expect(plan.rollbackSupport).toBeTruthy();
     expect(Array.isArray(plan.instructions) && plan.instructions.length > 0).toBeTruthy();
+    expect(plan.instructions).toContain('Simulated update flow (mock mode)');
     expect(plan.readiness?.status, JSON.stringify(plan.readiness)).toBeTruthy();
   });
 

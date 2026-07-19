@@ -101,7 +101,10 @@ async function getVisibleSettingsNavigation(
   projectName: string,
 ) {
   if (projectName.startsWith('mobile-')) {
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page
+      .getByRole('tablist', { name: 'Mobile navigation' })
+      .getByRole('button', { name: 'Settings', exact: true })
+      .click();
   }
 
   const settingsNavigation = page.locator('[aria-label="Settings navigation"]');

@@ -43,7 +43,7 @@ test.describe.serial('Core E2E flows', () => {
     await expect(alertsToggleOnOverview).toBeVisible();
     const alertsInitiallyEnabled = await alertsToggleOnOverview.isChecked();
     if (!alertsInitiallyEnabled) {
-      await alertsToggleOnOverview.setChecked(true, { force: true });
+      await alertsToggleOnOverview.click({ force: true });
       await expect(page.getByText('Notifications enabled', { exact: true })).toBeVisible();
     }
 
@@ -157,7 +157,7 @@ test.describe.serial('Core E2E flows', () => {
         name: 'Toggle external notifications',
       });
       await expect(toggle).toBeVisible();
-      await toggle.setChecked(true, { force: true });
+      await toggle.click({ force: true });
       await page.getByRole('button', { name: 'Thresholds' }).click();
       await expect(page).toHaveURL(/\/alerts\/thresholds/);
     }
@@ -182,7 +182,7 @@ test.describe.serial('Core E2E flows', () => {
         name: 'Toggle external notifications',
       });
       await expect(alertsToggleRestore).toBeVisible();
-      await alertsToggleRestore.setChecked(false, { force: true });
+      await alertsToggleRestore.click({ force: true });
       await expect(page.getByText('Notifications paused', { exact: true })).toBeVisible();
     }
   });
