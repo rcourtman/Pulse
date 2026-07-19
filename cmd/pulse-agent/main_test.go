@@ -794,7 +794,7 @@ func TestResolveEnableCommands(t *testing.T) {
 
 func TestResolveToken(t *testing.T) {
 	fakeReadFile := func(path string) ([]byte, error) {
-		if path == "/var/lib/pulse-agent/token" {
+		if path == defaultTokenFilePath() {
 			return []byte("default-token"), nil
 		}
 		if path == "valid-file" {
@@ -814,7 +814,6 @@ func TestResolveToken(t *testing.T) {
 		{"file priority", "", "valid-file", "env-token", "file-token"},
 		{"env priority", "", "", "env-token", "env-token"},
 		{"default file priority", "", "", "", "default-token"},
-		{"missing returns empty", "", "", "", "default-token"}, // Wait, default-token will be returned if nothing else is provided
 	}
 
 	// Update the test cases to avoid the default file if we want to test empty
