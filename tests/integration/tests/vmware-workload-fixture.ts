@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 
-const VMWARE_WORKLOAD_QUERY = 'vm,system-container,app-container,pod';
+const VMWARE_WORKLOAD_RESOURCE_URL =
+  /\/api\/resources\?type=vm(?:,|%2C)system-container(?:,|%2C)app-container(?:,|%2C)pod&page=1&limit=200$/i;
 
 const VMWARE_WORKLOAD_RESOURCE = {
   id: 'vmware:vc-mock-1:vm:vm-201',
@@ -56,20 +57,10 @@ const VMWARE_WORKLOAD_RESOURCE = {
 } as const;
 
 export async function installVmwareWorkloadResourceRoute(page: Page): Promise<void> {
-  await page.route('**/api/resources**', async (route) => {
-    const requestUrl = new URL(route.request().url());
-    if (
-      requestUrl.pathname !== '/api/resources' ||
-      requestUrl.searchParams.get('type') !== VMWARE_WORKLOAD_QUERY
-    ) {
-      await route.continue();
-      return;
-    }
-
+  await page.route(VMWARE_WORKLOAD_RESOURCE_URL, async (route) => {
     await route.fulfill({
       status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
+      json: {
         data: [VMWARE_WORKLOAD_RESOURCE],
         meta: {
           page: 1,
@@ -77,7 +68,7 @@ export async function installVmwareWorkloadResourceRoute(page: Page): Promise<vo
           total: 1,
           totalPages: 1,
         },
-      }),
+      },
     });
   });
 }
