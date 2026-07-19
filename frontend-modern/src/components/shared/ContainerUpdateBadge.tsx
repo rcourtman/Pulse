@@ -221,7 +221,7 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
                   <Match when={state.currentState() === 'error'}>
                     <XIcon class="w-3 h-3" />
                   </Match>
-                  <Match when={state.currentState() === 'idle' || state.currentState() === 'confirming'}>
+                  <Match when={state.currentState() === 'idle'}>
                     <UpdateArrowIcon class="w-3 h-3" />
                   </Match>
                 </Switch>
@@ -230,16 +230,6 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
                 <span class={!state.settingsLoaded() ? 'opacity-50' : ''}>{state.buttonLabel()}</span>
               </Show>
             </button>
-            <Show when={state.settingsLoaded() && state.currentState() === 'confirming'}>
-              <button
-                type="button"
-                class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surface-alt text-muted hover:bg-surface-hover transition-colors"
-                onClick={state.handleCancel}
-                title="Cancel"
-              >
-                <XIcon class="w-3 h-3" />
-              </button>
-            </Show>
             <ActionReviewDialog
               detail={state.reviewDetail()}
               onClose={state.handleReviewClosed}

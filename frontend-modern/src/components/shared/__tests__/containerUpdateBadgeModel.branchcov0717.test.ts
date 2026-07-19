@@ -234,15 +234,6 @@ describe('containerUpdateBadgeModel.branchcov', () => {
   });
 
   describe('getUpdateButtonClass', () => {
-    it('returns the amber "confirming" classes', () => {
-      expect(getUpdateButtonClass('confirming')).toBe(
-        [
-          BASE_CLASS,
-          'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-900',
-        ].join(' '),
-      );
-    });
-
     it('returns the blue cursor-wait "updating" classes', () => {
       expect(getUpdateButtonClass('updating')).toBe(
         [
@@ -291,7 +282,7 @@ describe('containerUpdateBadgeModel.branchcov', () => {
 
   describe('getUpdateButtonLabel', () => {
     describe('settingsLoaded = false (early-return arm: always "Update")', () => {
-      it.each<UpdateState>(['idle', 'confirming', 'updating', 'success', 'error'])(
+      it.each<UpdateState>(['idle', 'updating', 'success', 'error'])(
         'returns "Update" for state %s when settings are not loaded',
         (state) => {
           expect(getUpdateButtonLabel(state, false)).toBe('Update');
@@ -302,10 +293,6 @@ describe('containerUpdateBadgeModel.branchcov', () => {
     describe('settingsLoaded = true (switch arms)', () => {
       it('returns "Update" for the idle/default arm', () => {
         expect(getUpdateButtonLabel('idle', true)).toBe('Update');
-      });
-
-      it('returns "Confirm?" for the confirming arm', () => {
-        expect(getUpdateButtonLabel('confirming', true)).toBe('Confirm?');
       });
 
       it('returns "Updating..." for the updating arm', () => {
@@ -328,14 +315,6 @@ describe('containerUpdateBadgeModel.branchcov', () => {
   });
 
   describe('getUpdateButtonTooltip', () => {
-    describe('confirming state', () => {
-      it('returns the static confirm prompt', () => {
-        expect(getUpdateButtonTooltip({ state: 'confirming' })).toBe(
-          'Click again to confirm update',
-        );
-      });
-    });
-
     describe('success state', () => {
       it('returns the static success message', () => {
         expect(getUpdateButtonTooltip({ state: 'success' })).toBe(
@@ -463,14 +442,14 @@ describe('containerUpdateBadgeModel.branchcov', () => {
             }),
           }),
         ).toBe(
-          'Click to update\nCurrent: sha256:01234...\nLatest: sha256:01234...',
+          'Click to review and update\nCurrent: sha256:01234...\nLatest: sha256:01234...',
         );
       });
 
       it('returns "unknown" previews when updateStatus is present but digests are absent', () => {
         expect(
           getUpdateButtonTooltip({ state: 'idle', updateStatus: makeStatus({}) }),
-        ).toBe('Click to update\nCurrent: unknown...\nLatest: unknown...');
+        ).toBe('Click to review and update\nCurrent: unknown...\nLatest: unknown...');
       });
 
       it('routes an unknown state value (with no updateStatus) to the default early-return arm', () => {

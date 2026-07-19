@@ -126,7 +126,7 @@ func (p Planner) PlanWithPolicyFactors(req unified.ActionRequest, resource unifi
 		ApprovalPolicy:       requirement.Floor,
 		ApprovalRequirement:  requirement,
 		PredictedBlastRadius: predictedBlastRadius(resource),
-		RollbackAvailable:    false,
+		RollbackAvailable:    capability.SupportsRollback,
 		Message:              planMessage(resource, capability, requirement.Floor),
 		PlannedAt:            plannedAt,
 		ExpiresAt:            plannedAt.Add(ttl),

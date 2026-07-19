@@ -210,6 +210,54 @@ describe('ActionReviewDialog trust gates', () => {
     );
   });
 
+  it('collapses low-risk capabilities to a single Approve and run confirmation', async () => {
+    const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
+    audit.capabilityAutoAuthorization = 'low_risk';
+    vi.mocked(ResourceActionsAPI.decideAction).mockResolvedValue({
+      actionId: audit.id,
+      state: 'approved',
+      approval: {
+        actor: 'operator',
+        method: 'api',
+        timestamp: audit.updatedAt,
+        outcome: 'approved',
+      },
+      audit: { ...audit, state: 'approved' },
+    });
+    vi.mocked(ResourceActionsAPI.executeAction).mockResolvedValue({
+      actionId: audit.id,
+      state: 'executing',
+      audit: { ...audit, state: 'executing' },
+    });
+    vi.mocked(ResourceActionsAPI.getAction).mockResolvedValue(
+      detail({ ...audit, state: 'executing' }),
+    );
+    render(() => <ActionReviewDialog detail={detail(audit)} onClose={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and run' }));
+    await waitFor(() => {
+      expect(ResourceActionsAPI.decideAction).toHaveBeenCalledWith(
+        'action-1',
+        'approved',
+        'sha256:reviewed-plan',
+        'Operator approved from Actions review.',
+      );
+      expect(ResourceActionsAPI.executeAction).toHaveBeenCalledWith(
+        'action-1',
+        'sha256:reviewed-plan',
+        'Operator confirmed execution from Actions review.',
+      );
+    });
+  });
+
+  it('keeps the two-phase Approve for capabilities without the low-risk class', () => {
+    const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
+    render(() => <ActionReviewDialog detail={detail(audit)} onClose={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Approve and run' })).toBeNull();
+  });
+
   it('offers no action controls when the reviewed plan identity is missing', () => {
     const audit = makeAudit('resolved', '2099-01-01T00:00:00Z');
     delete audit.plan.planHash;

@@ -716,9 +716,10 @@ describe('Docker native tables', () => {
       />
     ));
 
-    const updateButton = screen.getByRole('button', { name: /click to update/i });
+    // One click plans the governed action; the review dialog is the
+    // confirmation surface, so no second in-row confirm click exists.
+    const updateButton = screen.getByRole('button', { name: /click to review and update/i });
     fireEvent.click(updateButton);
-    fireEvent.click(screen.getByRole('button', { name: /click again to confirm update/i }));
 
     await waitFor(() =>
       expect(ResourceActionsAPI.planAction).toHaveBeenCalledWith(

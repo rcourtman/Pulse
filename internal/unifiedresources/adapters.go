@@ -2308,7 +2308,8 @@ func dockerContainerUpdateCapability(runtime string) ResourceCapability {
 		Type:                 CapabilityTypeCommon,
 		Description:          fmt.Sprintf("Update this %s container to its latest image through its reporting Pulse agent, with automatic backup and rollback.", displayRuntime),
 		MinimumApprovalLevel: ApprovalAdmin,
-		AutoAuthorization:    AutoAuthorizeNever,
+		AutoAuthorization:    AutoAuthorizeLowRisk,
+		SupportsRollback:     true,
 		Platform:             runtime,
 		InternalHandler:      "docker.container.update",
 	}

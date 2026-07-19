@@ -356,3 +356,54 @@ func TestResourceVersionIgnoresRelationshipObservationTimestamps(t *testing.T) {
 		t.Fatal("resource version ignored a real relationship change")
 	}
 }
+
+func TestPlannerCarriesCapabilityRollbackSupportIntoPlan(t *testing.T) {
+	now := time.Date(2026, 7, 19, 10, 0, 0, 0, time.UTC)
+	resource := unified.Resource{
+		ID:     "app-container:7",
+		Type:   unified.ResourceTypeAppContainer,
+		Name:   "heimdall",
+		Status: unified.StatusOnline,
+		Capabilities: []unified.ResourceCapability{
+			{
+				Name:                 "update",
+				Type:                 unified.CapabilityTypeCommon,
+				Description:          "Update this Docker container",
+				MinimumApprovalLevel: unified.ApprovalAdmin,
+				SupportsRollback:     true,
+				InternalHandler:      "docker.container.update",
+			},
+			{
+				Name:                 "stop",
+				Type:                 unified.CapabilityTypeCommon,
+				Description:          "Stop this Docker container",
+				MinimumApprovalLevel: unified.ApprovalAdmin,
+				InternalHandler:      "docker.container.lifecycle",
+			},
+		},
+	}
+	actor := unified.ActionActor{SubjectID: "user:admin", Kind: unified.ActionActorUser, CredentialID: "session:test", OrgID: "default"}
+	planner := Planner{Now: func() time.Time { return now }}
+
+	withRollback, err := planner.Plan(unified.ActionRequest{
+		RequestID: "req-update", ResourceID: "app-container:7", CapabilityName: "update",
+		Reason: "Routine image update", Actor: actor,
+	}, resource)
+	if err != nil {
+		t.Fatalf("Plan(update) error = %v", err)
+	}
+	if !withRollback.RollbackAvailable {
+		t.Fatal("RollbackAvailable = false for a capability that declares rollback support")
+	}
+
+	withoutRollback, err := planner.Plan(unified.ActionRequest{
+		RequestID: "req-stop", ResourceID: "app-container:7", CapabilityName: "stop",
+		Reason: "Stop for maintenance", Actor: actor,
+	}, resource)
+	if err != nil {
+		t.Fatalf("Plan(stop) error = %v", err)
+	}
+	if withoutRollback.RollbackAvailable {
+		t.Fatal("RollbackAvailable = true for a capability with no declared rollback support")
+	}
+}

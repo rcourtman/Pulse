@@ -1698,7 +1698,7 @@ func TestResourceFromDockerContainerAdvertisesUpdateCapabilityOnlyWithDigest(t *
 		if capability.Name != "update" {
 			continue
 		}
-		if capability.InternalHandler != "docker.container.update" || capability.MinimumApprovalLevel != ApprovalAdmin || capability.AutoAuthorization != AutoAuthorizeNever {
+		if capability.InternalHandler != "docker.container.update" || capability.MinimumApprovalLevel != ApprovalAdmin || capability.AutoAuthorization != AutoAuthorizeLowRisk || !capability.SupportsRollback {
 			t.Fatalf("update capability contract = %+v", capability)
 		}
 	}

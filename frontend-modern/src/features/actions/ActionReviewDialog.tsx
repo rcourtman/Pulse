@@ -55,6 +55,12 @@ export const ActionReviewDialog: Component<{
     aptParametersValid() &&
     !isExpired() &&
     audit()?.state === 'pending_approval';
+  // Low-risk capabilities (rollback-supported, routine) collapse the decision
+  // to one confirmation: a single click records the approval and dispatches
+  // execution. Both lifecycle records are still written server-side.
+  const singleConfirmation = createMemo(
+    () => audit()?.capabilityAutoAuthorization === 'low_risk',
+  );
   const canExecute = () =>
     !readOnly() &&
     reviewedPlanHash() &&
@@ -110,6 +116,41 @@ export const ActionReviewDialog: Component<{
       const message =
         cause instanceof Error ? cause.message : 'The decision could not be recorded.';
       setError(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const approveAndRun = async () => {
+    const action = audit();
+    if (!action || busy()) return;
+    setBusy(true);
+    setError('');
+    try {
+      await ResourceActionsAPI.decideAction(
+        action.id,
+        'approved',
+        reviewedPlanHash(),
+        'Operator approved from Actions review.',
+      );
+      await ResourceActionsAPI.executeAction(
+        action.id,
+        reviewedPlanHash(),
+        'Operator confirmed execution from Actions review.',
+      );
+      await refresh();
+      notificationStore.success(
+        'Action approved and dispatched. Review the recorded outcome below.',
+      );
+    } catch (cause) {
+      const message =
+        cause instanceof Error ? cause.message : 'The action could not be approved and run.';
+      setError(message);
+      try {
+        await refresh();
+      } catch {
+        /* keep the actionable error; a refresh failure must not mask it */
+      }
     } finally {
       setBusy(false);
     }
@@ -201,13 +242,26 @@ export const ActionReviewDialog: Component<{
                 <Button variant="danger" disabled={busy()} onClick={() => void decide('rejected')}>
                   Reject
                 </Button>
-                <Button
-                  variant="primary"
-                  isLoading={busy()}
-                  onClick={() => void decide('approved')}
+                <Show
+                  when={singleConfirmation()}
+                  fallback={
+                    <Button
+                      variant="primary"
+                      isLoading={busy()}
+                      onClick={() => void decide('approved')}
+                    >
+                      Approve
+                    </Button>
+                  }
                 >
-                  Approve
-                </Button>
+                  <Button
+                    variant="primary"
+                    isLoading={busy()}
+                    onClick={() => void approveAndRun()}
+                  >
+                    Approve and run
+                  </Button>
+                </Show>
               </Show>
               <Show when={canExecute()}>
                 <Button variant="primary" isLoading={busy()} onClick={() => void execute()}>

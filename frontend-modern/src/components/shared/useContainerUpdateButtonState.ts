@@ -1,7 +1,6 @@
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import {
-  clearContainerUpdateState,
   getContainerUpdateState,
   markContainerQueued,
   markContainerUpdateError,
@@ -30,7 +29,7 @@ const newUpdateRequestId = (): string =>
 const ACTION_TERMINAL_STATES = ['completed', 'failed', 'rejected', 'expired'];
 
 export function useContainerUpdateButtonState(props: UpdateButtonProps) {
-  const [localState, setLocalState] = createSignal<'idle' | 'confirming' | 'planning'>('idle');
+  const [localState, setLocalState] = createSignal<'idle' | 'planning'>('idle');
   const [errorMessage, setErrorMessage] = createSignal('');
   const [reviewDetail, setReviewDetail] = createSignal<ActionDetailResponse | null>(null);
 
@@ -83,8 +82,7 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
   // Only gates the actionable states; in-flight and settled states keep their
   // own presentation.
   const updateUnavailableReason = (): string | undefined => {
-    const state = currentState();
-    if (state !== 'idle' && state !== 'confirming') return undefined;
+    if (currentState() !== 'idle') return undefined;
     return getActionReadinessRefusal(props.actionReadiness, 'update');
   };
   const isUpdateUnavailable = () => Boolean(updateUnavailableReason());
@@ -104,7 +102,7 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
   };
   const buttonLabel = () => getUpdateButtonLabel(currentState(), settingsLoaded());
 
-  // Updates run as audited actions: the confirming click plans an action for
+  // Updates run as audited actions: the update click plans an action for
   // the container's update capability and opens the review dialog, which owns
   // approval and execution. The legacy direct-update endpoint is retired.
   const planUpdateReview = async () => {
@@ -138,6 +136,8 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     }
   };
 
+  // One click plans the governed action and opens the review dialog; the
+  // dialog is the confirmation surface, so no in-row confirming hop exists.
   const handleClick = async (event: MouseEvent) => {
     event.stopPropagation();
     event.preventDefault();
@@ -147,20 +147,8 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     if (isUpdateUnavailable()) return;
 
     if (state === 'idle') {
-      setLocalState('confirming');
-      return;
-    }
-
-    if (state === 'confirming') {
       await planUpdateReview();
     }
-  };
-
-  const handleCancel = (event: MouseEvent) => {
-    event.stopPropagation();
-    event.preventDefault();
-    setLocalState('idle');
-    clearContainerUpdateState(props.agentId, props.containerId);
   };
 
   const handleReviewClosed = () => {
@@ -190,7 +178,6 @@ export function useContainerUpdateButtonState(props: UpdateButtonProps) {
     buttonLabel,
     buttonTooltip,
     currentState,
-    handleCancel,
     handleClick,
     handleReviewChanged,
     handleReviewClosed,

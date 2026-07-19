@@ -104,12 +104,6 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
   });
 
   describe('getUpdateButtonTooltip', () => {
-    it('returns the confirm prompt for the "confirming" state', () => {
-      expect(
-        getUpdateButtonTooltip({ state: 'confirming', now: 1000 }),
-      ).toBe('Click again to confirm update');
-    });
-
     it('returns the success message for the "success" state', () => {
       expect(getUpdateButtonTooltip({ state: 'success', now: 1000 })).toBe(
         '✓ Update completed successfully!',
@@ -225,7 +219,7 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
         }),
       });
       expect(result).toBe(
-        `Click to update\nCurrent: ${DIGEST_FIRST_12}...\nLatest: ${DIGEST_FIRST_12}...`,
+        `Click to review and update\nCurrent: ${DIGEST_FIRST_12}...\nLatest: ${DIGEST_FIRST_12}...`,
       );
     });
   });
@@ -233,7 +227,6 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
   describe('getUpdateButtonLabel', () => {
     it('short-circuits to "Update" when settingsLoaded is false, regardless of state', () => {
       const states: UpdateState[] = [
-        'confirming',
         'updating',
         'success',
         'error',
@@ -242,10 +235,6 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
       for (const state of states) {
         expect(getUpdateButtonLabel(state, false)).toBe('Update');
       }
-    });
-
-    it('returns "Confirm?" for the confirming state', () => {
-      expect(getUpdateButtonLabel('confirming', true)).toBe('Confirm?');
     });
 
     it('returns "Updating..." for the updating state', () => {
@@ -266,12 +255,6 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
   });
 
   describe('getUpdateButtonClass', () => {
-    it('returns the amber confirming classes with pointer hover', () => {
-      expect(getUpdateButtonClass('confirming')).toBe(
-        `${UPDATE_BUTTON_BASE_CLASS} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-900`,
-      );
-    });
-
     it('returns the blue updating classes with cursor-wait', () => {
       expect(getUpdateButtonClass('updating')).toBe(
         `${UPDATE_BUTTON_BASE_CLASS} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-wait`,

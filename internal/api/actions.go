@@ -82,6 +82,15 @@ type actionResourcePresentation struct {
 type actionAuditProjection struct {
 	unified.ActionAuditRecord
 	Resource *actionResourcePresentation `json:"resource,omitempty"`
+	// CapabilityAutoAuthorization is the read-time auto-authorization class of
+	// the planned capability. It only shapes review presentation (e.g. a
+	// single-confirmation control for low-risk capabilities); approval and
+	// execution authority remain bound to the persisted plan.
+	CapabilityAutoAuthorization unified.ActionAutoAuthorizationClass `json:"capabilityAutoAuthorization,omitempty"`
+	// BlastRadius carries read-time presentation for the plan's predicted
+	// blast-radius resource IDs so review surfaces can show names instead of
+	// raw identifiers. Entries without a resolvable resource keep an empty name.
+	BlastRadius []actionResourcePresentation `json:"blastRadius,omitempty"`
 }
 
 type pendingActionsResponse struct {
@@ -589,13 +598,30 @@ func projectActionAudits(records []unified.ActionAuditRecord, registry *unified.
 func projectActionAudit(record unified.ActionAuditRecord, registry *unified.ResourceRegistry) actionAuditProjection {
 	projection := actionAuditProjection{ActionAuditRecord: record}
 	resource, ok := presentationResourceByID(registry, record.Request.ResourceID)
-	if !ok || resource == nil || strings.TrimSpace(resource.Name) == "" {
-		return projection
+	if ok && resource != nil && strings.TrimSpace(resource.Name) != "" {
+		projection.Resource = &actionResourcePresentation{
+			ID:   unified.CanonicalResourceID(resource.ID),
+			Name: strings.TrimSpace(resource.Name),
+			Type: resourceContractType(*resource),
+		}
+		for _, capability := range resource.Capabilities {
+			if capability.Name == record.Request.CapabilityName {
+				projection.CapabilityAutoAuthorization = capability.AutoAuthorization
+				break
+			}
+		}
 	}
-	projection.Resource = &actionResourcePresentation{
-		ID:   unified.CanonicalResourceID(resource.ID),
-		Name: strings.TrimSpace(resource.Name),
-		Type: resourceContractType(*resource),
+	if record.Plan.PredictedBlastRadius != nil {
+		projection.BlastRadius = make([]actionResourcePresentation, 0, len(record.Plan.PredictedBlastRadius))
+		for _, affectedID := range record.Plan.PredictedBlastRadius {
+			entry := actionResourcePresentation{ID: affectedID}
+			if affected, found := presentationResourceByID(registry, affectedID); found && affected != nil {
+				entry.ID = unified.CanonicalResourceID(affected.ID)
+				entry.Name = strings.TrimSpace(affected.Name)
+				entry.Type = resourceContractType(*affected)
+			}
+			projection.BlastRadius = append(projection.BlastRadius, entry)
+		}
 	}
 	return projection
 }

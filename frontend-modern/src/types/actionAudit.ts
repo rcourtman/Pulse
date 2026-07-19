@@ -265,6 +265,10 @@ export interface ActionAuditRecord {
   request: ActionAuditRequest;
   /** Read-time display metadata from the canonical resource API; never part of plan identity. */
   resource?: ActionResourceReference;
+  /** Read-time auto-authorization class of the planned capability; presentation only. */
+  capabilityAutoAuthorization?: 'never' | 'low_risk' | 'elevated';
+  /** Read-time names for plan.predictedBlastRadius IDs; entries may carry an empty name. */
+  blastRadius?: ActionResourceReference[];
   plan: ActionAuditPlan;
   origin?: ActionAuditOrigin;
   approvals?: ActionAuditApprovalRecord[];

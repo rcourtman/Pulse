@@ -67,6 +67,7 @@ type ResourceCapability struct {
 	Description          string                       `json:"description"`
 	MinimumApprovalLevel ActionApprovalLevel          `json:"minimumApprovalLevel"`        // Policy may escalate this
 	AutoAuthorization    ActionAutoAuthorizationClass `json:"autoAuthorization,omitempty"` // Missing/never stays human-authorized
+	SupportsRollback     bool                         `json:"supportsRollback,omitempty"`  // True only when the executor declares a real recovery strategy
 	Platform             string                       `json:"platform,omitempty"`
 	InternalHandler      string                       `json:"-"` // DO NOT expose execution plumbing to public surfaces
 	Params               []CapabilityParam            `json:"params,omitempty"`

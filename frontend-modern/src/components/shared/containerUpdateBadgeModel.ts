@@ -28,7 +28,9 @@ export interface UpdateButtonProps {
   externalState?: 'updating' | 'queued' | 'error';
 }
 
-export type UpdateState = 'idle' | 'confirming' | 'updating' | 'success' | 'error';
+// The update click plans a governed action and opens the review dialog, which
+// is the confirmation surface; there is no separate in-row confirming state.
+export type UpdateState = 'idle' | 'updating' | 'success' | 'error';
 
 export interface ContainerUpdateButtonStoreState {
   startedAt: number;
@@ -86,12 +88,10 @@ export function getUpdateIconTooltip(updateStatus?: DockerContainerUpdateStatus)
 }
 
 export function getUpdateButtonClass(state: UpdateState, unavailable = false): string {
-  if (unavailable && (state === 'idle' || state === 'confirming')) {
+  if (unavailable && state === 'idle') {
     return `${UPDATE_BUTTON_BASE_CLASS} bg-surface-alt text-muted cursor-not-allowed opacity-70`;
   }
   switch (state) {
-    case 'confirming':
-      return `${UPDATE_BUTTON_BASE_CLASS} bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 cursor-pointer hover:bg-amber-200 dark:hover:bg-amber-900`;
     case 'updating':
       return `${UPDATE_BUTTON_BASE_CLASS} bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-wait`;
     case 'success':
@@ -107,8 +107,6 @@ export function getUpdateButtonLabel(state: UpdateState, settingsLoaded: boolean
   if (!settingsLoaded) return 'Update';
 
   switch (state) {
-    case 'confirming':
-      return 'Confirm?';
     case 'updating':
       return 'Updating...';
     case 'success':
@@ -130,8 +128,6 @@ export function getUpdateButtonTooltip(options: {
   const now = options.now ?? Date.now();
 
   switch (options.state) {
-    case 'confirming':
-      return 'Click again to confirm update';
     case 'updating': {
       const elapsed = options.storeState
         ? Math.round((now - options.storeState.startedAt) / 1000)
@@ -151,7 +147,7 @@ export function getUpdateButtonTooltip(options: {
 
       const current = getDigestPreview(options.updateStatus.currentDigest, 12);
       const latest = getDigestPreview(options.updateStatus.latestDigest, 12);
-      return `Click to update\nCurrent: ${current}...\nLatest: ${latest}...`;
+      return `Click to review and update\nCurrent: ${current}...\nLatest: ${latest}...`;
   }
 }
 

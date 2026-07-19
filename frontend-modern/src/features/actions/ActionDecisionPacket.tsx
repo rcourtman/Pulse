@@ -26,6 +26,13 @@ export const ActionDecisionPacket: Component<{
     const value = new Date(props.audit.plan.expiresAt ?? '');
     return Number.isNaN(value.valueOf()) ? 'Not recorded' : value.toLocaleString();
   });
+  // Prefer read-time names for blast-radius entries; fall back to the raw
+  // plan IDs so nothing is hidden when a resource cannot be resolved.
+  const blastRadiusEntries = createMemo(() => {
+    const ids = props.audit.plan.predictedBlastRadius ?? [];
+    const named = new Map((props.audit.blastRadius ?? []).map((entry) => [entry.id, entry.name]));
+    return ids.map((id) => ({ id, name: named.get(id)?.trim() || '' }));
+  });
 
   return (
     <div class="space-y-4" data-testid="action-decision-packet">
@@ -71,12 +78,19 @@ export const ActionDecisionPacket: Component<{
             <dd>{props.audit.plan.rollbackAvailable ? 'Yes' : 'No'}</dd>
           </div>
         </dl>
-        <Show when={(props.audit.plan.predictedBlastRadius ?? []).length > 0}>
+        <Show when={blastRadiusEntries().length > 0}>
           <div class="mt-3">
             <div class="text-sm text-muted">Also affected</div>
             <ul class="mt-1 list-disc pl-5 text-sm">
-              <For each={props.audit.plan.predictedBlastRadius}>
-                {(resource) => <li>{resource}</li>}
+              <For each={blastRadiusEntries()}>
+                {(entry) => (
+                  <li>
+                    <Show when={entry.name} fallback={<span class="break-all">{entry.id}</span>}>
+                      {entry.name}
+                      <span class="ml-1 break-all text-xs text-muted">({entry.id})</span>
+                    </Show>
+                  </li>
+                )}
               </For>
             </ul>
           </div>
