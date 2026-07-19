@@ -107,7 +107,7 @@ test.describe("Top-level page header consistency", () => {
       "Phone headers use responsive framing and intentionally do not share desktop Y coordinates",
     );
 
-    let baselineY: number | null = null;
+    let baselineContentOffsetY: number | null = null;
 
     for (const surface of ALIGNED_PAGE_HEADER_ROUTES) {
       await page.goto(surface.route, { waitUntil: "domcontentloaded" });
@@ -120,19 +120,34 @@ test.describe("Top-level page header consistency", () => {
 
       const headerFrame = page.locator("[data-page-header]").first();
       await expect(headerFrame).toBeVisible();
-      const boundingBox = await headerFrame.boundingBox();
+      const contentFrame = page.locator("#main .pulse-panel").first();
+      await expect(contentFrame).toBeVisible();
+
+      const [headerBoundingBox, contentBoundingBox] = await Promise.all([
+        headerFrame.boundingBox(),
+        contentFrame.boundingBox(),
+      ]);
       expect(
-        boundingBox,
+        headerBoundingBox,
         `${surface.route} should expose a measurable canonical header frame`,
       ).not.toBeNull();
+      expect(
+        contentBoundingBox,
+        `${surface.route} should expose a measurable canonical content frame`,
+      ).not.toBeNull();
 
-      if (baselineY === null) {
-        baselineY = boundingBox!.y;
+      // Shell-level banners can appear asynchronously between route visits.
+      // Measure the shared PageHeader from the shared content frame so the
+      // route contract stays strict without coupling it to transient chrome.
+      const contentOffsetY = headerBoundingBox!.y - contentBoundingBox!.y;
+
+      if (baselineContentOffsetY === null) {
+        baselineContentOffsetY = contentOffsetY;
         continue;
       }
 
       expect(
-        Math.abs(boundingBox!.y - baselineY),
+        Math.abs(contentOffsetY - baselineContentOffsetY),
         `${surface.route} should keep its top-level heading aligned with the other utility surfaces`,
       ).toBeLessThanOrEqual(1.5);
     }
