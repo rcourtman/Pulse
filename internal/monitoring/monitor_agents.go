@@ -1108,6 +1108,78 @@ func (m *Monitor) AcknowledgeDockerHostCommand(commandID, hostID, status, messag
 	return m.acknowledgeDockerCommand(commandID, hostID, status, message)
 }
 
+// supersedeStaleDockerHostDuplicates reaps leftover Docker host records for
+// the same physical machine after an agent re-enrolls under a fresh identity.
+// Wiping the agent state dir regenerates the agent ID, and a fresh install
+// command mints a fresh token, so identity resolution correctly refuses to
+// adopt the old record (a foreign token must never take over a live host,
+// #1008) and creates a new one — leaving the old record behind forever with a
+// stale agent version, stale containers, and stale image digests (#1586,
+// #1564). A record qualifies as a corpse only when it stopped reporting
+// before the superseding token was even minted: generating a fresh install
+// command for the same machine is explicit replace intent (the same rule the
+// removal block uses for re-enrollment, #1581), while a record that is still
+// reporting keeps advancing LastSeen and is never touched. Unlike a
+// user-initiated removal this does not set the resurrection block and does
+// not revoke the orphaned token.
+func (m *Monitor) supersedeStaleDockerHostDuplicates(current models.DockerHost, tokenRecord *config.APITokenRecord, hosts []*unifiedresources.DockerHostView) {
+	if tokenRecord == nil || tokenRecord.CreatedAt.IsZero() {
+		return
+	}
+	machineID := strings.TrimSpace(current.MachineID)
+	hostname := strings.TrimSpace(current.Hostname)
+	if machineID == "" || hostname == "" {
+		return
+	}
+
+	for _, stale := range hosts {
+		if stale == nil {
+			continue
+		}
+		staleID := dockerHostStableID(stale)
+		if staleID == "" || staleID == strings.TrimSpace(current.ID) {
+			continue
+		}
+		if strings.TrimSpace(stale.MachineID()) != machineID {
+			continue
+		}
+		if !unifiedresources.HostnamesEquivalent(stale.Hostname(), hostname) {
+			continue
+		}
+		if !stale.LastSeen().Before(tokenRecord.CreatedAt) {
+			continue
+		}
+
+		removed, ok := m.state.RemoveDockerHost(staleID)
+		if !ok {
+			continue
+		}
+		m.state.RemoveConnectionHealth(dockerConnectionPrefix + staleID)
+
+		m.mu.Lock()
+		if removed.TokenID != "" && removed.TokenID != current.TokenID {
+			delete(m.dockerTokenBindings, removed.TokenID)
+		}
+		if cmd, ok := m.dockerCommands[staleID]; ok {
+			delete(m.dockerCommandIndex, cmd.status.ID)
+		}
+		delete(m.dockerCommands, staleID)
+		m.clearDockerHostIdentityTrackingLocked(staleID)
+		m.mu.Unlock()
+
+		if m.alertManager != nil {
+			m.alertManager.HandleDockerHostRemoved(removed)
+			m.SyncAlertState()
+		}
+
+		log.Info().
+			Str("dockerHost", removed.Hostname).
+			Str("staleDockerHostID", staleID).
+			Str("replacementDockerHostID", current.ID).
+			Msg("Superseded stale Docker host record after agent re-enrollment")
+	}
+}
+
 // ApplyDockerReport ingests a Docker / Podman module report into the shared state.
 func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *config.APITokenRecord) (models.DockerHost, error) {
 	readState := m.snapshotBackedUnifiedReadState()
@@ -1540,6 +1612,8 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 
 	m.state.UpsertDockerHost(host)
 	m.state.SetConnectionHealth(dockerConnectionPrefix+host.ID, true)
+
+	m.supersedeStaleDockerHostDuplicates(host, tokenRecord, dockerHosts)
 
 	// Check if the host was previously hidden and is now visible again
 	if hasPrevious && previous.Hidden() && !host.Hidden {
