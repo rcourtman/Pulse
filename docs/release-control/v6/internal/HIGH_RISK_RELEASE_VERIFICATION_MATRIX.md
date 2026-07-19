@@ -1020,6 +1020,58 @@ Companion drill:
   release packet, independent post-release jobs are serialized, or the
   definitive verdict can pass without all applicable downstream results.
 
+## Gate: `operational-trust-canonical-lifecycle`
+
+- Owner lanes: `L6`, `L8`, `L10`, `L13`, `L14`, `L15`, `L16`, `L20`,
+  `L22`, `L23`
+- Minimum evidence tier: `managed-runtime-exercise`
+- Risk covered:
+  Customer-visible alert, evidence, protection, availability, notification,
+  Patrol, and action surfaces can contradict one another, present stale or
+  partial evidence as healthy, or treat provider mutation success as detector
+  recovery.
+- Primary runtime surfaces:
+  `internal/operationaltrust`
+  `internal/alerts`
+  `internal/notifications`
+  `internal/recovery`
+  `internal/unifiedresources`
+  `internal/actionlifecycle`
+  `internal/api`
+  `internal/ai`
+  `frontend-modern/src/features/patrol`
+  `frontend-modern/src/features/resources`
+- Automated proof:
+  `go test ./internal/operationaltrust ./internal/alerts ./internal/notifications ./internal/recovery ./internal/unifiedresources ./internal/actionlifecycle ./internal/api ./internal/ai -count=1`
+  `go test -race ./internal/alerts ./internal/notifications ./internal/actionlifecycle ./internal/operationaltrust -count=1`
+  `cd frontend-modern && npm run type-check`
+  `cd tests/integration && npm test -- tests/90-operational-trust-protection-posture.spec.ts tests/91-operational-trust-attention-workbench.spec.ts tests/92-operational-trust-availability-facet.spec.ts --project=chromium`
+- Managed-runtime scenario:
+  1. Exercise active, acknowledged, resolving, suppressed, stale, unknown,
+     restored, and recurrent lifecycle states through the live desktop surface.
+  2. Open protection and availability evidence to the deepest state; confirm
+     partial, denied, stale, provider-failed, and expired evidence remains
+     explicit and cannot render as healthy or protected.
+  3. Follow a notification into the exact lifecycle transition, then confirm
+     grouping, retry, cancellation, dead-letter, and restart behavior.
+  4. Complete the bounded Docker restart action through offer, plan, approval,
+     execution, receipt, and independent postcondition verification; confirm
+     provider success does not resolve the operational state.
+  5. Repeat the active-work and calm-day journeys at phone width, with keyboard,
+     reduced-motion, and screen-reader semantics.
+- Pass when:
+  Every customer-visible surface consumes the same canonical lifecycle and
+  evidence model, unsupported inferences fail closed, notification consequences
+  link to exact transitions, and governed actions remain separate from
+  detector-owned recovery.
+- Latest exercised record:
+  `docs/release-control/v6/internal/records/operational-trust-hardening-rollout-completion-2026-07-19.md`
+- Block release if:
+  Any active state, evidence explanation, protection assertion, notification
+  consequence, or governed action can contradict the canonical lifecycle;
+  limited evidence can appear healthy; or mutation success can appear resolved
+  before detector-owned recovery.
+
 ## Gate Ownership Rule
 
 Update these machine-visible gate states in `docs/release-control/v6/internal/status.json`

@@ -4810,6 +4810,107 @@
           "evidence_tier": "test-proof"
         }
       ]
+    },
+    {
+      "id": "RA42",
+      "summary": "Operational Trust remains contradiction-free across lifecycle, evidence, protection posture, resource attachment, notification linkage, Patrol attention, and governed action verification: limited or unavailable evidence cannot become healthy or resolved, provider success cannot become detector recovery, and every customer-visible state consumes one canonical lifecycle.",
+      "kind": "trust-gate",
+      "blocking_level": "release-ready",
+      "proof_type": "hybrid",
+      "lane_ids": [
+        "L6",
+        "L8",
+        "L10",
+        "L13",
+        "L14",
+        "L15",
+        "L16",
+        "L20",
+        "L22",
+        "L23"
+      ],
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "ai-runtime",
+        "alerts",
+        "api-contracts",
+        "frontend-primitives",
+        "monitoring",
+        "notifications",
+        "patrol-intelligence",
+        "performance-and-scalability",
+        "security-privacy",
+        "storage-recovery",
+        "unified-resources"
+      ],
+      "release_gate_ids": [
+        "operational-trust-canonical-lifecycle"
+      ],
+      "proof_commands": [
+        {
+          "id": "ra42-operational-trust-browser",
+          "cwd": "tests/integration",
+          "run": [
+            "npm",
+            "test",
+            "--",
+            "tests/90-operational-trust-protection-posture.spec.ts",
+            "tests/91-operational-trust-attention-workbench.spec.ts",
+            "tests/92-operational-trust-availability-facet.spec.ts",
+            "--project=chromium"
+          ]
+        },
+        {
+          "id": "ra42-operational-trust-core",
+          "run": [
+            "go",
+            "test",
+            "./internal/operationaltrust",
+            "./internal/alerts",
+            "./internal/notifications",
+            "./internal/recovery",
+            "./internal/unifiedresources",
+            "./internal/actionlifecycle",
+            "./internal/api",
+            "./internal/ai",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "ra42-operational-trust-frontend",
+          "cwd": "frontend-modern",
+          "run": [
+            "npm",
+            "run",
+            "type-check"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/OPERATIONAL_TRUST.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/operational-trust-hardening-rollout-completion-2026-07-19.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/alerts/operational_state_writers_test.go",
+          "kind": "file",
+          "evidence_tier": "test-proof"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/91-operational-trust-attention-workbench.spec.ts",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {
@@ -7755,6 +7856,35 @@
       ]
     },
     {
+      "id": "operational-trust-canonical-lifecycle",
+      "summary": "Confirm every customer-facing active state, evidence explanation, protection assertion, notification consequence, and governed action resolves through one contradiction-free canonical lifecycle and evidence model.",
+      "owner": "project-owner",
+      "blocking_level": "release-ready",
+      "minimum_evidence_tier": "managed-runtime-exercise",
+      "status": "passed",
+      "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L6",
+        "L8",
+        "L10",
+        "L13",
+        "L14",
+        "L15",
+        "L16",
+        "L20",
+        "L22",
+        "L23"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/operational-trust-hardening-rollout-completion-2026-07-19.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        }
+      ]
+    },
+    {
       "id": "organization-user-scope-and-rbac",
       "summary": "Confirm user creation, organization membership, RBAC scope, and cross-org sharing fail closed outside intended access.",
       "owner": "project-owner",
@@ -8734,6 +8864,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/operational-trust-hardening-rollout-completion-2026-07-19.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/operational-trust-lifecycle-evidence-notification-linkage-2026-07-19.md",
           "kind": "file"
         },
@@ -8846,8 +8982,8 @@
     {
       "id": "protection-posture-attention-queue",
       "name": "Monitor-First Patrol Workbench",
-      "summary": "Promote the corrected strong-version operator workbench into a governed lane expansion covering monitor-first launch, Patrol as the visible checking-loop surface, contextual Assistant demotion, safe action and verification flows, plain calm-day empty queues without proof strips, dashboard Explore boundaries, explicit autonomy and trust scaffolding, and browser proof for both active-work and calm-day states.",
-      "status": "planned",
+      "summary": "Accepted governed lane expansion for monitor-first launch, Patrol as the visible checking-loop surface, contextual Assistant demotion, canonical protection and availability evidence, safe action and verification flows, plain calm-day queues, and browser-proven active-work and calm-day states.",
+      "status": "accepted",
       "recorded_at": "2026-06-25",
       "target_id": "v6-product-lane-expansion",
       "current_lane_ids": [
