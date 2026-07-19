@@ -108,3 +108,25 @@ func TestSmartctlArgsStandbyGuard(t *testing.T) {
 		})
 	}
 }
+
+func TestLinuxNonRotationalBlockDeviceUsesLinuxSysfsPath(t *testing.T) {
+	origGOOS := runtimeGOOS
+	origReadFile := smartctlReadFile
+	t.Cleanup(func() {
+		runtimeGOOS = origGOOS
+		smartctlReadFile = origReadFile
+	})
+
+	runtimeGOOS = "linux"
+	smartctlReadFile = func(got string) ([]byte, error) {
+		const want = "/sys/block/sda/queue/rotational"
+		if got != want {
+			t.Fatalf("sysfs path = %q, want %q", got, want)
+		}
+		return []byte("0\n"), nil
+	}
+
+	if !linuxNonRotationalBlockDevice("/dev/sda") {
+		t.Fatal("expected Linux /dev/sda to resolve as a confirmed non-rotational device")
+	}
+}

@@ -9058,7 +9058,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "rc4-release-operator-release-gate-single-build-release-promotion-path",
+      "agent_id": "rc4-release-operator",
+      "summary": "Prepare and publish v6.1.0-rc.4 through the governed exact-SHA promotion workflow",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-07-19T14:52:34Z",
+      "heartbeat_at": "2026-07-19T14:52:34Z",
+      "expires_at": "2026-07-19T22:52:34Z",
+      "work_item": {
+        "kind": "release-gate",
+        "id": "single-build-release-promotion-path"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

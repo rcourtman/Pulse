@@ -1227,6 +1227,10 @@ the intentionally sparse public response.
    Direct Linux SATA/SAT-style block devices that return health but no
    temperature through smartctl auto-detection must retry explicit `-d sat` and
    `-d scsi` probes before settling on a no-temperature result.
+   Linux `/dev` and `/sys/block` identity parsing must use slash-based device
+   semantics independent of the Go build host, so the Windows native CI lane
+   proves the same SSD standby-guard decisions as Linux instead of interpreting
+   Unix device paths with Windows path separators.
    FreeBSD SMART probing must retry through the canonical typed and untyped
    device modes and the SCT temperature status path before settling on standby
    or no-data results, and partial or plain-text smartctl output must still
@@ -4649,6 +4653,9 @@ consent cannot silently widen an observer. That policy must survive the shared
 config loader, host/Docker/Kubernetes target normalization, and observer
 Proxmox registration path. Unix and Windows service installation must preserve
 the absolute observer-config path across an in-place update.
+Cross-platform config proof must serialize observer JSON through the canonical
+encoder so Windows absolute token-file paths remain valid JSON rather than
+being interpreted as escape sequences.
 
 The adjacent recovery handlers under `internal/api/` do not widen this agent
 lifecycle boundary. Protection posture is a read-only `monitoring:read`

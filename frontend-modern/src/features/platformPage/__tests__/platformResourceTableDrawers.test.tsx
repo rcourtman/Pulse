@@ -45,6 +45,7 @@ vi.mock('@/contexts/appRuntime', () => ({
 vi.mock('@/stores/alertsActivation', () => ({
   useAlertsActivation: () => ({
     activationState: () => 'active',
+    detectionEnabled: () => true,
     getMetricThresholds: () => ({}),
   }),
 }));

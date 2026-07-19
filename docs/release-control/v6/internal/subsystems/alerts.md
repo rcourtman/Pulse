@@ -978,6 +978,11 @@ parallel alert surface. Alert summary/tone copy belongs to the alert overview
 presentation owner, and any future compact alert surface must compose the
 shared alert read-model and acknowledgement hook rather than creating a
 dashboard-only panel.
+The Alerts Overview description must stay monitor-first: it names active
+incidents and current coverage across monitored resources, and must not imply
+that the overview itself owns installation-wide alert activation controls.
+The exported English fallback in `alertOverviewPresentation.ts`, localized
+message catalog, and header metadata proof must remain textually aligned.
 
 Alert threshold and schedule surfaces must now also treat
 `discoveryTarget` as optional frontend input and keep grouping-card state on

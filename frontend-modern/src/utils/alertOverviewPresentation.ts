@@ -27,7 +27,7 @@ export const ALERTS_PAGE_HISTORY_TITLE = 'Alert History';
 export const ALERTS_PAGE_DEFAULT_DESCRIPTION =
   'Review active incidents, inspect alert history, and manage thresholds, notifications, and schedules.';
 export const ALERTS_PAGE_OVERVIEW_DESCRIPTION =
-  'Review active incidents, confirm alert coverage, and control whether alerts are actively monitoring this install.';
+  'Review active incidents and confirm current alert coverage across monitored resources.';
 export const ALERTS_PAGE_THRESHOLDS_DESCRIPTION =
   'Tune thresholds and scoped overrides for infrastructure, workloads, and integrations.';
 export const ALERTS_PAGE_DESTINATIONS_DESCRIPTION =

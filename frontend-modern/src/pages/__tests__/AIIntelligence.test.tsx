@@ -191,6 +191,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
   presentationPolicyHidesCommercialSurfaces: () => presentationPolicyHidesCommercialSurfacesMock(),
   presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
+  presentationPolicyIsReadOnly: () => false,
 }));
 
 vi.mock('@/stores/notifications', () => ({

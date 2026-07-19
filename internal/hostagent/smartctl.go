@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -901,8 +902,8 @@ func isMultiplexedDeviceType(deviceType string) bool {
 // /sys/block device name. NVMe controllers (nvmeN) resolve to their first
 // namespace (nvmeNnM); every other device keeps its basename.
 func canonicalBlockDeviceForScanPath(scanPath string) string {
-	name := filepath.Base(strings.TrimSpace(scanPath))
-	if name == "" || name == "." || name == string(filepath.Separator) {
+	name := path.Base(strings.TrimSpace(scanPath))
+	if name == "" || name == "." || name == "/" {
 		return ""
 	}
 	if isNVMeControllerName(name) {
@@ -1238,7 +1239,7 @@ func linuxNonRotationalBlockDevice(device string) bool {
 	if block == "" {
 		return false
 	}
-	return readTrimmedFile(filepath.Join("/sys/block", block, "queue", "rotational")) == "0"
+	return readTrimmedFile(path.Join("/sys/block", block, "queue", "rotational")) == "0"
 }
 
 func smartctlArgsWithLog(args []string, logPage string) []string {

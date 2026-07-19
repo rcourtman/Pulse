@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 DOCKER_IMAGE_REPO="${DOCKER_IMAGE_REPO:-rcourtman/pulse}"
-CANONICAL_DEFAULT_PULSE_VERSION="6.1.0-rc.3"
+CANONICAL_DEFAULT_PULSE_VERSION="6.1.0-rc.4"
 
 resolve_default_pulse_version() {
     if [ -n "${PULSE_IMAGE_VERSION:-}" ]; then

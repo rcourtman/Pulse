@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -732,6 +733,9 @@ func TestUpdateContainer_SharedNamespaceCreateConfig(t *testing.T) {
 	})
 
 	t.Run("host network mode strips hostname only", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Docker does not support host network mode on Windows")
+		}
 		config, hostConfig := runUpdate(t, "host")
 
 		if config.Hostname != "" || config.Domainname != "" {

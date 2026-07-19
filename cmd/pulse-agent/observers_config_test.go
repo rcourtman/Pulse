@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,8 +14,18 @@ func TestLoadConfigBuildsReportOnlyObserverTargets(t *testing.T) {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(dir, "observers.json")
-	config := `{"version":1,"observers":[{"name":"dev","url":"http://127.0.0.1:7656","tokenFile":"` + tokenPath + `"}]}`
-	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+	config, err := json.Marshal(map[string]any{
+		"version": 1,
+		"observers": []map[string]any{{
+			"name":      "dev",
+			"url":       "http://127.0.0.1:7656",
+			"tokenFile": tokenPath,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("marshal observer config: %v", err)
+	}
+	if err := os.WriteFile(configPath, config, 0o600); err != nil {
 		t.Fatal(err)
 	}
 

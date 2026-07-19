@@ -141,7 +141,7 @@ describe('alertOverviewPresentation', () => {
       'Review active incidents, inspect alert history, and manage thresholds, notifications, and schedules.',
     );
     expect(ALERTS_PAGE_OVERVIEW_DESCRIPTION).toBe(
-      'Review active incidents, confirm alert coverage, and control whether alerts are actively monitoring this install.',
+      'Review active incidents and confirm current alert coverage across monitored resources.',
     );
     expect(ALERTS_PAGE_THRESHOLDS_DESCRIPTION).toBe(
       'Tune thresholds and scoped overrides for infrastructure, workloads, and integrations.',
@@ -159,7 +159,7 @@ describe('alertOverviewPresentation', () => {
       overview: {
         title: 'Alerts Overview',
         description:
-          'Review active incidents, confirm alert coverage, and control whether alerts are actively monitoring this install.',
+          'Review active incidents and confirm current alert coverage across monitored resources.',
       },
       thresholds: {
         title: 'Alert Thresholds',

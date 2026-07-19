@@ -4440,6 +4440,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/hostagent/observer_delivery_test.go",
                 "internal/hostagent/package_updates_test.go",
                 "internal/hostagent/send_report_test.go",
+                "internal/hostagent/smartctl_standby_guard_test.go",
                 "internal/hostagent/storage_cleanup_test.go",
             ],
         )

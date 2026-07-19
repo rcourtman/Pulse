@@ -999,9 +999,9 @@ host-local redirect contract as runtime token minting and exchange. Proof input
 must reject absolute, scheme-relative, backslash-authority, encoded-separator,
 and control-character targets before constructing the handoff request.
 
-The active support prerelease `v6.1.0-rc.3` cut sets the repo-root `VERSION`,
+The active support prerelease `v6.1.0-rc.4` cut sets the repo-root `VERSION`,
 repo-root `docker-compose.yml` image default, `scripts/install-docker.sh`
-fallback, and Helm chart release metadata to the same `6.1.0-rc.3` release
+fallback, and Helm chart release metadata to the same `6.1.0-rc.4` release
 version. This support prerelease keeps `rollback_version=v6.0.5`, publishes a
 versioned public GitHub prerelease plus versioned Docker and Helm artifacts, and
 does not move stable/latest install pointers or stable semver aliases. It puts
@@ -1020,8 +1020,17 @@ binding, ZFS pool membership resolves nvme-eui and namespace-suffixed member
 references, TrueNAS storage reads the served API shapes, Patrol findings can
 notify through alert channels, and in-app updates select releases by highest
 version.
+The fourth candidate adds the canonical Operational Trust attention and action
+loop, availability and protection posture across unified resources, more
+reliable alert state transitions, report-only Unified Agent observer
+destinations with destination-scoped transport policy, and release-candidate
+feedback fixes across Assistant, storage, Docker, responsive tables, and
+session continuity.
 The companion evidence for this cut is Pulse Mobile iOS build 10 and Android
-versionCode 8 on TestFlight and Google Play internal testing only. The release
+versionCode 8 on TestFlight and Google Play internal testing only, with
+candidate-channel runtime-version-1 update group
+`9b78b108-2586-4b0f-91d3-afbed19b49b3` built from mobile commit
+`fddb091e683e84902de6aac680b08a47862b738b` for both platforms. The release
 packet must not describe either candidate as a public store rollout.
 The same release boundary now provides one canonical in-app release-note
 experience. Update checks can preview a curated `Highlights` section, and an
@@ -1082,8 +1091,8 @@ compose image default, standalone installer fallback constant, and packaged
 Helm metadata. A draft release workflow failure caused by stale image or chart
 pins is a release-packet blocker until the defaults, tests, and evidence
 record are refreshed from the new branch head.
-For the active support prerelease `v6.1.0-rc.3` cut, the repo-root compose
-default and `scripts/install-docker.sh` fallback must both pin `6.1.0-rc.3`
+For the active support prerelease `v6.1.0-rc.4` cut, the repo-root compose
+default and `scripts/install-docker.sh` fallback must both pin `6.1.0-rc.4`
 until the next governed stable cut moves them forward. The stable promotion
 guard remains in force and must reject leftover `-rc.` defaults when the
 governed `VERSION` returns to a stable release.
