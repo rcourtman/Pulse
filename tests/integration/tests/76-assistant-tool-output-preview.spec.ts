@@ -105,7 +105,10 @@ test.describe('Assistant tool output preview', () => {
       });
     });
 
-    await page.route('**/api/ai/sessions', async (route) => {
+    // Match /api/ai/sessions with or without a query string (the session
+    // picker requests ?limit=...). The trailing `*` matches the query but not
+    // the /messages subpath (which has further slashes).
+    await page.route('**/api/ai/sessions*', async (route) => {
       if (route.request().method() !== 'GET') {
         await route.continue();
         return;
@@ -157,18 +160,33 @@ test.describe('Assistant tool output preview', () => {
       });
     });
 
-    await page.goto('/settings/infrastructure/platforms/truenas', {
+    await page.goto('/truenas', {
       waitUntil: 'domcontentloaded',
     });
-    await page.waitForURL(/\/settings\/infrastructure\/platforms\/truenas/, {
+    await page.waitForURL(/\/truenas/, {
       timeout: 15_000,
     });
 
-    await page.getByRole('button', { name: 'Expand Pulse Assistant' }).click();
+    // The assistant open control is the page-contextual launcher; on /truenas
+    // its accessible name is "Ask Pulse Assistant about TrueNAS".
+    await page
+      .getByRole('button', { name: 'Ask Pulse Assistant about TrueNAS' })
+      .click();
     await expect(page.getByRole('heading', { name: 'Pulse Assistant', exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Resume Tool output preview proof' }).click();
-    await expect(page.getByText('$ printf preview-proof-0606 on current resource')).toBeVisible();
+    // Resume the stubbed session via the sessions list: open the
+    // "Pulse Assistant sessions" menu, then pick the session option.
+    await page.getByRole('button', { name: 'Pulse Assistant sessions' }).click();
+    await page
+      .getByRole('option', { name: /Resume Tool output preview proof/ })
+      .click();
+
+    // The tool row now renders the human summary (with the target) and the raw
+    // command preview as two separate lines, rather than one combined string.
+    await expect(
+      page.getByText('Run read-only command on current resource'),
+    ).toBeVisible();
+    await expect(page.getByText('$ printf preview-proof-0606')).toBeVisible();
 
     const preview = page.locator('pre[aria-label="Tool output preview"]');
     await expect(preview).toBeVisible();
@@ -179,7 +197,10 @@ test.describe('Assistant tool output preview', () => {
     await expect(preview).not.toContainText('hidden-fifth-line');
     await expect(page.getByText('hidden-fifth-line')).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Details' }).click();
+    // Expand the tool block to reveal full output + raw input. The details
+    // control is the tool-row toggle (title "Show tool details"), not a
+    // standalone "Details" button.
+    await page.getByTitle('Show tool details').click();
     await expect(page.getByText('hidden-fifth-line')).toBeVisible();
     await expect(page.getByText(/"target_host":"current_resource"/)).toBeVisible();
   });
