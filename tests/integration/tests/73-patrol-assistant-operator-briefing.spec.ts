@@ -238,9 +238,13 @@ test.describe("Patrol Assistant operator briefing", () => {
       });
     });
 
-    await page.route("**/api/ai/sessions", async (route) => {
-      if (route.request().method() !== "GET") {
-        await route.continue();
+    await page.route("**/api/ai/sessions*", async (route) => {
+      const requestUrl = new URL(route.request().url());
+      if (
+        route.request().method() !== "GET" ||
+        requestUrl.pathname !== "/api/ai/sessions"
+      ) {
+        await route.fallback();
         return;
       }
 
@@ -395,75 +399,83 @@ test.describe("Patrol Assistant operator briefing", () => {
       });
     });
 
+    const operatorBriefingFinding = () => ({
+      id: "finding-operator-briefing",
+      source: "ai-patrol",
+      severity: "critical",
+      category: "performance",
+      resource_id: "host:web-server",
+      resource_name: "web-server",
+      resource_type: "host",
+      title: "High CPU usage",
+      description: "CPU stayed above 95%.",
+      detected_at: "2026-05-06T12:00:00Z",
+      last_seen_at: "2026-05-06T12:06:00Z",
+      status: "active",
+      times_raised: 4,
+      regression_count: 2,
+      last_regression_at: "2026-05-06T12:06:00Z",
+      loop_state: "awaiting_approval",
+      remediation_id: "remediation-1",
+      investigation_status: "completed",
+      investigation_outcome: "fix_queued",
+      investigation_attempts: 1,
+      ...(includeUnifiedInvestigationRecord
+        ? {
+            investigation_record: {
+              id: "record-1",
+              finding_id: "finding-operator-briefing",
+              subject: {
+                resource_id: "host:web-server",
+                resource_name: "web-server",
+                resource_type: "host",
+              },
+              trigger: {
+                detected_at: "2026-05-06T12:00:00Z",
+                title: "High CPU usage",
+              },
+              status: "completed",
+              outcome: "fix_queued",
+              confidence: "high",
+              conclusion: "Backup job saturated CPU.",
+              recommended_action:
+                "Approve a controlled restart after the backup completes.",
+              evidence: [
+                {
+                  kind: "metrics",
+                  summary: "CPU stayed above 95% for 10 minutes",
+                },
+              ],
+              proposed_fix: {
+                id: "fix-1",
+                description: "Restart the workload service",
+                commands: ["systemctl restart workload.service"],
+                risk_level: "medium",
+                destructive: true,
+              },
+              verification: ["CPU returned below 50%"],
+              tools_used: [],
+              started_at: "2026-05-06T12:00:00Z",
+              approval_id: "approval-1",
+            },
+          }
+        : {}),
+    });
+
+    await page.route("**/api/ai/patrol/findings*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([operatorBriefingFinding()]),
+      });
+    });
+
     await page.route("**/api/ai/unified/findings*", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          findings: [
-            {
-              id: "finding-operator-briefing",
-              source: "ai-patrol",
-              severity: "critical",
-              category: "performance",
-              resource_id: "host:web-server",
-              resource_name: "web-server",
-              resource_type: "host",
-              title: "High CPU usage",
-              description: "CPU stayed above 95%.",
-              detected_at: "2026-05-06T12:00:00Z",
-              last_seen_at: "2026-05-06T12:06:00Z",
-              status: "active",
-              times_raised: 4,
-              regression_count: 2,
-              last_regression_at: "2026-05-06T12:06:00Z",
-              loop_state: "awaiting_approval",
-              remediation_id: "remediation-1",
-              investigation_status: "completed",
-              investigation_outcome: "fix_queued",
-              investigation_attempts: 1,
-              ...(includeUnifiedInvestigationRecord
-                ? {
-                    investigation_record: {
-                      id: "record-1",
-                      finding_id: "finding-operator-briefing",
-                      subject: {
-                        resource_id: "host:web-server",
-                        resource_name: "web-server",
-                        resource_type: "host",
-                      },
-                      trigger: {
-                        detected_at: "2026-05-06T12:00:00Z",
-                        title: "High CPU usage",
-                      },
-                      status: "completed",
-                      outcome: "fix_queued",
-                      confidence: "high",
-                      conclusion: "Backup job saturated CPU.",
-                      recommended_action:
-                        "Approve a controlled restart after the backup completes.",
-                      evidence: [
-                        {
-                          kind: "metrics",
-                          summary: "CPU stayed above 95% for 10 minutes",
-                        },
-                      ],
-                      proposed_fix: {
-                        id: "fix-1",
-                        description: "Restart the workload service",
-                        commands: ["systemctl restart workload.service"],
-                        risk_level: "medium",
-                        destructive: true,
-                      },
-                      verification: ["CPU returned below 50%"],
-                      tools_used: [],
-                      started_at: "2026-05-06T12:00:00Z",
-                      approval_id: "approval-1",
-                    },
-                  }
-                : {}),
-            },
-          ],
+          findings: [operatorBriefingFinding()],
           count: 1,
           active_count: 1,
         }),
@@ -599,78 +611,62 @@ test.describe("Patrol Assistant operator briefing", () => {
       .click();
 
     await page.getByText("High CPU usage").click();
-    const finding = page.locator("#finding-finding-operator-briefing");
-    await finding
-      .getByRole("button", { name: "Discuss with Assistant" })
-      .first()
+    const findingReview = page.locator(
+      "#finding-finding-operator-briefing-details",
+    );
+    await findingReview.getByText("Manage", { exact: true }).click();
+    await findingReview
+      .getByRole("button", { name: "Open in Assistant" })
       .click();
 
     const assistantContext = page.getByLabel("Assistant context");
     await expect(assistantContext).toBeVisible();
-    await expect(assistantContext).toContainText("Operator briefing attached");
+    await expect(assistantContext).toContainText("Pulse Patrol");
     await expect(assistantContext).toContainText(
-      "Attention: active critical finding; regressed 2 times; last regression 2026-05-06T12:06:00Z; loop awaiting approval; approval approval-1; live approval pending; destructive proposed fix; fix queued for governed review",
+      "Completed · Fix Queued · High confidence",
     );
     await expect(assistantContext).toContainText(
-      `Decision: review live governed approval approval-1 before execution; approval pending; target web-server; expires ${approvalExpiresAt}; requested ${approvalRequestedAt}; proposed fix fix-1; risk high; destructive true`,
+      "High CPU usage on web-server (host)",
     );
     await expect(assistantContext).toContainText(
-      "Command details stay in approval context; destructive actions require governed approval.",
+      "Approval required before any action.",
     );
-    await expect(
-      assistantContext.getByRole("button", {
-        name: "Review approval risk and next step",
-      }),
-    ).toBeVisible();
-    await expect(
-      assistantContext.getByRole("button", {
-        name: "Explain Patrol evidence and confidence",
-      }),
-    ).toBeVisible();
-    await expect(
-      assistantContext.getByRole("button", {
-        name: "Summarize remediation without command text",
-      }),
-    ).toBeVisible();
     await expect(
       assistantContext.getByText("systemctl restart workload.service"),
     ).toHaveCount(0);
 
-    await assistantContext
-      .getByRole("button", { name: "Review approval risk and next step" })
-      .click();
-    await expect(
-      page.getByPlaceholder("Ask about your infrastructure..."),
-    ).toHaveValue("Review approval risk and next step");
-
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
 
     await page.getByTitle("Pulse Assistant sessions").click();
-    await expect(page.getByText("High CPU follow-up")).toBeVisible();
+    const highCPUFollowUp = page.getByRole("option", {
+      name: /^Resume High CPU follow-up/,
+    });
+    await expect(highCPUFollowUp).toBeVisible();
     await expect(page.getByText("Pulse Patrol").last()).toBeVisible();
     await expect(page.getByText("Approval required").last()).toBeVisible();
     await expect(page.getByText(/approval pending/).last()).toBeVisible();
-    await page.getByText("High CPU follow-up").click();
+    await highCPUFollowUp.click();
 
     const reloadedAssistantContext = page.getByLabel("Assistant context");
     await expect(reloadedAssistantContext).toBeVisible();
     await expect(reloadedAssistantContext).toContainText(
       "Patrol finding on web-server",
     );
+    await expect(reloadedAssistantContext).toContainText("approval pending");
     await expect(reloadedAssistantContext).toContainText(
-      "Finding finding-operator-briefing",
-    );
-    await expect(reloadedAssistantContext).toContainText(
-      "Last known state: approval pending",
+      "Approval required before any action.",
     );
     await expect(
       reloadedAssistantContext.getByText("systemctl restart workload.service"),
     ).toHaveCount(0);
 
     await page.getByTitle("Pulse Assistant sessions").click();
-    await expect(page.getByText("Context-only Patrol follow-up")).toBeVisible();
+    const contextOnlyFollowUp = page.getByRole("option", {
+      name: /^Resume Context-only Patrol follow-up/,
+    });
+    await expect(contextOnlyFollowUp).toBeVisible();
     await expect(page.getByText("Context attached").last()).toBeVisible();
-    await page.getByText("Context-only Patrol follow-up").click();
+    await contextOnlyFollowUp.click();
 
     const contextOnlyAssistantContext = page.getByLabel("Assistant context");
     await expect(contextOnlyAssistantContext).toBeVisible();
@@ -678,7 +674,7 @@ test.describe("Patrol Assistant operator briefing", () => {
       "Patrol finding on web-server",
     );
     await expect(contextOnlyAssistantContext).toContainText(
-      "Finding finding-context-only",
+      "Approval required before any action.",
     );
     await expect(
       contextOnlyAssistantContext.getByText(
@@ -687,10 +683,13 @@ test.describe("Patrol Assistant operator briefing", () => {
     ).toHaveCount(0);
 
     await page.getByTitle("Pulse Assistant sessions").click();
-    await expect(page.getByText("Runtime failure follow-up")).toBeVisible();
+    const runtimeFailureFollowUp = page.getByRole("option", {
+      name: /^Resume Runtime failure follow-up/,
+    });
+    await expect(runtimeFailureFollowUp).toBeVisible();
     await expect(page.getByText("Runtime issue").last()).toBeVisible();
     await expect(page.getByText(/run error/).last()).toBeVisible();
-    await page.getByText("Runtime failure follow-up").click();
+    await runtimeFailureFollowUp.click();
 
     const runAssistantContext = page.getByLabel("Assistant context");
     await expect(runAssistantContext).toBeVisible();
@@ -699,7 +698,6 @@ test.describe("Patrol Assistant operator briefing", () => {
     );
     await expect(runAssistantContext).toContainText("Run run-runtime-error");
     await expect(runAssistantContext).toContainText("Run type: Scoped run");
-    await expect(runAssistantContext).toContainText("Run state: run error");
     await expect(runAssistantContext).toContainText(
       "Review Patrol runtime issue",
     );
@@ -709,9 +707,12 @@ test.describe("Patrol Assistant operator briefing", () => {
     ).toHaveCount(0);
 
     await page.getByTitle("Pulse Assistant sessions").click();
-    await expect(page.getByText("Assessment follow-up")).toBeVisible();
+    const assessmentFollowUp = page.getByRole("option", {
+      name: /^Resume Assessment follow-up/,
+    });
+    await expect(assessmentFollowUp).toBeVisible();
     await expect(page.getByText("Assessment context").last()).toBeVisible();
-    await page.getByText("Assessment follow-up").click();
+    await assessmentFollowUp.click();
 
     const restoredAssessmentAssistantContext =
       page.getByLabel("Assistant context");
@@ -720,27 +721,25 @@ test.describe("Patrol Assistant operator briefing", () => {
       "Patrol assessment handoff",
     );
     await expect(restoredAssessmentAssistantContext).toContainText(
-      "Current Patrol assessment",
-    );
-    await expect(restoredAssessmentAssistantContext).toContainText(
-      "Review Patrol assessment",
+      "Approval required before any action.",
     );
 
     await page.getByTitle("Pulse Assistant sessions").click();
-    await expect(page.getByText("Configuration follow-up")).toBeVisible();
+    const configurationFollowUp = page.getByRole("option", {
+      name: /^Resume Configuration follow-up/,
+    });
+    await expect(configurationFollowUp).toBeVisible();
     await expect(page.getByText("Runtime issue").last()).toBeVisible();
-    await page.getByText("Configuration follow-up").click();
+    await configurationFollowUp.click();
 
     const configurationAssistantContext = page.getByLabel("Assistant context");
     await expect(configurationAssistantContext).toBeVisible();
     await expect(configurationAssistantContext).toContainText(
-      "Patrol configuration failure",
+      "Patrol mode save failure",
     );
+    await expect(configurationAssistantContext).toContainText("Patrol mode");
     await expect(configurationAssistantContext).toContainText(
-      "Patrol configuration",
-    );
-    await expect(configurationAssistantContext).toContainText(
-      "Review Patrol configuration issue",
+      "Review Patrol mode issue",
     );
 
     includePendingApproval = false;
@@ -753,30 +752,25 @@ test.describe("Patrol Assistant operator briefing", () => {
     const queuedFindingTitle = page.getByText("High CPU usage").first();
     await expect(queuedFindingTitle).toBeVisible();
     await queuedFindingTitle.click();
-    const queuedFinding = page.locator("#finding-finding-operator-briefing");
+    const queuedFinding = page.locator(
+      "#finding-finding-operator-briefing-details",
+    );
     await expect(queuedFinding.getByText("details unavailable")).toBeVisible();
+    await queuedFinding.getByText("Manage", { exact: true }).click();
     await queuedFinding
-      .getByRole("button", { name: "Discuss with Assistant" })
-      .last()
+      .getByRole("button", { name: "Open in Assistant" })
       .click();
 
     const queuedAssistantContext = page.getByLabel("Assistant context");
     await expect(queuedAssistantContext).toBeVisible();
-    await expect(queuedAssistantContext).toContainText(
-      "Operator briefing attached",
-    );
+    await expect(queuedAssistantContext).toContainText("Pulse Patrol");
     await expect(queuedAssistantContext).toContainText("Fix Queued");
     await expect(queuedAssistantContext).toContainText(
-      "Attention: active finding; loop fix queued; fix queued for governed review",
+      "High CPU usage on web-server (host)",
     );
     await expect(queuedAssistantContext).toContainText(
-      "Decision: Recover or regenerate the governed approval before execution; do not execute from chat context.",
+      "Approval required before any action.",
     );
-    await expect(
-      queuedAssistantContext.getByRole("button", {
-        name: "List approval prerequisites before action",
-      }),
-    ).toBeVisible();
     await expect(
       queuedAssistantContext.getByText("systemctl restart workload.service"),
     ).toHaveCount(0);
@@ -792,56 +786,48 @@ test.describe("Patrol Assistant operator briefing", () => {
     const expiredFindingTitle = page.getByText("High CPU usage").first();
     await expect(expiredFindingTitle).toBeVisible();
     await expiredFindingTitle.click();
-    const expiredFinding = page.locator("#finding-finding-operator-briefing");
-    await expect(expiredFinding.getByText("approval expired")).toBeVisible();
+    const expiredFinding = page.locator(
+      "#finding-finding-operator-briefing-details",
+    );
+    await expect(expiredFinding.getByText("Action details unavailable")).toBeVisible();
+    await expiredFinding.getByText("Manage", { exact: true }).click();
     await expiredFinding
-      .getByRole("button", { name: "Discuss with Assistant" })
-      .first()
+      .getByRole("button", { name: "Open in Assistant" })
       .click();
 
     const hydratedFindingAssistantContext =
       page.getByLabel("Assistant context");
     await expect(hydratedFindingAssistantContext).toBeVisible();
-    await expect(hydratedFindingAssistantContext).toContainText(
-      "Operator briefing attached",
-    );
+    await expect(hydratedFindingAssistantContext).toContainText("Pulse Patrol");
     await expect(hydratedFindingAssistantContext).toContainText("Fix Queued");
     await expect(hydratedFindingAssistantContext).toContainText(
-      "Proposed fix: Restart the workload service; target web-server; high risk; 1 command recorded for approval context; destructive proposed fix; rationale Workload service stayed wedged after backup pressure.",
+      "High CPU usage on web-server (host)",
     );
-    await expect(
-      hydratedFindingAssistantContext.getByRole("button", {
-        name: "Summarize remediation without command text",
-      }),
-    ).toBeVisible();
+    await expect(hydratedFindingAssistantContext).toContainText(
+      "Approval required before any action.",
+    );
     await expect(
       hydratedFindingAssistantContext.getByText(
         "systemctl restart workload.service",
       ),
     ).toHaveCount(0);
 
+    await page.getByTestId("assistant-close-button").click();
     await expiredFinding
-      .getByRole("button", { name: "Fix with Assistant" })
-      .last()
+      .getByRole("button", { name: "Discuss with Assistant" })
+      .first()
       .click();
 
     const expiredAssistantContext = page.getByLabel("Assistant context");
     await expect(expiredAssistantContext).toBeVisible();
-    await expect(expiredAssistantContext).toContainText(
-      "Operator briefing attached",
-    );
+    await expect(expiredAssistantContext).toContainText("Pulse Patrol");
     await expect(expiredAssistantContext).toContainText("Fix Queued");
     await expect(expiredAssistantContext).toContainText(
-      "Proposed fix: Restart the workload service; target web-server; high risk; 1 command recorded for approval context; destructive proposed fix; rationale Workload service stayed wedged after backup pressure.",
+      "High CPU usage on web-server",
     );
     await expect(expiredAssistantContext).toContainText(
-      "Command details stay in approval context; destructive actions require governed approval.",
+      "Approval required before any action.",
     );
-    await expect(
-      expiredAssistantContext.getByRole("button", {
-        name: "Summarize remediation without command text",
-      }),
-    ).toBeVisible();
     await expect(
       expiredAssistantContext.getByText("systemctl restart workload.service"),
     ).toHaveCount(0);

@@ -1,5 +1,5 @@
-import { useLocation, useSearchParams } from '@solidjs/router';
-import { Show, createMemo, createSignal } from 'solid-js';
+import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
+import { Show, createEffect, createMemo, createSignal } from 'solid-js';
 import BoxIcon from 'lucide-solid/icons/box';
 import { ButtonLink } from '@/components/shared/Button';
 import { getPlatformIcon } from '@/features/platformPage/platformIcon';
@@ -48,7 +48,7 @@ import {
   buildInfrastructureAgentUpdatesPath,
   buildInfrastructureOnboardingPath,
 } from '@/components/Settings/infrastructureWorkspaceModel';
-import { DOCKER_QUERY_PARAMS } from '@/routing/resourceLinks';
+import { buildDockerPath, DOCKER_PATH, DOCKER_QUERY_PARAMS } from '@/routing/resourceLinks';
 import { asTrimmedString } from '@/utils/stringUtils';
 import type { Resource } from '@/types/resource';
 
@@ -60,6 +60,7 @@ const dockerIcon = () => <DockerIcon class="h-6 w-6 text-slate-400" />;
 
 export function DockerPageSurface() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { resources, loading, error, refetch } = useUnifiedResources({
     query: DOCKER_RESOURCE_QUERY,
@@ -75,6 +76,14 @@ export function DockerPageSurface() {
   const activeTab = createMemo<DockerPageTabId>(() =>
     tabs().some((tab) => tab.id === requestedTab()) ? requestedTab() : 'overview',
   );
+
+  createEffect(() => {
+    const pathname = location.pathname.replace(/\/+$/, '');
+    if (pathname === `${DOCKER_PATH}/workloads`) {
+      navigate(buildDockerPath(), { replace: true });
+    }
+  });
+
   const hostFilter = createMemo(() => {
     const rawHost = searchParams[DOCKER_QUERY_PARAMS.host];
     return typeof rawHost === 'string' ? rawHost.trim() : '';

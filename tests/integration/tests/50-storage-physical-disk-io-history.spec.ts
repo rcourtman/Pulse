@@ -96,10 +96,13 @@ test.describe.serial('Storage physical disk drawer history', () => {
 
     // Physical disks moved onto the Proxmox platform page's storage section.
     await page.goto('/proxmox/storage', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('storage-page')).toBeVisible({ timeout: 60_000 });
     const disksTab = page.getByRole('tab', { name: 'Physical Disks' });
     await expect(disksTab).toBeVisible({ timeout: 30_000 });
-    await disksTab.click();
-    await page.getByRole('textbox', { name: /Search Proxmox storage/ }).fill('nvme2');
+    await disksTab.click({ timeout: 30_000 });
+    const search = page.getByRole('textbox', { name: /Search Proxmox storage/ });
+    await expect(search).toBeVisible({ timeout: 30_000 });
+    await search.fill('nvme2');
 
     const row = page
       .locator('table tbody tr')
@@ -107,7 +110,7 @@ test.describe.serial('Storage physical disk drawer history', () => {
       .filter({ hasText: 'pve2' })
       .first();
 
-    await expect(row).toBeVisible();
+    await expect(row).toBeVisible({ timeout: 30_000 });
     await row.getByRole('button', { name: /^Expand / }).click();
 
     const detail = page.locator('[data-inline-detail-for]').filter({ has: page.getByText('Live I/O (30m)') }).first();

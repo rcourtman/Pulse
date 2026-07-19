@@ -193,7 +193,15 @@ test.describe("Mobile viewport flows", () => {
 
     const table = page.locator("table.workload-table--mobile");
     await expect(table).toBeVisible({ timeout: 30_000 });
-    const geometry = await table.evaluate((element) => {
+    const geometry = await page.evaluate(() => {
+      const element = document.querySelector<HTMLTableElement>(
+        "table.workload-table--mobile",
+      );
+      if (!element) {
+        throw new Error(
+          "Mobile workloads table disappeared before measurement",
+        );
+      }
       const wrapper = element.parentElement;
       return {
         tableWidth: element.scrollWidth,
