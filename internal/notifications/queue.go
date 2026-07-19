@@ -518,6 +518,19 @@ func (nq *NotificationQueue) Enqueue(notif *QueuedNotification) error {
 		Str("type", notif.Type).
 		Int("alertCount", len(notif.Alerts)).
 		Msg("notification enqueued")
+	metrics := operationaltrust.GetMetrics()
+	metrics.ObserveNotificationDelivery("queued")
+	for _, alert := range notif.Alerts {
+		if alert == nil ||
+			alert.LatestTransition == nil ||
+			alert.LatestTransition.To != operationaltrust.OperationalOpen {
+			continue
+		}
+		metrics.ObserveOpenToNotification(
+			alert.LatestTransition.At,
+			notif.CreatedAt,
+		)
+	}
 
 	// Signal processor that new work is available
 	select {
@@ -949,7 +962,20 @@ func (nq *NotificationQueue) RecordAudit(notif *QueuedNotification, success bool
 		notif.PayloadBytes,
 		time.Now().Unix(),
 	)
-
+	if err == nil {
+		outcome := "failed"
+		switch {
+		case success && notif.Status == QueueStatusSent:
+			outcome = "sent"
+		case notif.Status == QueueStatusDLQ:
+			outcome = "dead_letter"
+		case notif.Status == QueueStatusCancelled:
+			outcome = "cancelled"
+		case notif.Status == QueueStatusPending && notif.Attempts > 0:
+			outcome = "retry"
+		}
+		operationaltrust.GetMetrics().ObserveNotificationDelivery(outcome)
+	}
 	return err
 }
 

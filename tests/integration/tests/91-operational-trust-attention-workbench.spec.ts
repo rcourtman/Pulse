@@ -296,6 +296,68 @@ async function mockAttention(
   initialMode: AttentionMode,
 ): Promise<{ setMode: (mode: AttentionMode) => void }> {
   let mode = initialMode;
+  let primaryState: "open" | "acknowledged" | "suppressed" = "open";
+  let suppressionReason = "";
+  const primaryItem = () => ({
+    ...openAttentionItem,
+    state: primaryState,
+  });
+  const primaryDetail = () => ({
+    ...detail,
+    item: primaryItem(),
+    operationalRecord: {
+      ...detail.operationalRecord,
+      state: primaryState,
+      ...(primaryState === "acknowledged"
+        ? {
+            acknowledgement: {
+              at: evaluatedAt,
+              by: "operator",
+            },
+          }
+        : {}),
+      ...(primaryState === "suppressed"
+        ? {
+            suppression: {
+              at: evaluatedAt,
+              by: "operator",
+              reason: suppressionReason,
+              expiresAt: new Date(now.getTime() + 60 * 60_000).toISOString(),
+            },
+          }
+        : {}),
+    },
+    timeline:
+      primaryState === "open"
+        ? detail.timeline
+        : [
+            ...detail.timeline,
+            {
+              id: `transition-${primaryState}`,
+              operationalRecordId: attentionID,
+              from: "open",
+              to: primaryState,
+              at: evaluatedAt,
+              cause:
+                primaryState === "acknowledged"
+                  ? "acknowledgement"
+                  : "suppression",
+              causeKey: attentionID,
+              evidenceIds: ["metric-evidence-1"],
+              reason:
+                primaryState === "suppressed"
+                  ? suppressionReason
+                  : "Operator acknowledged the issue.",
+            },
+          ],
+  });
+  const currentSummary = () => ({
+    ...activeSummary,
+    activeCount: primaryState === "suppressed" ? 1 : 2,
+    openCount: primaryState === "open" ? 1 : 0,
+    acknowledgedCount: primaryState === "acknowledged" ? 2 : 1,
+    suppressedCount: primaryState === "suppressed" ? 2 : 1,
+  });
   await page.route("**/api/resources**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname !== "/api/resources") {
@@ -496,6 +558,28 @@ async function mockAttention(
     }
 
     const url = new URL(route.request().url());
+    if (route.request().method() === "POST") {
+      if (url.pathname.endsWith("/acknowledge")) {
+        primaryState = "acknowledged";
+      } else if (url.pathname.endsWith("/unacknowledge")) {
+        primaryState = "open";
+      } else if (url.pathname.endsWith("/suppress")) {
+        const body = route.request().postDataJSON() as {
+          reason?: string;
+        };
+        suppressionReason = body.reason ?? "";
+        primaryState = "suppressed";
+      } else if (url.pathname.endsWith("/unsuppress")) {
+        primaryState = "open";
+        suppressionReason = "";
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true }),
+      });
+      return;
+    }
     if (url.pathname.endsWith("/summary")) {
       await route.fulfill({
         status: 200,
@@ -513,7 +597,7 @@ async function mockAttention(
                 coverageState: "current",
                 evaluatedAt,
               }
-            : activeSummary,
+            : currentSummary(),
         ),
       });
       return;
@@ -523,7 +607,7 @@ async function mockAttention(
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify(detail),
+        body: JSON.stringify(primaryDetail()),
       });
       return;
     }
@@ -542,7 +626,9 @@ async function mockAttention(
                 ? [suppressedAttentionItem]
                 : filter === "resolved"
                   ? [resolvedAttentionItem]
-                  : [openAttentionItem, uncertainAttentionItem];
+                  : primaryState === "suppressed"
+                    ? [uncertainAttentionItem]
+                    : [primaryItem(), uncertainAttentionItem];
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -561,7 +647,7 @@ async function mockAttention(
                 coverageState: "current",
                 evaluatedAt,
               }
-            : activeSummary,
+            : currentSummary(),
         meta: {
           page: 1,
           limit: 50,
@@ -577,6 +663,27 @@ async function mockAttention(
     },
   };
 }
+
+test("starts from the normal monitor shell and reaches the canonical attention queue", async ({
+  page,
+}) => {
+  await mockAttention(page, "active");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  await page
+    .getByRole("tab", { name: /Patrol/ })
+    .or(page.getByRole("button", { name: /Patrol/ }))
+    .or(page.getByRole("link", { name: /Patrol/ }))
+    .click();
+
+  await expect(page).toHaveURL(/\/patrol/);
+  await expect(
+    page.getByRole("region", { name: "Needs attention" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Open CPU pressure on pve-main" }),
+  ).toBeVisible();
+});
 
 test("makes active operational work primary and preserves the evidence boundary", async ({
   page,
@@ -658,6 +765,40 @@ test("makes active operational work primary and preserves the evidence boundary"
   await expect(page).toHaveURL(
     new RegExp(`attention=${encodeURIComponent(attentionID)}`),
   );
+
+  await detailPanel.getByRole("button", { name: "Acknowledge" }).click();
+  await expect(
+    detailPanel.getByText(/Acknowledged by operator/i),
+  ).toBeVisible();
+  await expect(
+    detailPanel.getByRole("button", { name: "Return to open" }),
+  ).toBeVisible();
+
+  await detailPanel
+    .getByRole("button", { name: "Suppress temporarily" })
+    .click();
+  await detailPanel
+    .getByRole("textbox", {
+      name: "Why is this safe to hide from active attention?",
+    })
+    .fill("Planned host maintenance");
+  await detailPanel
+    .getByRole("combobox", {
+      name: "Return it to active attention after",
+    })
+    .selectOption(String(60 * 60 * 1000));
+  await detailPanel
+    .getByRole("button", { name: "Suppress temporarily" })
+    .click();
+  await expect(
+    detailPanel.getByText(/Suppressed by operator: Planned host maintenance/i),
+  ).toBeVisible();
+  await detailPanel
+    .getByRole("button", { name: "Return to active attention" })
+    .click();
+  await expect(
+    detailPanel.getByRole("button", { name: "Acknowledge" }),
+  ).toBeVisible();
 
   await detailPanel
     .getByRole("button", { name: "Close attention detail" })

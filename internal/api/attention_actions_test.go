@@ -90,6 +90,7 @@ func TestAttentionActionPlanBindsCanonicalRecordEvidenceAndReplaysIdempotently(t
 		},
 	}
 	handler.SetActionDependencies(resources, authority)
+	handler.SetActionLicenseChecker(func(context.Context) bool { return true })
 
 	detailRequest := actionHandlerTestRequest(
 		httptest.NewRequest(
@@ -285,5 +286,32 @@ func TestAttentionActionOfferFailsClosedWithoutFreshEvidenceOrExecutorReadiness(
 		now,
 	); reason != ai.AttentionActionEvidenceStale || offer.Capability != "" {
 		t.Fatalf("stale offer=%+v reason=%q", offer, reason)
+	}
+}
+
+func TestAttentionActionPlanRequiresAutoFixEntitlementBeforeProjection(t *testing.T) {
+	handler := &AttentionHandlers{resources: &ResourceHandlers{}}
+	handler.SetActionLicenseChecker(func(context.Context) bool { return false })
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/ai/patrol/attention/docker-health/actions/restart/plan",
+		nil,
+	)
+	response := httptest.NewRecorder()
+
+	handler.HandleAttention(response, request)
+
+	if response.Code != http.StatusPaymentRequired {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusPaymentRequired, response.Body.String())
+	}
+	var payload struct {
+		Error   string `json:"error"`
+		Feature string `json:"feature"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.Error != "license_required" || payload.Feature != featureAIAutoFixKey {
+		t.Fatalf("license response = %+v", payload)
 	}
 }

@@ -1137,3 +1137,21 @@ That same ownership also governs acknowledgement and manual-clear cleanup.
 Clearing an alert through the canonical alerts runtime must remove both legacy
 public-id tracking and canonical-state acknowledgement records so old aliases
 cannot keep an alert acknowledged after the canonical alert has been removed.
+
+### Operational Trust writable lifecycle
+
+`internal/alerts/active_lifecycle.go` is the single writable owner for
+acknowledge, unacknowledge, suppress, unsuppress, collection-stale,
+collection-unknown, resolving, and collection-restored transitions. Every
+writer is idempotent under retry, retains new evidence without duplicating a
+same-state transition, persists through the active-alert store, and survives
+restart. Explicit stale, unknown, resolving, or suppressed state takes
+precedence over the legacy `Alert.Acknowledged` projection. The canonical
+record's `LastObservedAt` is the maximum of retained record, alert, and evidence
+timestamps so a fresh outage observation cannot be rolled back by an older
+legacy alert timestamp.
+
+Suppression is bounded and reasoned, leaves the default active queue, and
+remains inspectable. Expiry or explicit unsuppression returns the record to its
+detector-owned state; it never resolves it. Only fresh sufficient recovery
+evidence may enter resolving, and only detector recovery may resolve.

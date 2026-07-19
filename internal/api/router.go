@@ -675,6 +675,12 @@ func (r *Router) setupRoutes() {
 
 	// AI settings endpoints
 	r.aiSettingsHandler = NewAISettingsHandler(r.multiTenant, r.mtMonitor, r.agentExecServer)
+	if r.attentionHandlers != nil {
+		r.attentionHandlers.SetActionLicenseChecker(func(ctx context.Context) bool {
+			service := r.aiSettingsHandler.GetAIService(ctx)
+			return service != nil && service.HasLicenseFeature(ai.FeatureAIAutoFix)
+		})
+	}
 	if r.resourceHandlers != nil {
 		r.resourceHandlers.SetActionEmergencyStopChecker(func(orgID string) (bool, error) {
 			orgCtx := context.WithValue(context.Background(), OrgIDContextKey, approval.NormalizeOrgID(orgID))

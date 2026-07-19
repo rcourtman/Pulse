@@ -1444,3 +1444,15 @@ origin, target, evidence set, handler, actor, or parameters. The server binds
 the exact operational record and policy-shaped evidence IDs internally.
 Unauthorized, stale, partial, permission-limited, ambiguous, unsupported, or
 executor-unready records return no offer and no cross-resource detail.
+
+### Operational Trust evidence and mutation authorization
+
+Evidence detail is tenant-scoped through the selected canonical record and
+requires `monitoring:read`; lifecycle mutation requires `monitoring:write`.
+Unknown record/evidence pairs do not permit cross-resource enumeration, and an
+expired referenced envelope returns typed expiry without disclosing another
+record. Acknowledge and suppression actors are server-derived. Suppression
+accepts only a non-empty reason and bounded future expiry. Action offer and
+planning require the `ai_autofix` entitlement in addition to current RBAC,
+evidence, resource-capability, executor-readiness, approval, and action-policy
+checks.

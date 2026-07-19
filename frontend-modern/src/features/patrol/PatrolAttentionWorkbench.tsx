@@ -16,6 +16,7 @@ import ClockIcon from 'lucide-solid/icons/clock';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import RefreshIcon from 'lucide-solid/icons/refresh-cw';
 import RotateCwIcon from 'lucide-solid/icons/rotate-cw';
+import ShieldOffIcon from 'lucide-solid/icons/shield-off';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import XIcon from 'lucide-solid/icons/x';
 import type {
@@ -24,7 +25,13 @@ import type {
   AttentionItem,
   AttentionItemDetail,
 } from '@/api/patrolAttention';
-import { planPatrolAttentionAction } from '@/api/patrolAttention';
+import {
+  acknowledgePatrolAttention,
+  planPatrolAttentionAction,
+  suppressPatrolAttention,
+  unacknowledgePatrolAttention,
+  unsuppressPatrolAttention,
+} from '@/api/patrolAttention';
 import { ResourceActionsAPI } from '@/api/resourceActions';
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
@@ -40,6 +47,7 @@ import {
 } from '@/routing/resourceLinks';
 import type { EvidenceEnvelope } from '@/types/operationalTrust';
 import type { ActionDetailResponse } from '@/types/actionAudit';
+import { getAlertResourceIncidentAcknowledgedByLabel } from '@/utils/alertIncidentPresentation';
 import { formatRelativeTime } from '@/utils/format';
 
 const PRIMARY_EVIDENCE_LIMIT = 3;
@@ -59,6 +67,8 @@ export function PatrolAttentionWorkbench() {
   const [actionDetail, setActionDetail] = createSignal<ActionDetailResponse | null>(null);
   const [actionBusy, setActionBusy] = createSignal(false);
   const [actionError, setActionError] = createSignal('');
+  const [lifecycleBusy, setLifecycleBusy] = createSignal(false);
+  const [lifecycleError, setLifecycleError] = createSignal('');
   const itemButtons = new Map<string, HTMLButtonElement>();
   let detailPanel: HTMLDivElement | undefined;
   let actionTrigger: HTMLButtonElement | undefined;
@@ -148,6 +158,25 @@ export function PatrolAttentionWorkbench() {
       selected ? patrolAttentionStore.select(selected) : Promise.resolve(),
       patrolAttentionStore.load(patrolAttentionStore.filter()),
     ]);
+  };
+  const changeLifecycle = async (operation: () => Promise<unknown>) => {
+    if (lifecycleBusy()) return;
+    setLifecycleBusy(true);
+    setLifecycleError('');
+    try {
+      await operation();
+      const selected = selectedItemId();
+      await Promise.all([
+        selected ? patrolAttentionStore.select(selected) : Promise.resolve(),
+        patrolAttentionStore.load(patrolAttentionStore.filter()),
+      ]);
+    } catch (cause) {
+      setLifecycleError(
+        cause instanceof Error ? cause.message : 'The lifecycle change could not be saved.',
+      );
+    } finally {
+      setLifecycleBusy(false);
+    }
   };
 
   onMount(() => {
@@ -271,6 +300,16 @@ export function PatrolAttentionWorkbench() {
               actionBusy={actionBusy()}
               actionError={actionError()}
               onReviewAction={reviewAction}
+              lifecycleBusy={lifecycleBusy()}
+              lifecycleError={lifecycleError()}
+              onAcknowledge={(itemId) => changeLifecycle(() => acknowledgePatrolAttention(itemId))}
+              onUnacknowledge={(itemId) =>
+                changeLifecycle(() => unacknowledgePatrolAttention(itemId))
+              }
+              onSuppress={(itemId, reason, expiresAt) =>
+                changeLifecycle(() => suppressPatrolAttention(itemId, reason, expiresAt))
+              }
+              onUnsuppress={(itemId) => changeLifecycle(() => unsuppressPatrolAttention(itemId))}
             />
           </div>
         </Show>
@@ -425,6 +464,12 @@ function AttentionDetail(props: {
     offer: AttentionActionOffer,
     trigger: HTMLButtonElement,
   ) => void;
+  lifecycleBusy: boolean;
+  lifecycleError: string;
+  onAcknowledge: (itemId: string) => Promise<void>;
+  onUnacknowledge: (itemId: string) => Promise<void>;
+  onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
+  onUnsuppress: (itemId: string) => Promise<void>;
 }) {
   const detail = () => props.detail;
   const item = () => detail()?.item;
@@ -547,6 +592,16 @@ function AttentionDetail(props: {
                 {loaded().item.plainLanguageSummary}
               </p>
             </section>
+
+            <AttentionLifecycleControls
+              detail={loaded()}
+              busy={props.lifecycleBusy}
+              error={props.lifecycleError}
+              onAcknowledge={props.onAcknowledge}
+              onUnacknowledge={props.onUnacknowledge}
+              onSuppress={props.onSuppress}
+              onUnsuppress={props.onUnsuppress}
+            />
 
             <DetailSection title="Affected resource">
               <p class="text-sm font-medium text-base-content">
@@ -736,6 +791,185 @@ function AttentionDetail(props: {
         )}
       </Show>
     </aside>
+  );
+}
+
+const SUPPRESSION_DURATIONS = [
+  { value: 60 * 60 * 1000, label: '1 hour' },
+  { value: 24 * 60 * 60 * 1000, label: '24 hours' },
+  { value: 7 * 24 * 60 * 60 * 1000, label: '7 days' },
+] as const;
+
+function AttentionLifecycleControls(props: {
+  detail: AttentionItemDetail;
+  busy: boolean;
+  error: string;
+  onAcknowledge: (itemId: string) => Promise<void>;
+  onUnacknowledge: (itemId: string) => Promise<void>;
+  onSuppress: (itemId: string, reason: string, expiresAt: string) => Promise<void>;
+  onUnsuppress: (itemId: string) => Promise<void>;
+}) {
+  const [showSuppression, setShowSuppression] = createSignal(false);
+  const [reason, setReason] = createSignal('');
+  const [durationMs, setDurationMs] = createSignal<number>(SUPPRESSION_DURATIONS[1].value);
+  const state = () => props.detail.item.state;
+  const canAcknowledge = () => ['open', 'stale', 'unknown', 'resolving'].includes(state());
+  const canSuppress = () =>
+    ['open', 'acknowledged', 'stale', 'unknown', 'resolving'].includes(state());
+  const submitSuppression = async (event: SubmitEvent) => {
+    event.preventDefault();
+    const value = reason().trim();
+    if (!value) return;
+    await props.onSuppress(
+      props.detail.item.id,
+      value,
+      new Date(Date.now() + durationMs()).toISOString(),
+    );
+    setShowSuppression(false);
+    setReason('');
+  };
+
+  return (
+    <DetailSection title="Lifecycle">
+      <div class="rounded-md border border-border-subtle bg-surface-alt/40 p-3">
+        <Show when={props.detail.operationalRecord.acknowledgement}>
+          {(acknowledgement) => (
+            <p class="mb-2 text-xs leading-5 text-muted">
+              {getAlertResourceIncidentAcknowledgedByLabel(acknowledgement().by)}{' '}
+              {formatRelativeTime(acknowledgement().at, { compact: true })}.
+            </p>
+          )}
+        </Show>
+        <Show when={props.detail.operationalRecord.suppression}>
+          {(suppression) => (
+            <div class="mb-3 text-xs leading-5 text-muted">
+              <p>
+                Suppressed by {suppression().by}: {suppression().reason}
+              </p>
+              <Show when={suppression().expiresAt}>
+                {(expiresAt) => (
+                  <p>
+                    Returns to active attention {formatRelativeTime(expiresAt(), { compact: true })}
+                    .
+                  </p>
+                )}
+              </Show>
+            </div>
+          )}
+        </Show>
+        <div class="flex flex-wrap gap-2">
+          <Show when={canAcknowledge()}>
+            <Button
+              variant="primary"
+              size="sm"
+              isLoading={props.busy}
+              onClick={() => void props.onAcknowledge(props.detail.item.id)}
+            >
+              Acknowledge
+            </Button>
+          </Show>
+          <Show when={state() === 'acknowledged'}>
+            <Button
+              variant="secondary"
+              size="sm"
+              isLoading={props.busy}
+              onClick={() => void props.onUnacknowledge(props.detail.item.id)}
+            >
+              Return to open
+            </Button>
+          </Show>
+          <Show when={state() === 'suppressed'}>
+            <Button
+              variant="secondary"
+              size="sm"
+              isLoading={props.busy}
+              onClick={() => void props.onUnsuppress(props.detail.item.id)}
+            >
+              Return to active attention
+            </Button>
+          </Show>
+          <Show when={canSuppress() && !showSuppression()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              class="gap-1.5"
+              disabled={props.busy}
+              onClick={() => setShowSuppression(true)}
+            >
+              <ShieldOffIcon class="h-4 w-4" aria-hidden="true" />
+              Suppress temporarily
+            </Button>
+          </Show>
+        </div>
+        <Show when={showSuppression()}>
+          <form
+            class="mt-3 space-y-3 border-t border-border-subtle pt-3"
+            onSubmit={submitSuppression}
+          >
+            <div>
+              <label
+                for={`attention-suppression-reason-${props.detail.item.id}`}
+                class="text-xs font-medium text-base-content"
+              >
+                Why is this safe to hide from active attention?
+              </label>
+              <textarea
+                id={`attention-suppression-reason-${props.detail.item.id}`}
+                class="mt-1 min-h-20 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={reason()}
+                maxlength={240}
+                required
+                disabled={props.busy}
+                onInput={(event) => setReason(event.currentTarget.value)}
+              />
+            </div>
+            <div>
+              <label
+                for={`attention-suppression-duration-${props.detail.item.id}`}
+                class="text-xs font-medium text-base-content"
+              >
+                Return it to active attention after
+              </label>
+              <select
+                id={`attention-suppression-duration-${props.detail.item.id}`}
+                class="mt-1 block min-h-9 rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={String(durationMs())}
+                disabled={props.busy}
+                onChange={(event) => setDurationMs(Number(event.currentTarget.value))}
+              >
+                <For each={SUPPRESSION_DURATIONS}>
+                  {(duration) => <option value={duration.value}>{duration.label}</option>}
+                </For>
+              </select>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <Button
+                variant="warning"
+                size="sm"
+                isLoading={props.busy}
+                disabled={!reason().trim()}
+                type="submit"
+              >
+                Suppress temporarily
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={props.busy}
+                onClick={() => setShowSuppression(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </Show>
+        <Show when={props.error}>
+          <p role="alert" class="mt-3 text-xs leading-5 text-red-700 dark:text-red-300">
+            {props.error}
+          </p>
+        </Show>
+      </div>
+    </DetailSection>
   );
 }
 

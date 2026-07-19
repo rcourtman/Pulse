@@ -6635,3 +6635,14 @@ review. Verification presentation is derived only from the durable canonical
 action state and `ActionResultV2`: confirmed, contradicted, inconclusive, and
 not-attempted remain distinct. The projection has no authority to resolve the
 operational record.
+
+### Operational Trust rollout telemetry and lifecycle controls
+
+Patrol exposes evidence-backed lifecycle controls only for the selected
+canonical attention item. Acknowledge is reversible. Suppression requires a
+reason and bounded expiry. Neither action changes detector truth, and stale or
+unknown collection state remains stronger than a retained legacy
+acknowledgement flag. `internal/ai/patrol_metrics.go` compares the canonical
+active summary with the projected state set and increments one unlabeled
+low-cardinality mismatch counter on contradiction. It never labels metrics with
+resource, record, evidence, actor, or provider-instance identity.

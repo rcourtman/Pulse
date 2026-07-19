@@ -2109,3 +2109,15 @@ nor its action authorizes a reboot. Contradicted, inconclusive, or health-unknow
 postconditions remain actionable; only canonical confirmed postcondition truth
 may support resolution. Package-manager internals remain forensic detail rather
 than the least-expert default.
+
+### Operational Trust attention queue completion
+
+Patrol is the named monitor-first attention destination over one canonical
+operational lifecycle. Active, open, acknowledged, suppressed, stale/unknown,
+resolved, unavailable-evaluation, and honest calm states share one summary and
+detail projection. The selected detail owns reversible acknowledgement and
+bounded reasoned suppression, while Assistant remains explanation-only selected
+context. Evidence, impact, relationships, protection posture, lifecycle
+timeline, action origin, and verification truth remain linked to the same
+record. Mobile consumes the same list/detail and acknowledgement contracts; it
+does not revive the retired primary findings feed.

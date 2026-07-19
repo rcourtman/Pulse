@@ -159,6 +159,53 @@ func TestResourceRelationshipsWithCanonicalParent(t *testing.T) {
 	}
 }
 
+func TestNormalizeResourceRelationshipAddsStableAuditIdentity(t *testing.T) {
+	relationship := ResourceRelationship{
+		SourceID:   " network-endpoint:check-1 ",
+		TargetID:   " app-container:web ",
+		Type:       RelChecks,
+		Confidence: 1,
+		Discoverer: " availability_attachment ",
+		EvidenceID: " evidence-1 ",
+	}
+	normalizeResourceRelationship(&relationship)
+	firstID := relationship.ID
+
+	if firstID == "" {
+		t.Fatal("relationship ID was not derived")
+	}
+	if relationship.SourceID != "network-endpoint:check-1" ||
+		relationship.TargetID != "app-container:web" {
+		t.Fatalf("canonical endpoints = %q -> %q", relationship.SourceID, relationship.TargetID)
+	}
+	if relationship.EvidenceID != "evidence-1" {
+		t.Fatalf("evidence ID = %q", relationship.EvidenceID)
+	}
+
+	relationship.ID = ""
+	normalizeResourceRelationship(&relationship)
+	if relationship.ID != firstID {
+		t.Fatalf("relationship ID changed: got %q want %q", relationship.ID, firstID)
+	}
+}
+
+func TestOperationalTrustRelationshipVocabularyIsTyped(t *testing.T) {
+	for _, relationshipType := range []RelationshipType{
+		RelRunsOn,
+		RelHostedBy,
+		RelDependsOn,
+		RelStoresOn,
+		RelProtectedBy,
+		RelChecks,
+		RelMemberOf,
+		RelExposedBy,
+	} {
+		if relationshipType == "" {
+			t.Fatal("relationship type must not be empty")
+		}
+	}
+}
+
 func contains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {

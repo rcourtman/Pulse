@@ -350,6 +350,15 @@ func (m *PatrolMetrics) ObserveAttentionProjection(
 	for _, state := range states {
 		m.attentionItems.WithLabelValues(string(state)).Set(float64(counts[state]))
 	}
+	projectedActiveCount := 0
+	for state, count := range counts {
+		if attentionStateCountsAsActive(state) {
+			projectedActiveCount += count
+		}
+	}
+	if projectedActiveCount != projection.Summary.ActiveCount {
+		operationaltrust.GetMetrics().RecordActiveCountMismatch()
+	}
 	m.attentionOldestAge.Set(oldestAge.Seconds())
 	m.attentionAckLatest.Set(latestAcknowledgementElapsed.Seconds())
 	m.calmEvaluationTime.Set(float64(projection.Summary.EvaluatedAt.Unix()))

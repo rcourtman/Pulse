@@ -244,3 +244,15 @@ channel targeting.
 `api-contracts`: they are the product-facing control surface for
 notification-management transport, while canonical payload-shape governance
 still remains explicit in the shared API contract boundary.
+
+### Operational Trust delivery observability
+
+Notification queue rows retain the exact operational record and lifecycle
+transition IDs through grouping, retry, restart, send, cancellation, and dead
+letter. Restart during a queued retry must reopen the same durable delivery
+with the same transition links; it must not synthesize a new operational
+transition. `internal/notifications/queue.go` records bounded queue,
+retry/sent/failed/dead-letter/cancelled outcomes and open-to-enqueue latency
+without destination, record, resource, or evidence labels. Delivery state
+remains notification truth only and cannot resolve or reopen the alert
+lifecycle.

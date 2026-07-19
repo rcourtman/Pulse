@@ -4660,3 +4660,15 @@ deliver a command itself or add an agent wire shape. Actual dispatch retains
 the canonical action executor, exact agent/resource binding, command-enabled
 token policy, durable attempt/receipt, timeout, and restart-reconciliation
 boundaries.
+
+### Operational Trust lifecycle mutation boundary
+
+The attention evidence and lifecycle mutation handlers under `internal/api/`
+remain resource-monitoring consumers. Acknowledge, unacknowledge, suppress, and
+unsuppress call the alerts-owned operational lifecycle and persist through the
+active-alert store; they do not mint agent credentials, alter observer config,
+or dispatch commands. Evidence reads require `monitoring:read`, lifecycle
+mutations require `monitoring:write`, and slash-containing canonical record IDs
+are parsed as opaque identities. Governed action planning still enters the
+existing action lifecycle and entitlement boundary before any agent executor
+is considered.

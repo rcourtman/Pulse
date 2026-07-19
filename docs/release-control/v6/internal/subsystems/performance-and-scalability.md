@@ -1941,3 +1941,19 @@ the indexed `origin_json` operational-record expression; MemoryStore performs
 one bounded pass. The summary path performs no registry, action-store,
 executor-readiness, or action-origin work. Readiness checks remain local to
 the already-bounded visible page and do not issue browser requests per row.
+
+### Operational Trust rollout bounds
+
+The completed Operational Trust path preserves these explicit bounds:
+
+1. active-count and summary evaluation use the in-memory canonical projection;
+2. attention pages are capped at 200 items and a 10,000-record projection has
+   a five-second shared-CI ceiling;
+3. recovery posture joins batch at 200 subjects and platform tables issue one
+   bounded request rather than one request per row;
+4. action enrichment occurs after pagination and uses one registry, authority,
+   and latest-origin batch;
+5. evidence and recovery retention remain store-owned, indexed, bounded, and
+   covered by query-plan and retention tests;
+6. Operational Trust telemetry uses bounded enumerated labels only and never
+   introduces resource-cardinality labels.

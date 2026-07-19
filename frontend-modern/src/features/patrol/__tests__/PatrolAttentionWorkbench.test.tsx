@@ -12,6 +12,10 @@ const apiMocks = vi.hoisted(() => ({
   getList: vi.fn(),
   getDetail: vi.fn(),
   getSummary: vi.fn(),
+  acknowledge: vi.fn(),
+  unacknowledge: vi.fn(),
+  suppress: vi.fn(),
+  unsuppress: vi.fn(),
   planAction: vi.fn(),
   getAction: vi.fn(),
 }));
@@ -23,6 +27,10 @@ vi.mock('@/api/patrolAttention', async (importOriginal) => {
     getPatrolAttention: (...args: unknown[]) => apiMocks.getList(...args),
     getPatrolAttentionDetail: (...args: unknown[]) => apiMocks.getDetail(...args),
     getPatrolAttentionSummary: (...args: unknown[]) => apiMocks.getSummary(...args),
+    acknowledgePatrolAttention: (...args: unknown[]) => apiMocks.acknowledge(...args),
+    unacknowledgePatrolAttention: (...args: unknown[]) => apiMocks.unacknowledge(...args),
+    suppressPatrolAttention: (...args: unknown[]) => apiMocks.suppress(...args),
+    unsuppressPatrolAttention: (...args: unknown[]) => apiMocks.unsuppress(...args),
     planPatrolAttentionAction: (...args: unknown[]) => apiMocks.planAction(...args),
   };
 });
@@ -170,6 +178,10 @@ describe('PatrolAttentionWorkbench', () => {
     apiMocks.getList.mockReset();
     apiMocks.getDetail.mockReset();
     apiMocks.getSummary.mockReset();
+    apiMocks.acknowledge.mockReset();
+    apiMocks.unacknowledge.mockReset();
+    apiMocks.suppress.mockReset();
+    apiMocks.unsuppress.mockReset();
     apiMocks.planAction.mockReset();
     apiMocks.getAction.mockReset();
   });
@@ -266,6 +278,95 @@ describe('PatrolAttentionWorkbench', () => {
     expect(
       screen.queryByRole('heading', { name: 'Nothing needs your attention' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('acknowledges an operational item and refreshes the shared lifecycle projection', async () => {
+    const active = item();
+    const acknowledged = item({ state: 'acknowledged' });
+    const acknowledgedDetail = detail(acknowledged);
+    acknowledgedDetail.operationalRecord.acknowledgement = {
+      at: evaluatedAt,
+      by: 'operator',
+    };
+    apiMocks.getList
+      .mockResolvedValueOnce(
+        listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+      )
+      .mockResolvedValue(
+        listResponse(
+          [acknowledged],
+          summary({ activeCount: 1, acknowledgedCount: 1, calm: false }),
+        ),
+      );
+    apiMocks.getDetail.mockResolvedValueOnce(detail(active)).mockResolvedValue(acknowledgedDetail);
+    apiMocks.acknowledge.mockResolvedValue({ success: true });
+    renderWorkbench();
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Disk pressure on Database VM',
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Acknowledge' }));
+
+    await waitFor(() => expect(apiMocks.acknowledge).toHaveBeenCalledWith('record-1'));
+    expect(await screen.findByText(/Acknowledged by operator/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Return to open' })).toBeInTheDocument();
+  });
+
+  it('requires an explicit reason and bounded duration before temporary suppression', async () => {
+    const active = item();
+    const suppressed = item({ state: 'suppressed' });
+    const suppressedDetail = detail(suppressed);
+    suppressedDetail.operationalRecord.suppression = {
+      at: evaluatedAt,
+      by: 'operator',
+      reason: 'Planned storage maintenance',
+      expiresAt: '2026-07-20T08:00:00Z',
+    };
+    apiMocks.getList
+      .mockResolvedValueOnce(
+        listResponse([active], summary({ activeCount: 1, openCount: 1, calm: false })),
+      )
+      .mockResolvedValue(
+        listResponse([suppressed], summary({ activeCount: 0, suppressedCount: 1, calm: true })),
+      );
+    apiMocks.getDetail.mockResolvedValueOnce(detail(active)).mockResolvedValue(suppressedDetail);
+    apiMocks.suppress.mockResolvedValue({ success: true });
+    renderWorkbench();
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Open Disk pressure on Database VM',
+      }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Suppress temporarily' }));
+
+    const submit = screen.getByRole('button', { name: 'Suppress temporarily' });
+    expect(submit).toBeDisabled();
+    fireEvent.input(
+      screen.getByRole('textbox', {
+        name: 'Why is this safe to hide from active attention?',
+      }),
+      { target: { value: 'Planned storage maintenance' } },
+    );
+    fireEvent.change(
+      screen.getByRole('combobox', {
+        name: 'Return it to active attention after',
+      }),
+      { target: { value: String(60 * 60 * 1000) } },
+    );
+    fireEvent.click(submit);
+
+    await waitFor(() => {
+      expect(apiMocks.suppress).toHaveBeenCalledWith(
+        'record-1',
+        'Planned storage maintenance',
+        expect.any(String),
+      );
+    });
+    expect(await screen.findByText(/Suppressed by operator/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Return to active attention' })).toBeInTheDocument();
   });
 
   it('opens the canonical governed action review from an eligible attention item', async () => {

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionplanner"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -1199,6 +1200,15 @@ func (s *Service) completeCorrelatedDispatch(orgID string, store Store, record u
 	}
 	s.publishTransition(orgID, completed)
 	s.publishCompleted(completed)
+	truth := unified.CanonicalActionResultV2(completed)
+	verificationOutcome := string(truth.Verification.Status)
+	if truth.Verification.Status == unified.ActionVerificationInconclusive &&
+		strings.Contains(strings.ToLower(truth.Verification.ReasonCode), "timeout") {
+		verificationOutcome = "timed_out"
+	}
+	operationaltrust.GetMetrics().ObserveActionVerification(
+		verificationOutcome,
+	)
 	return completed, nil
 }
 

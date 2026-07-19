@@ -612,6 +612,7 @@ func (rr *ResourceRegistry) ingestResources(resources []Resource, thresholds map
 		}
 		resource.Type = CanonicalResourceType(resource.Type)
 		normalizeResourceAvailability(resource)
+		normalizeResourceRelationships(resource)
 		if resource.SourceStatus == nil && len(resource.Sources) > 0 {
 			resource.SourceStatus = make(map[DataSource]SourceStatus, len(resource.Sources))
 			for _, source := range resource.Sources {
@@ -1831,6 +1832,7 @@ func (rr *ResourceRegistry) refreshDockerNetworkAttachmentRelationships(host mod
 				Discoverer: dockerAdapterRelationshipDiscoverer,
 				Metadata:   dockerNetworkAttachmentMetadata(host, attachment),
 			}
+			normalizeResourceRelationship(&relationship)
 			relationshipsByContainer[containerID] = append(relationshipsByContainer[containerID], relationship)
 			relationshipsByNetwork[networkID] = append(relationshipsByNetwork[networkID], relationship)
 		}
@@ -1909,6 +1911,7 @@ func (rr *ResourceRegistry) setDockerNetworkAttachmentRelationshipsLocked(
 	})
 
 	resource.Relationships = append(base, nextDockerRelationships...)
+	normalizeResourceRelationships(resource)
 }
 
 func isDockerNetworkAttachmentRelationship(relationship ResourceRelationship) bool {
@@ -2403,6 +2406,7 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	var availabilityResolution availabilityLinkResolution
 	if source == SourceAvailability && resource.Type == ResourceTypeNetworkEndpoint {
 		availabilityResolution = rr.resolveAvailabilityLink(resource)
+		operationaltrust.GetMetrics().ObserveIdentityCorrelation(string(availabilityResolution.State))
 		applyAvailabilityResolution(resource.Availability, availabilityResolution)
 		if linked := availabilityResolution.ResourceID; linked != "" {
 			if existing := rr.resources[linked]; existing != nil {
@@ -2443,6 +2447,7 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 		bindAvailabilityEvidence(resource.Availability, resource.ID, availabilityResolution)
 		normalizeResourceAvailability(&resource)
 	}
+	normalizeResourceRelationships(&resource)
 	if existing := rr.resources[resource.ID]; existing != nil {
 		rr.mergeInto(existing, resource, source)
 		rr.bySource[source][sourceID] = existing.ID
@@ -2843,6 +2848,10 @@ func upsertAvailabilityCheckRelationship(
 			"correlationRule": resolution.Rule,
 		},
 	}
+	if availability.Evidence != nil {
+		relation.EvidenceID = availability.Evidence.ID
+	}
+	normalizeResourceRelationship(&relation)
 
 	out := append([]ResourceRelationship(nil), relationships...)
 	for index := range out {

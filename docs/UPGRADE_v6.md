@@ -294,6 +294,37 @@ Practical recommendation:
 
 - Before upgrading, keep console access available so you can retry activation from the v6 license panel if the exchange service is temporarily unavailable.
 
+## Operational Trust migration
+
+Pulse v6 consolidates alerts, Patrol attention, evidence, protection posture,
+attached availability checks, notifications, and governed action verification
+onto one Operational Trust lifecycle. See
+[`OPERATIONAL_TRUST.md`](OPERATIONAL_TRUST.md) for the operator contract and
+post-upgrade checks.
+
+The migrations are additive:
+
+- existing alert state is normalized into operational records and transitions;
+- notification delivery keeps exact operational-record and transition links;
+- recovery points and provider observations materialize provider-aware
+  protection posture;
+- unified-resource relationships and availability facets gain stable evidence
+  linkage;
+- action audit records preserve execution and verification as separate truth.
+
+Supported legacy JSON fields remain readable where older clients need them,
+but the primary v6 runtime has one writable owner for each domain. Pulse Mobile
+now reads the canonical Patrol attention queue. Operators should upgrade
+desktop and mobile clients together when they depend on acknowledgement,
+evidence, protection, or action-verification parity.
+
+Before the upgrade, back up the Pulse data directory and confirm the service
+account can write the alert, notification, recovery, and action stores. After
+startup, verify that the Patrol navigation count matches the active queue,
+inspect one evidence/protection drill-down, and confirm stale collection does
+not appear resolved. Pulse Pro users should also verify entitlement
+connectivity before relying on restart offers.
+
 ### Multi-Tenant (Opt-In)
 
 Multi-tenant mode is opt-in and additionally license-gated:

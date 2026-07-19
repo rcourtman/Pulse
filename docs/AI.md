@@ -121,6 +121,13 @@ only inside selected context and receives policy-shaped summaries and
 references. Assistant can explain the item, but it cannot create lifecycle
 truth, invent action authority, or hide uncertainty.
 
+Open items can be acknowledged directly. Suppression is temporary and requires
+an operator reason plus a bounded expiry; it never resolves the detector's
+finding. Eligible Pulse Pro Docker health items can offer a governed restart.
+That journey uses the canonical action plan, approval, execution, audit, and
+verification APIs. A successful command does not resolve the attention item;
+fresh detector evidence must still confirm recovery.
+
 ### What Patrol Sees
 
 Every patrol run passes the LLM comprehensive context about your environment:

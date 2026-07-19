@@ -29,10 +29,12 @@ const (
 type attentionAlertSnapshot func(context.Context) ([]alerts.Alert, []alerts.Alert, error)
 
 type AttentionHandlers struct {
-	readAlerts      attentionAlertSnapshot
-	recoveryManager *recoverymanager.Manager
-	resources       *ResourceHandlers
-	actionAuthority actionAuthority
+	getMonitor        func(context.Context) *monitoring.Monitor
+	readAlerts        attentionAlertSnapshot
+	recoveryManager   *recoverymanager.Manager
+	resources         *ResourceHandlers
+	actionAuthority   actionAuthority
+	hasAutoFixLicense func(context.Context) bool
 }
 
 func NewAttentionHandlers(
@@ -40,6 +42,7 @@ func NewAttentionHandlers(
 	recoveryManager *recoverymanager.Manager,
 ) *AttentionHandlers {
 	return &AttentionHandlers{
+		getMonitor: getMonitor,
 		readAlerts: func(ctx context.Context) ([]alerts.Alert, []alerts.Alert, error) {
 			if getMonitor == nil {
 				return nil, nil, fmt.Errorf("monitor is not configured")
@@ -66,6 +69,15 @@ func (h *AttentionHandlers) SetActionDependencies(
 	h.actionAuthority = authority
 }
 
+func (h *AttentionHandlers) SetActionLicenseChecker(
+	hasAutoFixLicense func(context.Context) bool,
+) {
+	if h == nil {
+		return
+	}
+	h.hasAutoFixLicense = hasAutoFixLicense
+}
+
 type attentionListResponse struct {
 	Data    []ai.AttentionItem  `json:"data"`
 	Summary ai.AttentionSummary `json:"summary"`
@@ -83,6 +95,10 @@ func (h *AttentionHandlers) HandleAttention(w http.ResponseWriter, r *http.Reque
 		h.handleAttentionActionPlan(w, r, path)
 		return
 	}
+	if r.Method == http.MethodPost && isAttentionMutationPath(path) {
+		h.handleAttentionMutation(w, r, path)
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -92,6 +108,8 @@ func (h *AttentionHandlers) HandleAttention(w http.ResponseWriter, r *http.Reque
 		h.handleAttentionList(w, r)
 	case path == "/summary":
 		h.handleAttentionSummary(w, r)
+	case strings.Contains(path, "/evidence/"):
+		h.handleAttentionEvidence(w, r, path)
 	case strings.HasPrefix(path, "/"):
 		h.handleAttentionDetail(w, r, strings.TrimPrefix(path, "/"))
 	default:

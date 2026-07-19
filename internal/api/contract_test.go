@@ -13906,6 +13906,7 @@ func TestContract_ResourceFacetsDeriveCanonicalParentRelationship(t *testing.T) 
 		"resourceId":"agent-1",
 		"relationships":[
 			{
+				"id":"relationship_aed4b8896bb2a8ca119ef1547a93e944",
 				"sourceId":"agent-1",
 				"targetId":"k8s-cluster-1",
 				"type":"owned_by",

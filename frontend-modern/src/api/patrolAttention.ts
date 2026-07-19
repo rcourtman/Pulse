@@ -91,6 +91,16 @@ export interface AttentionListResponse {
   };
 }
 
+export interface AttentionEvidenceResponse {
+  evidence: EvidenceEnvelope;
+  freshness: EvidenceFreshness;
+  retained: boolean;
+}
+
+export interface AttentionMutationResponse {
+  success: boolean;
+}
+
 export async function getPatrolAttention(
   filter: AttentionFilter = 'active',
   page = 1,
@@ -112,6 +122,62 @@ export async function getPatrolAttentionDetail(itemId: string): Promise<Attentio
   return apiFetchJSON<AttentionItemDetail>(
     `/api/ai/patrol/attention/${encodeURIComponent(itemId)}`,
   );
+}
+
+export async function getPatrolAttentionEvidence(
+  itemId: string,
+  evidenceId: string,
+): Promise<AttentionEvidenceResponse> {
+  return apiFetchJSON<AttentionEvidenceResponse>(
+    `/api/ai/patrol/attention/${encodeURIComponent(itemId)}/evidence/${encodeURIComponent(evidenceId)}`,
+  );
+}
+
+async function mutatePatrolAttention(
+  itemId: string,
+  mutation: 'acknowledge' | 'unacknowledge' | 'suppress' | 'unsuppress',
+  body = '{}',
+): Promise<AttentionMutationResponse> {
+  return apiFetchJSON<AttentionMutationResponse>(
+    `/api/ai/patrol/attention/${encodeURIComponent(itemId)}/${mutation}`,
+    {
+      method: 'POST',
+      body,
+    },
+  );
+}
+
+export async function acknowledgePatrolAttention(
+  itemId: string,
+): Promise<AttentionMutationResponse> {
+  return mutatePatrolAttention(itemId, 'acknowledge');
+}
+
+export async function unacknowledgePatrolAttention(
+  itemId: string,
+): Promise<AttentionMutationResponse> {
+  return mutatePatrolAttention(itemId, 'unacknowledge');
+}
+
+export async function suppressPatrolAttention(
+  itemId: string,
+  reason: string,
+  expiresAt: string,
+): Promise<AttentionMutationResponse> {
+  return mutatePatrolAttention(
+    itemId,
+    'suppress',
+    JSON.stringify({
+      reason,
+      expiresAt,
+    }),
+  );
+}
+
+export async function unsuppressPatrolAttention(
+  itemId: string,
+): Promise<AttentionMutationResponse> {
+  return mutatePatrolAttention(itemId, 'unsuppress');
 }
 
 export async function planPatrolAttentionAction(

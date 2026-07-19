@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/actionlifecycle"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -59,6 +60,8 @@ func (h *AttentionHandlers) projectAttentionActions(
 	store, storeErr := h.resources.getStore(orgID)
 	actor, actorErr := actionActorForRequest(h.resources.cfg, r, orgID)
 	authorized := actorErr == nil &&
+		h.hasAutoFixLicense != nil &&
+		h.hasAutoFixLicense(r.Context()) &&
 		h.actionAuthority.authorizeActor(r.Context(), orgID, actor, auth.ActionPlan) == nil &&
 		h.actionAuthority.authorizeActor(r.Context(), orgID, actor, auth.ActionApprove) == nil &&
 		h.actionAuthority.authorizeActor(r.Context(), orgID, actor, auth.ActionExecute) == nil
@@ -113,6 +116,11 @@ func (h *AttentionHandlers) projectAttentionActions(
 		}
 		offer, reason := ai.ProjectAttentionAction(detail, candidate, now)
 		if reason == ai.AttentionActionEligible {
+			operationaltrust.GetMetrics().ObserveActionOffer("eligible")
+		} else {
+			operationaltrust.GetMetrics().ObserveActionOffer("ineligible")
+		}
+		if reason == ai.AttentionActionEligible {
 			detail.Item.AvailableActions = []ai.AttentionActionOffer{offer}
 		}
 	}
@@ -138,6 +146,14 @@ func (h *AttentionHandlers) handleAttentionActionPlan(
 	}
 	if h == nil || h.resources == nil {
 		writeJSONError(w, http.StatusServiceUnavailable, "attention_actions_unavailable", "Governed actions are unavailable")
+		return
+	}
+	if h.hasAutoFixLicense == nil || !h.hasAutoFixLicense(r.Context()) {
+		WriteLicenseRequired(
+			w,
+			featureAIAutoFixKey,
+			"Patrol fix actions require Pulse Pro",
+		)
 		return
 	}
 

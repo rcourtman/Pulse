@@ -48,6 +48,15 @@ func ensureOperationalContract(alert *Alert, ingestedAt time.Time) {
 	if lastObservedAt.IsZero() || lastObservedAt.Before(firstObservedAt) {
 		lastObservedAt = firstObservedAt
 	}
+	if alert.OperationalRecord != nil &&
+		alert.OperationalRecord.LastObservedAt.After(lastObservedAt) {
+		lastObservedAt = alert.OperationalRecord.LastObservedAt
+	}
+	for _, envelope := range alert.Evidence {
+		if envelope.ObservedAt.After(lastObservedAt) {
+			lastObservedAt = envelope.ObservedAt
+		}
+	}
 	causeKey := strings.TrimSpace(alert.CanonicalState)
 	if causeKey == "" {
 		causeKey = strings.TrimSpace(alert.ID)
@@ -131,6 +140,21 @@ func ensureOperationalContract(alert *Alert, ingestedAt time.Time) {
 		alert.LatestTransition.OperationalRecordID != record.ID ||
 		alert.LatestTransition.To != record.State {
 		alert.LatestTransition = buildCurrentTransition(record, previousState)
+		if alert.LatestTransition != nil {
+			metrics := operationaltrust.GetMetrics()
+			if alert.LatestTransition.To == operationaltrust.OperationalOpen {
+				metrics.ObserveObservationToOpen(record.FirstObservedAt, ingestedAt)
+			}
+			transitionEvidence := make(map[string]struct{}, len(alert.LatestTransition.EvidenceIDs))
+			for _, evidenceID := range alert.LatestTransition.EvidenceIDs {
+				transitionEvidence[evidenceID] = struct{}{}
+			}
+			for _, envelope := range alert.Evidence {
+				if _, ok := transitionEvidence[envelope.ID]; ok {
+					metrics.ObserveEvidence(envelope, ingestedAt)
+				}
+			}
+		}
 	}
 	if alert.LatestTransition != nil {
 		alert.Transitions = appendOperationalTransition(
@@ -490,7 +514,27 @@ func legacyAlertRecoveryEvidenceEnvelope(
 }
 
 func operationalStateForAlert(alert *Alert) operationaltrust.OperationalState {
-	if alert != nil && alert.Acknowledged {
+	if alert == nil {
+		return operationaltrust.OperationalOpen
+	}
+	if alert.OperationalRecord != nil &&
+		alert.OperationalRecord.State == operationaltrust.OperationalSuppressed &&
+		alert.OperationalRecord.Suppression != nil {
+		suppression := alert.OperationalRecord.Suppression
+		if suppression.ExpiresAt == nil || suppression.ExpiresAt.After(time.Now()) {
+			return operationaltrust.OperationalSuppressed
+		}
+		alert.OperationalRecord.Suppression = nil
+	}
+	if alert.OperationalRecord != nil {
+		switch alert.OperationalRecord.State {
+		case operationaltrust.OperationalResolving,
+			operationaltrust.OperationalStale,
+			operationaltrust.OperationalUnknown:
+			return alert.OperationalRecord.State
+		}
+	}
+	if alert.Acknowledged {
 		return operationaltrust.OperationalAcknowledged
 	}
 	return operationaltrust.OperationalOpen
@@ -580,9 +624,25 @@ func buildCurrentTransition(
 	if record.State == operationaltrust.OperationalAcknowledged {
 		cause = operationaltrust.TransitionAcknowledgement
 		at = record.StateChangedAt
+	} else if record.State == operationaltrust.OperationalSuppressed {
+		cause = operationaltrust.TransitionSuppression
+		at = record.StateChangedAt
 	} else if previousState == operationaltrust.OperationalAcknowledged &&
 		record.State == operationaltrust.OperationalOpen {
 		cause = operationaltrust.TransitionUnacknowledgement
+		at = record.StateChangedAt
+	} else if previousState == operationaltrust.OperationalSuppressed &&
+		record.State == operationaltrust.OperationalOpen {
+		cause = operationaltrust.TransitionSuppressionExpired
+		at = record.StateChangedAt
+	} else if record.State == operationaltrust.OperationalStale {
+		cause = operationaltrust.TransitionCollectionStale
+		at = record.StateChangedAt
+	} else if record.State == operationaltrust.OperationalUnknown {
+		cause = operationaltrust.TransitionCollectionUnknown
+		at = record.StateChangedAt
+	} else if record.State == operationaltrust.OperationalResolving {
+		cause = operationaltrust.TransitionRecoveryEvidence
 		at = record.StateChangedAt
 	}
 	if from == record.State {

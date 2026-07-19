@@ -1815,6 +1815,17 @@ through the canonical resource model, but unified-resource consumers must not
 reintroduce removed workload aliases or feature-local resource-type shims just
 to satisfy one table, drawer, or badge surface.
 
+### Operational Trust relationship identity
+
+Operational Trust relationships use a stable normalized relationship ID and
+may bind an exact evidence ID. Availability attachment, hosting, storage,
+protection, and membership relationships normalize through the unified
+registry; ambiguous identity remains unattached and emits only a bounded
+correlation outcome. Attached availability is a facet of the known resource
+and must not create a duplicate standalone resource or second primary
+presentation. Supported legacy relationship payloads may omit the additive ID,
+but all primary runtime projections author the canonical stable identity.
+
 Patrol attention resource navigation carries the canonical subject resource ID
 through shared route builders as an opaque query value. Attention deep links
 carry the canonical operational-record ID separately. Neither link may derive

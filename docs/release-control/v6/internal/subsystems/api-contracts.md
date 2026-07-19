@@ -7844,3 +7844,23 @@ plan is replayed rather than duplicated.
 Decision, execution, receipt, reconciliation, result, and verification remain
 on the existing `/api/actions` contract. Provider success does not mutate the
 operational record; only fresh detector recovery evidence may resolve it.
+
+### Operational Trust evidence and lifecycle mutation transport
+
+The canonical selected-item transport now includes:
+
+1. `GET /api/ai/patrol/attention/{id}/evidence/{evidenceId}` under
+   `monitoring:read`; retained evidence returns its typed envelope and
+   freshness, while an expired referenced envelope returns typed `410 Gone`
+   instead of false absence or health.
+2. `POST /api/ai/patrol/attention/{id}/acknowledge` and
+   `/unacknowledge` under `monitoring:write`.
+3. `POST /api/ai/patrol/attention/{id}/suppress` with a non-empty reason and
+   bounded future `expiresAt`, and `/unsuppress`, under `monitoring:write`.
+
+Every mutation reloads the canonical active record, delegates to the
+alerts-owned lifecycle writer, and returns the refreshed shared detail
+projection. The browser cannot submit operational state, transition,
+evidence, actor, or subject identity. Action offers and planning additionally
+require the canonical `ai_autofix` entitlement and return the normal
+license-required `402` contract when it is absent.

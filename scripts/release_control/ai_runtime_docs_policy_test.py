@@ -65,6 +65,14 @@ class AIRuntimeDocsPolicyTest(unittest.TestCase):
             normalized_content,
         )
         self.assertIn(
+            "Suppression is temporary and requires an operator reason plus a bounded expiry",
+            normalized_content,
+        )
+        self.assertIn(
+            "A successful command does not resolve the attention item",
+            normalized_content,
+        )
+        self.assertIn(
             "The Assistant model matrix below proves Assistant orchestration only",
             normalized_content,
         )

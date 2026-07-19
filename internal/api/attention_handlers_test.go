@@ -1,16 +1,20 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 )
 
@@ -183,6 +187,198 @@ func TestParseAttentionActionPlanPathPreservesOperationalIDsContainingSlashes(t 
 		itemID != "agent:node-1/disk:mnt-disk2::metric-threshold:disk" ||
 		capability != "restart" {
 		t.Fatalf("item=%q capability=%q ok=%t", itemID, capability, ok)
+	}
+}
+
+func TestAttentionEvidenceDetailIsBoundedAndReportsExpiredRetention(t *testing.T) {
+	now := time.Date(2026, 7, 19, 8, 0, 0, 0, time.UTC)
+	const recordID = "agent:node-1/disk:mnt-disk2::metric-threshold:disk"
+	alert := attentionHandlerAlert(recordID, operationaltrust.OperationalOpen, now)
+	handler := &AttentionHandlers{
+		readAlerts: func(context.Context) ([]alerts.Alert, []alerts.Alert, error) {
+			return []alerts.Alert{alert}, nil, nil
+		},
+	}
+
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/ai/patrol/attention/agent:node-1/disk:mnt-disk2::metric-threshold:disk/evidence/"+
+			url.PathEscape(alert.Evidence[0].ID),
+		nil,
+	)
+	response := httptest.NewRecorder()
+	handler.HandleAttention(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	var payload attentionEvidenceResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode evidence response: %v", err)
+	}
+	if !payload.Retained || payload.Evidence.ID != alert.Evidence[0].ID {
+		t.Fatalf("evidence response = %+v", payload)
+	}
+
+	alert.OperationalRecord.EvidenceIDs = append(
+		alert.OperationalRecord.EvidenceIDs,
+		"evidence-expired",
+	)
+	expiredRequest := httptest.NewRequest(
+		http.MethodGet,
+		"/api/ai/patrol/attention/agent:node-1/disk:mnt-disk2::metric-threshold:disk/evidence/evidence-expired",
+		nil,
+	)
+	expiredResponse := httptest.NewRecorder()
+	handler.HandleAttention(expiredResponse, expiredRequest)
+	if expiredResponse.Code != http.StatusGone {
+		t.Fatalf(
+			"expired status = %d, want %d: %s",
+			expiredResponse.Code,
+			http.StatusGone,
+			expiredResponse.Body.String(),
+		)
+	}
+}
+
+func TestAttentionMutationPathPreservesOperationalIDsContainingSlashes(t *testing.T) {
+	for _, kind := range []attentionMutationKind{
+		attentionMutationAcknowledge,
+		attentionMutationUnacknowledge,
+		attentionMutationSuppress,
+		attentionMutationUnsuppress,
+	} {
+		itemID, gotKind, ok := parseAttentionMutationPath(
+			"/agent:node-1/disk:mnt-disk2::metric-threshold:disk/" + string(kind),
+		)
+		if !ok ||
+			itemID != "agent:node-1/disk:mnt-disk2::metric-threshold:disk" ||
+			gotKind != kind {
+			t.Fatalf("item=%q kind=%q ok=%t", itemID, gotKind, ok)
+		}
+	}
+}
+
+func TestAttentionLifecycleMutationsRefreshTheCanonicalProjection(t *testing.T) {
+	now := time.Now().UTC()
+	alert := attentionHandlerAlert(
+		"agent:node-1/disk:mnt-disk2::metric-threshold:disk",
+		operationaltrust.OperationalOpen,
+		now,
+	)
+	manager := alerts.NewManagerWithDataDir(t.TempDir())
+	t.Cleanup(manager.Stop)
+	setUnexportedField(
+		t,
+		manager,
+		"activeAlerts",
+		map[string]*alerts.Alert{alert.ID: alert.Clone()},
+	)
+	setUnexportedField(
+		t,
+		manager,
+		"activeAlertAlias",
+		map[string]string{alert.OperationalRecord.ID: alert.ID},
+	)
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "state", models.NewState())
+	setUnexportedField(t, monitor, "alertManager", manager)
+	handler := NewAttentionHandlers(
+		func(context.Context) *monitoring.Monitor { return monitor },
+		nil,
+	)
+
+	acknowledge := httptest.NewRequest(
+		http.MethodPost,
+		"/api/ai/patrol/attention/agent:node-1/disk:mnt-disk2::metric-threshold:disk/acknowledge",
+		bytes.NewBufferString("{}"),
+	)
+	acknowledgeResponse := httptest.NewRecorder()
+	handler.HandleAttention(acknowledgeResponse, acknowledge)
+	if acknowledgeResponse.Code != http.StatusOK {
+		t.Fatalf(
+			"acknowledge status = %d: %s",
+			acknowledgeResponse.Code,
+			acknowledgeResponse.Body.String(),
+		)
+	}
+	assertAttentionHandlerState(
+		t,
+		handler,
+		alert.ID,
+		operationaltrust.OperationalAcknowledged,
+	)
+
+	suppress := httptest.NewRequest(
+		http.MethodPost,
+		"/api/ai/patrol/attention/agent:node-1/disk:mnt-disk2::metric-threshold:disk/suppress",
+		bytes.NewBufferString(`{
+			"reason":"Planned storage maintenance",
+			"expiresAt":"`+now.Add(time.Hour).Format(time.RFC3339Nano)+`"
+		}`),
+	)
+	suppressResponse := httptest.NewRecorder()
+	handler.HandleAttention(suppressResponse, suppress)
+	if suppressResponse.Code != http.StatusOK {
+		t.Fatalf(
+			"suppress status = %d: %s",
+			suppressResponse.Code,
+			suppressResponse.Body.String(),
+		)
+	}
+	assertAttentionHandlerState(
+		t,
+		handler,
+		alert.ID,
+		operationaltrust.OperationalSuppressed,
+	)
+
+	activeList := httptest.NewRequest(
+		http.MethodGet,
+		"/api/ai/patrol/attention?filter=active",
+		nil,
+	)
+	activeResponse := httptest.NewRecorder()
+	handler.HandleAttention(activeResponse, activeList)
+	if activeResponse.Code != http.StatusOK {
+		t.Fatalf("active list status = %d: %s", activeResponse.Code, activeResponse.Body.String())
+	}
+	var active attentionListResponse
+	if err := json.Unmarshal(activeResponse.Body.Bytes(), &active); err != nil {
+		t.Fatalf("decode active list: %v", err)
+	}
+	if len(active.Data) != 0 || active.Summary.SuppressedCount != 1 {
+		t.Fatalf("suppressed active projection = %+v", active)
+	}
+}
+
+func assertAttentionHandlerState(
+	t *testing.T,
+	handler *AttentionHandlers,
+	itemID string,
+	want operationaltrust.OperationalState,
+) {
+	t.Helper()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/ai/patrol/attention/"+url.PathEscape(itemID),
+		nil,
+	)
+	response := httptest.NewRecorder()
+	handler.HandleAttention(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("detail status = %d: %s", response.Code, response.Body.String())
+	}
+	var detail ai.AttentionItemDetail
+	if err := json.Unmarshal(response.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode detail: %v", err)
+	}
+	if detail.Item.State != want || detail.OperationalRecord.State != want {
+		t.Fatalf(
+			"detail state item=%q record=%q, want %q",
+			detail.Item.State,
+			detail.OperationalRecord.State,
+			want,
+		)
 	}
 }
 

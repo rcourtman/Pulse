@@ -130,6 +130,16 @@ func TestAvailabilityExplicitLinkAttachesFacetToKnownResource(t *testing.T) {
 		if relationship.Type == RelChecks &&
 			relationship.TargetID == hostID &&
 			relationship.Metadata["targetId"] == "probe-1" {
+			if relationship.ID == "" {
+				t.Fatal("availability relationship is missing its stable ID")
+			}
+			if relationship.EvidenceID != host.Availability.Evidence.ID {
+				t.Fatalf(
+					"availability relationship evidence = %q, want %q",
+					relationship.EvidenceID,
+					host.Availability.Evidence.ID,
+				)
+			}
 			foundChecksRelationship = true
 		}
 	}

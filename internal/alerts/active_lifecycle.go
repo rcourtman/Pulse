@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rs/zerolog/log"
 )
 
@@ -105,6 +106,10 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 		m.mu.Unlock()
 		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
 	}
+	if alert.Acknowledged {
+		m.mu.Unlock()
+		return nil
+	}
 
 	alert.Acknowledged = true
 	now := time.Now()
@@ -120,6 +125,7 @@ func (m *Manager) AcknowledgeAlert(alertID, user string) error {
 
 	alertCopy := alert.Clone()
 	m.mu.Unlock()
+	m.saveActiveAlertsAsync("acknowledge")
 
 	log.Debug().
 		Str("alertID", alertID).
@@ -145,6 +151,10 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 		m.mu.Unlock()
 		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
 	}
+	if !alert.Acknowledged {
+		m.mu.Unlock()
+		return nil
+	}
 
 	alert.Acknowledged = false
 	alert.AckTime = nil
@@ -155,6 +165,7 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 
 	alertCopy := alert.Clone()
 	m.mu.Unlock()
+	m.saveActiveAlertsAsync("unacknowledge")
 
 	log.Info().
 		Str("alertID", alertID).
@@ -162,6 +173,269 @@ func (m *Manager) UnacknowledgeAlert(alertID string) error {
 
 	m.safeCallUnacknowledgedCallback(alertCopy, "")
 	return nil
+}
+
+// SuppressOperationalAlert moves one canonical operational record out of the
+// default attention queue without changing the detector's underlying finding.
+// Suppression is bounded by an optional expiry and remains inspectable.
+func (m *Manager) SuppressOperationalAlert(
+	alertID string,
+	actor string,
+	reason string,
+	expiresAt *time.Time,
+) error {
+	actor = strings.TrimSpace(actor)
+	reason = strings.TrimSpace(reason)
+	if actor == "" {
+		return fmt.Errorf("suppression actor is required")
+	}
+	if reason == "" {
+		return fmt.Errorf("suppression reason is required")
+	}
+
+	now := time.Now().UTC()
+	if expiresAt != nil {
+		value := expiresAt.UTC()
+		if !value.After(now) {
+			return fmt.Errorf("suppression expiry must be in the future")
+		}
+		expiresAt = &value
+	}
+
+	m.mu.Lock()
+	key, exists := m.resolveActiveAlertKeyNoLock(alertID)
+	if !exists {
+		m.mu.Unlock()
+		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
+	}
+	alert, ok := m.getActiveAlertNoLock(key)
+	if !ok || alert == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
+	}
+	ensureOperationalContract(alert, now)
+	if alert.OperationalRecord == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("operational record is unavailable: %s", alertID)
+	}
+
+	from := alert.OperationalRecord.State
+	alert.OperationalRecord.State = operationaltrust.OperationalSuppressed
+	alert.OperationalRecord.StateChangedAt = now
+	alert.OperationalRecord.Suppression = &operationaltrust.Suppression{
+		At:        now,
+		By:        actor,
+		Reason:    reason,
+		ExpiresAt: expiresAt,
+	}
+	appendExplicitOperationalTransition(
+		alert,
+		from,
+		operationaltrust.OperationalSuppressed,
+		now,
+		operationaltrust.TransitionSuppression,
+		reason,
+		alert.OperationalRecord.EvidenceIDs,
+	)
+	m.setActiveAlertNoLock(key, alert)
+	m.mu.Unlock()
+	m.saveActiveAlertsAsync("operational suppression")
+	return nil
+}
+
+// UnsuppressOperationalAlert returns a suppressed record to the detector-owned
+// active state. It does not resolve or erase the underlying alert.
+func (m *Manager) UnsuppressOperationalAlert(alertID string) error {
+	return m.updateExplicitOperationalState(
+		alertID,
+		operationaltrust.OperationalOpen,
+		operationaltrust.TransitionSuppressionExpired,
+		"suppression_removed",
+		nil,
+		func(record *operationaltrust.OperationalRecord) {
+			record.Suppression = nil
+		},
+	)
+}
+
+// MarkOperationalCollectionStale preserves an open finding when its source is
+// no longer current. Missing observations therefore cannot resolve it.
+func (m *Manager) MarkOperationalCollectionStale(
+	alertID string,
+	evidence operationaltrust.EvidenceEnvelope,
+	reason string,
+) error {
+	return m.updateExplicitOperationalState(
+		alertID,
+		operationaltrust.OperationalStale,
+		operationaltrust.TransitionCollectionStale,
+		reason,
+		&evidence,
+		nil,
+	)
+}
+
+// MarkOperationalCollectionUnknown preserves an open finding when collection
+// completeness, permission, or provider state cannot support a stronger claim.
+func (m *Manager) MarkOperationalCollectionUnknown(
+	alertID string,
+	evidence operationaltrust.EvidenceEnvelope,
+	reason string,
+) error {
+	return m.updateExplicitOperationalState(
+		alertID,
+		operationaltrust.OperationalUnknown,
+		operationaltrust.TransitionCollectionUnknown,
+		reason,
+		&evidence,
+		nil,
+	)
+}
+
+// MarkOperationalResolving records fresh recovery evidence while verification
+// is still pending. Resolution remains detector-owned and requires a later
+// decisive recovery observation.
+func (m *Manager) MarkOperationalResolving(
+	alertID string,
+	evidence operationaltrust.EvidenceEnvelope,
+	reason string,
+) error {
+	return m.updateExplicitOperationalState(
+		alertID,
+		operationaltrust.OperationalResolving,
+		operationaltrust.TransitionRecoveryEvidence,
+		reason,
+		&evidence,
+		nil,
+	)
+}
+
+// RestoreOperationalCollectionState reopens a stale or unknown record from a
+// fresh detector observation while retaining its timeline and evidence.
+func (m *Manager) RestoreOperationalCollectionState(
+	alertID string,
+	evidence operationaltrust.EvidenceEnvelope,
+) error {
+	return m.updateExplicitOperationalState(
+		alertID,
+		operationaltrust.OperationalOpen,
+		operationaltrust.TransitionDetectorDecision,
+		"collection_restored",
+		&evidence,
+		nil,
+	)
+}
+
+func (m *Manager) updateExplicitOperationalState(
+	alertID string,
+	state operationaltrust.OperationalState,
+	cause operationaltrust.TransitionCause,
+	reason string,
+	evidence *operationaltrust.EvidenceEnvelope,
+	mutate func(*operationaltrust.OperationalRecord),
+) error {
+	now := time.Now().UTC()
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return fmt.Errorf("operational transition reason is required")
+	}
+	if evidence != nil {
+		if err := evidence.Validate(); err != nil {
+			return fmt.Errorf("operational transition evidence: %w", err)
+		}
+	}
+
+	m.mu.Lock()
+	key, exists := m.resolveActiveAlertKeyNoLock(alertID)
+	if !exists {
+		m.mu.Unlock()
+		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
+	}
+	alert, ok := m.getActiveAlertNoLock(key)
+	if !ok || alert == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("%w: %s", ErrAlertNotFound, alertID)
+	}
+	ensureOperationalContract(alert, now)
+	if alert.OperationalRecord == nil {
+		m.mu.Unlock()
+		return fmt.Errorf("operational record is unavailable: %s", alertID)
+	}
+	from := alert.OperationalRecord.State
+	if from == state {
+		if evidence != nil {
+			alert.Evidence = appendOperationalEvidence(alert.Evidence, evidence.Clone())
+			alert.OperationalRecord.EvidenceIDs = operationalEvidenceIDs(alert.Evidence)
+			if evidence.ObservedAt.After(alert.OperationalRecord.LastObservedAt) {
+				alert.OperationalRecord.LastObservedAt = evidence.ObservedAt.UTC()
+			}
+			m.setActiveAlertNoLock(key, alert)
+			m.mu.Unlock()
+			operationaltrust.GetMetrics().ObserveEvidence(*evidence, now)
+			m.saveActiveAlertsAsync("operational evidence refresh")
+			return nil
+		}
+		m.mu.Unlock()
+		return nil
+	}
+
+	evidenceIDs := append([]string(nil), alert.OperationalRecord.EvidenceIDs...)
+	if evidence != nil {
+		alert.Evidence = appendOperationalEvidence(alert.Evidence, evidence.Clone())
+		evidenceIDs = []string{evidence.ID}
+		alert.OperationalRecord.EvidenceIDs = operationalEvidenceIDs(alert.Evidence)
+		operationaltrust.GetMetrics().ObserveEvidence(*evidence, now)
+	}
+	alert.OperationalRecord.State = state
+	alert.OperationalRecord.StateChangedAt = now
+	alert.OperationalRecord.ResolvedAt = nil
+	if mutate != nil {
+		mutate(alert.OperationalRecord)
+	}
+	appendExplicitOperationalTransition(alert, from, state, now, cause, reason, evidenceIDs)
+	m.setActiveAlertNoLock(key, alert)
+	m.mu.Unlock()
+	m.saveActiveAlertsAsync("operational lifecycle transition")
+	return nil
+}
+
+func appendExplicitOperationalTransition(
+	alert *Alert,
+	from operationaltrust.OperationalState,
+	to operationaltrust.OperationalState,
+	at time.Time,
+	cause operationaltrust.TransitionCause,
+	reason string,
+	evidenceIDs []string,
+) {
+	if alert == nil || alert.OperationalRecord == nil || from == to {
+		return
+	}
+	id, err := operationaltrust.NewTransitionID(
+		alert.OperationalRecord.ID,
+		from,
+		to,
+		at,
+		cause,
+		alert.OperationalRecord.CauseKey,
+		evidenceIDs,
+	)
+	if err != nil {
+		return
+	}
+	transition := operationaltrust.LifecycleTransition{
+		ID:                  id,
+		OperationalRecordID: alert.OperationalRecord.ID,
+		From:                from,
+		To:                  to,
+		At:                  at,
+		Cause:               cause,
+		CauseKey:            alert.OperationalRecord.CauseKey,
+		EvidenceIDs:         append([]string(nil), evidenceIDs...),
+		Reason:              strings.TrimSpace(reason),
+	}
+	alert.LatestTransition = &transition
+	alert.Transitions = appendOperationalTransition(alert.Transitions, transition.Clone())
 }
 
 // preserveAlertState copies acknowledgement and escalation metadata from an existing alert

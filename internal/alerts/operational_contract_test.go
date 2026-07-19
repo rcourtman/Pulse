@@ -531,3 +531,38 @@ func TestAlertOperationalContractJSONRemainsAdditive(t *testing.T) {
 		t.Fatalf("round-trip alert = %+v", roundTrip)
 	}
 }
+
+func TestEnsureOperationalContractKeepsExplicitUncertainStateAheadOfLegacyAcknowledgement(t *testing.T) {
+	observedAt := time.Date(2026, 7, 19, 6, 0, 0, 0, time.UTC)
+	alert := &Alert{
+		ID:              "alert-uncertain",
+		Type:            "availability",
+		ResourceID:      "app-container:web",
+		CanonicalSpecID: "availability",
+		CanonicalState:  "app-container:web::availability",
+		StartTime:       observedAt.Add(-time.Hour),
+		LastSeen:        observedAt.Add(-time.Minute),
+		Acknowledged:    true,
+		OperationalRecord: &operationaltrust.OperationalRecord{
+			ID:                "alert-uncertain",
+			CanonicalSpecID:   "availability",
+			SubjectResourceID: "app-container:web",
+			State:             operationaltrust.OperationalStale,
+			Severity:          operationaltrust.SeverityWarning,
+			FirstObservedAt:   observedAt.Add(-time.Hour),
+			LastObservedAt:    observedAt,
+			StateChangedAt:    observedAt.Add(-time.Minute),
+			CauseKey:          "availability",
+			EvidenceIDs:       []string{},
+		},
+	}
+
+	ensureOperationalContract(alert, observedAt.Add(time.Minute))
+
+	if got := alert.OperationalRecord.State; got != operationaltrust.OperationalStale {
+		t.Fatalf("operational state = %q, want stale", got)
+	}
+	if got := alert.OperationalRecord.LastObservedAt; !got.Equal(observedAt) {
+		t.Fatalf("LastObservedAt = %s, want %s", got, observedAt)
+	}
+}

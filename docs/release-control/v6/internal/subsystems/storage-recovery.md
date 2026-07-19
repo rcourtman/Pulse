@@ -2180,6 +2180,17 @@ while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
 
+### Operational Trust posture rollout
+
+Protection posture remains a provider-aware, subject-linked read model over
+recovery points and provider collection evidence. Invalid policy falls back to
+the canonical bounded default and records a bounded failure reason; invalid,
+partial, permission-denied, failed, stale, missing, or unknown provider
+evidence cannot produce `protected`. Evaluations record only the four canonical
+posture states. Platform and Patrol consumers use bounded batch posture reads,
+retain evidence and repository links, and never infer protection from the
+existence of a row, snapshot, or provider connection.
+
 The adjacent Operational Trust attention action transport does not turn
 protection posture into mutation authority. The selected item may display
 storage/recovery-owned posture beside a separately declared Docker restart

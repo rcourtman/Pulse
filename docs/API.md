@@ -1066,9 +1066,27 @@ Runs a focused investigation for an alert payload (used by the UI).
   - Returns one attention item with its operational record, lifecycle
     timeline, typed evidence, recommended next step, relationships, and
     protection posture.
-- All three attention routes require `monitoring:read`. They are read-side
-  projections only; alert lifecycle mutations remain owned by the canonical
-  alert routes.
+- `GET /api/ai/patrol/attention/{id}/evidence/{evidenceId}`
+  - Returns one exact retained evidence envelope with its current freshness.
+  - Returns `410 attention_evidence_detail_expired` when the operational
+    record still links the ID but the bounded detail has expired.
+- `POST /api/ai/patrol/attention/{id}/acknowledge`
+- `POST /api/ai/patrol/attention/{id}/unacknowledge`
+- `POST /api/ai/patrol/attention/{id}/suppress`
+  - Body: `{ "reason": "...", "expiresAt": "<RFC3339>" }`.
+  - The expiry must be in the future and no more than 30 days away.
+- `POST /api/ai/patrol/attention/{id}/unsuppress`
+- `POST /api/ai/patrol/attention/{id}/actions/restart/plan`
+  - Creates or replays the one server-owned Docker restart plan attached to
+    this operational record and its exact evidence IDs.
+  - Requires the canonical action authorization, an eligible server-side
+    offer, and the Pulse Pro `ai_autofix` entitlement. Clients cannot supply
+    command authority or override the target.
+- Attention reads require `monitoring:read`; lifecycle mutations require
+  `monitoring:write`. Action decision and execution use `/api/actions` and
+  retain their existing action-specific scopes.
+- Attention IDs and evidence IDs are opaque and can contain slashes. Clients
+  must path-escape each ID.
 - `GET /api/ai/patrol/autonomy`
 - `PUT /api/ai/patrol/autonomy`
 - `GET /api/ai/patrol/status`

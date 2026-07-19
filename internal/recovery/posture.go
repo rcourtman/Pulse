@@ -361,6 +361,7 @@ func DeriveProtectionPostureAt(
 ) ProtectionPosture {
 	subjectResourceID = strings.TrimSpace(subjectResourceID)
 	if err := policy.Validate(); err != nil {
+		operationaltrust.GetMetrics().ObserveProtectionEvaluationFailure("invalid_policy")
 		policy = DefaultProtectionPosturePolicy
 	}
 	if now.IsZero() {
@@ -585,6 +586,7 @@ func DeriveProtectionPostureAt(
 		posture.State = ProtectionStateUnknown
 	}
 
+	operationaltrust.GetMetrics().ObserveProtectionEvaluation(string(posture.State))
 	return posture
 }
 

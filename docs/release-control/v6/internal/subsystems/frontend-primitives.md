@@ -5101,3 +5101,15 @@ Protection table controls continue to compose shared filter, table, status,
 counter, loading, error, disclosure, and inline-detail primitives. The bounded
 batch hook retains fulfilled values during refresh and issues at most one
 request per 200 resource rows, rather than placing a request under each row.
+
+### Operational Trust attention interaction boundary
+
+The Patrol selected-detail surface owns the smallest lifecycle interaction
+set: acknowledge, return to open, temporary suppression with a required reason
+and one of the bounded 1-hour, 24-hour, or 7-day durations, and return to
+active. Every mutation refreshes both the shared detail and list projection.
+The queue retains screen-reader names, keyboard activation, focus restoration
+after node replacement, reduced-motion behavior, and a no-overflow phone
+layout. Raw evidence history, lifecycle timeline, provider limitations, and
+action audit remain one disclosure or shared review deeper; no platform table
+or Assistant surface recreates these controls.

@@ -78,6 +78,31 @@ In Docker and Kubernetes you must expose `9091` explicitly if you want to scrape
 | `pulse_alerts_rate_limited_total` | Counter | Alerts suppressed due to rate limiting. |
 | `pulse_alert_duration_seconds` | Histogram | Time from alert fire to resolve (by `type`). |
 
+## Operational Trust
+
+Operational Trust metrics use closed low-cardinality labels. They never label
+series with resource, operational-record, evidence, actor, provider-instance,
+or notification-destination IDs.
+
+| Metric | Type | Description |
+| :--- | :--- | :--- |
+| `pulse_operational_trust_observation_to_open_seconds` | Histogram | Time from the first canonical observation to an open operational record. |
+| `pulse_operational_trust_open_to_notification_enqueue_seconds` | Histogram | Time from an open transition to durable notification enqueue. |
+| `pulse_operational_trust_evidence_observations_total` | Counter | Evidence observations by bounded `source` and state (`current`, `stale`, `unknown`, `partial`, `unavailable`, `partial_permission`, `denied`, or `other`). |
+| `pulse_operational_trust_identity_correlations_total` | Counter | Resource correlation outcomes (`attached`, `standalone`, `ambiguous`, `unresolved`, or `other`). |
+| `pulse_operational_trust_protection_posture_evaluations_total` | Counter | Protection posture evaluations by state. |
+| `pulse_operational_trust_protection_posture_evaluation_failures_total` | Counter | Posture evaluation failures by bounded reason. |
+| `pulse_operational_trust_notification_delivery_total` | Counter | Transition-linked delivery outcomes (`queued`, `retry`, `sent`, `failed`, `dead_letter`, `cancelled`, or `other`). |
+| `pulse_operational_trust_active_count_mismatch_total` | Counter | Detected disagreement between the canonical active records and attention projection. |
+| `pulse_operational_trust_action_offers_total` | Counter | Action-offer projections by eligibility. |
+| `pulse_operational_trust_action_verification_total` | Counter | Verification outcomes, including confirmed, contradicted, inconclusive, timed out, and not attempted. |
+
+Example rollout alerts:
+
+- `increase(pulse_operational_trust_active_count_mismatch_total[15m]) > 0`
+- `increase(pulse_operational_trust_notification_delivery_total{outcome="dead_letter"}[15m]) > 0`
+- `increase(pulse_operational_trust_action_verification_total{outcome=~"contradicted|timed_out"}[30m]) > 0`
+
 ## 🚨 Alerting Examples
 - **High Error Rate**: `rate(pulse_http_request_errors_total[5m]) > 0.05`
 - **Stale Node**: `pulse_monitor_node_poll_staleness_seconds > 300`

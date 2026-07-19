@@ -319,3 +319,23 @@ func TestNewProtectionProviderObservationRequiresTypedLimitation(t *testing.T) {
 		t.Fatalf("permissions = %q, want denied", observation.Evidence.Permissions)
 	}
 }
+
+func TestDeriveProtectionPostureFailsClosedToDefaultPolicy(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 19, 8, 0, 0, 0, time.UTC)
+	recent := now.Add(-time.Hour)
+	posture := DeriveProtectionPostureAt(
+		"resource:vm-100",
+		[]ProtectionProviderSummary{protectionTestSummary(now, &recent)},
+		ProtectionPosturePolicy{},
+		now,
+	)
+
+	if posture.State != ProtectionStateProtected {
+		t.Fatalf("state = %q, want protected after default-policy fallback", posture.State)
+	}
+	if posture.Freshness != ProtectionFreshnessCurrent {
+		t.Fatalf("freshness = %q, want current after default-policy fallback", posture.Freshness)
+	}
+}

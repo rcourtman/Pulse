@@ -1621,7 +1621,8 @@ func TestSetProcessorTriggersPendingDelivery(t *testing.T) {
 }
 
 func TestNotificationQueuePersistsGroupedOperationalLinksAcrossDeliveryStates(t *testing.T) {
-	nq, err := NewNotificationQueue(t.TempDir())
+	dataDir := t.TempDir()
+	nq, err := NewNotificationQueue(dataDir)
 	if err != nil {
 		t.Fatalf("NewNotificationQueue() error = %v", err)
 	}
@@ -1705,6 +1706,27 @@ func TestNotificationQueuePersistsGroupedOperationalLinksAcrossDeliveryStates(t 
 			link.AttemptedAt == nil ||
 			link.CompletedAt != nil {
 			t.Fatalf("retrying link = %+v", link)
+		}
+	}
+
+	if err := nq.Stop(); err != nil {
+		t.Fatalf("Stop() before restart error = %v", err)
+	}
+	nq, err = NewNotificationQueue(dataDir)
+	if err != nil {
+		t.Fatalf("NewNotificationQueue() after restart error = %v", err)
+	}
+	restarted, err := nq.getNotificationLinks(notif.ID)
+	if err != nil {
+		t.Fatalf("get restarted links error = %v", err)
+	}
+	for index, link := range restarted {
+		if link.NotificationID != notif.ID ||
+			link.TransitionID != retrying[index].TransitionID ||
+			link.DeliveryState != operationaltrust.NotificationRetrying ||
+			link.AttemptedAt == nil ||
+			link.CompletedAt != nil {
+			t.Fatalf("restarted link = %+v", link)
 		}
 	}
 
