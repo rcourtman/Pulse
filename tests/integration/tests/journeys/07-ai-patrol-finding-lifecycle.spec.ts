@@ -19,9 +19,8 @@
  * Mock mode generates deterministic resources that patrol can inspect.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, ensureJourneyReady } from './journeyAuth';
 import {
-  ensureAuthenticated,
   apiRequest,
   setMockMode,
   getMockMode,
@@ -33,11 +32,11 @@ let mockModeWasEnabled: boolean | null = null;
 test.describe.serial(
   'Journey: Patrol → Finding → Approval → Fix → Verify Resolved',
   () => {
-    test.beforeAll(async ({ browser }) => {
-      const ctx = await browser.newContext();
+    test.beforeAll(async ({ browser, authStorageStatePath }) => {
+      const ctx = await browser.newContext({ storageState: authStorageStatePath });
       const page = await ctx.newPage();
       try {
-        await ensureAuthenticated(page);
+        await ensureJourneyReady(page);
         const state = await getMockMode(page);
         mockModeWasEnabled = state.enabled;
         if (!state.enabled) {
@@ -50,11 +49,11 @@ test.describe.serial(
       }
     });
 
-    test.afterAll(async ({ browser }) => {
-      const ctx = await browser.newContext();
+    test.afterAll(async ({ browser, authStorageStatePath }) => {
+      const ctx = await browser.newContext({ storageState: authStorageStatePath });
       const page = await ctx.newPage();
       try {
-        await ensureAuthenticated(page);
+        await ensureJourneyReady(page);
         if (mockModeWasEnabled !== null) {
           const current = await getMockMode(page);
           if (current.enabled !== mockModeWasEnabled) {
@@ -75,7 +74,7 @@ test.describe.serial(
         testInfo.project.name.startsWith('mobile-'),
         'Desktop journey',
       );
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       const resp = await apiRequest(page, '/api/ai/patrol/status');
       expect(resp.status()).toBe(200);
@@ -102,7 +101,7 @@ test.describe.serial(
         testInfo.project.name.startsWith('mobile-'),
         'Desktop journey',
       );
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       const resp = await apiRequest(page, '/api/ai/patrol/findings');
       expect(resp.status()).toBe(200);
@@ -130,7 +129,7 @@ test.describe.serial(
         testInfo.project.name.startsWith('mobile-'),
         'Desktop journey',
       );
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       const resp = await apiRequest(page, '/api/ai/patrol/run', {
         method: 'POST',
@@ -157,7 +156,7 @@ test.describe.serial(
         testInfo.project.name.startsWith('mobile-'),
         'Desktop journey',
       );
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       const resp = await apiRequest(page, '/api/ai/patrol/runs');
       expect(resp.status()).toBe(200);
@@ -182,7 +181,7 @@ test.describe.serial(
         testInfo.project.name.startsWith('mobile-'),
         'Desktop journey',
       );
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       const resp = await apiRequest(page, '/api/ai/patrol/autonomy');
       expect(resp.status()).toBe(200);
@@ -201,7 +200,7 @@ test.describe.serial(
         testInfo.project.name.startsWith('mobile-'),
         'Desktop journey',
       );
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       const resp = await apiRequest(page, '/api/ai/approvals');
       // 200 = success (Pro), 402 = license required (Community)
@@ -231,7 +230,7 @@ test.describe.serial(
         testInfo.project.name.startsWith('mobile-'),
         'Desktop journey',
       );
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       const findingsResp = await apiRequest(
         page,
@@ -247,12 +246,14 @@ test.describe.serial(
 
       const findingId = encodeURIComponent(findings[0].id);
 
-      // Investigation may or may not exist — both are valid states
+      // Investigation may or may not exist — both are valid states. 503 is
+      // also valid: the investigation service can be transiently unavailable
+      // (no AI provider configured / warming up) on a mock backend.
       const investResp = await apiRequest(
         page,
         `/api/ai/findings/${findingId}/investigation`,
       );
-      expect([200, 404]).toContain(investResp.status());
+      expect([200, 404, 503]).toContain(investResp.status());
 
       if (investResp.status() === 200) {
         const body = await investResp.json();
@@ -273,7 +274,7 @@ test.describe.serial(
         testInfo.project.name.startsWith('mobile-'),
         'Desktop journey',
       );
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       const findingsResp = await apiRequest(
         page,
@@ -339,7 +340,7 @@ test.describe.serial(
         testInfo.project.name.startsWith('mobile-'),
         'Desktop journey',
       );
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       const resp = await apiRequest(page, '/api/ai/patrol/suppressions');
       expect(resp.status()).toBe(200);
@@ -353,7 +354,7 @@ test.describe.serial(
         testInfo.project.name.startsWith('mobile-'),
         'Desktop journey',
       );
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       const resp = await apiRequest(page, '/api/ai/patrol/dismissed');
       expect(resp.status()).toBe(200);
@@ -365,7 +366,7 @@ test.describe.serial(
         testInfo.project.name.startsWith('mobile-'),
         'Desktop journey',
       );
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       await page.goto('/patrol');
       await page.waitForURL('**/patrol**');

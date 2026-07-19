@@ -1,6 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, ensureJourneyReady } from './journeyAuth';
 import {
-  ensureAuthenticated,
   apiRequest,
   setMockMode,
   getMockMode,
@@ -44,11 +43,11 @@ let reportingLicensed = true;
 test.describe.serial(
   'Journey: Audit Log + Webhook + Reporting',
   () => {
-    test.beforeAll(async ({ browser }) => {
-      const ctx = await browser.newContext();
+    test.beforeAll(async ({ browser, authStorageStatePath }) => {
+      const ctx = await browser.newContext({ storageState: authStorageStatePath });
       const page = await ctx.newPage();
       try {
-        await ensureAuthenticated(page);
+        await ensureJourneyReady(page);
         const state = await getMockMode(page);
         mockModeWasEnabled = state.enabled;
         // Enable mock mode so we have resources for reporting.
@@ -62,11 +61,11 @@ test.describe.serial(
       }
     });
 
-    test.afterAll(async ({ browser }) => {
-      const ctx = await browser.newContext();
+    test.afterAll(async ({ browser, authStorageStatePath }) => {
+      const ctx = await browser.newContext({ storageState: authStorageStatePath });
       const page = await ctx.newPage();
       try {
-        await ensureAuthenticated(page);
+        await ensureJourneyReady(page);
         if (mockModeWasEnabled !== null) {
           const current = await getMockMode(page);
           if (current.enabled !== mockModeWasEnabled) {
@@ -85,7 +84,7 @@ test.describe.serial(
     test('audit event list endpoint responds', async ({ page }, testInfo) => {
       test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop audit journey');
 
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       const res = await apiRequest(page, '/api/audit?limit=10');
 
@@ -115,7 +114,7 @@ test.describe.serial(
       test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop audit journey');
       test.skip(!auditLicensed, 'Audit logging not licensed');
 
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       const res = await apiRequest(page, '/api/audit/export?format=json');
 
@@ -144,7 +143,7 @@ test.describe.serial(
       test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop audit journey');
       test.skip(!auditLicensed, 'Audit logging not licensed');
 
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       const res = await apiRequest(page, '/api/audit/summary');
 
@@ -167,7 +166,7 @@ test.describe.serial(
       test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop audit journey');
       test.skip(!auditLicensed, 'Audit logging not licensed');
 
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       // GET existing audit webhooks — verifies the endpoint is accessible
       // and returns the expected shape.
@@ -218,7 +217,7 @@ test.describe.serial(
     test('audit log viewer page renders in UI', async ({ page }, testInfo) => {
       test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop audit journey');
 
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       await page.goto('/settings/security-audit', { waitUntil: 'domcontentloaded' });
       await page.waitForURL(/\/settings/, { timeout: 10_000 });
@@ -240,7 +239,7 @@ test.describe.serial(
     test('notification webhook test endpoint works', async ({ page }, testInfo) => {
       test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop webhook journey');
 
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
       // List existing notification webhooks.
       const listRes = await apiRequest(page, '/api/notifications/webhooks');
@@ -270,10 +269,18 @@ test.describe.serial(
 
       test.setTimeout(60_000);
 
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
-      // Poll for resources — mock mode may still be populating after earlier
-      // journey toggles. Wait up to 30s for at least one node/VM.
+      // Guarantee mock mode is on before polling — an earlier journey (e.g. 04)
+      // or a backend restart can leave it off, which would spin the poll for
+      // the full 30s and then skip. Enabling it up front makes resources
+      // appear promptly and keeps the poll tight.
+      if (!(await getMockMode(page)).enabled) {
+        await setMockMode(page, true);
+      }
+
+      // Poll for resources — mock mode may still be populating after the
+      // toggle. Wait up to 30s for at least one node/VM.
       let resourceType = '';
       let resourceId = '';
       let stateApiReachable = false;
@@ -342,10 +349,15 @@ test.describe.serial(
 
       test.setTimeout(60_000);
 
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
-      // Poll for resources — mock mode may still be populating after earlier
-      // journey toggles. Wait up to 30s for at least one node to appear.
+      // Guarantee mock mode is on before polling (see single-resource test).
+      if (!(await getMockMode(page)).enabled) {
+        await setMockMode(page, true);
+      }
+
+      // Poll for resources — mock mode may still be populating after the
+      // toggle. Wait up to 30s for at least one node to appear.
       let resources: { resourceType: string; resourceId: string }[] = [];
       let stateApiReachable = false;
       const deadline = Date.now() + 30_000;
@@ -408,18 +420,19 @@ test.describe.serial(
     test('reporting page renders in UI', async ({ page }, testInfo) => {
       test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop reporting journey');
 
-      await ensureAuthenticated(page);
+      await ensureJourneyReady(page);
 
-      // Reporting lives under the Operations page, not Settings.
-      await page.goto('/operations/reporting', {
+      // Reporting lives under Settings → Support → Data & Reports.
+      await page.goto('/settings/support/reporting', {
         waitUntil: 'domcontentloaded',
       });
-      await page.waitForURL(/\/operations/, { timeout: 10_000 });
+      await page.waitForURL(/\/settings/, { timeout: 10_000 });
       await expect(page.locator('#root')).toBeVisible();
 
-      // The reporting tab should show a heading or form content, or a paywall.
+      // The reporting page renders the "Data & Reports" heading, report form
+      // content, or an upgrade paywall when advanced_reporting is unlicensed.
       const reportContent = page.locator(
-        'h1:has-text("Report"), h2:has-text("Report"), a:has-text("Upgrade"), button:has-text("Generate")',
+        'h1:has-text("Data & Reports"), h2:has-text("Data & Reports"), h1:has-text("Report"), h2:has-text("Report"), a:has-text("Upgrade"), button:has-text("Generate")',
       ).first();
 
       await expect(
