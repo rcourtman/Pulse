@@ -403,3 +403,63 @@ func TestFromPBSBackups_DisambiguatesCandidatesByNamespace(t *testing.T) {
 		t.Fatalf("SubjectRef = %#v, want linked debian-go guest", result[0].SubjectRef)
 	}
 }
+
+func TestFromPBSBackupsWithEvidenceAddsProviderScopeAndCorrelation(t *testing.T) {
+	t.Parallel()
+
+	backupTime := time.Date(2026, 7, 19, 6, 0, 0, 0, time.UTC)
+	ingestedAt := backupTime.Add(2 * time.Minute)
+	backups := []models.PBSBackup{
+		{
+			ID:         "pbs-main:store-a:vm/100/2026-07-19T06:00:00Z",
+			VMID:       "100",
+			Instance:   "pbs-main",
+			Datastore:  "store-a",
+			BackupType: "vm",
+			BackupTime: backupTime,
+			Verified:   true,
+		},
+	}
+	candidates := map[string][]GuestCandidate{
+		"vm:100": {
+			{
+				SourceID:     "vm-100",
+				ResourceType: unifiedresources.ResourceTypeVM,
+				DisplayName:  "database",
+				InstanceName: "pve-main",
+				NodeName:     "pve-a",
+				VMID:         100,
+			},
+		},
+	}
+
+	points, err := FromPBSBackupsWithEvidence(backups, candidates, ingestedAt)
+	if err != nil {
+		t.Fatalf("FromPBSBackupsWithEvidence() error = %v", err)
+	}
+	if len(points) != 1 {
+		t.Fatalf("points = %d, want 1", len(points))
+	}
+	point := points[0]
+	if point.ProviderScope != "pbs-main" {
+		t.Fatalf("provider scope = %q, want pbs-main", point.ProviderScope)
+	}
+	if point.Evidence == nil {
+		t.Fatal("expected typed PBS evidence")
+	}
+	if point.Evidence.ObservedAt != backupTime {
+		t.Fatalf("observedAt = %v, want %v", point.Evidence.ObservedAt, backupTime)
+	}
+	if point.Evidence.Correlation == nil {
+		t.Fatal("expected auditable canonical guest correlation")
+	}
+	if point.Evidence.Correlation.CandidateCount != 1 {
+		t.Fatalf(
+			"candidate count = %d, want 1",
+			point.Evidence.Correlation.CandidateCount,
+		)
+	}
+	if err := point.Evidence.Validate(); err != nil {
+		t.Fatalf("evidence Validate() error = %v", err)
+	}
+}

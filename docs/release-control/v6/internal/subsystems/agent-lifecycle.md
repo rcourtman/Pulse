@@ -4619,3 +4619,9 @@ header alone is not identity. This lets a Basic-authenticated qualification
 operator approve or reject an agent action while preserving the agent token's
 separate reporting and command authority; invalid credentials must never reach
 the action handler or acquire an operator principal.
+
+The adjacent recovery handlers under `internal/api/` do not widen this agent
+lifecycle boundary. Protection posture is a read-only `monitoring:read`
+projection over recovery points and provider collection evidence. It does not
+register agents, issue or rotate credentials, interpret observer responses,
+or grant backup, restore, command, or remote-configuration authority.

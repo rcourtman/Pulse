@@ -230,6 +230,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "proxmox-backup-identity-monitoring",
                 "container-entrypoint-runtime",
                 "mock-runtime-fixtures",
+                "pbs-protection-evidence-runtime",
                 "monitoring-runtime",
             ],
         )

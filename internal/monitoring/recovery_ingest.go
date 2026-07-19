@@ -24,8 +24,9 @@ type recoveryReconcileScope struct {
 // recoveryIngestBatch is one poll cycle's worth of recovery points, plus an
 // optional reconcile scope when the points are a complete enumeration.
 type recoveryIngestBatch struct {
-	points    []recovery.RecoveryPoint
-	reconcile *recoveryReconcileScope
+	points       []recovery.RecoveryPoint
+	observations []recovery.ProtectionProviderObservation
+	reconcile    *recoveryReconcileScope
 }
 
 func (m *Monitor) ingestRecoveryPointsAsync(points []recovery.RecoveryPoint) {
@@ -39,8 +40,29 @@ func (m *Monitor) ingestAndReconcileRecoveryPointsAsync(points []recovery.Recove
 	m.enqueueRecoveryIngest(recoveryIngestBatch{points: points, reconcile: &scope})
 }
 
+func (m *Monitor) ingestAndReconcileRecoveryPointsWithObservationsAsync(
+	points []recovery.RecoveryPoint,
+	observations []recovery.ProtectionProviderObservation,
+	scope recoveryReconcileScope,
+) {
+	m.enqueueRecoveryIngest(recoveryIngestBatch{
+		points:       points,
+		observations: observations,
+		reconcile:    &scope,
+	})
+}
+
+func (m *Monitor) ingestProtectionProviderObservationsAsync(
+	observations []recovery.ProtectionProviderObservation,
+) {
+	m.enqueueRecoveryIngest(recoveryIngestBatch{observations: observations})
+}
+
 func (m *Monitor) enqueueRecoveryIngest(batch recoveryIngestBatch) {
-	if m == nil || (len(batch.points) == 0 && batch.reconcile == nil) {
+	if m == nil ||
+		(len(batch.points) == 0 &&
+			len(batch.observations) == 0 &&
+			batch.reconcile == nil) {
 		return
 	}
 
@@ -53,6 +75,7 @@ func (m *Monitor) enqueueRecoveryIngest(batch recoveryIngestBatch) {
 		m.recoveryIngestMu.Unlock()
 		log.Debug().
 			Int("points", len(batch.points)).
+			Int("provider_observations", len(batch.observations)).
 			Msg("Queued recovery point ingest behind active batch")
 		return
 	}
@@ -88,7 +111,10 @@ func (m *Monitor) runRecoveryPointIngestLoop(batches []recoveryIngestBatch) {
 }
 
 func (m *Monitor) ingestRecoveryPointsBestEffort(ctx context.Context, batch recoveryIngestBatch) {
-	if m == nil || (len(batch.points) == 0 && batch.reconcile == nil) {
+	if m == nil ||
+		(len(batch.points) == 0 &&
+			len(batch.observations) == 0 &&
+			batch.reconcile == nil) {
 		return
 	}
 
@@ -110,6 +136,22 @@ func (m *Monitor) ingestRecoveryPointsBestEffort(ctx context.Context, batch reco
 		return
 	}
 
+	// Collection-wide evidence is the authority for how much provider history
+	// Pulse could actually see. Persist it before any point mutation so a large
+	// point batch, refresh timeout, or reconciliation failure cannot leave
+	// retained artifacts looking more trustworthy than the poll that produced
+	// them.
+	if err := store.UpsertProtectionProviderObservations(
+		ctx,
+		batch.observations,
+	); err != nil {
+		log.Warn().
+			Err(err).
+			Str("org_id", orgID).
+			Int("provider_observations", len(batch.observations)).
+			Msg("Failed to upsert provider protection observations")
+		return
+	}
 	if err := store.UpsertPoints(ctx, batch.points); err != nil {
 		log.Warn().Err(err).Str("org_id", orgID).Int("points", len(batch.points)).Msg("Failed to upsert recovery points from backup polling")
 		// Do not reconcile against a batch that failed to land; deleting on

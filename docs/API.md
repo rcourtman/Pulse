@@ -484,7 +484,8 @@ Detailed storage usage per node and pool.
 
 ### Recovery (formerly Backups / Snapshots)
 Pulse v6 uses the recovery API to provide a platform-agnostic view of backup and snapshot artifacts.
-See `docs/architecture/RECOVERY_CONTRACT.md` for the provider-neutral contract (subjects, points, rollups, and filter semantics).
+See `docs/architecture/RECOVERY_CONTRACT.md` for the provider-neutral contract
+(subjects, points, rollups, posture, and filter semantics).
 
 - `GET /api/recovery/points`
   - Query params:
@@ -494,6 +495,11 @@ See `docs/architecture/RECOVERY_CONTRACT.md` for the provider-neutral contract (
     - Normalized filters: `q`, `cluster`, `node`, `namespace`, `scope=workload`, `verification` (`verified` | `unverified` | `unknown`)
 - `GET /api/recovery/rollups`
   - Query params: `provider`, `kind`, `mode`, `outcome`, `subjectResourceId`, `rollupId`, `from` (RFC3339), `to` (RFC3339), `page`, `limit`
+- `GET /api/recovery/postures`
+  - Returns server-derived per-resource protection posture and provider evidence quality.
+  - Query params: repeated `resourceId` values (maximum 200), `state` (`protected` | `attention` | `unprotected` | `unknown`), `page`, `limit` (maximum 200)
+  - Batch clients must make one bounded request per 200 resource ids, never one request per table row.
+  - Unknown identity, permission, history, or collection completeness remains `unknown`; clients must not infer a healthier state from raw backup or snapshot artifacts.
 - `GET /api/recovery/series`
   - Returns per-day counts for the activity chart.
   - Query params: same filters as `/api/recovery/points` (except paging), plus `tzOffsetMinutes` (integer; UTC offset minutes for day bucketing)

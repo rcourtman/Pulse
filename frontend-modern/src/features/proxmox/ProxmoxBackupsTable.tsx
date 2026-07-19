@@ -6,6 +6,7 @@ import { useSearchParams } from '@solidjs/router';
 import { FilterBar, type FilterDef, type FilterSelectOption } from '@/components/shared/FilterBar';
 import { FilterSegmentedControl } from '@/components/shared/FilterToolbar';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { useProtectionPostures } from '@/hooks/useProtectionPostures';
 import { apiFetch } from '@/utils/apiClient';
 import {
   PlatformErrorState,
@@ -37,7 +38,6 @@ import {
 import {
   buildProxmoxBackupRecoveryModel,
   coverageRowMatchesSearch,
-  isCoverageAttention,
   recoverableArtifactMatchesSearch,
   type RecoverableArtifact,
 } from './proxmoxBackupRecoveryModel';
@@ -99,6 +99,9 @@ export const ProxmoxBackupsTable: Component<{
   const [backups, { refetch }] = createResource<PVEBackupsPayload>(fetchPVEBackups);
   const [pbsBackups] = createResource<PBSBackupsPayload>(fetchPBSBackups);
   const { isMobile } = useBreakpoint();
+  const protectionPostures = useProtectionPostures(() =>
+    (props.workloads ?? []).map((workload) => workload.id),
+  );
 
   // Structured scope filters (node, type) live in the URL so the view is
   // shareable, survives reload, and can be captured by FilterBar saved views.
@@ -201,6 +204,7 @@ export const ProxmoxBackupsTable: Component<{
       snapshots: snapshots(),
       tasks: tasks(),
       nowMs: nowMs(),
+      protectionPostures: protectionPostures.postureByResourceID(),
     }),
   );
 
@@ -245,9 +249,7 @@ export const ProxmoxBackupsTable: Component<{
     const list = recoveryModel().coverageRows.filter((row) => {
       if (!nodeMatches(row.workload.node)) return false;
       if (!typeMatches(row.workload.type)) return false;
-      if (filter === 'attention' && !isCoverageAttention(row.posture)) return false;
-      if (filter === 'current' && row.posture !== 'current') return false;
-      if (filter === 'uncovered' && row.posture !== 'uncovered') return false;
+      if (filter !== 'all' && row.posture !== filter) return false;
       return coverageRowMatchesSearch(row, term);
     });
     const sortKey = coverageSortKey();
@@ -296,13 +298,18 @@ export const ProxmoxBackupsTable: Component<{
   const liveHealthSummary = createMemo(() => {
     const live = recoveryModel().coverageRows.filter((row) => !row.isOrphaned);
     return {
-      current: live.filter((row) => row.posture === 'current').length,
-      attention: live.filter((row) => isCoverageAttention(row.posture)).length,
-      uncovered: live.filter((row) => row.posture === 'uncovered').length,
+      protected: live.filter((row) => row.posture === 'protected').length,
+      attention: live.filter((row) => row.posture === 'attention').length,
+      unprotected: live.filter((row) => row.posture === 'unprotected').length,
+      unknown: live.filter((row) => row.posture === 'unknown').length,
     };
   });
   const view = (): BackupView =>
-    selectedView() ?? (liveHealthSummary().attention > 0 ? 'coverage' : 'date');
+    selectedView() ??
+    (liveHealthSummary().attention + liveHealthSummary().unprotected + liveHealthSummary().unknown >
+    0
+      ? 'coverage'
+      : 'date');
   const setView = (next: BackupView): void => {
     setSelectedView(next);
   };
@@ -462,6 +469,15 @@ export const ProxmoxBackupsTable: Component<{
         }
       >
         <div class="space-y-3">
+          <Show when={protectionPostures.response.error}>
+            <div
+              role="status"
+              class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
+            >
+              Protection posture is unavailable. Pulse is showing restore evidence without guessing
+              whether workloads are protected.
+            </div>
+          </Show>
           <Show when={(props.servers?.length ?? 0) > 0}>
             <ProxmoxBackupServersTable servers={props.servers ?? []} backups={pbsArtifacts()} />
           </Show>
@@ -472,8 +488,8 @@ export const ProxmoxBackupsTable: Component<{
             title="Backup health"
             tail={
               <span>
-                {liveTotalCount()} targets ·{' '}
-                {recoveryModel().coverageSummary.recoverableArtifacts} restore points
+                {liveTotalCount()} targets · {recoveryModel().coverageSummary.recoverableArtifacts}{' '}
+                restore points
                 <Show when={recoveryModel().coverageSummary.withPBS > 0}>
                   {' · '}
                   {recoveryModel().coverageSummary.withPBS} with{' '}
@@ -487,9 +503,9 @@ export const ProxmoxBackupsTable: Component<{
             }
             segments={[
               {
-                key: 'current',
-                value: liveHealthSummary().current,
-                label: 'current',
+                key: 'protected',
+                value: liveHealthSummary().protected,
+                label: 'protected',
                 toneClass: 'bg-emerald-500',
               },
               {
@@ -500,11 +516,18 @@ export const ProxmoxBackupsTable: Component<{
                 muted: liveHealthSummary().attention === 0,
               },
               {
-                key: 'uncovered',
-                value: liveHealthSummary().uncovered,
-                label: 'uncovered',
+                key: 'unprotected',
+                value: liveHealthSummary().unprotected,
+                label: 'unprotected',
                 toneClass: 'bg-red-500',
-                muted: liveHealthSummary().uncovered === 0,
+                muted: liveHealthSummary().unprotected === 0,
+              },
+              {
+                key: 'unknown',
+                value: liveHealthSummary().unknown,
+                label: 'unknown',
+                toneClass: 'bg-slate-400',
+                muted: liveHealthSummary().unknown === 0,
               },
             ]}
           />

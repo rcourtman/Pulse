@@ -8,10 +8,12 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	_ "modernc.org/sqlite"
@@ -207,10 +209,13 @@ func TestHandleListRollupsExposeCanonicalPlatformsPayload(t *testing.T) {
 }
 
 func TestBuildRecoveryRollupPayloadExposesCanonicalItemResourceIDField(t *testing.T) {
+	verifiedAt := time.Date(2026, 7, 19, 6, 0, 0, 0, time.UTC)
 	payload := buildRecoveryRollupPayload(recovery.ProtectionRollup{
 		RollupID:          "res:vm-123",
 		SubjectResourceID: "vm-123",
 		LastOutcome:       recovery.Outcome("success"),
+		VerifyIntent:      recovery.VerifyIntentVerified,
+		LastVerifiedAt:    &verifiedAt,
 	})
 
 	if payload.ItemResourceID != "vm-123" {
@@ -218,6 +223,136 @@ func TestBuildRecoveryRollupPayloadExposesCanonicalItemResourceIDField(t *testin
 	}
 	if payload.SubjectResourceID != "vm-123" {
 		t.Fatalf("payload.SubjectResourceID = %q, want %q", payload.SubjectResourceID, "vm-123")
+	}
+	if payload.VerifyIntent != recovery.VerifyIntentVerified {
+		t.Fatalf("payload.VerifyIntent = %q, want verified", payload.VerifyIntent)
+	}
+	if payload.LastVerifiedAt == nil || !payload.LastVerifiedAt.Equal(verifiedAt) {
+		t.Fatalf("payload.LastVerifiedAt = %v, want %v", payload.LastVerifiedAt, verifiedAt)
+	}
+}
+
+func TestHandleListProtectionPosturesReturnsBoundedCanonicalBatch(t *testing.T) {
+	t.Parallel()
+
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	manager := recoverymanager.New(mtp)
+	store, err := manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatalf("StoreForOrg(default): %v", err)
+	}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	completedAt := now.Add(-time.Hour)
+	verified := true
+	point := recovery.RecoveryPoint{
+		ID:                "pbs-backup:vm-123",
+		Provider:          recovery.ProviderProxmoxPBS,
+		Kind:              recovery.KindBackup,
+		Mode:              recovery.ModeRemote,
+		Outcome:           recovery.OutcomeSuccess,
+		CompletedAt:       &completedAt,
+		Verified:          &verified,
+		SubjectResourceID: "vm-123",
+		ProviderScope:     "pbs-main",
+	}
+	evidence, err := recovery.NewRecoveryPointEvidence(
+		point,
+		"pbs-backup-inventory",
+		now,
+	)
+	if err != nil {
+		t.Fatalf("NewRecoveryPointEvidence() error = %v", err)
+	}
+	point.Evidence = evidence
+	observation, err := recovery.NewProtectionProviderObservation(
+		recovery.ProviderProxmoxPBS,
+		"pbs-backup-enumeration",
+		"pbs-main",
+		recovery.OutcomeSuccess,
+		recovery.ProtectionHistoryComplete,
+		operationaltrust.EvidencePermissionsSufficient,
+		true,
+		now,
+		now,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewProtectionProviderObservation() error = %v", err)
+	}
+	if err := store.UpsertProtectionProviderObservations(
+		context.Background(),
+		[]recovery.ProtectionProviderObservation{observation},
+	); err != nil {
+		t.Fatalf("UpsertProtectionProviderObservations() error = %v", err)
+	}
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{point}); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+
+	handler := NewRecoveryHandlers(manager)
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/recovery/postures?resourceId=vm-123&resourceId=vm-missing",
+		nil,
+	)
+	response := httptest.NewRecorder()
+	handler.HandleListProtectionPostures(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf(
+			"HandleListProtectionPostures() status = %d, want 200 body=%s",
+			response.Code,
+			response.Body.String(),
+		)
+	}
+	var payload struct {
+		Data   []recovery.ProtectionPosture `json:"data"`
+		Policy struct {
+			FreshnessWindowSeconds    int64 `json:"freshnessWindowSeconds"`
+			VerificationWindowSeconds int64 `json:"verificationWindowSeconds"`
+		} `json:"policy"`
+		Meta struct {
+			Total int `json:"total"`
+			Limit int `json:"limit"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Meta.Total != 2 || len(payload.Data) != 2 {
+		t.Fatalf("postures total=%d len=%d, want 2/2", payload.Meta.Total, len(payload.Data))
+	}
+	byID := make(map[string]recovery.ProtectionPosture)
+	for _, posture := range payload.Data {
+		byID[posture.SubjectResourceID] = posture
+	}
+	if byID["vm-123"].State != recovery.ProtectionStateProtected {
+		t.Fatalf("vm-123 posture = %#v, want protected", byID["vm-123"])
+	}
+	if byID["vm-missing"].State != recovery.ProtectionStateUnknown {
+		t.Fatalf("vm-missing posture = %#v, want unknown", byID["vm-missing"])
+	}
+	if payload.Policy.FreshnessWindowSeconds <= 0 ||
+		payload.Policy.VerificationWindowSeconds <= 0 {
+		t.Fatalf("policy = %#v, want positive server evaluation windows", payload.Policy)
+	}
+}
+
+func TestHandleListProtectionPosturesRejectsUnboundedBatch(t *testing.T) {
+	t.Parallel()
+
+	values := url.Values{}
+	for i := 0; i <= maxProtectionPostureResourceIDs; i++ {
+		values.Add("resourceId", "resource-"+strconv.Itoa(i))
+	}
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/api/recovery/postures?"+values.Encode(),
+		nil,
+	)
+	response := httptest.NewRecorder()
+	NewRecoveryHandlers(nil).HandleListProtectionPostures(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400 body=%s", response.Code, response.Body.String())
 	}
 }
 

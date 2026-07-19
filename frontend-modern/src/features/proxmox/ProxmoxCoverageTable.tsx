@@ -32,9 +32,10 @@ import {
 const coveragePostureVariant = (
   posture: WorkloadCoverageRow['posture'],
 ): StatusIndicatorVariant => {
-  if (posture === 'current') return 'success';
-  if (posture === 'uncovered' || posture === 'failed' || posture === 'stale') return 'danger';
-  return 'warning';
+  if (posture === 'protected') return 'success';
+  if (posture === 'unprotected') return 'danger';
+  if (posture === 'attention') return 'warning';
+  return 'muted';
 };
 
 // Colour marks the exception, not the baseline: healthy rows keep neutral text
@@ -52,6 +53,17 @@ const taskWordVariant = (label: string): StatusIndicatorVariant => {
   if (label === 'Failed') return 'danger';
   if (label === 'OK') return 'success';
   return 'warning';
+};
+
+const providerLabel = (provider: string): string => {
+  if (provider === 'proxmox-pbs') return 'Proxmox Backup Server';
+  if (provider === 'proxmox-pve') return 'Proxmox VE';
+  return provider;
+};
+
+const evidenceQualityLabel = (value: string): string => {
+  if (!value) return 'Unknown';
+  return value.charAt(0).toUpperCase() + value.slice(1);
 };
 
 // "Workload coverage" table: one row per workload answering "does this have a
@@ -266,10 +278,14 @@ export function ProxmoxCoverageTable(props: {
                           <StatusDot
                             size="sm"
                             variant={coveragePostureVariant(row.posture)}
-                            title={getWorkloadRecoveryPostureLabel(row.posture)}
+                            title={
+                              row.protectionPosture?.explanation ??
+                              'Pulse does not have enough provider evidence to determine protection.'
+                            }
                             ariaHidden
                           />
                           <span
+                            title={row.protectionPosture?.explanation}
                             class={`truncate text-[11px] font-medium ${statusWordToneClass(
                               coveragePostureVariant(row.posture),
                             )}`}
@@ -374,6 +390,40 @@ export function ProxmoxCoverageTable(props: {
                         colspan={columnCount()}
                         data-inline-detail-for={row.key}
                       >
+                        <div class="mb-2 rounded-md border border-border-subtle bg-surface px-2 py-1.5 text-[11px] text-base-content">
+                          <span class="font-medium">
+                            {getWorkloadRecoveryPostureLabel(row.posture)}:
+                          </span>{' '}
+                          {row.protectionPosture?.explanation ??
+                            'Pulse cannot determine this workload’s protection because no complete provider evidence is linked to it.'}
+                        </div>
+                        <Show when={(row.protectionPosture?.providerStates.length ?? 0) > 0}>
+                          <div class="mb-2 overflow-hidden rounded-md border border-border-subtle">
+                            <div class="bg-surface-alt px-2 py-1 text-[11px] font-medium text-base-content">
+                              Provider evidence
+                            </div>
+                            <div class="divide-y divide-border-subtle">
+                              <For each={row.protectionPosture?.providerStates ?? []}>
+                                {(provider) => (
+                                  <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 px-2 py-1.5 text-[11px] sm:grid-cols-4">
+                                    <span class="font-medium text-base-content">
+                                      {providerLabel(provider.provider)}
+                                    </span>
+                                    <span class="text-muted">
+                                      Job {evidenceQualityLabel(provider.jobState)}
+                                    </span>
+                                    <span class="text-muted">
+                                      History {evidenceQualityLabel(provider.historyCompleteness)}
+                                    </span>
+                                    <span class="text-muted">
+                                      Access {evidenceQualityLabel(provider.permissions)}
+                                    </span>
+                                  </div>
+                                )}
+                              </For>
+                            </div>
+                          </div>
+                        </Show>
                         <Show
                           when={evidence().length > 0}
                           fallback={

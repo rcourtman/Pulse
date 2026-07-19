@@ -461,6 +461,38 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 	return out
 }
 
+// FromPBSBackupsWithEvidence is the operational-trust adapter for direct PBS
+// inventory. It preserves the supported RecoveryPoint payload while attaching
+// explicit provider scope and typed evidence to every successfully enumerated
+// backup. Collection-wide completeness and permission state are recorded
+// separately as a ProtectionProviderObservation by the polling owner.
+func FromPBSBackupsWithEvidence(
+	backups []models.PBSBackup,
+	candidatesByKey map[string][]GuestCandidate,
+	ingestedAt time.Time,
+) ([]recovery.RecoveryPoint, error) {
+	points := FromPBSBackups(backups, candidatesByKey)
+	if len(points) == 0 {
+		return []recovery.RecoveryPoint{}, nil
+	}
+	if ingestedAt.IsZero() {
+		return nil, fmt.Errorf("PBS recovery evidence ingestion time is required")
+	}
+	for i := range points {
+		points[i].ProviderScope = recovery.ProviderScopeForPoint(points[i])
+		evidence, err := recovery.NewRecoveryPointEvidence(
+			points[i],
+			"pbs-backup-inventory",
+			ingestedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("map PBS backup %q evidence: %w", points[i].ID, err)
+		}
+		points[i].Evidence = evidence
+	}
+	return points, nil
+}
+
 func sizePtr(v int64) *int64 {
 	if v <= 0 {
 		return nil

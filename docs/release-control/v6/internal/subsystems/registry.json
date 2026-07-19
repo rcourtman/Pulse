@@ -419,6 +419,14 @@
       "rationale": "Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary"
     },
     {
+      "path": "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
+      "subsystems": [
+        "storage-recovery",
+        "unified-resources"
+      ],
+      "rationale": "Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary"
+    },
+    {
       "path": "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
       "subsystems": [
         "storage-recovery",
@@ -2536,6 +2544,23 @@
             "exact_files": [
               "internal/api/diagnostics_additional_test.go",
               "internal/api/diagnostics_memory_test.go"
+            ]
+          },
+          {
+            "id": "protection-posture-api-contract",
+            "label": "bounded protection posture API proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/recovery_handlers.go",
+              "internal/api/router_routes_monitoring.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/hooks/__tests__/useProtectionPostures.test.ts",
+              "frontend-modern/src/types/recovery.ts",
+              "internal/api/recovery_handlers_test.go",
+              "internal/api/route_inventory_test.go"
             ]
           },
           {
@@ -5152,6 +5177,24 @@
             ]
           },
           {
+            "id": "pbs-protection-evidence-runtime",
+            "label": "PBS protection evidence collection proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/monitoring/monitor_backups.go",
+              "internal/monitoring/pbs_protection_observation.go",
+              "internal/monitoring/recovery_ingest.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/pbs_protection_observation_test.go",
+              "internal/monitoring/recovery_ingest_test.go",
+              "internal/recovery/mapper/proxmox/mapper_test.go",
+              "internal/recovery/posture_test.go"
+            ]
+          },
+          {
             "id": "monitoring-runtime",
             "label": "monitoring runtime proof",
             "match_prefixes": [
@@ -6267,8 +6310,10 @@
         "frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts",
         "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
         "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
+        "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
         "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
         "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx",
+        "frontend-modern/src/hooks/useProtectionPostures.ts",
         "frontend-modern/src/hooks/useRecoveryPoints.ts",
         "frontend-modern/src/types/recovery.ts",
         "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
@@ -6302,7 +6347,9 @@
               "internal/recovery/idgen/idgen_test.go",
               "internal/recovery/manager/manager_test.go",
               "internal/recovery/mapper/proxmox/mapper_test.go",
+              "internal/recovery/posture_test.go",
               "internal/recovery/recovery_test.go",
+              "internal/recovery/store/store_posture_test.go",
               "internal/recovery/store/store_queryplan_test.go",
               "internal/recovery/store/store_rollups_test.go",
               "internal/recovery/store/store_series_test.go",
@@ -6314,6 +6361,7 @@
             "label": "recovery product surface proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/hooks/useProtectionPostures.ts",
               "frontend-modern/src/hooks/useRecoveryPoints.ts",
               "frontend-modern/src/types/recovery.ts",
               "frontend-modern/src/utils/recoveryArtifactModePresentation.ts",
@@ -6326,8 +6374,11 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/api/__tests__/recoveryTransport.test.ts",
+              "frontend-modern/src/hooks/__tests__/useProtectionPostures.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-              "tests/integration/tests/17-proxmox-backups-layout.spec.ts"
+              "tests/integration/tests/17-proxmox-backups-layout.spec.ts",
+              "tests/integration/tests/90-operational-trust-protection-posture.spec.ts"
             ]
           },
           {
@@ -6370,16 +6421,20 @@
               "frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts",
               "frontend-modern/src/features/proxmox/ProxmoxBackupsTable.tsx",
               "frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx",
+              "frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx",
               "frontend-modern/src/features/proxmox/ProxmoxPageSurface.tsx",
               "frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.branchcov.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupRecoveryModel.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupSourcePresentation.test.ts",
               "frontend-modern/src/features/proxmox/__tests__/ProxmoxBackupsTable.test.tsx",
-              "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupsTableShared.test.tsx"
+              "frontend-modern/src/features/proxmox/__tests__/proxmoxBackupsTableShared.test.tsx",
+              "frontend-modern/src/features/proxmox/__tests__/ProxmoxCoverageTable.test.tsx",
+              "tests/integration/tests/90-operational-trust-protection-posture.spec.ts"
             ]
           },
           {

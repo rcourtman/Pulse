@@ -5048,3 +5048,19 @@ the matching Open or History subtab from server-authored lifecycle state, and
 removes the query when the dialog closes. Feature pages may summarize action
 context, but they must not recreate approve, reject, run, progress, or outcome
 controls outside the shared Actions review.
+
+### Protection posture presentation boundary
+
+Platform coverage tables render the storage/recovery-owned four-state
+`ProtectionPosture` contract without inventing age, failure, verification, or
+coverage states from raw browser payloads. Protected uses the shared success
+tone, attention uses warning, unprotected uses danger, and unknown uses muted
+presentation. The compact row remains actionable: plain-language rationale and
+provider history/permission limitations live one disclosure deeper beside
+bounded restore evidence. A posture fetch failure must keep the evidence
+inspectable and show unknown, never a locally inferred healthy fallback.
+
+Protection table controls continue to compose shared filter, table, status,
+counter, loading, error, disclosure, and inline-detail primitives. The bounded
+batch hook retains fulfilled values during refresh and issues at most one
+request per 200 resource rows, rather than placing a request under each row.

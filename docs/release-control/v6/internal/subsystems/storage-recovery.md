@@ -53,6 +53,11 @@ state.
 24. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx`
 25. `frontend-modern/src/features/proxmox/proxmoxBackupsTableShared.tsx`
 26. `frontend-modern/src/features/proxmox/proxmoxBackupSourcePresentation.ts`
+27. `internal/recovery/model/posture.go`
+28. `internal/recovery/posture.go`
+29. `internal/recovery/store/store_posture.go`
+30. `frontend-modern/src/hooks/useProtectionPostures.ts`
+31. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx`
 
 ## Shared Boundaries
 
@@ -90,9 +95,10 @@ knowledge persistence. Any future storage action must cross the explicit
 a recovery-provider read helper or compatibility alias.
 
 1. `frontend-modern/src/features/proxmox/ProxmoxBackupServersTable.tsx` shared with `unified-resources`: Proxmox backup server table rows are both a storage/recovery backup-health surface and a unified-resource platform-table consumer boundary.
-2. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `unified-resources`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
-3. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `api-contracts`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
-4. `internal/proxmoxidentity/backup_identity.go` shared with `alerts`, `monitoring`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
+2. `frontend-modern/src/features/proxmox/ProxmoxCoverageTable.tsx` shared with `unified-resources`: Proxmox workload coverage rows are both a storage/recovery protection-posture surface and a unified-resource identity consumer boundary.
+3. `frontend-modern/src/features/proxmox/ProxmoxRecoverableTable.tsx` shared with `unified-resources`: Proxmox recoverable workload table rows are both a storage/recovery coverage surface and a unified-resource platform-table consumer boundary.
+4. `internal/api/setup_script_render.go` shared with `agent-lifecycle`, `api-contracts`: the generated Proxmox setup-script is a shared boundary across agent lifecycle (forced-command keys, install/uninstall edits), API contracts (rendered token shape and encoded rerun URL), and storage/recovery (backup visibility grants, Pulse-managed temperature SSH keys, and SMART disk-temperature collection).
+5. `internal/proxmoxidentity/backup_identity.go` shared with `alerts`, `monitoring`: Proxmox PBS backup subject identity is a shared runtime boundary for monitoring backup freshness, backup-age alert attribution, and recovery-point guest mapping.
 
 Storage resource projections may show alert indicators from the canonical
 active-alert read model only while detector evaluation is enabled. They must
@@ -2154,6 +2160,33 @@ fields and nullable mode/kind metadata before presenting canonical item labels,
 while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
+
+### Canonical protection posture
+
+`ProtectionPosture` is the storage/recovery-owned subject read model over
+recovery points and typed provider collection evidence. Its only public states
+are `protected`, `attention`, `unprotected`, and `unknown`. A protected claim
+requires a current subject-linked backup supported by complete, sufficiently
+authorized provider history, plus verification when the provider declares it
+expected. Stale, failed, partial, or unverified evidence is attention;
+unprotected requires complete evidence of no qualifying backup; unavailable
+identity, history, collection, or permission evidence fails to unknown.
+Snapshots remain distinct and never prove independent recovery by themselves.
+
+The per-tenant recovery store persists provider observations and a materialized
+posture index, refreshes it after writes, reconciliation, migration, identity
+backfill, purge, and retention, and re-evaluates requested resource batches at
+read time so freshness cannot age into a reassuring stale snapshot. Legacy
+recovery rows receive additive provider scope and typed evidence during
+migration. Provider observations and recovery points share bounded retention.
+
+`GET /api/recovery/postures` is the bounded read boundary for one resource,
+resource-table batches, state-filtered attention lists, policy, evaluation
+time, provider limitations, and evidence references. The Proxmox coverage
+surface requests canonical resource IDs in batches of at most 200 and never
+derives posture from raw PVE/PBS artifacts. Raw backup files, snapshots, tasks,
+and provider state remain expandable recovery evidence. Missing or failed
+posture reads render unknown rather than falling back to browser inference.
 
 The adjacent shared authentication boundary must remain live when storage or
 recovery browser reads authenticated with local credentials overlap agent

@@ -25,9 +25,11 @@ const renderInRouter = (component: () => JSX.Element) =>
   ));
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
+const apiFetchJSONMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/utils/apiClient', () => ({
   apiFetch: apiFetchMock,
+  apiFetchJSON: apiFetchJSONMock,
 }));
 
 const jsonResponse = (payload: unknown) =>
@@ -110,11 +112,39 @@ const pbsPayload = {
   meta: { totalBackups: 1 },
 };
 
-function mockBackupAPIs() {
+function mockBackupAPIs(state: 'protected' | 'attention' = 'protected') {
   apiFetchMock.mockImplementation((url: string) => {
     if (url === '/api/backups/pbs') return Promise.resolve(jsonResponse(pbsPayload));
     if (url === '/api/backups/pve') return Promise.resolve(jsonResponse(pvePayload));
     return Promise.resolve(jsonResponse({}));
+  });
+  apiFetchJSONMock.mockResolvedValue({
+    data: [
+      {
+        subjectResourceId: 'ct-112',
+        state,
+        lastAttemptAt: '2026-05-25T02:00:00Z',
+        lastSuccessfulPointAt: '2026-05-25T01:34:25Z',
+        lastVerifiedAt: '2026-05-25T01:34:25Z',
+        freshness: 'current',
+        verification: 'verified',
+        coverage: 'complete',
+        providerStates: [],
+        repositoryResourceIds: [],
+        evidenceIds: ['evidence-1'],
+        explanation:
+          state === 'protected'
+            ? 'A current verified backup is available.'
+            : 'The latest provider job needs attention.',
+        evaluatedAt: '2026-05-25T02:05:00Z',
+      },
+    ],
+    policy: {
+      freshnessWindowSeconds: 604800,
+      verificationWindowSeconds: 604800,
+      requireVerification: true,
+    },
+    meta: { page: 1, limit: 200, total: 1, totalPages: 1 },
   });
 }
 
@@ -167,11 +197,12 @@ const expectCanonicalPlatformTableShell = (table: HTMLElement): void => {
 afterEach(() => {
   cleanup();
   apiFetchMock.mockReset();
+  apiFetchJSONMock.mockReset();
 });
 
 describe('ProxmoxBackupsTable', () => {
   it('defaults to coverage when protection needs attention and keeps the dated feed one click away', async () => {
-    mockBackupAPIs();
+    mockBackupAPIs('attention');
 
     renderInRouter(() => (
       <ProxmoxBackupsTable
@@ -216,6 +247,10 @@ describe('ProxmoxBackupsTable', () => {
     }
     expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pbs');
     expect(apiFetchMock).toHaveBeenCalledWith('/api/backups/pve');
+    expect(apiFetchJSONMock).toHaveBeenCalledTimes(1);
+    const postureURL = new URL(apiFetchJSONMock.mock.calls[0][0], 'https://pulse.invalid');
+    expect(postureURL.pathname).toBe('/api/recovery/postures');
+    expect(postureURL.searchParams.getAll('resourceId')).toEqual(['ct-112']);
   });
 
   it('offers By date / Coverage views and no legacy sub-tab tree', async () => {
@@ -260,10 +295,10 @@ describe('ProxmoxBackupsTable', () => {
     await screen.findAllByText('pbs-docker');
     await fireEvent.click(screen.getByRole('button', { name: /coverage/i }));
 
-    // Coverage is the posture view; the workload's recent backup reads
-    // "Current".
+    // Coverage is the posture view; the server-owned workload posture reads
+    // "Protected".
     expect(screen.getByRole('columnheader', { name: /posture/i })).toBeInTheDocument();
-    expect(screen.getAllByText('Current').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Protected').length).toBeGreaterThan(0);
 
     // Per-source detail is one click down inside the workload's row.
     await fireEvent.click(screen.getByRole('button', { name: /expand details for pbs-docker/i }));

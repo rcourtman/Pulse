@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rs/zerolog/log"
 
@@ -362,6 +363,9 @@ func Open(dbPath string) (*Store, error) {
 	// Best-effort backfill for PBS guest rows that predate canonical historical continuity.
 	// This should never block startup; missing backfills only affect protected-item accuracy.
 	_ = store.BackfillHistoricalProxmoxPBSGuestIdentity(context.Background())
+	// Best-effort backfill for provider scopes and the materialized canonical
+	// protection posture read model.
+	_ = store.BackfillProtectionMetadata(context.Background())
 	if err := hardenSQLiteArtifacts(dbPath); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("failed to secure recovery db files: %w", err)
@@ -394,6 +398,35 @@ func (s *Store) PurgeStalePVEPBSBackups(ctx context.Context) error {
 		ctx = context.Background()
 	}
 
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT subject_key
+		FROM recovery_points
+		WHERE id LIKE 'pve-backup:%'
+		  AND json_extract(details_json, '$.isPBS') = 1
+		  AND subject_key IS NOT NULL AND TRIM(subject_key) != ''
+	`)
+	if err != nil {
+		return err
+	}
+	affectedSubjectKeys := make(map[string]struct{})
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		if key = strings.TrimSpace(key); key != "" {
+			affectedSubjectKeys[key] = struct{}{}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+
 	res, err := s.db.ExecContext(ctx, `
 		DELETE FROM recovery_points
 		WHERE id LIKE 'pve-backup:%'
@@ -408,6 +441,15 @@ func (s *Store) PurgeStalePVEPBSBackups(ctx context.Context) error {
 		return err
 	}
 	if deleted > 0 {
+		if err := s.RefreshProtectionPostures(
+			ctx,
+			sortedStringSet(affectedSubjectKeys),
+		); err != nil {
+			return fmt.Errorf(
+				"refresh protection postures after stale PVE/PBS purge: %w",
+				err,
+			)
+		}
 		log.Info().
 			Int64("deleted", deleted).
 			Msg("Purged stale PVE-sourced PBS backup entries - PBS direct is now authoritative")
@@ -447,7 +489,7 @@ func (s *Store) ReconcileInstancePoints(ctx context.Context, provider, idPrefix,
 	// repository_ref_json.namespace. The id prefix keeps the classes apart, so
 	// matching either field never crosses providers.
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id FROM recovery_points
+		SELECT id, subject_key FROM recovery_points
 		WHERE provider = ?
 		  AND id LIKE ? || '%'
 		  AND (
@@ -461,13 +503,18 @@ func (s *Store) ReconcileInstancePoints(ctx context.Context, provider, idPrefix,
 	defer rows.Close()
 
 	var stale []string
+	affectedSubjectKeys := make(map[string]struct{})
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err != nil {
+		var subjectKey sql.NullString
+		if err := rows.Scan(&id, &subjectKey); err != nil {
 			return 0, err
 		}
 		if _, ok := keep[id]; !ok {
 			stale = append(stale, id)
+			if key := strings.TrimSpace(subjectKey.String); key != "" {
+				affectedSubjectKeys[key] = struct{}{}
+			}
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -512,6 +559,15 @@ func (s *Store) ReconcileInstancePoints(ctx context.Context, provider, idPrefix,
 	if err = tx.Commit(); err != nil {
 		return 0, err
 	}
+	if err := s.RefreshProtectionPostures(
+		ctx,
+		sortedStringSet(affectedSubjectKeys),
+	); err != nil {
+		return deleted, fmt.Errorf(
+			"refresh protection postures after recovery point reconciliation: %w",
+			err,
+		)
+	}
 
 	if deleted > 0 {
 		log.Info().
@@ -543,6 +599,9 @@ func (s *Store) initSchema() error {
 			verified INTEGER,
 			encrypted INTEGER,
 			immutable INTEGER,
+			provider_scope TEXT,
+			evidence_id TEXT,
+			evidence_json TEXT,
 			subject_key TEXT,
 			repository_key TEXT,
 			subject_resource_id TEXT,
@@ -575,6 +634,37 @@ func (s *Store) initSchema() error {
 
 		CREATE INDEX IF NOT EXISTS idx_recovery_points_subject_key_completed
 		ON recovery_points(subject_key, completed_at_ms);
+
+		CREATE TABLE IF NOT EXISTS protection_provider_observations (
+			id TEXT PRIMARY KEY,
+			provider TEXT NOT NULL,
+			source TEXT NOT NULL,
+			scope TEXT NOT NULL,
+			job_state TEXT NOT NULL,
+			history_completeness TEXT NOT NULL,
+			permissions TEXT NOT NULL,
+			verification_expected INTEGER NOT NULL DEFAULT 0,
+			observed_at_ms INTEGER NOT NULL,
+			ingested_at_ms INTEGER NOT NULL,
+			evidence_json TEXT NOT NULL,
+			created_at_ms INTEGER NOT NULL,
+			updated_at_ms INTEGER NOT NULL
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_protection_provider_observations_scope
+		ON protection_provider_observations(provider, scope, observed_at_ms DESC);
+
+		CREATE TABLE IF NOT EXISTS protection_postures (
+			subject_key TEXT PRIMARY KEY,
+			subject_resource_id TEXT NOT NULL UNIQUE,
+			state TEXT NOT NULL,
+			posture_json TEXT NOT NULL,
+			evaluated_at_ms INTEGER NOT NULL,
+			updated_at_ms INTEGER NOT NULL
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_protection_postures_state
+		ON protection_postures(state, evaluated_at_ms DESC, subject_resource_id);
 	`
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
@@ -585,6 +675,15 @@ func (s *Store) initSchema() error {
 		return err
 	}
 	if err := s.ensureColumn("recovery_points", "repository_key", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("recovery_points", "provider_scope", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("recovery_points", "evidence_id", "TEXT"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("recovery_points", "evidence_json", "TEXT"); err != nil {
 		return err
 	}
 
@@ -623,6 +722,12 @@ func (s *Store) initSchema() error {
 
 		CREATE INDEX IF NOT EXISTS idx_recovery_points_namespace_completed
 		ON recovery_points(namespace_label, completed_at_ms);
+
+		CREATE INDEX IF NOT EXISTS idx_recovery_points_subject_provider_scope
+		ON recovery_points(subject_key, provider, provider_scope, completed_at_ms);
+
+		CREATE INDEX IF NOT EXISTS idx_recovery_points_provider_scope
+		ON recovery_points(provider, provider_scope, completed_at_ms);
 	`
 	if _, err := s.db.Exec(postMigrationIndexes); err != nil {
 		return err
@@ -975,6 +1080,7 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 				id, provider, kind, mode, outcome,
 				started_at_ms, completed_at_ms, size_bytes,
 				verified, encrypted, immutable,
+				provider_scope, evidence_id, evidence_json,
 				subject_key, repository_key,
 				subject_resource_id, repository_resource_id,
 				subject_ref_json, repository_ref_json, details_json,
@@ -982,7 +1088,7 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 				cluster_label, node_host_label, namespace_label, entity_id_label,
 				repository_label, details_summary,
 				created_at_ms, updated_at_ms
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				provider=excluded.provider,
 				kind=excluded.kind,
@@ -994,6 +1100,9 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 				verified=excluded.verified,
 				encrypted=excluded.encrypted,
 				immutable=excluded.immutable,
+				provider_scope=excluded.provider_scope,
+				evidence_id=excluded.evidence_id,
+				evidence_json=excluded.evidence_json,
 				subject_key=excluded.subject_key,
 				repository_key=excluded.repository_key,
 				subject_resource_id=excluded.subject_resource_id,
@@ -1018,6 +1127,7 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 	}
 	defer stmt.Close()
 
+	affectedSubjectKeys := make(map[string]struct{}, len(points))
 	for _, p := range points {
 		adoptHistoricalProxmoxPBSGuestIdentity(&p, proxmoxPBSIdentities, proxmoxPBSLooseIdentities)
 
@@ -1045,6 +1155,10 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 		if err != nil {
 			return err
 		}
+		evidence, err := marshalJSON(p.Evidence)
+		if err != nil {
+			return err
+		}
 
 		var size any
 		if p.SizeBytes != nil {
@@ -1054,7 +1168,15 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 		subjectRID := strings.TrimSpace(p.SubjectResourceID)
 		repoRID := strings.TrimSpace(p.RepositoryResourceID)
 		subjectKey := recovery.SubjectKeyForPoint(p)
+		if strings.TrimSpace(subjectKey) != "" {
+			affectedSubjectKeys[strings.TrimSpace(subjectKey)] = struct{}{}
+		}
 		repoKey := recovery.RepositoryKey(p.Provider, repoRID, p.RepositoryRef)
+		providerScope := recovery.ProviderScopeForPoint(p)
+		evidenceID := ""
+		if p.Evidence != nil {
+			evidenceID = strings.TrimSpace(p.Evidence.ID)
+		}
 		idx := recovery.DeriveIndex(p)
 
 		if _, err := stmt.ExecContext(
@@ -1070,6 +1192,9 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 			boolPtrToDB(p.Verified),
 			boolPtrToDB(p.Encrypted),
 			boolPtrToDB(p.Immutable),
+			providerScope,
+			evidenceID,
+			nullStringToAny(evidence),
 			strings.TrimSpace(subjectKey),
 			strings.TrimSpace(repoKey),
 			subjectRID,
@@ -1110,6 +1235,12 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 	if err := tx.Commit(); err != nil {
 		return err
 	}
+	if err := s.RefreshProtectionPostures(
+		ctx,
+		sortedStringSet(affectedSubjectKeys),
+	); err != nil {
+		return fmt.Errorf("refresh protection postures after recovery point upsert: %w", err)
+	}
 	return nil
 }
 
@@ -1137,7 +1268,8 @@ func (s *Store) BackfillHistoricalProxmoxPBSGuestIdentity(ctx context.Context) e
 			id, provider, kind, mode, outcome,
 			subject_resource_id, repository_resource_id,
 			subject_ref_json, repository_ref_json, details_json,
-			subject_label, item_type, namespace_label, entity_id_label
+			subject_label, item_type, namespace_label, entity_id_label,
+			subject_key
 		FROM recovery_points
 		WHERE provider = 'proxmox-pbs'
 		LIMIT `+fmt.Sprint(maxBackfillRows)+`
@@ -1162,6 +1294,7 @@ func (s *Store) BackfillHistoricalProxmoxPBSGuestIdentity(ctx context.Context) e
 		itemType       sql.NullString
 		namespaceLabel sql.NullString
 		entityIDLabel  sql.NullString
+		subjectKey     sql.NullString
 	}
 
 	items := make([]item, 0, 256)
@@ -1182,6 +1315,7 @@ func (s *Store) BackfillHistoricalProxmoxPBSGuestIdentity(ctx context.Context) e
 			&r.itemType,
 			&r.namespaceLabel,
 			&r.entityIDLabel,
+			&r.subjectKey,
 		); err != nil {
 			return err
 		}
@@ -1223,6 +1357,7 @@ func (s *Store) BackfillHistoricalProxmoxPBSGuestIdentity(ctx context.Context) e
 	}
 	defer stmt.Close()
 
+	affectedSubjectKeys := make(map[string]struct{})
 	for _, item := range items {
 		key := recovery.ProxmoxPBSGuestContinuityKey(
 			item.subjectLabel.String,
@@ -1289,9 +1424,10 @@ func (s *Store) BackfillHistoricalProxmoxPBSGuestIdentity(ctx context.Context) e
 			return err
 		}
 
+		nextSubjectKey := recovery.SubjectKeyForPoint(p)
 		if _, err := stmt.ExecContext(
 			ctx,
-			recovery.SubjectKeyForPoint(p),
+			nextSubjectKey,
 			p.SubjectResourceID,
 			nullStringToAny(subjectRefJSON),
 			strings.TrimSpace(idx.SubjectLabel),
@@ -1308,10 +1444,25 @@ func (s *Store) BackfillHistoricalProxmoxPBSGuestIdentity(ctx context.Context) e
 		); err != nil {
 			return err
 		}
+		if key := strings.TrimSpace(item.subjectKey.String); key != "" {
+			affectedSubjectKeys[key] = struct{}{}
+		}
+		if key := strings.TrimSpace(nextSubjectKey); key != "" {
+			affectedSubjectKeys[key] = struct{}{}
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		return err
+	}
+	if err := s.RefreshProtectionPostures(
+		ctx,
+		sortedStringSet(affectedSubjectKeys),
+	); err != nil {
+		return fmt.Errorf(
+			"refresh protection postures after PBS identity backfill: %w",
+			err,
+		)
 	}
 	return nil
 }
@@ -1334,11 +1485,58 @@ func (s *Store) maybePrune(ctx context.Context) {
 	s.lastPrune = now
 
 	cutoffMs := now.Add(-s.retention).UnixMilli()
-	// Best-effort cleanup; never block writes if pruning fails.
-	_, _ = s.db.ExecContext(ctx, `
+	// Best-effort cleanup; never block writes if pruning fails. Capture every
+	// subject whose posture can change before deleting either source points or
+	// the provider evidence used to qualify their history.
+	affectedSubjectKeys := make(map[string]struct{})
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT subject_key
+		FROM recovery_points
+		WHERE COALESCE(completed_at_ms, started_at_ms, updated_at_ms) < ?
+		  AND subject_key IS NOT NULL AND TRIM(subject_key) != ''
+		UNION
+		SELECT DISTINCT rp.subject_key
+		FROM recovery_points rp
+		JOIN protection_provider_observations observation
+		  ON observation.provider = rp.provider
+		 AND observation.scope = rp.provider_scope
+		WHERE observation.observed_at_ms < ?
+		  AND rp.subject_key IS NOT NULL AND TRIM(rp.subject_key) != ''
+	`, cutoffMs, cutoffMs)
+	if err == nil {
+		for rows.Next() {
+			var key string
+			if scanErr := rows.Scan(&key); scanErr != nil {
+				err = scanErr
+				break
+			}
+			if key = strings.TrimSpace(key); key != "" {
+				affectedSubjectKeys[key] = struct{}{}
+			}
+		}
+		if rowsErr := rows.Err(); err == nil {
+			err = rowsErr
+		}
+		if closeErr := rows.Close(); err == nil {
+			err = closeErr
+		}
+	}
+	if err != nil {
+		return
+	}
+	if _, err = s.db.ExecContext(ctx, `
 		DELETE FROM recovery_points
 		WHERE COALESCE(completed_at_ms, started_at_ms, updated_at_ms) < ?
-	`, cutoffMs)
+	`, cutoffMs); err != nil {
+		return
+	}
+	if _, err = s.db.ExecContext(ctx, `
+		DELETE FROM protection_provider_observations
+		WHERE observed_at_ms < ?
+	`, cutoffMs); err != nil {
+		return
+	}
+	_ = s.RefreshProtectionPostures(ctx, sortedStringSet(affectedSubjectKeys))
 }
 
 func nullStringToAny(s sql.NullString) any {
@@ -1464,6 +1662,7 @@ func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions)
 			id, provider, kind, mode, outcome,
 			started_at_ms, completed_at_ms, size_bytes,
 			verified, encrypted, immutable,
+			provider_scope, evidence_json,
 			subject_resource_id, repository_resource_id,
 			subject_ref_json, repository_ref_json, details_json
 			, subject_label, subject_type, item_type, is_workload,
@@ -1489,6 +1688,7 @@ func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions)
 		var startedMs, completedMs sql.NullInt64
 		var sizeBytes sql.NullInt64
 		var verified, encrypted, immutable sql.NullInt64
+		var providerScope, evidenceRaw sql.NullString
 		var subjectRID, repoRID sql.NullString
 		var subjectRefRaw, repoRefRaw, detailsRaw sql.NullString
 		var subjectLabel, subjectType sql.NullString
@@ -1509,6 +1709,8 @@ func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions)
 			&verified,
 			&encrypted,
 			&immutable,
+			&providerScope,
+			&evidenceRaw,
 			&subjectRID,
 			&repoRID,
 			&subjectRefRaw,
@@ -1543,6 +1745,12 @@ func (s *Store) ListPoints(ctx context.Context, opts recovery.ListPointsOptions)
 		p.Verified = dbToBoolPtr(verified)
 		p.Encrypted = dbToBoolPtr(encrypted)
 		p.Immutable = dbToBoolPtr(immutable)
+		p.ProviderScope = strings.TrimSpace(providerScope.String)
+		var evidence operationaltrust.EvidenceEnvelope
+		_ = decodeRecoveryJSONField(p.ID, "evidence_json", evidenceRaw, &evidence)
+		if strings.TrimSpace(evidence.ID) != "" {
+			p.Evidence = &evidence
+		}
 
 		if subjectRID.Valid {
 			p.SubjectResourceID = subjectRID.String

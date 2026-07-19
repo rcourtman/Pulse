@@ -409,6 +409,7 @@ var allRouteAllowlist = []string{
 	"/api/recovery/series",
 	"/api/recovery/facets",
 	"/api/recovery/rollups",
+	"/api/recovery/postures",
 	"/api/resources",
 	"/api/resources/storage-incidents",
 	"/api/resources/storage-summary",

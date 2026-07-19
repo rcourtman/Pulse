@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { BackupTask, GuestSnapshot, PBSBackup, StorageBackup } from '@/types/api';
+import type { ProtectionPosture, ProtectionState } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import {
   buildProxmoxBackupRecoveryModel,
@@ -83,8 +84,21 @@ const task = (overrides: Partial<BackupTask> = {}): BackupTask => ({
   ...overrides,
 });
 
+const protectionPosture = (resourceId: string, state: ProtectionState): ProtectionPosture => ({
+  subjectResourceId: resourceId,
+  state,
+  freshness: state === 'protected' ? 'current' : 'unknown',
+  verification: state === 'protected' ? 'verified' : 'unknown',
+  coverage: state === 'unprotected' ? 'none' : state === 'unknown' ? 'unknown' : 'complete',
+  providerStates: [],
+  repositoryResourceIds: [],
+  evidenceIds: [],
+  explanation: `Canonical ${state} fixture`,
+  evaluatedAt: '2026-05-26T08:00:00Z',
+});
+
 describe('proxmoxBackupRecoveryModel', () => {
-  it('classifies backup ages with the same thresholds used by coverage posture', () => {
+  it('classifies backup ages for restore-point presentation', () => {
     const nowMs = Date.parse('2026-05-26T08:00:00Z');
 
     expect(getRecoveryAgeBand(nowMs - 2 * 24 * 60 * 60 * 1000, nowMs)).toBe('current');
@@ -101,6 +115,7 @@ describe('proxmoxBackupRecoveryModel', () => {
       snapshots: [snapshot()],
       tasks: [task()],
       nowMs: Date.parse('2026-05-26T08:00:00Z'),
+      protectionPostures: new Map([['vm-112', protectionPosture('vm-112', 'protected')]]),
     });
 
     expect(model.coverageRows).toHaveLength(1);
@@ -112,7 +127,7 @@ describe('proxmoxBackupRecoveryModel', () => {
     expect(row.archiveCount).toBe(1);
     expect(row.snapshotCount).toBe(1);
     expect(row.latestTask?.label).toBe('OK');
-    expect(getWorkloadRecoveryPostureLabel(row.posture)).toBe('Current');
+    expect(getWorkloadRecoveryPostureLabel(row.posture)).toBe('Protected');
     expect(model.recoverableArtifacts.map((artifact) => artifact.sourceLabel)).toEqual([
       'PBS',
       'PVE file',
@@ -140,7 +155,7 @@ describe('proxmoxBackupRecoveryModel', () => {
     );
   });
 
-  it('surfaces a failed latest backup task as workload attention', () => {
+  it('uses canonical workload attention while retaining the failed task as evidence', () => {
     const model = buildProxmoxBackupRecoveryModel({
       workloads: [workload({})],
       pbsBackups: [pbsBackup({ backupTime: '2026-05-25T01:34:25Z' })],
@@ -155,27 +170,30 @@ describe('proxmoxBackupRecoveryModel', () => {
         }),
       ],
       nowMs: Date.parse('2026-05-26T08:00:00Z'),
+      protectionPostures: new Map([['vm-112', protectionPosture('vm-112', 'attention')]]),
     });
 
     const row = model.coverageRows[0];
-    expect(row.posture).toBe('failed');
-    expect(getWorkloadRecoveryPostureLabel(row.posture)).toBe('Failed latest task');
+    expect(row.posture).toBe('attention');
+    expect(getWorkloadRecoveryPostureLabel(row.posture)).toBe('Needs attention');
     expect(coverageRowMatchesSearch(row, 'storage unavailable')).toBe(true);
   });
 
-  it('keeps inventory workloads with no restore point visible as uncovered', () => {
+  it('keeps an inventory workload with canonical unprotected evidence visible', () => {
+    const resource = workload({ id: 'vm-200', proxmox: { vmid: 200, node: 'delly' } });
     const model = buildProxmoxBackupRecoveryModel({
-      workloads: [workload({ id: 'vm-200', proxmox: { vmid: 200, node: 'delly' } })],
+      workloads: [resource],
       pbsBackups: [],
       archives: [],
       snapshots: [],
       tasks: [],
       nowMs: Date.parse('2026-05-26T08:00:00Z'),
+      protectionPostures: new Map([[resource.id, protectionPosture(resource.id, 'unprotected')]]),
     });
 
     expect(model.coverageRows).toHaveLength(1);
-    expect(model.coverageRows[0].posture).toBe('uncovered');
-    expect(model.coverageSummary.uncovered).toBe(1);
+    expect(model.coverageRows[0].posture).toBe('unprotected');
+    expect(model.coverageSummary.unprotected).toBe(1);
   });
 
   it('does not treat a linked Pulse agent facet as recovery evidence or authority', () => {
@@ -200,8 +218,8 @@ describe('proxmoxBackupRecoveryModel', () => {
     });
 
     expect(model.coverageRows).toHaveLength(1);
-    expect(model.coverageRows[0].posture).toBe('uncovered');
-    expect(model.coverageSummary.uncovered).toBe(1);
+    expect(model.coverageRows[0].posture).toBe('unknown');
+    expect(model.coverageSummary.unknown).toBe(1);
     expect(model.coverageRows[0].pbsCount).toBe(0);
     expect(model.coverageRows[0].archiveCount).toBe(0);
     expect(model.coverageRows[0].snapshotCount).toBe(0);

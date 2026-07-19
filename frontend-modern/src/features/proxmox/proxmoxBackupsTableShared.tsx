@@ -116,16 +116,21 @@ export const COVERAGE_FILTERS: FilterOption<CoverageFilterValue>[] = [
     leading: filterChipStatusDot('bg-amber-500'),
   },
   {
-    value: 'current',
-    label: 'Current',
+    value: 'protected',
+    label: 'Protected',
     tone: 'success',
     leading: filterChipStatusDot('bg-emerald-500'),
   },
   {
-    value: 'uncovered',
-    label: 'Uncovered',
+    value: 'unprotected',
+    label: 'Unprotected',
     tone: 'danger',
     leading: filterChipStatusDot('bg-red-500'),
+  },
+  {
+    value: 'unknown',
+    label: 'Unknown',
+    leading: filterChipStatusDot('bg-base-content/40'),
   },
 ];
 

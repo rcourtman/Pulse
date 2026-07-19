@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	kubernetesmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/kubernetes"
@@ -63,14 +64,16 @@ type recoveryPointPayload struct {
 	Encrypted *bool  `json:"encrypted,omitempty"`
 	Immutable *bool  `json:"immutable,omitempty"`
 
-	ItemResourceID       string                         `json:"itemResourceId,omitempty"`
-	SubjectResourceID    string                         `json:"subjectResourceId,omitempty"`
-	RepositoryResourceID string                         `json:"repositoryResourceId,omitempty"`
-	ItemRef              *recovery.ExternalRef          `json:"itemRef,omitempty"`
-	SubjectRef           *recovery.ExternalRef          `json:"subjectRef,omitempty"`
-	RepositoryRef        *recovery.ExternalRef          `json:"repositoryRef,omitempty"`
-	Details              map[string]any                 `json:"details,omitempty"`
-	Display              *recovery.RecoveryPointDisplay `json:"display,omitempty"`
+	ItemResourceID       string                             `json:"itemResourceId,omitempty"`
+	SubjectResourceID    string                             `json:"subjectResourceId,omitempty"`
+	RepositoryResourceID string                             `json:"repositoryResourceId,omitempty"`
+	ItemRef              *recovery.ExternalRef              `json:"itemRef,omitempty"`
+	SubjectRef           *recovery.ExternalRef              `json:"subjectRef,omitempty"`
+	RepositoryRef        *recovery.ExternalRef              `json:"repositoryRef,omitempty"`
+	Details              map[string]any                     `json:"details,omitempty"`
+	ProviderScope        string                             `json:"providerScope,omitempty"`
+	Evidence             *operationaltrust.EvidenceEnvelope `json:"evidence,omitempty"`
+	Display              *recovery.RecoveryPointDisplay     `json:"display,omitempty"`
 }
 
 type recoveryRollupPayload struct {
@@ -85,6 +88,8 @@ type recoveryRollupPayload struct {
 	LastOutcome       recovery.Outcome               `json:"lastOutcome"`
 	Platforms         []recovery.Provider            `json:"platforms,omitempty"`
 	Providers         []recovery.Provider            `json:"providers,omitempty"`
+	VerifyIntent      recovery.VerifyIntent          `json:"verifyIntent,omitempty"`
+	LastVerifiedAt    *time.Time                     `json:"lastVerifiedAt,omitempty"`
 }
 
 func buildRecoveryPointPayload(point recovery.RecoveryPoint) recoveryPointPayload {
@@ -108,6 +113,8 @@ func buildRecoveryPointPayload(point recovery.RecoveryPoint) recoveryPointPayloa
 		SubjectRef:           point.SubjectRef,
 		RepositoryRef:        point.RepositoryRef,
 		Details:              point.Details,
+		ProviderScope:        point.ProviderScope,
+		Evidence:             point.Evidence,
 		Display:              point.Display,
 	}
 }
@@ -125,6 +132,8 @@ func buildRecoveryRollupPayload(rollup recovery.ProtectionRollup) recoveryRollup
 		LastOutcome:       rollup.LastOutcome,
 		Platforms:         rollup.Providers,
 		Providers:         rollup.Providers,
+		VerifyIntent:      rollup.VerifyIntent,
+		LastVerifiedAt:    rollup.LastVerifiedAt,
 	}
 }
 
@@ -697,6 +706,248 @@ func (h *RecoveryHandlers) HandleListRollups(w http.ResponseWriter, r *http.Requ
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to serialize recovery rollups response")
 	}
+}
+
+const maxProtectionPostureResourceIDs = 200
+
+type protectionPosturesResponse struct {
+	Data   []recovery.ProtectionPosture            `json:"data"`
+	Policy recovery.ProtectionPosturePolicyPayload `json:"policy"`
+	Meta   struct {
+		Page       int `json:"page"`
+		Limit      int `json:"limit"`
+		Total      int `json:"total"`
+		TotalPages int `json:"totalPages"`
+	} `json:"meta"`
+}
+
+func parseProtectionPostureResourceIDs(qs url.Values) []string {
+	values := make([]string, 0, len(qs["resourceId"])+len(qs["resourceIds"]))
+	values = append(values, qs["resourceId"]...)
+	values = append(values, qs["resourceIds"]...)
+	unique := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		for _, part := range strings.Split(value, ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				unique[part] = struct{}{}
+			}
+		}
+	}
+	out := make([]string, 0, len(unique))
+	for value := range unique {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (h *RecoveryHandlers) HandleListProtectionPostures(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	qs := r.URL.Query()
+	resourceIDs := parseProtectionPostureResourceIDs(qs)
+	if len(resourceIDs) > maxProtectionPostureResourceIDs {
+		writeErrorResponse(
+			w,
+			http.StatusBadRequest,
+			"too_many_resource_ids",
+			"At most 200 resource IDs may be evaluated in one posture batch.",
+			map[string]string{"limit": strconv.Itoa(maxProtectionPostureResourceIDs)},
+		)
+		return
+	}
+	state := recovery.ProtectionState(strings.TrimSpace(qs.Get("state")))
+	if state != "" && !state.Valid() {
+		writeErrorResponse(
+			w,
+			http.StatusBadRequest,
+			"invalid_protection_state",
+			"Protection state must be protected, attention, unprotected, or unknown.",
+			map[string]string{"state": string(state)},
+		)
+		return
+	}
+	page := parseIntQuery(qs, "page", 1)
+	limit := parseIntQuery(qs, "limit", 100)
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > maxProtectionPostureResourceIDs {
+		limit = maxProtectionPostureResourceIDs
+	}
+
+	query := recovery.ProtectionPostureQuery{
+		SubjectResourceIDs: resourceIDs,
+		State:              state,
+		Page:               page,
+		Limit:              limit,
+	}
+	var (
+		postures []recovery.ProtectionPosture
+		total    int
+		err      error
+	)
+	if mock.IsMockEnabled() {
+		postures, total = mockProtectionPostures(
+			mock.CurrentFixtureGraph().RecoveryPoints(),
+			query,
+			time.Now().UTC(),
+		)
+	} else {
+		orgID := GetOrgID(r.Context())
+		store, storeErr := h.storeForOrg(orgID)
+		if storeErr != nil {
+			http.Error(
+				w,
+				sanitizeErrorForClient(storeErr, "Internal server error"),
+				http.StatusInternalServerError,
+			)
+			return
+		}
+		postures, total, err = store.ListProtectionPostures(r.Context(), query)
+		if err != nil {
+			http.Error(
+				w,
+				sanitizeErrorForClient(err, "Internal server error"),
+				http.StatusInternalServerError,
+			)
+			return
+		}
+	}
+
+	var response protectionPosturesResponse
+	response.Data = postures
+	response.Policy = recovery.DefaultProtectionPosturePolicy.Payload()
+	response.Meta.Page = page
+	response.Meta.Limit = limit
+	response.Meta.Total = total
+	if total == 0 {
+		response.Meta.TotalPages = 0
+	} else {
+		response.Meta.TotalPages = (total + limit - 1) / limit
+	}
+	if err := utils.WriteJSONResponse(w, response); err != nil {
+		log.Error().Err(err).Msg("Failed to serialize protection posture response")
+	}
+}
+
+func mockProtectionPostures(
+	points []recovery.RecoveryPoint,
+	query recovery.ProtectionPostureQuery,
+	now time.Time,
+) ([]recovery.ProtectionPosture, int) {
+	pointsByResource := make(map[string][]recovery.RecoveryPoint)
+	observationsByKey := make(map[string]recovery.ProtectionProviderObservation)
+	for _, point := range points {
+		resourceID := strings.TrimSpace(point.SubjectResourceID)
+		if resourceID == "" {
+			continue
+		}
+		pointsByResource[resourceID] = append(pointsByResource[resourceID], point)
+		scope := recovery.ProviderScopeForPoint(point)
+		key := string(point.Provider) + "\x00" + scope
+		if _, exists := observationsByKey[key]; exists {
+			continue
+		}
+		observation, err := recovery.NewProtectionProviderObservation(
+			point.Provider,
+			"mock-complete-recovery-fixture",
+			scope,
+			recovery.OutcomeUnknown,
+			recovery.ProtectionHistoryComplete,
+			operationaltrust.EvidencePermissionsSufficient,
+			point.Provider == recovery.ProviderProxmoxPBS,
+			now,
+			now,
+			nil,
+		)
+		if err == nil {
+			observationsByKey[key] = observation
+		}
+	}
+	observations := make([]recovery.ProtectionProviderObservation, 0, len(observationsByKey))
+	for _, observation := range observationsByKey {
+		observations = append(observations, observation)
+	}
+
+	resourceIDs := append([]string(nil), query.SubjectResourceIDs...)
+	if len(resourceIDs) == 0 {
+		for resourceID := range pointsByResource {
+			resourceIDs = append(resourceIDs, resourceID)
+		}
+		sort.Strings(resourceIDs)
+	}
+	postures := make([]recovery.ProtectionPosture, 0, len(resourceIDs))
+	for _, resourceID := range resourceIDs {
+		posture := recovery.BuildProtectionPostureFromPointsAt(
+			resourceID,
+			pointsByResource[resourceID],
+			observations,
+			recovery.DefaultProtectionPosturePolicy,
+			now,
+		)
+		if query.State != "" && posture.State != query.State {
+			continue
+		}
+		postures = append(postures, posture)
+	}
+	sort.SliceStable(postures, func(i, j int) bool {
+		iRank := protectionPostureStateRank(postures[i].State)
+		jRank := protectionPostureStateRank(postures[j].State)
+		if iRank != jRank {
+			return iRank < jRank
+		}
+		return postures[i].SubjectResourceID < postures[j].SubjectResourceID
+	})
+	total := len(postures)
+	if len(query.SubjectResourceIDs) > 0 {
+		return postures, total
+	}
+	return paginateProtectionPostures(postures, query.Page, query.Limit), total
+}
+
+func protectionPostureStateRank(state recovery.ProtectionState) int {
+	switch state {
+	case recovery.ProtectionStateAttention:
+		return 0
+	case recovery.ProtectionStateUnprotected:
+		return 1
+	case recovery.ProtectionStateUnknown:
+		return 2
+	default:
+		return 3
+	}
+}
+
+func paginateProtectionPostures(
+	postures []recovery.ProtectionPosture,
+	page int,
+	limit int,
+) []recovery.ProtectionPosture {
+	if len(postures) == 0 {
+		return []recovery.ProtectionPosture{}
+	}
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	start := (page - 1) * limit
+	if start >= len(postures) {
+		return []recovery.ProtectionPosture{}
+	}
+	end := start + limit
+	if end > len(postures) {
+		end = len(postures)
+	}
+	return postures[start:end]
 }
 
 func filterRecoveryPointsForRollups(all []recovery.RecoveryPoint, opts recovery.ListPointsOptions) []recovery.RecoveryPoint {

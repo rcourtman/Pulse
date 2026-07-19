@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { BackupTask, GuestSnapshot, PBSBackup } from '@/types/api';
+import type { BackupTask, PBSBackup } from '@/types/api';
+import type { ProtectionPosture, ProtectionState } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 
 import {
@@ -53,18 +54,6 @@ const pbsBackup = (overrides: Partial<PBSBackup> = {}): PBSBackup => ({
   ...overrides,
 });
 
-const snap = (overrides: Partial<GuestSnapshot> = {}): GuestSnapshot => ({
-  id: 'snap-100',
-  name: 'pre-upgrade',
-  node: 'node-a',
-  instance: 'inst-a',
-  type: 'vm',
-  vmid: 100,
-  time: '2026-07-09T00:00:00Z',
-  vmstate: false,
-  ...overrides,
-});
-
 const task = (overrides: Partial<BackupTask> = {}): BackupTask => ({
   id: 'task-100',
   node: 'node-a',
@@ -78,8 +67,25 @@ const task = (overrides: Partial<BackupTask> = {}): BackupTask => ({
 
 type ModelInput = Parameters<typeof buildProxmoxBackupRecoveryModel>[0];
 
-const buildModel = (input: Partial<ModelInput>): ProxmoxBackupRecoveryModel =>
-  buildProxmoxBackupRecoveryModel({
+const posture = (resourceId: string, state: ProtectionState): ProtectionPosture => ({
+  subjectResourceId: resourceId,
+  state,
+  freshness: state === 'protected' ? 'current' : 'unknown',
+  verification: state === 'protected' ? 'verified' : 'unknown',
+  coverage: state === 'unprotected' ? 'none' : state === 'unknown' ? 'unknown' : 'complete',
+  providerStates: [],
+  repositoryResourceIds: [],
+  evidenceIds: [],
+  explanation: `Canonical ${state} fixture`,
+  evaluatedAt: new Date(NOW).toISOString(),
+});
+
+const buildModel = (input: Partial<ModelInput>): ProxmoxBackupRecoveryModel => {
+  const workloads = input.workloads ?? [];
+  const protectionPostures =
+    input.protectionPostures ??
+    new Map(workloads.map((resource) => [resource.id, posture(resource.id, 'protected')]));
+  return buildProxmoxBackupRecoveryModel({
     workloads: [],
     pbsBackups: [],
     archives: [],
@@ -87,7 +93,9 @@ const buildModel = (input: Partial<ModelInput>): ProxmoxBackupRecoveryModel =>
     tasks: [],
     nowMs: NOW,
     ...input,
+    protectionPostures,
   });
+};
 
 // ---------------------------------------------------------------------------
 // getWorkloadRecoveryPostureLabel — uncovered switch cases
@@ -96,97 +104,37 @@ const buildModel = (input: Partial<ModelInput>): ProxmoxBackupRecoveryModel =>
 
 describe('getWorkloadRecoveryPostureLabel uncovered switch cases', () => {
   it.each<[WorkloadRecoveryPosture, string]>([
-    ['aging', 'Aging'],
-    ['stale', 'Stale'],
-    ['snapshot-only', 'Snapshot only'],
-    ['uncovered', 'Uncovered'],
-    ['unverified', 'Unverified'],
+    ['protected', 'Protected'],
+    ['attention', 'Needs attention'],
+    ['unprotected', 'Unprotected'],
+    ['unknown', 'Unknown'],
   ])('renders posture %s as %j', (posture, expected) => {
     expect(getWorkloadRecoveryPostureLabel(posture)).toBe(expected);
   });
 });
 
-// ---------------------------------------------------------------------------
-// buildPosture — uncovered posture arms (private; exercised via the model).
-// Sibling tests cover 'current', 'uncovered', and the 'failed' posture when a
-// failed task started AFTER the recovery (startedMs >= createdMs).
-// ---------------------------------------------------------------------------
-
-describe('buildPosture uncovered arms (via buildProxmoxBackupRecoveryModel)', () => {
-  it('classifies a 14-day-old PBS recovery as "aging"', () => {
+describe('canonical protection posture ownership', () => {
+  it('uses the server posture even when raw artifacts suggest a different answer', () => {
+    const resource = workload({});
     const model = buildModel({
-      workloads: [workload({})],
-      pbsBackups: [pbsBackup({ backupTime: isoDaysAgo(14) })],
+      workloads: [resource],
+      pbsBackups: [pbsBackup({ backupTime: isoDaysAgo(1), verified: true })],
+      protectionPostures: new Map([[resource.id, posture(resource.id, 'attention')]]),
     });
-    expect(model.coverageRows[0].posture).toBe('aging');
-    expect(model.coverageRows[0].postureRank).toBe(4);
-  });
-
-  it('classifies a 45-day-old PBS recovery as "stale"', () => {
-    const model = buildModel({
-      workloads: [workload({})],
-      pbsBackups: [pbsBackup({ backupTime: isoDaysAgo(45) })],
-    });
-    expect(model.coverageRows[0].posture).toBe('stale');
-    expect(model.coverageRows[0].postureRank).toBe(2);
-  });
-
-  it('flags a recent unverified PBS recovery as "unverified"', () => {
-    const model = buildModel({
-      workloads: [workload({})],
-      pbsBackups: [pbsBackup({ backupTime: isoDaysAgo(1), verified: false })],
-    });
-    expect(model.coverageRows[0].posture).toBe('unverified');
-    expect(model.coverageRows[0].postureRank).toBe(2);
-  });
-
-  it('flags a guest-snapshot-only workload as "snapshot-only"', () => {
-    const model = buildModel({
-      workloads: [workload({})],
-      snapshots: [snap({})],
-    });
-    expect(model.coverageRows[0].posture).toBe('snapshot-only');
-    expect(model.coverageRows[0].postureRank).toBe(3);
-    expect(model.coverageRows[0].snapshotCount).toBe(1);
-    expect(model.coverageRows[0].pbsCount).toBe(0);
-  });
-
-  it('treats a failed task with an unparseable start time as the latest failure', () => {
-    // startedMs is undefined -> the `latestTask.startedMs === undefined` arm of
-    // the failedTask disjunction fires even though the recovery has a createdMs.
-    const model = buildModel({
-      workloads: [workload({})],
-      pbsBackups: [pbsBackup({ backupTime: isoDaysAgo(1) })],
-      tasks: [
-        task({
-          status: 'failed',
-          startTime: '',
-          type: 'vm',
-        }),
-      ],
-    });
-    expect(model.coverageRows[0].posture).toBe('failed');
+    expect(model.coverageRows[0].posture).toBe('attention');
     expect(model.coverageRows[0].postureRank).toBe(0);
-    expect(model.coverageRows[0].latestTask?.label).toBe('Failed');
-    expect(model.coverageRows[0].latestTask?.startedMs).toBeUndefined();
+    expect(model.coverageRows[0].protectionPosture?.explanation).toBe(
+      'Canonical attention fixture',
+    );
   });
 
-  it('does not flag "failed" when a failed task predates the latest recovery', () => {
-    // failedTask is false because startedMs < latestRecovery.createdMs, so the
-    // failedTask conjunction is false and posture falls through to the age band.
+  it('reports unknown when no canonical posture is available', () => {
     const model = buildModel({
       workloads: [workload({})],
-      pbsBackups: [pbsBackup({ backupTime: isoDaysAgo(1) })],
-      tasks: [
-        task({
-          status: 'failed',
-          startTime: isoDaysAgo(10),
-          type: 'vm',
-        }),
-      ],
+      protectionPostures: new Map(),
     });
-    expect(model.coverageRows[0].posture).toBe('current');
-    expect(model.coverageRows[0].latestTask?.label).toBe('Failed');
+    expect(model.coverageRows[0].posture).toBe('unknown');
+    expect(model.coverageRows[0].postureRank).toBe(2);
   });
 });
 
@@ -324,9 +272,7 @@ describe('resourceBackupType branches (via candidate type)', () => {
 describe('resourceNode branches (via candidate node)', () => {
   it('prefers proxmox.nodeName when present', () => {
     const model = buildModel({
-      workloads: [
-        workload({ id: 'vm-721', proxmox: { vmid: 721, nodeName: 'named-a' } }),
-      ],
+      workloads: [workload({ id: 'vm-721', proxmox: { vmid: 721, nodeName: 'named-a' } })],
     });
     expect(model.coverageRows[0].workload.node).toBe('named-a');
   });
@@ -340,9 +286,7 @@ describe('resourceNode branches (via candidate node)', () => {
 
   it('falls back to parentName when no proxmox node field is set', () => {
     const model = buildModel({
-      workloads: [
-        workload({ id: 'vm-723', parentName: 'parent-x', proxmox: { vmid: 723 } }),
-      ],
+      workloads: [workload({ id: 'vm-723', parentName: 'parent-x', proxmox: { vmid: 723 } })],
     });
     expect(model.coverageRows[0].workload.node).toBe('parent-x');
   });
@@ -527,9 +471,10 @@ describe('buildProxmoxBackupRecoveryModel summary, sort, and empty edges', () =>
     expect(model.recoverableArtifacts).toHaveLength(0);
     expect(model.coverageSummary).toEqual({
       totalWorkloads: 0,
-      current: 0,
+      protected: 0,
       attention: 0,
-      uncovered: 0,
+      unprotected: 0,
+      unknown: 0,
       withPBS: 0,
       recoverableArtifacts: 0,
       totalBytes: 0,
@@ -550,12 +495,17 @@ describe('buildProxmoxBackupRecoveryModel summary, sort, and empty edges', () =>
     expect(model.coverageSummary.totalBytes).toBe(7_000);
     expect(model.coverageSummary.recoverableArtifacts).toBe(2);
     expect(model.coverageSummary.withPBS).toBe(2);
-    expect(model.coverageSummary.current).toBe(2);
+    expect(model.coverageSummary.protected).toBe(2);
     expect(model.coverageSummary.attention).toBe(0);
   });
 
   it('sorts rows by postureRank asc, then latestRecovery createdMs desc', () => {
-    const model = buildModel({
+    const postures = new Map([
+      ['vm-830', posture('vm-830', 'unprotected')],
+      ['vm-840', posture('vm-840', 'protected')],
+      ['vm-850', posture('vm-850', 'protected')],
+    ]);
+    const canonicalModel = buildModel({
       workloads: [
         workload({ id: 'vm-840', proxmox: { vmid: 840, node: 'a' } }),
         workload({ id: 'vm-830', proxmox: { vmid: 830, node: 'b' } }),
@@ -565,11 +515,14 @@ describe('buildProxmoxBackupRecoveryModel summary, sort, and empty edges', () =>
         pbsBackup({ id: 'pbs-840', vmid: '840', backupTime: isoDaysAgo(1) }),
         pbsBackup({ id: 'pbs-850', vmid: '850', backupTime: isoDaysAgo(2) }),
       ],
+      protectionPostures: postures,
     });
-    // 830 has no recovery -> uncovered (rank 1) sorts first.
-    // 840 and 850 are current (rank 5); tie broken by newer recovery first.
-    expect(model.coverageRows.map((row) => row.workload.vmid)).toEqual(['830', '840', '850']);
-    expect(model.coverageSummary.uncovered).toBe(1);
+    expect(canonicalModel.coverageRows.map((row) => row.workload.vmid)).toEqual([
+      '830',
+      '840',
+      '850',
+    ]);
+    expect(canonicalModel.coverageSummary.unprotected).toBe(1);
   });
 
   it('sorts recoverable artifacts by createdMs desc', () => {

@@ -11,14 +11,9 @@ import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
 export type BackupTabId = 'coverage' | 'recoverable' | 'sources' | 'tasks';
 export type SourceDetailTabId = 'pbs' | 'snapshots' | 'archives';
 
-export type CoverageFilterValue = 'all' | 'attention' | 'current' | 'uncovered';
+export type CoverageFilterValue = 'all' | 'attention' | 'protected' | 'unprotected' | 'unknown';
 export type RecoverableFilterValue =
-  | 'all'
-  | 'pbs'
-  | 'archive'
-  | 'snapshot'
-  | 'verified'
-  | 'unverified';
+  'all' | 'pbs' | 'archive' | 'snapshot' | 'verified' | 'unverified';
 export type SnapshotFilterValue = 'all' | 'recent' | 'stale' | 'with-ram';
 
 // One guest's aggregated snapshot inventory, the row shape for the Snapshots
@@ -159,13 +154,7 @@ export function cmpBool(a: boolean, b: boolean, direction: 'asc' | 'desc'): numb
 // `asc` (A→Z). Boolean columns default to `desc` so "true" sorts first.
 
 export type CoverageSortKey =
-  | 'posture'
-  | 'workload'
-  | 'latest'
-  | 'pbs'
-  | 'archive'
-  | 'snapshot'
-  | 'task';
+  'posture' | 'workload' | 'latest' | 'pbs' | 'archive' | 'snapshot' | 'task';
 export const COVERAGE_SORT_DEFAULT_DIRECTION: Record<CoverageSortKey, 'asc' | 'desc'> = {
   posture: 'asc',
   workload: 'asc',

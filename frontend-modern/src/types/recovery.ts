@@ -1,13 +1,10 @@
+import type { EvidenceEnvelope, EvidencePermissions } from '@/types/operationalTrust';
+
 export type RecoveryPlatform = string;
 export type RecoveryKind = 'snapshot' | 'backup' | 'other' | (string & {});
 export type RecoveryMode = 'snapshot' | 'local' | 'remote' | (string & {});
 export type RecoveryOutcome =
-  | 'success'
-  | 'warning'
-  | 'failed'
-  | 'running'
-  | 'unknown'
-  | (string & {});
+  'success' | 'warning' | 'failed' | 'running' | 'unknown' | (string & {});
 
 export interface RecoveryExternalRef {
   type: string;
@@ -59,6 +56,8 @@ export interface RecoveryPoint {
 
   itemResourceId?: string;
   repositoryResourceId?: string;
+  providerScope?: string;
+  evidence?: EvidenceEnvelope | null;
   itemRef?: RecoveryExternalRef | null;
   subjectRef?: RecoveryExternalRef | null;
   repositoryRef?: RecoveryExternalRef | null;
@@ -145,4 +144,52 @@ export interface RecoveryPointsFacets {
   hasSize?: boolean;
   hasVerification?: boolean;
   hasEntityId?: boolean;
+}
+
+export type ProtectionState = 'protected' | 'attention' | 'unprotected' | 'unknown';
+export type ProtectionFreshness = 'current' | 'stale' | 'unknown';
+export type ProtectionVerification = 'verified' | 'unverified' | 'stale' | 'unknown';
+export type ProtectionCoverage = 'complete' | 'partial' | 'none' | 'unknown';
+export type ProtectionHistoryCompleteness = 'complete' | 'partial' | 'unavailable' | 'unknown';
+
+export interface ProtectionProviderState {
+  provider: RecoveryPlatform;
+  source: string;
+  scope: string;
+  jobState: RecoveryOutcome;
+  historyCompleteness: ProtectionHistoryCompleteness;
+  permissions: EvidencePermissions;
+  lastAttemptAt?: string | null;
+  lastSuccessAt?: string | null;
+  lastVerifiedAt?: string | null;
+  evidenceIds: string[];
+  verificationExpected?: boolean;
+}
+
+export interface ProtectionPosture {
+  subjectResourceId: string;
+  state: ProtectionState;
+  lastAttemptAt?: string | null;
+  lastSuccessfulPointAt?: string | null;
+  lastVerifiedAt?: string | null;
+  freshness: ProtectionFreshness;
+  verification: ProtectionVerification;
+  coverage: ProtectionCoverage;
+  providerStates: ProtectionProviderState[];
+  repositoryResourceIds: string[];
+  evidenceIds: string[];
+  explanation: string;
+  evaluatedAt: string;
+}
+
+export interface ProtectionPosturePolicy {
+  freshnessWindowSeconds: number;
+  verificationWindowSeconds: number;
+  requireVerification: boolean;
+}
+
+export interface ProtectionPosturesResponse {
+  data: ProtectionPosture[];
+  policy: ProtectionPosturePolicy;
+  meta: RecoveryResponseMeta;
 }

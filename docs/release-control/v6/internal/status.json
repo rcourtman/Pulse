@@ -8729,6 +8729,16 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/operational-trust-lifecycle-evidence-notification-linkage-2026-07-19.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/operational-trust-protection-posture-2026-07-19.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/protection-posture-attention-queue-strong-version-2026-06-25.md",
           "kind": "file"
         },
@@ -8775,6 +8785,21 @@
         {
           "repo": "pulse",
           "path": "internal/monitoring/proxmox_action_observer.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/recovery/posture.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/recovery/store/store_posture.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/90-operational-trust-protection-posture.spec.ts",
           "kind": "file"
         }
       ]

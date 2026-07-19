@@ -60,3 +60,55 @@ const (
 	VerifyIntentStale    VerifyIntent = model.VerifyIntentStale
 	VerifyIntentUnknown  VerifyIntent = model.VerifyIntentUnknown
 )
+
+type ProtectionState = model.ProtectionState
+
+const (
+	ProtectionStateProtected   ProtectionState = model.ProtectionStateProtected
+	ProtectionStateAttention   ProtectionState = model.ProtectionStateAttention
+	ProtectionStateUnprotected ProtectionState = model.ProtectionStateUnprotected
+	ProtectionStateUnknown     ProtectionState = model.ProtectionStateUnknown
+)
+
+type ProtectionFreshness = model.ProtectionFreshness
+
+const (
+	ProtectionFreshnessCurrent ProtectionFreshness = model.ProtectionFreshnessCurrent
+	ProtectionFreshnessStale   ProtectionFreshness = model.ProtectionFreshnessStale
+	ProtectionFreshnessUnknown ProtectionFreshness = model.ProtectionFreshnessUnknown
+)
+
+type ProtectionVerification = model.ProtectionVerification
+
+const (
+	ProtectionVerificationVerified   ProtectionVerification = model.ProtectionVerificationVerified
+	ProtectionVerificationUnverified ProtectionVerification = model.ProtectionVerificationUnverified
+	ProtectionVerificationStale      ProtectionVerification = model.ProtectionVerificationStale
+	ProtectionVerificationUnknown    ProtectionVerification = model.ProtectionVerificationUnknown
+)
+
+type ProtectionCoverage = model.ProtectionCoverage
+
+const (
+	ProtectionCoverageComplete ProtectionCoverage = model.ProtectionCoverageComplete
+	ProtectionCoveragePartial  ProtectionCoverage = model.ProtectionCoveragePartial
+	ProtectionCoverageNone     ProtectionCoverage = model.ProtectionCoverageNone
+	ProtectionCoverageUnknown  ProtectionCoverage = model.ProtectionCoverageUnknown
+)
+
+type ProtectionHistoryCompleteness = model.ProtectionHistoryCompleteness
+
+const (
+	ProtectionHistoryComplete    ProtectionHistoryCompleteness = model.ProtectionHistoryComplete
+	ProtectionHistoryPartial     ProtectionHistoryCompleteness = model.ProtectionHistoryPartial
+	ProtectionHistoryUnavailable ProtectionHistoryCompleteness = model.ProtectionHistoryUnavailable
+	ProtectionHistoryUnknown     ProtectionHistoryCompleteness = model.ProtectionHistoryUnknown
+)
+
+type ProtectionProviderState = model.ProtectionProviderState
+type ProtectionPosture = model.ProtectionPosture
+type ProtectionProviderObservation = model.ProtectionProviderObservation
+type ProtectionPosturePolicy = model.ProtectionPosturePolicy
+type ProtectionPosturePolicyPayload = model.ProtectionPosturePolicyPayload
+type ProtectionPostureQuery = model.ProtectionPostureQuery
+type ProtectionProviderSummary = model.ProtectionProviderSummary

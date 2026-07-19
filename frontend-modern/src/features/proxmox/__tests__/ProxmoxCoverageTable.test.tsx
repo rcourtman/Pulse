@@ -21,8 +21,30 @@ const row = {
   pbsCount: 1,
   archiveCount: 0,
   snapshotCount: 0,
-  posture: 'current',
+  posture: 'protected',
   postureRank: 0,
+  protectionPosture: {
+    subjectResourceId: 'resource:vm:100',
+    state: 'protected',
+    freshness: 'current',
+    verification: 'verified',
+    coverage: 'complete',
+    providerStates: [
+      {
+        provider: 'proxmox-pbs',
+        source: 'pbs-backup-enumeration',
+        scope: 'pbs-main',
+        jobState: 'success',
+        historyCompleteness: 'complete',
+        permissions: 'sufficient',
+        evidenceIds: ['evidence-provider'],
+      },
+    ],
+    repositoryResourceIds: [],
+    evidenceIds: ['evidence-provider'],
+    explanation: 'A current verified backup is available from complete provider history.',
+    evaluatedAt: '2026-07-19T00:00:00Z',
+  },
 } as unknown as WorkloadCoverageRow;
 
 const headerTexts = () =>
@@ -68,5 +90,56 @@ describe('ProxmoxCoverageTable column visibility', () => {
     expect(document.body.textContent).toContain('pve1');
     expect(document.body.textContent).not.toContain('ID 100');
     expect(document.body.textContent).not.toContain('Node pve1');
+  });
+
+  it('keeps provider evidence in the workload drill-down instead of every table row', () => {
+    const { unmount } = render(() => (
+      <ProxmoxCoverageTable
+        rows={[row]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKeys={new Set<string>()}
+        onToggleExpand={() => {}}
+        showPbsColumn={true}
+        showArchiveColumn={false}
+        showSnapshotColumn={false}
+        showTaskColumn={false}
+      />
+    ));
+
+    expect(document.body.textContent).not.toContain('Provider evidence');
+    expect(document.body.textContent).not.toContain(
+      'A current verified backup is available from complete provider history.',
+    );
+    unmount();
+
+    render(() => (
+      <ProxmoxCoverageTable
+        rows={[row]}
+        hasAnyRows
+        emptyIcon={<span />}
+        emptyTitle=""
+        emptyDescription=""
+        sortKey={(() => 'posture') as Accessor<CoverageSortKey>}
+        sortDirection={() => 'asc'}
+        onSort={() => {}}
+        expandedKeys={new Set<string>(['w1'])}
+        onToggleExpand={() => {}}
+        showPbsColumn={true}
+        showArchiveColumn={false}
+        showSnapshotColumn={false}
+        showTaskColumn={false}
+      />
+    ));
+
+    expect(document.body.textContent).toContain('Provider evidence');
+    expect(document.body.textContent).toContain('Proxmox Backup Server');
+    expect(document.body.textContent).toContain('History Complete');
+    expect(document.body.textContent).toContain('Access Sufficient');
   });
 });

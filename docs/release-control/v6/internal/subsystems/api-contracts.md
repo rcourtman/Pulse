@@ -7764,3 +7764,20 @@ invalid Basic credentials attach no principal and fail before the handler.
 This is required for qualification clients and local operators to read,
 approve, reject, and execute governed actions without weakening the same
 capability checks for sessions, proxy users, or API tokens.
+
+### Protection posture transport
+
+`GET /api/recovery/postures` is the authenticated `monitoring:read` transport
+for the canonical storage/recovery posture model. It accepts one or repeated
+canonical `resourceId` values, rejects more than 200 unique IDs, and supports a
+bounded state-filtered paginated list. Responses carry typed posture data,
+provider-specific history and permission limitations, evidence references,
+the server evaluation policy, evaluation timestamps, and stable pagination
+metadata. A requested resource with insufficient evidence returns an explicit
+`unknown` posture rather than disappearing or inheriting a frontend guess.
+
+Existing recovery point and rollup routes remain additive compatibility
+boundaries. Recovery points now expose provider scope and typed evidence, and
+rollups expose their already-owned verification intent and last-verification
+time. Supported legacy provider, subject, and display aliases remain readable;
+they do not create a parallel posture authority.

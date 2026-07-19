@@ -7,7 +7,7 @@ Pulse v6 includes a **provider-neutral recovery view** that aggregates backup, s
 Recovery is event-first and answers two questions:
 
 1. **"What happened?"** → The **Recovery events** table shows individual recovery points (artifacts) with timestamps, outcomes, and sizes.
-2. **"What is covered?"** -> The **Protection coverage** action opens a rollup review for healthy, stale, failed, warning, running, unknown, and never-succeeded items.
+2. **"What can I actually recover?"** → **Protection coverage** shows the canonical posture for each resource: protected, attention, unprotected, or unknown.
 
 ## Supported Providers
 
@@ -47,6 +47,25 @@ A rollup groups recovery points for a subject to show:
 - **Latest point** — when was the most recent successful backup/snapshot?
 - **Health** — are there recent failures or warnings?
 
+### Protection Posture (A Trust Decision)
+
+A protection posture combines subject-linked recovery points with the latest
+provider collection evidence. It deliberately keeps four operator-facing
+states:
+
+- **Protected** — a qualifying current recovery point is linked to the resource
+  and complete provider evidence does not invalidate the claim.
+- **Attention** — evidence exists, but it is stale, failing, incomplete, or
+  unverified when verification is expected.
+- **Unprotected** — complete evidence confirms that no qualifying protection
+  exists.
+- **Unknown** — identity, permissions, provider history, or collection
+  completeness cannot support a stronger claim.
+
+A backup or snapshot artifact may still be shown while posture is unknown.
+Artifacts answer what Pulse found; posture answers what Pulse can safely claim.
+Snapshot presence alone is never presented as independent recovery.
+
 ## Navigating Recovery
 
 ### Recovery Events
@@ -64,15 +83,17 @@ Shows individual recovery points. Key columns:
 
 ### Protection Coverage
 
-Available from the Recovery header action and compatibility routes when posture or freshness needs review. It shows one row per protected item (or per item + method when multiple backup methods exist). Key columns:
+The Proxmox **Backups → Coverage** view shows one row per workload. The default
+table stays compact; expanding a row reveals the plain-language posture reason,
+provider evidence quality, and individual restore artifacts.
 
 | Column | Description |
 |---|---|
 | Item | The protected resource (VM name, dataset path, etc.) |
 | Item Type | Canonical resource category |
-| Platform | Which provider created the latest point (PVE, PBS, TrueNAS, Kubernetes) |
-| Latest Point | Most recent successful recovery point timestamp |
-| Status | Healthy, stale, failed, warning, running, unknown, or never succeeded |
+| Posture | Protected, attention, unprotected, or unknown |
+| Restore | Most recent successful recovery point timestamp |
+| Provider columns | Latest PBS, PVE, or guest-snapshot artifact where available |
 
 ### Filtering
 
@@ -89,6 +110,7 @@ Both workspaces support:
 |---|---|---|
 | `GET` | `/api/recovery/points` | List individual recovery points |
 | `GET` | `/api/recovery/rollups` | List subject rollups (protection coverage) |
+| `GET` | `/api/recovery/postures` | List canonical per-resource protection postures |
 | `GET` | `/api/recovery/series` | Time-series data for recovery charts |
 | `GET` | `/api/recovery/facets` | Available filter facets (providers, kinds, outcomes) |
 
@@ -105,6 +127,13 @@ All recovery endpoints support:
 | `until` | ISO 8601 timestamp — only points before this time |
 | `subject` | Filter by subject reference |
 | `limit` | Max results (default: 500) |
+
+`/api/recovery/postures` has a deliberately bounded table contract. Supply one
+or more repeated `resourceId` parameters for a resource or batch lookup (at
+most 200), or omit them for a paged list. It also accepts `state`, `page`, and
+`limit`; `state=attention` returns the actionable attention list. The response
+includes the posture policy and provider evidence states so clients do not
+re-derive trust from raw artifacts.
 
 ## Troubleshooting
 
@@ -128,6 +157,14 @@ Click the row to expand the details drawer, which shows the provider-specific er
 - **PBS**: Datastore unreachable, verification failed, prune job errors
 - **TrueNAS**: Replication target unreachable, dataset locked, insufficient space
 - **PVE**: Backup storage full, vzdump process error
+
+### Current backups show an unknown posture
+
+Expand the workload row and inspect the limiting evidence. Pulse uses unknown
+when the current poll cannot prove provider-history completeness, permission
+scope, or subject identity. Fix the reported collection or access gap and wait
+for the next provider poll; Pulse does not promote retained backup artifacts to
+protected while that uncertainty remains.
 
 ## See Also
 

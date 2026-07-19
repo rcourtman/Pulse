@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 )
@@ -160,5 +161,109 @@ func TestIngestRecoveryPointsBestEffortSkipsReconcileWhenUpsertFails(t *testing.
 	ids := listRecoveryPointIDs(t, manager)
 	if !ids["pve-backup:pve1-vzdump-101"] {
 		t.Fatal("reconcile must be skipped when the upsert fails; vzdump-101 was deleted")
+	}
+}
+
+func TestIngestRecoveryPointsBestEffortPersistsProviderObservationAndPosture(t *testing.T) {
+	t.Parallel()
+
+	m, manager := recoveryIngestTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	point := recoveryIngestTestPoint("pve-backup:pve1-vzdump-100", "pve1", now)
+	point.SubjectResourceID = "resource:vm-100"
+	observation, err := recovery.NewProtectionProviderObservation(
+		recovery.ProviderProxmoxPVE,
+		"pve-backup-enumeration",
+		"pve1",
+		recovery.OutcomeSuccess,
+		recovery.ProtectionHistoryComplete,
+		operationaltrust.EvidencePermissionsSufficient,
+		false,
+		now,
+		now,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewProtectionProviderObservation() error = %v", err)
+	}
+
+	m.ingestRecoveryPointsBestEffort(context.Background(), recoveryIngestBatch{
+		points: []recovery.RecoveryPoint{point},
+		observations: []recovery.ProtectionProviderObservation{
+			observation,
+		},
+	})
+
+	store, err := manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatalf("StoreForOrg(default): %v", err)
+	}
+	postures, _, err := store.ListProtectionPostures(
+		context.Background(),
+		recovery.ProtectionPostureQuery{
+			SubjectResourceIDs: []string{"resource:vm-100"},
+		},
+	)
+	if err != nil {
+		t.Fatalf("ListProtectionPostures() error = %v", err)
+	}
+	if len(postures) != 1 ||
+		postures[0].State != recovery.ProtectionStateProtected {
+		t.Fatalf("postures = %#v, want one protected posture", postures)
+	}
+}
+
+func TestIngestRecoveryPointsBestEffortPersistsProviderObservationBeforePointFailure(t *testing.T) {
+	t.Parallel()
+
+	m, manager := recoveryIngestTestMonitor(t)
+	store, err := manager.StoreForOrg("default")
+	if err != nil {
+		t.Fatalf("StoreForOrg(default): %v", err)
+	}
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	existing := recoveryIngestTestPoint("pve-backup:pve1-vzdump-100", "pve1", now)
+	existing.SubjectResourceID = "resource:vm-100"
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{existing}); err != nil {
+		t.Fatalf("UpsertPoints(existing): %v", err)
+	}
+	observation, err := recovery.NewProtectionProviderObservation(
+		recovery.ProviderProxmoxPVE,
+		"pve-backup-enumeration",
+		"pve1",
+		recovery.OutcomeSuccess,
+		recovery.ProtectionHistoryComplete,
+		operationaltrust.EvidencePermissionsSufficient,
+		false,
+		now,
+		now,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewProtectionProviderObservation() error = %v", err)
+	}
+
+	invalidPoint := existing
+	invalidPoint.ID = ""
+	m.ingestRecoveryPointsBestEffort(context.Background(), recoveryIngestBatch{
+		points:       []recovery.RecoveryPoint{invalidPoint},
+		observations: []recovery.ProtectionProviderObservation{observation},
+	})
+
+	postures, _, err := store.ListProtectionPostures(
+		context.Background(),
+		recovery.ProtectionPostureQuery{
+			SubjectResourceIDs: []string{"resource:vm-100"},
+		},
+	)
+	if err != nil {
+		t.Fatalf("ListProtectionPostures() error = %v", err)
+	}
+	if len(postures) != 1 ||
+		postures[0].State != recovery.ProtectionStateProtected {
+		t.Fatalf(
+			"postures = %#v, want provider observation to survive point failure",
+			postures,
+		)
 	}
 }

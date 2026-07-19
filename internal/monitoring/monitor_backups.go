@@ -1582,8 +1582,30 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 		Int("count", len(allBackups)).
 		Msg("PBS backups fetched")
 
+	protectionObservedAt := time.Now().UTC()
+	protectionObservation, protectionObservationErr :=
+		buildPBSProtectionProviderObservation(
+			instanceName,
+			datastoreCount,
+			datastoreFetches,
+			datastoreErrors,
+			datastoreTerminalFailures,
+			protectionObservedAt,
+		)
+	if protectionObservationErr != nil {
+		log.Warn().
+			Err(protectionObservationErr).
+			Str("instance", instanceName).
+			Msg("Failed to build PBS protection provider observation")
+	}
+
 	// Decide whether to keep existing backups when all queries failed
 	if shouldPreservePBSBackupsWithTerminal(datastoreCount, datastoreFetches, datastoreTerminalFailures) {
+		if protectionObservationErr == nil {
+			m.ingestProtectionProviderObservationsAsync(
+				[]recovery.ProtectionProviderObservation{protectionObservation},
+			)
+		}
 		log.Warn().
 			Str("instance", instanceName).
 			Int("datastores", datastoreCount).
@@ -1600,8 +1622,30 @@ func (m *Monitor) pollPBSBackups(ctx context.Context, instanceName string, clien
 
 	// Best-effort ingestion into recovery store (for rollups / unified backups UX).
 	candidates := buildPBSGuestCandidates(m.GetUnifiedReadStateOrSnapshot())
-	m.ingestAndReconcileRecoveryPointsAsync(
-		proxmoxrecoverymapper.FromPBSBackups(allBackups, candidates),
+	points, evidenceErr := proxmoxrecoverymapper.FromPBSBackupsWithEvidence(
+		allBackups,
+		candidates,
+		protectionObservedAt,
+	)
+	if evidenceErr != nil {
+		log.Warn().
+			Err(evidenceErr).
+			Str("instance", instanceName).
+			Msg("Failed to attach PBS recovery evidence; preserving existing points")
+		if protectionObservationErr == nil {
+			m.ingestProtectionProviderObservationsAsync(
+				[]recovery.ProtectionProviderObservation{protectionObservation},
+			)
+		}
+		return
+	}
+	observations := []recovery.ProtectionProviderObservation{}
+	if protectionObservationErr == nil {
+		observations = append(observations, protectionObservation)
+	}
+	m.ingestAndReconcileRecoveryPointsWithObservationsAsync(
+		points,
+		observations,
 		recoveryReconcileScope{
 			provider: string(recovery.ProviderProxmoxPBS),
 			idPrefix: "pbs-backup:",

@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/operationaltrust"
+)
 
 // Provider identifies the system that produced a recovery point.
 // This is intentionally a string (not an enum) to keep forward-compatibility with new platforms.
@@ -82,6 +86,14 @@ type RecoveryPoint struct {
 
 	// Provider-specific details for drill-down (kept small).
 	Details map[string]any `json:"details,omitempty"`
+
+	// ProviderScope is the stable provider-local collection scope used to
+	// correlate this point with provider history and permission observations.
+	ProviderScope string `json:"providerScope,omitempty"`
+
+	// Evidence carries the typed provenance for this recovery point. Older
+	// persisted rows may omit it and are treated as unknown-quality evidence.
+	Evidence *operationaltrust.EvidenceEnvelope `json:"evidence,omitempty"`
 
 	// Display contains normalized, provider-agnostic fields intended for UIs.
 	// These fields are derived at ingest time and/or backfilled in the store.

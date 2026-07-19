@@ -155,6 +155,7 @@ resource health.
 54. `internal/monitoring/monitor_backups.go`
 55. `internal/monitoring/resource_stale_thresholds.go`
 56. `internal/monitoring/recovery_ingest.go`
+56a. `internal/monitoring/pbs_protection_observation.go`
 57. `internal/monitoring/multi_tenant_monitor.go`
 58. `internal/monitoring/proxmox_action_observer.go`
 
@@ -1733,3 +1734,24 @@ delivery status and timestamp alongside guest power state. Downstream Patrol
 transition detection consumes that status instead of inventing a fixed stale
 window: a stopped guest can have fresh inventory, while a stale source cannot
 authoritatively prove either a stopped transition or recovery.
+
+### PBS protection evidence collection
+
+Direct PBS backup enumeration emits two separate storage/recovery inputs:
+subject-linked recovery points and one typed provider observation for the
+polled PBS instance. A complete poll records complete history with sufficient
+permissions; a partially successful poll records partial history and the
+appropriate partial or unknown permission posture; total transient failure
+records unavailable history; total terminal authorization failure records
+denied access. Retained backup points survive failed enumeration, but the new
+provider observation immediately prevents those cached points from being
+presented as current protection truth.
+
+PBS mapping attaches provider scope and a typed evidence envelope to every
+successfully enumerated recovery point. Identity correlation is confirmed only
+for direct canonical identity and inferred only for an auditable unique
+provider-scoped guest match. Monitoring persists the collection observation
+before point reconciliation so completeness and permission failure cannot be
+lost behind a successful cached-artifact path. Shared protection semantics stay
+in `internal/recovery/`; PBS monitoring owns only this explicit evidence-quality
+adapter.

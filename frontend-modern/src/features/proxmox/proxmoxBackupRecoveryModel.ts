@@ -1,4 +1,5 @@
 import type { BackupTask, GuestSnapshot, PBSBackup, StorageBackup } from '@/types/api';
+import type { ProtectionPosture, ProtectionState } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 
 import {
@@ -9,17 +10,11 @@ import {
 
 export type RecoverableSourceKind = ProxmoxBackupSourceKind;
 
-export type WorkloadRecoveryPosture =
-  | 'current'
-  | 'aging'
-  | 'stale'
-  | 'snapshot-only'
-  | 'failed'
-  | 'uncovered'
-  | 'unverified';
+export type WorkloadRecoveryPosture = ProtectionState;
 
 export interface WorkloadReference {
   key: string;
+  resourceId?: string;
   type: 'vm' | 'ct' | 'host' | 'unknown';
   typeLabel: string;
   vmid: string;
@@ -70,6 +65,7 @@ export interface WorkloadCoverageRow {
   snapshotCount: number;
   posture: WorkloadRecoveryPosture;
   postureRank: number;
+  protectionPosture?: ProtectionPosture;
   // True only when a VM/LXC row exists because a backup/task referenced a VMID
   // with no matching live inventory guest. Host backups can also carry a
   // `backup:` key, but they are first-class backup targets, not orphaned guests.
@@ -81,9 +77,10 @@ export interface ProxmoxBackupRecoveryModel {
   recoverableArtifacts: RecoverableArtifact[];
   coverageSummary: {
     totalWorkloads: number;
-    current: number;
+    protected: number;
     attention: number;
-    uncovered: number;
+    unprotected: number;
+    unknown: number;
     withPBS: number;
     recoverableArtifacts: number;
     totalBytes: number;
@@ -97,6 +94,7 @@ interface BuildModelInput {
   snapshots: readonly GuestSnapshot[];
   tasks: readonly BackupTask[];
   nowMs: number;
+  protectionPostures?: ReadonlyMap<string, ProtectionPosture>;
 }
 
 interface WorkloadCandidate extends WorkloadReference {
@@ -242,6 +240,7 @@ function buildCandidateFromResource(resource: Resource): WorkloadCandidate | nul
   const instance = resourceInstance(resource);
   return {
     key: `resource:${resource.id}`,
+    resourceId: resource.id,
     type,
     typeLabel: typeLabel(type),
     vmid,
@@ -380,47 +379,28 @@ function taskDurationSeconds(task: BackupTask): number | undefined {
   return Math.round((end - start) / 1000);
 }
 
-function buildPosture(row: WorkloadRowDraft, nowMs: number) {
-  const failedTask =
-    row.latestTask?.label === 'Failed' &&
-    (row.latestRecovery?.createdMs === undefined ||
-      row.latestTask.startedMs === undefined ||
-      row.latestTask.startedMs >= row.latestRecovery.createdMs);
-  if (failedTask) return { posture: 'failed' as const, rank: 0 };
-  if (!row.latestRecovery) return { posture: 'uncovered' as const, rank: 1 };
-  if (row.latestRecovery.sourceKind === 'pbs' && row.latestRecovery.verified === false) {
-    return { posture: 'unverified' as const, rank: 2 };
-  }
-  const hasExternalBackup = row.latestPBS !== undefined || row.latestArchive !== undefined;
-  if (!hasExternalBackup && row.latestSnapshot)
-    return { posture: 'snapshot-only' as const, rank: 3 };
-  const ageBand = getRecoveryAgeBand(row.latestRecovery.createdMs, nowMs);
-  if (ageBand === 'current') return { posture: 'current' as const, rank: 5 };
-  if (ageBand === 'aging') return { posture: 'aging' as const, rank: 4 };
-  return { posture: 'stale' as const, rank: 2 };
+function protectionPostureRank(posture: WorkloadRecoveryPosture): number {
+  if (posture === 'attention') return 0;
+  if (posture === 'unprotected') return 1;
+  if (posture === 'unknown') return 2;
+  return 3;
 }
 
 export function getWorkloadRecoveryPostureLabel(posture: WorkloadRecoveryPosture): string {
   switch (posture) {
-    case 'current':
-      return 'Current';
-    case 'aging':
-      return 'Aging';
-    case 'stale':
-      return 'Stale';
-    case 'snapshot-only':
-      return 'Snapshot only';
-    case 'failed':
-      return 'Failed latest task';
-    case 'uncovered':
-      return 'Uncovered';
-    case 'unverified':
-      return 'Unverified';
+    case 'protected':
+      return 'Protected';
+    case 'attention':
+      return 'Needs attention';
+    case 'unprotected':
+      return 'Unprotected';
+    case 'unknown':
+      return 'Unknown';
   }
 }
 
 export function isCoverageAttention(posture: WorkloadRecoveryPosture): boolean {
-  return posture !== 'current';
+  return posture === 'attention';
 }
 
 export function buildProxmoxBackupRecoveryModel(
@@ -569,11 +549,15 @@ export function buildProxmoxBackupRecoveryModel(
   }
 
   const coverageRows = Array.from(rows.values()).map((row) => {
-    const posture = buildPosture(row, input.nowMs);
+    const protectionPosture = row.workload.resourceId
+      ? input.protectionPostures?.get(row.workload.resourceId)
+      : undefined;
+    const posture = protectionPosture?.state ?? 'unknown';
     return {
       ...row,
-      posture: posture.posture,
-      postureRank: posture.rank,
+      posture,
+      postureRank: protectionPostureRank(posture),
+      protectionPosture,
       isOrphaned:
         !row.key.startsWith('resource:') &&
         (row.workload.type === 'vm' || row.workload.type === 'ct'),
@@ -592,9 +576,10 @@ export function buildProxmoxBackupRecoveryModel(
     recoverableArtifacts: artifacts,
     coverageSummary: {
       totalWorkloads: coverageRows.length,
-      current: coverageRows.filter((row) => row.posture === 'current').length,
+      protected: coverageRows.filter((row) => row.posture === 'protected').length,
       attention: coverageRows.filter((row) => isCoverageAttention(row.posture)).length,
-      uncovered: coverageRows.filter((row) => row.posture === 'uncovered').length,
+      unprotected: coverageRows.filter((row) => row.posture === 'unprotected').length,
+      unknown: coverageRows.filter((row) => row.posture === 'unknown').length,
       withPBS: coverageRows.filter((row) => row.pbsCount > 0).length,
       recoverableArtifacts: artifacts.length,
       totalBytes,
