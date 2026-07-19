@@ -811,7 +811,12 @@ export async function ensureFirstRunExperience(
         setup = await completeFirstRunViaAPI(page, bootstrapToken);
         usedAPIFallback = true;
       } else {
-        await page.goto("/");
+        // completeSetupWizard starts every attempt at the root route. Do not
+        // issue another navigation here: the app can still be finishing its
+        // auth-driven redirect after setup was reset, and competing root
+        // navigations leave the shared backend in first-run state when the
+        // retry is interrupted.
+        await page.waitForLoadState("domcontentloaded").catch(() => {});
         continue;
       }
     }
@@ -1019,6 +1024,20 @@ export async function login(page: Page, credentials = E2E_CREDENTIALS) {
 
 async function authenticateWithPrimaryAPIToken(page: Page): Promise<boolean> {
   for (const candidate of primaryAPITokenCandidates()) {
+    // A URL-token navigation reaches an authenticated route before the app's
+    // first API request has validated the token. Reject stale runtime tokens
+    // up front so that transient route is never mistaken for a live session.
+    const probe = await apiRequest(page, "/api/state", {
+      headers: { "X-API-Token": candidate.token },
+      timeout: 10_000,
+    }).catch(() => null);
+    if (!probe?.ok()) {
+      if (probe && (probe.status() === 401 || probe.status() === 403)) {
+        forgetRejectedPrimaryAPIToken(candidate);
+      }
+      continue;
+    }
+
     await page.goto(`/?token=${encodeURIComponent(candidate.token)}`, {
       waitUntil: "domcontentloaded",
     });

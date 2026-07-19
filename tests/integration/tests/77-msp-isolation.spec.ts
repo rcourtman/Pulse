@@ -80,6 +80,12 @@ async function setWebhookAllowlist(page: any, cidrs: string) {
 
 test.describe('MSP isolation E2E', () => {
   test.setTimeout(180_000);
+  test.beforeEach(({}, testInfo) => {
+    test.skip(
+      testInfo.project.name !== 'chromium',
+      'Cross-layer server and API coverage runs once under desktop Chromium',
+    );
+  });
 
   test('org-bound token is scoped away from other orgs and the default org', async ({ page }) => {
     await ensureAuthenticated(page);
