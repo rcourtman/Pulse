@@ -27,6 +27,36 @@ func TestInstallPS1ParsesWithPowerShell(t *testing.T) {
 	}
 }
 
+func TestInstallPS1KeepsTLS13OptionalOnLegacyWindowsPowerShell(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
+	if err != nil {
+		t.Fatalf("read install.ps1: %v", err)
+	}
+
+	script := string(content)
+	tls12Fallback := `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12`
+	optionalTLS13 := `[Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13`
+	tls12Index := strings.Index(script, tls12Fallback)
+	tls13Index := strings.Index(script, optionalTLS13)
+	if tls12Index == -1 {
+		t.Fatal("install.ps1 must establish TLS 1.2 before probing optional TLS 1.3 support")
+	}
+	if tls13Index == -1 {
+		t.Fatal("install.ps1 must enable TLS 1.3 when the runtime exposes it")
+	}
+	if tls12Index >= tls13Index {
+		t.Fatal("install.ps1 must establish the TLS 1.2 fallback before referencing the optional TLS 1.3 enum")
+	}
+
+	compatibilityBlock := script[tls12Index:tls13Index]
+	if !strings.Contains(compatibilityBlock, "try {") {
+		t.Fatal("install.ps1 must guard the optional TLS 1.3 enum behind a compatibility try block")
+	}
+	if !strings.Contains(script[tls13Index:], "} catch {") {
+		t.Fatal("install.ps1 must retain TLS 1.2 when the optional TLS 1.3 enum is unavailable")
+	}
+}
+
 func TestWindowsAgentLifecycleHarnessParsesWithPowerShell(t *testing.T) {
 	pwsh, err := exec.LookPath("pwsh")
 	if err != nil {

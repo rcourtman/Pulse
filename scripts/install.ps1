@@ -762,8 +762,15 @@ $serverChecksum = $null
 $serverSshSignature = $null
 
 try {
-    # Configure TLS 1.2 minimum
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+    # Configure TLS 1.2 minimum. The Tls13 enum member only exists on
+    # .NET Framework 4.8+ / .NET Core; referencing it directly crashes
+    # Windows PowerShell 5.1 on older frameworks, so add it opportunistically.
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+    } catch {
+        # TLS 1.3 unavailable on this framework; TLS 1.2 remains enforced.
+    }
 
     $downloadPreflightResponse = Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $CustomCaCertificate -Action {
         Invoke-WebRequest -Uri $DownloadUrl -Method Head -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
