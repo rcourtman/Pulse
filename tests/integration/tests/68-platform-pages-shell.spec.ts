@@ -257,7 +257,9 @@ test.describe('Platform pages shell', () => {
       { path: '/docker/images', testId: 'docker-page' },
       { path: '/docker/storage', testId: 'docker-page' },
       { path: '/docker/networks', testId: 'docker-page' },
-      { path: '/docker/swarm', testId: 'docker-page' },
+      // The default mock inventory intentionally has no Swarm resources.
+      // Empty inventory tabs omit search because there is nothing actionable
+      // to filter; populated Swarm table toolbars have component coverage.
       { path: '/kubernetes/nodes', testId: 'kubernetes-page' },
       { path: '/kubernetes/workloads', testId: 'kubernetes-page' },
       { path: '/kubernetes/services', testId: 'kubernetes-page' },

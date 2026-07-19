@@ -34,13 +34,13 @@ permissions:
 
 jobs:
   e2e:
-    name: Playwright Core E2E (shard ${{ matrix.shard }}/4)
+    name: Playwright Core E2E (shard ${{ matrix.shard }}/8)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     steps:
       - name: Checkout code
@@ -83,8 +83,9 @@ jobs:
           PULSE_E2E_SKIP_DOCKER: "true"
           PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL: "true"
           PULSE_E2E_PERF: "1"
+          PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY: "true"
           PULSE_MULTI_TENANT_ENABLED: "true"
-        run: npm test -- --shard=${{ matrix.shard }}/4
+        run: npm test -- --shard=${{ matrix.shard }}/8
 
       - name: Collect container logs
         if: always()

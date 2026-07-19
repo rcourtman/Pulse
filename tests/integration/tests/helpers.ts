@@ -1112,14 +1112,96 @@ async function storageStateHasLiveSession(
     baseURL: preferredBrowserBaseURL(),
     storageState: statePath,
   });
+  const page = await context.newPage();
   try {
     const res = await context.request.get("/api/state");
-    return res.status() === 200;
+    if (res.status() !== 200) {
+      return false;
+    }
+    await waitForDefaultMockRuntimeReady(page);
+    return true;
   } catch {
     return false;
   } finally {
     await context.close();
   }
+}
+
+type E2ERuntimeStateResource = {
+  name?: string;
+  sources?: string[];
+  type?: string;
+};
+
+type E2ERuntimeState = {
+  connectedInfrastructure?: Array<{ name?: string }>;
+  resources?: E2ERuntimeStateResource[];
+};
+
+const requiresDefaultMockRuntimeReadiness = (): boolean =>
+  ["1", "true", "yes", "on"].includes(
+    String(process.env.PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY || "")
+      .trim()
+      .toLowerCase(),
+  );
+
+const resourceHasSource = (
+  resource: E2ERuntimeStateResource,
+  source: string,
+): boolean => resource.sources?.includes(source) === true;
+
+async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> {
+  if (!requiresDefaultMockRuntimeReadiness()) {
+    return;
+  }
+
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.get("/api/state").catch(() => null);
+        if (!response?.ok()) {
+          return false;
+        }
+
+        const state = (await response.json()) as E2ERuntimeState;
+        const resources = Array.isArray(state.resources) ? state.resources : [];
+        const infrastructure = Array.isArray(state.connectedInfrastructure)
+          ? state.connectedInfrastructure
+          : [];
+
+        return (
+          resources.some(
+            (resource) =>
+              resource.name === "nvme-primary" &&
+              resource.type === "storage" &&
+              resourceHasSource(resource, "vmware"),
+          ) &&
+          resources.some(
+            (resource) =>
+              resource.type === "k8s-cluster" &&
+              resourceHasSource(resource, "kubernetes"),
+          ) &&
+          resources.some(
+            (resource) =>
+              resource.name === "tank" &&
+              resourceHasSource(resource, "truenas"),
+          ) &&
+          resources.some((resource) => resource.type === "docker-host") &&
+          resources.some((resource) => resource.type === "pbs") &&
+          resources.some((resource) => resource.type === "pmg") &&
+          infrastructure.some(
+            (entry) => entry.name === "esxi-01.lab.local",
+          )
+        );
+      },
+      {
+        message:
+          "default mock inventory should be complete before browser fixtures start",
+        timeout: 120_000,
+        intervals: [1_000, 2_000, 5_000],
+      },
+    )
+    .toBe(true);
 }
 
 export async function createAuthenticatedStorageState(
@@ -1144,6 +1226,7 @@ export async function createAuthenticatedStorageState(
   const page = await context.newPage();
   try {
     await ensureSessionAuthenticated(page);
+    await waitForDefaultMockRuntimeReady(page);
     await context.storageState({ path: storageStatePath });
   } finally {
     await context.close();
