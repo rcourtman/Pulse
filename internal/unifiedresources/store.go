@@ -98,6 +98,20 @@ type ActionAuditOriginReader interface {
 	GetLatestActionAuditByOrigin(surface, investigationID string) (ActionAuditRecord, bool, error)
 }
 
+// OperationalActionAuditOriginReader is the bounded origin lookup used by the
+// Operational Trust attention read model. The operational record identifier is
+// stable across resource observations, action retries, and process restarts.
+type OperationalActionAuditOriginReader interface {
+	GetLatestActionAuditByOperationalRecord(surface, operationalRecordID string) (ActionAuditRecord, bool, error)
+}
+
+// OperationalActionAuditOriginBatchReader resolves a bounded attention page
+// in one indexed store read. Attention list rendering must not issue one
+// action-audit query per item.
+type OperationalActionAuditOriginBatchReader interface {
+	GetLatestActionAuditsByOperationalRecords(surface string, operationalRecordIDs []string) (map[string]ActionAuditRecord, error)
+}
+
 // PendingActionAuditReader owns the indexed operator queue for canonical
 // actions awaiting a decision. Mobile and desktop clients must not reconstruct
 // this queue from the retired command-approval store.
@@ -688,6 +702,13 @@ func (s *SQLiteResourceStore) migrateActionAuditsSchema() error {
 		WHERE json_valid(origin_json)
 	`); err != nil {
 		return fmt.Errorf("create action audit origin investigation index: %w", err)
+	}
+	if _, err := s.db.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_action_audits_origin_operational_record_updated
+		ON action_audits(json_extract(origin_json, '$.surface'), json_extract(origin_json, '$.operationalRecordId'), updated_at DESC)
+		WHERE json_valid(origin_json)
+	`); err != nil {
+		return fmt.Errorf("create action audit origin operational record index: %w", err)
 	}
 	if _, err := s.db.Exec(`
 		CREATE INDEX IF NOT EXISTS idx_action_audits_state_updated
@@ -2263,6 +2284,85 @@ func (s *SQLiteResourceStore) GetLatestActionAuditByOrigin(surface, investigatio
 	return record, true, nil
 }
 
+func (s *SQLiteResourceStore) GetLatestActionAuditByOperationalRecord(surface, operationalRecordID string) (ActionAuditRecord, bool, error) {
+	surface = strings.TrimSpace(surface)
+	operationalRecordID = strings.TrimSpace(operationalRecordID)
+	if surface == "" || operationalRecordID == "" {
+		return ActionAuditRecord{}, false, nil
+	}
+	row := s.db.QueryRow(`
+		SELECT id, action_id, request_id, created_at, updated_at, state, decision_revision, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
+		FROM action_audits
+		WHERE json_valid(origin_json)
+		  AND json_extract(origin_json, '$.surface') = ?
+		  AND json_extract(origin_json, '$.operationalRecordId') = ?
+		ORDER BY updated_at DESC, created_at DESC
+		LIMIT 1
+	`, surface, operationalRecordID)
+	record, err := scanActionAuditRecord(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ActionAuditRecord{}, false, nil
+	}
+	if err != nil {
+		return ActionAuditRecord{}, false, fmt.Errorf("query action audit by operational record: %w", err)
+	}
+	return record, true, nil
+}
+
+func (s *SQLiteResourceStore) GetLatestActionAuditsByOperationalRecords(
+	surface string,
+	operationalRecordIDs []string,
+) (map[string]ActionAuditRecord, error) {
+	surface = strings.TrimSpace(surface)
+	ids := uniqueStrings(operationalRecordIDs)
+	if surface == "" || len(ids) == 0 {
+		return map[string]ActionAuditRecord{}, nil
+	}
+	if len(ids) > 200 {
+		return nil, fmt.Errorf("operational action audit batch exceeds 200 records")
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, surface)
+	for index, id := range ids {
+		placeholders[index] = "?"
+		args = append(args, id)
+	}
+	rows, err := s.db.Query(`
+		SELECT id, action_id, request_id, created_at, updated_at, state, decision_revision, request_json, plan_json, approvals_json, result_json, verification_outcome_json, origin_json
+		FROM action_audits
+		WHERE json_valid(origin_json)
+		  AND json_extract(origin_json, '$.surface') = ?
+		  AND json_extract(origin_json, '$.operationalRecordId') IN (`+strings.Join(placeholders, ",")+`)
+		ORDER BY updated_at DESC, created_at DESC
+	`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query action audits by operational records: %w", err)
+	}
+	defer rows.Close()
+	result := make(map[string]ActionAuditRecord, len(ids))
+	for rows.Next() {
+		record, scanErr := scanActionAuditRecord(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan action audit by operational record: %w", scanErr)
+		}
+		if record.Origin == nil {
+			continue
+		}
+		recordID := strings.TrimSpace(record.Origin.OperationalRecordID)
+		if recordID == "" {
+			continue
+		}
+		if _, found := result[recordID]; !found {
+			result[recordID] = record
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate action audits by operational records: %w", err)
+	}
+	return result, nil
+}
+
 func (s *SQLiteResourceStore) GetPendingActionAudits(limit int) ([]ActionAuditRecord, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
@@ -3499,6 +3599,74 @@ func (m *MemoryStore) GetLatestActionAuditByOrigin(surface, investigationID stri
 		return ActionAuditRecord{}, false, nil
 	}
 	return cloneActionAuditRecordForRead(latest), true, nil
+}
+
+func (m *MemoryStore) GetLatestActionAuditByOperationalRecord(surface, operationalRecordID string) (ActionAuditRecord, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	surface = strings.TrimSpace(surface)
+	operationalRecordID = strings.TrimSpace(operationalRecordID)
+	if surface == "" || operationalRecordID == "" {
+		return ActionAuditRecord{}, false, nil
+	}
+	var latest ActionAuditRecord
+	found := false
+	for _, record := range m.actionAudits {
+		if record.Origin == nil ||
+			strings.TrimSpace(record.Origin.Surface) != surface ||
+			strings.TrimSpace(record.Origin.OperationalRecordID) != operationalRecordID {
+			continue
+		}
+		if !found ||
+			record.UpdatedAt.After(latest.UpdatedAt) ||
+			(record.UpdatedAt.Equal(latest.UpdatedAt) && record.CreatedAt.After(latest.CreatedAt)) {
+			latest = record
+			found = true
+		}
+	}
+	if !found {
+		return ActionAuditRecord{}, false, nil
+	}
+	return cloneActionAuditRecordForRead(latest), true, nil
+}
+
+func (m *MemoryStore) GetLatestActionAuditsByOperationalRecords(
+	surface string,
+	operationalRecordIDs []string,
+) (map[string]ActionAuditRecord, error) {
+	surface = strings.TrimSpace(surface)
+	ids := uniqueStrings(operationalRecordIDs)
+	if surface == "" || len(ids) == 0 {
+		return map[string]ActionAuditRecord{}, nil
+	}
+	if len(ids) > 200 {
+		return nil, fmt.Errorf("operational action audit batch exceeds 200 records")
+	}
+	wanted := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		wanted[id] = struct{}{}
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	result := make(map[string]ActionAuditRecord, len(ids))
+	for _, record := range m.actionAudits {
+		if record.Origin == nil ||
+			strings.TrimSpace(record.Origin.Surface) != surface {
+			continue
+		}
+		recordID := strings.TrimSpace(record.Origin.OperationalRecordID)
+		if _, found := wanted[recordID]; !found {
+			continue
+		}
+		latest, found := result[recordID]
+		if !found ||
+			record.UpdatedAt.After(latest.UpdatedAt) ||
+			(record.UpdatedAt.Equal(latest.UpdatedAt) &&
+				record.CreatedAt.After(latest.CreatedAt)) {
+			result[recordID] = cloneActionAuditRecordForRead(record)
+		}
+	}
+	return result, nil
 }
 
 func (m *MemoryStore) GetPendingActionAudits(limit int) ([]ActionAuditRecord, error) {

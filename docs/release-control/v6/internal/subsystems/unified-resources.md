@@ -1471,7 +1471,8 @@ AI-only summary payloads, or page-local heuristics.
     `internal/unifiedresources/registry_test.go`.
 26. Keep action-audit origin metadata broker-owned. `ActionAuditRecord`
     carries an optional `Origin *ActionOrigin`
-    (`surface`/`findingId`/`investigationId`/`proposalId`), persisted in
+    (`surface`/`findingId`/`investigationId`/`proposalId`/
+    `operationalRecordId`/`evidenceIds`), persisted in
     the `action_audits.origin_json` column (added by
     `migrateActionAuditsSchema`) and round-tripped through
     `scanActionAuditRecord`. Origin identifies which internal surface
@@ -1480,8 +1481,9 @@ AI-only summary payloads, or page-local heuristics.
     in-process planning callers through the action lifecycle service's
     plan options; the public `POST /api/actions/plan` body must never be
     able to claim a first-party origin. `NormalizeActionOrigin` trims
-    fields and collapses an all-empty origin to nil so absent metadata
-    never persists as an empty object. Origin fields are Pulse-produced
+    fields, sorts and deduplicates evidence IDs, and collapses an all-empty
+    origin to nil so absent metadata never persists as an empty object.
+    Origin fields are Pulse-produced
     identifiers, not operator text, and stay outside the redaction set.
     Downstream reconciliation of origin-tagged records rides the shared
     lifecycle service's org-scoped `OnActionTransition` hook (wired via
@@ -1489,8 +1491,17 @@ AI-only summary payloads, or page-local heuristics.
     only after the corresponding store write succeeds, so a subscriber
     keyed by org ID never observes a state this store could still lose
     or apply it to the wrong tenant.
-    Regression coverage: `TestSQLiteStoreActionAuditOriginRoundTrip` in
-    `internal/unifiedresources/store_test.go`.
+    Operational Trust attention continuity uses the optional singular and
+    bounded batch operational-record readers. Memory and SQLite return the
+    latest action per record with the same clone semantics. SQLite guards the
+    JSON expression, uses the
+    `idx_action_audits_origin_operational_record_updated` index, and resolves
+    at most 200 requested records in one query so Patrol pagination cannot
+    become a per-row store pattern.
+    Regression coverage:
+    `TestSQLiteStoreActionAuditOriginRoundTrip`,
+    `TestSQLiteActionAuditOriginOperationalRecordReader`, and the matching
+    memory/batch reader tests in `internal/unifiedresources/store_test.go`.
 27. Keep API-added TrueNAS systems keyed by the configured connection,
     never by snapshot-reported identity. `systemSourceID` in
     `internal/truenas/provider.go` scopes the system source ID (and every

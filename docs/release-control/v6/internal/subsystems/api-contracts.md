@@ -7821,3 +7821,26 @@ boundaries. Recovery points now expose provider scope and typed evidence, and
 rollups expose their already-owned verification intent and last-verification
 time. Supported legacy provider, subject, and display aliases remain readable;
 they do not create a parallel posture authority.
+
+### Operational Trust attention action transport
+
+Attention list and detail payloads add typed action offers and verification
+state without changing supported lifecycle fields. Offer enrichment occurs
+only after bounded list pagination or for one selected detail. It performs one
+registry build, one store acquisition, one authority evaluation, and one
+bounded latest-action batch read for the visible page; summary performs none.
+
+`POST /api/ai/patrol/attention/{id}/actions/restart/plan` is the only
+Operational Trust mutation route introduced in Phase 5. The server parses
+record IDs containing slashes, reloads the canonical projection, and
+re-evaluates lifecycle evidence, subject identity, resource capability,
+executor readiness, and current plan/approve/execute authority. The public
+request supplies no target, parameters, evidence IDs, handler, actor, or
+origin. Planning stamps the internal `operational_trust_attention` origin,
+exact operational record ID, sorted evidence IDs, and a stable record-bound
+request ID before using the existing action lifecycle. A prior origin-bound
+plan is replayed rather than duplicated.
+
+Decision, execution, receipt, reconciliation, result, and verification remain
+on the existing `/api/actions` contract. Provider success does not mutate the
+operational record; only fresh detector recovery evidence may resolve it.

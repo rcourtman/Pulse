@@ -55,10 +55,20 @@ const (
 )
 
 type AttentionActionOffer struct {
-	Capability       string `json:"capability"`
-	Label            string `json:"label"`
-	Risk             string `json:"risk"`
-	RequiresApproval bool   `json:"requiresApproval"`
+	ActionID              string   `json:"actionId,omitempty"`
+	TargetResourceID      string   `json:"targetResourceId"`
+	Capability            string   `json:"capability"`
+	Kind                  string   `json:"kind"`
+	Label                 string   `json:"label"`
+	Mode                  string   `json:"mode"`
+	Risk                  string   `json:"risk"`
+	Approval              string   `json:"approval"`
+	Eligibility           string   `json:"eligibility"`
+	Reasons               []string `json:"reasons"`
+	EvidenceIDs           []string `json:"evidenceIds"`
+	ExpectedPostcondition string   `json:"expectedPostcondition"`
+	VerificationPolicy    string   `json:"verificationPolicy"`
+	RequiresApproval      bool     `json:"requiresApproval"`
 }
 
 type AttentionResource struct {
@@ -71,6 +81,7 @@ type AttentionItem struct {
 	SubjectResourceID    string                                `json:"subjectResourceId"`
 	SubjectResourceName  string                                `json:"subjectResourceName"`
 	SubjectResourceType  string                                `json:"subjectResourceType,omitempty"`
+	Kind                 string                                `json:"kind"`
 	Title                string                                `json:"title"`
 	PlainLanguageSummary string                                `json:"plainLanguageSummary"`
 	Severity             operationaltrust.OperationalSeverity  `json:"severity"`
@@ -218,6 +229,7 @@ func projectAttentionAlert(
 		SubjectResourceID:    record.SubjectResourceID,
 		SubjectResourceName:  resourceName,
 		SubjectResourceType:  attentionResourceType(alert),
+		Kind:                 strings.TrimSpace(alert.Type),
 		Title:                title,
 		PlainLanguageSummary: summary,
 		Severity:             record.Severity,

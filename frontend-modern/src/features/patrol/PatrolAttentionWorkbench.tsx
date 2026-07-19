@@ -15,16 +15,21 @@ import ChevronRightIcon from 'lucide-solid/icons/chevron-right';
 import ClockIcon from 'lucide-solid/icons/clock';
 import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import RefreshIcon from 'lucide-solid/icons/refresh-cw';
+import RotateCwIcon from 'lucide-solid/icons/rotate-cw';
 import SparklesIcon from 'lucide-solid/icons/sparkles';
 import XIcon from 'lucide-solid/icons/x';
 import type {
   AttentionFilter,
+  AttentionActionOffer,
   AttentionItem,
   AttentionItemDetail,
 } from '@/api/patrolAttention';
+import { planPatrolAttentionAction } from '@/api/patrolAttention';
+import { ResourceActionsAPI } from '@/api/resourceActions';
 import { Button, ButtonLink } from '@/components/shared/Button';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { MetadataBadge, type MetadataBadgeTone } from '@/components/shared/MetadataBadge';
+import { ActionReviewDialog } from '@/features/actions/ActionReviewDialog';
 import { aiChatStore } from '@/stores/aiChat';
 import { patrolAttentionStore } from '@/stores/patrolAttention';
 import {
@@ -34,6 +39,7 @@ import {
   parsePatrolAttentionItemId,
 } from '@/routing/resourceLinks';
 import type { EvidenceEnvelope } from '@/types/operationalTrust';
+import type { ActionDetailResponse } from '@/types/actionAudit';
 import { formatRelativeTime } from '@/utils/format';
 
 const PRIMARY_EVIDENCE_LIMIT = 3;
@@ -50,8 +56,12 @@ const FILTERS: Array<{ id: AttentionFilter; label: string }> = [
 export function PatrolAttentionWorkbench() {
   const location = useLocation();
   const [selectedItemId, setSelectedItemId] = createSignal('');
+  const [actionDetail, setActionDetail] = createSignal<ActionDetailResponse | null>(null);
+  const [actionBusy, setActionBusy] = createSignal(false);
+  const [actionError, setActionError] = createSignal('');
   const itemButtons = new Map<string, HTMLButtonElement>();
   let detailPanel: HTMLDivElement | undefined;
+  let actionTrigger: HTMLButtonElement | undefined;
 
   const selectedDetail = () => patrolAttentionStore.selectedDetail();
   const summary = () => patrolAttentionStore.summary();
@@ -100,6 +110,44 @@ export function PatrolAttentionWorkbench() {
   const changeFilter = (filter: AttentionFilter) => {
     closeDetail();
     void patrolAttentionStore.load(filter);
+  };
+  const reviewAction = async (
+    item: AttentionItem,
+    offer: AttentionActionOffer,
+    trigger: HTMLButtonElement,
+  ) => {
+    if (actionBusy()) return;
+    actionTrigger = trigger;
+    setActionBusy(true);
+    setActionError('');
+    try {
+      const actionId =
+        offer.actionId || (await planPatrolAttentionAction(item.id, offer.capability)).actionId;
+      setActionDetail(await ResourceActionsAPI.getAction(actionId));
+    } catch (cause) {
+      setActionError(
+        cause instanceof Error ? cause.message : 'The governed action could not be opened.',
+      );
+    } finally {
+      setActionBusy(false);
+    }
+  };
+  const closeActionReview = () => {
+    setActionDetail(null);
+    queueMicrotask(() => {
+      const currentTrigger = detailPanel?.querySelector<HTMLButtonElement>(
+        '[data-patrol-action-trigger]',
+      );
+      (currentTrigger ?? actionTrigger)?.focus();
+    });
+  };
+  const actionChanged = async (next: ActionDetailResponse) => {
+    setActionDetail(next);
+    const selected = selectedItemId();
+    await Promise.all([
+      selected ? patrolAttentionStore.select(selected) : Promise.resolve(),
+      patrolAttentionStore.load(patrolAttentionStore.filter()),
+    ]);
   };
 
   onMount(() => {
@@ -171,7 +219,11 @@ export function PatrolAttentionWorkbench() {
           </Button>
         </div>
 
-        <div class="mt-4 flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Attention filter">
+        <div
+          class="mt-4 flex gap-2 overflow-x-auto pb-1"
+          role="group"
+          aria-label="Attention filter"
+        >
           <For each={FILTERS}>
             {(option) => {
               const selected = () => patrolAttentionStore.filter() === option.id;
@@ -216,10 +268,18 @@ export function PatrolAttentionWorkbench() {
               detail={selectedDetail()}
               loading={patrolAttentionStore.detailLoading()}
               onClose={closeDetail}
+              actionBusy={actionBusy()}
+              actionError={actionError()}
+              onReviewAction={reviewAction}
             />
           </div>
         </Show>
       </div>
+      <ActionReviewDialog
+        detail={actionDetail()}
+        onClose={closeActionReview}
+        onChanged={actionChanged}
+      />
     </section>
   );
 }
@@ -262,10 +322,7 @@ function AttentionList(props: {
           </div>
         }
       >
-        <Show
-          when={patrolAttentionStore.items().length > 0}
-          fallback={<AttentionEmptyState />}
-        >
+        <Show when={patrolAttentionStore.items().length > 0} fallback={<AttentionEmptyState />}>
           <ul class="divide-y divide-border" aria-label="Patrol attention items">
             <For each={patrolAttentionStore.items()}>
               {(item) => (
@@ -303,7 +360,10 @@ function AttentionList(props: {
                           <span>{formatRelativeTime(item.firstObservedAt, { compact: true })}</span>
                         </div>
                       </div>
-                      <ChevronRightIcon class="mt-1 h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+                      <ChevronRightIcon
+                        class="mt-1 h-4 w-4 shrink-0 text-muted"
+                        aria-hidden="true"
+                      />
                     </div>
                   </button>
                 </li>
@@ -332,9 +392,7 @@ function AttentionEmptyState() {
         fallback={
           <>
             <ClockIcon class="h-8 w-8 text-muted" aria-hidden="true" />
-            <h3 class="mt-3 text-sm font-semibold text-base-content">
-              No items in this view
-            </h3>
+            <h3 class="mt-3 text-sm font-semibold text-base-content">No items in this view</h3>
             <p class="mt-1 max-w-md text-xs leading-5 text-muted">
               {summary()?.coverageState === 'partial'
                 ? 'The lifecycle queue is empty, but protection context is incomplete. Pulse is not treating that gap as proof of health.'
@@ -344,9 +402,7 @@ function AttentionEmptyState() {
         }
       >
         <CheckCircleIcon class="h-9 w-9 text-emerald-500" aria-hidden="true" />
-        <h3 class="mt-3 text-sm font-semibold text-base-content">
-          Nothing needs your attention
-        </h3>
+        <h3 class="mt-3 text-sm font-semibold text-base-content">Nothing needs your attention</h3>
         <p class="mt-1 max-w-md text-xs leading-5 text-muted">
           The current operational lifecycle evaluation has no active items.
           <Show when={summary()?.evaluatedAt}>
@@ -362,13 +418,19 @@ function AttentionDetail(props: {
   detail: AttentionItemDetail | null;
   loading: boolean;
   onClose: () => void;
+  actionBusy: boolean;
+  actionError: string;
+  onReviewAction: (
+    item: AttentionItem,
+    offer: AttentionActionOffer,
+    trigger: HTMLButtonElement,
+  ) => void;
 }) {
   const detail = () => props.detail;
   const item = () => detail()?.item;
   const orderedEvidence = createMemo(() =>
     [...(detail()?.evidence ?? [])].sort(
-      (left, right) =>
-        new Date(right.observedAt).getTime() - new Date(left.observedAt).getTime(),
+      (left, right) => new Date(right.observedAt).getTime() - new Date(left.observedAt).getTime(),
     ),
   );
   const primaryEvidence = createMemo(() => orderedEvidence().slice(0, PRIMARY_EVIDENCE_LIMIT));
@@ -407,9 +469,7 @@ function AttentionDetail(props: {
         detailLines: [
           current.plainLanguageSummary,
           current.impact ? `Impact: ${current.impact}` : undefined,
-          current.recommendedNextStep
-            ? `Next step: ${current.recommendedNextStep}`
-            : undefined,
+          current.recommendedNextStep ? `Next step: ${current.recommendedNextStep}` : undefined,
         ].filter((line): line is string => Boolean(line)),
         evidence: evidence.slice(0, 5),
         actionLabel: `Explain ${current.title}`,
@@ -492,9 +552,7 @@ function AttentionDetail(props: {
               <p class="text-sm font-medium text-base-content">
                 {loaded().item.subjectResourceName}
               </p>
-              <p class="mt-1 break-all text-xs text-muted">
-                {loaded().item.subjectResourceId}
-              </p>
+              <p class="mt-1 break-all text-xs text-muted">{loaded().item.subjectResourceId}</p>
               <Show when={loaded().item.relatedResources.length > 0}>
                 <p class="mt-2 text-xs text-muted">
                   {loaded().item.relatedResources.length} related{' '}
@@ -510,12 +568,54 @@ function AttentionDetail(props: {
                 </Show>
                 <Show when={loaded().item.recommendedNextStep}>
                   {(nextStep) => (
-                    <p class="mt-2 text-sm font-medium leading-5 text-base-content">
-                      {nextStep()}
-                    </p>
+                    <p class="mt-2 text-sm font-medium leading-5 text-base-content">{nextStep()}</p>
                   )}
                 </Show>
               </DetailSection>
+            </Show>
+
+            <Show when={loaded().item.availableActions[0]}>
+              {(offer) => (
+                <DetailSection title="Safe action">
+                  <div class="rounded-md border border-blue-200 bg-blue-50/70 p-3 dark:border-blue-900 dark:bg-blue-950/30">
+                    <div class="flex items-start gap-2">
+                      <RotateCwIcon
+                        class="mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300"
+                        aria-hidden="true"
+                      />
+                      <div class="min-w-0">
+                        <p class="text-sm font-semibold text-base-content">{offer().label}</p>
+                        <p class="mt-1 text-xs leading-5 text-muted">
+                          {offer().expectedPostcondition}{' '}
+                          {attentionActionGuidance(loaded().item, offer())}
+                        </p>
+                        <ActionVerificationMessage state={loaded().item.verificationState} />
+                        <Show when={props.actionError}>
+                          <p
+                            role="alert"
+                            class="mt-2 text-xs leading-5 text-red-700 dark:text-red-300"
+                          >
+                            {props.actionError}
+                          </p>
+                        </Show>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          class="mt-3 gap-1.5"
+                          data-patrol-action-trigger
+                          isLoading={props.actionBusy}
+                          onClick={(event) =>
+                            props.onReviewAction(loaded().item, offer(), event.currentTarget)
+                          }
+                        >
+                          <RotateCwIcon class="h-4 w-4" aria-hidden="true" />
+                          {offer().actionId ? 'Review action' : 'Review and approve'}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </DetailSection>
+              )}
             </Show>
 
             <DetailSection title="Evidence">
@@ -639,6 +739,44 @@ function AttentionDetail(props: {
   );
 }
 
+function ActionVerificationMessage(props: { state: AttentionItem['verificationState'] }) {
+  const message = () => {
+    switch (props.state) {
+      case 'pending':
+        return 'The action is awaiting a decision, execution, or verification.';
+      case 'succeeded':
+        return 'The restart postcondition was confirmed. This issue stays open until fresh health evidence shows the container is healthy.';
+      case 'failed':
+        return 'The restart did not satisfy its postcondition. The issue remains open.';
+      case 'unknown':
+        return 'Pulse could not conclusively verify the restart. The issue remains open.';
+      default:
+        return '';
+    }
+  };
+  return (
+    <Show when={message()}>
+      {(value) => <p class="mt-2 text-xs font-medium leading-5 text-base-content">{value()}</p>}
+    </Show>
+  );
+}
+
+function attentionActionGuidance(item: AttentionItem, offer: AttentionActionOffer): string {
+  if (!offer.actionId) {
+    return 'This requires an explicit review and approval before Pulse sends anything.';
+  }
+  switch (item.verificationState) {
+    case 'pending':
+      return 'Open the existing review to continue the governed action.';
+    case 'succeeded':
+    case 'failed':
+    case 'unknown':
+      return 'Pulse recorded the action result below. Open the review for the full audit.';
+    default:
+      return 'Open the existing review to inspect the recorded decision.';
+  }
+}
+
 function DetailSection(props: { title: string; children: import('solid-js').JSX.Element }) {
   return (
     <section>
@@ -705,12 +843,7 @@ function SeverityMarker(props: { item: AttentionItem }) {
 
 function StateBadge(props: { item: AttentionItem }) {
   return (
-    <MetadataBadge
-      tone={stateTone(props.item)}
-      size="xs"
-      shape="rounded"
-      appearance="outline"
-    >
+    <MetadataBadge tone={stateTone(props.item)} size="xs" shape="rounded" appearance="outline">
       {formatLabel(props.item.state)}
     </MetadataBadge>
   );
@@ -718,16 +851,14 @@ function StateBadge(props: { item: AttentionItem }) {
 
 function EvidenceLabel(props: { item: AttentionItem; badge?: boolean }) {
   const label = () =>
-    props.item.evidenceFreshness === 'fresh' &&
-    props.item.evidenceCompleteness === 'complete'
+    props.item.evidenceFreshness === 'fresh' && props.item.evidenceCompleteness === 'complete'
       ? 'Evidence current'
       : `${formatLabel(props.item.evidenceFreshness)} / ${formatLabel(props.item.evidenceCompleteness)}`;
   if (props.badge) {
     return (
       <MetadataBadge
         tone={
-          props.item.evidenceFreshness === 'fresh' &&
-          props.item.evidenceCompleteness === 'complete'
+          props.item.evidenceFreshness === 'fresh' && props.item.evidenceCompleteness === 'complete'
             ? 'success'
             : 'warning'
         }

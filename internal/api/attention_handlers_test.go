@@ -175,6 +175,17 @@ func TestAttentionHandlersRejectInvalidOrUnboundedQueries(t *testing.T) {
 	}
 }
 
+func TestParseAttentionActionPlanPathPreservesOperationalIDsContainingSlashes(t *testing.T) {
+	itemID, capability, ok := parseAttentionActionPlanPath(
+		"/agent:node-1/disk:mnt-disk2::metric-threshold:disk/actions/restart/plan",
+	)
+	if !ok ||
+		itemID != "agent:node-1/disk:mnt-disk2::metric-threshold:disk" ||
+		capability != "restart" {
+		t.Fatalf("item=%q capability=%q ok=%t", itemID, capability, ok)
+	}
+}
+
 func attentionHandlerAlert(
 	id string,
 	state operationaltrust.OperationalState,

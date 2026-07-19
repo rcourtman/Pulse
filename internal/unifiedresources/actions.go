@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -484,10 +485,12 @@ type ActionAuditRecord struct {
 // Origin is broker-owned metadata: it is set by in-process planning callers
 // only and is never accepted from the public plan request body.
 type ActionOrigin struct {
-	Surface         string `json:"surface"`
-	FindingID       string `json:"findingId,omitempty"`
-	InvestigationID string `json:"investigationId,omitempty"`
-	ProposalID      string `json:"proposalId,omitempty"`
+	Surface             string   `json:"surface"`
+	FindingID           string   `json:"findingId,omitempty"`
+	InvestigationID     string   `json:"investigationId,omitempty"`
+	ProposalID          string   `json:"proposalId,omitempty"`
+	OperationalRecordID string   `json:"operationalRecordId,omitempty"`
+	EvidenceIDs         []string `json:"evidenceIds,omitempty"`
 }
 
 // NormalizeActionOrigin trims origin fields and collapses an all-empty
@@ -497,12 +500,20 @@ func NormalizeActionOrigin(origin *ActionOrigin) *ActionOrigin {
 		return nil
 	}
 	normalized := ActionOrigin{
-		Surface:         strings.TrimSpace(origin.Surface),
-		FindingID:       strings.TrimSpace(origin.FindingID),
-		InvestigationID: strings.TrimSpace(origin.InvestigationID),
-		ProposalID:      strings.TrimSpace(origin.ProposalID),
+		Surface:             strings.TrimSpace(origin.Surface),
+		FindingID:           strings.TrimSpace(origin.FindingID),
+		InvestigationID:     strings.TrimSpace(origin.InvestigationID),
+		ProposalID:          strings.TrimSpace(origin.ProposalID),
+		OperationalRecordID: strings.TrimSpace(origin.OperationalRecordID),
+		EvidenceIDs:         uniqueStrings(origin.EvidenceIDs),
 	}
-	if normalized == (ActionOrigin{}) {
+	sort.Strings(normalized.EvidenceIDs)
+	if normalized.Surface == "" &&
+		normalized.FindingID == "" &&
+		normalized.InvestigationID == "" &&
+		normalized.ProposalID == "" &&
+		normalized.OperationalRecordID == "" &&
+		len(normalized.EvidenceIDs) == 0 {
 		return nil
 	}
 	return &normalized

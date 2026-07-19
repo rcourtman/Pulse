@@ -494,6 +494,7 @@ func (r *Router) setupRoutes() {
 	actionOrgChecker := NewAuthorizationChecker(NewMultiTenantOrganizationLoader(r.multiTenant))
 	actionAuth := actionAuthority{authorizer: r.authorizer, orgChecker: actionOrgChecker}
 	r.resourceHandlers.SetActionAuthorizers(actionAuth, actionAuth)
+	r.attentionHandlers.SetActionDependencies(r.resourceHandlers, actionAuth)
 	r.maintenanceSentinel = r.buildMaintenanceVerificationSentinel()
 	r.maintenanceVerificationHandlers = NewMaintenanceVerificationHandlers(r.resourceHandlers, r.maintenanceSentinel)
 	if r.maintenanceSentinel != nil {

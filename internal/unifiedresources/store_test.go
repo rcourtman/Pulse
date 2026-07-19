@@ -3134,19 +3134,35 @@ func TestActionAuditOriginReaderReturnsLatestTransition(t *testing.T) {
 			if !ok {
 				t.Fatalf("%T does not implement ActionAuditOriginReader", store)
 			}
+			operationalReader, ok := store.(OperationalActionAuditOriginReader)
+			if !ok {
+				t.Fatalf("%T does not implement OperationalActionAuditOriginReader", store)
+			}
+			operationalBatchReader, ok := store.(OperationalActionAuditOriginBatchReader)
+			if !ok {
+				t.Fatalf("%T does not implement OperationalActionAuditOriginBatchReader", store)
+			}
 			now := time.Now().UTC()
 			for _, record := range []ActionAuditRecord{
 				{
 					ID: "act-old", CreatedAt: now.Add(-time.Minute), UpdatedAt: now.Add(-time.Minute), State: ActionStatePending,
 					Request: ActionRequest{RequestID: "prop-old", ResourceID: "vm:42", CapabilityName: "restart", RequestedBy: "pulse_patrol"},
 					Plan:    ActionPlan{ActionID: "act-old", RequestID: "prop-old", Allowed: true},
-					Origin:  &ActionOrigin{Surface: "patrol", FindingID: "finding-1", InvestigationID: "inv-1", ProposalID: "prop-old"},
+					Origin: &ActionOrigin{
+						Surface: "patrol", FindingID: "finding-1", InvestigationID: "inv-1",
+						ProposalID: "prop-old", OperationalRecordID: "operational-1",
+						EvidenceIDs: []string{" evidence-b ", "evidence-a", "evidence-a"},
+					},
 				},
 				{
 					ID: "act-new", CreatedAt: now, UpdatedAt: now, State: ActionStateCompleted,
-					Request:             ActionRequest{RequestID: "prop-new", ResourceID: "vm:42", CapabilityName: "restart", RequestedBy: "pulse_patrol"},
-					Plan:                ActionPlan{ActionID: "act-new", RequestID: "prop-new", Allowed: true},
-					Origin:              &ActionOrigin{Surface: "patrol", FindingID: "finding-1", InvestigationID: "inv-1", ProposalID: "prop-new"},
+					Request: ActionRequest{RequestID: "prop-new", ResourceID: "vm:42", CapabilityName: "restart", RequestedBy: "pulse_patrol"},
+					Plan:    ActionPlan{ActionID: "act-new", RequestID: "prop-new", Allowed: true},
+					Origin: &ActionOrigin{
+						Surface: "patrol", FindingID: "finding-1", InvestigationID: "inv-1",
+						ProposalID: "prop-new", OperationalRecordID: "operational-1",
+						EvidenceIDs: []string{"evidence-c"},
+					},
 					VerificationOutcome: VerificationOutcome{Status: VerificationVerified},
 				},
 			} {
@@ -3160,6 +3176,20 @@ func TestActionAuditOriginReaderReturnsLatestTransition(t *testing.T) {
 			}
 			if got.ID != "act-new" || got.State != ActionStateCompleted {
 				t.Fatalf("latest audit = %#v, want act-new completed", got)
+			}
+			got, found, err = operationalReader.GetLatestActionAuditByOperationalRecord(
+				"patrol",
+				"operational-1",
+			)
+			if err != nil || !found || got.ID != "act-new" {
+				t.Fatalf("GetLatestActionAuditByOperationalRecord: got=%#v found=%v err=%v", got, found, err)
+			}
+			batch, err := operationalBatchReader.GetLatestActionAuditsByOperationalRecords(
+				"patrol",
+				[]string{"operational-1", "missing"},
+			)
+			if err != nil || len(batch) != 1 || batch["operational-1"].ID != "act-new" {
+				t.Fatalf("GetLatestActionAuditsByOperationalRecords: batch=%#v err=%v", batch, err)
 			}
 		})
 	}

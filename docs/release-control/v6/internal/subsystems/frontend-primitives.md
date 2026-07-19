@@ -2339,6 +2339,17 @@ detail, while legacy Patrol analytics belong in collapsed supporting context.
 Unavailable and partial states must use explicit copy rather than success
 styling.
 
+The selected attention detail may compose the shared Actions review for an
+eligible backend-authored offer. The detail owns only the expected
+postcondition, explicit-review warning, verification summary, and one review
+trigger. `ActionReviewDialog` remains the sole approve/reject/run and durable
+outcome primitive. After a decision or execution refreshes and replaces the
+detail subtree, dialog close must resolve and focus the current action trigger,
+not a detached element reference. Browser proof covers desktop and
+390-pixel mobile layouts, reduced motion, screen-reader names, exactly one run
+request, and focus restoration for both confirmed and contradicted
+verification.
+
 ## Current State
 
 Assistant availability in the app shell is derived from the

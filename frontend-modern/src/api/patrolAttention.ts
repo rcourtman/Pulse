@@ -9,27 +9,28 @@ import type {
   OperationalState,
 } from '@/types/operationalTrust';
 import type { ProtectionPosture } from '@/types/recovery';
+import type { ActionAuditPlan } from '@/types/actionAudit';
 
 export type AttentionFilter =
-  | 'active'
-  | 'open'
-  | 'acknowledged'
-  | 'suppressed'
-  | 'stale_unknown'
-  | 'resolved'
-  | 'all';
+  'active' | 'open' | 'acknowledged' | 'suppressed' | 'stale_unknown' | 'resolved' | 'all';
 
 export type AttentionVerificationState =
-  | 'not_available'
-  | 'pending'
-  | 'succeeded'
-  | 'failed'
-  | 'unknown';
+  'not_available' | 'pending' | 'succeeded' | 'failed' | 'unknown';
 
 export interface AttentionActionOffer {
+  actionId?: string;
+  targetResourceId: string;
   capability: string;
+  kind: string;
   label: string;
+  mode: 'plan' | 'dry-run' | 'execute';
   risk: string;
+  approval: 'not-required' | 'required' | 'granted' | 'denied';
+  eligibility: 'eligible' | 'ineligible' | 'unknown';
+  reasons: string[];
+  evidenceIds: string[];
+  expectedPostcondition: string;
+  verificationPolicy: string;
   requiresApproval: boolean;
 }
 
@@ -43,6 +44,7 @@ export interface AttentionItem {
   subjectResourceId: string;
   subjectResourceName: string;
   subjectResourceType?: string;
+  kind: string;
   title: string;
   plainLanguageSummary: string;
   severity: OperationalSeverity;
@@ -109,5 +111,18 @@ export async function getPatrolAttentionSummary(): Promise<AttentionSummary> {
 export async function getPatrolAttentionDetail(itemId: string): Promise<AttentionItemDetail> {
   return apiFetchJSON<AttentionItemDetail>(
     `/api/ai/patrol/attention/${encodeURIComponent(itemId)}`,
+  );
+}
+
+export async function planPatrolAttentionAction(
+  itemId: string,
+  capability: string,
+): Promise<ActionAuditPlan> {
+  return apiFetchJSON<ActionAuditPlan>(
+    `/api/ai/patrol/attention/${encodeURIComponent(itemId)}/actions/${encodeURIComponent(capability)}/plan`,
+    {
+      method: 'POST',
+      body: '{}',
+    },
   );
 }

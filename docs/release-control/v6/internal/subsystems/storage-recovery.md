@@ -2180,6 +2180,16 @@ while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
 
+The adjacent Operational Trust attention action transport does not turn
+protection posture into mutation authority. The selected item may display
+storage/recovery-owned posture beside a separately declared Docker restart
+offer, but recovery points, provider job evidence, backup age, verification
+intent, and posture state cannot authorize that restart. The Phase 5 route
+adds no backup, restore, retention, or recovery execution API and does not
+change storage/recovery lifecycle ownership; it enters the existing governed
+action lifecycle only after the action subsystem's own current evidence,
+capability, executor-readiness, and operator-authority gates pass.
+
 ### Canonical protection posture
 
 `ProtectionPosture` is the storage/recovery-owned subject read model over

@@ -8729,6 +8729,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/operational-trust-governed-docker-restart-2026-07-19.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/operational-trust-lifecycle-evidence-notification-linkage-2026-07-19.md",
           "kind": "file"
         },

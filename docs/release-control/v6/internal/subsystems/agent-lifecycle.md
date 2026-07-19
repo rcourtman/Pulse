@@ -4625,13 +4625,38 @@ operator approve or reject an agent action while preserving the agent token's
 separate reporting and command authority; invalid credentials must never reach
 the action handler or acquire an operator principal.
 
+### Multi-destination reporting authority
+
+The Unified Agent may fan one collected host, Docker/Podman, and Kubernetes
+snapshot out to one primary Pulse destination and zero or more report-only
+observers. Exactly one destination is authoritative. Only that primary may
+provide remote configuration, commands, enrollment, update selection, or
+canonical agent identity. Observer response bodies cannot enter any control
+path. Delivery queues, authentication failures, and persisted host-report
+buffers are destination-scoped; failure of one destination cannot block or
+replay reports to another.
+
+Observer configuration is explicit, versioned, and file-backed. It contains no
+raw token values and resolves each token from a separate private absolute-path
+file. Proxmox registration is also destination-scoped: the primary retains its
+legacy token name for upgrade continuity, observers use distinct token names
+and state markers, and every setup path must obtain a successful registration
+state response before any create, delete, or rotation command is executed.
+
 The adjacent recovery handlers under `internal/api/` do not widen this agent
 lifecycle boundary. Protection posture is a read-only `monitoring:read`
 projection over recovery points and provider collection evidence. It does not
 register agents, issue or rotate credentials, interpret observer responses,
 or grant backup, restore, command, or remote-configuration authority.
 
-The adjacent Patrol attention handlers and shared router registration also do
-not widen agent authority. They read the canonical alert lifecycle under
-`monitoring:read`; they do not accept agent reports, mint credentials, deliver
-commands, or reinterpret an observer response as configuration.
+The adjacent Patrol attention read handlers and shared router registration do
+not widen agent authority. Reads consume the canonical alert lifecycle under
+`monitoring:read`; they do not accept agent reports, mint credentials, or
+reinterpret an observer response as configuration. Phase 5 may plan one
+evidence-gated Docker restart only after current plan/approve/execute authority,
+declared capability, and executor readiness checks. That attention handler
+binds an internal origin and enters the existing action lifecycle; it does not
+deliver a command itself or add an agent wire shape. Actual dispatch retains
+the canonical action executor, exact agent/resource binding, command-enabled
+token policy, durable attempt/receipt, timeout, and restart-reconciliation
+boundaries.

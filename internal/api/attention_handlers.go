@@ -31,6 +31,8 @@ type attentionAlertSnapshot func(context.Context) ([]alerts.Alert, []alerts.Aler
 type AttentionHandlers struct {
 	readAlerts      attentionAlertSnapshot
 	recoveryManager *recoverymanager.Manager
+	resources       *ResourceHandlers
+	actionAuthority actionAuthority
 }
 
 func NewAttentionHandlers(
@@ -53,6 +55,17 @@ func NewAttentionHandlers(
 	}
 }
 
+func (h *AttentionHandlers) SetActionDependencies(
+	resources *ResourceHandlers,
+	authority actionAuthority,
+) {
+	if h == nil {
+		return
+	}
+	h.resources = resources
+	h.actionAuthority = authority
+}
+
 type attentionListResponse struct {
 	Data    []ai.AttentionItem  `json:"data"`
 	Summary ai.AttentionSummary `json:"summary"`
@@ -65,12 +78,15 @@ type attentionListResponse struct {
 }
 
 func (h *AttentionHandlers) HandleAttention(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/ai/patrol/attention")
+	if r.Method == http.MethodPost && isAttentionActionPlanPath(path) {
+		h.handleAttentionActionPlan(w, r, path)
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	path := strings.TrimPrefix(r.URL.Path, "/api/ai/patrol/attention")
 	switch {
 	case path == "" || path == "/":
 		h.handleAttentionList(w, r)
@@ -88,7 +104,7 @@ func (h *AttentionHandlers) handleAttentionList(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
-	projection, err := h.project(r.Context(), true)
+	projection, err := h.project(r, true)
 	if err != nil {
 		writeAttentionUnavailable(w, err)
 		return
@@ -115,6 +131,7 @@ func (h *AttentionHandlers) handleAttentionList(w http.ResponseWriter, r *http.R
 		)
 		return
 	}
+	h.projectAttentionActions(r, paged)
 
 	response := attentionListResponse{
 		Data:    make([]ai.AttentionItem, 0, len(paged)),
@@ -135,7 +152,7 @@ func (h *AttentionHandlers) handleAttentionList(w http.ResponseWriter, r *http.R
 }
 
 func (h *AttentionHandlers) handleAttentionSummary(w http.ResponseWriter, r *http.Request) {
-	projection, err := h.project(r.Context(), false)
+	projection, err := h.project(r, false)
 	if err != nil {
 		writeAttentionUnavailable(w, err)
 		return
@@ -161,14 +178,16 @@ func (h *AttentionHandlers) handleAttentionDetail(
 		)
 		return
 	}
-	projection, err := h.project(r.Context(), true)
+	projection, err := h.project(r, true)
 	if err != nil {
 		writeAttentionUnavailable(w, err)
 		return
 	}
 	for _, detail := range projection.Details {
 		if detail.Item.ID == itemID {
-			if err := utils.WriteJSONResponse(w, detail); err != nil {
+			details := []ai.AttentionItemDetail{detail}
+			h.projectAttentionActions(r, details)
+			if err := utils.WriteJSONResponse(w, details[0]); err != nil {
 				log.Error().Err(err).Msg("Failed to serialize Patrol attention detail")
 			}
 			return
@@ -184,12 +203,13 @@ func (h *AttentionHandlers) handleAttentionDetail(
 }
 
 func (h *AttentionHandlers) project(
-	ctx context.Context,
+	r *http.Request,
 	includeProtectionPosture bool,
 ) (ai.AttentionProjection, error) {
 	if h == nil || h.readAlerts == nil {
 		return ai.AttentionProjection{}, fmt.Errorf("attention lifecycle source is not configured")
 	}
+	ctx := r.Context()
 	active, history, err := h.readAlerts(ctx)
 	if err != nil {
 		return ai.AttentionProjection{}, err

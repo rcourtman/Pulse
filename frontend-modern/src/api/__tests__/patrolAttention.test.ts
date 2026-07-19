@@ -8,6 +8,7 @@ import {
   getPatrolAttention,
   getPatrolAttentionDetail,
   getPatrolAttentionSummary,
+  planPatrolAttentionAction,
 } from '@/api/patrolAttention';
 import { apiFetchJSON } from '@/utils/apiClient';
 
@@ -32,5 +33,17 @@ describe('Patrol attention API', () => {
 
     await getPatrolAttentionDetail('record/one');
     expect(fetchMock).toHaveBeenLastCalledWith('/api/ai/patrol/attention/record%2Fone');
+  });
+
+  it('plans the fixed attention capability without accepting public action authority', async () => {
+    await planPatrolAttentionAction('record/one', 'restart');
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/ai/patrol/attention/record%2Fone/actions/restart/plan',
+      {
+        method: 'POST',
+        body: '{}',
+      },
+    );
   });
 });

@@ -65,6 +65,52 @@ type basicActionContractAuthorizer struct {
 	wantUser string
 }
 
+func TestContract_OperationalTrustAttentionActionOfferJSONIsAdditiveAndTyped(t *testing.T) {
+	payload, err := json.Marshal(ai.AttentionActionOffer{
+		ActionID:              "action-1",
+		TargetResourceID:      "docker:host/container",
+		Capability:            ai.AttentionDockerRestartCapability,
+		Kind:                  "container_restart",
+		Label:                 "Restart this container",
+		Mode:                  "execute",
+		Risk:                  "low",
+		Approval:              "granted",
+		Eligibility:           "eligible",
+		Reasons:               []string{"fresh_confirmed_unhealthy_container"},
+		EvidenceIDs:           []string{"evidence-1"},
+		ExpectedPostcondition: "The same container is observed running after the restart.",
+		VerificationPolicy:    "Pulse requires a fresh container readback.",
+		RequiresApproval:      true,
+	})
+	if err != nil {
+		t.Fatalf("marshal attention action offer: %v", err)
+	}
+	var contract map[string]any
+	if err := json.Unmarshal(payload, &contract); err != nil {
+		t.Fatalf("decode attention action offer: %v", err)
+	}
+	for _, field := range []string{
+		"actionId",
+		"targetResourceId",
+		"capability",
+		"kind",
+		"label",
+		"mode",
+		"risk",
+		"approval",
+		"eligibility",
+		"reasons",
+		"evidenceIds",
+		"expectedPostcondition",
+		"verificationPolicy",
+		"requiresApproval",
+	} {
+		if _, found := contract[field]; !found {
+			t.Fatalf("attention action offer missing %q: %s", field, payload)
+		}
+	}
+}
+
 func (a basicActionContractAuthorizer) Authorize(ctx context.Context, action, resource string) (bool, error) {
 	return authpkg.GetUser(ctx) == a.wantUser && action == authpkg.ActionApprove && resource == authpkg.ResourceActions, nil
 }

@@ -968,6 +968,24 @@ observation remains stale or unknown and must not be presented as recovered.
 The attached-facet browser proof is
 `tests/integration/tests/92-operational-trust-availability-facet.spec.ts`.
 
+Phase 5 adds one deliberately narrow mutation without changing that ownership
+model. A selected canonical `docker-container-health` item may show the shared
+AI-runtime offer for the resource's declared Docker `restart` capability.
+`PatrolAttentionWorkbench` may plan or reopen that exact action, but all
+approval, execution, policy evidence, delivery, audit, and verification
+controls remain in the shared `ActionReviewDialog`. Patrol never reconstructs
+eligibility from copy or metadata and never closes the issue because the
+action command or running-state postcondition succeeded. It reports confirmed,
+contradicted, or inconclusive verification beside the still-open lifecycle
+record until fresh detector-owned recovery evidence resolves it.
+
+The review trigger must restore focus to the current rendered control after
+action refresh replaces the selected detail node. Desktop and mobile browser
+proof, including failed verification and reduced motion, remains
+`tests/integration/tests/91-operational-trust-attention-workbench.spec.ts`.
+The durable decision and proof record is
+`internal/records/operational-trust-governed-docker-restart-2026-07-19.md`.
+
 ## Current State
 
 The active Patrol queue now uses compact severity-accented rows for

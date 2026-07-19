@@ -6618,3 +6618,20 @@ and pre/post inventory equality. Legacy `pulse-qual-${run_id}` names remain
 accepted for external manifest compatibility, but governed remediation
 qualification uses neutral identities so a model is scored on infrastructure
 evidence rather than recognizing that it is inside a benchmark.
+
+### Operational Trust action eligibility
+
+`internal/ai/attention_actions.go` is the canonical pure projection for the
+first attention-owned action offer. It maps only a
+`docker-container-health` lifecycle item on an app-container to the existing
+declared Docker `restart` capability. Freshness, completeness, confidence,
+permissions, canonical subject binding, unambiguous correlation, live resource
+capability, exact internal handler, approval floor, executor readiness, and
+operator authority all fail closed through typed reasons. Frontend and API
+callers must not reproduce those gates from finding text or loose metadata.
+
+An origin-bound existing action may be projected for authorized historical
+review. Verification presentation is derived only from the durable canonical
+action state and `ActionResultV2`: confirmed, contradicted, inconclusive, and
+not-attempted remain distinct. The projection has no authority to resolve the
+operational record.

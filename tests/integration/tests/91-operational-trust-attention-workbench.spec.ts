@@ -105,8 +105,15 @@ test.beforeEach(async ({ page }) => {
   expect(pageErrors, "The Patrol shell raised a browser error").toEqual([]);
   expect(consoleErrors, "The Patrol shell logged a browser error").toEqual([]);
   const shellText = (await page.locator("body").innerText()).trim();
-  expect(shellText, `The authenticated shell was blank at ${page.url()}`).not.toBe("");
-  await expect(page.getByRole("tab", { name: /Patrol/ })).toBeVisible();
+  expect(
+    shellText,
+    `The authenticated shell was blank at ${page.url()}`,
+  ).not.toBe("");
+  await expect(
+    page
+      .getByRole("tab", { name: /Patrol/ })
+      .or(page.getByRole("button", { name: "Patrol", exact: true })),
+  ).toBeVisible();
 });
 
 const now = new Date();
@@ -529,13 +536,13 @@ async function mockAttention(
           ? [uncertainAttentionItem]
           : filter === "open"
             ? [openAttentionItem]
-          : filter === "acknowledged"
-            ? [acknowledgedAttentionItem]
-            : filter === "suppressed"
-              ? [suppressedAttentionItem]
-              : filter === "resolved"
-                ? [resolvedAttentionItem]
-            : [openAttentionItem, uncertainAttentionItem];
+            : filter === "acknowledged"
+              ? [acknowledgedAttentionItem]
+              : filter === "suppressed"
+                ? [suppressedAttentionItem]
+                : filter === "resolved"
+                  ? [resolvedAttentionItem]
+                  : [openAttentionItem, uncertainAttentionItem];
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -578,7 +585,11 @@ test("makes active operational work primary and preserves the evidence boundary"
   await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
   await expect(
-    page.getByRole("tab", { name: "Patrol: 2 active attention items" }),
+    page.getByRole("tab", { name: "Patrol: 2 active attention items" }).or(
+      page.getByRole("button", {
+        name: "Patrol: 2 active attention items",
+      }),
+    ),
   ).toBeVisible();
   const queue = page.getByRole("region", { name: "Needs attention" });
   await expect(queue.getByLabel("2 active attention items")).toBeVisible();
@@ -717,3 +728,491 @@ test("shows calm only with current coverage and never converts failure into heal
   ).toBeVisible();
   await expect(page.getByText("Nothing needs your attention")).toHaveCount(0);
 });
+
+type GovernedActionVerification = "confirmed" | "contradicted";
+
+const governedActionAttentionID = "docker-health-operational-record";
+const governedActionID = "act-operational-trust-restart";
+const governedResourceID = "docker:host-1/container-api";
+
+const governedActionOffer = (actionId?: string) => ({
+  ...(actionId ? { actionId } : {}),
+  targetResourceId: governedResourceID,
+  capability: "restart",
+  kind: "container_restart",
+  label: "Restart this container",
+  mode: actionId ? "execute" : "plan",
+  risk: "low",
+  approval: actionId ? "granted" : "required",
+  eligibility: "eligible",
+  reasons: ["fresh_confirmed_unhealthy_container", "declared_live_capability"],
+  evidenceIds: ["docker-health-evidence"],
+  expectedPostcondition:
+    "The same container is observed running after the restart.",
+  verificationPolicy:
+    "Pulse requires a fresh container readback and records whether it is agent-attested or independently observed.",
+  requiresApproval: true,
+});
+
+const governedActionAttentionItem = (
+  actionState: "unplanned" | "pending_approval" | "approved" | "completed",
+  verification: GovernedActionVerification,
+) => ({
+  id: governedActionAttentionID,
+  operationalRecordId: governedActionAttentionID,
+  subjectResourceId: governedResourceID,
+  subjectResourceName: "API container",
+  subjectResourceType: "app-container",
+  kind: "docker-container-health",
+  title: "API container is unhealthy",
+  plainLanguageSummary:
+    "Docker reported that the API container is unhealthy from a current health check.",
+  severity: "critical",
+  state: "open",
+  firstObservedAt,
+  lastObservedAt,
+  evidenceFreshness: "fresh",
+  evidenceCompleteness: "complete",
+  impact: "Requests handled by this container may fail.",
+  relatedResources: [],
+  recommendedNextStep:
+    "Review the bounded restart and its current policy before approving it.",
+  availableActions: [
+    governedActionOffer(
+      actionState === "unplanned" ? undefined : governedActionID,
+    ),
+  ],
+  verificationState:
+    actionState === "unplanned"
+      ? "not_available"
+      : actionState === "completed"
+        ? verification === "confirmed"
+          ? "succeeded"
+          : "failed"
+        : "pending",
+});
+
+const governedActionAudit = (
+  actionState: "pending_approval" | "approved" | "completed",
+  verification: GovernedActionVerification,
+) => {
+  const scope = {
+    orgId: "default",
+    resourceId: governedResourceID,
+    capabilityName: "restart",
+  };
+  const evidence = {
+    version: 1,
+    id: "restart-readback",
+    observerId: "docker-agent-1",
+    observerKind: "unified_agent",
+    observerTrustDomain: "agent:docker-agent-1",
+    executorTrustDomain: "agent:docker-agent-1",
+    method: "typed_container_read_after_write",
+    subjectId: governedResourceID,
+    observedAt: lastObservedAt,
+    receivedAt: evaluatedAt,
+    summary:
+      verification === "confirmed"
+        ? "The same container was observed running."
+        : "The container was still not running after the provider returned success.",
+    digest: `sha256:${"a".repeat(64)}`,
+  };
+  return {
+    id: governedActionID,
+    createdAt: firstObservedAt,
+    updatedAt: evaluatedAt,
+    state: actionState,
+    decisionRevision: actionState === "pending_approval" ? 0 : 1,
+    request: {
+      requestId: `operational-trust:${governedActionAttentionID}:restart`,
+      resourceId: governedResourceID,
+      capabilityName: "restart",
+      params: {},
+      reason:
+        "Restart API container after fresh confirmed evidence reported an unhealthy container.",
+      requestedBy: "operator",
+    },
+    resource: {
+      id: governedResourceID,
+      name: "API container",
+      type: "app-container",
+    },
+    plan: {
+      actionId: governedActionID,
+      requestId: `operational-trust:${governedActionAttentionID}:restart`,
+      allowed: true,
+      requiresApproval: true,
+      approvalPolicy: "admin",
+      approvalRequirement: {
+        version: 1,
+        floor: "admin",
+        quorum: 1,
+        disallowRequester: false,
+      },
+      predictedBlastRadius: [governedResourceID],
+      rollbackAvailable: false,
+      plannedAt: firstObservedAt,
+      expiresAt: "2099-07-19T12:00:00Z",
+      resourceVersion: "resource:sha256:docker-health",
+      policyVersion: "policy:sha256:docker-restart",
+      planHash: `sha256:${"b".repeat(64)}`,
+      policyDecision: {
+        version: 1,
+        status: "resolved",
+        decisionId: "policy-decision:docker-restart",
+        actionId: governedActionID,
+        scope,
+        approvalRequirement: {
+          version: 1,
+          floor: "admin",
+          quorum: 1,
+          disallowRequester: false,
+        },
+        planningAllowed: true,
+        requiresApproval: true,
+        authorities: [
+          {
+            kind: "capability_registry",
+            sourceId: "capability-registry:restart",
+            revision: "policy:sha256:docker-restart",
+            status: "consulted",
+            scope,
+            approvalFloor: "admin",
+            reasonCodes: [
+              "capability_approval_admin",
+              "capability_auto_low_risk",
+            ],
+          },
+        ],
+      },
+      preflight: {
+        target: governedResourceID,
+        currentState: "warning",
+        intendedChange: "Restart this Docker container.",
+        dryRunAvailable: false,
+        safetyChecks: [
+          "The container still declares restart.",
+          "The reporting agent remains connected.",
+        ],
+        verificationSteps: [
+          "Read the same container after the restart and compare its running state.",
+        ],
+        generatedAt: firstObservedAt,
+      },
+    },
+    origin: {
+      surface: "operational_trust_attention",
+      operationalRecordId: governedActionAttentionID,
+      evidenceIds: ["docker-health-evidence"],
+    },
+    approvals:
+      actionState === "pending_approval"
+        ? []
+        : [
+            {
+              actor: "operator",
+              method: "session",
+              timestamp: evaluatedAt,
+              outcome: "approved",
+            },
+          ],
+    ...(actionState === "completed"
+      ? {
+          result: {
+            success: true,
+            actionResultV2: {
+              version: 2,
+              execution: {
+                status: "succeeded",
+                summary: "The provider accepted and completed the restart.",
+              },
+              verification: {
+                status: verification,
+                evidenceClass: "agent_attested",
+                ...(verification === "contradicted"
+                  ? { reasonCode: "postcondition_contradicted" }
+                  : {}),
+                summary: evidence.summary,
+                evidence: [evidence],
+              },
+              compensation: {
+                support: "unavailable",
+                status: "not_available",
+                summary: "Container restart is not rollbackable.",
+              },
+            },
+          },
+          verificationOutcome: {
+            status: verification === "confirmed" ? "verified" : "failed",
+            evidenceSummary: evidence.summary,
+          },
+        }
+      : { verificationOutcome: { status: "unknown" } }),
+  };
+};
+
+async function mockGovernedAttentionAction(
+  page: Page,
+  verification: GovernedActionVerification,
+) {
+  await mockAttention(page, "active");
+  let actionState: "unplanned" | "pending_approval" | "approved" | "completed" =
+    "unplanned";
+  let executeCalls = 0;
+
+  await page.route("**/api/ai/patrol/attention**", async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === "POST" && url.pathname.endsWith("/plan")) {
+      actionState = "pending_approval";
+      const audit = governedActionAudit(actionState, verification);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(audit.plan),
+      });
+      return;
+    }
+    const item = governedActionAttentionItem(actionState, verification);
+    if (url.pathname.endsWith("/summary")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          activeCount: 1,
+          openCount: 1,
+          acknowledgedCount: 0,
+          suppressedCount: 0,
+          uncertainCount: 0,
+          resolvedCount: 0,
+          calm: false,
+          coverageState: "current",
+          evaluatedAt,
+        }),
+      });
+      return;
+    }
+    if (url.pathname !== "/api/ai/patrol/attention") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          item,
+          operationalRecord: {
+            id: governedActionAttentionID,
+            canonicalSpecId: "docker-container-health",
+            subjectResourceId: governedResourceID,
+            state: "open",
+            severity: "critical",
+            firstObservedAt,
+            lastObservedAt,
+            stateChangedAt: firstObservedAt,
+            evidenceIds: ["docker-health-evidence"],
+            causeKey: "docker-container-health",
+            relatedResourceIds: [],
+            impactSummary: item.impact,
+            recommendedNextStep: item.recommendedNextStep,
+          },
+          timeline: [],
+          evidence: [
+            {
+              id: "docker-health-evidence",
+              source: {
+                provider: "docker",
+                collector: "docker-container-health",
+              },
+              subject: { resourceId: governedResourceID },
+              observedAt: lastObservedAt,
+              ingestedAt: lastObservedAt,
+              validUntil: new Date(Date.now() + 5 * 60_000).toISOString(),
+              completeness: "complete",
+              confidence: "confirmed",
+              permissions: "sufficient",
+            },
+          ],
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: [item],
+        summary: {
+          activeCount: 1,
+          openCount: 1,
+          acknowledgedCount: 0,
+          suppressedCount: 0,
+          uncertainCount: 0,
+          resolvedCount: 0,
+          calm: false,
+          coverageState: "current",
+          evaluatedAt,
+        },
+        meta: { page: 1, limit: 50, total: 1, totalPages: 1 },
+      }),
+    });
+  });
+
+  await page.route("**/api/actions/**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith("/decision")) {
+      actionState = "approved";
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          actionId: governedActionID,
+          state: actionState,
+          approval: { outcome: "approved" },
+          audit: governedActionAudit(actionState, verification),
+        }),
+      });
+      return;
+    }
+    if (url.pathname.endsWith("/execute")) {
+      executeCalls += 1;
+      actionState = "completed";
+      const audit = governedActionAudit(actionState, verification);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          actionId: governedActionID,
+          state: actionState,
+          result: audit.result,
+          audit,
+        }),
+      });
+      return;
+    }
+    const audit = governedActionAudit(
+      actionState === "unplanned" ? "pending_approval" : actionState,
+      verification,
+    );
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        audit,
+        events: [],
+        ...(actionState === "completed"
+          ? {
+              attempt: {
+                id: `${governedActionID}.dispatch.1`,
+                actionId: governedActionID,
+                state: "receipt_recorded",
+                createdAt: firstObservedAt,
+                updatedAt: evaluatedAt,
+                dispatchCount: 1,
+              },
+              receipt: {
+                attemptId: `${governedActionID}.dispatch.1`,
+                actionId: governedActionID,
+                transportRequestId: `${governedActionID}.dispatch.1`,
+                receivedAt: evaluatedAt,
+              },
+            }
+          : {}),
+      }),
+    });
+  });
+  return {
+    executeCalls: () => executeCalls,
+  };
+}
+
+for (const verification of [
+  "confirmed",
+  "contradicted",
+] as GovernedActionVerification[]) {
+  test(`runs the governed restart and represents ${verification} verification honestly`, async ({
+    page,
+  }) => {
+    if (verification === "contradicted") {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+    }
+    const fixture = await mockGovernedAttentionAction(page, verification);
+    await page.goto("/patrol", { waitUntil: "domcontentloaded" });
+
+    const itemButton = page.getByRole("button", {
+      name: "Open API container is unhealthy",
+    });
+    await itemButton.focus();
+    await page.keyboard.press("Enter");
+    const detailPanel = page.getByRole("complementary", {
+      name: "API container is unhealthy",
+    });
+    await expect(detailPanel).toBeVisible();
+    await expect(
+      detailPanel.getByText(
+        "The same container is observed running after the restart.",
+      ),
+    ).toBeVisible();
+    await expect(
+      detailPanel.getByText(
+        /explicit review and approval before Pulse sends anything/i,
+      ),
+    ).toBeVisible();
+
+    const reviewTrigger = detailPanel.getByRole("button", {
+      name: "Review and approve",
+    });
+    await reviewTrigger.click();
+    const dialog = page.getByRole("dialog", { name: "Restart" });
+    await expect(dialog).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Restart API container after fresh confirmed evidence reported an unhealthy container.",
+      ),
+    ).toBeVisible();
+    await dialog.getByText("Policy evidence", { exact: true }).click();
+    await expect(
+      dialog.getByText("Eligible for low-risk automation"),
+    ).toBeVisible();
+
+    await dialog.getByRole("button", { name: "Approve" }).click();
+    await expect(
+      dialog.getByRole("button", { name: "Run action" }),
+    ).toBeVisible();
+    await dialog.getByRole("button", { name: "Run action" }).click();
+    await expect(
+      dialog.getByRole("button", { name: "Run action" }),
+    ).toHaveCount(0);
+    await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(
+      detailPanel.getByRole("button", { name: "Review action" }),
+    ).toBeFocused();
+    expect(fixture.executeCalls()).toBe(1);
+    await expect(
+      detailPanel.getByText(/recorded the action result below/i),
+    ).toBeVisible();
+    await expect(
+      detailPanel.getByText(
+        /explicit review and approval before Pulse sends anything/i,
+      ),
+    ).toHaveCount(0);
+
+    if (verification === "confirmed") {
+      await expect(
+        detailPanel.getByText(/restart postcondition was confirmed/i),
+      ).toBeVisible();
+      await expect(
+        detailPanel.getByText(/issue stays open until fresh health evidence/i),
+      ).toBeVisible();
+    } else {
+      await expect(
+        detailPanel.getByText(/restart did not satisfy its postcondition/i),
+      ).toBeVisible();
+      await expect(detailPanel.getByText(/issue remains open/i)).toBeVisible();
+      const overflows = await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth >
+          document.documentElement.clientWidth,
+      );
+      expect(overflows).toBeFalsy();
+    }
+  });
+}

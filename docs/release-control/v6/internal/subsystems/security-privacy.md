@@ -1426,3 +1426,21 @@ The apply route accepts that opaque token only and re-verifies authoritative
 Stripe ownership and current state before mutation. Downgrade artifact cleanup
 must stay within the tenant `reports/generated` directory and skip symlinks so
 commercial retention cannot become an arbitrary-file deletion primitive.
+
+Multi-destination Unified Agent configuration preserves authority separation.
+The primary token is never reused for an observer, observer tokens are loaded
+only from private regular non-symlink files, and observer URLs independently
+enforce TLS, CA, fingerprint, and explicit plaintext policy. Observer payload
+responses are report acknowledgements only and cannot authorize configuration,
+commands, enrollment, or updates. Per-destination Proxmox tokens prevent one
+Pulse instance from rotating credentials used by another.
+
+Operational Trust action offers enforce current plan, approve, and execute
+authority before a mutating affordance is returned. Planning repeats those
+checks after reloading the selected canonical record and before entering the
+shared action lifecycle; execution retains the existing fresh authorization,
+plan-hash, policy, and delivery gates. The browser cannot claim a first-party
+origin, target, evidence set, handler, actor, or parameters. The server binds
+the exact operational record and policy-shaped evidence IDs internally.
+Unauthorized, stale, partial, permission-limited, ambiguous, unsupported, or
+executor-unready records return no offer and no cross-resource detail.

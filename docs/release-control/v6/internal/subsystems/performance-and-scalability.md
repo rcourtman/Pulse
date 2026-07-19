@@ -1932,3 +1932,12 @@ The authenticated app bootstrap performs one bounded Patrol attention summary
 read and stores only low-cardinality counts. Queue list reads are paginated to
 at most 200 items, posture joins batch at 200 subjects, and the summary path
 does not scan recovery history or perform per-resource reads.
+
+Phase 5 action enrichment preserves that bound. It runs only after attention
+pagination (or for one selected detail), builds the resource registry once,
+opens the action store once, evaluates actor authority once, and performs one
+latest-action batch read for at most 200 operational record IDs. SQLite uses
+the indexed `origin_json` operational-record expression; MemoryStore performs
+one bounded pass. The summary path performs no registry, action-store,
+executor-readiness, or action-origin work. Readiness checks remain local to
+the already-bounded visible page and do not issue browser requests per row.
