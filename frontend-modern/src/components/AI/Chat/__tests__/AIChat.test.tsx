@@ -2015,7 +2015,11 @@ describe('AIChat', () => {
       expect(closeButton).toHaveClass('order-2');
       expect(headerActions).toHaveClass('order-3');
       expect(headerActions).toHaveClass('w-full');
+      expect(headerActions).toHaveClass('flex-wrap');
       expect(headerActions).not.toHaveClass('overflow-x-auto');
+      expect(headerActions).toContainElement(
+        screen.getByRole('button', { name: 'Pulse Assistant sessions' }),
+      );
       expect(headerActions).not.toContainElement(closeButton);
       expect(headerActions).not.toContainElement(modelSelector);
       expect(headerActions).not.toContainElement(controlButton);

@@ -501,7 +501,7 @@ test.describe("Infrastructure onboarding", () => {
     await expect(
       page.getByText("Connected systems", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("Pulse Agent", { exact: true })).toBeVisible();
+    await expect(page.getByText("Pulse Agent hosts", { exact: true })).toBeVisible();
     await expect(
       page.getByRole("button", { name: /Add Pulse Agent/i }),
     ).toBeVisible();

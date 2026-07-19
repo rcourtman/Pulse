@@ -4286,7 +4286,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             </h2>
 
             <div
-              class="order-3 flex w-full min-w-0 items-center gap-1.5 sm:order-none sm:w-auto sm:flex-none"
+              class="order-3 flex w-full min-w-0 flex-wrap items-center gap-1.5 sm:order-none sm:w-auto sm:flex-none"
               data-testid="assistant-header-actions"
             >
               {/* New chat */}

@@ -36,7 +36,7 @@ jobs:
   e2e:
     name: Playwright Core E2E (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -63,7 +63,7 @@ jobs:
         # GO_BUILD_TAGS="" drops the release build tag so the suite can enable
         # mock fixtures; release-tag gating has its own -tags release Go tests.
         run: |
-          docker build -t pulse:test --target runtime --build-arg GO_BUILD_TAGS="" .
+          docker build -t pulse:test --target e2e_runtime --build-arg GO_BUILD_TAGS="" .
           docker build -t pulse-mock-github:test ./tests/integration/mock-github-server
         env:
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
@@ -83,6 +83,7 @@ jobs:
           PULSE_E2E_SKIP_DOCKER: "true"
           PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL: "true"
           PULSE_E2E_PERF: "1"
+          PULSE_MULTI_TENANT_ENABLED: "true"
         run: npm test -- --shard=${{ matrix.shard }}/4
 
       - name: Collect container logs

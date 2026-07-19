@@ -555,9 +555,16 @@ test.describe("Patrol Assistant operator briefing", () => {
     });
 
     await page.goto("/patrol", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("button", { name: "Findings" })).toBeVisible();
-
-    await page.getByTestId("patrol-assessment-assistant-button").click();
+    await page
+      .getByText("Patrol checks, investigations, and run history", {
+        exact: true,
+      })
+      .click();
+    const assessmentAssistantButton = page.getByTestId(
+      "patrol-assessment-assistant-button",
+    );
+    await expect(assessmentAssistantButton).toBeVisible();
+    await assessmentAssistantButton.click();
     const assessmentAssistantContext = page.getByLabel("Assistant context");
     await expect(assessmentAssistantContext).toBeVisible();
     await expect(assessmentAssistantContext).toContainText(
@@ -731,9 +738,14 @@ test.describe("Patrol Assistant operator briefing", () => {
 
     includePendingApproval = false;
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("button", { name: "Findings" })).toBeVisible();
-
-    await page.getByText("High CPU usage").click();
+    await page
+      .getByText("Patrol checks, investigations, and run history", {
+        exact: true,
+      })
+      .click();
+    const queuedFindingTitle = page.getByText("High CPU usage").first();
+    await expect(queuedFindingTitle).toBeVisible();
+    await queuedFindingTitle.click();
     const queuedFinding = page.locator("#finding-finding-operator-briefing");
     await expect(queuedFinding.getByText("details unavailable")).toBeVisible();
     await queuedFinding
@@ -765,9 +777,14 @@ test.describe("Patrol Assistant operator briefing", () => {
     includeUnifiedInvestigationRecord = false;
     includeInvestigationProposedFix = true;
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("button", { name: "Findings" })).toBeVisible();
-
-    await page.getByText("High CPU usage").click();
+    await page
+      .getByText("Patrol checks, investigations, and run history", {
+        exact: true,
+      })
+      .click();
+    const expiredFindingTitle = page.getByText("High CPU usage").first();
+    await expect(expiredFindingTitle).toBeVisible();
+    await expiredFindingTitle.click();
     const expiredFinding = page.locator("#finding-finding-operator-briefing");
     await expect(expiredFinding.getByText("approval expired")).toBeVisible();
     await expiredFinding

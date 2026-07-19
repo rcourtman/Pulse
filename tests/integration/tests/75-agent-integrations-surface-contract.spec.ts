@@ -37,7 +37,7 @@ const test = base.extend<{}, WorkerFixtures>({
 });
 
 test.describe("Agent integrations surface contract", () => {
-  test("projects Pulse Intelligence surfaces from the live capabilities manifest", async ({
+  test("guides external agents through Patrol governance and the live manifest", async ({
     page,
   }) => {
     const manifestResponse = page.waitForResponse(
@@ -46,63 +46,70 @@ test.describe("Agent integrations surface contract", () => {
         response.request().method() === "GET",
     );
 
-    await page.goto("/settings/security/api", {
+    await page.goto("/settings/pulse-intelligence/assistant", {
       waitUntil: "domcontentloaded",
     });
-    await page.waitForURL(/\/settings\/security\/api/, { timeout: 15_000 });
+    await page.waitForURL(/\/settings\/pulse-intelligence\/assistant/, {
+      timeout: 15_000,
+    });
     await expect(
-      page.getByRole("heading", { level: 2, name: "Agent integrations" }),
+      page.getByRole("heading", { level: 2, name: "External agents" }),
     ).toBeVisible();
 
     const response = await manifestResponse;
     expect(response.ok()).toBeTruthy();
 
-    const surfaces = page.getByRole("heading", {
-      level: 3,
-      name: "Pulse Intelligence surfaces",
-    });
-    await expect(surfaces).toBeVisible();
-
-    const surfaceSection = surfaces.locator("..");
-    for (const label of [
-      "Pulse Intelligence Core",
-      "Pulse Patrol",
-      "Pulse Assistant",
-      "Pulse MCP",
-    ]) {
-      await expect(
-        surfaceSection.getByText(label, { exact: true }),
-      ).toBeVisible();
-    }
-
     await expect(
-      surfaceSection.getByText("Native surface", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      surfaceSection.getByText("External adapter", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      surfaceSection.getByText("Tools", { exact: true }).first(),
-    ).toBeVisible();
-    await expect(
-      surfaceSection.getByText("Interactive questions", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      surfaceSection.getByText("Capability metadata", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      surfaceSection.getByText(
-        "Canonical context, governed actions, safety gates, approval state, action audit, and verification shared by Pulse Assistant, Pulse MCP, and Pulse Patrol.",
+      page.getByText(
+        "Connect external tools to read Pulse context and request Patrol work.",
         { exact: true },
       ),
     ).toBeVisible();
+    await expect(
+      page.getByText(
+        "Patrol mode and scoped tokens control what connected agents can do.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Choose Patrol mode" }),
+    ).toBeVisible();
 
-    const horizontalOverflow = await surfaceSection
-      .locator("ul")
-      .evaluate((node) => ({
-        clientWidth: node.clientWidth,
-        scrollWidth: node.scrollWidth,
-      }));
+    await page.getByRole("button", { name: "Show connector setup" }).click();
+    await expect(
+      page.getByRole("heading", { level: 3, name: "Connector setup" }),
+    ).toBeVisible();
+    await expect(page.getByText("Create a scoped token", { exact: true })).toBeVisible();
+    await expect(page.getByText("Connect the agent", { exact: true })).toBeVisible();
+
+    await page.getByText("Client config", { exact: true }).click();
+    await expect(page.getByText("PULSE_API_TOKEN").first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 4, name: /OpenCode.*opencode\.json/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 4, name: /mcpServers/ }),
+    ).toBeVisible();
+
+    await page.getByText("Developer details", { exact: true }).click();
+    await expect(
+      page.getByText(
+        "Only open this when you are building or debugging a client",
+        { exact: false },
+      ),
+    ).toBeVisible();
+    await page.getByText("Live manifest details", { exact: true }).click();
+    await expect(
+      page.getByText("/api/agent/capabilities", { exact: true }),
+    ).toBeVisible();
+    await page.getByText("Failure codes", { exact: true }).click();
+    await expect(page.getByText("resource_not_found").first()).toBeVisible();
+
+    const panel = page.locator("#external-agent-setup");
+    const horizontalOverflow = await panel.evaluate((node) => ({
+      clientWidth: node.clientWidth,
+      scrollWidth: node.scrollWidth,
+    }));
     expect(horizontalOverflow.scrollWidth).toBeLessThanOrEqual(
       horizontalOverflow.clientWidth + 1,
     );
@@ -110,29 +117,15 @@ test.describe("Agent integrations surface contract", () => {
     const createTokenLink = page.getByRole("link", {
       name: "Create token",
     });
-    await expect(page.getByText("Token setup", { exact: true })).toBeVisible();
-    await expect(
-      page.getByText("Pulse Intelligence agent", { exact: true }).last(),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Stable failure codes", { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByText("resource_not_found").first()).toBeVisible();
-    await expect(createTokenLink).toHaveAttribute("href", "#api-token-create");
-    await expect(
-      page.getByRole("heading", { level: 3, name: "MCP client config" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { level: 4, name: /OpenCode.*opencode\.json/ }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { level: 4, name: /mcpServers/ }),
-    ).toBeVisible();
-    await expect(page.getByText("PULSE_API_TOKEN").first()).toBeVisible();
-    await expect(page.getByText("--base-url").first()).toBeVisible();
+    await expect(createTokenLink).toHaveAttribute(
+      "href",
+      "/settings/security/api?tokenPreset=pulse-intelligence-agent#api-token-create",
+    );
 
     await createTokenLink.click();
-    await expect(page).toHaveURL(/#api-token-create$/);
+    await expect(page).toHaveURL(
+      /\/settings\/security\/api\?tokenPreset=pulse-intelligence-agent#api-token-create$/,
+    );
     await expect(
       page.getByRole("heading", { level: 2, name: "Create token" }),
     ).toBeVisible();

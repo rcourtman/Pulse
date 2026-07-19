@@ -176,7 +176,11 @@ test.describe('Assistant tool output preview', () => {
 
     // Resume the stubbed session via the sessions list: open the
     // "Pulse Assistant sessions" menu, then pick the session option.
-    await page.getByRole('button', { name: 'Pulse Assistant sessions' }).click();
+    const sessionsButton = page.getByRole('button', {
+      name: 'Pulse Assistant sessions',
+    });
+    await expect(sessionsButton).toBeInViewport();
+    await sessionsButton.click();
     await page
       .getByRole('option', { name: /Resume Tool output preview proof/ })
       .click();

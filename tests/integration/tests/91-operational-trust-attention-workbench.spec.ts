@@ -5,6 +5,7 @@ type AttentionMode = "active" | "calm" | "failed";
 test.beforeEach(async ({ page }) => {
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
+  await page.routeWebSocket("**/ws?*", () => {});
   page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error") {

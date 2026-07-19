@@ -150,7 +150,7 @@ test.describe('Docker workloads host filter', () => {
     });
 
     await page.waitForURL(/\/workloads\?type=app-container&platform=docker&agent=docker-host-1/);
-    await expect(page.locator('#dashboard-type-filter')).toHaveValue('app-container');
+    await expect(page.locator('#workloads-type')).toHaveValue('app-container');
     await expect(page.locator('#workloads-platform-filter')).toHaveValue('docker');
     await expect(page.locator('#workloads-node-filter')).toHaveValue('docker-host-1');
 

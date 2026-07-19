@@ -309,6 +309,12 @@ CMD ["./pulse"]
 # production tenant hotfix builds to carry installer-signing material.
 FROM pulse-runtime-base AS hosted_runtime
 
+# Core browser integration tests exercise the running Pulse application and
+# mock remote update downloads. They do not serve production installer or agent
+# artifacts, so keep their image on the canonical runtime base instead of
+# rebuilding the release packet once per Playwright shard.
+FROM pulse-runtime-base AS e2e_runtime
+
 # Final stage (Pulse server runtime)
 FROM pulse-runtime-base AS runtime
 

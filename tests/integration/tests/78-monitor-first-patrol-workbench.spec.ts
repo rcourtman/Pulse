@@ -255,6 +255,67 @@ const buildPatrolFindings = (
   options: Required<PatrolWorkbenchFixtureOptions>,
 ) => buildPatrolFindingsResponse(options).findings;
 
+const buildAttentionItem = (
+  options: Required<PatrolWorkbenchFixtureOptions>,
+) => ({
+  id: "attention-high-cpu",
+  operationalRecordId: "attention-high-cpu",
+  subjectResourceId: monitoredProxmoxResource.id,
+  subjectResourceName: monitoredProxmoxResource.displayName,
+  subjectResourceType: monitoredProxmoxResource.type,
+  kind: "patrol_finding",
+  title: "High CPU pressure on pve-main",
+  plainLanguageSummary:
+    "CPU stayed above the configured warning threshold during the scheduled Patrol check.",
+  severity: "warning",
+  state: "open",
+  firstObservedAt: recentPatrolStartedAt,
+  lastObservedAt: recentPatrolCompletedAt,
+  evidenceFreshness: "fresh",
+  evidenceCompleteness: "complete",
+  impact:
+    "Sustained CPU pressure can slow hosted workloads on this Proxmox host.",
+  relatedResources: [],
+  recommendedNextStep:
+    "Review the host load and move or stop noisy workloads before approving a fix.",
+  availableActions:
+    options.pendingApprovalCount > 0
+      ? [
+          {
+            actionId: "action-finding-active-work",
+            targetResourceId: monitoredProxmoxResource.id,
+            capability: "agent.restart",
+            kind: "command",
+            label: "Restart Pulse Agent",
+            mode: "execute",
+            risk: "medium",
+            approval: "required",
+            eligibility: "eligible",
+            reasons: [],
+            evidenceIds: ["evidence-high-cpu"],
+            expectedPostcondition: "The agent reconnects and reports current CPU evidence.",
+            verificationPolicy: "Confirm a fresh agent heartbeat after restart.",
+            requiresApproval: true,
+          },
+        ]
+      : [],
+  verificationState: "not_available",
+});
+
+const buildAttentionSummary = (
+  options: Required<PatrolWorkbenchFixtureOptions>,
+) => ({
+  activeCount: options.findingCount,
+  openCount: options.findingCount,
+  acknowledgedCount: 0,
+  suppressedCount: 0,
+  uncertainCount: 0,
+  resolvedCount: 0,
+  calm: options.findingCount === 0 && options.runErrorCount === 0,
+  coverageState: "current",
+  evaluatedAt: recentPatrolCompletedAt,
+});
+
 async function mockMonitorFirstPatrolWorkbench(
   page: Page,
   options: PatrolWorkbenchFixtureOptions = {},
@@ -481,6 +542,84 @@ async function mockMonitorFirstPatrolWorkbench(
     });
   });
 
+  await page.route("**/api/ai/patrol/attention**", async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const item = buildAttentionItem(resolved);
+    const summary = buildAttentionSummary(resolved);
+
+    if (requestUrl.pathname.endsWith("/summary")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(summary),
+      });
+      return;
+    }
+
+    if (!requestUrl.pathname.endsWith("/attention")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          item,
+          operationalRecord: {
+            id: item.operationalRecordId,
+            canonicalSpecId: "patrol-finding",
+            subjectResourceId: item.subjectResourceId,
+            state: item.state,
+            severity: item.severity,
+            firstObservedAt: item.firstObservedAt,
+            lastObservedAt: item.lastObservedAt,
+            stateChangedAt: item.firstObservedAt,
+            evidenceIds: ["evidence-high-cpu"],
+            causeKey: item.id,
+            relatedResourceIds: [],
+            impactSummary: item.impact,
+            recommendedNextStep: item.recommendedNextStep,
+          },
+          timeline: [],
+          evidence: [
+            {
+              id: "evidence-high-cpu",
+              source: {
+                provider: "pulse-agent",
+                collector: "node-metrics",
+                instance: "pve-main",
+              },
+              subject: { resourceId: item.subjectResourceId },
+              observedAt: item.lastObservedAt,
+              ingestedAt: item.lastObservedAt,
+              completeness: "complete",
+              confidence: "confirmed",
+              permissions: "sufficient",
+              reason: {
+                code: "threshold_breach",
+                message: "CPU remained above the configured threshold.",
+              },
+            },
+          ],
+        }),
+      });
+      return;
+    }
+
+    const data = resolved.findingCount > 0 ? [item] : [];
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        data,
+        summary,
+        meta: {
+          page: 1,
+          limit: 50,
+          total: data.length,
+          totalPages: data.length > 0 ? 1 : 0,
+        },
+      }),
+    });
+  });
+
   await page.route("**/api/ai/models", async (route) => {
     await route.fulfill({
       status: 200,
@@ -519,7 +658,9 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       desktopNav.getByRole("tab", { name: "Proxmox" }),
     ).toBeVisible();
     await expect(
-      desktopNav.getByRole("tab", { name: "Patrol: 1 open work item" }),
+      desktopNav.getByRole("tab", {
+        name: "Patrol: 1 active attention item",
+      }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Ask Pulse Assistant about Proxmox" }),
@@ -573,10 +714,9 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       page.getByRole("heading", { level: 1, name: "Patrol" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { level: 2, name: "Open work" }),
+      page.getByRole("heading", { level: 2, name: "Needs attention" }),
     ).toBeVisible();
-    await expect(page.getByText("No current issues").first()).toBeVisible();
-    await expect(page.getByText("Checked 1 resource.")).toBeVisible();
+    await expect(page.getByText("Nothing needs your attention")).toBeVisible();
     await expect(
       page.getByRole("list", { name: "Patrol protection posture" }),
     ).toHaveCount(0);
@@ -586,7 +726,9 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(
       page.getByRole("button", { name: "Ask Pulse Assistant about Patrol" }),
     ).toBeVisible();
-    await expect(page.getByText(/Nothing needs attention/i)).toHaveCount(0);
+    await expect(
+      page.getByRole("list", { name: "Patrol attention items" }),
+    ).toHaveCount(0);
   });
 
   test("Patrol groups approvals and failed checks inside the Patrol workbench", async ({
@@ -618,60 +760,38 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await page.getByRole("tab", { name: /Patrol/ }).click();
     await expect(page).toHaveURL(/\/patrol$/);
     await expect(
-      page.getByRole("heading", { level: 2, name: "Open work" }),
-    ).toBeVisible();
-    const workGroups = page.getByRole("list", { name: "Patrol work groups" });
-    await expect(workGroups).toBeVisible();
-    await expect(workGroups.getByText("1 approval waiting")).toBeVisible();
-    await expect(
-      workGroups.getByText("Latest check needs review"),
+      page.getByRole("heading", { level: 2, name: "Needs attention" }),
     ).toBeVisible();
     await expect(
-      workGroups.getByText(
-        "Patrol checked 4 resources but ended with runtime issues.",
-      ),
+      page.getByRole("list", { name: "Patrol attention items" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: "Open High CPU pressure on pve-main",
+      }),
     ).toBeVisible();
     await expect(
       page.getByRole("list", { name: "Patrol protection posture" }),
     ).toHaveCount(0);
-    await expect(page.getByText("High CPU pressure on pve-main")).toBeVisible();
-    await expect(page.getByText("Approval required")).toBeVisible();
+    await page
+      .getByRole("button", {
+        name: "Open High CPU pressure on pve-main",
+      })
+      .click();
     await expect(
-      page.getByRole("link", { name: "Review in Actions" }),
-    ).toHaveAttribute("href", "/actions?action=action-finding-active-work");
+      page.getByRole("heading", { name: "High CPU pressure on pve-main" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "CPU stayed above the configured warning threshold during the scheduled Patrol check.",
+      ),
+    ).toBeVisible();
     await expect(
       page.getByText(
         "Sustained CPU pressure can slow hosted workloads on this Proxmox host.",
       ),
     ).toBeVisible();
-    const collapsedIssue = page.getByRole("button", {
-      name: "Open issue details for High CPU pressure on pve-main",
-    });
-    await expect(collapsedIssue.getByText("Problem")).toHaveCount(0);
-    await expect(collapsedIssue.getByText("Affected")).toHaveCount(0);
-    await expect(collapsedIssue.getByText("Safe workflow")).toHaveCount(0);
-    await expect(collapsedIssue.getByText("Verification")).toHaveCount(0);
-    await expect(collapsedIssue.getByText("What Pulse checked:")).toHaveCount(
-      0,
-    );
-
-    await page
-      .getByRole("button", {
-        name: "Review issue for High CPU pressure on pve-main",
-      })
-      .click();
-    const issueReview = page.getByRole("complementary", {
-      name: "Review High CPU pressure on pve-main",
-    });
-    await expect(issueReview).toBeVisible();
-    await expect(issueReview.getByText("pve-main (agent)")).toBeVisible();
-    await expect(
-      issueReview.getByText(
-        "CPU stayed above the configured warning threshold during the scheduled Patrol check.",
-      ),
-    ).toBeVisible();
-    await expect(issueReview.getByText("What Pulse checked:")).toBeVisible();
-    await expect(issueReview.getByText("Recommended next step:")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Review action" })).toBeVisible();
     await expect(
       page.getByRole("heading", { name: /^Pulse Assistant$/ }),
     ).toHaveCount(0);
@@ -759,6 +879,11 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Patrol" }),
     ).toBeVisible();
+    await page
+      .getByText("Patrol checks, investigations, and run history", {
+        exact: true,
+      })
+      .click();
     await expect(
       page.getByText("Operating system updates need review").first(),
     ).toBeVisible();
@@ -802,6 +927,11 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       }),
     );
     await page.reload({ waitUntil: "domcontentloaded" });
+    await page
+      .getByText("Patrol checks, investigations, and run history", {
+        exact: true,
+      })
+      .click();
     const cleanupTitle = page
       .getByText("Downloaded package data is using needed space")
       .first();
@@ -856,6 +986,11 @@ test.describe("Monitor-first Patrol workbench browser contract", () => {
       }),
     );
     await page.reload({ waitUntil: "domcontentloaded" });
+    await page
+      .getByText("Patrol checks, investigations, and run history", {
+        exact: true,
+      })
+      .click();
     await page.getByRole("button", { name: "Resolved" }).click();
     const resolvedTitle = page
       .getByText("Operating system updates confirmed complete")

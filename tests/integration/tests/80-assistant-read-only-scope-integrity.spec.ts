@@ -34,7 +34,7 @@ const test = base.extend<{}, WorkerFixtures>({
 
 test("Assistant makes the read-only promise literal in the current browser build", async ({
   page,
-}) => {
+}, testInfo) => {
   const fulfillSettings = async (route: Route) => {
     await route.fulfill({
       status: 200,
@@ -86,7 +86,10 @@ test("Assistant makes the read-only promise literal in the current browser build
   ).toHaveAttribute("aria-checked", "true");
   await expect(page.getByText("Observes only")).toBeVisible();
 
-  await page.getByRole("button", { name: "Collapse Pulse Assistant" }).click();
+  const closeAssistant = testInfo.project.name.startsWith("mobile-")
+    ? page.getByRole("button", { name: "Close Pulse Assistant" })
+    : page.getByRole("button", { name: "Collapse Pulse Assistant" });
+  await closeAssistant.click();
   await page.goto("/settings/security/api", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "New token" }).click();
   await page.getByText("Custom scopes", { exact: true }).click();

@@ -37,12 +37,14 @@ test.describe.serial('Core E2E flows', () => {
     await page.goto('/alerts/overview');
     await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeVisible();
 
-    const alertsToggleOnOverview = page.getByRole('checkbox', { name: /toggle alerts/i });
+    const alertsToggleOnOverview = page.getByRole('checkbox', {
+      name: 'Toggle external notifications',
+    });
     await expect(alertsToggleOnOverview).toBeVisible();
     const alertsInitiallyEnabled = await alertsToggleOnOverview.isChecked();
     if (!alertsInitiallyEnabled) {
       await alertsToggleOnOverview.setChecked(true, { force: true });
-      await expect(page.getByText('Alerts enabled', { exact: true })).toBeVisible();
+      await expect(page.getByText('Notifications enabled', { exact: true })).toBeVisible();
     }
 
     // Navigate to thresholds via in-app nav to avoid a full reload redirecting while activation is loading.
@@ -151,7 +153,9 @@ test.describe.serial('Core E2E flows', () => {
     if (!/\/alerts\/thresholds/.test(page.url())) {
       await page.goto('/alerts/overview');
       await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeVisible();
-      const toggle = page.getByRole('checkbox', { name: /toggle alerts/i });
+      const toggle = page.getByRole('checkbox', {
+        name: 'Toggle external notifications',
+      });
       await expect(toggle).toBeVisible();
       await toggle.setChecked(true, { force: true });
       await page.getByRole('button', { name: 'Thresholds' }).click();
@@ -174,10 +178,12 @@ test.describe.serial('Core E2E flows', () => {
     if (!alertsInitiallyEnabled) {
       await page.goto('/alerts/overview');
       await expect(page.getByRole('heading', { name: 'Alerts Overview' })).toBeVisible();
-      const alertsToggleRestore = page.getByRole('checkbox', { name: /toggle alerts/i });
+      const alertsToggleRestore = page.getByRole('checkbox', {
+        name: 'Toggle external notifications',
+      });
       await expect(alertsToggleRestore).toBeVisible();
       await alertsToggleRestore.setChecked(false, { force: true });
-      await expect(page.getByText('Alerts disabled', { exact: true })).toBeVisible();
+      await expect(page.getByText('Notifications paused', { exact: true })).toBeVisible();
     }
   });
 

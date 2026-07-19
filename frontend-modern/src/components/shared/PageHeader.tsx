@@ -54,6 +54,7 @@ export function PageHeader(props: PageHeaderProps) {
   return (
     <Show when={!kioskMode()}>
       <div
+        data-page-header=""
         class={`flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between ${local.class ?? ''}`.trim()}
         {...rest}
       >

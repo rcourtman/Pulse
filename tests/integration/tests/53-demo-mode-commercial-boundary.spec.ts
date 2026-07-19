@@ -96,6 +96,19 @@ const authenticatedTest = base.extend<{}, WorkerFixtures>({
   }, { scope: 'worker' }],
 });
 
+async function getVisibleSettingsNavigation(
+  page: Page,
+  projectName: string,
+) {
+  if (projectName.startsWith('mobile-')) {
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  }
+
+  const settingsNavigation = page.locator('[aria-label="Settings navigation"]');
+  await expect(settingsNavigation).toBeVisible();
+  return settingsNavigation;
+}
+
 async function probeDemoCommercialBoundaryFromBrowser(
   page: Page,
 ): Promise<DemoCommercialBoundaryResponses> {
@@ -322,8 +335,10 @@ base.describe('Demo mode commercial boundary', () => {
       page.getByText('Demo instance with mock data (read-only)', { exact: true }),
     ).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'Infrastructure' })).toBeVisible();
-    const settingsNavigation = page.locator('[aria-label="Settings navigation"]');
-    await expect(settingsNavigation).toBeVisible();
+    const settingsNavigation = await getVisibleSettingsNavigation(
+      page,
+      testInfo.project.name,
+    );
     await expect(page.getByText('Default Organization', { exact: true })).toHaveCount(0);
     await expect(settingsNavigation.getByText('Organization', { exact: true })).toHaveCount(0);
     await expect(
@@ -423,7 +438,7 @@ base.describe('Managed demo runtime commercial boundary', () => {
 
   base(
     'hides commercial surfaces and APIs without browser route stubs',
-    async ({ page }) => {
+    async ({ page }, testInfo) => {
       await ensureAuthenticated(page);
 
       const hiddenCommercialRequests = trackBrowserRequests(
@@ -440,8 +455,10 @@ base.describe('Managed demo runtime commercial boundary', () => {
           page.getByText('Demo instance with mock data (read-only)', { exact: true }),
         ).toBeVisible();
         await expect(page.getByRole('heading', { level: 1, name: 'Infrastructure' })).toBeVisible();
-        const settingsNavigation = page.locator('[aria-label="Settings navigation"]');
-        await expect(settingsNavigation).toBeVisible();
+        const settingsNavigation = await getVisibleSettingsNavigation(
+          page,
+          testInfo.project.name,
+        );
         await expect(page.getByText('Default Organization', { exact: true })).toHaveCount(0);
         await expect(settingsNavigation.getByText('Organization', { exact: true })).toHaveCount(0);
         await expect(settingsNavigation.getByText('Plans', { exact: true })).toHaveCount(0);

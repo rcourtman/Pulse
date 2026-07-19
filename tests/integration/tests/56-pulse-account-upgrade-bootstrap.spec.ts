@@ -1,11 +1,16 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { expect, test } from "@playwright/test";
 
 const PORTAL_PREVIEW_PORT = "8876";
 const PORTAL_PREVIEW_URL = `http://127.0.0.1:${PORTAL_PREVIEW_PORT}`;
-const PORTAL_FRONTEND_DIR =
-  "/Volumes/Development/pulse/repos/pulse/internal/cloudcp/portal/frontend";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PORTAL_FRONTEND_DIR = path.resolve(
+  __dirname,
+  "../../../internal/cloudcp/portal/frontend",
+);
 
 async function waitForPortalPreview(url: string, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
@@ -23,7 +28,7 @@ async function waitForPortalPreview(url: string, timeoutMs: number) {
   throw new Error(`Timed out waiting for Pulse Account preview at ${url}`);
 }
 
-async function stopPortalPreview(process: ChildProcessWithoutNullStreams | null) {
+async function stopPortalPreview(process: ChildProcess | null) {
   if (!process || process.killed) {
     return;
   }
@@ -42,10 +47,14 @@ async function stopPortalPreview(process: ChildProcessWithoutNullStreams | null)
 test.describe.configure({ mode: "serial" });
 
 test.describe("Pulse Account upgrade bootstrap", () => {
-  let previewProcess: ChildProcessWithoutNullStreams | null = null;
+  let previewProcess: ChildProcess | null = null;
 
-  test.beforeAll(async () => {
-    previewProcess = spawn(process.execPath, ["dev.mjs"], {
+  test.beforeAll(async ({}, testInfo) => {
+    if (testInfo.project.name.startsWith("mobile-")) {
+      return;
+    }
+
+    const processHandle = spawn(process.execPath, ["dev.mjs"], {
       cwd: PORTAL_FRONTEND_DIR,
       env: {
         ...process.env,
@@ -53,8 +62,9 @@ test.describe("Pulse Account upgrade bootstrap", () => {
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
-    previewProcess.stdout.on("data", () => {});
-    previewProcess.stderr.on("data", () => {});
+    previewProcess = processHandle;
+    processHandle.stdout?.on("data", () => {});
+    processHandle.stderr?.on("data", () => {});
     await waitForPortalPreview(`${PORTAL_PREVIEW_URL}/healthz`, 30000);
   });
 
