@@ -4,6 +4,7 @@ import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ResourceActionsAPI } from '@/api/resourceActions';
+import { WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH } from '@/components/Workloads/guestRowModel';
 import type { Resource } from '@/types/resource';
 import { DockerContainersTable } from '../DockerContainersTable';
 import { DockerConfigsTable } from '../DockerConfigsTable';
@@ -154,7 +155,7 @@ afterEach(() => {
 
 describe('Docker native tables', () => {
   it('renders Docker container API fields', () => {
-    setViewportWidth(1500);
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
 
     renderInRouter(() => (
       <DockerContainersTable
@@ -606,7 +607,7 @@ describe('Docker native tables', () => {
   });
 
   it('hides the Restarts column when the current containers have no restart signal', () => {
-    setViewportWidth(1500);
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
 
     renderInRouter(() => (
       <DockerContainersTable
@@ -646,7 +647,7 @@ describe('Docker native tables', () => {
   });
 
   it('shows the State column when any current container is not running', () => {
-    setViewportWidth(1500);
+    setViewportWidth(WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH);
 
     renderInRouter(() => (
       <DockerContainersTable
