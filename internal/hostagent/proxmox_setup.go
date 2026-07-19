@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agenttarget"
 	"github.com/rs/zerolog"
 )
 
@@ -32,6 +33,9 @@ type ProxmoxSetup struct {
 	collector          SystemCollector
 	stateDir           string          // directory for registration state files
 	retryBackoffs      []time.Duration // overridable for testing; nil uses defaults
+	monitorToken       string          // optional destination-scoped token name
+	authoritative      bool            // primary destinations retain local-network HTTP compatibility
+	allowPlaintextHTTP bool            // explicit observer plaintext transport policy
 }
 
 // ProxmoxSetupResult contains the result of a successful Proxmox setup.
@@ -200,6 +204,9 @@ func proxmoxTokenScope(candidates ...string) string {
 }
 
 func (p *ProxmoxSetup) monitorTokenName() string {
+	if tokenName := strings.TrimSpace(p.monitorToken); tokenName != "" {
+		return tokenName
+	}
 	return "pulse-" + proxmoxTokenScope(p.hostname, p.pulseURL)
 }
 
@@ -347,7 +354,25 @@ func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, collector S
 		reportIP:           reportIP,
 		stateDir:           stateDir,
 		insecureSkipVerify: insecure,
+		authoritative:      true,
 	}
+}
+
+// WithObserverPlaintextPolicy marks this setup as an observer transport. Unlike
+// the primary, every non-loopback plaintext observer requires its own explicit
+// opt-in and cannot inherit process-wide primary transport consent.
+func (p *ProxmoxSetup) WithObserverPlaintextPolicy(allowPlaintext bool) *ProxmoxSetup {
+	p.authoritative = false
+	p.allowPlaintextHTTP = allowPlaintext
+	return p
+}
+
+// WithMonitorTokenName isolates Proxmox credentials for an additional Pulse
+// destination. The primary destination deliberately keeps the legacy token
+// name for upgrade compatibility.
+func (p *ProxmoxSetup) WithMonitorTokenName(tokenName string) *ProxmoxSetup {
+	p.monitorToken = strings.TrimSpace(tokenName)
+	return p
 }
 
 // Run executes the Proxmox setup process:
@@ -355,7 +380,7 @@ func NewProxmoxSetup(logger zerolog.Logger, httpClient *http.Client, collector S
 // 2. Creates the monitoring user and API token
 // 3. Registers the node with Pulse via auto-register
 func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
-	pulseURL, err := normalizePulseURL(p.pulseURL)
+	pulseURL, err := agenttarget.NormalizePulseURL(p.pulseURL, p.authoritative, p.allowPlaintextHTTP)
 	if err != nil {
 		return nil, fmt.Errorf("invalid pulse URL: %w", err)
 	}
@@ -377,53 +402,11 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 		p.logger.Info().Str("type", string(ptype)).Msg("Auto-detected Proxmox type")
 	}
 
-	hostURL := p.getHostURL(ctx, ptype)
-
-	// Check if already registered (idempotency)
-	if p.isAlreadyRegistered() {
-		registered, err := p.checkRegistrationWithPulse(ctx, ptype, hostURL)
-		if err != nil {
-			p.logger.Warn().Err(err).Msg("Failed to verify Proxmox registration state with Pulse; keeping local marker behavior")
-			return nil, nil
-		}
-		if registered {
-			p.logger.Info().Msg("Proxmox node already registered, skipping setup")
-			return nil, nil
-		}
-		p.logger.Info().Str("type", string(ptype)).Str("host", hostURL).Msg("Local Proxmox registration marker exists but Pulse has no matching node; re-registering")
-	}
-
-	// Create monitoring user and token
-	tokenID, tokenValue, err := p.setupToken(ctx, ptype)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Proxmox API token: %w", err)
-	}
-
-	p.logger.Info().Str("token_id", tokenID).Msg("Created Proxmox API token")
-
-	// Register with Pulse
-	registered := false
-	registerResp, err := p.registerWithPulse(ctx, ptype, hostURL, tokenID, tokenValue)
-	if err != nil {
-		p.logger.Warn().Err(err).Msg("Failed to register with Pulse (node may already exist)")
-	} else {
-		registered = true
+	result, err := p.runForType(ctx, ptype)
+	if result != nil && result.Registered {
 		p.markAsRegistered()
-		p.markTypeAsRegistered(ptype)
-		if strings.TrimSpace(registerResp.Host) != "" {
-			hostURL = registerResp.Host
-		}
-		p.logger.Info().Str("host", hostURL).Str("node", registerResp.NodeName).Msg("Successfully registered Proxmox node with Pulse")
 	}
-
-	return &ProxmoxSetupResult{
-		ProxmoxType: string(ptype),
-		TokenID:     tokenID,
-		TokenValue:  tokenValue,
-		NodeHost:    hostURL,
-		NodeName:    registerResp.NodeName,
-		Registered:  registered,
-	}, nil
+	return result, err
 }
 
 // RunAll detects and registers ALL Proxmox products on this system.
@@ -431,7 +414,7 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 // supported configuration). Each type gets its own registration and state tracking.
 // Returns results for all types that were processed (skipping already-registered ones).
 func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error) {
-	pulseURL, err := normalizePulseURL(p.pulseURL)
+	pulseURL, err := agenttarget.NormalizePulseURL(p.pulseURL, p.authoritative, p.allowPlaintextHTTP)
 	if err != nil {
 		return nil, fmt.Errorf("invalid pulse URL: %w", err)
 	}
@@ -490,7 +473,7 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 // health-check rotation, which would cause uncontrolled token churn if Pulse
 // is temporarily unreachable.
 func (p *ProxmoxSetup) RunHealthCheck(ctx context.Context) ([]*ProxmoxSetupResult, error) {
-	pulseURL, err := normalizePulseURL(p.pulseURL)
+	pulseURL, err := agenttarget.NormalizePulseURL(p.pulseURL, p.authoritative, p.allowPlaintextHTTP)
 	if err != nil {
 		return nil, fmt.Errorf("invalid pulse URL: %w", err)
 	}
@@ -552,20 +535,26 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType)
 	ptype = proxmoxProductType(normalizedTypeStr)
 	hostURL := p.getHostURL(ctx, ptype)
 
-	// Check if this type is already registered
+	// Always establish destination reachability and registration state before
+	// mutating a Proxmox token. This prevents a missing local marker or a Pulse
+	// startup outage from rotating credentials that a healthy Pulse instance is
+	// still using.
+	registered, err := p.checkRegistrationWithPulse(ctx, ptype, hostURL)
+	if err != nil {
+		p.logger.Warn().
+			Err(err).
+			Str("type", string(ptype)).
+			Msg("Failed to verify Proxmox registration state with Pulse; leaving credentials unchanged")
+		return nil, nil
+	}
+	if registered {
+		if !p.isTypeRegistered(ptype) {
+			p.markTypeAsRegistered(ptype)
+		}
+		p.logger.Info().Str("type", string(ptype)).Msg("Proxmox type already registered, skipping")
+		return nil, nil
+	}
 	if p.isTypeRegistered(ptype) {
-		registered, err := p.checkRegistrationWithPulse(ctx, ptype, hostURL)
-		if err != nil {
-			p.logger.Warn().
-				Err(err).
-				Str("type", string(ptype)).
-				Msg("Failed to verify Proxmox registration state with Pulse; keeping local marker behavior")
-			return nil, nil
-		}
-		if registered {
-			p.logger.Info().Str("type", string(ptype)).Msg("Proxmox type already registered, skipping")
-			return nil, nil
-		}
 		p.logger.Info().
 			Str("type", string(ptype)).
 			Str("host", hostURL).
@@ -588,7 +577,7 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType)
 	p.logger.Info().Str("type", string(ptype)).Str("token_id", tokenID).Msg("Created Proxmox API token")
 
 	// Register with Pulse
-	registered := false
+	registered = false
 	registerResp, err := p.registerWithPulse(ctx, ptype, hostURL, tokenID, tokenValue)
 	if err != nil {
 		p.logger.Warn().Err(err).Str("type", string(ptype)).Msg("Failed to register with Pulse (node may already exist)")

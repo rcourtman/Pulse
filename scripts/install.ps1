@@ -20,6 +20,7 @@ param (
     [bool]$Uninstall = $false,
     [string]$CACertPath = $env:PULSE_CACERT,
     [string]$ServerFingerprint = $env:PULSE_SERVER_FINGERPRINT,
+    [string]$ObserversFile = $env:PULSE_OBSERVERS_FILE,
     [string]$AgentId = $env:PULSE_AGENT_ID,
     [string]$Hostname = $env:PULSE_HOSTNAME,
     [string]$TokenFile = $env:PULSE_TOKEN_FILE,
@@ -436,6 +437,9 @@ function Save-ConnectionState {
     if (-not [string]::IsNullOrWhiteSpace($ServerFingerprint)) {
         $lines += "PULSE_SERVER_FINGERPRINT='$ServerFingerprint'"
     }
+    if (-not [string]::IsNullOrWhiteSpace($ObserversFile)) {
+        $lines += "PULSE_OBSERVERS_FILE='$ObserversFile'"
+    }
 
     New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
     Set-Content -Path $ConnectionStatePath -Value ($lines -join "`n") -Encoding UTF8
@@ -610,6 +614,18 @@ if ([string]::IsNullOrWhiteSpace($Token) -and -not [string]::IsNullOrWhiteSpace(
         $Token = (Get-Content -Path $resolvedTokenFile -Raw -ErrorAction Stop).Trim()
     } catch {
         Show-Error "Failed to read token file.`nProvided: $TokenFile`nError: $_"
+        Exit 1
+    }
+}
+
+if (-not [string]::IsNullOrWhiteSpace($ObserversFile)) {
+    try {
+        $ObserversFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ObserversFile)
+        if (-not [System.IO.Path]::IsPathRooted($ObserversFile) -or -not (Test-Path $ObserversFile -PathType Leaf)) {
+            throw "path must be absolute and identify an existing file"
+        }
+    } catch {
+        Show-Error "Invalid observer config file.`nProvided: $ObserversFile`nError: $_"
         Exit 1
     }
 }
@@ -936,6 +952,7 @@ if ($EnableCommands) { $ServiceArgs += "--enable-commands" }
 if ($Insecure) { $ServiceArgs += "--insecure" }
 if (-not [string]::IsNullOrWhiteSpace($CACertPath)) { $ServiceArgs += @("--cacert", "`"$CACertPath`"") }
 if (-not [string]::IsNullOrWhiteSpace($ServerFingerprint)) { $ServiceArgs += @("--server-fingerprint", "`"$ServerFingerprint`"") }
+if (-not [string]::IsNullOrWhiteSpace($ObserversFile)) { $ServiceArgs += @("--observers-file", "`"$ObserversFile`"") }
 if (-not [string]::IsNullOrWhiteSpace($AgentId)) { $ServiceArgs += @("--agent-id", "`"$AgentId`"") }
 if (-not [string]::IsNullOrWhiteSpace($Hostname)) { $ServiceArgs += @("--hostname", "`"$Hostname`"") }
 $ServiceArgs += @("--log-file", "`"$LogFile`"")

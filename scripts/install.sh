@@ -23,6 +23,7 @@
 #   --disk-exclude <pattern>  Exclude mount points matching pattern (repeatable)
 #   --insecure          Skip TLS certificate verification
 #   --server-fingerprint <sha256> Pin the Pulse server leaf certificate
+#   --observers-file <path> Report to additional observer Pulse instances
 #   --enable-commands   Enable Pulse command execution on agent (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
 #   --health-addr <addr> Health/metrics listener address (default: 127.0.0.1:9191, use "" to disable)
 #   --update            Update an existing agent using saved connection state
@@ -79,6 +80,7 @@ UPDATE_ONLY="false"
 UNINSTALL="false"
 INSECURE="false"
 SERVER_FINGERPRINT="${PULSE_SERVER_FINGERPRINT:-}"
+OBSERVERS_FILE="${PULSE_OBSERVERS_FILE:-}"
 AGENT_ID=""
 HOSTNAME_OVERRIDE=""
 ENABLE_COMMANDS="false"
@@ -304,6 +306,7 @@ Options:
   --insecure              Skip TLS verification (auto-enabled for http:// URLs)
   --cacert <path>         Custom CA certificate for TLS (used by curl and agent)
   --server-fingerprint <sha256> Pin the Pulse server leaf certificate for agent connections
+  --observers-file <path> Absolute path to private JSON config for report-only observer Pulse destinations
   --enable-commands       Enable Pulse command execution (disabled by default; required for Patrol actions and Proxmox LXC Docker inventory)
   --health-addr <addr>    Health/metrics listener address (default: 127.0.0.1:9191; use "" to disable)
   --enroll                Exchange bootstrap token for runtime token (deploy wizard)
@@ -1451,6 +1454,7 @@ build_exec_arg_items() {
     if [[ -n "$PROXMOX_TYPE" ]]; then EXEC_ARG_ITEMS+=(--proxmox-type "$PROXMOX_TYPE"); fi
     if [[ "$INSECURE" == "true" ]]; then EXEC_ARG_ITEMS+=(--insecure); fi
     if [[ -n "$SERVER_FINGERPRINT" ]]; then EXEC_ARG_ITEMS+=(--server-fingerprint "$SERVER_FINGERPRINT"); fi
+    if [[ -n "$OBSERVERS_FILE" ]]; then EXEC_ARG_ITEMS+=(--observers-file "$OBSERVERS_FILE"); fi
     if [[ "$ENABLE_COMMANDS" == "true" ]]; then EXEC_ARG_ITEMS+=(--enable-commands); fi
     if [[ "$HEALTH_ADDR_SET" == "true" ]]; then EXEC_ARG_ITEMS+=(--health-addr "$HEALTH_ADDR"); fi
     if [[ "$ENROLL" == "true" ]]; then EXEC_ARG_ITEMS+=(--enroll); fi
@@ -1718,6 +1722,10 @@ apply_recovered_agent_arg_value() {
             if [[ -z "$SERVER_FINGERPRINT" ]]; then SERVER_FINGERPRINT="$value"; fi
             RECOVERED_AGENT_ARG_STATE="true"
             ;;
+        observers-file)
+            if [[ -z "$OBSERVERS_FILE" ]]; then OBSERVERS_FILE="$value"; fi
+            RECOVERED_AGENT_ARG_STATE="true"
+            ;;
         health-addr)
             if [[ "$HEALTH_ADDR_SET" != "true" ]]; then
                 HEALTH_ADDR="$value"
@@ -1772,10 +1780,10 @@ recover_connection_state_from_arg_stream() {
         fi
 
         case "$arg" in
-            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--cacert|--server-fingerprint|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude|-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-cacert|-server-fingerprint|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)
+            --url|--pulse-url|--token|--token-file|--interval|--agent-id|--hostname|--cacert|--server-fingerprint|--observers-file|--health-addr|--state-dir|--kubeconfig|--proxmox-type|--disk-exclude|-url|-pulse-url|-token|-token-file|-interval|-agent-id|-hostname|-cacert|-server-fingerprint|-observers-file|-health-addr|-state-dir|-kubeconfig|-proxmox-type|-disk-exclude)
                 pending_key=$(normalize_recovered_agent_arg_key "$arg")
                 ;;
-            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--cacert=*|--server-fingerprint=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*|-url=*|-pulse-url=*|-token=*|-token-file=*|-interval=*|-agent-id=*|-hostname=*|-cacert=*|-server-fingerprint=*|-health-addr=*|-state-dir=*|-kubeconfig=*|-proxmox-type=*|-disk-exclude=*)
+            --url=*|--pulse-url=*|--token=*|--token-file=*|--interval=*|--agent-id=*|--hostname=*|--cacert=*|--server-fingerprint=*|--observers-file=*|--health-addr=*|--state-dir=*|--kubeconfig=*|--proxmox-type=*|--disk-exclude=*|-url=*|-pulse-url=*|-token=*|-token-file=*|-interval=*|-agent-id=*|-hostname=*|-cacert=*|-server-fingerprint=*|-observers-file=*|-health-addr=*|-state-dir=*|-kubeconfig=*|-proxmox-type=*|-disk-exclude=*)
                 key="${arg%%=*}"
                 value="${arg#*=}"
                 apply_recovered_agent_arg_value "$key" "$value"
@@ -2288,6 +2296,7 @@ while [[ $# -gt 0 ]]; do
         --insecure) INSECURE="true"; shift ;;
         --cacert) CURL_CA_BUNDLE="$2"; shift 2 ;;
         --server-fingerprint) SERVER_FINGERPRINT="$2"; shift 2 ;;
+        --observers-file) OBSERVERS_FILE="$2"; shift 2 ;;
         --enable-commands) ENABLE_COMMANDS="true"; shift ;;
         --health-addr) HEALTH_ADDR="$2"; HEALTH_ADDR_SET="true"; shift 2 ;;
         --enroll) ENROLL="true"; shift ;;
@@ -2307,6 +2316,15 @@ while [[ $# -gt 0 ]]; do
         *) fail "Unknown argument: $1" ;;
     esac
 done
+
+if [[ -n "$OBSERVERS_FILE" ]]; then
+    if [[ "$OBSERVERS_FILE" != /* ]]; then
+        fail "Observer config path must be absolute: ${OBSERVERS_FILE}" "$EXIT_MISSING_ARGS"
+    fi
+    if [[ ! -f "$OBSERVERS_FILE" || -L "$OBSERVERS_FILE" ]]; then
+        fail "Observer config must be a regular non-symlink file: ${OBSERVERS_FILE}" "$EXIT_MISSING_ARGS"
+    fi
+fi
 
 # Read token from file if --token-file was provided
 if [[ -n "$TOKEN_FILE_PATH" ]]; then

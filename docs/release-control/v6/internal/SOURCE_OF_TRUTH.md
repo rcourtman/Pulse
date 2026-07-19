@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-07-14
+Last updated: 2026-07-19
 Status: ACTIVE
 
 This file is the stable human governance layer for the active v6 release

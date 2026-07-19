@@ -31,11 +31,13 @@ Run it on the host that already has the v5 `pulse-agent` service to replace the
 binary and service configuration in place; do not uninstall the old service
 first unless you are intentionally removing that host from Pulse.
 
-An installed agent is configured for one Pulse URL and one token. Do not point
-one running service at both a v5 server and a v6 server. After the upgrade,
-check the relevant platform page or **Machines** view once the agent has
-reported, and confirm the host-local version with `pulse-agent --version` if
-the UI has not received a fresh report yet.
+An installed agent has one **primary** Pulse URL and token. The primary is the
+only server allowed to supply remote configuration, commands, enrollment, or
+updates. The same collection can also be sent to explicitly configured,
+report-only **observer** instances; see [Observer destinations](#observer-destinations).
+After an upgrade, check the relevant platform page or **Machines** view once
+the agent has reported, and confirm the host-local version with
+`pulse-agent --version` if the UI has not received a fresh report yet.
 
 ### Linux (systemd)
 ```bash
@@ -88,6 +90,7 @@ curl -fsSL http://<pulse-ip>:7655/install.sh | \
 |------|---------|-------------|---------|
 | `--url` | `PULSE_URL` | Pulse server URL | `http://localhost:7655` |
 | `--token` | `PULSE_TOKEN` | API token | *(required)* |
+| `--observers-file` | `PULSE_OBSERVERS_FILE` | Private JSON file defining report-only destinations | *(none)* |
 | `--token-file` | - | Read API token from file | *(unset)* |
 | `--interval` | `PULSE_INTERVAL` | Reporting interval | `30s` |
 | `--enable-host` | `PULSE_ENABLE_HOST` | Enable host metrics | `true` |
@@ -123,6 +126,52 @@ health/metrics endpoint over the network. Use `--health-addr ""` or
 `PULSE_HEALTH_ADDR=off` to disable that listener.
 
 **Token resolution order**: `--token` → `--token-file` → `PULSE_TOKEN` → `/var/lib/pulse-agent/token`.
+
+## Observer destinations
+
+Observer destinations receive the same already-collected host, Docker/Podman,
+and Kubernetes reports. Collection runs once per interval. Delivery, retries,
+and persisted host-report buffers are isolated per destination, so an observer
+outage does not replay or block the primary stream. Observer responses cannot
+change configuration, execute commands, enroll the agent, or select updates.
+
+Create a separate API token on each observer and store every token in its own
+absolute-path file. On Unix, both the JSON file and token files must be regular,
+non-symlink files with no group or other permissions (for example mode `0600`).
+
+```json
+{
+  "version": 1,
+  "observers": [
+    {
+      "name": "dev",
+      "url": "https://pulse-dev.example.test",
+      "tokenFile": "/etc/pulse-agent/dev-observer.token",
+      "serverFingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "provisionProxmox": true
+    }
+  ]
+}
+```
+
+Start or install the service with
+`--observers-file /etc/pulse-agent/observers.json`. Plaintext remote HTTP is
+rejected unless that observer explicitly sets `"allowPlaintextHTTP": true`.
+`insecureSkipVerify` is available per observer but should be replaced with a
+CA file or certificate fingerprint wherever possible.
+
+When Proxmox integration is enabled, each observer gets a distinct
+destination-scoped PVE/PBS API token and registration-state directory. Pulse
+must answer the registration check before the agent creates or rotates any
+Proxmox token; an unavailable destination therefore leaves existing
+credentials unchanged. Set `"provisionProxmox": false` when an observer should
+receive only Unified Agent telemetry and no separately registered PVE/PBS
+source.
+
+Per-destination delivery status is exported on the health listener as
+`pulse_agent_destination_configured` and
+`pulse_agent_destination_delivery_up`, labelled by module, destination, and
+role.
 
 ### Advanced Flags
 

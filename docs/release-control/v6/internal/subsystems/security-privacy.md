@@ -1434,6 +1434,10 @@ enforce TLS, CA, fingerprint, and explicit plaintext policy. Observer payload
 responses are report acknowledgements only and cannot authorize configuration,
 commands, enrollment, or updates. Per-destination Proxmox tokens prevent one
 Pulse instance from rotating credentials used by another.
+The process-wide plaintext override belongs only to the authoritative primary:
+it cannot satisfy an observer's opt-in. Every non-loopback HTTP observer must
+declare its own `allowPlaintextHTTP` consent, and that decision must propagate
+unchanged through host, Docker, Kubernetes, and observer Proxmox transports.
 
 Operational Trust action offers enforce current plan, approve, and execute
 authority before a mutating affordance is returned. Planning repeats those

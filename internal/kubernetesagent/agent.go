@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/IGLOU-EU/go-wildcard/v2"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agenttarget"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
@@ -57,6 +58,7 @@ type Config struct {
 	InsecureSkipVerify bool
 	CACertPath         string
 	ServerFingerprint  string
+	Targets            []TargetConfig
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
 
@@ -70,6 +72,25 @@ type Config struct {
 	IncludeAllPods        bool // Include all non-succeeded pods (still capped)
 	IncludeAllDeployments bool // Include all deployments, not just problem ones
 	MaxPods               int  // Max pods included in the report
+}
+
+// TargetConfig describes one Pulse report destination. Exactly one target is
+// authoritative; additional targets are report-only observers.
+type TargetConfig struct {
+	Name               string
+	URL                string
+	Token              string
+	InsecureSkipVerify bool
+	AllowPlaintextHTTP bool
+	CACertPath         string
+	ServerFingerprint  string
+	Authoritative      bool
+}
+
+type reportTarget struct {
+	config TargetConfig
+	client *http.Client
+	buffer *utils.Queue[agentsk8s.Report]
 }
 
 // Agent collects and reports Kubernetes cluster state to Pulse.
@@ -100,6 +121,7 @@ type Agent struct {
 	excludeNamespaces []string
 
 	reportBuffer *utils.Queue[agentsk8s.Report]
+	targets      []*reportTarget
 }
 
 const (
@@ -147,19 +169,32 @@ func New(cfg Config) (*Agent, error) {
 		logger = &scoped
 	}
 
-	if strings.TrimSpace(cfg.APIToken) == "" {
-		return nil, fmt.Errorf("api token is required")
-	}
-
-	pulseURL := strings.TrimSpace(cfg.PulseURL)
-	if pulseURL == "" {
-		pulseURL = "http://localhost:7655"
-	}
-	pulseURL, err := normalizePulseURL(pulseURL)
+	legacyTarget := len(cfg.Targets) == 0
+	targetConfigs, err := normalizeKubernetesTargets(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("invalid pulse URL: %w", err)
+		if legacyTarget {
+			if strings.TrimSpace(cfg.APIToken) == "" {
+				return nil, fmt.Errorf("api token is required")
+			}
+			return nil, fmt.Errorf("invalid pulse URL: %w", err)
+		}
+		return nil, err
 	}
-	cfg.PulseURL = pulseURL
+	cfg.Targets = targetConfigs
+	primary := targetConfigs[0]
+	for _, target := range targetConfigs {
+		role := "observer"
+		if target.Authoritative {
+			role = "primary"
+		}
+		agenttarget.MarkConfigured("kubernetes", target.Name, role)
+		if target.Authoritative {
+			primary = target
+		}
+	}
+	cfg.PulseURL = primary.URL
+	cfg.APIToken = primary.Token
+	pulseURL := primary.URL
 
 	restCfg, contextName, err := buildRESTConfig(cfg.KubeconfigPath, cfg.KubeContext)
 	if err != nil {
@@ -183,22 +218,23 @@ func New(cfg Config) (*Agent, error) {
 		agentVersion = Version
 	}
 
-	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
-	if err != nil {
-		return nil, fmt.Errorf("configure Pulse TLS client: %w", err)
-	}
-	httpClient := &http.Client{
-		Timeout: 15 * time.Second,
-		Transport: &http.Transport{
-			Proxy:           http.ProxyFromEnvironment,
-			TLSClientConfig: tlsConfig,
-		},
-		// Disallow redirects for agent API calls. If a reverse proxy redirects
-		// HTTP to HTTPS, Go's default behavior converts POST to GET (per HTTP spec),
-		// causing 405 errors. Return an error with guidance instead.
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return fmt.Errorf("server returned redirect to %s - if using a reverse proxy, ensure you use the correct protocol (https:// instead of http://) in your --url flag", req.URL)
-		},
+	reportTargets := make([]*reportTarget, 0, len(targetConfigs))
+	var httpClient *http.Client
+	var primaryBuffer *utils.Queue[agentsk8s.Report]
+	for _, target := range targetConfigs {
+		client, err := newKubernetesHTTPClient(target)
+		if err != nil {
+			if legacyTarget {
+				return nil, fmt.Errorf("configure Pulse TLS client: %w", err)
+			}
+			return nil, fmt.Errorf("configure Pulse target %q: %w", target.Name, err)
+		}
+		buffer := utils.New[agentsk8s.Report](60)
+		reportTargets = append(reportTargets, &reportTarget{config: target, client: client, buffer: buffer})
+		if target.Authoritative {
+			httpClient = client
+			primaryBuffer = buffer
+		}
 	}
 
 	clusterServer := strings.TrimSpace(restCfg.Host)
@@ -228,7 +264,8 @@ func New(cfg Config) (*Agent, error) {
 		clusterContext:    clusterContext,
 		includeNamespaces: cfg.IncludeNamespaces,
 		excludeNamespaces: cfg.ExcludeNamespaces,
-		reportBuffer:      utils.New[agentsk8s.Report](60),
+		reportBuffer:      primaryBuffer,
+		targets:           reportTargets,
 	}
 
 	if err := agent.discoverClusterMetadata(context.Background()); err != nil {
@@ -254,6 +291,85 @@ func normalizePulseURL(rawURL string) (string, error) {
 	}
 
 	return parsed.String(), nil
+}
+
+func normalizeKubernetesTargets(cfg Config) ([]TargetConfig, error) {
+	raw := append([]TargetConfig(nil), cfg.Targets...)
+	if len(raw) == 0 {
+		url := strings.TrimSpace(cfg.PulseURL)
+		if url == "" {
+			url = "http://localhost:7655"
+		}
+		raw = []TargetConfig{{
+			Name: "primary", URL: url, Token: cfg.APIToken, InsecureSkipVerify: cfg.InsecureSkipVerify,
+			CACertPath: cfg.CACertPath, ServerFingerprint: cfg.ServerFingerprint, Authoritative: true,
+		}}
+	}
+
+	result := make([]TargetConfig, 0, len(raw))
+	seenURLs := make(map[string]struct{}, len(raw))
+	seenNames := make(map[string]struct{}, len(raw))
+	authoritative := 0
+	for index, target := range raw {
+		name := strings.TrimSpace(target.Name)
+		if name == "" {
+			if index == 0 {
+				name = "primary"
+			} else {
+				name = fmt.Sprintf("observer-%d", index)
+			}
+		}
+		if _, exists := seenNames[name]; exists {
+			return nil, fmt.Errorf("duplicate Pulse target name %q", name)
+		}
+		if index == 0 && !target.Authoritative {
+			target.Authoritative = true
+		}
+		url, err := agenttarget.NormalizePulseURL(
+			strings.TrimSpace(target.URL),
+			target.Authoritative,
+			target.AllowPlaintextHTTP,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Pulse target %q URL: %w", name, err)
+		}
+		if _, exists := seenURLs[url]; exists {
+			return nil, fmt.Errorf("duplicate Pulse target URL %q", url)
+		}
+		token := strings.TrimSpace(target.Token)
+		if token == "" {
+			return nil, fmt.Errorf("Pulse target %q API token is required", name)
+		}
+		if target.Authoritative {
+			authoritative++
+		}
+		target.Name = name
+		target.URL = url
+		target.Token = token
+		target.CACertPath = strings.TrimSpace(target.CACertPath)
+		target.ServerFingerprint = strings.TrimSpace(target.ServerFingerprint)
+		seenNames[name] = struct{}{}
+		seenURLs[url] = struct{}{}
+		result = append(result, target)
+	}
+	if authoritative != 1 {
+		return nil, fmt.Errorf("exactly one authoritative Pulse target is required (got %d)", authoritative)
+	}
+	return result, nil
+}
+
+func newKubernetesHTTPClient(target TargetConfig) (*http.Client, error) {
+	tlsConfig, err := agenttls.NewClientTLSConfig(target.CACertPath, target.InsecureSkipVerify, target.ServerFingerprint)
+	if err != nil {
+		return nil, err
+	}
+	return &http.Client{
+		Timeout:   15 * time.Second,
+		Transport: &http.Transport{Proxy: http.ProxyFromEnvironment, TLSClientConfig: tlsConfig},
+		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
+			return fmt.Errorf("server returned redirect to %s - use the final Pulse URL explicitly", req.URL)
+		},
+	}, nil
 }
 
 func buildRESTConfig(kubeconfigPath, kubeContext string) (*rest.Config, string, error) {
@@ -335,8 +451,16 @@ func (a *Agent) discoverClusterMetadata(ctx context.Context) error {
 }
 
 func (a *Agent) closeIdleConnections() {
-	if a.httpClient != nil {
-		a.httpClient.CloseIdleConnections()
+	if len(a.targets) == 0 {
+		if a.httpClient != nil {
+			a.httpClient.CloseIdleConnections()
+		}
+		return
+	}
+	for _, target := range a.targets {
+		if target.client != nil {
+			target.client.CloseIdleConnections()
+		}
 	}
 }
 
@@ -359,10 +483,20 @@ func (a *Agent) Run(ctx context.Context) error {
 }
 
 func (a *Agent) bufferedReportCount() int {
-	if a == nil || a.reportBuffer == nil {
+	if a == nil {
 		return 0
 	}
-	return a.reportBuffer.Len()
+	if len(a.targets) == 0 {
+		if a.reportBuffer == nil {
+			return 0
+		}
+		return a.reportBuffer.Len()
+	}
+	total := 0
+	for _, target := range a.targets {
+		total += target.buffer.Len()
+	}
+	return total
 }
 
 func (a *Agent) runOnce(ctx context.Context) {
@@ -379,59 +513,75 @@ func (a *Agent) runOnce(ctx context.Context) {
 		return
 	}
 
-	if err := a.sendReport(ctx, report); err != nil {
-		a.logger.Warn().
-			Err(err).
-			Str("phase", "send_report").
-			Str("cluster_id", a.clusterID).
-			Str("agent_id", a.agentID).
-			Int("report_nodes", len(report.Nodes)).
-			Int("report_pods", len(report.Pods)).
-			Int("report_deployments", len(report.Deployments)).
-			Int("buffer_depth_before", a.bufferedReportCount()).
-			Msg("Failed to send Kubernetes report, buffering")
-		a.reportBuffer.Push(report)
-		a.logger.Debug().
-			Str("phase", "buffer_report").
-			Str("cluster_id", a.clusterID).
-			Int("buffer_depth_after", a.bufferedReportCount()).
-			Msg("Buffered Kubernetes report for retry")
+	for _, target := range a.targets {
+		if err := a.sendReportToTarget(ctx, report, target); err != nil {
+			agenttarget.MarkDelivery("kubernetes", target.config.Name, kubernetesTargetRole(target.config), false)
+			target.buffer.Push(report)
+			a.logger.Warn().Err(err).
+				Str("destination", target.config.Name).
+				Bool("authoritative", target.config.Authoritative).
+				Int("buffer_depth", target.buffer.Len()).
+				Msg("Failed to send Kubernetes report, buffering only for this destination")
+			continue
+		}
+		agenttarget.MarkDelivery("kubernetes", target.config.Name, kubernetesTargetRole(target.config), true)
+		a.flushTargetReports(ctx, target)
+	}
+	if len(a.targets) == 0 {
+		if err := a.sendReport(ctx, report); err != nil {
+			a.reportBuffer.Push(report)
+		}
 	}
 }
 
+func kubernetesTargetRole(target TargetConfig) string {
+	if target.Authoritative {
+		return "primary"
+	}
+	return "observer"
+}
+
 func (a *Agent) flushReports(ctx context.Context) {
-	flushed := 0
-	for {
-		report, ok := a.reportBuffer.Peek()
-		if !ok {
-			if flushed > 0 {
-				a.logger.Debug().
-					Str("phase", "flush_buffered_reports").
-					Str("cluster_id", a.clusterID).
-					Str("agent_id", a.agentID).
-					Int("flushed_reports", flushed).
-					Int("buffer_depth_remaining", a.bufferedReportCount()).
-					Msg("Flushed buffered Kubernetes reports")
+	if len(a.targets) == 0 {
+		for {
+			report, ok := a.reportBuffer.Peek()
+			if !ok || a.sendReport(ctx, report) != nil {
+				return
 			}
+			a.reportBuffer.Pop()
+		}
+	}
+	for _, target := range a.targets {
+		a.flushTargetReports(ctx, target)
+	}
+}
+
+func (a *Agent) flushTargetReports(ctx context.Context, target *reportTarget) {
+	for {
+		report, ok := target.buffer.Peek()
+		if !ok {
 			return
 		}
-		if err := a.sendReport(ctx, report); err != nil {
+		if err := a.sendReportToTarget(ctx, report, target); err != nil {
+			agenttarget.MarkDelivery("kubernetes", target.config.Name, kubernetesTargetRole(target.config), false)
 			a.logger.Warn().
 				Err(err).
+				Str("destination", target.config.Name).
 				Str("phase", "flush_buffered_report").
 				Str("cluster_id", a.clusterID).
 				Str("agent_id", a.agentID).
 				Int("report_nodes", len(report.Nodes)).
 				Int("report_pods", len(report.Pods)).
 				Int("report_deployments", len(report.Deployments)).
-				Int("buffer_depth", a.bufferedReportCount()).
+				Int("buffer_depth", target.buffer.Len()).
 				Msg("Failed to flush buffered Kubernetes report")
 			return
 		}
-		if _, ok := a.reportBuffer.Pop(); !ok {
+		if _, ok := target.buffer.Pop(); !ok {
 			a.logger.Debug().Msg("Failed to remove buffered report after successful send")
 			return
 		}
+		agenttarget.MarkDelivery("kubernetes", target.config.Name, kubernetesTargetRole(target.config), true)
 	}
 }
 
@@ -3476,6 +3626,19 @@ func isProblemDeployment(dep appsv1.Deployment) bool {
 }
 
 func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) (retErr error) {
+	for _, target := range a.targets {
+		if target.config.Authoritative {
+			return a.sendReportToTarget(ctx, report, target)
+		}
+	}
+	// Preserve direct-construction test and legacy behavior.
+	return a.sendReportToTarget(ctx, report, &reportTarget{
+		config: TargetConfig{URL: a.pulseURL, Token: a.cfg.APIToken, Authoritative: true},
+		client: a.httpClient,
+	})
+}
+
+func (a *Agent) sendReportToTarget(ctx context.Context, report agentsk8s.Report, target *reportTarget) (retErr error) {
 	payload, err := json.Marshal(report)
 	if err != nil {
 		return fmt.Errorf("marshal report: %w", err)
@@ -3486,7 +3649,7 @@ func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) (retErr
 		return fmt.Errorf("compress report: %w", err)
 	}
 
-	reportURL := fmt.Sprintf("%s/api/agents/kubernetes/report", a.pulseURL)
+	reportURL := fmt.Sprintf("%s/api/agents/kubernetes/report", target.config.URL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reportURL, bytes.NewReader(compressed))
 	if err != nil {
 		return fmt.Errorf("create request for %s: %w", reportURL, err)
@@ -3494,11 +3657,15 @@ func (a *Agent) sendReport(ctx context.Context, report agentsk8s.Report) (retErr
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
-	req.Header.Set("Authorization", "Bearer "+a.cfg.APIToken)
-	req.Header.Set("X-API-Token", a.cfg.APIToken)
+	req.Header.Set("Authorization", "Bearer "+target.config.Token)
+	req.Header.Set("X-API-Token", target.config.Token)
 	req.Header.Set("User-Agent", reportUserAgent+a.agentVersion)
 
-	resp, err := a.httpClient.Do(req)
+	client := target.client
+	if client == nil {
+		client = a.httpClient
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("send request to %s: %w", reportURL, err)
 	}

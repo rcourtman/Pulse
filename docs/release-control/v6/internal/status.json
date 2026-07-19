@@ -1,6 +1,6 @@
 {
   "version": "6.0",
-  "updated_at": "2026-07-14",
+  "updated_at": "2026-07-19",
   "scope": {
     "active_repos": [
       "pulse",
@@ -80,6 +80,21 @@
         }
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "cmd/pulse-agent/main.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "cmd/pulse-agent/observers_config_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "cmd/pulse-agent/service_windows.go",
+          "kind": "file"
+        },
         {
           "repo": "pulse",
           "path": "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.workloads-link.test.tsx",
@@ -5927,7 +5942,7 @@
       "status": "target-met",
       "completion": {
         "state": "complete",
-        "summary": "Agent lifecycle and fleet operations are at the current governed RC floor: canonical auto-register now converges on one v6 contract, install-command consumers fail closed through shared validated boundaries, profile-management surfaces preserve the canonical malformed-payload and missing-profile resync contract across settings and deploy surfaces, and the runtime-side Unified Agent reporting path now uses the canonical product terminology.",
+        "summary": "Agent lifecycle and fleet operations are at the current governed RC floor: canonical auto-register converges on one v6 contract, install-command consumers fail closed through shared validated boundaries, and one Unified Agent can fan a single collection to one authoritative primary plus isolated report-only observers. Observer tokens, TLS policy, retry buffers, delivery metrics, and Proxmox credentials are destination-scoped; Proxmox token mutation is gated on a successful destination registration check.",
         "tracking": []
       },
       "blockers": [],
@@ -6087,6 +6102,16 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/agenttarget/config.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/agenttarget/config_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/agentupdate/update.go",
           "kind": "file"
         },
@@ -6122,7 +6147,17 @@
         },
         {
           "repo": "pulse",
+          "path": "internal/dockeragent/multi_target_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "internal/hostagent/agent.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/hostagent/observer_delivery_test.go",
           "kind": "file"
         },
         {
@@ -6133,6 +6168,16 @@
         {
           "repo": "pulse",
           "path": "internal/hostagent/proxmox_setup_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/kubernetesagent/multi_target_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/install.ps1",
           "kind": "file"
         },
         {

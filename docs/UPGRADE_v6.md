@@ -123,14 +123,16 @@ pulse-agent --version
 systemctl status pulse-agent
 ```
 
-### Can one installed Pulse Unified Agent report to both a Pulse v5 instance and a Pulse v6 instance at the same time?
+### Can one installed Pulse Unified Agent report to two Pulse instances at the same time?
 
-Not as a supported in-place setup. A running Unified Agent installation is
-configured against one Pulse URL and one token, and it fetches remote config
-from that one Pulse server. If you need side-by-side evaluation, use a
-separate test host or VM, a cloned lab machine, or a separate isolated agent
-installation instead of trying to point one running agent service at two Pulse
-servers.
+Yes. Configure one instance as the primary with `--url` and its token, then add
+the other as a report-only observer with `--observers-file`. Only the primary
+can supply remote configuration, commands, enrollment, or updates; observer
+delivery and retries are isolated. Each instance needs its own Pulse API token,
+and Proxmox observers use separate PVE/PBS tokens. See
+[Observer destinations](UNIFIED_AGENT.md#observer-destinations) for the file
+format and security requirements. Use a v6-capable agent for this topology;
+older v5 agents do not understand observer configuration.
 
 ### Can I keep Pulse v5 stable while I test Pulse v6?
 

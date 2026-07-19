@@ -136,6 +136,27 @@ func TestInstallPS1PersistsAndVerifiesServerFingerprint(t *testing.T) {
 	}
 }
 
+func TestInstallPS1PreservesObserverDestinationConfig(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
+	if err != nil {
+		t.Fatalf("read install.ps1: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`[string]$ObserversFile = $env:PULSE_OBSERVERS_FILE,`,
+		`$lines += "PULSE_OBSERVERS_FILE='$ObserversFile'"`,
+		`[System.IO.Path]::IsPathRooted($ObserversFile)`,
+		`Test-Path $ObserversFile -PathType Leaf`,
+		`$ServiceArgs += @("--observers-file", "` + "`" + `"$ObserversFile` + "`" + `"")`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.ps1 missing observer-config lifecycle contract: %s", needle)
+		}
+	}
+}
+
 func TestInstallPS1AllowsMissingTokenForOptionalAuth(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
 	if err != nil {

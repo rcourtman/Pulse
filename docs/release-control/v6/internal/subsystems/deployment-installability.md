@@ -2443,3 +2443,13 @@ on community and Pro binaries. The rollback tests in
 `internal/updates/manager_rollback_test.go`, the rollback handler tests in
 `internal/api/updates_test.go`, and the route inventory pin for
 `/api/updates/rollback` are the proof surface for this path.
+
+### Observer destination installation continuity
+
+Unix and Windows installers accept `--observers-file` and preserve the absolute
+path in the installed service command. Unix installation rejects relative,
+missing, and symlink configuration paths before service mutation. The runtime
+remains the final schema, permission, token-file, URL, and TLS-policy validator.
+Updates recover the observer-file argument from the existing service command so
+an in-place binary refresh does not silently collapse a multi-destination
+installation back to primary-only reporting.

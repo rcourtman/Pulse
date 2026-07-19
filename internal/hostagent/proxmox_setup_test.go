@@ -560,6 +560,7 @@ func TestGetIPThatReachesPulse_IPv6Target(t *testing.T) {
 func TestProxmoxSetup_RunForType(t *testing.T) {
 	mc := &mockCollector{}
 	var expectedTokenID string
+	registrationExists := true
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/setup-script-url":
@@ -573,7 +574,7 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 			}
 			if check, _ := payload["checkRegistration"].(bool); check {
 				w.Header().Set("Content-Type", "application/json")
-				_, _ = w.Write([]byte(`{"registered":true}`))
+				_, _ = w.Write([]byte(fmt.Sprintf(`{"registered":%t}`, registrationExists)))
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
@@ -601,6 +602,7 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 	})
 
 	t.Run("performs registration successfully", func(t *testing.T) {
+		registrationExists = false
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, os.ErrNotExist }
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
 			// pveum user token add pulse-monitor@pve ... --privsep 1
@@ -650,6 +652,44 @@ func TestProxmoxSetup_MonitorTokenNameIsNodeScoped(t *testing.T) {
 	}
 	if got := fallback.monitorTokenName(); got != "pulse-pulse-example-com" {
 		t.Fatalf("fallback token name = %q, want pulse-pulse-example-com", got)
+	}
+}
+
+func TestProxmoxSetup_DoesNotMutateTokenBeforeDestinationCheck(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+
+	mutations := 0
+	mc := &mockCollector{
+		statFn: func(string) (os.FileInfo, error) { return nil, os.ErrNotExist },
+		dialTimeoutFn: func(string, string, time.Duration) (net.Conn, error) {
+			return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.0.0.1")}}, nil
+		},
+		commandCombinedOutputFn: func(_ context.Context, name string, _ ...string) (string, error) {
+			if name == "pveum" || name == "proxmox-backup-manager" {
+				mutations++
+			}
+			return "", nil
+		},
+	}
+	p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "pve", "node", "", t.TempDir(), false)
+	p.retryBackoffs = []time.Duration{}
+	result, err := p.runForType(context.Background(), proxmoxProductPVE)
+	if err != nil {
+		t.Fatalf("runForType: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("result = %+v, want nil while destination is unavailable", result)
+	}
+	if mutations != 0 {
+		t.Fatalf("Proxmox command mutations = %d, want 0", mutations)
+	}
+
+	p.WithMonitorTokenName("pulse-node-observer-deadbeef")
+	if got := p.monitorTokenName(); got != "pulse-node-observer-deadbeef" {
+		t.Fatalf("observer token name = %q", got)
 	}
 }
 
@@ -967,8 +1007,8 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 		}
 
 		results, _ := p.RunAll(context.Background())
-		if len(results) != 1 || results[0].ProxmoxType != "pbs" {
-			t.Errorf("expected pbs result")
+		if len(results) != 0 {
+			t.Errorf("expected no token mutation while Pulse registration state is unreachable")
 		}
 	})
 
@@ -1437,8 +1477,8 @@ func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 		if gotPayload.AuthToken != "setup-token-optional" {
 			t.Fatalf("authToken = %q, want %q", gotPayload.AuthToken, "setup-token-optional")
 		}
-		if requestCount != 2 {
-			t.Fatalf("requestCount = %d, want 2", requestCount)
+		if requestCount != 4 {
+			t.Fatalf("requestCount = %d, want 4 (reachability check plus registration)", requestCount)
 		}
 	})
 
@@ -1454,6 +1494,27 @@ func TestProxmoxSetup_Run_TopLevel(t *testing.T) {
 			t.Fatalf("expected proxmox type validation error, got %v", err)
 		}
 	})
+}
+
+func TestObserverProxmoxSetupRequiresDestinationPlaintextOptIn(t *testing.T) {
+	setup := NewProxmoxSetup(
+		zerolog.Nop(),
+		http.DefaultClient,
+		nil,
+		"http://203.0.113.10:7655",
+		"observer-token",
+		"pve",
+		"node",
+		"",
+		t.TempDir(),
+		false,
+	).WithObserverPlaintextPolicy(false)
+
+	if _, err := setup.Run(context.Background()); err == nil {
+		t.Fatal("expected observer Proxmox setup to reject plaintext without destination opt-in")
+	} else if !strings.Contains(err.Error(), "explicitly allows plaintext HTTP") {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 // Helpers

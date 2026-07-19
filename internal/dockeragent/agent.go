@@ -15,8 +15,8 @@ import (
 
 	systemtypes "github.com/moby/moby/api/types/system"
 	"github.com/moby/moby/client"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agenttarget"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
-	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
@@ -24,11 +24,14 @@ import (
 
 // TargetConfig describes a single Pulse backend the agent should report to.
 type TargetConfig struct {
+	Name               string
 	URL                string
 	Token              string
 	InsecureSkipVerify bool
+	AllowPlaintextHTTP bool
 	CACertPath         string
 	ServerFingerprint  string
+	Authoritative      bool
 }
 
 // Config describes runtime configuration for the Docker / Podman collection module.
@@ -124,6 +127,7 @@ type Agent struct {
 	prevContainerCPU   map[string]cpuSample
 	cpuMu              sync.Mutex // protects prevContainerCPU
 	reportBuffer       *utils.Queue[agentsdocker.Report]
+	reportBuffers      map[string]*utils.Queue[agentsdocker.Report]
 	registryChecker    *RegistryChecker // For checking container image updates
 	collectMu          sync.Mutex       // serializes collectOnce calls
 	backgroundMu       sync.Mutex       // protects updateCheckRunning, cleanupTaskRunning
@@ -162,11 +166,13 @@ func New(cfg Config) (*Agent, error) {
 		}
 
 		targets, err = normalizeTargetsFn([]TargetConfig{{
+			Name:               "primary",
 			URL:                url,
 			Token:              token,
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 			CACertPath:         cfg.CACertPath,
 			ServerFingerprint:  cfg.ServerFingerprint,
+			Authoritative:      true,
 		}})
 		if err != nil {
 			return nil, fmt.Errorf("dockeragent.New: normalize fallback target: %w", err)
@@ -242,6 +248,11 @@ func New(cfg Config) (*Agent, error) {
 	hasSecure := false
 	hasInsecure := false
 	for _, target := range cfg.Targets {
+		role := "observer"
+		if target.Authoritative {
+			role = "primary"
+		}
+		agenttarget.MarkConfigured("docker", target.Name, role)
 		if target.InsecureSkipVerify {
 			hasInsecure = true
 		} else {
@@ -288,6 +299,20 @@ func New(cfg Config) (*Agent, error) {
 
 	const bufferCapacity = 60
 
+	reportBuffers := make(map[string]*utils.Queue[agentsdocker.Report], len(cfg.Targets))
+	for _, target := range cfg.Targets {
+		reportBuffers[target.Name] = utils.New[agentsdocker.Report](bufferCapacity)
+	}
+	primaryBuffer := reportBuffers["primary"]
+	if primaryBuffer == nil {
+		for _, target := range cfg.Targets {
+			if target.Authoritative {
+				primaryBuffer = reportBuffers[target.Name]
+				break
+			}
+		}
+	}
+
 	agent := &Agent{
 		cfg:                cfg,
 		docker:             dockerClient,
@@ -306,7 +331,8 @@ func New(cfg Config) (*Agent, error) {
 		allowedStates:      make(map[string]struct{}, len(stateFilters)),
 		stateFilters:       stateFilters,
 		prevContainerCPU:   make(map[string]cpuSample),
-		reportBuffer:       utils.New[agentsdocker.Report](bufferCapacity),
+		reportBuffer:       primaryBuffer,
+		reportBuffers:      reportBuffers,
 		registryChecker:    newRegistryCheckerWithConfig(*logger, !cfg.DisableUpdateChecks),
 	}
 
@@ -326,8 +352,10 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 
 	normalized := make([]TargetConfig, 0, len(raw))
 	seen := make(map[string]struct{}, len(raw))
+	seenNames := make(map[string]struct{}, len(raw))
 
-	for _, target := range raw {
+	authoritativeCount := 0
+	for index, target := range raw {
 		targetURL := strings.TrimSpace(target.URL)
 		token := strings.TrimSpace(target.Token)
 		if targetURL == "" && token == "" {
@@ -341,40 +369,67 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 			return nil, fmt.Errorf("pulse target %s is missing API token", targetURL)
 		}
 
-		normalizedURL, err := normalizeTargetURL(targetURL)
+		if len(normalized) == 0 && !target.Authoritative {
+			target.Authoritative = true
+		}
+		normalizedURL, err := normalizeTargetURLWithPolicy(
+			targetURL,
+			target.Authoritative,
+			target.AllowPlaintextHTTP,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("invalid pulse target URL %q: %w", targetURL, err)
 		}
 
 		caCertPath := strings.TrimSpace(target.CACertPath)
 		serverFingerprint := strings.TrimSpace(target.ServerFingerprint)
-		key := fmt.Sprintf("%s|%s|%t|%s|%s", normalizedURL, token, target.InsecureSkipVerify, caCertPath, serverFingerprint)
+		name := strings.TrimSpace(target.Name)
+		if name == "" {
+			if len(normalized) == 0 {
+				name = "primary"
+			} else {
+				name = fmt.Sprintf("observer-%d", index)
+			}
+		}
+		if _, exists := seenNames[name]; exists {
+			return nil, fmt.Errorf("duplicate Pulse target name %q", name)
+		}
+		key := normalizedURL
 		if _, exists := seen[key]; exists {
 			continue
 		}
+		if target.Authoritative {
+			authoritativeCount++
+		}
 		seen[key] = struct{}{}
+		seenNames[name] = struct{}{}
 
 		normalized = append(normalized, TargetConfig{
+			Name:               name,
 			URL:                normalizedURL,
 			Token:              token,
 			InsecureSkipVerify: target.InsecureSkipVerify,
+			AllowPlaintextHTTP: target.AllowPlaintextHTTP,
 			CACertPath:         caCertPath,
 			ServerFingerprint:  serverFingerprint,
+			Authoritative:      target.Authoritative,
 		})
 	}
-
+	if len(normalized) > 0 && authoritativeCount != 1 {
+		return nil, fmt.Errorf("exactly one authoritative Pulse target is required (got %d)", authoritativeCount)
+	}
 	return normalized, nil
 }
 
 func normalizeTargetURL(raw string) (string, error) {
-	parsed, err := securityutil.NormalizePulseHTTPBaseURLWithOptions(raw, securityutil.PulseURLValidationOptions{
-		AllowLocalNetworkHTTP: true,
-	})
+	return normalizeTargetURLWithPolicy(raw, true, false)
+}
+
+func normalizeTargetURLWithPolicy(raw string, authoritative bool, allowPlaintext bool) (string, error) {
+	normalized, err := agenttarget.NormalizePulseURL(raw, authoritative, allowPlaintext)
 	if err != nil {
 		return "", err
 	}
-
-	normalized := strings.TrimRight(parsed.String(), "/")
 	if normalized == "" {
 		return "", errors.New("URL is empty after normalization")
 	}
@@ -760,59 +815,116 @@ func (a *Agent) collectOnce(ctx context.Context) error {
 		return fmt.Errorf("build docker report: %w", err)
 	}
 
-	if err := a.sendReport(ctx, report); err != nil {
-		if errors.Is(err, ErrStopRequested) {
-			return nil
-		}
-		a.logger.Warn().
-			Err(err).
-			Int("buffered_reports", a.bufferedReports()).
-			Int("targets", len(a.targets)).
-			Msg("Failed to send docker report, buffering")
-		a.reportBuffer.Push(report)
-		return nil
-	}
-
-	a.flushBuffer(ctx)
-	return nil
+	return a.deliverReport(ctx, report)
 }
 
 func (a *Agent) flushBuffer(ctx context.Context) {
-	report, ok := a.reportBuffer.Peek()
-	if !ok {
+	a.ensureReportBuffers()
+	for _, target := range a.targets {
+		a.flushTargetBuffer(ctx, target)
+	}
+}
+
+func (a *Agent) deliverReport(ctx context.Context, report agentsdocker.Report) error {
+	a.ensureReportBuffers()
+	payload, err := json.Marshal(report)
+	if err != nil {
+		return fmt.Errorf("marshal report: %w", err)
+	}
+	compressed, err := utils.CompressJSON(payload)
+	if err != nil {
+		return fmt.Errorf("compress report: %w", err)
+	}
+	for _, target := range a.targets {
+		if err := a.sendReportToTarget(ctx, target, compressed, len(report.Containers)); err != nil {
+			agenttarget.MarkDelivery("docker", target.Name, targetRole(target), false)
+			if errors.Is(err, ErrStopRequested) && target.Authoritative {
+				return nil
+			}
+			a.reportBuffers[target.Name].Push(report)
+			a.logger.Warn().Err(err).Str("destination", target.Name).
+				Bool("authoritative", target.Authoritative).
+				Int("buffered_reports", a.reportBuffers[target.Name].Len()).
+				Msg("Failed to send docker report, buffering only for this destination")
+			continue
+		}
+		agenttarget.MarkDelivery("docker", target.Name, targetRole(target), true)
+		a.flushTargetBuffer(ctx, target)
+	}
+	return nil
+}
+
+func targetRole(target TargetConfig) string {
+	if target.Authoritative {
+		return "primary"
+	}
+	return "observer"
+}
+
+func (a *Agent) flushTargetBuffer(ctx context.Context, target TargetConfig) {
+	a.ensureReportBuffers()
+	queue := a.reportBuffers[target.Name]
+	if queue == nil {
 		return
 	}
-
-	a.logger.Info().Int("count", a.reportBuffer.Len()).Msg("Flushing buffered docker reports")
-
 	for {
-		if err := a.sendReport(ctx, report); err != nil {
-			if errors.Is(err, ErrStopRequested) {
-				return
-			}
-			a.logger.Warn().
-				Err(err).
-				Int("remaining_reports", a.bufferedReports()).
-				Msg("Failed to flush buffered docker report, stopping flush")
-			return
-		}
-		a.reportBuffer.Pop()
-
-		report, ok = a.reportBuffer.Peek()
+		report, ok := queue.Peek()
 		if !ok {
 			return
 		}
+		payload, err := json.Marshal(report)
+		if err != nil {
+			queue.Pop()
+			continue
+		}
+		compressed, err := utils.CompressJSON(payload)
+		if err != nil {
+			return
+		}
+		if err := a.sendReportToTarget(ctx, target, compressed, len(report.Containers)); err != nil {
+			return
+		}
+		queue.Pop()
 	}
 }
 
 func (a *Agent) bufferedReports() int {
-	if a.reportBuffer == nil {
-		return 0
+	a.ensureReportBuffers()
+	total := 0
+	for _, queue := range a.reportBuffers {
+		if queue != nil {
+			total += queue.Len()
+		}
 	}
-	return a.reportBuffer.Len()
+	return total
+}
+
+func (a *Agent) ensureReportBuffers() {
+	if a.reportBuffers != nil {
+		return
+	}
+	a.reportBuffers = make(map[string]*utils.Queue[agentsdocker.Report], len(a.targets))
+	for index := range a.targets {
+		if strings.TrimSpace(a.targets[index].Name) == "" {
+			if index == 0 {
+				a.targets[index].Name = "primary"
+			} else {
+				a.targets[index].Name = fmt.Sprintf("observer-%d", index)
+			}
+		}
+		if index == 0 {
+			a.targets[index].Authoritative = true
+		}
+		queue := utils.New[agentsdocker.Report](60)
+		if index == 0 && a.reportBuffer != nil {
+			queue = a.reportBuffer
+		}
+		a.reportBuffers[a.targets[index].Name] = queue
+	}
 }
 
 func (a *Agent) sendReport(ctx context.Context, report agentsdocker.Report) error {
+	a.ensureReportBuffers()
 	payload, err := json.Marshal(report)
 	if err != nil {
 		return fmt.Errorf("marshal report: %w", err)
@@ -915,6 +1027,9 @@ func (a *Agent) sendReportToTarget(ctx context.Context, target TargetConfig, pay
 	}
 
 	if len(body) == 0 {
+		return nil
+	}
+	if !target.Authoritative && target.Name != "" {
 		return nil
 	}
 
@@ -1171,10 +1286,15 @@ func (a *Agent) sendCommandAckWithPayload(ctx context.Context, target TargetConf
 }
 
 func (a *Agent) primaryTarget() TargetConfig {
-	if len(a.targets) == 0 {
-		return TargetConfig{}
+	for _, target := range a.targets {
+		if target.Authoritative {
+			return target
+		}
 	}
-	return a.targets[0]
+	if len(a.targets) > 0 {
+		return a.targets[0]
+	}
+	return TargetConfig{}
 }
 
 func (a *Agent) httpClientFor(target TargetConfig) *http.Client {

@@ -4642,6 +4642,13 @@ file. Proxmox registration is also destination-scoped: the primary retains its
 legacy token name for upgrade continuity, observers use distinct token names
 and state markers, and every setup path must obtain a successful registration
 state response before any create, delete, or rotation command is executed.
+Plaintext transport consent is destination-scoped too. The primary keeps the
+existing local-network compatibility and explicit process-level override, but
+an observer must opt in independently for every non-loopback HTTP URL; primary
+consent cannot silently widen an observer. That policy must survive the shared
+config loader, host/Docker/Kubernetes target normalization, and observer
+Proxmox registration path. Unix and Windows service installation must preserve
+the absolute observer-config path across an in-place update.
 
 The adjacent recovery handlers under `internal/api/` do not widen this agent
 lifecycle boundary. Protection posture is a read-only `monitoring:read`

@@ -102,6 +102,7 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 			AppliedConfig:      ws.cfg.AppliedConfig,
 			UpdateStatus:       updater.Snapshot,
 			ModuleStatus:       runtimeStatus.moduleStatuses,
+			Observers:          hostObserverTargets(ws.cfg.Observers),
 		}
 		agent, err := hostagent.New(hostCfg)
 		if err != nil {
@@ -146,6 +147,7 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 			IncludeServices:    true,
 			IncludeTasks:       true,
 			CollectDiskMetrics: true,
+			Targets:            dockerReportTargets(ws.cfg),
 		}
 
 		agent, err := dockeragent.New(dockerCfg)
@@ -191,6 +193,7 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 			IncludeAllPods:        ws.cfg.KubeIncludeAllPods,
 			IncludeAllDeployments: ws.cfg.KubeIncludeAllDeployments,
 			MaxPods:               ws.cfg.KubeMaxPods,
+			Targets:               kubernetesReportTargets(ws.cfg),
 		}
 		agent, err := kubernetesagent.New(kubeCfg)
 		if err != nil {

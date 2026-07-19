@@ -25,6 +25,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agenttarget"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
@@ -310,6 +311,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	logger.Info().
 		Str("version", Version).
 		Str("pulse_url", cfg.PulseURL).
+		Int("observer_destinations", len(cfg.Observers)).
 		Bool("host_enabled", cfg.EnableHost).
 		Bool("docker_enabled", cfg.EnableDocker).
 		Bool("kubernetes_enabled", cfg.EnableKubernetes).
@@ -321,6 +323,13 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		logger.Warn().
 			Str("pulse_url", cfg.PulseURL).
 			Msg("--allow-plaintext-http is set: the agent API token travels in cleartext to any non-loopback Pulse URL; only use this on a network you fully control")
+	}
+	for _, observer := range cfg.Observers {
+		if observer.AllowPlaintextHTTP {
+			logger.Warn().
+				Str("destination", observer.Name).
+				Msg("Observer destination explicitly permits plaintext HTTP; its API token may travel in cleartext")
+		}
 	}
 
 	// 5. Set prometheus info metric
@@ -395,6 +404,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			AppliedConfig:      cfg.AppliedConfig,
 			UpdateStatus:       updater.Snapshot,
 			ModuleStatus:       runtimeStatus.moduleStatuses,
+			Observers:          hostObserverTargets(cfg.Observers),
 
 			DockerContainerUpdater: dockerUpdaterBridge,
 		}
@@ -439,6 +449,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			IncludeTasks:        true,
 			CollectDiskMetrics:  false,
 			DiskExclude:         cfg.DiskExclude,
+			Targets:             dockerReportTargets(cfg),
 		}
 
 		dockerAgent, err = newDockerAgent(dockerCfg)
@@ -496,6 +507,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			IncludeAllPods:        cfg.KubeIncludeAllPods,
 			IncludeAllDeployments: cfg.KubeIncludeAllDeployments,
 			MaxPods:               cfg.KubeMaxPods,
+			Targets:               kubernetesReportTargets(cfg),
 		}
 
 		agent, err := newKubeAgent(kubeCfg)
@@ -776,6 +788,8 @@ type Config struct {
 	AllowPlaintextHTTP bool
 	CACertPath         string
 	ServerFingerprint  string
+	ObserversFile      string
+	Observers          []agenttarget.Observer
 	DeploySSHUser      string
 	LogLevel           zerolog.Level
 	LogFile            string
@@ -826,6 +840,76 @@ type Config struct {
 	KubeMaxPods               int
 }
 
+func hostObserverTargets(observers []agenttarget.Observer) []hostagent.ObserverTarget {
+	targets := make([]hostagent.ObserverTarget, 0, len(observers))
+	for _, observer := range observers {
+		targets = append(targets, hostagent.ObserverTarget{
+			Name:               observer.Name,
+			ID:                 observer.ID,
+			PulseURL:           observer.URL,
+			APIToken:           observer.Token,
+			InsecureSkipVerify: observer.InsecureSkipVerify,
+			AllowPlaintextHTTP: observer.AllowPlaintextHTTP,
+			CACertPath:         observer.CACertPath,
+			ServerFingerprint:  observer.ServerFingerprint,
+			ProvisionProxmox:   observer.ProvisionProxmox,
+		})
+	}
+	return targets
+}
+
+func dockerReportTargets(cfg Config) []dockeragent.TargetConfig {
+	targets := make([]dockeragent.TargetConfig, 0, len(cfg.Observers)+1)
+	targets = append(targets, dockeragent.TargetConfig{
+		Name:               "primary",
+		URL:                cfg.PulseURL,
+		Token:              cfg.APIToken,
+		InsecureSkipVerify: cfg.InsecureSkipVerify,
+		AllowPlaintextHTTP: cfg.AllowPlaintextHTTP,
+		CACertPath:         cfg.CACertPath,
+		ServerFingerprint:  cfg.ServerFingerprint,
+		Authoritative:      true,
+	})
+	for _, observer := range cfg.Observers {
+		targets = append(targets, dockeragent.TargetConfig{
+			Name:               observer.Name,
+			URL:                observer.URL,
+			Token:              observer.Token,
+			InsecureSkipVerify: observer.InsecureSkipVerify,
+			AllowPlaintextHTTP: observer.AllowPlaintextHTTP,
+			CACertPath:         observer.CACertPath,
+			ServerFingerprint:  observer.ServerFingerprint,
+		})
+	}
+	return targets
+}
+
+func kubernetesReportTargets(cfg Config) []kubernetesagent.TargetConfig {
+	targets := make([]kubernetesagent.TargetConfig, 0, len(cfg.Observers)+1)
+	targets = append(targets, kubernetesagent.TargetConfig{
+		Name:               "primary",
+		URL:                cfg.PulseURL,
+		Token:              cfg.APIToken,
+		InsecureSkipVerify: cfg.InsecureSkipVerify,
+		AllowPlaintextHTTP: cfg.AllowPlaintextHTTP,
+		CACertPath:         cfg.CACertPath,
+		ServerFingerprint:  cfg.ServerFingerprint,
+		Authoritative:      true,
+	})
+	for _, observer := range cfg.Observers {
+		targets = append(targets, kubernetesagent.TargetConfig{
+			Name:               observer.Name,
+			URL:                observer.URL,
+			Token:              observer.Token,
+			InsecureSkipVerify: observer.InsecureSkipVerify,
+			AllowPlaintextHTTP: observer.AllowPlaintextHTTP,
+			CACertPath:         observer.CACertPath,
+			ServerFingerprint:  observer.ServerFingerprint,
+		})
+	}
+	return targets
+}
+
 func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	// Environment Variables
 	envURL := strings.TrimSpace(getenv("PULSE_URL"))
@@ -867,6 +951,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envDiskExclude := strings.TrimSpace(getenv("PULSE_DISK_EXCLUDE"))
 	envReportIP := strings.TrimSpace(getenv("PULSE_REPORT_IP"))
 	envDisableCeph := strings.TrimSpace(getenv("PULSE_DISABLE_CEPH"))
+	envObserversFile := strings.TrimSpace(getenv("PULSE_OBSERVERS_FILE"))
 
 	// Defaults
 	defaultInterval := 30 * time.Second
@@ -920,6 +1005,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	allowPlaintextHTTPFlag := fs.Bool("allow-plaintext-http", utils.ParseBool(strings.TrimSpace(getenv("PULSE_AGENT_ALLOW_PLAINTEXT_HTTP"))), "Allow plain HTTP to a Pulse server that does not look local (sends the API token in cleartext; only for networks you fully control)")
 	caCertFlag := fs.String("cacert", envCACertPath, "Path to custom CA bundle for agent HTTPS transport")
 	serverFingerprintFlag := fs.String("server-fingerprint", envServerFingerprint, "Expected Pulse server TLS certificate fingerprint (SHA256)")
+	observersFileFlag := fs.String("observers-file", envObserversFile, "Absolute path to a private JSON file defining report-only Pulse observer destinations")
 	deploySSHUserFlag := fs.String("deploy-ssh-user", envDeploySSHUser, "SSH user for peer deploy fan-out (default: root; non-root requires passwordless sudo)")
 	logLevelFlag := fs.String("log-level", defaultLogLevel(envLogLevel), "Log level")
 	logFileFlag := fs.String("log-file", envLogFile, "Write rotating JSON logs to this file")
@@ -977,6 +1063,10 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 
 	// Resolve token with priority: --token > --token-file > env > default file
 	token := resolveToken(*tokenFlag, *tokenFileFlag, envToken)
+	observers, err := agenttarget.LoadObservers(strings.TrimSpace(*observersFileFlag), pulseURL)
+	if err != nil {
+		return Config{}, fmt.Errorf("load observer destinations: %w", err)
+	}
 
 	// When --enroll is set and a runtime token already exists from a previous
 	// enrollment, use it instead of the bootstrap token embedded in the service
@@ -1057,6 +1147,8 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		AllowPlaintextHTTP:        *allowPlaintextHTTPFlag,
 		CACertPath:                strings.TrimSpace(*caCertFlag),
 		ServerFingerprint:         strings.TrimSpace(*serverFingerprintFlag),
+		ObserversFile:             strings.TrimSpace(*observersFileFlag),
+		Observers:                 observers,
 		DeploySSHUser:             deploySSHUser,
 		LogLevel:                  logLevel,
 		LogFile:                   strings.TrimSpace(*logFileFlag),

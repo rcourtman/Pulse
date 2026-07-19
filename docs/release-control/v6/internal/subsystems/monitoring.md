@@ -1750,6 +1750,12 @@ The local agent health listener exports
 to `primary` or `observer`; destination names come from validated configuration.
 Observer delivery failure is visible but does not make the primary authority
 unready or merge observer retry state into primary delivery health.
+Host, Docker/Podman, and Kubernetes reporters each fan out the already-collected
+snapshot without triggering a second collection. Their retry queues and latest
+delivery gauges remain per destination, and Kubernetes observer transport uses
+the same destination-scoped TLS and explicit plaintext policy as the host and
+Docker reporters. Observer acknowledgements never change the canonical
+monitoring configuration returned by the primary.
 
 ### PBS protection evidence collection
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -19,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agenttarget"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
@@ -44,6 +46,7 @@ type Config struct {
 	InsecureSkipVerify bool
 	CACertPath         string
 	ServerFingerprint  string
+	Observers          []ObserverTarget
 	RunOnce            bool
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
@@ -92,6 +95,28 @@ type Config struct {
 	storageCleanup       *storageCleanupManager
 }
 
+// ObserverTarget is a report-only Pulse destination. It can receive the same
+// collected host payload and an independently provisioned Proxmox source, but
+// it never supplies remote config, commands, enrollment, or update authority.
+type ObserverTarget struct {
+	Name               string
+	ID                 string
+	PulseURL           string
+	APIToken           string
+	InsecureSkipVerify bool
+	AllowPlaintextHTTP bool
+	CACertPath         string
+	ServerFingerprint  string
+	ProvisionProxmox   bool
+}
+
+type observerReporter struct {
+	target             ObserverTarget
+	httpClient         *http.Client
+	reportBuffer       *utils.Queue[agentshost.Report]
+	lastAuthFailureLog time.Time
+}
+
 // Agent is responsible for collecting host metrics and shipping them to Pulse.
 type Agent struct {
 	cfg        Config
@@ -117,6 +142,7 @@ type Agent struct {
 	configMu               sync.RWMutex
 	remoteConfigChanged    chan struct{}
 	reportBuffer           *utils.Queue[agentshost.Report]
+	observerReporters      []*observerReporter
 	commandClient          *CommandClient
 	commandClientMu        sync.Mutex
 	commandClientRunCancel context.CancelFunc
@@ -270,23 +296,18 @@ func New(cfg Config) (*Agent, error) {
 	if arch == "" {
 		arch = runtime.GOARCH
 	}
-	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
+	client, err := newAgentHTTPClient(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
 	if err != nil {
 		return nil, fmt.Errorf("invalid TLS configuration: %w", err)
 	}
 
-	client := &http.Client{
-		Timeout: 15 * time.Second,
-		Transport: &http.Transport{
-			Proxy:           http.ProxyFromEnvironment,
-			TLSClientConfig: tlsConfig,
-		},
-		// Disallow redirects for agent API calls. If a reverse proxy redirects
-		// HTTP to HTTPS, Go's default behavior converts POST to GET (per HTTP spec),
-		// causing 405 errors. Return an error with guidance instead.
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return fmt.Errorf("server returned redirect to %s - if using a reverse proxy, ensure you use the correct protocol (https:// instead of http://) in your --url flag", req.URL)
-		},
+	observerReporters, err := newObserverReporters(cfg.Observers)
+	if err != nil {
+		return nil, err
+	}
+	agenttarget.MarkConfigured("host", "primary", "primary")
+	for _, observer := range observerReporters {
+		agenttarget.MarkConfigured("host", observer.target.Name, "observer")
 	}
 
 	trimmedTags := make([]string, 0, len(cfg.Tags))
@@ -349,6 +370,7 @@ func New(cfg Config) (*Agent, error) {
 		trimmedPulseURL:     pulseURL,
 		remoteConfigChanged: make(chan struct{}, 1),
 		reportBuffer:        utils.New[agentshost.Report](bufferCapacity),
+		observerReporters:   observerReporters,
 		collector:           collector,
 		newCommandClient:    newCommandClientFn,
 		runCommandClient:    runCommandClientFn,
@@ -365,6 +387,58 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	return agent, nil
+}
+
+func newAgentHTTPClient(caCertPath string, insecureSkipVerify bool, serverFingerprint string) (*http.Client, error) {
+	tlsConfig, err := agenttls.NewClientTLSConfig(caCertPath, insecureSkipVerify, serverFingerprint)
+	if err != nil {
+		return nil, err
+	}
+	return &http.Client{
+		Timeout: 15 * time.Second,
+		Transport: &http.Transport{
+			Proxy:           http.ProxyFromEnvironment,
+			TLSClientConfig: tlsConfig,
+		},
+		// Redirects can rewrite report POSTs to GETs and must never cross an
+		// authority boundary implicitly.
+		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
+			return fmt.Errorf("server returned redirect to %s - use the final Pulse URL explicitly", req.URL)
+		},
+	}, nil
+}
+
+func newObserverReporters(targets []ObserverTarget) ([]*observerReporter, error) {
+	const bufferCapacity = 60
+	result := make([]*observerReporter, 0, len(targets))
+	seen := make(map[string]struct{}, len(targets))
+	for _, target := range targets {
+		target.Name = strings.TrimSpace(target.Name)
+		target.ID = strings.TrimSpace(target.ID)
+		target.APIToken = strings.TrimSpace(target.APIToken)
+		if target.Name == "" || target.ID == "" || target.APIToken == "" {
+			return nil, errors.New("observer destination requires name, id, and API token")
+		}
+		url, err := agenttarget.NormalizePulseURL(target.PulseURL, false, target.AllowPlaintextHTTP)
+		if err != nil {
+			return nil, fmt.Errorf("invalid observer %q Pulse URL: %w", target.Name, err)
+		}
+		target.PulseURL = url
+		if _, exists := seen[target.ID]; exists {
+			return nil, fmt.Errorf("duplicate observer destination id for %q", target.Name)
+		}
+		seen[target.ID] = struct{}{}
+		client, err := newAgentHTTPClient(target.CACertPath, target.InsecureSkipVerify, target.ServerFingerprint)
+		if err != nil {
+			return nil, fmt.Errorf("configure observer %q TLS: %w", target.Name, err)
+		}
+		result = append(result, &observerReporter{
+			target:       target,
+			httpClient:   client,
+			reportBuffer: utils.New[agentshost.Report](bufferCapacity),
+		})
+	}
+	return result, nil
 }
 
 func normalizeProxmoxType(raw string) (string, error) {
@@ -442,10 +516,12 @@ func (a *Agent) Run(ctx context.Context) error {
 
 	// Load any reports buffered from a previous shutdown
 	a.loadPersistedBuffer()
+	a.loadPersistedObserverBuffers()
 
 	ticker := time.NewTicker(a.currentInterval())
 	defer ticker.Stop()
 	defer a.persistBuffer()
+	defer a.persistObserverBuffers()
 
 	if err := a.process(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		a.logger.Error().
@@ -619,7 +695,16 @@ func (a *Agent) process(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("build report: %w", err)
 	}
+	primaryErr := a.deliverPrimaryReport(ctx, report)
+	for _, observer := range a.observerReporters {
+		a.deliverObserverReport(ctx, observer, report)
+	}
+	return primaryErr
+}
+
+func (a *Agent) deliverPrimaryReport(ctx context.Context, report agentshost.Report) error {
 	if err := a.sendReport(ctx, report); err != nil {
+		agenttarget.MarkDelivery("host", "primary", "primary", false)
 		var statusErr *reportHTTPStatusError
 		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusForbidden {
 			a.logger.Error().
@@ -652,6 +737,7 @@ func (a *Agent) process(ctx context.Context) error {
 		event.Msg("Failed to send report, buffering")
 		return nil
 	}
+	agenttarget.MarkDelivery("host", "primary", "primary", true)
 
 	// A successful report means the token is accepted again; reset the auth
 	// failure throttle so a later rejection is reported promptly.
@@ -665,6 +751,56 @@ func (a *Agent) process(ctx context.Context) error {
 		Str("platform", report.Host.Platform).
 		Msg("Unified Agent report sent")
 	return nil
+}
+
+func (a *Agent) deliverObserverReport(ctx context.Context, observer *observerReporter, report agentshost.Report) {
+	if err := a.sendReportToDestination(ctx, report, observer.target.PulseURL, observer.target.APIToken, observer.httpClient, false); err != nil {
+		agenttarget.MarkDelivery("host", observer.target.Name, "observer", false)
+		var statusErr *reportHTTPStatusError
+		if errors.As(err, &statusErr) && (statusErr.StatusCode == http.StatusUnauthorized || statusErr.StatusCode == http.StatusForbidden) {
+			if time.Since(observer.lastAuthFailureLog) >= authFailureLogInterval {
+				observer.lastAuthFailureLog = time.Now()
+				a.logger.Error().Err(err).
+					Str("destination", observer.target.Name).
+					Str("role", "observer").
+					Str("pulse_url", observer.target.PulseURL).
+					Msg("Pulse observer rejected its API token; reports for this destination are dropped until the token is replaced")
+			}
+			return
+		}
+		observer.reportBuffer.Push(report)
+		a.logger.Warn().Err(err).
+			Str("destination", observer.target.Name).
+			Str("role", "observer").
+			Int("buffered_reports", observer.reportBuffer.Len()).
+			Msg("Failed to send observer report, buffering only for this destination")
+		return
+	}
+
+	agenttarget.MarkDelivery("host", observer.target.Name, "observer", true)
+	observer.lastAuthFailureLog = time.Time{}
+	a.flushObserverBuffer(ctx, observer)
+}
+
+func (a *Agent) flushObserverBuffer(ctx context.Context, observer *observerReporter) {
+	for !observer.reportBuffer.IsEmpty() {
+		report, ok := observer.reportBuffer.Peek()
+		if !ok {
+			return
+		}
+		if err := a.sendReportToDestination(ctx, report, observer.target.PulseURL, observer.target.APIToken, observer.httpClient, false); err != nil {
+			var statusErr *reportHTTPStatusError
+			if errors.As(err, &statusErr) && (statusErr.StatusCode == http.StatusUnauthorized || statusErr.StatusCode == http.StatusForbidden) {
+				for {
+					if _, ok := observer.reportBuffer.Pop(); !ok {
+						break
+					}
+				}
+			}
+			return
+		}
+		observer.reportBuffer.Pop()
+	}
 }
 
 // logAuthFailure emits an actionable, throttled error when the server rejects
@@ -739,11 +875,25 @@ func (a *Agent) flushBuffer(ctx context.Context) {
 
 const bufferFileName = "report-buffer.json"
 
+func observerBufferFileName(id string) string {
+	return "report-buffer-observer-" + id + ".json"
+}
+
 // persistBuffer writes buffered reports to disk on shutdown so they can be
 // retransmitted on the next startup. Uses atomic write (tmp + rename) to
 // prevent corruption if the process is killed mid-write.
 func (a *Agent) persistBuffer() {
-	items := a.reportBuffer.Items()
+	a.persistReportQueue(a.reportBuffer, bufferFileName, "primary")
+}
+
+func (a *Agent) persistObserverBuffers() {
+	for _, observer := range a.observerReporters {
+		a.persistReportQueue(observer.reportBuffer, observerBufferFileName(observer.target.ID), observer.target.Name)
+	}
+}
+
+func (a *Agent) persistReportQueue(queue *utils.Queue[agentshost.Report], fileName, destination string) {
+	items := queue.Items()
 	if len(items) == 0 {
 		return
 	}
@@ -764,7 +914,7 @@ func (a *Agent) persistBuffer() {
 		return
 	}
 
-	path := filepath.Join(a.stateDir, bufferFileName)
+	path := filepath.Join(a.stateDir, fileName)
 	tmpPath := path + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		a.logger.Warn().Err(err).Str("path", tmpPath).Msg("Failed to write report buffer temp file")
@@ -776,18 +926,28 @@ func (a *Agent) persistBuffer() {
 		return
 	}
 
-	a.logger.Info().Int("count", len(items)).Str("path", path).Msg("Persisted report buffer to disk")
+	a.logger.Info().Int("count", len(items)).Str("path", path).Str("destination", destination).Msg("Persisted report buffer to disk")
 }
 
 // loadPersistedBuffer loads buffered reports from a previous shutdown and
 // attempts to flush them. The file is deleted after loading regardless of
 // whether the flush succeeds (items are pushed back into the in-memory buffer).
 func (a *Agent) loadPersistedBuffer() {
+	a.loadPersistedReportQueue(a.reportBuffer, bufferFileName, "primary")
+}
+
+func (a *Agent) loadPersistedObserverBuffers() {
+	for _, observer := range a.observerReporters {
+		a.loadPersistedReportQueue(observer.reportBuffer, observerBufferFileName(observer.target.ID), observer.target.Name)
+	}
+}
+
+func (a *Agent) loadPersistedReportQueue(queue *utils.Queue[agentshost.Report], fileName, destination string) {
 	if a.stateDir == "" {
 		return
 	}
 
-	path := filepath.Join(a.stateDir, bufferFileName)
+	path := filepath.Join(a.stateDir, fileName)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -810,10 +970,10 @@ func (a *Agent) loadPersistedBuffer() {
 	}
 
 	for _, item := range items {
-		a.reportBuffer.Push(item)
+		queue.Push(item)
 	}
 
-	a.logger.Info().Int("count", len(items)).Msg("Loaded persisted report buffer from disk")
+	a.logger.Info().Int("count", len(items)).Str("destination", destination).Msg("Loaded persisted report buffer from disk")
 }
 
 func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
@@ -960,6 +1120,10 @@ func (a *Agent) currentStorageCleanupStatus(ctx context.Context) *agentshost.Sto
 }
 
 func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error {
+	return a.sendReportToDestination(ctx, report, a.trimmedPulseURL, a.cfg.APIToken, a.httpClient, true)
+}
+
+func (a *Agent) sendReportToDestination(ctx context.Context, report agentshost.Report, pulseURL, token string, client *http.Client, authoritative bool) error {
 	payload, err := json.Marshal(report)
 	if err != nil {
 		return fmt.Errorf("marshal report: %w", err)
@@ -971,7 +1135,7 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 	}
 
 	endpoint := agentReportEndpoint
-	url := fmt.Sprintf("%s%s", a.trimmedPulseURL, endpoint)
+	url := fmt.Sprintf("%s%s", strings.TrimRight(pulseURL, "/"), endpoint)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(compressed))
 	if err != nil {
 		return fmt.Errorf("create request: %w", err)
@@ -979,13 +1143,13 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "gzip")
-	if token := strings.TrimSpace(a.cfg.APIToken); token != "" {
+	if token := strings.TrimSpace(token); token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("X-API-Token", token)
 	}
 	req.Header.Set("User-Agent", "pulse-agent/"+Version)
 
-	resp, err := a.httpClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("send request: %w", err)
 	}
@@ -1001,6 +1165,10 @@ func (a *Agent) sendReport(ctx context.Context, report agentshost.Report) error 
 			Status:     resp.Status,
 			StatusCode: resp.StatusCode,
 		}
+	}
+	if !authoritative {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64*1024))
+		return nil
 	}
 
 	// Parse response to check for server-side config overrides
@@ -1795,48 +1963,54 @@ func (a *Agent) collectSMARTData(ctx context.Context, diskExclude []string) []ag
 // Supports hosts with multiple Proxmox products (e.g., PVE + PBS on same host).
 func (a *Agent) runProxmoxSetup(ctx context.Context) {
 	a.logger.Info().Msg("Proxmox mode enabled, checking setup...")
-
-	setup := NewProxmoxSetup(
-		a.logger,
-		a.httpClient,
-		a.collector,
-		a.trimmedPulseURL,
-		a.cfg.APIToken,
-		a.cfg.ProxmoxType,
-		a.hostname,
-		a.currentReportIP(),
-		a.stateDir,
-		a.cfg.InsecureSkipVerify,
-	)
-
-	// Use RunAll to detect and register all Proxmox products on this host
-	results, err := setup.RunAll(ctx)
-	if err != nil {
-		a.logger.Error().Err(err).Msg("Proxmox setup failed")
-		return
-	}
-
-	if len(results) == 0 {
-		// All types already registered
-		a.logger.Info().Msg("All detected Proxmox products already registered")
-		return
-	}
-
-	// Log results for each registered type
-	for _, result := range results {
-		if result.Registered {
-			a.logger.Info().
-				Str("type", result.ProxmoxType).
-				Str("host", result.NodeHost).
-				Str("token_id", result.TokenID).
-				Msg("Proxmox node registered successfully")
-		} else {
-			a.logger.Warn().
-				Str("type", result.ProxmoxType).
-				Str("host", result.NodeHost).
-				Msg("Proxmox token created but registration failed (node may need manual configuration)")
+	for _, destination := range a.proxmoxDestinations() {
+		results, err := destination.setup.RunAll(ctx)
+		if err != nil {
+			a.logger.Error().Err(err).Str("destination", destination.name).Msg("Proxmox setup failed")
+			continue
+		}
+		for _, result := range results {
+			if result.Registered {
+				a.logger.Info().Str("destination", destination.name).
+					Str("type", result.ProxmoxType).
+					Str("host", result.NodeHost).
+					Str("token_id", result.TokenID).
+					Msg("Proxmox node registered successfully")
+			} else {
+				a.logger.Warn().Str("destination", destination.name).
+					Str("type", result.ProxmoxType).
+					Str("host", result.NodeHost).
+					Msg("Proxmox token created but registration failed")
+			}
 		}
 	}
+}
+
+type proxmoxDestination struct {
+	name  string
+	setup *ProxmoxSetup
+}
+
+func (a *Agent) proxmoxDestinations() []proxmoxDestination {
+	destinations := []proxmoxDestination{{
+		name: "primary",
+		setup: NewProxmoxSetup(a.logger, a.httpClient, a.collector, a.trimmedPulseURL, a.cfg.APIToken,
+			a.cfg.ProxmoxType, a.hostname, a.currentReportIP(), a.stateDir, a.cfg.InsecureSkipVerify),
+	}}
+	for _, observer := range a.observerReporters {
+		if !observer.target.ProvisionProxmox {
+			continue
+		}
+		stateDir := filepath.Join(a.stateDir, "observers", observer.target.ID)
+		tokenName := "pulse-" + proxmoxTokenScope(a.hostname, a.trimmedPulseURL) + "-" + observer.target.ID
+		setup := NewProxmoxSetup(a.logger, observer.httpClient, a.collector, observer.target.PulseURL,
+			observer.target.APIToken, a.cfg.ProxmoxType, a.hostname, a.currentReportIP(), stateDir,
+			observer.target.InsecureSkipVerify).
+			WithObserverPlaintextPolicy(observer.target.AllowPlaintextHTTP).
+			WithMonitorTokenName(tokenName)
+		destinations = append(destinations, proxmoxDestination{name: observer.target.Name, setup: setup})
+	}
+	return destinations
 }
 
 const (
@@ -1865,34 +2039,22 @@ func (a *Agent) runProxmoxHealthCheckLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			setup := NewProxmoxSetup(
-				a.logger,
-				a.httpClient,
-				a.collector,
-				a.trimmedPulseURL,
-				a.cfg.APIToken,
-				a.cfg.ProxmoxType,
-				a.hostname,
-				a.currentReportIP(),
-				a.stateDir,
-				a.cfg.InsecureSkipVerify,
-			)
-			results, err := setup.RunHealthCheck(ctx)
-			if err != nil {
-				a.logger.Warn().Err(err).Msg("Proxmox health check failed")
-				continue
-			}
-			for _, result := range results {
-				if result.Registered {
-					a.logger.Info().
+			for _, destination := range a.proxmoxDestinations() {
+				results, err := destination.setup.RunHealthCheck(ctx)
+				if err != nil {
+					a.logger.Warn().Err(err).Str("destination", destination.name).Msg("Proxmox health check failed")
+					continue
+				}
+				for _, result := range results {
+					event := a.logger.Info()
+					if !result.Registered {
+						event = a.logger.Warn()
+					}
+					event.Str("destination", destination.name).
 						Str("type", result.ProxmoxType).
 						Str("host", result.NodeHost).
-						Msg("Proxmox node re-registered via health check")
-				} else {
-					a.logger.Warn().
-						Str("type", result.ProxmoxType).
-						Str("host", result.NodeHost).
-						Msg("Proxmox health check: token rotated but registration failed")
+						Bool("registered", result.Registered).
+						Msg("Proxmox destination health repair completed")
 				}
 			}
 		}

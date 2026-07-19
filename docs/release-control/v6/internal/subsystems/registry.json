@@ -1101,6 +1101,7 @@
       "contract": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
       "owned_prefixes": [
         "internal/agentexec/",
+        "internal/agenttarget/",
         "internal/agentupdate/",
         "internal/hostagent/",
         "scripts/intelligence_lab/"
@@ -1108,6 +1109,7 @@
       "owned_files": [
         ".github/workflows/unified-agent-native.yml",
         "cmd/pulse-agent/main.go",
+        "cmd/pulse-agent/service_windows.go",
         "frontend-modern/src/api/agentProfiles.ts",
         "frontend-modern/src/api/nodes.ts",
         "frontend-modern/src/components/Settings/agentProfileSettings.ts",
@@ -1215,12 +1217,14 @@
             "label": "pulse-agent CLI entrypoint proof",
             "match_prefixes": [],
             "match_files": [
-              "cmd/pulse-agent/main.go"
+              "cmd/pulse-agent/main.go",
+              "cmd/pulse-agent/service_windows.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "cmd/pulse-agent/main_test.go"
+              "cmd/pulse-agent/main_test.go",
+              "cmd/pulse-agent/observers_config_test.go"
             ]
           },
           {
@@ -1263,7 +1267,9 @@
           {
             "id": "agent-runtime-transport-trust",
             "label": "agent runtime transport trust proof",
-            "match_prefixes": [],
+            "match_prefixes": [
+              "internal/agenttarget/"
+            ],
             "match_files": [
               "internal/agenttls/config.go",
               "internal/dockeragent/agent.go",
@@ -1275,9 +1281,12 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "internal/agenttarget/config_test.go",
               "internal/agenttls/config_test.go",
               "internal/dockeragent/agent_internal_test.go",
+              "internal/dockeragent/multi_target_test.go",
               "internal/kubernetesagent/agent_new_test.go",
+              "internal/kubernetesagent/multi_target_test.go",
               "internal/remoteconfig/client_additional_test.go",
               "internal/remoteconfig/client_test.go",
               "internal/securityutil/httpurl_test.go"
@@ -1317,6 +1326,7 @@
               "internal/hostagent/commands_host_update_test.go",
               "internal/hostagent/commands_storage_cleanup_test.go",
               "internal/hostagent/docker_lifecycle_test.go",
+              "internal/hostagent/observer_delivery_test.go",
               "internal/hostagent/package_updates_test.go",
               "internal/hostagent/send_report_test.go",
               "internal/hostagent/storage_cleanup_test.go"
@@ -5078,6 +5088,7 @@
             "exact_files": [
               "internal/kubernetesagent/agent_inventory_test.go",
               "internal/kubernetesagent/agent_new_test.go",
+              "internal/kubernetesagent/multi_target_test.go",
               "internal/monitoring/kubernetes_agents_test.go",
               "internal/unifiedresources/adapter_coverage_test.go",
               "internal/unifiedresources/kubernetes_registry_test.go"
