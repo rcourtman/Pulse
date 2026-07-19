@@ -398,9 +398,9 @@ export const buildCommandsByPlatform = (
         command: windowsInteractiveCommand,
         note: (
           <span>
-            Run in PowerShell as Administrator. The script will prompt for the Pulse URL and API
-            token, preflight the matching agent binary, and install it as a Windows service with
-            automatic startup.
+            Run in PowerShell as Administrator. The command embeds this Pulse URL, hands the API
+            token over through a temporary token file, preflights the matching agent binary, and
+            installs it as a Windows service with automatic startup.
           </span>
         ),
       },
