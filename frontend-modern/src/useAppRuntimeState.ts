@@ -98,7 +98,20 @@ export const useAppRuntimeState = () => {
     }
 
     try {
-      return Boolean(window.sessionStorage.getItem(STORAGE_KEYS.AUTH_USER));
+      if (window.sessionStorage.getItem(STORAGE_KEYS.AUTH_USER)) {
+        return true;
+      }
+    } catch {
+      // Fall through to the remember-me hint below.
+    }
+
+    // A remembered login username means this browser signed in with
+    // "remember me", so an HttpOnly session cookie may still be valid even
+    // though every per-tab artifact died with the tab. Without this hint the
+    // pre-auth short-circuit pins the user back to the login page and the
+    // 30-day session never gets a chance to authenticate (issue #1531).
+    try {
+      return Boolean(window.localStorage.getItem(STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME));
     } catch {
       return false;
     }

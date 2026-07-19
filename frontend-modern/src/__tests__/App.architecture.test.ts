@@ -422,6 +422,12 @@ describe('App architecture', () => {
     );
     expect(appRuntimeStateSource).toContain('!hasLocalAuthBootstrapHint() &&');
     expect(appRuntimeStateSource).toContain('!hasSSOCallbackSuccessHint()');
+    // Remember-me sessions ride an HttpOnly cookie with no per-tab artifacts,
+    // so the remembered-username hint must keep the /api/state probe reachable
+    // after a tab close (issue #1531).
+    expect(appRuntimeStateSource).toContain(
+      'window.localStorage.getItem(STORAGE_KEYS.REMEMBERED_LOGIN_USERNAME)',
+    );
     expect(appRuntimeStateSource).toContain('aiChatStore.setEnabled(');
     expect(appRuntimeStateSource).toContain('aiIntelligenceStore.loadPatrolFindings()');
     expect(appRuntimeStateSource).toContain('aiIntelligenceStore.loadPendingApprovals()');
