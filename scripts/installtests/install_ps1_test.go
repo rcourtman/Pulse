@@ -111,6 +111,7 @@ func TestInstallPS1OwnsWindowsServiceLoggingAndRecovery(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`$ServiceArgs += @("--log-file", "` + "`" + `"$LogFile` + "`" + `"")`,
+		`"--state-dir", "` + "`" + `"$StateDir` + "`" + `"`,
 		`$scOutput = sc.exe failure $AgentName reset= 86400 actions= restart/5000/restart/5000/restart/5000`,
 		`Show-Error "Failed to configure service recovery actions: $scOutput"`,
 		`$scOutput = sc.exe failureflag $AgentName 1`,

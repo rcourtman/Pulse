@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -1027,7 +1028,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	kubeIncludeAllPodsFlag := fs.Bool("kube-include-all-pods", utils.ParseBool(envKubeIncludeAllPods), "Include all non-succeeded pods (may be large)")
 	kubeIncludeAllDeploymentsFlag := fs.Bool("kube-include-all-deployments", utils.ParseBool(envKubeIncludeAllDeployments), "Include all deployments, not just problem ones")
 	kubeMaxPodsFlag := fs.Int("kube-max-pods", defaultInt(envKubeMaxPods, 200), "Max pods included in report")
-	stateDirFlag := fs.String("state-dir", envStateDir, "Persistent state directory (default: /var/lib/pulse-agent)")
+	stateDirFlag := fs.String("state-dir", envStateDir, "Persistent state directory (default: platform service state directory)")
 	reportIPFlag := fs.String("report-ip", envReportIP, "IP address to report (for multi-NIC systems)")
 	disableCephFlag := fs.Bool("disable-ceph", utils.ParseBool(envDisableCeph), "Disable local Ceph status polling")
 	showVersion := fs.Bool("version", false, "Print the agent version and exit")
@@ -1072,12 +1073,11 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	// enrollment, use it instead of the bootstrap token embedded in the service
 	// config. This ensures the agent survives restarts after enrollment.
 	stateDir := strings.TrimSpace(*stateDirFlag)
+	if stateDir == "" {
+		stateDir = defaultAgentStateDir()
+	}
 	if *enrollFlag {
-		enrollStateDir := stateDir
-		if enrollStateDir == "" {
-			enrollStateDir = "/var/lib/pulse-agent"
-		}
-		runtimeTokenPath := filepath.Join(enrollStateDir, "runtime.token")
+		runtimeTokenPath := filepath.Join(stateDir, "runtime.token")
 		if content, err := os.ReadFile(runtimeTokenPath); err == nil {
 			if t := strings.TrimSpace(string(content)); t != "" {
 				token = t
@@ -1086,7 +1086,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	}
 
 	if token == "" && *enrollFlag && !*selfTest {
-		return Config{}, fmt.Errorf("Pulse API token is required for enrollment (use --token, --token-file, PULSE_TOKEN env, or /var/lib/pulse-agent/token)")
+		return Config{}, fmt.Errorf("Pulse API token is required for enrollment (use --token, --token-file, PULSE_TOKEN env, or %s)", defaultTokenFilePath())
 	}
 
 	logLevel, err := parseLogLevel(*logLevelFlag)
@@ -1172,7 +1172,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		KubeIncludeAllPods:        *kubeIncludeAllPodsFlag,
 		KubeIncludeAllDeployments: *kubeIncludeAllDeploymentsFlag,
 		KubeMaxPods:               kubeMaxPods,
-		StateDir:                  strings.TrimSpace(*stateDirFlag),
+		StateDir:                  stateDir,
 		DiskExclude:               diskExclude,
 		ReportIP:                  strings.TrimSpace(*reportIPFlag),
 		DisableCeph:               *disableCephFlag,
@@ -1294,11 +1294,28 @@ func resolveEnableCommands(enableFlag, disableFlag bool, envEnable, envDisable s
 // 1. --token flag (direct value)
 // 2. --token-file flag (read from file)
 // 3. PULSE_TOKEN environment variable
-// 4. Default token file at /var/lib/pulse-agent/token
+// 4. Default token file under the platform state directory
 //
 // Reading from a file is more secure than CLI args as tokens won't appear in `ps` output.
 func resolveToken(tokenFlag, tokenFileFlag, envToken string) string {
 	return resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, os.ReadFile)
+}
+
+// defaultAgentStateDir mirrors where each platform's installer keeps agent
+// state: %ProgramData%\Pulse on Windows (see scripts/install.ps1), the
+// systemd/launchd convention /var/lib/pulse-agent everywhere else.
+func defaultAgentStateDir() string {
+	if runtime.GOOS == "windows" {
+		if pd := strings.TrimSpace(os.Getenv("ProgramData")); pd != "" {
+			return filepath.Join(pd, "Pulse")
+		}
+		return `C:\ProgramData\Pulse`
+	}
+	return "/var/lib/pulse-agent"
+}
+
+func defaultTokenFilePath() string {
+	return filepath.Join(defaultAgentStateDir(), "token")
 }
 
 func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken string, readFile func(string) ([]byte, error)) string {
@@ -1321,8 +1338,8 @@ func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken string, readFile fu
 		return t
 	}
 
-	// 4. Default token file (most secure method for systemd services)
-	defaultTokenFile := "/var/lib/pulse-agent/token"
+	// 4. Default token file (most secure method for service installs)
+	defaultTokenFile := defaultTokenFilePath()
 	if content, err := readFile(defaultTokenFile); err == nil {
 		if t := strings.TrimSpace(string(content)); t != "" {
 			return t

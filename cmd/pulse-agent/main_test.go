@@ -921,6 +921,9 @@ func TestLoadConfig(t *testing.T) {
 		if cfg.EnableHost != true {
 			t.Errorf("expected host enabled by default")
 		}
+		if cfg.StateDir != defaultAgentStateDir() {
+			t.Errorf("expected platform state directory %q, got %q", defaultAgentStateDir(), cfg.StateDir)
+		}
 	})
 
 	t.Run("env overrides", func(t *testing.T) {
@@ -982,6 +985,16 @@ func TestLoadConfig(t *testing.T) {
 		}
 		if cfg.DeploySSHUser != "pulse-deploy" {
 			t.Errorf("expected deploy SSH user from flag, got %s", cfg.DeploySSHUser)
+		}
+	})
+
+	t.Run("state directory flag overrides platform default", func(t *testing.T) {
+		cfg, err := loadConfig([]string{"-token", "test-token", "-state-dir", "/custom/pulse-state"}, func(s string) string { return "" })
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.StateDir != "/custom/pulse-state" {
+			t.Errorf("expected explicit state directory, got %q", cfg.StateDir)
 		}
 	})
 

@@ -947,7 +947,8 @@ Save-ConnectionState
 # Build command line args (properly escaped)
 $ServiceArgs = @(
     "--url", "`"$Url`"",
-    "--interval", "`"$Interval`""
+    "--interval", "`"$Interval`"",
+    "--state-dir", "`"$StateDir`""
 )
 if (-not [string]::IsNullOrWhiteSpace($Token)) { $ServiceArgs += @("--token-file", "`"$TokenFilePath`"") }
 if ($EnableHost) { $ServiceArgs += "--enable-host" } else { $ServiceArgs += "--enable-host=false" }
