@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -237,6 +238,55 @@ func TestPatrolAutopilotActivationRequiresCurrentBoundAcknowledgement(t *testing
 	handlePatrolAutonomyUpdateForTest(handler, wrongCredentialRec, wrongCredential)
 	if wrongCredentialRec.Code != http.StatusConflict || !strings.Contains(wrongCredentialRec.Body.String(), unifiedresources.PatrolAutopilotStatusWrongActor) {
 		t.Fatalf("wrong credential status=%d body=%s", wrongCredentialRec.Code, wrongCredentialRec.Body.String())
+	}
+}
+
+// The Pro autonomy handler (pulse-enterprise aiautofix) decodes the gated
+// body with DisallowUnknownFields and its settings struct has no
+// acknowledgement_id, so the gate's normalized body must not carry the
+// consumed acknowledgement. Forwarding it made every Autopilot activation
+// on Pro builds fail with "Invalid request body".
+func TestPatrolAutopilotActivationForwardsStrictDecodableBody(t *testing.T) {
+	now := time.Date(2026, 7, 19, 18, 0, 0, 0, time.UTC)
+	handler, _ := newPatrolAutopilotTestHandler(t, "org-a", &now)
+
+	created := createPatrolAutopilotAcknowledgement(t, handler, "org-a", "alice", "session-strict", "ack-strict-001")
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", created.Code, created.Body.String())
+	}
+
+	activate := patrolAutopilotSessionRequest(t, http.MethodPut, "/api/ai/patrol/autonomy", `{"autonomy_level":"full","acknowledgement_id":"ack-strict-001","investigation_budget":10,"investigation_timeout_sec":120}`, "org-a", "alice", "session-strict")
+	rec := httptest.NewRecorder()
+	handler.GatePatrolAutonomyUpdate(func(w http.ResponseWriter, gated *http.Request) {
+		body, err := io.ReadAll(gated.Body)
+		if err != nil {
+			t.Fatalf("read gated body: %v", err)
+		}
+		if strings.Contains(string(body), "acknowledgement_id") {
+			t.Fatalf("gated body leaks consumed acknowledgement_id: %s", body)
+		}
+		// Mirror of the enterprise handler's strict decode contract.
+		var downstream struct {
+			AutonomyLevel           string `json:"autonomy_level"`
+			FullModeUnlocked        *bool  `json:"full_mode_unlocked,omitempty"`
+			InvestigationBudget     int    `json:"investigation_budget"`
+			InvestigationTimeoutSec int    `json:"investigation_timeout_sec"`
+		}
+		dec := json.NewDecoder(bytes.NewReader(body))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&downstream); err != nil {
+			t.Fatalf("gated body fails strict decode: %v body=%s", err, body)
+		}
+		if downstream.AutonomyLevel != string(config.PatrolAutonomyFull) || downstream.FullModeUnlocked == nil || !*downstream.FullModeUnlocked {
+			t.Fatalf("gated body lost activation shape: %s", body)
+		}
+		if req, ok := gated.Context().Value(patrolAutopilotActivationContextKey{}).(patrolAutopilotActivationRequest); !ok || req.AcknowledgementID != "ack-strict-001" {
+			t.Fatalf("activation context missing consumed acknowledgement: %#v", gated.Context().Value(patrolAutopilotActivationContextKey{}))
+		}
+		w.WriteHeader(http.StatusOK)
+	})(rec, activate)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("gate status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }
 

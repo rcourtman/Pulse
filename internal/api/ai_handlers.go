@@ -7797,6 +7797,14 @@ func (h *AISettingsHandler) GatePatrolAutonomyUpdate(next http.HandlerFunc) http
 		}
 		compatUnlocked := true
 		settings.FullModeUnlocked = &compatUnlocked
+		// The acknowledgement is consumed by this gate and handed to the
+		// downstream handler via context. It must not survive into the
+		// normalized body: the Pro autonomy handler decodes the body
+		// strictly and rejects unknown fields, so forwarding
+		// acknowledgement_id made every Autopilot activation fail with
+		// "Invalid request body" on Pro builds.
+		consumedAcknowledgementID := settings.AcknowledgementID
+		settings.AcknowledgementID = ""
 		normalizedBody, err := json.Marshal(settings)
 		if err != nil {
 			writeErrorResponse(w, http.StatusInternalServerError, "encoding_failed", "Failed to prepare Patrol autonomy request", nil)
@@ -7804,7 +7812,7 @@ func (h *AISettingsHandler) GatePatrolAutonomyUpdate(next http.HandlerFunc) http
 		}
 		r.Body = io.NopCloser(bytes.NewReader(normalizedBody))
 		r.ContentLength = int64(len(normalizedBody))
-		activationRequest := patrolAutopilotActivationRequest{AcknowledgementID: settings.AcknowledgementID, Actor: actor}
+		activationRequest := patrolAutopilotActivationRequest{AcknowledgementID: consumedAcknowledgementID, Actor: actor}
 		next(w, r.WithContext(context.WithValue(r.Context(), patrolAutopilotActivationContextKey{}, activationRequest)))
 	}
 }
