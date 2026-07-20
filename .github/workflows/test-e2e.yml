@@ -103,12 +103,12 @@ jobs:
           docker logs pulse-mock-github 2>&1 || echo "No pulse-mock-github container"
 
       - name: Upload Playwright report
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report-shard-${{ matrix.shard }}
           path: tests/integration/playwright-report/
-          retention-days: 30
+          retention-days: 3
 
       - name: Upload test videos and screenshots
         if: failure()
@@ -116,7 +116,7 @@ jobs:
         with:
           name: test-failures-shard-${{ matrix.shard }}
           path: tests/integration/test-results/
-          retention-days: 7
+          retention-days: 3
 
   agent-registration:
     name: Agent registration lifecycle
@@ -178,12 +178,12 @@ jobs:
         run: docker logs pulse-test-server 2>&1 || echo "No pulse-test-server container"
 
       - name: Upload Playwright report
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report-agent-registration
           path: tests/integration/playwright-report/
-          retention-days: 30
+          retention-days: 3
 
       - name: Upload test videos and screenshots
         if: failure()
@@ -191,7 +191,7 @@ jobs:
         with:
           name: test-failures-agent-registration
           path: tests/integration/test-results/
-          retention-days: 7
+          retention-days: 3
 
   e2e-verdict:
     name: E2E verdict
