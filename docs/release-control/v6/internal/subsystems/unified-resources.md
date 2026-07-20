@@ -1538,6 +1538,25 @@ AI-only summary payloads, or page-local heuristics.
 
 ## Current State
 
+### Governed action live-readiness refusal
+
+The unified action model owns `ErrActionExecutionUnavailable` as a permanent
+pre-dispatch refusal with canonical reason code
+`action_execution_unavailable`. The transport-independent lifecycle rebuilds
+the current canonical resource before asking the executor-owned readiness
+checker; a missing resource remains plan drift, while an explicit unavailable
+result records a bounded reason on the failed/no-effect audit and lifecycle
+event. Empty readiness or an executor without the optional checker preserves
+compatibility, but a checker that names the capability and reports it
+unavailable fails closed before either human or automatic policy admission.
+This refusal cannot alter the approved plan, select a replacement executor, or
+grant mutation authority from resource health alone.
+`internal/unifiedresources/actions_test.go`,
+`internal/actionlifecycle/service_test.go`, `internal/api/actions_test.go`,
+`internal/api/contract_test.go`, and
+`internal/agentcapabilities/manifest_test.go` prove the domain transition,
+both admission paths, HTTP/completion result, and shared manifest declaration.
+
 Resource detail drawer discovery-tab Suspense fallbacks now compose the
 frontend-primitives `DiscoveryLoadingFallback` template. `ResourceDetailDrawer`
 and `ResourceDetailDrawerOverviewTab` own when the Discovery tab is available,

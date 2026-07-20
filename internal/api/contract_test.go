@@ -14655,7 +14655,7 @@ func TestContract_ActionDryRunOnlyExecutionErrorJSONSnapshot(t *testing.T) {
 	}
 }
 
-func TestContract_APIActionExecutionRevalidatesPlanFreshness(t *testing.T) {
+func TestContract_APIActionExecutionRevalidatesPlanAndLiveReadiness(t *testing.T) {
 	source, err := os.ReadFile(filepath.Join("..", "actionlifecycle", "service.go"))
 	if err != nil {
 		t.Fatalf("read actionlifecycle service source: %v", err)
@@ -14664,25 +14664,33 @@ func TestContract_APIActionExecutionRevalidatesPlanFreshness(t *testing.T) {
 	for _, snippet := range []string{
 		"if unified.IsPermanentActionExecutionRefusal(err)",
 		"if err := s.ValidatePlanFresh(orgID, record); err != nil",
+		"if err := s.ValidateExecutionAvailable(ctx, orgID, record); err != nil",
 		"errors.Is(err, unified.ErrActionPlanDrift)",
 		"RecordRefusedExecution(store, record, actorID, now, err)",
 		"unified.RefuseActionExecution(record, reason, actor, now)",
 	} {
 		if !strings.Contains(src, snippet) {
-			t.Fatalf("actionlifecycle service must pin execute plan freshness guard snippet %q", snippet)
+			t.Fatalf("actionlifecycle service must pin execute plan and readiness guard snippet %q", snippet)
 		}
 	}
-	if strings.Index(src, "if err := s.ValidatePlanFresh(orgID, record); err != nil") >
-		strings.Index(src, "started, startEvent, err := unified.BeginActionExecution(record, actorID, now)") {
-		t.Fatal("Execute must validate plan freshness before entering executing state or calling the executor")
+	beginIndex := strings.Index(src, "started, startEvent, err := unified.BeginActionExecution(record, actorID, now)")
+	planIndex := strings.Index(src, "if err := s.ValidatePlanFresh(orgID, record); err != nil")
+	readinessIndex := strings.Index(src, "if err := s.ValidateExecutionAvailable(ctx, orgID, record); err != nil")
+	if planIndex < 0 || readinessIndex < 0 || beginIndex < 0 || planIndex > readinessIndex || readinessIndex > beginIndex {
+		t.Fatal("Execute must validate plan freshness and executor-owned live readiness before entering executing state or dispatching")
 	}
 
 	adapterSource, err := os.ReadFile("actions.go")
 	if err != nil {
 		t.Fatalf("read actions.go: %v", err)
 	}
-	if !strings.Contains(string(adapterSource), "writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanDrift") {
-		t.Fatal("actions.go must map plan drift to a 409 conflict with the canonical drift error code")
+	for _, snippet := range []string{
+		"writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanDrift",
+		"writeJSONErrorWithDetails(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionExecutionUnavailable",
+	} {
+		if !strings.Contains(string(adapterSource), snippet) {
+			t.Fatalf("actions.go must preserve the canonical execution refusal mapping %q", snippet)
+		}
 	}
 }
 
@@ -14695,7 +14703,7 @@ func readAgentCapabilitiesManifestSource(t *testing.T) string {
 	return string(source)
 }
 
-func TestContract_ExecuteActionCapabilityDeclaresPlanExpired(t *testing.T) {
+func TestContract_ExecuteActionCapabilityDeclaresPermanentRefusals(t *testing.T) {
 	manifest := agentcapabilities.CanonicalManifest()
 	var executeAction agentcapabilities.Capability
 	for _, cap := range manifest.Capabilities {
@@ -14709,6 +14717,9 @@ func TestContract_ExecuteActionCapabilityDeclaresPlanExpired(t *testing.T) {
 	}
 	if !stringSliceContains(executeAction.ErrorCodes, agentcapabilities.AgentErrCodeActionPlanExpired) {
 		t.Error("execute_action manifest must declare action_plan_expired so agents can branch on permanent expired-plan refusals")
+	}
+	if !stringSliceContains(executeAction.ErrorCodes, agentcapabilities.AgentErrCodeActionExecutionUnavailable) {
+		t.Error("execute_action manifest must declare action_execution_unavailable so agents can branch on execution-time live-readiness refusal")
 	}
 }
 
@@ -19247,15 +19258,23 @@ func TestContract_AgentSurfaceErrorEnvelopeUsesSharedAgentCapabilitiesType(t *te
 		"Error   string",
 		"Message string",
 		"Details map[string]string",
-		`AgentErrCodeResourceNotFound           = "resource_not_found"`,
-		`AgentErrCodeOperatorStateNotSet        = "operator_state_not_set"`,
-		`AgentErrCodeInvalidActionRequest       = "invalid_action_request"`,
-		`AgentErrCodeActionExecutionUnavailable = "action_execution_unavailable"`,
 		"func NewErrorEnvelope(",
 		"func DecodeErrorEnvelope(",
 	} {
 		if !strings.Contains(string(agentCapabilitiesSource), fragment) {
 			t.Errorf("agentcapabilities must own the shared agent error envelope; missing %s", fragment)
+		}
+	}
+	for constant, value := range map[string]string{
+		"AgentErrCodeResourceNotFound":           "resource_not_found",
+		"AgentErrCodeOperatorStateNotSet":        "operator_state_not_set",
+		"AgentErrCodeInvalidActionRequest":       "invalid_action_request",
+		"AgentErrCodeActionExecutionUnavailable": "action_execution_unavailable",
+		"AgentErrCodeActionReadinessCheckFailed": "action_execution_availability_failed",
+	} {
+		pattern := regexp.MustCompile(`\b` + regexp.QuoteMeta(constant) + `\s*=\s*"` + regexp.QuoteMeta(value) + `"`)
+		if !pattern.Match(agentCapabilitiesSource) {
+			t.Errorf("agentcapabilities must bind %s to %q", constant, value)
 		}
 	}
 }
@@ -20082,6 +20101,7 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"resource_registry_unavailable":                        true,
 		agentcapabilities.AgentErrCodeRawCommandRetired:        true,
 	}
+	internalOnlyCodes[agentcapabilities.AgentErrCodeActionReadinessCheckFailed] = true
 
 	agentErrorConstantValues := map[string]string{
 		"AgentErrCodeResourceNotFound":           agentcapabilities.AgentErrCodeResourceNotFound,
@@ -20113,6 +20133,7 @@ func TestContract_AgentSurfaceErrorCodesMatchManifestDeclarations(t *testing.T) 
 		"AgentErrCodeActionExecutionForbidden":   agentcapabilities.AgentErrCodeActionExecutionForbidden,
 		"AgentErrCodeActionNotExecuting":         agentcapabilities.AgentErrCodeActionNotExecuting,
 		"AgentErrCodeActionDryRunOnly":           agentcapabilities.AgentErrCodeActionDryRunOnly,
+		"AgentErrCodeActionReadinessCheckFailed": agentcapabilities.AgentErrCodeActionReadinessCheckFailed,
 		"AgentErrCodeActionPlanDrift":            agentcapabilities.AgentErrCodeActionPlanDrift,
 		"AgentErrCodeActionPlanIdentityMismatch": agentcapabilities.AgentErrCodeActionPlanIdentityMismatch,
 		"AgentErrCodeResourceRemediationLocked":  agentcapabilities.AgentErrCodeResourceRemediationLocked,

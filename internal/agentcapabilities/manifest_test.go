@@ -512,6 +512,7 @@ func TestCanonicalManifestPinsPulseMCPResolvedOperationsLoopCapabilities(t *test
 				AgentErrCodeActionExecutionFinal,
 				AgentErrCodeActionDryRunOnly,
 				AgentErrCodeActionPlanExpired,
+				AgentErrCodeActionExecutionUnavailable,
 				AgentErrCodeActionPlanDrift,
 				AgentErrCodeActionPlanIdentityMismatch,
 				AgentErrCodeResourceRemediationLocked,

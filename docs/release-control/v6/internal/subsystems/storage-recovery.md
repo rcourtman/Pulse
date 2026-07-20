@@ -1838,6 +1838,18 @@ that Safe auto-fix or Autopilot remediation is verified.
 
 ## Current State
 
+### Recovery actions retain execution-time readiness checks
+
+Recovery-oriented capabilities admitted to canonical Actions are subject to
+the same execution-time `AvailabilityChecker` gate as every other governed
+action. Losing executor or agent reachability after planning or approval
+produces a persisted `action_execution_unavailable` terminal no-effect refusal
+before a dispatch attempt for both human and automatic policy execution.
+Recovery Assurance remains a separate deterministic domain: backup freshness,
+protection posture, restore-chain evidence, and recoverability cannot satisfy
+action authorization or live executor readiness, and the readiness refusal
+cannot be rewritten as proof that a restore is or is not recoverable.
+
 Shared `internal/api/ai_handlers.go` now projects separate Patrol investigation
 evidence-call and model-response budgets/counters. Storage and recovery may use
 those values only as investigation cost/load evidence; they do not establish

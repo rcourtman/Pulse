@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -367,6 +368,7 @@ func TestRefuseActionExecutionRecordsPermanentRefusal(t *testing.T) {
 		{name: "plan drift", reason: ErrActionPlanDrift, wantCode: "plan_drift", wantPrefix: "plan_drift:"},
 		{name: "expired", reason: ErrActionPlanExpired, wantCode: "action_plan_expired", wantPrefix: "action_plan_expired:"},
 		{name: "dry run only", reason: ErrActionDryRunOnly, wantCode: "action_dry_run_only", wantPrefix: "action_dry_run_only:"},
+		{name: "execution unavailable", reason: fmt.Errorf("%w: command agent disconnected", ErrActionExecutionUnavailable), wantCode: "action_execution_unavailable", wantPrefix: "action_execution_unavailable: command agent disconnected"},
 		{name: "emergency stop", reason: ErrActionEmergencyStop, wantCode: "action_emergency_stop", wantPrefix: "action_emergency_stop:"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

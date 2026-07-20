@@ -34,6 +34,7 @@ const (
 	AgentErrCodeActionExecutionForbidden   = "action_execution_forbidden"
 	AgentErrCodeActionNotExecuting         = "action_not_executing"
 	AgentErrCodeActionDryRunOnly           = "action_dry_run_only"
+	AgentErrCodeActionReadinessCheckFailed = "action_execution_availability_failed"
 	AgentErrCodeActionPlanDrift            = "action_plan_drift"
 	AgentErrCodeActionPlanIdentityMismatch = "action_plan_identity_mismatch"
 	AgentErrCodeResourceRemediationLocked  = "resource_remediation_locked"

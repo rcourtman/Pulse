@@ -3500,6 +3500,23 @@ returning prompts, tool transcripts, credentials, or infrastructure data.
 
 ## Current State
 
+### Action execution revalidates live readiness
+
+`POST /api/actions/{actionId}/execute` routes through the transport-independent
+Actions lifecycle, which revalidates the approved plan against the current
+canonical resource and then asks the optional executor-owned
+`AvailabilityChecker` for live readiness before entering `executing`, creating
+a dispatch attempt, or calling the executor. The same gate applies to
+`ExecuteUnderPolicy`, so an automatic broker cannot bypass it. A resource that
+disappears remains `action_plan_drift`; an explicitly unavailable capability
+returns HTTP `409` with shared code `action_execution_unavailable` and bounded
+`resourceId`, `capabilityName`, `reasonCode`, and `reason` details. Pulse
+persists a terminal failed/no-effect audit and lifecycle event and publishes
+the normal completion notification. Executors without the optional checker,
+and checkers returning an empty readiness result, preserve the existing
+compatibility path. Registry or readiness-check infrastructure failures remain
+nonterminal internal errors rather than false permanent refusals.
+
 The public Patrol investigation boundary now carries independent
 `max_turns` and `max_evidence_calls` request limits and returns `model_turns`,
 `evidence_calls`, and total `tool_calls`. Persisted investigation sessions keep

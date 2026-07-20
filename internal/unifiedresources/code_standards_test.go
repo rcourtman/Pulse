@@ -924,6 +924,8 @@ func TestActionExecutionContractStaysAPIOwned(t *testing.T) {
 			"type AvailabilityChecker interface",
 			"CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness",
 			"func (s *Service) ValidatePlanFresh(orgID string, record unified.ActionAuditRecord) error",
+			"func (s *Service) ValidateExecutionAvailable(ctx context.Context, orgID string, record unified.ActionAuditRecord) error",
+			"ErrActionExecutionUnavailable",
 			"func (s *Service) ExecuteUnderPolicy(",
 			"func RecordRefusedExecution(store Store, record unified.ActionAuditRecord",
 			"func (s *Service) publishCompleted(record unified.ActionAuditRecord)",

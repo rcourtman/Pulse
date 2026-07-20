@@ -1955,6 +1955,20 @@ Agent` secondary handoff against the live setup wizard instead of relying
 
 ## Current State
 
+### Governed action readiness remains outside agent lifecycle authority
+
+The canonical Actions lifecycle may ask an executor-owned
+`AvailabilityChecker` whether an already-planned capability is still reachable
+immediately before human or automatic policy dispatch admission. Agent
+connectivity and command-agent loss are read-only readiness evidence at this
+boundary: an explicit unavailable result produces the stable
+`action_execution_unavailable` refusal, a terminal failed action audit and
+lifecycle event, and the normal action-completed publication without creating
+a dispatch attempt or issuing an agent command. The check does not enroll,
+reconnect, reconfigure, update, or otherwise mutate an agent, and it cannot
+replace canonical planning, approval, policy authorization, dispatch receipt,
+or verification.
+
 Shared `internal/api/ai_handlers.go` now projects separate Patrol investigation
 evidence-call and model-response budgets/counters. Those fields remain adjacent
 AI-runtime/API evidence only: agent enrollment, dispatch attempts, liveness,

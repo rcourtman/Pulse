@@ -63,16 +63,24 @@ func boundActionTestDecisionApproval(actionID, planHash, subject string, outcome
 }
 
 type stubActionExecutor struct {
-	result   *unified.ExecutionResult
-	err      error
-	received unified.ActionAuditRecord
-	calls    int
+	result    *unified.ExecutionResult
+	err       error
+	readiness *unified.ResourceActionReadiness
+	received  unified.ActionAuditRecord
+	calls     int
 }
 
 func (s *stubActionExecutor) ExecuteAction(_ context.Context, record unified.ActionAuditRecord) (*unified.ExecutionResult, error) {
 	s.calls++
 	s.received = record
 	return s.result, s.err
+}
+
+func (s *stubActionExecutor) CheckActionAvailable(_ context.Context, _ unified.ActionRequest, _ unified.Resource) unified.ResourceActionReadiness {
+	if s.readiness == nil {
+		return unified.ResourceActionReadiness{}
+	}
+	return *s.readiness
 }
 
 func TestHandlePlanActionBindsActorAndPlanHashToAuthenticatedOrg(t *testing.T) {
@@ -746,6 +754,118 @@ func TestHandleExecuteActionRunsApprovedPlanThroughExecutor(t *testing.T) {
 		!seen[unified.ActionStateExecuting] ||
 		!seen[unified.ActionStateCompleted] {
 		t.Fatalf("events = %#v, want full planned-to-completed lifecycle", events)
+	}
+}
+
+func TestHandleExecuteActionReturnsStableLostReadinessRefusal(t *testing.T) {
+	now := time.Date(2026, 7, 20, 20, 0, 0, 0, time.UTC)
+	h := newActionTestResourceHandlers(t, &config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID:        "vm:42",
+				Type:      unified.ResourceTypeVM,
+				Name:      "web-42",
+				Status:    unified.StatusWarning,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceProxmox},
+				Capabilities: []unified.ResourceCapability{
+					{
+						Name:                 "restart",
+						Type:                 unified.CapabilityTypeCommon,
+						Description:          "Restart the VM",
+						MinimumApprovalLevel: unified.ApprovalAdmin,
+						InternalHandler:      "proxmox.vm.restart",
+						Params: []unified.CapabilityParam{
+							{Name: "mode", Type: "string", Required: true, Enum: []string{"graceful", "force"}},
+						},
+					},
+				},
+			},
+		},
+	})
+	executor := &stubActionExecutor{
+		result:    &unified.ExecutionResult{Success: true, Output: "should not run"},
+		readiness: &unified.ResourceActionReadiness{Name: "restart", Available: true},
+	}
+	h.SetActionExecutor(executor)
+	published := make(chan unified.ActionAuditRecord, 1)
+	h.SetActionCompletedPublisher(func(record unified.ActionAuditRecord) { published <- record })
+
+	planRec := httptest.NewRecorder()
+	planReq := httptest.NewRequest(http.MethodPost, "/api/actions/plan", bytes.NewBufferString(`{
+		"requestId":"agent-run-readiness",
+		"resourceId":"vm:42",
+		"capabilityName":"restart",
+		"params":{"mode":"graceful"},
+		"reason":"Recover after confirmed outage"
+	}`))
+	h.HandlePlanAction(planRec, actionHandlerTestRequest(planReq, ""))
+	if planRec.Code != http.StatusOK {
+		t.Fatalf("plan status = %d, body=%s", planRec.Code, planRec.Body.String())
+	}
+	var plan unified.ActionPlan
+	if err := json.Unmarshal(planRec.Body.Bytes(), &plan); err != nil {
+		t.Fatalf("decode plan response: %v", err)
+	}
+
+	decisionRec := httptest.NewRecorder()
+	decisionReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/decision", bytes.NewBufferString(`{"outcome":"approved"}`))
+	decisionReq.SetPathValue("id", plan.ActionID)
+	h.HandleDecideAction(decisionRec, actionHandlerTestRequest(decisionReq, "operator@example.com"))
+	if decisionRec.Code != http.StatusOK {
+		t.Fatalf("decision status = %d, body=%s", decisionRec.Code, decisionRec.Body.String())
+	}
+
+	executor.readiness = &unified.ResourceActionReadiness{
+		Name:       "restart",
+		Available:  false,
+		ReasonCode: "command_agent_disconnected",
+		Reason:     "Proxmox node command agent is not connected.",
+	}
+	executeRec := httptest.NewRecorder()
+	executeReq := httptest.NewRequest(http.MethodPost, "/api/actions/"+plan.ActionID+"/execute", bytes.NewBufferString(`{}`))
+	executeReq.SetPathValue("id", plan.ActionID)
+	h.HandleExecuteAction(executeRec, actionHandlerTestRequest(executeReq, "operator@example.com"))
+	if executeRec.Code != http.StatusConflict {
+		t.Fatalf("execute status = %d, want %d, body=%s", executeRec.Code, http.StatusConflict, executeRec.Body.String())
+	}
+	if executor.calls != 0 {
+		t.Fatalf("executor calls = %d, want no dispatch", executor.calls)
+	}
+	var envelope struct {
+		Error   string            `json:"error"`
+		Details map[string]string `json:"details"`
+	}
+	if err := json.Unmarshal(executeRec.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode execution error: %v", err)
+	}
+	if envelope.Error != "action_execution_unavailable" ||
+		envelope.Details["resourceId"] != "vm:42" ||
+		envelope.Details["capabilityName"] != "restart" ||
+		envelope.Details["reasonCode"] != "command_agent_disconnected" ||
+		envelope.Details["reason"] != "Proxmox node command agent is not connected." {
+		t.Fatalf("execution error = %#v", envelope)
+	}
+
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get store: %v", err)
+	}
+	audit, ok, err := store.GetActionAudit(plan.ActionID)
+	if err != nil || !ok || audit.State != unified.ActionStateFailed || audit.Result == nil ||
+		!strings.HasPrefix(audit.Result.ErrorMessage, "action_execution_unavailable:") {
+		t.Fatalf("persisted audit = %#v ok=%v err=%v", audit, ok, err)
+	}
+	select {
+	case completed := <-published:
+		if completed.ID != plan.ActionID || completed.State != unified.ActionStateFailed {
+			t.Fatalf("published completion = %#v", completed)
+		}
+	default:
+		t.Fatal("expected terminal completion publication")
 	}
 }
 

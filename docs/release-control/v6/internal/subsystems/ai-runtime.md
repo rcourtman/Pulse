@@ -3901,6 +3901,18 @@ unassessed until deterministic remediation evals exist.
 
 ## Current State
 
+### Agent surfaces expose execution-time readiness refusal
+
+The canonical capability manifest and generated Pulse MCP documentation expose
+`action_execution_unavailable` on `execute_action` as a stable permanent
+refusal. Assistant and MCP clients may branch on that code after an approved
+plan loses executor-owned live readiness, but an adapter cannot retry around
+the terminal refusal, substitute a different capability, or dispatch through a
+provider-local path. The bounded human reason and provider reason code are
+diagnostic evidence only; the shared manifest remains the error-vocabulary
+owner, and canonical Actions remains the sole mutation plane for both human and
+automatic policy execution.
+
 First-session assistant discoverability is now a contract concern. Successful
 first-time provider setup (the Provider & Models setup modal) must open the
 Assistant drawer and refresh the session `assistantEnabled` capability in

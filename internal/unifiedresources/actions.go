@@ -571,6 +571,7 @@ var (
 	ErrActionPlanExpired                = errors.New("action plan expired")
 	ErrActionPlanNotExpired             = errors.New("action plan has not expired")
 	ErrActionDryRunOnly                 = errors.New("action plan is dry-run only")
+	ErrActionExecutionUnavailable       = errors.New("action execution unavailable")
 	ErrActionExecutionRefusal           = errors.New("action execution refusal is not a permanent terminal refusal")
 	ErrInvalidApprovalOutcome           = errors.New("invalid approval outcome")
 	ErrActionAuditAlreadyExists         = errors.New("action audit already exists")
@@ -1064,6 +1065,12 @@ func permanentActionExecutionRefusalMessage(reason error) (string, string, bool)
 		return "action_plan_expired", "action_plan_expired: action plan has expired; re-plan before executing", true
 	case errors.Is(reason, ErrActionDryRunOnly):
 		return "action_dry_run_only", "action_dry_run_only: action plan is dry-run only and cannot be executed", true
+	case errors.Is(reason, ErrActionExecutionUnavailable):
+		message := strings.TrimSpace(strings.TrimPrefix(reason.Error(), ErrActionExecutionUnavailable.Error()+":"))
+		if message == "" {
+			message = "action execution is unavailable; re-plan before executing"
+		}
+		return "action_execution_unavailable", "action_execution_unavailable: " + message, true
 	case errors.Is(reason, ErrResourceRemediationLocked):
 		return "resource_remediation_locked", "resource_remediation_locked: resource is operator-locked against automated remediation", true
 	case errors.Is(reason, ErrActionPolicyAuthorizationExpired):

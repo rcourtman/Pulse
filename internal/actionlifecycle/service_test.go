@@ -555,6 +555,40 @@ func TestPolicyAdmissionCommitsApprovalAndExecutingAtomicallySQLite(t *testing.T
 	runPolicyAdmissionCommitsAtomically(t, store)
 }
 
+func TestExecuteUnderPolicyRefusesLostReadinessBeforeAutomaticAdmission(t *testing.T) {
+	now := time.Now().UTC()
+	store := unified.NewMemoryStore()
+	executor := &stubExecutor{
+		result:    &unified.ExecutionResult{Success: true},
+		readiness: &unified.ResourceActionReadiness{Name: "restart", Available: true},
+	}
+	service := serviceForStore(t, store, testResource(now, unified.ApprovalAdmin), executor)
+	service.Now = func() time.Time { return now }
+	plan, err := service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor.readiness = &unified.ResourceActionReadiness{
+		Name:       "restart",
+		Available:  false,
+		ReasonCode: "command_agent_disconnected",
+		Reason:     "command agent disconnected",
+	}
+
+	failed, err := service.ExecuteUnderPolicy(context.Background(), "default", plan.ActionID, "pulse_patrol_policy", func(_ context.Context, record unified.ActionAuditRecord, at time.Time) (unified.ActionPolicyAuthorizationLease, string, error) {
+		return policyTestLease(record, at), "bounded policy", nil
+	})
+	if !errors.Is(err, unified.ErrActionExecutionUnavailable) || failed.State != unified.ActionStateFailed {
+		t.Fatalf("failed=%#v err=%v", failed, err)
+	}
+	if executor.calls != 0 || len(failed.Approvals) != 0 {
+		t.Fatalf("executor calls=%d approvals=%#v, want no dispatch or policy approval", executor.calls, failed.Approvals)
+	}
+	if _, found, getErr := store.GetActionDispatchAttempt(plan.ActionID); getErr != nil || found {
+		t.Fatalf("dispatch attempt found=%v err=%v, want none", found, getErr)
+	}
+}
+
 func runPolicyBarrierRevocations(t *testing.T, storeFactory func(t *testing.T) unified.ResourceStore) {
 	cases := []struct {
 		name   string
@@ -1172,6 +1206,44 @@ func TestExecuteRunsApprovedActionToTerminalAudit(t *testing.T) {
 	}
 	if record.State != unified.ActionStateCompleted || record.Result == nil || !record.Result.Success {
 		t.Fatalf("terminal audit = state %q result %#v", record.State, record.Result)
+	}
+}
+
+func TestExecuteRefusesLostReadinessBeforeAdmission(t *testing.T) {
+	now := time.Now().UTC()
+	env := newServiceEnv(t, testResource(now, unified.ApprovalNone))
+	env.executor.readiness = &unified.ResourceActionReadiness{Name: "restart", Available: true}
+
+	plan, err := env.service.Plan(context.Background(), "default", restartRequest(), testActionActor("requester", "default"))
+	if err != nil {
+		t.Fatalf("Plan: %v", err)
+	}
+	env.executor.readiness = &unified.ResourceActionReadiness{
+		Name:       "restart",
+		Available:  false,
+		ReasonCode: "command_agent_disconnected",
+		Reason:     "command agent disconnected",
+	}
+
+	failed, err := env.service.Execute(context.Background(), "default", plan.ActionID, testActionActor("requester", "default"), "")
+	var refused *AvailabilityRefusedError
+	if !errors.As(err, &refused) || !errors.Is(err, unified.ErrActionExecutionUnavailable) {
+		t.Fatalf("error = %v, want AvailabilityRefusedError wrapping ErrActionExecutionUnavailable", err)
+	}
+	if failed.State != unified.ActionStateFailed || failed.Result == nil ||
+		failed.Result.ActionResultV2 == nil ||
+		failed.Result.ActionResultV2.Execution.ReasonCode != "action_execution_unavailable" ||
+		!strings.HasPrefix(failed.Result.ErrorMessage, "action_execution_unavailable: command agent disconnected") {
+		t.Fatalf("failed audit = %#v", failed)
+	}
+	if env.executor.calls != 0 {
+		t.Fatalf("executor calls = %d, want no dispatch", env.executor.calls)
+	}
+	if len(env.completed) != 1 || env.completed[0].State != unified.ActionStateFailed {
+		t.Fatalf("completion publisher observed %#v", env.completed)
+	}
+	if _, found, getErr := env.store.GetActionDispatchAttempt(plan.ActionID); getErr != nil || found {
+		t.Fatalf("dispatch attempt found=%v err=%v, want none", found, getErr)
 	}
 }
 

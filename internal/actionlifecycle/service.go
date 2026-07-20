@@ -39,8 +39,9 @@ type DispatchBinder interface {
 	BindActionDispatch(ctx context.Context, record unified.ActionAuditRecord, attempt unified.ActionDispatchAttempt) (unified.ActionDispatchAttempt, error)
 }
 
-// AvailabilityChecker lets an executor contribute live readiness checks
-// before Pulse advertises or persists an executable action plan.
+// AvailabilityChecker lets an executor contribute read-only live readiness
+// checks before Pulse persists a plan and again immediately before dispatch
+// admission. It must not mutate the target or its agent connection.
 type AvailabilityChecker interface {
 	CheckActionAvailable(ctx context.Context, req unified.ActionRequest, resource unified.Resource) unified.ResourceActionReadiness
 }
@@ -269,8 +270,9 @@ func (e *CapabilityNotFoundError) Error() string {
 
 func (e *CapabilityNotFoundError) Unwrap() error { return actionplanner.ErrCapabilityNotFound }
 
-// AvailabilityRefusedError reports that the executor's live readiness check
-// refused the action before a plan was persisted.
+// AvailabilityRefusedError reports that an executor-owned live readiness
+// check explicitly refused the action. During planning no audit is persisted;
+// during execution the refusal is a permanent terminal no-effect result.
 type AvailabilityRefusedError struct {
 	ResourceID     string
 	CapabilityName string
@@ -282,8 +284,20 @@ func (e *AvailabilityRefusedError) Error() string {
 	if reason == "" {
 		reason = "action execution is unavailable"
 	}
-	return fmt.Sprintf("action %s on %s unavailable: %s", e.CapabilityName, e.ResourceID, reason)
+	return fmt.Sprintf("%s: %s", unified.ErrActionExecutionUnavailable, reason)
 }
+
+func (e *AvailabilityRefusedError) Unwrap() error { return unified.ErrActionExecutionUnavailable }
+
+// AvailabilityCheckError wraps an infrastructure failure while obtaining the
+// live resource or executor readiness. Explicit unavailability is represented
+// by AvailabilityRefusedError and must not be wrapped as transient.
+type AvailabilityCheckError struct{ Err error }
+
+func (e *AvailabilityCheckError) Error() string {
+	return fmt.Sprintf("action execution availability check: %v", e.Err)
+}
+func (e *AvailabilityCheckError) Unwrap() error { return e.Err }
 
 // PersistError wraps a storage write failure at a named lifecycle stage.
 type PersistError struct {
@@ -945,6 +959,18 @@ func (s *Service) Execute(ctx context.Context, orgID, actionID string, actor uni
 		}
 		return unified.ActionAuditRecord{}, &PolicyCheckError{Err: err}
 	}
+	if err := s.ValidateExecutionAvailable(ctx, orgID, record); err != nil {
+		if unified.IsPermanentActionExecutionRefusal(err) {
+			failed, persistErr := RecordRefusedExecution(store, record, actorID, now, err)
+			if persistErr != nil {
+				return unified.ActionAuditRecord{}, &PersistError{Op: "unavailable action execution refusal", Err: persistErr}
+			}
+			s.publishTransition(orgID, failed)
+			s.publishCompleted(failed)
+			return failed, err
+		}
+		return unified.ActionAuditRecord{}, &AvailabilityCheckError{Err: err}
+	}
 
 	started, startEvent, err := unified.BeginActionExecution(record, actorID, now)
 	if err != nil {
@@ -1065,6 +1091,13 @@ func (s *Service) beginPolicyExecution(ctx context.Context, orgID, actionID, act
 	if strings.TrimSpace(lease.OrgID) != strings.TrimSpace(orgID) || lease.ApprovalPolicy != record.Plan.ApprovalPolicy || lease.AutoAuthorization == unified.AutoAuthorizeNever || lease.ApprovalPolicy == unified.ApprovalDryRun || lease.ApprovalPolicy == unified.ApprovalMultiFactor {
 		failed, refuseErr := s.refusePolicyAdmission(store, orgID, record, actor, now, unified.ErrActionPolicyAuthorizationInvalid)
 		return failed, store, false, refuseErr
+	}
+	if err := s.ValidateExecutionAvailable(ctx, orgID, record); err != nil {
+		if unified.IsPermanentActionExecutionRefusal(err) {
+			failed, refuseErr := s.refusePolicyAdmission(store, orgID, record, actor, now, err)
+			return failed, store, false, refuseErr
+		}
+		return unified.ActionAuditRecord{}, store, false, &AvailabilityCheckError{Err: err}
 	}
 	started, approvedEvent, startEvent, err := unified.BeginPolicyActionExecution(record, unified.ActionApprovalRecord{Actor: actor, Reason: reason}, lease, now)
 	if err != nil {
@@ -1307,6 +1340,54 @@ func (s *Service) ValidatePlanFresh(orgID string, record unified.ActionAuditReco
 		return fmt.Errorf("%w: capability policy changed", unified.ErrActionPlanDrift)
 	}
 	return nil
+}
+
+const (
+	actionAvailabilityReasonCodeMaxRunes = 128
+	actionAvailabilityReasonMaxRunes     = 512
+)
+
+// ValidateExecutionAvailable resolves the current canonical resource and asks
+// the optional executor-owned readiness checker immediately before admission.
+// An absent checker or an empty readiness result preserves compatibility.
+func (s *Service) ValidateExecutionAvailable(ctx context.Context, orgID string, record unified.ActionAuditRecord) error {
+	checker, ok := s.Executor.(AvailabilityChecker)
+	if !ok {
+		return nil
+	}
+	normalized, err := unified.NormalizeActionAuditRecord(record)
+	if err != nil {
+		return fmt.Errorf("%w: %v", unified.ErrActionPlanDrift, err)
+	}
+	registry, err := s.registry(orgID)
+	if err != nil {
+		return err
+	}
+	resource, ok := registry.Get(normalized.Request.ResourceID)
+	if !ok || resource == nil {
+		return fmt.Errorf("%w: resource %q is no longer present", unified.ErrActionPlanDrift, normalized.Request.ResourceID)
+	}
+	readiness := checker.CheckActionAvailable(ctx, normalized.Request, *resource)
+	readiness.Name = strings.TrimSpace(readiness.Name)
+	readiness.ReasonCode = boundedActionAvailabilityText(readiness.ReasonCode, actionAvailabilityReasonCodeMaxRunes)
+	readiness.Reason = boundedActionAvailabilityText(readiness.Reason, actionAvailabilityReasonMaxRunes)
+	if readiness.Name == "" || readiness.Available {
+		return nil
+	}
+	return &AvailabilityRefusedError{
+		ResourceID:     normalized.Request.ResourceID,
+		CapabilityName: normalized.Request.CapabilityName,
+		Readiness:      readiness,
+	}
+}
+
+func boundedActionAvailabilityText(value string, maxRunes int) string {
+	value = strings.TrimSpace(value)
+	runes := []rune(value)
+	if maxRunes <= 0 || len(runes) <= maxRunes {
+		return value
+	}
+	return strings.TrimSpace(string(runes[:maxRunes-1])) + "…"
 }
 
 // validateExecutionPolicy enforces operator-set per-resource policy at the

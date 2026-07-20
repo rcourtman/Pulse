@@ -640,6 +640,7 @@ var (
 		AgentErrCodeActionExecutionFinal,
 		AgentErrCodeActionDryRunOnly,
 		AgentErrCodeActionPlanExpired,
+		AgentErrCodeActionExecutionUnavailable,
 		AgentErrCodeActionPlanDrift,
 		AgentErrCodeActionPlanIdentityMismatch,
 		AgentErrCodeResourceRemediationLocked,
@@ -1069,7 +1070,7 @@ var canonicalManifest = Manifest{
 		{
 			Name:             ExecuteActionCapabilityName,
 			Title:            "Execute action",
-			Description:      "Execute a previously planned and (when required) approved action. Returns the persisted audit record with the execution result attached. Refuses with stable codes when the action is in the wrong lifecycle state (action_not_approved, action_already_executing, action_execution_final, action_dry_run_only, action_plan_expired), when the approved plan no longer matches the current resource/capability contract (action_plan_drift), when the target is operator-locked against automated remediation (resource_remediation_locked), or when the API instance has no executor wired (action_executor_unavailable). action.completed SSE events fire on every terminal state so agents watching the stream do not need to poll this endpoint after dispatch.",
+			Description:      "Execute a previously planned and (when required) approved action. Returns the persisted audit record with the execution result attached. Refuses with stable codes when the action is in the wrong lifecycle state (action_not_approved, action_already_executing, action_execution_final, action_dry_run_only, action_plan_expired), when executor-owned live readiness is no longer available (action_execution_unavailable), when the approved plan no longer matches the current resource/capability contract (action_plan_drift), when the target is operator-locked against automated remediation (resource_remediation_locked), or when the API instance has no executor wired (action_executor_unavailable). Both human and automatic policy execution recheck readiness before dispatch admission. action.completed SSE events fire on every terminal state so agents watching the stream do not need to poll this endpoint after dispatch.",
 			Category:         "action",
 			Method:           http.MethodPost,
 			Path:             ActionExecutionCapabilityPath,

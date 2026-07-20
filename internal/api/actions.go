@@ -28,7 +28,7 @@ const maxPendingActionAudits = 100
 type ActionExecutor = actionlifecycle.Executor
 
 // ActionAvailabilityChecker is the API-facing name for the canonical
-// pre-plan readiness contract owned by internal/actionlifecycle.
+// plan-time and pre-dispatch readiness contract owned by actionlifecycle.
 type ActionAvailabilityChecker = actionlifecycle.AvailabilityChecker
 
 type actionDecisionRequest struct {
@@ -650,15 +650,26 @@ func writeActionExecuteError(w http.ResponseWriter, err error) {
 	var persist *actionlifecycle.PersistError
 	var freshness *actionlifecycle.FreshnessCheckError
 	var policy *actionlifecycle.PolicyCheckError
+	var availability *actionlifecycle.AvailabilityRefusedError
+	var availabilityCheck *actionlifecycle.AvailabilityCheckError
 	switch {
 	case errors.Is(err, actionlifecycle.ErrExecutorUnavailable):
 		writeJSONError(w, http.StatusNotImplemented, agentcapabilities.AgentErrCodeActionExecutorUnavailable, "No action executor is configured for this API instance")
+	case errors.As(err, &availability):
+		writeJSONErrorWithDetails(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionExecutionUnavailable, "Action execution is unavailable", map[string]string{
+			"resourceId":     availability.ResourceID,
+			"capabilityName": availability.CapabilityName,
+			"reasonCode":     availability.Readiness.ReasonCode,
+			"reason":         firstNonEmpty(availability.Readiness.Reason, "action execution is unavailable"),
+		})
 	case errors.As(err, &persist):
 		writeActionExecutionPersistError(w, err)
 	case errors.As(err, &freshness):
 		writeJSONError(w, http.StatusInternalServerError, "action_plan_validation_failed", sanitizeErrorForClient(err, "Failed to validate action plan freshness"))
 	case errors.As(err, &policy):
 		writeJSONError(w, http.StatusInternalServerError, "action_policy_validation_failed", sanitizeErrorForClient(err, "Failed to validate action policy"))
+	case errors.As(err, &availabilityCheck):
+		writeJSONError(w, http.StatusInternalServerError, agentcapabilities.AgentErrCodeActionReadinessCheckFailed, sanitizeErrorForClient(err, "Failed to validate action execution availability"))
 	default:
 		writeActionExecutionApplyError(w, err)
 	}
@@ -703,6 +714,8 @@ func writeActionExecutionApplyError(w http.ResponseWriter, err error) {
 		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanExpired, "Action plan has expired")
 	case errors.Is(err, unified.ErrActionDryRunOnly):
 		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionDryRunOnly, "Action plan is dry-run only and cannot be executed")
+	case errors.Is(err, unified.ErrActionExecutionUnavailable):
+		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionExecutionUnavailable, "Action execution is unavailable")
 	case errors.Is(err, unified.ErrActionPlanDrift):
 		writeJSONError(w, http.StatusConflict, agentcapabilities.AgentErrCodeActionPlanDrift, "Action plan no longer matches the current resource contract; re-plan before executing")
 	case errors.Is(err, unified.ErrResourceRemediationLocked):
