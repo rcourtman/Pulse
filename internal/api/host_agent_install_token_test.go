@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
 
 func decodeHostAgentInstallResponse(t *testing.T, rec *httptest.ResponseRecorder) AgentInstallCommandResponse {
@@ -99,5 +100,41 @@ func TestHandleAgentInstallCommand_HostOmitsTokenWhenAuthOptional(t *testing.T) 
 	}
 	if len(cfg.APITokens) != 0 {
 		t.Fatalf("expected optional-auth host install to avoid persisting API tokens")
+	}
+}
+
+func TestRouterSetupHandoffUsesCanonicalRuntimeConfig(t *testing.T) {
+	dataDir := t.TempDir()
+	runtimeConfig := &config.Config{DataPath: dataDir, ConfigPath: dataDir}
+	monitorConfig := &config.Config{DataPath: dataDir, ConfigPath: dataDir}
+
+	monitor, err := monitoring.New(monitorConfig)
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	t.Cleanup(monitor.Stop)
+
+	router := NewRouter(runtimeConfig, monitor, nil, nil, func() error { return nil }, "1.0.0")
+	t.Cleanup(router.shutdownBackgroundWorkers)
+
+	// The first-session security setup updates the Router-owned config after
+	// routes have already been wired. The agent-install handoff must observe
+	// that same canonical config instead of the monitor's startup snapshot.
+	config.Mu.Lock()
+	runtimeConfig.AuthUser = "admin"
+	runtimeConfig.AuthPass = "hashed-password"
+	config.Mu.Unlock()
+
+	body := []byte(`{"type":"host","enableCommands":false}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/agent-install-command", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	router.configHandlers.HandleAgentInstallCommand(rec, req)
+
+	resp := decodeHostAgentInstallResponse(t, rec)
+	if resp.Token == "" || resp.Record == nil {
+		t.Fatalf("expected setup handoff to create a scoped install token")
+	}
+	if got := router.configHandlers.getConfig(req.Context()); got != runtimeConfig {
+		t.Fatalf("config handler uses config %#v, want Router config %#v", got, runtimeConfig)
 	}
 }

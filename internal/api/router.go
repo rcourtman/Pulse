@@ -419,6 +419,7 @@ func (r *Router) setupRoutes() {
 	if r.monitor != nil {
 		r.configHandlers.SetMonitor(r.monitor)
 	}
+	r.configHandlers.SetConfig(r.config)
 	r.configHandlers.SetMockModeChangeHook(r.syncPlatformSupplementalProviders)
 	r.trueNASHandlers = &TrueNASHandlers{
 		getPersistence: r.configHandlers.getPersistence,
@@ -1474,6 +1475,7 @@ func (r *Router) SetMonitor(m *monitoring.Monitor) {
 	}
 	if r.configHandlers != nil {
 		r.configHandlers.SetMonitor(m)
+		r.configHandlers.SetConfig(r.config)
 	}
 	if r.notificationHandlers != nil {
 		r.notificationHandlers.SetMonitor(NewNotificationMonitorWrapper(m))

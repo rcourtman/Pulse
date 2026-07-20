@@ -86,6 +86,7 @@ func (r *Router) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 	r.mtMonitor = mtm
 	if r.configHandlers != nil {
 		r.configHandlers.SetMultiTenantMonitor(mtm)
+		r.configHandlers.SetConfig(r.config)
 	}
 	if r.alertHandlers != nil {
 		r.alertHandlers.SetMultiTenantMonitor(mtm)
