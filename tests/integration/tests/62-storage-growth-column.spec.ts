@@ -141,7 +141,7 @@ async function firstVisibleGrowthRow(
 // (24h) label for a pool matches the delta derived from the same 24h
 // used-capacity history the /api/storage-charts endpoint serves.
 test.describe.serial('Storage growth column', () => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
 
   test('renders storage-history growth deltas for the 24h window', async ({
     page,
@@ -165,7 +165,9 @@ test.describe.serial('Storage growth column', () => {
       timeout: 30_000,
     });
 
-    const probeResponse = await apiRequest(page, '/api/storage-charts?range=1440');
+    const probeResponse = await apiRequest(page, '/api/storage-charts?range=1440', {
+      timeout: 60_000,
+    });
     expect(probeResponse.ok()).toBeTruthy();
     const probePayload = (await probeResponse.json()) as StorageChartsResponse;
     const seriesId = await firstVisibleGrowthRow(page, probePayload);
@@ -179,7 +181,9 @@ test.describe.serial('Storage growth column', () => {
     // racing a single snapshot against the render.
     await expect
       .poll(async () => {
-        const response = await apiRequest(page, '/api/storage-charts?range=1440');
+        const response = await apiRequest(page, '/api/storage-charts?range=1440', {
+          timeout: 60_000,
+        });
         if (!response.ok()) return 'payload-error';
         const payload = (await response.json()) as StorageChartsResponse;
         const expected = growthLabelForPool(payload.pools?.[seriesId]);

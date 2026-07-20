@@ -170,6 +170,48 @@ func TestAppendMetric(t *testing.T) {
 	}
 }
 
+func TestAppendMetricSeriesMatchesPointAppendSemantics(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	timestamps := []time.Time{
+		now.Add(-2 * time.Hour),
+		now.Add(-45 * time.Minute),
+		now.Add(-30 * time.Minute),
+		now.Add(-15 * time.Minute),
+		now,
+	}
+	values := []float64{10, 20, 30, 40, 50}
+
+	pointHistory := NewMetricsHistory(3, time.Hour)
+	seriesHistory := NewMetricsHistory(3, time.Hour)
+	var pointResult []MetricPoint
+	for i := range values {
+		pointResult = pointHistory.appendMetric(pointResult, MetricPoint{
+			Value:     values[i],
+			Timestamp: timestamps[i],
+		})
+	}
+	seriesResult := seriesHistory.appendMetricSeries(nil, values, timestamps)
+
+	if len(seriesResult) != len(pointResult) {
+		t.Fatalf("series result length = %d, want %d", len(seriesResult), len(pointResult))
+	}
+	for i := range pointResult {
+		if seriesResult[i] != pointResult[i] {
+			t.Fatalf("series point %d = %+v, want %+v", i, seriesResult[i], pointResult[i])
+		}
+	}
+
+	replacement := []float64{99}
+	seriesResult = seriesHistory.appendMetricSeries(
+		seriesResult,
+		replacement,
+		[]time.Time{timestamps[len(timestamps)-1]},
+	)
+	if got := seriesResult[len(seriesResult)-1].Value; got != 99 {
+		t.Fatalf("duplicate terminal timestamp value = %v, want 99", got)
+	}
+}
+
 func TestMetricsHistoryStoresGuestAndNodeTemperature(t *testing.T) {
 	mh := NewMetricsHistory(10, time.Hour)
 	now := time.Now()

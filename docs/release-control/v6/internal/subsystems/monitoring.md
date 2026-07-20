@@ -928,6 +928,14 @@ The seed path must therefore include the canonical terminal `now` sample on
 its tiered timeline and anchor seeded series to the canonical metric model at
 that timestamp instead of to mutable state fields, so historical charts match
 the exact runtime history that would have been recorded live.
+Historical backfills must resolve resource identity, metric bounds, stable
+seed, speed, and role once per series, then append that ordered series to
+`MetricsHistory` under one series-level mutation. They must not repeat
+normalization, hashing, role lookup, locking, retention scans, and capacity
+checks independently for every point. Test harnesses must also bound mock seed
+duration to the deepest history window they actually prove; Core E2E owns a
+seven-day chart contract and must not make every parallel shard build the
+production-preview 90-day timeline.
 That means seeded history must sample the shared canonical mock runtime metric
 function at every historical timestamp for every mock-owned resource class.
 Monitoring must not approximate the past from snapshot/current values and then

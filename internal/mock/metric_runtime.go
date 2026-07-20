@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockmodel"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -220,6 +221,27 @@ func metricSpeed(metric string) float64 {
 func SampleMetric(resourceClass, resourceID, metric string, at time.Time) float64 {
 	min, max := MetricBoundsForResource(resourceClass, resourceID, metric)
 	return sampleNaturalMetric(resourceClass, resourceID, metric, min, max, metricSpeed(metric), at)
+}
+
+// SampleMetricSeries projects one canonical metric across a timestamp
+// sequence. The resource identity, bounds, seed, speed, and role are invariant
+// for the entire series, so resolve them once instead of repeating string
+// normalization, hashing, and registry lookups for every historical point.
+func SampleMetricSeries(resourceClass, resourceID, metric string, timestamps []time.Time) []float64 {
+	if len(timestamps) == 0 {
+		return nil
+	}
+
+	min, max := MetricBoundsForResource(resourceClass, resourceID, metric)
+	seed := MetricSeed(resourceClass, resourceID, metric)
+	speed := metricSpeed(metric)
+	role := MetricRole(resourceClass, resourceID)
+
+	values := make([]float64, len(timestamps))
+	for i, at := range timestamps {
+		values[i] = mockmodel.ValueAtMetricWithRole(seed, min, max, metric, speed, role, at)
+	}
+	return values
 }
 
 func SampleMetricInt(resourceClass, resourceID, metric string, at time.Time) int64 {

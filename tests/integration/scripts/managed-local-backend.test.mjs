@@ -167,6 +167,17 @@ test('multi-tenant release auth reuses storage state and classifies login rate l
   assert.match(helpers, /\/too many\/i\.test\(lastOutcome\) \? 15_000/);
 });
 
+test('shared browser readiness waits for the bounded mock history contract', async () => {
+  const helpers = await fs.readFile(path.join(integrationRoot, 'tests', 'helpers.ts'), 'utf8');
+  const compose = await fs.readFile(path.join(integrationRoot, 'docker-compose.test.yml'), 'utf8');
+
+  assert.match(compose, /PULSE_MOCK_TRENDS_SEED_DURATION=\$\{PULSE_MOCK_TRENDS_SEED_DURATION:-168h\}/);
+  assert.match(helpers, /"\/api\/storage-charts\?range=10080"/);
+  assert.match(helpers, /hasDeepSeries\(pool\.used\)/);
+  assert.match(helpers, /hasDeepSeries\(disk\.temperature\)/);
+  assert.match(helpers, /default mock history should cover the seven-day Core E2E chart window/);
+});
+
 test('multi-tenant release org switching waits for selected org UI state', async () => {
   const helpers = await fs.readFile(path.join(integrationRoot, 'tests', 'helpers.ts'), 'utf8');
 

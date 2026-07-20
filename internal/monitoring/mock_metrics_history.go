@@ -477,12 +477,7 @@ func canonicalMetricSeries(resourceType, resourceID, metric string, timestamps [
 	if len(timestamps) == 0 || strings.TrimSpace(resourceID) == "" {
 		return nil
 	}
-
-	values := make([]float64, len(timestamps))
-	for i, ts := range timestamps {
-		values[i] = mock.SampleMetric(resourceType, resourceID, metric, ts)
-	}
-	return values
+	return mock.SampleMetricSeries(resourceType, resourceID, metric, timestamps)
 }
 
 func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.FixtureGraph, now time.Time, seedDuration, interval time.Duration) {
@@ -606,16 +601,21 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		}
 
 		usageSeries := canonicalMetricSeries("storage", storageID, "usage", seedTimestamps)
+		usedSeries := make([]float64, numPoints)
+		availSeries := make([]float64, numPoints)
+		totalSeries := make([]float64, numPoints)
 		for i := 0; i < numPoints; i++ {
-			ts := seedTimestamps[i]
 			usage := clampFloat(usageSeries[i], 0, 100)
 			used := currentTotal * (usage / 100.0)
-			avail := math.Max(0, currentTotal-used)
-			mh.AddStorageMetric(storageID, "usage", usage, ts)
-			mh.AddStorageMetric(storageID, "used", used, ts)
-			mh.AddStorageMetric(storageID, "avail", avail, ts)
-			mh.AddStorageMetric(storageID, "total", currentTotal, ts)
+			usageSeries[i] = usage
+			usedSeries[i] = used
+			availSeries[i] = math.Max(0, currentTotal-used)
+			totalSeries[i] = currentTotal
 		}
+		mh.addStorageMetricSeries(storageID, "usage", usageSeries, seedTimestamps)
+		mh.addStorageMetricSeries(storageID, "used", usedSeries, seedTimestamps)
+		mh.addStorageMetricSeries(storageID, "avail", availSeries, seedTimestamps)
+		mh.addStorageMetricSeries(storageID, "total", totalSeries, seedTimestamps)
 		seedStoreStorageSeries(storageID, currentTotal)
 	}
 
@@ -628,12 +628,9 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		memSeries := canonicalMetricSeries("node", node.ID, "memory", seedTimestamps)
 		diskSeries := canonicalMetricSeries("node", node.ID, "disk", seedTimestamps)
 
-		for i := 0; i < numPoints; i++ {
-			ts := seedTimestamps[i]
-			mh.AddNodeMetric(node.ID, "cpu", cpuSeries[i], ts)
-			mh.AddNodeMetric(node.ID, "memory", memSeries[i], ts)
-			mh.AddNodeMetric(node.ID, "disk", diskSeries[i], ts)
-		}
+		mh.addNodeMetricSeries(node.ID, "cpu", cpuSeries, seedTimestamps)
+		mh.addNodeMetricSeries(node.ID, "memory", memSeries, seedTimestamps)
+		mh.addNodeMetricSeries(node.ID, "disk", diskSeries, seedTimestamps)
 		seedStoreSeries("node", node.ID, "cpu", "memory", "disk")
 	}
 
@@ -679,28 +676,19 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			netOutSeries = canonicalMetricSeries(storeType, storeID, "netout", seedTimestamps)
 		}
 
-		for i := 0; i < numPoints; i++ {
-			ts := seedTimestamps[i]
-			for _, metricID := range uniqueMetricIDs {
-				mh.AddGuestMetric(metricID, "cpu", cpuSeries[i], ts)
-				mh.AddGuestMetric(metricID, "memory", memSeries[i], ts)
-			}
+		for _, metricID := range uniqueMetricIDs {
+			mh.addGuestMetricSeries(metricID, "cpu", cpuSeries, seedTimestamps)
+			mh.addGuestMetricSeries(metricID, "memory", memSeries, seedTimestamps)
 			if includeDisk {
-				for _, metricID := range uniqueMetricIDs {
-					mh.AddGuestMetric(metricID, "disk", diskSeries[i], ts)
-				}
+				mh.addGuestMetricSeries(metricID, "disk", diskSeries, seedTimestamps)
 			}
 			if includeDiskIO {
-				for _, metricID := range uniqueMetricIDs {
-					mh.AddGuestMetric(metricID, "diskread", diskReadSeries[i], ts)
-					mh.AddGuestMetric(metricID, "diskwrite", diskWriteSeries[i], ts)
-				}
+				mh.addGuestMetricSeries(metricID, "diskread", diskReadSeries, seedTimestamps)
+				mh.addGuestMetricSeries(metricID, "diskwrite", diskWriteSeries, seedTimestamps)
 			}
 			if includeNetwork {
-				for _, metricID := range uniqueMetricIDs {
-					mh.AddGuestMetric(metricID, "netin", netInSeries[i], ts)
-					mh.AddGuestMetric(metricID, "netout", netOutSeries[i], ts)
-				}
+				mh.addGuestMetricSeries(metricID, "netin", netInSeries, seedTimestamps)
+				mh.addGuestMetricSeries(metricID, "netout", netOutSeries, seedTimestamps)
 			}
 		}
 
@@ -816,13 +804,10 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		busySeries := canonicalMetricSeries("disk", resourceID, "disk", seedTimestamps)
 		diskReadSeries := canonicalMetricSeries("disk", resourceID, "diskread", seedTimestamps)
 		diskWriteSeries := canonicalMetricSeries("disk", resourceID, "diskwrite", seedTimestamps)
-		for i := 0; i < numPoints; i++ {
-			ts := seedTimestamps[i]
-			mh.AddDiskMetric(resourceID, "smart_temp", tempSeries[i], ts)
-			mh.AddDiskMetric(resourceID, "disk", busySeries[i], ts)
-			mh.AddDiskMetric(resourceID, "diskread", diskReadSeries[i], ts)
-			mh.AddDiskMetric(resourceID, "diskwrite", diskWriteSeries[i], ts)
-		}
+		mh.addDiskMetricSeries(resourceID, "smart_temp", tempSeries, seedTimestamps)
+		mh.addDiskMetricSeries(resourceID, "disk", busySeries, seedTimestamps)
+		mh.addDiskMetricSeries(resourceID, "diskread", diskReadSeries, seedTimestamps)
+		mh.addDiskMetricSeries(resourceID, "diskwrite", diskWriteSeries, seedTimestamps)
 		seedStoreSeries("disk", resourceID, "smart_temp", "disk", "diskread", "diskwrite")
 	}
 
@@ -921,10 +906,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	for _, pool := range trueNASFixtures.Pools {
 		poolKey := mock.TrueNASPoolMetricID(trueNASFixtures.System.Hostname, pool.Name)
 		diskSeries := canonicalMetricSeries("storage", poolKey, "usage", seedTimestamps)
-		for i := 0; i < numPoints; i++ {
-			ts := seedTimestamps[i]
-			mh.AddGuestMetric(poolKey, "disk", diskSeries[i], ts)
-		}
+		mh.addGuestMetricSeries(poolKey, "disk", diskSeries, seedTimestamps)
 		recordStorageTimeline(poolKey, float64(pool.TotalBytes))
 	}
 
@@ -932,10 +914,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		dsKey := mock.TrueNASDatasetMetricID(trueNASFixtures.System.Hostname, dataset.Name)
 		totalBytes := dataset.UsedBytes + dataset.AvailBytes
 		diskSeries := canonicalMetricSeries("storage", dsKey, "usage", seedTimestamps)
-		for i := 0; i < numPoints; i++ {
-			ts := seedTimestamps[i]
-			mh.AddGuestMetric(dsKey, "disk", diskSeries[i], ts)
-		}
+		mh.addGuestMetricSeries(dsKey, "disk", diskSeries, seedTimestamps)
 		recordStorageTimeline(dsKey, float64(totalBytes))
 	}
 

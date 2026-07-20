@@ -79,6 +79,10 @@ services:
       # Mock mode is the default shared-estate contract. Dedicated lifecycle
       # jobs can disable it without maintaining a second compose definition.
       - PULSE_MOCK_MODE=${PULSE_MOCK_MODE:-true}
+      # Seven days is the deepest live-history window exercised by Core E2E.
+      # Keep the harness seed proportional to that contract instead of making
+      # every parallel shard build the production-preview 90-day timeline.
+      - PULSE_MOCK_TRENDS_SEED_DURATION=${PULSE_MOCK_TRENDS_SEED_DURATION:-168h}
       # Dev-only endpoints the suite depends on (first-run reset in the
       # first-session specs) are gated on development mode.
       - PULSE_DEV=true

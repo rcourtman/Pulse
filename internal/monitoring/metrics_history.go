@@ -171,6 +171,135 @@ func (mh *MetricsHistory) appendMetric(metrics []MetricPoint, point MetricPoint)
 	return metrics
 }
 
+// appendMetricSeries applies the same retention, duplicate-tail, and capacity
+// rules as appendMetric while amortizing them across a historical backfill.
+// Seed timestamps are ordered oldest-first, matching the live append contract.
+func (mh *MetricsHistory) appendMetricSeries(metrics []MetricPoint, values []float64, timestamps []time.Time) []MetricPoint {
+	count := len(values)
+	if len(timestamps) < count {
+		count = len(timestamps)
+	}
+	if count == 0 {
+		return metrics
+	}
+
+	for i := 0; i < count; i++ {
+		point := MetricPoint{Value: values[i], Timestamp: timestamps[i]}
+		if len(metrics) > 0 && metrics[len(metrics)-1].Timestamp.Equal(point.Timestamp) {
+			metrics[len(metrics)-1] = point
+		} else {
+			metrics = append(metrics, point)
+		}
+	}
+
+	cutoffTime := time.Now().Add(-mh.retentionTime)
+	firstRetained := sort.Search(len(metrics), func(i int) bool {
+		return metrics[i].Timestamp.After(cutoffTime)
+	})
+	if firstRetained == len(metrics) {
+		metrics = metrics[:0]
+	} else if firstRetained > 0 {
+		metrics = metrics[firstRetained:]
+	}
+
+	if len(metrics) > mh.maxDataPoints {
+		metrics = metrics[len(metrics)-mh.maxDataPoints:]
+	}
+	return metrics
+}
+
+func (mh *MetricsHistory) addGuestMetricSeries(guestID, metricType string, values []float64, timestamps []time.Time) {
+	mh.mu.Lock()
+	defer mh.mu.Unlock()
+
+	if _, exists := mh.guestMetrics[guestID]; !exists {
+		mh.guestMetrics[guestID] = &GuestMetrics{}
+	}
+	metrics := mh.guestMetrics[guestID]
+	switch metricType {
+	case "cpu":
+		metrics.CPU = mh.appendMetricSeries(metrics.CPU, values, timestamps)
+	case "memory":
+		metrics.Memory = mh.appendMetricSeries(metrics.Memory, values, timestamps)
+	case "disk":
+		metrics.Disk = mh.appendMetricSeries(metrics.Disk, values, timestamps)
+	case "diskread":
+		metrics.DiskRead = mh.appendMetricSeries(metrics.DiskRead, values, timestamps)
+	case "diskwrite":
+		metrics.DiskWrite = mh.appendMetricSeries(metrics.DiskWrite, values, timestamps)
+	case "netin":
+		metrics.NetworkIn = mh.appendMetricSeries(metrics.NetworkIn, values, timestamps)
+	case "netout":
+		metrics.NetworkOut = mh.appendMetricSeries(metrics.NetworkOut, values, timestamps)
+	case "temperature":
+		metrics.Temperature = mh.appendMetricSeries(metrics.Temperature, values, timestamps)
+	}
+}
+
+func (mh *MetricsHistory) addNodeMetricSeries(nodeID, metricType string, values []float64, timestamps []time.Time) {
+	mh.mu.Lock()
+	defer mh.mu.Unlock()
+
+	if _, exists := mh.nodeMetrics[nodeID]; !exists {
+		mh.nodeMetrics[nodeID] = &GuestMetrics{}
+	}
+	metrics := mh.nodeMetrics[nodeID]
+	switch metricType {
+	case "cpu":
+		metrics.CPU = mh.appendMetricSeries(metrics.CPU, values, timestamps)
+	case "memory":
+		metrics.Memory = mh.appendMetricSeries(metrics.Memory, values, timestamps)
+	case "disk":
+		metrics.Disk = mh.appendMetricSeries(metrics.Disk, values, timestamps)
+	case "netin":
+		metrics.NetworkIn = mh.appendMetricSeries(metrics.NetworkIn, values, timestamps)
+	case "netout":
+		metrics.NetworkOut = mh.appendMetricSeries(metrics.NetworkOut, values, timestamps)
+	case "temperature":
+		metrics.Temperature = mh.appendMetricSeries(metrics.Temperature, values, timestamps)
+	}
+}
+
+func (mh *MetricsHistory) addStorageMetricSeries(storageID, metricType string, values []float64, timestamps []time.Time) {
+	mh.mu.Lock()
+	defer mh.mu.Unlock()
+
+	if _, exists := mh.storageMetrics[storageID]; !exists {
+		mh.storageMetrics[storageID] = &StorageMetrics{}
+	}
+	metrics := mh.storageMetrics[storageID]
+	switch metricType {
+	case "usage":
+		metrics.Usage = mh.appendMetricSeries(metrics.Usage, values, timestamps)
+	case "used":
+		metrics.Used = mh.appendMetricSeries(metrics.Used, values, timestamps)
+	case "total":
+		metrics.Total = mh.appendMetricSeries(metrics.Total, values, timestamps)
+	case "avail":
+		metrics.Avail = mh.appendMetricSeries(metrics.Avail, values, timestamps)
+	}
+}
+
+func (mh *MetricsHistory) addDiskMetricSeries(resourceID, metricType string, values []float64, timestamps []time.Time) {
+	mh.mu.Lock()
+	defer mh.mu.Unlock()
+
+	if _, exists := mh.diskMetrics[resourceID]; !exists {
+		mh.diskMetrics[resourceID] = &DiskMetrics{}
+	}
+	metrics := mh.diskMetrics[resourceID]
+	switch metricType {
+	case "disk":
+		metrics.Utilization = mh.appendMetricSeries(metrics.Utilization, values, timestamps)
+	case "diskread":
+		metrics.DiskRead = mh.appendMetricSeries(metrics.DiskRead, values, timestamps)
+	case "diskwrite":
+		metrics.DiskWrite = mh.appendMetricSeries(metrics.DiskWrite, values, timestamps)
+	case "smart_temp":
+		metrics.Temperature = mh.appendMetricSeries(metrics.Temperature, values, timestamps)
+	}
+}
+
 // GetGuestMetrics returns historical metrics for a guest
 func (mh *MetricsHistory) GetGuestMetrics(guestID string, metricType string, duration time.Duration) []MetricPoint {
 	mh.mu.RLock()

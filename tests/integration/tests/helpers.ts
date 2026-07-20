@@ -1141,6 +1141,15 @@ type E2ERuntimeState = {
   resources?: E2ERuntimeStateResource[];
 };
 
+type E2EMetricPoint = {
+  timestamp?: number;
+};
+
+type E2EStorageCharts = {
+  pools?: Record<string, { used?: E2EMetricPoint[] }>;
+  disks?: Record<string, { temperature?: E2EMetricPoint[] }>;
+};
+
 const requiresDefaultMockRuntimeReadiness = (): boolean =>
   ["1", "true", "yes", "on"].includes(
     String(process.env.PULSE_E2E_REQUIRE_DEFAULT_MOCK_READY || "")
@@ -1201,6 +1210,52 @@ async function waitForDefaultMockRuntimeReady(page: Page): Promise<void> {
         message:
           "default mock inventory should be complete before browser fixtures start",
         timeout: 120_000,
+        intervals: [1_000, 2_000, 5_000],
+      },
+    )
+    .toBe(true);
+
+  const hasDeepSeries = (points: E2EMetricPoint[] | undefined): boolean => {
+    const timestamps = (points ?? [])
+      .map((point) => Number(point.timestamp))
+      .filter(Number.isFinite)
+      .sort((left, right) => left - right);
+    if (timestamps.length < 2) {
+      return false;
+    }
+    return timestamps[timestamps.length - 1] - timestamps[0] > 5 * 24 * 60 * 60 * 1000;
+  };
+
+  // Inventory becomes available before the monitor has finished building its
+  // historical mock timeline. Do not advertise the shared browser fixture as
+  // ready until the deepest Core E2E chart window is queryable for both pools
+  // and disks.
+  await expect
+    .poll(
+      async () => {
+        const response = await apiRequest(
+          page,
+          "/api/storage-charts?range=10080",
+          { timeout: 60_000 },
+        ).catch(() => null);
+        if (!response?.ok()) {
+          return false;
+        }
+
+        const charts = (await response.json()) as E2EStorageCharts;
+        return (
+          Object.values(charts.pools ?? {}).some((pool) =>
+            hasDeepSeries(pool.used),
+          ) &&
+          Object.values(charts.disks ?? {}).some((disk) =>
+            hasDeepSeries(disk.temperature),
+          )
+        );
+      },
+      {
+        message:
+          "default mock history should cover the seven-day Core E2E chart window before browser fixtures start",
+        timeout: 180_000,
         intervals: [1_000, 2_000, 5_000],
       },
     )

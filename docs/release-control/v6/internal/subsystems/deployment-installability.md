@@ -1826,6 +1826,13 @@ truth inside Playwright helpers. `tests/integration/tests/helpers.ts` may
 offer request trackers for browser-shell contract proofs, but those helpers
 must observe page-originated traffic only and must not blur browser runtime
 requests together with `page.request` or other direct API helper calls.
+The shared authenticated browser fixture must not report the default mock
+runtime ready from inventory alone while historical chart initialization is
+still running. When Core E2E requests the default mock-readiness gate, the
+helper must also prove that storage-pool and physical-disk history cover the
+suite's deepest seven-day chart window. The compose harness must seed that
+same seven-day window by default instead of forcing every parallel shard to
+build unrelated 90-day preview history.
 Managed runtime recovery and browser bootstrap proofs therefore need to keep
 helper coverage that demonstrates browser-shell request tracking remains
 trustworthy when the same test also performs direct health or security-status
