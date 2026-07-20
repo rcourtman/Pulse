@@ -6646,3 +6646,28 @@ acknowledgement flag. `internal/ai/patrol_metrics.go` compares the canonical
 active summary with the projected state set and increments one unlabeled
 low-cardinality mismatch counter on contradiction. It never labels metrics with
 resource, record, evidence, actor, or provider-instance identity.
+
+### Trust-gate manual Patrol acceptance
+
+An unscoped manual Patrol run is accepted only after `internal/ai/patrol.go`
+atomically reserves one execution slot and assigns the run ID and start time.
+That accepted identity is synchronously visible through Patrol status before
+the provider goroutine can emit its first event. A concurrent request therefore
+fails as already running instead of starting a second provider call. Once
+accepted, the run owns exactly one history record: provider or runtime setup
+failure is recorded against that run as an error outcome and must not be
+reclassified as an HTTP start failure or silently dropped.
+
+Acceptance authorizes analysis only. Any proposed customer-infrastructure
+mutation must still enter the canonical Actions lifecycle with its normal
+planning, approval, execution, audit, and verification boundaries; Patrol does
+not gain a parallel mutation plane from owning the run slot.
+
+`docs/AI_PATROL_QUALIFICATION.md` treats provider cold start as an explicit
+compatibility matrix. First provider events at 0, 15, 30, and 60 seconds must
+all retain the one accepted run identity, while the browser's delayed
+status/history read remains bounded and cannot trigger a replacement run.
+`internal/ai/patrol_manual_acceptance_test.go`,
+`internal/api/ai_handlers_patrol_actions_additional_test.go`, and
+`frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`
+are the focused acceptance, API, and cold-start timing proofs.

@@ -18,6 +18,8 @@ PATROL_PAGE_AND_STATE_EXACT_FILES = [
     "frontend-modern/src/features/patrol/__tests__/PatrolIntelligenceHeader.test.ts",
     "frontend-modern/src/features/patrol/__tests__/patrolControlPresentation.test.ts",
     "frontend-modern/src/features/patrol/__tests__/patrolInvestigationContextModel.test.ts",
+    "frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts",
+    "frontend-modern/src/features/patrol/__tests__/usePatrolIntelligenceState.test.ts",
     "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
     "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
     "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
@@ -1349,7 +1351,10 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            ["scripts/installtests/install_sh_test.go"],
+            [
+                "scripts/installtests/agent_state_dir_lifecycle_test.go",
+                "scripts/installtests/install_sh_test.go",
+            ],
         )
 
         match = by_subsystem["deployment-installability"]
@@ -1364,7 +1369,10 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            ["scripts/installtests/install_sh_test.go"],
+            [
+                "scripts/installtests/agent_state_dir_lifecycle_test.go",
+                "scripts/installtests/install_sh_test.go",
+            ],
         )
 
     def test_lookup_paths_assigns_docker_entrypoint_to_monitoring(self) -> None:
@@ -4136,9 +4144,30 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "internal/monitoring/issue1595_collection_trust_test.go",
                 "internal/monitoring/monitor_host_agents_test.go",
                 "internal/monitoring/monitor_package_updates_test.go",
                 "internal/unifiedresources/code_standards_test.go",
+            ],
+        )
+
+    def test_lookup_paths_assigns_diskinventory_to_monitoring_collection_trust(self) -> None:
+        result = lookup_paths(["pkg/diskinventory/identity.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+
+        match = result["files"][0]["matches"][0]
+        self.assertEqual(match["subsystem"], "monitoring")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "diskinventory-collection-trust",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "internal/hostagent/issue1595_sas_collection_test.go",
+                "internal/monitoring/issue1595_collection_trust_test.go",
+                "pkg/diskinventory/identity_test.go",
+                "pkg/diskinventory/status_test.go",
             ],
         )
 
@@ -4222,6 +4251,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "internal/monitoring/issue1595_collection_trust_test.go",
                 "internal/unifiedresources/availability_link_test.go",
                 "internal/unifiedresources/kubernetes_registry_test.go",
                 "internal/unifiedresources/pbs_pmg_registry_test.go",
@@ -4251,6 +4281,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             [
+                "internal/monitoring/issue1595_collection_trust_test.go",
                 "internal/unifiedresources/availability_link_test.go",
                 "internal/unifiedresources/kubernetes_registry_test.go",
                 "internal/unifiedresources/pbs_pmg_registry_test.go",
@@ -4437,6 +4468,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "internal/hostagent/commands_host_update_test.go",
                 "internal/hostagent/commands_storage_cleanup_test.go",
                 "internal/hostagent/docker_lifecycle_test.go",
+                "internal/hostagent/issue1595_sas_collection_test.go",
                 "internal/hostagent/observer_delivery_test.go",
                 "internal/hostagent/package_updates_test.go",
                 "internal/hostagent/send_report_test.go",

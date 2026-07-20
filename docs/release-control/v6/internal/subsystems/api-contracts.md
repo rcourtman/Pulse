@@ -7864,3 +7864,31 @@ projection. The browser cannot submit operational state, transition,
 evidence, actor, or subject identity. Action offers and planning additionally
 require the canonical `ai_autofix` entitlement and return the normal
 license-required `402` contract when it is absent.
+
+### Manual Patrol acceptance transport
+
+For an unscoped `POST /api/ai/patrol/run`, HTTP success means the server has
+atomically accepted one named run, not merely queued an attempt. The response
+retains the existing `success` and `message` fields and additively includes
+`accepted: true`, `run_id`, and `started_at`. The matching status payload
+exposes `running`, `current_run_id`, and `current_run_started_at` immediately,
+so a client can reconcile acceptance without waiting for a model-provider
+stream event.
+
+Pre-acceptance failures remain typed API failures: disabled Patrol and an
+already-running slot return `409` with `patrol_disabled` or
+`patrol_already_running`; the latter may include `current_run_id`. Readiness,
+scope-resolution, and cadence failures retain their existing typed rejection
+contracts. After acceptance, provider or runtime failure belongs to the run
+history as an error record and is not rewritten as a start rejection. Clients
+must also keep a transport/network failure distinct from a structured backend
+rejection.
+
+Scoped targeted checks retain their established scope-resolution response and
+do not claim the unscoped run-slot acceptance fields. All remediation remains
+on the canonical Actions API and lifecycle; accepting Patrol analysis does not
+authorize an alternate execution route.
+`internal/api/ai_handlers_patrol_actions_additional_test.go` proves the
+acceptance and typed-conflict payloads, while
+`frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`
+proves bounded status/history reconciliation against the returned run ID.

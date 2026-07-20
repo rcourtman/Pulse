@@ -1815,6 +1815,51 @@ through the canonical resource model, but unified-resource consumers must not
 reintroduce removed workload aliases or feature-local resource-type shims just
 to satisfy one table, drawer, or badge surface.
 
+### Physical-disk identity and collection read state
+
+`pkg/diskinventory` owns deterministic physical-disk fallback identity and
+field-level collection state. Serial remains preferred over WWN, and both
+remain preferred over device fallback. Direct SATA, SAS, and NVMe fallbacks
+retain their historical device-scoped shape; controller members sharing one
+block path add controller/target scope so they cannot collapse into one
+resource. Topology correlation is parent-scoped and ambiguity fails closed.
+
+Host reports, monitoring models, registry merges, typed physical-disk views,
+API resources, websocket/REST snapshot merges, and storage presentation must
+round-trip controller, target, per-member I/O, storage-group membership, and
+the five field statuses for serial, temperature, I/O, controller, and pool.
+`available` evidence wins over weaker observations per field. A current
+`unavailable`, `unsupported`, or `missing` state may retain a prior value for
+continuity, but the state and reason must survive so the consumer cannot claim
+fresh evidence or synthesize controller-level activity for one member.
+
+### Canonical identity succession
+
+Connection-backed TrueNAS systems keep connection-scoped canonical IDs across
+reported hostname or machine-identity changes, and separate connections with
+the same hostname remain distinct. Legacy hostname-derived IDs may be exposed
+as explicit `SupersededCanonicalIDs`; registry persistence may re-key owned
+operator state and delete the retired pin, while ordinary aliases remain
+read-only lookup compatibility. Identity pins from an unrelated Pulse Agent
+must not complete or merge a TrueNAS connection identity.
+
+`canonicalIdentity.supersededIds` is preserved across backend projection and
+thin/fresh frontend snapshot merges. Only this explicit succession set may
+authorize another subsystem to migrate durable keys. Unified resources owns
+identity and read-state truth, not alert configuration writes, Recovery
+Assurance, or customer-infrastructure mutation; canonical Actions remains the
+sole mutation plane.
+
+`pkg/diskinventory/identity_test.go`,
+`pkg/diskinventory/status_test.go`,
+`internal/hostagent/issue1595_sas_collection_test.go`,
+`internal/monitoring/issue1595_collection_trust_test.go`, and
+`internal/truenas/contract_test.go` prove identity, collection, registry
+read-state, and TrueNAS succession behavior.
+`frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts` and
+`frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts` prove
+browser projection and snapshot-merge continuity.
+
 ### Operational Trust relationship identity
 
 Operational Trust relationships use a stable normalized relationship ID and

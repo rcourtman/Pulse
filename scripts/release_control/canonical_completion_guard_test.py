@@ -231,6 +231,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "container-entrypoint-runtime",
                 "mock-runtime-fixtures",
                 "pbs-protection-evidence-runtime",
+                "diskinventory-collection-trust",
                 "monitoring-runtime",
             ],
         )
@@ -246,6 +247,8 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "internal/monitoring/availability_poller_test.go",
                         "internal/monitoring/canonical_guardrails_test.go",
+                        "internal/monitoring/issue1595_collection_trust_test.go",
+                        "internal/monitoring/monitor_alert_override_migration_test.go",
                         "internal/monitoring/monitor_backups_readstate_test.go",
                         "internal/monitoring/monitor_host_agents_test.go",
                         "internal/unifiedresources/code_standards_test.go",
@@ -339,6 +342,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "internal/monitoring/issue1595_collection_trust_test.go",
                         "internal/monitoring/monitor_host_agents_test.go",
                         "internal/monitoring/monitor_package_updates_test.go",
                         "internal/unifiedresources/code_standards_test.go",
@@ -378,6 +382,42 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
+    def test_diskinventory_runtime_uses_collection_trust_policy(self):
+        required = infer_impacted_subsystems(
+            [
+                "pkg/diskinventory/identity.go",
+                "pkg/diskinventory/status.go",
+            ]
+        )
+        self.assertEqual(set(required), {"monitoring"})
+
+        monitoring = required["monitoring"]
+        self.assertEqual(
+            monitoring["contract"],
+            "docs/release-control/v6/internal/subsystems/monitoring.md",
+        )
+        self.assertEqual(
+            monitoring["verification_requirements"],
+            [
+                {
+                    "id": "diskinventory-collection-trust",
+                    "label": "physical-disk collection trust and identity proof",
+                    "touched_runtime_files": [
+                        "pkg/diskinventory/identity.go",
+                        "pkg/diskinventory/status.go",
+                    ],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/hostagent/issue1595_sas_collection_test.go",
+                        "internal/monitoring/issue1595_collection_trust_test.go",
+                        "pkg/diskinventory/identity_test.go",
+                        "pkg/diskinventory/status_test.go",
+                    ],
+                }
+            ],
+        )
+
     def test_install_script_change_uses_unified_agent_installer_policy(self):
         required = infer_impacted_subsystems(["scripts/install.sh"])
         self.assertEqual(set(required), {"agent-lifecycle", "deployment-installability"})
@@ -401,6 +441,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "scripts/installtests/agent_state_dir_lifecycle_test.go",
                         "scripts/installtests/install_sh_test.go",
                     ],
                 }
@@ -425,6 +466,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "scripts/installtests/agent_state_dir_lifecycle_test.go",
                         "scripts/installtests/install_sh_test.go",
                     ],
                 }
@@ -556,6 +598,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "internal/hostagent/commands_host_update_test.go",
                         "internal/hostagent/commands_storage_cleanup_test.go",
                         "internal/hostagent/docker_lifecycle_test.go",
+                        "internal/hostagent/issue1595_sas_collection_test.go",
                         "internal/hostagent/observer_delivery_test.go",
                         "internal/hostagent/package_updates_test.go",
                         "internal/hostagent/send_report_test.go",
@@ -1026,6 +1069,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": ["frontend-modern/src/api/__tests__/"],
                     "exact_files": [
                         "frontend-modern/src/types/api.ts",
+                        "internal/api/ai_handlers_patrol_actions_additional_test.go",
                         "internal/api/contract_test.go",
                         "internal/api/patrol_autopilot_test.go",
                     ],
@@ -2114,6 +2158,7 @@ None yet.
                         "frontend-modern/src/features/alerts/__tests__/helpers.test.ts",
                         "frontend-modern/src/features/alerts/identity.test.ts",
                         "frontend-modern/src/features/alerts/thresholds/__tests__/helpers.test.ts",
+                        "frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx",
                         "frontend-modern/src/features/alerts/thresholds/hooks/__tests__/useThresholdsTableState.test.tsx",
                         "frontend-modern/src/pages/__tests__/Alerts.helpers.test.ts",
                         "frontend-modern/src/utils/__tests__/alertOverviewPresentation.test.ts",

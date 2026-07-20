@@ -5113,3 +5113,32 @@ after node replacement, reduced-motion behavior, and a no-overflow phone
 layout. Raw evidence history, lifecycle timeline, provider limitations, and
 action audit remain one disclosure or shared review deeper; no platform table
 or Assistant surface recreates these controls.
+
+### Trust-gate state presentation
+
+Shared frontend composition must preserve the typed domain state supplied by
+Patrol, alerts, storage, and unified resources rather than flattening it into a
+generic success/error or loading flag. After the backend accepts a manual
+Patrol run, the page leaves the transient Starting state using the accepted run
+identity and performs one bounded status/history reconciliation; a structured
+backend rejection remains distinct from a browser or network failure. Any
+action proposed from that run still hands off to the shared canonical Actions
+review instead of adding approve, execute, or retry-mutation controls to the
+Patrol feature.
+
+Storage detail primitives render physical-disk collection truth explicitly:
+temporarily unavailable, provider/controller unsupported, and unexpectedly
+missing evidence use different copy, and an unavailable per-disk I/O stream
+must not render an apparently live chart or synthetic zero counters. Alert
+threshold primitives similarly carry the current canonical override ID through
+edit, save, reload, and refetch while legacy IDs remain read-only compatibility
+candidates. Domain ownership stays with Patrol intelligence, storage recovery,
+alerts, and unified resources; the primitive layer owns consistent rendering,
+accessibility, and handoff behavior only.
+
+The focused browser proofs are
+`frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`,
+`frontend-modern/src/components/Storage/__tests__/DiskDetail.test.tsx`,
+`frontend-modern/src/components/Storage/__tests__/useDiskDetailModel.test.ts`,
+and
+`frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx`.

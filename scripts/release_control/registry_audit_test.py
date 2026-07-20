@@ -43,6 +43,96 @@ class RegistryAuditTest(unittest.TestCase):
         self.assertTrue(args.check)
         self.assertTrue(args.staged)
 
+    def test_trust_gate_regression_proofs_are_registered_to_exact_policies(self) -> None:
+        registry = registry_audit.load_registry_payload()
+        rules = {rule["id"]: rule for rule in registry["subsystems"]}
+
+        def policy(subsystem_id: str, policy_id: str) -> dict:
+            return next(
+                item
+                for item in rules[subsystem_id]["verification"]["path_policies"]
+                if item["id"] == policy_id
+            )
+
+        expected = {
+            ("agent-lifecycle", "pulse-agent-cli-entrypoint"): {
+                "scripts/installtests/agent_state_dir_lifecycle_test.go",
+            },
+            ("agent-lifecycle", "unified-agent-runtime"): {
+                "internal/hostagent/issue1595_sas_collection_test.go",
+            },
+            ("agent-lifecycle", "unified-agent-installer-runtime"): {
+                "scripts/installtests/agent_state_dir_lifecycle_test.go",
+            },
+            ("deployment-installability", "shell-installer-runtime"): {
+                "scripts/installtests/agent_state_dir_lifecycle_test.go",
+            },
+            ("ai-runtime", "patrol-qualification"): {
+                "frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts",
+                "internal/ai/patrol_manual_acceptance_test.go",
+            },
+            ("ai-runtime", "ai-api-surface"): {
+                "internal/api/ai_handlers_patrol_actions_additional_test.go",
+            },
+            ("alerts", "alerts-frontend-surface"): {
+                "frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx",
+            },
+            ("alerts", "alerts-runtime-support"): {
+                "internal/alerts/canonical_override_migration_test.go",
+                "internal/monitoring/monitor_alert_override_migration_test.go",
+            },
+            ("api-contracts", "backend-payload-contracts"): {
+                "internal/api/ai_handlers_patrol_actions_additional_test.go",
+            },
+            ("monitoring", "host-agent-ingest-runtime"): {
+                "internal/monitoring/issue1595_collection_trust_test.go",
+            },
+            ("monitoring", "runtime-report-model"): {
+                "internal/monitoring/issue1595_collection_trust_test.go",
+            },
+            ("monitoring", "monitoring-runtime"): {
+                "internal/monitoring/issue1595_collection_trust_test.go",
+                "internal/monitoring/monitor_alert_override_migration_test.go",
+            },
+            ("monitoring", "diskinventory-collection-trust"): {
+                "internal/hostagent/issue1595_sas_collection_test.go",
+                "internal/monitoring/issue1595_collection_trust_test.go",
+                "pkg/diskinventory/identity_test.go",
+                "pkg/diskinventory/status_test.go",
+            },
+            ("patrol-intelligence", "patrol-page-and-state"): {
+                "frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts",
+                "frontend-modern/src/features/patrol/__tests__/usePatrolIntelligenceState.test.ts",
+            },
+            ("storage-recovery", "storage-product-surface"): {
+                "frontend-modern/src/components/Storage/__tests__/DiskDetail.test.tsx",
+                "frontend-modern/src/components/Storage/__tests__/useDiskDetailModel.test.ts",
+                "frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts",
+            },
+            ("unified-resources", "identity-canonicalization"): {
+                "internal/hostagent/issue1595_sas_collection_test.go",
+                "internal/monitoring/issue1595_collection_trust_test.go",
+                "internal/truenas/contract_test.go",
+                "pkg/diskinventory/identity_test.go",
+                "pkg/diskinventory/status_test.go",
+            },
+            ("unified-resources", "read-state-views"): {
+                "internal/monitoring/issue1595_collection_trust_test.go",
+            },
+            ("unified-resources", "resource-runtime-adapter-helpers"): {
+                "frontend-modern/src/utils/__tests__/resourceStateAdapters.test.ts",
+            },
+            ("unified-resources", "platform-registry-runtime"): {
+                "internal/monitoring/issue1595_collection_trust_test.go",
+            },
+        }
+
+        for (subsystem_id, policy_id), proof_files in expected.items():
+            with self.subTest(subsystem=subsystem_id, policy=policy_id):
+                self.assertTrue(
+                    proof_files.issubset(set(policy(subsystem_id, policy_id)["exact_files"]))
+                )
+
     def test_patrol_autopilot_registry_uses_dedicated_proof_and_rejects_drift(self) -> None:
         registry = registry_audit.load_registry_payload()
         rules = {rule["id"]: rule for rule in registry["subsystems"]}

@@ -2121,3 +2121,28 @@ context. Evidence, impact, relationships, protection posture, lifecycle
 timeline, action origin, and verification truth remain linked to the same
 record. Mobile consumes the same list/detail and acknowledgement contracts; it
 does not revive the retired primary findings feed.
+
+### Accepted-run browser ownership
+
+`usePatrolIntelligenceState.ts` treats a successful unscoped start response as
+an accepted backend run identified by `run_id`, not as a request that remains
+Starting until the first provider event. It schedules one reconciliation after
+15 seconds, bounds the parallel status and history reads to 5 seconds, and
+accepts either a matching running status or the matching durable run record as
+authoritative. A provider/runtime error record remains a completed accepted run
+outcome. Missing data, refresh failure, backend rejection, and browser/network
+failure remain separate states and copy.
+
+Reconciliation is generation-aware and cancellable. Route changes, retries, or
+superseding starts cancel the old timer; stale completions cannot overwrite the
+current run, and reconciliation never starts a replacement provider call.
+Patrol state may present investigation and proposed-action context, but all
+customer-infrastructure mutations remain exclusively in the canonical Actions
+review and lifecycle.
+
+`frontend-modern/src/features/patrol/__tests__/patrolRunAcceptance.test.ts`
+proves 0/15/30/60-second provider-event timing, recorded failures, bounded hung
+reads, cancellation, and clean retry.
+`frontend-modern/src/features/patrol/__tests__/usePatrolIntelligenceState.test.ts`
+and `frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx` prove typed
+start-failure presentation and the accepted-run page transition.

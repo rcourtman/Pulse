@@ -2180,6 +2180,34 @@ while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
 
+### Physical-disk collection truth
+
+Storage surfaces consume the unified physical-disk collection contract without
+turning absence into health or activity. Serial identity, temperature, per-disk
+I/O, controller association, and pool membership each carry one of
+`available`, transiently `unavailable`, provider/controller `unsupported`, or
+unexpectedly `missing`, plus bounded source and reason detail. Retained prior
+values may remain visible as history, but their current collection state must
+remain explicit. In particular, members behind a shared controller must not
+inherit aggregate I/O counters, and a disk drawer must hide live-I/O charts
+when per-member collection is unavailable or unsupported.
+
+Direct SATA, SAS, and NVMe device fallback identities remain compatible.
+Controller-member fallback identities add controller/target scope only where
+needed to keep multiple members distinct; serial and WWN continue to take
+precedence. These rules belong to deterministic Collection Trust and
+read-state presentation. They do not establish backup coverage, restore
+readiness, or any other Recovery Assurance conclusion, and they introduce no
+storage mutation path outside canonical Actions.
+
+`internal/hostagent/issue1595_sas_collection_test.go` and
+`internal/monitoring/issue1595_collection_trust_test.go` prove wide-SAS
+collection, normalization, identity, and read-state retention.
+`frontend-modern/src/features/storageBackups/__tests__/diskPresentation.test.ts`,
+`frontend-modern/src/components/Storage/__tests__/DiskDetail.test.tsx`, and
+`frontend-modern/src/components/Storage/__tests__/useDiskDetailModel.test.ts`
+prove the distinct operator-facing states and live-I/O suppression.
+
 ### Operational Trust posture rollout
 
 Protection posture remains a provider-aware, subject-linked read model over

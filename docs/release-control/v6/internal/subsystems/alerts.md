@@ -1160,3 +1160,29 @@ Suppression is bounded and reasoned, leaves the default active queue, and
 remains inspectable. Expiry or explicit unsuppression returns the record to its
 detector-owned state; it never resolves it. Only fresh sufficient recovery
 evidence may enter resolving, and only detector recovery may resolve.
+
+### Canonical threshold-override succession
+
+Alert threshold overrides are persisted under the current canonical resource
+ID. `internal/alerts/canonical_override_migration.go` may re-home an override
+from a retired ID only when the unified-resource owner explicitly publishes
+that ID in `SupersededCanonicalIDs`. Display aliases, hostnames, metric
+targets, connection labels, and other lookup conveniences are not persistence
+authority. A still-live old ID or one old ID claimed by multiple current
+resources fails closed and remains untouched; when both keys exist, the current
+canonical override wins.
+
+Monitoring owns the synchronization point that applies this migration to the
+active alert configuration and persists it before later reloads. The frontend
+may read legacy connection-target keys as compatibility candidates, but save,
+edit, and delete operations target the resource's current canonical ID and
+retain that ID across refetches or reported-identity changes. This migration
+changes alert configuration only and does not create customer-infrastructure
+mutation authority outside canonical Actions.
+
+`internal/alerts/canonical_override_migration_test.go` proves the
+unambiguous/live/ambiguous decision matrix,
+`internal/monitoring/monitor_alert_override_migration_test.go` proves durable
+reload behavior, and
+`frontend-modern/src/features/alerts/thresholds/hooks/__tests__/truenasThresholdPersistence.test.tsx`
+proves the browser-side TrueNAS save/refetch contract.

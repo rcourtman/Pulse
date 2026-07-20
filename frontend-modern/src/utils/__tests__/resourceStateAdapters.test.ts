@@ -365,6 +365,38 @@ describe('resourceStateAdapters nodeFromResource', () => {
     expect(resource.platformScopes).toEqual(['proxmox-pve', 'docker']);
   });
 
+  it('preserves canonical identity succession across thin realtime merges', () => {
+    const existing = {
+      ...createNodeResource({ proxmox: { nodeName: 'pve-node-1' } }),
+      canonicalIdentity: {
+        primaryId: 'agent:connection-current',
+        aliases: ['agent-current', 'node-1'],
+        supersededIds: ['agent-retired-before-refresh'],
+      },
+    } as Resource;
+
+    const [resource] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          ...existing,
+          lastSeen: Date.now(),
+          canonicalIdentity: {
+            primaryId: 'agent:connection-current',
+            aliases: ['agent-current'],
+            supersededIds: ['agent-retired-in-refresh'],
+          },
+        } as Resource,
+      ],
+      [existing],
+    );
+
+    expect(resource.canonicalIdentity).toMatchObject({
+      primaryId: 'agent:connection-current',
+      aliases: ['agent-current', 'node-1'],
+      supersededIds: ['agent-retired-in-refresh', 'agent-retired-before-refresh'],
+    });
+  });
+
   it('canonicalizes agentless availability realtime resources as availability endpoints', () => {
     const [resource] = mergeCanonicalResourceSnapshot(
       [
