@@ -63,6 +63,64 @@ func NewMetricsHistory(maxDataPoints int, retentionTime time.Duration) *MetricsH
 	}
 }
 
+func (mh *MetricsHistory) clone() *MetricsHistory {
+	if mh == nil {
+		return nil
+	}
+
+	mh.mu.RLock()
+	defer mh.mu.RUnlock()
+
+	cloned := NewMetricsHistory(mh.maxDataPoints, mh.retentionTime)
+	for id, metrics := range mh.guestMetrics {
+		cloned.guestMetrics[id] = cloneGuestMetrics(metrics)
+	}
+	for id, metrics := range mh.nodeMetrics {
+		cloned.nodeMetrics[id] = cloneGuestMetrics(metrics)
+	}
+	for id, metrics := range mh.storageMetrics {
+		if metrics == nil {
+			cloned.storageMetrics[id] = nil
+			continue
+		}
+		cloned.storageMetrics[id] = &StorageMetrics{
+			Usage: append([]MetricPoint(nil), metrics.Usage...),
+			Used:  append([]MetricPoint(nil), metrics.Used...),
+			Total: append([]MetricPoint(nil), metrics.Total...),
+			Avail: append([]MetricPoint(nil), metrics.Avail...),
+		}
+	}
+	for id, metrics := range mh.diskMetrics {
+		if metrics == nil {
+			cloned.diskMetrics[id] = nil
+			continue
+		}
+		cloned.diskMetrics[id] = &DiskMetrics{
+			Temperature: append([]MetricPoint(nil), metrics.Temperature...),
+			Utilization: append([]MetricPoint(nil), metrics.Utilization...),
+			DiskRead:    append([]MetricPoint(nil), metrics.DiskRead...),
+			DiskWrite:   append([]MetricPoint(nil), metrics.DiskWrite...),
+		}
+	}
+	return cloned
+}
+
+func cloneGuestMetrics(metrics *GuestMetrics) *GuestMetrics {
+	if metrics == nil {
+		return nil
+	}
+	return &GuestMetrics{
+		CPU:         append([]MetricPoint(nil), metrics.CPU...),
+		Memory:      append([]MetricPoint(nil), metrics.Memory...),
+		Disk:        append([]MetricPoint(nil), metrics.Disk...),
+		DiskRead:    append([]MetricPoint(nil), metrics.DiskRead...),
+		DiskWrite:   append([]MetricPoint(nil), metrics.DiskWrite...),
+		NetworkIn:   append([]MetricPoint(nil), metrics.NetworkIn...),
+		NetworkOut:  append([]MetricPoint(nil), metrics.NetworkOut...),
+		Temperature: append([]MetricPoint(nil), metrics.Temperature...),
+	}
+}
+
 // Reset clears all historical metrics data.
 func (mh *MetricsHistory) Reset() {
 	mh.mu.Lock()

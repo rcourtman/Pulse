@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
@@ -34,6 +35,20 @@ type mockMetricsSamplerConfig struct {
 	// land in a metrics.db that also holds real history.
 	SeedStore bool
 }
+
+type mockMetricsSeedCacheKey struct {
+	fixtureRevision uint64
+	seedAtUnixNano  int64
+	seedDuration    time.Duration
+	sampleInterval  time.Duration
+	maxDataPoints   int
+}
+
+var mockMetricsSeedCache = struct {
+	sync.Mutex
+	key     mockMetricsSeedCacheKey
+	history *MetricsHistory
+}{}
 
 func mockMetricsSamplerConfigFromEnv() mockMetricsSamplerConfig {
 	seedDuration := parseDurationEnv("PULSE_MOCK_TRENDS_SEED_DURATION", defaultMockSeedDuration)
@@ -1003,6 +1018,43 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	log.Debug().Msg("mock seeding: completed")
 }
 
+func prepareMockMetricsHistory(
+	graph mock.FixtureGraph,
+	fixtureRevision uint64,
+	now time.Time,
+	seedDuration time.Duration,
+	interval time.Duration,
+	maxDataPoints int,
+	storeSink *metrics.Store,
+) (*MetricsHistory, bool) {
+	seedAt := normalizeMockMetricTimestamp(now, interval)
+	if storeSink != nil {
+		history := NewMetricsHistory(maxDataPoints, seedDuration)
+		seedMockMetricsHistory(history, storeSink, graph, seedAt, seedDuration, interval)
+		return history, false
+	}
+
+	key := mockMetricsSeedCacheKey{
+		fixtureRevision: fixtureRevision,
+		seedAtUnixNano:  seedAt.UnixNano(),
+		seedDuration:    seedDuration,
+		sampleInterval:  interval,
+		maxDataPoints:   maxDataPoints,
+	}
+
+	mockMetricsSeedCache.Lock()
+	defer mockMetricsSeedCache.Unlock()
+	if mockMetricsSeedCache.history != nil && mockMetricsSeedCache.key == key {
+		return mockMetricsSeedCache.history.clone(), true
+	}
+
+	template := NewMetricsHistory(maxDataPoints, seedDuration)
+	seedMockMetricsHistory(template, nil, graph, seedAt, seedDuration, interval)
+	mockMetricsSeedCache.key = key
+	mockMetricsSeedCache.history = template
+	return template.clone(), false
+}
+
 // recordTrueNASFixturesMetrics records live fixture ticks for TrueNAS host,
 // storage, and app-container metrics.
 func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixtures mock.PlatformFixtures, ts time.Time) {
@@ -1630,7 +1682,7 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 	m.metricsHistory = NewMetricsHistory(maxPoints, seedDuration)
 	m.mu.Unlock()
 
-	graph := mock.CurrentFixtureGraph()
+	graph, fixtureRevision := mock.CurrentFixtureGraphWithRevision()
 	state := graph.State
 	log.Info().
 		Int("nodes", len(state.Nodes)).
@@ -1653,7 +1705,21 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 			log.Warn().Msg("PULSE_MOCK_SEED_METRICS_STORE is set but the metrics store is unavailable; mock report history will stay empty")
 		}
 	}
-	seedMockMetricsHistory(m.metricsHistory, storeSink, graph, normalizeMockMetricTimestamp(time.Now(), cfg.SampleInterval), seedDuration, cfg.SampleInterval)
+	history, cacheHit := prepareMockMetricsHistory(
+		graph,
+		fixtureRevision,
+		time.Now(),
+		seedDuration,
+		cfg.SampleInterval,
+		maxPoints,
+		storeSink,
+	)
+	m.mu.Lock()
+	m.metricsHistory = history
+	m.mu.Unlock()
+	if cacheHit {
+		log.Info().Msg("Mock metrics sampler: reused cached historical seed")
+	}
 	m.invalidateMockChartCaches()
 	m.prewarmMockDashboardChartCaches()
 

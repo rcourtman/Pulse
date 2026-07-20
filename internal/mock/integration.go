@@ -16,16 +16,17 @@ import (
 )
 
 var (
-	dataMu        sync.RWMutex
-	setEnabledMu  sync.Mutex
-	updateLoopMu  sync.Mutex
-	mockGraph     = emptyFixtureGraph()
-	mockConfig    = DefaultConfig
-	enabled       atomic.Bool
-	updateEveryNS atomic.Int64
-	updateTicker  *time.Ticker
-	stopUpdatesCh chan struct{}
-	updateLoopWg  sync.WaitGroup
+	dataMu          sync.RWMutex
+	setEnabledMu    sync.Mutex
+	updateLoopMu    sync.Mutex
+	mockGraph       = emptyFixtureGraph()
+	mockConfig      = DefaultConfig
+	enabled         atomic.Bool
+	fixtureRevision atomic.Uint64
+	updateEveryNS   atomic.Int64
+	updateTicker    *time.Ticker
+	stopUpdatesCh   chan struct{}
+	updateLoopWg    sync.WaitGroup
 )
 
 func init() {
@@ -168,6 +169,7 @@ func enableMockMode(config MockConfig, fromInit bool) {
 	dataMu.Lock()
 	mockConfig = config
 	mockGraph = buildFixtureGraph(config, now)
+	fixtureRevision.Add(1)
 	enabled.Store(true)
 	dataMu.Unlock()
 	startUpdateLoop()
@@ -202,6 +204,7 @@ func disableMockMode() {
 
 	dataMu.Lock()
 	mockGraph = emptyFixtureGraph()
+	fixtureRevision.Add(1)
 	dataMu.Unlock()
 
 	log.Info().Msg("mock mode disabled")
@@ -474,6 +477,7 @@ func SetMockConfig(cfg MockConfig) {
 	setMockUpdateInterval(normalized.UpdateInterval)
 	if configChanged && enabled.Load() {
 		mockGraph = buildFixtureGraph(normalized, time.Now())
+		fixtureRevision.Add(1)
 	}
 	dataMu.Unlock()
 

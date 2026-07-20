@@ -101,14 +101,21 @@ func (g *FixtureGraph) UpdateAlertSnapshots(active []alerts.Alert, resolved []mo
 }
 
 func CurrentFixtureGraph() FixtureGraph {
-	if !IsMockEnabled() {
-		return emptyFixtureGraph()
-	}
+	graph, _ := CurrentFixtureGraphWithRevision()
+	return graph
+}
 
+// CurrentFixtureGraphWithRevision returns one coherent fixture snapshot and
+// its structural revision so downstream caches cannot pair an old graph with
+// a newer invalidation token.
+func CurrentFixtureGraphWithRevision() (FixtureGraph, uint64) {
 	dataMu.RLock()
 	defer dataMu.RUnlock()
 
-	return cloneFixtureGraph(mockGraph)
+	if !enabled.Load() {
+		return emptyFixtureGraph(), fixtureRevision.Load()
+	}
+	return cloneFixtureGraph(mockGraph), fixtureRevision.Load()
 }
 
 func currentOrDefaultPlatformFixtures() PlatformFixtures {
