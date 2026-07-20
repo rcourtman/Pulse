@@ -33,7 +33,10 @@ describe('AIAPI', () => {
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/settings/ai');
 
     apiFetchJSONMock.mockResolvedValueOnce({ configured: true } as any);
-    await AIAPI.updateSettings({ enabled: true, zai_base_url: 'https://api.z.ai/api/coding/paas/v4' });
+    await AIAPI.updateSettings({
+      enabled: true,
+      zai_base_url: 'https://api.z.ai/api/coding/paas/v4',
+    });
     expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/settings/ai/update', {
       method: 'PUT',
       body: JSON.stringify({ enabled: true, zai_base_url: 'https://api.z.ai/api/coding/paas/v4' }),
@@ -161,8 +164,7 @@ describe('AIAPI', () => {
           category: 'reliability',
           title: 'Service stalled',
           description: 'Service stopped responding again',
-          previous_resolved_fix_summary:
-            'Restart the workload service after backup window clears',
+          previous_resolved_fix_summary: 'Restart the workload service after backup window clears',
           detected_at: '2026-05-08T12:00:00Z',
         },
       ],

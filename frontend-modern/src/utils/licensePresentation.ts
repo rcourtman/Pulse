@@ -1092,8 +1092,7 @@ export const getCommercialMigrationNotice = (
         'Pulse detected a paid v5 license, but that key was rejected during v6 migration. Retrieve your current key at pulserelay.pro/retrieve-license if this purchase is still active.';
       break;
     case 'exchange_stale_key':
-      body =
-        'Pulse detected a paid v5 license, but this key has been superseded by a renewal.';
+      body = 'Pulse detected a paid v5 license, but this key has been superseded by a renewal.';
       break;
     case 'exchange_malformed':
       body = 'Pulse detected a v5-looking key, but it is malformed and cannot be migrated.';

@@ -74,7 +74,10 @@ describe('routeStateNavigation – branch coverage (schedule / clearScrollRestor
       scheduler.schedule('/proxmox/overview?type=vm');
       vi.runAllTimers();
 
-      expect(navigate).toHaveBeenCalledWith('/proxmox/overview?type=vm', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigate).toHaveBeenCalledWith(
+        '/proxmox/overview?type=vm',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
       expect(scrollToSpy).not.toHaveBeenCalled();
       // scrollRestoration is only flipped to 'manual' inside the restoreScroll
       // block, so the null arm leaves it untouched.

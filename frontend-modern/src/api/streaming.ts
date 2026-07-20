@@ -41,10 +41,7 @@ const yieldToBrowserPaint = () =>
     });
   });
 
-const shouldYieldAfterEvent = <T,>(
-  event: T,
-  options: JSONEventStreamOptions<T>,
-) => {
+const shouldYieldAfterEvent = <T>(event: T, options: JSONEventStreamOptions<T>) => {
   if (!options.yieldBetweenEvents) return false;
   if (typeof options.yieldBetweenEvents === 'function') {
     return options.yieldBetweenEvents(event);

@@ -26,7 +26,9 @@ const toneClasses: Record<DiscoveryReadinessPresentation['tone'], string> = {
     'border-border bg-surface-alt text-muted dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
 };
 
-const iconForState = (state: DiscoveryReadinessPresentation['state']): Component<{ class?: string }> => {
+const iconForState = (
+  state: DiscoveryReadinessPresentation['state'],
+): Component<{ class?: string }> => {
   switch (state) {
     case 'fresh':
       return CheckCircle2Icon;

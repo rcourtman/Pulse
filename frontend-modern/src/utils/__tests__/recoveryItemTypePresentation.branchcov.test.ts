@@ -151,9 +151,9 @@ describe('recoveryItemTypePresentation branch coverage', () => {
       expect(getRecoveryPointItemTypeKey(undefined)).toBe('');
       expect(getRecoveryPointItemTypeKey({})).toBe('');
       // Explicitly-null nested refs still resolve to ''.
-      expect(
-        getRecoveryPointItemTypeKey({ display: null, itemRef: null, subjectRef: null }),
-      ).toBe('');
+      expect(getRecoveryPointItemTypeKey({ display: null, itemRef: null, subjectRef: null })).toBe(
+        '',
+      );
     });
   });
 
@@ -182,9 +182,7 @@ describe('recoveryItemTypePresentation branch coverage', () => {
 
     it('returns the table badge classes for known keys', () => {
       const podTone = 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300';
-      expect(getRecoveryItemTypeBadgeClass('pod')).toBe(
-        `${TABLE_BADGE_BASE_CLASSES} ${podTone}`,
-      );
+      expect(getRecoveryItemTypeBadgeClass('pod')).toBe(`${TABLE_BADGE_BASE_CLASSES} ${podTone}`);
       expect(getRecoveryItemTypeBadgeClass('pvc')).toBe(
         `${TABLE_BADGE_BASE_CLASSES} ${DEFAULT_BADGE_TONE_CLASSES}`,
       );

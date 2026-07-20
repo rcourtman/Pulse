@@ -262,7 +262,11 @@ function OSInfoCell(props: { osName: string; osVersion: string; agentVersion: st
           </svg>
         );
       default:
-        return <span class="text-slate-400" aria-hidden="true">—</span>;
+        return (
+          <span class="text-slate-400" aria-hidden="true">
+            —
+          </span>
+        );
     }
   };
 
@@ -405,9 +409,7 @@ function InfoTooltipCell(props: { value: string; tooltip: string; type: string }
   );
 }
 
-function AvailabilityProbeCell(props: {
-  presentation: AvailabilityProbePresentation;
-}) {
+function AvailabilityProbeCell(props: { presentation: AvailabilityProbePresentation }) {
   const p = createMemo(() => props.presentation);
 
   const badgeText = createMemo(() => {
@@ -419,8 +421,7 @@ function AvailabilityProbeCell(props: {
         : result === 'not checked'
           ? 'pending'
           : result;
-    const freshness =
-      p().freshnessLabel === 'freshness unknown' ? 'unknown' : p().freshnessLabel;
+    const freshness = p().freshnessLabel === 'freshness unknown' ? 'unknown' : p().freshnessLabel;
     return `${compactResult} · ${freshness}`;
   });
 
@@ -436,4 +437,11 @@ function AvailabilityProbeCell(props: {
   );
 }
 
-export { AvailabilityProbeCell, BackupIndicator, BackupStatusCell, InfoTooltipCell, NetworkInfoCell, OSInfoCell };
+export {
+  AvailabilityProbeCell,
+  BackupIndicator,
+  BackupStatusCell,
+  InfoTooltipCell,
+  NetworkInfoCell,
+  OSInfoCell,
+};

@@ -57,12 +57,9 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     parsePeriod(new URLSearchParams(location.search).get('period'));
   const severityFilter: Accessor<AlertSeverityFilter> = () =>
     parseSeverity(new URLSearchParams(location.search).get('severity'));
-  const searchTerm: Accessor<string> = () =>
-    new URLSearchParams(location.search).get('q') ?? '';
+  const searchTerm: Accessor<string> = () => new URLSearchParams(location.search).get('q') ?? '';
 
-  const updateSearchParam = (
-    mutate: (params: URLSearchParams) => void,
-  ): void => {
+  const updateSearchParam = (mutate: (params: URLSearchParams) => void): void => {
     const params = new URLSearchParams(location.search);
     mutate(params);
     const query = params.toString();
@@ -258,7 +255,9 @@ export function useAlertHistoryState(props: UseAlertHistoryStateProps) {
     return groupAlertHistoryItems(alertData());
   });
 
-  const bucketDurationLabel = createMemo(() => getAlertBucketDurationLabel(alertTrends().bucketSize));
+  const bucketDurationLabel = createMemo(() =>
+    getAlertBucketDurationLabel(alertTrends().bucketSize),
+  );
 
   const rangeSummary = createMemo(() => {
     return buildAlertRangeSummary(alertTrends(), userLocale);

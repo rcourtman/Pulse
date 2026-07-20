@@ -20,21 +20,10 @@ import {
   getStorageRecordType,
   getStorageRecordUsagePercent,
 } from './recordPresentation';
-import {
-  getCompactStoragePoolProtectionLabel,
-  getStoragePoolStateLabel,
-} from './rowPresentation';
+import { getCompactStoragePoolProtectionLabel, getStoragePoolStateLabel } from './rowPresentation';
 
 export type StorageSortKey =
-  | 'priority'
-  | 'name'
-  | 'state'
-  | 'source'
-  | 'type'
-  | 'host'
-  | 'protection'
-  | 'usage'
-  | 'growth';
+  'priority' | 'name' | 'state' | 'source' | 'type' | 'host' | 'protection' | 'usage' | 'growth';
 export type StorageGroupKey = 'node' | 'type' | 'status' | 'none';
 
 export type StorageSortContext = {

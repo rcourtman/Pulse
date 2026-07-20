@@ -28,33 +28,19 @@ describe('buttonModel.branchcov2', () => {
       // Drives the `options: ButtonClassOptions = {}` default-parameter arm
       // and both `??` right arms (variant -> 'secondary', size -> 'md').
       expect(getButtonClass()).toBe(
-        [
-          BUTTON_BASE_CLASS,
-          BUTTON_VARIANT_CLASSES.secondary,
-          BUTTON_SIZE_CLASSES.md,
-        ].join(' '),
+        [BUTTON_BASE_CLASS, BUTTON_VARIANT_CLASSES.secondary, BUTTON_SIZE_CLASSES.md].join(' '),
       );
     });
 
     it('uses the ?? right arms for variant and size when called with an empty options object', () => {
       expect(getButtonClass({})).toBe(
-        [
-          BUTTON_BASE_CLASS,
-          BUTTON_VARIANT_CLASSES.secondary,
-          BUTTON_SIZE_CLASSES.md,
-        ].join(' '),
+        [BUTTON_BASE_CLASS, BUTTON_VARIANT_CLASSES.secondary, BUTTON_SIZE_CLASSES.md].join(' '),
       );
     });
 
     it('selects the explicit variant and size when provided (?? left arms)', () => {
-      expect(
-        getButtonClass({ variant: 'primary', size: 'lg' }),
-      ).toBe(
-        [
-          BUTTON_BASE_CLASS,
-          BUTTON_VARIANT_CLASSES.primary,
-          BUTTON_SIZE_CLASSES.lg,
-        ].join(' '),
+      expect(getButtonClass({ variant: 'primary', size: 'lg' })).toBe(
+        [BUTTON_BASE_CLASS, BUTTON_VARIANT_CLASSES.primary, BUTTON_SIZE_CLASSES.lg].join(' '),
       );
     });
 
@@ -75,11 +61,7 @@ describe('buttonModel.branchcov2', () => {
       'outline',
     ])('resolves the %s variant from BUTTON_VARIANT_CLASSES', (variant) => {
       expect(getButtonClass({ variant })).toBe(
-        [
-          BUTTON_BASE_CLASS,
-          BUTTON_VARIANT_CLASSES[variant],
-          BUTTON_SIZE_CLASSES.md,
-        ].join(' '),
+        [BUTTON_BASE_CLASS, BUTTON_VARIANT_CLASSES[variant], BUTTON_SIZE_CLASSES.md].join(' '),
       );
     });
 
@@ -95,11 +77,7 @@ describe('buttonModel.branchcov2', () => {
       'iconMd',
     ])('resolves the %s size from BUTTON_SIZE_CLASSES', (size) => {
       expect(getButtonClass({ size })).toBe(
-        [
-          BUTTON_BASE_CLASS,
-          BUTTON_VARIANT_CLASSES.secondary,
-          BUTTON_SIZE_CLASSES[size],
-        ].join(' '),
+        [BUTTON_BASE_CLASS, BUTTON_VARIANT_CLASSES.secondary, BUTTON_SIZE_CLASSES[size]].join(' '),
       );
     });
 
@@ -118,11 +96,7 @@ describe('buttonModel.branchcov2', () => {
       // Defensive branch: empty string is falsy and must not contribute a
       // trailing space to the joined output.
       expect(getButtonClass({ class: '' })).toBe(
-        [
-          BUTTON_BASE_CLASS,
-          BUTTON_VARIANT_CLASSES.secondary,
-          BUTTON_SIZE_CLASSES.md,
-        ].join(' '),
+        [BUTTON_BASE_CLASS, BUTTON_VARIANT_CLASSES.secondary, BUTTON_SIZE_CLASSES.md].join(' '),
       );
     });
 
@@ -132,27 +106,19 @@ describe('buttonModel.branchcov2', () => {
       // 'undefined' token or double space appears.
       const bogus = 'not-a-real-variant' as unknown as ButtonVariant;
       expect(getButtonClass({ variant: bogus })).toBe(
-        [
-          BUTTON_BASE_CLASS,
-          BUTTON_SIZE_CLASSES.md,
-        ].join(' '),
+        [BUTTON_BASE_CLASS, BUTTON_SIZE_CLASSES.md].join(' '),
       );
     });
 
     it('drops an unknown size lookup (undefined) via .filter(Boolean)', () => {
       const bogus = 'not-a-real-size' as unknown as ButtonSize;
       expect(getButtonClass({ size: bogus })).toBe(
-        [
-          BUTTON_BASE_CLASS,
-          BUTTON_VARIANT_CLASSES.secondary,
-        ].join(' '),
+        [BUTTON_BASE_CLASS, BUTTON_VARIANT_CLASSES.secondary].join(' '),
       );
     });
 
     it('combines an explicit variant, size, and class together', () => {
-      expect(
-        getButtonClass({ variant: 'danger', size: 'icon', class: 'rounded-full' }),
-      ).toBe(
+      expect(getButtonClass({ variant: 'danger', size: 'icon', class: 'rounded-full' })).toBe(
         [
           BUTTON_BASE_CLASS,
           BUTTON_VARIANT_CLASSES.danger,
@@ -186,9 +152,7 @@ describe('buttonModel.branchcov2', () => {
     });
 
     it('selects the explicit variant and size when provided (?? left arms)', () => {
-      expect(
-        getCopyValueButtonClass({ variant: 'accent', size: 'sm' }),
-      ).toBe(
+      expect(getCopyValueButtonClass({ variant: 'accent', size: 'sm' })).toBe(
         [
           COPY_VALUE_BUTTON_BASE_CLASS,
           COPY_VALUE_BUTTON_VARIANT_CLASSES.accent,
@@ -247,27 +211,19 @@ describe('buttonModel.branchcov2', () => {
     it('drops an unknown variant lookup (undefined) via .filter(Boolean)', () => {
       const bogus = 'nope' as unknown as CopyValueButtonVariant;
       expect(getCopyValueButtonClass({ variant: bogus })).toBe(
-        [
-          COPY_VALUE_BUTTON_BASE_CLASS,
-          COPY_VALUE_BUTTON_SIZE_CLASSES.md,
-        ].join(' '),
+        [COPY_VALUE_BUTTON_BASE_CLASS, COPY_VALUE_BUTTON_SIZE_CLASSES.md].join(' '),
       );
     });
 
     it('drops an unknown size lookup (undefined) via .filter(Boolean)', () => {
       const bogus = 'xl' as unknown as CopyValueButtonSize;
       expect(getCopyValueButtonClass({ size: bogus })).toBe(
-        [
-          COPY_VALUE_BUTTON_BASE_CLASS,
-          COPY_VALUE_BUTTON_VARIANT_CLASSES.neutral,
-        ].join(' '),
+        [COPY_VALUE_BUTTON_BASE_CLASS, COPY_VALUE_BUTTON_VARIANT_CLASSES.neutral].join(' '),
       );
     });
 
     it('combines an explicit variant, size, and class together', () => {
-      expect(
-        getCopyValueButtonClass({ variant: 'chip', size: 'chip', class: 'tag-cls' }),
-      ).toBe(
+      expect(getCopyValueButtonClass({ variant: 'chip', size: 'chip', class: 'tag-cls' })).toBe(
         [
           COPY_VALUE_BUTTON_BASE_CLASS,
           COPY_VALUE_BUTTON_VARIANT_CLASSES.chip,
@@ -302,9 +258,7 @@ describe('buttonModel.branchcov2', () => {
     });
 
     it('selects the explicit tone and size when provided (?? left arms)', () => {
-      expect(
-        getActionIconButtonClass({ tone: 'primary', size: 'md' }),
-      ).toBe(
+      expect(getActionIconButtonClass({ tone: 'primary', size: 'md' })).toBe(
         [
           ACTION_ICON_BUTTON_BASE_CLASS,
           ACTION_ICON_BUTTON_TONE_CLASSES.primary,
@@ -373,27 +327,19 @@ describe('buttonModel.branchcov2', () => {
     it('drops an unknown tone lookup (undefined) via .filter(Boolean)', () => {
       const bogus = 'hyper' as unknown as ActionIconButtonTone;
       expect(getActionIconButtonClass({ tone: bogus })).toBe(
-        [
-          ACTION_ICON_BUTTON_BASE_CLASS,
-          ACTION_ICON_BUTTON_SIZE_CLASSES.sm,
-        ].join(' '),
+        [ACTION_ICON_BUTTON_BASE_CLASS, ACTION_ICON_BUTTON_SIZE_CLASSES.sm].join(' '),
       );
     });
 
     it('drops an unknown size lookup (undefined) via .filter(Boolean)', () => {
       const bogus = '3xl' as unknown as ActionIconButtonSize;
       expect(getActionIconButtonClass({ size: bogus })).toBe(
-        [
-          ACTION_ICON_BUTTON_BASE_CLASS,
-          ACTION_ICON_BUTTON_TONE_CLASSES.neutral,
-        ].join(' '),
+        [ACTION_ICON_BUTTON_BASE_CLASS, ACTION_ICON_BUTTON_TONE_CLASSES.neutral].join(' '),
       );
     });
 
     it('combines an explicit tone, size, and class together', () => {
-      expect(
-        getActionIconButtonClass({ tone: 'danger', size: 'xs', class: 'ring-2' }),
-      ).toBe(
+      expect(getActionIconButtonClass({ tone: 'danger', size: 'xs', class: 'ring-2' })).toBe(
         [
           ACTION_ICON_BUTTON_BASE_CLASS,
           ACTION_ICON_BUTTON_TONE_CLASSES.danger,

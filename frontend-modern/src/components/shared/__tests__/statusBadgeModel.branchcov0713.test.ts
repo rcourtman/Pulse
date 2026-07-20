@@ -203,17 +203,20 @@ describe('statusBadgeModel.branchcov0713', () => {
         },
       ];
 
-      it.each(cases)('$name produces the exact class string', ({ size, isEnabled, disabled, stateClass }) => {
-        const expected = [
-          STATUS_BADGE_BASE_CLASS,
-          STATUS_BADGE_PADDING_BY_SIZE[size],
-          stateClass,
-          disabled ? STATUS_BADGE_INTERACTION_DISABLED_CLASS : '',
-        ]
-          .join(' ')
-          .trim();
-        expect(getStatusBadgeClass(size, isEnabled, disabled)).toBe(expected);
-      });
+      it.each(cases)(
+        '$name produces the exact class string',
+        ({ size, isEnabled, disabled, stateClass }) => {
+          const expected = [
+            STATUS_BADGE_BASE_CLASS,
+            STATUS_BADGE_PADDING_BY_SIZE[size],
+            stateClass,
+            disabled ? STATUS_BADGE_INTERACTION_DISABLED_CLASS : '',
+          ]
+            .join(' ')
+            .trim();
+          expect(getStatusBadgeClass(size, isEnabled, disabled)).toBe(expected);
+        },
+      );
 
       it.each(cases)(
         '$name has no double spaces and no leading/trailing whitespace',
@@ -243,9 +246,7 @@ describe('statusBadgeModel.branchcov0713', () => {
         // The undefined lookup contributes an empty string; the surrounding
         // separators collapse into a literal double space between the base
         // class and the enabled-state class.
-        expect(result).toBe(
-          `${STATUS_BADGE_BASE_CLASS}  ${STATUS_BADGE_ENABLED_CLASS}`,
-        );
+        expect(result).toBe(`${STATUS_BADGE_BASE_CLASS}  ${STATUS_BADGE_ENABLED_CLASS}`);
         expect(result).toMatch(/\s{2,}/);
       });
 

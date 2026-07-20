@@ -147,9 +147,7 @@ export const NetworkBoundarySettingsSection: Component<NetworkBoundarySettingsSe
           </svg>
           Embedding
         </h4>
-        <p class="text-xs text-muted">
-          Allow Pulse to be embedded in iframes (e.g., Homepage)
-        </p>
+        <p class="text-xs text-muted">Allow Pulse to be embedded in iframes (e.g., Homepage)</p>
         <div class="space-y-3">
           <div class="flex items-center gap-2">
             <input

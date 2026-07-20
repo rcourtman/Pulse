@@ -4,10 +4,7 @@ import {
   getResourceMetricsHistoryFallbackMetrics,
   getResourceMetricsHistoryTarget,
 } from '@/components/Infrastructure/resourceDetailDrawerMetricsHistoryModel';
-import type {
-  MetricsHistoryTargetResourceType,
-  Resource,
-} from '@/types/resource';
+import type { MetricsHistoryTargetResourceType, Resource } from '@/types/resource';
 
 // Minimal valid Resource fixture; mirrors the baseResource() convention used by
 // sibling branchcov tests in this directory.

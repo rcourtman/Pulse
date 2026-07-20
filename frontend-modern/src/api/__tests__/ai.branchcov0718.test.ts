@@ -129,7 +129,10 @@ describe('AIAPI branch coverage (request shaping + response handling)', () => {
     });
 
     it('forwards an explicit json format while keeping the days default', async () => {
-      const stub = new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } });
+      const stub = new Response('[]', {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
       apiFetchMock.mockResolvedValueOnce(stub);
 
       await AIAPI.exportCostHistory(30, 'json');

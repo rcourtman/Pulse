@@ -592,9 +592,7 @@ export const useConnectionsLedger = (): ConnectionsLedger => {
             ...(primary?.hostAliases ?? []),
           ];
           if (
-            candidates.some(
-              (value) => value && clusterMemberHosts.has(value.trim().toLowerCase()),
-            )
+            candidates.some((value) => value && clusterMemberHosts.has(value.trim().toLowerCase()))
           ) {
             return null;
           }

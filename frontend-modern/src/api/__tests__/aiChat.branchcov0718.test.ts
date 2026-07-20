@@ -163,9 +163,7 @@ describe('AIChatAPI branch coverage', () => {
       const result = { denied: true, message: 'Command denied.' };
       apiFetchJSONMock.mockResolvedValueOnce(result);
 
-      await expect(AIChatAPI.denyCommand('approval-1', 'Wrong host')).resolves.toEqual(
-        result,
-      );
+      await expect(AIChatAPI.denyCommand('approval-1', 'Wrong host')).resolves.toEqual(result);
 
       expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/approvals/approval-1/deny', {
         method: 'POST',
@@ -240,10 +238,9 @@ describe('AIChatAPI branch coverage', () => {
       await expect(AIChatAPI.forkSession('session/root')).resolves.toEqual(forked);
 
       // The session id is encoded; the literal '/fork' suffix is not.
-      expect(apiFetchJSONMock).toHaveBeenCalledWith(
-        '/api/ai/sessions/session%2Froot/fork',
-        { method: 'POST' },
-      );
+      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/sessions/session%2Froot/fork', {
+        method: 'POST',
+      });
     });
   });
 

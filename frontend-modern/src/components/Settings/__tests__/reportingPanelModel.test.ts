@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SelectedResource } from '../ResourcePicker';
-import {
-  buildReportingRequest,
-  getReportingRangeStart,
-} from '../reportingPanelModel';
+import { buildReportingRequest, getReportingRangeStart } from '../reportingPanelModel';
 import type { ReportingPerformanceReportDefinition } from '../reportingCatalogModel';
 import {
   buildReportSchedulePayload,
@@ -64,15 +61,18 @@ describe('reporting panel model', () => {
       },
     ];
 
-    const request = buildReportingRequest({
-      end: now.toISOString(),
-      format: 'pdf',
-      metricType: 'cpu',
-      now,
-      resources,
-      start: '2026-03-19T12:34:56.000Z',
-      title: '',
-    }, performanceDefinition);
+    const request = buildReportingRequest(
+      {
+        end: now.toISOString(),
+        format: 'pdf',
+        metricType: 'cpu',
+        now,
+        resources,
+        start: '2026-03-19T12:34:56.000Z',
+        title: '',
+      },
+      performanceDefinition,
+    );
 
     expect(request.filename).toBe('report-agent-1-20260320.pdf');
     expect(request.request.init).toBeUndefined();
@@ -98,15 +98,18 @@ describe('reporting panel model', () => {
       },
     ];
 
-    const request = buildReportingRequest({
-      end: now.toISOString(),
-      format: 'csv',
-      metricType: '',
-      now,
-      resources,
-      start: '2026-03-19T12:34:56.000Z',
-      title: '',
-    }, performanceDefinition);
+    const request = buildReportingRequest(
+      {
+        end: now.toISOString(),
+        format: 'csv',
+        metricType: '',
+        now,
+        resources,
+        start: '2026-03-19T12:34:56.000Z',
+        title: '',
+      },
+      performanceDefinition,
+    );
 
     expect(request.filename).toBe('fleet-report-20260320.csv');
     expect(request.request.url).toBe('/api/admin/reports/generate-multi');
@@ -170,15 +173,18 @@ describe('reporting panel model', () => {
       },
     ];
 
-    const request = buildReportingRequest({
-      end: now.toISOString(),
-      format: 'pdf',
-      metricType: '',
-      now,
-      resources,
-      start: '2026-03-19T12:34:56.000Z',
-      title: 'Custom report title',
-    }, performanceDefinition);
+    const request = buildReportingRequest(
+      {
+        end: now.toISOString(),
+        format: 'pdf',
+        metricType: '',
+        now,
+        resources,
+        start: '2026-03-19T12:34:56.000Z',
+        title: 'Custom report title',
+      },
+      performanceDefinition,
+    );
 
     expect(request.request.url).toContain('title=Custom+report+title');
   });
@@ -254,15 +260,18 @@ describe('reporting panel model', () => {
       },
     ];
 
-    const request = buildReportingRequest({
-      end: now.toISOString(),
-      format: 'pdf',
-      metricType: '',
-      now,
-      resources,
-      start: '2026-03-19T12:34:56.000Z',
-      title: '',
-    }, performanceDefinition);
+    const request = buildReportingRequest(
+      {
+        end: now.toISOString(),
+        format: 'pdf',
+        metricType: '',
+        now,
+        resources,
+        start: '2026-03-19T12:34:56.000Z',
+        title: '',
+      },
+      performanceDefinition,
+    );
 
     expect(request.filename).toBe('report-lab-node-quotedvm-20260320.pdf');
   });

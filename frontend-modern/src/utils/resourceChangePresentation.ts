@@ -96,11 +96,7 @@ const RESOURCE_CHANGE_KIND_PRESENTATIONS: Record<
 };
 
 type ResourceChangeSourceType =
-  | 'platform_event'
-  | 'pulse_diff'
-  | 'heuristic'
-  | 'user_action'
-  | 'agent_action';
+  'platform_event' | 'pulse_diff' | 'heuristic' | 'user_action' | 'agent_action';
 
 export const RESOURCE_CHANGE_SOURCE_TYPE_ORDER: ResourceChangeSourceType[] = [
   'platform_event',

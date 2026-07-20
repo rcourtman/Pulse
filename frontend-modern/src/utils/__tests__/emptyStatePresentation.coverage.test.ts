@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  getEmptyStatePresentation,
-  type EmptyStateTone,
-} from '@/utils/emptyStatePresentation';
+import { getEmptyStatePresentation, type EmptyStateTone } from '@/utils/emptyStatePresentation';
 
 // NOTE: The existing `emptyStatePresentation.test.ts` only covers the `danger`
 // and `default` tones. This file adds coverage for the remaining tones, the
@@ -50,16 +47,12 @@ describe('getEmptyStatePresentation — full tone coverage', () => {
       ['null', null],
       ['undefined', undefined],
     ])('returns undefined for %s', (_label, invalid) => {
-      const result = getEmptyStatePresentation(
-        invalid as unknown as EmptyStateTone,
-      );
+      const result = getEmptyStatePresentation(invalid as unknown as EmptyStateTone);
       expect(result).toBeUndefined();
     });
 
     it('does not fall back to default classes for an unknown tone', () => {
-      const fallback = getEmptyStatePresentation(
-        'nonexistent' as unknown as EmptyStateTone,
-      );
+      const fallback = getEmptyStatePresentation('nonexistent' as unknown as EmptyStateTone);
       const def = getEmptyStatePresentation('default');
       // Explicitly documents the absence of a default-fallback branch.
       expect(fallback).not.toEqual(def);

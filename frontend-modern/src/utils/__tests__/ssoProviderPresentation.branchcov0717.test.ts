@@ -107,9 +107,7 @@ describe('ssoProviderPresentation branch coverage (supplemental)', () => {
   describe('getSSOProvidersLoadErrorMessage / DetailsLoadErrorMessage', () => {
     it('returns the canonical load-error strings', () => {
       expect(getSSOProvidersLoadErrorMessage()).toBe('Unable to load SSO providers.');
-      expect(getSSOProviderDetailsLoadErrorMessage()).toBe(
-        'Unable to load SSO provider details.',
-      );
+      expect(getSSOProviderDetailsLoadErrorMessage()).toBe('Unable to load SSO provider details.');
     });
   });
 
@@ -127,15 +125,11 @@ describe('ssoProviderPresentation branch coverage (supplemental)', () => {
     it('coerces an undefined error to the literal string "undefined" via String()', () => {
       // `String(undefined)` => 'undefined' — documents the runtime behaviour of
       // the optional `error` parameter when callers omit it.
-      expect(getSSOProviderSaveErrorMessage()).toBe(
-        'Unable to save the SSO provider: undefined',
-      );
+      expect(getSSOProviderSaveErrorMessage()).toBe('Unable to save the SSO provider: undefined');
     });
 
     it('coerces null to "null"', () => {
-      expect(getSSOProviderSaveErrorMessage(null)).toBe(
-        'Unable to save the SSO provider: null',
-      );
+      expect(getSSOProviderSaveErrorMessage(null)).toBe('Unable to save the SSO provider: null');
     });
 
     it('coerces a plain object to "[object Object]"', () => {
@@ -187,9 +181,7 @@ describe('ssoProviderPresentation branch coverage (supplemental)', () => {
 
   describe('getSSOConnectionTestSuccessMessage / FailureMessage / ErrorMessage', () => {
     it('returns the canonical connection-test strings', () => {
-      expect(getSSOConnectionTestSuccessMessage()).toBe(
-        'Connection test completed successfully.',
-      );
+      expect(getSSOConnectionTestSuccessMessage()).toBe('Connection test completed successfully.');
       expect(getSSOConnectionTestFailureMessage('Bad certificate')).toBe(
         'Connection test failed: Bad certificate',
       );
@@ -304,9 +296,7 @@ describe('ssoProviderPresentation branch coverage (supplemental)', () => {
 
   describe('getSSOProviderCardClass', () => {
     it('returns the full enabled-card class string', () => {
-      expect(getSSOProviderCardClass(true)).toBe(
-        'p-4 rounded-md border bg-surface border-border',
-      );
+      expect(getSSOProviderCardClass(true)).toBe('p-4 rounded-md border bg-surface border-border');
     });
 
     it('returns the full disabled-card class string', () => {

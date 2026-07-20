@@ -84,9 +84,10 @@ describe('getInfrastructurePlatformBadges (branch coverage)', () => {
   });
 
   it('keeps every non-agent platform source when multiple infrastructure platforms remain', () => {
-    expect(
-      getInfrastructurePlatformBadges(['docker', 'kubernetes']).map((b) => b.label),
-    ).toEqual(['Docker / Podman', 'K8s']);
+    expect(getInfrastructurePlatformBadges(['docker', 'kubernetes']).map((b) => b.label)).toEqual([
+      'Docker / Podman',
+      'K8s',
+    ]);
   });
 });
 

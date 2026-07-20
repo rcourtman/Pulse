@@ -30,7 +30,10 @@ export class AlertsAPI {
     return apiFetchJSON(`${this.baseUrl}/history?${queryParams}`);
   }
 
-  static async getIncidentTimeline(alertIdentifier: string, startedAt?: string): Promise<Incident | null> {
+  static async getIncidentTimeline(
+    alertIdentifier: string,
+    startedAt?: string,
+  ): Promise<Incident | null> {
     const query = new URLSearchParams({ alertIdentifier });
     if (startedAt) {
       query.set('started_at', startedAt);

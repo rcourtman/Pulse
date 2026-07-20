@@ -15,9 +15,9 @@ const dockerHost = (overrides: Partial<Resource> = {}): Resource =>
 
 describe('collectIdentityConflictHosts', () => {
   it('returns an empty list when no host carries a conflict', () => {
-    expect(collectIdentityConflictHosts([dockerHost(), dockerHost({ id: 'h2', name: 'h2' })])).toEqual(
-      [],
-    );
+    expect(
+      collectIdentityConflictHosts([dockerHost(), dockerHost({ id: 'h2', name: 'h2' })]),
+    ).toEqual([]);
   });
 
   it('collects conflicting hosts with their hostnames', () => {
@@ -61,7 +61,9 @@ describe('DockerIdentityConflictNotice', () => {
       />
     ));
     const notice = screen.getByTestId('docker-identity-conflict-notice');
-    expect(notice.textContent).toContain('Two machines appear to share the identity of docker-host-1');
+    expect(notice.textContent).toContain(
+      'Two machines appear to share the identity of docker-host-1',
+    );
     expect(notice.textContent).toContain('clone-a, clone-b');
     expect(notice.textContent).toContain('/etc/machine-id');
   });

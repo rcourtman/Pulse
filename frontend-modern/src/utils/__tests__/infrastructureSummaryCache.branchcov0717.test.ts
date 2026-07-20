@@ -36,11 +36,8 @@ vi.mock('@/api/charts', async () => {
 
 const DEFAULT_METRICS_KEY = 'cpu,memory,disk,diskread,diskwrite,netin,netout';
 
-const cacheKeyForRange = (
-  range: TimeRange,
-  orgScope = 'default',
-  metrics = DEFAULT_METRICS_KEY,
-) => `pulse.infrastructureSummaryCharts.${encodeURIComponent(orgScope)}::${range}::${metrics}`;
+const cacheKeyForRange = (range: TimeRange, orgScope = 'default', metrics = DEFAULT_METRICS_KEY) =>
+  `pulse.infrastructureSummaryCharts.${encodeURIComponent(orgScope)}::${range}::${metrics}`;
 
 interface MetricPoint {
   timestamp: number;
@@ -282,10 +279,7 @@ describe('readInfrastructureSummaryCache — series coercion coverage', () => {
   it('treats a null charts field as the emptyentries branch', () => {
     // null && ... -> false -> [] arm. Distinct from undefined (also falsy) and
     // from the non-object truthy case above.
-    storePayload(
-      '1h',
-      buildPayload({ charts: null as unknown as undefined }),
-    );
+    storePayload('1h', buildPayload({ charts: null as unknown as undefined }));
     const cached = readInfrastructureSummaryCache('1h');
     expect(cached).not.toBeNull();
     expect(cached?.map.size).toBe(0);
@@ -309,7 +303,15 @@ describe('readInfrastructureSummaryCache — hit / miss / expiry / empty boundar
         cachedAt,
         oldestDataTimestamp,
         charts: {
-          'node-1': { cpu: makeSeries(2), memory: [], disk: [], diskread: [], diskwrite: [], netin: [], netout: [] },
+          'node-1': {
+            cpu: makeSeries(2),
+            memory: [],
+            disk: [],
+            diskread: [],
+            diskwrite: [],
+            netin: [],
+            netout: [],
+          },
         },
       }),
     );
@@ -333,10 +335,7 @@ describe('readInfrastructureSummaryCache — hit / miss / expiry / empty boundar
     try {
       const maxAge = 60_000;
       const cachedAt = now() - maxAge;
-      storePayload(
-        '1h',
-        buildPayload({ cachedAt, charts: undefined }),
-      );
+      storePayload('1h', buildPayload({ cachedAt, charts: undefined }));
       expect(readInfrastructureSummaryCache('1h', maxAge)).not.toBeNull();
     } finally {
       vi.useRealTimers();
@@ -406,11 +405,7 @@ describe('persistInfrastructureSummaryCache — write-boundary coverage', () => 
     // The sibling test always supplies cpu, so the `?? []` right operand for
     // cpu stays uncovered. Persist a ChartData without cpu and verify the
     // cached entry round-trips with cpu === [].
-    persistInfrastructureSummaryCache(
-      '1h',
-      new Map([['node-1', { memory: makeSeries(2) }]]),
-      null,
-    );
+    persistInfrastructureSummaryCache('1h', new Map([['node-1', { memory: makeSeries(2) }]]), null);
     const series = readInfrastructureSummaryCache('1h')?.map.get('node-1');
     expect(series?.cpu).toEqual([]);
     expect(series?.memory?.length).toBe(2);
@@ -519,7 +514,7 @@ describe('infraSummaryPerfNow — Date.now() fallback arm', () => {
     // back to Date.now(). The fetch path calls perfNow at start and end, so a
     // successful round-trip with performance masked proves the fallback works.
     mockGetCharts.mockResolvedValueOnce(
-      makeInfraResponse({ nodeData: { 'n': { cpu: makeSeries(1) } } }),
+      makeInfraResponse({ nodeData: { n: { cpu: makeSeries(1) } } }),
     );
     const result = await withGlobalUndefined('performance', () =>
       fetchInfrastructureSummaryAndCache('1h'),
@@ -588,11 +583,9 @@ describe('org_switched cache invalidation handler — uncovered getter + branche
   it('does not throw when the localStorage iteration itself throws (catch arm)', () => {
     // Covers the try/catch around the invalidation loop: if localStorage.length
     // throws, the handler must swallow it and return silently.
-    const lengthSpy = vi
-      .spyOn(Storage.prototype, 'length', 'get')
-      .mockImplementation(() => {
-        throw new Error('storage poisoned');
-      });
+    const lengthSpy = vi.spyOn(Storage.prototype, 'length', 'get').mockImplementation(() => {
+      throw new Error('storage poisoned');
+    });
     try {
       expect(() => eventBus.emit('org_switched', 'broken-org')).not.toThrow();
     } finally {
@@ -641,7 +634,7 @@ describe('infraSummaryPerfLog — perf-enabled branches via module reload', () =
       mod.__resetInfrastructureSummaryFetchesForTests();
       mockGetCharts.mockReset();
       mockGetCharts.mockResolvedValueOnce(
-        makeInfraResponse({ nodeData: { 'n': { cpu: makeSeries(1) } } }),
+        makeInfraResponse({ nodeData: { n: { cpu: makeSeries(1) } } }),
       );
       await mod.fetchInfrastructureSummaryAndCache('1h', { caller: 'perf-enabled' });
 
@@ -698,11 +691,9 @@ describe('readInfrastructureSummaryCache — read failure path', () => {
   it('swallows a localStorage.getItem failure and returns null (catch arm)', () => {
     // Covers the outer try/catch in readInfrastructureSummaryCache: a throw out
     // of getItem must be swallowed and surface as a null result.
-    const getItemSpy = vi
-      .spyOn(Storage.prototype, 'getItem')
-      .mockImplementation(() => {
-        throw new Error('getItem exploded');
-      });
+    const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('getItem exploded');
+    });
     try {
       expect(readInfrastructureSummaryCache('1h')).toBeNull();
     } finally {
@@ -724,11 +715,7 @@ describe('persistInfrastructureSummaryCache — JSON.stringify failure path', ()
     const cyclic = { cpu: [] as MetricPoint[] } as unknown as ChartData;
     (cyclic as { self: unknown }).self = cyclic;
     expect(() =>
-      persistInfrastructureSummaryCache(
-        '1h',
-        new Map([['node-1', cyclic]]),
-        null,
-      ),
+      persistInfrastructureSummaryCache('1h', new Map([['node-1', cyclic]]), null),
     ).not.toThrow();
   });
 });

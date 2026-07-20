@@ -72,7 +72,9 @@ export const HelpIcon: Component<HelpIconProps> = (props) => {
                   <ul class="space-y-1 text-[11px]">
                     {helpContent.examples!.map((example) => (
                       <li class="flex items-start gap-1.5">
-                        <span class="text-muted mt-0.5 select-none" aria-hidden="true">-</span>
+                        <span class="text-muted mt-0.5 select-none" aria-hidden="true">
+                          -
+                        </span>
                         <span class="text-muted">{example}</span>
                       </li>
                     ))}

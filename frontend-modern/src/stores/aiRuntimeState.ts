@@ -7,7 +7,9 @@ import { logger } from '@/utils/logger';
 const [aiRuntimeSettings, setAIRuntimeSettings] = createSignal<AISettings | null>(null);
 const [aiRuntimeSettingsLoading, setAIRuntimeSettingsLoading] = createSignal(false);
 const [aiRuntimeSettingsLoaded, setAIRuntimeSettingsLoaded] = createSignal(false);
-const [aiRuntimeSettingsLoadError, setAIRuntimeSettingsLoadError] = createSignal<Error | null>(null);
+const [aiRuntimeSettingsLoadError, setAIRuntimeSettingsLoadError] = createSignal<Error | null>(
+  null,
+);
 
 const [aiRuntimeModels, setAIRuntimeModels] = createSignal<ModelInfo[]>([]);
 const [aiRuntimeModelsLoading, setAIRuntimeModelsLoading] = createSignal(false);

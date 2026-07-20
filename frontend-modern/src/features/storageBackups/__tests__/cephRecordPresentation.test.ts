@@ -79,7 +79,14 @@ describe('cephRecordPresentation', () => {
         makeRecord(),
         makeCluster({
           pools: [
-            { id: 1, name: 'rbd', storedBytes: 75, availableBytes: 25, objects: 1, percentUsed: 75 },
+            {
+              id: 1,
+              name: 'rbd',
+              storedBytes: 75,
+              availableBytes: 25,
+              objects: 1,
+              percentUsed: 75,
+            },
           ],
         }),
       ),

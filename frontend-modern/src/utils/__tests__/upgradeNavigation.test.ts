@@ -101,9 +101,6 @@ describe('upgradeNavigation', () => {
 
     openExternalUpgradeDestination('/auth/license-purchase-start?feature=relay', true);
 
-    expect(windowOpen).toHaveBeenCalledWith(
-      '/auth/license-purchase-start?feature=relay',
-      '_blank',
-    );
+    expect(windowOpen).toHaveBeenCalledWith('/auth/license-purchase-start?feature=relay', '_blank');
   });
 });

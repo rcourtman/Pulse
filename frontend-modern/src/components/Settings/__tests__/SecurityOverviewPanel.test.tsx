@@ -25,7 +25,10 @@ describe('SecurityOverviewPanel', () => {
     expect(screen.getByText('Recommended hardening steps')).toBeInTheDocument();
     expect(screen.getByText('Plan HTTPS before live use')).toBeInTheDocument();
     expect(screen.getByText('Create an API token')).toBeInTheDocument();
-    expect(screen.getAllByText('Open API Access')[0]).toHaveAttribute('href', '/settings/security/api');
+    expect(screen.getAllByText('Open API Access')[0]).toHaveAttribute(
+      'href',
+      '/settings/security/api',
+    );
     expect(screen.getByText('Open security guide')).toHaveAttribute('href', '/docs/SECURITY.md');
     expect(screen.getAllByText('Recommended')).toHaveLength(2);
   });

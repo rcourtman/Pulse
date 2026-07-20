@@ -164,15 +164,11 @@ describe('alertEmailPresentation — branch coverage (batch 0718)', () => {
 
   describe('getAlertEmailAdvancedToggleLabel — exact constant wiring', () => {
     it('returns the canonical HIDE constant for true', () => {
-      expect(getAlertEmailAdvancedToggleLabel(true)).toBe(
-        ALERT_EMAIL_HIDE_ADVANCED_OPTIONS_LABEL,
-      );
+      expect(getAlertEmailAdvancedToggleLabel(true)).toBe(ALERT_EMAIL_HIDE_ADVANCED_OPTIONS_LABEL);
     });
 
     it('returns the canonical SHOW constant for false', () => {
-      expect(getAlertEmailAdvancedToggleLabel(false)).toBe(
-        ALERT_EMAIL_SHOW_ADVANCED_OPTIONS_LABEL,
-      );
+      expect(getAlertEmailAdvancedToggleLabel(false)).toBe(ALERT_EMAIL_SHOW_ADVANCED_OPTIONS_LABEL);
     });
   });
 

@@ -239,4 +239,3 @@ describe('Charts API Types', () => {
     });
   });
 });
-

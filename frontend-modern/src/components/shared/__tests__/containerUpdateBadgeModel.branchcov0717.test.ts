@@ -93,9 +93,9 @@ describe('containerUpdateBadgeModel.branchcov', () => {
     });
 
     it('returns false when an error is present alongside updateAvailable === false (right operand of && is false)', () => {
-      expect(
-        hasContainerUpdateCurrent(makeStatus({ updateAvailable: false, error: 'x' })),
-      ).toBe(false);
+      expect(hasContainerUpdateCurrent(makeStatus({ updateAvailable: false, error: 'x' }))).toBe(
+        false,
+      );
     });
 
     it('returns false when updateStatus is undefined (optional-chain / left-operand arm)', () => {
@@ -122,9 +122,7 @@ describe('containerUpdateBadgeModel.branchcov', () => {
     });
 
     it('falls back to "Unknown error" when updateStatus itself is undefined', () => {
-      expect(getContainerUpdateErrorTooltip(undefined)).toBe(
-        'Update check failed: Unknown error',
-      );
+      expect(getContainerUpdateErrorTooltip(undefined)).toBe('Update check failed: Unknown error');
     });
 
     it('falls back to "Unknown error" when error is an empty string (|| right arm, falsy string)', () => {
@@ -152,15 +150,15 @@ describe('containerUpdateBadgeModel.branchcov', () => {
     });
 
     it('appends a 12-char digest preview when currentDigest is present', () => {
-      expect(
-        getContainerUpdateCurrentTooltip(makeStatus({ currentDigest: LONG_DIGEST })),
-      ).toBe('Image is current\nDigest: sha256:01234...');
+      expect(getContainerUpdateCurrentTooltip(makeStatus({ currentDigest: LONG_DIGEST }))).toBe(
+        'Image is current\nDigest: sha256:01234...',
+      );
     });
 
     it('uses the full digest when it is shorter than 12 chars (slice no-op arm)', () => {
-      expect(
-        getContainerUpdateCurrentTooltip(makeStatus({ currentDigest: 'abc' })),
-      ).toBe('Image is current\nDigest: abc...');
+      expect(getContainerUpdateCurrentTooltip(makeStatus({ currentDigest: 'abc' }))).toBe(
+        'Image is current\nDigest: abc...',
+      );
     });
   });
 
@@ -191,20 +189,12 @@ describe('containerUpdateBadgeModel.branchcov', () => {
     it('coerces an empty-string digest to "unknown" (|| right arm of getDigestPreview)', () => {
       // Empty string is falsy: `(''.slice(0,19)) || 'unknown'` -> 'unknown'.
       expect(
-        getContainerUpdateBadgeTooltip(
-          makeStatus({ currentDigest: '', latestDigest: '' }),
-        ),
-      ).toBe(
-        'Image update available\nCurrent: unknown...\nLatest: unknown...',
-      );
+        getContainerUpdateBadgeTooltip(makeStatus({ currentDigest: '', latestDigest: '' })),
+      ).toBe('Image update available\nCurrent: unknown...\nLatest: unknown...');
     });
 
     it('mixes a present currentDigest with an absent latestDigest', () => {
-      expect(
-        getContainerUpdateBadgeTooltip(
-          makeStatus({ currentDigest: LONG_DIGEST }),
-        ),
-      ).toBe(
+      expect(getContainerUpdateBadgeTooltip(makeStatus({ currentDigest: LONG_DIGEST }))).toBe(
         'Image update available\nCurrent: sha256:0123456789ab...\nLatest: unknown...',
       );
     });
@@ -217,12 +207,8 @@ describe('containerUpdateBadgeModel.branchcov', () => {
 
     it('returns the full multi-line message with 12-char previews when updateStatus is present', () => {
       expect(
-        getUpdateIconTooltip(
-          makeStatus({ currentDigest: LONG_DIGEST, latestDigest: LONG_DIGEST }),
-        ),
-      ).toBe(
-        'Update available\nCurrent: sha256:01234...\nLatest: sha256:01234...',
-      );
+        getUpdateIconTooltip(makeStatus({ currentDigest: LONG_DIGEST, latestDigest: LONG_DIGEST })),
+      ).toBe('Update available\nCurrent: sha256:01234...\nLatest: sha256:01234...');
     });
 
     it('returns "unknown" previews when updateStatus is present but digests are absent', () => {
@@ -251,10 +237,9 @@ describe('containerUpdateBadgeModel.branchcov', () => {
 
     it('returns the red cursor-help "error" classes', () => {
       expect(getUpdateButtonClass('error')).toBe(
-        [
-          BASE_CLASS,
-          'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 cursor-help',
-        ].join(' '),
+        [BASE_CLASS, 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 cursor-help'].join(
+          ' ',
+        ),
       );
     });
 
@@ -404,9 +389,9 @@ describe('containerUpdateBadgeModel.branchcov', () => {
       });
 
       it('falls back to errorMessage when storeState is absent', () => {
-        expect(
-          getUpdateButtonTooltip({ state: 'error', errorMessage: 'timeout' }),
-        ).toBe('✗ Update failed: timeout');
+        expect(getUpdateButtonTooltip({ state: 'error', errorMessage: 'timeout' })).toBe(
+          '✗ Update failed: timeout',
+        );
       });
 
       it('falls back to errorMessage when storeState is present but has no message', () => {
@@ -421,9 +406,7 @@ describe('containerUpdateBadgeModel.branchcov', () => {
       });
 
       it('falls back to "Unknown error" when neither storeState.message nor errorMessage is set', () => {
-        expect(getUpdateButtonTooltip({ state: 'error' })).toBe(
-          '✗ Update failed: Unknown error',
-        );
+        expect(getUpdateButtonTooltip({ state: 'error' })).toBe('✗ Update failed: Unknown error');
       });
     });
 
@@ -441,15 +424,13 @@ describe('containerUpdateBadgeModel.branchcov', () => {
               latestDigest: LONG_DIGEST,
             }),
           }),
-        ).toBe(
-          'Click to review and update\nCurrent: sha256:01234...\nLatest: sha256:01234...',
-        );
+        ).toBe('Click to review and update\nCurrent: sha256:01234...\nLatest: sha256:01234...');
       });
 
       it('returns "unknown" previews when updateStatus is present but digests are absent', () => {
-        expect(
-          getUpdateButtonTooltip({ state: 'idle', updateStatus: makeStatus({}) }),
-        ).toBe('Click to review and update\nCurrent: unknown...\nLatest: unknown...');
+        expect(getUpdateButtonTooltip({ state: 'idle', updateStatus: makeStatus({}) })).toBe(
+          'Click to review and update\nCurrent: unknown...\nLatest: unknown...',
+        );
       });
 
       it('routes an unknown state value (with no updateStatus) to the default early-return arm', () => {

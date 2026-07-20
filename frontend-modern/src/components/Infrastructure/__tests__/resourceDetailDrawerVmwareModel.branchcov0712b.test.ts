@@ -4,10 +4,7 @@ import {
   buildVMwareDetailsSummary,
 } from '@/components/Infrastructure/resourceDetailDrawerVmwareModel';
 import type { DetailRow } from '@/components/shared/detailSectionModel';
-import type {
-  ResourceVMwareMeta,
-  ResourceVMwareSnapshot,
-} from '@/types/resource';
+import type { ResourceVMwareMeta, ResourceVMwareSnapshot } from '@/types/resource';
 
 // Branch-coverage complement to resourceDetailDrawerVmwareModel.coverage.test.ts.
 // Scope is strictly: buildVMwareDetailsSummary, formatMiB, flattenSnapshotRows.
@@ -32,10 +29,8 @@ const findRow = (
 const vmSections = (vmware?: Partial<ResourceVMwareMeta>): Sections =>
   buildVMwareDetailSections('vm', (vmware ?? {}) as ResourceVMwareMeta);
 
-const hardwareRow = (
-  vmware: Partial<ResourceVMwareMeta>,
-  label: string,
-): DetailRow | undefined => findRow(vmSections(vmware), 'Virtual hardware', label);
+const hardwareRow = (vmware: Partial<ResourceVMwareMeta>, label: string): DetailRow | undefined =>
+  findRow(vmSections(vmware), 'Virtual hardware', label);
 
 const snapshotSectionRows = (snapshots: ResourceVMwareSnapshot[]): DetailRow[] =>
   findSection(vmSections({ snapshotTree: snapshots }), 'Snapshot tree')?.rows ?? [];
@@ -73,21 +68,19 @@ describe('buildVMwareDetailsSummary (additional branches)', () => {
   });
 
   it('counts only vms when the network has vms but no hosts', () => {
-    expect(
-      buildVMwareDetailsSummary('network', { networkVmNames: ['vm-01', 'vm-02'] }),
-    ).toBe('Read-only vCenter context · 2 VMs');
-  });
-
-  it('clamps an explicit snapshotCount of 0 to no snapshot part', () => {
-    expect(buildVMwareDetailsSummary('vm', { snapshotCount: 0 })).toBe(
-      'Read-only vCenter context',
+    expect(buildVMwareDetailsSummary('network', { networkVmNames: ['vm-01', 'vm-02'] })).toBe(
+      'Read-only vCenter context · 2 VMs',
     );
   });
 
+  it('clamps an explicit snapshotCount of 0 to no snapshot part', () => {
+    expect(buildVMwareDetailsSummary('vm', { snapshotCount: 0 })).toBe('Read-only vCenter context');
+  });
+
   it('omits alarm and task parts when both counts are explicitly zero', () => {
-    expect(
-      buildVMwareDetailsSummary('vm', { activeAlarmCount: 0, recentTaskCount: 0 }),
-    ).toBe('Read-only vCenter context');
+    expect(buildVMwareDetailsSummary('vm', { activeAlarmCount: 0, recentTaskCount: 0 })).toBe(
+      'Read-only vCenter context',
+    );
   });
 
   // SUSPECT SOURCE BEHAVIOR (reported, not fixed): the host/vm count chains use

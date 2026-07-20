@@ -21,11 +21,7 @@ export const OrganizationOverviewLoadingState: Component = () => (
     <SettingsSkeletonTable
       titleWidth="w-24"
       rows={3}
-      cells={[
-        { class: 'h-4 w-40' },
-        { class: 'h-4 w-14', radius: 'full' },
-        { class: 'h-4 w-24' },
-      ]}
+      cells={[{ class: 'h-4 w-40' }, { class: 'h-4 w-14', radius: 'full' }, { class: 'h-4 w-24' }]}
     />
   </SettingsLoadingSkeleton>
 );

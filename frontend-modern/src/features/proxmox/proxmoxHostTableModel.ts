@@ -5,16 +5,7 @@ import type { PlatformTableColumnKind } from '@/features/platformPage/columnAlig
 import { getPlatformTableWeightedColumnWidthStyle } from '@/features/platformPage/sharedPlatformPage';
 
 export type ProxmoxHostTableColumnId =
-  | 'node'
-  | 'version'
-  | 'uptime'
-  | 'cpu'
-  | 'memory'
-  | 'disk'
-  | 'temp'
-  | 'vms'
-  | 'cts'
-  | 'cluster';
+  'node' | 'version' | 'uptime' | 'cpu' | 'memory' | 'disk' | 'temp' | 'vms' | 'cts' | 'cluster';
 
 export type ProxmoxHostTableColumn = {
   id: ProxmoxHostTableColumnId;

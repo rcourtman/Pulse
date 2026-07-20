@@ -39,8 +39,7 @@ export function getRBACFeatureGateCopy(
 export function getUserAssignmentsEmptyStateCopy(): UserAssignmentsEmptyStateCopy {
   return {
     title: 'No users yet',
-    body:
-      "Users appear here automatically when they sign in via SSO (OIDC/SAML) or proxy authentication. Once they've logged in, you can assign roles to control their access.",
+    body: "Users appear here automatically when they sign in via SSO (OIDC/SAML) or proxy authentication. Once they've logged in, you can assign roles to control their access.",
     ssoHint: 'Configure SSO in Security settings',
     syncHint: 'Users sync on first login',
   };

@@ -73,7 +73,9 @@ export function ThresholdsTableProxmoxBackupsSection(props: ThresholdsTableSecti
                   'critical days': prev.criticalDays ?? 0,
                 };
                 const nextRecord =
-                  typeof value === 'function' ? value(currentRecord) : { ...currentRecord, ...value };
+                  typeof value === 'function'
+                    ? value(currentRecord)
+                    : { ...currentRecord, ...value };
                 return {
                   ...prev,
                   freshHours:
@@ -120,7 +122,9 @@ export function ThresholdsTableProxmoxBackupsSection(props: ThresholdsTableSecti
                 <h3 class="text-sm font-semibold text-base-content">
                   {state.backupOrphanedPresentation.title}
                 </h3>
-                <p class="mt-1 text-xs text-muted">{state.backupOrphanedPresentation.description}</p>
+                <p class="mt-1 text-xs text-muted">
+                  {state.backupOrphanedPresentation.description}
+                </p>
               </div>
               <Toggle
                 checked={tableProps.backupDefaults().alertOrphaned ?? true}

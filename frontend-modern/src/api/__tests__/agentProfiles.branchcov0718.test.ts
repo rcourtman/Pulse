@@ -412,9 +412,7 @@ describe('AgentProfilesAPI branch coverage', () => {
 
     it('treats null Enum as absent (undefined)', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce(
-        jsonResponse([
-          { Key: 'k', Type: 'string', Description: 'D', Required: false, Enum: null },
-        ]),
+        jsonResponse([{ Key: 'k', Type: 'string', Description: 'D', Required: false, Enum: null }]),
       );
 
       const result = await AgentProfilesAPI.getConfigSchema();
@@ -472,10 +470,7 @@ describe('AgentProfilesAPI branch coverage', () => {
         { Valid: true, Warnings: [] },
         'Warnings',
       );
-      expect(objectArrayFieldOrEmpty).not.toHaveBeenCalledWith(
-        expect.anything(),
-        'Errors',
-      );
+      expect(objectArrayFieldOrEmpty).not.toHaveBeenCalledWith(expect.anything(), 'Errors');
     });
 
     it('returns empty warnings array when Warnings field is undefined', async () => {

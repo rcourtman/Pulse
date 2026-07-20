@@ -52,14 +52,17 @@ describe('storageSources.branchcov2', () => {
     ])(
       'normalizes the raw platform alias %s into the wins-list key %s before resolving (type=%s ignored)',
       (rawPlatform, expected, type) => {
-        expect(resolveStorageSourceKey(makeStorage({ platform: rawPlatform, type }))).toBe(expected);
+        expect(resolveStorageSourceKey(makeStorage({ platform: rawPlatform, type }))).toBe(
+          expected,
+        );
       },
     );
 
     it('prefers a winning platform tag over a type that would itself classify as kubernetes', () => {
       // platform=kubernetes wins before the type-based kubernetes classifier runs.
-      expect(resolveStorageSourceKey(makeStorage({ platform: 'kubernetes', type: 'csi-driver' })))
-        .toBe('kubernetes');
+      expect(
+        resolveStorageSourceKey(makeStorage({ platform: 'kubernetes', type: 'csi-driver' })),
+      ).toBe('kubernetes');
     });
   });
 
@@ -69,14 +72,11 @@ describe('storageSources.branchcov2', () => {
       ['agent', 'dir'],
       ['docker', 'dir'],
       ['ceph', 'dir'],
-    ])(
-      'ignores non-winning platform tag %s and resolves by on-disk type %s',
-      (platform, type) => {
-        // 'dir' -> proxmox-pve; 'ceph' -> ceph
-        const expected = type === 'ceph' ? 'ceph' : 'proxmox-pve';
-        expect(resolveStorageSourceKey(makeStorage({ platform, type }))).toBe(expected);
-      },
-    );
+    ])('ignores non-winning platform tag %s and resolves by on-disk type %s', (platform, type) => {
+      // 'dir' -> proxmox-pve; 'ceph' -> ceph
+      const expected = type === 'ceph' ? 'ceph' : 'proxmox-pve';
+      expect(resolveStorageSourceKey(makeStorage({ platform, type }))).toBe(expected);
+    });
 
     it('coerces an undefined platform to empty string and still resolves by type', () => {
       const storage = { ...makeStorage({}), platform: undefined } as Storage;
@@ -87,14 +87,12 @@ describe('storageSources.branchcov2', () => {
   });
 
   describe('resolveStorageSourceKey — type-based canonical recognition', () => {
-    it.each([
-      ['proxmox-pbs'],
-      ['ceph'],
-      ['kubernetes'],
-      ['proxmox-pmg'],
-    ])('returns the recognized canonical type %s directly when platform is empty', (type) => {
-      expect(resolveStorageSourceKey(makeStorage({ platform: '', type }))).toBe(type);
-    });
+    it.each([['proxmox-pbs'], ['ceph'], ['kubernetes'], ['proxmox-pmg']])(
+      'returns the recognized canonical type %s directly when platform is empty',
+      (type) => {
+        expect(resolveStorageSourceKey(makeStorage({ platform: '', type }))).toBe(type);
+      },
+    );
 
     it.each([['cephfs'], ['rbd']])(
       'collapses the ceph family member %s to ceph via CEPH_TYPES',

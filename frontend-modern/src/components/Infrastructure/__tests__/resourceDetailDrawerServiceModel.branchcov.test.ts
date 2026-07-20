@@ -397,9 +397,7 @@ describe('formatPbsEvidenceSource (via evidence sourceLabel)', () => {
 
   it('returns the generic "Observed task history" for non-backup task history', () => {
     const pbs: PBSPlatformData = {
-      jobHealthEvidence: [
-        evidence({ id: 'src', family: 'verify', evidenceScope: 'task-history' }),
-      ],
+      jobHealthEvidence: [evidence({ id: 'src', family: 'verify', evidenceScope: 'task-history' })],
     };
     expect(evidenceWithId(pbs, 'src')?.sourceLabel).toBe('Observed task history');
   });
@@ -501,9 +499,7 @@ describe('buildPbsEvidenceFreshnessLabel (via evidence freshnessLabel)', () => {
 
   it('falls back to the unix last-run-endtime when the ISO time is absent', () => {
     const pbs: PBSPlatformData = {
-      jobHealthEvidence: [
-        evidence({ id: 'fr', 'last-run-endtime': 1776717000 }),
-      ],
+      jobHealthEvidence: [evidence({ id: 'fr', 'last-run-endtime': 1776717000 })],
     };
     expect(evidenceWithId(pbs, 'fr')?.freshnessLabel).toBe('Last run 2026-04-20T20:30:00Z');
   });

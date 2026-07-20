@@ -82,8 +82,7 @@ export const getAPITokenScopePresets = (
       id: API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID,
       label: API_TOKEN_PATROL_EXTERNAL_AGENT_PRESET_LABEL,
       scopes: pulseIntelligenceScopes,
-      description:
-        'Scopes for connected agents that read Pulse context and request Patrol work.',
+      description: 'Scopes for connected agents that read Pulse context and request Patrol work.',
     });
   }
 

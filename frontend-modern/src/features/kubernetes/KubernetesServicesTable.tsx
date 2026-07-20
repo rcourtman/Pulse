@@ -170,7 +170,12 @@ export const KubernetesServicesTable: Component<{
                 >
                   Scope
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} sortKey="type" class="md:w-[11%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="type"
+                  class="md:w-[11%]"
+                >
                   Type
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -181,13 +186,21 @@ export const KubernetesServicesTable: Component<{
                 >
                   Cluster IP
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[13%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[13%]"
+                >
                   External IPs
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[16%]">
                   Ports
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[13%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[13%]"
+                >
                   Selector
                 </PlatformSortableTableHead>
               </>

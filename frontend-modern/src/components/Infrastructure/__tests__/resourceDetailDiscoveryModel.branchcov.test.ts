@@ -35,7 +35,9 @@ const baseResource = (overrides: Partial<Resource> = {}): Resource =>
     ...overrides,
   }) as unknown as Resource;
 
-const discoveryTarget = (overrides: Partial<ResourceDiscoveryTarget> = {}): ResourceDiscoveryTarget =>
+const discoveryTarget = (
+  overrides: Partial<ResourceDiscoveryTarget> = {},
+): ResourceDiscoveryTarget =>
   ({
     resourceType: 'agent',
     agentId: 'agent-default',

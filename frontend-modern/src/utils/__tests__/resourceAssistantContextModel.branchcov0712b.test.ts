@@ -4,10 +4,7 @@ import {
   type ResourceAssistantContextTarget,
 } from '@/utils/resourceAssistantContextModel';
 import type { AIChatContext } from '@/stores/aiChat';
-import type {
-  ResourceDiscoveryReadiness,
-  ResourceDiscoveryTarget,
-} from '@/types/resource';
+import type { ResourceDiscoveryReadiness, ResourceDiscoveryTarget } from '@/types/resource';
 
 // Minimal target factory matching the required fields of
 // `ResourceAssistantContextTarget`. Optional facets are layered in per-test to
@@ -33,9 +30,7 @@ describe('buildResourceAssistantContextForTarget — branch coverage (branchcov2
     });
 
     it('falls back to target.id when name is an empty string', () => {
-      const context = buildResourceAssistantContextForTarget(
-        makeTarget({ id: 'id-7', name: '' }),
-      );
+      const context = buildResourceAssistantContextForTarget(makeTarget({ id: 'id-7', name: '' }));
       expect(context.briefing?.title).toBe('id-7');
       expect(context.handoffResources?.[0]?.name).toBe('id-7');
     });
@@ -86,9 +81,7 @@ describe('buildResourceAssistantContextForTarget — branch coverage (branchcov2
           discoveryReadiness: { state: 'fresh' } satisfies ResourceDiscoveryReadiness,
         }),
       );
-      expect(context.briefing?.statusLabel).toBe(
-        'Read-only context attached · Discovery fresh',
-      );
+      expect(context.briefing?.statusLabel).toBe('Read-only context attached · Discovery fresh');
     });
 
     it('appends the unknown statusLabel when discoveryTarget exists but readiness is absent', () => {
@@ -103,9 +96,7 @@ describe('buildResourceAssistantContextForTarget — branch coverage (branchcov2
           } satisfies ResourceDiscoveryTarget,
         }),
       );
-      expect(context.briefing?.statusLabel).toBe(
-        'Read-only context attached · Discovery unknown',
-      );
+      expect(context.briefing?.statusLabel).toBe('Read-only context attached · Discovery unknown');
     });
 
     it('uses the plain statusLabel when neither readiness nor discoveryTarget are present', () => {
@@ -150,9 +141,7 @@ describe('buildResourceAssistantContextForTarget — branch coverage (branchcov2
     });
 
     it('drops the Parent line and leaves node undefined when parentName is absent', () => {
-      const context = buildResourceAssistantContextForTarget(
-        makeTarget({ parentName: undefined }),
-      );
+      const context = buildResourceAssistantContextForTarget(makeTarget({ parentName: undefined }));
       expect(context.briefing?.detailLines?.some((l) => l.startsWith('Parent:'))).toBe(false);
       expect(context.handoffResources?.[0]?.node).toBeUndefined();
     });
@@ -171,9 +160,7 @@ describe('buildResourceAssistantContextForTarget — branch coverage (branchcov2
     });
 
     it('drops the Discovery line when discoveryTarget is absent', () => {
-      const context = buildResourceAssistantContextForTarget(
-        makeTarget({ discoveryTarget: null }),
-      );
+      const context = buildResourceAssistantContextForTarget(makeTarget({ discoveryTarget: null }));
       expect(context.briefing?.detailLines?.some((l) => l.startsWith('Discovery:'))).toBe(false);
     });
 
@@ -205,9 +192,7 @@ describe('buildResourceAssistantContextForTarget — branch coverage (branchcov2
 
   describe('context + handoff shape', () => {
     it('echoes status into context.resourceStatus when status is provided', () => {
-      const context = buildResourceAssistantContextForTarget(
-        makeTarget({ status: 'maintenance' }),
-      );
+      const context = buildResourceAssistantContextForTarget(makeTarget({ status: 'maintenance' }));
       expect(context.context).toStrictEqual({
         source: 'resource-detail-drawer',
         resourceId: 'res-1',
@@ -217,9 +202,7 @@ describe('buildResourceAssistantContextForTarget — branch coverage (branchcov2
     });
 
     it('leaves context.resourceStatus undefined when status is absent', () => {
-      const context = buildResourceAssistantContextForTarget(
-        makeTarget({ status: undefined }),
-      );
+      const context = buildResourceAssistantContextForTarget(makeTarget({ status: undefined }));
       // Destructure to assert the literal key is absent (undefined), not omitted
       // from the returned object via toStrictEqual semantics.
       expect(context.context?.resourceStatus).toBeUndefined();
@@ -279,9 +262,7 @@ describe('buildResourceAssistantContextForTarget — branch coverage (branchcov2
           ],
           safetyNote: 'Approval required before any action.',
         },
-        handoffResources: [
-          { id: 'vm-101', name: 'web-prod-01', type: 'vm', node: 'esxi-host-1' },
-        ],
+        handoffResources: [{ id: 'vm-101', name: 'web-prod-01', type: 'vm', node: 'esxi-host-1' }],
         handoffMetadata: { kind: 'resource_context' },
         autonomousMode: false,
       };

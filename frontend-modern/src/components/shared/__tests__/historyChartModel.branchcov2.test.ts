@@ -14,12 +14,12 @@ import {
   getHistoryChartYAxisLabels,
 } from '@/components/shared/historyChartModel';
 
-const pt = (
-  timestamp: number,
-  value: number,
-  min: number,
-  max: number,
-): AggregatedMetricPoint => ({ timestamp, value, min, max });
+const pt = (timestamp: number, value: number, min: number, max: number): AggregatedMetricPoint => ({
+  timestamp,
+  value,
+  min,
+  max,
+});
 
 describe('formatHistoryChartTooltipValue', () => {
   it('formats percentage units with one decimal', () => {
@@ -96,8 +96,18 @@ describe('getHistoryChartDataMin', () => {
   });
 
   it('falls back to point.value when min is null', () => {
-    const nullMin = { timestamp: 1, value: 7, min: null, max: null } as unknown as AggregatedMetricPoint;
-    const value = { timestamp: 2, value: 3, min: null, max: null } as unknown as AggregatedMetricPoint;
+    const nullMin = {
+      timestamp: 1,
+      value: 7,
+      min: null,
+      max: null,
+    } as unknown as AggregatedMetricPoint;
+    const value = {
+      timestamp: 2,
+      value: 3,
+      min: null,
+      max: null,
+    } as unknown as AggregatedMetricPoint;
     expect(getHistoryChartDataMin([nullMin, value])).toBe(3);
   });
 });
@@ -118,8 +128,18 @@ describe('getHistoryChartDataMax', () => {
   });
 
   it('falls back to point.value when max is null', () => {
-    const low = { timestamp: 1, value: 7, min: null, max: null } as unknown as AggregatedMetricPoint;
-    const high = { timestamp: 2, value: 99, min: null, max: null } as unknown as AggregatedMetricPoint;
+    const low = {
+      timestamp: 1,
+      value: 7,
+      min: null,
+      max: null,
+    } as unknown as AggregatedMetricPoint;
+    const high = {
+      timestamp: 2,
+      value: 99,
+      min: null,
+      max: null,
+    } as unknown as AggregatedMetricPoint;
     expect(getHistoryChartDataMax([low, high])).toBe(99);
   });
 });
@@ -174,7 +194,12 @@ describe('getHistoryChartScale', () => {
 describe('getHistoryChartYAxisLabels', () => {
   it('renders percent labels at the three tick positions', () => {
     expect(
-      getHistoryChartYAxisLabels({ minValue: 0, maxValue: 100, isPercentLike: true, isByteLike: false }),
+      getHistoryChartYAxisLabels({
+        minValue: 0,
+        maxValue: 100,
+        isPercentLike: true,
+        isByteLike: false,
+      }),
     ).toStrictEqual([
       { pct: 0, label: '0%' },
       { pct: 0.5, label: '50%' },
@@ -184,7 +209,12 @@ describe('getHistoryChartYAxisLabels', () => {
 
   it('renders byte-like 0/avg/max labels', () => {
     expect(
-      getHistoryChartYAxisLabels({ minValue: 0, maxValue: 100, isPercentLike: false, isByteLike: true }),
+      getHistoryChartYAxisLabels({
+        minValue: 0,
+        maxValue: 100,
+        isPercentLike: false,
+        isByteLike: true,
+      }),
     ).toStrictEqual([
       { pct: 0, label: '0' },
       { pct: 0.5, label: 'Avg' },
@@ -194,7 +224,12 @@ describe('getHistoryChartYAxisLabels', () => {
 
   it('renders computed numeric labels for other unit kinds', () => {
     expect(
-      getHistoryChartYAxisLabels({ minValue: 10, maxValue: 110, isPercentLike: false, isByteLike: false }),
+      getHistoryChartYAxisLabels({
+        minValue: 10,
+        maxValue: 110,
+        isPercentLike: false,
+        isByteLike: false,
+      }),
     ).toStrictEqual([
       { pct: 0, label: '0' },
       { pct: 0.5, label: '60' },

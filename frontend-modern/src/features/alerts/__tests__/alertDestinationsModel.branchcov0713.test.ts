@@ -172,15 +172,13 @@ describe('normalizeAppriseConfig — branch coverage (0713)', () => {
 
     it("falls back apiKeyHeader to 'X-API-KEY' when empty or undefined", () => {
       expect(normalizeAppriseConfig({ apiKeyHeader: '' }).apiKeyHeader).toBe('X-API-KEY');
-      expect(normalizeAppriseConfig({ apiKeyHeader: undefined }).apiKeyHeader).toBe(
-        'X-API-KEY',
-      );
+      expect(normalizeAppriseConfig({ apiKeyHeader: undefined }).apiKeyHeader).toBe('X-API-KEY');
     });
 
     it('forwards a custom apiKeyHeader verbatim', () => {
-      expect(
-        normalizeAppriseConfig({ apiKeyHeader: 'Authorization' }).apiKeyHeader,
-      ).toBe('Authorization');
+      expect(normalizeAppriseConfig({ apiKeyHeader: 'Authorization' }).apiKeyHeader).toBe(
+        'Authorization',
+      );
     });
   });
 
@@ -230,9 +228,7 @@ describe('normalizeAppriseConfig — branch coverage (0713)', () => {
       // Documents current behaviour: the guard checks typeof and > 0 but
       // not Number.isFinite, so Infinity leaks through. Pinned, not fixed.
       const malformed = { timeoutSeconds: Number.POSITIVE_INFINITY } as Partial<AppriseConfig>;
-      expect(normalizeAppriseConfig(malformed).timeoutSeconds).toBe(
-        Number.POSITIVE_INFINITY,
-      );
+      expect(normalizeAppriseConfig(malformed).timeoutSeconds).toBe(Number.POSITIVE_INFINITY);
     });
   });
 
@@ -295,10 +291,10 @@ describe('normalizeAppriseConfig — branch coverage (0713)', () => {
       expect(normalizeAppriseConfig({ targets: [] }).targetsText).toBe('');
     });
 
-    it("joins a single target without a trailing newline", () => {
-      expect(
-        normalizeAppriseConfig({ targets: ['mailto://user@example.com'] }).targetsText,
-      ).toBe('mailto://user@example.com');
+    it('joins a single target without a trailing newline', () => {
+      expect(normalizeAppriseConfig({ targets: ['mailto://user@example.com'] }).targetsText).toBe(
+        'mailto://user@example.com',
+      );
     });
 
     it("joins multiple targets with '\\n'", () => {
@@ -348,15 +344,11 @@ describe('buildAppriseConfigPayload — branch coverage (0713)', () => {
   // -----------------------------------------------------------------------
   describe('mode passthrough', () => {
     it("forwards mode 'http' unchanged", () => {
-      expect(buildAppriseConfigPayload(makeUIAppriseConfig({ mode: 'http' })).mode).toBe(
-        'http',
-      );
+      expect(buildAppriseConfigPayload(makeUIAppriseConfig({ mode: 'http' })).mode).toBe('http');
     });
 
     it("forwards mode 'cli' unchanged", () => {
-      expect(buildAppriseConfigPayload(makeUIAppriseConfig({ mode: 'cli' })).mode).toBe(
-        'cli',
-      );
+      expect(buildAppriseConfigPayload(makeUIAppriseConfig({ mode: 'cli' })).mode).toBe('cli');
     });
   });
 
@@ -367,28 +359,24 @@ describe('buildAppriseConfigPayload — branch coverage (0713)', () => {
   // -----------------------------------------------------------------------
   describe('boolean passthrough', () => {
     it('forwards enabled true', () => {
-      expect(buildAppriseConfigPayload(makeUIAppriseConfig({ enabled: true })).enabled).toBe(
-        true,
-      );
+      expect(buildAppriseConfigPayload(makeUIAppriseConfig({ enabled: true })).enabled).toBe(true);
     });
 
     it('forwards enabled false', () => {
-      expect(
-        buildAppriseConfigPayload(makeUIAppriseConfig({ enabled: false })).enabled,
-      ).toBe(false);
+      expect(buildAppriseConfigPayload(makeUIAppriseConfig({ enabled: false })).enabled).toBe(
+        false,
+      );
     });
 
     it('forwards skipTlsVerify true', () => {
       expect(
-        buildAppriseConfigPayload(makeUIAppriseConfig({ skipTlsVerify: true }))
-          .skipTlsVerify,
+        buildAppriseConfigPayload(makeUIAppriseConfig({ skipTlsVerify: true })).skipTlsVerify,
       ).toBe(true);
     });
 
     it('forwards skipTlsVerify false', () => {
       expect(
-        buildAppriseConfigPayload(makeUIAppriseConfig({ skipTlsVerify: false }))
-          .skipTlsVerify,
+        buildAppriseConfigPayload(makeUIAppriseConfig({ skipTlsVerify: false })).skipTlsVerify,
       ).toBe(false);
     });
   });
@@ -408,21 +396,21 @@ describe('buildAppriseConfigPayload — branch coverage (0713)', () => {
   // -----------------------------------------------------------------------
   describe('targetsText → targets via parseAppriseTargets', () => {
     it('returns [] for an empty targetsText', () => {
-      expect(buildAppriseConfigPayload(makeUIAppriseConfig({ targetsText: '' })).targets).toStrictEqual([]);
+      expect(
+        buildAppriseConfigPayload(makeUIAppriseConfig({ targetsText: '' })).targets,
+      ).toStrictEqual([]);
     });
 
     it('returns [] for a whitespace-only targetsText (filtered after trim)', () => {
       expect(
-        buildAppriseConfigPayload(makeUIAppriseConfig({ targetsText: '  \n  ,' }))
-          .targets,
+        buildAppriseConfigPayload(makeUIAppriseConfig({ targetsText: '  \n  ,' })).targets,
       ).toStrictEqual([]);
     });
 
     it('returns a single-element array for a one-line targetsText', () => {
       expect(
-        buildAppriseConfigPayload(
-          makeUIAppriseConfig({ targetsText: 'mailto://a@example.com' }),
-        ).targets,
+        buildAppriseConfigPayload(makeUIAppriseConfig({ targetsText: 'mailto://a@example.com' }))
+          .targets,
       ).toStrictEqual(['mailto://a@example.com']);
     });
 
@@ -496,17 +484,13 @@ describe('buildAppriseConfigPayload — branch coverage (0713)', () => {
 
     it('treats differently-cased entries as distinct (no lowercasing)', () => {
       expect(
-        buildAppriseConfigPayload(
-          makeUIAppriseConfig({ targetsText: 'A@x.com,a@x.com' }),
-        ).targets,
+        buildAppriseConfigPayload(makeUIAppriseConfig({ targetsText: 'A@x.com,a@x.com' })).targets,
       ).toStrictEqual(['A@x.com', 'a@x.com']);
     });
 
     it('preserves internal whitespace within an entry (trim is ends-only)', () => {
       expect(
-        buildAppriseConfigPayload(
-          makeUIAppriseConfig({ targetsText: 'a b@example.com' }),
-        ).targets,
+        buildAppriseConfigPayload(makeUIAppriseConfig({ targetsText: 'a b@example.com' })).targets,
       ).toStrictEqual(['a b@example.com']);
     });
   });
@@ -537,8 +521,7 @@ describe('buildAppriseConfigPayload — branch coverage (0713)', () => {
 
     it('forwards a positive timeoutSeconds verbatim', () => {
       expect(
-        buildAppriseConfigPayload(makeUIAppriseConfig({ timeoutSeconds: 45 }))
-          .timeoutSeconds,
+        buildAppriseConfigPayload(makeUIAppriseConfig({ timeoutSeconds: 45 })).timeoutSeconds,
       ).toBe(45);
     });
 
@@ -547,8 +530,7 @@ describe('buildAppriseConfigPayload — branch coverage (0713)', () => {
       // the inbound normalizeAppriseConfig guard is the only place 0 is
       // rewritten. Pin this so a future clamp here would be noticed.
       expect(
-        buildAppriseConfigPayload(makeUIAppriseConfig({ timeoutSeconds: 0 }))
-          .timeoutSeconds,
+        buildAppriseConfigPayload(makeUIAppriseConfig({ timeoutSeconds: 0 })).timeoutSeconds,
       ).toBe(0);
     });
   });

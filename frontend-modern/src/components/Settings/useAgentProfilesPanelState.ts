@@ -35,10 +35,7 @@ import {
   getPreferredNamedEntityLabel,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
-import {
-  getAgentStatusIndicator,
-  isConnectedHealthStatus,
-} from '@/utils/status';
+import { getAgentStatusIndicator, isConnectedHealthStatus } from '@/utils/status';
 
 const resourcePriority = (resource: Resource): number => {
   switch (resource.type) {

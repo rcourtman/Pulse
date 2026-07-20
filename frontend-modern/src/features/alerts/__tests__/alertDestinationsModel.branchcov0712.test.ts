@@ -48,40 +48,26 @@ describe('buildEmailConfigPayload — branch coverage (batch 2)', () => {
       // Each entry is non-empty before trim but becomes '' after trim,
       // exercising the `entry.length > 0 === false` filter arm for
       // strings that only become empty *after* trimming.
-      const result = buildEmailConfigPayload(
-        makeUIEmailConfig({ to: ['   ', '\t', '\n'] }),
-      );
+      const result = buildEmailConfigPayload(makeUIEmailConfig({ to: ['   ', '\t', '\n'] }));
       expect(result.to).toStrictEqual([]);
     });
 
     it('strips leading-only, trailing-only, and tab-padded whitespace independently', () => {
       const result = buildEmailConfigPayload(
         makeUIEmailConfig({
-          to: [
-            '  leading@test.com',
-            'trailing@test.com  ',
-            '\ttab@test.com\t',
-          ],
+          to: ['  leading@test.com', 'trailing@test.com  ', '\ttab@test.com\t'],
         }),
       );
-      expect(result.to).toStrictEqual([
-        'leading@test.com',
-        'trailing@test.com',
-        'tab@test.com',
-      ]);
+      expect(result.to).toStrictEqual(['leading@test.com', 'trailing@test.com', 'tab@test.com']);
     });
 
     it('preserves internal whitespace within recipient entries', () => {
-      const result = buildEmailConfigPayload(
-        makeUIEmailConfig({ to: ['  alice bob@test.com  '] }),
-      );
+      const result = buildEmailConfigPayload(makeUIEmailConfig({ to: ['  alice bob@test.com  '] }));
       expect(result.to).toStrictEqual(['alice bob@test.com']);
     });
 
     it('keeps a single already-trimmed entry without modification', () => {
-      const result = buildEmailConfigPayload(
-        makeUIEmailConfig({ to: ['clean@test.com'] }),
-      );
+      const result = buildEmailConfigPayload(makeUIEmailConfig({ to: ['clean@test.com'] }));
       expect(result.to).toStrictEqual(['clean@test.com']);
     });
 

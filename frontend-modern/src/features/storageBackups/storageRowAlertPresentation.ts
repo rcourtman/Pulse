@@ -19,8 +19,7 @@ export const getStorageRowAlertPresentation = (options: {
   isExpanded: boolean;
   isResourceHighlighted: boolean;
 }): StorageRowAlertPresentation => {
-  const showAlertHighlight =
-    options.alertState.hasUnacknowledgedAlert && options.parentNodeOnline;
+  const showAlertHighlight = options.alertState.hasUnacknowledgedAlert && options.parentNodeOnline;
   const hasAcknowledgedOnlyAlert =
     options.alertState.hasAcknowledgedOnlyAlert && options.parentNodeOnline;
 

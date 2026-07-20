@@ -184,7 +184,8 @@ describe('getActionAuditVerificationOutcomePresentation — actionResultV2 verif
     );
     expect(presentation).toStrictEqual({
       label: 'Confirmation lacks an evidence source',
-      detail: 'The record says confirmed but provides no evidence source; do not treat it as independently verified.',
+      detail:
+        'The record says confirmed but provides no evidence source; do not treat it as independently verified.',
       evidenceSummary: 'No additional verification summary. Source: No evidence source.',
       className:
         'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',
@@ -263,7 +264,8 @@ describe('getActionAuditVerificationOutcomePresentation — actionResultV2 verif
     });
     expect(presentation).toStrictEqual({
       label: 'Legacy check passed (source unclassified)',
-      detail: 'This older record does not identify an evidence source. Do not treat it as independent confirmation.',
+      detail:
+        'This older record does not identify an evidence source. Do not treat it as independent confirmation.',
       evidenceSummary: 'legacy readback',
       className:
         'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300',

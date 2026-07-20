@@ -129,7 +129,9 @@ describe('getAlertResourceIncidentLoadFailure — branch coverage', () => {
 describe('getAlertResourceIncidentNoteSaveFailure — branch coverage', () => {
   it('returns the canonical note-save-failure string and matches the exported constant', () => {
     expect(getAlertResourceIncidentNoteSaveFailure()).toBe('Failed to save incident note');
-    expect(getAlertResourceIncidentNoteSaveFailure()).toBe(ALERT_RESOURCE_INCIDENT_NOTE_SAVE_FAILURE);
+    expect(getAlertResourceIncidentNoteSaveFailure()).toBe(
+      ALERT_RESOURCE_INCIDENT_NOTE_SAVE_FAILURE,
+    );
   });
 });
 

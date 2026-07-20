@@ -31,10 +31,10 @@ describe('patrol api', () => {
 
   it('uses server acknowledgement and activation endpoints for Autopilot', async () => {
     await createPatrolAutopilotAcknowledgement('ack/one');
-    expect(apiFetchJSONMock).toHaveBeenLastCalledWith(
-      '/api/ai/patrol/autonomy/acknowledgements',
-      { method: 'POST', body: JSON.stringify({ acknowledgement_id: 'ack/one' }) },
-    );
+    expect(apiFetchJSONMock).toHaveBeenLastCalledWith('/api/ai/patrol/autonomy/acknowledgements', {
+      method: 'POST',
+      body: JSON.stringify({ acknowledgement_id: 'ack/one' }),
+    });
 
     await updatePatrolAutonomySettings({
       autonomy_level: 'full',
@@ -511,7 +511,10 @@ describe('triggerPatrolRun scope body', () => {
 
   beforeEach(() => {
     apiFetchJSONMock.mockReset();
-    apiFetchJSONMock.mockResolvedValue({ success: true, message: 'Triggered targeted Patrol check' });
+    apiFetchJSONMock.mockResolvedValue({
+      success: true,
+      message: 'Triggered targeted Patrol check',
+    });
   });
 
   it('sends no body for a fleet-wide run', async () => {

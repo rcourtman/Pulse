@@ -329,9 +329,9 @@ describe('getOutlierEmphasis (branch coverage)', () => {
   });
 
   it('returns baseline when stats.max <= 0', () => {
-    expect(
-      getOutlierEmphasis(5, { median: 0, mad: 0, max: 0, p97: 0, p99: 0, count: 5 }),
-    ).toEqual(BASELINE);
+    expect(getOutlierEmphasis(5, { median: 0, mad: 0, max: 0, p97: 0, p99: 0, count: 5 })).toEqual(
+      BASELINE,
+    );
   });
 
   describe('small sample path (count < 4)', () => {

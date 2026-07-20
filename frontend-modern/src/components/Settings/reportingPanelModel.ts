@@ -52,10 +52,7 @@ export function buildReportingFilename(
   now: Date,
   definition: Pick<
     ReportingPerformanceReportDefinition,
-    | 'filenameDateStyle'
-    | 'multiFilenamePrefix'
-    | 'singleFilenamePrefix'
-    | 'singleFilenameSubject'
+    'filenameDateStyle' | 'multiFilenamePrefix' | 'singleFilenamePrefix' | 'singleFilenameSubject'
   >,
 ): string {
   const date = formatReportingFilenameDate(now, definition.filenameDateStyle);
@@ -67,7 +64,10 @@ export function buildReportingFilename(
 
 function sanitizeReportingFilenameSubject(
   value: string,
-  subject: Pick<ReportingPerformanceReportDefinition, 'singleFilenameSubject'>['singleFilenameSubject'],
+  subject: Pick<
+    ReportingPerformanceReportDefinition,
+    'singleFilenameSubject'
+  >['singleFilenameSubject'],
 ): string {
   switch (subject) {
     case 'resource_id': {

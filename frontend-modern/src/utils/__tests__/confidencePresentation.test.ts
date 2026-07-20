@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  formatConfidenceLabel,
-  formatConfidencePercentage,
-} from '@/utils/confidencePresentation';
+import { formatConfidenceLabel, formatConfidencePercentage } from '@/utils/confidencePresentation';
 
 describe('confidencePresentation', () => {
   it('formats shared confidence percentages', () => {

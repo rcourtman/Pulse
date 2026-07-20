@@ -13,7 +13,9 @@ interface EnvironmentLockBadgeProps {
 
 export const EnvironmentLockBadge: Component<EnvironmentLockBadgeProps> = (props) => (
   <span
-    class={props.class ? `${ENVIRONMENT_LOCK_BADGE_CLASS} ${props.class}` : ENVIRONMENT_LOCK_BADGE_CLASS}
+    class={
+      props.class ? `${ENVIRONMENT_LOCK_BADGE_CLASS} ${props.class}` : ENVIRONMENT_LOCK_BADGE_CLASS
+    }
     title={getEnvironmentLockTitle(props.envVar)}
   >
     {props.icon ? <props.icon class="w-3 h-3" /> : null}

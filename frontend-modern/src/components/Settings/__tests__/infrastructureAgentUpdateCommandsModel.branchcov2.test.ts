@@ -218,7 +218,9 @@ describe('connectionDisplayName (via target.displayName)', () => {
       agentIdentity: { hostname: 'real-hostname', platform: 'linux' },
     });
 
-    const targets = collectInfrastructureAgentUpdateTargets([row({ attachedConnections: [agent] })]);
+    const targets = collectInfrastructureAgentUpdateTargets([
+      row({ attachedConnections: [agent] }),
+    ]);
 
     expect(targets[0]?.displayName).toBe('real-hostname');
   });
@@ -231,7 +233,9 @@ describe('connectionDisplayName (via target.displayName)', () => {
       agentIdentity: undefined,
     });
 
-    const targets = collectInfrastructureAgentUpdateTargets([row({ attachedConnections: [agent] })]);
+    const targets = collectInfrastructureAgentUpdateTargets([
+      row({ attachedConnections: [agent] }),
+    ]);
 
     expect(targets[0]?.displayName).toBe('named-host');
   });
@@ -244,7 +248,9 @@ describe('connectionDisplayName (via target.displayName)', () => {
       agentIdentity: { hostname: '   ', platform: 'linux' },
     });
 
-    const targets = collectInfrastructureAgentUpdateTargets([row({ attachedConnections: [agent] })]);
+    const targets = collectInfrastructureAgentUpdateTargets([
+      row({ attachedConnections: [agent] }),
+    ]);
 
     expect(targets[0]?.displayName).toBe('named-host');
   });
@@ -257,7 +263,9 @@ describe('connectionDisplayName (via target.displayName)', () => {
       agentIdentity: { hostname: '   ', platform: 'linux' },
     });
 
-    const targets = collectInfrastructureAgentUpdateTargets([row({ attachedConnections: [agent] })]);
+    const targets = collectInfrastructureAgentUpdateTargets([
+      row({ attachedConnections: [agent] }),
+    ]);
 
     expect(targets[0]?.displayName).toBe('10.0.0.4');
   });
@@ -270,7 +278,9 @@ describe('connectionDisplayName (via target.displayName)', () => {
       agentIdentity: { hostname: '', platform: 'linux' },
     });
 
-    const targets = collectInfrastructureAgentUpdateTargets([row({ attachedConnections: [agent] })]);
+    const targets = collectInfrastructureAgentUpdateTargets([
+      row({ attachedConnections: [agent] }),
+    ]);
 
     expect(targets[0]?.displayName).toBe('agent:h5');
   });
@@ -362,7 +372,9 @@ describe('expectedVersionFor (via target.expectedVersion)', () => {
       agentUpdateAvailable: true,
     });
 
-    const targets = collectInfrastructureAgentUpdateTargets([row({ attachedConnections: [agent] })]);
+    const targets = collectInfrastructureAgentUpdateTargets([
+      row({ attachedConnections: [agent] }),
+    ]);
 
     expect(targets[0]?.expectedVersion).toBe('6.0.1');
   });
@@ -392,7 +404,9 @@ describe('expectedVersionFor (via target.expectedVersion)', () => {
       agentUpdateAvailable: true,
     });
 
-    const targets = collectInfrastructureAgentUpdateTargets([row({ attachedConnections: [agent] })]);
+    const targets = collectInfrastructureAgentUpdateTargets([
+      row({ attachedConnections: [agent] }),
+    ]);
 
     expect(targets[0]?.expectedVersion).toBeUndefined();
   });

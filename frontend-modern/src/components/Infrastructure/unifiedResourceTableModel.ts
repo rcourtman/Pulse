@@ -2,10 +2,7 @@ import type { Resource } from '@/types/resource';
 import { getServiceHealthSummaryPresentation } from '@/utils/serviceHealthPresentation';
 import type { IODistributionStats } from '@/components/Infrastructure/infrastructureSelectors';
 import type { PBSPlatformData, PMGPlatformData } from './resourceDetailMappers';
-import {
-  getPbsActivitySummary,
-  getPbsJobTotal,
-} from './resourceDetailDrawerServiceModel';
+import { getPbsActivitySummary, getPbsJobTotal } from './resourceDetailDrawerServiceModel';
 
 type PBSServiceData = PBSPlatformData;
 type PMGServiceData = PMGPlatformData;
@@ -42,8 +39,7 @@ export const isResourceOnline = (resource: Resource) => {
 export const getPBSTableRow = (resource: Resource): PBSTableRow | null => {
   if (resource.type !== 'pbs') return null;
   const platformData = resource.platformData as
-    | { pbs?: PBSServiceData; pmg?: PMGServiceData }
-    | undefined;
+    { pbs?: PBSServiceData; pmg?: PMGServiceData } | undefined;
   const pbs = platformData?.pbs;
   const totalJobs = getPbsJobTotal(pbs);
   const activitySummary = getPbsActivitySummary(pbs);
@@ -63,8 +59,7 @@ export const getPBSTableRow = (resource: Resource): PBSTableRow | null => {
 export const getPMGTableRow = (resource: Resource): PMGTableRow | null => {
   if (resource.type !== 'pmg') return null;
   const platformData = resource.platformData as
-    | { pbs?: PBSServiceData; pmg?: PMGServiceData }
-    | undefined;
+    { pbs?: PBSServiceData; pmg?: PMGServiceData } | undefined;
   const pmg = platformData?.pmg;
   const health = pmg?.connectionHealth?.trim() || null;
   const backlog = (pmg?.queueDeferred || 0) + (pmg?.queueHold || 0);
@@ -80,10 +75,7 @@ export const getPMGTableRow = (resource: Resource): PMGTableRow | null => {
   };
 };
 
-export const getOutlierEmphasis = (
-  value: number,
-  stats: IODistributionStats,
-): IOEmphasis => {
+export const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphasis => {
   if (!Number.isFinite(value) || value <= 0 || stats.max <= 0) {
     return { className: 'text-muted', showOutlierHint: false };
   }

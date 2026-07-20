@@ -137,7 +137,10 @@ describe('routeStateNavigation', () => {
 
   it('skips redundant navigations to the current path', () => {
     const navigate = vi.fn();
-    const scheduler = createRouteStateNavigateScheduler(navigate, () => '/proxmox/backups?rollupId=abc');
+    const scheduler = createRouteStateNavigateScheduler(
+      navigate,
+      () => '/proxmox/backups?rollupId=abc',
+    );
 
     scheduler.schedule('/proxmox/backups?rollupId=abc');
     vi.runAllTimers();

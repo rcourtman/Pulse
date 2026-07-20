@@ -190,22 +190,25 @@ describe('infrastructureOnboardingPresentation — branch coverage (branchcov2)'
     it('pulls platform-specific manifest canonicalProjections for every supported API platform', () => {
       // Each platform exercises a distinct manifestEntry.canonicalProjections,
       // confirming the manifest side of the ?? is data-driven per type.
-      expect(getInfrastructureOnboardingProductPresentation('truenas').canonicalProjections)
-        .toStrictEqual([
-          'agent',
-          'vm',
-          'app-container',
-          'network-share',
-          'storage',
-          'physical-disk',
-        ]);
-      expect(getInfrastructureOnboardingProductPresentation('pve').canonicalProjections)
-        .toStrictEqual(['agent', 'vm', 'system-container', 'storage', 'ceph', 'physical-disk']);
-      expect(getInfrastructureOnboardingProductPresentation('pbs').canonicalProjections)
-        .toStrictEqual(['pbs', 'storage']);
-      expect(getInfrastructureOnboardingProductPresentation('pmg').canonicalProjections).toStrictEqual(
-        ['pmg'],
-      );
+      expect(
+        getInfrastructureOnboardingProductPresentation('truenas').canonicalProjections,
+      ).toStrictEqual([
+        'agent',
+        'vm',
+        'app-container',
+        'network-share',
+        'storage',
+        'physical-disk',
+      ]);
+      expect(
+        getInfrastructureOnboardingProductPresentation('pve').canonicalProjections,
+      ).toStrictEqual(['agent', 'vm', 'system-container', 'storage', 'ceph', 'physical-disk']);
+      expect(
+        getInfrastructureOnboardingProductPresentation('pbs').canonicalProjections,
+      ).toStrictEqual(['pbs', 'storage']);
+      expect(
+        getInfrastructureOnboardingProductPresentation('pmg').canonicalProjections,
+      ).toStrictEqual(['pmg']);
     });
 
     it('reads the manifest supportFloor for supported API platforms', () => {

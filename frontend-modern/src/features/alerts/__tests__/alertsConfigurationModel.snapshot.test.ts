@@ -14,7 +14,7 @@ import {
 /** Build a minimal AlertConfig from extra fields, using `as unknown as` so
  *  we can omit required-but-irrelevant props and inject wrong-typed values. */
 const cfg = (extra: Record<string, unknown>): AlertConfig =>
-  ({ overrides: {}, ...extra } as unknown as AlertConfig);
+  ({ overrides: {}, ...extra }) as unknown as AlertConfig;
 
 const localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
@@ -260,9 +260,7 @@ describe('readAlertsConfigurationSnapshot — factory fallback (undefined-trigge
 
 describe('readAlertsConfigurationSnapshot — present-but-empty section zeroes fields', () => {
   it('zeroes guestDefaults when the section object is empty', () => {
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ guestDefaults: {} }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ guestDefaults: {} }));
     // getTriggerValue(undefined) = 0; 0 ?? 80 = 0 (the ?? never fires)
     expect(snapshot.guestDefaults.cpu).toBe(0);
     expect(snapshot.guestDefaults.memory).toBe(0);
@@ -276,9 +274,7 @@ describe('readAlertsConfigurationSnapshot — present-but-empty section zeroes f
   });
 
   it('zeroes nodeDefaults when the section object is empty', () => {
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ nodeDefaults: {} }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ nodeDefaults: {} }));
     expect(snapshot.nodeDefaults.cpu).toBe(0);
     expect(snapshot.nodeDefaults.memory).toBe(0);
     expect(snapshot.nodeDefaults.disk).toBe(0);
@@ -514,9 +510,7 @@ describe('readAlertsConfigurationSnapshot — diskTempByType', () => {
 describe('readAlertsConfigurationSnapshot — diskFillByType', () => {
   it('copies the map as-is when present', () => {
     const fillMap = { ssd: { trigger: 90, clear: 85 }, hdd: { trigger: 95, clear: 90 } };
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ diskFillByType: fillMap }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ diskFillByType: fillMap }));
     expect(snapshot.diskFillByType).toEqual(fillMap);
   });
 });
@@ -634,9 +628,7 @@ describe('readAlertsConfigurationSnapshot — storageDefault', () => {
   });
 
   it('extracts trigger when storageDefault is a number (legacy)', () => {
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ storageDefault: 78 }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ storageDefault: 78 }));
     expect(snapshot.storageDefault).toBe(78);
   });
 });
@@ -692,9 +684,7 @@ describe('readAlertsConfigurationSnapshot — timeThresholds', () => {
   });
 
   it('falls back to DEFAULT_DELAY_SECONDS for missing fields', () => {
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ timeThresholds: { guest: 30 } }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ timeThresholds: { guest: 30 } }));
     expect(snapshot.timeThresholds.guest).toBe(30);
     expect(snapshot.timeThresholds.node).toBe(5);
     expect(snapshot.timeThresholds['vmware-network']).toBe(5);
@@ -1024,9 +1014,7 @@ describe('readAlertsConfigurationSnapshot — schedule.quietHours', () => {
   });
 
   it('keeps default quietHours when schedule exists but quietHours is absent', () => {
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ schedule: { cooldown: 10 } }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ schedule: { cooldown: 10 } }));
     expect(snapshot.scheduleQuietHours.enabled).toBe(false);
     expect(snapshot.scheduleQuietHours.start).toBe('22:00');
   });
@@ -1038,33 +1026,25 @@ describe('readAlertsConfigurationSnapshot — schedule.quietHours', () => {
 
 describe('readAlertsConfigurationSnapshot — schedule.cooldown', () => {
   it('disables cooldown and zeroes minutes when value is zero', () => {
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ schedule: { cooldown: 0 } }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ schedule: { cooldown: 0 } }));
     expect(snapshot.scheduleCooldown.enabled).toBe(false);
     expect(snapshot.scheduleCooldown.minutes).toBe(0);
   });
 
   it('enables and clamps cooldown minutes when value is positive', () => {
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ schedule: { cooldown: 200 } }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ schedule: { cooldown: 200 } }));
     expect(snapshot.scheduleCooldown.enabled).toBe(true);
     expect(snapshot.scheduleCooldown.minutes).toBe(120); // clamped to max
   });
 
   it('keeps default cooldown when cooldown is undefined', () => {
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ schedule: { quietHours: undefined } }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ schedule: { quietHours: undefined } }));
     expect(snapshot.scheduleCooldown.enabled).toBe(true);
     expect(snapshot.scheduleCooldown.minutes).toBe(30);
   });
 
   it('uses fallbackMaxAlertsPerHour default when maxAlertsHour is undefined', () => {
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ schedule: { cooldown: 15 } }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ schedule: { cooldown: 15 } }));
     expect(snapshot.scheduleCooldown.maxAlerts).toBe(3); // MAX_ALERTS_DEFAULT
   });
 });
@@ -1138,9 +1118,7 @@ describe('readAlertsConfigurationSnapshot — schedule.grouping', () => {
   });
 
   it('keeps default grouping when grouping is absent', () => {
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ schedule: { cooldown: 10 } }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ schedule: { cooldown: 10 } }));
     expect(snapshot.scheduleGrouping.enabled).toBe(true);
     expect(snapshot.scheduleGrouping.window).toBe(1); // GROUPING_WINDOW_DEFAULT_MINUTES
   });
@@ -1152,16 +1130,12 @@ describe('readAlertsConfigurationSnapshot — schedule.grouping', () => {
 
 describe('readAlertsConfigurationSnapshot — schedule.notifyOnResolve', () => {
   it('sets to false when defined as false', () => {
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ schedule: { notifyOnResolve: false } }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ schedule: { notifyOnResolve: false } }));
     expect(snapshot.notifyOnResolve).toBe(false);
   });
 
   it('keeps default true when notifyOnResolve is undefined', () => {
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ schedule: { cooldown: 10 } }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ schedule: { cooldown: 10 } }));
     expect(snapshot.notifyOnResolve).toBe(true);
   });
 });
@@ -1244,9 +1218,7 @@ describe('readAlertsConfigurationSnapshot — schedule.escalation', () => {
   });
 
   it('keeps default escalation when escalation is absent', () => {
-    const snapshot = readAlertsConfigurationSnapshot(
-      cfg({ schedule: { cooldown: 10 } }),
-    );
+    const snapshot = readAlertsConfigurationSnapshot(cfg({ schedule: { cooldown: 10 } }));
     expect(snapshot.scheduleEscalation.enabled).toBe(false);
     expect(snapshot.scheduleEscalation.levels).toEqual([]);
   });

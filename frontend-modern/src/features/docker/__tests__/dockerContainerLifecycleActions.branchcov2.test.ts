@@ -40,9 +40,9 @@ describe('dockerContainerLifecycleActions.branchcov2', () => {
     });
 
     it('falls back to displayName when name is blank', () => {
-      expect(
-        dockerContainerLifecycleName(resource({ name: '   ', displayName: 'Web App' })),
-      ).toBe('Web App');
+      expect(dockerContainerLifecycleName(resource({ name: '   ', displayName: 'Web App' }))).toBe(
+        'Web App',
+      );
     });
 
     it('falls back to docker.displayName when name and displayName are blank', () => {

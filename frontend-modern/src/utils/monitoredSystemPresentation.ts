@@ -105,8 +105,7 @@ const normalizeImpactPreviewCount = (count: number | null | undefined): number =
 const formatImpactPreviewCount = (count: number): string =>
   `${count} monitored ${count === 1 ? 'system' : 'systems'}`;
 
-const formatImpactPreviewDelta = (delta: number): string =>
-  delta > 0 ? `+${delta}` : `${delta}`;
+const formatImpactPreviewDelta = (delta: number): string => (delta > 0 ? `+${delta}` : `${delta}`);
 
 export function getMonitoredSystemLedgerPresentation() {
   return MONITORED_SYSTEM_LEDGER_PRESENTATION;

@@ -199,9 +199,7 @@ describe('alertDestinationsPresentation.branchcov0718', () => {
 
     it('exposes the apprise TLS vocabulary', () => {
       expect(ALERT_DESTINATIONS_APPRISE_TLS_LABEL).toBe('TLS verification');
-      expect(ALERT_DESTINATIONS_APPRISE_TLS_CHECKBOX_LABEL).toBe(
-        'Allow self-signed certificates',
-      );
+      expect(ALERT_DESTINATIONS_APPRISE_TLS_CHECKBOX_LABEL).toBe('Allow self-signed certificates');
       expect(ALERT_DESTINATIONS_APPRISE_TLS_HELP).toBe(
         'Enable only when the Apprise API uses a self-signed certificate.',
       );

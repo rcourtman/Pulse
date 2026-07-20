@@ -412,19 +412,17 @@ describe('deriveLegacySourceList (via canonicalizeRealtimeResource)', () => {
   });
 
   it('returns ["availability"] for network-endpoint type', () => {
-    const result = canonicalizeRealtimeResource(
-      ({
-        id: 'ne-1',
-        type: 'network-endpoint',
-        name: 'endpoint',
-        displayName: 'Endpoint',
-        platformId: 'ne-1',
-        platformType: 'generic',
-        sourceType: 'api',
-        status: 'online',
-        lastSeen: 1_700_000_000_000,
-      }) as Resource,
-    );
+    const result = canonicalizeRealtimeResource({
+      id: 'ne-1',
+      type: 'network-endpoint',
+      name: 'endpoint',
+      displayName: 'Endpoint',
+      platformId: 'ne-1',
+      platformType: 'generic',
+      sourceType: 'api',
+      status: 'online',
+      lastSeen: 1_700_000_000_000,
+    } as Resource);
     expect(pd(result).sources).toEqual(['availability']);
     expect(result.platformType).toBe('availability');
   });
@@ -792,7 +790,15 @@ describe('buildDisk (via nodeFromResource)', () => {
         disk: undefined,
         proxmox: {
           nodeName: 'n1',
-          disk: { total: 4000, used: 1000, free: 3000, usage: 25, mountpoint: '/', type: 'ext4', device: '/dev/sda1' },
+          disk: {
+            total: 4000,
+            used: 1000,
+            free: 3000,
+            usage: 25,
+            mountpoint: '/',
+            type: 'ext4',
+            device: '/dev/sda1',
+          },
         } as unknown as Resource['proxmox'],
       }),
     );
@@ -984,12 +990,7 @@ describe('buildTemperature (via nodeFromResource)', () => {
         platformData: {
           temperature: {
             available: true,
-            nvme: [
-              { device: 'nvme0', temp: 40 },
-              { device: 'nvme1' },
-              { temp: 35 },
-              null,
-            ],
+            nvme: [{ device: 'nvme0', temp: 40 }, { device: 'nvme1' }, { temp: 35 }, null],
           },
         },
       }),
@@ -1006,7 +1007,12 @@ describe('mergePlatformData (via mergeCanonicalResource)', () => {
   it('returns existing platformData when incoming has none', () => {
     const merged = mergeCanonicalResource(
       agent({ id: 'r1', platformData: undefined }),
-      agent({ id: 'r1', platformType: 'agent', sourceType: 'agent', platformData: { agent: { hostname: 'h' } } }),
+      agent({
+        id: 'r1',
+        platformType: 'agent',
+        sourceType: 'agent',
+        platformData: { agent: { hostname: 'h' } },
+      }),
     );
     const agentFacet = pd(merged).agent as Record<string, unknown> | undefined;
     expect(agentFacet?.hostname).toBe('h');
@@ -1222,9 +1228,7 @@ describe('mapPMGQuarantine (via pmgInstanceFromResource)', () => {
   });
 
   it('returns undefined quarantine when the value is not a record', () => {
-    const instance = pmgInstanceFromResource(
-      pmgResource({ quarantine: 'not-a-record' }),
-    );
+    const instance = pmgInstanceFromResource(pmgResource({ quarantine: 'not-a-record' }));
     expect(instance?.quarantine).toBeUndefined();
   });
 
@@ -1295,9 +1299,7 @@ describe('pbsInstanceFromResource metric fallbacks', () => {
   });
 
   it('falls back to resource.status for connectionHealth when pbs facet lacks it', () => {
-    const instance = pbsInstanceFromResource(
-      pbsResource({}, { status: 'degraded' }),
-    );
+    const instance = pbsInstanceFromResource(pbsResource({}, { status: 'degraded' }));
     expect(instance?.connectionHealth).toBe('degraded');
   });
 

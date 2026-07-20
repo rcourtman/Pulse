@@ -28,8 +28,7 @@ describe('searchTipsPopoverModel.branchcov0712c', () => {
       // The ternary only special-cases 'left'; anything else (including a
       // wrong-typed value that slips past the union at runtime) must fall to
       // the 'right-0' arm.
-      const bogus =
-        'center' as unknown as Parameters<typeof getSearchTipsPopoverPositionClass>[0];
+      const bogus = 'center' as unknown as Parameters<typeof getSearchTipsPopoverPositionClass>[0];
       expect(getSearchTipsPopoverPositionClass(bogus)).toBe('right-0');
     });
   });
@@ -56,8 +55,7 @@ describe('searchTipsPopoverModel.branchcov0712c', () => {
     it('falls through both ifs to the default return for an unknown variant (defensive)', () => {
       // An out-of-union value must not match either `if` guard and so lands in
       // the trailing default (the icon) return.
-      const bogus =
-        'ghost' as unknown as Parameters<typeof getSearchTipsPopoverTriggerClass>[0];
+      const bogus = 'ghost' as unknown as Parameters<typeof getSearchTipsPopoverTriggerClass>[0];
       expect(getSearchTipsPopoverTriggerClass(bogus)).toBe(
         `flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:text-muted sm:h-5 sm:w-5 ${TRIGGER_BASE_CLASSES}`,
       );

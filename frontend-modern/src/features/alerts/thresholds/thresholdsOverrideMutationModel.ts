@@ -31,9 +31,7 @@ export const withThresholdEntries = (
   return next;
 };
 
-export const stripStateKeys = (
-  thresholds: Record<string, number>,
-): Record<string, number> => {
+export const stripStateKeys = (thresholds: Record<string, number>): Record<string, number> => {
   const next = { ...thresholds };
   delete (next as Record<string, unknown>).disabled;
   delete (next as Record<string, unknown>).disableConnectivity;

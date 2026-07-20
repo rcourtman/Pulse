@@ -382,7 +382,11 @@ export const AICostDashboard: Component = () => {
                   <div class="text-lg font-semibold text-base-content">
                     <Show
                       when={estimatedTotalUSD() != null}
-                      fallback={<span class="text-muted" aria-hidden="true">—</span>}
+                      fallback={
+                        <span class="text-muted" aria-hidden="true">
+                          —
+                        </span>
+                      }
                     >
                       {formatUSD(estimatedTotalUSD() ?? 0)}
                     </Show>
@@ -394,7 +398,11 @@ export const AICostDashboard: Component = () => {
                   <div class="text-lg font-semibold text-base-content mt-0.5">
                     <Show
                       when={parsedBudgetUSD30d() != null}
-                      fallback={<span class="text-muted" aria-hidden="true">—</span>}
+                      fallback={
+                        <span class="text-muted" aria-hidden="true">
+                          —
+                        </span>
+                      }
                     >
                       {formatUSD(parsedBudgetUSD30d() ?? 0)}
                     </Show>
@@ -481,7 +489,15 @@ export const AICostDashboard: Component = () => {
               <div class="text-xs text-muted">
                 USD is an estimate based on public list prices. It may differ from billing.
                 <Show when={unpricedProviderModels().length > 0}>
-                  <span class="ml-2" title={`Pricing unknown for:\n${unpricedProviderModels().map((pm) => `${getAIProviderDisplayName(pm.provider) || pm.provider}/${pm.model}`).join('\n')}`}>
+                  <span
+                    class="ml-2"
+                    title={`Pricing unknown for:\n${unpricedProviderModels()
+                      .map(
+                        (pm) =>
+                          `${getAIProviderDisplayName(pm.provider) || pm.provider}/${pm.model}`,
+                      )
+                      .join('\n')}`}
+                  >
                     Estimated spend is partial — {unpricedProviderModels().length} model
                     {unpricedProviderModels().length === 1 ? '' : 's'} have unknown pricing.
                   </span>
@@ -547,7 +563,11 @@ export const AICostDashboard: Component = () => {
                         <TableCell class="py-2 px-2 text-right text-base-content">
                           <Show
                             when={pm.pricing_known}
-                            fallback={<span class="text-muted" aria-hidden="true">—</span>}
+                            fallback={
+                              <span class="text-muted" aria-hidden="true">
+                                —
+                              </span>
+                            }
                           >
                             {formatUSD(pm.estimated_usd ?? 0)}
                           </Show>

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  evaluateFilterStack,
-  parseFilter,
-  parseFilterStack,
-} from '@/utils/searchQuery';
+import { evaluateFilterStack, parseFilter, parseFilterStack } from '@/utils/searchQuery';
 import type {
   ComparisonOperator,
   FilterStack,
@@ -110,9 +106,7 @@ describe('evaluateMetricCondition — field switch branches (via evaluateFilterS
 
   it('cpu: missing cpu key uses the : 0 ternary arm', () => {
     // 'cpu' not in guest -> value 0; 0 < 1 true
-    expect(
-      evaluateFilterStack(guestWithout(['cpu']), single(metric('cpu', '<', 1))),
-    ).toBe(true);
+    expect(evaluateFilterStack(guestWithout(['cpu']), single(metric('cpu', '<', 1)))).toBe(true);
   });
 
   it('memory: falsy/missing memory yields 0', () => {
@@ -124,9 +118,9 @@ describe('evaluateMetricCondition — field switch branches (via evaluateFilterS
       ),
     ).toBe(true);
     // memory key absent -> 0; 0 <= 0 true
-    expect(
-      evaluateFilterStack(guestWithout(['memory']), single(metric('memory', '<=', 0))),
-    ).toBe(true);
+    expect(evaluateFilterStack(guestWithout(['memory']), single(metric('memory', '<=', 0)))).toBe(
+      true,
+    );
   });
 
   it('memory: compares the raw usage value when present', () => {
@@ -150,7 +144,10 @@ describe('evaluateMetricCondition — field switch branches (via evaluateFilterS
 
   it('uptime: running guest uses the uptime value', () => {
     expect(
-      evaluateFilterStack(makeGuest({ status: 'running', uptime: 7200 }), single(metric('uptime', '>', 3600))),
+      evaluateFilterStack(
+        makeGuest({ status: 'running', uptime: 7200 }),
+        single(metric('uptime', '>', 3600)),
+      ),
     ).toBe(true);
   });
 
@@ -164,9 +161,9 @@ describe('evaluateMetricCondition — field switch branches (via evaluateFilterS
   });
 
   it('uptime: running status but missing uptime key yields 0', () => {
-    expect(
-      evaluateFilterStack(guestWithout(['uptime']), single(metric('uptime', '>', 1))),
-    ).toBe(false);
+    expect(evaluateFilterStack(guestWithout(['uptime']), single(metric('uptime', '>', 1)))).toBe(
+      false,
+    );
   });
 
   it('default field: a switch-unlisted metric field present on the guest is read numerically', () => {
@@ -220,12 +217,8 @@ describe('evaluateTextCondition — field switch branches (via evaluateFilterSta
   const text = (field: string, value: string): ParsedFilter => ({ type: 'text', field, value });
 
   it('name: missing/empty name returns false', () => {
-    expect(
-      evaluateFilterStack(guestWithout(['name']), single(text('name', 'test'))),
-    ).toBe(false);
-    expect(
-      evaluateFilterStack(makeGuest({ name: '' }), single(text('name', 'test'))),
-    ).toBe(false);
+    expect(evaluateFilterStack(guestWithout(['name']), single(text('name', 'test')))).toBe(false);
+    expect(evaluateFilterStack(makeGuest({ name: '' }), single(text('name', 'test')))).toBe(false);
   });
 
   it('name: case-insensitive substring match', () => {
@@ -239,9 +232,9 @@ describe('evaluateTextCondition — field switch branches (via evaluateFilterSta
   });
 
   it('node: substring match', () => {
-    expect(evaluateFilterStack(makeGuest({ node: 'cluster-a' }), single(text('node', 'cluster')))).toBe(
-      true,
-    );
+    expect(
+      evaluateFilterStack(makeGuest({ node: 'cluster-a' }), single(text('node', 'cluster'))),
+    ).toBe(true);
   });
 
   it('vmid: falsy vmid (0) returns false', () => {
@@ -258,9 +251,7 @@ describe('evaluateTextCondition — field switch branches (via evaluateFilterSta
     });
 
     it('returns false when tags is null', () => {
-      expect(
-        evaluateFilterStack(makeGuest({ tags: null }), single(text('tags', 'x'))),
-      ).toBe(false);
+      expect(evaluateFilterStack(makeGuest({ tags: null }), single(text('tags', 'x')))).toBe(false);
     });
 
     it('returns false for an empty tags array', () => {
@@ -278,7 +269,10 @@ describe('evaluateTextCondition — field switch branches (via evaluateFilterSta
 
     it('returns false when tags is a non-array, non-string value', () => {
       expect(
-        evaluateFilterStack(makeGuest({ tags: 42 as unknown as string[] }), single(text('tags', 'x'))),
+        evaluateFilterStack(
+          makeGuest({ tags: 42 as unknown as string[] }),
+          single(text('tags', 'x')),
+        ),
       ).toBe(false);
     });
 
@@ -293,20 +287,14 @@ describe('evaluateTextCondition — field switch branches (via evaluateFilterSta
 
     it('splits a comma-separated tags string and matches', () => {
       expect(
-        evaluateFilterStack(
-          makeGuest({ tags: 'production,web,api' }),
-          single(text('tags', 'api')),
-        ),
+        evaluateFilterStack(makeGuest({ tags: 'production,web,api' }), single(text('tags', 'api'))),
       ).toBe(true);
     });
 
     it('ignores empty segments in a comma-separated tag search', () => {
       // ',,' splits to [] after filtering -> no search tags -> some([]) is false
       expect(
-        evaluateFilterStack(
-          makeGuest({ tags: ['production'] }),
-          single(text('tags', ',,')),
-        ),
+        evaluateFilterStack(makeGuest({ tags: ['production'] }), single(text('tags', ',,'))),
       ).toBe(false);
     });
   });
@@ -342,9 +330,7 @@ describe('evaluateTextCondition — field switch branches (via evaluateFilterSta
     });
 
     it('returns false when the default field is absent from the guest', () => {
-      expect(
-        evaluateFilterStack(guestWithout(['lock']), single(text('lock', 'x'))),
-      ).toBe(false);
+      expect(evaluateFilterStack(guestWithout(['lock']), single(text('lock', 'x')))).toBe(false);
     });
 
     it('returns false for a non-string/number/boolean field value', () => {
@@ -385,9 +371,9 @@ describe('evaluateFilterStack — top-level branches', () => {
 
   describe('raw text matching across fields', () => {
     it('matches raw text against node', () => {
-      expect(evaluateFilterStack(makeGuest({ node: 'cluster-a' }), single(parseFilter('cluster')))).toBe(
-        true,
-      );
+      expect(
+        evaluateFilterStack(makeGuest({ node: 'cluster-a' }), single(parseFilter('cluster'))),
+      ).toBe(true);
     });
 
     it('matches raw text against vmid', () => {
@@ -457,7 +443,16 @@ describe('evaluateFilterStack — top-level branches', () => {
         ],
         operators: ['AND'],
       };
-      expect(evaluateFilterStack(makeGuest({ name: 'test-vm', cpu: 0.5, disk: { usage: 50, total: 100, used: 50, free: 50 } }), stack)).toBe(false);
+      expect(
+        evaluateFilterStack(
+          makeGuest({
+            name: 'test-vm',
+            cpu: 0.5,
+            disk: { usage: 50, total: 100, used: 50, free: 50 },
+          }),
+          stack,
+        ),
+      ).toBe(false);
     });
   });
 });

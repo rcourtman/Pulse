@@ -676,8 +676,8 @@ export const ResourceOperatorStateSection: Component<ResourceOperatorStateSectio
             <div class="flex-1">
               <label class="text-sm font-medium text-base-content">Automatic actions</label>
               <p class="mt-0.5 text-[11px] leading-tight text-muted">
-                Choose exactly which actions Patrol may run on this resource. Your Patrol mode,
-                live safety checks, remediation locks, and verification still apply.
+                Choose exactly which actions Patrol may run on this resource. Your Patrol mode, live
+                safety checks, remediation locks, and verification still apply.
               </p>
             </div>
             <Toggle

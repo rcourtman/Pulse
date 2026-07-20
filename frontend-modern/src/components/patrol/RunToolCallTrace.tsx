@@ -65,7 +65,12 @@ const VerifiedIcon: Component<{ status: ToolCallVerificationStatus }> = (p) => {
         viewBox="0 0 24 24"
         aria-hidden="true"
       >
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2.5"
+          d="M5 13l4 4L19 7"
+        />
       </svg>
     );
   }
@@ -88,7 +93,10 @@ const VerifiedIcon: Component<{ status: ToolCallVerificationStatus }> = (p) => {
     );
   }
   return (
-    <span class={`inline-block w-3 text-center font-mono text-xs ${verifiedIconClass(p.status)}`} aria-hidden="true">
+    <span
+      class={`inline-block w-3 text-center font-mono text-xs ${verifiedIconClass(p.status)}`}
+      aria-hidden="true"
+    >
       –
     </span>
   );

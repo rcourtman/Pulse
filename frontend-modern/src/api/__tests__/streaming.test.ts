@@ -238,9 +238,7 @@ describe('consumeJSONEventStream', () => {
 
   it('surfaces stalled read timeouts without reporting normal completion', async () => {
     vi.useFakeTimers();
-    const read = vi.fn(
-      () => new Promise<ReadableStreamReadResult<Uint8Array>>(() => undefined),
-    );
+    const read = vi.fn(() => new Promise<ReadableStreamReadResult<Uint8Array>>(() => undefined));
     const releaseLock = vi.fn();
     const onEvent = vi.fn();
     const onTimeout = vi.fn();

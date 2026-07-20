@@ -1,9 +1,6 @@
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { useTooltip } from '@/hooks/useTooltip';
-import {
-  buildStackedDiskBarPresentation,
-  type StackedDiskBarProps,
-} from './stackedDiskBarModel';
+import { buildStackedDiskBarPresentation, type StackedDiskBarProps } from './stackedDiskBarModel';
 
 export function useStackedDiskBarState(props: StackedDiskBarProps) {
   const tip = useTooltip();

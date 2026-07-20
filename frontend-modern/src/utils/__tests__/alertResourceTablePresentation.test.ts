@@ -50,9 +50,7 @@ describe('alertResourceTablePresentation', () => {
       'Add a note about this override (optional)',
     );
     expect(ALERT_RESOURCE_TABLE_EDIT_NOTE_PLACEHOLDER).toBe('Add a note...');
-    expect(ALERT_RESOURCE_TABLE_RESET_FACTORY_DEFAULTS_LABEL).toBe(
-      'Reset to factory defaults',
-    );
+    expect(ALERT_RESOURCE_TABLE_RESET_FACTORY_DEFAULTS_LABEL).toBe('Reset to factory defaults');
     expect(ALERT_RESOURCE_TABLE_REVERT_TO_DEFAULTS_LABEL).toBe('Revert to defaults');
     expect(ALERT_RESOURCE_TABLE_ALERT_DELAY_LABEL).toBe('Alert Delay (s)');
     expect(ALERT_RESOURCE_TABLE_OFFLINE_STATE_OFF_LABEL).toBe('Off');
@@ -74,9 +72,7 @@ describe('alertResourceTablePresentation', () => {
       'Add a note about this override (optional)',
     );
     expect(getAlertResourceTableEditNotePlaceholder()).toBe('Add a note...');
-    expect(getAlertResourceTableResetFactoryDefaultsLabel()).toBe(
-      'Reset to factory defaults',
-    );
+    expect(getAlertResourceTableResetFactoryDefaultsLabel()).toBe('Reset to factory defaults');
     expect(getAlertResourceTableRevertToDefaultsLabel()).toBe('Revert to defaults');
     expect(getAlertResourceTableAlertDelayLabel()).toBe('Alert Delay (s)');
     expect(getAlertResourceTableOfflineStateOrder()).toEqual(['off', 'warning', 'critical']);
@@ -97,9 +93,7 @@ describe('alertResourceTablePresentation', () => {
         'bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900 dark:text-red-200 dark:hover:bg-red-800',
       title: 'Offline alerts will raise critical-level notifications.',
     });
-    expect(getAlertResourceTableMetricInputTitle(true)).toBe(
-      'Click to enable this metric',
-    );
+    expect(getAlertResourceTableMetricInputTitle(true)).toBe('Click to enable this metric');
     expect(getAlertResourceTableMetricInputTitle(false)).toBe(
       'Set to -1 to disable alerts for this metric',
     );

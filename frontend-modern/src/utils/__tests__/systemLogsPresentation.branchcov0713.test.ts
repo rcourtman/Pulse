@@ -77,9 +77,7 @@ describe('getSystemLogLineClass — branch coverage (batch 2)', () => {
     });
 
     it('resolves to red when all three severities appear in one line', () => {
-      expect(
-        getSystemLogLineClass('[DEBUG] [WARN] [ERROR] boom ERR WRN DBG'),
-      ).toBe('text-red-400');
+      expect(getSystemLogLineClass('[DEBUG] [WARN] [ERROR] boom ERR WRN DBG')).toBe('text-red-400');
     });
   });
 
@@ -176,7 +174,9 @@ describe('getSystemLogStreamPresentation — ternary truthiness coercion (batch 
     const truthy = 'truthy' as unknown as Parameters<typeof getSystemLogStreamPresentation>[0];
     const falsy = NaN as unknown as Parameters<typeof getSystemLogStreamPresentation>[0];
     expect(getSystemLogStreamPresentation(truthy).indicatorClass).toBe('bg-amber-400');
-    expect(getSystemLogStreamPresentation(falsy).indicatorClass).toBe('bg-emerald-400 animate-pulse');
+    expect(getSystemLogStreamPresentation(falsy).indicatorClass).toBe(
+      'bg-emerald-400 animate-pulse',
+    );
   });
 });
 

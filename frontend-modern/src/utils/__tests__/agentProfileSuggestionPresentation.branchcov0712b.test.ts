@@ -38,9 +38,7 @@ describe('getAgentProfileSuggestionRiskHints (branch coverage)', () => {
   it('pushes the docker-update-checks hint for the disable_docker_update_checks===true arm', () => {
     expect(
       getAgentProfileSuggestionRiskHints({ disable_docker_update_checks: true }),
-    ).toStrictEqual([
-      'Docker update checks are disabled. Update visibility will be limited.',
-    ]);
+    ).toStrictEqual(['Docker update checks are disabled. Update visibility will be limited.']);
   });
 
   it('pushes the host-monitoring hint for the enable_host===false arm', () => {

@@ -34,4 +34,3 @@ export function useMetricBarState(props: MetricBarProps) {
     },
   };
 }
-

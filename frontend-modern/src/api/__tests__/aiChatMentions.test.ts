@@ -35,21 +35,14 @@ describe('AIChatAPI mention payloads', () => {
       },
     } as unknown as Response);
 
-    await AIChatAPI.chat(
-      'check @NVMe Primary',
-      undefined,
-      undefined,
-      vi.fn(),
-      undefined,
-      [
-        {
-          id: 'storage-vmware-1',
-          name: 'NVMe Primary',
-          type: 'storage',
-          node: 'Lab VC',
-        },
-      ],
-    );
+    await AIChatAPI.chat('check @NVMe Primary', undefined, undefined, vi.fn(), undefined, [
+      {
+        id: 'storage-vmware-1',
+        name: 'NVMe Primary',
+        type: 'storage',
+        node: 'Lab VC',
+      },
+    ]);
 
     expect(apiFetchMock).toHaveBeenCalledWith(
       '/api/ai/chat',

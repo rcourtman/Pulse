@@ -32,11 +32,7 @@ const getUpgradeTarget = (destination: UpgradeDestination, target?: string) => {
   return target;
 };
 
-const getUpgradeRel = (
-  destination: UpgradeDestination,
-  target?: string,
-  rel?: string,
-) => {
+const getUpgradeRel = (destination: UpgradeDestination, target?: string, rel?: string) => {
   if (rel) return rel;
   if ((getUpgradeNewTab(destination) || target === '_blank') && !destination.preserveOpener) {
     return 'noopener noreferrer';
@@ -48,9 +44,7 @@ const getUpgradeButtonVariant = (tone: UpgradeButtonTone): ButtonVariant =>
   tone === 'warning' ? 'warning' : 'primaryFlat';
 
 const getUpgradeButtonClass = (mobileFullWidth: boolean, className?: string) =>
-  [mobileFullWidth ? 'w-full sm:w-auto' : 'w-auto', 'gap-2', className]
-    .filter(Boolean)
-    .join(' ');
+  [mobileFullWidth ? 'w-full sm:w-auto' : 'w-auto', 'gap-2', className].filter(Boolean).join(' ');
 
 export const UpgradeLink: Component<UpgradeLinkProps> = (props) => {
   const [local, others] = splitProps(props, ['destination', 'rel', 'target']);
@@ -65,16 +59,8 @@ export const UpgradeLink: Component<UpgradeLinkProps> = (props) => {
   };
 
   return (
-    <Show
-      when={useHardLink()}
-      fallback={<A {...others} href={local.destination.href} />}
-    >
-      <a
-        {...others}
-        href={local.destination.href}
-        target={target()}
-        rel={rel()}
-      />
+    <Show when={useHardLink()} fallback={<A {...others} href={local.destination.href} />}>
+      <a {...others} href={local.destination.href} target={target()} rel={rel()} />
     </Show>
   );
 };

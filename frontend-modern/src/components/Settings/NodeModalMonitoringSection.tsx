@@ -82,7 +82,8 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
           <p class="text-sm text-muted">
             Pulse tracks all supported Proxmox VE resources by default — virtual machines,
             containers, storage, and backups — so you always get full visibility without extra
-            configuration. Disable individual collectors below to reduce API load or trim workload noise.
+            configuration. Disable individual collectors below to reduce API load or trim workload
+            noise.
           </p>
 
           <label class="flex items-start gap-2 text-sm text-base-content">
@@ -223,8 +224,8 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
               </div>
               <Show when={!state.temperatureMonitoringEnabledValue()}>
                 <p class="mt-3 rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-700 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                  Pulse will skip SSH temperature polling for this node. Existing monitoring readings
-                  will stop refreshing.
+                  Pulse will skip SSH temperature polling for this node. Existing monitoring
+                  readings will stop refreshing.
                 </p>
               </Show>
               <Show when={modalProps.temperatureMonitoringLocked}>

@@ -76,12 +76,14 @@ export function buildLegacyReportingCatalogFallback(): ReportingCatalog {
     },
     guidance: {
       title: 'Advanced Insights',
-      description: 'Older Pulse servers expose the legacy reporting transport directly. Performance reports remain available here, but newer catalog-driven reporting surfaces require a newer backend.',
+      description:
+        'Older Pulse servers expose the legacy reporting transport directly. Performance reports remain available here, but newer catalog-driven reporting surfaces require a newer backend.',
     },
     performanceReport: {
       id: 'performance_reports',
       title: 'Performance Reports',
-      description: 'Generate PDF summaries or CSV metric exports from historical monitoring data for one or more selected resources.',
+      description:
+        'Generate PDF summaries or CSV metric exports from historical monitoring data for one or more selected resources.',
       singleResourceEndpoint: '/api/reporting',
       multiResourceEndpoint: '/api/reporting/generate-multi',
       singleFilenamePrefix: 'report',

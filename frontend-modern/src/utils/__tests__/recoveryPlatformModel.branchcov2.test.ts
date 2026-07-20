@@ -74,9 +74,10 @@ describe('recoveryPlatformModel.branchcov2', () => {
     });
 
     it('trims and filters blank entries from the resolved values', () => {
-      expect(
-        getRecoveryRollupPlatforms({ platforms: ['  a  ', '', '   ', 'b'] }),
-      ).toEqual(['a', 'b']);
+      expect(getRecoveryRollupPlatforms({ platforms: ['  a  ', '', '   ', 'b'] })).toEqual([
+        'a',
+        'b',
+      ]);
       // All entries normalize to empty -> filter(Boolean) yields [].
       expect(getRecoveryRollupPlatforms({ platforms: ['   ', ''] })).toEqual([]);
     });
@@ -263,7 +264,7 @@ describe('recoveryPlatformModel.branchcov2', () => {
           meta: null,
         } as unknown as Parameters<typeof normalizeRecoveryRollupsResponse>[0]),
       ).toStrictEqual({ data: [], meta: defaults });
-      });
+    });
   });
 
   describe('normalizeRecoveryPointsResponse', () => {

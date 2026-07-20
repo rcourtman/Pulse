@@ -440,7 +440,12 @@ describe('buildPrimaryPlatformNavigationVisibility — standalone via availabili
 
   it('shows standalone when resource.sources includes "availability"', () => {
     const visibility = buildPrimaryPlatformNavigationVisibility([
-      resource({ id: 'avail-src-1', type: 'agent', platformType: 'agent', sources: ['availability'] }),
+      resource({
+        id: 'avail-src-1',
+        type: 'agent',
+        platformType: 'agent',
+        sources: ['availability'],
+      }),
     ]);
     expect(visibility.standalone).toBe(true);
   });

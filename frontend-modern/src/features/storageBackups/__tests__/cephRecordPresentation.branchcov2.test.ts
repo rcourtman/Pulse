@@ -97,18 +97,14 @@ describe('isCephClusterPoolStorageRecord branch coverage', () => {
 
   it('returns true when type is "ceph" and details.node === "cluster"', () => {
     expect(
-      isCephClusterPoolStorageRecord(
-        makeRecord({ details: { type: 'ceph', node: 'cluster' } }),
-      ),
+      isCephClusterPoolStorageRecord(makeRecord({ details: { type: 'ceph', node: 'cluster' } })),
     ).toBe(true);
   });
 
   it('returns false when type is "ceph" but details.node is not "cluster"', () => {
     // Exercises the `details.node === 'cluster'` false arm with a valid ceph type.
     expect(
-      isCephClusterPoolStorageRecord(
-        makeRecord({ details: { type: 'ceph', node: 'pve1' } }),
-      ),
+      isCephClusterPoolStorageRecord(makeRecord({ details: { type: 'ceph', node: 'pve1' } })),
     ).toBe(false);
   });
 
@@ -117,9 +113,7 @@ describe('isCephClusterPoolStorageRecord branch coverage', () => {
     // is undefined → not 'cluster' → false. The type-only path proves the
     // `|| {}` branch is taken (no throw, undefined.node coerced via {}).
     expect(
-      isCephClusterPoolStorageRecord(
-        makeRecord({ details: { type: 'ceph' } }) as StorageRecord,
-      ),
+      isCephClusterPoolStorageRecord(makeRecord({ details: { type: 'ceph' } }) as StorageRecord),
     ).toBe(false);
   });
 });
@@ -526,40 +520,34 @@ describe('getCephSummaryText branch coverage', () => {
   // ---- Cluster arm: OSDs omitted when numOsds/numOsdsUp not finite --------
   it('omits the OSDs part when numOsds is NaN', () => {
     expect(
-      getCephSummaryText(
-        makeRecord(),
-        makeCluster({ numOsds: NaN, numOsdsUp: 6, numPGs: 0 }),
-      ),
+      getCephSummaryText(makeRecord(), makeCluster({ numOsds: NaN, numOsdsUp: 6, numPGs: 0 })),
     ).toBe('400 B / 1000 B (40%)');
   });
 
   it('omits the OSDs part when numOsdsUp is NaN even if numOsds is finite', () => {
     expect(
-      getCephSummaryText(
-        makeRecord(),
-        makeCluster({ numOsds: 6, numOsdsUp: NaN, numPGs: 0 }),
-      ),
+      getCephSummaryText(makeRecord(), makeCluster({ numOsds: 6, numOsdsUp: NaN, numPGs: 0 })),
     ).toBe('400 B / 1000 B (40%)');
   });
 
   // ---- Cluster arm: PGs omitted when numPGs is 0 or not finite ------------
   it('keeps OSDs but omits PGs when numPGs is 0', () => {
-    expect(
-      getCephSummaryText(makeRecord(), makeCluster({ numPGs: 0 })),
-    ).toBe('400 B / 1000 B (40%) • OSDs 6/6');
+    expect(getCephSummaryText(makeRecord(), makeCluster({ numPGs: 0 }))).toBe(
+      '400 B / 1000 B (40%) • OSDs 6/6',
+    );
   });
 
   it('omits PGs when numPGs is NaN (Number.isFinite false)', () => {
-    expect(
-      getCephSummaryText(makeRecord(), makeCluster({ numPGs: NaN })),
-    ).toBe('400 B / 1000 B (40%) • OSDs 6/6');
+    expect(getCephSummaryText(makeRecord(), makeCluster({ numPGs: NaN }))).toBe(
+      '400 B / 1000 B (40%) • OSDs 6/6',
+    );
   });
 
   // ---- Cluster arm: large numPGs is rendered via toLocaleString ----------
   it('renders a large numPGs count with toLocaleString grouping', () => {
-    expect(
-      getCephSummaryText(makeRecord(), makeCluster({ numPGs: 1_500 })),
-    ).toBe('400 B / 1000 B (40%) • OSDs 6/6 • PGs 1,500');
+    expect(getCephSummaryText(makeRecord(), makeCluster({ numPGs: 1_500 }))).toBe(
+      '400 B / 1000 B (40%) • OSDs 6/6 • PGs 1,500',
+    );
   });
 
   // ---- Cluster `|| 0` clamps: negative bytes treated as 0 ----------------
@@ -585,7 +573,9 @@ describe('getCephSummaryText branch coverage', () => {
     // Number.isFinite(NaN) is false → the whole cluster arm is skipped.
     expect(
       getCephSummaryText(
-        makeRecord({ capacity: { totalBytes: 1_000, usedBytes: 400, freeBytes: 600, usagePercent: 40 } }),
+        makeRecord({
+          capacity: { totalBytes: 1_000, usedBytes: 400, freeBytes: 600, usagePercent: 40 },
+        }),
         makeCluster({ totalBytes: NaN }),
       ),
     ).toBe('400 B / 1000 B (40%)');
@@ -595,7 +585,9 @@ describe('getCephSummaryText branch coverage', () => {
   it('formats the record capacity summary when cluster is null', () => {
     expect(
       getCephSummaryText(
-        makeRecord({ capacity: { totalBytes: 1_000, usedBytes: 400, freeBytes: 600, usagePercent: 40 } }),
+        makeRecord({
+          capacity: { totalBytes: 1_000, usedBytes: 400, freeBytes: 600, usagePercent: 40 },
+        }),
         null,
       ),
     ).toBe('400 B / 1000 B (40%)');

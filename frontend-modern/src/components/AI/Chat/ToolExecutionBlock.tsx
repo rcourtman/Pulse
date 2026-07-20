@@ -455,119 +455,119 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
         </div>
       }
     >
-    <div
-      class="my-2 overflow-hidden rounded-md border border-border-subtle bg-surface text-[11px] shadow-sm"
-      role={settlingFastCompletion() ? 'status' : undefined}
-      aria-label={settlingFastCompletion() ? 'Assistant tool running' : undefined}
-    >
       <div
-        class={`flex min-w-0 items-start gap-2 px-2.5 py-2 ${
-          hasDetails()
-            ? 'cursor-pointer transition-colors hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:ring-inset'
-            : ''
-        }`}
-        role={hasDetails() ? 'button' : undefined}
-        tabIndex={hasDetails() ? 0 : undefined}
-        aria-expanded={hasDetails() ? showDetails() : undefined}
-        aria-controls={hasDetails() ? detailsId : undefined}
-        title={hasDetails() ? summaryControlTitle() : undefined}
-        onClick={toggleDetails}
-        onKeyDown={handleSummaryKeyDown}
+        class="my-2 overflow-hidden rounded-md border border-border-subtle bg-surface text-[11px] shadow-sm"
+        role={settlingFastCompletion() ? 'status' : undefined}
+        aria-label={settlingFastCompletion() ? 'Assistant tool running' : undefined}
       >
-        <div class="pt-0.5">
-          <Show
-            when={!settlingFastCompletion()}
-            fallback={
-              <LoaderCircleIcon
-                class="h-3.5 w-3.5 shrink-0 animate-spin text-blue-500 dark:text-blue-400"
-                aria-label="running"
-              />
-            }
-          >
+        <div
+          class={`flex min-w-0 items-start gap-2 px-2.5 py-2 ${
+            hasDetails()
+              ? 'cursor-pointer transition-colors hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:ring-inset'
+              : ''
+          }`}
+          role={hasDetails() ? 'button' : undefined}
+          tabIndex={hasDetails() ? 0 : undefined}
+          aria-expanded={hasDetails() ? showDetails() : undefined}
+          aria-controls={hasDetails() ? detailsId : undefined}
+          title={hasDetails() ? summaryControlTitle() : undefined}
+          onClick={toggleDetails}
+          onKeyDown={handleSummaryKeyDown}
+        >
+          <div class="pt-0.5">
             <Show
-              when={props.tool.success}
+              when={!settlingFastCompletion()}
               fallback={
-                <XCircleIcon
-                  class={`${getToolCallResultTextClass(props.tool.success)} h-3.5 w-3.5 shrink-0`}
-                  aria-label={statusLabel()}
+                <LoaderCircleIcon
+                  class="h-3.5 w-3.5 shrink-0 animate-spin text-blue-500 dark:text-blue-400"
+                  aria-label="running"
                 />
               }
             >
-              <CheckCircleIcon
-                class={`${getToolCallResultTextClass(props.tool.success)} h-3.5 w-3.5 shrink-0`}
-                aria-label={statusLabel()}
-              />
+              <Show
+                when={props.tool.success}
+                fallback={
+                  <XCircleIcon
+                    class={`${getToolCallResultTextClass(props.tool.success)} h-3.5 w-3.5 shrink-0`}
+                    aria-label={statusLabel()}
+                  />
+                }
+              >
+                <CheckCircleIcon
+                  class={`${getToolCallResultTextClass(props.tool.success)} h-3.5 w-3.5 shrink-0`}
+                  aria-label={statusLabel()}
+                />
+              </Show>
             </Show>
-          </Show>
+          </div>
+
+          <div class="min-w-0 flex-1">
+            <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <span class="shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider text-muted">
+                {toolLabel()}
+              </span>
+              <span
+                class={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-medium ${statusPillClass()}`}
+              >
+                {statusLabel()}
+              </span>
+              <Show when={durationLabel()}>
+                <span
+                  class="inline-flex shrink-0 items-center gap-1 text-[10px] font-medium text-muted"
+                  title="Tool duration"
+                  aria-label={`Tool duration ${durationLabel()}`}
+                >
+                  <ClockIcon class="h-3 w-3" aria-hidden="true" />
+                  {durationLabel()}
+                </span>
+              </Show>
+              <Show when={hasDetails()}>
+                <ChevronRightIcon
+                  class={`h-3.5 w-3.5 shrink-0 text-muted transition-transform ${
+                    showDetails() ? 'rotate-90' : ''
+                  }`}
+                  aria-hidden="true"
+                />
+              </Show>
+              <Show when={hiddenOutputBadgeSummary()}>
+                <span
+                  class="shrink-0 rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[9px] font-medium text-muted"
+                  title="Open tool details to inspect output"
+                  aria-label={`Tool output available: ${hiddenOutputBadgeSummary()}`}
+                >
+                  {hiddenOutputBadgeLabel()}
+                </span>
+              </Show>
+            </div>
+            <ToolInputSummary summary={inputSummary()} />
+            <Show when={commandPreview()}>
+              <ToolCommandPreview preview={commandPreview()} />
+            </Show>
+          </div>
         </div>
 
-        <div class="min-w-0 flex-1">
-          <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <span class="shrink-0 font-mono text-[9px] font-semibold uppercase tracking-wider text-muted">
-              {toolLabel()}
-            </span>
-            <span
-              class={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-medium ${statusPillClass()}`}
+        <Show when={showInlineOutputPreview()}>
+          <div class="border-t border-border-subtle bg-surface-alt">
+            <div class="px-3 pt-2 text-[9px] font-semibold uppercase tracking-wide text-muted">
+              Output preview
+            </div>
+            <pre
+              class="px-3 pb-2 pt-1 font-mono text-[11px] leading-5 text-base-content whitespace-pre-wrap break-words"
+              aria-label="Tool output preview"
             >
-              {statusLabel()}
-            </span>
-            <Show when={durationLabel()}>
-              <span
-                class="inline-flex shrink-0 items-center gap-1 text-[10px] font-medium text-muted"
-                title="Tool duration"
-                aria-label={`Tool duration ${durationLabel()}`}
-              >
-                <ClockIcon class="h-3 w-3" aria-hidden="true" />
-                {durationLabel()}
-              </span>
-            </Show>
-            <Show when={hasDetails()}>
-              <ChevronRightIcon
-                class={`h-3.5 w-3.5 shrink-0 text-muted transition-transform ${
-                  showDetails() ? 'rotate-90' : ''
-                }`}
-                aria-hidden="true"
-              />
-            </Show>
-            <Show when={hiddenOutputBadgeSummary()}>
-              <span
-                class="shrink-0 rounded border border-border-subtle bg-surface-alt px-1.5 py-0.5 text-[9px] font-medium text-muted"
-                title="Open tool details to inspect output"
-                aria-label={`Tool output available: ${hiddenOutputBadgeSummary()}`}
-              >
-                {hiddenOutputBadgeLabel()}
-              </span>
-            </Show>
+              {outputPreview()}
+            </pre>
           </div>
-          <ToolInputSummary summary={inputSummary()} />
-          <Show when={commandPreview()}>
-            <ToolCommandPreview preview={commandPreview()} />
-          </Show>
-        </div>
+        </Show>
+
+        <Show when={showDetails() && hasDetails()}>
+          <ToolDetailsPanel
+            id={detailsId}
+            input={hasInput() ? detailInputText() : ''}
+            output={hasOutput() ? outputText() : ''}
+          />
+        </Show>
       </div>
-
-      <Show when={showInlineOutputPreview()}>
-        <div class="border-t border-border-subtle bg-surface-alt">
-          <div class="px-3 pt-2 text-[9px] font-semibold uppercase tracking-wide text-muted">
-            Output preview
-          </div>
-          <pre
-            class="px-3 pb-2 pt-1 font-mono text-[11px] leading-5 text-base-content whitespace-pre-wrap break-words"
-            aria-label="Tool output preview"
-          >
-            {outputPreview()}
-          </pre>
-        </div>
-      </Show>
-
-      <Show when={showDetails() && hasDetails()}>
-        <ToolDetailsPanel
-          id={detailsId}
-          input={hasInput() ? detailInputText() : ''}
-          output={hasOutput() ? outputText() : ''}
-        />
-      </Show>
-    </div>
     </Show>
   );
 };

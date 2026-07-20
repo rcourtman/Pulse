@@ -8,7 +8,9 @@ import {
 describe('reporting inventory export model', () => {
   it('builds a VM inventory export filename', () => {
     const now = new Date('2026-03-20T12:34:56.000Z');
-    expect(buildVMInventoryExportFilename(now, 'csv', 'vm-inventory', 'utc_yyyymmdd')).toBe('vm-inventory-20260320.csv');
+    expect(buildVMInventoryExportFilename(now, 'csv', 'vm-inventory', 'utc_yyyymmdd')).toBe(
+      'vm-inventory-20260320.csv',
+    );
   });
 
   it('builds the canonical VM inventory export request', () => {

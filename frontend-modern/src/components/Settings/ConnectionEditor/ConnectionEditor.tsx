@@ -159,12 +159,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
               </Show>
             </div>
             <Show when={(props.mode ?? 'add') === 'add'}>
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                onClick={reopenProbe}
-              >
+              <Button type="button" variant="outline" size="xs" onClick={reopenProbe}>
                 ← Back to API probe
               </Button>
             </Show>
@@ -179,12 +174,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
           }
         >
           <div class="border-b border-border bg-surface-alt px-4 py-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              onClick={props.onBackToCatalog}
-            >
+            <Button type="button" variant="outline" size="xs" onClick={props.onBackToCatalog}>
               ← Back to source types
             </Button>
           </div>

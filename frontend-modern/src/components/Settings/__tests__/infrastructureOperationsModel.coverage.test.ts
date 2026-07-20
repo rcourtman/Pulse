@@ -60,7 +60,7 @@ describe('shellQuoteArg', () => {
   });
 
   it('preserves spaces and double quotes without escaping them', () => {
-    expect(shellQuoteArg('say "hi" now')).toBe("'say \"hi\" now'");
+    expect(shellQuoteArg('say "hi" now')).toBe('\'say "hi" now\'');
   });
 
   it('keeps shell metacharacters literal inside the single quotes', () => {
@@ -117,9 +117,7 @@ describe('getRowReportingSummary', () => {
 
   it('lower-cases only the first surface label and wraps a single item', () => {
     expect(
-      getRowReportingSummary(
-        makeRow({ surfaces: [surface('Host telemetry', 'agent')] }),
-      ),
+      getRowReportingSummary(makeRow({ surfaces: [surface('Host telemetry', 'agent')] })),
     ).toBe('Pulse is receiving host telemetry from this item.');
   });
 
@@ -152,11 +150,9 @@ describe('getRowReportingSummary', () => {
   it('keeps an empty first label empty rather than lower-casing nothing', () => {
     // sentenceCaseSurfaceLabel guards label.length === 0; an empty first label
     // therefore flows through unchanged, producing a double-space gap.
-    expect(
-      getRowReportingSummary(
-        makeRow({ surfaces: [surface('', 'agent')] }),
-      ),
-    ).toBe('Pulse is receiving  from this item.');
+    expect(getRowReportingSummary(makeRow({ surfaces: [surface('', 'agent')] }))).toBe(
+      'Pulse is receiving  from this item.',
+    );
   });
 
   it('does not mutate labels that are not in the first position', () => {

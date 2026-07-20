@@ -45,9 +45,7 @@ const makeRun = (overrides: Partial<PatrolRunRecord> = {}): PatrolRunRecord => (
   ...overrides,
 });
 
-const makeTriggerStatus = (
-  overrides: Partial<PatrolTriggerStatus> = {},
-): PatrolTriggerStatus => ({
+const makeTriggerStatus = (overrides: Partial<PatrolTriggerStatus> = {}): PatrolTriggerStatus => ({
   running: false,
   pending_triggers: 0,
   current_interval_ms: 300_000,
@@ -496,19 +494,17 @@ describe('getPatrolTriggerStatusSummary (branch coverage)', () => {
 
   it('returns undefined when triggers are blocked but manual run is explicitly available', () => {
     expect(
-      getPatrolTriggerStatusSummary(
-        makeTriggerStatus({ event_triggers_blocked: true }),
-        { manualRunAvailable: true },
-      ),
+      getPatrolTriggerStatusSummary(makeTriggerStatus({ event_triggers_blocked: true }), {
+        manualRunAvailable: true,
+      }),
     ).toBeUndefined();
   });
 
   it('returns undefined when blocked, manual unavailable, but no blocked reason given', () => {
     expect(
-      getPatrolTriggerStatusSummary(
-        makeTriggerStatus({ event_triggers_blocked: true }),
-        { manualRunAvailable: false },
-      ),
+      getPatrolTriggerStatusSummary(makeTriggerStatus({ event_triggers_blocked: true }), {
+        manualRunAvailable: false,
+      }),
     ).toBeUndefined();
   });
 
@@ -546,13 +542,10 @@ describe('getPatrolTriggerStatusSummary (branch coverage)', () => {
 
   it('returns the in-progress summary when manual is blocked by an already-running reason', () => {
     expect(
-      getPatrolTriggerStatusSummary(
-        makeTriggerStatus({ event_triggers_blocked: true }),
-        {
-          manualRunAvailable: false,
-          manualRunBlockedReason: 'Patrol run is in progress',
-        },
-      ),
+      getPatrolTriggerStatusSummary(makeTriggerStatus({ event_triggers_blocked: true }), {
+        manualRunAvailable: false,
+        manualRunBlockedReason: 'Patrol run is in progress',
+      }),
     ).toBe(
       'A Patrol run is already in progress. New automatic and manual runs are paused until it finishes.',
     );

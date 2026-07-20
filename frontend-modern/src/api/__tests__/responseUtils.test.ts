@@ -17,5 +17,4 @@ describe('responseUtils structured API errors', () => {
       'VMware vCenter 6.7 is below the supported VI JSON release floor',
     );
   });
-
 });

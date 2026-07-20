@@ -13,9 +13,7 @@ import {
 // getStorageRowAlertPresentation.
 // ---------------------------------------------------------------------------
 
-const makeAlertState = (
-  overrides: Partial<StorageAlertRowState> = {},
-): StorageAlertRowState => ({
+const makeAlertState = (overrides: Partial<StorageAlertRowState> = {}): StorageAlertRowState => ({
   hasAlert: false,
   alertCount: 0,
   severity: null,
@@ -179,9 +177,7 @@ describe('getStorageRowAlertPresentation branch coverage', () => {
   // ---- No arm of the if/else-if chain (all flags false) --------------------
   //      Only BASE_ROW_CLASSES remain; every data attr is the neutral default.
   it('returns only the base classes when no alert, highlight or expand flags are set', () => {
-    const result: StorageRowAlertPresentation = getStorageRowAlertPresentation(
-      makeOptions(),
-    );
+    const result: StorageRowAlertPresentation = getStorageRowAlertPresentation(makeOptions());
 
     expect(result.rowClass).toBe(BASE_ROW_CLASS);
     expect(result.dataAlertState).toBe('none');
@@ -192,9 +188,7 @@ describe('getStorageRowAlertPresentation branch coverage', () => {
 
   // ---- L45 isExpanded true arm ---------------------------------------------
   it('appends the expanded bg-surface-alt class when isExpanded is true', () => {
-    const result = getStorageRowAlertPresentation(
-      makeOptions({ isExpanded: true }),
-    );
+    const result = getStorageRowAlertPresentation(makeOptions({ isExpanded: true }));
 
     // Base classes are still present and the expanded class is appended.
     expect(result.rowClass).toContain('transition-all duration-200');
@@ -322,9 +316,7 @@ describe('getStorageRowAlertPresentation branch coverage', () => {
 
   // ---- L57 isResourceHighlighted false -> 'false' (explicit boundary) ------
   it('reports dataResourceHighlighted as false when isResourceHighlighted is false', () => {
-    const result = getStorageRowAlertPresentation(
-      makeOptions({ isResourceHighlighted: false }),
-    );
+    const result = getStorageRowAlertPresentation(makeOptions({ isResourceHighlighted: false }));
 
     expect(result.dataResourceHighlighted).toBe('false');
   });

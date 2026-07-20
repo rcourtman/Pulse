@@ -166,7 +166,11 @@ export const collectRepresentedDiscoveryHosts = (
   const representedHosts = createRepresentedDiscoveryHosts();
 
   nodes.forEach((node) => {
-    addRepresentedDiscoveryHosts(representedHosts, node.type, [node.name, node.host, node.guestURL]);
+    addRepresentedDiscoveryHosts(representedHosts, node.type, [
+      node.name,
+      node.host,
+      node.guestURL,
+    ]);
     if (node.type === 'pve' && 'clusterEndpoints' in node) {
       addClusterEndpointHosts(representedHosts, node.type, node.clusterEndpoints);
     }

@@ -12,9 +12,7 @@ import {
   getLicenseTierLabel,
   getOrganizationBillingLicenseStatusLabel,
 } from '@/utils/licensePresentation';
-import {
-  getOrganizationSettingsLoadErrorMessage,
-} from '@/utils/organizationSettingsPresentation';
+import { getOrganizationSettingsLoadErrorMessage } from '@/utils/organizationSettingsPresentation';
 import {
   buildHostedCommercialPlanModel,
   buildHostedCommercialUsageModel,

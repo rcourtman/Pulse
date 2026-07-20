@@ -69,28 +69,31 @@ describe('diskDetailPresentation', () => {
     );
 
     expect(
-      getDiskDetailAttributeCards({
-        node: 'tower',
-        instance: 'cluster-main',
-        devPath: '/dev/nvme0n1',
-        model: 'NVMe',
-        serial: 'SERIAL-2',
-        wwn: '',
-        size: 1,
-        health: 'PASSED',
-        wearout: -1,
-        type: 'nvme',
-        temperature: 55,
-        rpm: 0,
-        used: '',
-        riskReasons: [],
-        smartAttributes: {
-          percentageUsed: 12,
-          availableSpare: 97,
-          mediaErrors: 0,
-          unsafeShutdowns: 4,
+      getDiskDetailAttributeCards(
+        {
+          node: 'tower',
+          instance: 'cluster-main',
+          devPath: '/dev/nvme0n1',
+          model: 'NVMe',
+          serial: 'SERIAL-2',
+          wwn: '',
+          size: 1,
+          health: 'PASSED',
+          wearout: -1,
+          type: 'nvme',
+          temperature: 55,
+          rpm: 0,
+          used: '',
+          riskReasons: [],
+          smartAttributes: {
+            percentageUsed: 12,
+            availableSpare: 97,
+            mediaErrors: 0,
+            unsafeShutdowns: 4,
+          },
         },
-      }, { warning: 65, critical: 70 }),
+        { warning: 65, critical: 70 },
+      ),
     ).toEqual(
       expect.arrayContaining([
         { label: 'Temperature', value: '55°C', ok: true },

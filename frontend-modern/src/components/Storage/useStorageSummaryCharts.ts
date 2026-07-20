@@ -2,10 +2,7 @@ import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from
 import type { StorageSummaryChartsResponse, TimeRange } from '@/api/charts';
 import type { SummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import { eventBus } from '@/stores/events';
-import {
-  fetchStorageSummaryAndCache,
-  readStorageSummaryCache,
-} from '@/utils/storageSummaryCache';
+import { fetchStorageSummaryAndCache, readStorageSummaryCache } from '@/utils/storageSummaryCache';
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -35,7 +32,7 @@ export const useStorageSummaryCharts = (options: UseStorageSummaryChartsOptions)
     return raw && raw !== 'all' ? raw : undefined;
   });
 
-  const awaitAbortable = <T,>(promise: Promise<T>, signal: AbortSignal): Promise<T> => {
+  const awaitAbortable = <T>(promise: Promise<T>, signal: AbortSignal): Promise<T> => {
     if (signal.aborted) {
       return Promise.reject(new DOMException('Aborted', 'AbortError'));
     }

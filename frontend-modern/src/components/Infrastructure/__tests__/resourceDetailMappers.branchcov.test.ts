@@ -90,9 +90,7 @@ describe('buildMemory', () => {
   });
 
   it('uses metric.free over computed free even when fallback.free exists', () => {
-    expect(
-      buildMemory({ current: 0, total: 100, used: 10, free: 5 }, { free: 90 }).free,
-    ).toBe(5);
+    expect(buildMemory({ current: 0, total: 100, used: 10, free: 5 }, { free: 90 }).free).toBe(5);
   });
 });
 
@@ -246,9 +244,7 @@ describe('toAgentDisks', () => {
 
 describe('toNodeFromProxmox', () => {
   it('returns null when platformData has no proxmox block', () => {
-    expect(
-      toNodeFromProxmox({ ...baseProxmoxResource(), platformData: { agent: {} } }),
-    ).toBeNull();
+    expect(toNodeFromProxmox({ ...baseProxmoxResource(), platformData: { agent: {} } })).toBeNull();
   });
 
   it('returns null when platformData is absent entirely', () => {
@@ -284,9 +280,7 @@ describe('toNodeFromProxmox', () => {
 
   it('falls back to "now" when lastSeen is not finite', () => {
     const before = Date.now();
-    const node = toNodeFromProxmox(
-      baseProxmoxResource({ lastSeen: Number.NaN }),
-    );
+    const node = toNodeFromProxmox(baseProxmoxResource({ lastSeen: Number.NaN }));
     const after = Date.now();
 
     expect(node?.lastSeen).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
@@ -509,7 +503,10 @@ describe('formatGPUStatsLabel (observed via buildTemperatureRows GPU rows)', () 
 
   it('falls back to "GPU <index+1>" when id is whitespace-only', () => {
     const rows = buildTemperatureRows({
-      gpu: [{ id: '   ', name: 'Integrated' }, { id: '5', name: 'Discrete' }],
+      gpu: [
+        { id: '   ', name: 'Integrated' },
+        { id: '5', name: 'Discrete' },
+      ],
     });
     const labels = rows.map((r) => r.label);
     expect(labels).toEqual(['GPU 1', 'GPU 5']);
@@ -534,7 +531,9 @@ describe('formatPowerWatts (observed via buildTemperatureRows power rows)', () =
 
   it('drops the row for a non-finite value (empty string filters out)', () => {
     expect(findPower({ powerWatts: { cpu: Number.NaN } }, 'CPU Power')).toBeUndefined();
-    expect(findPower({ powerWatts: { cpu: Number.POSITIVE_INFINITY } }, 'CPU Power')).toBeUndefined();
+    expect(
+      findPower({ powerWatts: { cpu: Number.POSITIVE_INFINITY } }, 'CPU Power'),
+    ).toBeUndefined();
   });
 });
 
@@ -554,9 +553,7 @@ describe('buildTemperatureRows (remaining uncovered branches)', () => {
 
   it('emits a thermal row whose valueTitle omits "via <source>" when source is absent', () => {
     const rows = buildTemperatureRows({ thermalState: { pressure: 'nominal' } });
-    expect(rows).toEqual([
-      { label: 'Thermal pressure', value: 'Nominal', valueTitle: 'Nominal' },
-    ]);
+    expect(rows).toEqual([{ label: 'Thermal pressure', value: 'Nominal', valueTitle: 'Nominal' }]);
   });
 
   it('filters out limitsPercent entries >= 100 and non-finite entries', () => {
@@ -592,9 +589,7 @@ describe('buildTemperatureRows (remaining uncovered branches)', () => {
       const rows = buildTemperatureRows({
         smart: [{ device: 'sda', temperature: 42 }],
       });
-      expect(rows).toEqual([
-        { label: 'Disk sda', value: '42°C', valueTitle: '42.0°C' },
-      ]);
+      expect(rows).toEqual([{ label: 'Disk sda', value: '42°C', valueTitle: '42.0°C' }]);
     });
 
     it('skips standby disks', () => {

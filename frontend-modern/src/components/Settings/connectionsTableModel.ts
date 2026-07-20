@@ -751,8 +751,7 @@ const moduleHealthSignal = (connection: Connection): FleetGovernanceSignal | und
     key: 'module-health',
     label: `${displayName} module ${module.state}`,
     detail:
-      module.lastError ||
-      `${displayName} monitoring is enabled but the module is not running yet.`,
+      module.lastError || `${displayName} monitoring is enabled but the module is not running yet.`,
     tone: 'warning',
   };
 };

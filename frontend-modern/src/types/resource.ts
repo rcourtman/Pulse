@@ -103,14 +103,7 @@ export type SourceType =
 // Kubernetes adapter emits for unhealthy-but-alive rows (cordoned nodes,
 // not-ready containers, pending pods, partially available controllers).
 export type ResourceStatus =
-  | 'online'
-  | 'offline'
-  | 'running'
-  | 'stopped'
-  | 'degraded'
-  | 'warning'
-  | 'paused'
-  | 'unknown';
+  'online' | 'offline' | 'running' | 'stopped' | 'degraded' | 'warning' | 'paused' | 'unknown';
 
 // Metric value with optional limits
 export interface ResourceMetric {
@@ -170,13 +163,7 @@ export interface ResourceDiscoveryTarget {
 }
 
 export type ResourceDiscoveryReadinessState =
-  | 'fresh'
-  | 'stale'
-  | 'missing'
-  | 'running'
-  | 'failed'
-  | 'unavailable'
-  | 'unsupported';
+  'fresh' | 'stale' | 'missing' | 'running' | 'failed' | 'unavailable' | 'unsupported';
 
 export interface ResourceDiscoveryReadiness {
   state: ResourceDiscoveryReadinessState;
@@ -247,11 +234,7 @@ export type ResourceChangeKind =
   | 'command_executed'
   | 'runbook_executed';
 export type ResourceChangeSourceType =
-  | 'platform_event'
-  | 'pulse_diff'
-  | 'heuristic'
-  | 'user_action'
-  | 'agent_action';
+  'platform_event' | 'pulse_diff' | 'heuristic' | 'user_action' | 'agent_action';
 export type ResourceChangeSourceAdapter =
   | 'docker_adapter'
   | 'proxmox_adapter'
@@ -261,11 +244,7 @@ export type ResourceChangeSourceAdapter =
   | string;
 
 export type ResourceFacetSourceAdapter =
-  | 'docker_adapter'
-  | 'proxmox_adapter'
-  | 'truenas_adapter'
-  | 'vmware_adapter'
-  | 'agent:ops-helper';
+  'docker_adapter' | 'proxmox_adapter' | 'truenas_adapter' | 'vmware_adapter' | 'agent:ops-helper';
 
 export interface ResourceFacetCounts {
   recentChanges: number;

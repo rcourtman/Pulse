@@ -58,9 +58,7 @@ describe('alertResourceTablePresentation.branchcov0718', () => {
     });
 
     it('lowercases a multi-word title phrase', () => {
-      expect(getAlertResourceTableNoResultsState('Alert Rules')).toBe(
-        'No alert rules found',
-      );
+      expect(getAlertResourceTableNoResultsState('Alert Rules')).toBe('No alert rules found');
     });
 
     it('passes an already-lowercase title through unchanged', () => {
@@ -94,9 +92,7 @@ describe('alertResourceTablePresentation.branchcov0718', () => {
       const bogus = 'info' as unknown as AlertResourceTableOfflineState;
       const presentation = getAlertResourceTableOfflineStatePresentation(bogus);
       expect(presentation.label).toBe('Crit');
-      expect(presentation.title).toBe(
-        'Offline alerts will raise critical-level notifications.',
-      );
+      expect(presentation.title).toBe('Offline alerts will raise critical-level notifications.');
     });
   });
 
@@ -124,9 +120,7 @@ describe('alertResourceTablePresentation.branchcov0718', () => {
     // helpers. Pin the underlying constants directly so a rename is caught
     // even if the helper return values stay stable.
     it('exposes the enable/disable metric-input title constants', () => {
-      expect(ALERT_RESOURCE_TABLE_ENABLE_METRIC_TITLE).toBe(
-        'Click to enable this metric',
-      );
+      expect(ALERT_RESOURCE_TABLE_ENABLE_METRIC_TITLE).toBe('Click to enable this metric');
       expect(ALERT_RESOURCE_TABLE_DISABLE_METRIC_TITLE).toBe(
         'Set to -1 to disable alerts for this metric',
       );

@@ -22,9 +22,7 @@ describe('CalloutCard', () => {
   });
 
   it('supports warning tone styling', () => {
-    render(() => (
-      <CalloutCard title="Warning" description="Act carefully" tone="warning" />
-    ));
+    render(() => <CalloutCard title="Warning" description="Act carefully" tone="warning" />);
 
     const description = screen.getByText('Act carefully');
     expect(description.className).toContain('text-amber-800');

@@ -83,7 +83,7 @@ describe('workloadSelectors (branch coverage)', () => {
       const memDesc = createWorkloadSortComparator('memory', 'desc');
 
       expect(memAsc).not.toBeNull();
- expect(memDesc).not.toBeNull();
+      expect(memDesc).not.toBeNull();
 
       // null-mem (0) < low-mem (0.1) < high-mem (0.8)
       expect([...guests].sort(memAsc!).map((g) => g.id)).toEqual(['null', 'low', 'high']);
@@ -92,8 +92,18 @@ describe('workloadSelectors (branch coverage)', () => {
 
     it('treats memory.usage of 0 as 0 via the || fallback', () => {
       const guests = [
-        makeGuest(1, { id: 'a', name: 'alpha', cpu: 0.5, memory: { total: 100, used: 0, free: 100, usage: 0 } }),
-        makeGuest(2, { id: 'b', name: 'beta', cpu: 0.5, memory: { total: 100, used: 50, free: 50, usage: 0.5 } }),
+        makeGuest(1, {
+          id: 'a',
+          name: 'alpha',
+          cpu: 0.5,
+          memory: { total: 100, used: 0, free: 100, usage: 0 },
+        }),
+        makeGuest(2, {
+          id: 'b',
+          name: 'beta',
+          cpu: 0.5,
+          memory: { total: 100, used: 50, free: 50, usage: 0.5 },
+        }),
       ];
 
       const memAsc = createWorkloadSortComparator('memory', 'asc');
@@ -102,8 +112,16 @@ describe('workloadSelectors (branch coverage)', () => {
 
     it('sorts by disk usage percent via getDiskUsagePercent', () => {
       const guests = [
-        makeGuest(1, { id: 'big', name: 'big-disk', disk: { total: 100, used: 90, free: 10, usage: 0.9 } }),
-        makeGuest(2, { id: 'small', name: 'small-disk', disk: { total: 100, used: 10, free: 90, usage: 0.1 } }),
+        makeGuest(1, {
+          id: 'big',
+          name: 'big-disk',
+          disk: { total: 100, used: 90, free: 10, usage: 0.9 },
+        }),
+        makeGuest(2, {
+          id: 'small',
+          name: 'small-disk',
+          disk: { total: 100, used: 10, free: 90, usage: 0.1 },
+        }),
       ];
 
       const diskAsc = createWorkloadSortComparator('disk', 'asc');
@@ -485,7 +503,9 @@ describe('workloadSelectors (branch coverage)', () => {
       ).toEqual(['k8s-guest']);
 
       expect(
-        filterWorkloads({ ...baseParams, guests, searchTerm: 'containerid-uniq-ddd' }).map((g) => g.id),
+        filterWorkloads({ ...baseParams, guests, searchTerm: 'containerid-uniq-ddd' }).map(
+          (g) => g.id,
+        ),
       ).toEqual(['cid-guest']);
     });
   });
@@ -516,17 +536,13 @@ describe('workloadSelectors (branch coverage)', () => {
 
     it('clamps used/total result above 100 to 100', () => {
       expect(
-        getDiskUsagePercent(
-          makeGuest(1, { disk: { total: 100, used: 150, free: 0, usage: NaN } }),
-        ),
+        getDiskUsagePercent(makeGuest(1, { disk: { total: 100, used: 150, free: 0, usage: NaN } })),
       ).toBe(100);
     });
 
     it('returns null when total is 0 in the used/total fallback', () => {
       expect(
-        getDiskUsagePercent(
-          makeGuest(1, { disk: { total: 0, used: 50, free: 0, usage: NaN } }),
-        ),
+        getDiskUsagePercent(makeGuest(1, { disk: { total: 0, used: 50, free: 0, usage: NaN } })),
       ).toBeNull();
     });
 
@@ -549,9 +565,7 @@ describe('workloadSelectors (branch coverage)', () => {
       expect(getDiskUsagePercent(null as unknown as WorkloadGuest)).toBeNull();
       expect(getDiskUsagePercent(undefined as unknown as WorkloadGuest)).toBeNull();
       expect(
-        getDiskUsagePercent(
-          makeGuest(1, { disk: undefined as unknown as WorkloadGuest['disk'] }),
-        ),
+        getDiskUsagePercent(makeGuest(1, { disk: undefined as unknown as WorkloadGuest['disk'] })),
       ).toBeNull();
     });
   });
@@ -674,7 +688,10 @@ describe('workloadSelectors (branch coverage)', () => {
         type: 'app-container',
         workloadType: 'app-container',
       });
-      const scope = buildWorkloadSummaryGroupScope('grp', [guest], { type: 'Container', name: 'frigate' });
+      const scope = buildWorkloadSummaryGroupScope('grp', [guest], {
+        type: 'Container',
+        name: 'frigate',
+      });
       expect(scope).not.toBeNull();
       expect(scope!.label).toBe('frigate · Container (1 workload)');
       expect(scope!.seriesIds).toEqual(['cid-1']);
@@ -692,15 +709,26 @@ describe('workloadSelectors (branch coverage)', () => {
     });
 
     it('uses workload count alone when label name and type are both empty', () => {
-      const guest = makeGuest(1, { id: 'x-1', type: 'app-container', workloadType: 'app-container' });
+      const guest = makeGuest(1, {
+        id: 'x-1',
+        type: 'app-container',
+        workloadType: 'app-container',
+      });
       const scope = buildWorkloadSummaryGroupScope('grp', [guest], { type: '', name: '' });
       expect(scope).not.toBeNull();
       expect(scope!.label).toBe('1 workload');
     });
 
     it('trims the groupId for the scope id', () => {
-      const guest = makeGuest(1, { id: 'x-2', type: 'app-container', workloadType: 'app-container' });
-      const scope = buildWorkloadSummaryGroupScope('  padded-grp  ', [guest], { type: 'T', name: 'N' });
+      const guest = makeGuest(1, {
+        id: 'x-2',
+        type: 'app-container',
+        workloadType: 'app-container',
+      });
+      const scope = buildWorkloadSummaryGroupScope('  padded-grp  ', [guest], {
+        type: 'T',
+        name: 'N',
+      });
       expect(scope).not.toBeNull();
       expect(scope!.id).toBe('padded-grp');
     });
@@ -784,8 +812,22 @@ describe('workloadSelectors (branch coverage)', () => {
   describe('groupWorkloads', () => {
     it('sorts the single flat group when a comparator is provided', () => {
       const guests = [
-        makeGuest(1, { id: 'b-id', name: 'beta', instance: 'x', node: 'y', type: 'vm', workloadType: 'vm' }),
-        makeGuest(2, { id: 'a-id', name: 'alpha', instance: 'x', node: 'y', type: 'vm', workloadType: 'vm' }),
+        makeGuest(1, {
+          id: 'b-id',
+          name: 'beta',
+          instance: 'x',
+          node: 'y',
+          type: 'vm',
+          workloadType: 'vm',
+        }),
+        makeGuest(2, {
+          id: 'a-id',
+          name: 'alpha',
+          instance: 'x',
+          node: 'y',
+          type: 'vm',
+          workloadType: 'vm',
+        }),
       ];
 
       const comparator = createWorkloadSortComparator('name', 'asc');

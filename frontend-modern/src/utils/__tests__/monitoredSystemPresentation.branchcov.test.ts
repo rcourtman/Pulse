@@ -123,7 +123,10 @@ describe('buildMonitoredSystemImpactPreviewUnavailableState (branch coverage)', 
   it('returns null when the error code does not match', () => {
     expect(buildMonitoredSystemImpactPreviewUnavailableState({ code: 'other_error' })).toBeNull();
     expect(
-      buildMonitoredSystemImpactPreviewUnavailableState({ code: null, reason: 'supplemental_inventory_unsettled' }),
+      buildMonitoredSystemImpactPreviewUnavailableState({
+        code: null,
+        reason: 'supplemental_inventory_unsettled',
+      }),
     ).toBeNull();
   });
 
@@ -241,7 +244,9 @@ describe('formatMonitoredSystemImpactPreviewSummary (branch coverage)', () => {
 
   it('falls back to current when projected_count is absent (delta 0)', () => {
     expect(
-      formatMonitoredSystemImpactPreviewSummary({ current_count: 4 } as MonitoredSystemImpactPreviewSummaryInput),
+      formatMonitoredSystemImpactPreviewSummary({
+        current_count: 4,
+      } as MonitoredSystemImpactPreviewSummaryInput),
     ).toBe(
       'Pulse currently counts 4 monitored systems. Saving this change would keep the count at 4 monitored systems.',
     );
@@ -272,7 +277,11 @@ describe('formatMonitoredSystemSurfaceAttribution (branch coverage)', () => {
       formatMonitoredSystemSurfaceAttribution({ name: '', type: 'host', source: 'vmware' }),
     ).toBe('Unnamed source (Host via VMware)');
     expect(
-      formatMonitoredSystemSurfaceAttribution({ name: '   ', type: 'docker-host', source: 'docker' }),
+      formatMonitoredSystemSurfaceAttribution({
+        name: '   ',
+        type: 'docker-host',
+        source: 'docker',
+      }),
     ).toBe('Unnamed source (Docker Host via Docker)');
   });
 
@@ -288,9 +297,9 @@ describe('formatMonitoredSystemSurfaceAttribution (branch coverage)', () => {
 
   it('falls back to "Unnamed source" when the name property is missing', () => {
     expect(
-      formatMonitoredSystemSurfaceAttribution(
-        { type: 'host', source: 'vmware' } as Parameters<typeof formatMonitoredSystemSurfaceAttribution>[0],
-      ),
+      formatMonitoredSystemSurfaceAttribution({ type: 'host', source: 'vmware' } as Parameters<
+        typeof formatMonitoredSystemSurfaceAttribution
+      >[0]),
     ).toBe('Unnamed source (Host via VMware)');
   });
 });

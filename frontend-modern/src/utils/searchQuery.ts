@@ -39,14 +39,7 @@ export type LogicalOperator = 'AND' | 'OR';
 
 export interface MetricCondition {
   field:
-    | 'cpu'
-    | 'memory'
-    | 'disk'
-    | 'diskRead'
-    | 'diskWrite'
-    | 'networkIn'
-    | 'networkOut'
-    | 'uptime';
+    'cpu' | 'memory' | 'disk' | 'diskRead' | 'diskWrite' | 'networkIn' | 'networkOut' | 'uptime';
   operator: ComparisonOperator;
   value: number;
 }

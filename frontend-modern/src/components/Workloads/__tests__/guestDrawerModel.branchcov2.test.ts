@@ -52,12 +52,8 @@ const makeGuest = (overrides?: Partial<WorkloadGuest>): WorkloadGuest =>
 // AggregatedMetricPoint declares min/max as required numbers, but the runtime
 // contract (and the code under test) tolerates missing/non-finite min/max, so
 // build points with optional min/max and cast to satisfy the declared type.
-const pt = (
-  timestamp: number,
-  value: number,
-  min?: number,
-  max?: number,
-): AggregatedMetricPoint => ({ timestamp, value, min, max }) as AggregatedMetricPoint;
+const pt = (timestamp: number, value: number, min?: number, max?: number): AggregatedMetricPoint =>
+  ({ timestamp, value, min, max }) as AggregatedMetricPoint;
 
 describe('guestDrawerModel (branch coverage)', () => {
   describe('isGuestDrawerVM', () => {
@@ -111,14 +107,14 @@ describe('guestDrawerModel (branch coverage)', () => {
     });
 
     it('drops cpu when it is a non-finite number', () => {
-      expect(getGuestDrawerHistoryFallbackMetrics(makeGuest({ cpu: Number.NaN })).cpu).toBeUndefined();
+      expect(
+        getGuestDrawerHistoryFallbackMetrics(makeGuest({ cpu: Number.NaN })).cpu,
+      ).toBeUndefined();
     });
 
     it('drops cpu when it is not a number (typeof guard)', () => {
       expect(
-        getGuestDrawerHistoryFallbackMetrics(
-          makeGuest({ cpu: 'busy' as unknown as number }),
-        ).cpu,
+        getGuestDrawerHistoryFallbackMetrics(makeGuest({ cpu: 'busy' as unknown as number })).cpu,
       ).toBeUndefined();
     });
 
@@ -172,12 +168,10 @@ describe('guestDrawerModel (branch coverage)', () => {
 
   describe('getGuestDrawerHistoryScale', () => {
     it('returns a fixed 0-100 scale for percent units', () => {
-      expect(
-        getGuestDrawerHistoryScale(
-          [{ points: [pt(1, 150, 0, 999)] }],
-          '%',
-        ),
-      ).toStrictEqual({ minValue: 0, maxValue: 100 });
+      expect(getGuestDrawerHistoryScale([{ points: [pt(1, 150, 0, 999)] }], '%')).toStrictEqual({
+        minValue: 0,
+        maxValue: 100,
+      });
     });
 
     describe("unit 'C'", () => {
@@ -192,29 +186,33 @@ describe('guestDrawerModel (branch coverage)', () => {
       });
 
       it('expands a single distinct value (min===max) symmetrically around it', () => {
-        expect(
-          getGuestDrawerHistoryScale([{ points: [pt(1, 50, 50, 50)] }], 'C'),
-        ).toStrictEqual({ minValue: 45, maxValue: 55 });
+        expect(getGuestDrawerHistoryScale([{ points: [pt(1, 50, 50, 50)] }], 'C')).toStrictEqual({
+          minValue: 45,
+          maxValue: 55,
+        });
       });
 
       it('clamps the symmetric lower bound to 0 when the value is near zero', () => {
-        expect(
-          getGuestDrawerHistoryScale([{ points: [pt(1, 3, 3, 3)] }], 'C'),
-        ).toStrictEqual({ minValue: 0, maxValue: 8 });
+        expect(getGuestDrawerHistoryScale([{ points: [pt(1, 3, 3, 3)] }], 'C')).toStrictEqual({
+          minValue: 0,
+          maxValue: 8,
+        });
       });
 
       it('applies 15%% padding around distinct min/max using finite min/max fields', () => {
         // min=50, max=80 -> padding=max(2, 30*0.15=4.5)=4.5 -> {45.5, 84.5}
-        expect(
-          getGuestDrawerHistoryScale([{ points: [pt(1, 55, 50, 80)] }], 'C'),
-        ).toStrictEqual({ minValue: 45.5, maxValue: 84.5 });
+        expect(getGuestDrawerHistoryScale([{ points: [pt(1, 55, 50, 80)] }], 'C')).toStrictEqual({
+          minValue: 45.5,
+          maxValue: 84.5,
+        });
       });
 
       it('falls back to point.value for low/high when min/max are absent', () => {
         // value=40 only -> min===max=40 -> {35, 45}
-        expect(
-          getGuestDrawerHistoryScale([{ points: [pt(1, 40)] }], 'C'),
-        ).toStrictEqual({ minValue: 35, maxValue: 45 });
+        expect(getGuestDrawerHistoryScale([{ points: [pt(1, 40)] }], 'C')).toStrictEqual({
+          minValue: 35,
+          maxValue: 45,
+        });
       });
     });
 
@@ -225,10 +223,7 @@ describe('guestDrawerModel (branch coverage)', () => {
           getGuestDrawerHistoryScale(
             [
               {
-                points: [
-                  pt(1, 100, undefined, Number.POSITIVE_INFINITY),
-                  pt(2, Number.NaN),
-                ],
+                points: [pt(1, 100, undefined, Number.POSITIVE_INFINITY), pt(2, Number.NaN)],
               },
             ],
             'B/s',
@@ -239,16 +234,17 @@ describe('guestDrawerModel (branch coverage)', () => {
       it('scales to 1.15x of the largest finite max (prefers max over value)', () => {
         // max=200 -> maxValue = max(1, 200*1.15) (IEEE-754 -> 229.99999999999997)
         const expectedMax = Math.max(1, 200 * 1.15);
-        expect(
-          getGuestDrawerHistoryScale([{ points: [pt(1, 100, 0, 200)] }], 'B/s'),
-        ).toStrictEqual({ minValue: 0, maxValue: expectedMax });
+        expect(getGuestDrawerHistoryScale([{ points: [pt(1, 100, 0, 200)] }], 'B/s')).toStrictEqual(
+          { minValue: 0, maxValue: expectedMax },
+        );
       });
 
       it('falls back to point.value when max is absent', () => {
         // value=150 -> maxValue = max(1, 150*1.15) = 172.5
-        expect(
-          getGuestDrawerHistoryScale([{ points: [pt(1, 150)] }], 'B/s'),
-        ).toStrictEqual({ minValue: 0, maxValue: 172.5 });
+        expect(getGuestDrawerHistoryScale([{ points: [pt(1, 150)] }], 'B/s')).toStrictEqual({
+          minValue: 0,
+          maxValue: 172.5,
+        });
       });
     });
   });
@@ -256,9 +252,9 @@ describe('guestDrawerModel (branch coverage)', () => {
   describe('buildGuestDrawerHistoryPath', () => {
     it('returns an empty string for fewer than two points', () => {
       expect(buildGuestDrawerHistoryPath([], { minValue: 0, maxValue: 100 }, 0, 100)).toBe('');
-      expect(
-        buildGuestDrawerHistoryPath([pt(1, 50)], { minValue: 0, maxValue: 100 }, 0, 100),
-      ).toBe('');
+      expect(buildGuestDrawerHistoryPath([pt(1, 50)], { minValue: 0, maxValue: 100 }, 0, 100)).toBe(
+        '',
+      );
     });
 
     it('builds an M.. L.. path with default geometry across the full value range', () => {
@@ -356,7 +352,13 @@ describe('guestDrawerModel (branch coverage)', () => {
     it('maps a system-container to the canonical node-scoped id', () => {
       expect(
         getGuestDrawerHistoryTarget(
-          makeGuest({ type: 'lxc', workloadType: 'system-container', instance: 'c', node: 'pve', vmid: 102 }),
+          makeGuest({
+            type: 'lxc',
+            workloadType: 'system-container',
+            instance: 'c',
+            node: 'pve',
+            vmid: 102,
+          }),
         ),
       ).toStrictEqual({ resourceType: 'system-container', resourceId: 'c:pve:102' });
     });
@@ -408,7 +410,9 @@ describe('guestDrawerModel (branch coverage)', () => {
 
     it('returns the bare version for a non-vm', () => {
       expect(
-        getGuestDrawerAgentLabel(makeGuest({ type: 'lxc', workloadType: 'system-container', agentVersion: '1.0' })),
+        getGuestDrawerAgentLabel(
+          makeGuest({ type: 'lxc', workloadType: 'system-container', agentVersion: '1.0' }),
+        ),
       ).toBe('1.0');
     });
   });
@@ -444,9 +448,7 @@ describe('guestDrawerModel (branch coverage)', () => {
 
     it('returns an empty array when total is not positive and no balloon/swap', () => {
       expect(
-        getGuestDrawerMemoryRows(
-          makeGuest({ memory: { total: 0, used: 0, free: 0, usage: 0 } }),
-        ),
+        getGuestDrawerMemoryRows(makeGuest({ memory: { total: 0, used: 0, free: 0, usage: 0 } })),
       ).toEqual([]);
     });
 
@@ -495,7 +497,12 @@ describe('guestDrawerModel (branch coverage)', () => {
       expect(
         getGuestDrawerMemoryRows(
           makeGuest({
-            memory: { total: 4096, used: 1024, usage: 0.25, balloon: 2048 } as unknown as WorkloadGuest['memory'],
+            memory: {
+              total: 4096,
+              used: 1024,
+              usage: 0.25,
+              balloon: 2048,
+            } as unknown as WorkloadGuest['memory'],
           }),
         ),
       ).toEqual([
@@ -507,7 +514,12 @@ describe('guestDrawerModel (branch coverage)', () => {
       expect(
         getGuestDrawerMemoryRows(
           makeGuest({
-            memory: { total: 4096, used: 1024, usage: 0.25, balloon: 4096 } as unknown as WorkloadGuest['memory'],
+            memory: {
+              total: 4096,
+              used: 1024,
+              usage: 0.25,
+              balloon: 4096,
+            } as unknown as WorkloadGuest['memory'],
           }),
         ),
       ).toEqual([
@@ -573,12 +585,16 @@ describe('guestDrawerModel (branch coverage)', () => {
 
   describe('getGuestDrawerNetworkInterfaces', () => {
     it('returns an empty array when absent (|| fallback)', () => {
-      expect(getGuestDrawerNetworkInterfaces(makeGuest({ networkInterfaces: undefined }))).toEqual([]);
+      expect(getGuestDrawerNetworkInterfaces(makeGuest({ networkInterfaces: undefined }))).toEqual(
+        [],
+      );
     });
 
     it('returns the same array reference when present', () => {
       const ifaces = [{ name: 'eth0', mac: 'aa:bb' }];
-      expect(getGuestDrawerNetworkInterfaces(makeGuest({ networkInterfaces: ifaces }))).toBe(ifaces);
+      expect(getGuestDrawerNetworkInterfaces(makeGuest({ networkInterfaces: ifaces }))).toBe(
+        ifaces,
+      );
     });
   });
 

@@ -62,9 +62,7 @@ describe('KubernetesAlertsTable', () => {
         type: 'k8s-node',
         name: 'edge-pop-lax-01',
         kubernetes: { clusterName: 'edge' },
-        incidents: [
-          { code: 'k8s_node_version_drift', severity: 'info', summary: 'kubelet drift' },
-        ],
+        incidents: [{ code: 'k8s_node_version_drift', severity: 'info', summary: 'kubelet drift' }],
       }),
     ]);
 

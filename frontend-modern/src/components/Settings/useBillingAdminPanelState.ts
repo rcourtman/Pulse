@@ -8,12 +8,8 @@ import { isHostedModeEnabled, isMultiTenantEnabled } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
 import { presentationPolicyHidesOrganizationSurfaces } from '@/stores/sessionPresentationPolicy';
 import { logger } from '@/utils/logger';
-import {
-  getBillingAdminStateUpdateSuccessMessage,
-} from '@/utils/licensePresentation';
-import {
-  getOrganizationSettingsLoadErrorMessage as getOrganizationSettingsPanelLoadErrorMessage,
-} from '@/utils/organizationSettingsPresentation';
+import { getBillingAdminStateUpdateSuccessMessage } from '@/utils/licensePresentation';
+import { getOrganizationSettingsLoadErrorMessage as getOrganizationSettingsPanelLoadErrorMessage } from '@/utils/organizationSettingsPresentation';
 
 export type BillingStateCache = Record<string, BillingState | undefined>;
 

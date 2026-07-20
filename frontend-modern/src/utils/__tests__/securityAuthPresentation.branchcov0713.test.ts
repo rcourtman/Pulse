@@ -46,9 +46,7 @@ describe('getSecurityAuthRestartInstruction — branch coverage (batch 0713)', (
       expect(getSecurityAuthRestartInstruction('systemd').command).toBe(
         'sudo systemctl restart pulse',
       );
-      expect(getSecurityAuthRestartInstruction('manual').command).not.toBe(
-        'npm run dev:restart',
-      );
+      expect(getSecurityAuthRestartInstruction('manual').command).not.toBe('npm run dev:restart');
     });
   });
 
@@ -91,9 +89,7 @@ describe('getSecurityAuthRestartInstruction — branch coverage (batch 0713)', (
     });
 
     it('falls through to default for null (deliberately malformed input)', () => {
-      const result = getSecurityAuthRestartInstruction(
-        null as unknown as DeploymentTypeParam,
-      );
+      const result = getSecurityAuthRestartInstruction(null as unknown as DeploymentTypeParam);
       expect(result).toEqual({
         label: 'Restart Pulse using your deployment method',
       });
@@ -102,9 +98,7 @@ describe('getSecurityAuthRestartInstruction — branch coverage (batch 0713)', (
     });
 
     it('falls through to default for a non-string runtime value (deliberately malformed)', () => {
-      const result = getSecurityAuthRestartInstruction(
-        42 as unknown as DeploymentTypeParam,
-      );
+      const result = getSecurityAuthRestartInstruction(42 as unknown as DeploymentTypeParam);
       expect(result).toEqual({
         label: 'Restart Pulse using your deployment method',
       });

@@ -12,7 +12,8 @@ export function useSelectionCardGroupState<T extends string | number>(
   const variant = createMemo(() => resolveSelectionCardGroupVariant(props.variant));
 
   const isOptionActive = (option: SelectionCardOption<T>) => option.value === props.value;
-  const isOptionDisabled = (option: SelectionCardOption<T>) => Boolean(props.disabled || option.disabled);
+  const isOptionDisabled = (option: SelectionCardOption<T>) =>
+    Boolean(props.disabled || option.disabled);
   const getOptionTone = (option: SelectionCardOption<T>) => resolveSelectionCardTone(option.tone);
 
   const handleOptionClick = (option: SelectionCardOption<T>) => {

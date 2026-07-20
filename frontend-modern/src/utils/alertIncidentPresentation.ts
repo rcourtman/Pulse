@@ -78,7 +78,9 @@ export function getAlertIncidentLevelBadgeClass(level: AlertIncidentLevel): stri
   return `${ALERT_INCIDENT_LEVEL_BASE} bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300`;
 }
 
-export function getAlertHistoryStatusPresentation(status?: string | null): AlertHistoryStatusPresentation {
+export function getAlertHistoryStatusPresentation(
+  status?: string | null,
+): AlertHistoryStatusPresentation {
   const normalized = (status ?? '').trim().toLowerCase();
 
   if (normalized === 'active') {
@@ -127,7 +129,9 @@ export function getAlertResourceIncidentCountLabel(count: number) {
 }
 
 export function getAlertResourceIncidentRefreshLabel(isLoading: boolean) {
-  return isLoading ? ALERT_RESOURCE_INCIDENT_REFRESHING_LABEL : ALERT_RESOURCE_INCIDENT_REFRESH_LABEL;
+  return isLoading
+    ? ALERT_RESOURCE_INCIDENT_REFRESHING_LABEL
+    : ALERT_RESOURCE_INCIDENT_REFRESH_LABEL;
 }
 
 export function getAlertResourceIncidentAcknowledgedByLabel(user: string) {
@@ -153,7 +157,9 @@ export function getAlertResourceIncidentNotePlaceholder() {
 }
 
 export function getAlertResourceIncidentSaveNoteLabel(isSaving: boolean) {
-  return isSaving ? ALERT_RESOURCE_INCIDENT_SAVING_NOTE_LABEL : ALERT_RESOURCE_INCIDENT_SAVE_NOTE_LABEL;
+  return isSaving
+    ? ALERT_RESOURCE_INCIDENT_SAVING_NOTE_LABEL
+    : ALERT_RESOURCE_INCIDENT_SAVE_NOTE_LABEL;
 }
 
 export function getAlertResourceIncidentLoadFailure() {

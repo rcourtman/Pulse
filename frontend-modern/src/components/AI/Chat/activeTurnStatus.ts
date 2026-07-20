@@ -628,10 +628,7 @@ export const getAssistantActiveTurnStatus = (
   if (statePendingToolCandidate) {
     statusCandidates.push(statePendingToolCandidate);
   }
-  const eventStatusCandidate = latestStreamActivityStatus(
-    assistantMessage.streamEvents,
-    now,
-  );
+  const eventStatusCandidate = latestStreamActivityStatus(assistantMessage.streamEvents, now);
   if (eventStatusCandidate) {
     statusCandidates.push(eventStatusCandidate);
   } else {

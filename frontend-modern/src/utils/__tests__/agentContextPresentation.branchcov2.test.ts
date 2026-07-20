@@ -27,7 +27,9 @@ const baseContext = (overrides: Partial<AgentResourceContext> = {}): AgentResour
   ...overrides,
 });
 
-const baseSection = (overrides: Partial<AgentResourceContextSection> = {}): AgentResourceContextSection => ({
+const baseSection = (
+  overrides: Partial<AgentResourceContextSection> = {},
+): AgentResourceContextSection => ({
   id: 'runtime',
   title: 'Runtime',
   source: '',
@@ -40,9 +42,7 @@ const baseSection = (overrides: Partial<AgentResourceContextSection> = {}): Agen
 describe('agentContextPresentation — branch coverage (branchcov2)', () => {
   describe('formatAgentResourceContextForClipboard — header branches', () => {
     it('falls back to canonicalId when resourceName is empty (|| right operand)', () => {
-      const text = formatAgentResourceContextForClipboard(
-        baseContext({ resourceName: '' }),
-      );
+      const text = formatAgentResourceContextForClipboard(baseContext({ resourceName: '' }));
       // resourceName '' is falsy -> `context.resourceName || context.canonicalId`
       // resolves to the canonical id.
       expect(text.startsWith('# Pulse resource context: host:node-1\n')).toBe(true);
@@ -66,9 +66,7 @@ describe('agentContextPresentation — branch coverage (branchcov2)', () => {
     });
 
     it('emits the Technology line when context.technology is set (if-true arm)', () => {
-      const text = formatAgentResourceContextForClipboard(
-        baseContext({ technology: 'docker' }),
-      );
+      const text = formatAgentResourceContextForClipboard(baseContext({ technology: 'docker' }));
       expect(text).toContain('Technology: docker');
     });
   });
@@ -101,7 +99,9 @@ describe('agentContextPresentation — branch coverage (branchcov2)', () => {
           '',
           'Context facts below are bounded, read-only Pulse context. Redacted values were withheld by policy.',
           '',
-        ].join('\n').trim() + '\n',
+        ]
+          .join('\n')
+          .trim() + '\n',
       );
     });
 
@@ -157,9 +157,7 @@ describe('agentContextPresentation — branch coverage (branchcov2)', () => {
     });
 
     it('returns empty string for an empty timestamp (falsy arm)', () => {
-      const text = formatAgentResourceContextForClipboard(
-        baseContext({ generatedAt: '' }),
-      );
+      const text = formatAgentResourceContextForClipboard(baseContext({ generatedAt: '' }));
       expect(text).toContain('Generated: \n');
     });
 
@@ -276,7 +274,12 @@ describe('agentContextPresentation — branch coverage (branchcov2)', () => {
       const text = formatAgentResourceContextForClipboard(
         baseContext({
           contextSections: [
-            baseSection({ title: 'Bare', source: '', trustTier: '', facts: [{ label: 'L', value: 'V' }] }),
+            baseSection({
+              title: 'Bare',
+              source: '',
+              trustTier: '',
+              facts: [{ label: 'L', value: 'V' }],
+            }),
           ],
         }),
       );
@@ -288,7 +291,12 @@ describe('agentContextPresentation — branch coverage (branchcov2)', () => {
       const text = formatAgentResourceContextForClipboard(
         baseContext({
           contextSections: [
-            baseSection({ title: 'S', source: 'unified', trustTier: '', facts: [{ label: 'L', value: 'V' }] }),
+            baseSection({
+              title: 'S',
+              source: 'unified',
+              trustTier: '',
+              facts: [{ label: 'L', value: 'V' }],
+            }),
           ],
         }),
       );
@@ -299,7 +307,12 @@ describe('agentContextPresentation — branch coverage (branchcov2)', () => {
       const text = formatAgentResourceContextForClipboard(
         baseContext({
           contextSections: [
-            baseSection({ title: 'S', source: '', trustTier: 'runtime-observed', facts: [{ label: 'L', value: 'V' }] }),
+            baseSection({
+              title: 'S',
+              source: '',
+              trustTier: 'runtime-observed',
+              facts: [{ label: 'L', value: 'V' }],
+            }),
           ],
         }),
       );
@@ -400,7 +413,13 @@ describe('agentContextPresentation — branch coverage (branchcov2)', () => {
       const text = formatAgentResourceContextForClipboard(
         baseContext({
           contextSections: [
-            baseSection({ id: 'skip-me', title: 'Skipped', source: 's', trustTier: 't', redactions: undefined }),
+            baseSection({
+              id: 'skip-me',
+              title: 'Skipped',
+              source: 's',
+              trustTier: 't',
+              redactions: undefined,
+            }),
             baseSection({
               id: 'keep-me',
               title: 'Kept',
@@ -420,7 +439,13 @@ describe('agentContextPresentation — branch coverage (branchcov2)', () => {
       const text = formatAgentResourceContextForClipboard(
         baseContext({
           contextSections: [
-            baseSection({ id: 'skip-me', title: 'Skipped', source: 's', trustTier: 't', redactions: [] }),
+            baseSection({
+              id: 'skip-me',
+              title: 'Skipped',
+              source: 's',
+              trustTier: 't',
+              redactions: [],
+            }),
           ],
         }),
       );

@@ -20,11 +20,7 @@ import {
 import { useInfrastructureOperationsContext } from './useInfrastructureOperationsState';
 
 export type InfrastructureInstallerFocus =
-  | 'agent'
-  | 'linux-host'
-  | 'unraid'
-  | 'docker'
-  | 'kubernetes';
+  'agent' | 'linux-host' | 'unraid' | 'docker' | 'kubernetes';
 
 interface InfrastructureInstallerSectionProps {
   focus?: InfrastructureInstallerFocus;
@@ -302,9 +298,8 @@ export const InfrastructureInstallerSection: Component<InfrastructureInstallerSe
               <li class="flex items-start">
                 <span class="mr-2 mt-0.5 text-emerald-500">✓</span>
                 <span>
-                  Read-only by default. Assistant chat actions and host shell stay off until you
-                  opt in per host from{' '}
-                  <span class="font-medium">Settings → Infrastructure</span>.
+                  Read-only by default. Assistant chat actions and host shell stay off until you opt
+                  in per host from <span class="font-medium">Settings → Infrastructure</span>.
                 </span>
               </li>
               <li class="flex items-start">

@@ -167,7 +167,12 @@ describe('agentAttachmentProblem', () => {
   });
 
   it.each([
-    ['unreachable', 'Agent unreachable', 'Pulse cannot currently reach the agent on this host.', 'critical'],
+    [
+      'unreachable',
+      'Agent unreachable',
+      'Pulse cannot currently reach the agent on this host.',
+      'critical',
+    ],
     ['unauthorized', 'Agent unauthorized', 'The Pulse Agent token is being rejected.', 'critical'],
     ['pending', 'Agent pending first report', 'The Pulse Agent has not reported yet.', 'warning'],
   ] as const satisfies ReadonlyArray<[ConnectionState, string, string, 'critical' | 'warning']>)(
@@ -198,10 +203,13 @@ describe('agentAttachmentProblem', () => {
     },
   );
 
-  it.each(['active', 'paused'] as const)('returns undefined for the non-problem state %s', (state) => {
-    vi.setSystemTime(PINNED_NOW);
-    expect(agentAttachmentProblem(connectionFixture({ state }))).toBeUndefined();
-  });
+  it.each(['active', 'paused'] as const)(
+    'returns undefined for the non-problem state %s',
+    (state) => {
+      vi.setSystemTime(PINNED_NOW);
+      expect(agentAttachmentProblem(connectionFixture({ state }))).toBeUndefined();
+    },
+  );
 });
 
 // ---- connectionAgentVersionPresentation -------------------------------------
@@ -240,7 +248,11 @@ describe('connectionAgentVersionPresentation', () => {
     // update branch short-circuits; the plain agent-version branch also needs
     // a current version, so the expected-version ("Version target") branch wins.
     const presentation = connectionAgentVersionPresentation(
-      connectionFixture({ agentVersion: '   ', expectedAgentVersion: '6.0.3', agentUpdateAvailable: true }),
+      connectionFixture({
+        agentVersion: '   ',
+        expectedAgentVersion: '6.0.3',
+        agentUpdateAvailable: true,
+      }),
     );
     expect(presentation?.badgeLabel).toBe('Version target');
     expect(presentation?.detail).toBe('6.0.3');
@@ -248,7 +260,11 @@ describe('connectionAgentVersionPresentation', () => {
 
   it('renders the agent-version badge when the flag is set but the expected version is blank', () => {
     const presentation = connectionAgentVersionPresentation(
-      connectionFixture({ agentVersion: '6.0.0', expectedAgentVersion: '', agentUpdateAvailable: true }),
+      connectionFixture({
+        agentVersion: '6.0.0',
+        expectedAgentVersion: '',
+        agentUpdateAvailable: true,
+      }),
     );
     expect(presentation?.badgeLabel).toBe('Agent version');
     expect(presentation?.detail).toBe('6.0.0');
@@ -256,7 +272,11 @@ describe('connectionAgentVersionPresentation', () => {
 
   it('renders the neutral agent-version badge when no update is flagged', () => {
     const presentation = connectionAgentVersionPresentation(
-      connectionFixture({ agentVersion: '6.0.0', expectedAgentVersion: '6.0.3', agentUpdateAvailable: false }),
+      connectionFixture({
+        agentVersion: '6.0.0',
+        expectedAgentVersion: '6.0.3',
+        agentUpdateAvailable: false,
+      }),
     );
     expect(presentation).toMatchObject({ badgeLabel: 'Agent version', detail: '6.0.0' });
     expect(presentation?.badgeClassName).not.toContain('amber');
@@ -300,7 +320,11 @@ describe('connectionAgentVersionPresentation', () => {
 describe('connectionAgentEndpointDisplay (remaining branches)', () => {
   it('skips a hostname that equals the name case-insensitively and falls through to a distinct address', () => {
     const endpoint = connectionAgentEndpointDisplay(
-      connectionFixture({ name: 'Host-1', address: '10.0.0.7', agentIdentity: { hostname: 'host-1' } }),
+      connectionFixture({
+        name: 'Host-1',
+        address: '10.0.0.7',
+        agentIdentity: { hostname: 'host-1' },
+      }),
     );
     // hostname 'host-1' lowercased equals name 'Host-1' lowercased -> skipped;
     // address '10.0.0.7' is distinct -> returned.
@@ -310,7 +334,12 @@ describe('connectionAgentEndpointDisplay (remaining branches)', () => {
   it('returns null when no reportIp, alias, hostname, or address is available', () => {
     expect(
       connectionAgentEndpointDisplay(
-        connectionFixture({ name: 'host-1', address: '', agentIdentity: undefined, hostAliases: [] }),
+        connectionFixture({
+          name: 'host-1',
+          address: '',
+          agentIdentity: undefined,
+          hostAliases: [],
+        }),
       ),
     ).toBeNull();
   });
@@ -367,13 +396,17 @@ describe('prettifyPlatform (via connectionAgentIdentitySummary)', () => {
 describe('connectionAgentHostProfileLabel (via connectionAgentIdentitySummary)', () => {
   it('returns the manifest family for a known host profile', () => {
     expect(
-      connectionAgentIdentitySummary(connectionFixture({ agentIdentity: { hostProfile: 'unraid' } })),
+      connectionAgentIdentitySummary(
+        connectionFixture({ agentIdentity: { hostProfile: 'unraid' } }),
+      ),
     ).toBe('Unraid');
   });
 
   it('resolves a host-profile alias token to its family', () => {
     expect(
-      connectionAgentIdentitySummary(connectionFixture({ agentIdentity: { hostProfile: 'unraid-os' } })),
+      connectionAgentIdentitySummary(
+        connectionFixture({ agentIdentity: { hostProfile: 'unraid-os' } }),
+      ),
     ).toBe('Unraid');
   });
 
@@ -381,7 +414,9 @@ describe('connectionAgentHostProfileLabel (via connectionAgentIdentitySummary)',
     // 'centos' has no manifest family and is not a canonical platform case, so
     // the default arm of prettifyPlatform returns the trimmed value verbatim.
     expect(
-      connectionAgentIdentitySummary(connectionFixture({ agentIdentity: { hostProfile: 'centos' } })),
+      connectionAgentIdentitySummary(
+        connectionFixture({ agentIdentity: { hostProfile: 'centos' } }),
+      ),
     ).toBe('centos');
   });
 
@@ -421,20 +456,43 @@ describe('connectionAgentHostProfileLabel (via connectionAgentIdentitySummary)',
 describe('configDriftSignal (via fleetGovernanceSignalsForConnection)', () => {
   it.each([
     ['current', 'Config current', 'Desired and applied configuration fingerprints match.', 'ok'],
-    ['drifted', 'Config drift', 'Desired and applied configuration fingerprints do not match.', 'warning'],
-    ['pending', 'Config pending', 'Pulse is waiting for applied configuration confirmation.', 'warning'],
+    [
+      'drifted',
+      'Config drift',
+      'Desired and applied configuration fingerprints do not match.',
+      'warning',
+    ],
+    [
+      'pending',
+      'Config pending',
+      'Pulse is waiting for applied configuration confirmation.',
+      'warning',
+    ],
     ['paused', 'Config paused', 'Configuration rollout is paused for this source.', 'muted'],
-    ['unknown', 'Config unknown', 'Pulse does not yet have enough config fingerprint data.', 'warning'],
-    ['not-applicable', 'No config drift', 'This source is not governed by desired/applied config rollout.', 'muted'],
+    [
+      'unknown',
+      'Config unknown',
+      'Pulse does not yet have enough config fingerprint data.',
+      'warning',
+    ],
+    [
+      'not-applicable',
+      'No config drift',
+      'This source is not governed by desired/applied config rollout.',
+      'muted',
+    ],
   ] as const satisfies ReadonlyArray<
     [ConnectionFleetConfigDriftStatus, string, string, FleetGovernanceSignalTone]
-  >)('uses the fallback detail when configDrift %s carries no reason', (status, label, detail, tone) => {
-    const signal = signalByKey(
-      connectionFixture({ fleet: fleetFixture({ configDrift: { status } }) }),
-      'config-drift',
-    );
-    expect(signal).toMatchObject({ key: 'config-drift', label, detail, tone });
-  });
+  >)(
+    'uses the fallback detail when configDrift %s carries no reason',
+    (status, label, detail, tone) => {
+      const signal = signalByKey(
+        connectionFixture({ fleet: fleetFixture({ configDrift: { status } }) }),
+        'config-drift',
+      );
+      expect(signal).toMatchObject({ key: 'config-drift', label, detail, tone });
+    },
+  );
 
   it('honours an explicit reason over the fallback copy (pending case)', () => {
     const signal = signalByKey(
@@ -455,18 +513,26 @@ describe('rolloutSignal (via fleetGovernanceSignalsForConnection)', () => {
     ['current', 'Rollout current', 'The rollout state is current.', 'ok'],
     ['pending', 'Rollout pending', 'The staged rollout is waiting for confirmation.', 'warning'],
     ['paused', 'Rollout paused', 'The staged rollout is paused.', 'warning'],
-    ['blocked', 'Rollout blocked', 'The rollout is blocked by the current connection state.', 'critical'],
+    [
+      'blocked',
+      'Rollout blocked',
+      'The rollout is blocked by the current connection state.',
+      'critical',
+    ],
     ['unknown', 'Rollout unknown', 'Pulse has not classified staged rollout state yet.', 'warning'],
     ['not-applicable', 'No rollout', 'This source does not use staged rollout control.', 'muted'],
   ] as const satisfies ReadonlyArray<
     [ConnectionFleetRolloutStatus, string, string, FleetGovernanceSignalTone]
-  >)('uses the fallback detail when rollout %s carries no reason', (status, label, detail, tone) => {
-    const signal = signalByKey(
-      connectionFixture({ fleet: fleetFixture({ rollout: { status } }) }),
-      'rollout',
-    );
-    expect(signal).toMatchObject({ key: 'rollout', label, detail, tone });
-  });
+  >)(
+    'uses the fallback detail when rollout %s carries no reason',
+    (status, label, detail, tone) => {
+      const signal = signalByKey(
+        connectionFixture({ fleet: fleetFixture({ rollout: { status } }) }),
+        'rollout',
+      );
+      expect(signal).toMatchObject({ key: 'rollout', label, detail, tone });
+    },
+  );
 
   it('honours an explicit reason over the fallback copy (pending case)', () => {
     const signal = signalByKey(
@@ -488,8 +554,18 @@ describe('rolloutSignal (via fleetGovernanceSignalsForConnection)', () => {
 
 describe('credentialHealthSignal (via fleetGovernanceSignalsForConnection)', () => {
   it.each([
-    ['expiring', 'Credentials expiring', 'The credential is approaching its configured expiration.', 'warning'],
-    ['not-applicable', 'No credentials', 'This source does not use a stored credential path.', 'muted'],
+    [
+      'expiring',
+      'Credentials expiring',
+      'The credential is approaching its configured expiration.',
+      'warning',
+    ],
+    [
+      'not-applicable',
+      'No credentials',
+      'This source does not use a stored credential path.',
+      'muted',
+    ],
   ] as const satisfies ReadonlyArray<
     [ConnectionFleetCredentialHealthStatus, string, string, FleetGovernanceSignalTone]
   >)('maps credential-health status %s to its fixed signal', (status, label, detail, tone) => {

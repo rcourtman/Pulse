@@ -117,9 +117,9 @@ describe('hasCustomAlertResourceGlobalDefaults', () => {
   });
 
   it('returns false when a factory key is absent from globalDefaults (current is undefined)', () => {
-    expect(
-      hasCustomAlertResourceGlobalDefaults({ memory: 90 }, { cpu: 80, memory: 90 }),
-    ).toBe(false);
+    expect(hasCustomAlertResourceGlobalDefaults({ memory: 90 }, { cpu: 80, memory: 90 })).toBe(
+      false,
+    );
   });
 
   it('returns true when exactly one of many keys differs', () => {

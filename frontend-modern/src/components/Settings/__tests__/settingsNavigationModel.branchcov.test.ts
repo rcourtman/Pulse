@@ -184,7 +184,9 @@ describe('normalizeSettingsPath (exercised via resolveCanonicalSettingsPath)', (
   });
 
   it("defends against a null runtime input by treating it as '' (the `path || ''` arm)", () => {
-    expect(resolveCanonicalSettingsPath(null as unknown as string)).toBe('/settings/infrastructure');
+    expect(resolveCanonicalSettingsPath(null as unknown as string)).toBe(
+      '/settings/infrastructure',
+    );
   });
 
   it("defends against an undefined runtime input by treating it as '' (the `path || ''` arm)", () => {

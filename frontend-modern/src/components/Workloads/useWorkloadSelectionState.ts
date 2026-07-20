@@ -25,7 +25,9 @@ export function useWorkloadSelectionState(options: UseWorkloadsSelectionStateOpt
   const location = useLocation();
 
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
-  const [selectedWorkloadGroupId, setSelectedWorkloadGroupIdRaw] = createSignal<string | null>(null);
+  const [selectedWorkloadGroupId, setSelectedWorkloadGroupIdRaw] = createSignal<string | null>(
+    null,
+  );
   const [hoveredWorkloadId, setHoveredWorkloadId] = createSignal<string | null>(null);
   const [hoveredWorkloadGroupScope, setHoveredWorkloadGroupScope] =
     createSignal<SummarySeriesGroupScope | null>(null);

@@ -116,7 +116,9 @@ describe('infrastructureSummaryCache fetch dedupe', () => {
     expect(mockGetCharts).toHaveBeenNthCalledWith(2, '1h', undefined, {
       metrics: ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'],
     });
-    expect(readInfrastructureSummaryCache('1h', undefined, undefined, ['cpu', 'memory'])).not.toBeNull();
+    expect(
+      readInfrastructureSummaryCache('1h', undefined, undefined, ['cpu', 'memory']),
+    ).not.toBeNull();
     expect(readInfrastructureSummaryCache('1h')).not.toBeNull();
   });
 

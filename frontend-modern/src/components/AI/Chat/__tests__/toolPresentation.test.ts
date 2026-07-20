@@ -28,9 +28,7 @@ describe('formatPulseReadInputSummary (read tool)', () => {
   });
 
   it('summarizes tail with and without a path', () => {
-    expect(readSummary({ action: 'tail', path: '/var/log/syslog' })).toBe(
-      'tail /var/log/syslog',
-    );
+    expect(readSummary({ action: 'tail', path: '/var/log/syslog' })).toBe('tail /var/log/syslog');
     expect(readSummary({ action: 'tail' })).toBe('tail file');
   });
 

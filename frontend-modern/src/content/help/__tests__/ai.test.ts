@@ -7,6 +7,8 @@ describe('AI help content', () => {
 
     expect(providerHelp?.description).toContain('choose the route');
     expect(providerHelp?.description).toContain('switch routes explicitly');
-    expect(providerHelp?.description).not.toMatch(/fallback to others|automatic provider fallback/i);
+    expect(providerHelp?.description).not.toMatch(
+      /fallback to others|automatic provider fallback/i,
+    );
   });
 });

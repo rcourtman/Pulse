@@ -34,9 +34,7 @@ const makeGuest = (overrides?: Partial<WorkloadGuest>): WorkloadGuest =>
     ...overrides,
   }) as WorkloadGuest;
 
-const target = (
-  overrides: Partial<ResourceDiscoveryTarget> = {},
-): ResourceDiscoveryTarget => ({
+const target = (overrides: Partial<ResourceDiscoveryTarget> = {}): ResourceDiscoveryTarget => ({
   resourceType: 'vm',
   agentId: 'agent-1',
   resourceId: 'resource-1',

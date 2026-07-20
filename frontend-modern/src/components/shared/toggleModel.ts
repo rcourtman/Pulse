@@ -35,7 +35,10 @@ const toggleSizeConfig: Record<ToggleSize, { track: string; knob: string; transl
   },
 };
 
-export function resolveToggleSize(size: ToggleSize | undefined, fallback: ToggleSize = 'sm'): ToggleSize {
+export function resolveToggleSize(
+  size: ToggleSize | undefined,
+  fallback: ToggleSize = 'sm',
+): ToggleSize {
   return size ?? fallback;
 }
 

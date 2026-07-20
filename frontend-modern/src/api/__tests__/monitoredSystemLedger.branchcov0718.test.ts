@@ -29,10 +29,10 @@ describe('MonitoredSystemLedgerAPI branch coverage', () => {
 
       await MonitoredSystemLedgerAPI.explain();
 
-      expect(apiFetchJSON).toHaveBeenCalledWith(
-        '/api/license/monitored-system-ledger/explain',
-        { method: 'POST', body: '{}' },
-      );
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/license/monitored-system-ledger/explain', {
+        method: 'POST',
+        body: '{}',
+      });
     });
 
     it('serializes both candidate and replacement objects into the POST body', async () => {

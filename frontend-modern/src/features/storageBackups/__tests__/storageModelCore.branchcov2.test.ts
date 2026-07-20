@@ -277,10 +277,7 @@ describe('sortStorageRecords branch coverage', () => {
   it('sorts by name through the default else arm', () => {
     const a = makeRecord({ id: 'a', name: 'Zeta' });
     const b = makeRecord({ id: 'b', name: 'Alpha' });
-    expect(sortStorageRecords([a, b], 'name', 'asc').map((r) => r.name)).toEqual([
-      'Alpha',
-      'Zeta',
-    ]);
+    expect(sortStorageRecords([a, b], 'name', 'asc').map((r) => r.name)).toEqual(['Alpha', 'Zeta']);
     expect(sortStorageRecords([a, b], 'name', 'desc').map((r) => r.name)).toEqual([
       'Zeta',
       'Alpha',
@@ -391,9 +388,10 @@ describe('sortStorageRecords branch coverage', () => {
         ['v', growthEntry(50)],
       ]),
     };
-    expect(
-      sortStorageRecords([nullDelta, val], 'growth', 'asc', ctx).map((r) => r.id),
-    ).toEqual(['v', 'nd']);
+    expect(sortStorageRecords([nullDelta, val], 'growth', 'asc', ctx).map((r) => r.id)).toEqual([
+      'v',
+      'nd',
+    ]);
   });
 
   it('returns a new sorted array and does not mutate the input ([...records] copy)', () => {

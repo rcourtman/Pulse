@@ -11,8 +11,9 @@ interface SavedViewsMenuProps {
 }
 
 export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
-  const { views, saveCurrent, removeView, applyView, setDefault, clearDefault } =
-    useSavedViews(props.storageKey);
+  const { views, saveCurrent, removeView, applyView, setDefault, clearDefault } = useSavedViews(
+    props.storageKey,
+  );
   const [open, setOpen] = createSignal(false);
   const [savePromptOpen, setSavePromptOpen] = createSignal(false);
   const [name, setName] = createSignal('');
@@ -108,9 +109,8 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
                 </button>
                 <Show when={views().length === 0}>
                   <div class="px-3 py-3 text-xs text-muted">
-                    No saved views yet. Set the filters you want, then click
-                    "Save current view as..." to name and recall this slice
-                    later.
+                    No saved views yet. Set the filters you want, then click "Save current view
+                    as..." to name and recall this slice later.
                   </div>
                 </Show>
                 <Show when={views().length > 0}>
@@ -153,11 +153,7 @@ export const SavedViewsMenu: Component<SavedViewsMenuProps> = (props) => {
                             }
                           >
                             <StarIcon
-                              class={
-                                view.isDefault === true
-                                  ? 'h-3 w-3 fill-current'
-                                  : 'h-3 w-3'
-                              }
+                              class={view.isDefault === true ? 'h-3 w-3 fill-current' : 'h-3 w-3'}
                             />
                           </button>
                           <button

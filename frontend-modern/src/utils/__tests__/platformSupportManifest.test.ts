@@ -338,11 +338,13 @@ describe('platformSupportManifest', () => {
       expect(sourcePlatformSupportsOnboardingPath('agent', 'install-workspace')).toBe(true);
       expect(sourcePlatformSupportsOnboardingPath('docker', 'install-workspace')).toBe(true);
       expect(sourcePlatformSupportsOnboardingPath('kubernetes', 'install-workspace')).toBe(true);
-      expect(sourcePlatformSupportsOnboardingPath('proxmox-pve', 'platform-connections')).toBe(true);
+      expect(sourcePlatformSupportsOnboardingPath('proxmox-pve', 'platform-connections')).toBe(
+        true,
+      );
       expect(sourcePlatformSupportsOnboardingPath('truenas', 'platform-connections')).toBe(true);
-      expect(
-        sourcePlatformSupportsOnboardingPath('vmware-vsphere', 'platform-connections'),
-      ).toBe(true);
+      expect(sourcePlatformSupportsOnboardingPath('vmware-vsphere', 'platform-connections')).toBe(
+        true,
+      );
     });
 
     it('returns false when the platform declares a different onboarding path', () => {
@@ -357,7 +359,9 @@ describe('platformSupportManifest', () => {
       expect(sourcePlatformSupportsOnboardingPath('k8s', 'install-workspace')).toBe(true);
       expect(sourcePlatformSupportsOnboardingPath('vmware', 'platform-connections')).toBe(true);
       expect(sourcePlatformSupportsOnboardingPath('AGENT', 'install-workspace')).toBe(true);
-      expect(sourcePlatformSupportsOnboardingPath('Proxmox-PVE', 'platform-connections')).toBe(true);
+      expect(sourcePlatformSupportsOnboardingPath('Proxmox-PVE', 'platform-connections')).toBe(
+        true,
+      );
     });
 
     it('returns false for presentation-only platforms, unknown input, and empty input', () => {

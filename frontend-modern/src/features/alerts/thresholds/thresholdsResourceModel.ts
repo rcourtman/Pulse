@@ -47,13 +47,13 @@ export const hasThresholdDiff = (
 ) =>
   Boolean(
     override?.thresholds &&
-      Object.keys(override.thresholds).some((key) => {
-        const thresholdKey = key as keyof Override['thresholds'];
-        return (
-          override.thresholds[thresholdKey] !== undefined &&
-          override.thresholds[thresholdKey] !== defaults[key]
-        );
-      }),
+    Object.keys(override.thresholds).some((key) => {
+      const thresholdKey = key as keyof Override['thresholds'];
+      return (
+        override.thresholds[thresholdKey] !== undefined &&
+        override.thresholds[thresholdKey] !== defaults[key]
+      );
+    }),
   );
 
 export function hostOverrideIdCandidates(resource: Resource): string[] {
@@ -89,9 +89,7 @@ export const dockerHostOverrideIdCandidates = (resource: Resource): string[] => 
 };
 
 export const dockerContainerOverrideIdCandidates = (host: Resource, shortId: string): string[] =>
-  uniqueIds(
-    ...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`),
-  );
+  uniqueIds(...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`));
 
 export const findOverrideByCandidates = (
   overridesMap: Map<string, Override>,
@@ -126,7 +124,9 @@ export const getFriendlyNodeName = (value: string, clusterName?: string): string
     }
     if (!result) return '';
     const firstWord = result.split(/\s+/)[0] || result;
-    const withoutDomain = firstWord.includes('.') ? (firstWord.split('.')[0] ?? firstWord) : firstWord;
+    const withoutDomain = firstWord.includes('.')
+      ? (firstWord.split('.')[0] ?? firstWord)
+      : firstWord;
     return withoutDomain.trim();
   };
 
@@ -146,16 +146,13 @@ export const getFriendlyNodeName = (value: string, clusterName?: string): string
   return base;
 };
 
-export const getFriendlyAlertNodeName = (
-  value: string,
-  clusterName?: string,
-): string => getFriendlyNodeName(value, clusterName);
+export const getFriendlyAlertNodeName = (value: string, clusterName?: string): string =>
+  getFriendlyNodeName(value, clusterName);
 
 export function buildNodeHeaderMeta(node: Resource) {
   const data = platformData(node);
   const clusterName = (data?.clusterName as string | undefined) ?? undefined;
-  const isClusterMember =
-    (data?.isClusterMember as boolean | undefined) ?? Boolean(node.clusterId);
+  const isClusterMember = (data?.isClusterMember as boolean | undefined) ?? Boolean(node.clusterId);
 
   const originalDisplayName = getAlertResourceDisplayLabel(node);
   const friendlyName = getFriendlyAlertNodeName(originalDisplayName, clusterName);
@@ -215,7 +212,11 @@ export function buildAgentHeaderMeta(agent: Resource) {
   return { headerMeta, keys };
 }
 
-export const agentDiskResourceId = (agentId: string, mountpoint: string, device?: string): string => {
+export const agentDiskResourceId = (
+  agentId: string,
+  mountpoint: string,
+  device?: string,
+): string => {
   let label = (mountpoint?.trim() || device?.trim() || 'disk').toLowerCase();
   label = label
     .replace(/[^a-z0-9]/g, '-')
@@ -229,7 +230,10 @@ export const storageCoords = (resource: Resource): { node: string; instance: str
   const data = platformData(resource);
   if (resource.type === 'datastore') {
     const instance =
-      (data?.pbsInstanceId as string | undefined) || resource.parentId || resource.platformId || 'pbs';
+      (data?.pbsInstanceId as string | undefined) ||
+      resource.parentId ||
+      resource.platformId ||
+      'pbs';
     const node = (data?.pbsInstanceName as string | undefined) || instance;
     return { node, instance };
   }

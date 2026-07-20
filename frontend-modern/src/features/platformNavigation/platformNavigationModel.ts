@@ -10,12 +10,7 @@ import {
 import { normalizeSourcePlatformKey, resolveResourcePlatformType } from '@/utils/sourcePlatforms';
 
 export type PrimaryPlatformNavId =
-  | 'proxmox'
-  | 'docker'
-  | 'kubernetes'
-  | 'truenas'
-  | 'vmware'
-  | 'standalone';
+  'proxmox' | 'docker' | 'kubernetes' | 'truenas' | 'vmware' | 'standalone';
 
 export type PlatformNavigationVisibility = Record<PrimaryPlatformNavId, boolean>;
 

@@ -50,7 +50,15 @@ function FormField(props: FormFieldProps) {
   );
 }
 
-const WEEKDAY_OPTIONS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const WEEKDAY_OPTIONS = [
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+];
 
 export function ReportingPanel() {
   const {
@@ -296,11 +304,17 @@ export function ReportingPanel() {
                 <div class="space-y-1">
                   <h4 class="text-base font-semibold text-base-content">Scheduled reports</h4>
                   <p class="text-sm text-muted">
-                    Send recurring client performance reports using the same resource scope and branding as generated reports.
+                    Send recurring client performance reports using the same resource scope and
+                    branding as generated reports.
                   </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                  <Button variant="secondary" size="sm" class="gap-2" onClick={reloadReportSchedules}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    class="gap-2"
+                    onClick={reloadReportSchedules}
+                  >
                     <RefreshCw size={16} />
                     Refresh
                   </Button>
@@ -322,10 +336,13 @@ export function ReportingPanel() {
                 when={reportSchedules().length > 0}
                 fallback={
                   <div class="flex flex-col gap-3 border border-dashed border-base-300 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <p class="text-sm text-muted">
-                      No scheduled reports are configured yet.
-                    </p>
-                    <Button variant="secondary" size="sm" class="gap-2" onClick={startCreateSchedule}>
+                    <p class="text-sm text-muted">No scheduled reports are configured yet.</p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      class="gap-2"
+                      onClick={startCreateSchedule}
+                    >
                       <Plus size={16} />
                       Create schedule
                     </Button>
@@ -358,19 +375,34 @@ export function ReportingPanel() {
                       <For each={reportSchedules()}>
                         {(schedule) => (
                           <tr>
-                            <td class="truncate px-3 py-2 font-medium text-base-content" title={schedule.name}>
+                            <td
+                              class="truncate px-3 py-2 font-medium text-base-content"
+                              title={schedule.name}
+                            >
                               {schedule.name}
                             </td>
-                            <td class="truncate px-3 py-2 text-muted" title={reportScheduleCadenceLabel(schedule)}>
+                            <td
+                              class="truncate px-3 py-2 text-muted"
+                              title={reportScheduleCadenceLabel(schedule)}
+                            >
                               {reportScheduleCadenceLabel(schedule)}
                             </td>
-                            <td class="truncate px-3 py-2 text-muted" title={reportScheduleScopeLabel(schedule)}>
+                            <td
+                              class="truncate px-3 py-2 text-muted"
+                              title={reportScheduleScopeLabel(schedule)}
+                            >
                               {reportScheduleScopeLabel(schedule)}
                             </td>
-                            <td class="truncate px-3 py-2 text-muted" title={reportScheduleDeliveryLabel(schedule)}>
+                            <td
+                              class="truncate px-3 py-2 text-muted"
+                              title={reportScheduleDeliveryLabel(schedule)}
+                            >
                               {reportScheduleDeliveryLabel(schedule)}
                             </td>
-                            <td class="truncate px-3 py-2 text-muted" title={schedule.last_error || ''}>
+                            <td
+                              class="truncate px-3 py-2 text-muted"
+                              title={schedule.last_error || ''}
+                            >
                               <div class="truncate">{reportScheduleLastRunLabel(schedule)}</div>
                               <Show when={schedule.last_run_at}>
                                 <div class="truncate text-xs text-muted">
@@ -463,7 +495,11 @@ export function ReportingPanel() {
                     <FormSelect
                       label="Cadence"
                       value={scheduleForm().cadenceType}
-                      onChange={(e) => updateScheduleForm({ cadenceType: e.currentTarget.value as 'monthly' | 'weekly' })}
+                      onChange={(e) =>
+                        updateScheduleForm({
+                          cadenceType: e.currentTarget.value as 'monthly' | 'weekly',
+                        })
+                      }
                     >
                       <option value="monthly">Monthly</option>
                       <option value="weekly">Weekly</option>
@@ -477,7 +513,9 @@ export function ReportingPanel() {
                           onChange={(e) => updateScheduleForm({ weekday: e.currentTarget.value })}
                         >
                           <For each={WEEKDAY_OPTIONS}>
-                            {(day) => <option value={day}>{day[0].toUpperCase() + day.slice(1)}</option>}
+                            {(day) => (
+                              <option value={day}>{day[0].toUpperCase() + day.slice(1)}</option>
+                            )}
                           </For>
                         </FormSelect>
                       }
@@ -489,7 +527,9 @@ export function ReportingPanel() {
                           max="28"
                           class={formControl}
                           value={scheduleForm().dayOfMonth}
-                          onInput={(e) => updateScheduleForm({ dayOfMonth: Number(e.currentTarget.value) })}
+                          onInput={(e) =>
+                            updateScheduleForm({ dayOfMonth: Number(e.currentTarget.value) })
+                          }
                         />
                       </FormField>
                     </Show>
@@ -504,7 +544,9 @@ export function ReportingPanel() {
                     <FormSelect
                       label="Format"
                       value={scheduleForm().format}
-                      onChange={(e) => updateScheduleForm({ format: e.currentTarget.value as ReportingFormat })}
+                      onChange={(e) =>
+                        updateScheduleForm({ format: e.currentTarget.value as ReportingFormat })
+                      }
                     >
                       <option value="pdf">PDF</option>
                       <option value="csv">CSV</option>
@@ -535,7 +577,11 @@ export function ReportingPanel() {
                     <FormSelect
                       label="Delivery"
                       value={scheduleForm().deliveryMethod}
-                      onChange={(e) => updateScheduleForm({ deliveryMethod: e.currentTarget.value as 'email' | 'disk' })}
+                      onChange={(e) =>
+                        updateScheduleForm({
+                          deliveryMethod: e.currentTarget.value as 'email' | 'disk',
+                        })
+                      }
                     >
                       <option value="email">Email recipients</option>
                       <option value="disk">Save to disk</option>
@@ -547,13 +593,18 @@ export function ReportingPanel() {
                         max="120"
                         class={formControl}
                         value={scheduleForm().retentionCount}
-                        onInput={(e) => updateScheduleForm({ retentionCount: Number(e.currentTarget.value) })}
+                        onInput={(e) =>
+                          updateScheduleForm({ retentionCount: Number(e.currentTarget.value) })
+                        }
                       />
                     </FormField>
                   </div>
 
                   <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <FormField label="Email recipients" helpText="Blank uses the existing email notification recipients">
+                    <FormField
+                      label="Email recipients"
+                      helpText="Blank uses the existing email notification recipients"
+                    >
                       <input
                         type="text"
                         class={formControl}
@@ -585,7 +636,9 @@ export function ReportingPanel() {
                         <input
                           type="checkbox"
                           checked={scheduleForm().saveToDisk}
-                          onChange={(e) => updateScheduleForm({ saveToDisk: e.currentTarget.checked })}
+                          onChange={(e) =>
+                            updateScheduleForm({ saveToDisk: e.currentTarget.checked })
+                          }
                         />
                         Save copy
                       </label>

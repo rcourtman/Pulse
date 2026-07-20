@@ -121,7 +121,9 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
     it('returns the full text when slotWidth <= 0 (short-circuit)', () => {
       // slotWidth = containerWidth(0) / 1 = 0 -> first operand of the || .
       const p = buildStackedDiskBarPresentation(
-        { disks: [makeDisk({ mountpoint: '/dev/sda1', total: 100, used: 50, free: 50, usage: 50 })] },
+        {
+          disks: [makeDisk({ mountpoint: '/dev/sda1', total: 100, used: 50, free: 50, usage: 50 })],
+        },
         0,
       );
       expect(p.miniDisks[0].inlineText).toBe('sda1 50%');
@@ -130,7 +132,9 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
     it('returns the full text when it fits within the slot', () => {
       // 'sda1 50%' width = 8 * 5.4 + 4 = 47.2 <= slotWidth(60).
       const p = buildStackedDiskBarPresentation(
-        { disks: [makeDisk({ mountpoint: '/dev/sda1', total: 100, used: 50, free: 50, usage: 50 })] },
+        {
+          disks: [makeDisk({ mountpoint: '/dev/sda1', total: 100, used: 50, free: 50, usage: 50 })],
+        },
         60,
       );
       expect(p.miniDisks[0].inlineText).toBe('sda1 50%');
@@ -374,7 +378,9 @@ describe('stackedDiskBarModel (branch coverage 2)', () => {
       const p = buildStackedDiskBarPresentation(
         {
           mode: 'mini',
-          disks: [makeDisk({ mountpoint: '/dev/nvme0', total: 100, used: 75, free: 25, usage: 75 })],
+          disks: [
+            makeDisk({ mountpoint: '/dev/nvme0', total: 100, used: 75, free: 25, usage: 75 }),
+          ],
         },
         400,
       );

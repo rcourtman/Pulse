@@ -83,7 +83,7 @@ describe('formatRate (exercised via presentCapacityForecast)', () => {
     expect(out!.detail).toBe('6 days to full at +0.50%/day');
   });
 
-  it("uses no sign and one decimal for a rate <= -1 (negative fill projection)", () => {
+  it('uses no sign and one decimal for a rate <= -1 (negative fill projection)', () => {
     const out = presentCapacityForecast({
       current_pct: 50,
       daily_change: -2,
@@ -95,15 +95,11 @@ describe('formatRate (exercised via presentCapacityForecast)', () => {
 
 describe('presentCapacityForecast', () => {
   it('returns null for malformed falsy non-null inputs (defensive !fc guard)', () => {
-    expect(
-      presentCapacityForecast(0 as unknown as CapacityForecast),
-    ).toBeNull();
-    expect(
-      presentCapacityForecast('' as unknown as CapacityForecast),
-    ).toBeNull();
+    expect(presentCapacityForecast(0 as unknown as CapacityForecast)).toBeNull();
+    expect(presentCapacityForecast('' as unknown as CapacityForecast)).toBeNull();
   });
 
-  it("defaults daily_change to 0 via ?? when it is null", () => {
+  it('defaults daily_change to 0 via ?? when it is null', () => {
     const out = presentCapacityForecast({
       current_pct: 80,
       days_to_full: 5,
@@ -113,7 +109,7 @@ describe('presentCapacityForecast', () => {
     expect(out!.tone).toBe('critical');
   });
 
-  it("defaults daily_change to 0 via ?? when it is undefined", () => {
+  it('defaults daily_change to 0 via ?? when it is undefined', () => {
     const out = presentCapacityForecast({
       current_pct: 80,
       days_to_full: 5,

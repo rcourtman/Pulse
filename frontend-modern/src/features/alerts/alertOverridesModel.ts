@@ -76,7 +76,10 @@ const buildSharedStorageLegacyKeyMap = (storageResources: Resource[]): Map<strin
 // last slash to a dash reconstructs the legacy key exactly; carrying it as a
 // trailing candidate keeps pre-existing overrides bound to the single card
 // and lets the next save re-home them onto the canonical key (#1591).
-const legacyPBSDatastoreOverrideId = (resource: Resource, canonicalId?: string): string | undefined => {
+const legacyPBSDatastoreOverrideId = (
+  resource: Resource,
+  canonicalId?: string,
+): string | undefined => {
   if (resource.storage?.platform !== 'pbs' || !canonicalId) return undefined;
   const slash = canonicalId.lastIndexOf('/');
   if (slash <= 0) return undefined;
@@ -88,11 +91,7 @@ export const storageOverrideIdCandidates = (resource: Resource): string[] => {
     resource.metricsTarget?.resourceType === 'storage'
       ? resource.metricsTarget.resourceId
       : undefined;
-  return uniqueIds(
-    canonicalId,
-    resource.id,
-    legacyPBSDatastoreOverrideId(resource, canonicalId),
-  );
+  return uniqueIds(canonicalId, resource.id, legacyPBSDatastoreOverrideId(resource, canonicalId));
 };
 
 export const storageOverrideActionId = (resource: Resource): string =>

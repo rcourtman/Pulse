@@ -25,7 +25,9 @@ const capability = (overrides: Partial<AgentCapability> = {}): AgentCapability =
   ...overrides,
 });
 
-const component = (overrides: Partial<AgentSurfaceContractComponent> = {}): AgentSurfaceContractComponent => ({
+const component = (
+  overrides: Partial<AgentSurfaceContractComponent> = {},
+): AgentSurfaceContractComponent => ({
   id: 'component_id',
   label: 'Component',
   description: 'component description',
@@ -53,7 +55,9 @@ const adapter = (overrides: Partial<AgentMCPAdapterContract> = {}): AgentMCPAdap
   ...overrides,
 });
 
-const manifest = (overrides: Partial<AgentCapabilitiesManifest> = {}): AgentCapabilitiesManifest => ({
+const manifest = (
+  overrides: Partial<AgentCapabilitiesManifest> = {},
+): AgentCapabilitiesManifest => ({
   version: 'v1',
   surfaceContract: {
     core: component({ id: 'core', label: 'Core' }),
@@ -148,7 +152,11 @@ describe('agentCapabilities branch coverage', () => {
     it('returns null when the contract normalizes away', () => {
       expect(getAgentSurfaceToolPosturePresentation(undefined)).toBeNull();
       expect(
-        getAgentSurfaceToolPosturePresentation({ surfaceId: '   ', toolSource: 'x', toolNames: [] }),
+        getAgentSurfaceToolPosturePresentation({
+          surfaceId: '   ',
+          toolSource: 'x',
+          toolNames: [],
+        }),
       ).toBeNull();
     });
   });

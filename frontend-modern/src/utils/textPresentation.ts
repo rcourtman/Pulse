@@ -21,19 +21,18 @@ export function humanizeToken(value?: string, options?: HumanizeTokenOptions): s
     return options?.fallback ?? '';
   }
 
-  if (options?.preserveShortAllCaps && normalized === normalized.toUpperCase() && normalized.length <= 4) {
+  if (
+    options?.preserveShortAllCaps &&
+    normalized === normalized.toUpperCase() &&
+    normalized.length <= 4
+  ) {
     return normalized;
   }
 
-  return normalized
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+  return normalized.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-export function formatIdentifierLabel(
-  value?: string,
-  options?: IdentifierLabelOptions,
-): string {
+export function formatIdentifierLabel(value?: string, options?: IdentifierLabelOptions): string {
   let normalized = (value || '').trim();
   if (!normalized) {
     return options?.fallback ?? '';
@@ -55,10 +54,7 @@ export function formatIdentifierLabel(
   return label;
 }
 
-export function titleCaseDelimitedLabel(
-  value?: string,
-  options?: TitleCaseLabelOptions,
-): string {
+export function titleCaseDelimitedLabel(value?: string, options?: TitleCaseLabelOptions): string {
   const normalized = (value || '').trim();
   if (!normalized) {
     return options?.fallback ?? '';

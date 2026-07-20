@@ -23,10 +23,26 @@ describe('vmwareDisplay', () => {
     });
 
     it.each([
-      ['both enabled', { clusterHaEnabled: true, clusterDrsEnabled: true }, 'HA enabled · DRS enabled'],
-      ['both disabled', { clusterHaEnabled: false, clusterDrsEnabled: false }, 'HA disabled · DRS disabled'],
-      ['HA enabled DRS disabled', { clusterHaEnabled: true, clusterDrsEnabled: false }, 'HA enabled · DRS disabled'],
-      ['HA disabled DRS enabled', { clusterHaEnabled: false, clusterDrsEnabled: true }, 'HA disabled · DRS enabled'],
+      [
+        'both enabled',
+        { clusterHaEnabled: true, clusterDrsEnabled: true },
+        'HA enabled · DRS enabled',
+      ],
+      [
+        'both disabled',
+        { clusterHaEnabled: false, clusterDrsEnabled: false },
+        'HA disabled · DRS disabled',
+      ],
+      [
+        'HA enabled DRS disabled',
+        { clusterHaEnabled: true, clusterDrsEnabled: false },
+        'HA enabled · DRS disabled',
+      ],
+      [
+        'HA disabled DRS enabled',
+        { clusterHaEnabled: false, clusterDrsEnabled: true },
+        'HA disabled · DRS enabled',
+      ],
     ])('joins both flags with " · " for %s', (_label, meta, expected) => {
       expect(formatVmwareClusterServices(meta as ResourceVMwareMeta)).toBe(expected);
     });

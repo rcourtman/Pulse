@@ -83,8 +83,7 @@ export const FilterBar: Component<FilterBarProps> = (props) => {
       hasDesktopViewOptions() ||
       hasClearableState());
   const showInlineRow = () => props.isMobile() && mobileExpanded() && inlineFilters().length > 0;
-  const showDesktopChipRow = () =>
-    !props.isMobile() && activeMenuFilters().length > 0;
+  const showDesktopChipRow = () => !props.isMobile() && activeMenuFilters().length > 0;
   const showMobileBody = () => props.isMobile() && mobileExpanded();
   const showChipRow = () =>
     showDesktopChipRow() ||

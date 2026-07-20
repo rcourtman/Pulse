@@ -136,7 +136,9 @@ describe('diskListModel (branch coverage 0713)', () => {
 
     it('maps a percent at or above critical to the critical class with default thresholds', () => {
       // 90 >= 90 -> critical.
-      expect(getWorkloadsDiskProgressClass(makeDisk({ used: 90, total: 100 }))).toBe(CRITICAL_CLASS);
+      expect(getWorkloadsDiskProgressClass(makeDisk({ used: 90, total: 100 }))).toBe(
+        CRITICAL_CLASS,
+      );
     });
 
     it('maps a no-capacity disk (percent 0) to the normal class', () => {

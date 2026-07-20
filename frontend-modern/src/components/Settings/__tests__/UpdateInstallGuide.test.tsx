@@ -100,7 +100,8 @@ describe('UpdateInstallGuide', () => {
                 id: 'agent-token-scopes',
                 status: 'blocked',
                 title: 'Agent token scopes',
-                summary: 'Registered agents exist, but no loaded API token grants agent reporting scope.',
+                summary:
+                  'Registered agents exist, but no loaded API token grants agent reporting scope.',
               },
             ],
           },
@@ -175,9 +176,7 @@ describe('UpdateInstallGuide', () => {
     ));
 
     expect(screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose pull`)).toBeInTheDocument();
-    expect(
-      screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose up -d`),
-    ).toBeInTheDocument();
+    expect(screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose up -d`)).toBeInTheDocument();
     expect(screen.queryByText(/docker pull rcourtman\/pulse/)).not.toBeInTheDocument();
   });
 

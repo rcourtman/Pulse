@@ -221,7 +221,8 @@ export function reportScheduleScopeLabel(schedule: ReportSchedule): string {
 export function reportScheduleDeliveryLabel(schedule: ReportSchedule): string {
   const normalized = normalizeReportSchedule(schedule);
   if (normalized.delivery.method === 'disk') return 'Save to disk';
-  if ((normalized.delivery.to ?? []).length > 0) return `${normalized.delivery.to!.length} email recipient${normalized.delivery.to!.length === 1 ? '' : 's'}`;
+  if ((normalized.delivery.to ?? []).length > 0)
+    return `${normalized.delivery.to!.length} email recipient${normalized.delivery.to!.length === 1 ? '' : 's'}`;
   return 'Email config recipients';
 }
 
@@ -235,5 +236,10 @@ export function formatReportScheduleTime(value?: string): string {
   if (!value) return '';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }

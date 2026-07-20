@@ -684,7 +684,8 @@ export const useAppRuntimeState = () => {
       }
 
       if (securityData.ssoEnabled && securityData.ssoSessionUsername) {
-        const ssoDisplayName = securityData.ssoSessionDisplayName || securityData.ssoSessionUsername;
+        const ssoDisplayName =
+          securityData.ssoSessionDisplayName || securityData.ssoSessionUsername;
         logger.info('[App] SSO session detected', { user: ssoDisplayName });
         setHasAuth(true);
         setProxyAuthInfo({

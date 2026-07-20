@@ -54,9 +54,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
   }
 
   const showPatrolOption = () =>
-    props.patrolOption === true &&
-    !isLocked() &&
-    !!(props.alert.resourceId || '').trim();
+    props.patrolOption === true && !isLocked() && !!(props.alert.resourceId || '').trim();
   const usesPatrolPrimary = () => showPatrolOption() && props.variant !== 'icon';
   const buttonTitle = () =>
     isLocked()

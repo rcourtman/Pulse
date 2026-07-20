@@ -78,7 +78,7 @@ describe('PatrolIntelligenceHeader', () => {
     expect(headerSource).toContain('getPatrolSetupAction');
     expect(headerSource).toContain('providerSetupAction().href');
     expect(headerSource).toContain('Fix setup');
-    expect(headerSource).toContain("getPatrolSetupAction(state.patrolReadiness()?.cause)");
+    expect(headerSource).toContain('getPatrolSetupAction(state.patrolReadiness()?.cause)');
     expect(headerSource).toContain('runButtonDisabled');
     expect(headerSource).not.toContain('!state.canTriggerPatrol() ||');
   });
@@ -100,8 +100,7 @@ describe('PatrolIntelligenceHeader', () => {
       },
       approval: {
         label: 'Ask first',
-        detail:
-          'Patrol investigates and prepares fixes, but every change waits for your approval.',
+        detail: 'Patrol investigates and prepares fixes, but every change waits for your approval.',
         compactLabel: 'Ask first',
       },
       assisted: {

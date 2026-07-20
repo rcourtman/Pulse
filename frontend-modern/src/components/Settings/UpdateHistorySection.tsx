@@ -192,13 +192,13 @@ export const UpdateHistorySection: Component = () => {
               </div>
               <div class="px-6 py-4 space-y-3 text-sm text-base-content">
                 <p>
-                  This restores the binary, configuration, and data from the backup taken before
-                  the update to {formatVersionLabel(entry().version_to)} on{' '}
+                  This restores the binary, configuration, and data from the backup taken before the
+                  update to {formatVersionLabel(entry().version_to)} on{' '}
                   {formatTimestamp(entry().timestamp)}.
                 </p>
                 <p>
-                  Settings and alert changes made since that backup will be reverted, and Pulse
-                  will restart to complete the rollback.
+                  Settings and alert changes made since that backup will be reverted, and Pulse will
+                  restart to complete the rollback.
                 </p>
               </div>
               <div class="px-6 py-4 bg-surface-alt border-t border-border flex items-center justify-end gap-3">

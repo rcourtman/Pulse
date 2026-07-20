@@ -129,7 +129,10 @@ describe('getAvailabilityProbeEndpointLabel — branch coverage (primary target)
 
     it('returns the bare address when port is the wrong type (string)', () => {
       expect(
-        getAvailabilityProbeEndpointLabel({ address: 'example.com', port: 'abc' as unknown as number }),
+        getAvailabilityProbeEndpointLabel({
+          address: 'example.com',
+          port: 'abc' as unknown as number,
+        }),
       ).toBe('example.com');
     });
 

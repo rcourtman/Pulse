@@ -44,9 +44,7 @@ function makeSignal<T>(factory: () => AnySignal<T>): {
 }
 
 function dispatchCustomSync(key: string, value: string | null) {
-  window.dispatchEvent(
-    new CustomEvent(SYNC_EVENT, { detail: { key, value } }),
-  );
+  window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { key, value } }));
 }
 
 // jsdom's StorageEvent constructor rejects non-jsdom Storage instances for
@@ -283,17 +281,16 @@ describe('localStorage signals', () => {
       expect(sig.value()).toBe(expected);
     });
 
-    it.each([
-      ['abc'],
-      ['Infinity'],
-      ['NaN'],
-    ])('falls back to the default when stored %j is not finite', (stored) => {
-      localStorage.setItem('num-key', stored);
+    it.each([['abc'], ['Infinity'], ['NaN']])(
+      'falls back to the default when stored %j is not finite',
+      (stored) => {
+        localStorage.setItem('num-key', stored);
 
-      const sig = makeSignal(() => createLocalStorageNumberSignal('num-key', 7));
+        const sig = makeSignal(() => createLocalStorageNumberSignal('num-key', 7));
 
-      expect(sig.value()).toBe(7);
-    });
+        expect(sig.value()).toBe(7);
+      },
+    );
 
     it('heals an invalid stored value by writing the default back to storage', async () => {
       localStorage.setItem('num-key', 'abc');

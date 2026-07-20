@@ -49,10 +49,7 @@ describe('useAlertIncidentTimelineState', () => {
     await result.toggleIncidentTimeline('row-1', 'alert-1', '2026-03-01T00:00:00Z');
 
     expect(result.expandedIncidents().has('row-1')).toBe(true);
-    expect(AlertsAPI.getIncidentTimeline).toHaveBeenCalledWith(
-      'alert-1',
-      '2026-03-01T00:00:00Z',
-    );
+    expect(AlertsAPI.getIncidentTimeline).toHaveBeenCalledWith('alert-1', '2026-03-01T00:00:00Z');
     expect(result.incidentTimelines()['row-1']).toMatchObject({ id: 'incident-1' });
 
     result.setIncidentNoteDraft('row-1', 'operator note');

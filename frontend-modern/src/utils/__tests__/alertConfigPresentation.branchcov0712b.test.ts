@@ -66,9 +66,7 @@ describe('alertConfigPresentation — branch coverage (branchcov2)', () => {
       expect(getAlertConfigSummaryGrouping(1, true, true)).toContain(
         '1 minute windows by node and workload',
       );
-      expect(getAlertConfigSummaryGrouping(120, false, false)).toContain(
-        '120 minute windows',
-      );
+      expect(getAlertConfigSummaryGrouping(120, false, false)).toContain('120 minute windows');
     });
   });
 
@@ -76,34 +74,22 @@ describe('alertConfigPresentation — branch coverage (branchcov2)', () => {
     it('uses the singular "level" form when exactly one level is configured', () => {
       // The only input that takes the `levelCount === 1 ? ''` truthy arm
       // (sibling test only covers the plural arm via levelCount=2).
-      expect(getAlertConfigSummaryEscalation(1)).toBe(
-        '• 1 escalation level configured',
-      );
+      expect(getAlertConfigSummaryEscalation(1)).toBe('• 1 escalation level configured');
     });
 
     it('uses the plural "levels" form for counts other than 1', () => {
       // Drives the ternary's falsy arm across representative boundaries:
       // zero, two, and a larger count.
-      expect(getAlertConfigSummaryEscalation(0)).toBe(
-        '• 0 escalation levels configured',
-      );
-      expect(getAlertConfigSummaryEscalation(2)).toBe(
-        '• 2 escalation levels configured',
-      );
-      expect(getAlertConfigSummaryEscalation(5)).toBe(
-        '• 5 escalation levels configured',
-      );
+      expect(getAlertConfigSummaryEscalation(0)).toBe('• 0 escalation levels configured');
+      expect(getAlertConfigSummaryEscalation(2)).toBe('• 2 escalation levels configured');
+      expect(getAlertConfigSummaryEscalation(5)).toBe('• 5 escalation levels configured');
     });
 
     it('interpolates the count verbatim into the prefix bullet', () => {
       // Confirms the template literal wiring: bullet, count, then the fixed
       // trailing copy. Guards against accidental prefix changes.
-      expect(getAlertConfigSummaryEscalation(3)).toBe(
-        '• 3 escalation levels configured',
-      );
-      expect(getAlertConfigSummaryEscalation(1)).toMatch(
-        /^• 1 escalation level configured$/,
-      );
+      expect(getAlertConfigSummaryEscalation(3)).toBe('• 3 escalation levels configured');
+      expect(getAlertConfigSummaryEscalation(1)).toMatch(/^• 1 escalation level configured$/);
     });
   });
 });

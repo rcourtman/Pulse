@@ -36,10 +36,7 @@ export interface SelfHostedCommercialModelInput {
 }
 
 export interface HostedCommercialModelInput {
-  status?: Pick<
-    LicenseStatus,
-    'email' | 'is_lifetime' | 'expires_at' | 'max_guests'
-  > | null;
+  status?: Pick<LicenseStatus, 'email' | 'is_lifetime' | 'expires_at' | 'max_guests'> | null;
   tierLabel: string;
   licenseStatusLabel: string;
   organizationCount: number;

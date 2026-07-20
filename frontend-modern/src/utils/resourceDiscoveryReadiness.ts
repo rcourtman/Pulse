@@ -1,8 +1,5 @@
 import { formatDiscoveryAge } from '@/api/discovery';
-import type {
-  ResourceDiscoveryReadiness,
-  ResourceDiscoveryReadinessState,
-} from '@/types/resource';
+import type { ResourceDiscoveryReadiness, ResourceDiscoveryReadinessState } from '@/types/resource';
 
 export type DiscoveryReadinessTone = 'success' | 'warning' | 'info' | 'danger' | 'muted';
 

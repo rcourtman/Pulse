@@ -156,7 +156,9 @@ export const SecurityWarning: Component = () => {
               </div>
 
               <p class="text-sm text-base-content mt-1">
-                <span class={warningPresentation().messageClass}>{warningPresentation().message}</span>
+                <span class={warningPresentation().messageClass}>
+                  {warningPresentation().message}
+                </span>
               </p>
 
               <Show when={showDetails()}>
@@ -164,34 +166,49 @@ export const SecurityWarning: Component = () => {
                   <div class="text-xs space-y-1">
                     <div class="flex items-center gap-2">
                       <span
-                        class={getSecurityFeatureStatePresentation(status()!.credentialsEncrypted).className}
+                        class={
+                          getSecurityFeatureStatePresentation(status()!.credentialsEncrypted)
+                            .className
+                        }
                       >
                         {getSecurityFeatureStatePresentation(status()!.credentialsEncrypted).label}
                       </span>
                       <span>Credentials encrypted at rest</span>
                     </div>
                     <div class="flex items-center gap-2">
-                      <span class={getSecurityFeatureStatePresentation(status()!.exportProtected).className}>
+                      <span
+                        class={
+                          getSecurityFeatureStatePresentation(status()!.exportProtected).className
+                        }
+                      >
                         {getSecurityFeatureStatePresentation(status()!.exportProtected).label}
                       </span>
                       <span>Export requires authentication</span>
                     </div>
                     <div class="flex items-center gap-2">
                       <span
-                        class={getSecurityFeatureStatePresentation(status()!.hasAuthentication).className}
+                        class={
+                          getSecurityFeatureStatePresentation(status()!.hasAuthentication).className
+                        }
                       >
                         {getSecurityFeatureStatePresentation(status()!.hasAuthentication).label}
                       </span>
                       <span>Authentication enabled</span>
                     </div>
                     <div class="flex items-center gap-2">
-                      <span class={getSecurityFeatureStatePresentation(status()!.hasHTTPS).className}>
+                      <span
+                        class={getSecurityFeatureStatePresentation(status()!.hasHTTPS).className}
+                      >
                         {getSecurityFeatureStatePresentation(status()!.hasHTTPS).label}
                       </span>
                       <span>HTTPS connection</span>
                     </div>
                     <div class="flex items-center gap-2">
-                      <span class={getSecurityFeatureStatePresentation(status()!.hasAuditLogging).className}>
+                      <span
+                        class={
+                          getSecurityFeatureStatePresentation(status()!.hasAuditLogging).className
+                        }
+                      >
                         {getSecurityFeatureStatePresentation(status()!.hasAuditLogging).label}
                       </span>
                       <span>Audit logging enabled</span>

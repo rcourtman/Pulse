@@ -23,12 +23,32 @@ describe('agentVersion', () => {
       ['uppercase V prefix', 'V1.2.3', { major: 1, minor: 2, patch: 3, prerelease: [] }],
       ['whitespace padded', '  1.2.3  ', { major: 1, minor: 2, patch: 3, prerelease: [] }],
       ['with prerelease', '1.2.3-rc.5', { major: 1, minor: 2, patch: 3, prerelease: ['rc', '5'] }],
-      ['with prerelease + build', '1.2.3-rc.5+git.1', { major: 1, minor: 2, patch: 3, prerelease: ['rc', '5'] }],
-      ['build metadata only', '1.2.3+git.151.gabcdef', { major: 1, minor: 2, patch: 3, prerelease: [] }],
-      ['v + prerelease + build', 'v1.2.3-rc.5+build.2', { major: 1, minor: 2, patch: 3, prerelease: ['rc', '5'] }],
+      [
+        'with prerelease + build',
+        '1.2.3-rc.5+git.1',
+        { major: 1, minor: 2, patch: 3, prerelease: ['rc', '5'] },
+      ],
+      [
+        'build metadata only',
+        '1.2.3+git.151.gabcdef',
+        { major: 1, minor: 2, patch: 3, prerelease: [] },
+      ],
+      [
+        'v + prerelease + build',
+        'v1.2.3-rc.5+build.2',
+        { major: 1, minor: 2, patch: 3, prerelease: ['rc', '5'] },
+      ],
       ['leading zeros', '01.02.03', { major: 1, minor: 2, patch: 3, prerelease: [] }],
-      ['extra dotted segments (first 3 used)', '1.2.3.4.5', { major: 1, minor: 2, patch: 3, prerelease: [] }],
-      ['trailing dash with empty prerelease', '1.2.3-', { major: 1, minor: 2, patch: 3, prerelease: [] }],
+      [
+        'extra dotted segments (first 3 used)',
+        '1.2.3.4.5',
+        { major: 1, minor: 2, patch: 3, prerelease: [] },
+      ],
+      [
+        'trailing dash with empty prerelease',
+        '1.2.3-',
+        { major: 1, minor: 2, patch: 3, prerelease: [] },
+      ],
     ])('parses %s', (_label, input, expected) => {
       expect(parseAgentVersion(input)).toEqual(expected);
     });
@@ -96,7 +116,7 @@ describe('agentVersion', () => {
 
     it('compares real-world agent version ranges in ascending order', () => {
       const sorted = ['6.0.0-rc.5', '6.0.0', '6.1.0', '6.1.1'].sort(
-        (x, y) => (compareAgentVersions(x, y) ?? 0),
+        (x, y) => compareAgentVersions(x, y) ?? 0,
       );
       expect(sorted).toEqual(['6.0.0-rc.5', '6.0.0', '6.1.0', '6.1.1']);
     });

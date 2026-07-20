@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../');
-const readRepoFile = (relativePath: string) => readFileSync(resolve(repoRoot, relativePath), 'utf-8');
+const readRepoFile = (relativePath: string) =>
+  readFileSync(resolve(repoRoot, relativePath), 'utf-8');
 
 describe('quickstart copy contract', () => {
   it('keeps self-hosted public docs free of hosted quickstart claims', () => {
@@ -62,7 +63,9 @@ describe('quickstart copy contract', () => {
     const ai = readRepoFile('docs/AI.md');
 
     expect(ai).toContain('the configured LLM owns diagnosis');
-    expect(ai).toContain('Pulse supplies context, capabilities, safety gates, approval state, and audit trails');
+    expect(ai).toContain(
+      'Pulse supplies context, capabilities, safety gates, approval state, and audit trails',
+    );
     expect(ai).toContain('Pulse does not convert them into Pulse-authored findings');
 
     expect(ai).not.toContain("learns what's normal");

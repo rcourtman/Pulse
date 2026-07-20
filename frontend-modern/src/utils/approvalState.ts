@@ -1,8 +1,8 @@
 import type { ApprovalRequest } from '@/api/ai';
 
-export const getApprovalExpiryTime = (
-  approval: { expiresAt?: ApprovalRequest['expiresAt'] | null },
-): number | null => {
+export const getApprovalExpiryTime = (approval: {
+  expiresAt?: ApprovalRequest['expiresAt'] | null;
+}): number | null => {
   const expiry = Date.parse(approval.expiresAt ?? '');
   return Number.isFinite(expiry) ? expiry : null;
 };

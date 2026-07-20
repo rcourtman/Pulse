@@ -3,15 +3,11 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import containerUpdateBadgeSource from '@/components/shared/ContainerUpdateBadge.tsx?raw';
 import containerUpdateBadgeModelSource from '@/components/shared/containerUpdateBadgeModel.ts?raw';
 import containerUpdateButtonStateSource from '@/components/shared/useContainerUpdateButtonState.ts?raw';
-import {
-  ContainerUpdateBadge,
-  UpdateButton,
-} from '@/components/shared/ContainerUpdateBadge';
+import { ContainerUpdateBadge, UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import { getUpdatePlanErrorMessage } from '@/components/shared/containerUpdateBadgeModel';
 
 vi.mock('@/api/monitoring', () => ({
-  MonitoringAPI: {
-  },
+  MonitoringAPI: {},
 }));
 
 vi.mock('@/stores/containerUpdates', () => ({
@@ -39,9 +35,7 @@ describe('ContainerUpdateBadge', () => {
     expect(containerUpdateBadgeSource).not.toContain('createSignal');
 
     expect(containerUpdateButtonStateSource).toContain('ResourceActionsAPI.planAction');
-    expect(containerUpdateButtonStateSource).not.toContain(
-      'MonitoringAPI.updateDockerContainer',
-    );
+    expect(containerUpdateButtonStateSource).not.toContain('MonitoringAPI.updateDockerContainer');
     expect(containerUpdateButtonStateSource).toContain('markContainerQueued');
     expect(containerUpdateButtonStateSource).toContain('createSignal');
     expect(containerUpdateButtonStateSource).toContain(

@@ -9,20 +9,14 @@ interface WorkloadsWorkloadViewportSyncOptions {
   tableBodyRef: Accessor<HTMLTableSectionElement | null>;
 }
 
-export function useWorkloadViewportSync(
-  options: WorkloadsWorkloadViewportSyncOptions,
-) {
+export function useWorkloadViewportSync(options: WorkloadsWorkloadViewportSyncOptions) {
   const syncGuestWindowToViewport = () => {
     if (!options.groupedWindowing.isWindowed() || typeof window === 'undefined') return;
     const body = options.tableBodyRef();
     if (!body) return;
     const rect = body.getBoundingClientRect();
     const scrollTop = Math.max(0, -rect.top);
-    options.groupedWindowing.onScroll(
-      scrollTop,
-      window.innerHeight,
-      options.rowHeight,
-    );
+    options.groupedWindowing.onScroll(scrollTop, window.innerHeight, options.rowHeight);
   };
 
   createEffect(() => {

@@ -37,32 +37,24 @@ function makeDiskData(
 
 describe('normalizePhysicalDiskState via isUnraidPhysicalDisk', () => {
   it('lowercases and trims storageGroup before comparing to "unraid-array"', () => {
-    expect(
-      isUnraidPhysicalDisk(makeDiskData({ storageGroup: '  UNRAID-Array  ' })),
-    ).toBe(true);
+    expect(isUnraidPhysicalDisk(makeDiskData({ storageGroup: '  UNRAID-Array  ' }))).toBe(true);
   });
 
   it('lowercases and trims storageRole on the role+state path', () => {
     expect(
-      isUnraidPhysicalDisk(
-        makeDiskData({ storageRole: '  Cache  ', storageState: ' spinning ' }),
-      ),
+      isUnraidPhysicalDisk(makeDiskData({ storageRole: '  Cache  ', storageState: ' spinning ' })),
     ).toBe(true);
   });
 
   it('returns false on the role path when storageState is whitespace-only', () => {
-    expect(
-      isUnraidPhysicalDisk(
-        makeDiskData({ storageRole: 'data', storageState: '   ' }),
-      ),
-    ).toBe(false);
+    expect(isUnraidPhysicalDisk(makeDiskData({ storageRole: 'data', storageState: '   ' }))).toBe(
+      false,
+    );
   });
 
   it('returns false when neither storageGroup nor role+state match', () => {
     expect(
-      isUnraidPhysicalDisk(
-        makeDiskData({ storageRole: 'hot-spare', storageState: 'active' }),
-      ),
+      isUnraidPhysicalDisk(makeDiskData({ storageRole: 'hot-spare', storageState: 'active' })),
     ).toBe(false);
   });
 });

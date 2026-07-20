@@ -17,9 +17,7 @@ const makeSystem = (overrides: Partial<Resource> = {}): Resource =>
     truenas: {
       hostname: 'nas-primary',
       version: 'TrueNAS-SCALE-24.10.2',
-      services: [
-        { id: '1', service: 'smb', enabled: true, state: 'RUNNING', pids: [2418, 2420] },
-      ],
+      services: [{ id: '1', service: 'smb', enabled: true, state: 'RUNNING', pids: [2418, 2420] }],
     },
     ...overrides,
   }) as Resource;

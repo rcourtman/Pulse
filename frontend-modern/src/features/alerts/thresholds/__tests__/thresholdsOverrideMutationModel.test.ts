@@ -57,12 +57,7 @@ describe('thresholdsOverrideMutationModel', () => {
     });
 
     it('preserves the order of unrelated overrides when replacing', () => {
-      const existing = [
-        makeOverride('a'),
-        makeOverride('b'),
-        makeOverride('c'),
-        makeOverride('d'),
-      ];
+      const existing = [makeOverride('a'), makeOverride('b'), makeOverride('c'), makeOverride('d')];
       const next = upsertOverride(existing, makeOverride('c', { cpu: 90 }));
       expect(next.map((o) => o.id)).toEqual(['a', 'b', 'c', 'd']);
       expect(next[2].thresholds).toEqual({ cpu: 90 });

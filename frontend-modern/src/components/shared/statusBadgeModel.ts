@@ -38,7 +38,9 @@ export function getStatusBadgeClass(
     STATUS_BADGE_PADDING_BY_SIZE[size],
     isEnabled ? STATUS_BADGE_ENABLED_CLASS : STATUS_BADGE_DISABLED_STATE_CLASS,
     disabled ? STATUS_BADGE_INTERACTION_DISABLED_CLASS : '',
-  ].join(' ').trim();
+  ]
+    .join(' ')
+    .trim();
 }
 
 export function getStatusBadgeLabel(props: StatusBadgeProps): string {

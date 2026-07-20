@@ -23,9 +23,7 @@ describe('aiControlLevelPresentation', () => {
     expect(getAIControlLevelBadgeClass('controlled')).toContain('bg-amber-100');
     expect(getAIControlLevelBadgeClass('autonomous')).toContain('bg-red-100');
     expect(getAIControlLevelDescription('read_only')).toContain('Assistant can query and explain');
-    expect(getAIControlLevelDescription('controlled')).toContain(
-      'asks before chat-only actions',
-    );
+    expect(getAIControlLevelDescription('controlled')).toContain('asks before chat-only actions');
     expect(getAIControlLevelDescription('autonomous')).toContain('eligible chat-only actions');
     expect(getAIControlLevelDescription('autonomous')).toContain(
       'Infrastructure work stays with Patrol mode',

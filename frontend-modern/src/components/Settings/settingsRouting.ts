@@ -1,3 +1,1 @@
-export {
-  settingsAgentNodeLabel,
-} from './settingsNavigationModel';
+export { settingsAgentNodeLabel } from './settingsNavigationModel';

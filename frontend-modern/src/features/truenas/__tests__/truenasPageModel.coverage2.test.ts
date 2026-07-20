@@ -80,19 +80,27 @@ describe('truenasPageModel coverage2', () => {
 
     it('maps shutoff/shutdown/poweroff vm states to stopped', () => {
       expect(
-        mapTrueNASVMStatus(makeResource({ id: 'a', type: 'vm', truenas: { vm: { state: 'SHUTOFF' } } })),
+        mapTrueNASVMStatus(
+          makeResource({ id: 'a', type: 'vm', truenas: { vm: { state: 'SHUTOFF' } } }),
+        ),
       ).toBe('stopped');
       expect(
-        mapTrueNASVMStatus(makeResource({ id: 'b', type: 'vm', truenas: { vm: { state: 'shutdown' } } })),
+        mapTrueNASVMStatus(
+          makeResource({ id: 'b', type: 'vm', truenas: { vm: { state: 'shutdown' } } }),
+        ),
       ).toBe('stopped');
       expect(
-        mapTrueNASVMStatus(makeResource({ id: 'c', type: 'vm', truenas: { vm: { state: 'POWEROFF' } } })),
+        mapTrueNASVMStatus(
+          makeResource({ id: 'c', type: 'vm', truenas: { vm: { state: 'POWEROFF' } } }),
+        ),
       ).toBe('stopped');
     });
 
     it('maps paused/suspended/error/crashed vm states to attention', () => {
       expect(
-        mapTrueNASVMStatus(makeResource({ id: 'a', type: 'vm', truenas: { vm: { state: 'PAUSED' } } })),
+        mapTrueNASVMStatus(
+          makeResource({ id: 'a', type: 'vm', truenas: { vm: { state: 'PAUSED' } } }),
+        ),
       ).toBe('attention');
       expect(
         mapTrueNASVMStatus(
@@ -100,7 +108,9 @@ describe('truenasPageModel coverage2', () => {
         ),
       ).toBe('attention');
       expect(
-        mapTrueNASVMStatus(makeResource({ id: 'c', type: 'vm', truenas: { vm: { state: 'error' } } })),
+        mapTrueNASVMStatus(
+          makeResource({ id: 'c', type: 'vm', truenas: { vm: { state: 'error' } } }),
+        ),
       ).toBe('attention');
       expect(
         mapTrueNASVMStatus(
@@ -152,7 +162,11 @@ describe('truenasPageModel coverage2', () => {
       ).toBe('attention');
       expect(
         mapTrueNASAppStatus(
-          makeResource({ id: 'b', type: 'app-container', truenas: { app: { state: 'deploying' } } }),
+          makeResource({
+            id: 'b',
+            type: 'app-container',
+            truenas: { app: { state: 'deploying' } },
+          }),
         ),
       ).toBe('attention');
       expect(
@@ -202,48 +216,34 @@ describe('truenasPageModel coverage2', () => {
 
     it('marks offline/stopped resource status as disabled even without share metadata', () => {
       expect(
-        mapTrueNASShareStatus(
-          makeResource({ id: 'a', type: 'network-share', status: 'offline' }),
-        ),
+        mapTrueNASShareStatus(makeResource({ id: 'a', type: 'network-share', status: 'offline' })),
       ).toBe('disabled');
       expect(
-        mapTrueNASShareStatus(
-          makeResource({ id: 'b', type: 'network-share', status: 'stopped' }),
-        ),
+        mapTrueNASShareStatus(makeResource({ id: 'b', type: 'network-share', status: 'stopped' })),
       ).toBe('disabled');
     });
 
     it('marks degraded/paused resource status as attention', () => {
       expect(
-        mapTrueNASShareStatus(
-          makeResource({ id: 'a', type: 'network-share', status: 'degraded' }),
-        ),
+        mapTrueNASShareStatus(makeResource({ id: 'a', type: 'network-share', status: 'degraded' })),
       ).toBe('attention');
       expect(
-        mapTrueNASShareStatus(
-          makeResource({ id: 'b', type: 'network-share', status: 'paused' }),
-        ),
+        mapTrueNASShareStatus(makeResource({ id: 'b', type: 'network-share', status: 'paused' })),
       ).toBe('attention');
     });
 
     it('marks online/running resource status as active when share.enabled is absent', () => {
       expect(
-        mapTrueNASShareStatus(
-          makeResource({ id: 'a', type: 'network-share', status: 'online' }),
-        ),
+        mapTrueNASShareStatus(makeResource({ id: 'a', type: 'network-share', status: 'online' })),
       ).toBe('active');
       expect(
-        mapTrueNASShareStatus(
-          makeResource({ id: 'b', type: 'network-share', status: 'running' }),
-        ),
+        mapTrueNASShareStatus(makeResource({ id: 'b', type: 'network-share', status: 'running' })),
       ).toBe('active');
     });
 
     it('returns attention for an unrecognized status with no share metadata', () => {
       expect(
-        mapTrueNASShareStatus(
-          makeResource({ id: 'a', type: 'network-share', status: 'unknown' }),
-        ),
+        mapTrueNASShareStatus(makeResource({ id: 'a', type: 'network-share', status: 'unknown' })),
       ).toBe('attention');
     });
   });
@@ -265,11 +265,13 @@ describe('truenasPageModel coverage2', () => {
     });
 
     it('maps stop/inactive service states to stopped when enabled is not false', () => {
-      expect(mapTrueNASServiceStatus(makeServiceRow({ service: { state: 'STOP', enabled: true } }))).toBe(
-        'stopped',
-      );
       expect(
-        mapTrueNASServiceStatus(makeServiceRow({ service: { state: 'inactive', enabled: undefined } })),
+        mapTrueNASServiceStatus(makeServiceRow({ service: { state: 'STOP', enabled: true } })),
+      ).toBe('stopped');
+      expect(
+        mapTrueNASServiceStatus(
+          makeServiceRow({ service: { state: 'inactive', enabled: undefined } }),
+        ),
       ).toBe('stopped');
     });
 
@@ -304,7 +306,9 @@ describe('truenasPageModel coverage2', () => {
         'paused',
       ]) {
         expect(
-          mapTrueNASStorageStatus(makeResource({ id: 's', type: 'pool', status: status as Resource['status'] })),
+          mapTrueNASStorageStatus(
+            makeResource({ id: 's', type: 'pool', status: status as Resource['status'] }),
+          ),
         ).toBe('attention');
       }
     });
@@ -319,9 +323,9 @@ describe('truenasPageModel coverage2', () => {
     });
 
     it('maps online/running/healthy statuses to healthy', () => {
-      expect(mapTrueNASStorageStatus(makeResource({ id: 'a', type: 'pool', status: 'online' }))).toBe(
-        'healthy',
-      );
+      expect(
+        mapTrueNASStorageStatus(makeResource({ id: 'a', type: 'pool', status: 'online' })),
+      ).toBe('healthy');
       expect(
         mapTrueNASStorageStatus(makeResource({ id: 'b', type: 'pool', status: 'running' })),
       ).toBe('healthy');
@@ -333,9 +337,9 @@ describe('truenasPageModel coverage2', () => {
     });
 
     it('returns unknown when no status or zfs/disk signals are present', () => {
-      expect(mapTrueNASStorageStatus(makeResource({ id: 'a', type: 'pool', status: 'unknown' }))).toBe(
-        'unknown',
-      );
+      expect(
+        mapTrueNASStorageStatus(makeResource({ id: 'a', type: 'pool', status: 'unknown' })),
+      ).toBe('unknown');
     });
 
     it('treats healthy zfsPoolState and passed disk health as not attention', () => {
@@ -405,7 +409,12 @@ describe('truenasPageModel coverage2', () => {
         status: 'online',
         storage: { topology: 'pool', platform: 'truenas' },
       });
-      const rows = buildTrueNASStorageTopologyRows([healthyPool, unknownPool, offlinePool, attentionPool]);
+      const rows = buildTrueNASStorageTopologyRows([
+        healthyPool,
+        unknownPool,
+        offlinePool,
+        attentionPool,
+      ]);
       expect(rows.map((row) => row.id)).toEqual([
         'pool:pool-attention',
         'pool:pool-offline',
@@ -529,7 +538,9 @@ describe('truenasPageModel coverage2', () => {
         type: 'pool',
         incidentSeverity: 'warning',
         incidentCode: 'truenas_custom',
-        incidents: [{ code: '   ', severity: '   ', summary: 'incident summary', source: 'VolumeStatus' }],
+        incidents: [
+          { code: '   ', severity: '   ', summary: 'incident summary', source: 'VolumeStatus' },
+        ],
       });
       const rows = buildTrueNASIncidentRows([resource]);
       expect(rows).toHaveLength(1);
@@ -622,9 +633,7 @@ describe('truenasPageModel coverage2', () => {
       const withNative = makeResource({
         id: 'a',
         type: 'pool',
-        incidents: [
-          { code: 'truenas_code', severity: 'info', summary: 's', nativeId: 'alert-7' },
-        ],
+        incidents: [{ code: 'truenas_code', severity: 'info', summary: 's', nativeId: 'alert-7' }],
       });
       const row = buildTrueNASIncidentRows([withNative])[0];
       expect(row?.id).toBe('a:incident:alert-7:0');
@@ -763,7 +772,14 @@ describe('truenasPageModel coverage2', () => {
       const app = baseApp({
         truenas: {
           app: {
-            volumes: [{ source: 'vol-src-token', destination: 'vol-dst-token', mode: 'rw-mode', type: 'bind-vol' }],
+            volumes: [
+              {
+                source: 'vol-src-token',
+                destination: 'vol-dst-token',
+                mode: 'rw-mode',
+                type: 'bind-vol',
+              },
+            ],
           },
         },
       });
@@ -805,9 +821,7 @@ describe('truenasPageModel coverage2', () => {
       const app = baseApp({
         truenas: {
           app: {
-            usedPorts: [
-              { hostPorts: [{ hostPort: 30456, hostIp: '192.168.1.5' }] },
-            ],
+            usedPorts: [{ hostPorts: [{ hostPort: 30456, hostIp: '192.168.1.5' }] }],
           },
         },
       });
@@ -917,7 +931,9 @@ describe('truenasPageModel coverage2', () => {
       const rows = buildTrueNASStorageTopologyRows([pool]);
       expect(filterTrueNASStorageTopologyRows(rows, 'elevated-risk-token', 'all')).toHaveLength(1);
       expect(filterTrueNASStorageTopologyRows(rows, 'risk-summary-token', 'all')).toHaveLength(1);
-      expect(filterTrueNASStorageTopologyRows(rows, 'protection-summary-token', 'all')).toHaveLength(1);
+      expect(
+        filterTrueNASStorageTopologyRows(rows, 'protection-summary-token', 'all'),
+      ).toHaveLength(1);
     });
 
     it('matches disk devPath/model/serial/wwn/diskType/storageState', () => {
@@ -947,11 +963,15 @@ describe('truenasPageModel coverage2', () => {
         id: 'tank',
         type: 'pool',
         storage: { topology: 'pool', platform: 'truenas' },
-        incidents: [{ code: 'incident-code-token', severity: 'warning', summary: 'incident-summary-token' }],
+        incidents: [
+          { code: 'incident-code-token', severity: 'warning', summary: 'incident-summary-token' },
+        ],
       });
       const rows = buildTrueNASStorageTopologyRows([pool]);
       expect(filterTrueNASStorageTopologyRows(rows, 'incident-code-token', 'all')).toHaveLength(1);
-      expect(filterTrueNASStorageTopologyRows(rows, 'incident-summary-token', 'all')).toHaveLength(1);
+      expect(filterTrueNASStorageTopologyRows(rows, 'incident-summary-token', 'all')).toHaveLength(
+        1,
+      );
     });
 
     it('matches a row by its kind keyword (pool) even when the resource name does not contain it', () => {
@@ -1298,7 +1318,11 @@ describe('truenasPageModel coverage2', () => {
       const vm = makeResource({ id: 'vm', type: 'vm', platformData: impairedSource() });
       expect(mapTrueNASVMStatus(vm)).toBe('attention');
 
-      const app = makeResource({ id: 'app', type: 'app-container', platformData: impairedSource() });
+      const app = makeResource({
+        id: 'app',
+        type: 'app-container',
+        platformData: impairedSource(),
+      });
       expect(mapTrueNASAppStatus(app)).toBe('attention');
 
       const share = makeResource({

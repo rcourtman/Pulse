@@ -69,7 +69,12 @@ afterEach(() => {
   cleanup();
   mock.runtimeBuild = 'community';
   mock.dockerUpdate = undefined;
-  mock.plan = { canAutoUpdate: true, requiresRoot: false, rollbackSupport: false, instructions: [] };
+  mock.plan = {
+    canAutoUpdate: true,
+    requiresRoot: false,
+    rollbackSupport: false,
+    instructions: [],
+  };
 });
 
 describe('UpdateBanner Pro edition update paths', () => {
@@ -92,15 +97,18 @@ describe('UpdateBanner Pro edition update paths', () => {
     fireEvent.click(screen.getByTitle('Show more'));
 
     expect(screen.getByText(/private Pulse Pro build from the license server/)).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Apply Update Automatically' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apply Update Automatically' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Private Release Access/ })).not.toBeInTheDocument();
   });
 
   it('routes non-auto-updatable Pro deployments to the portal', async () => {
     mock.runtimeBuild = 'pro';
-    mock.plan = { canAutoUpdate: false, requiresRoot: false, rollbackSupport: false, instructions: [] };
+    mock.plan = {
+      canAutoUpdate: false,
+      requiresRoot: false,
+      rollbackSupport: false,
+      instructions: [],
+    };
 
     render(() => <UpdateBanner />);
 
@@ -111,7 +119,12 @@ describe('UpdateBanner Pro edition update paths', () => {
 
   it('shows the portal steps (archive + .sshsig) for manual Pro deployments when expanded', async () => {
     mock.runtimeBuild = 'pro';
-    mock.plan = { canAutoUpdate: false, requiresRoot: false, rollbackSupport: false, instructions: [] };
+    mock.plan = {
+      canAutoUpdate: false,
+      requiresRoot: false,
+      rollbackSupport: false,
+      instructions: [],
+    };
 
     render(() => <UpdateBanner />);
     await screen.findByRole('link', { name: /Private Release Access/ });
@@ -131,7 +144,12 @@ describe('UpdateBanner Pro edition update paths', () => {
     const digest = 'sha256:' + 'ab'.repeat(32);
     const pinnedRef = `registry.pulserelay.pro/pulse/pulse-pro@${digest}`;
     mock.runtimeBuild = 'pro';
-    mock.plan = { canAutoUpdate: false, requiresRoot: false, rollbackSupport: false, instructions: [] };
+    mock.plan = {
+      canAutoUpdate: false,
+      requiresRoot: false,
+      rollbackSupport: false,
+      instructions: [],
+    };
     mock.dockerUpdate = {
       version: 'v6.1.0',
       image: 'registry.pulserelay.pro/pulse/pulse-pro',
@@ -146,9 +164,7 @@ describe('UpdateBanner Pro edition update paths', () => {
 
     expect(screen.getByText('Pulse Pro update')).toBeInTheDocument();
     expect(screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose pull`)).toBeInTheDocument();
-    expect(
-      screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose up -d`),
-    ).toBeInTheDocument();
+    expect(screen.getByText(`PULSE_IMAGE='${pinnedRef}' docker compose up -d`)).toBeInTheDocument();
     // The binary archive steps and community image must not appear for a
     // Docker Pro deployment with broker commands available.
     expect(screen.queryByText(/install\.sh --archive/)).not.toBeInTheDocument();

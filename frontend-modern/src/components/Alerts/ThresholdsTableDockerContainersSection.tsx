@@ -36,7 +36,9 @@ export function ThresholdsTableDockerContainersSection(props: ThresholdsTableSec
           setEditingThresholds={state.setEditingThresholds}
           editingNote={state.editingNote}
           setEditingNote={state.setEditingNote}
-          onBulkEdit={(ids) => state.handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])}
+          onBulkEdit={(ids) =>
+            state.handleBulkEdit(ids, ['CPU %', 'Memory %', 'Disk %', 'Temp °C'])
+          }
           formatMetricValue={formatMetricValue}
           hasActiveAlert={state.hasActiveAlert}
           globalDefaults={{

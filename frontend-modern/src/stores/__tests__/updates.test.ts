@@ -199,7 +199,9 @@ describe('updateStore', () => {
 
     it('clears the marker and toasts the backend error when the rollback is rejected', async () => {
       mockRollbackUpdate.mockRejectedValue(
-        new Error('no retained backup for this update; it may have been pruned by backup retention'),
+        new Error(
+          'no retained backup for this update; it may have been pruned by backup retention',
+        ),
       );
 
       const updateStore = await loadUpdateStore();

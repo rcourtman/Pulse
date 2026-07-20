@@ -156,7 +156,9 @@ describe('getResourceHealthIssuePresentation', () => {
         storage: {
           risk: {
             level: 'critical',
-            reasons: [{ code: 'storage_down', severity: 'critical', summary: 'Storage risk reason A' }],
+            reasons: [
+              { code: 'storage_down', severity: 'critical', summary: 'Storage risk reason A' },
+            ],
           },
         },
       }),
@@ -170,7 +172,9 @@ describe('getResourceHealthIssuePresentation', () => {
         agent: {
           storageRisk: {
             level: 'critical',
-            reasons: [{ code: 'agent_disk', severity: 'critical', summary: 'Agent storage risk reason' }],
+            reasons: [
+              { code: 'agent_disk', severity: 'critical', summary: 'Agent storage risk reason' },
+            ],
           },
         },
       }),
@@ -207,7 +211,11 @@ describe('getResourceHealthIssuePresentation', () => {
       }),
     );
     expect(result?.primary).toBe('Storage posture');
-    expect(result?.details).toStrictEqual(['Storage risk', 'Storage protection', 'Storage rebuild']);
+    expect(result?.details).toStrictEqual([
+      'Storage risk',
+      'Storage protection',
+      'Storage rebuild',
+    ]);
   });
 
   it('surfaces all four agent storage summaries (posture primary, rest as details)', () => {

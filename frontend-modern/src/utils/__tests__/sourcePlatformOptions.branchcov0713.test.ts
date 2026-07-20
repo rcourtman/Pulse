@@ -26,10 +26,7 @@ describe('orderSourcePlatformKeys — branch coverage (batch 0713)', () => {
     });
 
     it('strips entries that normalize to "" while keeping valid ones (.filter(Boolean) truthy + falsy arms)', () => {
-      expect(orderSourcePlatformKeys(['agent', '', '   ', 'docker'])).toEqual([
-        'agent',
-        'docker',
-      ]);
+      expect(orderSourcePlatformKeys(['agent', '', '   ', 'docker'])).toEqual(['agent', 'docker']);
     });
 
     it('tolerates null/undefined entries that violate the declared Iterable<string>', () => {
@@ -102,9 +99,12 @@ describe('orderSourcePlatformKeys — branch coverage (batch 0713)', () => {
       // agent (index 0) vs docker (index 6) -> return indexA - indexB arm.
       // agent/docker vs aaa-custom/zzz-custom -> indexA === -1 and indexB === -1 arms.
       // aaa-custom vs zzz-custom -> localeCompare fallback.
-      expect(
-        orderSourcePlatformKeys(['zzz-custom', 'agent', 'docker', 'aaa-custom']),
-      ).toEqual(['agent', 'docker', 'aaa-custom', 'zzz-custom']);
+      expect(orderSourcePlatformKeys(['zzz-custom', 'agent', 'docker', 'aaa-custom'])).toEqual([
+        'agent',
+        'docker',
+        'aaa-custom',
+        'zzz-custom',
+      ]);
     });
   });
 
@@ -131,9 +131,11 @@ describe('orderSourcePlatformKeys — branch coverage (batch 0713)', () => {
     it('ranks preferred keys ahead of non-preferred keys, then orders unknowns by label', () => {
       // 'agent' is the only entry in the supplied preferredOrder, so it sorts first;
       // 'aaa-custom' and 'bbb-custom' fall through to label-based ordering.
-      expect(
-        orderSourcePlatformKeys(['bbb-custom', 'agent', 'aaa-custom'], ['agent']),
-      ).toEqual(['agent', 'aaa-custom', 'bbb-custom']);
+      expect(orderSourcePlatformKeys(['bbb-custom', 'agent', 'aaa-custom'], ['agent'])).toEqual([
+        'agent',
+        'aaa-custom',
+        'bbb-custom',
+      ]);
     });
   });
 });

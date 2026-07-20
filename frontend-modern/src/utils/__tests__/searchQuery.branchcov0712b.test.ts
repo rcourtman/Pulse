@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { evaluateFilterStack, parseFilter, parseFilterStack } from '@/utils/searchQuery';
-import type { ComparisonOperator, FilterStack, MetricCondition, ParsedFilter } from '@/utils/searchQuery';
+import type {
+  ComparisonOperator,
+  FilterStack,
+  MetricCondition,
+  ParsedFilter,
+} from '@/utils/searchQuery';
 import type { VM } from '@/types/api';
 
 /**
@@ -209,9 +214,13 @@ describe('evaluateMetricCondition — field-switch arms (via evaluateFilterStack
   describe('cpu field', () => {
     it('multiplies the decimal by 100; `>` true above and false at the threshold', () => {
       // 0.9 -> 90 ; 90 > 50 true
-      expect(evaluateFilterStack(makeGuest({ cpu: 0.9 }), single(metric('cpu', '>', 50)))).toBe(true);
+      expect(evaluateFilterStack(makeGuest({ cpu: 0.9 }), single(metric('cpu', '>', 50)))).toBe(
+        true,
+      );
       // 0.4 -> 40 ; 40 > 50 false
-      expect(evaluateFilterStack(makeGuest({ cpu: 0.4 }), single(metric('cpu', '>', 50)))).toBe(false);
+      expect(evaluateFilterStack(makeGuest({ cpu: 0.4 }), single(metric('cpu', '>', 50)))).toBe(
+        false,
+      );
     });
   });
 
@@ -284,9 +293,9 @@ describe('evaluateMetricCondition — field-switch arms (via evaluateFilterStack
     });
 
     it('returns 0 when running but the uptime key is absent', () => {
-      expect(
-        evaluateFilterStack(guestWithout(['uptime']), single(metric('uptime', '>', 1))),
-      ).toBe(false);
+      expect(evaluateFilterStack(guestWithout(['uptime']), single(metric('uptime', '>', 1)))).toBe(
+        false,
+      );
     });
   });
 
@@ -312,7 +321,10 @@ describe('evaluateMetricCondition — field-switch arms (via evaluateFilterStack
 
     it('returns false when the field exists but its value is undefined', () => {
       expect(
-        evaluateFilterStack(makeGuest({ networkIn: undefined }), single(metric('networkIn', '>', 0))),
+        evaluateFilterStack(
+          makeGuest({ networkIn: undefined }),
+          single(metric('networkIn', '>', 0)),
+        ),
       ).toBe(false);
     });
 
@@ -345,28 +357,28 @@ describe('evaluateMetricCondition — field-switch arms (via evaluateFilterStack
   describe('`=` / `==` epsilon arm (Math.abs(v - cond.value) < 0.01)', () => {
     it('matches within the 0.01 window for "="', () => {
       // 50.0 vs 50.005 -> diff 0.005 -> true
-      expect(
-        evaluateFilterStack(makeGuest({ cpu: 0.5 }), single(metric('cpu', '=', 50.005))),
-      ).toBe(true);
+      expect(evaluateFilterStack(makeGuest({ cpu: 0.5 }), single(metric('cpu', '=', 50.005)))).toBe(
+        true,
+      );
     });
 
     it('does not match outside the 0.01 window for "="', () => {
       // 50.0 vs 50.02 -> diff 0.02 -> false
-      expect(
-        evaluateFilterStack(makeGuest({ cpu: 0.5 }), single(metric('cpu', '=', 50.02))),
-      ).toBe(false);
+      expect(evaluateFilterStack(makeGuest({ cpu: 0.5 }), single(metric('cpu', '=', 50.02)))).toBe(
+        false,
+      );
     });
 
     it('matches exactly with "==" at the same value', () => {
-      expect(
-        evaluateFilterStack(makeGuest({ cpu: 0.5 }), single(metric('cpu', '==', 50))),
-      ).toBe(true);
+      expect(evaluateFilterStack(makeGuest({ cpu: 0.5 }), single(metric('cpu', '==', 50)))).toBe(
+        true,
+      );
     });
 
     it('does not match with "==" far from the value', () => {
-      expect(
-        evaluateFilterStack(makeGuest({ cpu: 0.5 }), single(metric('cpu', '==', 51))),
-      ).toBe(false);
+      expect(evaluateFilterStack(makeGuest({ cpu: 0.5 }), single(metric('cpu', '==', 51)))).toBe(
+        false,
+      );
     });
   });
 
@@ -386,12 +398,12 @@ describe('evaluateMetricCondition — field-switch arms (via evaluateFilterStack
 describe('evaluateTextCondition — field-switch arms (via evaluateFilterStack)', () => {
   describe('name field', () => {
     it('matches case-insensitively and rejects a non-substring', () => {
-      expect(evaluateFilterStack(makeGuest({ name: 'Prod-Web' }), single(text('name', 'prod')))).toBe(
-        true,
-      );
-      expect(evaluateFilterStack(makeGuest({ name: 'Prod-Web' }), single(text('name', 'zzz')))).toBe(
-        false,
-      );
+      expect(
+        evaluateFilterStack(makeGuest({ name: 'Prod-Web' }), single(text('name', 'prod'))),
+      ).toBe(true);
+      expect(
+        evaluateFilterStack(makeGuest({ name: 'Prod-Web' }), single(text('name', 'zzz'))),
+      ).toBe(false);
     });
 
     it('returns false when name is the empty string (falsy)', () => {
@@ -441,28 +453,19 @@ describe('evaluateTextCondition — field-switch arms (via evaluateFilterStack)'
 
     it('matches case-insensitively across array tags and search value', () => {
       expect(
-        evaluateFilterStack(
-          makeGuest({ tags: ['Production'] }),
-          single(text('tags', 'PROD')),
-        ),
+        evaluateFilterStack(makeGuest({ tags: ['Production'] }), single(text('tags', 'PROD'))),
       ).toBe(true);
     });
 
     it('splits a comma-separated tags STRING and matches a segment', () => {
       expect(
-        evaluateFilterStack(
-          makeGuest({ tags: 'production,web,api' }),
-          single(text('tags', 'api')),
-        ),
+        evaluateFilterStack(makeGuest({ tags: 'production,web,api' }), single(text('tags', 'api'))),
       ).toBe(true);
     });
 
     it('returns false when the tags string contains only empty segments', () => {
       expect(
-        evaluateFilterStack(
-          makeGuest({ tags: ',,' }),
-          single(text('tags', 'production')),
-        ),
+        evaluateFilterStack(makeGuest({ tags: ',,' }), single(text('tags', 'production'))),
       ).toBe(false);
     });
 
@@ -491,7 +494,9 @@ describe('evaluateTextCondition — field-switch arms (via evaluateFilterStack)'
 
   describe('default field arm (non-name/node/vmid/tags)', () => {
     it('matches a string field via case-insensitive substring', () => {
-      expect(evaluateFilterStack(makeGuest({ type: 'qemu' }), single(text('type', 'QE')))).toBe(true);
+      expect(evaluateFilterStack(makeGuest({ type: 'qemu' }), single(text('type', 'QE')))).toBe(
+        true,
+      );
     });
 
     it('matches a numeric field via toString substring', () => {

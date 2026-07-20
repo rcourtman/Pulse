@@ -79,9 +79,7 @@ describe('alertConfigPresentation', () => {
       'Restore quiet hours, cooldown, grouping, and escalation settings to their defaults',
     );
     expect(ALERT_CONFIG_SCHEDULING_TITLE).toBe('Alert scheduling');
-    expect(ALERT_CONFIG_SCHEDULING_DESCRIPTION).toBe(
-      'Configure when and how alerts are delivered',
-    );
+    expect(ALERT_CONFIG_SCHEDULING_DESCRIPTION).toBe('Configure when and how alerts are delivered');
     expect(ALERT_CONFIG_QUIET_HOURS_TITLE).toBe('Quiet hours');
     expect(ALERT_CONFIG_QUIET_HOURS_DESCRIPTION).toBe(
       'Pause non-critical alerts during specific times.',
@@ -90,9 +88,7 @@ describe('alertConfigPresentation', () => {
     expect(ALERT_CONFIG_QUIET_HOURS_END_TIME_LABEL).toBe('End time');
     expect(ALERT_CONFIG_QUIET_HOURS_TIMEZONE_LABEL).toBe('Timezone');
     expect(ALERT_CONFIG_COOLDOWN_TITLE).toBe('Alert cooldown');
-    expect(ALERT_CONFIG_COOLDOWN_DESCRIPTION).toBe(
-      'Limit alert frequency to prevent spam.',
-    );
+    expect(ALERT_CONFIG_COOLDOWN_DESCRIPTION).toBe('Limit alert frequency to prevent spam.');
     expect(ALERT_CONFIG_COOLDOWN_PERIOD_LABEL).toBe('Cooldown period');
     expect(ALERT_CONFIG_COOLDOWN_PERIOD_SUFFIX).toBe('minutes');
     expect(ALERT_CONFIG_COOLDOWN_PERIOD_HELP).toBe(
@@ -142,9 +138,7 @@ describe('alertConfigPresentation', () => {
     expect(ALERT_CONFIG_ESCALATION_NOTIFY_WEBHOOKS).toBe('Webhooks');
     expect(ALERT_CONFIG_ESCALATION_NOTIFY_ALL).toBe('All channels');
     expect(ALERT_CONFIG_SUMMARY_TITLE).toBe('Configuration summary');
-    expect(ALERT_CONFIG_SUMMARY_DESCRIPTION).toBe(
-      'Preview of the active schedule settings.',
-    );
+    expect(ALERT_CONFIG_SUMMARY_DESCRIPTION).toBe('Preview of the active schedule settings.');
     expect(ALERT_CONFIG_SUMMARY_ALL_DISABLED).toBe(
       '• All notification controls are disabled - alerts will be sent immediately',
     );
@@ -188,15 +182,11 @@ describe('alertConfigPresentation', () => {
     expect(getAlertConfigRecoveryHelp()).toBe(
       'Sends on the same channels as live alerts to confirm when a condition clears.',
     );
-    expect(getAlertConfigEscalationHelp()).toBe(
-      'Define escalation levels for unresolved alerts:',
-    );
+    expect(getAlertConfigEscalationHelp()).toBe('Define escalation levels for unresolved alerts:');
     expect(getAlertConfigEscalationNotifyLabel('email')).toBe('Email');
     expect(getAlertConfigEscalationNotifyLabel('webhook')).toBe('Webhooks');
     expect(getAlertConfigEscalationNotifyLabel('all')).toBe('All channels');
-    expect(getAlertConfigSummaryRecoveryEnabled()).toBe(
-      ALERT_CONFIG_SUMMARY_RECOVERY,
-    );
+    expect(getAlertConfigSummaryRecoveryEnabled()).toBe(ALERT_CONFIG_SUMMARY_RECOVERY);
     expect(getAlertConfigSummaryEscalation(2)).toBe('• 2 escalation levels configured');
     expect(getAlertConfigSummaryAllDisabled()).toBe(
       '• All notification controls are disabled - alerts will be sent immediately',

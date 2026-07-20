@@ -46,9 +46,7 @@ describe('formatPendingToolStatus branch coverage', () => {
   it('renders a waiting tool from the label fallback when no activity is parseable', () => {
     expect(
       activeTurn({
-        pendingTools: [
-          { id: 'tool-1', name: 'pulse_get_nodes', input: '{}', status: 'waiting' },
-        ],
+        pendingTools: [{ id: 'tool-1', name: 'pulse_get_nodes', input: '{}', status: 'waiting' }],
       }),
     ).toEqual({
       type: 'tool',
@@ -157,9 +155,9 @@ describe('sanitizeWorkflowStatusMessage branch coverage', () => {
   });
 
   it('collapses runs of whitespace and lone spaced-out periods', () => {
-    expect(
-      formatAssistantWorkflowStatus({ message: 'Working   on   it .' }),
-    ).toBe('Working on it.');
+    expect(formatAssistantWorkflowStatus({ message: 'Working   on   it .' })).toBe(
+      'Working on it.',
+    );
   });
 
   it('leaves a plain message unchanged when no tool context is present', () => {
@@ -177,17 +175,17 @@ describe('messageContainsToolLabel branch coverage', () => {
   it('appends the tool suffix when the friendly label is absent from the message', () => {
     // messageContainsToolLabel('Working', 'read') -> \bread\b does not match -> false
     //  -> toolSuffix is appended.
-    expect(
-      formatAssistantWorkflowStatus({ message: 'Working', tool: 'pulse_read' }),
-    ).toBe('Working · read');
+    expect(formatAssistantWorkflowStatus({ message: 'Working', tool: 'pulse_read' })).toBe(
+      'Working · read',
+    );
   });
 
   it('withholds the tool suffix when the message already mentions the label as a word', () => {
     // messageContainsToolLabel('Reading storage', 'read') -> \bread\b does not
     //  match inside "Reading" -> false -> suffix appended (boundary edge case).
-    expect(
-      formatAssistantWorkflowStatus({ message: 'Reading storage', tool: 'pulse_read' }),
-    ).toBe('Reading storage · read');
+    expect(formatAssistantWorkflowStatus({ message: 'Reading storage', tool: 'pulse_read' })).toBe(
+      'Reading storage · read',
+    );
   });
 });
 
@@ -203,8 +201,12 @@ describe('formatRetryDelay branch coverage', () => {
     >[0]);
 
   it('formats sub-second delays in milliseconds', () => {
-    expect(retry({ attempt: 1, retryAfterMs: 500 })).toBe('Retrying. · attempt 1 · retrying in 500ms');
-    expect(retry({ attempt: 1, retryAfterMs: 999 })).toBe('Retrying. · attempt 1 · retrying in 999ms');
+    expect(retry({ attempt: 1, retryAfterMs: 500 })).toBe(
+      'Retrying. · attempt 1 · retrying in 500ms',
+    );
+    expect(retry({ attempt: 1, retryAfterMs: 999 })).toBe(
+      'Retrying. · attempt 1 · retrying in 999ms',
+    );
   });
 
   it('formats the one-second boundary and sub-ten-second delays with one decimal', () => {

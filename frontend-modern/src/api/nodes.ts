@@ -28,7 +28,8 @@ const normalizeClusterEndpoint = (endpoint: RawClusterEndpoint): ClusterEndpoint
 
 const nodeHasClusterEndpoints = (
   node: NodeConfig,
-): node is NodeConfig & { type: 'pve'; clusterEndpoints?: RawClusterEndpoint[] } => node.type === 'pve';
+): node is NodeConfig & { type: 'pve'; clusterEndpoints?: RawClusterEndpoint[] } =>
+  node.type === 'pve';
 
 const normalizeNodeConfig = (node: NodeConfig): NodeConfig => {
   if (!nodeHasClusterEndpoints(node)) return node;
@@ -250,10 +251,13 @@ export class NodesAPI {
     enableProxmox: boolean;
     enableCommands?: boolean;
   }): Promise<AgentInstallCommandResponse> {
-    const response = await apiFetchJSON<RawAgentInstallCommandResponse>('/api/agent-install-command', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
+    const response = await apiFetchJSON<RawAgentInstallCommandResponse>(
+      '/api/agent-install-command',
+      {
+        method: 'POST',
+        body: JSON.stringify(params),
+      },
+    );
     return normalizeAgentInstallCommandResponse(response);
   }
 

@@ -153,9 +153,12 @@ describe('guestOverrideIdentity', () => {
     });
 
     it('falls instance back to the resolved node when no instance source is available', () => {
-      expect(
-        getGuestOverrideIdentity({ node: 'pve', vmid: 100 }),
-      ).toEqual({ id: undefined, instance: 'pve', node: 'pve', vmid: 100 });
+      expect(getGuestOverrideIdentity({ node: 'pve', vmid: 100 })).toEqual({
+        id: undefined,
+        instance: 'pve',
+        node: 'pve',
+        vmid: 100,
+      });
     });
 
     it('ignores non-object proxmox and platformData values', () => {
@@ -190,9 +193,9 @@ describe('guestOverrideIdentity', () => {
     });
 
     it('uses the stable guest:instance:vmid key for cluster guests (instance !== node)', () => {
-      expect(
-        guestOverrideStorageId({ instance: 'cluster-a', node: 'node-1', vmid: 100 }),
-      ).toBe('guest:cluster-a:100');
+      expect(guestOverrideStorageId({ instance: 'cluster-a', node: 'node-1', vmid: 100 })).toBe(
+        'guest:cluster-a:100',
+      );
     });
 
     it('uses the canonical instance:node:vmid key for standalone guests (instance === node)', () => {
@@ -256,10 +259,9 @@ describe('guestOverrideIdentity', () => {
         'cluster-a-100',
         'cluster-a-node-1-100',
       ]);
-      expect(guestOverrideIdCandidates({ id: '  ', instance: 'pve', node: 'pve', vmid: 100 })).toEqual([
-        'pve:pve:100',
-        'pve-100',
-      ]);
+      expect(
+        guestOverrideIdCandidates({ id: '  ', instance: 'pve', node: 'pve', vmid: 100 }),
+      ).toEqual(['pve:pve:100', 'pve-100']);
     });
   });
 

@@ -60,7 +60,9 @@ export function ThresholdsTableProxmoxStorageSection(props: ThresholdsTableSecti
             showDelayColumn={true}
             globalDelaySeconds={tableProps.timeThresholds().storage}
             metricDelaySeconds={tableProps.metricTimeThresholds().storage ?? {}}
-            onMetricDelayChange={(metric, value) => state.updateMetricDelay('storage', metric, value)}
+            onMetricDelayChange={(metric, value) =>
+              state.updateMetricDelay('storage', metric, value)
+            }
             factoryDefaults={
               tableProps.factoryStorageDefault !== undefined
                 ? { usage: tableProps.factoryStorageDefault }

@@ -3,11 +3,7 @@ import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import type { WorkloadIOEmphasis } from './guestRowModel';
 import { computeIOScale } from '@/components/Infrastructure/infrastructureSelectors';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
-import {
-  parseFilterStack,
-  evaluateFilterStack,
-  splitSearchExclusions,
-} from '@/utils/searchQuery';
+import { parseFilterStack, evaluateFilterStack, splitSearchExclusions } from '@/utils/searchQuery';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
@@ -200,9 +196,7 @@ export const filterWorkloads = ({
     }
 
     if (exclusions.length > 0) {
-      guests = guests.filter(
-        (g) => !exclusions.some((term) => matchesWorkloadTextSearch(g, term)),
-      );
+      guests = guests.filter((g) => !exclusions.some((term) => matchesWorkloadTextSearch(g, term)));
     }
 
     if (textSearches.length > 0) {

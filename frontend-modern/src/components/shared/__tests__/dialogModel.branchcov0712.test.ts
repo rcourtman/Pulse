@@ -95,9 +95,7 @@ describe('getDialogPanelClass', () => {
 
     it('appends a provided panelClass after the modal branch', () => {
       // Exercises: layout === 'drawer-right' (false), panelClass ?? left arm (provided).
-      expect(getDialogPanelClass('modal', 'max-w-2xl')).toBe(
-        `${BASE} ${MODAL_BRANCH} max-w-2xl`,
-      );
+      expect(getDialogPanelClass('modal', 'max-w-2xl')).toBe(`${BASE} ${MODAL_BRANCH} max-w-2xl`);
     });
 
     it('treats an empty-string panelClass as a present value, dropping the max-w-lg fallback (?? left arm)', () => {

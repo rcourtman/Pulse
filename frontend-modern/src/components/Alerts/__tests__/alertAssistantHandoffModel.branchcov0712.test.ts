@@ -232,7 +232,7 @@ describe('formatContextLine (exercised via buildAlertAssistantHandoff)', () => {
 });
 
 describe('buildAlertAssistantHandoff (node-label, metadata-chain & briefing ternaries)', () => {
-  it("falls back to alert.node when nodeDisplayName is undefined (|| chain 2nd arm)", () => {
+  it('falls back to alert.node when nodeDisplayName is undefined (|| chain 2nd arm)', () => {
     const handoff = buildHandoff({ node: 'pve2', nodeDisplayName: undefined });
     expect(handoff.context.handoffContext).toContain('Node: pve2');
     expect(handoff.context.briefing.detailLines).toContain('Node: pve2');
@@ -246,7 +246,7 @@ describe('buildAlertAssistantHandoff (node-label, metadata-chain & briefing tern
     expect(handoff.context.briefing.detailLines).toContain('Node: pve2');
   });
 
-  it("yields empty nodeLabel when node is falsy (outer ternary false arm) -> drops the Node line", () => {
+  it('yields empty nodeLabel when node is falsy (outer ternary false arm) -> drops the Node line', () => {
     const handoff = buildHandoff({ node: '' });
     expect(handoff.context.handoffContext).not.toContain('Node:');
     expect(handoff.context.briefing.detailLines).not.toContain('Node:');
@@ -254,7 +254,7 @@ describe('buildAlertAssistantHandoff (node-label, metadata-chain & briefing tern
     expect(handoff.context.handoffResources[0].node).toBe('');
   });
 
-  it("hits the metadata?.resourceType optional-chain false branch when metadata is undefined", () => {
+  it('hits the metadata?.resourceType optional-chain false branch when metadata is undefined', () => {
     // makeAlert has no metadata by default; type='cpu' -> targetType inferred from
     // the 'vm-101' id via inferAlertTargetTypeFromResourceId.
     const handoff = buildHandoff({ type: 'cpu' });
@@ -271,7 +271,7 @@ describe('buildAlertAssistantHandoff (node-label, metadata-chain & briefing tern
     expect(handoff.context.targetType).toBe('vm');
   });
 
-  it("omits the currentMetric detailLine for a state alert (hasMetricValues false -> briefing ternary false arm)", () => {
+  it('omits the currentMetric detailLine for a state alert (hasMetricValues false -> briefing ternary false arm)', () => {
     const handoff = buildHandoff({ type: 'powered-off', value: 0, threshold: 0 });
     expect(handoff.context.briefing.detailLines).toEqual([
       'Node: PVE Node 1',
@@ -283,21 +283,21 @@ describe('buildAlertAssistantHandoff (node-label, metadata-chain & briefing tern
     expect(handoff.context.handoffContext).not.toContain('Threshold:');
   });
 
-  it("keeps the currentMetric detailLine for a metric alert (hasMetricValues true -> briefing ternary true arm)", () => {
+  it('keeps the currentMetric detailLine for a metric alert (hasMetricValues true -> briefing ternary true arm)', () => {
     const handoff = buildHandoff({ type: 'cpu', value: 92.5, threshold: 80 });
     expect(handoff.context.briefing.detailLines).toContain('Current value 92.5%; threshold 80.0%');
     expect(handoff.context.handoffContext).toContain('Current Value: 92.5%');
     expect(handoff.context.handoffContext).toContain('Threshold: 80.0%');
   });
 
-  it("leaves context.vmid undefined when vmid is not supplied", () => {
+  it('leaves context.vmid undefined when vmid is not supplied', () => {
     const handoff = buildHandoff();
     // The source spreads `vmid` (shorthand) from the optional input, so the key
     // exists but holds undefined when the caller omits it.
     expect(handoff.context.context.vmid).toBeUndefined();
   });
 
-  it("propagates vmid into context when supplied", () => {
+  it('propagates vmid into context when supplied', () => {
     const handoff = buildHandoff({}, { vmid: 101 });
     expect(handoff.context.context.vmid).toBe(101);
   });

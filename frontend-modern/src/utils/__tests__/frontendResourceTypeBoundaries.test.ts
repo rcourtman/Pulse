@@ -3700,9 +3700,7 @@ describe('frontend resource type boundaries', () => {
       'export function getPatrolFindingsEmptyState',
     );
     expect(patrolEmptyStatePresentationSource).toContain('historicalRegressionCount?: number');
-    expect(patrolEmptyStatePresentationSource).toContain(
-      'HISTORICAL_REGRESSION_EMPTY_STATE_BODY',
-    );
+    expect(patrolEmptyStatePresentationSource).toContain('HISTORICAL_REGRESSION_EMPTY_STATE_BODY');
     expect(patrolRunPresentationSource).toContain('export function getRunHistoryLoadingState');
     expect(patrolRunPresentationSource).toContain('export function getToolCallsLoadingState');
     expect(patrolRunPresentationSource).toContain('export function getToolCallsUnavailableState');

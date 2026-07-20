@@ -80,9 +80,7 @@ describe('resolveStorageRecordMetricResourceId', () => {
         makeRecord({ id: 'storage-1', refs: { resourceId: '   ' } }),
       ),
     ).toBe('storage-1');
-    expect(resolveStorageRecordMetricResourceId(makeRecord({ id: 'storage-1' }))).toBe(
-      'storage-1',
-    );
+    expect(resolveStorageRecordMetricResourceId(makeRecord({ id: 'storage-1' }))).toBe('storage-1');
   });
 
   it('trims whitespace from the selected field at every precedence level', () => {
@@ -98,9 +96,9 @@ describe('resolveStorageRecordMetricResourceId', () => {
         makeRecord({ refs: { resourceId: '  trimmed-refs  ' } }),
       ),
     ).toBe('trimmed-refs');
-    expect(
-      resolveStorageRecordMetricResourceId(makeRecord({ id: '  trimmed-id  ' })),
-    ).toBe('trimmed-id');
+    expect(resolveStorageRecordMetricResourceId(makeRecord({ id: '  trimmed-id  ' }))).toBe(
+      'trimmed-id',
+    );
   });
 
   it('returns an empty string when id is empty and no higher-precedence field is set', () => {
@@ -183,9 +181,7 @@ describe('resolvePhysicalDiskMetricResourceId', () => {
 
   it('returns serial from disk.physicalDisk.serial', () => {
     expect(
-      resolvePhysicalDiskMetricResourceId(
-        makeResource({ physicalDisk: { serial: 'SERIAL-1' } }),
-      ),
+      resolvePhysicalDiskMetricResourceId(makeResource({ physicalDisk: { serial: 'SERIAL-1' } })),
     ).toBe('SERIAL-1');
   });
 
@@ -220,9 +216,7 @@ describe('resolvePhysicalDiskMetricResourceId', () => {
 
   it('falls through to wwn when no serial is available', () => {
     expect(
-      resolvePhysicalDiskMetricResourceId(
-        makeResource({ physicalDisk: { wwn: 'WWN-1' } }),
-      ),
+      resolvePhysicalDiskMetricResourceId(makeResource({ physicalDisk: { wwn: 'WWN-1' } })),
     ).toBe('WWN-1');
   });
 
@@ -256,9 +250,7 @@ describe('resolvePhysicalDiskMetricResourceId', () => {
   });
 
   it('falls back to id when serial, wwn, and metricsTarget are all absent', () => {
-    expect(resolvePhysicalDiskMetricResourceId(makeResource({ id: 'disk-1' }))).toBe(
-      'disk-1',
-    );
+    expect(resolvePhysicalDiskMetricResourceId(makeResource({ id: 'disk-1' }))).toBe('disk-1');
   });
 
   it('falls back to id when serial and wwn are whitespace-only', () => {

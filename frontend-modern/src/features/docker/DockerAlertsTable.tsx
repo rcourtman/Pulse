@@ -256,7 +256,8 @@ export const DockerAlertsTable: Component<{
                               {docker()?.hostname || docker()?.swarm?.clusterName || '-'}
                             </span>
                             <span class="block truncate text-[10px] text-muted">
-                              {docker()?.runtime || formatPlatformAlertCode(incident.code, 'docker')}
+                              {docker()?.runtime ||
+                                formatPlatformAlertCode(incident.code, 'docker')}
                             </span>
                           </TableCell>
                           <TableCell

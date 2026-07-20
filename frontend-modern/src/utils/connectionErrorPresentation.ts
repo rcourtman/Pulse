@@ -95,10 +95,7 @@ const HUMANIZED_PATTERNS: { match: RegExp; headline: string; hint: string | null
 ];
 
 const stripImplementationPrefixes = (raw: string): string =>
-  raw
-    .replace(POLL_PREFIX_PATTERN, '')
-    .replace(HTTP_VERB_PATTERN, '')
-    .trim();
+  raw.replace(POLL_PREFIX_PATTERN, '').replace(HTTP_VERB_PATTERN, '').trim();
 
 export const humanizeConnectionError = (raw?: string | null): HumanizedConnectionError | null => {
   if (!raw) return null;

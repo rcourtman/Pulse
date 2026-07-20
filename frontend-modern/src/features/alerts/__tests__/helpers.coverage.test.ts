@@ -108,17 +108,11 @@ describe('alerts helpers — coercion coverage', () => {
 
   describe('parseAppriseTargets', () => {
     it('splits newline-separated targets', () => {
-      expect(parseAppriseTargets('mailto:a@x\nmailto:b@x')).toEqual([
-        'mailto:a@x',
-        'mailto:b@x',
-      ]);
+      expect(parseAppriseTargets('mailto:a@x\nmailto:b@x')).toEqual(['mailto:a@x', 'mailto:b@x']);
     });
 
     it('splits comma-separated targets', () => {
-      expect(parseAppriseTargets('mailto:a@x,mailto:b@x')).toEqual([
-        'mailto:a@x',
-        'mailto:b@x',
-      ]);
+      expect(parseAppriseTargets('mailto:a@x,mailto:b@x')).toEqual(['mailto:a@x', 'mailto:b@x']);
     });
 
     it('splits a mix of newlines and commas', () => {
@@ -130,10 +124,7 @@ describe('alerts helpers — coercion coverage', () => {
     });
 
     it('normalizes CRLF line endings', () => {
-      expect(parseAppriseTargets('mailto:a@x\r\nmailto:b@x')).toEqual([
-        'mailto:a@x',
-        'mailto:b@x',
-      ]);
+      expect(parseAppriseTargets('mailto:a@x\r\nmailto:b@x')).toEqual(['mailto:a@x', 'mailto:b@x']);
     });
 
     it('trims whitespace around each target', () => {
@@ -164,9 +155,7 @@ describe('alerts helpers — coercion coverage', () => {
 
   describe('formatAppriseTargets', () => {
     it('joins targets with newlines', () => {
-      expect(formatAppriseTargets(['mailto:a@x', 'mailto:b@x'])).toBe(
-        'mailto:a@x\nmailto:b@x',
-      );
+      expect(formatAppriseTargets(['mailto:a@x', 'mailto:b@x'])).toBe('mailto:a@x\nmailto:b@x');
     });
 
     it('returns a single target without a trailing newline', () => {
@@ -195,9 +184,7 @@ describe('alerts helpers — coercion coverage', () => {
 
     it('format(parse(text)) normalizes messy input to newline form', () => {
       const messy = '  mailto:a@x , mailto:b@x\n\r\nmailto:a@x\n ';
-      expect(formatAppriseTargets(parseAppriseTargets(messy))).toBe(
-        'mailto:a@x\nmailto:b@x',
-      );
+      expect(formatAppriseTargets(parseAppriseTargets(messy))).toBe('mailto:a@x\nmailto:b@x');
     });
 
     it('an empty list round-trips through the empty string', () => {
@@ -246,7 +233,9 @@ describe('alerts helpers — coercion coverage', () => {
     });
 
     it('returns undefined when platformData is null', () => {
-      expect(platformData(makeResource({ platformData: null as unknown as undefined }))).toBeUndefined();
+      expect(
+        platformData(makeResource({ platformData: null as unknown as undefined })),
+      ).toBeUndefined();
     });
 
     it('returns the unwrapped payload when present', () => {

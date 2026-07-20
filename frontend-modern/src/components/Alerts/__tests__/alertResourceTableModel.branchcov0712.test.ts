@@ -117,9 +117,9 @@ describe('hasCustomAlertResourceGlobalDefaults', () => {
   });
 
   it('returns false when a factory key is absent from globalDefaults (current is undefined)', () => {
-    expect(
-      hasCustomAlertResourceGlobalDefaults({ memory: 90 }, { cpu: 80, memory: 90 }),
-    ).toBe(false);
+    expect(hasCustomAlertResourceGlobalDefaults({ memory: 90 }, { cpu: 80, memory: 90 })).toBe(
+      false,
+    );
   });
 
   it('returns true when exactly one of many keys differs', () => {
@@ -671,9 +671,9 @@ describe('extract closure — optional-chain and metric-capture branch coverage'
 
     it('reads the diskRead key from editingThresholds when metric is "diskRead"', () => {
       const resource = makeResource({ defaults: { diskRead: 10 } });
-      expect(getAlertResourceMetricDisplayValue(resource, 'diskRead', { diskRead: 250 }, true)).toBe(
-        250,
-      );
+      expect(
+        getAlertResourceMetricDisplayValue(resource, 'diskRead', { diskRead: 250 }, true),
+      ).toBe(250);
     });
 
     it('reads the networkOut key from thresholds for a multi-word metric name', () => {

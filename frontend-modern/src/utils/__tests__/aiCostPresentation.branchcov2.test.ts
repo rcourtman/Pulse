@@ -217,9 +217,7 @@ describe('readableTargetType — branch coverage (via getAICostTargetPresentatio
 
   describe('trim + lowercase normalization before the map lookup', () => {
     it('normalizes whitespace and casing so "  PATROL_RUN  " still maps to "Patrol runs"', () => {
-      expect(
-        getAICostTargetPresentation(input({ target_type: '  PATROL_RUN  ' })),
-      ).toEqual({
+      expect(getAICostTargetPresentation(input({ target_type: '  PATROL_RUN  ' }))).toEqual({
         label: 'Patrol runs',
         rawLabel: 'PATROL_RUN',
       });
@@ -235,9 +233,7 @@ describe('readableTargetType — branch coverage (via getAICostTargetPresentatio
     });
 
     it('humanizes an unmapped mixed snake/kebab type', () => {
-      expect(
-        getAICostTargetPresentation(input({ target_type: 'vm-snapshot_task' })),
-      ).toEqual({
+      expect(getAICostTargetPresentation(input({ target_type: 'vm-snapshot_task' }))).toEqual({
         label: 'Vm Snapshot Task',
         rawLabel: 'vm-snapshot_task',
       });
@@ -253,18 +249,14 @@ describe('readableTargetType — branch coverage (via getAICostTargetPresentatio
     });
 
     it('falls back to "Usage" when target_type is null', () => {
-      expect(
-        getAICostTargetPresentation(input({ target_type: null })),
-      ).toEqual({
+      expect(getAICostTargetPresentation(input({ target_type: null }))).toEqual({
         label: 'Usage',
         rawLabel: 'usage',
       });
     });
 
     it('falls back to "Usage" when target_type is whitespace-only', () => {
-      expect(
-        getAICostTargetPresentation(input({ target_type: '   ' })),
-      ).toEqual({
+      expect(getAICostTargetPresentation(input({ target_type: '   ' }))).toEqual({
         label: 'Usage',
         rawLabel: 'usage',
       });
@@ -327,9 +319,7 @@ describe('getAICostTargetPresentation — branch coverage', () => {
     });
 
     it('never emits a `detail` field on the resource path', () => {
-      const result = getAICostTargetPresentation(
-        input({ target_type: 'vm', target_id: 'web-1' }),
-      );
+      const result = getAICostTargetPresentation(input({ target_type: 'vm', target_id: 'web-1' }));
       expect(result).not.toHaveProperty('detail');
     });
   });
@@ -379,9 +369,7 @@ describe('getAICostTargetPresentation — branch coverage', () => {
 
     it('trims a padded target_id before shaping rawLabel and detail', () => {
       expect(
-        getAICostTargetPresentation(
-          input({ target_type: 'patrol_run', target_id: '  nightly  ' }),
-        ),
+        getAICostTargetPresentation(input({ target_type: 'patrol_run', target_id: '  nightly  ' })),
       ).toEqual({
         label: 'Patrol runs',
         detail: 'nightly',

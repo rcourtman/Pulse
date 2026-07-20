@@ -41,7 +41,8 @@ type FetchWorkloadsSummaryAndCacheOptions = {
 const inMemoryWorkloadCache = new Map<string, WorkloadChartsResponse>();
 const inFlightWorkloadFetches = new Map<string, Promise<WorkloadChartsResponse>>();
 
-const normalizeNodeScope = (nodeScope: string | null | undefined): string => nodeScope?.trim() ?? '';
+const normalizeNodeScope = (nodeScope: string | null | undefined): string =>
+  nodeScope?.trim() ?? '';
 
 const normalizeMaxPoints = (maxPoints: number | null | undefined): number | undefined => {
   if (typeof maxPoints !== 'number' || !Number.isFinite(maxPoints) || maxPoints <= 0) {
@@ -50,7 +51,8 @@ const normalizeMaxPoints = (maxPoints: number | null | undefined): number | unde
   return Math.round(maxPoints);
 };
 
-const resolveOrgScope = (orgScope?: string | null): string => normalizeOrgScope(orgScope ?? getOrgID());
+const resolveOrgScope = (orgScope?: string | null): string =>
+  normalizeOrgScope(orgScope ?? getOrgID());
 
 const storageCacheKeyFor = (range: TimeRange, nodeScope: string, orgScope: string): string =>
   `${WORKLOADS_SUMMARY_CACHE_PREFIX}${encodeURIComponent(orgScope)}::${range}::${encodeURIComponent(nodeScope || '__all__')}`;
@@ -63,7 +65,7 @@ export function workloadsSummaryCacheScopeKey(
   return `${WORKLOADS_SUMMARY_CACHE_VERSION}::${resolveOrgScope(orgScope)}::${range}::${normalizeNodeScope(nodeScope)}`;
 }
 
-const trimPoints = <T,>(points: T[] | undefined, max: number): T[] => {
+const trimPoints = <T>(points: T[] | undefined, max: number): T[] => {
   if (!points || points.length === 0) return [];
   if (points.length <= max) return points;
   if (max <= 1) return points.slice(points.length - 1);
@@ -100,7 +102,10 @@ const writeInMemoryWorkloadsSummaryCache = (
   response: WorkloadChartsResponse,
 ): void => {
   const scopeKey = workloadsSummaryCacheScopeKey(range, nodeScope, orgScope);
-  if (!inMemoryWorkloadCache.has(scopeKey) && inMemoryWorkloadCache.size >= MAX_IN_MEMORY_WORKLOAD_ENTRIES) {
+  if (
+    !inMemoryWorkloadCache.has(scopeKey) &&
+    inMemoryWorkloadCache.size >= MAX_IN_MEMORY_WORKLOAD_ENTRIES
+  ) {
     const oldest = inMemoryWorkloadCache.keys().next().value;
     if (oldest !== undefined) inMemoryWorkloadCache.delete(oldest);
   }
@@ -112,7 +117,9 @@ export function readInMemoryWorkloadsSummaryCache(
   nodeScope: string | null | undefined = '',
   orgScope?: string | null,
 ): WorkloadChartsResponse | null {
-  return inMemoryWorkloadCache.get(workloadsSummaryCacheScopeKey(range, nodeScope, orgScope)) ?? null;
+  return (
+    inMemoryWorkloadCache.get(workloadsSummaryCacheScopeKey(range, nodeScope, orgScope)) ?? null
+  );
 }
 
 export function persistWorkloadsSummaryCache(

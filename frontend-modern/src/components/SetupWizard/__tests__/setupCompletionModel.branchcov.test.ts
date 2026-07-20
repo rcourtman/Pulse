@@ -30,7 +30,12 @@ describe('setupCompletionModel branch coverage', () => {
   describe('isSetupCompletionInfrastructureResource (via inclusion/exclusion)', () => {
     it('admits agent resources with an agent facet onto the agent connection path', () => {
       const systems = buildSetupCompletionConnectedSystems([
-        makeResource({ id: 'agent-1', type: 'agent', name: 'Tower', agent: { agentId: 'agent-1' } }),
+        makeResource({
+          id: 'agent-1',
+          type: 'agent',
+          name: 'Tower',
+          agent: { agentId: 'agent-1' },
+        }),
       ]);
 
       expect(systems).toHaveLength(1);
@@ -80,7 +85,12 @@ describe('setupCompletionModel branch coverage', () => {
 
       const mixed = buildSetupCompletionConnectedSystems([
         vm,
-        makeResource({ id: 'agent-1', type: 'agent', name: 'Tower', agent: { agentId: 'agent-1' } }),
+        makeResource({
+          id: 'agent-1',
+          type: 'agent',
+          name: 'Tower',
+          agent: { agentId: 'agent-1' },
+        }),
       ]);
       expect(namesOf(mixed)).toEqual(['Tower']);
     });

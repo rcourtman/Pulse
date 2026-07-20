@@ -56,10 +56,12 @@ describe('aiChatUtils', () => {
       ];
 
       const grouped = utils.groupModelsByProvider(models);
-      expect(grouped.get('ollama')?.map((m) => m.id).sort()).toEqual([
-        'gpt-oss-20b',
-        'my-claude-clone',
-      ]);
+      expect(
+        grouped
+          .get('ollama')
+          ?.map((m) => m.id)
+          .sort(),
+      ).toEqual(['gpt-oss-20b', 'my-claude-clone']);
       expect(grouped.has('openai')).toBe(false);
       expect(grouped.has('anthropic')).toBe(false);
     });
@@ -143,9 +145,7 @@ describe('aiChatUtils', () => {
     // classes — used to be ALLOWED_ATTR; allowing them opens a UI-redress
     // surface (overlay attacks, hidden text, etc.).
     it('strips class attribute from LLM-supplied markup', () => {
-      const output = utils.renderMarkdown(
-        '<div class="fixed inset-0 z-50 bg-black">overlay</div>',
-      );
+      const output = utils.renderMarkdown('<div class="fixed inset-0 z-50 bg-black">overlay</div>');
       expect(output).not.toContain('class="fixed');
       expect(output).not.toContain('inset-0');
     });

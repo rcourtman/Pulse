@@ -105,9 +105,9 @@ describe('containerRow (via Containers section)', () => {
   });
 
   it('treats a negative restartCount as zero restarts', () => {
-    expect(singleContainerRow({ name: 'c', state: 'running', ready: true, restartCount: -3 })?.value).toBe(
-      'running · ready',
-    );
+    expect(
+      singleContainerRow({ name: 'c', state: 'running', ready: true, restartCount: -3 })?.value,
+    ).toBe('running · ready');
   });
 
   it('treats whitespace-only state/name/image as absent', () => {
@@ -176,7 +176,9 @@ describe('buildKubernetesDetailsSummary', () => {
 
   it('returns null for a node with neither OS image nor cordon state', () => {
     expect(
-      buildKubernetesDetailsSummary(makeResource({ id: 'node-3', type: 'k8s-node', kubernetes: {} })),
+      buildKubernetesDetailsSummary(
+        makeResource({ id: 'node-3', type: 'k8s-node', kubernetes: {} }),
+      ),
     ).toBeNull();
   });
 

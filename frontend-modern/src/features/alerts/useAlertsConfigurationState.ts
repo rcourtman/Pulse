@@ -67,11 +67,15 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
     setSuppressDirtyFlag(true);
     props.setHasUnsavedChanges(false);
     destinationsState.resetDestinations();
-    configurationSnapshotState.applyConfigurationSnapshot(createDefaultAlertsConfigurationSnapshot());
+    configurationSnapshotState.applyConfigurationSnapshot(
+      createDefaultAlertsConfigurationSnapshot(),
+    );
 
     try {
       const config = await AlertsAPI.getConfig();
-      configurationSnapshotState.applyConfigurationSnapshot(readAlertsConfigurationSnapshot(config));
+      configurationSnapshotState.applyConfigurationSnapshot(
+        readAlertsConfigurationSnapshot(config),
+      );
 
       overridesState.replaceRawOverridesConfig(config.overrides || {});
 

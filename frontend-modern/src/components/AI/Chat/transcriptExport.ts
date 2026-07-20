@@ -96,7 +96,10 @@ const formatToolOutput = (output: unknown): string => {
   const text = toolValueText(output).replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
   if (!text) return '';
   const lines = text.split('\n').slice(0, 6);
-  const preview = lines.map((line) => line.trimEnd().slice(0, 160)).join('\n').trim();
+  const preview = lines
+    .map((line) => line.trimEnd().slice(0, 160))
+    .join('\n')
+    .trim();
   if (!preview) return '';
   return text.split('\n').length > lines.length ? `${preview}\n...` : preview;
 };
@@ -216,9 +219,7 @@ const appendMessageMetadata = (
 ) => {
   if (options.includeAssistantMetadata === false) return;
   const modelRoute =
-    message.role === 'assistant'
-      ? formatModelRoute(message.model, options.getModelRouteLabel)
-      : '';
+    message.role === 'assistant' ? formatModelRoute(message.model, options.getModelRouteLabel) : '';
 
   const metadata = [
     message.timestamp ? `Time: ${formatTimestamp(message.timestamp)}` : undefined,
@@ -369,7 +370,10 @@ export const formatAssistantTranscript = (options: AssistantTranscriptOptions): 
     }
   }
 
-  return `${lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n`;
+  return `${lines
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()}\n`;
 };
 
 const filenameDatePart = (date: Date): string => {

@@ -1,6 +1,4 @@
-import {
-  parseWorkloadsLinkSearch,
-} from '@/routing/resourceLinks';
+import { parseWorkloadsLinkSearch } from '@/routing/resourceLinks';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest } from '@/types/workloads';
 import { getCanonicalWorkloadId } from '@/utils/workloads';

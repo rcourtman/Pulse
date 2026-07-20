@@ -124,15 +124,15 @@ describe('recoveryPlatformModel', () => {
       }),
     ).toEqual({
       data: [
-          {
-            id: 'point-1',
-            platform: 'truenas',
-            kind: 'snapshot',
-            mode: 'snapshot',
-            outcome: 'success',
-            itemResourceId: 'res-1',
-            itemRef: { type: 'truenas-dataset', name: 'tank/apps' },
-          },
+        {
+          id: 'point-1',
+          platform: 'truenas',
+          kind: 'snapshot',
+          mode: 'snapshot',
+          outcome: 'success',
+          itemResourceId: 'res-1',
+          itemRef: { type: 'truenas-dataset', name: 'tank/apps' },
+        },
       ],
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
     });
@@ -152,13 +152,13 @@ describe('recoveryPlatformModel', () => {
       }),
     ).toEqual({
       data: [
-          {
-            rollupId: 'rollup-1',
-            lastOutcome: 'warning',
-            itemResourceId: 'res-1',
-            itemRef: { type: 'truenas-dataset', name: 'tank/apps' },
-            platforms: ['truenas'],
-          },
+        {
+          rollupId: 'rollup-1',
+          lastOutcome: 'warning',
+          itemResourceId: 'res-1',
+          itemRef: { type: 'truenas-dataset', name: 'tank/apps' },
+          platforms: ['truenas'],
+        },
       ],
       meta: { page: 1, limit: 100, total: 1, totalPages: 1 },
     });

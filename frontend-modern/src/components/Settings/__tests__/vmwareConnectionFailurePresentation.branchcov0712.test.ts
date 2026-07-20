@@ -258,8 +258,7 @@ describe('buildVMwareConnectionFailurePresentation — final-return default* coa
     expect(out).toStrictEqual({
       code: 'CODE_Y',
       category: 'mystery',
-      guidance:
-        'Review the vCenter endpoint and credentials, then retry the connection test.',
+      guidance: 'Review the vCenter endpoint and credentials, then retry the connection test.',
       message: 'Fallback message',
       title: 'VMware connection test failed',
       tone: 'danger',

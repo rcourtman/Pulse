@@ -1,3 +1,1 @@
-export type {
-  SettingsTab,
-} from './settingsNavigationModel';
+export type { SettingsTab } from './settingsNavigationModel';

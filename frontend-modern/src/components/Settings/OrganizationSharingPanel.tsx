@@ -31,11 +31,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
       }
     >
       <div class="space-y-6">
-        <SettingsPanel
-          title="Organization Sharing"
-          noPadding
-          bodyClass="divide-y divide-border"
-        >
+        <SettingsPanel title="Organization Sharing" noPadding bodyClass="divide-y divide-border">
           <Show when={!state.loading()} fallback={<OrganizationSharingLoadingState />}>
             <OrganizationSharingCreateSection state={state} />
             <OrganizationOutgoingSharesSection state={state} />

@@ -196,9 +196,7 @@ export function isUnraidPhysicalDisk(disk: PhysicalDiskPresentationData): boolea
   );
 }
 
-export function hasUnraidPhysicalDiskFaultSignal(
-  disk: PhysicalDiskPresentationData,
-): boolean {
+export function hasUnraidPhysicalDiskFaultSignal(disk: PhysicalDiskPresentationData): boolean {
   if (!isUnraidPhysicalDisk(disk)) return false;
   if ((disk.errorCount || 0) > 0) return true;
   if (UNRAID_PHYSICAL_DISK_FAULT_STATES.has(normalizePhysicalDiskState(disk.storageState))) {

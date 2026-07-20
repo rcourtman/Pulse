@@ -49,8 +49,16 @@ describe('workloadSelectors (branch coverage 2)', () => {
       const guests = [
         makeGuest(1, { id: 'zz', name: 'zebra', disk: nullDisk }),
         makeGuest(2, { id: 'aa', name: 'alpha', disk: nullDisk }),
-        makeGuest(3, { id: 'mm', name: 'mid', disk: { total: 100, used: 20, free: 80, usage: 0.2 } }),
-        makeGuest(4, { id: 'bb', name: 'bravo', disk: { total: 100, used: 90, free: 10, usage: 0.9 } }),
+        makeGuest(3, {
+          id: 'mm',
+          name: 'mid',
+          disk: { total: 100, used: 20, free: 80, usage: 0.2 },
+        }),
+        makeGuest(4, {
+          id: 'bb',
+          name: 'bravo',
+          disk: { total: 100, used: 90, free: 10, usage: 0.9 },
+        }),
       ];
 
       const diskAsc = createWorkloadSortComparator('disk', 'asc');
@@ -273,7 +281,13 @@ describe('workloadSelectors (branch coverage 2)', () => {
       const guests = [
         makeGuest(1, { id: 'g1', name: 'numhost', vmid: 7777, status: 'running' }),
         makeGuest(2, { id: 'g2', name: 'stathost', vmid: 1, status: 'quarantined' }),
-        makeGuest(3, { id: 'g3', name: 'insthost', vmid: 2, status: 'running', instance: 'insttoken' }),
+        makeGuest(3, {
+          id: 'g3',
+          name: 'insthost',
+          vmid: 2,
+          status: 'running',
+          instance: 'insttoken',
+        }),
       ];
 
       // vmid is a number candidate -> filtered into the String(value) match.
@@ -282,7 +296,9 @@ describe('workloadSelectors (branch coverage 2)', () => {
       ).toEqual(['g1']);
       // status candidate.
       expect(
-        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'quarantined' }).map((g) => g.id),
+        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'quarantined' }).map(
+          (g) => g.id,
+        ),
       ).toEqual(['g2']);
       // instance candidate.
       expect(
@@ -316,7 +332,9 @@ describe('workloadSelectors (branch coverage 2)', () => {
       ];
 
       expect(
-        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'uniquematch' }).map((g) => g.id),
+        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'uniquematch' }).map(
+          (g) => g.id,
+        ),
       ).toEqual(['scope-2']);
     });
   });
@@ -361,8 +379,20 @@ describe('workloadSelectors (branch coverage 2)', () => {
           type: 'vm',
           workloadType: 'vm',
         }),
-        makeGuest(3, { id: 'running', name: 'running', status: 'running', type: 'vm', workloadType: 'vm' }),
-        makeGuest(4, { id: 'offline', name: 'offline', status: 'offline', type: 'vm', workloadType: 'vm' }),
+        makeGuest(3, {
+          id: 'running',
+          name: 'running',
+          status: 'running',
+          type: 'vm',
+          workloadType: 'vm',
+        }),
+        makeGuest(4, {
+          id: 'offline',
+          name: 'offline',
+          status: 'offline',
+          type: 'vm',
+          workloadType: 'vm',
+        }),
       ];
 
       // '' and 'quarantined' are neither DEGRADED nor OFFLINE nor running, so the

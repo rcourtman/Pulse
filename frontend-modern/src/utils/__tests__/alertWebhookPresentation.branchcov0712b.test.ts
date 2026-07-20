@@ -256,9 +256,7 @@ describe('alertWebhookPresentation (branch coverage 2)', () => {
     it('returns the delete failure message for any non-matching action (default arm)', () => {
       expect(
         getAlertWebhookMutationFailure(
-          'totally-bogus' as unknown as Parameters<
-            typeof getAlertWebhookMutationFailure
-          >[0],
+          'totally-bogus' as unknown as Parameters<typeof getAlertWebhookMutationFailure>[0],
         ),
       ).toBe('Failed to delete webhook');
     });

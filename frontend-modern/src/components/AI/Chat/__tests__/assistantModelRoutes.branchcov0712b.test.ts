@@ -120,11 +120,7 @@ describe('normalizeAssistantRecentModelRoutes branch coverage', () => {
   it('deduplicates explicit routes by their trimmed form', () => {
     expect(
       normalizeAssistantRecentModelRoutes(
-        [
-          'openrouter:qwen/qwen3.7-plus',
-          'openrouter:qwen/qwen3.7-plus',
-          'deepseek:deepseek-chat',
-        ],
+        ['openrouter:qwen/qwen3.7-plus', 'openrouter:qwen/qwen3.7-plus', 'deepseek:deepseek-chat'],
         10,
       ),
     ).toEqual(['openrouter:qwen/qwen3.7-plus', 'deepseek:deepseek-chat']);
@@ -133,11 +129,7 @@ describe('normalizeAssistantRecentModelRoutes branch coverage', () => {
   it('breaks as soon as the limit is reached, ignoring later valid routes', () => {
     expect(
       normalizeAssistantRecentModelRoutes(
-        [
-          'openrouter:qwen/qwen3.7-plus',
-          'deepseek:deepseek-chat',
-          'gemini:gemini-3.1-flash-lite',
-        ],
+        ['openrouter:qwen/qwen3.7-plus', 'deepseek:deepseek-chat', 'gemini:gemini-3.1-flash-lite'],
         2,
       ),
     ).toEqual(['openrouter:qwen/qwen3.7-plus', 'deepseek:deepseek-chat']);

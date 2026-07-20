@@ -1,5 +1,9 @@
 import type { AIChatContext } from '@/stores/aiChat';
-import type { Resource, ResourceDiscoveryReadiness, ResourceDiscoveryTarget } from '@/types/resource';
+import type {
+  Resource,
+  ResourceDiscoveryReadiness,
+  ResourceDiscoveryTarget,
+} from '@/types/resource';
 import {
   formatDiscoveryReadinessBriefingLine,
   getDiscoveryReadinessPresentation,

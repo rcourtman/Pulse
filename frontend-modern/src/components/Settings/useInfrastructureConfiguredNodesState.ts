@@ -12,10 +12,7 @@ import type {
 } from '@/types/nodes';
 import { settingsAgentNodeLabel } from './settingsRouting';
 import { applyClusterEndpointOverridesLocally } from './nodeModalModel';
-import {
-  matchConfiguredNodeToResource,
-  type NodeType,
-} from './infrastructureSettingsModel';
+import { matchConfiguredNodeToResource, type NodeType } from './infrastructureSettingsModel';
 import {
   getNodeDeleteErrorMessage,
   getNodeTemperatureMonitoringUpdateErrorMessage,

@@ -17,7 +17,7 @@ import {
 } from './pulseDataGridModel';
 import { usePulseDataGridState } from './usePulseDataGridState';
 
-export type { PulseDataGridProps, } from './pulseDataGridModel';
+export type { PulseDataGridProps } from './pulseDataGridModel';
 
 /**
  * A standardized, responsive datagrid component for Pulse.

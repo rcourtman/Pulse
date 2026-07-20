@@ -25,9 +25,7 @@ function getGroupSummaryLabel(group: AlertHistoryGroup) {
     parts.push(`${aiCount} patrol insight${aiCount === 1 ? '' : 's'}`);
   }
 
-  return (
-    parts.join(', ') || `${group.alerts.length} item${group.alerts.length === 1 ? '' : 's'}`
-  );
+  return parts.join(', ') || `${group.alerts.length} item${group.alerts.length === 1 ? '' : 's'}`;
 }
 
 export function AlertHistoryTableGroupRow(props: AlertHistoryTableGroupRowProps) {
@@ -38,9 +36,7 @@ export function AlertHistoryTableGroupRow(props: AlertHistoryTableGroupRowProps)
           <span class="truncate" title={props.group.fullLabel}>
             {props.group.label}
           </span>
-          <span class={GROUPED_TABLE_ROW_META_CLASS}>
-            {getGroupSummaryLabel(props.group)}
-          </span>
+          <span class={GROUPED_TABLE_ROW_META_CLASS}>{getGroupSummaryLabel(props.group)}</span>
         </div>
       </TableCell>
     </TableRow>

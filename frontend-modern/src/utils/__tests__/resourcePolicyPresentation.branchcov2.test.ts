@@ -32,11 +32,13 @@ import type { ResourcePolicyDisplayResource } from '@/utils/resourcePolicyPresen
  * which is the only call site — matching the existing test's approach.
  */
 
-const governedPolicy = (overrides: {
-  sensitivity?: ResourceSensitivity;
-  scope?: ResourceRoutingScope;
-  redact?: ResourceRedactionHint[];
-} = {}): NonNullable<ResourcePolicyDisplayResource['policy']> => ({
+const governedPolicy = (
+  overrides: {
+    sensitivity?: ResourceSensitivity;
+    scope?: ResourceRoutingScope;
+    redact?: ResourceRedactionHint[];
+  } = {},
+): NonNullable<ResourcePolicyDisplayResource['policy']> => ({
   sensitivity: overrides.sensitivity ?? 'restricted',
   routing: {
     scope: overrides.scope ?? 'local-only',
@@ -47,9 +49,8 @@ const governedPolicy = (overrides: {
 // The static type marks `name` and `displayName` as required, but the source
 // functions defendively optional-chain (`?.trim()`) on both. This helper lets
 // us hand in deliberately-partial resources to exercise those fallback arms.
-const asResource = (
-  r: Partial<ResourcePolicyDisplayResource>,
-): ResourcePolicyDisplayResource => r as unknown as ResourcePolicyDisplayResource;
+const asResource = (r: Partial<ResourcePolicyDisplayResource>): ResourcePolicyDisplayResource =>
+  r as unknown as ResourcePolicyDisplayResource;
 
 describe('getResourceSensitivityLabel — branch coverage', () => {
   it('returns the canonical label for every known sensitivity', () => {
@@ -90,9 +91,9 @@ describe('getResourceRedactionHintLabel — branch coverage', () => {
   });
 
   it('falls back to the raw hint string when the hint is not in the label map (?? hint arm)', () => {
-    expect(
-      getResourceRedactionHintLabel('custom-redaction' as ResourceRedactionHint),
-    ).toBe('custom-redaction');
+    expect(getResourceRedactionHintLabel('custom-redaction' as ResourceRedactionHint)).toBe(
+      'custom-redaction',
+    );
   });
 });
 
@@ -386,9 +387,7 @@ describe('shouldShowResourceAlternateName — branch coverage', () => {
   it('treats a whitespace-only displayName as present (guard does not trim) and thus differing from name', () => {
     // The guard `!resource?.displayName` does not trim, so '   ' is truthy and
     // passes; then ''.toLowerCase() !== 'host-1' -> true.
-    expect(
-      shouldShowResourceAlternateName({ name: 'host-1', displayName: '   ' }),
-    ).toBe(true);
+    expect(shouldShowResourceAlternateName({ name: 'host-1', displayName: '   ' })).toBe(true);
   });
 
   it('returns false when the policy requires governed handling', () => {

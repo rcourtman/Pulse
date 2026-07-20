@@ -158,11 +158,9 @@ describe('dispatchResourceMetadataChanged', () => {
 
   describe('catch arm (dispatch failures are swallowed, not re-thrown)', () => {
     it('swallows a throw from window.dispatchEvent and does not propagate', () => {
-      const dispatchSpy = vi
-        .spyOn(win, 'dispatchEvent')
-        .mockImplementation(() => {
-          throw new Error('dispatch boom');
-        });
+      const dispatchSpy = vi.spyOn(win, 'dispatchEvent').mockImplementation(() => {
+        throw new Error('dispatch boom');
+      });
       const detail: ResourceMetadataChangedDetail = {
         metadataKind: 'agent',
         metadataId: 'agent-3',
@@ -186,11 +184,14 @@ describe('dispatchResourceMetadataChanged', () => {
       // reject. This confirms the whole try expression is guarded, not just
       // the dispatchEvent call.
       const original = globalThis.CustomEvent;
-      vi.stubGlobal('CustomEvent', class {
-        constructor() {
-          throw new Error('ctor boom');
-        }
-      });
+      vi.stubGlobal(
+        'CustomEvent',
+        class {
+          constructor() {
+            throw new Error('ctor boom');
+          }
+        },
+      );
       const detail: ResourceMetadataChangedDetail = {
         metadataKind: 'guest',
         metadataId: 'vm-102',

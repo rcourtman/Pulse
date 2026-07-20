@@ -16,9 +16,7 @@ const hasFeatures =
 // `tabFeatureRequirements`. Driving every entry guarantees the
 // `tabFeatureRequirements[tab]` lookup -> defined-array arm is exercised for
 // each key, not just a representative sample.
-const allGatedTabs = Object.entries(tabFeatureRequirements) as Array<
-  [SettingsTab, string[]]
->;
+const allGatedTabs = Object.entries(tabFeatureRequirements) as Array<[SettingsTab, string[]]>;
 
 // A spread of real catalog tabs that are intentionally ABSENT from
 // `tabFeatureRequirements`; each must resolve to `undefined` on lookup and
@@ -182,6 +180,12 @@ describe('isTabLocked - defensive behavior for out-of-map tabs', () => {
     const unknownTab = 'totally-not-a-real-tab' as unknown as SettingsTab;
     expect(isTabLocked(unknownTab, hasFeatures([]), () => true)).toBe(false);
     // Also confirm the runtime-unloaded path is equally safe.
-    expect(isTabLocked(unknownTab, () => true, () => false)).toBe(false);
+    expect(
+      isTabLocked(
+        unknownTab,
+        () => true,
+        () => false,
+      ),
+    ).toBe(false);
   });
 });

@@ -96,9 +96,7 @@ describe('auditWebhookPresentation — branch coverage (batch 0718)', () => {
     it('returns commercial copy for explicit paidRuntimeRequired: false with showCommercialCopy omitted (undefined !== false)', () => {
       // Documents that omitting showCommercialCopy is equivalent to
       // showCommercialCopy: true — the `!== false` default-on behaviour.
-      expect(
-        getAuditWebhookFeatureGateCopy({ paidRuntimeRequired: false }),
-      ).toEqual({
+      expect(getAuditWebhookFeatureGateCopy({ paidRuntimeRequired: false })).toEqual({
         title: 'Audit Webhooks',
         body: 'Audit webhook delivery is available on paid self-hosted and hosted plans.',
       });

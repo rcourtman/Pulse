@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { PlatformType, Resource, ResourceAlert, ResourceMetric, ResourceType } from '@/types/resource';
+import type {
+  PlatformType,
+  Resource,
+  ResourceAlert,
+  ResourceMetric,
+  ResourceType,
+} from '@/types/resource';
 
 import {
   buildProxmoxPageModel,
@@ -609,8 +615,18 @@ describe('buildProxmoxPageModel estate classification, status counts, and alert 
   });
 
   const guests = [
-    makeResource({ id: 'vm-r', type: 'vm', status: 'running', proxmox: { vmid: 1, nodeName: 'node-a' } }),
-    makeResource({ id: 'vm-o', type: 'vm', status: 'online', proxmox: { vmid: 2, nodeName: 'node-a' } }),
+    makeResource({
+      id: 'vm-r',
+      type: 'vm',
+      status: 'running',
+      proxmox: { vmid: 1, nodeName: 'node-a' },
+    }),
+    makeResource({
+      id: 'vm-o',
+      type: 'vm',
+      status: 'online',
+      proxmox: { vmid: 2, nodeName: 'node-a' },
+    }),
     makeResource({
       id: 'vm-d',
       type: 'vm',

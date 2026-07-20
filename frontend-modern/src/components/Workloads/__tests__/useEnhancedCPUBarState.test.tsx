@@ -27,7 +27,9 @@ describe('useEnhancedCPUBarState', () => {
           description: 'CPU usage is abnormally high',
         },
       });
-      return <div onMouseEnter={captured.handleMouseEnter} onMouseLeave={captured.handleMouseLeave} />;
+      return (
+        <div onMouseEnter={captured.handleMouseEnter} onMouseLeave={captured.handleMouseLeave} />
+      );
     };
 
     const { container } = render(() => <Harness />);
@@ -45,4 +47,3 @@ describe('useEnhancedCPUBarState', () => {
     expect(captured!.tooltipVisible()).toBe(false);
   });
 });
-

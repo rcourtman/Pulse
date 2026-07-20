@@ -62,8 +62,7 @@ const storageKeyFor = (
 
 const metric = (value: number): MetricPoint => ({ timestamp: value, value });
 
-const points = (n: number): MetricPoint[] =>
-  Array.from({ length: n }, (_, i) => metric(i));
+const points = (n: number): MetricPoint[] => Array.from({ length: n }, (_, i) => metric(i));
 
 const makeResponse = (cpu?: MetricPoint[]): WorkloadChartsResponse => ({
   data: {
@@ -107,36 +106,26 @@ describe('workloadsSummaryCache branch coverage (supplemental)', () => {
     });
 
     it('coerces undefined node scope to empty string via the ?. ?? chain', () => {
-      expect(workloadsSummaryCacheScopeKey('1h', undefined, 'acme')).toBe(
-        `${VERSION}::acme::1h::`,
-      );
+      expect(workloadsSummaryCacheScopeKey('1h', undefined, 'acme')).toBe(`${VERSION}::acme::1h::`);
     });
 
     it('coerces null node scope to empty string (optional chaining treats null as nullish)', () => {
-      expect(workloadsSummaryCacheScopeKey('1h', null, 'acme')).toBe(
-        `${VERSION}::acme::1h::`,
-      );
+      expect(workloadsSummaryCacheScopeKey('1h', null, 'acme')).toBe(`${VERSION}::acme::1h::`);
     });
 
     it('collapses a whitespace-only node scope to empty string', () => {
-      expect(workloadsSummaryCacheScopeKey('1h', '   ', 'acme')).toBe(
-        `${VERSION}::acme::1h::`,
-      );
+      expect(workloadsSummaryCacheScopeKey('1h', '   ', 'acme')).toBe(`${VERSION}::acme::1h::`);
     });
 
     it('uses the defaulted params when only range is supplied', () => {
       // nodeScope defaults '' and orgScope defaults undefined -> getOrgID().
-      expect(workloadsSummaryCacheScopeKey('1h')).toBe(
-        `${VERSION}::${ORG_FROM_GETORGID}::1h::`,
-      );
+      expect(workloadsSummaryCacheScopeKey('1h')).toBe(`${VERSION}::${ORG_FROM_GETORGID}::1h::`);
     });
   });
 
   describe('resolveOrgScope (via workloadsSummaryCacheScopeKey)', () => {
     it('honours an explicitly provided org scope without calling getOrgID', () => {
-      expect(workloadsSummaryCacheScopeKey('1h', '', 'custom')).toBe(
-        `${VERSION}::custom::1h::`,
-      );
+      expect(workloadsSummaryCacheScopeKey('1h', '', 'custom')).toBe(`${VERSION}::custom::1h::`);
     });
 
     it('falls back to getOrgID() when orgScope is undefined (?? right operand)', () => {
@@ -153,15 +142,11 @@ describe('workloadsSummaryCache branch coverage (supplemental)', () => {
 
     it('normalises an empty-string orgScope to the default org (empty string is not nullish)', () => {
       // '' ?? getOrgID() -> '' (not nullish), then normalizeOrgScope('') -> 'default'.
-      expect(workloadsSummaryCacheScopeKey('1h', '', '')).toBe(
-        `${VERSION}::default::1h::`,
-      );
+      expect(workloadsSummaryCacheScopeKey('1h', '', '')).toBe(`${VERSION}::default::1h::`);
     });
 
     it('trims and keeps a whitespace-padded org scope', () => {
-      expect(workloadsSummaryCacheScopeKey('1h', '', '  acme  ')).toBe(
-        `${VERSION}::acme::1h::`,
-      );
+      expect(workloadsSummaryCacheScopeKey('1h', '', '  acme  ')).toBe(`${VERSION}::acme::1h::`);
     });
   });
 
@@ -183,10 +168,7 @@ describe('workloadsSummaryCache branch coverage (supplemental)', () => {
   });
 
   describe('normalizeMaxPoints (via fetchWorkloadsSummaryAndCache call args)', () => {
-    const expectCall = async (
-      maxPoints: unknown,
-      expected: number | undefined,
-    ): Promise<void> => {
+    const expectCall = async (maxPoints: unknown, expected: number | undefined): Promise<void> => {
       await fetchWorkloadsSummaryAndCache('1h', {
         maxPoints: maxPoints as number | null,
       });
@@ -267,9 +249,7 @@ describe('workloadsSummaryCache branch coverage (supplemental)', () => {
       const response = makeResponse();
       mockGetWorkloadCharts.mockResolvedValueOnce(response);
       await fetchWorkloadsSummaryAndCache('1h', {});
-      expect(readInMemoryWorkloadsSummaryCache('1h', '', ORG_FROM_GETORGID)).toBe(
-        response,
-      );
+      expect(readInMemoryWorkloadsSummaryCache('1h', '', ORG_FROM_GETORGID)).toBe(response);
     });
   });
 
@@ -403,22 +383,20 @@ describe('workloadsSummaryCache branch coverage (supplemental)', () => {
     });
 
     it('stores an empty data record when response.data is undefined (|| {} arm)', () => {
-      persistWorkloadsSummaryCache(
-        '1h',
-        '',
-        'acme',
-        { dockerData: {}, timestamp: 1, stats: { oldestDataTimestamp: 0 } } as unknown as WorkloadChartsResponse,
-      );
+      persistWorkloadsSummaryCache('1h', '', 'acme', {
+        dockerData: {},
+        timestamp: 1,
+        stats: { oldestDataTimestamp: 0 },
+      } as unknown as WorkloadChartsResponse);
       expect(readWorkloadsSummaryCache('1h', '', 'acme')?.data).toEqual({});
     });
 
     it('stores an empty dockerData record when response.dockerData is undefined (|| {} arm)', () => {
-      persistWorkloadsSummaryCache(
-        '1h',
-        '',
-        'acme',
-        { data: {}, timestamp: 1, stats: { oldestDataTimestamp: 0 } } as unknown as WorkloadChartsResponse,
-      );
+      persistWorkloadsSummaryCache('1h', '', 'acme', {
+        data: {},
+        timestamp: 1,
+        stats: { oldestDataTimestamp: 0 },
+      } as unknown as WorkloadChartsResponse);
       expect(readWorkloadsSummaryCache('1h', '', 'acme')?.dockerData).toEqual({});
     });
 
@@ -451,15 +429,11 @@ describe('workloadsSummaryCache branch coverage (supplemental)', () => {
     });
 
     it('swallows a localStorage.setItem failure (catch arm) without throwing', () => {
-      const spy = vi
-        .spyOn(Storage.prototype, 'setItem')
-        .mockImplementationOnce(() => {
-          throw new Error('QuotaExceededError');
-        });
+      const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+        throw new Error('QuotaExceededError');
+      });
       const response = makeResponse();
-      expect(() =>
-        persistWorkloadsSummaryCache('1h', '', 'acme', response),
-      ).not.toThrow();
+      expect(() => persistWorkloadsSummaryCache('1h', '', 'acme', response)).not.toThrow();
       // Not persisted to storage (setItem threw)...
       expect(localStorage.length).toBe(0);
       // ...but memory was warmed before the try block.
@@ -501,11 +475,8 @@ describe('workloadsSummaryCache branch coverage (supplemental)', () => {
       orgScope: string | undefined,
       payload: Record<string, unknown>,
     ): void => {
-      const normalizedNode = (nodeScope?.trim() ?? '');
-      localStorage.setItem(
-        storageKeyFor(range, normalizedNode, orgScope),
-        JSON.stringify(payload),
-      );
+      const normalizedNode = nodeScope?.trim() ?? '';
+      localStorage.setItem(storageKeyFor(range, normalizedNode, orgScope), JSON.stringify(payload));
     };
 
     it('rejects and removes an entry whose version mismatches', () => {

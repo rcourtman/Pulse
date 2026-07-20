@@ -28,10 +28,7 @@ import { stripAssistantOutputArtifacts } from './assistantOutputHygiene';
 import { formatAssistantTurnDuration } from './assistantTurnSummary';
 import { assistantWorkflowStatusKind, formatAssistantWorkflowStatus } from './activeTurnStatus';
 import { groupStreamEventsForDisplay } from './streamEventGrouping';
-import {
-  createPacedWorkflowStatus,
-  WORKFLOW_STATUS_REFRESH_MS,
-} from './workflowStatusDisplay';
+import { createPacedWorkflowStatus, WORKFLOW_STATUS_REFRESH_MS } from './workflowStatusDisplay';
 import type {
   ChatMessage,
   ModelRouteRecoveryOption,
@@ -241,7 +238,9 @@ const AssistantMarkdownBlock: Component<{
     }
   });
 
-  return <div ref={container} class={markdownClass} aria-live={props.streaming ? 'polite' : undefined} />;
+  return (
+    <div ref={container} class={markdownClass} aria-live={props.streaming ? 'polite' : undefined} />
+  );
 };
 
 /**
@@ -286,9 +285,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     if (!isSelectedModelRouteEvent(evt)) return true;
     const hasRouteSwitch = (props.message.streamEvents || []).some(
       (event) =>
-        event.type === 'model_switch' &&
-        !!event.model?.trim() &&
-        !isSelectedModelRouteEvent(event),
+        event.type === 'model_switch' && !!event.model?.trim() && !isSelectedModelRouteEvent(event),
     );
     return (
       hasRouteSwitch || !messageModelLabel() || modelRouteLabel(evt.model) !== messageModelLabel()
@@ -382,12 +379,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
   );
   const workflowStatusPaceSequenceKey = createMemo(() => {
     const first = liveWorkflowStatusHistory()[0];
-    return [
-      props.message.id,
-      first?.phase,
-      first?.message,
-      first?.startedAt,
-    ]
+    return [props.message.id, first?.phase, first?.message, first?.startedAt]
       .map((value) => String(value ?? ''))
       .join(':');
   });
@@ -493,9 +485,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
     if (kind === 'tool') return 'bg-blue-500';
     return 'bg-blue-500';
   };
-  const workflowStatusText = createMemo(() =>
-    formatWorkflowStatus(currentWorkflowStatus(), true),
-  );
+  const workflowStatusText = createMemo(() => formatWorkflowStatus(currentWorkflowStatus(), true));
   // Workflow status is footer-owned (the activity dock in index.tsx), never shown
   // in the transcript — not as a per-event row (shouldRenderWorkflowStatusEvent)
   // and not as this early-phase header chip. During the empty-content window the
@@ -779,7 +769,9 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                           </div>
                         </Match>
 
-                        <Match when={evt()?.type === 'pending_tool' ? evt().pendingTool : undefined}>
+                        <Match
+                          when={evt()?.type === 'pending_tool' ? evt().pendingTool : undefined}
+                        >
                           {(pendingTool) => <PendingToolBlock tool={pendingTool()} />}
                         </Match>
 

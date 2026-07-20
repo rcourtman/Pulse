@@ -18,30 +18,29 @@ import type { ResourceDiscoveryTarget } from '@/types/resource';
 // the malformed-input cases opt out of the contract intentionally.
 type AppContainerMetadataIdInput = Pick<WorkloadGuest, 'dockerHostId' | 'name'>;
 
-
 describe('buildAppContainerMetadataId', () => {
   it('builds a host-and-name id in the canonical app-container format', () => {
-    expect(
-      buildAppContainerMetadataId({ dockerHostId: 'docker-main', name: 'grafana' }),
-    ).toBe('app-container:docker-main:name:grafana');
+    expect(buildAppContainerMetadataId({ dockerHostId: 'docker-main', name: 'grafana' })).toBe(
+      'app-container:docker-main:name:grafana',
+    );
   });
 
   it('strips leading slashes from the container name', () => {
-    expect(
-      buildAppContainerMetadataId({ dockerHostId: 'docker-main', name: '/grafana' }),
-    ).toBe('app-container:docker-main:name:grafana');
+    expect(buildAppContainerMetadataId({ dockerHostId: 'docker-main', name: '/grafana' })).toBe(
+      'app-container:docker-main:name:grafana',
+    );
   });
 
   it('strips multiple leading slashes from the container name', () => {
-    expect(
-      buildAppContainerMetadataId({ dockerHostId: 'docker-main', name: '///traefik' }),
-    ).toBe('app-container:docker-main:name:traefik');
+    expect(buildAppContainerMetadataId({ dockerHostId: 'docker-main', name: '///traefik' })).toBe(
+      'app-container:docker-main:name:traefik',
+    );
   });
 
   it('preserves internal slashes in the container name', () => {
-    expect(
-      buildAppContainerMetadataId({ dockerHostId: 'docker-main', name: '/stack/app-1' }),
-    ).toBe('app-container:docker-main:name:stack/app-1');
+    expect(buildAppContainerMetadataId({ dockerHostId: 'docker-main', name: '/stack/app-1' })).toBe(
+      'app-container:docker-main:name:stack/app-1',
+    );
   });
 
   it('trims surrounding whitespace from both parts', () => {
@@ -128,18 +127,18 @@ describe('getWorkloadPlatformScopes', () => {
   });
 
   it('falls back to the platform type when no scopes are provided', () => {
-    expect(getWorkloadPlatformScopes({ platformScopes: undefined, platformType: 'docker' })).toEqual(
-      ['docker'],
-    );
+    expect(
+      getWorkloadPlatformScopes({ platformScopes: undefined, platformType: 'docker' }),
+    ).toEqual(['docker']);
     expect(getWorkloadPlatformScopes({ platformScopes: [], platformType: 'K8s' })).toEqual([
       'kubernetes',
     ]);
   });
 
   it('returns an empty array when neither scopes nor platform type resolve', () => {
-    expect(getWorkloadPlatformScopes({ platformScopes: undefined, platformType: undefined })).toEqual(
-      [],
-    );
+    expect(
+      getWorkloadPlatformScopes({ platformScopes: undefined, platformType: undefined }),
+    ).toEqual([]);
     expect(getWorkloadPlatformScopes({ platformScopes: ['all'], platformType: '' })).toEqual([]);
   });
 
@@ -156,7 +155,10 @@ describe('getWorkloadPlatformScopes', () => {
 describe('workloadMatchesPlatformScope', () => {
   it('matches a workload scope verbatim', () => {
     expect(
-      workloadMatchesPlatformScope({ platformScopes: ['docker'], platformType: undefined }, 'docker'),
+      workloadMatchesPlatformScope(
+        { platformScopes: ['docker'], platformType: undefined },
+        'docker',
+      ),
     ).toBe(true);
   });
 
@@ -177,7 +179,10 @@ describe('workloadMatchesPlatformScope', () => {
 
   it('matches case-insensitively', () => {
     expect(
-      workloadMatchesPlatformScope({ platformScopes: ['Docker'], platformType: undefined }, 'DOCKER'),
+      workloadMatchesPlatformScope(
+        { platformScopes: ['Docker'], platformType: undefined },
+        'DOCKER',
+      ),
     ).toBe(true);
   });
 
@@ -457,21 +462,13 @@ describe('resolveDiscoveryTargetForWorkload', () => {
     });
 
     it('returns null when the docker host id is missing', () => {
-      expect(
-        resolveDiscoveryTargetForWorkload({ ...dockerGuest, dockerHostId: '' }),
-      ).toBeNull();
-      expect(
-        resolveDiscoveryTargetForWorkload({ ...dockerGuest, dockerHostId: '   ' }),
-      ).toBeNull();
+      expect(resolveDiscoveryTargetForWorkload({ ...dockerGuest, dockerHostId: '' })).toBeNull();
+      expect(resolveDiscoveryTargetForWorkload({ ...dockerGuest, dockerHostId: '   ' })).toBeNull();
     });
 
     it('returns null when the container id is missing', () => {
-      expect(
-        resolveDiscoveryTargetForWorkload({ ...dockerGuest, containerId: '' }),
-      ).toBeNull();
-      expect(
-        resolveDiscoveryTargetForWorkload({ ...dockerGuest, containerId: '   ' }),
-      ).toBeNull();
+      expect(resolveDiscoveryTargetForWorkload({ ...dockerGuest, containerId: '' })).toBeNull();
+      expect(resolveDiscoveryTargetForWorkload({ ...dockerGuest, containerId: '   ' })).toBeNull();
     });
   });
 

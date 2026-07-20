@@ -360,7 +360,10 @@ describe('getAPTActionPresentation — residual branch coverage', () => {
     it('uses the cleanup title for clean_package_cache', () => {
       expect(
         getAPTActionPresentation(
-          makeAudit({ capabilityName: 'clean_package_cache', reasonCodes: ['capability_auto_low_risk'] }),
+          makeAudit({
+            capabilityName: 'clean_package_cache',
+            reasonCodes: ['capability_auto_low_risk'],
+          }),
         )?.title,
       ).toBe('Clear downloaded package data');
     });
@@ -376,7 +379,10 @@ describe('getAPTActionPresentation — residual branch coverage', () => {
     it('bounds the cleanup capability to downloaded package data only', () => {
       expect(
         getAPTActionPresentation(
-          makeAudit({ capabilityName: 'clean_package_cache', reasonCodes: ['capability_auto_low_risk'] }),
+          makeAudit({
+            capabilityName: 'clean_package_cache',
+            reasonCodes: ['capability_auto_low_risk'],
+          }),
         )?.authorityBoundary,
       ).toBe(
         'The agent may clear only downloaded package data on the pressured filesystem. It cannot choose paths, remove installed packages, or reboot the host.',

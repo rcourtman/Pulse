@@ -263,20 +263,16 @@ describe('matchesPhysicalDiskHealthFilter (branchcov2)', () => {
     expect(matchesPhysicalDiskHealthFilter('critical', 'all')).toBe(true);
   });
 
-  it.each([
-    ['warning'],
-    ['critical'],
-    ['offline'],
-  ] as const)('returns true for "attention" when health is %s', (health) => {
-    expect(matchesPhysicalDiskHealthFilter(health, 'attention')).toBe(true);
-  });
-
-  it.each(['healthy', 'unknown'])(
-    'returns false for "attention" when health is %s',
+  it.each([['warning'], ['critical'], ['offline']] as const)(
+    'returns true for "attention" when health is %s',
     (health) => {
-      expect(matchesPhysicalDiskHealthFilter(health as 'healthy', 'attention')).toBe(false);
+      expect(matchesPhysicalDiskHealthFilter(health, 'attention')).toBe(true);
     },
   );
+
+  it.each(['healthy', 'unknown'])('returns false for "attention" when health is %s', (health) => {
+    expect(matchesPhysicalDiskHealthFilter(health as 'healthy', 'attention')).toBe(false);
+  });
 
   it('returns true on an exact health/filter match', () => {
     expect(matchesPhysicalDiskHealthFilter('warning', 'warning')).toBe(true);
@@ -295,7 +291,7 @@ describe('matchesPhysicalDiskHealthFilter (branchcov2)', () => {
 
 describe('getPhysicalDiskHealthSummary (branchcov2)', () => {
   const statusWith = (summary?: string): DiskHealthStatusPresentation =>
-    ({ label: 'X', summary, tone: 't' } as unknown as DiskHealthStatusPresentation);
+    ({ label: 'X', summary, tone: 't' }) as unknown as DiskHealthStatusPresentation;
 
   it('returns empty string when summary is undefined (optional-chain arm)', () => {
     expect(getPhysicalDiskHealthSummary(statusWith(undefined))).toBe('');
@@ -306,9 +302,7 @@ describe('getPhysicalDiskHealthSummary (branchcov2)', () => {
   });
 
   it('returns empty string when summary equals the canonical "no issues" message', () => {
-    expect(
-      getPhysicalDiskHealthSummary(statusWith('No active disk-health issues.')),
-    ).toBe('');
+    expect(getPhysicalDiskHealthSummary(statusWith('No active disk-health issues.'))).toBe('');
   });
 
   it('returns the trimmed summary for a real, non-canonical message', () => {

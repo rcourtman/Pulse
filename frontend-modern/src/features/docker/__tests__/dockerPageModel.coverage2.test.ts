@@ -14,9 +14,7 @@ import {
   mapDockerTaskStatus,
 } from '../dockerPageModel';
 
-const makeResource = (
-  resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>,
-): Resource => ({
+const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource => ({
   ...resource,
   name: resource.name ?? resource.id,
   displayName: resource.displayName ?? resource.id,
@@ -320,35 +318,29 @@ describe('hasDockerStorageUsageBucket', () => {
 // ---------------------------------------------------------------------------
 
 describe('mapDockerSwarmNodeStatus — down, degraded, ready, and unknown branches', () => {
-  it.each(['offline', 'stopped', 'failed'])(
-    'returns danger Down for status %s',
-    (status) => {
-      expect(
-        mapDockerSwarmNodeStatus(
-          makeResource({
-            id: `n-${status}`,
-            type: 'docker-swarm-node',
-            status: status as Resource['status'],
-          }),
-        ),
-      ).toEqual({ variant: 'danger', label: 'Down' });
-    },
-  );
+  it.each(['offline', 'stopped', 'failed'])('returns danger Down for status %s', (status) => {
+    expect(
+      mapDockerSwarmNodeStatus(
+        makeResource({
+          id: `n-${status}`,
+          type: 'docker-swarm-node',
+          status: status as Resource['status'],
+        }),
+      ),
+    ).toEqual({ variant: 'danger', label: 'Down' });
+  });
 
-  it.each(['degraded', 'warning'])(
-    'returns warning Degraded for status %s',
-    (status) => {
-      expect(
-        mapDockerSwarmNodeStatus(
-          makeResource({
-            id: `n-${status}`,
-            type: 'docker-swarm-node',
-            status: status as Resource['status'],
-          }),
-        ),
-      ).toEqual({ variant: 'warning', label: 'Degraded' });
-    },
-  );
+  it.each(['degraded', 'warning'])('returns warning Degraded for status %s', (status) => {
+    expect(
+      mapDockerSwarmNodeStatus(
+        makeResource({
+          id: `n-${status}`,
+          type: 'docker-swarm-node',
+          status: status as Resource['status'],
+        }),
+      ),
+    ).toEqual({ variant: 'warning', label: 'Degraded' });
+  });
 
   it('returns success Ready for an active non-leader running node', () => {
     expect(
@@ -418,7 +410,11 @@ describe('mapDockerTaskStatus — uncovered state branches', () => {
   it('returns success for complete', () => {
     expect(
       mapDockerTaskStatus(
-        makeResource({ id: 't-complete', type: 'docker-task', docker: { currentState: 'complete' } }),
+        makeResource({
+          id: 't-complete',
+          type: 'docker-task',
+          docker: { currentState: 'complete' },
+        }),
       ),
     ).toEqual({ variant: 'success', label: 'Complete' });
   });
@@ -470,9 +466,9 @@ describe('mapDockerTaskStatus — uncovered state branches', () => {
 
 describe('hasDockerSwarmEvidence — inactive and active evidence branches', () => {
   it('returns false when docker.swarm is absent', () => {
-    expect(
-      hasDockerSwarmEvidence(makeResource({ id: 'host-1', type: 'agent', docker: {} })),
-    ).toBe(false);
+    expect(hasDockerSwarmEvidence(makeResource({ id: 'host-1', type: 'agent', docker: {} }))).toBe(
+      false,
+    );
   });
 
   it('returns false when docker is absent entirely', () => {
@@ -960,9 +956,7 @@ describe('buildDockerIncidentRow fallback chains (via buildDockerIncidentRows)',
       makeResource({
         id: 'r1',
         type: 'app-container',
-        incidents: [
-          { code: 'docker_alert', severity: 'warning', summary: 'x', provider: 'swarm' },
-        ],
+        incidents: [{ code: 'docker_alert', severity: 'warning', summary: 'x', provider: 'swarm' }],
       }),
     ]);
     expect(rows[0].source).toBe('swarm');
@@ -1233,9 +1227,9 @@ describe('dockerIncidentSearchHaystack (via filterDockerIncidents)', () => {
         incidents: [{ code: 'docker_alert', severity: 'warning', summary: 'x' }],
       }),
     ]);
-    expect(
-      filterDockerIncidents(incidents, 'prod-swarm', 'all').map((r) => r.resourceId),
-    ).toEqual(['r1']);
+    expect(filterDockerIncidents(incidents, 'prod-swarm', 'all').map((r) => r.resourceId)).toEqual([
+      'r1',
+    ]);
   });
 
   it('matches resource.docker.serviceName', () => {
@@ -1263,9 +1257,9 @@ describe('dockerIncidentSearchHaystack (via filterDockerIncidents)', () => {
         incidents: [{ code: 'docker_alert', severity: 'warning', summary: 'x' }],
       }),
     ]);
-    expect(
-      filterDockerIncidents(incidents, 'env:prod', 'all').map((r) => r.resourceId),
-    ).toEqual(['r1']);
+    expect(filterDockerIncidents(incidents, 'env:prod', 'all').map((r) => r.resourceId)).toEqual([
+      'r1',
+    ]);
   });
 
   it('matches resource.parentName', () => {
@@ -1278,9 +1272,9 @@ describe('dockerIncidentSearchHaystack (via filterDockerIncidents)', () => {
         incidents: [{ code: 'docker_alert', severity: 'warning', summary: 'x' }],
       }),
     ]);
-    expect(
-      filterDockerIncidents(incidents, 'parent-host', 'all').map((r) => r.resourceId),
-    ).toEqual(['r1']);
+    expect(filterDockerIncidents(incidents, 'parent-host', 'all').map((r) => r.resourceId)).toEqual(
+      ['r1'],
+    );
   });
 
   it('matches resource.platformId', () => {
@@ -1309,9 +1303,9 @@ describe('dockerIncidentSearchHaystack (via filterDockerIncidents)', () => {
         incidents: [{ code: 'docker_alert', severity: 'warning', summary: 'x' }],
       }),
     ]);
-    expect(
-      filterDockerIncidents(incidents, 'playbook', 'all').map((r) => r.resourceId),
-    ).toEqual(['r1']);
+    expect(filterDockerIncidents(incidents, 'playbook', 'all').map((r) => r.resourceId)).toEqual([
+      'r1',
+    ]);
     expect(
       filterDockerIncidents(incidents, 'disk-pressure', 'all').map((r) => r.resourceId),
     ).toEqual(['r1']);
@@ -1339,9 +1333,9 @@ describe('mapResourceStatusToTriad (via filterDockerResources)', () => {
       type: 'app-container',
       status: 'stopped',
     });
-    expect(
-      filterDockerResources([resource], '', 'offline').map((r) => r.id),
-    ).toEqual(['r-stopped']);
+    expect(filterDockerResources([resource], '', 'offline').map((r) => r.id)).toEqual([
+      'r-stopped',
+    ]);
   });
 
   it('maps unknown status to unknown (excluded from all specific filters)', () => {

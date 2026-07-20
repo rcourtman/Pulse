@@ -44,12 +44,8 @@ describe('infrastructureSettingsPresentation', () => {
       'Enter at least one valid subnet in CIDR format',
     );
     expect(getDiscoveryScanStartErrorMessage()).toBe('Unable to start the discovery scan.');
-    expect(getDiscoverySettingUpdateErrorMessage()).toBe(
-      'Unable to update the discovery setting.',
-    );
-    expect(getDiscoverySubnetUpdateErrorMessage()).toBe(
-      'Unable to update the discovery subnet.',
-    );
+    expect(getDiscoverySettingUpdateErrorMessage()).toBe('Unable to update the discovery setting.');
+    expect(getDiscoverySubnetUpdateErrorMessage()).toBe('Unable to update the discovery subnet.');
   });
 
   it('returns canonical infrastructure node management error copy', () => {

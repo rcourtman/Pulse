@@ -18,9 +18,7 @@ describe('hostAgentConnectionID', () => {
 
   it('trims whitespace on the agent meta id before prefixing', () => {
     expect(
-      hostAgentConnectionID(
-        host({ agent: { agentId: '   agent-delly   ' } as Resource['agent'] }),
-      ),
+      hostAgentConnectionID(host({ agent: { agentId: '   agent-delly   ' } as Resource['agent'] })),
     ).toBe('agent:agent-delly');
   });
 
@@ -33,9 +31,7 @@ describe('hostAgentConnectionID', () => {
   });
 
   it('uses host.id for a type="agent" row with no agent meta id', () => {
-    expect(hostAgentConnectionID(host({ type: 'agent', id: 'agent-123' }))).toBe(
-      'agent:agent-123',
-    );
+    expect(hostAgentConnectionID(host({ type: 'agent', id: 'agent-123' }))).toBe('agent:agent-123');
   });
 
   it('uses an already-prefixed host.id for a type="agent" row without re-prefixing', () => {

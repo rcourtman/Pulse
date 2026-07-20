@@ -69,9 +69,7 @@ describe('useColumnVisibility', () => {
     window.localStorage.setItem(storageKey, JSON.stringify(['ip']));
 
     let disposeRoot: (() => void) | undefined;
-    let visibility:
-      | ReturnType<typeof useColumnVisibility>
-      | undefined;
+    let visibility: ReturnType<typeof useColumnVisibility> | undefined;
 
     createRoot((dispose) => {
       disposeRoot = dispose;
@@ -82,14 +80,7 @@ describe('useColumnVisibility', () => {
         { id: 'aiContext', label: 'AI Context', toggleable: true, defaultHidden: true },
       ];
 
-      visibility = useColumnVisibility(
-        storageKey,
-        columns,
-        ['ip'],
-        undefined,
-        {},
-        ['aiContext'],
-      );
+      visibility = useColumnVisibility(storageKey, columns, ['ip'], undefined, {}, ['aiContext']);
 
       expect(visibility.hiddenColumns()).toEqual(['ip', 'aiContext']);
       expect(visibility.visibleColumns().map((col) => col.id)).toEqual(['name', 'type']);
@@ -114,14 +105,9 @@ describe('useColumnVisibility', () => {
         { id: 'aiContext', label: 'AI Context', toggleable: true, defaultHidden: true },
       ];
 
-      const remounted = useColumnVisibility(
-        storageKey,
-        columns,
-        ['ip'],
-        undefined,
-        {},
-        ['aiContext'],
-      );
+      const remounted = useColumnVisibility(storageKey, columns, ['ip'], undefined, {}, [
+        'aiContext',
+      ]);
 
       expect(remounted.hiddenColumns()).toEqual(['ip']);
       expect(remounted.visibleColumns().map((col) => col.id)).toEqual([
@@ -169,13 +155,10 @@ describe('useColumnVisibility', () => {
         { id: 'outcome', label: 'Outcome' },
       ];
 
-      const visibility = useColumnVisibility(
-        storageKey,
-        columns,
-        [],
-        undefined,
-        { subject: 'item', source: 'platform' },
-      );
+      const visibility = useColumnVisibility(storageKey, columns, [], undefined, {
+        subject: 'item',
+        source: 'platform',
+      });
 
       expect(visibility.hiddenColumns()).toEqual(['item', 'platform']);
       expect(visibility.visibleColumns().map((col) => col.id)).toEqual(['outcome']);

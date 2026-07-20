@@ -30,11 +30,7 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
       }
     >
       <div class="space-y-6">
-        <SettingsPanel
-          title="Organization Overview"
-          noPadding
-          bodyClass="divide-y divide-border"
-        >
+        <SettingsPanel title="Organization Overview" noPadding bodyClass="divide-y divide-border">
           <Show when={!state.loading()} fallback={<OrganizationOverviewLoadingState />}>
             <Show when={state.org()}>
               <OrganizationOverviewDetailsSection state={state} />

@@ -10,9 +10,7 @@ import {
   mapDockerContainerStatus,
 } from '../dockerPageModel';
 
-const makeResource = (
-  resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>,
-): Resource => ({
+const makeResource = (resource: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource => ({
   ...resource,
   name: resource.name ?? resource.id,
   displayName: resource.displayName ?? resource.id,
@@ -47,7 +45,12 @@ describe('mapDockerContainerStatus — state fallbacks', () => {
   it('returns Unknown when no container state or status is present', () => {
     expect(
       mapDockerContainerStatus(
-        makeResource({ id: 'c-empty', type: 'app-container', status: '' as unknown as Resource['status'], docker: {} }),
+        makeResource({
+          id: 'c-empty',
+          type: 'app-container',
+          status: '' as unknown as Resource['status'],
+          docker: {},
+        }),
       ),
     ).toEqual({ variant: 'muted', label: 'Unknown' });
   });
@@ -55,7 +58,11 @@ describe('mapDockerContainerStatus — state fallbacks', () => {
   it('returns Unknown when docker is entirely absent and status is empty', () => {
     expect(
       mapDockerContainerStatus(
-        makeResource({ id: 'c-no-docker', type: 'app-container', status: '' as unknown as Resource['status'] }),
+        makeResource({
+          id: 'c-no-docker',
+          type: 'app-container',
+          status: '' as unknown as Resource['status'],
+        }),
       ),
     ).toEqual({ variant: 'muted', label: 'Unknown' });
   });
@@ -63,7 +70,11 @@ describe('mapDockerContainerStatus — state fallbacks', () => {
   it('title-cases unrecognized container states as muted', () => {
     expect(
       mapDockerContainerStatus(
-        makeResource({ id: 'c-unknown', type: 'app-container', docker: { containerState: 'quarantined' } }),
+        makeResource({
+          id: 'c-unknown',
+          type: 'app-container',
+          docker: { containerState: 'quarantined' },
+        }),
       ),
     ).toEqual({ variant: 'muted', label: 'Quarantined' });
   });
@@ -71,7 +82,12 @@ describe('mapDockerContainerStatus — state fallbacks', () => {
   it('falls back to resource.status when containerState is absent', () => {
     expect(
       mapDockerContainerStatus(
-        makeResource({ id: 'c-status', type: 'app-container', status: 'restarting' as unknown as Resource['status'], docker: {} }),
+        makeResource({
+          id: 'c-status',
+          type: 'app-container',
+          status: 'restarting' as unknown as Resource['status'],
+          docker: {},
+        }),
       ),
     ).toEqual({ variant: 'warning', label: 'Restarting' });
   });
@@ -83,7 +99,11 @@ describe('mapDockerContainerStatus — state fallbacks', () => {
   ])('treats %s as a deliberately stopped state', (state, label) => {
     expect(
       mapDockerContainerStatus(
-        makeResource({ id: `c-${state}`, type: 'app-container', docker: { containerState: state } }),
+        makeResource({
+          id: `c-${state}`,
+          type: 'app-container',
+          docker: { containerState: state },
+        }),
       ),
     ).toEqual({ variant: 'muted', label });
   });
@@ -91,7 +111,11 @@ describe('mapDockerContainerStatus — state fallbacks', () => {
   it('treats removing as a fatal state with a title-cased label', () => {
     expect(
       mapDockerContainerStatus(
-        makeResource({ id: 'c-removing', type: 'app-container', docker: { containerState: 'removing' } }),
+        makeResource({
+          id: 'c-removing',
+          type: 'app-container',
+          docker: { containerState: 'removing' },
+        }),
       ),
     ).toEqual({ variant: 'danger', label: 'Removing' });
   });
@@ -155,7 +179,12 @@ describe('dockerResourceSearchHaystack — image tags and digests', () => {
 describe('dockerContainerPortLabel — port token shapes', () => {
   it('formats a fully mapped port with host IP', () => {
     expect(
-      dockerContainerPortLabel({ ip: '0.0.0.0', publicPort: 8080, privatePort: 80, protocol: 'tcp' }),
+      dockerContainerPortLabel({
+        ip: '0.0.0.0',
+        publicPort: 8080,
+        privatePort: 80,
+        protocol: 'tcp',
+      }),
     ).toBe('0.0.0.0:8080->80/tcp');
   });
 
@@ -226,7 +255,9 @@ describe('dockerResourceSearchHaystack — volume mount guards', () => {
       id: 'c-ro',
       type: 'app-container',
       docker: {
-        mounts: [{ type: 'bind', source: '/host/config', destination: '/config', mode: 'Z', rw: false }],
+        mounts: [
+          { type: 'bind', source: '/host/config', destination: '/config', mode: 'Z', rw: false },
+        ],
       },
     });
     expect(dockerResourceSearchHaystack(container)).toContain('read-only');

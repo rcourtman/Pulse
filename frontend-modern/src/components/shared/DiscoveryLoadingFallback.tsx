@@ -14,9 +14,7 @@ export function DiscoveryLoadingFallback(props: DiscoveryLoadingFallbackProps): 
     <div
       role="status"
       aria-live="polite"
-      class={['flex items-center justify-center py-8', props.class ?? '']
-        .filter(Boolean)
-        .join(' ')}
+      class={['flex items-center justify-center py-8', props.class ?? ''].filter(Boolean).join(' ')}
     >
       <LoadingSpinner size="xl" tone="info" />
       <span class="ml-2 text-sm text-muted">{text()}</span>

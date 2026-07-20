@@ -111,8 +111,7 @@ describe('getAlertIncidentStatusPresentation — switch branch coverage', () => 
   it('hits the "open" case', () => {
     expect(getAlertIncidentStatusPresentation('open')).toStrictEqual({
       label: 'open',
-      className:
-        'px-2 py-0.5 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
+      className: 'px-2 py-0.5 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
     });
   });
 
@@ -348,7 +347,8 @@ describe('event-filter class helpers — variant + selected branch coverage', ()
   });
 
   it('getAlertIncidentEventFilterChipClass returns the selected (blue) chip regardless of variant', () => {
-    const selected = 'px-2 py-0.5 rounded border text-[10px] transition-colors border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300';
+    const selected =
+      'px-2 py-0.5 rounded border text-[10px] transition-colors border-blue-300 bg-blue-100 text-blue-700 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-300';
     // selected short-circuits before the variant check, so both variants are equal.
     expect(getAlertIncidentEventFilterChipClass(true, 'compact')).toBe(selected);
     expect(getAlertIncidentEventFilterChipClass(true, 'panel')).toBe(selected);
@@ -419,9 +419,9 @@ describe('getAlertResourceIncidentTruncatedEventsLabel — branch coverage', () 
   });
 
   it('returns the bare form when totalCount is a non-number type (typeof false arm)', () => {
-    expect(
-      getAlertResourceIncidentTruncatedEventsLabel(5, 'many' as unknown as number),
-    ).toBe('Showing last 5 events');
+    expect(getAlertResourceIncidentTruncatedEventsLabel(5, 'many' as unknown as number)).toBe(
+      'Showing last 5 events',
+    );
   });
 
   it('returns "Showing N events" when totalCount is a number <= count (singular at 1)', () => {
@@ -444,8 +444,6 @@ describe('getAlertResourceIncidentTruncatedEventsLabel — branch coverage', () 
 
   it('returns "Showing last count of totalCount events" when totalCount > count', () => {
     // totalCount <= count false arm.
-    expect(getAlertResourceIncidentTruncatedEventsLabel(5, 12)).toBe(
-      'Showing last 5 of 12 events',
-    );
+    expect(getAlertResourceIncidentTruncatedEventsLabel(5, 12)).toBe('Showing last 5 of 12 events');
   });
 });

@@ -1,10 +1,6 @@
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import type { Accessor } from 'solid-js';
-import {
-  getDialogFocusableElements,
-  getDialogLayout,
-  type DialogLayout,
-} from './dialogModel';
+import { getDialogFocusableElements, getDialogLayout, type DialogLayout } from './dialogModel';
 
 interface DialogStateOptions {
   closeOnBackdrop?: boolean;

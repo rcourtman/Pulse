@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ClusterEndpoint } from '@/types/nodes';
-import {
-  buildClusterEndpointOverridesPayload,
-  deriveNameFromHost,
-} from '../nodeModalModel';
+import { buildClusterEndpointOverridesPayload, deriveNameFromHost } from '../nodeModalModel';
 
 // Same fixture builder shape as the sibling nodeModalModel.test.ts suite so the
 // private comparison/trim branches under test are driven through the single
@@ -120,9 +117,9 @@ describe('buildClusterEndpointOverridesPayload', () => {
 
   it('includes multiple changed members in order and skips an unchanged middle member', () => {
     const endpoints = [
-      endpoint('pve1'),                       // no saved override -> '' !== '10.0.0.11' -> changed
-      endpoint('pve2', '10.0.0.2'),           // '10.0.0.2' === '10.0.0.2'  -> unchanged (skipped)
-      endpoint('pve3', '10.0.0.3'),           // '10.0.0.33' !== '10.0.0.3' -> changed
+      endpoint('pve1'), // no saved override -> '' !== '10.0.0.11' -> changed
+      endpoint('pve2', '10.0.0.2'), // '10.0.0.2' === '10.0.0.2'  -> unchanged (skipped)
+      endpoint('pve3', '10.0.0.3'), // '10.0.0.33' !== '10.0.0.3' -> changed
     ];
     const payload = buildClusterEndpointOverridesPayload(endpoints, {
       pve1: '10.0.0.11',

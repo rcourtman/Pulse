@@ -241,7 +241,9 @@ describe('storagePageState branch coverage', () => {
 
     it('marks a node online only when status is "online" AND uptime is a positive number', () => {
       expect(
-        buildStorageNodeOnlineByLabel([makeResource({ name: 'host-a', status: 'online', uptime: 1 })]),
+        buildStorageNodeOnlineByLabel([
+          makeResource({ name: 'host-a', status: 'online', uptime: 1 }),
+        ]),
       ).toEqual(new Map([['host-a', true]]));
     });
 
@@ -341,12 +343,12 @@ describe('storagePageState branch coverage', () => {
     });
 
     it('returns the stored boolean for isZfs (true and false)', () => {
-      expect(
-        getStorageMetaBoolean(makeStorageRecord({ details: { isZfs: true } }), 'isZfs'),
-      ).toBe(true);
-      expect(
-        getStorageMetaBoolean(makeStorageRecord({ details: { isZfs: false } }), 'isZfs'),
-      ).toBe(false);
+      expect(getStorageMetaBoolean(makeStorageRecord({ details: { isZfs: true } }), 'isZfs')).toBe(
+        true,
+      );
+      expect(getStorageMetaBoolean(makeStorageRecord({ details: { isZfs: false } }), 'isZfs')).toBe(
+        false,
+      );
     });
 
     it('returns null for non-boolean values (string, number, null)', () => {
@@ -357,10 +359,7 @@ describe('storagePageState branch coverage', () => {
         getStorageMetaBoolean(makeStorageRecord({ details: { isCeph: 1 } }), 'isCeph'),
       ).toBeNull();
       expect(
-        getStorageMetaBoolean(
-          makeStorageRecord({ details: { isCeph: null } }),
-          'isCeph',
-        ),
+        getStorageMetaBoolean(makeStorageRecord({ details: { isCeph: null } }), 'isCeph'),
       ).toBeNull();
     });
   });
@@ -381,7 +380,12 @@ describe('storagePageState branch coverage', () => {
       const record = makeStorageRecord({
         details: { isCeph: false, type: 'rbd' },
         capabilities: ['replication'],
-        source: { platform: 'proxmox-pve', family: 'virtualization', origin: 'resource', adapterId: 'a' },
+        source: {
+          platform: 'proxmox-pve',
+          family: 'virtualization',
+          origin: 'resource',
+          adapterId: 'a',
+        },
       });
       expect(isStorageRecordCeph(record)).toBe(false);
     });
@@ -390,7 +394,12 @@ describe('storagePageState branch coverage', () => {
       const record = makeStorageRecord({
         details: { type: 'rbd' },
         capabilities: [],
-        source: { platform: 'proxmox-pve', family: 'virtualization', origin: 'resource', adapterId: 'a' },
+        source: {
+          platform: 'proxmox-pve',
+          family: 'virtualization',
+          origin: 'resource',
+          adapterId: 'a',
+        },
       });
       expect(isStorageRecordCeph(record)).toBe(true);
     });
@@ -399,7 +408,12 @@ describe('storagePageState branch coverage', () => {
       const record = makeStorageRecord({
         details: { type: 'lvm' },
         capabilities: ['capacity', 'replication'],
-        source: { platform: 'proxmox-pve', family: 'virtualization', origin: 'resource', adapterId: 'a' },
+        source: {
+          platform: 'proxmox-pve',
+          family: 'virtualization',
+          origin: 'resource',
+          adapterId: 'a',
+        },
       });
       expect(isStorageRecordCeph(record)).toBe(true);
     });
@@ -408,7 +422,12 @@ describe('storagePageState branch coverage', () => {
       const record = makeStorageRecord({
         details: { type: 'zfs' },
         capabilities: ['capacity'],
-        source: { platform: 'truenas-scale', family: 'generic', origin: 'resource', adapterId: 'a' },
+        source: {
+          platform: 'truenas-scale',
+          family: 'generic',
+          origin: 'resource',
+          adapterId: 'a',
+        },
       });
       expect(isStorageRecordCeph(record)).toBe(false);
     });
@@ -426,7 +445,12 @@ describe('storagePageState branch coverage', () => {
       const record = makeStorageRecord({
         details: { type: 'lvm' },
         capabilities: ['capacity'],
-        source: { platform: 'proxmox-pve', family: 'virtualization', origin: 'resource', adapterId: 'a' },
+        source: {
+          platform: 'proxmox-pve',
+          family: 'virtualization',
+          origin: 'resource',
+          adapterId: 'a',
+        },
       });
       expect(isStorageRecordCeph(record)).toBe(false);
     });
@@ -534,9 +558,12 @@ describe('storagePageState branch coverage', () => {
         ['critical', 'critical'],
         ['offline', 'offline'],
         ['unknown', 'unknown'],
-      ] as const)('write passes %s through getStorageStatusFilterValue unchanged', (input, expected) => {
-        expect(buildFields().status!.write?.(input)).toBe(expected);
-      });
+      ] as const)(
+        'write passes %s through getStorageStatusFilterValue unchanged',
+        (input, expected) => {
+          expect(buildFields().status!.write?.(input)).toBe(expected);
+        },
+      );
     });
 
     describe('diskRole field', () => {

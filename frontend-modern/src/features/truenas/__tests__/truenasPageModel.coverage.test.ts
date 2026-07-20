@@ -265,7 +265,12 @@ describe('truenasPageModel coverage', () => {
       const posture = buildTrueNASProtectionPosture([
         makeRecoveryPoint({ id: 'ok', kind: 'snapshot', mode: 'snapshot', outcome: 'success' }),
         makeRecoveryPoint({ id: 'fail', kind: 'snapshot', mode: 'snapshot', outcome: 'failed' }),
-        makeRecoveryPoint({ id: 'mystery', kind: 'snapshot', mode: 'snapshot', outcome: 'pending' }),
+        makeRecoveryPoint({
+          id: 'mystery',
+          kind: 'snapshot',
+          mode: 'snapshot',
+          outcome: 'pending',
+        }),
       ]);
       expect(posture).toEqual({
         healthy: 1,

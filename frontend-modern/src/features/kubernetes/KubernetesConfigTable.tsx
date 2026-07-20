@@ -261,7 +261,12 @@ export const KubernetesConfigTable: Component<{
                 >
                   Resource
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} sortKey="kind" class="md:w-[13%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="kind"
+                  class="md:w-[13%]"
+                >
                   Kind
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -283,10 +288,18 @@ export const KubernetesConfigTable: Component<{
                 <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[14%]">
                   Data shape
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[13%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[13%]"
+                >
                   Token refs
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[10%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[10%]"
+                >
                   Labels
                 </PlatformSortableTableHead>
               </>

@@ -131,12 +131,8 @@ describe('getPrimaryResourceIdentity (branch coverage)', () => {
 
 describe('getPreferredWorkloadsAgentHint (branch coverage)', () => {
   it('returns undefined for resource types outside the docker/truenas/agent families', () => {
-    expect(
-      getPreferredWorkloadsAgentHint(makeResource({ type: 'vm' })),
-    ).toBeUndefined();
-    expect(
-      getPreferredWorkloadsAgentHint(makeResource({ type: 'k8s-cluster' })),
-    ).toBeUndefined();
+    expect(getPreferredWorkloadsAgentHint(makeResource({ type: 'vm' }))).toBeUndefined();
+    expect(getPreferredWorkloadsAgentHint(makeResource({ type: 'k8s-cluster' }))).toBeUndefined();
   });
 
   it('falls back to the shared hostname when the docker hostname is absent', () => {
@@ -286,7 +282,7 @@ describe('getPreferredResourceDisplayName (branch coverage)', () => {
 
 describe('getInfrastructureMetadataId (branch coverage)', () => {
   const nodeWith = (overrides: Partial<Pick<Node, 'id' | 'name' | 'linkedAgentId'>>) =>
-    ({ id: 'node-1', name: 'pve1', ...overrides } as Pick<Node, 'id' | 'name' | 'linkedAgentId'>);
+    ({ id: 'node-1', name: 'pve1', ...overrides }) as Pick<Node, 'id' | 'name' | 'linkedAgentId'>;
 
   it('falls back to the node id when no agent and no linked agent id resolve', () => {
     expect(getInfrastructureMetadataId(nodeWith({ linkedAgentId: undefined }))).toBe('node-1');
@@ -305,9 +301,9 @@ describe('getInfrastructureMetadataId (branch coverage)', () => {
       status: 'online',
       lastSeen: Date.now(),
     } as unknown as Agent;
-    expect(
-      getInfrastructureMetadataId(nodeWith({ linkedAgentId: 'agent-linked' }), agent),
-    ).toBe('agent-linked');
+    expect(getInfrastructureMetadataId(nodeWith({ linkedAgentId: 'agent-linked' }), agent)).toBe(
+      'agent-linked',
+    );
   });
 });
 
@@ -319,7 +315,12 @@ describe('getInfrastructureDiscoveryHostname / getAgentLikeDiscoveryHostname (br
       status: 'online',
       lastSeen: Date.now(),
       canonicalIdentity: { hostname: 'canonical.host' },
-      discoveryTarget: { resourceType: 'agent', agentId: 'a1', resourceId: 'a1', hostname: 'disc.host' },
+      discoveryTarget: {
+        resourceType: 'agent',
+        agentId: 'a1',
+        resourceId: 'a1',
+        hostname: 'disc.host',
+      },
       platformData: { agent: { hostname: 'plat.host' } },
     } as unknown as Agent;
     expect(getInfrastructureDiscoveryHostname({ name: 'pve1' }, agent)).toBe('canonical.host');
@@ -331,7 +332,12 @@ describe('getInfrastructureDiscoveryHostname / getAgentLikeDiscoveryHostname (br
       hostname: 'agent.host',
       status: 'online',
       lastSeen: Date.now(),
-      discoveryTarget: { resourceType: 'agent', agentId: 'a1', resourceId: 'a1', hostname: 'disc.host' },
+      discoveryTarget: {
+        resourceType: 'agent',
+        agentId: 'a1',
+        resourceId: 'a1',
+        hostname: 'disc.host',
+      },
     } as unknown as Agent;
     expect(getInfrastructureDiscoveryHostname({ name: 'pve1' }, agent)).toBe('disc.host');
   });
@@ -362,8 +368,7 @@ describe('getInfrastructureDiscoveryHostname / getAgentLikeDiscoveryHostname (br
 });
 
 describe('resolveGuestUrlWithIdentity (branch coverage)', () => {
-  const withIP = (ip: string): Resource =>
-    makeResource({ identity: { ips: [ip] } });
+  const withIP = (ip: string): Resource => makeResource({ identity: { ips: [ip] } });
 
   it('substitutes the LAN IP into an http URL and preserves port and path', () => {
     expect(resolveGuestUrlWithIdentity('http://pi:8006/console', withIP('192.168.0.2'))).toBe(

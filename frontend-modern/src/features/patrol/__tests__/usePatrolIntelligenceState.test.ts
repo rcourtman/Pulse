@@ -75,7 +75,9 @@ describe('usePatrolIntelligenceState', () => {
     expect(patrolIntelligenceStateSource).toContain('rememberPatrolLoadError');
     expect(patrolIntelligenceStateSource).toContain('Promise.allSettled([');
     expect(patrolIntelligenceStateSource).toContain('setInitialSurfaceReady(true);');
-    expect(patrolIntelligenceStateSource).toContain("logger.debug('[Patrol] Failed to refresh Patrol data'");
+    expect(patrolIntelligenceStateSource).toContain(
+      "logger.debug('[Patrol] Failed to refresh Patrol data'",
+    );
     expect(patrolIntelligenceStateSource).toContain('patrolLoadError,');
   });
 

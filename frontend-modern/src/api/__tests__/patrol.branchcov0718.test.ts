@@ -251,9 +251,7 @@ describe('patrol api — uncovered branch coverage', () => {
 
       const result = await getInvestigation('finding-inv');
 
-      expect(apiFetchJSONMock).toHaveBeenCalledWith(
-        '/api/ai/findings/finding-inv/investigation',
-      );
+      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/findings/finding-inv/investigation');
       expect(result).toEqual(investigation);
       expect(result.outcome).toBe('fix_verified');
     });
@@ -325,10 +323,9 @@ describe('patrol api — uncovered branch coverage', () => {
 
       // Note: no body key is set — this is the no-body branch (unlike the
       // other finding mutations which always carry a JSON body).
-      expect(apiFetchJSONMock).toHaveBeenCalledWith(
-        '/api/ai/findings/finding-re/reinvestigate',
-        { method: 'POST' },
-      );
+      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/ai/findings/finding-re/reinvestigate', {
+        method: 'POST',
+      });
       expect(result).toEqual({ success: true, message: 'Reinvestigation queued' });
     });
 

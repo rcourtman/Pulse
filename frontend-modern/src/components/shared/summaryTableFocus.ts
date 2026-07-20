@@ -52,7 +52,9 @@ const isElementVisibleWithinViewport = (element: HTMLElement): boolean => {
   while (current) {
     const style = getComputedStyle(current);
     const clipsVertically =
-      (style.overflowY === 'auto' || style.overflowY === 'scroll' || style.overflowY === 'hidden') &&
+      (style.overflowY === 'auto' ||
+        style.overflowY === 'scroll' ||
+        style.overflowY === 'hidden') &&
       current.scrollHeight > current.clientHeight;
     if (clipsVertically) {
       const containerRect = current.getBoundingClientRect();
@@ -186,10 +188,7 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
         return;
       }
       const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        target.closest('[role="dialog"], [aria-modal="true"]')
-      ) {
+      if (target instanceof HTMLElement && target.closest('[role="dialog"], [aria-modal="true"]')) {
         return;
       }
       options.onEscapeClear?.();
@@ -388,7 +387,8 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
     activeRow,
     isActiveRowVisible,
     jumpToActiveRow,
-    setClearSurfaceRootRef: (element: HTMLElement | undefined) => setClearSurfaceRoot(element ?? null),
+    setClearSurfaceRootRef: (element: HTMLElement | undefined) =>
+      setClearSurfaceRoot(element ?? null),
     setTableRootRef: (element: HTMLElement | undefined) => setTableRoot(element ?? null),
     shouldShowJumpToActiveRow,
   } as const;

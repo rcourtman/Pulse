@@ -41,9 +41,7 @@ const runtimeBlock = (
   ...overrides,
 });
 
-const runtime = (
-  overrides: Partial<LicenseRuntimeIdentity> = {},
-): LicenseRuntimeIdentity => ({
+const runtime = (overrides: Partial<LicenseRuntimeIdentity> = {}): LicenseRuntimeIdentity => ({
   build: 'community-1',
   label: 'Community runtime',
   ...overrides,

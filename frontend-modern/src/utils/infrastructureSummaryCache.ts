@@ -15,7 +15,15 @@ export const INFRA_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
 const INFRA_SUMMARY_CACHE_VERSION = 5;
 const INFRA_SUMMARY_CACHE_MAX_CHARS = 900_000;
 const INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES = 360;
-const DEFAULT_INFRA_SUMMARY_METRICS = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'] as const;
+const DEFAULT_INFRA_SUMMARY_METRICS = [
+  'cpu',
+  'memory',
+  'disk',
+  'diskread',
+  'diskwrite',
+  'netin',
+  'netout',
+] as const;
 type NormalizedInfrastructureSummaryMetrics = readonly InfrastructureSummaryMetric[];
 
 const INFRA_SUMMARY_PERF_LOG_PREFIX = '[InfraSummaryPerf]';
@@ -331,7 +339,7 @@ export function fetchInfrastructureSummaryAndCache(
 
   const requestId = ++infraSummaryFetchSeq;
   const startedAt = infraSummaryPerfNow();
-    infraSummaryPerfLog('fetch start', { caller, range, orgScope, requestId });
+  infraSummaryPerfLog('fetch start', { caller, range, orgScope, requestId });
 
   const request = ChartsAPI.getInfrastructureSummaryCharts(range, undefined, {
     metrics: [...normalizedMetrics],
@@ -343,7 +351,13 @@ export function fetchInfrastructureSummaryAndCache(
         Number.isFinite(response.stats.oldestDataTimestamp)
           ? response.stats.oldestDataTimestamp
           : null;
-      persistInfrastructureSummaryCache(range, map, oldestDataTimestamp, orgScope, normalizedMetrics);
+      persistInfrastructureSummaryCache(
+        range,
+        map,
+        oldestDataTimestamp,
+        orgScope,
+        normalizedMetrics,
+      );
 
       infraSummaryPerfLog('fetch done', {
         caller,

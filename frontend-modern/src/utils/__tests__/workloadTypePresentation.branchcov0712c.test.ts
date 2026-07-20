@@ -190,9 +190,7 @@ describe('workloadTypePresentation (branch coverage 0712c)', () => {
 
     it('treats a non-string rawType as unknown and falls back to DEFAULT', () => {
       type RawTypeArg = Parameters<typeof getWorkloadTypePresentation>[0];
-      expect(
-        getWorkloadTypePresentation(0 as unknown as RawTypeArg),
-      ).toStrictEqual({
+      expect(getWorkloadTypePresentation(0 as unknown as RawTypeArg)).toStrictEqual({
         label: 'Unknown',
         pluralLabel: 'Unknown',
         title: 'Unknown',

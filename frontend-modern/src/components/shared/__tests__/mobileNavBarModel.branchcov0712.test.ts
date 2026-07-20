@@ -6,7 +6,10 @@ import {
   getMobileNavTabAriaLabel,
   getMobileNavTabButtonClass,
 } from '@/components/shared/mobileNavBarModel';
-import type { MobileNavBarIcon, MobileNavBarUtilityTab } from '@/components/shared/mobileNavBarModel';
+import type {
+  MobileNavBarIcon,
+  MobileNavBarUtilityTab,
+} from '@/components/shared/mobileNavBarModel';
 
 // The icon is never rendered by these model-only tests; a cast stub satisfies
 // the Component type without pulling solid-js into a plain .ts file.
@@ -14,9 +17,7 @@ const noopIcon = (() => null) as unknown as MobileNavBarIcon;
 
 // Defaults are tuned to the alerts-scoped functions so their tests stay minimal;
 // non-alerts tests override `id` explicitly.
-function makeUtilityTab(
-  overrides: Partial<MobileNavBarUtilityTab> = {},
-): MobileNavBarUtilityTab {
+function makeUtilityTab(overrides: Partial<MobileNavBarUtilityTab> = {}): MobileNavBarUtilityTab {
   return {
     id: 'alerts',
     label: 'Alerts',
@@ -183,10 +184,7 @@ describe('mobileNavBarModel.branchcov2', () => {
 
     it('keeps all tabs in input order when none match the priority set', () => {
       const tabs = [{ id: 'x' }, { id: 'y' }];
-      expect(buildOrderedMobileNavTabs(tabs, ['a', 'b'])).toStrictEqual([
-        { id: 'x' },
-        { id: 'y' },
-      ]);
+      expect(buildOrderedMobileNavTabs(tabs, ['a', 'b'])).toStrictEqual([{ id: 'x' }, { id: 'y' }]);
     });
 
     it('preserves the full tab object (generic T) through reordering', () => {

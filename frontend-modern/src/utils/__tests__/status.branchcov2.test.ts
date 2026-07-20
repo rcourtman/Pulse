@@ -87,18 +87,14 @@ describe('getStatusIndicatorBadgeToneClasses (branch coverage)', () => {
     expect(getStatusIndicatorBadgeToneClasses('info')).toBe(
       'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
     );
-    expect(getStatusIndicatorBadgeToneClasses('muted')).toBe(
-      'bg-surface-alt text-base-content',
-    );
+    expect(getStatusIndicatorBadgeToneClasses('muted')).toBe('bg-surface-alt text-base-content');
   });
 
   it('falls back to the muted tone class for a variant not present in the table', () => {
     // `|| STATUS_INDICATOR_BADGE_TONE_CLASSES.muted` defensive arm — driven by a
     // deliberately-malformed variant cast to satisfy the nominal type.
     const invalid = 'chartreuse' as unknown as StatusIndicatorVariant;
-    expect(getStatusIndicatorBadgeToneClasses(invalid)).toBe(
-      'bg-surface-alt text-base-content',
-    );
+    expect(getStatusIndicatorBadgeToneClasses(invalid)).toBe('bg-surface-alt text-base-content');
   });
 });
 
@@ -120,9 +116,7 @@ describe('isNodeOnline (branch coverage)', () => {
     expect(isNodeOnline({ status: 'online', uptime: 1000, connectionHealth: 'OFFLINE' })).toBe(
       false,
     );
-    expect(isNodeOnline({ status: 'online', uptime: 1000, connectionHealth: 'Error' })).toBe(
-      false,
-    );
+    expect(isNodeOnline({ status: 'online', uptime: 1000, connectionHealth: 'Error' })).toBe(false);
   });
 
   it('rejects a whitespace-only connectionHealth neither matches offline nor error, but is still treated as connected', () => {
@@ -335,16 +329,18 @@ describe('getPBSStatusIndicator (branch coverage)', () => {
     // DEGRADED arm driven by connection alone (status 'paused' is not healthy/
     // online and not in the degraded set, so without connection it would fall
     // through to defaultIndicator). Label prefers connection.
-    expect(
-      getPBSStatusIndicator({ status: 'paused', connectionHealth: 'maintenance' }),
-    ).toEqual({ variant: 'warning', label: 'Maintenance' });
+    expect(getPBSStatusIndicator({ status: 'paused', connectionHealth: 'maintenance' })).toEqual({
+      variant: 'warning',
+      label: 'Maintenance',
+    });
   });
 
   it('prefers connection over status when both are degraded for the warning label', () => {
     // `formatStatusLabel(connection || status, 'Degraded')` — connection wins.
-    expect(
-      getPBSStatusIndicator({ status: 'degraded', connectionHealth: 'recovering' }),
-    ).toEqual({ variant: 'warning', label: 'Recovering' });
+    expect(getPBSStatusIndicator({ status: 'degraded', connectionHealth: 'recovering' })).toEqual({
+      variant: 'warning',
+      label: 'Recovering',
+    });
   });
 
   it('returns the muted default indicator for a status that is neither offline, healthy/online, nor degraded', () => {

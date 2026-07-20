@@ -300,7 +300,10 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const navIds = commands
           .map((c) => c.id)
-          .filter((id) => id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id));
+          .filter(
+            (id) =>
+              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
+          );
         expect(navIds).toStrictEqual([]);
       });
     });
@@ -315,7 +318,10 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const platformIds = commands
           .map((c) => c.id)
-          .filter((id) => id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id));
+          .filter(
+            (id) =>
+              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
+          );
         expect(platformIds).toStrictEqual(['nav-proxmox']);
       });
 
@@ -328,7 +334,10 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const platformIds = commands
           .map((c) => c.id)
-          .filter((id) => id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id));
+          .filter(
+            (id) =>
+              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
+          );
         expect(platformIds).toStrictEqual(['nav-docker']);
       });
 
@@ -342,7 +351,10 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const platformIds = commands
           .map((c) => c.id)
-          .filter((id) => id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id));
+          .filter(
+            (id) =>
+              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
+          );
         expect(platformIds).toStrictEqual(['nav-kubernetes', 'nav-kubernetes-workloads']);
       });
 
@@ -355,7 +367,10 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const platformIds = commands
           .map((c) => c.id)
-          .filter((id) => id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id));
+          .filter(
+            (id) =>
+              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
+          );
         expect(platformIds).toStrictEqual(['nav-truenas']);
       });
 
@@ -369,7 +384,10 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const platformIds = commands
           .map((c) => c.id)
-          .filter((id) => id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id));
+          .filter(
+            (id) =>
+              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
+          );
         expect(platformIds).toStrictEqual(['nav-vmware', 'nav-vmware-networks']);
       });
 
@@ -382,7 +400,10 @@ describe('commandPaletteModel.branchcov0713', () => {
         });
         const platformIds = commands
           .map((c) => c.id)
-          .filter((id) => id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id));
+          .filter(
+            (id) =>
+              id.startsWith('nav-') && !['nav-alerts', 'nav-patrol', 'nav-settings'].includes(id),
+          );
         expect(platformIds).toStrictEqual(['nav-standalone']);
       });
     });

@@ -32,7 +32,9 @@ const FIXTURE: Resource[] = [
     id: 'zulu',
     kubernetes: {
       podPhase: 'Running',
-      podContainers: [{ ready: false, state: 'waiting', reason: 'CrashLoopBackOff', restartCount: 3 }],
+      podContainers: [
+        { ready: false, state: 'waiting', reason: 'CrashLoopBackOff', restartCount: 3 },
+      ],
     },
   }),
   makePod({

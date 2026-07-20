@@ -80,7 +80,12 @@ vi.mock('@/api/resourceActions', () => ({
             status: 'legacy_unknown',
             scope: { orgId: '', resourceId: '', capabilityName: '' },
             authorities: [],
-            approvalRequirement: { version: 0, floor: 'admin', quorum: 1, disallowRequester: false },
+            approvalRequirement: {
+              version: 0,
+              floor: 'admin',
+              quorum: 1,
+              disallowRequester: false,
+            },
             planningAllowed: false,
             requiresApproval: true,
           },

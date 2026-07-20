@@ -71,8 +71,9 @@ describe('hasFindingInvestigationHandoffPointer', () => {
   };
 
   it('is true when an investigation outcome is recorded', () => {
-    expect(hasFindingInvestigationHandoffPointer({ ...base, investigationOutcome: 'fix_failed' }))
-      .toBe(true);
+    expect(
+      hasFindingInvestigationHandoffPointer({ ...base, investigationOutcome: 'fix_failed' }),
+    ).toBe(true);
   });
 
   it('is true when a session id is present even without an outcome', () => {
@@ -83,7 +84,10 @@ describe('hasFindingInvestigationHandoffPointer', () => {
 
   it('is true when only a last-investigated timestamp is present', () => {
     expect(
-      hasFindingInvestigationHandoffPointer({ ...base, lastInvestigatedAt: '2026-07-01T00:00:00Z' }),
+      hasFindingInvestigationHandoffPointer({
+        ...base,
+        lastInvestigatedAt: '2026-07-01T00:00:00Z',
+      }),
     ).toBe(true);
   });
 
@@ -152,17 +156,18 @@ describe('doesFindingNeedAttention (ATTENTION_OUTCOMES set membership)', () => {
     'cannot_fix',
   ] as const;
 
-  it.each(attentionOutcomes)('flags an active finding with outcome %s as needing attention', (
-    outcome,
-  ) => {
-    expect(
-      doesFindingNeedAttention({
-        id: 'f1',
-        status: 'active',
-        investigationOutcome: outcome,
-      }),
-    ).toBe(true);
-  });
+  it.each(attentionOutcomes)(
+    'flags an active finding with outcome %s as needing attention',
+    (outcome) => {
+      expect(
+        doesFindingNeedAttention({
+          id: 'f1',
+          status: 'active',
+          investigationOutcome: outcome,
+        }),
+      ).toBe(true);
+    },
+  );
 
   it('does not flag a non-attention outcome that is not awaiting approval', () => {
     // fix_executed is positive progress, not in the attention set.
@@ -230,10 +235,9 @@ describe('doesFindingNeedAttention (ATTENTION_OUTCOMES set membership)', () => {
       expiresAt: new Date(now + 60_000).toISOString(),
     };
     expect(
-      doesFindingNeedAttention(
-        { id: 'f7', status: 'active', investigationOutcome: 'fix_queued' },
-        [approval],
-      ),
+      doesFindingNeedAttention({ id: 'f7', status: 'active', investigationOutcome: 'fix_queued' }, [
+        approval,
+      ]),
     ).toBe(false);
   });
 });

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
-import type {
-  StorageGroupedRecords,
-  StorageGroupKey,
-} from '@/components/Storage/useStorageModel';
+import type { StorageGroupedRecords, StorageGroupKey } from '@/components/Storage/useStorageModel';
 import {
   buildStorageSummaryGroupId,
   buildStorageSummaryGroupScope,

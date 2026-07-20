@@ -162,10 +162,9 @@ describe('TrueNASAPI preview* branch coverage', () => {
 
       await TrueNASAPI.previewSavedConnection('conn/with slash');
 
-      expect(mock).toHaveBeenCalledWith(
-        '/api/truenas/connections/conn%2Fwith%20slash/preview',
-        { method: 'POST' },
-      );
+      expect(mock).toHaveBeenCalledWith('/api/truenas/connections/conn%2Fwith%20slash/preview', {
+        method: 'POST',
+      });
     });
 
     it('includes the serialized body when an input override is provided', async () => {
@@ -241,9 +240,7 @@ describe('TrueNASAPI preview* branch coverage', () => {
         additional_count: 1,
         effect: 'creates_new',
         current_systems: [],
-        projected_systems: [
-          { name: 'solo', type: 'truenas', status: 'online', source: 'truenas' },
-        ],
+        projected_systems: [{ name: 'solo', type: 'truenas', status: 'online', source: 'truenas' }],
         projected_system: undefined,
       });
 

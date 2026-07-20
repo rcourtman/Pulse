@@ -2,23 +2,10 @@ import { apiFetchJSON } from '@/utils/apiClient';
 import { MonitoringAPI } from './monitoring';
 
 export type ConnectionType =
-  | 'pve'
-  | 'pbs'
-  | 'pmg'
-  | 'vmware'
-  | 'truenas'
-  | 'availability'
-  | 'agent'
-  | 'docker'
-  | 'kubernetes';
+  'pve' | 'pbs' | 'pmg' | 'vmware' | 'truenas' | 'availability' | 'agent' | 'docker' | 'kubernetes';
 
 export type ConnectionState =
-  | 'active'
-  | 'paused'
-  | 'unauthorized'
-  | 'unreachable'
-  | 'stale'
-  | 'pending';
+  'active' | 'paused' | 'unauthorized' | 'unreachable' | 'stale' | 'pending';
 
 export type ConnectionSource = 'manual' | 'agent' | 'script';
 
@@ -26,11 +13,7 @@ export type ConnectionFleetEnrollmentState = 'configured' | 'enrolled' | 'paused
 export type ConnectionFleetLivenessState = ConnectionState;
 export type ConnectionFleetVersionDrift = 'behind' | 'current' | 'unknown' | 'not-applicable';
 export type ConnectionFleetAdapterHealth =
-  | 'blocked'
-  | 'degraded'
-  | 'healthy'
-  | 'paused'
-  | 'unknown';
+  'blocked' | 'degraded' | 'healthy' | 'paused' | 'unknown';
 export type ConnectionFleetConfigRollout = 'configured' | 'paused' | 'reported' | 'unknown';
 export type ConnectionFleetCredentialStatus = 'invalid' | 'paused' | 'unknown' | 'verified';
 export type ConnectionFleetUpdateStatus =
@@ -44,45 +27,17 @@ export type ConnectionFleetUpdateStatus =
   | 'updating';
 export type ConnectionFleetRemoteControl = 'disabled' | 'enabled' | 'not-applicable' | 'unknown';
 export type ConnectionFleetConfigDriftStatus =
-  | 'current'
-  | 'drifted'
-  | 'not-applicable'
-  | 'paused'
-  | 'pending'
-  | 'unknown';
+  'current' | 'drifted' | 'not-applicable' | 'paused' | 'pending' | 'unknown';
 export type ConnectionFleetRolloutStatus =
-  | 'blocked'
-  | 'current'
-  | 'not-applicable'
-  | 'paused'
-  | 'pending'
-  | 'unknown';
+  'blocked' | 'current' | 'not-applicable' | 'paused' | 'pending' | 'unknown';
 export type ConnectionFleetCredentialHealthStatus =
-  | 'expired'
-  | 'expiring'
-  | 'invalid'
-  | 'not-applicable'
-  | 'paused'
-  | 'unknown'
-  | 'verified';
+  'expired' | 'expiring' | 'invalid' | 'not-applicable' | 'paused' | 'unknown' | 'verified';
 export type ConnectionFleetCommandPolicyStatus =
-  | 'blocked'
-  | 'disabled'
-  | 'enabled'
-  | 'not-applicable'
-  | 'unknown';
+  'blocked' | 'disabled' | 'enabled' | 'not-applicable' | 'unknown';
 export type ConnectionFleetCommandPolicyState =
-  | 'disabled'
-  | 'enabled'
-  | 'not-applicable'
-  | 'unknown';
+  'disabled' | 'enabled' | 'not-applicable' | 'unknown';
 export type ConnectionFleetCommandPolicyEnforcement =
-  | 'blocked'
-  | 'drifted'
-  | 'in-sync'
-  | 'not-applicable'
-  | 'pending'
-  | 'unknown';
+  'blocked' | 'drifted' | 'in-sync' | 'not-applicable' | 'pending' | 'unknown';
 
 export interface ConnectionFleetConfigFingerprint {
   version: string;

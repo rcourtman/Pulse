@@ -34,9 +34,7 @@ describe('alertWebhookPresentation branch coverage (supplemental 0717)', () => {
 
   describe('getAlertWebhookNamePlaceholder', () => {
     it('echoes a provided template name (|| left operand)', () => {
-      expect(getAlertWebhookNamePlaceholder('Discord Incidents')).toBe(
-        'Discord Incidents',
-      );
+      expect(getAlertWebhookNamePlaceholder('Discord Incidents')).toBe('Discord Incidents');
     });
 
     it('falls back to the default placeholder when the name is undefined (|| right operand)', () => {
@@ -50,21 +48,17 @@ describe('alertWebhookPresentation branch coverage (supplemental 0717)', () => {
 
   describe('getAlertWebhookUrlPlaceholder', () => {
     it('echoes a provided url pattern (|| left operand)', () => {
-      expect(
-        getAlertWebhookUrlPlaceholder('https://discord.com/api/webhooks/123'),
-      ).toBe('https://discord.com/api/webhooks/123');
+      expect(getAlertWebhookUrlPlaceholder('https://discord.com/api/webhooks/123')).toBe(
+        'https://discord.com/api/webhooks/123',
+      );
     });
 
     it('falls back to the default URL placeholder when undefined (|| right operand)', () => {
-      expect(getAlertWebhookUrlPlaceholder(undefined)).toBe(
-        'https://example.com/webhook',
-      );
+      expect(getAlertWebhookUrlPlaceholder(undefined)).toBe('https://example.com/webhook');
     });
 
     it('falls back to the default URL placeholder when the pattern is empty (falsy || arm)', () => {
-      expect(getAlertWebhookUrlPlaceholder('')).toBe(
-        'https://example.com/webhook',
-      );
+      expect(getAlertWebhookUrlPlaceholder('')).toBe('https://example.com/webhook');
     });
   });
 
@@ -134,29 +128,21 @@ describe('alertWebhookPresentation branch coverage (supplemental 0717)', () => {
 
   describe('getAlertWebhookMutationSuccess', () => {
     it('maps the "add" action to the add-success message', () => {
-      expect(getAlertWebhookMutationSuccess('add')).toBe(
-        'Webhook added successfully',
-      );
+      expect(getAlertWebhookMutationSuccess('add')).toBe('Webhook added successfully');
     });
 
     it('maps the "update" action to the update-success message', () => {
-      expect(getAlertWebhookMutationSuccess('update')).toBe(
-        'Webhook updated successfully',
-      );
+      expect(getAlertWebhookMutationSuccess('update')).toBe('Webhook updated successfully');
     });
 
     it('maps the "delete" action to the delete-success message', () => {
-      expect(getAlertWebhookMutationSuccess('delete')).toBe(
-        'Webhook deleted successfully',
-      );
+      expect(getAlertWebhookMutationSuccess('delete')).toBe('Webhook deleted successfully');
     });
 
     it('routes any unrecognised action through the default arm to the delete-success message', () => {
-      expect(
-        getAlertWebhookMutationSuccess(
-          'nuke' as unknown as 'add' | 'update' | 'delete',
-        ),
-      ).toBe('Webhook deleted successfully');
+      expect(getAlertWebhookMutationSuccess('nuke' as unknown as 'add' | 'update' | 'delete')).toBe(
+        'Webhook deleted successfully',
+      );
     });
   });
 
@@ -275,11 +261,7 @@ describe('alertWebhookPresentation branch coverage (supplemental 0717)', () => {
         priority: '1',
       });
       // Presets first, then the filtered extras (priority is not a preset key).
-      expect(inputs.map((i) => i.key)).toStrictEqual([
-        'token',
-        'user',
-        'priority',
-      ]);
+      expect(inputs.map((i) => i.key)).toStrictEqual(['token', 'user', 'priority']);
       const priority = inputs.find((i) => i.key === 'priority');
       expect(priority).toStrictEqual({ key: 'priority', value: '1' });
     });

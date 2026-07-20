@@ -35,9 +35,9 @@ function makeItem(overrides: Partial<HistoryItem> = {}): HistoryItem {
 
 describe('getIncidentRowKey', () => {
   it('joins id and startTime with ::', () => {
-    expect(
-      getIncidentRowKey(makeItem({ id: 'a1', startTime: '2026-03-22T09:00:00.000Z' })),
-    ).toBe('a1::2026-03-22T09:00:00.000Z');
+    expect(getIncidentRowKey(makeItem({ id: 'a1', startTime: '2026-03-22T09:00:00.000Z' }))).toBe(
+      'a1::2026-03-22T09:00:00.000Z',
+    );
   });
 
   it('produces distinct keys for same id with different startTime', () => {
@@ -53,10 +53,7 @@ describe('getIncidentRowKey', () => {
 
 describe('buildAlertHistoryParams', () => {
   it('falls back to limit 1000 with no startTime for an unrecognised range', () => {
-    const result = buildAlertHistoryParams(
-      'bogus' as AlertHistoryRange,
-      Date.UTC(2026, 2, 22),
-    );
+    const result = buildAlertHistoryParams('bogus' as AlertHistoryRange, Date.UTC(2026, 2, 22));
     expect(result).toEqual({ limit: 1000 });
     expect(result.startTime).toBeUndefined();
   });
@@ -351,11 +348,7 @@ describe('groupAlertHistoryItems', () => {
 
   it('labels today and yesterday relative to the current date', () => {
     const realNow = new Date();
-    const todayMidnight = new Date(
-      realNow.getFullYear(),
-      realNow.getMonth(),
-      realNow.getDate(),
-    );
+    const todayMidnight = new Date(realNow.getFullYear(), realNow.getMonth(), realNow.getDate());
     const yesterdayMidnight = new Date(todayMidnight);
     yesterdayMidnight.setDate(yesterdayMidnight.getDate() - 1);
 

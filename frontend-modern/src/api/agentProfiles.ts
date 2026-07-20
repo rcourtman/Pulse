@@ -75,12 +75,10 @@ export interface ConfigValidationResult {
 
 export const MISSING_AGENT_PROFILE_ASSIGNMENT_MESSAGE =
   'Selected profile no longer exists. Refresh and choose another profile.';
-export const INVALID_AGENT_PROFILE_LIST_MESSAGE =
-  'Invalid agent profile list response from Pulse.';
+export const INVALID_AGENT_PROFILE_LIST_MESSAGE = 'Invalid agent profile list response from Pulse.';
 export const INVALID_AGENT_PROFILE_ASSIGNMENT_LIST_MESSAGE =
   'Invalid agent profile assignment list response from Pulse.';
-export const INVALID_AGENT_PROFILE_RESPONSE_MESSAGE =
-  'Invalid agent profile response from Pulse.';
+export const INVALID_AGENT_PROFILE_RESPONSE_MESSAGE = 'Invalid agent profile response from Pulse.';
 export const INVALID_AGENT_PROFILE_SUGGESTION_MESSAGE =
   'Invalid agent profile suggestion response from Pulse.';
 export const INVALID_AGENT_PROFILE_SCHEMA_MESSAGE =
@@ -163,10 +161,7 @@ export class AgentProfilesAPI {
     return value;
   }
 
-  private static requireArrayResponse<T>(
-    response: unknown,
-    invalidMessage: string,
-  ): T[] {
+  private static requireArrayResponse<T>(response: unknown, invalidMessage: string): T[] {
     if (!Array.isArray(response)) {
       throw new Error(invalidMessage);
     }
@@ -234,9 +229,8 @@ export class AgentProfilesAPI {
       402,
       [],
     );
-    return arrayOrEmpty<AgentProfile>(response).map(
-      (profile) =>
-        this.requireAgentProfileResponse(profile, INVALID_AGENT_PROFILE_LIST_MESSAGE),
+    return arrayOrEmpty<AgentProfile>(response).map((profile) =>
+      this.requireAgentProfileResponse(profile, INVALID_AGENT_PROFILE_LIST_MESSAGE),
     );
   }
 
@@ -430,7 +424,11 @@ export class AgentProfilesAPI {
       return {
         key: this.requireStringField(def, 'Key', INVALID_AGENT_PROFILE_SCHEMA_MESSAGE),
         type: this.requireStringField(def, 'Type', INVALID_AGENT_PROFILE_SCHEMA_MESSAGE),
-        description: this.requireStringField(def, 'Description', INVALID_AGENT_PROFILE_SCHEMA_MESSAGE),
+        description: this.requireStringField(
+          def,
+          'Description',
+          INVALID_AGENT_PROFILE_SCHEMA_MESSAGE,
+        ),
         defaultValue: def.Default,
         required: (() => {
           const value = def.Required;
@@ -441,20 +439,25 @@ export class AgentProfilesAPI {
         })(),
         min: this.requireOptionalNumberField(def, 'Min', INVALID_AGENT_PROFILE_SCHEMA_MESSAGE),
         max: this.requireOptionalNumberField(def, 'Max', INVALID_AGENT_PROFILE_SCHEMA_MESSAGE),
-        pattern: this.requireOptionalStringField(def, 'Pattern', INVALID_AGENT_PROFILE_SCHEMA_MESSAGE),
+        pattern: this.requireOptionalStringField(
+          def,
+          'Pattern',
+          INVALID_AGENT_PROFILE_SCHEMA_MESSAGE,
+        ),
         enum: (() => {
           const value = def.Enum;
           if (value === undefined || value === null) {
             return undefined;
           }
-          return this.requireArrayResponse<unknown>(value, INVALID_AGENT_PROFILE_SCHEMA_MESSAGE).map(
-            (entry) => {
-              if (typeof entry !== 'string') {
-                throw new Error(INVALID_AGENT_PROFILE_SCHEMA_MESSAGE);
-              }
-              return entry;
-            },
-          );
+          return this.requireArrayResponse<unknown>(
+            value,
+            INVALID_AGENT_PROFILE_SCHEMA_MESSAGE,
+          ).map((entry) => {
+            if (typeof entry !== 'string') {
+              throw new Error(INVALID_AGENT_PROFILE_SCHEMA_MESSAGE);
+            }
+            return entry;
+          });
         })(),
       };
     });
@@ -464,14 +467,11 @@ export class AgentProfilesAPI {
    * Validate a config without saving.
    */
   static async validateConfig(config: Record<string, unknown>): Promise<ConfigValidationResult> {
-    const response = await apiFetch(
-      `${this.baseUrl}/validate`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
-      },
-    );
+    const response = await apiFetch(`${this.baseUrl}/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config),
+    });
     await assertAPIResponseOK(response, 'Failed to validate profile config');
     const parsed = await parseRequiredJSON<ConfigValidationResultResponse>(
       response,

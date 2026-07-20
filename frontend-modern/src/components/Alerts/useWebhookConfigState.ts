@@ -1,11 +1,7 @@
 import { createEffect, createSignal } from 'solid-js';
 import type { Accessor } from 'solid-js';
 
-import {
-  NotificationsAPI,
-  type Webhook,
-  type WebhookTemplate,
-} from '@/api/notifications';
+import { NotificationsAPI, type Webhook, type WebhookTemplate } from '@/api/notifications';
 import { logger } from '@/utils/logger';
 import {
   getAlertWebhookCustomFieldInputs,
@@ -145,7 +141,8 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
     }
   });
 
-  const currentTemplate = () => templates().find((template) => template.service === formData().service);
+  const currentTemplate = () =>
+    templates().find((template) => template.service === formData().service);
 
   const toggleAllWebhooks = (enabled: boolean) => {
     props.webhooks.forEach((webhook) => {
@@ -310,9 +307,7 @@ export function useWebhookConfigState(props: WebhookConfigProps): WebhookConfigS
   };
 
   const removeCustomFieldInput = (index: number) => {
-    updateCustomFieldInputs((inputs) =>
-      inputs.filter((_, currentIndex) => currentIndex !== index),
-    );
+    updateCustomFieldInputs((inputs) => inputs.filter((_, currentIndex) => currentIndex !== index));
   };
 
   const addCustomFieldInput = () => {

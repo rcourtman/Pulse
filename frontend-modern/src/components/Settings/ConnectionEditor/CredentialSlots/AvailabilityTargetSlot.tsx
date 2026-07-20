@@ -351,9 +351,7 @@ export const AvailabilityTargetSlot: Component<AvailabilityTargetSlotProps> = (p
         <FormSelect
           label="Link to resource (optional)"
           value={form().linkedResourceId}
-          onChange={(event) =>
-            updateForm({ linkedResourceId: event.currentTarget.value })
-          }
+          onChange={(event) => updateForm({ linkedResourceId: event.currentTarget.value })}
           fieldClass="sm:col-span-2"
           help="Link this check to a known resource so its status appears on that resource's row. Leave empty to attach only when its IP address or full hostname has one exact match."
         >

@@ -67,7 +67,13 @@ const run = ({
   visibleGuests: readonly WorkloadGuest[];
   excludedWorkloadTypes?: readonly WorkloadType[];
   platformScope?: string | null;
-}) => buildNestedWorkloadContextByGuestId({ guests, visibleGuests, excludedWorkloadTypes, platformScope });
+}) =>
+  buildNestedWorkloadContextByGuestId({
+    guests,
+    visibleGuests,
+    excludedWorkloadTypes,
+    platformScope,
+  });
 
 describe('nestedWorkloadContext (branch coverage)', () => {
   describe('formatRuntimeLabel', () => {
@@ -89,7 +95,9 @@ describe('nestedWorkloadContext (branch coverage)', () => {
         title: 'Nested Podman',
         count: 1,
         href: '/docker/overview?host=host-a',
-        items: [{ id: 'app-container:kea', name: 'kea', status: 'running', runtimeLabel: 'Podman' }],
+        items: [
+          { id: 'app-container:kea', name: 'kea', status: 'running', runtimeLabel: 'Podman' },
+        ],
       });
     });
 
@@ -132,7 +140,10 @@ describe('nestedWorkloadContext (branch coverage)', () => {
         dockerHostId: 'proxmox-lxc-docker:pve-a:node-a:141',
       });
 
-      const result = run({ guests: [exited, emptyStatus, whitespaceStatus], visibleGuests: [parent] });
+      const result = run({
+        guests: [exited, emptyStatus, whitespaceStatus],
+        visibleGuests: [parent],
+      });
 
       expect(result['pve-a:node-a:141']?.items.map((item) => item.status)).toEqual([
         'exited',
@@ -379,7 +390,12 @@ describe('nestedWorkloadContext (branch coverage)', () => {
           count: 1,
           href: '/docker/overview?host=media-lxc.mist-stork.ts.net',
           items: [
-            { id: 'app-container:frigate', name: 'frigate', status: 'running', runtimeLabel: 'Docker' },
+            {
+              id: 'app-container:frigate',
+              name: 'frigate',
+              status: 'running',
+              runtimeLabel: 'Docker',
+            },
           ],
         },
       });

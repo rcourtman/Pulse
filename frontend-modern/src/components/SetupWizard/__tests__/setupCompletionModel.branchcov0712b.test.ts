@@ -199,7 +199,13 @@ describe('setupCompletionModel branch coverage (supplemental)', () => {
       // two all-empty-identity pbs resources with different resolved names must NOT collide.
       const systems = buildSetupCompletionConnectedSystems([
         makeResource({ id: '', type: 'pbs', name: '', displayName: '', platformId: '' }),
-        makeResource({ id: '', type: 'pbs', name: 'realbox', displayName: 'Real Box', platformId: '' }),
+        makeResource({
+          id: '',
+          type: 'pbs',
+          name: 'realbox',
+          displayName: 'Real Box',
+          platformId: '',
+        }),
       ]);
 
       expect(systems).toHaveLength(2);

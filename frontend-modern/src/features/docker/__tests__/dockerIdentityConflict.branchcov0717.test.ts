@@ -23,10 +23,7 @@ describe('dockerIdentityConflict.branchcov', () => {
     it('returns an empty array when no host has docker.identityConflict (docker absent arm)', () => {
       // `host.docker?.identityConflict` short-circuits at `docker` undefined ->
       // `!conflict` is true -> continue.
-      const hosts = [
-        host({ id: 'h1', name: 'h1' }),
-        host({ id: 'h2', name: 'h2' }),
-      ];
+      const hosts = [host({ id: 'h1', name: 'h1' }), host({ id: 'h2', name: 'h2' })];
       expect(collectIdentityConflictHosts(hosts)).toEqual([]);
     });
 
@@ -81,9 +78,7 @@ describe('dockerIdentityConflict.branchcov', () => {
           },
         }),
       ]);
-      expect(result).toEqual([
-        { name: 'h1', hostnames: ['clone-a', 'clone-b'] },
-      ]);
+      expect(result).toEqual([{ name: 'h1', hostnames: ['clone-a', 'clone-b'] }]);
     });
 
     it('drops hostnames that trim to empty (length === 0 filter arm)', () => {
@@ -275,10 +270,7 @@ describe('dockerIdentityConflict.branchcov', () => {
           docker: { identityConflict: { hostnames: ['a-1'] } },
         }),
       ];
-      expect(collectIdentityConflictHosts(hosts).map((h) => h.name)).toEqual([
-        'zeta',
-        'alpha',
-      ]);
+      expect(collectIdentityConflictHosts(hosts).map((h) => h.name)).toEqual(['zeta', 'alpha']);
     });
   });
 });

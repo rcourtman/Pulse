@@ -212,9 +212,7 @@ describe('pbsRepositoryLabel — uncovered branches', () => {
 
   it('treats a whitespace-only namespace as root', () => {
     // `namespace?.trim()` -> '' (falsy) -> '(root)'.
-    expect(pbsRepositoryLabel(pbs({ datastore: 'main', namespace: '   ' }))).toBe(
-      'main / (root)',
-    );
+    expect(pbsRepositoryLabel(pbs({ datastore: 'main', namespace: '   ' }))).toBe('main / (root)');
   });
 
   it('trims surrounding whitespace from a named namespace', () => {

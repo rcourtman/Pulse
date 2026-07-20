@@ -37,7 +37,7 @@ const THEME_KEY = STORAGE_KEYS.THEME_PREFERENCE;
 const DARK_MEDIA_QUERY = '(prefers-color-scheme: dark)';
 
 describe('normalizeThemePreference (branch coverage)', () => {
-  it("returns each canonical preference unchanged via the isThemePreference truthy arm", () => {
+  it('returns each canonical preference unchanged via the isThemePreference truthy arm', () => {
     // 'dark' and 'system' arms are not exercised by the sibling test.
     expect(normalizeThemePreference('dark')).toBe('dark');
     expect(normalizeThemePreference('system')).toBe('system');

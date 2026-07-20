@@ -62,7 +62,7 @@ const credentialInvalid = (connection: Connection): boolean =>
 const activeWorkloadSurfaces = (connection: Connection): string[] => {
   const scope = connection.scope ?? {};
   const scoped = Object.keys(scope).filter((surface) => scope[surface]);
-  const surfaces = scoped.length > 0 ? scoped : connection.surfaces ?? [];
+  const surfaces = scoped.length > 0 ? scoped : (connection.surfaces ?? []);
   const seen = new Set<string>();
   const labels: string[] = [];
   const orderedSurfaces = [...surfaces].sort((left, right) => {

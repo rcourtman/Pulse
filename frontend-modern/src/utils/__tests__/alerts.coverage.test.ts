@@ -42,14 +42,12 @@ describe('isStateAlertType', () => {
     expect(isStateAlertType('')).toBe(false);
   });
 
-  it.each([
-    'Powered-Off',
-    'UNREACHABLE',
-    'Offline',
-    'Host-Offline',
-  ])('is case-sensitive: %s is not a state alert type', (alertType) => {
-    expect(isStateAlertType(alertType)).toBe(false);
-  });
+  it.each(['Powered-Off', 'UNREACHABLE', 'Offline', 'Host-Offline'])(
+    'is case-sensitive: %s is not a state alert type',
+    (alertType) => {
+      expect(isStateAlertType(alertType)).toBe(false);
+    },
+  );
 
   it.each([' powered-off', 'powered-off ', 'unreachable\n', '\toffline'])(
     'does not match state types with surrounding whitespace: %j',

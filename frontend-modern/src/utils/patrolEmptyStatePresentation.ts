@@ -71,8 +71,7 @@ type PatrolRunSnapshotEmptyStateArgs = Pick<
   | 'error_count'
 >;
 
-const DEGRADED_COVERAGE_EMPTY_STATE_BODY =
-  'Run Patrol to check everything and refresh open work.';
+const DEGRADED_COVERAGE_EMPTY_STATE_BODY = 'Run Patrol to check everything and refresh open work.';
 const DEGRADED_HEALTH_EMPTY_STATE_BODY =
   'No current issues are listed, but Patrol health needs review.';
 const HISTORICAL_REGRESSION_EMPTY_STATE_BODY = 'Past issues are in History if you need the record.';
@@ -140,9 +139,7 @@ function hasHistoricalRegressions(count: number | undefined): boolean {
   return typeof count === 'number' && Number.isFinite(count) && count > 0;
 }
 
-function getLatestRunCoverageContext(
-  runs: PatrolRunRecord[] | undefined,
-): string | undefined {
+function getLatestRunCoverageContext(runs: PatrolRunRecord[] | undefined): string | undefined {
   if (!runs || runs.length === 0) {
     return undefined;
   }

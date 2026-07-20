@@ -232,7 +232,8 @@ export function usePatrolIntelligenceState() {
   const [isRefreshing, setIsRefreshing] = createSignal(false);
   const [isManualRefreshRunning, setIsManualRefreshRunning] = createSignal(false);
   const [autonomyLevel, setAutonomyLevel] = createSignal<PatrolAutonomyLevel>('monitor');
-  const [requestedAutonomyLevel, setRequestedAutonomyLevel] = createSignal<PatrolAutonomyLevel>('monitor');
+  const [requestedAutonomyLevel, setRequestedAutonomyLevel] =
+    createSignal<PatrolAutonomyLevel>('monitor');
   const [autopilotStatus, setAutopilotStatus] = createSignal<PatrolAutopilotStatus | null>(null);
   const [autopilotDialogOpen, setAutopilotDialogOpen] = createSignal(false);
   const [isUpdatingAutonomy, setIsUpdatingAutonomy] = createSignal(false);
@@ -609,9 +610,7 @@ export function usePatrolIntelligenceState() {
       return;
     }
     const previousLevel = autonomyLevel();
-    const shouldRecordPatrolControlStarter =
-      !controlLocked &&
-      level !== previousLevel;
+    const shouldRecordPatrolControlStarter = !controlLocked && level !== previousLevel;
     setIsUpdatingAutonomy(true);
 
     try {
@@ -677,7 +676,9 @@ export function usePatrolIntelligenceState() {
       await loadAutonomySettings();
       notificationStore.success('Autopilot acknowledgement revoked. Effective mode refreshed.');
     } catch (err) {
-      notificationStore.error((err as Error).message || 'Autopilot acknowledgement could not be revoked.');
+      notificationStore.error(
+        (err as Error).message || 'Autopilot acknowledgement could not be revoked.',
+      );
     } finally {
       setIsUpdatingAutonomy(false);
     }

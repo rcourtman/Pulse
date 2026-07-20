@@ -68,11 +68,7 @@ export function buildAlertHistoryParams(range: AlertHistoryRange, now = Date.now
   return params;
 }
 
-export function formatAlertHistoryDuration(
-  startTime: string,
-  endTime?: string,
-  now = Date.now(),
-) {
+export function formatAlertHistoryDuration(startTime: string, endTime?: string, now = Date.now()) {
   const start = new Date(startTime).getTime();
   const end = endTime ? new Date(endTime).getTime() : now;
   const duration = end - start;
@@ -413,7 +409,11 @@ export function getAlertHistoryDaySuffix(day: number) {
   }
 }
 
-export function formatAlertHistoryGroupLabel(date: Date, todayStart: number, yesterdayStart: number) {
+export function formatAlertHistoryGroupLabel(
+  date: Date,
+  todayStart: number,
+  yesterdayStart: number,
+) {
   const month = MONTH_NAMES[date.getMonth()];
   const day = date.getDate();
   const suffix = getAlertHistoryDaySuffix(day);

@@ -205,7 +205,12 @@ export const KubernetesNetworkingTable: Component<{
                 >
                   Resource
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} sortKey="kind" class="md:w-[12%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="kind"
+                  class="md:w-[12%]"
+                >
                   Kind
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -224,13 +229,21 @@ export const KubernetesNetworkingTable: Component<{
                 >
                   Type / class
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[18%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[18%]"
+                >
                   Address / hosts
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[12%]">
                   Ports
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[13%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[13%]"
+                >
                   Targets
                 </PlatformSortableTableHead>
               </>

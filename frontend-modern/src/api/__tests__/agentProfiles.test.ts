@@ -51,7 +51,7 @@ describe('AgentProfilesAPI', () => {
     });
     vi.mocked(assertAPIResponseOK).mockResolvedValue(undefined);
     vi.mocked(assertAPIResponseOKOrAllowedStatus).mockResolvedValue(undefined);
-  vi.mocked(assertAPIResponseOKOrThrowStatus).mockResolvedValue(undefined);
+    vi.mocked(assertAPIResponseOKOrThrowStatus).mockResolvedValue(undefined);
     vi.mocked(arrayOrEmpty).mockImplementation((value) =>
       Array.isArray(value) ? (value as never[]) : [],
     );
@@ -107,7 +107,9 @@ describe('AgentProfilesAPI', () => {
     });
 
     it('returns empty array on 402 error', async () => {
-      vi.mocked(apiFetchJSON).mockRejectedValueOnce(Object.assign(new Error('Payment Required'), { status: 402 }));
+      vi.mocked(apiFetchJSON).mockRejectedValueOnce(
+        Object.assign(new Error('Payment Required'), { status: 402 }),
+      );
 
       const result = await AgentProfilesAPI.listProfiles();
 
@@ -156,7 +158,9 @@ describe('AgentProfilesAPI', () => {
     });
 
     it('returns null on 404', async () => {
-      vi.mocked(apiFetchJSON).mockRejectedValueOnce(Object.assign(new Error('Not Found'), { status: 404 }));
+      vi.mocked(apiFetchJSON).mockRejectedValueOnce(
+        Object.assign(new Error('Not Found'), { status: 404 }),
+      );
 
       const result = await AgentProfilesAPI.getProfile('p1');
 
@@ -288,7 +292,9 @@ describe('AgentProfilesAPI', () => {
     });
 
     it('returns empty array on 402', async () => {
-      vi.mocked(apiFetchJSON).mockRejectedValueOnce(Object.assign(new Error('Payment Required'), { status: 402 }));
+      vi.mocked(apiFetchJSON).mockRejectedValueOnce(
+        Object.assign(new Error('Payment Required'), { status: 402 }),
+      );
 
       const result = await AgentProfilesAPI.listAssignments();
 
@@ -379,7 +385,9 @@ describe('AgentProfilesAPI', () => {
         ok: true,
         status: 200,
         text: () =>
-          Promise.resolve(JSON.stringify({ name: 'Suggested', description: '', config: {}, rationale: [] })),
+          Promise.resolve(
+            JSON.stringify({ name: 'Suggested', description: '', config: {}, rationale: [] }),
+          ),
       } as unknown as Response;
       vi.mocked(apiFetch).mockResolvedValueOnce(mockResponse);
       vi.mocked(parseRequiredAPIResponse).mockResolvedValueOnce({
@@ -479,7 +487,10 @@ describe('AgentProfilesAPI', () => {
       const result = await AgentProfilesAPI.getConfigSchema();
 
       expect(apiFetch).toHaveBeenCalledWith('/api/admin/profiles/schema');
-      expect(assertAPIResponseOK).toHaveBeenCalledWith(expect.any(Response), 'Failed to fetch profile schema');
+      expect(assertAPIResponseOK).toHaveBeenCalledWith(
+        expect.any(Response),
+        'Failed to fetch profile schema',
+      );
       expect(parseRequiredJSON).toHaveBeenCalledWith(
         expect.any(Response),
         INVALID_AGENT_PROFILE_SCHEMA_MESSAGE,

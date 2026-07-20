@@ -139,11 +139,7 @@ export class MonitoringAPI {
 
   static async setDockerRuntimeDisplayName(agentId: string, displayName: string): Promise<void> {
     const url = `${this.baseUrl}/agents/docker/runtimes/${encodeURIComponent(agentId)}/display-name`;
-    await setResourceDisplayName(
-      url,
-      displayName,
-      'Docker / Podman agent not found',
-    );
+    await setResourceDisplayName(url, displayName, 'Docker / Podman agent not found');
   }
 
   static async allowDockerRuntimeReenroll(agentId: string): Promise<void> {
@@ -176,11 +172,7 @@ export class MonitoringAPI {
     displayName: string,
   ): Promise<void> {
     const url = `${this.baseUrl}/agents/kubernetes/clusters/${encodeURIComponent(clusterId)}/display-name`;
-    await setResourceDisplayName(
-      url,
-      displayName,
-      'Kubernetes cluster not found',
-    );
+    await setResourceDisplayName(url, displayName, 'Kubernetes cluster not found');
   }
 
   static async allowKubernetesClusterReenroll(clusterId: string): Promise<void> {

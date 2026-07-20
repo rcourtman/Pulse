@@ -86,10 +86,9 @@ describe('ActionAuditAPI listActionAudits branch coverage', () => {
       limit: 0,
     });
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith(
-      '/api/audit/actions?resourceId=vm%3A42',
-      { cache: 'no-store' },
-    );
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/audit/actions?resourceId=vm%3A42', {
+      cache: 'no-store',
+    });
   });
 
   // Covers normalizeSince invalid-date arm:
@@ -125,10 +124,9 @@ describe('ActionAuditAPI listActionAudits branch coverage', () => {
 
     const result = await ActionAuditAPI.listActionAudits({ resourceId: '  vm:42  ' });
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith(
-      '/api/audit/actions?resourceId=vm%3A42',
-      { cache: 'no-store' },
-    );
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/audit/actions?resourceId=vm%3A42', {
+      cache: 'no-store',
+    });
     expect(result.resourceId).toBe('vm:42');
   });
 

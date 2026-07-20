@@ -66,4 +66,3 @@ describe('useMetricBarState', () => {
     expect(observers[0].disconnect).toHaveBeenCalled();
   });
 });
-

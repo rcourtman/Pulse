@@ -1,11 +1,7 @@
 import type { Temperature } from '@/types/api';
 
 export type TemperatureTransport =
-  | 'disabled'
-  | 'socket-proxy'
-  | 'https-proxy'
-  | 'ssh'
-  | 'ssh-blocked';
+  'disabled' | 'socket-proxy' | 'https-proxy' | 'ssh' | 'ssh-blocked';
 
 // Node configuration types
 

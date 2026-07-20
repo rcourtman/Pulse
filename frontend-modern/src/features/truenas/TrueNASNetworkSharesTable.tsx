@@ -209,7 +209,11 @@ export const TrueNASNetworkSharesTable: Component<{
                 <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[19%]">
                   Access
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden lg:table-cell md:w-[13%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden lg:table-cell md:w-[13%]"
+                >
                   Clients
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead

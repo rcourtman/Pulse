@@ -26,9 +26,7 @@ describe('aiProviderPresentation', () => {
 
   it('detects providers from explicit prefixes and model naming heuristics', () => {
     expect(getProviderFromModelId('openai:gpt-4o')).toBe('openai');
-    expect(getProviderFromModelId('codex-subscription:gpt-5.6-luna')).toBe(
-      'codex-subscription',
-    );
+    expect(getProviderFromModelId('codex-subscription:gpt-5.6-luna')).toBe('codex-subscription');
     expect(getProviderFromModelId('claude-subscription:opus')).toBe('claude-subscription');
     expect(getProviderFromModelId('anthropic/claude-sonnet-4.5')).toBe('openrouter');
     expect(getProviderFromModelId('claude-3-5-sonnet')).toBe('anthropic');
@@ -78,9 +76,7 @@ describe('aiProviderPresentation', () => {
       }),
     ).toBe('DeepSeek: DeepSeek V4 Pro');
 
-    expect(formatAIModelRouteLabel('deepseek:deepseek-v4-pro')).toBe(
-      'DeepSeek: DeepSeek V4 Pro',
-    );
+    expect(formatAIModelRouteLabel('deepseek:deepseek-v4-pro')).toBe('DeepSeek: DeepSeek V4 Pro');
   });
 
   it('does not duplicate an existing OpenRouter route label', () => {

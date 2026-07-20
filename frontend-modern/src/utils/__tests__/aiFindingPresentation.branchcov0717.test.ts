@@ -285,9 +285,7 @@ describe('aiFindingPresentation branch coverage (supplemental)', () => {
     };
     it.each(Object.entries(expected))('maps %s to its badge class', (_outcome, classes) => {
       // Cast back through the union type; runtime resolves via Record lookup.
-      expect(
-        getInvestigationOutcomeBadgeClasses(_outcome as InvestigationOutcome),
-      ).toBe(classes);
+      expect(getInvestigationOutcomeBadgeClasses(_outcome as InvestigationOutcome)).toBe(classes);
     });
 
     it('falls back to the default badge for an unrecognized outcome', () => {
@@ -641,7 +639,9 @@ describe('aiFindingPresentation branch coverage (supplemental)', () => {
           'pending_updates=2 inventory=host-1 checked_at=2026-07-17T10:00:00Z received_at=2026-07-17T10:00:05Z reboot_required=true',
       });
       expect(out).toContain('2 operating system updates were pending');
-      expect(out).toContain('reboot required: Yes. No reboot is authorized by this finding or action');
+      expect(out).toContain(
+        'reboot required: Yes. No reboot is authorized by this finding or action',
+      );
       expect(out).not.toContain('Pulse could not safely present');
     });
 
@@ -680,7 +680,10 @@ describe('aiFindingPresentation branch coverage (supplemental)', () => {
 
     it('passes trimmed evidence through verbatim when the key is not a bounded format', () => {
       expect(
-        getFindingEvidencePresentation({ key: 'something-else', evidence: '  raw evidence body  ' }),
+        getFindingEvidencePresentation({
+          key: 'something-else',
+          evidence: '  raw evidence body  ',
+        }),
       ).toBe('raw evidence body');
     });
 
@@ -781,12 +784,9 @@ describe('aiFindingPresentation branch coverage (supplemental)', () => {
     };
 
     it('needs attention when fix is queued with no live approval and no action record', () => {
-      expect(
-        doesFindingNeedAttention(
-          { ...queuedBase } as unknown as AttentionFinding,
-          [],
-        ),
-      ).toBe(true);
+      expect(doesFindingNeedAttention({ ...queuedBase } as unknown as AttentionFinding, [])).toBe(
+        true,
+      );
     });
 
     it('needs attention when the record exists but carries no action (?. non-short-circuit arm)', () => {
@@ -1043,8 +1043,20 @@ describe('aiFindingPresentation branch coverage (supplemental)', () => {
 
     it('keeps disjoint resources as separate single-finding groups', () => {
       const groups = buildPatrolFindingDisplayGroups([
-        displayFinding({ id: 'f1', resourceId: 'r1', resourceName: 'A', resourceType: 'vm', title: 't1' }),
-        displayFinding({ id: 'f2', resourceId: 'r2', resourceName: 'B', resourceType: 'vm', title: 't2' }),
+        displayFinding({
+          id: 'f1',
+          resourceId: 'r1',
+          resourceName: 'A',
+          resourceType: 'vm',
+          title: 't1',
+        }),
+        displayFinding({
+          id: 'f2',
+          resourceId: 'r2',
+          resourceName: 'B',
+          resourceType: 'vm',
+          title: 't2',
+        }),
       ]);
       expect(groups).toHaveLength(2);
       expect(groups.map((g) => g.kind)).toStrictEqual(['finding', 'finding']);

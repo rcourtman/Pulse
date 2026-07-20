@@ -9,54 +9,53 @@ const CODE_PREFIX_BY_PROVIDER: Record<PlatformAlertProvider, string> = {
   vmware: 'vmware_',
 };
 
-const RESOURCE_TYPE_LABELS: Record<PlatformAlertProvider, Partial<Record<ResourceType, string>>> =
-  {
-    docker: {
-      agent: 'Host',
-      'app-container': 'Container',
-      'docker-service': 'Service',
-      'docker-task': 'Task',
-      'docker-swarm-node': 'Swarm Node',
-      'docker-image': 'Image',
-      'docker-volume': 'Volume',
-      'docker-network': 'Network',
-      'docker-secret': 'Secret',
-      'docker-config': 'Config',
-    },
-    kubernetes: {
-      agent: 'Node',
-      'k8s-cluster': 'Cluster',
-      'k8s-node': 'Node',
-      pod: 'Pod',
-      'k8s-deployment': 'Deployment',
-      'k8s-replicaset': 'ReplicaSet',
-      'k8s-statefulset': 'StatefulSet',
-      'k8s-daemonset': 'DaemonSet',
-      'k8s-job': 'Job',
-      'k8s-cronjob': 'CronJob',
-      'k8s-service': 'Service',
-      'k8s-ingress': 'Ingress',
-      'k8s-namespace': 'Namespace',
-      'k8s-event': 'Event',
-      'k8s-persistent-volume': 'PersistentVolume',
-      'k8s-persistent-volume-claim': 'PVC',
-    },
-    truenas: {
-      agent: 'System',
-      storage: 'Pool',
-      pool: 'Pool',
-      dataset: 'Dataset',
-      physical_disk: 'Disk',
-      'network-share': 'Share',
-      vm: 'VM',
-      'app-container': 'App',
-    },
-    vmware: {
-      agent: 'Host',
-      vm: 'VM',
-      storage: 'Datastore',
-    },
-  };
+const RESOURCE_TYPE_LABELS: Record<PlatformAlertProvider, Partial<Record<ResourceType, string>>> = {
+  docker: {
+    agent: 'Host',
+    'app-container': 'Container',
+    'docker-service': 'Service',
+    'docker-task': 'Task',
+    'docker-swarm-node': 'Swarm Node',
+    'docker-image': 'Image',
+    'docker-volume': 'Volume',
+    'docker-network': 'Network',
+    'docker-secret': 'Secret',
+    'docker-config': 'Config',
+  },
+  kubernetes: {
+    agent: 'Node',
+    'k8s-cluster': 'Cluster',
+    'k8s-node': 'Node',
+    pod: 'Pod',
+    'k8s-deployment': 'Deployment',
+    'k8s-replicaset': 'ReplicaSet',
+    'k8s-statefulset': 'StatefulSet',
+    'k8s-daemonset': 'DaemonSet',
+    'k8s-job': 'Job',
+    'k8s-cronjob': 'CronJob',
+    'k8s-service': 'Service',
+    'k8s-ingress': 'Ingress',
+    'k8s-namespace': 'Namespace',
+    'k8s-event': 'Event',
+    'k8s-persistent-volume': 'PersistentVolume',
+    'k8s-persistent-volume-claim': 'PVC',
+  },
+  truenas: {
+    agent: 'System',
+    storage: 'Pool',
+    pool: 'Pool',
+    dataset: 'Dataset',
+    physical_disk: 'Disk',
+    'network-share': 'Share',
+    vm: 'VM',
+    'app-container': 'App',
+  },
+  vmware: {
+    agent: 'Host',
+    vm: 'VM',
+    storage: 'Datastore',
+  },
+};
 
 const titleCaseToken = (part: string): string =>
   part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
@@ -64,10 +63,7 @@ const titleCaseToken = (part: string): string =>
 const isUnsetDate = (date: Date): boolean =>
   Number.isNaN(date.getTime()) || date.getUTCFullYear() < 2000;
 
-export function formatPlatformAlertCode(
-  code: string,
-  provider?: PlatformAlertProvider,
-): string {
+export function formatPlatformAlertCode(code: string, provider?: PlatformAlertProvider): string {
   const trimmed = code.trim();
   const prefix = provider ? CODE_PREFIX_BY_PROVIDER[provider] : undefined;
   const normalized =

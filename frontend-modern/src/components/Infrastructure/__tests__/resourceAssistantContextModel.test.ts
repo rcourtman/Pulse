@@ -50,8 +50,6 @@ describe('buildResourceAssistantContext', () => {
     expect(context.briefing?.detailLines).toContain(
       'Discovery data: Discovery fresh, service Home Assistant, 5 facts',
     );
-    expect(context.briefing?.statusLabel).toBe(
-      'Read-only context attached · Discovery fresh',
-    );
+    expect(context.briefing?.statusLabel).toBe('Read-only context attached · Discovery fresh');
   });
 });

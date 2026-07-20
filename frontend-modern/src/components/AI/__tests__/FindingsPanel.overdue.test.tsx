@@ -129,7 +129,10 @@ beforeEach(() => {
   mockState.loadRemediationPlans.mockClear();
   if (typeof window.requestAnimationFrame !== 'function') {
     window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
-      window.setTimeout(() => callback(performance.now()), 0)) as typeof window.requestAnimationFrame;
+      window.setTimeout(
+        () => callback(performance.now()),
+        0,
+      )) as typeof window.requestAnimationFrame;
   }
 });
 
@@ -200,9 +203,7 @@ describe('FindingsPanel overdue commitments filter', () => {
     render(() => <FindingsPanel findingsSource="patrol" />);
 
     await waitFor(() => expect(mockState.loadPatrolFindings).toHaveBeenCalled());
-    expect(
-      screen.queryByRole('button', { name: /overdue commitments/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /overdue commitments/i })).not.toBeInTheDocument();
   });
 
   it('honors filterOverride="overdue" so callers can land directly on the filter', async () => {

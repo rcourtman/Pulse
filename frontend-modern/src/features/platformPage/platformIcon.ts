@@ -8,13 +8,7 @@ import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { TrueNASIcon } from '@/components/icons/TrueNASIcon';
 
 export type PlatformIconKey =
-  | 'proxmox'
-  | 'docker'
-  | 'kubernetes'
-  | 'truenas'
-  | 'vmware'
-  | 'standalone'
-  | 'systems';
+  'proxmox' | 'docker' | 'kubernetes' | 'truenas' | 'vmware' | 'standalone' | 'systems';
 
 export type PlatformIcon = (props: { class?: string }) => JSX.Element;
 

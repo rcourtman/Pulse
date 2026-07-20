@@ -333,13 +333,10 @@ describe('NotificationsAPI — branch coverage (0718)', () => {
 
       const result = await NotificationsAPI.testWebhook(webhook);
 
-      expect(apiFetchJSONMock).toHaveBeenCalledWith(
-        '/api/notifications/webhooks/test',
-        {
-          method: 'POST',
-          body: JSON.stringify(webhook),
-        },
-      );
+      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/notifications/webhooks/test', {
+        method: 'POST',
+        body: JSON.stringify(webhook),
+      });
       expect(parseBody(apiFetchJSONMock.mock.calls[0])).toEqual(webhook);
       expect(result).toEqual({ success: true, message: 'ok' });
     });

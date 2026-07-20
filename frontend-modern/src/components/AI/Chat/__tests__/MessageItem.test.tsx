@@ -131,7 +131,7 @@ describe('MessageItem', () => {
     expect(messageItemSource).toContain('@/components/shared/Button');
     expect(messageItemSource).toContain('CopyValueButton');
     expect(messageItemSource).toContain('ActionIconButton');
-    expect(messageItemSource).not.toContain("lucide-solid/icons/copy");
+    expect(messageItemSource).not.toContain('lucide-solid/icons/copy');
     expect(messageItemSource).not.toContain("lucide-solid/icons/check';");
     expect(messageItemSource).not.toContain(
       'mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border-subtle bg-surface text-muted opacity-0 shadow-sm transition-opacity hover:text-base-content',
@@ -193,9 +193,7 @@ describe('MessageItem', () => {
           })}
           {...makeHandlers()}
           getModelRouteLabel={(modelId) =>
-            modelId === 'openrouter:qwen/qwen3.7-plus'
-              ? 'Qwen 3.7 Plus via OpenRouter'
-              : modelId
+            modelId === 'openrouter:qwen/qwen3.7-plus' ? 'Qwen 3.7 Plus via OpenRouter' : modelId
           }
           queuedPosition={2}
           queuedCount={3}
@@ -2319,7 +2317,12 @@ describe('MessageItem', () => {
         tool: { name: 'pulse_query', input: '{}', output, success: true },
       });
       const [msg, setMsg] = createSignal<ChatMessage>(
-        makeMessage({ role: 'assistant', content: '', isStreaming: true, streamEvents: [toolEvent('a')] }),
+        makeMessage({
+          role: 'assistant',
+          content: '',
+          isStreaming: true,
+          streamEvents: [toolEvent('a')],
+        }),
       );
       render(() => <MessageItem message={msg()} {...makeHandlers()} />);
 
@@ -2328,7 +2331,12 @@ describe('MessageItem', () => {
       // Next stream tick: brand-new array + brand-new tool event object (output
       // grew), same position. <For> would recreate the row; <Index> keeps it.
       setMsg(
-        makeMessage({ role: 'assistant', content: '', isStreaming: true, streamEvents: [toolEvent('ab')] }),
+        makeMessage({
+          role: 'assistant',
+          content: '',
+          isStreaming: true,
+          streamEvents: [toolEvent('ab')],
+        }),
       );
 
       const nodeAfter = screen.getByTestId('tool-execution-block');

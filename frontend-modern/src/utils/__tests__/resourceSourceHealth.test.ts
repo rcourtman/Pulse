@@ -34,9 +34,9 @@ describe('resourceSourceHealth', () => {
   });
 
   it('treats explicit connected source statuses as healthy and missing source statuses as unknown', () => {
-    expect(getResourceSourceHealth(makeResource({ truenas: { status: 'online' } }), 'truenas')).toBe(
-      'connected',
-    );
+    expect(
+      getResourceSourceHealth(makeResource({ truenas: { status: 'online' } }), 'truenas'),
+    ).toBe('connected');
     expect(getResourceSourceHealth(makeResource(undefined), 'truenas')).toBe('unknown');
   });
 

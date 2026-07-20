@@ -81,23 +81,19 @@ const makeToken = (overrides: Partial<APITokenRecord> = {}): APITokenRecord => (
 
 describe('readPlatformString (via tokenIdForResource)', () => {
   it('returns a non-empty string verbatim', () => {
-    expect(
-      tokenIdForResource(makeResource({ platformData: { tokenId: 'tok-abc' } })),
-    ).toBe('tok-abc');
+    expect(tokenIdForResource(makeResource({ platformData: { tokenId: 'tok-abc' } }))).toBe(
+      'tok-abc',
+    );
   });
 
   it('returns undefined for an empty string (length === 0)', () => {
-    expect(
-      tokenIdForResource(makeResource({ platformData: { tokenId: '' } })),
-    ).toBeUndefined();
+    expect(tokenIdForResource(makeResource({ platformData: { tokenId: '' } }))).toBeUndefined();
   });
 
   it('returns undefined for a whitespace-only string (still length > 0, not trimmed)', () => {
     // readPlatformString intentionally does NOT trim; a blank-but-non-empty
     // string is returned verbatim, proving it is distinct from the empty arm.
-    expect(
-      tokenIdForResource(makeResource({ platformData: { tokenId: '   ' } })),
-    ).toBe('   ');
+    expect(tokenIdForResource(makeResource({ platformData: { tokenId: '   ' } }))).toBe('   ');
   });
 
   it.each([42, 0, true, false, null, ['array'], { k: 'v' }])(
@@ -154,9 +150,7 @@ describe('tokenIdForResource', () => {
 describe('revokedTokenIdForResource', () => {
   it('returns a non-empty revokedTokenId string verbatim from the top level', () => {
     expect(
-      revokedTokenIdForResource(
-        makeResource({ platformData: { revokedTokenId: 'revoked-1' } }),
-      ),
+      revokedTokenIdForResource(makeResource({ platformData: { revokedTokenId: 'revoked-1' } })),
     ).toBe('revoked-1');
   });
 
@@ -341,8 +335,7 @@ describe('groupAPITokenScopes', () => {
 
   it('routes specific known scopes to their expected groups', () => {
     const groups = groupAPITokenScopes();
-    const valuesFor = (group: string) =>
-      groups.find(([g]) => g === group)?.[1].map((o) => o.value);
+    const valuesFor = (group: string) => groups.find(([g]) => g === group)?.[1].map((o) => o.value);
     expect(valuesFor('Monitoring')).toStrictEqual([MONITORING_READ_SCOPE, 'monitoring:write']);
     expect(valuesFor('Security')).toStrictEqual([AUDIT_READ_SCOPE]);
     expect(valuesFor('Agents')).toContain(DOCKER_REPORT_SCOPE);
@@ -552,8 +545,7 @@ describe('getAPITokenScopePresets (full structure)', () => {
       id: API_TOKEN_PULSE_INTELLIGENCE_AGENT_PRESET_ID,
       label: API_TOKEN_PATROL_EXTERNAL_AGENT_PRESET_LABEL,
       scopes: ['monitoring:read', 'ai:execute'],
-      description:
-        'Scopes for connected agents that read Pulse context and request Patrol work.',
+      description: 'Scopes for connected agents that read Pulse context and request Patrol work.',
     });
     // Base presets still follow in canonical order after the inserted preset.
     expect(presets.map((p) => p.id)).toStrictEqual([

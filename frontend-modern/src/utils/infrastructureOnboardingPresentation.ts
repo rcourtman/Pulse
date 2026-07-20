@@ -35,15 +35,7 @@ export interface InfrastructureSourceManagerProductPresentation extends Infrastr
 }
 
 export type InfrastructureSourcePickerItemId =
-  | 'vmware'
-  | 'pve'
-  | 'truenas'
-  | 'unraid'
-  | 'pbs'
-  | 'pmg'
-  | 'linux-host'
-  | 'docker'
-  | 'kubernetes';
+  'vmware' | 'pve' | 'truenas' | 'unraid' | 'pbs' | 'pmg' | 'linux-host' | 'docker' | 'kubernetes';
 
 export type InfrastructureSourcePickerRouteStep = InfrastructureSourcePickerItemId;
 

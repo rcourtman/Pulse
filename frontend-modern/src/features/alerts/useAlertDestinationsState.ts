@@ -11,10 +11,7 @@ import {
   normalizeAppriseConfig,
   normalizeEmailConfigFromAPI,
 } from './alertDestinationsModel';
-import {
-  createDefaultAppriseConfig,
-  createDefaultEmailConfig,
-} from './helpers';
+import { createDefaultAppriseConfig, createDefaultEmailConfig } from './helpers';
 import type { AlertTab, UIAppriseConfig, UIEmailConfig } from './types';
 
 interface AlertDestinationsStateOptions {

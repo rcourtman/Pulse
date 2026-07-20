@@ -63,7 +63,8 @@ describe('OnboardingAPI', () => {
           {
             code: 'instance_url_not_https',
             severity: 'warning',
-            message: 'Pulse web link is not included in this pairing code because the resolved Pulse URL is not HTTPS.',
+            message:
+              'Pulse web link is not included in this pairing code because the resolved Pulse URL is not HTTPS.',
             field: 'instance_url',
           },
         ],

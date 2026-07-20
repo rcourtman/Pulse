@@ -42,12 +42,9 @@ const STATUS_LABELS: Record<MaintenanceVerificationStatus, string> = {
 
 const STATUS_CLASSES: Record<MaintenanceVerificationStatus, string> = {
   pending: 'bg-surface-hover text-base-content',
-  healthy:
-    'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
-  needs_review:
-    'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
-  failed_verification:
-    'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
+  healthy: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+  needs_review: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+  failed_verification: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
 };
 
 export const MaintenanceVerificationSection: Component<MaintenanceVerificationSectionProps> = (
@@ -63,9 +60,7 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
         return res.data ?? [];
       } catch (err) {
         notificationStore.error(
-          err instanceof Error
-            ? err.message
-            : 'Failed to load Maintenance Verification Reports',
+          err instanceof Error ? err.message : 'Failed to load Maintenance Verification Reports',
         );
         return [];
       }
@@ -91,9 +86,7 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
       refresh();
     } catch (err) {
       notificationStore.error(
-        err instanceof Error
-          ? err.message
-          : 'Failed to rerun maintenance verification',
+        err instanceof Error ? err.message : 'Failed to rerun maintenance verification',
       );
     } finally {
       setRerunning(false);
@@ -109,9 +102,7 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
       refresh();
     } catch (err) {
       notificationStore.error(
-        err instanceof Error
-          ? err.message
-          : 'Failed to mark report reviewed',
+        err instanceof Error ? err.message : 'Failed to mark report reviewed',
       );
     } finally {
       setReviewingId(null);
@@ -126,16 +117,12 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
     >
       <header class="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3
-            id="maintenance-verification-heading"
-            class="text-sm font-semibold text-base-content"
-          >
+          <h3 id="maintenance-verification-heading" class="text-sm font-semibold text-base-content">
             Maintenance verification
           </h3>
           <p class="text-xs text-muted">
-            Pulse runs deterministic checks each time a maintenance window
-            ends and writes a Maintenance Verification Report. The result
-            sticks here for review.
+            Pulse runs deterministic checks each time a maintenance window ends and writes a
+            Maintenance Verification Report. The result sticks here for review.
           </p>
         </div>
         <button
@@ -153,8 +140,8 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
         when={hasReports()}
         fallback={
           <div class="mt-3 rounded border border-dashed border-border bg-surface-hover p-3 text-xs text-muted">
-            No verification reports yet. A report is written automatically the
-            next time this resource exits a maintenance window.
+            No verification reports yet. A report is written automatically the next time this
+            resource exits a maintenance window.
           </div>
         }
       >
@@ -175,9 +162,7 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
                     </span>
                     <span class="text-xs text-muted">
                       Window ended{' '}
-                      {report.windowEndedAt
-                        ? formatRelativeTime(report.windowEndedAt)
-                        : 'unknown'}
+                      {report.windowEndedAt ? formatRelativeTime(report.windowEndedAt) : 'unknown'}
                     </span>
                   </div>
                   <Show when={!report.userOutcome}>
@@ -193,10 +178,7 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
                   </Show>
                   <Show when={report.userOutcome === 'reviewed'}>
                     <span class="text-[11px] text-muted">
-                      Reviewed{' '}
-                      {report.reviewedAt
-                        ? formatRelativeTime(report.reviewedAt)
-                        : ''}
+                      Reviewed {report.reviewedAt ? formatRelativeTime(report.reviewedAt) : ''}
                       {report.reviewedBy ? ` by ${report.reviewedBy}` : ''}
                     </span>
                   </Show>
@@ -216,15 +198,11 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
                     <dd>{report.evidence.activeWarningAlerts}</dd>
                   </div>
                   <div>
-                    <dt class="font-medium text-base-content">
-                      Critical findings
-                    </dt>
+                    <dt class="font-medium text-base-content">Critical findings</dt>
                     <dd>{report.evidence.activeCriticalFindings}</dd>
                   </div>
                   <div>
-                    <dt class="font-medium text-base-content">
-                      Warning findings
-                    </dt>
+                    <dt class="font-medium text-base-content">Warning findings</dt>
                     <dd>{report.evidence.activeWarningFindings}</dd>
                   </div>
                   <div>
@@ -235,15 +213,11 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
                     {(rec) => (
                       <>
                         <div>
-                          <dt class="font-medium text-base-content">
-                            Metric samples
-                          </dt>
+                          <dt class="font-medium text-base-content">Metric samples</dt>
                           <dd>{rec().samplesAfterEnd}</dd>
                         </div>
                         <div>
-                          <dt class="font-medium text-base-content">
-                            Metric trend
-                          </dt>
+                          <dt class="font-medium text-base-content">Metric trend</dt>
                           <dd>{rec().trend || 'unknown'}</dd>
                         </div>
                       </>
@@ -252,15 +226,11 @@ export const MaintenanceVerificationSection: Component<MaintenanceVerificationSe
                 </dl>
 
                 <Show when={report.evidence.operatorStateSummary}>
-                  <p class="mt-1 text-[11px] text-muted">
-                    {report.evidence.operatorStateSummary}
-                  </p>
+                  <p class="mt-1 text-[11px] text-muted">{report.evidence.operatorStateSummary}</p>
                 </Show>
 
                 <Show when={report.evidence.patrolRunTodo}>
-                  <p class="mt-1 text-[11px] italic text-muted">
-                    {report.evidence.patrolRunTodo}
-                  </p>
+                  <p class="mt-1 text-[11px] italic text-muted">{report.evidence.patrolRunTodo}</p>
                 </Show>
 
                 <Show when={report.userOutcome === 'reviewed' && report.reviewNote}>

@@ -254,9 +254,7 @@ describe('normalizeDiskArray - edge cases', () => {
   });
 
   it('filters any mountpoint under the /System/Volumes/ prefix', () => {
-    expect(
-      normalizeDiskArray([{ mountpoint: '/System/Volumes/VM', total: 100 }]),
-    ).toBeUndefined();
+    expect(normalizeDiskArray([{ mountpoint: '/System/Volumes/VM', total: 100 }])).toBeUndefined();
   });
 
   it('keeps disks whose mountpoint is undefined or empty', () => {

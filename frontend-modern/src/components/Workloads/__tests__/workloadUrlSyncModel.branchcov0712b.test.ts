@@ -78,18 +78,16 @@ describe('resolveWorkloadsWorkloadTypeParam (branch coverage)', () => {
     });
 
     it('keeps the pod mode when namespace is set and the raw alias is "k8s"', () => {
-      expect(
-        resolveWorkloadsWorkloadTypeParam(params({ type: 'k8s', namespace: 'default' })),
-      ).toBe('pod');
+      expect(resolveWorkloadsWorkloadTypeParam(params({ type: 'k8s', namespace: 'default' }))).toBe(
+        'pod',
+      );
     });
 
     it('treats whitespace-only context/namespace as no scope', () => {
       // Boolean(" ".trim()) === false for both fields, so the precedence guard
       // is skipped and the resolved mode is returned unchanged.
       expect(
-        resolveWorkloadsWorkloadTypeParam(
-          params({ type: 'vm', context: '   ', namespace: '   ' }),
-        ),
+        resolveWorkloadsWorkloadTypeParam(params({ type: 'vm', context: '   ', namespace: '   ' })),
       ).toBe('vm');
     });
   });
@@ -155,9 +153,9 @@ describe('resolveWorkloadsWorkloadRuntimeParam (branch coverage)', () => {
     it('reaches Branch 2 via the empty-type relevance path (!params.type.trim())', () => {
       // type="": nextMode=null and the ternary returns false, but the
       // `|| !params.type.trim()` disjunct flips runtimeRelevant to true.
-      expect(
-        resolveWorkloadsWorkloadRuntimeParam(params({ type: '', runtime: '' })),
-      ).toStrictEqual({ forceViewMode: null, runtime: '', shouldApply: true });
+      expect(resolveWorkloadsWorkloadRuntimeParam(params({ type: '', runtime: '' }))).toStrictEqual(
+        { forceViewMode: null, runtime: '', shouldApply: true },
+      );
     });
   });
 

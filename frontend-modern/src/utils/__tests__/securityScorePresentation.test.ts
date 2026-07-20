@@ -108,7 +108,9 @@ describe('securityScorePresentation', () => {
         exportProtected: true,
         hasHTTPS: false,
       }).message,
-    ).toBe('Authentication is enabled, but this Pulse instance is still missing HTTPS and an API token.');
+    ).toBe(
+      'Authentication is enabled, but this Pulse instance is still missing HTTPS and an API token.',
+    );
   });
 
   it('keeps global warnings off for private authenticated setup debt', () => {
@@ -213,8 +215,7 @@ describe('securityScorePresentation', () => {
         critical: true,
       }),
     ).toMatchObject({
-      cardClassName:
-        'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950',
+      cardClassName: 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950',
       iconClassName: 'text-emerald-500 dark:text-emerald-400',
       statusLabel: 'Enabled',
     });

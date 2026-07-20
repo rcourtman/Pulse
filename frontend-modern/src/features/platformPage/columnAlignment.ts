@@ -84,12 +84,7 @@ import type { PlatformTableCellAlign } from './sharedPlatformPage';
  * content demands it; the bar block contiguity and the Uptime-after-bars
  * rule are the load-bearing parts of the convention.
  */
-export type PlatformTableColumnKind =
-  | 'name'
-  | 'text'
-  | 'metric-bar'
-  | 'numeric-value'
-  | 'badge';
+export type PlatformTableColumnKind = 'name' | 'text' | 'metric-bar' | 'numeric-value' | 'badge';
 
 export const PLATFORM_COLUMN_ALIGN_BY_KIND: Record<
   PlatformTableColumnKind,
@@ -102,6 +97,5 @@ export const PLATFORM_COLUMN_ALIGN_BY_KIND: Record<
   badge: 'center',
 };
 
-export const getPlatformColumnAlign = (
-  kind: PlatformTableColumnKind,
-): PlatformTableCellAlign => PLATFORM_COLUMN_ALIGN_BY_KIND[kind];
+export const getPlatformColumnAlign = (kind: PlatformTableColumnKind): PlatformTableCellAlign =>
+  PLATFORM_COLUMN_ALIGN_BY_KIND[kind];

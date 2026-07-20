@@ -200,7 +200,9 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
             <Show when={investigationRecord().confidenceLabel}>
               <MetadataBadge
                 {...INVESTIGATION_BADGE_PROPS}
-                tone={getInvestigationConfidenceBadgeTone(props.investigationRecord!.confidence ?? '')}
+                tone={getInvestigationConfidenceBadgeTone(
+                  props.investigationRecord!.confidence ?? '',
+                )}
               >
                 {investigationRecord().confidenceLabel}
               </MetadataBadge>
@@ -284,9 +286,7 @@ export const InvestigationSection: Component<InvestigationSectionProps> = (props
               <div class="text-[10px] font-medium uppercase text-muted">Rollback</div>
               <Show
                 when={investigationRecord().rollbackSummaries.length > 0}
-                fallback={
-                  <p class="mt-1 text-xs italic text-muted/70">Rollback not specified</p>
-                }
+                fallback={<p class="mt-1 text-xs italic text-muted/70">Rollback not specified</p>}
               >
                 <ul class="mt-1 space-y-1 text-xs text-muted">
                   <For each={investigationRecord().rollbackSummaries}>

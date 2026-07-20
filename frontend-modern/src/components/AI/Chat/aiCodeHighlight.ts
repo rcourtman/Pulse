@@ -11,18 +11,17 @@ const loadHighlighter = (): Promise<HLJSApi | null> => {
   if (!hljsPromise) {
     hljsPromise = (async () => {
       try {
-        const [core, bash, json, yaml, ini, sql, dockerfile, nginx, plaintext] =
-          await Promise.all([
-            import('highlight.js/lib/core'),
-            import('highlight.js/lib/languages/bash'),
-            import('highlight.js/lib/languages/json'),
-            import('highlight.js/lib/languages/yaml'),
-            import('highlight.js/lib/languages/ini'),
-            import('highlight.js/lib/languages/sql'),
-            import('highlight.js/lib/languages/dockerfile'),
-            import('highlight.js/lib/languages/nginx'),
-            import('highlight.js/lib/languages/plaintext'),
-          ]);
+        const [core, bash, json, yaml, ini, sql, dockerfile, nginx, plaintext] = await Promise.all([
+          import('highlight.js/lib/core'),
+          import('highlight.js/lib/languages/bash'),
+          import('highlight.js/lib/languages/json'),
+          import('highlight.js/lib/languages/yaml'),
+          import('highlight.js/lib/languages/ini'),
+          import('highlight.js/lib/languages/sql'),
+          import('highlight.js/lib/languages/dockerfile'),
+          import('highlight.js/lib/languages/nginx'),
+          import('highlight.js/lib/languages/plaintext'),
+        ]);
         const hljs = core.default;
         hljs.registerLanguage('bash', bash.default);
         hljs.registerAliases(['sh', 'shell', 'zsh', 'console'], { languageName: 'bash' });

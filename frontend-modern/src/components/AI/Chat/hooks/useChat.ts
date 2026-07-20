@@ -295,8 +295,7 @@ export function useChat(options: UseChatOptions = {}) {
   };
 
   const isLocalPromptProgressEvent = (event: StreamDisplayEvent) =>
-    event.type === 'workflow_status' &&
-    isLocalPromptProgressStatus(event.workflowStatus);
+    event.type === 'workflow_status' && isLocalPromptProgressStatus(event.workflowStatus);
 
   const streamEventsWithoutLocalPromptProgressRows = (
     events: StreamDisplayEvent[] | undefined,
@@ -1373,7 +1372,10 @@ export function useChat(options: UseChatOptions = {}) {
         setMessages((prev) => [
           ...prev,
           {
-            id: typeof data.message_id === 'string' && data.message_id ? data.message_id : generateId(),
+            id:
+              typeof data.message_id === 'string' && data.message_id
+                ? data.message_id
+                : generateId(),
             role: 'user',
             content: prompt,
             timestamp: new Date(),
@@ -1884,9 +1886,7 @@ export function useChat(options: UseChatOptions = {}) {
                 pendingTools: [],
                 pendingApprovals: [],
                 pendingQuestions: [],
-                streamEvents: streamEventsWithoutUnresolvedInteractiveRows(
-                  flushedMsg.streamEvents,
-                ),
+                streamEvents: streamEventsWithoutUnresolvedInteractiveRows(flushedMsg.streamEvents),
                 workflowStatus: undefined,
                 workflowStatusHistory: undefined,
               };
@@ -2519,7 +2519,10 @@ export function useChat(options: UseChatOptions = {}) {
   // and the user prompt that triggered it from the view AND from the persisted
   // session, then re-send that prompt so the conversation shows a single clean
   // attempt instead of a dead-end error plus a double-recorded prompt.
-  const retryMessage = async (assistantMessageId: string, sendOptionOverrides?: SendMessageOptions) => {
+  const retryMessage = async (
+    assistantMessageId: string,
+    sendOptionOverrides?: SendMessageOptions,
+  ) => {
     const msgs = messages();
     const idx = msgs.findIndex((m) => m.id === assistantMessageId);
     if (idx < 0) return;
@@ -2543,7 +2546,10 @@ export function useChat(options: UseChatOptions = {}) {
       try {
         await AIChatAPI.undoLastTurn(currentSessionId, { expectedPrompt: prompt });
       } catch (error) {
-        logger.warn('[useChat] Retry could not remove the previous turn from session history', error);
+        logger.warn(
+          '[useChat] Retry could not remove the previous turn from session history',
+          error,
+        );
       }
     }
     const removeIds = new Set([msgs[userIdx].id, assistantMessageId]);

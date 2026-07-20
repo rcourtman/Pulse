@@ -34,10 +34,7 @@ const sectionLabels = (resource: Resource): string[] =>
 const allRows = (resource: Resource): ResourceDetailDrawerTrueNASRow[] =>
   buildTrueNASDetailSections(resource).flatMap((section) => section.rows);
 
-const findRow = (
-  resource: Resource,
-  label: string,
-): ResourceDetailDrawerTrueNASRow | undefined =>
+const findRow = (resource: Resource, label: string): ResourceDetailDrawerTrueNASRow | undefined =>
   allRows(resource).find((row) => row.label === label);
 
 const systemWithService = (service: ResourceTrueNASServiceMeta): Resource =>
@@ -46,8 +43,7 @@ const systemWithService = (service: ResourceTrueNASServiceMeta): Resource =>
 const diskResource = (disk: ResourcePhysicalDiskMeta): Resource =>
   baseResource({ physicalDisk: disk });
 
-const storageResource = (storage: ResourceStorageMeta): Resource =>
-  baseResource({ storage });
+const storageResource = (storage: ResourceStorageMeta): Resource => baseResource({ storage });
 
 describe('truenasServiceStatus / serviceStatusLabel / serviceStatusTone', () => {
   // A single service must resolve to exactly one status row; its label and tone
@@ -169,9 +165,9 @@ describe('truenasServiceStatus / serviceStatusLabel / serviceStatusTone', () => 
 
 describe('storageKindLabel', () => {
   it('prefers topology over type', () => {
-    expect(
-      findRow(storageResource({ topology: 'dataset', type: 'zfs_pool' }), 'Kind')?.value,
-    ).toBe('Dataset');
+    expect(findRow(storageResource({ topology: 'dataset', type: 'zfs_pool' }), 'Kind')?.value).toBe(
+      'Dataset',
+    );
   });
 
   it('falls back to type when topology is absent', () => {
@@ -317,9 +313,9 @@ describe('booleanValue (via the VM Autostart flag)', () => {
   });
 
   it('returns "Disabled" for false', () => {
-    expect(findRow(baseResource({ truenas: { vm: { autostart: false } } }), 'Autostart')?.value).toBe(
-      'Disabled',
-    );
+    expect(
+      findRow(baseResource({ truenas: { vm: { autostart: false } } }), 'Autostart')?.value,
+    ).toBe('Disabled');
   });
 
   it('returns null (row omitted) for undefined', () => {

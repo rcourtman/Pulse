@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  formatAssistantTurnDuration,
-  getAssistantTurnSummary,
-} from '../assistantTurnSummary';
+import { formatAssistantTurnDuration, getAssistantTurnSummary } from '../assistantTurnSummary';
 import type { ChatMessage } from '../types';
 
 // Branch-coverage companion to assistantTurnSummary.test.ts. Each test below
@@ -172,7 +169,7 @@ describe('getAssistantTurnSummary branch coverage', () => {
     });
   });
 
-  it("omits the model part when model is absent (message.model?. absent short-circuit)", () => {
+  it('omits the model part when model is absent (message.model?. absent short-circuit)', () => {
     expect(
       getAssistantTurnSummary(
         baseAssistant({

@@ -409,9 +409,8 @@ describe('sanitizeDiagnosticsData / dockerAgents', () => {
       } as DockerAgentsDiagnosticWithExtras,
     });
 
-    const attention = (
-      sanitized.dockerAgents as unknown as DockerAgentsDiagnosticWithExtras
-    ).attention;
+    const attention = (sanitized.dockerAgents as unknown as DockerAgentsDiagnosticWithExtras)
+      .attention;
     expect(attention).toStrictEqual([
       {
         agentId: 'docker-host-1',
@@ -566,9 +565,7 @@ describe('sanitizeDiagnosticsData / snapshot arrays', () => {
     } as DiagnosticsDataWithSnapshots);
 
     const out = sanitized as unknown as DiagnosticsDataWithSnapshots;
-    expect(out.guestSnapshots).toStrictEqual([
-      { instance: 'node-1', status: 'running' },
-    ]);
+    expect(out.guestSnapshots).toStrictEqual([{ instance: 'node-1', status: 'running' }]);
   });
 
   it('stamps an instance placeholder on every memorySources entry', () => {
@@ -578,9 +575,7 @@ describe('sanitizeDiagnosticsData / snapshot arrays', () => {
     } as DiagnosticsDataWithSnapshots);
 
     const out = sanitized as unknown as DiagnosticsDataWithSnapshots;
-    expect(out.memorySources).toStrictEqual([
-      { instance: 'node-1', source: 'balloon' },
-    ]);
+    expect(out.memorySources).toStrictEqual([{ instance: 'node-1', source: 'balloon' }]);
   });
 });
 

@@ -150,7 +150,8 @@ describe('ConnectionsAPI', () => {
             desired: 'disabled',
             applied: 'enabled',
             enforcement: 'drifted',
-            reason: 'agent still reports command execution enabled while desired policy disables it',
+            reason:
+              'agent still reports command execution enabled while desired policy disables it',
           },
         },
         capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
@@ -223,7 +224,8 @@ describe('ConnectionsAPI', () => {
           configDrift: {
             status: 'pending',
             desired: { version: 'host-agent-config/v1', hash: 'sha256:desired' },
-            reason: 'Pulse has not received a comparable applied agent configuration fingerprint yet',
+            reason:
+              'Pulse has not received a comparable applied agent configuration fingerprint yet',
           },
           rollout: {
             status: 'pending',

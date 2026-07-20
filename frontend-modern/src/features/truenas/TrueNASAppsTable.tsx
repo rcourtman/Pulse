@@ -126,14 +126,7 @@ const UpdatePills: Component<{ app: ResourceTrueNASAppMeta | undefined }> = (pro
 // Columns a user can sort by. Ports and Images summarize several values at
 // once, so they carry no single scalar to order on. Updates orders on how
 // many update kinds (app / image) are pending so outdated apps surface first.
-const TRUENAS_APP_SORT_KEYS = [
-  'app',
-  'version',
-  'cpu',
-  'memory',
-  'containers',
-  'updates',
-] as const;
+const TRUENAS_APP_SORT_KEYS = ['app', 'version', 'cpu', 'memory', 'containers', 'updates'] as const;
 
 type TrueNASAppSortKey = (typeof TRUENAS_APP_SORT_KEYS)[number];
 
@@ -166,7 +159,9 @@ const getTrueNASAppSortValue = (
     case 'containers':
       return appContainerCount(app);
     case 'updates':
-      return (app?.upgradeAvailable === true ? 1 : 0) + (app?.imageUpdatesAvailable === true ? 1 : 0);
+      return (
+        (app?.upgradeAvailable === true ? 1 : 0) + (app?.imageUpdatesAvailable === true ? 1 : 0)
+      );
     default:
       key satisfies never;
       return null;
@@ -271,10 +266,18 @@ export const TrueNASAppsTable: Component<{
                 >
                   Containers
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[18%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[18%]"
+                >
                   Ports
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden lg:table-cell md:w-[12%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden lg:table-cell md:w-[12%]"
+                >
                   Images
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead

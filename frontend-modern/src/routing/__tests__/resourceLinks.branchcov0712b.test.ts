@@ -36,9 +36,7 @@ describe('buildWorkloadsRouteSearch branch coverage', () => {
         cluster: 'prod-us-east',
         summaryGroup: 'compute',
       }),
-    ).toBe(
-      '?runtime=containerd&namespace=kube-system&cluster=prod-us-east&summaryGroup=compute',
-    );
+    ).toBe('?runtime=containerd&namespace=kube-system&cluster=prod-us-east&summaryGroup=compute');
   });
 
   it('verifies the omitted query-param keys map to the canonical names', () => {
@@ -114,9 +112,7 @@ describe('buildKubernetesPath branch coverage', () => {
   it('strips leading and trailing slashes but preserves inner path segments', () => {
     expect(buildKubernetesPath('/workloads/')).toBe(`${KUBERNETES_PATH}/workloads`);
     expect(buildKubernetesPath('///workloads///')).toBe(`${KUBERNETES_PATH}/workloads`);
-    expect(buildKubernetesPath('/config/networking/')).toBe(
-      `${KUBERNETES_PATH}/config/networking`,
-    );
+    expect(buildKubernetesPath('/config/networking/')).toBe(`${KUBERNETES_PATH}/config/networking`);
   });
 
   it('trims surrounding whitespace before slash-stripping', () => {
@@ -127,9 +123,9 @@ describe('buildKubernetesPath branch coverage', () => {
 
 describe('buildTrueNASPath branch coverage', () => {
   it('falls back to the default tab when called with an explicit undefined argument', () => {
-    expect(
-      buildTrueNASPath(undefined as unknown as Parameters<typeof buildTrueNASPath>[0]),
-    ).toBe(`${TRUENAS_PATH}/overview`);
+    expect(buildTrueNASPath(undefined as unknown as Parameters<typeof buildTrueNASPath>[0])).toBe(
+      `${TRUENAS_PATH}/overview`,
+    );
   });
 
   it('returns the base path when the tab is empty or whitespace-only', () => {
@@ -273,9 +269,7 @@ describe('buildRecoveryRouteSearch branch coverage', () => {
   it('canonicalizes system-container item-type aliases through the switch arms', () => {
     expect(buildRecoveryRouteSearch({ itemType: 'lxc' })).toBe('?itemType=system-container');
     expect(buildRecoveryRouteSearch({ itemType: 'ct' })).toBe('?itemType=system-container');
-    expect(buildRecoveryRouteSearch({ itemType: 'container' })).toBe(
-      '?itemType=system-container',
-    );
+    expect(buildRecoveryRouteSearch({ itemType: 'container' })).toBe('?itemType=system-container');
     expect(buildRecoveryRouteSearch({ itemType: 'oci-container' })).toBe(
       '?itemType=system-container',
     );
@@ -286,30 +280,20 @@ describe('buildRecoveryRouteSearch branch coverage', () => {
     expect(buildRecoveryRouteSearch({ itemType: 'docker-container' })).toBe(
       '?itemType=app-container',
     );
-    expect(buildRecoveryRouteSearch({ itemType: 'app-container' })).toBe(
-      '?itemType=app-container',
-    );
+    expect(buildRecoveryRouteSearch({ itemType: 'app-container' })).toBe('?itemType=app-container');
   });
 
   it('canonicalizes the remaining item-type switch arms (pod, pvc, cluster, dataset, velero, guest)', () => {
     expect(buildRecoveryRouteSearch({ itemType: 'k8s-pod' })).toBe('?itemType=pod');
     expect(buildRecoveryRouteSearch({ itemType: 'pvc' })).toBe('?itemType=pvc');
-    expect(buildRecoveryRouteSearch({ itemType: 'kubernetes-cluster' })).toBe(
-      '?itemType=cluster',
-    );
-    expect(buildRecoveryRouteSearch({ itemType: 'truenas-dataset' })).toBe(
-      '?itemType=dataset',
-    );
-    expect(buildRecoveryRouteSearch({ itemType: 'velero-backup' })).toBe(
-      '?itemType=velero-backup',
-    );
+    expect(buildRecoveryRouteSearch({ itemType: 'kubernetes-cluster' })).toBe('?itemType=cluster');
+    expect(buildRecoveryRouteSearch({ itemType: 'truenas-dataset' })).toBe('?itemType=dataset');
+    expect(buildRecoveryRouteSearch({ itemType: 'velero-backup' })).toBe('?itemType=velero-backup');
     expect(buildRecoveryRouteSearch({ itemType: 'proxmox-guest' })).toBe('?itemType=guest');
   });
 
   it('strips the proxmox-/truenas-/k8s- prefixes via the default-arm branches', () => {
-    expect(buildRecoveryRouteSearch({ itemType: 'proxmox-storage' })).toBe(
-      '?itemType=storage',
-    );
+    expect(buildRecoveryRouteSearch({ itemType: 'proxmox-storage' })).toBe('?itemType=storage');
     expect(buildRecoveryRouteSearch({ itemType: 'truenas-share' })).toBe('?itemType=share');
     expect(buildRecoveryRouteSearch({ itemType: 'k8s-node' })).toBe('?itemType=node');
   });

@@ -258,8 +258,7 @@ export function buildStoragePoolDetailZfsSummary(
 const readPhysicalDisk = (disk: Resource): NonNullable<Resource['physicalDisk']> => {
   const platformData = (disk.platformData || {}) as Record<string, unknown>;
   const platformDisk = platformData.physicalDisk as
-    | NonNullable<Resource['physicalDisk']>
-    | undefined;
+    NonNullable<Resource['physicalDisk']> | undefined;
   return (disk.physicalDisk || platformDisk || {}) as NonNullable<Resource['physicalDisk']>;
 };
 

@@ -172,9 +172,7 @@ describe('CollapsibleSection', () => {
       </CollapsibleSection>
     ));
 
-    expect(
-      screen.queryByText(ALERT_THRESHOLDS_SECTION_DISABLED_LABEL),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(ALERT_THRESHOLDS_SECTION_DISABLED_LABEL)).not.toBeInTheDocument();
   });
 
   it('shows unsaved changes indicator when hasChanges is true', () => {

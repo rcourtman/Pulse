@@ -112,5 +112,4 @@ describe('OnboardingAPI – branch coverage', () => {
       expect(caught?.diagnostics).toEqual([]);
     });
   });
-
 });

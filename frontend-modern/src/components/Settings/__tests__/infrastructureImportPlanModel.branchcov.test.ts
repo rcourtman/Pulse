@@ -80,7 +80,7 @@ describe('nodeTypeToMonitoredSource / nodeTypeToResourceType (pmg arm)', () => {
 // ---- hostnameFromEndpoint ---------------------------------------------------
 
 describe('hostnameFromEndpoint (via plan.hostname)', () => {
-  it("returns an empty hostname when the endpoint is empty", () => {
+  it('returns an empty hostname when the endpoint is empty', () => {
     // formData.host empty AND probe host empty => endpoint '' => hostname ''.
     const plan = buildNodeImportPlan(
       'pve',
@@ -92,7 +92,7 @@ describe('hostnameFromEndpoint (via plan.hostname)', () => {
     expect(plan?.hostname).toBe('');
   });
 
-  it("parses a scheme-less host by implicitly prepending https://", () => {
+  it('parses a scheme-less host by implicitly prepending https://', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'tower.local:8006' }),
@@ -104,7 +104,7 @@ describe('hostnameFromEndpoint (via plan.hostname)', () => {
     expect(plan?.hostname).toBe('tower.local');
   });
 
-  it("falls back to manual host stripping when the URL cannot be parsed", () => {
+  it('falls back to manual host stripping when the URL cannot be parsed', () => {
     // 'bad:host' makes `new URL('https://bad:host')` throw (invalid port); the
     // catch arm strips any scheme, drops the path, then drops the port.
     const plan = buildNodeImportPlan(
@@ -122,17 +122,19 @@ describe('hostnameFromEndpoint (via plan.hostname)', () => {
 // `normalizeEndpoint(formData.host) || endpointFromCandidate(candidate)`.
 
 describe('endpointFromCandidate (via plan.endpoint with empty formData.host)', () => {
-  it("normalizes (trims) the probe candidate host", () => {
+  it('normalizes (trims) the probe candidate host', () => {
     const plan = buildNodeImportPlan(
       'pbs',
       makeForm('pbs', { host: '' }),
-      probeCandidate(makeProbe({ type: 'pbs', host: '   https://backup.local:8007   ', port: 8007 })),
+      probeCandidate(
+        makeProbe({ type: 'pbs', host: '   https://backup.local:8007   ', port: 8007 }),
+      ),
     );
 
     expect(plan?.endpoint).toBe('https://backup.local:8007');
   });
 
-  it("prefers the discovery server hostname when present", () => {
+  it('prefers the discovery server hostname when present', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { host: '' }),
@@ -142,7 +144,7 @@ describe('endpointFromCandidate (via plan.endpoint with empty formData.host)', (
     expect(plan?.endpoint).toBe('https://host.local:8006');
   });
 
-  it("falls back to the IP when the discovery hostname is an empty string", () => {
+  it('falls back to the IP when the discovery hostname is an empty string', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { host: '' }),
@@ -152,7 +154,7 @@ describe('endpointFromCandidate (via plan.endpoint with empty formData.host)', (
     expect(plan?.endpoint).toBe('https://10.0.0.20:8006');
   });
 
-  it("falls back to the IP when the discovery hostname is undefined", () => {
+  it('falls back to the IP when the discovery hostname is undefined', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { host: '' }),
@@ -166,7 +168,7 @@ describe('endpointFromCandidate (via plan.endpoint with empty formData.host)', (
 // ---- versionFromCandidate ---------------------------------------------------
 
 describe('versionFromCandidate (via plan.detectedVersion)', () => {
-  it("joins product and version hints for a probe candidate", () => {
+  it('joins product and version hints for a probe candidate', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),
@@ -176,7 +178,7 @@ describe('versionFromCandidate (via plan.detectedVersion)', () => {
     expect(plan?.detectedVersion).toBe('Proxmox VE 9.1');
   });
 
-  it("returns only the product when the version hint is absent", () => {
+  it('returns only the product when the version hint is absent', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),
@@ -186,7 +188,7 @@ describe('versionFromCandidate (via plan.detectedVersion)', () => {
     expect(plan?.detectedVersion).toBe('Proxmox VE');
   });
 
-  it("returns only the version when the product hint is absent", () => {
+  it('returns only the version when the product hint is absent', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),
@@ -196,7 +198,7 @@ describe('versionFromCandidate (via plan.detectedVersion)', () => {
     expect(plan?.detectedVersion).toBe('9.1');
   });
 
-  it("uses the generic fallback when hints are missing entirely", () => {
+  it('uses the generic fallback when hints are missing entirely', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),
@@ -206,7 +208,7 @@ describe('versionFromCandidate (via plan.detectedVersion)', () => {
     expect(plan?.detectedVersion).toBe('Detected API endpoint');
   });
 
-  it("uses the generic fallback when both hints trim to empty", () => {
+  it('uses the generic fallback when both hints trim to empty', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),
@@ -216,7 +218,7 @@ describe('versionFromCandidate (via plan.detectedVersion)', () => {
     expect(plan?.detectedVersion).toBe('Detected API endpoint');
   });
 
-  it("joins server version and release for a discovery candidate", () => {
+  it('joins server version and release for a discovery candidate', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),
@@ -226,7 +228,7 @@ describe('versionFromCandidate (via plan.detectedVersion)', () => {
     expect(plan?.detectedVersion).toBe('Proxmox VE 8.4');
   });
 
-  it("returns only the server version when release is undefined", () => {
+  it('returns only the server version when release is undefined', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),
@@ -236,7 +238,7 @@ describe('versionFromCandidate (via plan.detectedVersion)', () => {
     expect(plan?.detectedVersion).toBe('Proxmox VE');
   });
 
-  it("returns only the release when version is empty", () => {
+  it('returns only the release when version is empty', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),
@@ -246,7 +248,7 @@ describe('versionFromCandidate (via plan.detectedVersion)', () => {
     expect(plan?.detectedVersion).toBe('9.0');
   });
 
-  it("returns an empty detected version when both version and release are empty", () => {
+  it('returns an empty detected version when both version and release are empty', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),
@@ -260,7 +262,7 @@ describe('versionFromCandidate (via plan.detectedVersion)', () => {
 // ---- candidateLabel ---------------------------------------------------------
 
 describe('candidateLabel (via plan.candidateLabel and steps[0].detail)', () => {
-  it("describes a probe candidate with its host", () => {
+  it('describes a probe candidate with its host', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),
@@ -272,7 +274,7 @@ describe('candidateLabel (via plan.candidateLabel and steps[0].detail)', () => {
     expect(plan?.steps[0]?.detail).toBe(plan?.candidateLabel);
   });
 
-  it("describes a discovery candidate using its hostname", () => {
+  it('describes a discovery candidate using its hostname', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),
@@ -282,7 +284,7 @@ describe('candidateLabel (via plan.candidateLabel and steps[0].detail)', () => {
     expect(plan?.candidateLabel).toBe('Discovery candidate at node7.local:8006');
   });
 
-  it("falls back to the IP in the discovery label when hostname is empty", () => {
+  it('falls back to the IP in the discovery label when hostname is empty', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),
@@ -292,7 +294,7 @@ describe('candidateLabel (via plan.candidateLabel and steps[0].detail)', () => {
     expect(plan?.candidateLabel).toBe('Discovery candidate at 10.0.0.5:8006');
   });
 
-  it("falls back to the IP in the discovery label when hostname is undefined", () => {
+  it('falls back to the IP in the discovery label when hostname is undefined', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),
@@ -306,34 +308,47 @@ describe('candidateLabel (via plan.candidateLabel and steps[0].detail)', () => {
 // ---- credentialLabel --------------------------------------------------------
 
 describe('credentialLabel (via plan.credentialLabel and steps[1].detail)', () => {
-  it("emits the password-validation message when authType is password", () => {
+  it('emits the password-validation message when authType is password', () => {
     // authType === 'password' short-circuits ahead of setupMode.
     const plan = buildNodeImportPlan(
       'pve',
-      makeForm('pve', { name: 'x', host: 'https://x.local', authType: 'password', setupMode: 'auto' }),
+      makeForm('pve', {
+        name: 'x',
+        host: 'https://x.local',
+        authType: 'password',
+        setupMode: 'auto',
+      }),
       probeCandidate(makeProbe()),
     );
 
-    expect(plan?.credentialLabel).toBe(
-      'Validate username and password credentials before saving.',
-    );
+    expect(plan?.credentialLabel).toBe('Validate username and password credentials before saving.');
     expect(plan?.steps[1]?.detail).toBe(plan?.credentialLabel);
   });
 
-  it("emits the API-token message for token + manual setup", () => {
+  it('emits the API-token message for token + manual setup', () => {
     const plan = buildNodeImportPlan(
       'pve',
-      makeForm('pve', { name: 'x', host: 'https://x.local', authType: 'token', setupMode: 'manual' }),
+      makeForm('pve', {
+        name: 'x',
+        host: 'https://x.local',
+        authType: 'token',
+        setupMode: 'manual',
+      }),
       probeCandidate(makeProbe()),
     );
 
     expect(plan?.credentialLabel).toBe('Validate the supplied API token before saving.');
   });
 
-  it("emits the agent handoff message for token + agent setup", () => {
+  it('emits the agent handoff message for token + agent setup', () => {
     const plan = buildNodeImportPlan(
       'pve',
-      makeForm('pve', { name: 'x', host: 'https://x.local', authType: 'token', setupMode: 'agent' }),
+      makeForm('pve', {
+        name: 'x',
+        host: 'https://x.local',
+        authType: 'token',
+        setupMode: 'agent',
+      }),
       probeCandidate(makeProbe()),
     );
 
@@ -342,7 +357,7 @@ describe('credentialLabel (via plan.credentialLabel and steps[1].detail)', () =>
     );
   });
 
-  it("emits the inventory-setup fallback for token + auto setup", () => {
+  it('emits the inventory-setup fallback for token + auto setup', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local', authType: 'token', setupMode: 'auto' }),
@@ -358,7 +373,7 @@ describe('credentialLabel (via plan.credentialLabel and steps[1].detail)', () =>
 // ---- coverageLabel ----------------------------------------------------------
 
 describe('coverageLabel (via plan.coverageLabel)', () => {
-  it("lists only the SMART-disks collector when it is the sole enabled PVE collector", () => {
+  it('lists only the SMART-disks collector when it is the sole enabled PVE collector', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', {
@@ -376,7 +391,7 @@ describe('coverageLabel (via plan.coverageLabel)', () => {
     expect(plan?.coverageLabel).toBe('SMART disks');
   });
 
-  it("joins a selected subset of PVE collectors in declared order", () => {
+  it('joins a selected subset of PVE collectors in declared order', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', {
@@ -394,7 +409,7 @@ describe('coverageLabel (via plan.coverageLabel)', () => {
     expect(plan?.coverageLabel).toBe('VMs, storage');
   });
 
-  it("reports no Proxmox collectors when every PVE toggle is off", () => {
+  it('reports no Proxmox collectors when every PVE toggle is off', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', {
@@ -412,7 +427,7 @@ describe('coverageLabel (via plan.coverageLabel)', () => {
     expect(plan?.coverageLabel).toBe('No Proxmox collectors selected');
   });
 
-  it("reports no PBS collectors when every PBS toggle is off", () => {
+  it('reports no PBS collectors when every PBS toggle is off', () => {
     const plan = buildNodeImportPlan(
       'pbs',
       makeForm('pbs', {
@@ -430,7 +445,7 @@ describe('coverageLabel (via plan.coverageLabel)', () => {
     expect(plan?.coverageLabel).toBe('No PBS collectors selected');
   });
 
-  it("lists the default PMG collectors in declared order", () => {
+  it('lists the default PMG collectors in declared order', () => {
     const plan = buildNodeImportPlan(
       'pmg',
       makeForm('pmg', { name: 'x', host: 'https://x.local' }),
@@ -441,7 +456,7 @@ describe('coverageLabel (via plan.coverageLabel)', () => {
     expect(plan?.coverageLabel).toBe('mail stats, queues, quarantine');
   });
 
-  it("reports no PMG collectors when every PMG toggle is off", () => {
+  it('reports no PMG collectors when every PMG toggle is off', () => {
     const plan = buildNodeImportPlan(
       'pmg',
       makeForm('pmg', {
@@ -462,19 +477,19 @@ describe('coverageLabel (via plan.coverageLabel)', () => {
 // ---- buildNodeImportPlan guards + wiring -----------------------------------
 
 describe('buildNodeImportPlan guards and wiring', () => {
-  it("returns null when the candidate is null", () => {
+  it('returns null when the candidate is null', () => {
     const plan = buildNodeImportPlan('pve', makeForm('pve'), null);
 
     expect(plan).toBeNull();
   });
 
-  it("returns null when the candidate is undefined", () => {
+  it('returns null when the candidate is undefined', () => {
     const plan = buildNodeImportPlan('pve', makeForm('pve'), undefined);
 
     expect(plan).toBeNull();
   });
 
-  it("omits the preview request when both endpoint and derived name are empty", () => {
+  it('omits the preview request when both endpoint and derived name are empty', () => {
     // Empty formData.host + empty probe host => endpoint '' => hostname ''.
     // Empty name => deriveNameFromHost('') === '' => name ''.
     const plan = buildNodeImportPlan(
@@ -486,7 +501,7 @@ describe('buildNodeImportPlan guards and wiring', () => {
     expect(plan.previewRequest).toBeNull();
   });
 
-  it("derives the node name from the endpoint host when formData.name is empty", () => {
+  it('derives the node name from the endpoint host when formData.name is empty', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: '', host: 'https://node7.local:8006' }),
@@ -499,7 +514,7 @@ describe('buildNodeImportPlan guards and wiring', () => {
     expect(plan?.previewRequest?.candidate.resource_id).toBe('node7.local');
   });
 
-  it("composes the signature from source, candidate, version, name, endpoint, auth, setup, coverage", () => {
+  it('composes the signature from source, candidate, version, name, endpoint, auth, setup, coverage', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', {
@@ -530,7 +545,7 @@ describe('buildNodeImportPlan guards and wiring', () => {
     );
   });
 
-  it("emits the five canonical steps in order", () => {
+  it('emits the five canonical steps in order', () => {
     const plan = buildNodeImportPlan(
       'pve',
       makeForm('pve', { name: 'x', host: 'https://x.local' }),

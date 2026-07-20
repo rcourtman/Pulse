@@ -42,28 +42,20 @@ describe('getAuditEventTypeBadgeClass (branch coverage)', () => {
   });
 
   it('routes an unrecognised event type through the default arm', () => {
-    expect(getAuditEventTypeBadgeClass('something_new')).toBe(
-      'bg-surface-alt text-base-content',
-    );
+    expect(getAuditEventTypeBadgeClass('something_new')).toBe('bg-surface-alt text-base-content');
   });
 
   it('coerces undefined to an empty trimmed string and lands on the default arm', () => {
-    expect(getAuditEventTypeBadgeClass(undefined)).toBe(
-      'bg-surface-alt text-base-content',
-    );
+    expect(getAuditEventTypeBadgeClass(undefined)).toBe('bg-surface-alt text-base-content');
   });
 
   it('honours the nullish-coalesce fallback for an explicit null argument', () => {
     // `(null ?? '').trim()` -> '' -> default case.
-    expect(getAuditEventTypeBadgeClass(null)).toBe(
-      'bg-surface-alt text-base-content',
-    );
+    expect(getAuditEventTypeBadgeClass(null)).toBe('bg-surface-alt text-base-content');
   });
 
   it('treats whitespace-only input as empty after trimming', () => {
-    expect(getAuditEventTypeBadgeClass('    ')).toBe(
-      'bg-surface-alt text-base-content',
-    );
+    expect(getAuditEventTypeBadgeClass('    ')).toBe('bg-surface-alt text-base-content');
   });
 
   it('keeps the three coloured badges distinct from the default surface badge', () => {
@@ -157,7 +149,9 @@ describe('getAuditLogFetchErrorMessage (branch coverage)', () => {
   it('maps a matching message to the internal-error copy even without a 500 status', () => {
     // Regex operand of the || is true while status operand is absent.
     expect(
-      getAuditLogFetchErrorMessage({ message: 'failed to fetch audit events: internal server error' }),
+      getAuditLogFetchErrorMessage({
+        message: 'failed to fetch audit events: internal server error',
+      }),
     ).toBe(
       'Audit events could not be loaded because the server returned an internal error. Check the server logs, then refresh the audit log.',
     );

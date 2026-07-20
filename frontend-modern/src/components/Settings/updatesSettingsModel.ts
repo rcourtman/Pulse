@@ -91,10 +91,7 @@ function buildProDockerUpdateSteps(dockerUpdate: DockerUpdateCommands): UpdateIn
 }
 
 export function buildUpdateInstallGuide(
-  versionInfo: Pick<
-    VersionInfo,
-    'deploymentType' | 'isDocker'
-  > | null | undefined,
+  versionInfo: Pick<VersionInfo, 'deploymentType' | 'isDocker'> | null | undefined,
   updateInfo: Pick<UpdateInfo, 'latestVersion' | 'dockerUpdate'> | null | undefined,
   updatePlan: Pick<UpdatePlan, 'canAutoUpdate'> | null | undefined,
   dockerImageTag: string,
@@ -126,7 +123,10 @@ export function buildUpdateInstallGuide(
     };
   }
 
-  if (versionInfo.deploymentType === 'docker' || (!versionInfo.deploymentType && versionInfo.isDocker)) {
+  if (
+    versionInfo.deploymentType === 'docker' ||
+    (!versionInfo.deploymentType && versionInfo.isDocker)
+  ) {
     // Pro runtime: only ever show the broker's digest-pinned commands. The
     // community pull below would replace the container with the community
     // build and silently strip Pro features.
@@ -196,8 +196,16 @@ export function buildUpdateInstallGuide(
       headerSummary: `Version ${updateInfo?.latestVersion} is ready to install`,
       introText,
       steps: [
-        { id: 'development-pull', title: 'Pull the latest changes', command: 'git pull origin main' },
-        { id: 'development-build', title: 'Rebuild and restart', command: 'make build && make run' },
+        {
+          id: 'development-pull',
+          title: 'Pull the latest changes',
+          command: 'git pull origin main',
+        },
+        {
+          id: 'development-build',
+          title: 'Rebuild and restart',
+          command: 'make build && make run',
+        },
       ],
     };
   }

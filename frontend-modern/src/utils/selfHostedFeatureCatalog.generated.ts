@@ -2,11 +2,7 @@
 // Do not edit it manually.
 
 export type SelfHostedFeatureRole =
-  | 'hidden'
-  | 'included'
-  | 'primary_pillar'
-  | 'included_extra'
-  | 'compatibility_only';
+  'hidden' | 'included' | 'primary_pillar' | 'included_extra' | 'compatibility_only';
 
 export interface GeneratedSelfHostedFeatureCatalogEntry {
   key: string;
@@ -28,350 +24,354 @@ export interface GeneratedSelfHostedFeatureCatalogEntry {
 
 export const SELF_HOSTED_FEATURE_CATALOG: readonly GeneratedSelfHostedFeatureCatalogEntry[] = [
   {
-    "key": "update_alerts",
-    "displayName": "Update Alerts (Container/Package Updates)",
-    "comparisonName": "Update Alerts",
-    "showInComparisonTable": true,
-    "displayableInSelfHostedPlan": true,
-    "roles": {
-      "community": "included",
-      "relay": "included",
-      "pro": "included"
+    key: 'update_alerts',
+    displayName: 'Update Alerts (Container/Package Updates)',
+    comparisonName: 'Update Alerts',
+    showInComparisonTable: true,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'included',
+      relay: 'included',
+      pro: 'included',
     },
-    "includedIn": {
-      "community": true,
-      "relay": true,
-      "pro": true
-    }
+    includedIn: {
+      community: true,
+      relay: true,
+      pro: true,
+    },
   },
   {
-    "key": "sso",
-    "displayName": "Core SSO (OIDC/SAML)",
-    "comparisonName": "Core SSO (OIDC/SAML)",
-    "showInComparisonTable": true,
-    "displayableInSelfHostedPlan": true,
-    "roles": {
-      "community": "included",
-      "relay": "included",
-      "pro": "included"
+    key: 'sso',
+    displayName: 'Core SSO (OIDC/SAML)',
+    comparisonName: 'Core SSO (OIDC/SAML)',
+    showInComparisonTable: true,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'included',
+      relay: 'included',
+      pro: 'included',
     },
-    "includedIn": {
-      "community": true,
-      "relay": true,
-      "pro": true
-    }
+    includedIn: {
+      community: true,
+      relay: true,
+      pro: true,
+    },
   },
   {
-    "key": "ai_patrol",
-    "displayName": "Pulse Patrol (Background Health Checks)",
-    "comparisonName": "Pulse Patrol",
-    "showInComparisonTable": true,
-    "displayableInSelfHostedPlan": true,
-    "roles": {
-      "community": "included",
-      "relay": "included",
-      "pro": "included"
+    key: 'ai_patrol',
+    displayName: 'Pulse Patrol (Background Health Checks)',
+    comparisonName: 'Pulse Patrol',
+    showInComparisonTable: true,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'included',
+      relay: 'included',
+      pro: 'included',
     },
-    "includedIn": {
-      "community": true,
-      "relay": true,
-      "pro": true
-    }
+    includedIn: {
+      community: true,
+      relay: true,
+      pro: true,
+    },
   },
   {
-    "key": "relay",
-    "displayName": "Pulse Relay (Remote Access)",
-    "comparisonName": "Pulse Relay (Remote Access)",
-    "showInComparisonTable": true,
-    "displayableInSelfHostedPlan": true,
-    "roles": {
-      "community": "hidden",
-      "relay": "primary_pillar",
-      "pro": "included"
+    key: 'relay',
+    displayName: 'Pulse Relay (Remote Access)',
+    comparisonName: 'Pulse Relay (Remote Access)',
+    showInComparisonTable: true,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'hidden',
+      relay: 'primary_pillar',
+      pro: 'included',
     },
-    "includedIn": {
-      "community": false,
-      "relay": true,
-      "pro": true
-    }
+    includedIn: {
+      community: false,
+      relay: true,
+      pro: true,
+    },
   },
   {
-    "key": "mobile_app",
-    "displayName": "Pulse Mobile Pairing",
-    "comparisonName": "Pulse Mobile Pairing",
-    "showInComparisonTable": true,
-    "displayableInSelfHostedPlan": true,
-    "roles": {
-      "community": "hidden",
-      "relay": "primary_pillar",
-      "pro": "included"
+    key: 'mobile_app',
+    displayName: 'Pulse Mobile Pairing',
+    comparisonName: 'Pulse Mobile Pairing',
+    showInComparisonTable: true,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'hidden',
+      relay: 'primary_pillar',
+      pro: 'included',
     },
-    "includedIn": {
-      "community": false,
-      "relay": true,
-      "pro": true
-    }
+    includedIn: {
+      community: false,
+      relay: true,
+      pro: true,
+    },
   },
   {
-    "key": "push_notifications",
-    "displayName": "Push Notifications",
-    "comparisonName": "Push Notifications",
-    "showInComparisonTable": true,
-    "displayableInSelfHostedPlan": true,
-    "roles": {
-      "community": "hidden",
-      "relay": "primary_pillar",
-      "pro": "included"
+    key: 'push_notifications',
+    displayName: 'Push Notifications',
+    comparisonName: 'Push Notifications',
+    showInComparisonTable: true,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'hidden',
+      relay: 'primary_pillar',
+      pro: 'included',
     },
-    "includedIn": {
-      "community": false,
-      "relay": true,
-      "pro": true
-    }
+    includedIn: {
+      community: false,
+      relay: true,
+      pro: true,
+    },
   },
   {
-    "key": "ai_alerts",
-    "displayName": "Patrol Investigates Issues and Explains the Root Cause",
-    "comparisonName": "Patrol Investigates Issues and Explains the Root Cause",
-    "showInComparisonTable": true,
-    "displayableInSelfHostedPlan": true,
-    "roles": {
-      "community": "hidden",
-      "relay": "hidden",
-      "pro": "primary_pillar"
+    key: 'ai_alerts',
+    displayName: 'Patrol Investigates Issues and Explains the Root Cause',
+    comparisonName: 'Patrol Investigates Issues and Explains the Root Cause',
+    showInComparisonTable: true,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'hidden',
+      relay: 'hidden',
+      pro: 'primary_pillar',
     },
-    "includedIn": {
-      "community": false,
-      "relay": false,
-      "pro": true
-    }
+    includedIn: {
+      community: false,
+      relay: false,
+      pro: true,
+    },
   },
   {
-    "key": "ai_autofix",
-    "displayName": "Patrol Applies Safe Fixes and Verifies the Result",
-    "comparisonName": "Patrol Applies Safe Fixes and Verifies the Result",
-    "showInComparisonTable": true,
-    "displayableInSelfHostedPlan": true,
-    "roles": {
-      "community": "hidden",
-      "relay": "hidden",
-      "pro": "primary_pillar"
+    key: 'ai_autofix',
+    displayName: 'Patrol Applies Safe Fixes and Verifies the Result',
+    comparisonName: 'Patrol Applies Safe Fixes and Verifies the Result',
+    showInComparisonTable: true,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'hidden',
+      relay: 'hidden',
+      pro: 'primary_pillar',
     },
-    "includedIn": {
-      "community": false,
-      "relay": false,
-      "pro": true
-    }
+    includedIn: {
+      community: false,
+      relay: false,
+      pro: true,
+    },
   },
   {
-    "key": "long_term_metrics",
-    "displayName": "Extended Metric History",
-    "comparisonName": "Extended Metric History",
-    "showInComparisonTable": false,
-    "displayableInSelfHostedPlan": true,
-    "roles": {
-      "community": "hidden",
-      "relay": "primary_pillar",
-      "pro": "primary_pillar"
+    key: 'long_term_metrics',
+    displayName: 'Extended Metric History',
+    comparisonName: 'Extended Metric History',
+    showInComparisonTable: false,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'hidden',
+      relay: 'primary_pillar',
+      pro: 'primary_pillar',
     },
-    "includedIn": {
-      "community": false,
-      "relay": true,
-      "pro": true
-    }
+    includedIn: {
+      community: false,
+      relay: true,
+      pro: true,
+    },
   },
   {
-    "key": "advanced_sso",
-    "displayName": "Multi-Provider SSO",
-    "comparisonName": "Multi-Provider SSO",
-    "showInComparisonTable": false,
-    "displayableInSelfHostedPlan": false,
-    "roles": {
-      "community": "included",
-      "relay": "included",
-      "pro": "included"
+    key: 'advanced_sso',
+    displayName: 'Multi-Provider SSO',
+    comparisonName: 'Multi-Provider SSO',
+    showInComparisonTable: false,
+    displayableInSelfHostedPlan: false,
+    roles: {
+      community: 'included',
+      relay: 'included',
+      pro: 'included',
     },
-    "includedIn": {
-      "community": true,
-      "relay": true,
-      "pro": true
-    }
+    includedIn: {
+      community: true,
+      relay: true,
+      pro: true,
+    },
   },
   {
-    "key": "rbac",
-    "displayName": "Role-Based Access Control (RBAC)",
-    "comparisonName": "Role-Based Access Control (RBAC)",
-    "showInComparisonTable": true,
-    "displayableInSelfHostedPlan": true,
-    "roles": {
-      "community": "hidden",
-      "relay": "hidden",
-      "pro": "included_extra"
+    key: 'rbac',
+    displayName: 'Role-Based Access Control (RBAC)',
+    comparisonName: 'Role-Based Access Control (RBAC)',
+    showInComparisonTable: true,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'hidden',
+      relay: 'hidden',
+      pro: 'included_extra',
     },
-    "includedIn": {
-      "community": false,
-      "relay": false,
-      "pro": true
-    }
+    includedIn: {
+      community: false,
+      relay: false,
+      pro: true,
+    },
   },
   {
-    "key": "audit_logging",
-    "displayName": "Audit Logging",
-    "comparisonName": "Audit Logging",
-    "showInComparisonTable": true,
-    "displayableInSelfHostedPlan": true,
-    "roles": {
-      "community": "hidden",
-      "relay": "hidden",
-      "pro": "included_extra"
+    key: 'audit_logging',
+    displayName: 'Audit Logging',
+    comparisonName: 'Audit Logging',
+    showInComparisonTable: true,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'hidden',
+      relay: 'hidden',
+      pro: 'included_extra',
     },
-    "includedIn": {
-      "community": false,
-      "relay": false,
-      "pro": true
-    }
+    includedIn: {
+      community: false,
+      relay: false,
+      pro: true,
+    },
   },
   {
-    "key": "advanced_reporting",
-    "displayName": "PDF/CSV Reporting",
-    "comparisonName": "PDF/CSV Reporting",
-    "showInComparisonTable": true,
-    "displayableInSelfHostedPlan": true,
-    "roles": {
-      "community": "hidden",
-      "relay": "hidden",
-      "pro": "included_extra"
+    key: 'advanced_reporting',
+    displayName: 'PDF/CSV Reporting',
+    comparisonName: 'PDF/CSV Reporting',
+    showInComparisonTable: true,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'hidden',
+      relay: 'hidden',
+      pro: 'included_extra',
     },
-    "includedIn": {
-      "community": false,
-      "relay": false,
-      "pro": true
-    }
+    includedIn: {
+      community: false,
+      relay: false,
+      pro: true,
+    },
   },
   {
-    "key": "agent_profiles",
-    "displayName": "Centralized Agent Profiles",
-    "comparisonName": "Centralized Agent Profiles",
-    "showInComparisonTable": true,
-    "displayableInSelfHostedPlan": true,
-    "roles": {
-      "community": "hidden",
-      "relay": "hidden",
-      "pro": "included_extra"
+    key: 'agent_profiles',
+    displayName: 'Centralized Agent Profiles',
+    comparisonName: 'Centralized Agent Profiles',
+    showInComparisonTable: true,
+    displayableInSelfHostedPlan: true,
+    roles: {
+      community: 'hidden',
+      relay: 'hidden',
+      pro: 'included_extra',
     },
-    "includedIn": {
-      "community": false,
-      "relay": false,
-      "pro": true
-    }
+    includedIn: {
+      community: false,
+      relay: false,
+      pro: true,
+    },
   },
   {
-    "key": "kubernetes_ai",
-    "displayName": "Kubernetes AI Analysis (Compatibility)",
-    "comparisonName": "Kubernetes AI Analysis (Compatibility)",
-    "showInComparisonTable": false,
-    "displayableInSelfHostedPlan": false,
-    "roles": {
-      "community": "hidden",
-      "relay": "hidden",
-      "pro": "compatibility_only"
+    key: 'kubernetes_ai',
+    displayName: 'Kubernetes AI Analysis (Compatibility)',
+    comparisonName: 'Kubernetes AI Analysis (Compatibility)',
+    showInComparisonTable: false,
+    displayableInSelfHostedPlan: false,
+    roles: {
+      community: 'hidden',
+      relay: 'hidden',
+      pro: 'compatibility_only',
     },
-    "includedIn": {
-      "community": false,
-      "relay": false,
-      "pro": true
-    }
+    includedIn: {
+      community: false,
+      relay: false,
+      pro: true,
+    },
   },
   {
-    "key": "multi_user",
-    "displayName": "Multi-User Mode",
-    "comparisonName": "Multi-User Mode",
-    "showInComparisonTable": false,
-    "displayableInSelfHostedPlan": false,
-    "roles": {
-      "community": "hidden",
-      "relay": "hidden",
-      "pro": "hidden"
+    key: 'multi_user',
+    displayName: 'Multi-User Mode',
+    comparisonName: 'Multi-User Mode',
+    showInComparisonTable: false,
+    displayableInSelfHostedPlan: false,
+    roles: {
+      community: 'hidden',
+      relay: 'hidden',
+      pro: 'hidden',
     },
-    "includedIn": {
-      "community": false,
-      "relay": false,
-      "pro": false
-    }
+    includedIn: {
+      community: false,
+      relay: false,
+      pro: false,
+    },
   },
   {
-    "key": "white_label",
-    "displayName": "White-Label Branding",
-    "comparisonName": "White-Label Branding",
-    "showInComparisonTable": false,
-    "displayableInSelfHostedPlan": false,
-    "roles": {
-      "community": "hidden",
-      "relay": "hidden",
-      "pro": "hidden"
+    key: 'white_label',
+    displayName: 'White-Label Branding',
+    comparisonName: 'White-Label Branding',
+    showInComparisonTable: false,
+    displayableInSelfHostedPlan: false,
+    roles: {
+      community: 'hidden',
+      relay: 'hidden',
+      pro: 'hidden',
     },
-    "includedIn": {
-      "community": false,
-      "relay": false,
-      "pro": false
-    }
+    includedIn: {
+      community: false,
+      relay: false,
+      pro: false,
+    },
   },
   {
-    "key": "multi_tenant",
-    "displayName": "Multi-Tenant Mode",
-    "comparisonName": "Multi-Tenant Mode",
-    "showInComparisonTable": false,
-    "displayableInSelfHostedPlan": false,
-    "roles": {
-      "community": "hidden",
-      "relay": "hidden",
-      "pro": "hidden"
+    key: 'multi_tenant',
+    displayName: 'Multi-Tenant Mode',
+    comparisonName: 'Multi-Tenant Mode',
+    showInComparisonTable: false,
+    displayableInSelfHostedPlan: false,
+    roles: {
+      community: 'hidden',
+      relay: 'hidden',
+      pro: 'hidden',
     },
-    "includedIn": {
-      "community": false,
-      "relay": false,
-      "pro": false
-    }
+    includedIn: {
+      community: false,
+      relay: false,
+      pro: false,
+    },
   },
   {
-    "key": "unlimited",
-    "displayName": "Hosted Capacity Policy",
-    "comparisonName": "Hosted Capacity Policy",
-    "showInComparisonTable": false,
-    "displayableInSelfHostedPlan": false,
-    "roles": {
-      "community": "hidden",
-      "relay": "hidden",
-      "pro": "hidden"
+    key: 'unlimited',
+    displayName: 'Hosted Capacity Policy',
+    comparisonName: 'Hosted Capacity Policy',
+    showInComparisonTable: false,
+    displayableInSelfHostedPlan: false,
+    roles: {
+      community: 'hidden',
+      relay: 'hidden',
+      pro: 'hidden',
     },
-    "includedIn": {
-      "community": false,
-      "relay": false,
-      "pro": false
-    }
+    includedIn: {
+      community: false,
+      relay: false,
+      pro: false,
+    },
   },
   {
-    "key": "demo_fixtures",
-    "displayName": "Demo Fixtures (Internal)",
-    "comparisonName": "Demo Fixtures (Internal)",
-    "showInComparisonTable": false,
-    "displayableInSelfHostedPlan": false,
-    "roles": {
-      "community": "hidden",
-      "relay": "hidden",
-      "pro": "hidden"
+    key: 'demo_fixtures',
+    displayName: 'Demo Fixtures (Internal)',
+    comparisonName: 'Demo Fixtures (Internal)',
+    showInComparisonTable: false,
+    displayableInSelfHostedPlan: false,
+    roles: {
+      community: 'hidden',
+      relay: 'hidden',
+      pro: 'hidden',
     },
-    "includedIn": {
-      "community": false,
-      "relay": false,
-      "pro": false
-    }
-  }
+    includedIn: {
+      community: false,
+      relay: false,
+      pro: false,
+    },
+  },
 ] as const;
 
-export const SELF_HOSTED_FEATURE_CATALOG_BY_KEY: Record<string, GeneratedSelfHostedFeatureCatalogEntry> = Object.fromEntries(
-  SELF_HOSTED_FEATURE_CATALOG.map((entry) => [entry.key, entry]),
-) as Record<string, GeneratedSelfHostedFeatureCatalogEntry>;
+export const SELF_HOSTED_FEATURE_CATALOG_BY_KEY: Record<
+  string,
+  GeneratedSelfHostedFeatureCatalogEntry
+> = Object.fromEntries(SELF_HOSTED_FEATURE_CATALOG.map((entry) => [entry.key, entry])) as Record<
+  string,
+  GeneratedSelfHostedFeatureCatalogEntry
+>;
 
 export function getSelfHostedFeatureCatalogEntry(
   key?: string | null,

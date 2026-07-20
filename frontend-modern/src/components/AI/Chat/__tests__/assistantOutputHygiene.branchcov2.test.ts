@@ -69,9 +69,7 @@ describe('normalizeAssistantVisibleInternalIdentifiers branch coverage', () => {
   it('consumes surrounding backticks and a trailing label word, handling multiple matches', () => {
     // The regex swallows the optional backticks and the trailing
     // (tool|command|query|call) word, replacing the whole match with the label.
-    expect(
-      stripAssistantOutputArtifacts('`pulse_read` tool and run_command query'),
-    ).toEqual({
+    expect(stripAssistantOutputArtifacts('`pulse_read` tool and run_command query')).toEqual({
       text: 'read command and command',
       stripped: false,
     });
@@ -141,10 +139,7 @@ describe('appendVisibleTextBeforeAssistantOutputArtifacts branch coverage', () =
     });
     // safeText re-slices back to 'Done.' which is no longer than what was shown.
     expect(
-      appendVisibleTextBeforeAssistantOutputArtifacts(
-        state,
-        '\npulse_read(target_host="x")',
-      ),
+      appendVisibleTextBeforeAssistantOutputArtifacts(state, '\npulse_read(target_host="x")'),
     ).toEqual({ text: '', stripped: true });
   });
 });
@@ -319,9 +314,10 @@ describe('isCompactedToolPrelude branch coverage', () => {
 
   it('returns false for 16-47 letters with exactly one whitespace', () => {
     // 20 letters + 1 space + 1 letter = 21 letters, 1 whitespace.
-    expect(
-      stripAssistantOutputArtifacts('aaaaaaaaaaaaaaaaaaaa b\npulse_read()'),
-    ).toEqual({ text: 'aaaaaaaaaaaaaaaaaaaa b', stripped: true });
+    expect(stripAssistantOutputArtifacts('aaaaaaaaaaaaaaaaaaaa b\npulse_read()')).toEqual({
+      text: 'aaaaaaaaaaaaaaaaaaaa b',
+      stripped: true,
+    });
   });
 
   it('returns false when whitespace >= 2 even with many letters', () => {
@@ -338,10 +334,12 @@ describe('isCompactedToolPrelude branch coverage', () => {
 describe('splitTrailingPotentialToolNamePrefix branch coverage', () => {
   it('holds nothing when the trailing run is not a known tool prefix', () => {
     // 'world123' is tool-name characters but not a pulse/patrol prefix.
-    expect(appendVisibleTextBeforeAssistantOutputArtifacts(freshState(), 'hello world123')).toEqual({
-      text: 'hello world123',
-      stripped: false,
-    });
+    expect(appendVisibleTextBeforeAssistantOutputArtifacts(freshState(), 'hello world123')).toEqual(
+      {
+        text: 'hello world123',
+        stripped: false,
+      },
+    );
   });
 
   it('keeps a leading backtick attached to a held pulse_ prefix', () => {
@@ -381,9 +379,7 @@ describe('isKnownAssistantToolNamePrefix branch coverage', () => {
 
   it('matches a complete patrol_ tool name via the patrol_ regex arm', () => {
     const state = freshState();
-    expect(
-      appendVisibleTextBeforeAssistantOutputArtifacts(state, 'try patrol_remediate'),
-    ).toEqual({
+    expect(appendVisibleTextBeforeAssistantOutputArtifacts(state, 'try patrol_remediate')).toEqual({
       text: 'try ',
       stripped: false,
     });

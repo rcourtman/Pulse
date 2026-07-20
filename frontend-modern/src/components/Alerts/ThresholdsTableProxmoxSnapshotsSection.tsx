@@ -59,7 +59,9 @@ export function ThresholdsTableProxmoxSnapshotsSection(props: ThresholdsTableSec
                   'critical size (gib)': prev.criticalSizeGiB ?? 0,
                 };
                 const nextRecord =
-                  typeof value === 'function' ? value(currentRecord) : { ...currentRecord, ...value };
+                  typeof value === 'function'
+                    ? value(currentRecord)
+                    : { ...currentRecord, ...value };
                 return {
                   ...prev,
                   warningDays:

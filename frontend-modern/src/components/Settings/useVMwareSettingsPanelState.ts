@@ -6,11 +6,7 @@ import {
   type VMwareConnection,
   type VMwareConnectionInput,
 } from '@/api/vmware';
-import {
-  apiErrorCode,
-  apiErrorDetailField,
-  apiErrorStatus,
-} from '@/api/responseUtils';
+import { apiErrorCode, apiErrorDetailField, apiErrorStatus } from '@/api/responseUtils';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import {

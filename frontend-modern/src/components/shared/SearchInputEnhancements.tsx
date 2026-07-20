@@ -61,11 +61,7 @@ interface SearchInputHistoryDropdownProps {
 
 export const SearchInputHistoryDropdown: Component<SearchInputHistoryDropdownProps> = (props) => (
   <Show when={props.state.hasHistory() && props.state.isHistoryOpen()}>
-    <div
-      ref={props.state.setHistoryMenuRef}
-      class={SEARCH_HISTORY_MENU_CLASS}
-      role="listbox"
-    >
+    <div ref={props.state.setHistoryMenuRef} class={SEARCH_HISTORY_MENU_CLASS} role="listbox">
       <Show
         when={props.state.searchHistory().length > 0}
         fallback={

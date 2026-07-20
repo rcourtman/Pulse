@@ -9,15 +9,17 @@ export const GROUPED_TABLE_MODE_ARIA_LABEL = 'Group by';
 export const GROUPED_TABLE_MODE_GROUPED_TITLE = 'Grouped table view';
 export const GROUPED_TABLE_MODE_FLAT_TITLE = 'Flat list view';
 
-interface GroupedTableModeSegmentedControlProps
-  extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onChange'> {
+interface GroupedTableModeSegmentedControlProps extends Omit<
+  JSX.HTMLAttributes<HTMLDivElement>,
+  'onChange'
+> {
   value: GroupedTableMode;
   onChange: (value: GroupedTableMode) => void;
 }
 
-export const GroupedTableModeSegmentedControl: Component<
-  GroupedTableModeSegmentedControlProps
-> = (props) => {
+export const GroupedTableModeSegmentedControl: Component<GroupedTableModeSegmentedControlProps> = (
+  props,
+) => {
   const [local, divProps] = splitProps(props, ['value', 'onChange']);
 
   return (

@@ -16,13 +16,7 @@ import type { StorageRouteStateFields } from './useStorageRouteState';
 
 export type StorageView = 'pools' | 'disks';
 export type StorageStatusFilterValue =
-  | 'all'
-  | 'attention'
-  | 'available'
-  | 'warning'
-  | 'critical'
-  | 'offline'
-  | 'unknown';
+  'all' | 'attention' | 'available' | 'warning' | 'critical' | 'offline' | 'unknown';
 
 export interface StorageOption {
   value: string;
@@ -135,9 +129,7 @@ export const normalizeStorageSortKey = (value: string): StorageSortKey => {
   return 'priority';
 };
 
-export const getDefaultStorageSortDirection = (
-  sortKey: StorageSortKey,
-): 'asc' | 'desc' =>
+export const getDefaultStorageSortDirection = (sortKey: StorageSortKey): 'asc' | 'desc' =>
   sortKey === 'priority' || sortKey === 'usage' || sortKey === 'growth' ? 'desc' : 'asc';
 
 export const normalizeStorageGroupKey = (value: string): StorageGroupKey => {
@@ -212,9 +204,7 @@ export const hasActiveStorageFilters = (state: StorageFilterActivityState): bool
     DEFAULT_STORAGE_DISK_GROUP_FILTER;
 
 export const getStorageNodeFilterLabel = (view: StorageView): string =>
-  view === 'disks'
-    ? getAllFilterOptionLabel('disk hosts')
-    : getAllFilterOptionLabel('nodes');
+  view === 'disks' ? getAllFilterOptionLabel('disk hosts') : getAllFilterOptionLabel('nodes');
 
 export const readStorageRouteValue = (value: string | undefined, defaultValue: string): string => {
   const normalized = (value || '').trim();

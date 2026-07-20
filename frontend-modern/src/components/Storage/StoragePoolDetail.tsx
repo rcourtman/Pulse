@@ -160,10 +160,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
                       <For each={zfsSummary()!.devices}>
                         {(device) => (
                           <div class={STORAGE_DETAIL_LINKED_DISK_ROW_CLASS}>
-                            <span
-                              class={STORAGE_DETAIL_LINKED_DISK_PATH_CLASS}
-                              title={device.name}
-                            >
+                            <span class={STORAGE_DETAIL_LINKED_DISK_PATH_CLASS} title={device.name}>
                               {device.name}
                             </span>
                             <Show when={device.type}>

@@ -60,7 +60,9 @@ export const DockerConfigsTable: Component<DockerNativeTableProps> = (props) => 
     sortKeys: DOCKER_CONFIG_SORT_KEYS,
     descendingFirst: ['created'],
   });
-  const sortedRows = createMemo(() => sort.sortRows(tableState.filtered(), getDockerConfigSortValue));
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getDockerConfigSortValue),
+  );
 
   return (
     <Show

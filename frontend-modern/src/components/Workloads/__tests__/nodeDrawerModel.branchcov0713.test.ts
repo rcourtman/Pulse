@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { Node, Temperature } from '@/types/api';
 
-import { getNodeDrawerHistoryFallbackMetrics, getNodeDrawerHistoryTarget } from '../nodeDrawerModel';
+import {
+  getNodeDrawerHistoryFallbackMetrics,
+  getNodeDrawerHistoryTarget,
+} from '../nodeDrawerModel';
 
 const makeNode = (overrides: Partial<Node> = {}): Node => ({
   id: 'agent:pve-node-1',

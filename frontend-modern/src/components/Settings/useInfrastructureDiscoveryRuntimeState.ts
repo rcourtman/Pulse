@@ -243,11 +243,15 @@ export const useInfrastructureDiscoveryRuntimeState = ({
       }
       const responseTimestamp = normalizeDiscoveryTimestamp(
         data && typeof data === 'object'
-          ? (data as { timestamp?: unknown; updated?: unknown }).timestamp ??
-              (data as { timestamp?: unknown; updated?: unknown }).updated
+          ? ((data as { timestamp?: unknown; updated?: unknown }).timestamp ??
+              (data as { timestamp?: unknown; updated?: unknown }).updated)
           : undefined,
       );
-      if (data && typeof data === 'object' && Array.isArray((data as { servers?: unknown }).servers)) {
+      if (
+        data &&
+        typeof data === 'object' &&
+        Array.isArray((data as { servers?: unknown }).servers)
+      ) {
         updateDiscoveredNodesFromServers((data as { servers: RawDiscoveredServer[] }).servers);
       }
       setDiscoveryScanStatus((previous) => ({
@@ -509,7 +513,9 @@ export const useInfrastructureDiscoveryRuntimeState = ({
         ...previous,
         scanning: !!data.scanning,
         subnet: data.subnet || previous.subnet,
-        lastScanStartedAt: data.scanning ? (data.timestamp ?? Date.now()) : previous.lastScanStartedAt,
+        lastScanStartedAt: data.scanning
+          ? (data.timestamp ?? Date.now())
+          : previous.lastScanStartedAt,
         lastResultAt: !data.scanning && data.timestamp ? data.timestamp : previous.lastResultAt,
       }));
 

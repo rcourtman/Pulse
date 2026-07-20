@@ -87,8 +87,7 @@ export const consolidateCephClusterPoolRecords = (records: StorageRecord[]): Sto
         ...record,
         health: pool.health,
         statusLabel: poolStatus,
-        issueSummary:
-          pool.issueSummary?.trim() || `Ceph reports pool ${pool.name} ${poolStatus}`,
+        issueSummary: pool.issueSummary?.trim() || `Ceph reports pool ${pool.name} ${poolStatus}`,
         details: { ...(record.details || {}), status: poolStatus },
       };
     });
@@ -100,10 +99,7 @@ export const getCephClusterKeyFromStorageRecord = (record: StorageRecord): strin
   return record.refs?.platformEntityId || parent || record.location.label || record.source.platform;
 };
 
-export const getCephSummaryText = (
-  record: StorageRecord,
-  cluster: CephCluster | null,
-): string => {
+export const getCephSummaryText = (record: StorageRecord, cluster: CephCluster | null): string => {
   if (cluster && Number.isFinite(cluster.totalBytes)) {
     const total = Math.max(0, cluster.totalBytes || 0);
     const used = Math.max(0, cluster.usedBytes || 0);
@@ -141,7 +137,5 @@ export const getCephPoolsText = (record: StorageRecord, cluster: CephCluster | n
   return `${record.name}: ${formatPercent(percent)}`;
 };
 
-export const collectCephClusterNodes = (
-  nodes: Set<string>,
-  record: StorageRecord,
-): Set<string> => new Set([...nodes, getStorageRecordNodeLabel(record)]);
+export const collectCephClusterNodes = (nodes: Set<string>, record: StorageRecord): Set<string> =>
+  new Set([...nodes, getStorageRecordNodeLabel(record)]);

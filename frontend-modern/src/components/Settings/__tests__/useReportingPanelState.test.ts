@@ -81,7 +81,9 @@ function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), { status });
 }
 
-function buildCatalogAndSchedulesFetchMock(catalogResponse: Response = jsonResponse(catalogPayload)) {
+function buildCatalogAndSchedulesFetchMock(
+  catalogResponse: Response = jsonResponse(catalogPayload),
+) {
   return vi.fn((url: string) => {
     if (url === '/api/admin/reports/schedules') {
       return Promise.resolve(jsonResponse(schedulesPayload));
@@ -309,7 +311,9 @@ describe('useReportingPanelState', () => {
     await flushAsync();
     await flushAsync();
 
-    expect(apiFetchMock.mock.calls.filter(([url]) => url === '/api/admin/reports/catalog')).toHaveLength(2);
+    expect(
+      apiFetchMock.mock.calls.filter(([url]) => url === '/api/admin/reports/catalog'),
+    ).toHaveLength(2);
     expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
     expect(hookState.reportSchedules()).toEqual([]);
 

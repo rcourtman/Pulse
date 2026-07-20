@@ -207,7 +207,11 @@ export const KubernetesAutoscalingTable: Component<{
                 <PlatformSortableTableHead kind="text" sort={sort} class="md:w-[11%]">
                   Metrics
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[7%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[7%]"
+                >
                   Labels
                 </PlatformSortableTableHead>
               </>

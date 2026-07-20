@@ -63,9 +63,7 @@ describe('patrolFormat branch coverage (supplemental)', () => {
       });
 
       it('matches "provider not ready"', () => {
-        expect(formatPatrolRuntimeFailureDetail('Provider not ready')).toBe(
-          'Provider not ready',
-        );
+        expect(formatPatrolRuntimeFailureDetail('Provider not ready')).toBe('Provider not ready');
       });
 
       it('matches "selected model unavailable"', () => {
@@ -75,9 +73,9 @@ describe('patrolFormat branch coverage (supplemental)', () => {
       });
 
       it('matches "selected model context window too small"', () => {
-        expect(
-          formatPatrolRuntimeFailureDetail('Selected model context window too small'),
-        ).toBe('Selected model context window too small');
+        expect(formatPatrolRuntimeFailureDetail('Selected model context window too small')).toBe(
+          'Selected model context window too small',
+        );
       });
     });
 
@@ -90,17 +88,15 @@ describe('patrolFormat branch coverage (supplemental)', () => {
       });
 
       it('matches the "tools are not supported" phrase', () => {
-        expect(formatPatrolRuntimeFailureDetail('tools are not supported here')).toBe(
-          expected,
-        );
+        expect(formatPatrolRuntimeFailureDetail('tools are not supported here')).toBe(expected);
       });
 
       it('matches the compound "no endpoints found" + "tool" condition (both halves required)', () => {
         // Only "no endpoints found" without "tool" must NOT hit this arm —
         // exercised separately below to prove the conjunction.
-        expect(
-          formatPatrolRuntimeFailureDetail('no endpoints found for the requested tool'),
-        ).toBe(expected);
+        expect(formatPatrolRuntimeFailureDetail('no endpoints found for the requested tool')).toBe(
+          expected,
+        );
       });
 
       it('does NOT classify when "no endpoints found" appears without "tool" (conjunction false arm)', () => {
@@ -117,9 +113,7 @@ describe('patrolFormat branch coverage (supplemental)', () => {
         'Provider reported insufficient credits or token budget for the requested Patrol analysis.';
 
       it('matches "insufficient balance"', () => {
-        expect(formatPatrolRuntimeFailureDetail('insufficient balance on account')).toBe(
-          expected,
-        );
+        expect(formatPatrolRuntimeFailureDetail('insufficient balance on account')).toBe(expected);
       });
 
       it('matches "payment required"', () => {
@@ -135,9 +129,7 @@ describe('patrolFormat branch coverage (supplemental)', () => {
       });
 
       it('matches "max_tokens"', () => {
-        expect(formatPatrolRuntimeFailureDetail('max_tokens exceeded budget')).toBe(
-          expected,
-        );
+        expect(formatPatrolRuntimeFailureDetail('max_tokens exceeded budget')).toBe(expected);
       });
     });
 
@@ -188,21 +180,15 @@ describe('patrolFormat branch coverage (supplemental)', () => {
         'Provider connection failed. Check provider reachability before retrying Patrol.';
 
       it('matches "failed to connect"', () => {
-        expect(formatPatrolRuntimeFailureDetail('failed to connect to upstream')).toBe(
-          expected,
-        );
+        expect(formatPatrolRuntimeFailureDetail('failed to connect to upstream')).toBe(expected);
       });
 
       it('matches "connection refused"', () => {
-        expect(formatPatrolRuntimeFailureDetail('connection refused by host')).toBe(
-          expected,
-        );
+        expect(formatPatrolRuntimeFailureDetail('connection refused by host')).toBe(expected);
       });
 
       it('matches "no such host"', () => {
-        expect(formatPatrolRuntimeFailureDetail('no such host: api.example')).toBe(
-          expected,
-        );
+        expect(formatPatrolRuntimeFailureDetail('no such host: api.example')).toBe(expected);
       });
 
       it('matches "i/o timeout"', () => {
@@ -214,15 +200,12 @@ describe('patrolFormat branch coverage (supplemental)', () => {
       });
 
       it('matches "returned status 5" (5xx prefix arm)', () => {
-        expect(formatPatrolRuntimeFailureDetail('provider returned status 503')).toBe(
-          expected,
-        );
+        expect(formatPatrolRuntimeFailureDetail('provider returned status 503')).toBe(expected);
       });
     });
 
     describe('provider-analysis classification arms', () => {
-      const expected =
-        'Provider analysis failed. Check Provider & Models before retrying Patrol.';
+      const expected = 'Provider analysis failed. Check Provider & Models before retrying Patrol.';
 
       it('matches the exact "agentic patrol failed" sentinel', () => {
         expect(formatPatrolRuntimeFailureDetail('agentic patrol failed')).toBe(expected);
@@ -238,9 +221,7 @@ describe('patrolFormat branch coverage (supplemental)', () => {
 
       it('matches the "agentic patrol failed: provider error" prefix', () => {
         expect(
-          formatPatrolRuntimeFailureDetail(
-            'agentic patrol failed: provider error something else',
-          ),
+          formatPatrolRuntimeFailureDetail('agentic patrol failed: provider error something else'),
         ).toBe(expected);
       });
     });
@@ -304,9 +285,9 @@ describe('patrolFormat branch coverage (supplemental)', () => {
       });
 
       it('returns just the summary when detail is absent (summary || detail, detail empty)', () => {
-        expect(
-          formatPatrolRuntimeFailureSummary({ errorSummary: 'provider rate limited' }),
-        ).toBe('provider rate limited');
+        expect(formatPatrolRuntimeFailureSummary({ errorSummary: 'provider rate limited' })).toBe(
+          'provider rate limited',
+        );
       });
 
       it('returns just the detail when summary is absent (summary || detail, summary empty)', () => {

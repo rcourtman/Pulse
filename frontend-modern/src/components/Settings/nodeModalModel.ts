@@ -1,8 +1,4 @@
-import type {
-  ClusterEndpoint,
-  ClusterEndpointOverridePayload,
-  NodeConfig,
-} from '@/types/nodes';
+import type { ClusterEndpoint, ClusterEndpointOverridePayload, NodeConfig } from '@/types/nodes';
 import type { SecurityStatus } from '@/types/config';
 import type { NodeModalNodeType } from '@/utils/nodeModalPresentation';
 

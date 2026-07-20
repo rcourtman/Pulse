@@ -24,10 +24,12 @@ describe('textPresentation', () => {
       'get container status',
     );
     expect(formatIdentifierLabel('some_reason')).toBe('some reason');
-    expect(formatIdentifierLabel('pulse_very_long_unknown_tool_name', {
-      stripPrefix: 'pulse_',
-      maxLength: 12,
-    })).toBe('very long un');
+    expect(
+      formatIdentifierLabel('pulse_very_long_unknown_tool_name', {
+        stripPrefix: 'pulse_',
+        maxLength: 12,
+      }),
+    ).toBe('very long un');
     expect(formatIdentifierLabel(undefined, { fallback: 'Unknown' })).toBe('Unknown');
   });
 

@@ -37,9 +37,7 @@ describe('k8sNamespacePresentation.branchcov0718 — residual uncovered exports'
   describe('exported label / copy constants (direct assertion)', () => {
     it('exposes the canonical drawer title and description', () => {
       expect(K8S_NAMESPACES_DRAWER_TITLE).toBe('Namespaces');
-      expect(K8S_NAMESPACES_DRAWER_DESCRIPTION).toBe(
-        'Scope Pods and Deployments by namespace',
-      );
+      expect(K8S_NAMESPACES_DRAWER_DESCRIPTION).toBe('Scope Pods and Deployments by namespace');
     });
 
     it('exposes the canonical search placeholder', () => {

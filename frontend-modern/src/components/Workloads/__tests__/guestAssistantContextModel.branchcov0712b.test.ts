@@ -252,9 +252,7 @@ describe('guestAssistantContextModel (branch coverage)', () => {
           ],
           safetyNote: 'Approval required before any action.',
         },
-        handoffResources: [
-          { id: 'pve-a:node-a:101', name: 'web-vm', type: 'vm', node: 'node-a' },
-        ],
+        handoffResources: [{ id: 'pve-a:node-a:101', name: 'web-vm', type: 'vm', node: 'node-a' }],
         handoffMetadata: { kind: 'resource_context' },
         autonomousMode: false,
       });

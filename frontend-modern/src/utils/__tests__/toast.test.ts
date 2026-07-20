@@ -10,13 +10,7 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 import { logger } from '@/utils/logger';
-import {
-  showToast,
-  showSuccess,
-  showError,
-  showErrorWithDetail,
-  showWarning,
-} from '@/utils/toast';
+import { showToast, showSuccess, showError, showErrorWithDetail, showWarning } from '@/utils/toast';
 
 describe('toast', () => {
   const loggerInfo = vi.mocked(logger.info);
@@ -109,18 +103,15 @@ describe('toast', () => {
       { name: 'showWarning', fn: showWarning, type: 'warning' },
     ];
 
-    it.each(wrapperCases)(
-      '$name delegates to showToast with type "$type"',
-      ({ fn, type }) => {
-        const mock = vi.fn(() => 'id');
-        (window as unknown as { showToast: typeof mock }).showToast = mock;
+    it.each(wrapperCases)('$name delegates to showToast with type "$type"', ({ fn, type }) => {
+      const mock = vi.fn(() => 'id');
+      (window as unknown as { showToast: typeof mock }).showToast = mock;
 
-        const result = fn('Title', 'Message', 3000);
+      const result = fn('Title', 'Message', 3000);
 
-        expect(mock).toHaveBeenCalledWith(type, 'Title', 'Message', 3000, undefined);
-        expect(result).toBe('id');
-      },
-    );
+      expect(mock).toHaveBeenCalledWith(type, 'Title', 'Message', 3000, undefined);
+      expect(result).toBe('id');
+    });
 
     it('showErrorWithDetail delegates with message undefined and detail as the 5th arg', () => {
       const mock = vi.fn(() => 'id');

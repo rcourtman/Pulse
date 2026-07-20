@@ -168,9 +168,7 @@ export function useTooltipState(options: TooltipStateOptions): {
   };
 }
 
-export function useTooltipPortalState(
-  options: TooltipPortalStateOptions,
-): {
+export function useTooltipPortalState(options: TooltipPortalStateOptions): {
   maxWidth: Accessor<number>;
   position: Accessor<TooltipPosition>;
   setTooltipRef: (el: HTMLDivElement) => void;

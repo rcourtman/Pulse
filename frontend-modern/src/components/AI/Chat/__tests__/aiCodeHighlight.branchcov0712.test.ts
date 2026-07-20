@@ -96,9 +96,7 @@ describe('loadHighlighter branch coverage — mocked core failures', () => {
     vi.doMock('highlight.js/lib/core', () => ({ default: throwingHljs }));
 
     const { highlightSettledCodeBlocks: highlight } = await import('../aiCodeHighlight');
-    const container = makeContainer(
-      '<pre><code class="language-bash">echo hello</code></pre>',
-    );
+    const container = makeContainer('<pre><code class="language-bash">echo hello</code></pre>');
     await highlight(container);
 
     const code = container.querySelector('code') as HTMLElement;

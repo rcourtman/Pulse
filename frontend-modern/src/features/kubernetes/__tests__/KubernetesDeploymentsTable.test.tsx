@@ -108,9 +108,9 @@ describe('KubernetesDeploymentsTable', () => {
       />
     ));
 
-    const rows = Array.from(
-      document.querySelectorAll('[data-kubernetes-deployment-row]'),
-    ).map((row) => row.getAttribute('data-kubernetes-deployment-row'));
+    const rows = Array.from(document.querySelectorAll('[data-kubernetes-deployment-row]')).map(
+      (row) => row.getAttribute('data-kubernetes-deployment-row'),
+    );
     expect(rows).toEqual(['broken', 'partial', 'healthy']);
     expect(screen.getByTitle('0 / 3 ready')).toHaveClass('bg-red-500');
     expect(screen.getByTitle('1 / 3 ready')).toHaveClass('bg-amber-500');

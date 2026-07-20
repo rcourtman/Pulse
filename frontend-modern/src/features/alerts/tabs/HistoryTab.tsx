@@ -71,9 +71,7 @@ export function HistoryTab(props: HistoryTabProps) {
       <AlertHistoryFrequencyCard state={historyState} />
       <AlertHistoryFiltersCard state={historyState} isMobile={isMobile()} />
       <AlertResourceIncidentsPanel state={historyState} getResource={props.getResource} />
-      <AlertHistoryTableSection
-        state={historyState}
-      />
+      <AlertHistoryTableSection state={historyState} />
       <AlertHistoryAdministrationCard state={historyState} />
     </div>
   );

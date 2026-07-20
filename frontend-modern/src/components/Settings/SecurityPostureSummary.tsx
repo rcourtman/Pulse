@@ -101,7 +101,9 @@ export const SecurityPostureSummary: Component<SecurityPostureSummaryProps> = (p
                   <div class="flex items-center justify-between">
                     <p class="text-xs text-muted">{item.description}</p>
                     <Show when={item.critical && !item.enabled}>
-                      <span class={`text-[10px] font-medium uppercase ${card.criticalLabelClassName}`}>
+                      <span
+                        class={`text-[10px] font-medium uppercase ${card.criticalLabelClassName}`}
+                      >
                         Critical
                       </span>
                     </Show>

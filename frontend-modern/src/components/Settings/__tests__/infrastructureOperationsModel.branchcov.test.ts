@@ -99,15 +99,15 @@ describe('getPowerShellInstallProfileEnvFromFlags', () => {
   });
 
   it('produces both assignments for the proxmox-pve profile flags', () => {
-    expect(getPowerShellInstallProfileEnvFromFlags(['--enable-proxmox', '--proxmox-type pve'])).toEqual(
-      [`$env:PULSE_ENABLE_PROXMOX="true"`, `$env:PULSE_PROXMOX_TYPE="pve"`],
-    );
+    expect(
+      getPowerShellInstallProfileEnvFromFlags(['--enable-proxmox', '--proxmox-type pve']),
+    ).toEqual([`$env:PULSE_ENABLE_PROXMOX="true"`, `$env:PULSE_PROXMOX_TYPE="pve"`]);
   });
 
   it('produces both assignments for the proxmox-pbs profile flags', () => {
-    expect(getPowerShellInstallProfileEnvFromFlags(['--enable-proxmox', '--proxmox-type pbs'])).toEqual(
-      [`$env:PULSE_ENABLE_PROXMOX="true"`, `$env:PULSE_PROXMOX_TYPE="pbs"`],
-    );
+    expect(
+      getPowerShellInstallProfileEnvFromFlags(['--enable-proxmox', '--proxmox-type pbs']),
+    ).toEqual([`$env:PULSE_ENABLE_PROXMOX="true"`, `$env:PULSE_PROXMOX_TYPE="pbs"`]);
   });
 
   it('does not recognize the "--proxmox-type=<value>" equals form', () => {

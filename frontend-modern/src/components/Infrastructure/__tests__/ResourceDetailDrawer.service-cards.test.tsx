@@ -280,9 +280,7 @@ describe('ResourceDetailDrawer service cards', () => {
       },
     });
 
-    const { getByRole, getByTestId } = render(() => (
-      <ResourceDetailDrawer resource={resource} />
-    ));
+    const { getByRole, getByTestId } = render(() => <ResourceDetailDrawer resource={resource} />);
 
     fireEvent.click(getByRole('button', { name: 'Show service' }));
     fireEvent.click(getByRole('button', { name: 'Show mail flow' }));

@@ -188,9 +188,7 @@ describe('mapKubernetesNodeStatus — uncovered branches', () => {
 
   it('returns muted Unknown for paused status (not handled by the node mapper)', () => {
     expect(
-      mapKubernetesNodeStatus(
-        makeResource({ id: 'n-paused', type: 'k8s-node', status: 'paused' }),
-      ),
+      mapKubernetesNodeStatus(makeResource({ id: 'n-paused', type: 'k8s-node', status: 'paused' })),
     ).toEqual({ variant: 'muted', label: 'Unknown' });
   });
 });
@@ -224,9 +222,7 @@ describe('kubernetesResourceSearchHaystack', () => {
         resourceKind: 'Pod',
         externalIps: ['1.2.3.4'],
         addresses: ['10.0.0.1'],
-        podContainers: [
-          { name: 'main', image: 'ghcr.io/app:v1', state: 'running', reason: '' },
-        ],
+        podContainers: [{ name: 'main', image: 'ghcr.io/app:v1', state: 'running', reason: '' }],
       },
     });
 
@@ -538,9 +534,7 @@ describe('buildKubernetesIncidentRow field fallbacks (via buildKubernetesInciden
       makeResource({
         id: 'a',
         type: 'pod',
-        incidents: [
-          { code: 'k8s_x', severity: 'warning', summary: 's', nativeId: 'evt-42' },
-        ],
+        incidents: [{ code: 'k8s_x', severity: 'warning', summary: 's', nativeId: 'evt-42' }],
       }),
     ]);
     expect(withNativeId[0].id).toBe('a:incident:evt-42:0');
@@ -560,9 +554,7 @@ describe('buildKubernetesIncidentRow field fallbacks (via buildKubernetesInciden
       makeResource({
         id: 'a',
         type: 'pod',
-        incidents: [
-          { code: 'k8s_x', severity: 'warning', summary: 's', source: 'prometheus' },
-        ],
+        incidents: [{ code: 'k8s_x', severity: 'warning', summary: 's', source: 'prometheus' }],
       }),
     ]);
     expect(fromSource[0].source).toBe('prometheus');
@@ -571,9 +563,7 @@ describe('buildKubernetesIncidentRow field fallbacks (via buildKubernetesInciden
       makeResource({
         id: 'b',
         type: 'pod',
-        incidents: [
-          { code: 'k8s_x', severity: 'warning', summary: 's', provider: 'datadog' },
-        ],
+        incidents: [{ code: 'k8s_x', severity: 'warning', summary: 's', provider: 'datadog' }],
       }),
     ]);
     expect(fromProvider[0].source).toBe('datadog');

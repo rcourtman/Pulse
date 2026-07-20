@@ -4,8 +4,7 @@ export const ALERT_RESOURCE_TABLE_METRIC_DISABLED_PLACEHOLDER = 'Off';
 export const ALERT_RESOURCE_TABLE_OVERRIDE_NOTE_PLACEHOLDER =
   'Add a note about this override (optional)';
 export const ALERT_RESOURCE_TABLE_EDIT_NOTE_PLACEHOLDER = 'Add a note...';
-export const ALERT_RESOURCE_TABLE_RESET_FACTORY_DEFAULTS_LABEL =
-  'Reset to factory defaults';
+export const ALERT_RESOURCE_TABLE_RESET_FACTORY_DEFAULTS_LABEL = 'Reset to factory defaults';
 export const ALERT_RESOURCE_TABLE_REVERT_TO_DEFAULTS_LABEL = 'Revert to defaults';
 export const ALERT_RESOURCE_TABLE_ALERT_DELAY_LABEL = 'Alert Delay (s)';
 export const ALERT_RESOURCE_TABLE_OFFLINE_STATE_OFF_LABEL = 'Off';

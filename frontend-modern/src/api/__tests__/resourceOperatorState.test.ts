@@ -39,9 +39,7 @@ describe('resourceOperatorState api', () => {
   });
 
   it('returns null when the server reports operator_state_not_set as 404', async () => {
-    apiFetchJSONMock.mockRejectedValueOnce(
-      Object.assign(new Error('Not found'), { status: 404 }),
-    );
+    apiFetchJSONMock.mockRejectedValueOnce(Object.assign(new Error('Not found'), { status: 404 }));
 
     await expect(getResourceOperatorState('vm:101')).resolves.toBeNull();
   });
@@ -98,9 +96,8 @@ describe('resourceOperatorState api', () => {
     apiFetchJSONMock.mockResolvedValueOnce(undefined as never);
 
     await expect(clearResourceOperatorState('vm:101')).resolves.toBeUndefined();
-    expect(apiFetchJSONMock).toHaveBeenCalledWith(
-      '/api/resources/vm%3A101/operator-state',
-      { method: 'DELETE' },
-    );
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/resources/vm%3A101/operator-state', {
+      method: 'DELETE',
+    });
   });
 });

@@ -54,14 +54,11 @@ describe('relayPresentation', () => {
 
   it('returns activation-required presentation for missing Relay token errors', () => {
     expect(
-      getRelayConnectionPresentation(
-        { enabled: true } as never,
-        {
-          connected: false,
-          active_channels: 0,
-          last_error: 'register: no license token available',
-        },
-      ),
+      getRelayConnectionPresentation({ enabled: true } as never, {
+        connected: false,
+        active_channels: 0,
+        last_error: 'register: no license token available',
+      }),
     ).toEqual({
       variant: 'danger',
       label: RELAY_ACTIVATION_REQUIRED_LABEL,

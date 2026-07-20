@@ -44,8 +44,7 @@ const makeNode = (overrides: Record<string, unknown>): NodeConfigWithStatus =>
   }) as unknown as NodeConfigWithStatus;
 
 /** Minimal `Resource` carrying only the identity fields the matcher reads. */
-const makeResource = (id: string, name: string): Resource =>
-  ({ id, name }) as unknown as Resource;
+const makeResource = (id: string, name: string): Resource => ({ id, name }) as unknown as Resource;
 
 /** A fully-populated `ClusterEndpoint` with overridable fields. */
 const makeEndpoint = (overrides: Partial<ClusterEndpoint> = {}): ClusterEndpoint => ({
@@ -152,7 +151,12 @@ describe('collectRepresentedDiscoveryHosts', () => {
 
   it('buckets each platform type into its own set, normalizing name + host + guestURL', () => {
     const result = collectRepresentedDiscoveryHosts([
-      makeNode({ type: 'pve', name: 'pve-name', host: 'https://10.0.0.1:8006', guestURL: 'https://10.0.0.1:8006' }),
+      makeNode({
+        type: 'pve',
+        name: 'pve-name',
+        host: 'https://10.0.0.1:8006',
+        guestURL: 'https://10.0.0.1:8006',
+      }),
       makeNode({ type: 'pbs', name: 'pbs-name', host: '10.0.0.2:8007' }),
       makeNode({ type: 'pmg', name: 'pmg-name', host: 'pmg-host' }),
     ]);
@@ -173,7 +177,12 @@ describe('collectRepresentedDiscoveryHosts', () => {
 
   it('no-ops cluster aggregation when clusterEndpoints is explicitly undefined (addClusterEndpointHosts undefined arm)', () => {
     const result = collectRepresentedDiscoveryHosts([
-      makeNode({ type: 'pve', name: 'cluster', host: 'https://primary:8006', clusterEndpoints: undefined }),
+      makeNode({
+        type: 'pve',
+        name: 'cluster',
+        host: 'https://primary:8006',
+        clusterEndpoints: undefined,
+      }),
     ]);
     // `'clusterEndpoints' in node` is true, but `endpoints?.forEach` is a no-op.
     expect(result.pve).toStrictEqual(new Set(['cluster', 'primary']));
@@ -181,7 +190,12 @@ describe('collectRepresentedDiscoveryHosts', () => {
 
   it('no-ops cluster aggregation when clusterEndpoints is an empty array', () => {
     const result = collectRepresentedDiscoveryHosts([
-      makeNode({ type: 'pve', name: 'cluster', host: 'https://primary:8006', clusterEndpoints: [] }),
+      makeNode({
+        type: 'pve',
+        name: 'cluster',
+        host: 'https://primary:8006',
+        clusterEndpoints: [],
+      }),
     ]);
     expect(result.pve).toStrictEqual(new Set(['cluster', 'primary']));
   });
@@ -260,9 +274,7 @@ describe('filterRepresentedDiscoveredServers', () => {
       ],
       nodes,
     );
-    expect(filtered).toEqual([
-      { ip: '10.0.0.99', port: 8006, type: 'pve', version: '8.2.2' },
-    ]);
+    expect(filtered).toEqual([{ ip: '10.0.0.99', port: 8006, type: 'pve', version: '8.2.2' }]);
   });
 
   it('removes a server whose hostname is represented even when its IP is not (hostname arm)', () => {
@@ -291,9 +303,7 @@ describe('filterRepresentedDiscoveredServers', () => {
       [{ ip: '10.0.0.99', port: 8006, type: 'pve', version: '8.2.2' }],
       nodes,
     );
-    expect(filtered).toEqual([
-      { ip: '10.0.0.99', port: 8006, type: 'pve', version: '8.2.2' },
-    ]);
+    expect(filtered).toEqual([{ ip: '10.0.0.99', port: 8006, type: 'pve', version: '8.2.2' }]);
   });
 
   it('keeps a server whose IP normalizes to null when nothing represents its hostname (normalizedIP falsy arm)', () => {
@@ -313,9 +323,7 @@ describe('filterRepresentedDiscoveredServers', () => {
       [{ ip: '10.0.0.5', port: 8007, type: 'pbs', version: '3.0.1' }],
       nodes,
     );
-    expect(filtered).toEqual([
-      { ip: '10.0.0.5', port: 8007, type: 'pbs', version: '3.0.1' },
-    ]);
+    expect(filtered).toEqual([{ ip: '10.0.0.5', port: 8007, type: 'pbs', version: '3.0.1' }]);
   });
 });
 
@@ -323,10 +331,7 @@ describe('filterRepresentedDiscoveredServers', () => {
 
 describe('matchConfiguredNodeToResource', () => {
   it('returns undefined when nodeResources is undefined', () => {
-    const result = matchConfiguredNodeToResource(
-      makeNode({ id: 'a', name: 'a' }),
-      undefined,
-    );
+    const result = matchConfiguredNodeToResource(makeNode({ id: 'a', name: 'a' }), undefined);
     expect(result).toBeUndefined();
   });
 
@@ -346,10 +351,10 @@ describe('matchConfiguredNodeToResource', () => {
 
   it('matches when resource.name === configNode.name (ids differ)', () => {
     const matched = makeResource('r1', 'shared-name');
-    const result = matchConfiguredNodeToResource(
-      makeNode({ id: 'c1', name: 'shared-name' }),
-      [matched, makeResource('r2', 'other')],
-    );
+    const result = matchConfiguredNodeToResource(makeNode({ id: 'c1', name: 'shared-name' }), [
+      matched,
+      makeResource('r2', 'other'),
+    ]);
     expect(result).toBe(matched);
   });
 
@@ -357,38 +362,32 @@ describe('matchConfiguredNodeToResource', () => {
     // configNode.name 'host.lan' and resource.name 'host' differ literally and
     // by id, but both strip to 'host'.
     const matched = makeResource('r1', 'host');
-    const result = matchConfiguredNodeToResource(
-      makeNode({ id: 'c1', name: 'host.lan' }),
-      [matched],
-    );
+    const result = matchConfiguredNodeToResource(makeNode({ id: 'c1', name: 'host.lan' }), [
+      matched,
+    ]);
     expect(result).toBe(matched);
   });
 
   it('matches when resource.id contains configNode.name', () => {
     // id 'prefix-sub-suffix' includes 'sub'; names differ; bases differ.
     const matched = makeResource('prefix-sub-suffix', 'unrelated');
-    const result = matchConfiguredNodeToResource(
-      makeNode({ id: 'c1', name: 'sub' }),
-      [matched],
-    );
+    const result = matchConfiguredNodeToResource(makeNode({ id: 'c1', name: 'sub' }), [matched]);
     expect(result).toBe(matched);
   });
 
   it('matches when configNode.name contains resource.name', () => {
     // 'bigname'.includes('big'); id and name and bases all differ.
     const matched = makeResource('r1', 'big');
-    const result = matchConfiguredNodeToResource(
-      makeNode({ id: 'c1', name: 'bigname' }),
-      [matched],
-    );
+    const result = matchConfiguredNodeToResource(makeNode({ id: 'c1', name: 'bigname' }), [
+      matched,
+    ]);
     expect(result).toBe(matched);
   });
 
   it('returns undefined when no predicate matches', () => {
-    const result = matchConfiguredNodeToResource(
-      makeNode({ id: 'c1', name: 'zzz' }),
-      [makeResource('r1', 'yyy')],
-    );
+    const result = matchConfiguredNodeToResource(makeNode({ id: 'c1', name: 'zzz' }), [
+      makeResource('r1', 'yyy'),
+    ]);
     expect(result).toBeUndefined();
   });
 });

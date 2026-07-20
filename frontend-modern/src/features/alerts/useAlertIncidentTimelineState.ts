@@ -50,7 +50,11 @@ export function useAlertIncidentTimelineState() {
     }
   };
 
-  const toggleIncidentTimeline = async (key: string, alertIdentifier: string, startedAt?: string) => {
+  const toggleIncidentTimeline = async (
+    key: string,
+    alertIdentifier: string,
+    startedAt?: string,
+  ) => {
     const next = new Set(expandedIncidents());
     if (next.has(key)) {
       next.delete(key);

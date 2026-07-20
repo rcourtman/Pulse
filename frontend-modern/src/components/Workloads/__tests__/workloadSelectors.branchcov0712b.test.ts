@@ -66,7 +66,11 @@ describe('workloadSelectors (branch coverage 2)', () => {
           name: 'null-mem',
           memory: null as unknown as WorkloadGuest['memory'],
         }),
-        makeGuest(2, { id: 'big-mem', name: 'big-mem', memory: { total: 100, used: 80, free: 20, usage: 0.8 } }),
+        makeGuest(2, {
+          id: 'big-mem',
+          name: 'big-mem',
+          memory: { total: 100, used: 80, free: 20, usage: 0.8 },
+        }),
       ];
       const asc = createWorkloadSortComparator('memory', 'asc')!;
       // null-mem -> 0 < 0.8
@@ -75,9 +79,21 @@ describe('workloadSelectors (branch coverage 2)', () => {
 
     it('coerces memory.usage of 0 to 0 via the `|| 0` fallback and tiebreaks equals', () => {
       const guests = [
-        makeGuest(1, { id: 'b', name: 'beta', memory: { total: 100, used: 0, free: 100, usage: 0 } }),
-        makeGuest(2, { id: 'a', name: 'alpha', memory: { total: 100, used: 0, free: 100, usage: 0 } }),
-        makeGuest(3, { id: 'c', name: 'gamma', memory: { total: 100, used: 50, free: 50, usage: 0.5 } }),
+        makeGuest(1, {
+          id: 'b',
+          name: 'beta',
+          memory: { total: 100, used: 0, free: 100, usage: 0 },
+        }),
+        makeGuest(2, {
+          id: 'a',
+          name: 'alpha',
+          memory: { total: 100, used: 0, free: 100, usage: 0 },
+        }),
+        makeGuest(3, {
+          id: 'c',
+          name: 'gamma',
+          memory: { total: 100, used: 50, free: 50, usage: 0.5 },
+        }),
       ];
       const asc = createWorkloadSortComparator('memory', 'asc')!;
       // a,b both 0 -> equal numeric -> tiebreak (alpha<beta); c=0.5 last
@@ -99,14 +115,12 @@ describe('workloadSelectors (branch coverage 2)', () => {
         makeGuest(1, { id: 'busy', name: 'busy', networkIn: 200, networkOut: 100 }),
         makeGuest(2, { id: 'quiet', name: 'quiet', networkIn: 5, networkOut: 3 }),
       ];
-      expect([...guests].sort(createWorkloadSortComparator('netIo', 'asc')!).map((g) => g.id)).toEqual([
-        'quiet',
-        'busy',
-      ]);
-      expect([...guests].sort(createWorkloadSortComparator('netIo', 'desc')!).map((g) => g.id)).toEqual([
-        'busy',
-        'quiet',
-      ]);
+      expect(
+        [...guests].sort(createWorkloadSortComparator('netIo', 'asc')!).map((g) => g.id),
+      ).toEqual(['quiet', 'busy']);
+      expect(
+        [...guests].sort(createWorkloadSortComparator('netIo', 'desc')!).map((g) => g.id),
+      ).toEqual(['busy', 'quiet']);
     });
 
     it('routes a both-empty disk pair through tiebreak and orders empties last in both directions', () => {
@@ -114,24 +128,26 @@ describe('workloadSelectors (branch coverage 2)', () => {
       const guests = [
         makeGuest(1, { id: 'zz', name: 'zebra', disk: emptyDisk }),
         makeGuest(2, { id: 'aa', name: 'alpha', disk: emptyDisk }),
-        makeGuest(3, { id: 'mm', name: 'mid', disk: { total: 100, used: 20, free: 80, usage: 0.2 } }),
-        makeGuest(4, { id: 'bb', name: 'bravo', disk: { total: 100, used: 90, free: 10, usage: 0.9 } }),
+        makeGuest(3, {
+          id: 'mm',
+          name: 'mid',
+          disk: { total: 100, used: 20, free: 80, usage: 0.2 },
+        }),
+        makeGuest(4, {
+          id: 'bb',
+          name: 'bravo',
+          disk: { total: 100, used: 90, free: 10, usage: 0.9 },
+        }),
       ];
       // getDiskUsagePercent(emptyDisk) -> total 0 -> null -> isEmpty. Non-empty sort first;
       // empty pair -> aIsEmpty && bIsEmpty -> tiebreak (alpha<zebra).
-      expect([...guests].sort(createWorkloadSortComparator('disk', 'asc')!).map((g) => g.id)).toEqual([
-        'mm',
-        'bb',
-        'aa',
-        'zz',
-      ]);
+      expect(
+        [...guests].sort(createWorkloadSortComparator('disk', 'asc')!).map((g) => g.id),
+      ).toEqual(['mm', 'bb', 'aa', 'zz']);
       // desc only flips the non-empty comparison; empties still sort last by name asc.
-      expect([...guests].sort(createWorkloadSortComparator('disk', 'desc')!).map((g) => g.id)).toEqual([
-        'bb',
-        'mm',
-        'aa',
-        'zz',
-      ]);
+      expect(
+        [...guests].sort(createWorkloadSortComparator('disk', 'desc')!).map((g) => g.id),
+      ).toEqual(['bb', 'mm', 'aa', 'zz']);
     });
 
     it('pushes a single empty disk value to the end via the aIsEmpty/bIsEmpty arms', () => {
@@ -141,17 +157,19 @@ describe('workloadSelectors (branch coverage 2)', () => {
           name: 'empty',
           disk: undefined as unknown as WorkloadGuest['disk'],
         }),
-        makeGuest(2, { id: 'full', name: 'full', disk: { total: 100, used: 50, free: 50, usage: 0.5 } }),
+        makeGuest(2, {
+          id: 'full',
+          name: 'full',
+          disk: { total: 100, used: 50, free: 50, usage: 0.5 },
+        }),
       ];
       // empty -> getDiskUsagePercent null -> aIsEmpty -> return 1 (sorts last) in both dirs.
-      expect([...guests].sort(createWorkloadSortComparator('disk', 'asc')!).map((g) => g.id)).toEqual([
-        'full',
-        'empty',
-      ]);
-      expect([...guests].sort(createWorkloadSortComparator('disk', 'desc')!).map((g) => g.id)).toEqual([
-        'full',
-        'empty',
-      ]);
+      expect(
+        [...guests].sort(createWorkloadSortComparator('disk', 'asc')!).map((g) => g.id),
+      ).toEqual(['full', 'empty']);
+      expect(
+        [...guests].sort(createWorkloadSortComparator('disk', 'desc')!).map((g) => g.id),
+      ).toEqual(['full', 'empty']);
     });
 
     it('uses the generic-key else branch for a string field with asc/desc', () => {
@@ -160,14 +178,12 @@ describe('workloadSelectors (branch coverage 2)', () => {
         makeGuest(2, { id: 'b', name: 'beta', status: 'running' }),
       ];
       // 'running' < 'stopped'
-      expect([...guests].sort(createWorkloadSortComparator('status', 'asc')!).map((g) => g.id)).toEqual([
-        'b',
-        'a',
-      ]);
-      expect([...guests].sort(createWorkloadSortComparator('status', 'desc')!).map((g) => g.id)).toEqual([
-        'a',
-        'b',
-      ]);
+      expect(
+        [...guests].sort(createWorkloadSortComparator('status', 'asc')!).map((g) => g.id),
+      ).toEqual(['b', 'a']);
+      expect(
+        [...guests].sort(createWorkloadSortComparator('status', 'desc')!).map((g) => g.id),
+      ).toEqual(['a', 'b']);
     });
 
     it('hits the string-equal tiebreak when a generic string key matches on both sides', () => {
@@ -176,10 +192,9 @@ describe('workloadSelectors (branch coverage 2)', () => {
         makeGuest(2, { id: 'a-id', name: 'alpha', status: 'running' }),
       ];
       // status 'running' === 'running' -> aStr===bStr -> tiebreak (alpha<beta).
-      expect([...guests].sort(createWorkloadSortComparator('status', 'asc')!).map((g) => g.id)).toEqual([
-        'a-id',
-        'b-id',
-      ]);
+      expect(
+        [...guests].sort(createWorkloadSortComparator('status', 'asc')!).map((g) => g.id),
+      ).toEqual(['a-id', 'b-id']);
     });
 
     it('treats an empty-string generic value as empty and sorts it last', () => {
@@ -188,10 +203,9 @@ describe('workloadSelectors (branch coverage 2)', () => {
         makeGuest(2, { id: 'full', name: 'full', status: 'running' }),
       ];
       // aVal '' -> aIsEmpty -> sorts last.
-      expect([...guests].sort(createWorkloadSortComparator('status', 'asc')!).map((g) => g.id)).toEqual([
-        'full',
-        'empty',
-      ]);
+      expect(
+        [...guests].sort(createWorkloadSortComparator('status', 'asc')!).map((g) => g.id),
+      ).toEqual(['full', 'empty']);
     });
 
     it('returns 0 only when numeric, name, and id are all equal', () => {
@@ -272,16 +286,31 @@ describe('workloadSelectors (branch coverage 2)', () => {
       ];
       // workloadHostScopeId(pod) === '' would drop both; viewMode==='pod' skips the guard.
       expect(
-        filterWorkloads({ ...baseFilterParams, guests, viewMode: 'pod', selectedNode: 'worker-a' }).map(
-          (g) => g.id,
-        ),
+        filterWorkloads({
+          ...baseFilterParams,
+          guests,
+          viewMode: 'pod',
+          selectedNode: 'worker-a',
+        }).map((g) => g.id),
       ).toEqual(['pod-a', 'pod-b']);
     });
 
     it('filters by workloadHostScopeId when nodeScope is set in a non-pod view', () => {
       const guests = [
-        makeGuest(1, { id: 'vm-a', type: 'vm', workloadType: 'vm', instance: 'cluster-a', node: 'node-a' }),
-        makeGuest(2, { id: 'vm-b', type: 'vm', workloadType: 'vm', instance: 'cluster-b', node: 'node-b' }),
+        makeGuest(1, {
+          id: 'vm-a',
+          type: 'vm',
+          workloadType: 'vm',
+          instance: 'cluster-a',
+          node: 'node-a',
+        }),
+        makeGuest(2, {
+          id: 'vm-b',
+          type: 'vm',
+          workloadType: 'vm',
+          instance: 'cluster-b',
+          node: 'node-b',
+        }),
       ];
       expect(
         filterWorkloads({
@@ -294,7 +323,13 @@ describe('workloadSelectors (branch coverage 2)', () => {
 
     it('gives nodeScope precedence over hostHint (hostHint filter skipped when nodeScope set)', () => {
       const guests = [
-        makeGuest(1, { id: 'vm-a', type: 'vm', workloadType: 'vm', instance: 'cluster-a', node: 'node-a' }),
+        makeGuest(1, {
+          id: 'vm-a',
+          type: 'vm',
+          workloadType: 'vm',
+          instance: 'cluster-a',
+          node: 'node-a',
+        }),
         makeGuest(2, {
           id: 'app-a',
           name: 'redis',
@@ -359,9 +394,12 @@ describe('workloadSelectors (branch coverage 2)', () => {
       ];
       // hostHint set but viewMode==='pod' -> `viewMode !== 'pod'` false -> skipped; pod kept.
       expect(
-        filterWorkloads({ ...baseFilterParams, guests, viewMode: 'pod', selectedHostHint: 'nope' }).map(
-          (g) => g.id,
-        ),
+        filterWorkloads({
+          ...baseFilterParams,
+          guests,
+          viewMode: 'pod',
+          selectedHostHint: 'nope',
+        }).map((g) => g.id),
       ).toEqual(['pod-a']);
     });
 
@@ -497,14 +535,27 @@ describe('workloadSelectors (branch coverage 2)', () => {
       ];
       // viewMode 'all' -> cluster guard skipped -> both remain.
       expect(
-        filterWorkloads({ ...baseFilterParams, guests, selectedCluster: 'prod-cluster' }).map((g) => g.id),
+        filterWorkloads({ ...baseFilterParams, guests, selectedCluster: 'prod-cluster' }).map(
+          (g) => g.id,
+        ),
       ).toEqual(['vm-a', 'vm-b']);
     });
 
     it('keeps only container-typed workloads under the combined container view mode', () => {
       const guests = [
-        makeGuest(1, { id: 'app', type: 'app-container', workloadType: 'app-container', contextLabel: 'h' }),
-        makeGuest(2, { id: 'lxc', type: 'lxc', workloadType: 'system-container', instance: 'i', node: 'n' }),
+        makeGuest(1, {
+          id: 'app',
+          type: 'app-container',
+          workloadType: 'app-container',
+          contextLabel: 'h',
+        }),
+        makeGuest(2, {
+          id: 'lxc',
+          type: 'lxc',
+          workloadType: 'system-container',
+          instance: 'i',
+          node: 'n',
+        }),
         makeGuest(3, { id: 'vm', type: 'vm', workloadType: 'vm', instance: 'i', node: 'n' }),
         makeGuest(4, {
           id: 'pod',
@@ -561,7 +612,9 @@ describe('workloadSelectors (branch coverage 2)', () => {
         }),
       ];
       expect(
-        filterWorkloads({ ...baseFilterParams, guests, selectedPlatform: 'truenas' }).map((g) => g.id),
+        filterWorkloads({ ...baseFilterParams, guests, selectedPlatform: 'truenas' }).map(
+          (g) => g.id,
+        ),
       ).toEqual(['tn']);
     });
 
@@ -618,7 +671,9 @@ describe('workloadSelectors (branch coverage 2)', () => {
       ];
       // isContainerWorkloadViewMode('all') === false -> filter skipped.
       expect(
-        filterWorkloads({ ...baseFilterParams, guests, containerRuntime: 'docker' }).map((g) => g.id),
+        filterWorkloads({ ...baseFilterParams, guests, containerRuntime: 'docker' }).map(
+          (g) => g.id,
+        ),
       ).toEqual(['c1', 'c2']);
     });
 
@@ -708,7 +763,9 @@ describe('workloadSelectors (branch coverage 2)', () => {
         filterWorkloads({ ...baseFilterParams, guests, searchTerm: '-worker' }).map((g) => g.id),
       ).toEqual(['a', 'c']);
       expect(
-        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'alpha, gamma' }).map((g) => g.id),
+        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'alpha, gamma' }).map(
+          (g) => g.id,
+        ),
       ).toEqual(['a', 'c']);
     });
 
@@ -752,7 +809,9 @@ describe('workloadSelectors (branch coverage 2)', () => {
       ];
       // needle lowercased; candidate lowercased -> 'QUARANTINED' still matches.
       expect(
-        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'QUARANTINED' }).map((g) => g.id),
+        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'QUARANTINED' }).map(
+          (g) => g.id,
+        ),
       ).toEqual(['g1']);
     });
 
@@ -775,7 +834,9 @@ describe('workloadSelectors (branch coverage 2)', () => {
       ];
       // [].join(' ') -> '' -> String('').includes('uniquematch') is false.
       expect(
-        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'uniquematch' }).map((g) => g.id),
+        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'uniquematch' }).map(
+          (g) => g.id,
+        ),
       ).toEqual(['scope']);
     });
 
@@ -837,13 +898,19 @@ describe('workloadSelectors (branch coverage 2)', () => {
         }),
       ];
       expect(
-        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'registry.local' }).map((g) => g.id),
+        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'registry.local' }).map(
+          (g) => g.id,
+        ),
       ).toEqual(['img']);
       expect(
-        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'payments-uniq' }).map((g) => g.id),
+        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'payments-uniq' }).map(
+          (g) => g.id,
+        ),
       ).toEqual(['ns']);
       expect(
-        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'contextlabel-uniq' }).map((g) => g.id),
+        filterWorkloads({ ...baseFilterParams, guests, searchTerm: 'contextlabel-uniq' }).map(
+          (g) => g.id,
+        ),
       ).toEqual(['ctx']);
     });
   });

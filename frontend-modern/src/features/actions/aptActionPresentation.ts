@@ -56,14 +56,22 @@ const getUpdateFacts = (summary: string): APTActionPresentationFact[] => {
   const after = parseCount(match[3]);
   const phase = formatPhase(match[1], 'update');
   if (before === undefined || after === undefined || !phase) return [];
-  const health = match[4] === 'healthy' ? 'Known healthy' : match[4] === 'unhealthy' ? 'Known unhealthy' : 'Unknown';
+  const health =
+    match[4] === 'healthy'
+      ? 'Known healthy'
+      : match[4] === 'unhealthy'
+        ? 'Known unhealthy'
+        : 'Unknown';
   return [
     { label: 'Last phase reached', value: phase },
     { label: 'Updates before', value: String(before) },
     { label: 'Updates remaining', value: String(after) },
     { label: 'Update system health', value: health },
     { label: 'Recovery required', value: match[5] === 'true' ? 'Yes' : 'No' },
-    { label: 'Reboot required', value: match[6] === 'true' ? 'Yes — fact only; no reboot was authorized' : 'No' },
+    {
+      label: 'Reboot required',
+      value: match[6] === 'true' ? 'Yes — fact only; no reboot was authorized' : 'No',
+    },
   ];
 };
 
@@ -83,7 +91,8 @@ const getCleanupFacts = (summary: string): APTActionPresentationFact[] => {
     !phase ||
     after > before ||
     reclaimed !== before - after
-  ) return [];
+  )
+    return [];
   return [
     { label: 'Last phase reached', value: phase },
     { label: 'Downloaded package data before', value: formatBytes(before) },
@@ -118,20 +127,25 @@ export const getAPTActionPresentation = (
 
   let nextStep = 'Review the server policy and exact scope before making a decision.';
   if (audit.result?.actionResultV2 && facts.length === 0) {
-    nextStep = 'Refresh this action record and review the canonical result before deciding what to do next.';
+    nextStep =
+      'Refresh this action record and review the canonical result before deciding what to do next.';
   } else if (verification?.status === 'confirmed') {
     nextStep = isUpdate
       ? 'Review the remaining-update and reboot facts. A reboot, if needed, is a separate governed action.'
       : 'Review the measured space reclaimed. Create another cleanup plan only if a fresh scan still shows pressure.';
   } else if (audit.result?.actionResultV2) {
     if (isUpdate && recoveryRequired) {
-      nextStep = 'Do not retry. Repair the host update system, run a fresh scan, and create a new plan only after health is known.';
+      nextStep =
+        'Do not retry. Repair the host update system, run a fresh scan, and create a new plan only after health is known.';
     } else if (isUpdate && health === 'Unknown') {
-      nextStep = 'Do not retry automatically. Run a fresh host scan so update-system health and remaining updates are known.';
+      nextStep =
+        'Do not retry automatically. Run a fresh host scan so update-system health and remaining updates are known.';
     } else if (!isUpdate && rescanRequired) {
-      nextStep = 'Do not retry automatically. Run a fresh scan to measure the current cache pressure before creating another plan.';
+      nextStep =
+        'Do not retry automatically. Run a fresh scan to measure the current cache pressure before creating another plan.';
     } else {
-      nextStep = 'Review the separate execution and verification results, then rescan before creating another plan.';
+      nextStep =
+        'Review the separate execution and verification results, then rescan before creating another plan.';
     }
   }
 

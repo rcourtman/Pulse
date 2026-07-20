@@ -20,8 +20,7 @@ export const ALERT_CONFIG_COOLDOWN_TITLE = 'Alert cooldown';
 export const ALERT_CONFIG_COOLDOWN_DESCRIPTION = 'Limit alert frequency to prevent spam.';
 export const ALERT_CONFIG_COOLDOWN_PERIOD_LABEL = 'Cooldown period';
 export const ALERT_CONFIG_COOLDOWN_PERIOD_SUFFIX = 'minutes';
-export const ALERT_CONFIG_COOLDOWN_PERIOD_HELP =
-  'Minimum time between alerts for the same issue';
+export const ALERT_CONFIG_COOLDOWN_PERIOD_HELP = 'Minimum time between alerts for the same issue';
 export const ALERT_CONFIG_COOLDOWN_MAX_ALERTS_LABEL = 'Max alerts / hour';
 export const ALERT_CONFIG_COOLDOWN_MAX_ALERTS_SUFFIX = 'alerts';
 export const ALERT_CONFIG_COOLDOWN_MAX_ALERTS_HELP = 'Per workload/metric combination';
@@ -64,8 +63,7 @@ export const ALERT_CONFIG_SUMMARY_GROUPING_PREFIX = '• Grouping alerts within'
 export const ALERT_CONFIG_SUMMARY_RECOVERY = '• Recovery notifications enabled when alerts clear';
 export const ALERT_CONFIG_RECOVERY_HELP =
   'Sends on the same channels as live alerts to confirm when a condition clears.';
-export const ALERT_CONFIG_ESCALATION_HELP =
-  'Define escalation levels for unresolved alerts:';
+export const ALERT_CONFIG_ESCALATION_HELP = 'Define escalation levels for unresolved alerts:';
 export const ALERT_CONFIG_ESCALATION_AFTER_LABEL = 'After';
 export const ALERT_CONFIG_ESCALATION_NOTIFY_LABEL = 'Notify';
 export const ALERT_CONFIG_ESCALATION_MINUTES_SUFFIX = 'min';
@@ -153,9 +151,7 @@ export function getAlertConfigEscalationHelp() {
   return ALERT_CONFIG_ESCALATION_HELP;
 }
 
-export function getAlertConfigEscalationNotifyLabel(
-  type: 'email' | 'webhook' | 'all',
-) {
+export function getAlertConfigEscalationNotifyLabel(type: 'email' | 'webhook' | 'all') {
   switch (type) {
     case 'email':
       return ALERT_CONFIG_ESCALATION_NOTIFY_EMAIL;

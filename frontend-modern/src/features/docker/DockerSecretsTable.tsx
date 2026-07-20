@@ -62,7 +62,9 @@ export const DockerSecretsTable: Component<DockerNativeTableProps> = (props) => 
     sortKeys: DOCKER_SECRET_SORT_KEYS,
     descendingFirst: ['created'],
   });
-  const sortedRows = createMemo(() => sort.sortRows(tableState.filtered(), getDockerSecretSortValue));
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getDockerSecretSortValue),
+  );
 
   return (
     <Show

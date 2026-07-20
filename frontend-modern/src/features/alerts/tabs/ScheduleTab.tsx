@@ -38,9 +38,7 @@ export function ScheduleTab(props: ScheduleTabProps) {
     <div class="space-y-6">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 class="text-base font-semibold text-base-content">
-            {ALERT_CONFIG_SCHEDULING_TITLE}
-          </h3>
+          <h3 class="text-base font-semibold text-base-content">{ALERT_CONFIG_SCHEDULING_TITLE}</h3>
           <p class="mt-1 text-sm text-muted">{ALERT_CONFIG_SCHEDULING_DESCRIPTION}</p>
         </div>
         <button

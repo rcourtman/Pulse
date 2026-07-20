@@ -15,9 +15,7 @@ import type { StreamDisplayEvent } from './types';
 // Tool / approval / question / pending-tool events are genuine sequence
 // boundaries (the model narrates around an action), so they close the open
 // content and thinking blocks: text before and after an action stays ordered.
-export const groupStreamEventsForDisplay = (
-  events: StreamDisplayEvent[],
-): StreamDisplayEvent[] => {
+export const groupStreamEventsForDisplay = (events: StreamDisplayEvent[]): StreamDisplayEvent[] => {
   const grouped: StreamDisplayEvent[] = [];
   // Indices of the currently-open content and thinking blocks, or -1 when none
   // is open. Only a hard-boundary event resets these.

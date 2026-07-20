@@ -197,10 +197,9 @@ describe('formatModelSwitch', () => {
     )[id] ?? id;
 
   it('renders a selected route with the using prefix', () => {
-    const transcript = render(
-      [{ type: 'model_switch', model: 'm-sel', modelEvent: 'selected' }],
-      { getModelRouteLabel: labelFor },
-    );
+    const transcript = render([{ type: 'model_switch', model: 'm-sel', modelEvent: 'selected' }], {
+      getModelRouteLabel: labelFor,
+    });
 
     expect(transcript).toContain('[model] using Selected Route');
   });
@@ -279,9 +278,9 @@ describe('hasRenderableEvent switch arms', () => {
   });
 
   it('renders question only when a question payload exists', () => {
-    expect(
-      hasContent({ type: 'question', question: { questionId: 'q', questions: [] } }),
-    ).toBe(true);
+    expect(hasContent({ type: 'question', question: { questionId: 'q', questions: [] } })).toBe(
+      true,
+    );
     expect(hasContent({ type: 'question' })).toBe(false);
   });
 });

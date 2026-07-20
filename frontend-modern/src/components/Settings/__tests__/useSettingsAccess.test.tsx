@@ -119,9 +119,7 @@ describe('useSettingsAccess', () => {
   it('keeps direct feature-gated routes active when the panel owns the locked state', async () => {
     const setActiveTabSpy = vi.fn();
     hasFeatureMock.mockReturnValue(false);
-    shouldHideSettingsNavItemMock.mockImplementation(
-      (tab: string) => tab === 'support-reporting',
-    );
+    shouldHideSettingsNavItemMock.mockImplementation((tab: string) => tab === 'support-reporting');
     shouldBlockSettingsRouteItemMock.mockReturnValue(false);
 
     renderHarness(setActiveTabSpy, 'support-reporting');

@@ -24,7 +24,8 @@ export const STORAGE_BAR_LABEL_WRAP_CLASS =
 export const STORAGE_BAR_LABEL_TEXT_CLASS =
   'max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center';
 export const STORAGE_BAR_TOOLTIP_WRAP_CLASS = 'min-w-[160px]';
-export const STORAGE_BAR_TOOLTIP_TITLE_CLASS = 'font-medium mb-1 text-slate-300 border-b border-border pb-1';
+export const STORAGE_BAR_TOOLTIP_TITLE_CLASS =
+  'font-medium mb-1 text-slate-300 border-b border-border pb-1';
 export const STORAGE_BAR_TOOLTIP_LABEL_CLASS = 'text-slate-400';
 export const STORAGE_BAR_TOOLTIP_VALUE_CLASS = 'text-base-content';
 export const STORAGE_BAR_ZFS_SECTION_CLASS = 'mt-1 pt-1 border-t border-slate-600';
@@ -61,8 +62,7 @@ export const getStorageBarZfsSummary = (zfsPool?: ZFSPool): StorageBarZfsSummary
   if (!zfsPool) return null;
 
   const scan = zfsPool.scan || '';
-  const hasErrors =
-    zfsPool.readErrors > 0 || zfsPool.writeErrors > 0 || zfsPool.checksumErrors > 0;
+  const hasErrors = zfsPool.readErrors > 0 || zfsPool.writeErrors > 0 || zfsPool.checksumErrors > 0;
 
   return {
     hasErrors,

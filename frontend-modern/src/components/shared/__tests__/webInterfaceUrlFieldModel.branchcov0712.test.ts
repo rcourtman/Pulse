@@ -81,9 +81,7 @@ describe('webInterfaceUrlFieldModel.branchcov2', () => {
     it('returns the trimmed targetLabel when present, overriding the kind default', () => {
       // kind 'guest' would default to 'workload', so returning 'container-7'
       // proves the explicit label wins.
-      expect(
-        getWebInterfaceTargetLabel('guest', '  container-7  '),
-      ).toBe('container-7');
+      expect(getWebInterfaceTargetLabel('guest', '  container-7  ')).toBe('container-7');
     });
 
     it('returns the trimmed non-empty label even for agent kind (label still wins over default)', () => {
@@ -115,18 +113,12 @@ describe('webInterfaceUrlFieldModel.branchcov2', () => {
       // null is not a valid string; cast through unknown to satisfy strict
       // null checks while still exercising the real `value || ''` fallback
       // inside normalizeWebInterfaceUrl at runtime.
-      const nullLabel = null as unknown as Parameters<
-        typeof getWebInterfaceTargetLabel
-      >[1];
+      const nullLabel = null as unknown as Parameters<typeof getWebInterfaceTargetLabel>[1];
       expect(getWebInterfaceTargetLabel('docker', nullLabel)).toBe('workload');
     });
 
     it('covers all three metadataKind values against the same empty-label input', () => {
-      const kinds: WebInterfaceUrlFieldProps['metadataKind'][] = [
-        'guest',
-        'agent',
-        'docker',
-      ];
+      const kinds: WebInterfaceUrlFieldProps['metadataKind'][] = ['guest', 'agent', 'docker'];
       const results = kinds.map((k) => getWebInterfaceTargetLabel(k, undefined));
       expect(results).toStrictEqual(['workload', 'agent', 'workload']);
     });

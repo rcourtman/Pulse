@@ -20,7 +20,13 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
     <div
       class={`flex flex-col h-full ${props.compact ? '' : 'bg-surface rounded-md shadow-sm border border-border p-4'}`}
     >
-      <HistoryChartHeader chart={chart} compact={props.compact} hideSelector={props.hideSelector} label={props.label} unit={props.unit} />
+      <HistoryChartHeader
+        chart={chart}
+        compact={props.compact}
+        hideSelector={props.hideSelector}
+        label={props.label}
+        unit={props.unit}
+      />
 
       <div
         class={`relative flex-1 w-full ${props.compact ? 'min-h-[120px]' : 'min-h-[200px]'}`}

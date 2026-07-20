@@ -21,8 +21,7 @@ export function DockerIdentityConflictNotice(props: DockerIdentityConflictNotice
   const message = createMemo(() => {
     if (count() === 1) {
       const host = props.hosts[0];
-      const names =
-        host.hostnames.length > 1 ? ` (${host.hostnames.join(', ')})` : '';
+      const names = host.hostnames.length > 1 ? ` (${host.hostnames.join(', ')})` : '';
       return (
         `Two machines appear to share the identity of ${host.name}${names}. ` +
         `They are likely cloned VMs with the same /etc/machine-id, so Pulse sees them as one host and their reports overwrite each other. ` +

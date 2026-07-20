@@ -73,10 +73,7 @@ const readAppliedDefaultHiddenMigrations = (
   }
 };
 
-const persistAppliedDefaultHiddenMigrations = (
-  storageKey: string,
-  ids: string[],
-): void => {
+const persistAppliedDefaultHiddenMigrations = (storageKey: string, ids: string[]): void => {
   if (typeof window === 'undefined') return;
 
   try {
@@ -112,10 +109,10 @@ export function useColumnVisibility(
   persistedIdAliases: Record<string, string> = {},
   defaultHiddenMigrationIds: string[] = [],
 ) {
-  const defaultHiddenFromColumns = columns
-    .filter((c) => c.defaultHidden)
-    .map((c) => c.id);
-  const effectiveDefaultHidden = Array.from(new Set([...defaultHiddenFromColumns, ...defaultHidden]));
+  const defaultHiddenFromColumns = columns.filter((c) => c.defaultHidden).map((c) => c.id);
+  const effectiveDefaultHidden = Array.from(
+    new Set([...defaultHiddenFromColumns, ...defaultHidden]),
+  );
 
   // Get list of toggleable column IDs
   const toggleableIds = columns.filter((c) => c.toggleable).map((c) => c.id);

@@ -20,7 +20,9 @@ export function AlertWebhookDestinationsSection(props: AlertWebhookDestinationsS
     <SettingsPanel
       title={getAlertWebhooksSectionTitle()}
       description={getAlertWebhooksSectionDescription()}
-      action={<span class="whitespace-nowrap text-xs text-muted">{props.webhooks.length} configured</span>}
+      action={
+        <span class="whitespace-nowrap text-xs text-muted">{props.webhooks.length} configured</span>
+      }
       class="min-w-0"
       bodyClass="space-y-4"
     >

@@ -28,8 +28,6 @@ describe('diagnosticsPresentation', () => {
       description: 'Run diagnostics to test connections and inspect system status.',
       actionLabel: 'Run Diagnostics',
     });
-    expect(DIAGNOSTICS_EMPTY_PBS_MESSAGE).toBe(
-      'No Proxmox Backup Server instances configured.',
-    );
+    expect(DIAGNOSTICS_EMPTY_PBS_MESSAGE).toBe('No Proxmox Backup Server instances configured.');
   });
 });

@@ -46,10 +46,7 @@ export interface SecurityFeatureCardPresentation {
 }
 
 export type SecurityHardeningActionKey =
-  | 'enable-authentication'
-  | 'protect-exports'
-  | 'configure-https'
-  | 'create-api-token';
+  'enable-authentication' | 'protect-exports' | 'configure-https' | 'create-api-token';
 
 export interface SecurityHardeningAction {
   key: SecurityHardeningActionKey;
@@ -169,7 +166,8 @@ export function getSecurityWarningPresentation(options: {
     return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
   };
 
-  let message = 'Review the remaining security settings before using this instance for live infrastructure.';
+  let message =
+    'Review the remaining security settings before using this instance for live infrastructure.';
   if (!options.hasAuthentication) {
     message =
       'Authentication is disabled. Anyone who can reach this Pulse instance can access stored infrastructure credentials.';
@@ -221,9 +219,7 @@ export function getSecurityFeatureStatePresentation(
   };
 }
 
-export function getSecurityScoreIconComponent(
-  score: number,
-): Component<{ class?: string }> {
+export function getSecurityScoreIconComponent(score: number): Component<{ class?: string }> {
   switch (getSecurityScorePresentation(score).icon) {
     case 'shield-check':
       return ShieldCheck;
@@ -240,8 +236,7 @@ export function getSecurityFeatureCardPresentation(options: {
 }): SecurityFeatureCardPresentation {
   if (options.enabled) {
     return {
-      cardClassName:
-        'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950',
+      cardClassName: 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950',
       iconClassName: 'text-emerald-500 dark:text-emerald-400',
       statusLabel: 'Enabled',
       criticalLabelClassName: 'text-emerald-600 dark:text-emerald-400',
@@ -250,8 +245,7 @@ export function getSecurityFeatureCardPresentation(options: {
 
   if (options.critical) {
     return {
-      cardClassName:
-        'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950',
+      cardClassName: 'border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950',
       iconClassName: 'text-rose-500 dark:text-rose-400',
       statusLabel: 'Disabled',
       criticalLabelClassName: 'text-rose-600 dark:text-rose-400',
@@ -356,9 +350,7 @@ export function getSecurityPostureItems(status: SecurityPostureStatus): Security
       key: 'export',
       label: 'Export protection',
       enabled: status.exportProtected && !status.unprotectedExportAllowed,
-      description: status.unprotectedExportAllowed
-        ? 'Unprotected'
-        : 'Token + passphrase required',
+      description: status.unprotectedExportAllowed ? 'Unprotected' : 'Token + passphrase required',
       critical: true,
     },
     {

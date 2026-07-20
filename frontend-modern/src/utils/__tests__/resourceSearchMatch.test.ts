@@ -181,13 +181,13 @@ describe('resourceMatchesSearch', () => {
     });
 
     it('matches object keys from kubernetes.hard', () => {
-      const resource = makeResource({ kubernetes: { hard: { 'cpu': '4', 'memory': '8Gi' } } });
+      const resource = makeResource({ kubernetes: { hard: { cpu: '4', memory: '8Gi' } } });
       expect(resourceMatchesSearch(resource, 'memory')).toBe(true);
       expect(resourceMatchesSearch(resource, 'cpu')).toBe(true);
     });
 
     it('matches object keys from kubernetes.used', () => {
-      const resource = makeResource({ kubernetes: { used: { 'pods': '10' } } });
+      const resource = makeResource({ kubernetes: { used: { pods: '10' } } });
       expect(resourceMatchesSearch(resource, 'pods')).toBe(true);
     });
 
@@ -232,9 +232,9 @@ describe('resourceMatchesSearch', () => {
 
   describe('whitespace handling and filtering', () => {
     it('trims the search term before matching', () => {
-      expect(
-        resourceMatchesSearch(makeResource({ displayName: 'tower' }), '   tower   '),
-      ).toBe(true);
+      expect(resourceMatchesSearch(makeResource({ displayName: 'tower' }), '   tower   ')).toBe(
+        true,
+      );
     });
 
     it('trims candidate values before matching', () => {

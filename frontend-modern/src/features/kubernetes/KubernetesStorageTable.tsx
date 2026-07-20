@@ -275,7 +275,12 @@ export const KubernetesStorageTable: Component<{
                 >
                   Resource
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} sortKey="kind" class="md:w-[10%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="kind"
+                  class="md:w-[10%]"
+                >
                   Kind
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -310,7 +315,11 @@ export const KubernetesStorageTable: Component<{
                 >
                   Size
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[12%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[12%]"
+                >
                   Access / policy
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead

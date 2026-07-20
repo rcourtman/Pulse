@@ -68,9 +68,7 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
                 onClick={() => isSortable && props.handleSort(sortKeyForCol!)}
                 title={col.icon ? col.label : undefined}
               >
-                <div
-                  class={`flex min-h-[14px] items-center gap-0.5 ${alignClasses().flexJustify}`}
-                >
+                <div class={`flex min-h-[14px] items-center gap-0.5 ${alignClasses().flexJustify}`}>
                   {col.icon ? (
                     <>
                       <span class="flex items-center" aria-hidden="true">

@@ -38,7 +38,8 @@ const SETUP_COMPLETION_PREVIEW_SCENARIOS: Record<
   },
 };
 
-export const DEFAULT_SETUP_COMPLETION_PREVIEW_SCENARIO_ID: SetupCompletionPreviewScenarioId = 'empty';
+export const DEFAULT_SETUP_COMPLETION_PREVIEW_SCENARIO_ID: SetupCompletionPreviewScenarioId =
+  'empty';
 
 export const getSetupCompletionPreviewScenario = (
   search: string | null | undefined,

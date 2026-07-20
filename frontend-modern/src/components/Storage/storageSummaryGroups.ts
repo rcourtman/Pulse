@@ -32,7 +32,9 @@ export const buildStorageSummaryGroupScope = (
   }
 
   const seriesIds = Array.from(
-    new Set(group.items.map((record) => resolveStorageRecordMetricResourceId(record)).filter(Boolean)),
+    new Set(
+      group.items.map((record) => resolveStorageRecordMetricResourceId(record)).filter(Boolean),
+    ),
   );
   if (seriesIds.length === 0) {
     return null;

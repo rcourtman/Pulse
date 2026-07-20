@@ -79,23 +79,68 @@ describe('ResourceActionHistory verification rendering', () => {
   it('keeps APT execution, verification, recovery, bounded facts, and next step separate without a duplicate legacy card', () => {
     cleanup();
     const apt = actionAudit({
-      request: { requestId: 'apt-request', resourceId: 'proxmox:node:pve-1', capabilityName: 'install_os_updates', reason: 'Resolve pending operating system updates', requestedBy: 'pulse_patrol' },
-      plan: { actionId: 'apt-action', requestId: 'apt-request', allowed: true, requiresApproval: true, approvalPolicy: 'admin', rollbackAvailable: false },
-      result: { success: false, actionResultV2: {
-        version: 2,
-        execution: { status: 'inconclusive', summary: 'APT package updates: phase=install; 6 pending before, 3 pending after; package manager health: unhealthy; recovery required: true; reboot required: false' },
-        verification: { status: 'contradicted', evidenceClass: 'agent_attested', summary: 'Three updates still remain.' },
-        compensation: { support: 'unavailable', status: 'not_available', summary: 'No rollback is available; repair is required.' },
-      } },
-      verification: { ran: true, success: false, command: 'legacy command must not render', output: 'legacy output must not render' },
+      request: {
+        requestId: 'apt-request',
+        resourceId: 'proxmox:node:pve-1',
+        capabilityName: 'install_os_updates',
+        reason: 'Resolve pending operating system updates',
+        requestedBy: 'pulse_patrol',
+      },
+      plan: {
+        actionId: 'apt-action',
+        requestId: 'apt-request',
+        allowed: true,
+        requiresApproval: true,
+        approvalPolicy: 'admin',
+        rollbackAvailable: false,
+      },
+      result: {
+        success: false,
+        actionResultV2: {
+          version: 2,
+          execution: {
+            status: 'inconclusive',
+            summary:
+              'APT package updates: phase=install; 6 pending before, 3 pending after; package manager health: unhealthy; recovery required: true; reboot required: false',
+          },
+          verification: {
+            status: 'contradicted',
+            evidenceClass: 'agent_attested',
+            summary: 'Three updates still remain.',
+          },
+          compensation: {
+            support: 'unavailable',
+            status: 'not_available',
+            summary: 'No rollback is available; repair is required.',
+          },
+        },
+      },
+      verification: {
+        ran: true,
+        success: false,
+        command: 'legacy command must not render',
+        output: 'legacy output must not render',
+      },
     });
-    render(() => ResourceActionHistory({ audits: [apt], count: 1, loadingLabel: 'Actions loaded', error: '', onRetry: () => undefined }));
+    render(() =>
+      ResourceActionHistory({
+        audits: [apt],
+        count: 1,
+        loadingLabel: 'Actions loaded',
+        error: '',
+        onRetry: () => undefined,
+      }),
+    );
     const history = within(screen.getByTestId('resource-action-history-section'));
     expect(history.getByText('Execution inconclusive')).toBeInTheDocument();
     expect(history.getByText('Outcome contradicted')).toBeInTheDocument();
     expect(history.getByText('Recovery: Not Available')).toBeInTheDocument();
     expect(history.getByText('Known unhealthy')).toBeInTheDocument();
-    expect(history.getByText('Do not retry. Repair the host update system, run a fresh scan, and create a new plan only after health is known.')).toBeInTheDocument();
+    expect(
+      history.getByText(
+        'Do not retry. Repair the host update system, run a fresh scan, and create a new plan only after health is known.',
+      ),
+    ).toBeInTheDocument();
     expect(history.queryByText('legacy command must not render')).toBeNull();
     expect(history.queryByText('Legacy check failed (source unclassified)')).toBeNull();
     expect(screen.getAllByTestId('resource-action-recovery-truth')).toHaveLength(1);

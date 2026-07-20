@@ -63,20 +63,28 @@ describe('alertThresholdsPresentation', () => {
       'No virtualization hosts match the current filters.',
     );
     expect(PBS_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No PBS servers match the current filters.');
-    expect(GUEST_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No VMs or containers match the current filters.');
+    expect(GUEST_THRESHOLDS_FILTER_EMPTY_STATE).toBe(
+      'No VMs or containers match the current filters.',
+    );
     expect(GUEST_FILTERING_EMPTY_STATE).toBe('Configure VM and container filtering rules.');
     expect(BACKUP_THRESHOLDS_EMPTY_STATE).toBe('Configure recovery alert thresholds.');
     expect(SNAPSHOT_THRESHOLDS_EMPTY_STATE).toBe('Configure snapshot age thresholds.');
     expect(STORAGE_THRESHOLDS_EMPTY_STATE).toBe('No storage devices found.');
-    expect(STORAGE_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No storage devices match the current filters.');
+    expect(STORAGE_THRESHOLDS_FILTER_EMPTY_STATE).toBe(
+      'No storage devices match the current filters.',
+    );
     expect(PMG_THRESHOLDS_EMPTY_STATE).toBe(
       'No mail gateways configured yet. Add a Proxmox Mail Gateway connection in Settings → Infrastructure to manage thresholds.',
     );
     expect(PMG_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No mail gateways match the current filters.');
     expect(AGENT_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No machines match the current filters.');
-    expect(AGENT_DISKS_EMPTY_STATE).toContain('Machines with mounted filesystems will appear here.');
+    expect(AGENT_DISKS_EMPTY_STATE).toContain(
+      'Machines with mounted filesystems will appear here.',
+    );
     expect(AGENT_DISKS_FILTER_EMPTY_STATE).toBe('No machine disks match the current filters.');
-    expect(CONTAINER_RUNTIMES_FILTER_EMPTY_STATE).toBe('No container runtimes match the current filters.');
+    expect(CONTAINER_RUNTIMES_FILTER_EMPTY_STATE).toBe(
+      'No container runtimes match the current filters.',
+    );
     expect(CONTAINERS_FILTER_EMPTY_STATE).toBe('No containers match the current filters.');
   });
 

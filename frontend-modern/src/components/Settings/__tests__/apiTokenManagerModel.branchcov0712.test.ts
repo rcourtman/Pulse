@@ -65,15 +65,15 @@ describe('readPlatformNumber (via tokenRevokedAtForResource)', () => {
   });
 
   it('returns 0 for a finite zero (not treated as missing)', () => {
-    expect(
-      tokenRevokedAtForResource(makeResource({ platformData: { tokenRevokedAt: 0 } })),
-    ).toBe(0);
+    expect(tokenRevokedAtForResource(makeResource({ platformData: { tokenRevokedAt: 0 } }))).toBe(
+      0,
+    );
   });
 
   it('returns a negative finite number verbatim', () => {
-    expect(
-      tokenRevokedAtForResource(makeResource({ platformData: { tokenRevokedAt: -42 } })),
-    ).toBe(-42);
+    expect(tokenRevokedAtForResource(makeResource({ platformData: { tokenRevokedAt: -42 } }))).toBe(
+      -42,
+    );
   });
 
   it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
@@ -127,16 +127,14 @@ describe('readPlatformData (via tokenRevokedAtForResource)', () => {
 
 describe('readNestedPlatformField (via tokenRevokedAtForResource)', () => {
   it('returns the field directly from platformData when present at the top level', () => {
-    expect(
-      tokenRevokedAtForResource(makeResource({ platformData: { tokenRevokedAt: 111 } })),
-    ).toBe(111);
+    expect(tokenRevokedAtForResource(makeResource({ platformData: { tokenRevokedAt: 111 } }))).toBe(
+      111,
+    );
   });
 
   it('falls through to platformData.agent.<field> when not at the top level', () => {
     expect(
-      tokenRevokedAtForResource(
-        makeResource({ platformData: { agent: { tokenRevokedAt: 222 } } }),
-      ),
+      tokenRevokedAtForResource(makeResource({ platformData: { agent: { tokenRevokedAt: 222 } } })),
     ).toBe(222);
   });
 
@@ -162,9 +160,7 @@ describe('readNestedPlatformField (via tokenRevokedAtForResource)', () => {
 
   it('returns undefined when agent is an object without the field and docker is absent', () => {
     expect(
-      tokenRevokedAtForResource(
-        makeResource({ platformData: { agent: { unrelated: true } } }),
-      ),
+      tokenRevokedAtForResource(makeResource({ platformData: { agent: { unrelated: true } } })),
     ).toBeUndefined();
   });
 
@@ -293,7 +289,9 @@ describe('getAPITokenDialogName', () => {
   });
 
   it('combines prefix and suffix when the name is blank and both are set', () => {
-    expect(getAPITokenDialogName(makeToken({ name: '', prefix: 'pl', suffix: 'xy' }))).toBe('pl…xy');
+    expect(getAPITokenDialogName(makeToken({ name: '', prefix: 'pl', suffix: 'xy' }))).toBe(
+      'pl…xy',
+    );
   });
 
   it('returns "untitled token" when name, prefix, and suffix are all blank', () => {
@@ -620,9 +618,7 @@ describe('appendUsageEntry (via buildDockerTokenUsage)', () => {
       platformData: { docker: { hostSourceId: 'rt-shared', tokenId: 't1' } },
     });
     expect(buildDockerTokenUsage([a, b])).toStrictEqual(
-      new Map([
-        ['t1', { count: 1, items: [{ id: 'rt-shared', label: 'Docker One' }] }],
-      ]),
+      new Map([['t1', { count: 1, items: [{ id: 'rt-shared', label: 'Docker One' }] }]]),
     );
   });
 });

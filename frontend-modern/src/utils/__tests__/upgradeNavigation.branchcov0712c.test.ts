@@ -13,7 +13,9 @@ describe('upgradeNavigation (branch coverage)', () => {
       // SSR guard: typeof window === 'undefined' -> early return before window.open.
       // If the guard were absent, `undefined.open(...)` would throw.
       vi.stubGlobal('window', undefined);
-      expect(() => openExternalUpgradeDestination('https://example.com/pricing', false)).not.toThrow();
+      expect(() =>
+        openExternalUpgradeDestination('https://example.com/pricing', false),
+      ).not.toThrow();
       vi.unstubAllGlobals();
       // The held spy was never wired during the SSR call -> concrete proof the guard fired.
       expect(openSpy).toHaveBeenCalledTimes(0);

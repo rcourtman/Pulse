@@ -87,7 +87,9 @@ export const DockerVolumesTable: Component<DockerNativeTableProps> = (props) => 
     sortKeys: DOCKER_VOLUME_SORT_KEYS,
     descendingFirst: ['size', 'refs', 'created'],
   });
-  const sortedRows = createMemo(() => sort.sortRows(tableState.filtered(), getDockerVolumeSortValue));
+  const sortedRows = createMemo(() =>
+    sort.sortRows(tableState.filtered(), getDockerVolumeSortValue),
+  );
 
   return (
     <Show

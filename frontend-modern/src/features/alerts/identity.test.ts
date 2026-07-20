@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  getAlertIdentifiers,
-  getCanonicalAlertId,
-  matchesAlertIdentifier,
-} from './identity';
+import { getAlertIdentifiers, getCanonicalAlertId, matchesAlertIdentifier } from './identity';
 
 describe('alert identity helpers', () => {
   it('treats id as the canonical alert identifier', () => {

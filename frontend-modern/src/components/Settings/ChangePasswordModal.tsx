@@ -116,7 +116,13 @@ export const ChangePasswordModal: Component<ChangePasswordModalProps> = (props) 
             title="Close"
             class="text-slate-400 hover:text-muted disabled:opacity-50"
           >
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"

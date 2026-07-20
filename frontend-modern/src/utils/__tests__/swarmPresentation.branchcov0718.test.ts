@@ -126,13 +126,9 @@ describe('swarmPresentation.branchcov0718', () => {
     });
 
     it('wires the control availability status labels', () => {
-      expect(presentation.controlAvailableLabel).toBe(
-        SWARM_DRAWER_CONTROL_AVAILABLE_LABEL,
-      );
+      expect(presentation.controlAvailableLabel).toBe(SWARM_DRAWER_CONTROL_AVAILABLE_LABEL);
       expect(presentation.controlAvailableLabel).toBe('available');
-      expect(presentation.controlUnavailableLabel).toBe(
-        SWARM_DRAWER_CONTROL_UNAVAILABLE_LABEL,
-      );
+      expect(presentation.controlUnavailableLabel).toBe(SWARM_DRAWER_CONTROL_UNAVAILABLE_LABEL);
       expect(presentation.controlUnavailableLabel).toBe('unavailable');
     });
 

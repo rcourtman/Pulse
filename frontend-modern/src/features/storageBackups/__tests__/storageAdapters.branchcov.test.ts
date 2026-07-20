@@ -300,7 +300,10 @@ describe('storageAdapters.branchcov - mapResourceStorageRecord (via resource ada
   });
 
   it('classifies a plain proxmox storage resource with node scope', () => {
-    const resource = makeResource({ id: 'node-scope', platformData: { type: 'dir', node: 'pve1' } });
+    const resource = makeResource({
+      id: 'node-scope',
+      platformData: { type: 'dir', node: 'pve1' },
+    });
     const records = resourceAdapter.build(ctx([resource]));
     expect(records[0].location.scope).toBe('node');
   });

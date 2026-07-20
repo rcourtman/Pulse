@@ -42,9 +42,7 @@ describe('buildEmailConfigPayload — branch coverage (batch 3 / 0712c)', () => 
   // -----------------------------------------------------------------------
   describe('trim arm — exotic whitespace', () => {
     it('strips carriage-return and CRLF sequences from both ends', () => {
-      const result = buildEmailConfigPayload(
-        makeUIEmailConfig({ to: ['\r\ruser@test.com\r\n'] }),
-      );
+      const result = buildEmailConfigPayload(makeUIEmailConfig({ to: ['\r\ruser@test.com\r\n'] }));
       expect(result.to).toStrictEqual(['user@test.com']);
     });
 
@@ -77,9 +75,7 @@ describe('buildEmailConfigPayload — branch coverage (batch 3 / 0712c)', () => 
       // U+2028 (line separator) and U+2029 (paragraph separator) are
       // whitespace from trim()'s perspective; a sole entry of them must
       // be filtered out, leaving an empty to list.
-      const result = buildEmailConfigPayload(
-        makeUIEmailConfig({ to: ['\u2028\u2029'] }),
-      );
+      const result = buildEmailConfigPayload(makeUIEmailConfig({ to: ['\u2028\u2029'] }));
       expect(result.to).toStrictEqual([]);
     });
   });
@@ -100,9 +96,7 @@ describe('buildEmailConfigPayload — branch coverage (batch 3 / 0712c)', () => 
     });
 
     it('keeps the literal string "false" because length > 0', () => {
-      const result = buildEmailConfigPayload(
-        makeUIEmailConfig({ to: ['false'] }),
-      );
+      const result = buildEmailConfigPayload(makeUIEmailConfig({ to: ['false'] }));
       expect(result.to).toStrictEqual(['false']);
     });
 
@@ -120,11 +114,7 @@ describe('buildEmailConfigPayload — branch coverage (batch 3 / 0712c)', () => 
           to: ['one@test.com', 'two@test.com', 'three@test.com'],
         }),
       );
-      expect(result.to).toStrictEqual([
-        'one@test.com',
-        'two@test.com',
-        'three@test.com',
-      ]);
+      expect(result.to).toStrictEqual(['one@test.com', 'two@test.com', 'three@test.com']);
     });
   });
 
@@ -142,9 +132,7 @@ describe('buildEmailConfigPayload — branch coverage (batch 3 / 0712c)', () => 
     });
 
     it('preserves an internal tab while trimming ends', () => {
-      const result = buildEmailConfigPayload(
-        makeUIEmailConfig({ to: ['\ta\tb@test.com\t'] }),
-      );
+      const result = buildEmailConfigPayload(makeUIEmailConfig({ to: ['\ta\tb@test.com\t'] }));
       expect(result.to).toStrictEqual(['a\tb@test.com']);
     });
   });
@@ -198,9 +186,7 @@ describe('buildEmailConfigPayload — branch coverage (batch 3 / 0712c)', () => 
     });
 
     it('forwards a custom provider string unchanged', () => {
-      const result = buildEmailConfigPayload(
-        makeUIEmailConfig({ provider: 'mailgun' }),
-      );
+      const result = buildEmailConfigPayload(makeUIEmailConfig({ provider: 'mailgun' }));
       expect(result.provider).toBe('mailgun');
     });
   });

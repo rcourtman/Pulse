@@ -63,11 +63,9 @@ describe('useWorkloadViewportSync', () => {
       expect(onScroll).toHaveBeenCalledWith(96, window.innerHeight, 32);
     });
 
-    expect(addEventListenerSpy).toHaveBeenCalledWith(
-      'scroll',
-      expect.any(Function),
-      { passive: true },
-    );
+    expect(addEventListenerSpy).toHaveBeenCalledWith('scroll', expect.any(Function), {
+      passive: true,
+    });
     expect(addEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
 
     window.dispatchEvent(new Event('scroll'));

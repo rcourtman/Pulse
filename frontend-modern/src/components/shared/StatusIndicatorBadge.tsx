@@ -54,12 +54,7 @@ export function StatusIndicatorBadge(props: StatusIndicatorBadgeProps): JSX.Elem
   return (
     <span class={className()} title={props.title}>
       {props.dot ? (
-        <StatusDot
-          variant={variant()}
-          size="xs"
-          ariaHidden={true}
-          class="translate-y-[0.5px]"
-        />
+        <StatusDot variant={variant()} size="xs" ariaHidden={true} class="translate-y-[0.5px]" />
       ) : null}
       {label()}
     </span>

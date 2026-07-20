@@ -3,12 +3,7 @@ import type { BackupAlertConfig, SnapshotAlertConfig } from '@/types/alerts';
 import type { AlertResourceThresholdMap } from '@/components/Alerts/alertResourceTableModel';
 
 export type ThresholdsActiveTab =
-  | 'proxmox'
-  | 'docker'
-  | 'kubernetes'
-  | 'truenas'
-  | 'vmware'
-  | 'systems';
+  'proxmox' | 'docker' | 'kubernetes' | 'truenas' | 'vmware' | 'systems';
 
 export interface Resource {
   id: string;

@@ -155,7 +155,10 @@ export const KubernetesPodsTable: Component<{
     descendingFirst: ['restarts', 'age'],
   });
   const sortedRows = createMemo(() =>
-    sort.sortRows([...tableState.filtered()].sort(compareKubernetesPods), getKubernetesPodSortValue),
+    sort.sortRows(
+      [...tableState.filtered()].sort(compareKubernetesPods),
+      getKubernetesPodSortValue,
+    ),
   );
   const drawer = createPlatformResourceDetailState({ idPrefix: 'kubernetes-pod-drawer' });
   const resolveResourceLabel = createPlatformResourceLabelResolver(() => props.resources);
@@ -220,7 +223,12 @@ export const KubernetesPodsTable: Component<{
                 >
                   Node
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} sortKey="status" class="md:w-[8%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  sortKey="status"
+                  class="md:w-[8%]"
+                >
                   Status
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead

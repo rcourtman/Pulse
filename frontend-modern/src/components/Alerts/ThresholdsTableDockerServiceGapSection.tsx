@@ -59,7 +59,9 @@ export function ThresholdsTableDockerServiceGapSection(props: ThresholdsTableSec
             }}
             class="mt-1 w-full rounded-md border border-border bg-surface p-2 text-sm text-base-content focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-200 dark:focus:border-sky-400 dark:focus:ring-sky-600"
           />
-          <p class="mt-1 text-xs text-muted">{state.dockerServicePresentation.warningGapDescription}</p>
+          <p class="mt-1 text-xs text-muted">
+            {state.dockerServicePresentation.warningGapDescription}
+          </p>
         </div>
         <div>
           <label

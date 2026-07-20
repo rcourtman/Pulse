@@ -39,10 +39,7 @@ const baseResource = (overrides: Partial<Resource>): Resource =>
 const allRows = (resource: Resource): ResourceDetailDrawerTrueNASRow[] =>
   buildTrueNASDetailSections(resource).flatMap((section) => section.rows);
 
-const findRow = (
-  resource: Resource,
-  label: string,
-): ResourceDetailDrawerTrueNASRow | undefined =>
+const findRow = (resource: Resource, label: string): ResourceDetailDrawerTrueNASRow | undefined =>
   allRows(resource).find((row) => row.label === label);
 
 // --- fixture builders -----------------------------------------------------
@@ -174,9 +171,9 @@ describe('summarizeList (via App list rows)', () => {
   });
 
   it('appends a +N suffix when values exceed the visible count', () => {
-    expect(
-      findRow(appRes({ usedHostIps: ['a', 'b', 'c', 'd', 'e'] }), 'Host IPs')?.value,
-    ).toBe('a, b, c +2');
+    expect(findRow(appRes({ usedHostIps: ['a', 'b', 'c', 'd', 'e'] }), 'Host IPs')?.value).toBe(
+      'a, b, c +2',
+    );
   });
 
   it('omits the row when the list is empty', () => {
@@ -184,15 +181,15 @@ describe('summarizeList (via App list rows)', () => {
   });
 
   it('trims and filters whitespace-only entries', () => {
-    expect(
-      findRow(appRes({ usedHostIps: ['  x  ', '', '  ', 'y'] }), 'Host IPs')?.value,
-    ).toBe('x, y');
+    expect(findRow(appRes({ usedHostIps: ['  x  ', '', '  ', 'y'] }), 'Host IPs')?.value).toBe(
+      'x, y',
+    );
   });
 
   it('respects a custom visible count (Images uses 2)', () => {
-    expect(
-      findRow(appRes({ images: ['img1', 'img2', 'img3', 'img4'] }), 'Images')?.value,
-    ).toBe('img1, img2 +2');
+    expect(findRow(appRes({ images: ['img1', 'img2', 'img3', 'img4'] }), 'Images')?.value).toBe(
+      'img1, img2 +2',
+    );
   });
 
   it('shows no suffix when count equals the visible count', () => {
@@ -200,9 +197,9 @@ describe('summarizeList (via App list rows)', () => {
   });
 
   it('populates the title attribute with the full list', () => {
-    expect(
-      findRow(appRes({ usedHostIps: ['a', 'b', 'c', 'd'] }), 'Host IPs')?.title,
-    ).toBe('a, b, c, d');
+    expect(findRow(appRes({ usedHostIps: ['a', 'b', 'c', 'd'] }), 'Host IPs')?.title).toBe(
+      'a, b, c, d',
+    );
   });
 });
 
@@ -294,10 +291,8 @@ describe('portLabel (via App "Ports" row)', () => {
 describe('appVolumeLabels (via App "Volumes" row)', () => {
   it('formats source -> destination', () => {
     expect(
-      findRow(
-        appRes({ volumes: [{ source: '/mnt/tank/app', destination: '/data' }] }),
-        'Volumes',
-      )?.value,
+      findRow(appRes({ volumes: [{ source: '/mnt/tank/app', destination: '/data' }] }), 'Volumes')
+        ?.value,
     ).toBe('/mnt/tank/app -> /data');
   });
 
@@ -314,7 +309,9 @@ describe('appVolumeLabels (via App "Volumes" row)', () => {
   });
 
   it('filters volumes where neither source nor destination is present', () => {
-    expect(findRow(appRes({ volumes: [{ source: '  ', destination: '' }] }), 'Volumes')).toBeUndefined();
+    expect(
+      findRow(appRes({ volumes: [{ source: '  ', destination: '' }] }), 'Volumes'),
+    ).toBeUndefined();
   });
 });
 
@@ -332,9 +329,9 @@ describe('appNetworkLabels (via App "Networks" row)', () => {
   });
 
   it('prefers name over id', () => {
-    expect(
-      findRow(appRes({ networks: [{ name: 'bridge', id: 'net1' }] }), 'Networks')?.value,
-    ).toBe('bridge');
+    expect(findRow(appRes({ networks: [{ name: 'bridge', id: 'net1' }] }), 'Networks')?.value).toBe(
+      'bridge',
+    );
   });
 
   it('filters networks where neither name nor id is present', () => {
@@ -378,9 +375,7 @@ describe('formatVMCpu (via VM "vCPU" row)', () => {
 
 describe('formatVMTopology (via VM "Topology" row)', () => {
   it('formats cores x threads', () => {
-    expect(findRow(vmRes({ cores: 2, threads: 4 }), 'Topology')?.value).toBe(
-      '2 cores x 4 threads',
-    );
+    expect(findRow(vmRes({ cores: 2, threads: 4 }), 'Topology')?.value).toBe('2 cores x 4 threads');
   });
 
   it('formats cores-only', () => {
@@ -492,10 +487,7 @@ describe('storageUsageLabel (via Storage "Usage" row)', () => {
 
   it('prefers used/total over percent', () => {
     expect(
-      findRow(
-        storageRes({}, { disk: { used: 1024, total: 2048, current: 50 } }),
-        'Usage',
-      )?.value,
+      findRow(storageRes({}, { disk: { used: 1024, total: 2048, current: 50 } }), 'Usage')?.value,
     ).toBe('1.00 KB / 2.00 KB');
   });
 
@@ -769,9 +761,9 @@ describe('buildTrueNASAppSections additional branches', () => {
   });
 
   it('falls back to containers array length for Containers row', () => {
-    expect(
-      findRow(appRes({ containers: [{ id: 'c1' }, { id: 'c2' }] }), 'Containers')?.value,
-    ).toBe('2');
+    expect(findRow(appRes({ containers: [{ id: 'c1' }, { id: 'c2' }] }), 'Containers')?.value).toBe(
+      '2',
+    );
   });
 
   it('prefers humanVersion over version', () => {
@@ -925,7 +917,7 @@ describe('buildTrueNASStorageSections additional branches', () => {
     expect(findRow(resource, 'Risk')?.tone).toBe('default');
   });
 
-it('shows Protection reduced (booleanValue) with warning tone when true', () => {
+  it('shows Protection reduced (booleanValue) with warning tone when true', () => {
     const row = findRow(storageRes({ protectionReduced: true }), 'Protection reduced');
     expect(row?.value).toBe('Enabled');
     expect(row?.tone).toBe('warning');
@@ -980,10 +972,7 @@ describe('buildTrueNASSystemSections additional branches', () => {
   });
 
   it('shows Storage summary with warning tone', () => {
-    const row = findRow(
-      systemResource({ storageRiskSummary: 'Pool degraded' }),
-      'Storage summary',
-    );
+    const row = findRow(systemResource({ storageRiskSummary: 'Pool degraded' }), 'Storage summary');
     expect(row?.value).toBe('Pool degraded');
     expect(row?.tone).toBe('warning');
   });

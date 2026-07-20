@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  getStorageRowAlertPresentation,
-} from '@/features/storageBackups/storageRowAlertPresentation';
+import { getStorageRowAlertPresentation } from '@/features/storageBackups/storageRowAlertPresentation';
 
 describe('storageRowAlertPresentation', () => {
   it('returns unacknowledged critical row styling canonically', () => {

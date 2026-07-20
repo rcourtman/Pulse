@@ -8,13 +8,7 @@
 import type { Resource } from '@/types/resource';
 
 export type MetricResourceKind =
-  | 'node'
-  | 'vm'
-  | 'container'
-  | 'agent'
-  | 'dockerHost'
-  | 'dockerContainer'
-  | 'k8s';
+  'node' | 'vm' | 'container' | 'agent' | 'dockerHost' | 'dockerContainer' | 'k8s';
 
 /**
  * Build a namespaced metric key for a resource

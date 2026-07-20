@@ -90,9 +90,7 @@ describe('collectRiskReasons (via getResourceStorageIssueLabel on Unraid resourc
       pbs: {
         storageRisk: {
           level: 'warning',
-          reasons: [
-            { code: 'unraid_disabled_disks', severity: 'warning', summary: 'pbs-disk' },
-          ],
+          reasons: [{ code: 'unraid_disabled_disks', severity: 'warning', summary: 'pbs-disk' }],
         },
       },
     });
@@ -176,7 +174,10 @@ describe('findRiskReason (exercised via hasUnraidStorageAttentionIssue)', () => 
         arrayState: 'STARTED',
         risk: {
           level: 'warning',
-          reasons: [{ code: '', summary: 'x' }, { summary: 'y' }] as unknown as ResourceStorageRiskReason[],
+          reasons: [
+            { code: '', summary: 'x' },
+            { summary: 'y' },
+          ] as unknown as ResourceStorageRiskReason[],
         },
       },
     } as unknown as Resource;

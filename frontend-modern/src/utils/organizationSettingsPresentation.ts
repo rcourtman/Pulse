@@ -6,11 +6,7 @@ export const ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE =
 export const ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS = 'p-4 text-sm text-slate-500';
 
 export type OrganizationSettingsLoadContext =
-  | 'access'
-  | 'overview'
-  | 'sharing'
-  | 'billing'
-  | 'billing-admin';
+  'access' | 'overview' | 'sharing' | 'billing' | 'billing-admin';
 
 const ORGANIZATION_SETTINGS_LOAD_FALLBACKS: Record<OrganizationSettingsLoadContext, string> = {
   access: 'Unable to load organization access settings.',

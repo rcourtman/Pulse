@@ -6,7 +6,10 @@ import { DiscoveryLoadingFallback } from '@/components/shared/DiscoveryLoadingFa
 import { DrawerSubjectHeading } from '@/components/shared/DrawerSubjectHeading';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { getSimpleStatusIndicator } from '@/utils/status';
-import { GuestDrawerHistory, GuestDrawerHistoryRangeSelect } from '@/components/Workloads/GuestDrawerHistory';
+import {
+  GuestDrawerHistory,
+  GuestDrawerHistoryRangeSelect,
+} from '@/components/Workloads/GuestDrawerHistory';
 import { GUEST_DRAWER_HISTORY_DEFAULT_RANGE } from '@/components/Workloads/guestDrawerModel';
 import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import type { Resource } from '@/types/resource';
@@ -39,11 +42,7 @@ export const DockerHostDrawer: Component<DockerHostDrawerProps> = (props) => {
   const headerIndicator = createMemo(() => getSimpleStatusIndicator(props.host.status));
 
   return (
-    <section
-      class="space-y-3"
-      aria-labelledby={headingId()}
-      data-testid="docker-host-drawer"
-    >
+    <section class="space-y-3" aria-labelledby={headingId()} data-testid="docker-host-drawer">
       <DrawerSubjectHeading
         headingId={headingId()}
         title={displayName()}

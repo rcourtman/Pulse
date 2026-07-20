@@ -71,13 +71,7 @@ export interface InfrastructureChartsResponse {
 }
 
 export type InfrastructureSummaryMetric =
-  | 'cpu'
-  | 'memory'
-  | 'disk'
-  | 'diskread'
-  | 'diskwrite'
-  | 'netin'
-  | 'netout';
+  'cpu' | 'memory' | 'disk' | 'diskread' | 'diskwrite' | 'netin' | 'netout';
 
 export interface WorkloadChartsResponse {
   data: Record<string, ChartData>;
@@ -143,16 +137,7 @@ export interface StorageSummaryTrendResponse {
 }
 
 // Persistent metrics history types (SQLite-backed, longer retention)
-export type HistoryTimeRange =
-  | '30m'
-  | '1h'
-  | '6h'
-  | '12h'
-  | '24h'
-  | '7d'
-  | '14d'
-  | '30d'
-  | '90d';
+export type HistoryTimeRange = '30m' | '1h' | '6h' | '12h' | '24h' | '7d' | '14d' | '30d' | '90d';
 type MetricsHistoryAPIResourceType =
   | 'vm'
   | 'system-container'

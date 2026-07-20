@@ -15,10 +15,7 @@ import { apiFetchJSON } from '@/utils/apiClient';
  *   - pending             → in-flight; the sentinel hasn't decided
  */
 export type MaintenanceVerificationStatus =
-  | 'pending'
-  | 'healthy'
-  | 'needs_review'
-  | 'failed_verification';
+  'pending' | 'healthy' | 'needs_review' | 'failed_verification';
 
 export type MaintenanceVerificationUserOutcome = 'reviewed' | '';
 

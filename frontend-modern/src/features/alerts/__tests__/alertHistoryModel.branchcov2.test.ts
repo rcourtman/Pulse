@@ -108,9 +108,9 @@ describe('buildAlertHistoryParams', () => {
   });
 
   it('falls back to limit 1000 with no startTime for an unrecognised range', () => {
-    expect(
-      buildAlertHistoryParams('bogus' as AlertHistoryRange, now),
-    ).toStrictEqual({ limit: 1000 });
+    expect(buildAlertHistoryParams('bogus' as AlertHistoryRange, now)).toStrictEqual({
+      limit: 1000,
+    });
   });
 });
 
@@ -121,9 +121,9 @@ describe('buildAlertHistoryParams', () => {
 
 describe('formatAlertHistoryDuration', () => {
   it('returns "0m" when end is before start (negative duration)', () => {
-    expect(
-      formatAlertHistoryDuration('2026-03-22T10:00:00.000Z', '2026-03-22T09:00:00.000Z'),
-    ).toBe('0m');
+    expect(formatAlertHistoryDuration('2026-03-22T10:00:00.000Z', '2026-03-22T09:00:00.000Z')).toBe(
+      '0m',
+    );
   });
 
   it('uses the provided `now` when endTime is omitted', () => {
@@ -138,23 +138,23 @@ describe('formatAlertHistoryDuration', () => {
   });
 
   it('formats the minute-only arm with leading minutes under one hour', () => {
-    expect(
-      formatAlertHistoryDuration('2026-03-22T09:00:00.000Z', '2026-03-22T09:05:00.000Z'),
-    ).toBe('5m');
+    expect(formatAlertHistoryDuration('2026-03-22T09:00:00.000Z', '2026-03-22T09:05:00.000Z')).toBe(
+      '5m',
+    );
   });
 
   it('renders the residual minutes even when hours divide evenly', () => {
     // exactly 1 hour → minutes=60, hours=1, days=0 → "1h 0m"
-    expect(
-      formatAlertHistoryDuration('2026-03-22T09:00:00.000Z', '2026-03-22T10:00:00.000Z'),
-    ).toBe('1h 0m');
+    expect(formatAlertHistoryDuration('2026-03-22T09:00:00.000Z', '2026-03-22T10:00:00.000Z')).toBe(
+      '1h 0m',
+    );
   });
 
   it('renders the residual hours even when days divide evenly', () => {
     // exactly 1 day → minutes=1440, hours=24, days=1 → "1d 0h"
-    expect(
-      formatAlertHistoryDuration('2026-03-22T09:00:00.000Z', '2026-03-23T09:00:00.000Z'),
-    ).toBe('1d 0h');
+    expect(formatAlertHistoryDuration('2026-03-22T09:00:00.000Z', '2026-03-23T09:00:00.000Z')).toBe(
+      '1d 0h',
+    );
   });
 });
 
@@ -459,9 +459,7 @@ describe('buildAlertTrends (nice-size fallback)', () => {
     // ~1801 days ago → rawRangeHours ≈ 43224 → rawBucketSize = ceil(43224/30) = 1441
     // which is larger than the max nice value (1440), so `.find()` returns undefined
     // and the `?? rawBucketSize` fallback engages.
-    const alerts = [
-      makeItem({ startTime: new Date(now - 1801 * 24 * MS_PER_HOUR).toISOString() }),
-    ];
+    const alerts = [makeItem({ startTime: new Date(now - 1801 * 24 * MS_PER_HOUR).toISOString() })];
     const trends = buildAlertTrends(alerts, 'all', now);
     expect(trends.bucketSize).toBe(1441);
     expect(trends.rangeHours).toBe(30 * 1441);
@@ -469,9 +467,7 @@ describe('buildAlertTrends (nice-size fallback)', () => {
   });
 
   it('caps the bucket count at maxBuckets (30) for a very wide range', () => {
-    const alerts = [
-      makeItem({ startTime: new Date(now - 5000 * 24 * MS_PER_HOUR).toISOString() }),
-    ];
+    const alerts = [makeItem({ startTime: new Date(now - 5000 * 24 * MS_PER_HOUR).toISOString() })];
     const trends = buildAlertTrends(alerts, 'all', now);
     expect(trends.buckets.length).toBeLessThanOrEqual(30);
     expect(trends.rangeHours).toBe(trends.buckets.length * trends.bucketSize);
@@ -638,9 +634,7 @@ describe('formatAlertHistoryGroupLabel', () => {
 describe('getIncidentRowKey', () => {
   it('joins id and startTime with "::" into a stable composite key', () => {
     expect(
-      getIncidentRowKey(
-        makeItem({ id: 'inc-9', startTime: '2026-03-22T09:00:00.000Z' }),
-      ),
+      getIncidentRowKey(makeItem({ id: 'inc-9', startTime: '2026-03-22T09:00:00.000Z' })),
     ).toBe('inc-9::2026-03-22T09:00:00.000Z');
   });
 });

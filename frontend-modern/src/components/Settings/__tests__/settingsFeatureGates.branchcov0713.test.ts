@@ -16,7 +16,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SettingsTab } from '../settingsNavigationModel';
-import { getTabLockReason, isFeatureLocked, isTabLocked, tabFeatureRequirements } from '../settingsFeatureGates';
+import {
+  getTabLockReason,
+  isFeatureLocked,
+  isTabLocked,
+  tabFeatureRequirements,
+} from '../settingsFeatureGates';
 
 // ---- Helpers ---------------------------------------------------------------
 // Mirrors the `hasFeatures` factory used by the sibling branchcov0712c test so
@@ -31,9 +36,7 @@ const hasFeatures =
 // `tabFeatureRequirements`. Driving every entry guarantees the
 // `tabFeatureRequirements[tab]` lookup -> defined-array arm is exercised for
 // each key, not just a representative sample.
-const allGatedTabs = Object.entries(tabFeatureRequirements) as Array<
-  [SettingsTab, string[]]
->;
+const allGatedTabs = Object.entries(tabFeatureRequirements) as Array<[SettingsTab, string[]]>;
 
 /**
  * Wraps `hasFeatures` with a call-sink so tests can assert guard ORDERING —
@@ -71,7 +74,13 @@ const EXPECTED_LOCK_REASON: Partial<Record<SettingsTab, string>> = {
 describe('isFeatureLocked - direct branch coverage', () => {
   // Guard 1, `!features` arm: `features` is `undefined`.
   it('returns false when features is undefined (first guard: !features)', () => {
-    expect(isFeatureLocked(undefined, () => false, () => true)).toBe(false);
+    expect(
+      isFeatureLocked(
+        undefined,
+        () => false,
+        () => true,
+      ),
+    ).toBe(false);
   });
 
   // Guard 1, `!features` arm: deliberately-malformed `null` input violates the
@@ -79,33 +88,55 @@ describe('isFeatureLocked - direct branch coverage', () => {
   // mode clean. `!null` is true so the function must short-circuit to false.
   it('returns false when features is null (cast; !features covers nullish)', () => {
     const features = null as unknown as Parameters<typeof isFeatureLocked>[0];
-    expect(isFeatureLocked(features, () => false, () => true)).toBe(false);
+    expect(
+      isFeatureLocked(
+        features,
+        () => false,
+        () => true,
+      ),
+    ).toBe(false);
   });
 
   // Guard 1, `features.length === 0` arm.
   it('returns false when features is an empty array (length === 0 arm)', () => {
-    expect(isFeatureLocked([], () => false, () => true)).toBe(false);
+    expect(
+      isFeatureLocked(
+        [],
+        () => false,
+        () => true,
+      ),
+    ).toBe(false);
   });
 
   // Guard 2, `!runtimeCapabilitiesLoaded()` arm: populated features but the
   // license/capability state has not resolved yet -> must not lock.
   it('returns false when features are present but runtime is not loaded', () => {
-    expect(isFeatureLocked(['relay'], () => false, () => false)).toBe(false);
+    expect(
+      isFeatureLocked(
+        ['relay'],
+        () => false,
+        () => false,
+      ),
+    ).toBe(false);
   });
 
   // Guard 3, `every()` -> true arm: `!true === false` (unlocked).
   it('returns false when every required feature is held and runtime is loaded', () => {
     expect(
-      isFeatureLocked(['relay', 'multi_tenant'], hasFeatures(['relay', 'multi_tenant']), () => true),
+      isFeatureLocked(
+        ['relay', 'multi_tenant'],
+        hasFeatures(['relay', 'multi_tenant']),
+        () => true,
+      ),
     ).toBe(false);
   });
 
   // Guard 3, `every()` -> false arm: `!false === true` (LOCKED). This is the
   // only branch that returns true.
   it('returns true when the first required feature is missing (every -> false)', () => {
-    expect(isFeatureLocked(['relay', 'multi_tenant'], hasFeatures(['multi_tenant']), () => true)).toBe(
-      true,
-    );
+    expect(
+      isFeatureLocked(['relay', 'multi_tenant'], hasFeatures(['multi_tenant']), () => true),
+    ).toBe(true);
   });
 
   it('returns true when only the first of several required features is held', () => {
@@ -184,17 +215,15 @@ describe('isTabLocked - predicate short-circuit (complements branchcov0712c)', (
 
 describe('getTabLockReason - branch coverage', () => {
   // Guard 1: tab NOT present in tabFeatureRequirements -> `undefined` -> null.
-  it.each(
-    [
-      'infrastructure-systems',
-      'system-general',
-      'system-network',
-      'api',
-      'support-diagnostics',
-      'security-overview',
-      'security-audit',
-    ] as SettingsTab[],
-  )('returns null for non-gated tab %s (lookup -> undefined)', (tab) => {
+  it.each([
+    'infrastructure-systems',
+    'system-general',
+    'system-network',
+    'api',
+    'support-diagnostics',
+    'security-overview',
+    'security-audit',
+  ] as SettingsTab[])('returns null for non-gated tab %s (lookup -> undefined)', (tab) => {
     expect(getTabLockReason(tab, hasFeatures([]), () => true)).toBeNull();
   });
 

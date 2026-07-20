@@ -22,10 +22,7 @@ export function getReportingInventoryExportErrorMessage(): string {
   return 'Failed to generate VM inventory export';
 }
 
-export function formatReportingFilenameDate(
-  date: Date,
-  style: 'utc_yyyymmdd',
-): string {
+export function formatReportingFilenameDate(date: Date, style: 'utc_yyyymmdd'): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
   const day = String(date.getUTCDate()).padStart(2, '0');

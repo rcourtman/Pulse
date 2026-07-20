@@ -179,11 +179,7 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
                           aria-selected={item.index === selectedIndex()}
                           aria-disabled={command.disabled ? 'true' : undefined}
                           aria-label={`${
-                            command.disabled
-                              ? 'Unavailable'
-                              : command.insertText
-                                ? 'Insert'
-                                : 'Run'
+                            command.disabled ? 'Unavailable' : command.insertText ? 'Insert' : 'Run'
                           } /${command.name}: ${command.description}${
                             command.disabledReason ? `. ${command.disabledReason}` : ''
                           }`}
@@ -191,9 +187,7 @@ export function SlashCommandAutocomplete(props: SlashCommandAutocompleteProps) {
                             command.disabled
                               ? 'cursor-not-allowed opacity-60'
                               : 'hover:bg-surface-hover'
-                          } ${
-                            item.index === selectedIndex() ? 'bg-surface-hover' : ''
-                          }`}
+                          } ${item.index === selectedIndex() ? 'bg-surface-hover' : ''}`}
                           onClick={(event) => {
                             event.stopPropagation();
                             selectCommand(command);

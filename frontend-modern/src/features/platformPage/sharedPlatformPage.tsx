@@ -960,9 +960,11 @@ export const getPlatformResourceCountNoun = (rowNoun: string, count: number): st
   return words.join(' ');
 };
 
-export const PlatformResourceCounter: Component<{ visible: number; total: number; rowNoun: string }> = (
-  props,
-) => {
+export const PlatformResourceCounter: Component<{
+  visible: number;
+  total: number;
+  rowNoun: string;
+}> = (props) => {
   const totalNoun = () => getPlatformResourceCountNoun(props.rowNoun, props.total);
   return (
     <span class="ml-auto whitespace-nowrap text-xs font-medium text-muted">

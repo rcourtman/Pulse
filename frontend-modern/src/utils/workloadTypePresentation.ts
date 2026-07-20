@@ -10,11 +10,7 @@ export interface WorkloadTypePresentation {
 }
 
 type WorkloadTypePresentationKey =
-  | WorkloadType
-  | 'system-container'
-  | 'app-container'
-  | 'agent'
-  | 'pod';
+  WorkloadType | 'system-container' | 'app-container' | 'agent' | 'pod';
 
 const PRESENTATION_MAP: Record<WorkloadTypePresentationKey, WorkloadTypePresentation> = {
   vm: {

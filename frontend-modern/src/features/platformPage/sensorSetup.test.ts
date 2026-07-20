@@ -54,9 +54,9 @@ describe('collectOutdatedSensorSetupNodes', () => {
     const wrapperNode = node({
       proxmox: { node: 'pve1', temperatureDetails: { available: true } },
     });
-    expect(
-      collectOutdatedSensorSetupNodes([wrapperNode], [disk({ nodeName: 'pve1' })]),
-    ).toEqual([]);
+    expect(collectOutdatedSensorSetupNodes([wrapperNode], [disk({ nodeName: 'pve1' })])).toEqual(
+      [],
+    );
   });
 
   it('ignores legacy nodes when temperature collection did not succeed', () => {
@@ -90,9 +90,9 @@ describe('collectOutdatedSensorSetupNodes', () => {
   });
 
   it('ignores disks that belong to a different node', () => {
-    expect(
-      collectOutdatedSensorSetupNodes([legacyNode()], [disk({ nodeName: 'pve2' })]),
-    ).toEqual([]);
+    expect(collectOutdatedSensorSetupNodes([legacyNode()], [disk({ nodeName: 'pve2' })])).toEqual(
+      [],
+    );
   });
 
   it('sorts multiple affected nodes by name', () => {

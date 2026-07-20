@@ -48,7 +48,7 @@ describe('MaintenanceVerificationSection', () => {
   });
 
   it('hides the review button once the report has been reviewed', () => {
-    expect(sectionSource).toContain("when={!report.userOutcome}");
+    expect(sectionSource).toContain('when={!report.userOutcome}');
     expect(sectionSource).toContain("when={report.userOutcome === 'reviewed'}");
   });
 
@@ -64,7 +64,9 @@ describe('maintenanceVerification API client', () => {
   });
 
   it('exposes the four operations the section needs', () => {
-    expect(apiClientSource).toContain('export async function listMaintenanceVerificationsForResource');
+    expect(apiClientSource).toContain(
+      'export async function listMaintenanceVerificationsForResource',
+    );
     expect(apiClientSource).toContain('export async function reviewMaintenanceVerification');
     expect(apiClientSource).toContain('export async function rerunMaintenanceVerification');
   });
@@ -80,7 +82,9 @@ describe('maintenanceVerification API client', () => {
 describe('ResourceDetailDrawerOverviewTab integration', () => {
   it('renders MaintenanceVerificationSection directly under the operator-state section', () => {
     expect(overviewTabSource).toContain("from './MaintenanceVerificationSection'");
-    expect(overviewTabSource).toContain('<MaintenanceVerificationSection resourceId={resource.id} />');
+    expect(overviewTabSource).toContain(
+      '<MaintenanceVerificationSection resourceId={resource.id} />',
+    );
     const operatorIndex = overviewTabSource.indexOf('<ResourceOperatorStateSection');
     const verificationIndex = overviewTabSource.indexOf('<MaintenanceVerificationSection');
     expect(operatorIndex).toBeGreaterThan(0);

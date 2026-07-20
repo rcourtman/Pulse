@@ -40,7 +40,9 @@ describe('TooltipPortal', () => {
       expect(document.body.querySelector('[data-tooltip-portal="true"]')).not.toBeNull();
     });
 
-    const tooltip = document.body.querySelector('[data-tooltip-portal="true"]') as HTMLElement | null;
+    const tooltip = document.body.querySelector(
+      '[data-tooltip-portal="true"]',
+    ) as HTMLElement | null;
     const portal = tooltip?.closest('foreignObject');
     expect(tooltip?.textContent).toContain('Memory Composition');
     expect(Number.parseFloat(portal?.getAttribute('x') ?? '0')).toBeGreaterThan(0);
@@ -98,10 +100,12 @@ describe('TooltipPortal', () => {
   });
 
   it('repositions while the portal stays visible and coordinates keep changing', async () => {
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
-      callback(0);
-      return 1;
-    });
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(
+      (callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      },
+    );
 
     vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockReturnValue({
       width: 180,

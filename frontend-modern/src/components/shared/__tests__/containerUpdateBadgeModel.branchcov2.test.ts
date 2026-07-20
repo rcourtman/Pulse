@@ -111,9 +111,9 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
     });
 
     it('defaults step to "Processing..." and elapsed to 0 when storeState is missing (updating)', () => {
-      expect(
-        getUpdateButtonTooltip({ state: 'updating', now: 100_000 }),
-      ).toBe('Processing... (0s)');
+      expect(getUpdateButtonTooltip({ state: 'updating', now: 100_000 })).toBe(
+        'Processing... (0s)',
+      );
     });
 
     it('uses storeState.message and computes elapsed seconds when elapsed <= 60', () => {
@@ -204,9 +204,7 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
     });
 
     it('returns "Update container" for the default state when updateStatus is absent', () => {
-      expect(getUpdateButtonTooltip({ state: 'idle', now: 1000 })).toBe(
-        'Update container',
-      );
+      expect(getUpdateButtonTooltip({ state: 'idle', now: 1000 })).toBe('Update container');
     });
 
     it('truncates digests to 12 chars for the default state when updateStatus is present', () => {
@@ -226,12 +224,7 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
 
   describe('getUpdateButtonLabel', () => {
     it('short-circuits to "Update" when settingsLoaded is false, regardless of state', () => {
-      const states: UpdateState[] = [
-        'updating',
-        'success',
-        'error',
-        'idle',
-      ];
+      const states: UpdateState[] = ['updating', 'success', 'error', 'idle'];
       for (const state of states) {
         expect(getUpdateButtonLabel(state, false)).toBe('Update');
       }
@@ -286,9 +279,7 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
   // icon, current, and button-default tooltip tests.
   describe('getDigestPreview (via public callers)', () => {
     it('returns "unknown" for an undefined digest (badge tooltip, undefined status)', () => {
-      expect(getContainerUpdateBadgeTooltip(undefined)).toContain(
-        'Current: unknown...',
-      );
+      expect(getContainerUpdateBadgeTooltip(undefined)).toContain('Current: unknown...');
     });
 
     it('returns the full digest when it is shorter than the preview length', () => {
@@ -307,20 +298,14 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
         currentDigest: LONG_DIGEST,
         latestDigest: LONG_DIGEST,
       });
-      expect(getContainerUpdateBadgeTooltip(status)).toContain(
-        `Current: ${DIGEST_FIRST_19}...`,
-      );
-      expect(getUpdateIconTooltip(status)).toContain(
-        `Current: ${DIGEST_FIRST_12}...`,
-      );
+      expect(getContainerUpdateBadgeTooltip(status)).toContain(`Current: ${DIGEST_FIRST_19}...`);
+      expect(getUpdateIconTooltip(status)).toContain(`Current: ${DIGEST_FIRST_12}...`);
     });
   });
 
   describe('getContainerUpdateErrorTooltip', () => {
     it('falls back to "Unknown error" when updateStatus is undefined', () => {
-      expect(getContainerUpdateErrorTooltip(undefined)).toBe(
-        'Update check failed: Unknown error',
-      );
+      expect(getContainerUpdateErrorTooltip(undefined)).toBe('Update check failed: Unknown error');
     });
 
     it('falls back to "Unknown error" when error is absent on a defined status', () => {
@@ -338,9 +323,7 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
 
     it('falls back to "Unknown error" for an empty-string error (|| falsy arm)', () => {
       const status = makeUpdateStatus({ error: '' });
-      expect(getContainerUpdateErrorTooltip(status)).toBe(
-        'Update check failed: Unknown error',
-      );
+      expect(getContainerUpdateErrorTooltip(status)).toBe('Update check failed: Unknown error');
     });
   });
 
@@ -350,9 +333,7 @@ describe('containerUpdateBadgeModel.branchcov2', () => {
     });
 
     it('takes the early return when currentDigest is absent', () => {
-      expect(getContainerUpdateCurrentTooltip(makeUpdateStatus())).toBe(
-        'Image is current',
-      );
+      expect(getContainerUpdateCurrentTooltip(makeUpdateStatus())).toBe('Image is current');
     });
 
     it('takes the early return for an empty-string currentDigest (falsy guard)', () => {

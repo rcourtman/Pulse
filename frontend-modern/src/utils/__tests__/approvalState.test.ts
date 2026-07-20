@@ -17,15 +17,15 @@ describe('approvalState', () => {
   });
 
   it('keeps only pending approvals with a future parseable expiry live', () => {
-    expect(isLivePendingApproval({ status: 'pending', expiresAt: '2026-05-07T10:05:00Z' }, now)).toBe(
-      true,
-    );
-    expect(isLivePendingApproval({ status: 'pending', expiresAt: '2026-05-07T09:59:00Z' }, now)).toBe(
-      false,
-    );
-    expect(isLivePendingApproval({ status: 'approved', expiresAt: '2026-05-07T10:05:00Z' }, now)).toBe(
-      false,
-    );
+    expect(
+      isLivePendingApproval({ status: 'pending', expiresAt: '2026-05-07T10:05:00Z' }, now),
+    ).toBe(true);
+    expect(
+      isLivePendingApproval({ status: 'pending', expiresAt: '2026-05-07T09:59:00Z' }, now),
+    ).toBe(false);
+    expect(
+      isLivePendingApproval({ status: 'approved', expiresAt: '2026-05-07T10:05:00Z' }, now),
+    ).toBe(false);
   });
 
   it('fails closed when a pending approval expiry is malformed or missing', () => {

@@ -101,9 +101,7 @@ export function Button(props: ButtonProps) {
       disabled={local.disabled || local.isLoading}
       {...rest}
     >
-      {local.isLoading ? (
-        <LoadingSpinner size="md" tone="current" class="-ml-1 mr-2" />
-      ) : null}
+      {local.isLoading ? <LoadingSpinner size="md" tone="current" class="-ml-1 mr-2" /> : null}
       {local.children}
     </button>
   );

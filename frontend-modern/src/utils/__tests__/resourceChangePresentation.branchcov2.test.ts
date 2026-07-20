@@ -40,9 +40,7 @@ describe('formatResourceChangeKind (branch coverage)', () => {
 
   it('returns an empty string for an empty kind via the default arm fallback', () => {
     expect(
-      formatResourceChangeKind(
-        '' as unknown as Parameters<typeof formatResourceChangeKind>[0],
-      ),
+      formatResourceChangeKind('' as unknown as Parameters<typeof formatResourceChangeKind>[0]),
     ).toBe('');
   });
 });
@@ -188,9 +186,9 @@ describe('formatResourceChangeHeadline (branch coverage)', () => {
   });
 
   it('falls back to the resourceId when a restart has neither endpoints nor a reason', () => {
-    expect(
-      formatResourceChangeHeadline(makeChange({ kind: 'restart', resourceId: 'vm:99' })),
-    ).toBe('Restart: vm:99');
+    expect(formatResourceChangeHeadline(makeChange({ kind: 'restart', resourceId: 'vm:99' }))).toBe(
+      'Restart: vm:99',
+    );
   });
 
   it('trims surrounding whitespace from a reason before composing the headline', () => {

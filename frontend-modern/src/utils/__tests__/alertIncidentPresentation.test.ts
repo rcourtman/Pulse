@@ -63,8 +63,7 @@ describe('alertIncidentPresentation', () => {
 
     expect(getAlertIncidentStatusPresentation('open', false)).toEqual({
       label: 'open',
-      className:
-        'px-2 py-0.5 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
+      className: 'px-2 py-0.5 rounded bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300',
     });
 
     expect(getAlertIncidentStatusPresentation('resolved', false)).toEqual({
@@ -191,9 +190,7 @@ describe('alertIncidentPresentation', () => {
   });
 
   it('returns canonical resource incident card presentation classes', () => {
-    expect(getAlertResourceIncidentCardClass()).toBe(
-      'rounded border border-border bg-surface p-3',
-    );
+    expect(getAlertResourceIncidentCardClass()).toBe('rounded border border-border bg-surface p-3');
     expect(getAlertResourceIncidentSummaryRowClass()).toBe(
       'mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted',
     );

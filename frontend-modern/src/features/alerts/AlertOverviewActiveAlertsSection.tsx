@@ -134,9 +134,7 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                         class="text-xs text-muted hover:text-base-content transition-colors"
                         onClick={() => toggleGroup(group.key)}
                       >
-                        {isGroupExpanded(group.key)
-                          ? 'Hide'
-                          : `+${group.related.length} related`}
+                        {isGroupExpanded(group.key) ? 'Hide' : `+${group.related.length} related`}
                       </button>
                       <Show when={[group.primary, ...group.related].some((a) => !a.acknowledged)}>
                         <button

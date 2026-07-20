@@ -85,10 +85,15 @@ export const ContainerUpdateBadge: Component<ContainerUpdateBadgeProps> = (props
             class="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-help"
             onMouseEnter={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
-              showTooltip(getContainerUpdateBadgeTooltip(props.updateStatus), rect.left + rect.width / 2, rect.top, {
-                align: 'center',
-                direction: 'up',
-              });
+              showTooltip(
+                getContainerUpdateBadgeTooltip(props.updateStatus),
+                rect.left + rect.width / 2,
+                rect.top,
+                {
+                  align: 'center',
+                  direction: 'up',
+                },
+              );
             }}
             onMouseLeave={() => hideTooltip()}
           >
@@ -104,10 +109,15 @@ export const ContainerUpdateBadge: Component<ContainerUpdateBadgeProps> = (props
             aria-label={getContainerUpdateErrorTooltip(props.updateStatus)}
             onMouseEnter={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
-              showTooltip(getContainerUpdateErrorTooltip(props.updateStatus), rect.left + rect.width / 2, rect.top, {
-                align: 'center',
-                direction: 'up',
-              });
+              showTooltip(
+                getContainerUpdateErrorTooltip(props.updateStatus),
+                rect.left + rect.width / 2,
+                rect.top,
+                {
+                  align: 'center',
+                  direction: 'up',
+                },
+              );
             }}
             onMouseLeave={() => hideTooltip()}
           >
@@ -121,10 +131,15 @@ export const ContainerUpdateBadge: Component<ContainerUpdateBadgeProps> = (props
             aria-label={getContainerUpdateCurrentTooltip(props.updateStatus)}
             onMouseEnter={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
-              showTooltip(getContainerUpdateCurrentTooltip(props.updateStatus), rect.left + rect.width / 2, rect.top, {
-                align: 'center',
-                direction: 'up',
-              });
+              showTooltip(
+                getContainerUpdateCurrentTooltip(props.updateStatus),
+                rect.left + rect.width / 2,
+                rect.top,
+                {
+                  align: 'center',
+                  direction: 'up',
+                },
+              );
             }}
             onMouseLeave={() => hideTooltip()}
           >
@@ -150,10 +165,15 @@ export const UpdateIcon: Component<UpdateIconProps> = (props) => {
         class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-help"
         onMouseEnter={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
-          showTooltip(getUpdateIconTooltip(props.updateStatus), rect.left + rect.width / 2, rect.top, {
-            align: 'center',
-            direction: 'up',
-          });
+          showTooltip(
+            getUpdateIconTooltip(props.updateStatus),
+            rect.left + rect.width / 2,
+            rect.top,
+            {
+              align: 'center',
+              direction: 'up',
+            },
+          );
         }}
         onMouseLeave={() => hideTooltip()}
       >
@@ -227,7 +247,9 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
                 </Switch>
               </Show>
               <Show when={!props.compact}>
-                <span class={!state.settingsLoaded() ? 'opacity-50' : ''}>{state.buttonLabel()}</span>
+                <span class={!state.settingsLoaded() ? 'opacity-50' : ''}>
+                  {state.buttonLabel()}
+                </span>
               </Show>
             </button>
             <ActionReviewDialog
@@ -238,7 +260,11 @@ export const UpdateButton: Component<UpdateButtonProps> = (props) => {
           </div>
         }
       >
-        <ContainerUpdateBadge updateStatus={props.updateStatus} compact={props.compact} showCurrent={true} />
+        <ContainerUpdateBadge
+          updateStatus={props.updateStatus}
+          compact={props.compact}
+          showCurrent={true}
+        />
       </Show>
     </Show>
   );

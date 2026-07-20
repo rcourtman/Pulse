@@ -155,8 +155,7 @@ describe('agentMachineTableModel coverage2', () => {
     });
 
     it('sorts by agent label descending and keeps empty labels at the bottom', () => {
-      const getAgent = (m: Resource): string =>
-        m.id === 'x' ? '6.0' : m.id === 'y' ? '5.0' : '';
+      const getAgent = (m: Resource): string => (m.id === 'x' ? '6.0' : m.id === 'y' ? '5.0' : '');
       const sorted = sortAgentMachines(
         [resource({ id: 'y' }), resource({ id: 'z' }), resource({ id: 'x' })],
         'agent',
@@ -335,13 +334,17 @@ describe('agentMachineTableModel coverage2', () => {
 
     it('returns read only when write is absent', () => {
       expect(
-        getAgentMachineDiskIOTotal(resource({ diskIO: { readRate: 500 } as unknown as ResourceDiskIO })),
+        getAgentMachineDiskIOTotal(
+          resource({ diskIO: { readRate: 500 } as unknown as ResourceDiskIO }),
+        ),
       ).toBe(500);
     });
 
     it('returns write only when read is absent', () => {
       expect(
-        getAgentMachineDiskIOTotal(resource({ diskIO: { writeRate: 300 } as unknown as ResourceDiskIO })),
+        getAgentMachineDiskIOTotal(
+          resource({ diskIO: { writeRate: 300 } as unknown as ResourceDiskIO }),
+        ),
       ).toBe(300);
     });
 
@@ -354,7 +357,9 @@ describe('agentMachineTableModel coverage2', () => {
     it('prefers agent disk percentages over machine-level disk metrics', () => {
       const machine = resource({
         disk: { total: 1000, used: 900, current: 90 },
-        agent: { disks: [{ device: '/dev/sda1', mountpoint: '/', type: 'ext4', total: 1000, used: 500 }] },
+        agent: {
+          disks: [{ device: '/dev/sda1', mountpoint: '/', type: 'ext4', total: 1000, used: 500 }],
+        },
       });
       expect(getAgentMachineDiskPercent(machine)).toBe(50);
     });
@@ -362,7 +367,9 @@ describe('agentMachineTableModel coverage2', () => {
     it('returns zero rather than falling back when agent disks exist but are all empty', () => {
       const machine = resource({
         disk: { total: 1000, used: 900, current: 90 },
-        agent: { disks: [{ device: '/dev/sda1', mountpoint: '/', type: 'ext4', total: 0, used: 0 }] },
+        agent: {
+          disks: [{ device: '/dev/sda1', mountpoint: '/', type: 'ext4', total: 0, used: 0 }],
+        },
       });
       expect(getAgentMachineDiskPercent(machine)).toBe(0);
     });
@@ -604,7 +611,12 @@ describe('agentMachineTableModel coverage2', () => {
         agent: {
           sensors: {
             smart: [
-              { device: '/dev/sda', model: 'Samsung', serial: 'SN123', standby: true } as unknown as HostDiskSMART,
+              {
+                device: '/dev/sda',
+                model: 'Samsung',
+                serial: 'SN123',
+                standby: true,
+              } as unknown as HostDiskSMART,
             ],
           },
         },

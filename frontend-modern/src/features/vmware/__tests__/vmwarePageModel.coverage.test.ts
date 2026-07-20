@@ -36,7 +36,11 @@ describe('vmwarePageModel coverage', () => {
         type: 'storage',
         name: 'y-ds',
         storage: { topology: 'datastore' },
-        vmware: { entityType: 'datastore', datastoreAccessible: true, maintenanceMode: 'in_maintenance' },
+        vmware: {
+          entityType: 'datastore',
+          datastoreAccessible: true,
+          maintenanceMode: 'in_maintenance',
+        },
       });
       const attention = makeResource({
         id: 'ds-attention',
@@ -142,11 +146,7 @@ describe('vmwarePageModel coverage', () => {
 
       const { networks } = buildVmwarePageModel([healthy, unknown, attention]);
 
-      expect(networks.map((n) => n.id)).toEqual([
-        'net-attention',
-        'net-unknown',
-        'net-healthy',
-      ]);
+      expect(networks.map((n) => n.id)).toEqual(['net-attention', 'net-unknown', 'net-healthy']);
     });
 
     it('tie-breaks equal-rank networks by display name', () => {
@@ -197,12 +197,7 @@ describe('vmwarePageModel coverage', () => {
       const { vms } = buildVmwarePageModel([byFallback, byRuntime, byParent, both]);
 
       // host-alpha < host-beta < host-zeta < unknown
-      expect(vms.map((v) => v.id)).toEqual([
-        'vm-both',
-        'vm-parent',
-        'vm-runtime',
-        'vm-fallback',
-      ]);
+      expect(vms.map((v) => v.id)).toEqual(['vm-both', 'vm-parent', 'vm-runtime', 'vm-fallback']);
     });
   });
 
@@ -242,13 +237,7 @@ describe('vmwarePageModel coverage', () => {
         vmware: { ...host, powerState: 'poweredOn' },
       });
 
-      const { vms } = buildVmwarePageModel([
-        poweredOn,
-        unknown,
-        poweredOff,
-        suspended,
-        attention,
-      ]);
+      const { vms } = buildVmwarePageModel([poweredOn, unknown, poweredOff, suspended, attention]);
 
       expect(vms.map((v) => v.id)).toEqual([
         'vm-attention',

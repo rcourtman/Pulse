@@ -41,8 +41,7 @@ describe('useThresholdSliderState', () => {
     expect(addDocumentSpy).toHaveBeenCalledWith('mouseup', expect.any(Function));
 
     const scrollHandler = addWindowSpy.mock.calls.find((call) => call[0] === 'scroll')?.[1] as
-      | EventListener
-      | undefined;
+      EventListener | undefined;
     expect(scrollHandler).toBeTypeOf('function');
     scrollHandler?.(new Event('scroll'));
     expect(scrollToSpy).toHaveBeenCalled();

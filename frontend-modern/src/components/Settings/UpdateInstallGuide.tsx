@@ -170,8 +170,7 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
             }
           >
             <p class="text-xs text-blue-700 dark:text-blue-300">
-              Updates are managed through Docker. Use these commands to check for and apply
-              updates:
+              Updates are managed through Docker. Use these commands to check for and apply updates:
             </p>
             <div class="space-y-2">
               <CopyCommandBlock
@@ -194,8 +193,7 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
       <Show when={props.versionInfo?.isSourceBuild}>
         <div class="rounded-md border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900">
           <p class="text-xs text-blue-800 dark:text-blue-200">
-            <strong>Built from source:</strong> Pull the latest code from git and rebuild to
-            update.
+            <strong>Built from source:</strong> Pull the latest code from git and rebuild to update.
           </p>
         </div>
       </Show>
@@ -244,7 +242,7 @@ export const UpdateInstallGuide: Component<UpdateInstallGuideProps> = (props) =>
                       ? 'cursor-not-allowed bg-green-400 text-white dark:bg-green-600'
                       : readinessBlocked()
                         ? 'cursor-not-allowed bg-red-200 text-red-800 dark:bg-red-900 dark:text-red-200'
-                      : 'bg-green-600 text-white hover:bg-green-700'
+                        : 'bg-green-600 text-white hover:bg-green-700'
                   }`}
                 >
                   <Show

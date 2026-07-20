@@ -12,10 +12,7 @@ const createPointerEvent = (pointerType: string) =>
     target: document.body,
   }) as unknown as PointerEvent & { currentTarget: HTMLElement; target: Element };
 
-const createFocusEvent = (
-  currentTarget: HTMLElement,
-  relatedTarget: EventTarget | null = null,
-) =>
+const createFocusEvent = (currentTarget: HTMLElement, relatedTarget: EventTarget | null = null) =>
   ({
     currentTarget,
     target: currentTarget,

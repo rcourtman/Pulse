@@ -111,9 +111,7 @@ describe('KubernetesPodsTable', () => {
             id: 'crashing-pod',
             kubernetes: {
               podPhase: 'Running',
-              podContainers: [
-                { ready: false, state: 'waiting', reason: 'CrashLoopBackOff' },
-              ],
+              podContainers: [{ ready: false, state: 'waiting', reason: 'CrashLoopBackOff' }],
             },
           }),
           makeResource({
@@ -134,8 +132,8 @@ describe('KubernetesPodsTable', () => {
       />
     ));
 
-    const rows = Array.from(document.querySelectorAll('[data-kubernetes-pod-row]')).map(
-      (row) => row.getAttribute('data-kubernetes-pod-row'),
+    const rows = Array.from(document.querySelectorAll('[data-kubernetes-pod-row]')).map((row) =>
+      row.getAttribute('data-kubernetes-pod-row'),
     );
     expect(rows).toEqual(['crashing-pod', 'not-ready-pod', 'happy-pod']);
     // The failure reason is visible cell text, not just a dot tooltip.

@@ -331,7 +331,11 @@ export const KubernetesControllersTable: Component<{
                 >
                   Exceptions
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[9%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[9%]"
+                >
                   Detail
                 </PlatformSortableTableHead>
               </>

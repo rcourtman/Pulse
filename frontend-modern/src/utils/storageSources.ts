@@ -3,14 +3,7 @@ import { getAllFilterOptionLabel } from '@/components/shared/filterOptionPresent
 import { getSourcePlatformLabel, normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
-export type StorageSourceTone =
-  | 'slate'
-  | 'orange'
-  | 'indigo'
-  | 'rose'
-  | 'teal'
-  | 'cyan'
-  | 'blue';
+export type StorageSourceTone = 'slate' | 'orange' | 'indigo' | 'rose' | 'teal' | 'cyan' | 'blue';
 
 export interface StorageSourceOption {
   key: string;

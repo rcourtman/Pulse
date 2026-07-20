@@ -18,12 +18,7 @@ export const BACKUP_ACTIVITY_RANGE_DAYS = [
 export type BackupActivityMetricMode = 'count' | 'volume';
 
 export type BackupActivitySegmentKind =
-  | 'archive'
-  | 'pbs'
-  | 'ok'
-  | 'failed'
-  | 'running'
-  | 'snapshot';
+  'archive' | 'pbs' | 'ok' | 'failed' | 'running' | 'snapshot';
 
 interface BackupActivitySegmentPresentation {
   label: string;

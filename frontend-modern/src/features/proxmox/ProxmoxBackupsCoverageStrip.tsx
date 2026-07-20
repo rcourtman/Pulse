@@ -28,7 +28,10 @@ export interface CoverageStripProps {
 
 export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props) => {
   const total = () =>
-    props.segments.reduce((sum, seg) => sum + (Number.isFinite(seg.value) ? Math.max(0, seg.value) : 0), 0);
+    props.segments.reduce(
+      (sum, seg) => sum + (Number.isFinite(seg.value) ? Math.max(0, seg.value) : 0),
+      0,
+    );
 
   return (
     <div class="rounded-lg border border-border-subtle bg-surface-alt/25 px-3 py-2">
@@ -42,9 +45,7 @@ export const ProxmoxBackupsCoverageStrip: Component<CoverageStripProps> = (props
       </div>
       <Show
         when={total() > 0}
-        fallback={
-          <div class="mt-2 h-2 w-full rounded-full bg-surface" aria-hidden="true" />
-        }
+        fallback={<div class="mt-2 h-2 w-full rounded-full bg-surface" aria-hidden="true" />}
       >
         <div class="mt-2 flex h-2 w-full overflow-hidden rounded-full bg-surface">
           <For each={props.segments}>

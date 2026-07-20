@@ -20,11 +20,7 @@ export type AssistantSlashCommandAction =
   | 'sessions';
 
 export type AssistantSlashCommandCategory =
-  | 'Session'
-  | 'Model'
-  | 'Transcript'
-  | 'Help'
-  | 'Developer';
+  'Session' | 'Model' | 'Transcript' | 'Help' | 'Developer';
 
 export interface AssistantSlashCommand {
   action: AssistantSlashCommandAction;

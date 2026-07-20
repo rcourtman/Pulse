@@ -227,25 +227,22 @@ describe('patrolControlPresentation branch coverage (set 2)', () => {
       ['approval work-type composition', { approval: 1 }],
       ['in-progress work-type composition', { inProgress: 1 }],
       ['recurring work-type composition', { recurring: 1 }],
-    ] as const)(
-      'suppresses the posture when %s is present',
-      (_label, compositionOverride) => {
-        expect(
-          getMonitorContextPatrolProtectionPosture({
-            ...baseMonitorInput,
-            workTypeComposition: {
-              total: 1,
-              approval: 0,
-              failed: 0,
-              inProgress: 0,
-              recurring: 0,
-              newIssues: 0,
-              ...compositionOverride,
-            },
-          }),
-        ).toEqual([]);
-      },
-    );
+    ] as const)('suppresses the posture when %s is present', (_label, compositionOverride) => {
+      expect(
+        getMonitorContextPatrolProtectionPosture({
+          ...baseMonitorInput,
+          workTypeComposition: {
+            total: 1,
+            approval: 0,
+            failed: 0,
+            inProgress: 0,
+            recurring: 0,
+            newIssues: 0,
+            ...compositionOverride,
+          },
+        }),
+      ).toEqual([]);
+    });
 
     it('suppresses the posture when the status reports open findings', () => {
       // OR operand: `statusFindingCount > 0`.

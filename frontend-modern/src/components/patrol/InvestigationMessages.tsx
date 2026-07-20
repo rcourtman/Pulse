@@ -40,7 +40,12 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
 
   return (
     <div class="mt-2">
-      <Show when={!getInvestigationMessagesState(messages.loading, !!messages()?.length).empty && getInvestigationMessagesState(messages.loading, !!messages()?.length).text}>
+      <Show
+        when={
+          !getInvestigationMessagesState(messages.loading, !!messages()?.length).empty &&
+          getInvestigationMessagesState(messages.loading, !!messages()?.length).text
+        }
+      >
         <div class="flex items-center gap-2 text-xs text-muted py-2">
           <LoadingSpinner size="sm" />
           {getInvestigationMessagesState(messages.loading, !!messages()?.length).text}

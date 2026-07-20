@@ -14,21 +14,14 @@ export interface FilterOption<T extends string | number> {
 }
 
 export type FilterButtonGroupVariant =
-  | 'default'
-  | 'settings'
-  | 'compact'
-  | 'prominent'
-  | 'segmented';
+  'default' | 'settings' | 'compact' | 'prominent' | 'segmented';
 export type FilterButtonGroupOptionTone =
-  | 'default'
-  | 'info'
-  | 'success'
-  | 'warning'
-  | 'danger'
-  | 'muted';
+  'default' | 'info' | 'success' | 'warning' | 'danger' | 'muted';
 
-export interface FilterButtonGroupProps<T extends string | number>
-  extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onChange'> {
+export interface FilterButtonGroupProps<T extends string | number> extends Omit<
+  JSX.HTMLAttributes<HTMLDivElement>,
+  'onChange'
+> {
   options: FilterOption<T>[];
   value: T;
   onChange: (value: T) => void;
@@ -76,9 +69,7 @@ export function getFilterButtonGroupClass(
   return `${groupClassByVariant[variant]} touch-scroll ${className ?? ''}`.trim();
 }
 
-export function getFilterButtonGroupLabelClass(
-  variant: FilterButtonGroupVariant,
-): string {
+export function getFilterButtonGroupLabelClass(variant: FilterButtonGroupVariant): string {
   return labelClassByVariant[variant] ?? labelClassByVariant.default!;
 }
 

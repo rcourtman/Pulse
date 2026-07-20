@@ -43,7 +43,9 @@ const connectionFixture = (overrides: Partial<Connection> = {}): Connection => (
 // fields (configDrift/rollout/credentialHealth/commandPolicy) are left
 // undefined so the *FromFleet derivation paths are exercised unless a test
 // overrides them explicitly.
-const fleetFixture = (overrides: Partial<ConnectionFleetGovernance> = {}): ConnectionFleetGovernance => ({
+const fleetFixture = (
+  overrides: Partial<ConnectionFleetGovernance> = {},
+): ConnectionFleetGovernance => ({
   enrollmentState: 'enrolled',
   livenessState: 'active',
   versionDrift: 'current',
@@ -119,9 +121,9 @@ describe('isIPv4Literal (via connectionAgentEndpointDisplay)', () => {
   it('skips whitespace-only aliases before the first valid literal', () => {
     // Empty/whitespace aliases are skipped by trim(), then the first valid
     // literal wins.
-    expect(
-      connectionAgentEndpointDisplay(aliasConnection(['   ', '', '10.0.0.5'])),
-    ).toBe('10.0.0.5');
+    expect(connectionAgentEndpointDisplay(aliasConnection(['   ', '', '10.0.0.5']))).toBe(
+      '10.0.0.5',
+    );
   });
 
   it('trims surrounding whitespace from a candidate before matching', () => {
@@ -208,7 +210,13 @@ describe('fleetSignalClassName', () => {
   );
 
   it('always embeds the shared layout prefix', () => {
-    for (const tone of ['ok', 'info', 'warning', 'critical', 'muted'] as FleetGovernanceSignalTone[]) {
+    for (const tone of [
+      'ok',
+      'info',
+      'warning',
+      'critical',
+      'muted',
+    ] as FleetGovernanceSignalTone[]) {
       expect(fleetSignalClassName(tone).startsWith(PREFIX)).toBe(true);
     }
   });
@@ -288,7 +296,11 @@ describe('rolloutFromFleet (via fleetGovernanceSignalsForConnection)', () => {
       }),
       'rollout',
     );
-    expect(signal).toMatchObject({ label: 'Rollout blocked', detail: 'halted by operator', tone: 'critical' });
+    expect(signal).toMatchObject({
+      label: 'Rollout blocked',
+      detail: 'halted by operator',
+      tone: 'critical',
+    });
   });
 
   it.each(['configured', 'reported'] as ConnectionFleetConfigRollout[])(
@@ -345,16 +357,15 @@ describe('credentialHealthFromFleet (via fleetGovernanceSignalsForConnection)', 
     ['invalid', 'Credentials invalid', 'critical'],
     ['paused', 'Credentials paused', 'muted'],
     ['unknown', 'Credentials unknown', 'warning'],
-  ] as const satisfies ReadonlyArray<[ConnectionFleetCredentialStatus, string, FleetGovernanceSignalTone]>)(
-    'derives the credential-health signal from credentialStatus %s',
-    (status, label, tone) => {
-      const signal = signalByKey(
-        connectionFixture({ fleet: fleetFixture({ credentialStatus: status }) }),
-        'credential-health',
-      );
-      expect(signal).toMatchObject({ label, tone });
-    },
-  );
+  ] as const satisfies ReadonlyArray<
+    [ConnectionFleetCredentialStatus, string, FleetGovernanceSignalTone]
+  >)('derives the credential-health signal from credentialStatus %s', (status, label, tone) => {
+    const signal = signalByKey(
+      connectionFixture({ fleet: fleetFixture({ credentialStatus: status }) }),
+      'credential-health',
+    );
+    expect(signal).toMatchObject({ label, tone });
+  });
 
   it('surfaces credential-health for non-agent API sources too', () => {
     // credentialHealth is source-agnostic: it appears even when agent-fleet
@@ -435,7 +446,9 @@ describe('commandPolicyFromFleet (via fleetGovernanceSignalsForConnection)', () 
     ['enabled', 'Remote control enabled', 'info'],
     ['disabled', 'Remote control disabled', 'info'],
     ['not-applicable', 'No remote control', 'muted'],
-  ] as const satisfies ReadonlyArray<[ConnectionFleetRemoteControl, string, FleetGovernanceSignalTone]>)(
+  ] as const satisfies ReadonlyArray<
+    [ConnectionFleetRemoteControl, string, FleetGovernanceSignalTone]
+  >)(
     'derives the command-policy signal from remoteControl %s (enforcement not-applicable)',
     (remoteControl, label, tone) => {
       const signal = signalByKey(
@@ -525,16 +538,15 @@ describe('versionSignal (via fleetGovernanceSignalsForConnection)', () => {
     ['current', 'Version current', 'ok'],
     ['unknown', 'Version unknown', 'muted'],
     ['not-applicable', 'No agent version', 'muted'],
-  ] as const satisfies ReadonlyArray<[ConnectionFleetVersionDrift, string, FleetGovernanceSignalTone]>)(
-    'maps version drift %s to its signal',
-    (state, label, tone) => {
-      const signal = signalByKey(
-        connectionFixture({ fleet: fleetFixture({ versionDrift: state }) }),
-        'version',
-      );
-      expect(signal).toMatchObject({ key: 'version', label, tone });
-    },
-  );
+  ] as const satisfies ReadonlyArray<
+    [ConnectionFleetVersionDrift, string, FleetGovernanceSignalTone]
+  >)('maps version drift %s to its signal', (state, label, tone) => {
+    const signal = signalByKey(
+      connectionFixture({ fleet: fleetFixture({ versionDrift: state }) }),
+      'version',
+    );
+    expect(signal).toMatchObject({ key: 'version', label, tone });
+  });
 });
 
 // ---- fleetGovernanceSignalsForConnection (orchestrator) --------------------

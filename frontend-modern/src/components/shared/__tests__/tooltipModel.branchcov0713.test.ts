@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  resolveTooltipPosition,
-  sanitizeTooltipContent,
-} from '@/components/shared/tooltipModel';
+import { resolveTooltipPosition, sanitizeTooltipContent } from '@/components/shared/tooltipModel';
 import type {
   TooltipAlignment,
   TooltipDirection,
@@ -70,7 +67,7 @@ describe('tooltipModel.branchcov0713', () => {
       expect(sanitizeTooltipContent('a~b')).toBe('a~b');
     });
 
-    it("keeps space (0x20), the lowest printable char (>= 0x20 boundary)", () => {
+    it('keeps space (0x20), the lowest printable char (>= 0x20 boundary)', () => {
       expect(sanitizeTooltipContent('a b')).toBe('a b');
     });
 
@@ -85,9 +82,7 @@ describe('tooltipModel.branchcov0713', () => {
     });
 
     it('filters a mixed string down to exactly its whitelisted characters', () => {
-      expect(sanitizeTooltipContent('\thello\n\x00world\x7fend')).toBe(
-        '\thello\nworldend',
-      );
+      expect(sanitizeTooltipContent('\thello\n\x00world\x7fend')).toBe('\thello\nworldend');
     });
 
     it('does not mutate or reorder retained characters when nothing is stripped', () => {
@@ -211,7 +206,7 @@ describe('tooltipModel.branchcov0713', () => {
       expect(result).toEqual({ left: 500, top: 600 - PADDING } satisfies TooltipPosition);
     });
 
-    it("clamps each axis independently when only one overflows (left axis overflows, top is in range)", () => {
+    it('clamps each axis independently when only one overflows (left axis overflows, top is in range)', () => {
       const result = resolveTooltipPosition({
         rect: { width: 100, height: 50 },
         viewportWidth: 1000,
@@ -232,8 +227,9 @@ describe('tooltipModel.branchcov0713', () => {
     it("treats an out-of-union align as NOT 'center' (falls to the align='left' behavior)", () => {
       // Defensive: strict equality means any foreign value skips the centering
       // branch, leaving left === x.
-      const bogusAlign =
-        'right' as unknown as Parameters<typeof resolveTooltipPosition>[0]['align'];
+      const bogusAlign = 'right' as unknown as Parameters<
+        typeof resolveTooltipPosition
+      >[0]['align'];
       const result = resolveTooltipPosition({
         rect: { width: 100, height: 50 },
         viewportWidth: 1000,
@@ -248,8 +244,7 @@ describe('tooltipModel.branchcov0713', () => {
     });
 
     it("treats an out-of-union direction as NOT 'up' (falls to the direction='down' behavior)", () => {
-      const bogusDirection =
-        'sideways' as unknown as TooltipDirection;
+      const bogusDirection = 'sideways' as unknown as TooltipDirection;
       const result = resolveTooltipPosition({
         rect: { width: 100, height: 50 },
         viewportWidth: 1000,
@@ -264,7 +259,7 @@ describe('tooltipModel.branchcov0713', () => {
       expect(result).toEqual({ left: 250, top: 408 } satisfies TooltipPosition);
     });
 
-    it("computes maxLeft and maxTop from the supplied viewport dims even with an unusual align/direction pairing", () => {
+    it('computes maxLeft and maxTop from the supplied viewport dims even with an unusual align/direction pairing', () => {
       // align='left', direction='up' with a tight viewport to exercise both
       // clamps at once using only declared-union values.
       const result = resolveTooltipPosition({
@@ -325,8 +320,7 @@ describe('tooltipModel.branchcov0713', () => {
             direction,
           });
           const expectedLeft = align === 'center' ? x - rect.width / 2 : x;
-          const expectedTop =
-            direction === 'up' ? y - rect.height - PADDING : y + PADDING;
+          const expectedTop = direction === 'up' ? y - rect.height - PADDING : y + PADDING;
           expect(result).toEqual({
             left: expectedLeft,
             top: expectedTop,

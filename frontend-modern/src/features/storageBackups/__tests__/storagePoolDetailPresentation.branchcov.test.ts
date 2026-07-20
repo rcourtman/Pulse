@@ -43,7 +43,9 @@ const rowValue = (rows: { label: string; value: string }[], label: string): stri
 
 describe('buildStoragePoolDetailConfigRows branch coverage', () => {
   it('splices a Content row at index 3 (before Status) when details.content is present', () => {
-    const rows = buildStoragePoolDetailConfigRows(buildRecord({ details: { content: 'Media share' } }));
+    const rows = buildStoragePoolDetailConfigRows(
+      buildRecord({ details: { content: 'Media share' } }),
+    );
     expect(rows[3]).toEqual({ label: 'Content', value: 'Media share' });
     expect(rows[4]).toEqual({ label: 'Status', value: 'available' });
   });
@@ -54,18 +56,28 @@ describe('buildStoragePoolDetailConfigRows branch coverage', () => {
   });
 
   it('renders Shared as "Yes" / "No" from a boolean details.shared and "-" when absent', () => {
-    expect(rowValue(buildStoragePoolDetailConfigRows(buildRecord({ details: { shared: true } })), 'Shared')).toBe(
-      'Yes',
+    expect(
+      rowValue(
+        buildStoragePoolDetailConfigRows(buildRecord({ details: { shared: true } })),
+        'Shared',
+      ),
+    ).toBe('Yes');
+    expect(
+      rowValue(
+        buildStoragePoolDetailConfigRows(buildRecord({ details: { shared: false } })),
+        'Shared',
+      ),
+    ).toBe('No');
+    expect(rowValue(buildStoragePoolDetailConfigRows(buildRecord({ details: {} })), 'Shared')).toBe(
+      '-',
     );
-    expect(rowValue(buildStoragePoolDetailConfigRows(buildRecord({ details: { shared: false } })), 'Shared')).toBe(
-      'No',
-    );
-    expect(rowValue(buildStoragePoolDetailConfigRows(buildRecord({ details: {} })), 'Shared')).toBe('-');
   });
 
   it('shows "n/a" for Used/Free/Total when totalBytes is null (falsy)', () => {
     const rows = buildStoragePoolDetailConfigRows(
-      buildRecord({ capacity: { totalBytes: null, usedBytes: null, freeBytes: null, usagePercent: null } }),
+      buildRecord({
+        capacity: { totalBytes: null, usedBytes: null, freeBytes: null, usagePercent: null },
+      }),
     );
     expect(rowValue(rows, 'Used')).toBe('n/a');
     expect(rowValue(rows, 'Free')).toBe('n/a');
@@ -74,7 +86,9 @@ describe('buildStoragePoolDetailConfigRows branch coverage', () => {
 
   it('computes freeBytes from total - used when freeBytes is null and totalBytes > 0', () => {
     const rows = buildStoragePoolDetailConfigRows(
-      buildRecord({ capacity: { totalBytes: 2048, usedBytes: 1024, freeBytes: null, usagePercent: 50 } }),
+      buildRecord({
+        capacity: { totalBytes: 2048, usedBytes: 1024, freeBytes: null, usagePercent: 50 },
+      }),
     );
     expect(rowValue(rows, 'Used')).toBe('1.00 KB');
     expect(rowValue(rows, 'Free')).toBe('1.00 KB');
@@ -83,7 +97,9 @@ describe('buildStoragePoolDetailConfigRows branch coverage', () => {
 
   it('clamps the computed freeBytes to 0 when used exceeds total', () => {
     const rows = buildStoragePoolDetailConfigRows(
-      buildRecord({ capacity: { totalBytes: 100, usedBytes: 200, freeBytes: null, usagePercent: 200 } }),
+      buildRecord({
+        capacity: { totalBytes: 100, usedBytes: 200, freeBytes: null, usagePercent: 200 },
+      }),
     );
     expect(rowValue(rows, 'Free')).toBe('0 B');
   });
@@ -161,7 +177,13 @@ describe('buildStoragePoolDetailTopologyRows branch coverage', () => {
   it('renders the Sync action without a percentage when syncProgress is 0', () => {
     const record = buildRecord({
       source: unraidSource(),
-      details: { type: 'unraid-array', platform: 'unraid', topology: 'array', syncAction: 'checking', syncProgress: 0 },
+      details: {
+        type: 'unraid-array',
+        platform: 'unraid',
+        topology: 'array',
+        syncAction: 'checking',
+        syncProgress: 0,
+      },
     });
     expect(rowValue(buildStoragePoolDetailTopologyRows(record, []), 'Sync')).toBe('checking');
   });
@@ -177,7 +199,9 @@ describe('buildStoragePoolDetailTopologyRows branch coverage', () => {
         syncProgress: 45.6,
       },
     });
-    expect(rowValue(buildStoragePoolDetailTopologyRows(record, []), 'Sync')).toBe('rebuilding (46%)');
+    expect(rowValue(buildStoragePoolDetailTopologyRows(record, []), 'Sync')).toBe(
+      'rebuilding (46%)',
+    );
   });
 
   it.each([
@@ -185,19 +209,22 @@ describe('buildStoragePoolDetailTopologyRows branch coverage', () => {
     ['NaN', Number.NaN],
     ['Infinity', Number.POSITIVE_INFINITY],
     ['-Infinity', Number.NEGATIVE_INFINITY],
-  ])('treats non-finite/non-numeric syncProgress (%s) as 0 so no percentage is shown', (_label, progress) => {
-    const record = buildRecord({
-      source: unraidSource(),
-      details: {
-        type: 'unraid-array',
-        platform: 'unraid',
-        topology: 'array',
-        syncAction: 'checking',
-        syncProgress: progress,
-      },
-    });
-    expect(rowValue(buildStoragePoolDetailTopologyRows(record, []), 'Sync')).toBe('checking');
-  });
+  ])(
+    'treats non-finite/non-numeric syncProgress (%s) as 0 so no percentage is shown',
+    (_label, progress) => {
+      const record = buildRecord({
+        source: unraidSource(),
+        details: {
+          type: 'unraid-array',
+          platform: 'unraid',
+          topology: 'array',
+          syncAction: 'checking',
+          syncProgress: progress,
+        },
+      });
+      expect(rowValue(buildStoragePoolDetailTopologyRows(record, []), 'Sync')).toBe('checking');
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -237,7 +264,14 @@ describe('buildStoragePoolDetailZfsSummary branch coverage', () => {
   it('treats an empty-string scan the same as "none"', () => {
     const record = buildRecord({
       details: {
-        zfsPool: { state: 'DEGRADED', scan: '', readErrors: 0, writeErrors: 0, checksumErrors: 0, devices: [] },
+        zfsPool: {
+          state: 'DEGRADED',
+          scan: '',
+          readErrors: 0,
+          writeErrors: 0,
+          checksumErrors: 0,
+          devices: [],
+        },
       },
     });
     expect(buildStoragePoolDetailZfsSummary(record)).toEqual({
@@ -353,20 +387,53 @@ describe('getStoragePoolLinkedDisks branch coverage', () => {
   it('breaks role ties by devPath localeCompare', () => {
     const record = buildRecord({ id: 'pool-1' });
     const disks = [
-      { id: 'b', name: 'b', parentId: 'pool-1', physicalDisk: { devPath: '/dev/sdd', storageRole: 'data' } },
-      { id: 'a', name: 'a', parentId: 'pool-1', physicalDisk: { devPath: '/dev/sdc', storageRole: 'data' } },
+      {
+        id: 'b',
+        name: 'b',
+        parentId: 'pool-1',
+        physicalDisk: { devPath: '/dev/sdd', storageRole: 'data' },
+      },
+      {
+        id: 'a',
+        name: 'a',
+        parentId: 'pool-1',
+        physicalDisk: { devPath: '/dev/sdc', storageRole: 'data' },
+      },
     ] as unknown as Resource[];
 
-    expect(getStoragePoolLinkedDisks(record, disks).map((d) => d.devPath)).toEqual(['/dev/sdc', '/dev/sdd']);
+    expect(getStoragePoolLinkedDisks(record, disks).map((d) => d.devPath)).toEqual([
+      '/dev/sdc',
+      '/dev/sdd',
+    ]);
   });
 
   it('ranks roles parity(0) < data(1) < cache(2) < unknown(3)', () => {
     const record = buildRecord({ id: 'pool-1' });
     const disks = [
-      { id: 'u', name: 'u', parentId: 'pool-1', physicalDisk: { devPath: '/dev/sdz', storageRole: 'spare' } },
-      { id: 'c', name: 'c', parentId: 'pool-1', physicalDisk: { devPath: '/dev/sdy', storageRole: 'cache' } },
-      { id: 'p', name: 'p', parentId: 'pool-1', physicalDisk: { devPath: '/dev/sdv', storageRole: 'parity' } },
-      { id: 'd', name: 'd', parentId: 'pool-1', physicalDisk: { devPath: '/dev/sdx', storageRole: 'data' } },
+      {
+        id: 'u',
+        name: 'u',
+        parentId: 'pool-1',
+        physicalDisk: { devPath: '/dev/sdz', storageRole: 'spare' },
+      },
+      {
+        id: 'c',
+        name: 'c',
+        parentId: 'pool-1',
+        physicalDisk: { devPath: '/dev/sdy', storageRole: 'cache' },
+      },
+      {
+        id: 'p',
+        name: 'p',
+        parentId: 'pool-1',
+        physicalDisk: { devPath: '/dev/sdv', storageRole: 'parity' },
+      },
+      {
+        id: 'd',
+        name: 'd',
+        parentId: 'pool-1',
+        physicalDisk: { devPath: '/dev/sdx', storageRole: 'data' },
+      },
     ] as unknown as Resource[];
 
     expect(getStoragePoolLinkedDisks(record, disks).map((d) => d.role)).toEqual([
@@ -385,8 +452,16 @@ describe('getStoragePoolLinkedDisks branch coverage', () => {
       details: { type: 'unraid-cache-pool', platform: 'unraid' },
     });
     const disks = [
-      { id: 'in', name: 'in', physicalDisk: { devPath: '/dev/sda', storageRole: 'cache', storageGroup: 'My Cache' } },
-      { id: 'out', name: 'out', physicalDisk: { devPath: '/dev/sdb', storageRole: 'cache', storageGroup: 'other' } },
+      {
+        id: 'in',
+        name: 'in',
+        physicalDisk: { devPath: '/dev/sda', storageRole: 'cache', storageGroup: 'My Cache' },
+      },
+      {
+        id: 'out',
+        name: 'out',
+        physicalDisk: { devPath: '/dev/sdb', storageRole: 'cache', storageGroup: 'other' },
+      },
     ] as unknown as Resource[];
 
     expect(getStoragePoolLinkedDisks(record, disks).map((d) => d.id)).toEqual(['in']);
@@ -400,8 +475,16 @@ describe('getStoragePoolLinkedDisks branch coverage', () => {
       details: { type: 'pool', platform: 'unraid', topology: 'array' },
     });
     const disks = [
-      { id: 'in', name: 'in', physicalDisk: { devPath: '/dev/sda', storageRole: 'data', storageGroup: 'unraid-array' } },
-      { id: 'out', name: 'out', physicalDisk: { devPath: '/dev/sdb', storageRole: 'data', storageGroup: 'nope' } },
+      {
+        id: 'in',
+        name: 'in',
+        physicalDisk: { devPath: '/dev/sda', storageRole: 'data', storageGroup: 'unraid-array' },
+      },
+      {
+        id: 'out',
+        name: 'out',
+        physicalDisk: { devPath: '/dev/sdb', storageRole: 'data', storageGroup: 'nope' },
+      },
     ] as unknown as Resource[];
 
     expect(getStoragePoolLinkedDisks(record, disks).map((d) => d.id)).toEqual(['in']);
@@ -415,7 +498,11 @@ describe('getStoragePoolLinkedDisks branch coverage', () => {
       details: { type: 'pool', platform: 'unraid', topology: '' },
     });
     const disks = [
-      { id: 'x', name: 'x', physicalDisk: { devPath: '/dev/sda', storageRole: 'data', storageGroup: 'unraid-array' } },
+      {
+        id: 'x',
+        name: 'x',
+        physicalDisk: { devPath: '/dev/sda', storageRole: 'data', storageGroup: 'unraid-array' },
+      },
     ] as unknown as Resource[];
 
     expect(getStoragePoolLinkedDisks(record, disks)).toEqual([]);

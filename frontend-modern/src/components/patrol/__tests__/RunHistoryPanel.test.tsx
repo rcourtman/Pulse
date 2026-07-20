@@ -93,11 +93,7 @@ describe('RunHistoryPanel', () => {
       />
     ));
 
-    expect(
-      screen.getByText(
-        'This older check has no issue list.',
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText('This older check has no issue list.')).toBeInTheDocument();
   });
 
   it('keeps older run snapshots behind an explicit expansion', () => {

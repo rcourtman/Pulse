@@ -27,7 +27,9 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
       <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <SectionHeader
           title="Alert frequency"
-          description={<span class="text-xs text-muted">{props.state.alertData().length} alerts</span>}
+          description={
+            <span class="text-xs text-muted">{props.state.alertData().length} alerts</span>
+          }
           size="sm"
           class="flex-1"
         />
@@ -69,18 +71,14 @@ export function AlertHistoryFrequencyCard(props: AlertHistoryFrequencyCardProps)
                 <span class="flex items-center gap-1">
                   <div class={getAlertSeverityDotClass('warning')}></div>
                   {
-                    props.state
-                      .alertData()
-                      .filter((alert) => alert.severity === 'warning').length
+                    props.state.alertData().filter((alert) => alert.severity === 'warning').length
                   }{' '}
                   warnings
                 </span>
                 <span class="flex items-center gap-1">
                   <div class={getAlertSeverityDotClass('critical')}></div>
                   {
-                    props.state
-                      .alertData()
-                      .filter((alert) => alert.severity === 'critical').length
+                    props.state.alertData().filter((alert) => alert.severity === 'critical').length
                   }{' '}
                   critical
                 </span>

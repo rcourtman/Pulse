@@ -32,10 +32,7 @@ export function loadStoredAssistantPanelWidth(storage: Pick<Storage, 'getItem'>)
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function persistAssistantPanelWidth(
-  storage: Pick<Storage, 'setItem'>,
-  width: number,
-): void {
+export function persistAssistantPanelWidth(storage: Pick<Storage, 'setItem'>, width: number): void {
   try {
     storage.setItem(ASSISTANT_PANEL_WIDTH_STORAGE_KEY, String(Math.round(width)));
   } catch {

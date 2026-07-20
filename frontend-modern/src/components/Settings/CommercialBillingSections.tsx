@@ -83,7 +83,9 @@ export const CommercialUsageMeters: Component<CommercialUsageMetersProps> = (pro
             <span>{item.label}</span>
             <span>
               {item.current}
-              {typeof item.limit === 'number' ? ` / ${item.limit}` : ` / ${NOT_METERED_USAGE_LABEL}`}
+              {typeof item.limit === 'number'
+                ? ` / ${item.limit}`
+                : ` / ${NOT_METERED_USAGE_LABEL}`}
             </span>
           </div>
           <Show when={typeof item.limit === 'number'}>

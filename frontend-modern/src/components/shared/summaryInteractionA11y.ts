@@ -59,27 +59,29 @@ interface SummaryInteractiveActionKeydownOptions {
   onPreviewClear?: () => void;
 }
 
-export const createSummaryInteractiveActionKeydownHandler = (
-  options: SummaryInteractiveActionKeydownOptions,
-): JSX.EventHandler<HTMLButtonElement, KeyboardEvent> => (event) => {
-  if (
-    event.key === 'Enter' ||
-    event.key === ' ' ||
-    event.key === 'Space' ||
-    event.code === 'Space'
-  ) {
-    event.preventDefault();
-    options.onAction?.();
-    return;
-  }
+export const createSummaryInteractiveActionKeydownHandler =
+  (
+    options: SummaryInteractiveActionKeydownOptions,
+  ): JSX.EventHandler<HTMLButtonElement, KeyboardEvent> =>
+  (event) => {
+    if (
+      event.key === 'Enter' ||
+      event.key === ' ' ||
+      event.key === 'Space' ||
+      event.code === 'Space'
+    ) {
+      event.preventDefault();
+      options.onAction?.();
+      return;
+    }
 
-  if (event.key !== 'Escape') {
-    return;
-  }
-  event.preventDefault();
-  options.onPreviewClear?.();
-  event.currentTarget.blur();
-};
+    if (event.key !== 'Escape') {
+      return;
+    }
+    event.preventDefault();
+    options.onPreviewClear?.();
+    event.currentTarget.blur();
+  };
 
 export const buildSummaryDisclosureControlsId = (seriesId: string): string =>
   `summary-row-detail-${seriesId.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;

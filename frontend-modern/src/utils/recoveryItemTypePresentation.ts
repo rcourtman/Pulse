@@ -27,9 +27,7 @@ interface RecoveryItemTypeLike {
   subjectRef?: RecoveryExternalRef | null;
 }
 
-const getRecoveryItemTypeValue = (
-  value: RecoveryItemTypeLike | null | undefined,
-): string =>
+const getRecoveryItemTypeValue = (value: RecoveryItemTypeLike | null | undefined): string =>
   String(
     value?.display?.itemType ||
       value?.display?.subjectType ||
@@ -38,10 +36,10 @@ const getRecoveryItemTypeValue = (
       '',
   );
 
-export const normalizeRecoveryItemTypeQueryValue = (
-  value: string | null | undefined,
-): string => {
-  const normalized = String(value || '').trim().toLowerCase();
+export const normalizeRecoveryItemTypeQueryValue = (value: string | null | undefined): string => {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase();
   switch (normalized) {
     case '':
     case 'all':

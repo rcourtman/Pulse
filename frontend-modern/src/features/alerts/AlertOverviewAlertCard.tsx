@@ -39,12 +39,19 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
 
   const resourceLink = (): string => {
     const rid = props.alert.resourceId ?? '';
-    const resourceType = typeof props.alert.metadata?.resourceType === 'string'
-      ? props.alert.metadata.resourceType as string
-      : '';
+    const resourceType =
+      typeof props.alert.metadata?.resourceType === 'string'
+        ? (props.alert.metadata.resourceType as string)
+        : '';
     if (rid.startsWith('agent:') || resourceType === 'agent') return '/machines';
-    if (rid.includes('docker') || resourceType === 'docker-container' || resourceType === 'docker-host') return '/docker/overview';
-    if (resourceType === 'kubernetes' || resourceType.startsWith('k8s-')) return '/kubernetes/overview';
+    if (
+      rid.includes('docker') ||
+      resourceType === 'docker-container' ||
+      resourceType === 'docker-host'
+    )
+      return '/docker/overview';
+    if (resourceType === 'kubernetes' || resourceType.startsWith('k8s-'))
+      return '/kubernetes/overview';
     return '/proxmox/overview';
   };
 

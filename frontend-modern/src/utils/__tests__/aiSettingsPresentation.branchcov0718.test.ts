@@ -163,15 +163,11 @@ describe('getAISessionSummarizeErrorMessage — branch coverage', () => {
 
 describe('getAISettingsSaveErrorMessage — branch coverage', () => {
   it('falls back to the default fallback when message is null', () => {
-    expect(getAISettingsSaveErrorMessage(null)).toBe(
-      'Unable to save Provider & Models settings.',
-    );
+    expect(getAISettingsSaveErrorMessage(null)).toBe('Unable to save Provider & Models settings.');
   });
 
   it('falls back to the default fallback when message is the empty string', () => {
-    expect(getAISettingsSaveErrorMessage('')).toBe(
-      'Unable to save Provider & Models settings.',
-    );
+    expect(getAISettingsSaveErrorMessage('')).toBe('Unable to save Provider & Models settings.');
   });
 
   it('falls back to the default fallback when message is whitespace-only', () => {
@@ -215,9 +211,7 @@ describe('getAICredentialsClearErrorMessage — branch coverage', () => {
   });
 
   it('returns the trimmed detail for a padded non-empty message', () => {
-    expect(getAICredentialsClearErrorMessage('  permission denied  ')).toBe(
-      'permission denied',
-    );
+    expect(getAICredentialsClearErrorMessage('  permission denied  ')).toBe('permission denied');
   });
 });
 

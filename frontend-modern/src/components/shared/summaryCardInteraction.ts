@@ -108,7 +108,10 @@ export const resolveSummaryScopeState = (options: {
     });
 
   const chartHoveredSeriesId = normalizeSeriesId(options.chartHoveredSeriesId);
-  if (chartHoveredSeriesId && (!groupScope || isSummarySeriesInGroupScope(groupScope, chartHoveredSeriesId))) {
+  if (
+    chartHoveredSeriesId &&
+    (!groupScope || isSummarySeriesInGroupScope(groupScope, chartHoveredSeriesId))
+  ) {
     return {
       groupScope,
       kind: 'entity',
@@ -118,7 +121,10 @@ export const resolveSummaryScopeState = (options: {
   }
 
   const hoveredSeriesId = normalizeSeriesId(options.hoveredSeriesId);
-  if (hoveredSeriesId && (!groupScope || isSummarySeriesInGroupScope(groupScope, hoveredSeriesId))) {
+  if (
+    hoveredSeriesId &&
+    (!groupScope || isSummarySeriesInGroupScope(groupScope, hoveredSeriesId))
+  ) {
     return {
       groupScope,
       kind: 'entity',
@@ -128,7 +134,10 @@ export const resolveSummaryScopeState = (options: {
   }
 
   const focusedSeriesId = normalizeSeriesId(options.focusedSeriesId);
-  if (focusedSeriesId && (!groupScope || isSummarySeriesInGroupScope(groupScope, focusedSeriesId))) {
+  if (
+    focusedSeriesId &&
+    (!groupScope || isSummarySeriesInGroupScope(groupScope, focusedSeriesId))
+  ) {
     return {
       groupScope,
       kind: 'entity',

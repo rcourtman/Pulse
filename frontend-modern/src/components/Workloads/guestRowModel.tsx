@@ -195,7 +195,14 @@ export const GUEST_COLUMNS: ColumnDef[] = [
   { id: 'vmid', label: 'ID', width: '45px', sortKey: 'vmid', kind: 'numeric-value' },
   { id: 'cpu', label: 'CPU', width: '140px', sortKey: 'cpu', kind: 'metric-bar' },
   { id: 'memory', label: 'Mem', width: '140px', sortKey: 'memory', kind: 'metric-bar' },
-  { id: 'disk', label: 'Disk', width: '140px', toggleable: true, sortKey: 'disk', kind: 'metric-bar' },
+  {
+    id: 'disk',
+    label: 'Disk',
+    width: '140px',
+    toggleable: true,
+    sortKey: 'disk',
+    kind: 'metric-bar',
+  },
   {
     id: 'ip',
     label: 'IP',
@@ -312,7 +319,13 @@ export const GUEST_COLUMNS: ColumnDef[] = [
     id: 'aiContext',
     label: 'AI Context',
     icon: (
-      <svg class="w-3.5 h-3.5 block" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <svg
+        class="w-3.5 h-3.5 block"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
         <path
           stroke-linecap="round"
           stroke-linejoin="round"

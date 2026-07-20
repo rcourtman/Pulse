@@ -10,13 +10,21 @@ describe('PatrolAutopilotAcknowledgementDialog', () => {
     const activate = vi.fn();
     const state = {
       autopilotDialogOpen: () => true,
-      autopilotStatus: () => ({ code: 'acknowledgement_required', active: false, currentVersion: 1, acceptedScope: ['policy_authorized_actions', 'outcome_truth_not_inferred'], acceptedLimits: {} }),
+      autopilotStatus: () => ({
+        code: 'acknowledgement_required',
+        active: false,
+        currentVersion: 1,
+        acceptedScope: ['policy_authorized_actions', 'outcome_truth_not_inferred'],
+        acceptedLimits: {},
+      }),
       isUpdatingAutonomy: () => false,
       setAutopilotDialogOpen: vi.fn(),
       acknowledgeAndActivateAutopilot: activate,
     } as unknown as PatrolIntelligenceState;
     render(() => <PatrolAutopilotAcknowledgementDialog state={state} />);
-    const activateButton = screen.getByRole('button', { name: 'Record acknowledgement and activate' });
+    const activateButton = screen.getByRole('button', {
+      name: 'Record acknowledgement and activate',
+    });
     expect(activateButton).toBeDisabled();
     expect(screen.getByText(/version 1 acknowledgement/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('checkbox'));

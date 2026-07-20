@@ -14,9 +14,7 @@ import {
 //     when `avg_delay` is a Go duration string)
 //   - sortResourceCorrelations
 //   - sortResourceRelationships
-const makeCorrelation = (
-  overrides: Partial<ResourceCorrelation> = {},
-): ResourceCorrelation => ({
+const makeCorrelation = (overrides: Partial<ResourceCorrelation> = {}): ResourceCorrelation => ({
   source_id: 'storage-1',
   source_name: 'Storage 1',
   source_type: 'storage',
@@ -32,9 +30,7 @@ const makeCorrelation = (
   ...overrides,
 });
 
-const makeRelationship = (
-  overrides: Partial<ResourceRelationship> = {},
-): ResourceRelationship => ({
+const makeRelationship = (overrides: Partial<ResourceRelationship> = {}): ResourceRelationship => ({
   sourceId: 'node:pve-1',
   targetId: 'vm-42',
   type: 'runs_on',
@@ -54,62 +50,58 @@ describe('parseGoDurationMs (via formatResourceCorrelationSummary)', () => {
   // the formatted delay, making assertions unambiguous.
 
   it('returns null (omitting delay) for a whitespace-only string via the empty-normalized early return', () => {
-    expect(
-      formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '   ' })),
-    ).toBe('2 occurrences');
+    expect(formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '   ' }))).toBe(
+      '2 occurrences',
+    );
   });
 
   it('trims surrounding whitespace before parsing', () => {
-    expect(
-      formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '  5s  ' })),
-    ).toBe('2 occurrences · avg delay 5s');
+    expect(formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '  5s  ' }))).toBe(
+      '2 occurrences · avg delay 5s',
+    );
   });
 
   it('parses the h (hour) unit', () => {
-    expect(
-      formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '2h' })),
-    ).toBe('2 occurrences · avg delay 120m');
+    expect(formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '2h' }))).toBe(
+      '2 occurrences · avg delay 120m',
+    );
   });
 
   it('parses a fractional amount using the decimal part of the duration pattern', () => {
-    expect(
-      formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '1.0s' })),
-    ).toBe('2 occurrences · avg delay 1s');
+    expect(formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '1.0s' }))).toBe(
+      '2 occurrences · avg delay 1s',
+    );
   });
 
   it('parses the us (microseconds) unit', () => {
-    expect(
-      formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '2000us' })),
-    ).toBe('2 occurrences · avg delay 2ms');
+    expect(formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '2000us' }))).toBe(
+      '2 occurrences · avg delay 2ms',
+    );
   });
 
   it('parses the µs (unicode microseconds) unit', () => {
-    expect(
-      formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '2000µs' })),
-    ).toBe('2 occurrences · avg delay 2ms');
+    expect(formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '2000µs' }))).toBe(
+      '2 occurrences · avg delay 2ms',
+    );
   });
 
   it('parses the ns (nanoseconds) unit', () => {
-    expect(
-      formatResourceCorrelationSummary(
-        makeCorrelation({ avg_delay: '3000000ns' }),
-      ),
-    ).toBe('2 occurrences · avg delay 3ms');
+    expect(formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '3000000ns' }))).toBe(
+      '2 occurrences · avg delay 3ms',
+    );
   });
 
   it('accumulates multiple unit tokens in a single duration string', () => {
-    expect(
-      formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '1h30m' })),
-    ).toBe('2 occurrences · avg delay 90m');
+    expect(formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '1h30m' }))).toBe(
+      '2 occurrences · avg delay 90m',
+    );
   });
 
   it('returns null when the matched amount is not finite (defensive continue branch)', () => {
     // 400 nines overflow Number.parseFloat to Infinity, exercising the
     // `if (!Number.isFinite(amount)) continue;` branch.
     expect(
-      formatResourceCorrelationSummary(
-        makeCorrelation({ avg_delay: `${'9'.repeat(400)}s` }),
-      ),
+      formatResourceCorrelationSummary(makeCorrelation({ avg_delay: `${'9'.repeat(400)}s` })),
     ).toBe('2 occurrences');
   });
 
@@ -118,22 +110,20 @@ describe('parseGoDurationMs (via formatResourceCorrelationSummary)', () => {
     // to Infinity, exercising the `!Number.isFinite(totalNs)` arm of the
     // terminal guard.
     expect(
-      formatResourceCorrelationSummary(
-        makeCorrelation({ avg_delay: `${'9'.repeat(300)}h` }),
-      ),
+      formatResourceCorrelationSummary(makeCorrelation({ avg_delay: `${'9'.repeat(300)}h` })),
     ).toBe('2 occurrences');
   });
 
   it('returns null when the parsed duration is zero (totalNs <= 0 guard)', () => {
-    expect(
-      formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '0s' })),
-    ).toBe('2 occurrences');
+    expect(formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '0s' }))).toBe(
+      '2 occurrences',
+    );
   });
 
   it('returns null when no unit token matches at all (!matched guard)', () => {
-    expect(
-      formatResourceCorrelationSummary(makeCorrelation({ avg_delay: 'abc' })),
-    ).toBe('2 occurrences');
+    expect(formatResourceCorrelationSummary(makeCorrelation({ avg_delay: 'abc' }))).toBe(
+      '2 occurrences',
+    );
   });
 
   it('documents the current behaviour that an `ms` token is consumed as minutes', () => {
@@ -142,9 +132,9 @@ describe('parseGoDurationMs (via formatResourceCorrelationSummary)', () => {
     // `5m`) and the trailing `s` is left unparsed. The result is therefore
     // 5 minutes, not 5 milliseconds. This is reported as a suspected source
     // bug; the assertion pins the actual current behaviour.
-    expect(
-      formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '5ms' })),
-    ).toBe('2 occurrences · avg delay 5m');
+    expect(formatResourceCorrelationSummary(makeCorrelation({ avg_delay: '5ms' }))).toBe(
+      '2 occurrences · avg delay 5m',
+    );
   });
 });
 
@@ -227,10 +217,7 @@ describe('sortResourceRelationships (branch coverage)', () => {
       }),
       makeRelationship({ sourceId: 'true-active', active: true, confidence: 0 }),
     ]);
-    expect(sorted.map((r) => r.sourceId)).toEqual([
-      'true-active',
-      'undefined-active',
-    ]);
+    expect(sorted.map((r) => r.sourceId)).toEqual(['true-active', 'undefined-active']);
   });
 
   it('sorts active before inactive, then by confidence, then by observedAt fallback', () => {
@@ -302,11 +289,7 @@ describe('sortResourceRelationships (branch coverage)', () => {
     ]);
     // All active, all confidence 0.5 -> time tie-break, newest first.
     // last-seen (2026-05) > observed-only (2026-04) > no-times (0).
-    expect(sorted.map((r) => r.sourceId)).toEqual([
-      'last-seen',
-      'observed-only',
-      'no-times',
-    ]);
+    expect(sorted.map((r) => r.sourceId)).toEqual(['last-seen', 'observed-only', 'no-times']);
   });
 
   it('returns a new array instance (does not return the input reference)', () => {

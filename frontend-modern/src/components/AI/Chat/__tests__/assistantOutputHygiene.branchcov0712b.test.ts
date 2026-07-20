@@ -160,9 +160,7 @@ describe('isKnownAssistantToolNamePrefix branch coverage', () => {
 
   it('matches a full patrol_ tool name via the /^patrol_/ regex arm', () => {
     const state = freshState();
-    expect(
-      appendVisibleTextBeforeAssistantOutputArtifacts(state, 'try patrol_remediate'),
-    ).toEqual({
+    expect(appendVisibleTextBeforeAssistantOutputArtifacts(state, 'try patrol_remediate')).toEqual({
       text: 'try ',
       stripped: false,
     });

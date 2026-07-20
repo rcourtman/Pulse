@@ -2,7 +2,14 @@ import { render, screen } from '@solidjs/testing-library';
 import { describe, expect, it } from 'vitest';
 import tableSource from '@/components/shared/Table.tsx?raw';
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shared/Table';
 
 describe('TableBody', () => {
   it('keeps the shared table wrapper CSP-safe', () => {

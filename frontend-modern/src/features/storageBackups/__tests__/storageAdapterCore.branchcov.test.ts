@@ -35,37 +35,26 @@ describe('normalizeHealthValue via normalizeStorageResourceHealth', () => {
     expect(normalizeStorageResourceHealth('   ', undefined, '  ')).toBe('unknown');
   });
 
-  it.each([
-    'online',
-    'running',
-    'available',
-    'healthy',
-    'ok',
-    'optimal',
-  ])('maps exact healthy keyword %s to "healthy"', (status) => {
-    expect(normalizeStorageResourceHealth(status, undefined)).toBe('healthy');
-  });
+  it.each(['online', 'running', 'available', 'healthy', 'ok', 'optimal'])(
+    'maps exact healthy keyword %s to "healthy"',
+    (status) => {
+      expect(normalizeStorageResourceHealth(status, undefined)).toBe('healthy');
+    },
+  );
 
-  it.each([
-    'warning',
-    'warn',
-    'degraded',
-    'health_warn',
-  ])('maps exact warning keyword %s to "warning"', (status) => {
-    expect(normalizeStorageResourceHealth(status, undefined)).toBe('warning');
-  });
+  it.each(['warning', 'warn', 'degraded', 'health_warn'])(
+    'maps exact warning keyword %s to "warning"',
+    (status) => {
+      expect(normalizeStorageResourceHealth(status, undefined)).toBe('warning');
+    },
+  );
 
-  it.each([
-    'critical',
-    'faulted',
-    'failed',
-    'error',
-    'unhealthy',
-    'health_crit',
-    'health_err',
-  ])('maps exact critical keyword %s to "critical"', (status) => {
-    expect(normalizeStorageResourceHealth(status, undefined)).toBe('critical');
-  });
+  it.each(['critical', 'faulted', 'failed', 'error', 'unhealthy', 'health_crit', 'health_err'])(
+    'maps exact critical keyword %s to "critical"',
+    (status) => {
+      expect(normalizeStorageResourceHealth(status, undefined)).toBe('critical');
+    },
+  );
 
   it.each(['offline', 'stopped', 'down', 'unavailable'])(
     'maps exact offline keyword %s to "offline"',
@@ -127,12 +116,12 @@ describe('extractHealthTag via normalizeStorageResourceHealth', () => {
   });
 
   it('uses the LAST health: tag when several are present', () => {
-    expect(
-      normalizeStorageResourceHealth('online', ['health:ok', 'health:critical']),
-    ).toBe('critical');
-    expect(
-      normalizeStorageResourceHealth('offline', ['health:critical', 'health:healthy']),
-    ).toBe('healthy');
+    expect(normalizeStorageResourceHealth('online', ['health:ok', 'health:critical'])).toBe(
+      'critical',
+    );
+    expect(normalizeStorageResourceHealth('offline', ['health:critical', 'health:healthy'])).toBe(
+      'healthy',
+    );
   });
 
   it('matches the health: prefix case-insensitively after trimming each tag', () => {
@@ -143,9 +132,9 @@ describe('extractHealthTag via normalizeStorageResourceHealth', () => {
 describe('normalizeStorageResourceHealth priority chain', () => {
   it('prefers incidentSeverity over health tag over status', () => {
     // incidentSeverity beats a health tag and the status
-    expect(
-      normalizeStorageResourceHealth('online', ['health:warning'], 'critical'),
-    ).toBe('critical');
+    expect(normalizeStorageResourceHealth('online', ['health:warning'], 'critical')).toBe(
+      'critical',
+    );
     // health tag beats status
     expect(normalizeStorageResourceHealth('online', ['health:critical'])).toBe('critical');
   });
@@ -243,9 +232,7 @@ describe('canonicalStorageIdentityKey', () => {
 
   it('uses "unknown-location" when both location.label and refs.platformEntityId are blank', () => {
     expect(
-      canonicalStorageIdentityKey(
-        makeRecord({ location: { label: '', scope: 'node' }, refs: {} }),
-      ),
+      canonicalStorageIdentityKey(makeRecord({ location: { label: '', scope: 'node' }, refs: {} })),
     ).toBe('proxmox-pve|unknown-location|tank|pool');
     // refs absent entirely as well
     expect(
@@ -262,9 +249,9 @@ describe('canonicalStorageIdentityKey', () => {
   });
 
   it('uses "unknown-name" when both name and id are blank', () => {
-    expect(
-      canonicalStorageIdentityKey(makeRecord({ name: '', id: '' })),
-    ).toBe('proxmox-pve|pve1|unknown-name|pool');
+    expect(canonicalStorageIdentityKey(makeRecord({ name: '', id: '' }))).toBe(
+      'proxmox-pve|pve1|unknown-name|pool',
+    );
   });
 
   it('defaults a missing category to "other"', () => {

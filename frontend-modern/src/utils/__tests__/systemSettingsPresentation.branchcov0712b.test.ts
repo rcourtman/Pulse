@@ -66,9 +66,9 @@ describe('systemSettingsPresentation — branch coverage (branchcov2)', () => {
       // A valid hourly interval is ignored once the disabled flag is set, and
       // the disabled branch wins over a non-boolean falsy value (JS coercion).
       expect(getBackupIntervalSummary(false, 3600)).toBe('Backup polling is disabled.');
-      expect(
-        getBackupIntervalSummary(0 as unknown as boolean, 86400),
-      ).toBe('Backup polling is disabled.');
+      expect(getBackupIntervalSummary(0 as unknown as boolean, 86400)).toBe(
+        'Backup polling is disabled.',
+      );
     });
 
     it('treats negative intervals as the default cadence (< 0 portion of `backupPollingInterval <= 0`)', () => {
@@ -98,21 +98,17 @@ describe('systemSettingsPresentation — branch coverage (branchcov2)', () => {
 
     it('falls through the day and hour guards to the plural minutes fallback (false arms of `% 86400` and `% 3600`)', () => {
       // 5400s = 90 min: not divisible by an hour or a day -> minutes fallback, plural.
-      expect(getBackupIntervalSummary(true, 5400)).toBe(
-        'Pulse checks backups every 90 minutes.',
-      );
+      expect(getBackupIntervalSummary(true, 5400)).toBe('Pulse checks backups every 90 minutes.');
       // 300s = 5 min: same fall-through, plural count of 5.
-      expect(getBackupIntervalSummary(true, 300)).toBe(
-        'Pulse checks backups every 5 minutes.',
-      );
+      expect(getBackupIntervalSummary(true, 300)).toBe('Pulse checks backups every 5 minutes.');
     });
 
     it('honors a truthy non-boolean flag as enabled (coercion through `!backupPollingEnabled`)', () => {
       // A non-empty string is truthy, so the disabled guard is skipped and the
       // interval is formatted normally. Cast satisfies the declared boolean type.
-      expect(
-        getBackupIntervalSummary('true' as unknown as boolean, 3600),
-      ).toBe('Pulse checks backups every hour.');
+      expect(getBackupIntervalSummary('true' as unknown as boolean, 3600)).toBe(
+        'Pulse checks backups every hour.',
+      );
     });
   });
 });

@@ -13,7 +13,10 @@ export interface ThresholdSliderProps {
 export const DEFAULT_THRESHOLD_SLIDER_MIN = 0;
 export const DEFAULT_THRESHOLD_SLIDER_MAX = 100;
 
-export function getThresholdSliderBounds(min?: number, max?: number): {
+export function getThresholdSliderBounds(
+  min?: number,
+  max?: number,
+): {
   min: number;
   max: number;
 } {

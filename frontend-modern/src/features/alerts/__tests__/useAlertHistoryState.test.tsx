@@ -79,7 +79,10 @@ describe('useAlertHistoryState', () => {
     vi.mocked(eventBus.on).mockClear();
     navigateSpy.mockClear();
     setMockLocation('');
-    vi.stubGlobal('confirm', vi.fn(() => true));
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => true),
+    );
     localStorage.clear();
   });
 

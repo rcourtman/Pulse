@@ -12,9 +12,7 @@ import {
   sortResourceRelationships,
 } from '@/utils/resourceCorrelationPresentation';
 
-const makeCorrelation = (
-  overrides: Partial<ResourceCorrelation> = {},
-): ResourceCorrelation => ({
+const makeCorrelation = (overrides: Partial<ResourceCorrelation> = {}): ResourceCorrelation => ({
   source_id: 'storage-1',
   source_name: 'Storage 1',
   source_type: 'storage',
@@ -30,9 +28,7 @@ const makeCorrelation = (
   ...overrides,
 });
 
-const makeRelationship = (
-  overrides: Partial<ResourceRelationship> = {},
-): ResourceRelationship => ({
+const makeRelationship = (overrides: Partial<ResourceRelationship> = {}): ResourceRelationship => ({
   sourceId: 'node:pve-1',
   targetId: 'vm-42',
   type: 'runs_on',
@@ -250,9 +246,9 @@ describe('sortResourceCorrelations (branch coverage)', () => {
 
 describe('formatResourceRelationshipEndpoint (branch coverage)', () => {
   it('returns Unknown resource when sourceId is empty', () => {
-    expect(
-      formatResourceRelationshipEndpoint(makeRelationship({ sourceId: '' }), 'source'),
-    ).toBe('Unknown resource');
+    expect(formatResourceRelationshipEndpoint(makeRelationship({ sourceId: '' }), 'source')).toBe(
+      'Unknown resource',
+    );
   });
 
   it('returns Unknown resource when targetId is whitespace-only', () => {
@@ -279,9 +275,7 @@ describe('formatResourceRelationshipSummary (branch coverage)', () => {
 
   it('filters out the fallback discoverer label when discoverer is empty', () => {
     expect(
-      formatResourceRelationshipSummary(
-        makeRelationship({ confidence: 0.5, discoverer: '' }),
-      ),
+      formatResourceRelationshipSummary(makeRelationship({ confidence: 0.5, discoverer: '' })),
     ).toBe('50% confidence');
   });
 
@@ -299,9 +293,7 @@ describe('formatResourceRelationshipSummary (branch coverage)', () => {
 
   it('humanizes an all-caps discoverer via the lowercase arm', () => {
     expect(
-      formatResourceRelationshipSummary(
-        makeRelationship({ confidence: 0.4, discoverer: 'SNMP' }),
-      ),
+      formatResourceRelationshipSummary(makeRelationship({ confidence: 0.4, discoverer: 'SNMP' })),
     ).toBe('40% confidence · Snmp');
   });
 

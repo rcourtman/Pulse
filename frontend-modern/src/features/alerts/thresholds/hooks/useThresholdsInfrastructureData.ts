@@ -61,7 +61,8 @@ export function useThresholdsInfrastructureData(inputs: ThresholdsDataInputs) {
 
     return search
       ? pbsServers.filter(
-          (pbs) => pbs.name.toLowerCase().includes(search) || pbs.host?.toLowerCase().includes(search),
+          (pbs) =>
+            pbs.name.toLowerCase().includes(search) || pbs.host?.toLowerCase().includes(search),
         )
       : pbsServers;
   }, []);
@@ -121,7 +122,8 @@ export function useThresholdsInfrastructureData(inputs: ThresholdsDataInputs) {
 
     return search
       ? pmgServers.filter(
-          (pmg) => pmg.name.toLowerCase().includes(search) || pmg.host?.toLowerCase().includes(search),
+          (pmg) =>
+            pmg.name.toLowerCase().includes(search) || pmg.host?.toLowerCase().includes(search),
         )
       : pmgServers;
   }, []);
@@ -163,7 +165,8 @@ export function useThresholdsInfrastructureData(inputs: ThresholdsDataInputs) {
     return search
       ? storageDevices.filter(
           (storage) =>
-            storage.name.toLowerCase().includes(search) || storage.node?.toLowerCase().includes(search),
+            storage.name.toLowerCase().includes(search) ||
+            storage.node?.toLowerCase().includes(search),
         )
       : storageDevices;
   }, []);

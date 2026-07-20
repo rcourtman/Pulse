@@ -16,8 +16,7 @@ export const markRouteStateDeliberateScroll = (now = Date.now()): void => {
   );
 };
 
-const resolvePathname = (path: string): string =>
-  new URL(path, window.location.origin).pathname;
+const resolvePathname = (path: string): string => new URL(path, window.location.origin).pathname;
 
 const isSamePathnameNavigation = (currentPath: string, targetPath: string): boolean =>
   resolvePathname(currentPath) === resolvePathname(targetPath);

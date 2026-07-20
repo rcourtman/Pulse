@@ -71,9 +71,7 @@ function makeSignal<T>(factory: () => AnySignal<T>): {
 }
 
 function dispatchCustomSync(key: string, value: string | null) {
-  window.dispatchEvent(
-    new CustomEvent(SYNC_EVENT, { detail: { key, value } }),
-  );
+  window.dispatchEvent(new CustomEvent(SYNC_EVENT, { detail: { key, value } }));
 }
 
 // jsdom's StorageEvent constructor rejects non-jsdom Storage instances for
@@ -111,16 +109,13 @@ describe('localStorage signal factories — parse/stringify branch coverage', ()
       [String(Number.MAX_SAFE_INTEGER), Number.MAX_SAFE_INTEGER],
     ];
 
-    it.each(finiteParseCases)(
-      'runs parse(stored) on first read: %j -> %s',
-      (stored, expected) => {
-        localStorage.setItem('num-init', stored);
+    it.each(finiteParseCases)('runs parse(stored) on first read: %j -> %s', (stored, expected) => {
+      localStorage.setItem('num-init', stored);
 
-        const sig = makeSignal(() => createLocalStorageNumberSignal('num-init', 7));
+      const sig = makeSignal(() => createLocalStorageNumberSignal('num-init', 7));
 
-        expect(sig.value()).toBe(expected);
-      },
-    );
+      expect(sig.value()).toBe(expected);
+    });
 
     it.each([['abc'], ['Infinity'], ['-Infinity'], ['NaN'], ['-0x10']])(
       'runs parse(stored) and falls back to the default when %j is not finite',
@@ -222,16 +217,13 @@ describe('localStorage signal factories — parse/stringify branch coverage', ()
       ['anything', false],
     ];
 
-    it.each(boolParseCases)(
-      'runs parse(stored) on first read: %j -> %s',
-      (stored, expected) => {
-        localStorage.setItem('bool-init', stored);
+    it.each(boolParseCases)('runs parse(stored) on first read: %j -> %s', (stored, expected) => {
+      localStorage.setItem('bool-init', stored);
 
-        const sig = makeSignal(() => createLocalStorageBooleanSignal('bool-init', false));
+      const sig = makeSignal(() => createLocalStorageBooleanSignal('bool-init', false));
 
-        expect(sig.value()).toBe(expected);
-      },
-    );
+      expect(sig.value()).toBe(expected);
+    });
   });
 
   // ---------------------------------------------------------------- L46 -----

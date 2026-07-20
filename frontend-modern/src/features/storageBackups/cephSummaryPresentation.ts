@@ -57,9 +57,7 @@ export const buildExplicitCephClusters = (resources: Resource[]): CephCluster[] 
   });
 };
 
-export const deriveCephClustersFromStorageRecords = (
-  records: StorageRecord[],
-): CephCluster[] => {
+export const deriveCephClustersFromStorageRecords = (records: StorageRecord[]): CephCluster[] => {
   const summaryByKey = new Map<
     string,
     { total: number; used: number; available: number; records: number; nodes: Set<string> }
@@ -131,9 +129,7 @@ export const summarizeCephClusters = (clusters: CephCluster[]): CephSummaryStats
   };
 };
 
-export const buildCephClusterLookup = (
-  clusters: CephCluster[],
-): Record<string, CephCluster> => {
+export const buildCephClusterLookup = (clusters: CephCluster[]): Record<string, CephCluster> => {
   const map: Record<string, CephCluster> = {};
   clusters.forEach((cluster) => {
     [cluster.instance, cluster.id, cluster.name].forEach((key) => {

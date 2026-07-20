@@ -55,7 +55,9 @@ describe('recoveryItemTypePresentation', () => {
 
   it('falls back cleanly for unknown item types', () => {
     expect(getRecoveryItemTypeLabel('custom-thing')).toBe('Custom Thing');
-    expect(getRecoveryItemTypeBadgeClass('custom-thing')).toContain('bg-surface-alt text-base-content');
+    expect(getRecoveryItemTypeBadgeClass('custom-thing')).toContain(
+      'bg-surface-alt text-base-content',
+    );
     expect(getRecoveryItemTypeBadgeClass('custom-thing')).toContain('inline-flex items-center');
     expect(getRecoveryItemTypeBadgeClass('custom-thing')).toContain('px-1 py-0.5');
   });

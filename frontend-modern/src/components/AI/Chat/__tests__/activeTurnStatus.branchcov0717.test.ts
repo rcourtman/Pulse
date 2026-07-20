@@ -4,11 +4,7 @@ import {
   formatAssistantWorkflowStatus,
   getAssistantActiveTurnStatus,
 } from '@/components/AI/Chat/activeTurnStatus';
-import type {
-  ChatMessage,
-  PendingTool,
-  StreamDisplayEvent,
-} from '@/components/AI/Chat/types';
+import type { ChatMessage, PendingTool, StreamDisplayEvent } from '@/components/AI/Chat/types';
 
 // Fixture builders — mirror the conventions of the sibling branch-coverage tests.
 const assistantMessage = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
@@ -134,9 +130,11 @@ describe('activeTurnStatus branch coverage (supplemental)', () => {
     it('skips a pendingTools entry that produces no status text', () => {
       // pendingToolCandidate(undefined) -> formatPendingToolStatus('') -> null,
       // so the reducer returns its current accumulator unchanged.
-      expect(
-        activeTurn({ pendingTools: [undefined as unknown as PendingTool] }),
-      ).toEqual({ type: 'thinking', text: 'Sending prompt.', startedAt: 1_000 });
+      expect(activeTurn({ pendingTools: [undefined as unknown as PendingTool] })).toEqual({
+        type: 'thinking',
+        text: 'Sending prompt.',
+        startedAt: 1_000,
+      });
     });
   });
 
@@ -180,7 +178,9 @@ describe('activeTurnStatus branch coverage (supplemental)', () => {
       // The final `|| undefined` arm: activityAt is undefined.
       expect(
         activeTurn({
-          streamEvents: [{ type: 'workflow_status', workflowStatus: { message: 'Working on it.' } }],
+          streamEvents: [
+            { type: 'workflow_status', workflowStatus: { message: 'Working on it.' } },
+          ],
         }),
       ).toEqual({ type: 'thinking', text: 'Working on it.' });
     });
@@ -246,28 +246,27 @@ describe('activeTurnStatus branch coverage (supplemental)', () => {
   // -------------------------------------------------------------------------
 
   describe('isGenericToolProgress equality arms', () => {
-    it.each([
-      'Running command',
-      'Running read-only command',
-      'Running read-only command.',
-    ])('treats %q generic progress as generic when a command preview exists', (progress) => {
-      // A real command preview plus a generic progress string forces
-      // isGenericToolProgress to be evaluated (commandPreview truthy ->
-      // !commandPreview is false -> !isGenericToolProgress(progress) runs).
-      expect(
-        activeTurn({
-          pendingTools: [
-            {
-              id: 't1',
-              name: 'pulse_read',
-              input: readToolInput('uptime'),
-              progress,
-              status: 'running',
-            },
-          ],
-        }),
-      ).toEqual({ type: 'tool', text: 'Running $ uptime' });
-    });
+    it.each(['Running command', 'Running read-only command', 'Running read-only command.'])(
+      'treats %q generic progress as generic when a command preview exists',
+      (progress) => {
+        // A real command preview plus a generic progress string forces
+        // isGenericToolProgress to be evaluated (commandPreview truthy ->
+        // !commandPreview is false -> !isGenericToolProgress(progress) runs).
+        expect(
+          activeTurn({
+            pendingTools: [
+              {
+                id: 't1',
+                name: 'pulse_read',
+                input: readToolInput('uptime'),
+                progress,
+                status: 'running',
+              },
+            ],
+          }),
+        ).toEqual({ type: 'tool', text: 'Running $ uptime' });
+      },
+    );
   });
 
   // -------------------------------------------------------------------------

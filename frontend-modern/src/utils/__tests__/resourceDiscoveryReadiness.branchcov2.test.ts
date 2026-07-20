@@ -4,10 +4,7 @@ import {
   formatReadinessAge,
   getDiscoveryReadinessPresentation,
 } from '@/utils/resourceDiscoveryReadiness';
-import type {
-  ResourceDiscoveryReadiness,
-  ResourceDiscoveryReadinessState,
-} from '@/types/resource';
+import type { ResourceDiscoveryReadiness, ResourceDiscoveryReadinessState } from '@/types/resource';
 
 // `formatDiscoveryAge` (from @/api/discovery) is wall-clock dependent. Mock it
 // deterministically so the `observedAt`-driven code paths assert concrete
@@ -113,13 +110,55 @@ describe('resourceDiscoveryReadiness — branch coverage (branchcov2)', () => {
         statusLabel: string;
         tone: string;
       }> = [
-        { state: 'fresh', label: 'Discovery fresh', shortLabel: 'Fresh', statusLabel: 'Discovery fresh', tone: 'success' },
-        { state: 'stale', label: 'Discovery stale', shortLabel: 'Stale', statusLabel: 'Discovery stale', tone: 'warning' },
-        { state: 'missing', label: 'Not discovered', shortLabel: 'None', statusLabel: 'No discovery data', tone: 'muted' },
-        { state: 'running', label: 'Discovery running', shortLabel: 'Running', statusLabel: 'Discovery running', tone: 'info' },
-        { state: 'failed', label: 'Discovery failed', shortLabel: 'Failed', statusLabel: 'Discovery failed', tone: 'danger' },
-        { state: 'unavailable', label: 'Discovery unavailable', shortLabel: 'Unavailable', statusLabel: 'Discovery unavailable', tone: 'warning' },
-        { state: 'unsupported', label: 'Not supported', shortLabel: 'N/A', statusLabel: 'Discovery unsupported', tone: 'muted' },
+        {
+          state: 'fresh',
+          label: 'Discovery fresh',
+          shortLabel: 'Fresh',
+          statusLabel: 'Discovery fresh',
+          tone: 'success',
+        },
+        {
+          state: 'stale',
+          label: 'Discovery stale',
+          shortLabel: 'Stale',
+          statusLabel: 'Discovery stale',
+          tone: 'warning',
+        },
+        {
+          state: 'missing',
+          label: 'Not discovered',
+          shortLabel: 'None',
+          statusLabel: 'No discovery data',
+          tone: 'muted',
+        },
+        {
+          state: 'running',
+          label: 'Discovery running',
+          shortLabel: 'Running',
+          statusLabel: 'Discovery running',
+          tone: 'info',
+        },
+        {
+          state: 'failed',
+          label: 'Discovery failed',
+          shortLabel: 'Failed',
+          statusLabel: 'Discovery failed',
+          tone: 'danger',
+        },
+        {
+          state: 'unavailable',
+          label: 'Discovery unavailable',
+          shortLabel: 'Unavailable',
+          statusLabel: 'Discovery unavailable',
+          tone: 'warning',
+        },
+        {
+          state: 'unsupported',
+          label: 'Not supported',
+          shortLabel: 'N/A',
+          statusLabel: 'Discovery unsupported',
+          tone: 'muted',
+        },
       ];
 
       for (const { state, label, shortLabel, statusLabel, tone } of cases) {
@@ -133,7 +172,9 @@ describe('resourceDiscoveryReadiness — branch coverage (branchcov2)', () => {
     });
 
     it('falls back to the unknown copy when the state is not canonical (STATE_COPY ?? fallback)', () => {
-      const presentation = getDiscoveryReadinessPresentation(makeReadiness({ state: UNKNOWN_STATE }));
+      const presentation = getDiscoveryReadinessPresentation(
+        makeReadiness({ state: UNKNOWN_STATE }),
+      );
       expect(presentation).toStrictEqual({
         state: UNKNOWN_STATE,
         label: 'Discovery unknown',
@@ -205,9 +246,8 @@ describe('resourceDiscoveryReadiness — branch coverage (branchcov2)', () => {
 
     it('falls back to formatReadinessAge(ageSeconds) when observedAt is missing or empty', () => {
       expect(
-        getDiscoveryReadinessPresentation(
-          makeReadiness({ state: 'fresh', ageSeconds: 600 }),
-        )?.detail,
+        getDiscoveryReadinessPresentation(makeReadiness({ state: 'fresh', ageSeconds: 600 }))
+          ?.detail,
       ).toBe('Observed 10 minutes old');
       // Empty string is falsy, so the observedAt branch is skipped.
       expect(
@@ -255,7 +295,9 @@ describe('resourceDiscoveryReadiness — branch coverage (branchcov2)', () => {
 
     it('emits the service branch alone when only serviceName is set', () => {
       expect(
-        formatDiscoveryReadinessBriefingLine(makeReadiness({ state: 'failed', serviceName: 'SNMP' })),
+        formatDiscoveryReadinessBriefingLine(
+          makeReadiness({ state: 'failed', serviceName: 'SNMP' }),
+        ),
       ).toBe('Discovery data: Discovery failed, service SNMP');
     });
 

@@ -202,9 +202,9 @@ describe('useSystemSettingsState', () => {
       },
     }));
 
-	vi.doMock('@/stores/systemSettings', () => ({
-	  updateDockerUpdateActionsSetting: vi.fn(),
-	}));
+    vi.doMock('@/stores/systemSettings', () => ({
+      updateDockerUpdateActionsSetting: vi.fn(),
+    }));
 
     ({ useSystemSettingsState } = await import('../useSystemSettingsState'));
   });

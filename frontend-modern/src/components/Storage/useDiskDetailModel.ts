@@ -10,9 +10,7 @@ import {
 } from '@/features/storageBackups/diskDetailPresentation';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import type { Resource } from '@/types/resource';
-import {
-  resolvePhysicalDiskHistoryResourceId,
-} from './diskResourceUtils';
+import { resolvePhysicalDiskHistoryResourceId } from './diskResourceUtils';
 
 type UseDiskDetailModelOptions = {
   disk: Accessor<Resource>;

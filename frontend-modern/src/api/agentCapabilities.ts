@@ -71,11 +71,7 @@ export type AgentOperationsLoopNextAction =
 export type AgentOperationsLoopStepStatus = 'complete' | 'current' | 'pending';
 
 export type AgentOperationsLoopProActivationValueProofState =
-  | 'not_started'
-  | 'in_progress'
-  | 'governed_decision_recorded'
-  | 'verified_needs_mcp'
-  | 'verified';
+  'not_started' | 'in_progress' | 'governed_decision_recorded' | 'verified_needs_mcp' | 'verified';
 
 export type AgentOperationsLoopPatrolControlValueState =
   AgentOperationsLoopProActivationValueProofState;

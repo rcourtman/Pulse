@@ -171,8 +171,9 @@ const getTrueNASServiceSortValue = (
     case 'boot':
       return row.service.enabled ? 'Enabled' : 'Disabled';
     case 'pids': {
-      const count = (row.service.pids ?? []).filter((pid) => Number.isFinite(pid) && pid > 0)
-        .length;
+      const count = (row.service.pids ?? []).filter(
+        (pid) => Number.isFinite(pid) && pid > 0,
+      ).length;
       return count > 0 ? count : null;
     }
     case 'system':

@@ -224,9 +224,7 @@ describe('mapPBSBackupJob (via pbsInstanceFromResource.backupJobs)', () => {
   });
 
   it('defaults every string field (including id) and drops non-record entries', () => {
-    const instance = pbsInstanceFromResource(
-      createPBSResource({ backupJobs: [{}, null, 'x'] }),
-    );
+    const instance = pbsInstanceFromResource(createPBSResource({ backupJobs: [{}, null, 'x'] }));
 
     expect(instance?.backupJobs).toHaveLength(1);
     expect(instance?.backupJobs[0]).toEqual({
@@ -538,10 +536,7 @@ describe('mapPMGRelayDomain (via pmgInstanceFromResource.relayDomains)', () => {
   it('maps a relay domain with an optional comment', () => {
     const instance = pmgInstanceFromResource(
       createPMGResource({
-        relayDomains: [
-          { domain: 'example.com', comment: 'primary' },
-          { domain: 'bare.example' },
-        ],
+        relayDomains: [{ domain: 'example.com', comment: 'primary' }, { domain: 'bare.example' }],
       }),
     );
 
@@ -552,9 +547,7 @@ describe('mapPMGRelayDomain (via pmgInstanceFromResource.relayDomains)', () => {
   });
 
   it('defaults empty domain and drops non-record entries', () => {
-    const instance = pmgInstanceFromResource(
-      createPMGResource({ relayDomains: [{}, null] }),
-    );
+    const instance = pmgInstanceFromResource(createPMGResource({ relayDomains: [{}, null] }));
 
     expect(instance?.relayDomains).toHaveLength(1);
     expect(instance?.relayDomains?.[0].domain).toBe('');
@@ -651,9 +644,7 @@ describe('mapPMGMailCountPoint (via pmgInstanceFromResource.mailCount)', () => {
   });
 
   it('falls back to the epoch timestamp and zeroes every count for an empty record', () => {
-    const instance = pmgInstanceFromResource(
-      createPMGResource({ mailCount: [{}, null] }),
-    );
+    const instance = pmgInstanceFromResource(createPMGResource({ mailCount: [{}, null] }));
 
     expect(instance?.mailCount).toHaveLength(1);
     expect(instance?.mailCount?.[0]).toEqual({

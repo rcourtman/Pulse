@@ -150,9 +150,7 @@ describe('organizationSettingsPresentation branch coverage (supplemental)', () =
 
   describe('getOrganizationIncomingShareDeclineErrorMessage', () => {
     it('returns the provided message on the truthy arm of `message ||`', () => {
-      expect(getOrganizationIncomingShareDeclineErrorMessage('still in use')).toBe(
-        'still in use',
-      );
+      expect(getOrganizationIncomingShareDeclineErrorMessage('still in use')).toBe('still in use');
     });
 
     it('treats an empty-string message as falsy and falls back', () => {

@@ -28,12 +28,12 @@ describe('rbacPresentation', () => {
       title: 'Custom Roles',
       body: expect.not.stringContaining('Pro'),
     });
-    expect(
-      getRBACFeatureGateCopy('user-assignments', { showCommercialCopy: false }),
-    ).toMatchObject({
-      title: 'Centralized Access Control',
-      body: expect.not.stringContaining('Pro'),
-    });
+    expect(getRBACFeatureGateCopy('user-assignments', { showCommercialCopy: false })).toMatchObject(
+      {
+        title: 'Centralized Access Control',
+        body: expect.not.stringContaining('Pro'),
+      },
+    );
   });
 
   it('returns canonical user assignments empty state copy', () => {

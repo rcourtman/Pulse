@@ -77,26 +77,23 @@ describe('formatTimestamp guard branches', () => {
 
 describe('formatGeneratedAt guard branches', () => {
   it('emits a Generated ISO line for a valid date', () => {
-    const transcript = render(
-      [{ id: 'a1', role: 'assistant', content: 'Hi', timestamp }],
-      { generatedAt: new Date('2026-06-06T12:34:56Z') },
-    );
+    const transcript = render([{ id: 'a1', role: 'assistant', content: 'Hi', timestamp }], {
+      generatedAt: new Date('2026-06-06T12:34:56Z'),
+    });
     expect(transcript).toContain('Generated: 2026-06-06T12:34:56.000Z');
   });
 
   it('omits the Generated line for a NaN date', () => {
-    const transcript = render(
-      [{ id: 'a1', role: 'assistant', content: 'Hi', timestamp }],
-      { generatedAt: new Date(NaN) },
-    );
+    const transcript = render([{ id: 'a1', role: 'assistant', content: 'Hi', timestamp }], {
+      generatedAt: new Date(NaN),
+    });
     expect(transcript).not.toContain('Generated:');
   });
 
   it('omits the Generated line when generatedAt is not a Date instance', () => {
-    const transcript = render(
-      [{ id: 'a1', role: 'assistant', content: 'Hi', timestamp }],
-      { generatedAt: 'not-a-date' as unknown as Date },
-    );
+    const transcript = render([{ id: 'a1', role: 'assistant', content: 'Hi', timestamp }], {
+      generatedAt: 'not-a-date' as unknown as Date,
+    });
     expect(transcript).not.toContain('Generated:');
   });
 
@@ -460,9 +457,7 @@ describe('hasTranscriptMessageContent uncovered branches', () => {
           role: 'assistant',
           content: '',
           timestamp,
-          pendingApprovals: [
-            { toolId: 't1', toolName: '', command: '', runOnHost: false },
-          ],
+          pendingApprovals: [{ toolId: 't1', toolName: '', command: '', runOnHost: false }],
         },
       ]),
     ).toBe(true);
@@ -533,9 +528,7 @@ describe('appendMessageMetadata uncovered branches', () => {
   });
 
   it('emits Time but not Model metadata for a user message', () => {
-    const transcript = render([
-      { id: 'u1', role: 'user', content: 'Hello', timestamp },
-    ]);
+    const transcript = render([{ id: 'u1', role: 'user', content: 'Hello', timestamp }]);
     expect(transcript).toContain('Time:');
     expect(transcript).not.toContain('Model:');
   });
@@ -631,7 +624,13 @@ describe('appendAssistantStreamEvents fallback and guard branches', () => {
 
   it('renders a stopped interruption notice', () => {
     const transcript = render([
-      { id: 'a1', role: 'assistant', content: 'partial answer', timestamp, interruption: 'stopped' },
+      {
+        id: 'a1',
+        role: 'assistant',
+        content: 'partial answer',
+        timestamp,
+        interruption: 'stopped',
+      },
     ]);
     expect(transcript).toContain('[interrupted] Stopped by user');
   });
@@ -794,9 +793,7 @@ describe('formatAssistantTranscript structural edge cases', () => {
   });
 
   it('collapses three or more consecutive newlines into two', () => {
-    const transcript = render([
-      { id: 'u1', role: 'user', content: 'A\n\n\n\n\nB', timestamp },
-    ]);
+    const transcript = render([{ id: 'u1', role: 'user', content: 'A\n\n\n\n\nB', timestamp }]);
     expect(transcript).not.toMatch(/\n{3,}/);
     expect(transcript).toContain('A');
     expect(transcript).toContain('B');

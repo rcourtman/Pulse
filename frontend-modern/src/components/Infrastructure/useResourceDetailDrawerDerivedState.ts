@@ -86,14 +86,7 @@ import {
 import { getResourceHealthIssuePresentation } from './resourceHealthPresentation';
 
 type DrawerTab =
-  | 'overview'
-  | 'history'
-  | 'discovery'
-  | 'mail'
-  | 'namespaces'
-  | 'deployments'
-  | 'swarm'
-  | 'debug';
+  'overview' | 'history' | 'discovery' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
 interface ResourceDrawerDiscoverySourceKey {
   type: DiscoveryResourceType;

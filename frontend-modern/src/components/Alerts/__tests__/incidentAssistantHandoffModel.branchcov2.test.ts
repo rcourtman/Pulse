@@ -339,10 +339,7 @@ describe('formatContextLine (exercised via buildAlertIncidentAssistantHandoff)',
   it('omits the "Message:" context line and briefing detailLine when message is undefined', () => {
     const handoff = buildHandoff(makeIncident({ message: undefined }));
     expect(handoff.context.handoffContext).not.toContain('Message:');
-    expect(handoff.context.briefing.detailLines).toEqual([
-      '2 timeline events',
-      'Node: edge-1',
-    ]);
+    expect(handoff.context.briefing.detailLines).toEqual(['2 timeline events', 'Node: edge-1']);
   });
 
   it('omits the "Node:" context line when node is an empty string (trim -> empty -> undefined)', () => {

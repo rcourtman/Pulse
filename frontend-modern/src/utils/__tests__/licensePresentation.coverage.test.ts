@@ -192,37 +192,23 @@ describe('requiresPulseProRuntime - branch coverage', () => {
   });
 
   it('returns false for tiers outside the Pro runtime set', () => {
-    expect(
-      requiresPulseProRuntime({ tier: 'relay', subscription_state: 'active' }),
-    ).toBe(false);
-    expect(
-      requiresPulseProRuntime({ tier: 'free', subscription_state: 'active' }),
-    ).toBe(false);
+    expect(requiresPulseProRuntime({ tier: 'relay', subscription_state: 'active' })).toBe(false);
+    expect(requiresPulseProRuntime({ tier: 'free', subscription_state: 'active' })).toBe(false);
   });
 
   it('returns false for a Pro-tier with non-paid subscription state', () => {
-    expect(
-      requiresPulseProRuntime({ tier: 'pro', subscription_state: 'expired' }),
-    ).toBe(false);
+    expect(requiresPulseProRuntime({ tier: 'pro', subscription_state: 'expired' })).toBe(false);
   });
 
   it('returns true for active, grace, and trial Pro-tier entitlements', () => {
-    expect(
-      requiresPulseProRuntime({ tier: 'pro', subscription_state: 'active' }),
-    ).toBe(true);
-    expect(
-      requiresPulseProRuntime({ tier: 'pro', subscription_state: 'grace' }),
-    ).toBe(true);
-    expect(
-      requiresPulseProRuntime({ tier: 'pro', subscription_state: 'trial' }),
-    ).toBe(true);
+    expect(requiresPulseProRuntime({ tier: 'pro', subscription_state: 'active' })).toBe(true);
+    expect(requiresPulseProRuntime({ tier: 'pro', subscription_state: 'grace' })).toBe(true);
+    expect(requiresPulseProRuntime({ tier: 'pro', subscription_state: 'trial' })).toBe(true);
   });
 
   it('returns true for every tier in the Pro-runtime-required set', () => {
     for (const tier of ['pro', 'pro_annual', 'pro_plus', 'lifetime', 'enterprise']) {
-      expect(
-        requiresPulseProRuntime({ tier, subscription_state: 'active' }),
-      ).toBe(true);
+      expect(requiresPulseProRuntime({ tier, subscription_state: 'active' })).toBe(true);
     }
   });
 });
@@ -242,9 +228,7 @@ describe('getGrandfatheredPriceContinuityNotice - edge cases', () => {
   });
 
   it('returns null for a grandfathered plan with a null subscription state', () => {
-    expect(
-      getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', null),
-    ).toBeNull();
+    expect(getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', null)).toBeNull();
     expect(
       getGrandfatheredPriceContinuityNotice('v5_pro_annual_grandfathered', undefined),
     ).toBeNull();
@@ -263,9 +247,7 @@ describe('getGrandfatheredPriceContinuityNotice - edge cases', () => {
 
 describe('getCommercialMigrationActionText - all switch branches', () => {
   it('returns retry guidance for retry_activation', () => {
-    expect(getCommercialMigrationActionText('retry_activation')).toBe(
-      'Retry from this instance.',
-    );
+    expect(getCommercialMigrationActionText('retry_activation')).toBe('Retry from this instance.');
   });
 
   it('returns current-key guidance for use_v6_activation_key', () => {
@@ -402,9 +384,7 @@ describe('getBillingAdminTrialStatus - branch coverage', () => {
   });
 
   it('returns No trial for a non-trial state with no trial timestamps', () => {
-    expect(
-      getBillingAdminTrialStatus({ subscription_state: 'active' } as never),
-    ).toBe('No trial');
+    expect(getBillingAdminTrialStatus({ subscription_state: 'active' } as never)).toBe('No trial');
   });
 
   it('formats a trial state with only trial_ends_at', () => {
@@ -581,7 +561,10 @@ describe('getSelfHostedCurrentPlanPresentation - is_lifetime branch', () => {
         upgrade_reasons: [],
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
-      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Applies Safe Fixes and Verifies the Result'],
+      displayableCapabilities: [
+        'Pulse Relay (Remote Access)',
+        'Patrol Applies Safe Fixes and Verifies the Result',
+      ],
     });
     expect(result.supplementalBadges).toContain('Grandfathered lifetime');
     expect(result.supplementalSummary).toContain(
@@ -602,7 +585,10 @@ describe('getSelfHostedCurrentPlanPresentation - grace + grandfathered branch', 
         upgrade_reasons: [],
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
-      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Applies Safe Fixes and Verifies the Result'],
+      displayableCapabilities: [
+        'Pulse Relay (Remote Access)',
+        'Patrol Applies Safe Fixes and Verifies the Result',
+      ],
     });
     expect(result.supplementalBadges).toContain('Grandfathered price');
   });
@@ -655,7 +641,10 @@ describe('getSelfHostedCurrentPlanPresentation - getPatrolControlAction branches
         upgrade_reasons: [],
         runtime: { build: 'pro', label: 'Pulse Pro runtime' },
       },
-      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Applies Safe Fixes and Verifies the Result'],
+      displayableCapabilities: [
+        'Pulse Relay (Remote Access)',
+        'Patrol Applies Safe Fixes and Verifies the Result',
+      ],
       patrolOperatorStatus: {
         patrolControlOperationsLoopStarterCount: 1,
         patrolControlCompletedOperationsLoopCount: 1,
@@ -811,7 +800,10 @@ describe('getSelfHostedActivationSuccessPresentation - purchase + runtime mismat
         upgrade_reasons: [],
         runtime: { build: 'community', label: 'Pulse Community runtime' },
       },
-      displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Applies Safe Fixes and Verifies the Result'],
+      displayableCapabilities: [
+        'Pulse Relay (Remote Access)',
+        'Patrol Applies Safe Fixes and Verifies the Result',
+      ],
       source: 'purchase',
     });
     expect(result).not.toBeNull();

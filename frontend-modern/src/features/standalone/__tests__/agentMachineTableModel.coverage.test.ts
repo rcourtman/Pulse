@@ -30,13 +30,16 @@ const resource = (overrides: Partial<Resource>): Resource =>
 const rowsFor = (
   sections: readonly AgentMachineTemperatureDetailSection[],
   heading: string,
-): AgentMachineTemperatureDetailRow[] => sections.find((entry) => entry.heading === heading)?.rows ?? [];
+): AgentMachineTemperatureDetailRow[] =>
+  sections.find((entry) => entry.heading === heading)?.rows ?? [];
 
 describe('agentMachineTableModel coverage', () => {
   describe('getAgentMachineMemoryPercent', () => {
     it('derives the percentage from total/used and ignores the current fallback', () => {
       expect(
-        getAgentMachineMemoryPercent(resource({ memory: { current: 99, total: 16_000, used: 4_000 } })),
+        getAgentMachineMemoryPercent(
+          resource({ memory: { current: 99, total: 16_000, used: 4_000 } }),
+        ),
       ).toBe(25);
     });
 
@@ -68,9 +71,7 @@ describe('agentMachineTableModel coverage', () => {
     });
 
     it('falls back to agent.memory.usage only when memory.current is absent', () => {
-      expect(
-        getAgentMachineMemoryPercent(resource({ agent: { memory: { usage: 42 } } })),
-      ).toBe(42);
+      expect(getAgentMachineMemoryPercent(resource({ agent: { memory: { usage: 42 } } }))).toBe(42);
     });
 
     it('returns undefined when no memory source is available', () => {
@@ -232,7 +233,9 @@ describe('agentMachineTableModel coverage', () => {
     it('does not cap sections with six or fewer rows', () => {
       const sections = getAgentMachineTemperatureDetailSections(
         resource({
-          agent: { sensors: { temperatureCelsius: { s1: 10, s2: 20, s3: 30, s4: 40, s5: 50, s6: 60 } } },
+          agent: {
+            sensors: { temperatureCelsius: { s1: 10, s2: 20, s3: 30, s4: 40, s5: 50, s6: 60 } },
+          },
         }),
       );
       const rows = rowsFor(sections, 'Temperatures');

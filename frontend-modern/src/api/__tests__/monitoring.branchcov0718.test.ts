@@ -165,9 +165,9 @@ describe('MonitoringAPI branch coverage (optional query params / empty-input gua
     it('updateAgentConfig throws the canonical message and skips the transport for an empty agentId', async () => {
       // Exercises the `if (!agentId)` guard arm in updateAgentConfig — the
       // PATCH body is never built or sent.
-      await expect(
-        MonitoringAPI.updateAgentConfig('', { commandsEnabled: true }),
-      ).rejects.toThrow('Agent ID is required to update agent config.');
+      await expect(MonitoringAPI.updateAgentConfig('', { commandsEnabled: true })).rejects.toThrow(
+        'Agent ID is required to update agent config.',
+      );
       expect(fetchMock).not.toHaveBeenCalled();
     });
 

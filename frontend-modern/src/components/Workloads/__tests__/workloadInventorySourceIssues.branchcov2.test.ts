@@ -241,9 +241,7 @@ describe('workloadInventorySourceIssues (branch coverage)', () => {
         }),
       ]);
 
-      expect(issues[0]?.coverageLabel).toBe(
-        'VMs, containers, and Kubernetes workloads',
-      );
+      expect(issues[0]?.coverageLabel).toBe('VMs, containers, and Kubernetes workloads');
     });
   });
 

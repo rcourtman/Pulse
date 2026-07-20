@@ -130,7 +130,9 @@ export const useReportingPanelState = () => {
       setReportSchedules(parseReportSchedulesResponse(await response.json()));
     } catch (error) {
       console.error('Report schedules error:', error);
-      setReportSchedulesError(error instanceof Error ? error.message : 'Failed to load report schedules');
+      setReportSchedulesError(
+        error instanceof Error ? error.message : 'Failed to load report schedules',
+      );
     } finally {
       setReportSchedulesLoading(false);
     }
@@ -322,11 +324,14 @@ export const useReportingPanelState = () => {
 
   const updateReportSchedule = async (schedule: ReportSchedule) => {
     const normalized = normalizeReportSchedule(schedule);
-    const response = await apiFetch(`/api/admin/reports/schedules/${encodeURIComponent(normalized.id)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(normalized),
-    });
+    const response = await apiFetch(
+      `/api/admin/reports/schedules/${encodeURIComponent(normalized.id)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(normalized),
+      },
+    );
     if (!response.ok) {
       throw await apiErrorFromResponse(response, 'Failed to update report schedule');
     }
@@ -381,9 +386,12 @@ export const useReportingPanelState = () => {
     if (!window.confirm(`Delete ${schedule.name}?`)) return;
     setDeletingScheduleID(schedule.id);
     try {
-      const response = await apiFetch(`/api/admin/reports/schedules/${encodeURIComponent(schedule.id)}`, {
-        method: 'DELETE',
-      });
+      const response = await apiFetch(
+        `/api/admin/reports/schedules/${encodeURIComponent(schedule.id)}`,
+        {
+          method: 'DELETE',
+        },
+      );
       if (!response.ok) {
         throw await apiErrorFromResponse(response, 'Failed to delete report schedule');
       }

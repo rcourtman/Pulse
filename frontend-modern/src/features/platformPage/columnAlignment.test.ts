@@ -40,9 +40,7 @@ describe('columnAlignment', () => {
     );
 
     it('is exhaustive over the PlatformTableColumnKind union (no missing or extra keys)', () => {
-      expect(Object.keys(PLATFORM_COLUMN_ALIGN_BY_KIND).sort()).toEqual(
-        [...ALL_KINDS].sort(),
-      );
+      expect(Object.keys(PLATFORM_COLUMN_ALIGN_BY_KIND).sort()).toEqual([...ALL_KINDS].sort());
     });
 
     it('only emits valid PlatformTableCellAlign values', () => {

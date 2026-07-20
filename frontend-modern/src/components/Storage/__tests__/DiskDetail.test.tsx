@@ -4,7 +4,12 @@ import { DiskDetail } from '@/components/Storage/DiskDetail';
 import type { Resource } from '@/types/resource';
 
 vi.mock('@/components/shared/HistoryChart', () => ({
-  HistoryChart: (props: { resourceType: string; resourceId: string; metric: string; range?: string }) => (
+  HistoryChart: (props: {
+    resourceType: string;
+    resourceId: string;
+    metric: string;
+    range?: string;
+  }) => (
     <div data-testid="history-chart">
       {props.resourceType}:{props.resourceId}:{props.metric}:{props.range}
     </div>

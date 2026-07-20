@@ -71,16 +71,21 @@ describe('proxmoxBackupActivityPresentation', () => {
       ['ok', 'OK', 'bg-emerald-500', 'bg-emerald-500'],
       ['failed', 'Failed', 'bg-red-500', 'bg-red-500'],
       ['running', 'Running', 'bg-amber-500', 'bg-amber-500'],
-    ])('returns the canonical presentation for %s', (kind, label, segmentClassName, swatchClassName) => {
-      expect(getBackupActivitySegmentPresentation(kind as BackupActivitySegmentKind)).toEqual({
-        label,
-        segmentClassName,
-        swatchClassName,
-      });
-    });
+    ])(
+      'returns the canonical presentation for %s',
+      (kind, label, segmentClassName, swatchClassName) => {
+        expect(getBackupActivitySegmentPresentation(kind as BackupActivitySegmentKind)).toEqual({
+          label,
+          segmentClassName,
+          swatchClassName,
+        });
+      },
+    );
 
     it('returns a stable reference for repeated lookups', () => {
-      expect(getBackupActivitySegmentPresentation('ok')).toBe(getBackupActivitySegmentPresentation('ok'));
+      expect(getBackupActivitySegmentPresentation('ok')).toBe(
+        getBackupActivitySegmentPresentation('ok'),
+      );
     });
 
     it('delegates source kinds to the proxmox backup source vocabulary', () => {
@@ -265,13 +270,29 @@ describe('proxmoxBackupActivityPresentation', () => {
 
     it.each<[string, ActivityItem[], number]>([
       ['empty stays at the floor of 2', [], 2],
-      ['a max of 1 stays at the floor of 2', [{ ts: localMs(2026, 1, 13, 9, 0), kind: 'ok', bytes: 1 }], 2],
+      [
+        'a max of 1 stays at the floor of 2',
+        [{ ts: localMs(2026, 1, 13, 9, 0), kind: 'ok', bytes: 1 }],
+        2,
+      ],
       ['a max of 2 maps to 2', [{ ts: localMs(2026, 1, 13, 9, 0), kind: 'ok', bytes: 2 }], 2],
       ['a max of 5 maps to 5', [{ ts: localMs(2026, 1, 13, 9, 0), kind: 'ok', bytes: 5 }], 5],
-      ['a max of 6 rounds up to 10', [{ ts: localMs(2026, 1, 13, 9, 0), kind: 'ok', bytes: 6 }], 10],
+      [
+        'a max of 6 rounds up to 10',
+        [{ ts: localMs(2026, 1, 13, 9, 0), kind: 'ok', bytes: 6 }],
+        10,
+      ],
       ['a max of 50 maps to 50', [{ ts: localMs(2026, 1, 13, 9, 0), kind: 'ok', bytes: 50 }], 50],
-      ['a max of 100 maps to 100', [{ ts: localMs(2026, 1, 13, 9, 0), kind: 'ok', bytes: 100 }], 100],
-      ['a max of 1000 maps to 1000', [{ ts: localMs(2026, 1, 13, 9, 0), kind: 'ok', bytes: 1000 }], 1000],
+      [
+        'a max of 100 maps to 100',
+        [{ ts: localMs(2026, 1, 13, 9, 0), kind: 'ok', bytes: 100 }],
+        100,
+      ],
+      [
+        'a max of 1000 maps to 1000',
+        [{ ts: localMs(2026, 1, 13, 9, 0), kind: 'ok', bytes: 1000 }],
+        1000,
+      ],
     ])('axisMax %s', (_label, items, axisMax) => {
       const timeline = buildBackupActivityTimeline(7, items, itemMs, classify, {
         now: NOW,
@@ -306,12 +327,22 @@ describe('proxmoxBackupActivityPresentation', () => {
     it('omits the percentage when a single kind is requested', () => {
       const rows = getBackupActivityTooltipRows(point({ total: 5, ok: 5 }), ['ok']);
       expect(rows).toEqual([
-        { kind: 'ok', label: 'OK', count: 5, value: '5', segmentClassName: 'bg-emerald-500', muted: false },
+        {
+          kind: 'ok',
+          label: 'OK',
+          count: 5,
+          value: '5',
+          segmentClassName: 'bg-emerald-500',
+          muted: false,
+        },
       ]);
     });
 
     it('appends rounded percentages when multiple kinds are requested', () => {
-      const rows = getBackupActivityTooltipRows(point({ total: 10, ok: 6, failed: 4 }), ['ok', 'failed']);
+      const rows = getBackupActivityTooltipRows(point({ total: 10, ok: 6, failed: 4 }), [
+        'ok',
+        'failed',
+      ]);
       expect(rows.map((row) => [row.value, row.muted])).toEqual([
         ['6 (60%)', false],
         ['4 (40%)', false],
@@ -331,16 +362,20 @@ describe('proxmoxBackupActivityPresentation', () => {
     });
 
     it('clamps negative totals and counts to zero', () => {
-      const rows = getBackupActivityTooltipRows(
-        point({ total: -5, ok: -3, failed: -2 }),
-        ['ok', 'failed'],
-      );
+      const rows = getBackupActivityTooltipRows(point({ total: -5, ok: -3, failed: -2 }), [
+        'ok',
+        'failed',
+      ]);
       expect(rows.map((row) => row.value)).toEqual(['0', '0']);
       expect(rows.every((row) => row.count === 0 && row.muted)).toBe(true);
     });
 
     it('reads missing count keys as zero', () => {
-      const partial = { key: '2026-02-13', total: 2, counts: { ok: 2 } } as unknown as BackupActivityPoint;
+      const partial = {
+        key: '2026-02-13',
+        total: 2,
+        counts: { ok: 2 },
+      } as unknown as BackupActivityPoint;
       const rows = getBackupActivityTooltipRows(partial, ['ok', 'failed']);
       expect(rows[1].count).toBe(0);
       expect(rows[1].muted).toBe(true);
@@ -361,7 +396,11 @@ describe('proxmoxBackupActivityPresentation', () => {
     });
 
     it('formats a single volume-mode row without a percentage', () => {
-      const rows = getBackupActivityTooltipRows(point({ total: 1073741824, ok: 1073741824 }), ['ok'], 'volume');
+      const rows = getBackupActivityTooltipRows(
+        point({ total: 1073741824, ok: 1073741824 }),
+        ['ok'],
+        'volume',
+      );
       expect(rows[0].value).toBe('1.00 GB');
     });
 

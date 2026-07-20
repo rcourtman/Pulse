@@ -1,8 +1,5 @@
 import { useNavigate } from '@solidjs/router';
-import {
-  navigateToUpgradeDestination,
-  type UpgradeDestination,
-} from '@/utils/upgradeNavigation';
+import { navigateToUpgradeDestination, type UpgradeDestination } from '@/utils/upgradeNavigation';
 
 export function useUpgradeNavigation() {
   const navigate = useNavigate();

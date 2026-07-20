@@ -41,8 +41,7 @@ const projectOverrides = (
     ...overrides,
   });
 
-const makePBS = (id: string, name: string): PBSInstance =>
-  ({ id, name } as unknown as PBSInstance);
+const makePBS = (id: string, name: string): PBSInstance => ({ id, name }) as unknown as PBSInstance;
 
 // ---------------------------------------------------------------------------
 // hostOverrideIdCandidates
@@ -55,9 +54,7 @@ describe('hostOverrideIdCandidates', () => {
 
   it('prepends resource.agent.agentId when present', () => {
     expect(
-      hostOverrideIdCandidates(
-        makeResource({ id: 'agent-1', agent: { agentId: 'explicit-aid' } }),
-      ),
+      hostOverrideIdCandidates(makeResource({ id: 'agent-1', agent: { agentId: 'explicit-aid' } })),
     ).toEqual(['explicit-aid', 'agent-1']);
   });
 
@@ -892,9 +889,7 @@ describe('buildProjectedOverrides — storageCoords', () => {
       storageResources: [datastore],
     });
 
-    expect(result).toEqual([
-      expect.objectContaining({ node: 'pbs', instance: 'pbs' }),
-    ]);
+    expect(result).toEqual([expect.objectContaining({ node: 'pbs', instance: 'pbs' })]);
   });
 
   it('uses pbsInstanceName as node when present', () => {
@@ -911,9 +906,7 @@ describe('buildProjectedOverrides — storageCoords', () => {
       storageResources: [datastore],
     });
 
-    expect(result).toEqual([
-      expect.objectContaining({ node: 'friendly-pbs', instance: 'inst-5' }),
-    ]);
+    expect(result).toEqual([expect.objectContaining({ node: 'friendly-pbs', instance: 'inst-5' })]);
   });
 
   it('uses platformData.node and platformData.instance for non-datastore storage', () => {
@@ -930,9 +923,7 @@ describe('buildProjectedOverrides — storageCoords', () => {
       storageResources: [storage],
     });
 
-    expect(result).toEqual([
-      expect.objectContaining({ node: 'pve-1', instance: 'Main' }),
-    ]);
+    expect(result).toEqual([expect.objectContaining({ node: 'pve-1', instance: 'Main' })]);
   });
 
   it('returns empty node when platformData.node is absent for non-datastore', () => {
@@ -950,9 +941,7 @@ describe('buildProjectedOverrides — storageCoords', () => {
       storageResources: [storage],
     });
 
-    expect(result).toEqual([
-      expect.objectContaining({ node: '', instance: 'Main' }),
-    ]);
+    expect(result).toEqual([expect.objectContaining({ node: '', instance: 'Main' })]);
   });
 
   it('falls back to platformId for instance when platformData.instance is absent', () => {
@@ -969,9 +958,7 @@ describe('buildProjectedOverrides — storageCoords', () => {
       storageResources: [storage],
     });
 
-    expect(result).toEqual([
-      expect.objectContaining({ node: '', instance: 'fallback-pid' }),
-    ]);
+    expect(result).toEqual([expect.objectContaining({ node: '', instance: 'fallback-pid' })]);
   });
 
   it('returns empty node and instance when no coords are available', () => {
@@ -987,9 +974,7 @@ describe('buildProjectedOverrides — storageCoords', () => {
       storageResources: [storage],
     });
 
-    expect(result).toEqual([
-      expect.objectContaining({ node: '', instance: '' }),
-    ]);
+    expect(result).toEqual([expect.objectContaining({ node: '', instance: '' })]);
   });
 });
 
@@ -1261,9 +1246,7 @@ describe('buildProjectedOverrides — agent resource override', () => {
       agentResourceList: [agent],
     });
 
-    expect(result).toEqual([
-      expect.objectContaining({ instance: 'Ubuntu 22.04' }),
-    ]);
+    expect(result).toEqual([expect.objectContaining({ instance: 'Ubuntu 22.04' })]);
   });
 
   it('falls back to platformData.platform for instance', () => {
@@ -1280,9 +1263,7 @@ describe('buildProjectedOverrides — agent resource override', () => {
       agentResourceList: [agent],
     });
 
-    expect(result).toEqual([
-      expect.objectContaining({ instance: 'debian' }),
-    ]);
+    expect(result).toEqual([expect.objectContaining({ instance: 'debian' })]);
   });
 
   it('returns empty string for instance when no platform/os data exists', () => {
@@ -1298,9 +1279,7 @@ describe('buildProjectedOverrides — agent resource override', () => {
       agentResourceList: [agent],
     });
 
-    expect(result).toEqual([
-      expect.objectContaining({ instance: '' }),
-    ]);
+    expect(result).toEqual([expect.objectContaining({ instance: '' })]);
   });
 });
 

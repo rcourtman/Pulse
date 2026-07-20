@@ -13,9 +13,7 @@ const previewWizardState: WizardState = {
 export const SetupCompletionPreview: Component = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const previewScenario = createMemo(() =>
-    getSetupCompletionPreviewScenario(location.search),
-  );
+  const previewScenario = createMemo(() => getSetupCompletionPreviewScenario(location.search));
 
   return (
     <SetupCompletionPanel

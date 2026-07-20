@@ -266,7 +266,8 @@ export const KubernetesAlertsTable: Component<{
                               {scopeText()}
                             </span>
                             <span class="block truncate text-[10px] text-muted">
-                              {k()?.nodeName || formatPlatformAlertCode(incident.code, 'kubernetes')}
+                              {k()?.nodeName ||
+                                formatPlatformAlertCode(incident.code, 'kubernetes')}
                             </span>
                           </TableCell>
                           <TableCell

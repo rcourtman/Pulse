@@ -83,8 +83,7 @@ describe('buildKubernetesCapabilityBadges branch coverage', () => {
       {
         label: 'Node Telemetry (Agent)',
         classes: SUPPORTED_BADGE_CLASS,
-        title:
-          'Linked Pulse agent provides node uptime, temperature, disk, network, and disk I/O.',
+        title: 'Linked Pulse agent provides node uptime, temperature, disk, network, and disk I/O.',
       },
       {
         label: 'Pod Ephemeral Disk',
@@ -267,9 +266,7 @@ describe('buildHostDetailSummary branch coverage', () => {
   });
 
   it('dedupes repeated card names before joining', () => {
-    expect(buildHostDetailSummary(['system', 'system', 'hardware'])).toBe(
-      'System and Hardware',
-    );
+    expect(buildHostDetailSummary(['system', 'system', 'hardware'])).toBe('System and Hardware');
   });
 });
 
@@ -287,9 +284,7 @@ describe('buildAccessSummary branch coverage', () => {
       { href: '/a', label: 'A', compactLabel: 'A', ariaLabel: 'A' },
       { href: '/b', label: 'B', compactLabel: 'B', ariaLabel: 'B' },
     ];
-    expect(buildAccessSummary({ hasWebInterface: true, links })).toBe(
-      'Web interface · 2 links',
-    );
+    expect(buildAccessSummary({ hasWebInterface: true, links })).toBe('Web interface · 2 links');
   });
 
   it('returns the bare link count when web interface is absent and exactly one link is present', () => {

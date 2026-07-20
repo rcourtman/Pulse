@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  formatConfidenceLabel,
-  formatConfidencePercentage,
-} from '@/utils/confidencePresentation';
+import { formatConfidenceLabel, formatConfidencePercentage } from '@/utils/confidencePresentation';
 
 describe('confidencePresentation — branch coverage (branchcov0713)', () => {
   describe('formatConfidencePercentage — Number.isFinite guard arm', () => {

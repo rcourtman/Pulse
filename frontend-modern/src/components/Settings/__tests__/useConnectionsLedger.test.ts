@@ -222,8 +222,7 @@ describe('useConnectionsLedger', () => {
       address: 'pi',
     };
     let resolveReload:
-      | ((value: { connections: Connection[]; systems: ConnectionSystem[] }) => void)
-      | undefined;
+      ((value: { connections: Connection[]; systems: ConnectionSystem[] }) => void) | undefined;
     vi.spyOn(ConnectionsAPI, 'list')
       .mockResolvedValueOnce({ connections: [firstConnection], systems: [] })
       .mockImplementationOnce(

@@ -123,7 +123,9 @@ export function useThresholdsHostData(inputs: ThresholdsDataInputs) {
           '',
         status: agentResource.status,
         hasOverride:
-          hasCustomThresholds || Boolean(override?.disabled) || Boolean(override?.disableConnectivity),
+          hasCustomThresholds ||
+          Boolean(override?.disabled) ||
+          Boolean(override?.disableConnectivity),
         disabled: override?.disabled || false,
         disableConnectivity: override?.disableConnectivity || false,
         thresholds: override?.thresholds || {},
@@ -173,7 +175,9 @@ export function useThresholdsHostData(inputs: ThresholdsDataInputs) {
       const data = platformData(agentResource);
       const platformAgent = readRecord(data?.agent);
       const disksFromPlatformRoot = Array.isArray(data?.disks) ? data.disks : null;
-      const disksFromPlatformAgent = Array.isArray(platformAgent?.disks) ? platformAgent.disks : null;
+      const disksFromPlatformAgent = Array.isArray(platformAgent?.disks)
+        ? platformAgent.disks
+        : null;
       const disksFromResourceAgent = Array.isArray(agentResource.agent?.disks)
         ? agentResource.agent.disks
         : null;
@@ -247,7 +251,8 @@ export function useThresholdsHostData(inputs: ThresholdsDataInputs) {
 
     return search
       ? disks.filter(
-          (disk) => disk.name.toLowerCase().includes(search) || disk.node?.toLowerCase().includes(search),
+          (disk) =>
+            disk.name.toLowerCase().includes(search) || disk.node?.toLowerCase().includes(search),
         )
       : disks;
   }, []);

@@ -1,10 +1,6 @@
 import type { AppriseConfig, EmailConfig } from '@/api/notifications';
 
-import {
-  formatAppriseTargets,
-  normalizeEmailConfigFromAPI,
-  parseAppriseTargets,
-} from './helpers';
+import { formatAppriseTargets, normalizeEmailConfigFromAPI, parseAppriseTargets } from './helpers';
 import type { UIAppriseConfig, UIEmailConfig } from './types';
 
 export function normalizeAppriseConfig(
@@ -57,6 +53,4 @@ export function buildAppriseConfigPayload(config: UIAppriseConfig): AppriseConfi
   } as AppriseConfig;
 }
 
-export {
-  normalizeEmailConfigFromAPI,
-};
+export { normalizeEmailConfigFromAPI };

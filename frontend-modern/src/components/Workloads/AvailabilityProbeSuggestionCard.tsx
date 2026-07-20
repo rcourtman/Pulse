@@ -66,7 +66,10 @@ export function AvailabilityProbeSuggestionCard(props: AvailabilityProbeSuggesti
         <Show when={state() !== 'created'}>
           <div class="flex items-center justify-between gap-2">
             <span class="text-muted">Service</span>
-            <span class="font-medium text-base-content truncate ml-2" title={props.suggestion.service_name}>
+            <span
+              class="font-medium text-base-content truncate ml-2"
+              title={props.suggestion.service_name}
+            >
               {props.suggestion.service_name}
             </span>
           </div>
@@ -76,7 +79,10 @@ export function AvailabilityProbeSuggestionCard(props: AvailabilityProbeSuggesti
           </div>
           <div class="flex items-center justify-between gap-2">
             <span class="text-muted">Target</span>
-            <span class="font-medium text-base-content truncate ml-2" title={props.suggestion.address}>
+            <span
+              class="font-medium text-base-content truncate ml-2"
+              title={props.suggestion.address}
+            >
               {props.suggestion.address}
             </span>
           </div>

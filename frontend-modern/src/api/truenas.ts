@@ -236,7 +236,9 @@ export class TrueNASAPI {
       `${TRUE_NAS_CONNECTIONS_PATH}/${encodeURIComponent(id)}/test`,
       {
         method: 'POST',
-        ...(input !== undefined ? { body: JSON.stringify(serializeTrueNASConnectionInput(input)) } : {}),
+        ...(input !== undefined
+          ? { body: JSON.stringify(serializeTrueNASConnectionInput(input)) }
+          : {}),
       },
     );
     return {

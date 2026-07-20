@@ -11,9 +11,7 @@ export function useStackedMemoryBarState(props: StackedMemoryBarProps) {
   let containerRef: HTMLDivElement | undefined;
   let resizeObserver: ResizeObserver | undefined;
 
-  const presentation = createMemo(() =>
-    buildStackedMemoryBarPresentation(props, containerWidth()),
-  );
+  const presentation = createMemo(() => buildStackedMemoryBarPresentation(props, containerWidth()));
 
   onMount(() => {
     if (!containerRef) {
@@ -45,4 +43,3 @@ export function useStackedMemoryBarState(props: StackedMemoryBarProps) {
     tooltipVisible: createMemo(() => tip.show() && presentation().tooltipRows.length > 0),
   };
 }
-

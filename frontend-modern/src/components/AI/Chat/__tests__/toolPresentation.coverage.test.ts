@@ -26,7 +26,9 @@ describe('pendingToolActionLabel', () => {
     expect(pendingToolActionLabel('pulse_read')).toBe('Preparing read...');
     expect(pendingToolActionLabel('pulse_query')).toBe('Preparing query...');
     expect(pendingToolActionLabel('pulse_fetch_url')).toBe('Fetching URL...');
-    expect(pendingToolActionLabel('pulse_get_infrastructure_state')).toBe('Reading infrastructure...');
+    expect(pendingToolActionLabel('pulse_get_infrastructure_state')).toBe(
+      'Reading infrastructure...',
+    );
     expect(pendingToolActionLabel('pulse_get_active_alerts')).toBe('Reading alerts...');
     expect(pendingToolActionLabel('alerts')).toBe('Reading alerts...');
     expect(pendingToolActionLabel('pulse_get_metrics_history')).toBe('Reading metrics...');
@@ -243,18 +245,16 @@ describe('parseFunctionStyleToolInput', () => {
 
 describe('parseQuotedValue escape handling', () => {
   it('unescapes embedded quotes inside a quoted command value', () => {
-    expect(
-      commandPreview('run_command(command="echo \\"hi\\"")', 'pulse_run_command'),
-    ).toBe('$ echo "hi"');
+    expect(commandPreview('run_command(command="echo \\"hi\\"")', 'pulse_run_command')).toBe(
+      '$ echo "hi"',
+    );
   });
 
   it('rescues earlier args when a quote is left unterminated or a comma is missing', () => {
-    expect(
-      parseToolInputSummary('read(action="file" path="/x")', 'pulse_read'),
-    ).toBe('read file');
-    expect(
-      parseToolInputSummary('read(action="file", path="unterminated)', 'pulse_read'),
-    ).toBe('read unterminated');
+    expect(parseToolInputSummary('read(action="file" path="/x")', 'pulse_read')).toBe('read file');
+    expect(parseToolInputSummary('read(action="file", path="unterminated)', 'pulse_read')).toBe(
+      'read unterminated',
+    );
   });
 
   it('stops cleanly at an early closing paren and preserves a trailing-backslash partial value', () => {

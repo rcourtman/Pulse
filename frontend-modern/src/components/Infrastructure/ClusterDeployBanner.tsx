@@ -52,7 +52,8 @@ export const ClusterDeployBanner: Component<ClusterDeployBannerProps> = (props) 
           <div class="flex items-center gap-1.5 text-[11px] text-blue-600 dark:text-blue-400">
             <InfoIcon class="w-3 h-3" />
             <span>
-              {info().deployableCount} node{info().deployableCount !== 1 ? 's' : ''} ready for Pulse Agent
+              {info().deployableCount} node{info().deployableCount !== 1 ? 's' : ''} ready for Pulse
+              Agent
             </span>
           </div>
           <button

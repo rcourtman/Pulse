@@ -17,7 +17,7 @@ describe('type column guardrails', () => {
     expect(typeColumnContractSource).toContain("TYPE_COLUMN_ID = 'type'");
     expect(typeColumnContractSource).toContain("TYPE_COLUMN_LABEL = 'Type'");
     expect(typeColumnContractSource).toContain("TYPE_COLUMN_SORT_KEY = 'type'");
-    expect(typeColumnContractSource).toContain("TYPE_COLUMN_SORTABLE = true");
+    expect(typeColumnContractSource).toContain('TYPE_COLUMN_SORTABLE = true');
     expect(typeColumnContractSource).toContain("TYPE_COLUMN_PRIORITY = 'essential'");
     expect(typeColumnContractSource).toContain("TYPE_COLUMN_WIDTH = '60px'");
     expect(typeColumnContractSource).toContain("TYPE_COLUMN_MIN_WIDTH = '60px'");
@@ -39,7 +39,7 @@ describe('type column guardrails', () => {
     expect(guestRowModelSource).toContain('createVisibleCanonicalTypeColumn()');
     expect(guestRowModelSource).not.toContain('createCanonicalTypeColumn');
     expect(guestRowModelSource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
-    expect(guestRowModelSource).not.toContain("defaultVisibility:");
+    expect(guestRowModelSource).not.toContain('defaultVisibility:');
   });
 
   it('limits runtime Type columns to the known allowlist', () => {
@@ -62,9 +62,7 @@ describe('type column guardrails', () => {
       .map(([path]) => path)
       .sort();
 
-    expect(typeColumnUsers).toEqual([
-      '../Workloads/guestRowModel.tsx',
-    ]);
+    expect(typeColumnUsers).toEqual(['../Workloads/guestRowModel.tsx']);
 
     expect(inlineTypeColumnUsers).toEqual([]);
   });
@@ -73,8 +71,7 @@ describe('type column guardrails', () => {
     const runtimeEntries = Object.entries(sourceFiles).filter(
       ([path]) => !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'),
     );
-    const hiddenTypeArrayPattern =
-      /useColumnVisibility\([\s\S]*?\[\s*['"]type['"][\s\S]*?\]/;
+    const hiddenTypeArrayPattern = /useColumnVisibility\([\s\S]*?\[\s*['"]type['"][\s\S]*?\]/;
 
     const pageLevelTypeDefaultHiddenUsers = runtimeEntries
       .filter(([, source]) => hiddenTypeArrayPattern.test(source))
@@ -88,25 +85,21 @@ describe('type column guardrails', () => {
     const runtimeEntries = Object.entries(sourceFiles).filter(
       ([path]) => !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'),
     );
-    const typeColumnDefinitionImportPattern =
-      /from\s*['"]@\/utils\/typeColumnDefinition['"]/;
+    const typeColumnDefinitionImportPattern = /from\s*['"]@\/utils\/typeColumnDefinition['"]/;
 
     const directHelperImportUsers = runtimeEntries
       .filter(([, source]) => typeColumnDefinitionImportPattern.test(source))
       .map(([path]) => path)
       .sort();
 
-    expect(directHelperImportUsers).toEqual([
-      '../Workloads/guestRowModel.tsx',
-    ]);
+    expect(directHelperImportUsers).toEqual(['../Workloads/guestRowModel.tsx']);
   });
 
   it('limits direct type column contract imports to the shared helper and label presentation util', () => {
     const runtimeEntries = Object.entries(sourceFiles).filter(
       ([path]) => !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'),
     );
-    const typeColumnContractImportPattern =
-      /from\s*['"]@\/utils\/typeColumnContract['"]/;
+    const typeColumnContractImportPattern = /from\s*['"]@\/utils\/typeColumnContract['"]/;
 
     const directContractImportUsers = runtimeEntries
       .filter(([, source]) => typeColumnContractImportPattern.test(source))

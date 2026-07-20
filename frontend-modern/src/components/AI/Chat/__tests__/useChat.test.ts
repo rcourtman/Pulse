@@ -559,7 +559,11 @@ describe('useChat', () => {
       expect(chat.messages()).toHaveLength(2);
 
       mockChat.mockResolvedValueOnce(undefined);
-      mockUndoLastTurn.mockResolvedValueOnce({ success: true, session_id: 'sess', can_redo: false });
+      mockUndoLastTurn.mockResolvedValueOnce({
+        success: true,
+        session_id: 'sess',
+        can_redo: false,
+      });
       await chat.retryMessage(failed!.id);
       await new Promise((r) => setTimeout(r, 0));
 
@@ -947,7 +951,12 @@ describe('useChat', () => {
 
       fireEvent({
         type: 'steer_applied',
-        data: { client_message_id: 'foreign-row', message_id: 'srv-9', prompt: 'from another tab', turn: 2 },
+        data: {
+          client_message_id: 'foreign-row',
+          message_id: 'srv-9',
+          prompt: 'from another tab',
+          turn: 2,
+        },
       });
       await new Promise((r) => setTimeout(r, 0));
 
@@ -1301,9 +1310,7 @@ describe('useChat', () => {
 
       const assistant = chat.messages().find((m) => m.role === 'assistant')!;
       expect(assistant.content).toBe('');
-      expect(assistant.streamEvents?.filter((event) => event.type === 'content') ?? []).toEqual(
-        [],
-      );
+      expect(assistant.streamEvents?.filter((event) => event.type === 'content') ?? []).toEqual([]);
       dispose();
     });
 

@@ -201,12 +201,7 @@ export const VsphereDatastoresTable: Component<{
                 >
                   Datastore
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="type"
-                  class="md:w-[9%]"
-                >
+                <PlatformSortableTableHead kind="text" sort={sort} sortKey="type" class="md:w-[9%]">
                   Type
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -217,7 +212,11 @@ export const VsphereDatastoresTable: Component<{
                 >
                   Capacity
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[14%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[14%]"
+                >
                   Hosts
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -228,7 +227,11 @@ export const VsphereDatastoresTable: Component<{
                 >
                   VMs
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden lg:table-cell md:w-[13%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden lg:table-cell md:w-[13%]"
+                >
                   Consumers
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead

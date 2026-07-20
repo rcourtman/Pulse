@@ -81,10 +81,7 @@ describe('alertOverridesModel coverage', () => {
       });
 
       expect(
-        normalizeRawOverridesConfig(
-          { 'Main-node-a-local-lvm': cpuThreshold(90, 80) },
-          [storage],
-        ),
+        normalizeRawOverridesConfig({ 'Main-node-a-local-lvm': cpuThreshold(90, 80) }, [storage]),
       ).toEqual({ 'Main-node-a-local-lvm': cpuThreshold(90, 80) });
     });
 
@@ -99,10 +96,7 @@ describe('alertOverridesModel coverage', () => {
       });
 
       expect(
-        normalizeRawOverridesConfig(
-          { 'Main-node-a-': cpuThreshold(90, 80) },
-          [storage],
-        ),
+        normalizeRawOverridesConfig({ 'Main-node-a-': cpuThreshold(90, 80) }, [storage]),
       ).toEqual({ 'Main-node-a-': cpuThreshold(90, 80) });
     });
 
@@ -116,10 +110,7 @@ describe('alertOverridesModel coverage', () => {
       });
 
       expect(
-        normalizeRawOverridesConfig(
-          { 'Main-node-a-ceph-pool': cpuThreshold(90, 80) },
-          [storage],
-        ),
+        normalizeRawOverridesConfig({ 'Main-node-a-ceph-pool': cpuThreshold(90, 80) }, [storage]),
       ).toEqual({ 'Main-node-a-ceph-pool': cpuThreshold(90, 80) });
     });
 
@@ -134,10 +125,7 @@ describe('alertOverridesModel coverage', () => {
       });
 
       expect(
-        normalizeRawOverridesConfig(
-          { 'DC1-node-a-nfs-share': cpuThreshold(90, 80) },
-          [storage],
-        ),
+        normalizeRawOverridesConfig({ 'DC1-node-a-nfs-share': cpuThreshold(90, 80) }, [storage]),
       ).toEqual({ 'canonical-1': cpuThreshold(90, 80) });
     });
 
@@ -152,10 +140,7 @@ describe('alertOverridesModel coverage', () => {
       });
 
       expect(
-        normalizeRawOverridesConfig(
-          { 'pve1-node-a-ceph-pool': cpuThreshold(90, 80) },
-          [storage],
-        ),
+        normalizeRawOverridesConfig({ 'pve1-node-a-ceph-pool': cpuThreshold(90, 80) }, [storage]),
       ).toEqual({ 'canonical-1': cpuThreshold(90, 80) });
     });
 
@@ -170,10 +155,9 @@ describe('alertOverridesModel coverage', () => {
       });
 
       expect(
-        normalizeRawOverridesConfig(
-          { 'Main-valid-node-ceph-pool': cpuThreshold(90, 80) },
-          [storage],
-        ),
+        normalizeRawOverridesConfig({ 'Main-valid-node-ceph-pool': cpuThreshold(90, 80) }, [
+          storage,
+        ]),
       ).toEqual({ 'canonical-1': cpuThreshold(90, 80) });
     });
 
@@ -188,10 +172,7 @@ describe('alertOverridesModel coverage', () => {
       });
 
       expect(
-        normalizeRawOverridesConfig(
-          { 'Main-node-a-ceph-pool': cpuThreshold(90, 80) },
-          [storage],
-        ),
+        normalizeRawOverridesConfig({ 'Main-node-a-ceph-pool': cpuThreshold(90, 80) }, [storage]),
       ).toEqual({ 'Main-node-a-ceph-pool': cpuThreshold(90, 80) });
     });
 
@@ -206,10 +187,7 @@ describe('alertOverridesModel coverage', () => {
       });
 
       expect(
-        normalizeRawOverridesConfig(
-          { 'solo-node-ceph-pool': cpuThreshold(90, 80) },
-          [storage],
-        ),
+        normalizeRawOverridesConfig({ 'solo-node-ceph-pool': cpuThreshold(90, 80) }, [storage]),
       ).toEqual({ 'canonical-1': cpuThreshold(90, 80) });
     });
   });
@@ -220,9 +198,9 @@ describe('alertOverridesModel coverage', () => {
     });
 
     it('passes through plain keys unchanged', () => {
-      expect(
-        normalizeRawOverridesConfig({ 'plain-key': cpuThreshold(90, 80) }),
-      ).toEqual({ 'plain-key': cpuThreshold(90, 80) });
+      expect(normalizeRawOverridesConfig({ 'plain-key': cpuThreshold(90, 80) })).toEqual({
+        'plain-key': cpuThreshold(90, 80),
+      });
     });
 
     it('normalizes disk labels that collapse to empty into unknown', () => {

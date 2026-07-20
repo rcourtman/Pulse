@@ -56,9 +56,7 @@ export function hasContainerUpdateCurrent(updateStatus?: DockerContainerUpdateSt
   return updateStatus?.updateAvailable === false && !hasContainerUpdateError(updateStatus);
 }
 
-export function getContainerUpdateErrorTooltip(
-  updateStatus?: DockerContainerUpdateStatus,
-): string {
+export function getContainerUpdateErrorTooltip(updateStatus?: DockerContainerUpdateStatus): string {
   return `Update check failed: ${updateStatus?.error || 'Unknown error'}`;
 }
 
@@ -71,9 +69,7 @@ export function getContainerUpdateCurrentTooltip(
   return `Image is current\nDigest: ${current}...`;
 }
 
-export function getContainerUpdateBadgeTooltip(
-  updateStatus?: DockerContainerUpdateStatus,
-): string {
+export function getContainerUpdateBadgeTooltip(updateStatus?: DockerContainerUpdateStatus): string {
   const current = getDigestPreview(updateStatus?.currentDigest, 19);
   const latest = getDigestPreview(updateStatus?.latestDigest, 19);
   return `Image update available\nCurrent: ${current}...\nLatest: ${latest}...`;

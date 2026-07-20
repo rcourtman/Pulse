@@ -320,9 +320,9 @@ export function useAlertScheduleState(props: UseAlertScheduleStateProps) {
   };
 
   const removeEscalationLevel = (index: number) => {
-    const nextLevels = props.escalation().levels.filter(
-      (_level: EscalationLevel, currentIndex: number) => currentIndex !== index,
-    );
+    const nextLevels = props
+      .escalation()
+      .levels.filter((_level: EscalationLevel, currentIndex: number) => currentIndex !== index);
     props.setEscalation({
       ...props.escalation(),
       levels: nextLevels,

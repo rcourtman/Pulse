@@ -180,11 +180,7 @@ describe('workloadMetricHistoryModel (branch coverage)', () => {
     it('clamps cpu values via clampPercent (>100, <0, in-range)', () => {
       const series = getMetricSparklineSeriesFromChartData(
         {
-          cpu: [
-            seriesPoint(1, 150),
-            seriesPoint(2, -5),
-            seriesPoint(3, 50),
-          ],
+          cpu: [seriesPoint(1, 150), seriesPoint(2, -5), seriesPoint(3, 50)],
         },
         'cpu',
       );
@@ -220,10 +216,7 @@ describe('workloadMetricHistoryModel (branch coverage)', () => {
     });
 
     it('emits a disk series with the disk color', () => {
-      const series = getMetricSparklineSeriesFromChartData(
-        { disk: [seriesPoint(1, 99)] },
-        'disk',
-      );
+      const series = getMetricSparklineSeriesFromChartData({ disk: [seriesPoint(1, 99)] }, 'disk');
       expect(series[0].id).toBe('disk');
       expect(series[0].color).toBe('#10b981');
     });
@@ -355,9 +348,7 @@ describe('workloadMetricHistoryModel (branch coverage)', () => {
     });
 
     it('returns null for non-finite width', () => {
-      expect(
-        computeMetricMiniSparklineHoverState(twoPointSeries, 10, Number.NaN),
-      ).toBeNull();
+      expect(computeMetricMiniSparklineHoverState(twoPointSeries, 10, Number.NaN)).toBeNull();
     });
 
     it('clamps a negative cursorX to zero (left edge)', () => {

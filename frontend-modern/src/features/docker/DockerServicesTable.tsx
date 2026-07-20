@@ -131,7 +131,10 @@ export const DockerServicesTable: Component<{
     descendingFirst: ['desired', 'running'],
   });
   const sortedRows = createMemo(() =>
-    sort.sortRows([...tableState.filtered()].sort(compareDockerServices), getDockerServiceSortValue),
+    sort.sortRows(
+      [...tableState.filtered()].sort(compareDockerServices),
+      getDockerServiceSortValue,
+    ),
   );
 
   const hasFilteredSourceRows = () => (props.sourceCount ?? props.resources.length) > 0;
@@ -215,12 +218,7 @@ export const DockerServicesTable: Component<{
                 >
                   Image
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead
-                  kind="text"
-                  sort={sort}
-                  sortKey="mode"
-                  class="md:w-[8%]"
-                >
+                <PlatformSortableTableHead kind="text" sort={sort} sortKey="mode" class="md:w-[8%]">
                   Mode
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead

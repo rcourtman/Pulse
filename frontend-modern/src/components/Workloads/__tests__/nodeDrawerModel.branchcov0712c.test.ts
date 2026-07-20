@@ -126,10 +126,7 @@ describe('getNodeDrawerHistoryFallbackMetrics (branch coverage 0712c)', () => {
       temperature: makeTemp({
         cpuPackage: undefined,
         cpuMax: undefined,
-        cores: [
-          { core: 0 } as unknown as CoreTemp,
-          { core: 1, temp: 75 },
-        ],
+        cores: [{ core: 0 } as unknown as CoreTemp, { core: 1, temp: 75 }],
       }),
     });
     expect(getNodeDrawerHistoryFallbackMetrics(node)).toStrictEqual({

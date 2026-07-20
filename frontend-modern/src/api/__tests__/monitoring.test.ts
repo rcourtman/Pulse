@@ -146,7 +146,9 @@ describe('MonitoringAPI', () => {
     it('treats 404 as idempotent success', async () => {
       vi.mocked(apiFetch).mockResolvedValueOnce({ ok: false, status: 404 } as unknown as Response);
 
-      await expect(MonitoringAPI.markDockerRuntimePendingUninstall('agent-1')).resolves.toBeUndefined();
+      await expect(
+        MonitoringAPI.markDockerRuntimePendingUninstall('agent-1'),
+      ).resolves.toBeUndefined();
     });
   });
 
@@ -186,7 +188,6 @@ describe('MonitoringAPI', () => {
       );
     });
   });
-
 
   describe('agent management', () => {
     it('deletes agent via unified backend route', async () => {
@@ -456,5 +457,4 @@ describe('MonitoringAPI', () => {
       expect(result).toEqual({ success: true, commandId: 'cmd-2' });
     });
   });
-
 });

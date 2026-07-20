@@ -84,7 +84,9 @@ describe('systemSettings store', () => {
     expect(privacyDoc).toContain('uses request IP addresses transiently for abuse/rate limiting');
     expect(privacyDoc).toContain('Reset ID');
     expect(privacyDoc).toContain('Pulse Intelligence Patrol control completed operations loop 30d');
-    expect(privacyDoc).toContain('Pulse Intelligence Patrol control paid resolved operations loop 30d');
+    expect(privacyDoc).toContain(
+      'Pulse Intelligence Patrol control paid resolved operations loop 30d',
+    );
     expect(privacyDoc).not.toContain('completed-work proof');
     expect(privacyDoc).not.toContain('resolved-work proof');
     expect(privacyDoc).not.toContain('governed-operation proof');
@@ -108,7 +110,9 @@ describe('systemSettings store', () => {
 
     for (const copy of [securityDoc, publicSecurityDoc]) {
       expect(copy).toContain('Relay Security (Relay and Above)');
-      expect(copy).toContain('Relay functionality requires a Relay, Pro, legacy Pro+, or Cloud license');
+      expect(copy).toContain(
+        'Relay functionality requires a Relay, Pro, legacy Pro+, or Cloud license',
+      );
       expect(copy).not.toContain('Relay Security (Pro)');
       expect(copy).not.toContain('Relay functionality requires a Pro or Cloud license');
     }
@@ -117,8 +121,12 @@ describe('systemSettings store', () => {
   it('documents self-hosted AI provider transport and resource-policy redaction in the privacy doc', () => {
     const privacyDoc = readFileSync(path.join(repoRoot, 'docs', 'PRIVACY.md'), 'utf8');
 
-    expect(privacyDoc).toContain('AI prompts from self-managed installs do not transit Pulse infrastructure');
-    expect(privacyDoc).toContain('governed resource details use the same resource-policy redaction');
+    expect(privacyDoc).toContain(
+      'AI prompts from self-managed installs do not transit Pulse infrastructure',
+    );
+    expect(privacyDoc).toContain(
+      'governed resource details use the same resource-policy redaction',
+    );
     expect(privacyDoc).toContain('Local providers stay on your network');
   });
 });

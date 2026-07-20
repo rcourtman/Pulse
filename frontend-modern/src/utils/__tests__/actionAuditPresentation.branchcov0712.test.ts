@@ -75,9 +75,7 @@ describe('actionAuditPresentation branch coverage (supplemental)', () => {
       // Documents the behaviour: slice(0,1).toUpperCase() + slice(1) preserves the
       // rest verbatim, so 'updateContainer' becomes 'UpdateContainer' (camelCase
       // tail is kept, not lowercased).
-      expect(formatActionCapabilityLabel('docker.updateContainer')).toBe(
-        'Docker UpdateContainer',
-      );
+      expect(formatActionCapabilityLabel('docker.updateContainer')).toBe('Docker UpdateContainer');
     });
   });
 
@@ -195,9 +193,7 @@ describe('actionAuditPresentation branch coverage (supplemental)', () => {
 
     it('delegates to the state lookup for non-failed states', () => {
       // state !== 'failed' -> skips the refusal check entirely.
-      expect(
-        getActionAuditRecordStatePresentation({ state: 'executing' }),
-      ).toStrictEqual({
+      expect(getActionAuditRecordStatePresentation({ state: 'executing' })).toStrictEqual({
         label: 'Executing',
         className:
           'bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-900 dark:text-sky-200 dark:border-sky-700',
@@ -228,8 +224,7 @@ describe('actionAuditPresentation branch coverage (supplemental)', () => {
         getActionAuditResultPresentation({ result: { success: true } })?.detail,
       ).toBeUndefined();
       expect(
-        getActionAuditResultPresentation({ result: { success: true, output: '   ' } })
-          ?.detail,
+        getActionAuditResultPresentation({ result: { success: true, output: '   ' } })?.detail,
       ).toBeUndefined();
     });
   });
@@ -371,9 +366,7 @@ describe('actionAuditPresentation branch coverage (supplemental)', () => {
       // guard true (actionResultV2 undefined), but getActionAuditVerification(audit)
       // resolves to undefined -> `undefined?.ran === true` is false. Distinct from
       // the empty-record case above because `result` is present here.
-      expect(
-        shouldRenderActionAuditVerification({ result: { success: true } }),
-      ).toBe(false);
+      expect(shouldRenderActionAuditVerification({ result: { success: true } })).toBe(false);
     });
 
     it('lets the top-level verification precedence force a false render (ran=false shadows a ran=true result verification)', () => {

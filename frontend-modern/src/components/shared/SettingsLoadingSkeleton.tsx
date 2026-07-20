@@ -83,13 +83,7 @@ export function SettingsLoadingSkeleton(props: SettingsLoadingSkeletonProps) {
     { gap: 'md' as SettingsSkeletonGap, label: 'Loading settings', padding: 'none' as const },
     props,
   );
-  const [local, rest] = splitProps(merged, [
-    'children',
-    'class',
-    'gap',
-    'label',
-    'padding',
-  ]);
+  const [local, rest] = splitProps(merged, ['children', 'class', 'gap', 'label', 'padding']);
 
   return (
     <div
@@ -138,7 +132,12 @@ export function SettingsSkeletonCard(props: SettingsSkeletonCardProps) {
 
 export function SettingsSkeletonMetricGrid(props: SettingsSkeletonMetricGridProps) {
   const merged = mergeProps(
-    { columns: 'four' as SettingsSkeletonColumns, count: 4, labelWidth: 'w-20', valueWidth: 'w-28' },
+    {
+      columns: 'four' as SettingsSkeletonColumns,
+      count: 4,
+      labelWidth: 'w-20',
+      valueWidth: 'w-28',
+    },
     props,
   );
 
@@ -189,11 +188,7 @@ export function SettingsSkeletonTable(props: SettingsSkeletonTableProps) {
 
   const table = (
     <div class="overflow-hidden rounded-md border border-border">
-      <SettingsSkeletonBlock
-        class={merged.headerClass}
-        radius="none"
-        surface="muted"
-      />
+      <SettingsSkeletonBlock class={merged.headerClass} radius="none" surface="muted" />
       <For each={range(merged.rows)}>
         {() => (
           <div class="border-t border-border-subtle px-3 py-3">

@@ -276,14 +276,38 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
         </div>
       </Show>
       <Show when={state.requestedAutonomyLevel() !== state.autonomyLevel()}>
-        <div role="status" class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-          Requested {PATROL_AUTONOMY_POLICY_PRESENTATION[state.requestedAutonomyLevel()].label}; effective mode is {selectedAutonomyPolicy().label}. Server status: {state.autopilotStatus()?.code.replace(/_/g, ' ') || 'unavailable'}.
+        <div
+          role="status"
+          class="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+        >
+          Requested {PATROL_AUTONOMY_POLICY_PRESENTATION[state.requestedAutonomyLevel()].label};
+          effective mode is {selectedAutonomyPolicy().label}. Server status:{' '}
+          {state.autopilotStatus()?.code.replace(/_/g, ' ') || 'unavailable'}.
         </div>
       </Show>
       <Show when={state.autopilotStatus()?.active && state.autopilotStatus()?.acknowledgementId}>
         <div class="mt-3 flex flex-col gap-2 rounded-md border border-border bg-surface px-3 py-3 text-xs sm:flex-row sm:items-center sm:justify-between">
-          <div><span class="font-semibold">Autopilot acknowledgement v{state.autopilotStatus()?.acknowledgementVersion}</span><span class="ml-2 text-muted">Active for this identity<Show when={state.autopilotStatus()?.expiresAt}> until {new Date(state.autopilotStatus()!.expiresAt!).toLocaleString()}</Show>.</span></div>
-          <Button size="sm" variant="dangerOutline" disabled={state.isUpdatingAutonomy()} onClick={() => void state.revokeAutopilot()}>Revoke Autopilot</Button>
+          <div>
+            <span class="font-semibold">
+              Autopilot acknowledgement v{state.autopilotStatus()?.acknowledgementVersion}
+            </span>
+            <span class="ml-2 text-muted">
+              Active for this identity
+              <Show when={state.autopilotStatus()?.expiresAt}>
+                {' '}
+                until {new Date(state.autopilotStatus()!.expiresAt!).toLocaleString()}
+              </Show>
+              .
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="dangerOutline"
+            disabled={state.isUpdatingAutonomy()}
+            onClick={() => void state.revokeAutopilot()}
+          >
+            Revoke Autopilot
+          </Button>
         </div>
       </Show>
     </>

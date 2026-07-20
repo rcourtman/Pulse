@@ -32,9 +32,10 @@ describe('guestThresholdOverrideMutationModel', () => {
     });
 
     it('uses the exact id for non-guest resources', () => {
-      expect(
-        getOverridePersistenceIdentity({ id: 'agent-1', type: 'agent' }),
-      ).toEqual({ candidateIds: ['agent-1'], storageId: 'agent-1' });
+      expect(getOverridePersistenceIdentity({ id: 'agent-1', type: 'agent' })).toEqual({
+        candidateIds: ['agent-1'],
+        storageId: 'agent-1',
+      });
     });
 
     it('returns empty candidates for a non-guest resource with a blank id', () => {
@@ -146,9 +147,7 @@ describe('guestThresholdOverrideMutationModel', () => {
     });
 
     it('returns undefined when candidateIds is empty and overrides is non-empty', () => {
-      expect(
-        findOverrideForResource(overrides, { id: '', type: 'agent' }),
-      ).toBeUndefined();
+      expect(findOverrideForResource(overrides, { id: '', type: 'agent' })).toBeUndefined();
     });
   });
 
@@ -164,9 +163,9 @@ describe('guestThresholdOverrideMutationModel', () => {
     });
 
     it('matches by exact id for non-guest resources', () => {
-      expect(
-        findRawOverrideConfigForResource(rawConfig, { id: 'agent-1', type: 'agent' }),
-      ).toEqual({ cpu: { trigger: 50, clear: 45 } });
+      expect(findRawOverrideConfigForResource(rawConfig, { id: 'agent-1', type: 'agent' })).toEqual(
+        { cpu: { trigger: 50, clear: 45 } },
+      );
     });
 
     it('returns the first truthy raw config across guest candidate ids in priority order', () => {

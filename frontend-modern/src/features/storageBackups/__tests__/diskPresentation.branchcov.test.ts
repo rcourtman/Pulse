@@ -311,27 +311,27 @@ describe('matchesPhysicalDiskFilterState branch coverage', () => {
   });
 
   it('returns false when roleFilter does not match', () => {
-    expect(
-      matchesPhysicalDiskFilterState(baseResource, baseDisk, { roleFilter: 'parity' }),
-    ).toBe(false);
+    expect(matchesPhysicalDiskFilterState(baseResource, baseDisk, { roleFilter: 'parity' })).toBe(
+      false,
+    );
   });
 
   it('returns true when roleFilter matches', () => {
-    expect(
-      matchesPhysicalDiskFilterState(baseResource, baseDisk, { roleFilter: 'cache' }),
-    ).toBe(true);
+    expect(matchesPhysicalDiskFilterState(baseResource, baseDisk, { roleFilter: 'cache' })).toBe(
+      true,
+    );
   });
 
   it('returns false when groupFilter does not match', () => {
-    expect(
-      matchesPhysicalDiskFilterState(baseResource, baseDisk, { groupFilter: 'mirror' }),
-    ).toBe(false);
+    expect(matchesPhysicalDiskFilterState(baseResource, baseDisk, { groupFilter: 'mirror' })).toBe(
+      false,
+    );
   });
 
   it('returns true when groupFilter matches', () => {
-    expect(
-      matchesPhysicalDiskFilterState(baseResource, baseDisk, { groupFilter: 'tank' }),
-    ).toBe(true);
+    expect(matchesPhysicalDiskFilterState(baseResource, baseDisk, { groupFilter: 'tank' })).toBe(
+      true,
+    );
   });
 
   it('returns false when search term does not match any haystack field', () => {
@@ -414,9 +414,9 @@ describe('getPhysicalDiskHostLabel branch coverage', () => {
   });
 
   it('trims whitespace from the resolved host label', () => {
-    expect(
-      getPhysicalDiskHostLabel(makeDiskData({ node: '  tower  ' }), {} as Resource),
-    ).toBe('tower');
+    expect(getPhysicalDiskHostLabel(makeDiskData({ node: '  tower  ' }), {} as Resource)).toBe(
+      'tower',
+    );
   });
 });
 
@@ -481,9 +481,9 @@ describe('hasPhysicalDiskSmartWarning branch coverage', () => {
   });
 
   it('returns true when mediaErrors > 0', () => {
-    expect(
-      hasPhysicalDiskSmartWarning(makeDiskData({ smartAttributes: { mediaErrors: 3 } })),
-    ).toBe(true);
+    expect(hasPhysicalDiskSmartWarning(makeDiskData({ smartAttributes: { mediaErrors: 3 } }))).toBe(
+      true,
+    );
   });
 
   it('returns false when all warning counters are zero', () => {

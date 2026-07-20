@@ -301,8 +301,8 @@ export const AIAssistantCommandAccessSection: Component<AIRuntimeControlsSection
           </Show>
         </div>
         <p class="text-[10px] text-muted">
-          This controls actions started from Assistant chat only. Patrol handles infrastructure
-          work from the Patrol page.
+          This controls actions started from Assistant chat only. Patrol handles infrastructure work
+          from the Patrol page.
         </p>
 
         <FormSelect

@@ -61,16 +61,12 @@ describe('storageSources', () => {
       expect(normalizeStorageSourceKey('All')).toBe('all');
     });
 
-    it.each([
-      [''],
-      ['   '],
-      [undefined],
-      [null],
-      ['!!!'],
-      ['@@@@'],
-    ])('returns an empty string for empty or punctuation-only input %s', (input) => {
-      expect(normalizeStorageSourceKey(input as string | null | undefined)).toBe('');
-    });
+    it.each([[''], ['   '], [undefined], [null], ['!!!'], ['@@@@']])(
+      'returns an empty string for empty or punctuation-only input %s',
+      (input) => {
+        expect(normalizeStorageSourceKey(input as string | null | undefined)).toBe('');
+      },
+    );
 
     it('slugifies mixed-case and whitespace into a canonical slug', () => {
       expect(normalizeStorageSourceKey('TrueNAS')).toBe('truenas');
@@ -121,12 +117,9 @@ describe('storageSources', () => {
       expect(resolveStorageSourceKey(makeStorage({ platform: '', type }))).toBe('proxmox-pve');
     });
 
-    it.each([[''], ['storage']])(
-      'falls back to proxmox-pve for empty/generic type %s',
-      (type) => {
-        expect(resolveStorageSourceKey(makeStorage({ platform: '', type }))).toBe('proxmox-pve');
-      },
-    );
+    it.each([[''], ['storage']])('falls back to proxmox-pve for empty/generic type %s', (type) => {
+      expect(resolveStorageSourceKey(makeStorage({ platform: '', type }))).toBe('proxmox-pve');
+    });
 
     it.each([['ceph'], ['cephfs'], ['rbd']])('resolves ceph type %s to ceph', (type) => {
       expect(resolveStorageSourceKey(makeStorage({ platform: '', type }))).toBe('ceph');

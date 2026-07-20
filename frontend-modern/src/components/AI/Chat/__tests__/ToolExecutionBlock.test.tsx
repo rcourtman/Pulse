@@ -59,7 +59,7 @@ describe('ToolExecutionBlock', () => {
   it('keeps tool copy controls on the shared CopyValueButton primitive', () => {
     expect(toolExecutionBlockSource).toContain('@/components/shared/Button');
     expect(toolExecutionBlockSource).toContain('CopyValueButton');
-    expect(toolExecutionBlockSource).not.toContain("lucide-solid/icons/copy");
+    expect(toolExecutionBlockSource).not.toContain('lucide-solid/icons/copy');
     expect(toolExecutionBlockSource).not.toContain("lucide-solid/icons/check';");
     expect(toolExecutionBlockSource).not.toContain(
       'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border-subtle bg-surface text-muted transition-colors hover:bg-surface-hover hover:text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500/30',
@@ -853,7 +853,12 @@ describe('PendingToolBlock', () => {
     const tail = 'x'.repeat(130);
     render(() => (
       <PendingToolBlock
-        tool={makePending({ name: 'pulse_query', input: '', rawInput: head + tail, status: 'pending' })}
+        tool={makePending({
+          name: 'pulse_query',
+          input: '',
+          rawInput: head + tail,
+          status: 'pending',
+        })}
       />
     ));
     const preview = screen.getByLabelText('Tool input streaming');

@@ -216,9 +216,7 @@ describe('AgentIntegrationsPanel', () => {
       'false',
     );
     expect(screen.getAllByRole('link', { name: 'Choose Patrol mode' })).toHaveLength(1);
-    expect(
-      screen.queryByRole('heading', { name: 'Connector setup' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Connector setup' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Create token' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show connector setup' }));
@@ -235,12 +233,9 @@ describe('AgentIntegrationsPanel', () => {
       PATROL_CONTROL_PATH,
     );
     expect(
-      screen.getByText(
-        'Required before agents can request Patrol work',
-        {
-          exact: false,
-        },
-      ),
+      screen.getByText('Required before agents can request Patrol work', {
+        exact: false,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText('Step 2')).toBeInTheDocument();
     expect(screen.getByText('Create a scoped token')).toBeInTheDocument();

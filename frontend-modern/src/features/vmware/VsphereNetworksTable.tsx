@@ -185,7 +185,11 @@ export const VsphereNetworksTable: Component<{
                 >
                   Type
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden md:table-cell md:w-[18%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden md:table-cell md:w-[18%]"
+                >
                   Hosts
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead
@@ -196,7 +200,11 @@ export const VsphereNetworksTable: Component<{
                 >
                   VMs
                 </PlatformSortableTableHead>
-                <PlatformSortableTableHead kind="text" sort={sort} class="hidden lg:table-cell md:w-[18%]">
+                <PlatformSortableTableHead
+                  kind="text"
+                  sort={sort}
+                  class="hidden lg:table-cell md:w-[18%]"
+                >
                   Connected VMs
                 </PlatformSortableTableHead>
                 <PlatformSortableTableHead

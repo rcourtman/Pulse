@@ -223,45 +223,57 @@ describe('workloadFallbackLabel coverage (via fallback workloads)', () => {
 
 describe('resourceVmid coverage (via buildCandidateFromResource)', () => {
   it('prefers proxmox meta vmid over platformData', () => {
-    const model = emptyModel([], [
-      workload({
-        id: 'vm-300',
-        proxmox: { vmid: 300, node: 'node-a' },
-        platformData: { proxmox: { vmid: 999 } },
-      }),
-    ]);
+    const model = emptyModel(
+      [],
+      [
+        workload({
+          id: 'vm-300',
+          proxmox: { vmid: 300, node: 'node-a' },
+          platformData: { proxmox: { vmid: 999 } },
+        }),
+      ],
+    );
     expect(model.coverageRows[0].workload.vmid).toBe('300');
   });
 
   it('reads a numeric vmid from platformData.proxmox when meta vmid is absent', () => {
-    const model = emptyModel([], [
-      workload({
-        id: 'vm-500',
-        proxmox: { node: 'node-a' },
-        platformData: { proxmox: { vmid: 500 } },
-      }),
-    ]);
+    const model = emptyModel(
+      [],
+      [
+        workload({
+          id: 'vm-500',
+          proxmox: { node: 'node-a' },
+          platformData: { proxmox: { vmid: 500 } },
+        }),
+      ],
+    );
     expect(model.coverageRows[0].workload.vmid).toBe('500');
   });
 
   it('reads a string vmid from platformData.proxmox when meta vmid is absent', () => {
-    const model = emptyModel([], [
-      workload({
-        id: 'vm-600',
-        proxmox: { node: 'node-a' },
-        platformData: { proxmox: { vmid: '600' } },
-      }),
-    ]);
+    const model = emptyModel(
+      [],
+      [
+        workload({
+          id: 'vm-600',
+          proxmox: { node: 'node-a' },
+          platformData: { proxmox: { vmid: '600' } },
+        }),
+      ],
+    );
     expect(model.coverageRows[0].workload.vmid).toBe('600');
   });
 
   it('produces no candidate when neither meta nor platformData provides a vmid', () => {
-    const model = emptyModel([], [
-      workload({
-        id: 'vm-noid',
-        proxmox: { node: 'node-a' },
-      }),
-    ]);
+    const model = emptyModel(
+      [],
+      [
+        workload({
+          id: 'vm-noid',
+          proxmox: { node: 'node-a' },
+        }),
+      ],
+    );
     expect(model.coverageRows).toHaveLength(0);
   });
 });

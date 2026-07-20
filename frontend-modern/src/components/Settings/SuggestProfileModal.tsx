@@ -243,7 +243,13 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
             title="Close"
             class="p-1.5 rounded-md text-slate-500 hover:text-base-content hover:bg-surface-hover"
           >
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              aria-hidden="true"
+            >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -461,7 +467,9 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                         <div class="text-[11px] text-muted mt-1">
                                           Default{' '}
                                           {hasAgentProfileSuggestionValue(setting.defaultValue)
-                                            ? formatAgentProfileSuggestionValue(setting.defaultValue)
+                                            ? formatAgentProfileSuggestionValue(
+                                                setting.defaultValue,
+                                              )
                                             : 'n/a'}
                                         </div>
                                       </Show>
@@ -503,7 +511,9 @@ export const SuggestProfileModal: Component<SuggestProfileModalProps> = (props) 
                                     {(def) => (
                                       <div class="flex items-center justify-between text-xs text-muted">
                                         <span class="font-mono">{def.key}</span>
-                                        <span>{formatAgentProfileSuggestionValue(def.defaultValue)}</span>
+                                        <span>
+                                          {formatAgentProfileSuggestionValue(def.defaultValue)}
+                                        </span>
                                       </div>
                                     )}
                                   </For>

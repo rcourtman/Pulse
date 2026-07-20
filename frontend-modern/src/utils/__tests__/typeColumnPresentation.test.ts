@@ -22,8 +22,7 @@ describe('typeColumnPresentation', () => {
     const runtimeEntries = Object.entries(sourceFiles).filter(
       ([path]) => !path.endsWith('.test.ts') && !path.endsWith('.test.tsx'),
     );
-    const typeColumnPresentationImportPattern =
-      /from\s*['"]@\/utils\/typeColumnPresentation['"]/;
+    const typeColumnPresentationImportPattern = /from\s*['"]@\/utils\/typeColumnPresentation['"]/;
 
     const directTypeLabelHelperUsers = runtimeEntries
       .filter(([, source]) => typeColumnPresentationImportPattern.test(source))

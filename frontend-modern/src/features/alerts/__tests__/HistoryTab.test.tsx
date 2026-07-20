@@ -49,12 +49,7 @@ vi.mock('../AlertHistoryAdministrationCard', () => ({
 
 describe('HistoryTab', () => {
   it('renders against the current history-state contract without depending on legacy filteredAlerts', () => {
-    render(() => (
-      <HistoryTab
-        getResource={() => undefined}
-        allResources={() => []}
-      />
-    ));
+    render(() => <HistoryTab getResource={() => undefined} allResources={() => []} />);
 
     expect(screen.getByText('frequency-card')).toBeInTheDocument();
     expect(screen.getByText('filters-card')).toBeInTheDocument();

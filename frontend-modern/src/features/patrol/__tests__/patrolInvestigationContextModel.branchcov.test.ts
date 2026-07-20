@@ -138,18 +138,10 @@ describe('buildPatrolInvestigationRecordPresentation (branch coverage)', () => {
       subject: { resource_id: 'vm-1' },
       trigger: { detected_at: '2026-01-01T00:00:00Z' },
       status: 'completed',
-      evidence: [
-        { kind: 'metrics' },
-        { id: 'ev-2' },
-        { summary: 'has summary' },
-      ],
+      evidence: [{ kind: 'metrics' }, { id: 'ev-2' }, { summary: 'has summary' }],
     } as unknown as InvestigationRecord);
 
-    expect(presentation.evidenceSummaries).toEqual([
-      'metrics',
-      'ev-2',
-      'has summary',
-    ]);
+    expect(presentation.evidenceSummaries).toEqual(['metrics', 'ev-2', 'has summary']);
   });
 
   it('keeps a proposed fix that has only a command summary but no description', () => {
@@ -251,9 +243,9 @@ describe('buildPatrolAssistantProposedFixBriefingInput (branch coverage)', () =>
   });
 
   it('treats a source with neither commandCount nor commands as zero commands', () => {
-    expect(
-      buildPatrolAssistantProposedFixBriefingInput({ description: 'd' }),
-    ).toMatchObject({ commandCount: 0 });
+    expect(buildPatrolAssistantProposedFixBriefingInput({ description: 'd' })).toMatchObject({
+      commandCount: 0,
+    });
   });
 
   it('returns undefined when every field is empty and the fix is not destructive', () => {
@@ -270,9 +262,7 @@ describe('buildPatrolAssistantProposedFixBriefingInput (branch coverage)', () =>
   });
 
   it('keeps a fix whose only signal is that it is destructive', () => {
-    expect(
-      buildPatrolAssistantProposedFixBriefingInput({ destructive: true }),
-    ).toEqual({
+    expect(buildPatrolAssistantProposedFixBriefingInput({ destructive: true })).toEqual({
       description: '',
       riskLevel: '',
       targetHost: '',
@@ -320,9 +310,7 @@ describe('buildPatrolAssistantProposedFixBriefingInputFromApproval (branch cover
   });
 
   it('returns undefined for a null approval', () => {
-    expect(
-      buildPatrolAssistantProposedFixBriefingInputFromApproval(null),
-    ).toBeUndefined();
+    expect(buildPatrolAssistantProposedFixBriefingInputFromApproval(null)).toBeUndefined();
   });
 });
 
@@ -547,12 +535,8 @@ describe('buildPatrolAssistantFindingHandoffInputFromUnifiedFinding (branch cove
 describe('buildPatrolConfigurationFailureHandoff (branch coverage)', () => {
   it('falls back to the default message and bare subject when message and code are empty', () => {
     const handoff = buildPatrolConfigurationFailureHandoff({ message: '' });
-    expect(handoff.context.briefing?.subject).toBe(
-      'Patrol mode could not be saved.',
-    );
-    expect(handoff.context.briefing?.title).toBe(
-      'Patrol mode save failure attached',
-    );
+    expect(handoff.context.briefing?.subject).toBe('Patrol mode could not be saved.');
+    expect(handoff.context.briefing?.title).toBe('Patrol mode save failure attached');
     expect(handoff.context.briefing?.statusLabel).toBeUndefined();
     expect(handoff.context.briefing?.detailLines).toEqual([]);
   });
@@ -564,9 +548,7 @@ describe('buildPatrolConfigurationFailureHandoff (branch coverage)', () => {
     });
 
     expect(handoff.context.briefing?.statusLabel).toBe('provider_unavailable');
-    expect(handoff.context.briefing?.detailLines).toEqual([
-      'Cause: Provider Unavailable',
-    ]);
+    expect(handoff.context.briefing?.detailLines).toEqual(['Cause: Provider Unavailable']);
     expect(handoff.context.context?.readinessCause).toBe('provider_unavailable');
   });
 
@@ -590,10 +572,7 @@ describe('buildPatrolConfigurationFailureHandoff (branch coverage)', () => {
       readiness: { provider: 'ollama', model: 'm1' },
     });
 
-    expect(handoff.context.briefing?.detailLines).toEqual([
-      'Provider: ollama',
-      'Model: m1',
-    ]);
+    expect(handoff.context.briefing?.detailLines).toEqual(['Provider: ollama', 'Model: m1']);
     expect(handoff.context.context?.provider).toBe('ollama');
     expect(handoff.context.context?.model).toBe('m1');
   });
@@ -621,9 +600,7 @@ describe('buildPatrolConfigurationFailureHandoff (branch coverage)', () => {
 
 describe('buildPatrolAssistantFindingBriefing (branch coverage)', () => {
   it('returns undefined when there are no finding facts, record, approval, or fix', () => {
-    expect(
-      buildPatrolAssistantFindingBriefing({ title: 'T', subject: 'S' }),
-    ).toBeUndefined();
+    expect(buildPatrolAssistantFindingBriefing({ title: 'T', subject: 'S' })).toBeUndefined();
   });
 
   it('uses the commands-plus-approval safety note when the fix is not destructive', () => {

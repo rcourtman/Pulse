@@ -22,8 +22,7 @@ import {
 const REMOVED_BADGE = 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
 const CONNECTED_BADGE = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
 const DEFAULT_BADGE = 'bg-surface-alt text-base-content';
-const LOOKUP_CONNECTED_BADGE =
-  'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
+const LOOKUP_CONNECTED_BADGE = 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
 const LOOKUP_DISCONNECTED_BADGE =
   'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
 
@@ -138,7 +137,10 @@ describe('getUnifiedAgentStatusPresentation — branch coverage', () => {
     it('routes a non-canonical state value to the default arm (only "removed" is special)', () => {
       // A state outside {'active','removed'} is not 'removed', so it falls
       // through to the connected/default logic.
-      const result = getUnifiedAgentStatusPresentation('paused' as UnifiedAgentMonitoringState, 'offline');
+      const result = getUnifiedAgentStatusPresentation(
+        'paused' as UnifiedAgentMonitoringState,
+        'offline',
+      );
       expect(result).toEqual({ badgeClass: DEFAULT_BADGE, label: 'offline' });
     });
 
@@ -188,18 +190,14 @@ describe('getUnifiedAgentLookupStatusPresentation — branch coverage', () => {
     ['null', null],
     ['undefined', undefined],
   ] as const)('routes a falsy non-boolean value (%s) to the not-connected arm', (_name, value) => {
-    expect(
-      getUnifiedAgentLookupStatusPresentation(value as unknown as boolean),
-    ).toEqual({
+    expect(getUnifiedAgentLookupStatusPresentation(value as unknown as boolean)).toEqual({
       badgeClass: LOOKUP_DISCONNECTED_BADGE,
       label: 'Not reporting yet',
     });
   });
 
   it('routes a truthy non-boolean value (1) to the connected arm', () => {
-    expect(
-      getUnifiedAgentLookupStatusPresentation(1 as unknown as boolean),
-    ).toEqual({
+    expect(getUnifiedAgentLookupStatusPresentation(1 as unknown as boolean)).toEqual({
       badgeClass: LOOKUP_CONNECTED_BADGE,
       label: 'Connected',
     });

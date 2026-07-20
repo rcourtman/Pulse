@@ -33,9 +33,7 @@ function makeFinding(overrides: Partial<AssessmentFinding> = {}): AssessmentFind
   };
 }
 
-function makeRuntimeFinding(
-  overrides: Partial<AssessmentFinding> = {},
-): AssessmentFinding {
+function makeRuntimeFinding(overrides: Partial<AssessmentFinding> = {}): AssessmentFinding {
   return makeFinding({
     resourceId: 'ai-service',
     resourceName: 'Pulse Patrol Service',
@@ -75,9 +73,7 @@ function makeRun(overrides: Partial<PatrolRunRecord> = {}): PatrolRunRecord {
   };
 }
 
-function makeHealth(
-  overrides: Partial<IntelligenceHealthScore> = {},
-): IntelligenceHealthScore {
+function makeHealth(overrides: Partial<IntelligenceHealthScore> = {}): IntelligenceHealthScore {
   return {
     score: 90,
     grade: 'A',
@@ -127,8 +123,7 @@ describe('getPatrolAssessmentShellPresentation', () => {
       headerClass: 'bg-red-50/70 dark:bg-red-950/30',
       badgeVariant: 'danger',
       iconClass: 'text-red-600 dark:text-red-300',
-      iconContainerClass:
-        'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40',
+      iconContainerClass: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40',
     });
   });
 
@@ -137,8 +132,7 @@ describe('getPatrolAssessmentShellPresentation', () => {
       headerClass: 'bg-blue-50/70 dark:bg-blue-950/30',
       badgeVariant: 'info',
       iconClass: 'text-blue-600 dark:text-blue-300',
-      iconContainerClass:
-        'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40',
+      iconContainerClass: 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40',
     });
   });
 
@@ -307,8 +301,7 @@ describe('getPatrolAssessmentPresentation — runtime state', () => {
   it('maps the blocked state to the paused runtime presentation', () => {
     expect(getPatrolAssessmentPresentation({ runtimeState: 'blocked' })).toEqual({
       title: 'Patrol paused',
-      description:
-        'Patrol cannot check infrastructure until the blocking condition is cleared.',
+      description: 'Patrol cannot check infrastructure until the blocking condition is cleared.',
       eyebrow: 'Patrol paused',
       compactLabel: 'Patrol paused',
       tone: 'warning',
@@ -328,8 +321,7 @@ describe('getPatrolAssessmentPresentation — runtime state', () => {
   it('maps the unavailable state to the unavailable runtime presentation', () => {
     expect(getPatrolAssessmentPresentation({ runtimeState: 'unavailable' })).toEqual({
       title: 'Patrol unavailable',
-      description:
-        'Patrol is not ready yet. Check Provider & Models and runtime availability.',
+      description: 'Patrol is not ready yet. Check Provider & Models and runtime availability.',
       eyebrow: 'Patrol unavailable',
       compactLabel: 'Patrol unavailable',
       tone: 'error',
@@ -585,9 +577,7 @@ describe('getFindingAssessmentDescription — single runtime issue', () => {
     expect(
       getPatrolAssessmentPresentation({
         warningFindings: 1,
-        activeFindings: [
-          makeRuntimeFinding({ title: 'Some custom runtime error' }),
-        ],
+        activeFindings: [makeRuntimeFinding({ title: 'Some custom runtime error' })],
       }).description,
     ).toContain('Some custom runtime error');
   });
@@ -690,21 +680,18 @@ describe('predictionReadsAsCoverageGap (via getPatrolAssessmentPresentation)', (
     ['current full issue list'],
     ['current health may be incomplete'],
     ['summary may be incomplete'],
-  ])(
-    'suppresses the coverage-gap prediction "%s" after a verified full run',
-    (prediction) => {
-      const description = getPatrolAssessmentPresentation({
-        overallHealth: makeHealth({
-          score: 80,
-          grade: 'B',
-          factors: [coverageFactor()],
-          prediction,
-        }),
-        runs: [successfulFullRun()],
-      }).description;
-      expect(description).toBe('Patrol still needs attention.');
-    },
-  );
+  ])('suppresses the coverage-gap prediction "%s" after a verified full run', (prediction) => {
+    const description = getPatrolAssessmentPresentation({
+      overallHealth: makeHealth({
+        score: 80,
+        grade: 'B',
+        factors: [coverageFactor()],
+        prediction,
+      }),
+      runs: [successfulFullRun()],
+    }).description;
+    expect(description).toBe('Patrol still needs attention.');
+  });
 });
 
 // ===========================================================================
@@ -788,8 +775,7 @@ describe('getPatrolVerificationPresentation — runtime state', () => {
   it('maps the blocked state to the paused runtime presentation', () => {
     expect(getPatrolVerificationPresentation({ runtimeState: 'blocked' })).toEqual({
       title: 'Patrol paused',
-      description:
-        'Patrol cannot check infrastructure until the blocking condition is cleared.',
+      description: 'Patrol cannot check infrastructure until the blocking condition is cleared.',
       compactLabel: 'Patrol paused',
       tone: 'warning',
     });
@@ -807,8 +793,7 @@ describe('getPatrolVerificationPresentation — runtime state', () => {
   it('maps the unavailable state to the unavailable runtime presentation', () => {
     expect(getPatrolVerificationPresentation({ runtimeState: 'unavailable' })).toEqual({
       title: 'Patrol unavailable',
-      description:
-        'Patrol is not ready yet. Check Provider & Models and runtime availability.',
+      description: 'Patrol is not ready yet. Check Provider & Models and runtime availability.',
       compactLabel: 'Patrol unavailable',
       tone: 'error',
     });
@@ -830,8 +815,7 @@ describe('getPatrolVerificationPresentation — full run with errors (hasRunErro
       }),
     ).toEqual({
       title: 'Patrol check needs review',
-      description:
-        'The most recent Patrol check covered 10 resources but ended with 2 errors.',
+      description: 'The most recent Patrol check covered 10 resources but ended with 2 errors.',
       compactLabel: 'Check needs review',
       tone: 'warning',
       lastFullRunAt: '2026-07-10T09:05:00Z',
@@ -1090,18 +1074,14 @@ describe('getPatrolRecencyPresentation — timestamp fallback logic', () => {
   });
 
   it('returns last activity when only lastActivityAt is provided', () => {
-    expect(
-      getPatrolRecencyPresentation({ lastActivityAt: '2026-07-10T09:00:00Z' }),
-    ).toEqual({
+    expect(getPatrolRecencyPresentation({ lastActivityAt: '2026-07-10T09:00:00Z' })).toEqual({
       label: 'Last activity',
       timestamp: '2026-07-10T09:00:00Z',
     });
   });
 
   it('returns last check when only lastPatrolAt is provided', () => {
-    expect(
-      getPatrolRecencyPresentation({ lastPatrolAt: '2026-07-10T09:57:00Z' }),
-    ).toEqual({
+    expect(getPatrolRecencyPresentation({ lastPatrolAt: '2026-07-10T09:57:00Z' })).toEqual({
       label: 'Last check',
       timestamp: '2026-07-10T09:57:00Z',
     });
@@ -1210,17 +1190,13 @@ describe('normalizeRunType (via run-type classification)', () => {
   it('treats undefined type as a full run', () => {
     const run = makeRun({ resources_checked: 5, error_count: 0 });
     delete (run as Partial<PatrolRunRecord>).type;
-    expect(
-      getPatrolVerificationPresentation({ runs: [run] }).title,
-    ).toBe('Recently checked');
+    expect(getPatrolVerificationPresentation({ runs: [run] }).title).toBe('Recently checked');
   });
 
   it('treats "PATROL" (uppercase) as a full run', () => {
     expect(
       getPatrolVerificationPresentation({
-        runs: [
-          makeRun({ type: 'PATROL', resources_checked: 5, error_count: 0 }),
-        ],
+        runs: [makeRun({ type: 'PATROL', resources_checked: 5, error_count: 0 })],
       }).title,
     ).toBe('Recently checked');
   });
@@ -1228,9 +1204,7 @@ describe('normalizeRunType (via run-type classification)', () => {
   it('treats "  Full  " (whitespace, mixed case) as a full run', () => {
     expect(
       getPatrolVerificationPresentation({
-        runs: [
-          makeRun({ type: '  Full  ', resources_checked: 5, error_count: 0 }),
-        ],
+        runs: [makeRun({ type: '  Full  ', resources_checked: 5, error_count: 0 })],
       }).title,
     ).toBe('Recently checked');
   });
@@ -1238,9 +1212,7 @@ describe('normalizeRunType (via run-type classification)', () => {
   it('classifies "SCOPED" (uppercase) as a scoped run', () => {
     expect(
       getPatrolVerificationPresentation({
-        runs: [
-          makeRun({ type: 'SCOPED', resources_checked: 1, error_count: 0 }),
-        ],
+        runs: [makeRun({ type: 'SCOPED', resources_checked: 1, error_count: 0 })],
       }).description,
     ).toContain('targeted checks');
   });
@@ -1248,9 +1220,7 @@ describe('normalizeRunType (via run-type classification)', () => {
   it('classifies "verification" as a verification run', () => {
     expect(
       getPatrolVerificationPresentation({
-        runs: [
-          makeRun({ type: 'verification', resources_checked: 1, error_count: 0 }),
-        ],
+        runs: [makeRun({ type: 'verification', resources_checked: 1, error_count: 0 })],
       }).description,
     ).toContain('follow-up checks');
   });

@@ -29,33 +29,25 @@ describe('parseFunctionStyleToolInput — partial-mode branches', () => {
     // partial pass runs: the unquoted scan hits `)` (line 279 allowPartial
     // arm), then the post-value `)` break fires (line 298). The captured
     // command flows through to the read-exec intent label.
-    expect(parseToolInputSummary('read(command=df -h)z', 'pulse_read')).toBe(
-      'Inspect filesystems',
-    );
+    expect(parseToolInputSummary('read(command=df -h)z', 'pulse_read')).toBe('Inspect filesystems');
   });
 
   it('breaks on ")" after a quoted value when strict mode rejected the call (line 298)', () => {
     // `read(action="file")extra)` — strict consumes the inner body then fails
     // at the leftover "extra"; the partial pass slices the trailing ")" and
     // breaks at the next ")" after the quoted value.
-    expect(parseToolInputSummary('read(action="file")extra)', 'pulse_read')).toBe(
-      'read file',
-    );
+    expect(parseToolInputSummary('read(action="file")extra)', 'pulse_read')).toBe('read file');
   });
 
   it('rescues earlier args when the body ends right after "=" (line 267)', () => {
     // No closing ")" → strict regex fails; partial parses `action="file"`,
     // reaches `path=`, then end-of-body and returns the partial result.
-    expect(parseToolInputSummary('read(action="file", path=', 'pulse_read')).toBe(
-      'read file',
-    );
+    expect(parseToolInputSummary('read(action="file", path=', 'pulse_read')).toBe('read file');
   });
 
   it('rescues earlier args when an unquoted value is empty (line 284)', () => {
     // `x=,` yields an empty rawValue; partialResult returns the prior `action`.
-    expect(parseToolInputSummary('read(action="file", x=,)', 'pulse_read')).toBe(
-      'read file',
-    );
+    expect(parseToolInputSummary('read(action="file", x=,)', 'pulse_read')).toBe('read file');
   });
 
   it('types negative-integer and decimal unquoted values via the numeric matcher arms', () => {

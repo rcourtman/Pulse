@@ -187,10 +187,7 @@ describe('commandPaletteModel.branchcov2', () => {
           shortcut: 'g k',
           keywords: ['k8s'],
         });
-        const result = filterCommandPaletteCommands(
-          [proxmox, docker, k8s],
-          'docker',
-        );
+        const result = filterCommandPaletteCommands([proxmox, docker, k8s], 'docker');
         expect(result).toStrictEqual([docker]);
       });
 

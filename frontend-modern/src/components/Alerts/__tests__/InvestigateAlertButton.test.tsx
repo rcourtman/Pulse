@@ -145,7 +145,10 @@ beforeEach(() => {
   getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('ai_alerts'));
   vi.spyOn(window, 'open').mockImplementation(() => null);
   triggerPatrolRunMock.mockReset();
-  triggerPatrolRunMock.mockResolvedValue({ success: true, message: 'Triggered targeted Patrol check' });
+  triggerPatrolRunMock.mockResolvedValue({
+    success: true,
+    message: 'Triggered targeted Patrol check',
+  });
   notificationStoreMock.success.mockReset();
   notificationStoreMock.error.mockReset();
   notificationStoreMock.warning.mockReset();
@@ -244,10 +247,7 @@ describe('InvestigateAlertButton', () => {
     it('shows locked title when licenseLocked', () => {
       render(() => <InvestigateAlertButton alert={makeAlert()} licenseLocked={true} />);
       const button = screen.getByRole('button');
-      expect(button).toHaveAttribute(
-        'title',
-            'Pro required to ask Pulse Assistant about alerts',
-      );
+      expect(button).toHaveAttribute('title', 'Pro required to ask Pulse Assistant about alerts');
     });
 
     it('shows unlocked title when not licenseLocked', () => {

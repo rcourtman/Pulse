@@ -2,9 +2,7 @@ import { Component, For, Show } from 'solid-js';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import type { StorageGroupedRecords, StorageGroupKey } from './useStorageModel';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
-import {
-  createSummaryInteractiveRowPreviewHandlers,
-} from '@/components/shared/summaryInteractionA11y';
+import { createSummaryInteractiveRowPreviewHandlers } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import {
   buildStorageGroupRowPresentation,
@@ -46,11 +44,7 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
       data-summary-group-id={props.summaryGroupScope?.id ?? undefined}
       data-summary-group-series-count={String(props.summaryGroupScope?.seriesIds.length ?? 0)}
       data-summary-row-active={props.summaryActive ? 'true' : 'false'}
-      onClick={() =>
-        props.onFocusChange?.(
-          props.summaryFocused ? null : props.summaryGroupScope,
-        )
-      }
+      onClick={() => props.onFocusChange?.(props.summaryFocused ? null : props.summaryGroupScope)}
       {...interactiveRowHandlers}
     >
       <td colSpan={99} class={STORAGE_GROUP_ROW_CELL_CLASS}>
@@ -65,9 +59,7 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
           />
 
           {/* Group label */}
-          <span class={STORAGE_GROUP_ROW_LABEL_CLASS}>
-            {row().label}
-          </span>
+          <span class={STORAGE_GROUP_ROW_LABEL_CLASS}>{row().label}</span>
 
           {/* Aggregate capacity bar */}
           <Show when={row().showUsage}>
@@ -78,22 +70,21 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
                 free={Math.max(0, props.group.stats.totalBytes - props.group.stats.usedBytes)}
               />
             </div>
-            <span class={STORAGE_GROUP_ROW_USAGE_LABEL_CLASS}>
-              {row().usagePercentLabel}
-            </span>
+            <span class={STORAGE_GROUP_ROW_USAGE_LABEL_CLASS}>{row().usagePercentLabel}</span>
           </Show>
 
           {/* Pool count */}
-          <span class={STORAGE_GROUP_ROW_POOL_COUNT_CLASS}>
-            {row().poolCountLabel}
-          </span>
+          <span class={STORAGE_GROUP_ROW_POOL_COUNT_CLASS}>{row().poolCountLabel}</span>
 
           {/* Health dots */}
           <div class={STORAGE_GROUP_ROW_HEALTH_WRAP_CLASS}>
             <For each={row().healthCounts}>
               {(item) => (
                 <span class={STORAGE_GROUP_ROW_HEALTH_ITEM_CLASS}>
-                  <span class={`${STORAGE_GROUP_ROW_HEALTH_DOT_CLASS} ${item.dotClass}`} title={item.label} />
+                  <span
+                    class={`${STORAGE_GROUP_ROW_HEALTH_DOT_CLASS} ${item.dotClass}`}
+                    title={item.label}
+                  />
                   <span class={`${STORAGE_GROUP_ROW_HEALTH_COUNT_CLASS} ${item.countClass}`}>
                     {item.count}
                   </span>

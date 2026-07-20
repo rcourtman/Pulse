@@ -130,15 +130,30 @@ describe('normalizeReportSchedule', () => {
   it('passes through fully-populated truthy values unchanged on the happy path', () => {
     const schedule = makeSchedule({
       enabled: true,
-      cadence: { type: 'weekly', day_of_month: 20, weekday: 'friday', time: '17:30', timezone: 'Europe/Paris' },
-      scope: { resources: [{ resourceType: 'vm', resourceId: 'v1', name: 'web' }], tags: ['tier1'] },
+      cadence: {
+        type: 'weekly',
+        day_of_month: 20,
+        weekday: 'friday',
+        time: '17:30',
+        timezone: 'Europe/Paris',
+      },
+      scope: {
+        resources: [{ resourceType: 'vm', resourceId: 'v1', name: 'web' }],
+        tags: ['tier1'],
+      },
       format: 'csv',
       delivery: { method: 'disk', to: ['ops@x'], attach: true, save_to_disk: true },
       retention_count: 7,
     });
     expect(normalizeReportSchedule(schedule)).toMatchObject({
       enabled: true,
-      cadence: { type: 'weekly', day_of_month: 20, weekday: 'friday', time: '17:30', timezone: 'Europe/Paris' },
+      cadence: {
+        type: 'weekly',
+        day_of_month: 20,
+        weekday: 'friday',
+        time: '17:30',
+        timezone: 'Europe/Paris',
+      },
       format: 'csv',
       delivery: { method: 'disk', to: ['ops@x'], attach: true, save_to_disk: true },
       retention_count: 7,
@@ -155,8 +170,11 @@ describe('normalizeReportSchedule', () => {
 
   it('keeps day_of_month of 0 (nullish coalescing does not default on falsy numbers)', () => {
     expect(
-      normalizeReportSchedule(makeSchedule({ cadence: { type: 'monthly', day_of_month: 0, time: '09:00', timezone: 'UTC' } })).cadence
-        .day_of_month,
+      normalizeReportSchedule(
+        makeSchedule({
+          cadence: { type: 'monthly', day_of_month: 0, time: '09:00', timezone: 'UTC' },
+        }),
+      ).cadence.day_of_month,
     ).toBe(0);
   });
 
@@ -180,14 +198,26 @@ describe('normalizeReportSchedule', () => {
 
   it('classifies an unknown cadence type as monthly', () => {
     const schedule = makeSchedule({
-      cadence: { type: 'daily' as unknown as 'monthly', day_of_month: 3, time: '08:00', timezone: 'UTC' },
+      cadence: {
+        type: 'daily' as unknown as 'monthly',
+        day_of_month: 3,
+        time: '08:00',
+        timezone: 'UTC',
+      },
     });
     expect(normalizeReportSchedule(schedule).cadence.type).toBe('monthly');
   });
 
   it('defaults weekday/time/timezone via || when they are empty strings', () => {
     const schedule = makeSchedule({
-      cadence: { type: 'monthly', day_of_month: 1, weekday: '', time: '', timezone: '', day_of_month_ignored: true } as unknown as ReportSchedule['cadence'],
+      cadence: {
+        type: 'monthly',
+        day_of_month: 1,
+        weekday: '',
+        time: '',
+        timezone: '',
+        day_of_month_ignored: true,
+      } as unknown as ReportSchedule['cadence'],
     });
     expect(normalizeReportSchedule(schedule).cadence).toMatchObject({
       weekday: 'monday',
@@ -198,13 +228,17 @@ describe('normalizeReportSchedule', () => {
 
   it('keeps scope arrays when they are arrays, and replaces them when not', () => {
     const kept = normalizeReportSchedule(
-      makeSchedule({ scope: { resources: [{ resourceType: 'vm', resourceId: 'v1' }], tags: ['a'] } }),
+      makeSchedule({
+        scope: { resources: [{ resourceType: 'vm', resourceId: 'v1' }], tags: ['a'] },
+      }),
     );
     expect(kept.scope.resources).toHaveLength(1);
     expect(kept.scope.tags).toEqual(['a']);
 
     const replaced = normalizeReportSchedule(
-      makeSchedule({ scope: { resources: null as unknown as [], tags: 'nope' as unknown as string[] } }),
+      makeSchedule({
+        scope: { resources: null as unknown as [], tags: 'nope' as unknown as string[] },
+      }),
     );
     expect(replaced.scope.resources).toStrictEqual([]);
     expect(replaced.scope.tags).toStrictEqual([]);
@@ -218,12 +252,20 @@ describe('normalizeReportSchedule', () => {
   });
 
   it('classifies delivery method as disk only for disk, email otherwise', () => {
-    expect(normalizeReportSchedule(makeSchedule({ delivery: { method: 'disk', attach: true, save_to_disk: true } })).delivery.method).toBe(
-      'disk',
-    );
     expect(
       normalizeReportSchedule(
-        makeSchedule({ delivery: { method: 'carrier-pigeon' as unknown as 'email', attach: true, save_to_disk: true } }),
+        makeSchedule({ delivery: { method: 'disk', attach: true, save_to_disk: true } }),
+      ).delivery.method,
+    ).toBe('disk');
+    expect(
+      normalizeReportSchedule(
+        makeSchedule({
+          delivery: {
+            method: 'carrier-pigeon' as unknown as 'email',
+            attach: true,
+            save_to_disk: true,
+          },
+        }),
       ).delivery.method,
     ).toBe('email');
   });
@@ -231,11 +273,22 @@ describe('normalizeReportSchedule', () => {
   it('defaults delivery.to to [] when missing and keeps it when an array', () => {
     expect(
       normalizeReportSchedule(
-        makeSchedule({ delivery: { method: 'email', to: undefined as unknown as string[], attach: true, save_to_disk: true } }),
+        makeSchedule({
+          delivery: {
+            method: 'email',
+            to: undefined as unknown as string[],
+            attach: true,
+            save_to_disk: true,
+          },
+        }),
       ).delivery.to,
     ).toStrictEqual([]);
     expect(
-      normalizeReportSchedule(makeSchedule({ delivery: { method: 'email', to: ['a@b'], attach: true, save_to_disk: true } })).delivery.to,
+      normalizeReportSchedule(
+        makeSchedule({
+          delivery: { method: 'email', to: ['a@b'], attach: true, save_to_disk: true },
+        }),
+      ).delivery.to,
     ).toEqual(['a@b']);
   });
 
@@ -247,7 +300,13 @@ describe('normalizeReportSchedule', () => {
     expect(allFalse.delivery.save_to_disk).toBe(false);
 
     const defaults = normalizeReportSchedule(
-      makeSchedule({ delivery: { method: 'email', attach: undefined as unknown as boolean, save_to_disk: undefined as unknown as boolean } }),
+      makeSchedule({
+        delivery: {
+          method: 'email',
+          attach: undefined as unknown as boolean,
+          save_to_disk: undefined as unknown as boolean,
+        },
+      }),
     );
     expect(defaults.delivery.attach).toBe(true);
     expect(defaults.delivery.save_to_disk).toBe(true);
@@ -356,15 +415,27 @@ describe('scheduleToSelectedResources', () => {
 
 describe('buildReportSchedulePayload', () => {
   it('emits day_of_month and omits weekday for a monthly form', () => {
-    const payload = buildReportSchedulePayload(makeForm({ cadenceType: 'monthly', dayOfMonth: 12 }), [
-      makeResource(),
-    ]);
-    expect(payload.cadence).toMatchObject({ type: 'monthly', day_of_month: 12, weekday: undefined });
+    const payload = buildReportSchedulePayload(
+      makeForm({ cadenceType: 'monthly', dayOfMonth: 12 }),
+      [makeResource()],
+    );
+    expect(payload.cadence).toMatchObject({
+      type: 'monthly',
+      day_of_month: 12,
+      weekday: undefined,
+    });
   });
 
   it('emits weekday and omits day_of_month for a weekly form', () => {
-    const payload = buildReportSchedulePayload(makeForm({ cadenceType: 'weekly', weekday: 'wednesday' }), []);
-    expect(payload.cadence).toMatchObject({ type: 'weekly', weekday: 'wednesday', day_of_month: undefined });
+    const payload = buildReportSchedulePayload(
+      makeForm({ cadenceType: 'weekly', weekday: 'wednesday' }),
+      [],
+    );
+    expect(payload.cadence).toMatchObject({
+      type: 'weekly',
+      weekday: 'wednesday',
+      day_of_month: undefined,
+    });
   });
 
   it('falls back to UTC when the timezone trims to empty', () => {
@@ -373,10 +444,9 @@ describe('buildReportSchedulePayload', () => {
   });
 
   it('trims the schedule name and maps resources into the scope', () => {
-    const payload = buildReportSchedulePayload(
-      makeForm({ name: '  trimmed  ' }),
-      [makeResource({ id: 'r1', type: 'agent', name: 'host' })],
-    );
+    const payload = buildReportSchedulePayload(makeForm({ name: '  trimmed  ' }), [
+      makeResource({ id: 'r1', type: 'agent', name: 'host' }),
+    ]);
     expect(payload.name).toBe('trimmed');
     expect(payload.scope.resources).toStrictEqual([
       { resourceType: 'agent', resourceId: 'r1', name: 'host' },
@@ -394,11 +464,22 @@ describe('buildReportSchedulePayload', () => {
 
   it('forwards format, delivery flags, and retention_count verbatim', () => {
     const payload = buildReportSchedulePayload(
-      makeForm({ format: 'csv', deliveryMethod: 'disk', attach: false, saveToDisk: false, retentionCount: 3 }),
+      makeForm({
+        format: 'csv',
+        deliveryMethod: 'disk',
+        attach: false,
+        saveToDisk: false,
+        retentionCount: 3,
+      }),
       [],
     );
     expect(payload.format).toBe('csv');
-    expect(payload.delivery).toStrictEqual({ method: 'disk', to: [], attach: false, save_to_disk: false });
+    expect(payload.delivery).toStrictEqual({
+      method: 'disk',
+      to: [],
+      attach: false,
+      save_to_disk: false,
+    });
     expect(payload.retention_count).toBe(3);
   });
 });
@@ -519,14 +600,18 @@ describe('reportScheduleScopeLabel', () => {
 describe('reportScheduleDeliveryLabel', () => {
   it('returns "Save to disk" for the disk method', () => {
     expect(
-      reportScheduleDeliveryLabel(makeSchedule({ delivery: { method: 'disk', attach: true, save_to_disk: true } })),
+      reportScheduleDeliveryLabel(
+        makeSchedule({ delivery: { method: 'disk', attach: true, save_to_disk: true } }),
+      ),
     ).toBe('Save to disk');
   });
 
   it('renders the singular recipient form for one email recipient', () => {
     expect(
       reportScheduleDeliveryLabel(
-        makeSchedule({ delivery: { method: 'email', to: ['ops@x'], attach: true, save_to_disk: true } }),
+        makeSchedule({
+          delivery: { method: 'email', to: ['ops@x'], attach: true, save_to_disk: true },
+        }),
       ),
     ).toBe('1 email recipient');
   });
@@ -534,7 +619,9 @@ describe('reportScheduleDeliveryLabel', () => {
   it('renders the plural recipient form for multiple email recipients', () => {
     expect(
       reportScheduleDeliveryLabel(
-        makeSchedule({ delivery: { method: 'email', to: ['a@x', 'b@x'], attach: true, save_to_disk: true } }),
+        makeSchedule({
+          delivery: { method: 'email', to: ['a@x', 'b@x'], attach: true, save_to_disk: true },
+        }),
       ),
     ).toBe('2 email recipients');
   });
@@ -567,7 +654,9 @@ describe('reportScheduleLastRunLabel', () => {
 
   it('surfaces last_error for a failed run', () => {
     expect(
-      reportScheduleLastRunLabel(makeSchedule({ last_run_status: 'failed', last_error: 'timeout' })),
+      reportScheduleLastRunLabel(
+        makeSchedule({ last_run_status: 'failed', last_error: 'timeout' }),
+      ),
     ).toBe('Failed: timeout');
   });
 

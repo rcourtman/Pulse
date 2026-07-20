@@ -96,7 +96,11 @@ describe('workloadTopology (branch coverage 2)', () => {
 
   describe('getWorkloadDockerHostId', () => {
     it('short-circuits to empty string for a non-app-container type', () => {
-      const vm = makeGuest(1, { type: 'vm', workloadType: 'vm', dockerHostId: 'should-be-ignored' });
+      const vm = makeGuest(1, {
+        type: 'vm',
+        workloadType: 'vm',
+        dockerHostId: 'should-be-ignored',
+      });
       // type !== 'app-container' -> guard returns '' before touching dockerHostId.
       expect(getWorkloadDockerHostId(vm)).toBe('');
     });
@@ -286,11 +290,7 @@ describe('workloadTopology (branch coverage 2)', () => {
         instance: 'cluster-lxc',
         contextLabel: 'ctx-lxc',
       });
-      expect(getWorkloadHostHintCandidates(lxc)).toEqual([
-        'node-lxc',
-        'cluster-lxc',
-        'ctx-lxc',
-      ]);
+      expect(getWorkloadHostHintCandidates(lxc)).toEqual(['node-lxc', 'cluster-lxc', 'ctx-lxc']);
     });
   });
 
@@ -400,9 +400,7 @@ describe('workloadTopology (branch coverage 2)', () => {
       });
       // type === 'pod' -> else: dedupeTrimmed([getCanonicalWorkloadId(guest), guest.id]).
       // getCanonicalWorkloadId returns guest.id for pods -> collapses to a single entry.
-      expect(getWorkloadAlertResourceIdCandidates(pod)).toEqual([
-        'k8s:cluster-a:pod:pod-uid-1',
-      ]);
+      expect(getWorkloadAlertResourceIdCandidates(pod)).toEqual(['k8s:cluster-a:pod:pod-uid-1']);
     });
   });
 });

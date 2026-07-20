@@ -222,9 +222,7 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
     } catch (error) {
       logger.error('Failed to remove organization member', error);
       notificationStore.error(
-        getOrganizationRemoveMemberErrorMessage(
-          error instanceof Error ? error.message : undefined,
-        ),
+        getOrganizationRemoveMemberErrorMessage(error instanceof Error ? error.message : undefined),
       );
     } finally {
       setSaving(false);

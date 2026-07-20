@@ -41,11 +41,7 @@ describe('normalizeGuestDrawerTags', () => {
     });
 
     it('preserves the original order of the surviving tags', () => {
-      expect(normalizeGuestDrawerTags([' c ', '', ' a ', ' b '])).toStrictEqual([
-        'c',
-        'a',
-        'b',
-      ]);
+      expect(normalizeGuestDrawerTags([' c ', '', ' a ', ' b '])).toStrictEqual(['c', 'a', 'b']);
     });
 
     it('returns an empty array for an empty input array', () => {

@@ -261,10 +261,4 @@ export function useResources(storeOverride?: ResourceStoreLike): UseResourcesRet
 
 // Re-export types and helpers
 export type { Resource, ResourceType, PlatformType, ResourceStatus, ResourceFilter };
-export {
-  isInfrastructure,
-  isWorkload,
-  getCpuPercent,
-  getMemoryPercent,
-  getDiskPercent,
-};
+export { isInfrastructure, isWorkload, getCpuPercent, getMemoryPercent, getDiskPercent };

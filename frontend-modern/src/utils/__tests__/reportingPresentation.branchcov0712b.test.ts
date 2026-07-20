@@ -31,14 +31,11 @@ describe('resolveReportingDownloadFilename', () => {
 
   it('returns the fallback when content-disposition is not a string (defensive typeof guard)', () => {
     expect(
-      resolveReportingDownloadFilename(
-        undefined as unknown as ContentDisposition,
-        fallback,
-      ),
+      resolveReportingDownloadFilename(undefined as unknown as ContentDisposition, fallback),
     ).toBe(fallback);
-    expect(
-      resolveReportingDownloadFilename(42 as unknown as ContentDisposition, fallback),
-    ).toBe(fallback);
+    expect(resolveReportingDownloadFilename(42 as unknown as ContentDisposition, fallback)).toBe(
+      fallback,
+    );
   });
 
   it('returns the fallback when content-disposition is an empty string', () => {
@@ -61,7 +58,7 @@ describe('resolveReportingDownloadFilename', () => {
   it('prefers the RFC 5987 encoded filename over a quoted filename', () => {
     expect(
       resolveReportingDownloadFilename(
-        "attachment; filename=\"quoted.pdf\"; filename*=UTF-8''encoded%20report.csv",
+        'attachment; filename="quoted.pdf"; filename*=UTF-8\'\'encoded%20report.csv',
         fallback,
       ),
     ).toBe('encoded report.csv');
@@ -69,17 +66,12 @@ describe('resolveReportingDownloadFilename', () => {
 
   it('returns the raw encoded token when it cannot be URI-decoded (decodeRFC5987Value catch path)', () => {
     // '%' is not a valid URI escape, so decodeURIComponent throws and the helper returns the original token.
-    expect(
-      resolveReportingDownloadFilename("attachment; filename*=UTF-8''%", fallback),
-    ).toBe('%');
+    expect(resolveReportingDownloadFilename("attachment; filename*=UTF-8''%", fallback)).toBe('%');
   });
 
   it('returns the quoted filename when a quoted directive is present', () => {
     expect(
-      resolveReportingDownloadFilename(
-        'attachment; filename="canonical-report.pdf"',
-        fallback,
-      ),
+      resolveReportingDownloadFilename('attachment; filename="canonical-report.pdf"', fallback),
     ).toBe('canonical-report.pdf');
   });
 
@@ -99,8 +91,6 @@ describe('resolveReportingDownloadFilename', () => {
   });
 
   it('returns the fallback when no filename directive is present at all', () => {
-    expect(resolveReportingDownloadFilename('attachment; size=1234', fallback)).toBe(
-      fallback,
-    );
+    expect(resolveReportingDownloadFilename('attachment; size=1234', fallback)).toBe(fallback);
   });
 });

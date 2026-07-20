@@ -148,9 +148,7 @@ describe('buildExplicitCephClusters branch coverage', () => {
   });
 
   it('defaults everything when platformData is missing entirely', () => {
-    const [cluster] = buildExplicitCephClusters([
-      makeResource({ platformData: undefined }),
-    ]);
+    const [cluster] = buildExplicitCephClusters([makeResource({ platformData: undefined })]);
     // platformData || {} -> cephMeta {} -> all ceph fields default.
     expect(cluster.health).toBe('HEALTH_UNKNOWN');
     expect(cluster.healthMessage).toBe('');
@@ -201,9 +199,7 @@ describe('buildExplicitCephClusters branch coverage', () => {
   });
 
   it('defaults all disk metrics to 0 when resource.disk is absent', () => {
-    const [cluster] = buildExplicitCephClusters([
-      makeResource({ disk: undefined }),
-    ]);
+    const [cluster] = buildExplicitCephClusters([makeResource({ disk: undefined })]);
     expect(cluster.totalBytes).toBe(0);
     expect(cluster.usedBytes).toBe(0);
     expect(cluster.availableBytes).toBe(0);
@@ -248,9 +244,7 @@ describe('buildExplicitCephClusters branch coverage', () => {
   });
 
   it('uses lastSeen verbatim when it is a positive finite number', () => {
-    const [cluster] = buildExplicitCephClusters([
-      makeResource({ lastSeen: 9_999_999 }),
-    ]);
+    const [cluster] = buildExplicitCephClusters([makeResource({ lastSeen: 9_999_999 })]);
     expect(cluster.lastUpdated).toBe(9_999_999);
   });
 

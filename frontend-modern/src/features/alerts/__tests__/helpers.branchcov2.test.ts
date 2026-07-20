@@ -60,7 +60,11 @@ describe('alerts helpers — branch coverage (batch 2)', () => {
     });
 
     it('falls back to the raw type string when no canonical label resolves', () => {
-      expect(unifiedTypeToAlertDisplayType('' as unknown as Parameters<typeof unifiedTypeToAlertDisplayType>[0])).toBe('');
+      expect(
+        unifiedTypeToAlertDisplayType(
+          '' as unknown as Parameters<typeof unifiedTypeToAlertDisplayType>[0],
+        ),
+      ).toBe('');
     });
   });
 
@@ -70,17 +74,21 @@ describe('alerts helpers — branch coverage (batch 2)', () => {
     });
 
     it('falls back to UTC when the resolved timezone is empty', () => {
-      const spy = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(
-        (() => ({ resolvedOptions: () => ({ timeZone: '' }) })) as unknown as typeof Intl.DateTimeFormat,
-      );
+      const spy = vi
+        .spyOn(Intl, 'DateTimeFormat')
+        .mockImplementation((() => ({
+          resolvedOptions: () => ({ timeZone: '' }),
+        })) as unknown as typeof Intl.DateTimeFormat);
       expect(getLocalTimezone()).toBe('UTC');
       spy.mockRestore();
     });
 
     it('returns the resolved IANA timezone when one is available', () => {
-      const spy = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(
-        (() => ({ resolvedOptions: () => ({ timeZone: 'Australia/Sydney' }) })) as unknown as typeof Intl.DateTimeFormat,
-      );
+      const spy = vi
+        .spyOn(Intl, 'DateTimeFormat')
+        .mockImplementation((() => ({
+          resolvedOptions: () => ({ timeZone: 'Australia/Sydney' }),
+        })) as unknown as typeof Intl.DateTimeFormat);
       expect(getLocalTimezone()).toBe('Australia/Sydney');
       spy.mockRestore();
     });
@@ -97,7 +105,7 @@ describe('alerts helpers — branch coverage (batch 2)', () => {
     });
 
     it('trims and lowercases type and metric keys and rounds fractional values', () => {
-      const input = { '  VM ': { ' CPU ': 3.6, 'Memory': 7 } };
+      const input = { '  VM ': { ' CPU ': 3.6, Memory: 7 } };
       expect(normalizeMetricDelayMap(input)).toEqual({ vm: { cpu: 4, memory: 7 } });
     });
 
@@ -107,7 +115,9 @@ describe('alerts helpers — branch coverage (batch 2)', () => {
 
     it('skips entries whose metrics value is null', () => {
       expect(
-        normalizeMetricDelayMap({ vm: null } as unknown as Parameters<typeof normalizeMetricDelayMap>[0]),
+        normalizeMetricDelayMap({ vm: null } as unknown as Parameters<
+          typeof normalizeMetricDelayMap
+        >[0]),
       ).toEqual({});
     });
 

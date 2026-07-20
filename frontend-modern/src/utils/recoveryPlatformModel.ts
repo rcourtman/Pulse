@@ -12,8 +12,7 @@ import type {
   RecoveryRollupsTransportResponse,
 } from '@/types/recovery';
 
-const toTrimmedString = (value: unknown): string =>
-  typeof value === 'string' ? value.trim() : '';
+const toTrimmedString = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 interface RecoveryPointPlatformLike {
   platform?: string | null;
@@ -58,9 +57,8 @@ const normalizeRecoveryDisplay = (
   };
 };
 
-const getRecoveryItemResourceId = (
-  value: RecoveryItemResourceLike | null | undefined,
-): string => toTrimmedString(value?.itemResourceId) || toTrimmedString(value?.subjectResourceId);
+const getRecoveryItemResourceId = (value: RecoveryItemResourceLike | null | undefined): string =>
+  toTrimmedString(value?.itemResourceId) || toTrimmedString(value?.subjectResourceId);
 
 const getRecoveryItemRef = (
   value: RecoveryItemRefLike | null | undefined,
@@ -81,7 +79,9 @@ export const getRecoveryRollupPlatforms = (
   return values.map((value) => toTrimmedString(value)).filter(Boolean);
 };
 
-const normalizeRecoveryMeta = (meta: RecoveryResponseMeta | null | undefined): RecoveryResponseMeta => {
+const normalizeRecoveryMeta = (
+  meta: RecoveryResponseMeta | null | undefined,
+): RecoveryResponseMeta => {
   const page = typeof meta?.page === 'number' && Number.isFinite(meta.page) ? meta.page : 1;
   const limit = typeof meta?.limit === 'number' && Number.isFinite(meta.limit) ? meta.limit : 0;
   const total = typeof meta?.total === 'number' && Number.isFinite(meta.total) ? meta.total : 0;

@@ -21,7 +21,7 @@ const ROWS: readonly Row[] = [
   { name: 'charlie', cpu: 90 },
 ];
 
-const withSortState = <T,>(
+const withSortState = <T>(
   fn: (sort: ReturnType<typeof createPlatformTableSortState<SortKey>>) => T,
 ): T =>
   createRoot((dispose) => {

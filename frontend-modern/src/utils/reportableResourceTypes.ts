@@ -1,11 +1,7 @@
 import type { Resource, ResourceType } from '@/types/resource';
 
 export type ResourcePickerTypeFilter =
-  | 'all'
-  | 'infrastructure'
-  | 'workloads'
-  | 'storage'
-  | 'recovery';
+  'all' | 'infrastructure' | 'workloads' | 'storage' | 'recovery';
 
 const RESOURCE_PICKER_TYPE_FILTER_LABELS: Record<ResourcePickerTypeFilter, string> = {
   all: 'All',

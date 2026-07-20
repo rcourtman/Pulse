@@ -89,7 +89,7 @@ describe('patrolEmptyStatePresentation', () => {
             status: 'error',
             error_count: 1,
             resources_checked: 72,
-        } as unknown as PatrolRunRecord,
+          } as unknown as PatrolRunRecord,
         ],
       }),
     ).toEqual({

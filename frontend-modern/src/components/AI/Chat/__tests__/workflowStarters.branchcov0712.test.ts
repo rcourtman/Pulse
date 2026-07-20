@@ -22,9 +22,7 @@ const one = (prompts: AgentWorkflowPrompt[], context: Record<string, unknown> = 
 
 describe('workflowStarterLabel branch coverage', () => {
   it('returns the trimmed label when a label is present (normalizeIdentifier trim + truthy arm)', () => {
-    const [starter] = one([
-      { name: 'pulse_a', label: '   Spaced Label   ', arguments: [] },
-    ]);
+    const [starter] = one([{ name: 'pulse_a', label: '   Spaced Label   ', arguments: [] }]);
     expect(starter.label).toBe('Spaced Label');
   });
 
@@ -100,12 +98,17 @@ describe('getAssistantWorkflowStarterResourceId branch coverage', () => {
   });
 
   it('rejects every patrol target type so a run/assessment/configuration id is not used', () => {
-    expect(getAssistantWorkflowStarterResourceId({ targetType: 'patrol-run', targetId: 'run-1' })).toBe('');
+    expect(
+      getAssistantWorkflowStarterResourceId({ targetType: 'patrol-run', targetId: 'run-1' }),
+    ).toBe('');
     expect(
       getAssistantWorkflowStarterResourceId({ targetType: 'patrol-assessment', targetId: 'a-1' }),
     ).toBe('');
     expect(
-      getAssistantWorkflowStarterResourceId({ targetType: 'patrol-configuration', targetId: 'c-1' }),
+      getAssistantWorkflowStarterResourceId({
+        targetType: 'patrol-configuration',
+        targetId: 'c-1',
+      }),
     ).toBe('');
   });
 
@@ -167,9 +170,7 @@ describe('getAssistantWorkflowStarterFindingId branch coverage', () => {
   });
 
   it('falls back to context.context.findingId via the optional chain', () => {
-    expect(getAssistantWorkflowStarterFindingId({ context: { findingId: 'f-ctx' } })).toBe(
-      'f-ctx',
-    );
+    expect(getAssistantWorkflowStarterFindingId({ context: { findingId: 'f-ctx' } })).toBe('f-ctx');
   });
 
   it('returns empty string when context.context exists but has no findingId', () => {
@@ -188,18 +189,16 @@ describe('getAssistantWorkflowStarterFindingId branch coverage', () => {
 
 describe('resolveWorkflowStarterArgument branch coverage', () => {
   it('routes "resourceId" through getAssistantWorkflowStarterResourceId', () => {
-    const [starter] = one(
-      [{ name: 'p', arguments: [{ name: 'resourceId', required: true }] }],
-      { handoffResources: [{ id: 'vm:7' }] },
-    );
+    const [starter] = one([{ name: 'p', arguments: [{ name: 'resourceId', required: true }] }], {
+      handoffResources: [{ id: 'vm:7' }],
+    });
     expect(starter.arguments).toStrictEqual({ resourceId: 'vm:7' });
   });
 
   it('routes "finding_id" through getAssistantWorkflowStarterFindingId', () => {
-    const [starter] = one(
-      [{ name: 'p', arguments: [{ name: 'finding_id', required: true }] }],
-      { findingId: 'f-1' },
-    );
+    const [starter] = one([{ name: 'p', arguments: [{ name: 'finding_id', required: true }] }], {
+      findingId: 'f-1',
+    });
     expect(starter.arguments).toStrictEqual({ finding_id: 'f-1' });
   });
 
@@ -237,17 +236,14 @@ describe('buildWorkflowStarterArguments branch coverage', () => {
   });
 
   it('keeps a resolved optional argument and includes the prompt', () => {
-    const [starter] = one(
-      [{ name: 'p', arguments: [{ name: 'resourceId', required: false }] }],
-      { handoffResources: [{ id: 'vm:1' }] },
-    );
+    const [starter] = one([{ name: 'p', arguments: [{ name: 'resourceId', required: false }] }], {
+      handoffResources: [{ id: 'vm:1' }],
+    });
     expect(starter.arguments).toStrictEqual({ resourceId: 'vm:1' });
   });
 
   it('omits an unresolved optional argument but still includes the prompt with {}', () => {
-    const [starter] = one([
-      { name: 'p', arguments: [{ name: 'resourceId', required: false }] },
-    ]);
+    const [starter] = one([{ name: 'p', arguments: [{ name: 'resourceId', required: false }] }]);
     expect(starter).toMatchObject({ name: 'p' });
     expect(starter.arguments).toStrictEqual({});
   });

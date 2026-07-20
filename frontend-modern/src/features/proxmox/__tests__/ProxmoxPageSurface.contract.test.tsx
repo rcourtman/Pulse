@@ -223,9 +223,7 @@ describe('ProxmoxPageSurface contract', () => {
     render(() => <ProxmoxPageSurface />);
 
     expect(screen.getByTestId('platform-table-loading-state')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('list', { name: 'Proxmox Patrol coverage' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Proxmox Patrol coverage' })).not.toBeInTheDocument();
   });
 
   it('does not surface stale-agent notices for development builds without an agent target', () => {

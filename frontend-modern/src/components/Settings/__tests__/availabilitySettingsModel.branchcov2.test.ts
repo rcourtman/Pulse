@@ -19,10 +19,7 @@ import {
   getAvailabilityTargetMethodLabel,
   getAvailabilityTargetStatusLabel,
 } from '../availabilitySettingsModel';
-import type {
-  AvailabilityProbeStatus,
-  AvailabilityTarget,
-} from '@/api/availabilityTargets';
+import type { AvailabilityProbeStatus, AvailabilityTarget } from '@/api/availabilityTargets';
 
 // ---- Fixtures ---------------------------------------------------------------
 // Mirrors the sibling availabilitySettingsModel.test.ts factory shape so the
@@ -38,9 +35,7 @@ const target = (overrides: Partial<AvailabilityTarget> = {}): AvailabilityTarget
   ...overrides,
 });
 
-const status = (
-  overrides: Partial<AvailabilityProbeStatus> = {},
-): AvailabilityProbeStatus => ({
+const status = (overrides: Partial<AvailabilityProbeStatus> = {}): AvailabilityProbeStatus => ({
   targetId: 'mqtt-broker',
   name: 'MQTT broker',
   address: 'mqtt.local',
@@ -86,7 +81,7 @@ describe('getAvailabilityTargetStatusLabel', () => {
     ).toBe('Online');
   });
 
-  it("returns the trimmed lastError for an unavailable target with one (|| left operand)", () => {
+  it('returns the trimmed lastError for an unavailable target with one (|| left operand)', () => {
     expect(
       getAvailabilityTargetStatusLabel(
         target({
@@ -143,7 +138,7 @@ describe('getAvailabilityTargetKindLabel', () => {
 // the final fallback arm (icmp / https / tcp-without-port).
 
 describe('getAvailabilityTargetAddressLabel', () => {
-  it("prepends a leading slash to an http path that lacks one (ternary else arm)", () => {
+  it('prepends a leading slash to an http path that lacks one (ternary else arm)', () => {
     expect(
       getAvailabilityTargetAddressLabel(
         target({ protocol: 'http', address: 'http://api.local', path: 'v1/health' }),
@@ -151,7 +146,7 @@ describe('getAvailabilityTargetAddressLabel', () => {
     ).toBe('http://api.local/v1/health');
   });
 
-  it("returns the address verbatim when it already ends with the path (endsWith guard)", () => {
+  it('returns the address verbatim when it already ends with the path (endsWith guard)', () => {
     expect(
       getAvailabilityTargetAddressLabel(
         target({ protocol: 'http', address: 'http://api.local/health', path: '/health' }),
@@ -159,7 +154,7 @@ describe('getAvailabilityTargetAddressLabel', () => {
     ).toBe('http://api.local/health');
   });
 
-  it("returns the address verbatim for http when path is undefined (path falsy arm)", () => {
+  it('returns the address verbatim for http when path is undefined (path falsy arm)', () => {
     expect(
       getAvailabilityTargetAddressLabel(
         target({ protocol: 'http', address: 'http://api.local', path: undefined }),
@@ -167,7 +162,7 @@ describe('getAvailabilityTargetAddressLabel', () => {
     ).toBe('http://api.local');
   });
 
-  it("returns the address verbatim for http when path is whitespace-only (trim -> falsy arm)", () => {
+  it('returns the address verbatim for http when path is whitespace-only (trim -> falsy arm)', () => {
     expect(
       getAvailabilityTargetAddressLabel(
         target({ protocol: 'http', address: 'http://api.local', path: '   ' }),
@@ -183,7 +178,7 @@ describe('getAvailabilityTargetAddressLabel', () => {
     ).toBe('http://api.local/health');
   });
 
-  it("returns the address verbatim for tcp without a port (port falsy arm)", () => {
+  it('returns the address verbatim for tcp without a port (port falsy arm)', () => {
     expect(
       getAvailabilityTargetAddressLabel(
         target({ protocol: 'tcp', address: 'mqtt.local', port: undefined }),
@@ -191,7 +186,7 @@ describe('getAvailabilityTargetAddressLabel', () => {
     ).toBe('mqtt.local');
   });
 
-  it("returns the address verbatim for icmp (final fallback arm)", () => {
+  it('returns the address verbatim for icmp (final fallback arm)', () => {
     expect(
       getAvailabilityTargetAddressLabel(
         target({ protocol: 'icmp', address: '10.0.0.1', port: undefined }),
@@ -199,7 +194,7 @@ describe('getAvailabilityTargetAddressLabel', () => {
     ).toBe('10.0.0.1');
   });
 
-  it("returns the address verbatim for https (final fallback arm; no https special-case)", () => {
+  it('returns the address verbatim for https (final fallback arm; no https special-case)', () => {
     expect(
       getAvailabilityTargetAddressLabel(
         target({ protocol: 'https', address: 'https://api.local', path: '/health' }),
@@ -228,11 +223,11 @@ describe('getAvailabilityTargetMethodLabel', () => {
     expect(getAvailabilityTargetMethodLabel(target({ protocol: 'http' }))).toBe('HTTP check');
   });
 
-  it("uppercases an unrecognised but valid protocol via the default arm (https)", () => {
+  it('uppercases an unrecognised but valid protocol via the default arm (https)', () => {
     expect(getAvailabilityTargetMethodLabel(target({ protocol: 'https' }))).toBe('HTTPS');
   });
 
-  it("uppercases an arbitrary protocol string via the default arm (cast)", () => {
+  it('uppercases an arbitrary protocol string via the default arm (cast)', () => {
     expect(
       getAvailabilityTargetMethodLabel(
         target({ protocol: 'grpc' as unknown as AvailabilityTarget['protocol'] }),
@@ -263,7 +258,7 @@ describe('getAvailabilityTargetAddKind', () => {
     ).toBeUndefined();
   });
 
-  it("returns undefined when the targetKind param does not normalise to a known kind (invalid kind guard)", () => {
+  it('returns undefined when the targetKind param does not normalise to a known kind (invalid kind guard)', () => {
     expect(
       getAvailabilityTargetAddKind(
         '/settings/monitoring/availability',

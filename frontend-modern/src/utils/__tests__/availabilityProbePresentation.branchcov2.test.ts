@@ -49,9 +49,7 @@ describe('normalizeAvailabilityProtocol — branch coverage (via getAvailability
   });
 
   it('coerces a null protocol to an empty (unknown) protocol', () => {
-    expect(
-      getAvailabilityProbeMethodLabel({ protocol: null as unknown as string }),
-    ).toBe('Probe');
+    expect(getAvailabilityProbeMethodLabel({ protocol: null as unknown as string })).toBe('Probe');
   });
 
   it('trims and lowercases a cased/whitespace-padded protocol before matching', () => {
@@ -136,15 +134,11 @@ describe('getAvailabilityProbeTargetLabel — branch coverage', () => {
   });
 
   it('returns the trimmed path for http with a path', () => {
-    expect(getAvailabilityProbeTargetLabel({ protocol: 'http', path: '/status' })).toBe(
-      '/status',
-    );
+    expect(getAvailabilityProbeTargetLabel({ protocol: 'http', path: '/status' })).toBe('/status');
   });
 
   it('returns the trimmed path for https with a path', () => {
-    expect(getAvailabilityProbeTargetLabel({ protocol: 'https', path: '/ready' })).toBe(
-      '/ready',
-    );
+    expect(getAvailabilityProbeTargetLabel({ protocol: 'https', path: '/ready' })).toBe('/ready');
   });
 
   it('returns null for http with no path', () => {

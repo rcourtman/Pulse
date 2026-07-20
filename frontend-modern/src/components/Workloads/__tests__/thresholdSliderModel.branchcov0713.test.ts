@@ -170,7 +170,11 @@ describe('getThresholdSliderLabel (branch coverage 0713)', () => {
 
   describe('else arm (value%)', () => {
     it('appends % for each non-temperature metric type', () => {
-      expect(PERCENT_TYPES.map((t) => getThresholdSliderLabel(t, 50))).toEqual(['50%', '50%', '50%']);
+      expect(PERCENT_TYPES.map((t) => getThresholdSliderLabel(t, 50))).toEqual([
+        '50%',
+        '50%',
+        '50%',
+      ]);
     });
 
     it('renders 0% for a zero value', () => {

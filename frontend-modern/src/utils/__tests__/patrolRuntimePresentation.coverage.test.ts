@@ -42,9 +42,7 @@ describe('normalizePatrolRuntimeBlockedReason', () => {
   });
 
   it('passes through an unrelated reason unchanged but trimmed', () => {
-    expect(normalizePatrolRuntimeBlockedReason('  provider offline  ')).toBe(
-      'provider offline',
-    );
+    expect(normalizePatrolRuntimeBlockedReason('  provider offline  ')).toBe('provider offline');
   });
 
   it('does not rewrite when the trigger word is a substring without word boundaries', () => {
@@ -57,8 +55,7 @@ describe('getPatrolRuntimePresentation', () => {
     expect(getPatrolRuntimePresentation('blocked')).toMatchObject({
       label: 'Patrol paused',
       title: 'Patrol paused',
-      description:
-        'Patrol cannot check infrastructure until the blocking condition is cleared.',
+      description: 'Patrol cannot check infrastructure until the blocking condition is cleared.',
       tone: 'warning',
     });
   });
@@ -106,8 +103,7 @@ describe('getPatrolRuntimePresentation', () => {
     expect(getPatrolRuntimePresentation('unavailable')).toMatchObject({
       label: 'Patrol unavailable',
       title: 'Patrol unavailable',
-      description:
-        'Patrol is not ready yet. Check Provider & Models and runtime availability.',
+      description: 'Patrol is not ready yet. Check Provider & Models and runtime availability.',
       tone: 'error',
     });
   });
@@ -131,9 +127,7 @@ describe('getPatrolRuntimePresentation', () => {
   });
 
   it('falls back to the "active" presentation for an unknown state value', () => {
-    expect(
-      getPatrolRuntimePresentation('idle' as unknown as PatrolRuntimeState),
-    ).toMatchObject({
+    expect(getPatrolRuntimePresentation('idle' as unknown as PatrolRuntimeState)).toMatchObject({
       label: 'Patrol enabled',
       title: 'Patrol enabled',
       description: 'Patrol is ready to check your infrastructure.',

@@ -32,10 +32,12 @@ const makeHost = (over: HostOverrides = {}): Resource =>
 describe('dockerHostDrawerModel', () => {
   describe('getDockerHostDrawerHistoryTarget', () => {
     it('builds an agent-scoped target from the agent agentId', () => {
-      expect(getDockerHostDrawerHistoryTarget(makeHost({ agent: { agentId: 'agent-9' } }))).toEqual({
-        resourceType: 'agent',
-        resourceId: 'agent-9',
-      });
+      expect(getDockerHostDrawerHistoryTarget(makeHost({ agent: { agentId: 'agent-9' } }))).toEqual(
+        {
+          resourceType: 'agent',
+          resourceId: 'agent-9',
+        },
+      );
     });
 
     it('strips a leading agent: prefix from the agentId', () => {
@@ -51,9 +53,10 @@ describe('dockerHostDrawerModel', () => {
     });
 
     it('leaves an agentId that does not start with agent: untouched', () => {
-      expect(
-        getDockerHostDrawerHistoryTarget(makeHost({ agent: { agentId: 'node-1' } })),
-      ).toEqual({ resourceType: 'agent', resourceId: 'node-1' });
+      expect(getDockerHostDrawerHistoryTarget(makeHost({ agent: { agentId: 'node-1' } }))).toEqual({
+        resourceType: 'agent',
+        resourceId: 'node-1',
+      });
     });
 
     it('trims surrounding whitespace before resolving the id', () => {
@@ -70,9 +73,10 @@ describe('dockerHostDrawerModel', () => {
     });
 
     it('strips the agent: prefix from the id fallback too', () => {
-      expect(
-        getDockerHostDrawerHistoryTarget(makeHost({ id: 'agent:host-1' })),
-      ).toEqual({ resourceType: 'agent', resourceId: 'host-1' });
+      expect(getDockerHostDrawerHistoryTarget(makeHost({ id: 'agent:host-1' }))).toEqual({
+        resourceType: 'agent',
+        resourceId: 'host-1',
+      });
     });
 
     it('falls back to the resource name when neither agentId nor id are present', () => {
@@ -110,17 +114,15 @@ describe('dockerHostDrawerModel', () => {
     });
 
     it('returns null when the only candidate is whitespace', () => {
-      expect(
-        getDockerHostDrawerHistoryTarget(makeHost({ id: '   ', name: '   ' })),
-      ).toBeNull();
+      expect(getDockerHostDrawerHistoryTarget(makeHost({ id: '   ', name: '   ' }))).toBeNull();
     });
   });
 
   describe('getDockerHostDrawerHistoryFallbackMetrics', () => {
     it('returns the host temperature when it is a finite number', () => {
-      expect(
-        getDockerHostDrawerHistoryFallbackMetrics(makeHost({ temperature: 42 })),
-      ).toEqual({ temperature: 42 });
+      expect(getDockerHostDrawerHistoryFallbackMetrics(makeHost({ temperature: 42 }))).toEqual({
+        temperature: 42,
+      });
     });
 
     it('falls back to docker.temperature when host temperature is absent', () => {
@@ -213,11 +215,7 @@ describe('dockerHostDrawerModel', () => {
 
     it('declares the utilization cpu/memory/disk series', () => {
       const utilization = DOCKER_HOST_DRAWER_HISTORY_GROUPS.find((g) => g.id === 'utilization');
-      expect(utilization?.series.map((series) => series.metric)).toEqual([
-        'cpu',
-        'memory',
-        'disk',
-      ]);
+      expect(utilization?.series.map((series) => series.metric)).toEqual(['cpu', 'memory', 'disk']);
       expect(utilization?.series.every((series) => series.unit === '%')).toBe(true);
     });
 

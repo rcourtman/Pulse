@@ -45,9 +45,7 @@ describe('humanizeConnectionError', () => {
   });
 
   it('classifies HTTP 401 as authentication failed', () => {
-    const result = humanizeConnectionError(
-      'Get "https://pve/api2/json/version": 401 Unauthorized',
-    );
+    const result = humanizeConnectionError('Get "https://pve/api2/json/version": 401 Unauthorized');
     expect(result?.headline).toBe('Authentication failed');
   });
 

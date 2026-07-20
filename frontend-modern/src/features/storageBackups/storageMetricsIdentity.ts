@@ -21,7 +21,8 @@ export const resolvePhysicalDiskMetricResourceId = (disk: Resource): string => {
     return metricsTargetId;
   }
 
-  const platformData = ((disk.platformData as DiskPlatformData | undefined) || {}) as DiskPlatformData;
+  const platformData = ((disk.platformData as DiskPlatformData | undefined) ||
+    {}) as DiskPlatformData;
   const serial = trim(disk.physicalDisk?.serial || platformData.physicalDisk?.serial);
   if (serial) return serial;
 

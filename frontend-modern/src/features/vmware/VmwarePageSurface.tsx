@@ -137,11 +137,7 @@ export function VmwarePageSurface() {
 
   return (
     <div data-testid="vmware-page" class="space-y-3">
-      <PlatformSectionTabs
-        tabs={tabs()}
-        active={activeTab()}
-        ariaLabel="VMware sections"
-      />
+      <PlatformSectionTabs tabs={tabs()} active={activeTab()} ariaLabel="VMware sections" />
 
       <Show
         when={!loading() || model().resources.length > 0}

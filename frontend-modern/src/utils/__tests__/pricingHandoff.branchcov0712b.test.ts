@@ -128,7 +128,9 @@ describe('pricingHandoff (branch coverage)', () => {
       expect(getInProductPricingDestination('long_term_metrics')).toBe(
         SELF_HOSTED_PRO_BILLING_PLAN_HREF,
       );
-      expect(getInProductPricingDestination('agent_profiles')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+      expect(getInProductPricingDestination('agent_profiles')).toBe(
+        SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+      );
       expect(getInProductPricingDestination('self_hosted_plan')).toBe(
         SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
       );
@@ -233,7 +235,9 @@ describe('pricingHandoff (branch coverage)', () => {
           SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
           `?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}`,
         ),
-      ).toBe(`${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}`);
+      ).toBe(
+        `${SELF_HOSTED_PRO_BILLING_PLAN_HREF}?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}`,
+      );
     });
 
     it('defaults the bare canonical billing root to the plan href', () => {

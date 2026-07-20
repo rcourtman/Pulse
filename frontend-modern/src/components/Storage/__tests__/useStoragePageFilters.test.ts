@@ -40,7 +40,9 @@ describe('useStoragePageFilters', () => {
   };
 
   it('reads canonical storage query state through the shared page-filter hook', () => {
-    const ctx = setup('?tab=disks&source=agent&status=warning&group=status&sort=usage&order=asc&q=tank');
+    const ctx = setup(
+      '?tab=disks&source=agent&status=warning&group=status&sort=usage&order=asc&q=tank',
+    );
 
     vi.runAllTimers();
 

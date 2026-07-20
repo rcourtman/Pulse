@@ -140,14 +140,14 @@ describe('agentInstallCommand', () => {
     expect(command).toContain('$env:PULSE_NON_INTERACTIVE="true"');
     expect(command).toContain('$env:PULSE_INSECURE_SKIP_VERIFY="true"');
     expect(command).toContain('$env:PULSE_CACERT="C:\\Pulse\\custom-ca.cer"');
-    expect(command).toContain('Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript');
+    expect(command).toContain(
+      'Invoke-WebRequest -Uri $pulseScriptUrl -UseBasicParsing -OutFile $pulseInstallScript',
+    );
     expect(command).toContain(
       '& $pulsePowerShell -NoProfile -ExecutionPolicy Bypass -File $pulseInstallScript -Url',
     );
     expect(command).toContain('if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }');
-    expect(command).toContain(
-      'Remove-Item Env:PULSE_PREFLIGHT_ONLY -ErrorAction SilentlyContinue',
-    );
+    expect(command).toContain('Remove-Item Env:PULSE_PREFLIGHT_ONLY -ErrorAction SilentlyContinue');
     expect(command).not.toContain('-PreflightOnly $true');
     expect(command).not.toContain('-NonInteractive $true');
     expect(command).not.toContain('-Insecure $true');

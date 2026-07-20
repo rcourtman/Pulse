@@ -9,10 +9,7 @@ import { KubernetesIcon } from '@/components/icons/KubernetesIcon';
 import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import { TrueNASIcon } from '@/components/icons/TrueNASIcon';
 
-import {
-  getPlatformIcon,
-  type PlatformIconKey,
-} from './platformIcon';
+import { getPlatformIcon, type PlatformIconKey } from './platformIcon';
 
 const ALL_KEYS: PlatformIconKey[] = [
   'proxmox',
@@ -68,9 +65,7 @@ describe('platformIcon', () => {
     });
 
     it('returns undefined for an unknown key at runtime', () => {
-      expect(
-        getPlatformIcon('does-not-exist' as unknown as PlatformIconKey),
-      ).toBeUndefined();
+      expect(getPlatformIcon('does-not-exist' as unknown as PlatformIconKey)).toBeUndefined();
     });
 
     it('every resolved icon accepts a Solid props object (renderable component shape)', () => {

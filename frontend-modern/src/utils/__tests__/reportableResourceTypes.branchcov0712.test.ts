@@ -105,7 +105,7 @@ describe('matchesReportableResourceTypeFilter — branch coverage (branchcov2)',
     expect(matchesReportableResourceTypeFilter({ type: 'storage' }, 'recovery')).toBe(false);
   });
 
-  it("returns true via the defensive fall-through for an unrecognized filter value", () => {
+  it('returns true via the defensive fall-through for an unrecognized filter value', () => {
     // No declared ResourcePickerTypeFilter reaches the final `return true`, so a
     // bogus value is cast through unknown to satisfy strict mode while driving
     // the branch at runtime.

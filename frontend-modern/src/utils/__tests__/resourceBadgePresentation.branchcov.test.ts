@@ -171,9 +171,7 @@ describe('withBadgeVersion (via getInfrastructureSystemIdentityBadges) — branc
         topology: 'datastore',
       } as Resource['storage'],
     });
-    expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual([
-      'PBS 2',
-    ]);
+    expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual(['PBS 2']);
   });
 
   it('keeps the title unchanged when the version already appears in the title', () => {
@@ -241,7 +239,9 @@ describe('getAgentSystemIdentityBadge (via getInfrastructureSystemIdentityBadges
         osName: 'truenas',
       }),
     );
-    expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual(['TrueNAS']);
+    expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual([
+      'TrueNAS',
+    ]);
   });
 
   it('derives a known source from manifest display tokens in the osName', () => {
@@ -251,7 +251,9 @@ describe('getAgentSystemIdentityBadge (via getInfrastructureSystemIdentityBadges
         osName: 'Synology DSM',
       }),
     );
-    expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual(['Synology']);
+    expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual([
+      'Synology',
+    ]);
   });
 
   it.each([
@@ -286,7 +288,9 @@ describe('getAgentSystemIdentityBadge (via getInfrastructureSystemIdentityBadges
         osName: '',
       }),
     );
-    expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual(['FreeBSD']);
+    expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual([
+      'FreeBSD',
+    ]);
   });
 
   it('returns null for an agent with no recognizable identity (falls through)', () => {
@@ -318,7 +322,9 @@ describe('getKnownHostIdentitySource (via identity badges) — branch coverage',
         osName: 'truenas',
       }),
     );
-    expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual(['TrueNAS']);
+    expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual([
+      'TrueNAS',
+    ]);
   });
 
   it('excludes docker from host identity even when docker tokens are present', () => {
@@ -360,7 +366,9 @@ describe('getHostIdentityAgentProfile (via identity badges) — branch coverage'
         osName: 'truenas',
       }),
     );
-    expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual(['TrueNAS']);
+    expect(getInfrastructureSystemIdentityBadges(resource).map((b) => b.label)).toEqual([
+      'TrueNAS',
+    ]);
   });
 });
 

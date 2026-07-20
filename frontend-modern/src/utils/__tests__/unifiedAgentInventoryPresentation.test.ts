@@ -34,9 +34,9 @@ describe('unifiedAgentInventoryPresentation', () => {
   });
 
   it('returns canonical last-seen labels', () => {
-    expect(
-      getUnifiedAgentLastSeenLabel({ status: 'removed' }, 'Monitoring stopped'),
-    ).toBe('Monitoring stopped');
+    expect(getUnifiedAgentLastSeenLabel({ status: 'removed' }, 'Monitoring stopped')).toBe(
+      'Monitoring stopped',
+    );
     expect(getUnifiedAgentLastSeenLabel({ status: 'active' }, 'Monitoring stopped')).toBe('—');
   });
 
@@ -65,9 +65,7 @@ describe('unifiedAgentInventoryPresentation', () => {
     expect(getUnifiedAgentConfigUpdateSuccessMessage(false)).toBe(
       'Pulse command execution disabled. Syncing with agent...',
     );
-    expect(getUnifiedAgentConfigUpdateErrorMessage()).toBe(
-      'Failed to update agent configuration',
-    );
+    expect(getUnifiedAgentConfigUpdateErrorMessage()).toBe('Failed to update agent configuration');
     expect(getUnifiedAgentClipboardCopySuccessMessage()).toBe('Copied to clipboard');
     expect(getUnifiedAgentClipboardCopyErrorMessage()).toBe('Failed to copy');
     expect(getUnifiedAgentUninstallCommandCopiedMessage()).toBe('Uninstall command copied');

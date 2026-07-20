@@ -2,10 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StorageSummaryChartsResponse, TimeRange } from '@/api/charts';
 import { eventBus } from '@/stores/events';
 import { getOrgID, setOrgID } from '@/utils/apiClient';
-import {
-  fetchStorageSummaryAndCache,
-  readStorageSummaryCache,
-} from '@/utils/storageSummaryCache';
+import { fetchStorageSummaryAndCache, readStorageSummaryCache } from '@/utils/storageSummaryCache';
 
 const mockGetStorageSummaryCharts = vi.fn();
 
@@ -124,8 +121,9 @@ describe('storageSummaryCache', () => {
     });
 
     it('fetches separately per node scope', async () => {
-      mockGetStorageSummaryCharts.mockImplementation((_range: TimeRange, _signal: unknown, options?: { nodeId?: string }) =>
-        Promise.resolve(makeResponse(options?.nodeId ? 10 : 20)),
+      mockGetStorageSummaryCharts.mockImplementation(
+        (_range: TimeRange, _signal: unknown, options?: { nodeId?: string }) =>
+          Promise.resolve(makeResponse(options?.nodeId ? 10 : 20)),
       );
 
       await fetchStorageSummaryAndCache('1h', { nodeId: 'node-1' });

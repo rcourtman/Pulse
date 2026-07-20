@@ -145,26 +145,19 @@ describe('logger', () => {
       ['just info', false],
     ];
 
-    it.each(infoKeywordCases)(
-      'info in production logs for %j? %s',
-      (message, shouldLog) => {
-        logger.info(message);
+    it.each(infoKeywordCases)('info in production logs for %j? %s', (message, shouldLog) => {
+      logger.info(message);
 
-        if (shouldLog) {
-          expect(logSpy).toHaveBeenCalledWith('%s', `[INFO] ${message}`, '');
-        } else {
-          expect(logSpy).not.toHaveBeenCalled();
-        }
-      },
-    );
+      if (shouldLog) {
+        expect(logSpy).toHaveBeenCalledWith('%s', `[INFO] ${message}`, '');
+      } else {
+        expect(logSpy).not.toHaveBeenCalled();
+      }
+    });
 
     // The keyword check uses String.includes, which is case-sensitive. Capitalized
     // variants of the trigger words are therefore NOT surfaced in production.
-    const capitalizedKeywordCases: Array<[string]> = [
-      ['Established'],
-      ['Failed'],
-      ['Error'],
-    ];
+    const capitalizedKeywordCases: Array<[string]> = [['Established'], ['Failed'], ['Error']];
 
     it.each(capitalizedKeywordCases)(
       'info in production does NOT log for capitalized keyword %j (case-sensitive match, suspected bug)',

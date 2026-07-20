@@ -151,20 +151,18 @@ describe('computeStorageCapacityDeltaAnalysis branch coverage — delta sign and
   });
 
   it('clamps a sub-byte positive delta (abs < 1) to exactly 0', () => {
-    expect(
-      computeStorageCapacityDeltaAnalysis([point(1_000, 100.0), point(2_000, 100.4)]),
-    ).toEqual({
-      deltaBytes: 0, // raw delta 0.4 -> clamped
-      durationMs: 1_000,
-      startTimestamp: 1_000,
-      endTimestamp: 2_000,
-    });
+    expect(computeStorageCapacityDeltaAnalysis([point(1_000, 100.0), point(2_000, 100.4)])).toEqual(
+      {
+        deltaBytes: 0, // raw delta 0.4 -> clamped
+        durationMs: 1_000,
+        startTimestamp: 1_000,
+        endTimestamp: 2_000,
+      },
+    );
   });
 
   it('clamps a sub-byte negative delta (abs < 1) to exactly 0', () => {
-    expect(
-      computeStorageCapacityDeltaAnalysis([point(1_000, 100.0), point(2_000, 99.6)]),
-    ).toEqual({
+    expect(computeStorageCapacityDeltaAnalysis([point(1_000, 100.0), point(2_000, 99.6)])).toEqual({
       deltaBytes: 0, // raw delta -0.4 -> abs < 1 -> clamped
       durationMs: 1_000,
       startTimestamp: 1_000,
@@ -179,9 +177,7 @@ describe('computeStorageCapacityDeltaAnalysis branch coverage — delta sign and
 
 describe('computeStorageCapacityDeltaAnalysis branch coverage — finite/duration guard', () => {
   it('returns null when start and end timestamps are equal (durationMs === 0, <= 0 arm)', () => {
-    expect(
-      computeStorageCapacityDeltaAnalysis([point(1_000, 100), point(1_000, 200)]),
-    ).toBeNull();
+    expect(computeStorageCapacityDeltaAnalysis([point(1_000, 100), point(1_000, 200)])).toBeNull();
   });
 
   it('returns null when end timestamp precedes start after sorting only equal timestamps collapse (durationMs 0)', () => {

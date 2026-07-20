@@ -71,9 +71,7 @@ const getDockerSwarmNodeSortValue = (
         ? resource.docker.memoryBytes
         : null;
     case 'address':
-      return (
-        asTrimmedString(resource.docker?.address || resource.docker?.managerAddress) || null
-      );
+      return asTrimmedString(resource.docker?.address || resource.docker?.managerAddress) || null;
     default:
       key satisfies never;
       return null;

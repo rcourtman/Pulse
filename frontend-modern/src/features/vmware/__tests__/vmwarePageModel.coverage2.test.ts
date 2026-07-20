@@ -363,9 +363,7 @@ describe('hasIncidentSignal (via buildVmwareIncidentRows)', () => {
     const res = makeResource({
       id: 'res-no-signal',
       type: 'agent',
-      incidents: [
-        { code: '', severity: 'warning', summary: '' },
-      ],
+      incidents: [{ code: '', severity: 'warning', summary: '' }],
     });
     expect(buildVmwareIncidentRows([res])).toEqual([]);
   });
@@ -374,9 +372,7 @@ describe('hasIncidentSignal (via buildVmwareIncidentRows)', () => {
     const res = makeResource({
       id: 'res-code-only',
       type: 'agent',
-      incidents: [
-        { code: 'alarm-x', severity: 'warning', summary: '' },
-      ],
+      incidents: [{ code: 'alarm-x', severity: 'warning', summary: '' }],
     });
     const rows = buildVmwareIncidentRows([res]);
     expect(rows).toHaveLength(1);
@@ -387,9 +383,7 @@ describe('hasIncidentSignal (via buildVmwareIncidentRows)', () => {
     const res = makeResource({
       id: 'res-summary-only',
       type: 'agent',
-      incidents: [
-        { code: '', severity: 'info', summary: 'something happened' },
-      ],
+      incidents: [{ code: '', severity: 'info', summary: 'something happened' }],
     });
     const rows = buildVmwareIncidentRows([res]);
     expect(rows).toHaveLength(1);
@@ -572,9 +566,7 @@ describe('buildIncidentRow (via buildVmwareIncidentRows)', () => {
     const res = makeResource({
       id: 'st-1',
       type: 'agent',
-      incidents: [
-        { code: 'c', severity: 'info', summary: 's', startedAt: '2026-03-01T10:00:00Z' },
-      ],
+      incidents: [{ code: 'c', severity: 'info', summary: 's', startedAt: '2026-03-01T10:00:00Z' }],
     });
     expect(buildVmwareIncidentRows([res])[0].startedAt).toBe('2026-03-01T10:00:00Z');
   });
@@ -755,11 +747,7 @@ describe('incidentSeverityRank (via buildVmwareIncidentRows sorting)', () => {
     });
 
     const rows = buildVmwareIncidentRows([info, warning, critical]);
-    expect(rows.map((r) => r.resourceId)).toEqual([
-      'sort-critical',
-      'sort-warning',
-      'sort-info',
-    ]);
+    expect(rows.map((r) => r.resourceId)).toEqual(['sort-critical', 'sort-warning', 'sort-info']);
   });
 
   it('tie-breaks same-severity incidents by priority descending', () => {
@@ -1198,9 +1186,7 @@ describe('appendRow / dedup (via buildVmwareActivityRows)', () => {
     const res = makeResource({
       id: 'rc-res',
       type: 'vm',
-      recentChanges: [
-        makeChange({ id: 'embedded-1', resourceId: 'rc-res', metadata: {} }),
-      ],
+      recentChanges: [makeChange({ id: 'embedded-1', resourceId: 'rc-res', metadata: {} })],
     });
     const rows = buildVmwareActivityRows([res], []);
     expect(rows).toHaveLength(1);
@@ -1340,7 +1326,12 @@ describe('vmwareVirtualMachineSearchHaystack (via filterVmwareVirtualMachines)',
   it('matches by cluster services (HA/DRS formatted string)', () => {
     const vm = makeResource({
       ...baseVm(),
-      vmware: { entityType: 'vm', powerState: 'poweredOn', clusterHaEnabled: true, clusterDrsEnabled: false },
+      vmware: {
+        entityType: 'vm',
+        powerState: 'poweredOn',
+        clusterHaEnabled: true,
+        clusterDrsEnabled: false,
+      },
     });
     expect(filterVmwareVirtualMachines([vm], 'ha enabled', 'all')).toHaveLength(1);
     expect(filterVmwareVirtualMachines([vm], 'drs disabled', 'all')).toHaveLength(1);
@@ -1470,7 +1461,10 @@ describe('filterVmwareActivity (additional branches)', () => {
 
   it('filters to only tasks when status is "tasks"', () => {
     const rows = buildTestRows();
-    expect(filterVmwareActivity(rows, '', 'tasks').map((r) => r.nativeId)).toEqual(['failed-row', 'task-row']);
+    expect(filterVmwareActivity(rows, '', 'tasks').map((r) => r.nativeId)).toEqual([
+      'failed-row',
+      'task-row',
+    ]);
   });
 
   it('returns all rows when status is "all" with no search', () => {

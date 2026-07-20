@@ -44,11 +44,12 @@ describe('apiTokenPresentation — branch coverage (branchcov2)', () => {
     it('returns the trimmed message when it starts with "Cannot grant scope" (trim + startsWith true arm)', () => {
       // Drives `typedError.message.trim()` and the `startsWith('Cannot grant scope')`
       // true arm: leading/trailing whitespace is stripped before the message is echoed.
-      const error = Object.assign(
-        new Error('  Cannot grant scope "ai:execute": denied  '),
-        { status: 403 },
+      const error = Object.assign(new Error('  Cannot grant scope "ai:execute": denied  '), {
+        status: 403,
+      });
+      expect(getAPITokenGenerateErrorMessage(error)).toBe(
+        'Cannot grant scope "ai:execute": denied',
       );
-      expect(getAPITokenGenerateErrorMessage(error)).toBe('Cannot grant scope "ai:execute": denied');
     });
 
     it('falls through to the default for a 403 message that matches neither sentinel', () => {
@@ -117,9 +118,7 @@ describe('apiTokenPresentation — branch coverage (branchcov2)', () => {
         count: 1,
         items: [{ label: 'Edge Node' }],
       };
-      expect(getAPITokenDockerPodmanUsageTitle(entry)).toBe(
-        'Docker / Podman runtimes: Edge Node',
-      );
+      expect(getAPITokenDockerPodmanUsageTitle(entry)).toBe('Docker / Podman runtimes: Edge Node');
     });
 
     it('drops falsy labels and joins the remaining truthy ones with ", "', () => {

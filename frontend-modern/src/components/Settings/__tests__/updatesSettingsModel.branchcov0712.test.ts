@@ -14,12 +14,7 @@ import {
   buildUpdateInstallGuide,
   getUpdateChannelCardOptions,
 } from '../updatesSettingsModel';
-import type {
-  DockerUpdateCommands,
-  UpdateInfo,
-  UpdatePlan,
-  VersionInfo,
-} from '@/api/updates';
+import type { DockerUpdateCommands, UpdateInfo, UpdatePlan, VersionInfo } from '@/api/updates';
 
 // ---- Fixtures ---------------------------------------------------------------
 // Mirror the shapes used by the sibling UpdateInstallGuide.test.tsx so the two
@@ -47,9 +42,7 @@ const makeUpdatePlan = (overrides: Partial<UpdatePlanPick> = {}): UpdatePlanPick
 
 const digest = 'sha256:' + 'ab'.repeat(32);
 const pinnedRef = `registry.pulserelay.pro/pulse/pulse-pro@${digest}`;
-const makeDockerUpdate = (
-  overrides: Partial<DockerUpdateCommands> = {},
-): DockerUpdateCommands => ({
+const makeDockerUpdate = (overrides: Partial<DockerUpdateCommands> = {}): DockerUpdateCommands => ({
   version: 'v6.0.5',
   image: 'registry.pulserelay.pro/pulse/pulse-pro',
   imageDigest: digest,
@@ -163,7 +156,14 @@ describe('buildUpdateInstallGuide', () => {
 
   it('returns null when versionInfo is undefined (!versionInfo guard)', () => {
     expect(
-      buildUpdateInstallGuide(undefined, makeUpdateInfo(), makeUpdatePlan(), 'v6.0.5', 'curl', false),
+      buildUpdateInstallGuide(
+        undefined,
+        makeUpdateInfo(),
+        makeUpdatePlan(),
+        'v6.0.5',
+        'curl',
+        false,
+      ),
     ).toBeNull();
   });
 
@@ -434,8 +434,16 @@ describe('buildUpdateInstallGuide', () => {
       headerSummary: 'Version v6.0.5 is ready to install',
       introText: 'Follow these steps to update manually:',
       steps: [
-        { id: 'development-pull', title: 'Pull the latest changes', command: 'git pull origin main' },
-        { id: 'development-build', title: 'Rebuild and restart', command: 'make build && make run' },
+        {
+          id: 'development-pull',
+          title: 'Pull the latest changes',
+          command: 'git pull origin main',
+        },
+        {
+          id: 'development-build',
+          title: 'Rebuild and restart',
+          command: 'make build && make run',
+        },
       ],
     });
   });

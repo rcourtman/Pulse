@@ -64,7 +64,10 @@ const resolveVerticalScroller = (element: Element | null | undefined): Window | 
 };
 
 const getScrollerMetrics = (scroller: Window | HTMLElement) => {
-  if (isWindowScroller(scroller) || typeof (scroller as HTMLElement).getBoundingClientRect !== 'function') {
+  if (
+    isWindowScroller(scroller) ||
+    typeof (scroller as HTMLElement).getBoundingClientRect !== 'function'
+  ) {
     return {
       top: 0,
       bottom: window.innerHeight,
@@ -151,22 +154,15 @@ export const revealInlineDetailInViewport = (options: {
   const metrics = getScrollerMetrics(scroller);
   const rowRect = options.row.getBoundingClientRect();
   const detailRect = options.detail?.getBoundingClientRect() ?? null;
-  const minTopMargin = Math.max(
-    INLINE_DETAIL_MIN_TOP_MARGIN,
-    Math.round(metrics.height * 0.12),
-  );
+  const minTopMargin = Math.max(INLINE_DETAIL_MIN_TOP_MARGIN, Math.round(metrics.height * 0.12));
   const preferredTop = Math.max(
     minTopMargin,
     Math.round(metrics.height * INLINE_DETAIL_TARGET_TOP_RATIO),
   );
-  const detailPeek = Math.max(
-    INLINE_DETAIL_MIN_DETAIL_PEEK,
-    Math.round(metrics.height * 0.24),
-  );
+  const detailPeek = Math.max(INLINE_DETAIL_MIN_DETAIL_PEEK, Math.round(metrics.height * 0.24));
   const currentRowOffset = rowRect.top - metrics.top;
   const rowHasBreathingRoom = currentRowOffset >= minTopMargin;
-  const detailHasPeek =
-    !detailRect || detailRect.top - metrics.top <= metrics.height - detailPeek;
+  const detailHasPeek = !detailRect || detailRect.top - metrics.top <= metrics.height - detailPeek;
 
   if (rowHasBreathingRoom && detailHasPeek) {
     return false;

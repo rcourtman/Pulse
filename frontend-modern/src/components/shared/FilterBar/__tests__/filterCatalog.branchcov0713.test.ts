@@ -24,7 +24,9 @@ const makeFilter = (overrides: {
   setValue: vi.fn(),
   defaultValue: '',
   options: () => overrides.options ?? [],
-  ...(overrides.formatChipValue !== undefined ? { formatChipValue: overrides.formatChipValue } : {}),
+  ...(overrides.formatChipValue !== undefined
+    ? { formatChipValue: overrides.formatChipValue }
+    : {}),
 });
 
 describe('formatFilterChipValue branch coverage', () => {
@@ -90,7 +92,9 @@ describe('formatFilterChipValue branch coverage', () => {
       });
 
       expect(formatFilterChipValue(filter)).toBe('override');
-      expect(formatChipValue).toHaveBeenCalledWith('no-such-option', [{ value: 'all', label: 'All' }]);
+      expect(formatChipValue).toHaveBeenCalledWith('no-such-option', [
+        { value: 'all', label: 'All' },
+      ]);
     });
   });
 

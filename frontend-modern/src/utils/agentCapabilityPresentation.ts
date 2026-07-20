@@ -1,12 +1,5 @@
 export type AgentCapability =
-  | 'agent'
-  | 'docker'
-  | 'kubernetes'
-  | 'proxmox'
-  | 'pbs'
-  | 'pmg'
-  | 'truenas'
-  | 'availability';
+  'agent' | 'docker' | 'kubernetes' | 'proxmox' | 'pbs' | 'pmg' | 'truenas' | 'availability';
 
 export function getAgentCapabilityLabel(capability: AgentCapability): string {
   switch (capability) {

@@ -75,7 +75,9 @@ describe('getDiscoveryURLSuggestionSourceLabel (branch coverage)', () => {
   });
 
   it('trims surrounding whitespace before matching a known case', () => {
-    expect(getDiscoveryURLSuggestionSourceLabel('  web_port_inference  ')).toBe('Detected web port');
+    expect(getDiscoveryURLSuggestionSourceLabel('  web_port_inference  ')).toBe(
+      'Detected web port',
+    );
     expect(getDiscoveryURLSuggestionSourceLabel('\tservice_default_match\n')).toBe(
       'Known service default',
     );
@@ -89,7 +91,9 @@ describe('getDiscoverySuggestedURLReason (branch coverage)', () => {
   });
 
   it('uses the source label for both text and title when only a code is present', () => {
-    expect(getDiscoverySuggestedURLReason({ suggested_url_source_code: 'web_port_inference' })).toEqual({
+    expect(
+      getDiscoverySuggestedURLReason({ suggested_url_source_code: 'web_port_inference' }),
+    ).toEqual({
       text: 'Detected web port',
       title: 'Detected web port',
     });
@@ -162,25 +166,35 @@ describe('hasMeaningfulDiscoveryContext (branch coverage)', () => {
   it('is truthy when any port is present', () => {
     expect(
       hasMeaningfulDiscoveryContext(
-        makeDiscovery({ ports: [{ port: 5432, protocol: 'tcp', process: 'postgres', address: '0.0.0.0' }] }),
+        makeDiscovery({
+          ports: [{ port: 5432, protocol: 'tcp', process: 'postgres', address: '0.0.0.0' }],
+        }),
       ),
     ).toBe(true);
   });
 
   it('is truthy when only config_paths are present', () => {
-    expect(hasMeaningfulDiscoveryContext(makeDiscovery({ config_paths: ['/etc/nginx/nginx.conf'] }))).toBe(true);
+    expect(
+      hasMeaningfulDiscoveryContext(makeDiscovery({ config_paths: ['/etc/nginx/nginx.conf'] })),
+    ).toBe(true);
   });
 
   it('is truthy when only data_paths are present', () => {
-    expect(hasMeaningfulDiscoveryContext(makeDiscovery({ data_paths: ['/var/lib/postgres'] }))).toBe(true);
+    expect(
+      hasMeaningfulDiscoveryContext(makeDiscovery({ data_paths: ['/var/lib/postgres'] })),
+    ).toBe(true);
   });
 
   it('is truthy when only log_paths are present', () => {
-    expect(hasMeaningfulDiscoveryContext(makeDiscovery({ log_paths: ['/var/log/nginx'] }))).toBe(true);
+    expect(hasMeaningfulDiscoveryContext(makeDiscovery({ log_paths: ['/var/log/nginx'] }))).toBe(
+      true,
+    );
   });
 
   it('is truthy when only a suggested_url is present', () => {
-    expect(hasMeaningfulDiscoveryContext(makeDiscovery({ suggested_url: 'https://example.local' }))).toBe(true);
+    expect(
+      hasMeaningfulDiscoveryContext(makeDiscovery({ suggested_url: 'https://example.local' })),
+    ).toBe(true);
   });
 
   it('is truthy when only a suggested_availability_probe is present', () => {
@@ -212,7 +226,9 @@ describe('isMeaningfulDiscoveryFact (via hasMeaningfulDiscoveryContext, branch c
     expect(hasMeaningfulDiscoveryContext(factOnly(makeFact({ value: '' })))).toBe(false);
     // ...and the hyphen/underscore form of "n a", which normalises into the stoplist.
     expect(hasMeaningfulDiscoveryContext(factOnly(makeFact({ value: 'N-A' })))).toBe(false);
-    expect(hasMeaningfulDiscoveryContext(factOnly(makeFact({ value: 'system_container' })))).toBe(false);
+    expect(hasMeaningfulDiscoveryContext(factOnly(makeFact({ value: 'system_container' })))).toBe(
+      false,
+    );
   });
 
   it('treats a slash-bearing token like "n/a" as meaningful (slashes are not normalised away)', () => {
@@ -259,7 +275,9 @@ describe('isMeaningfulDiscoveryFact (via hasMeaningfulDiscoveryContext, branch c
 
   it('rejects values containing "does not exist"', () => {
     expect(
-      hasMeaningfulDiscoveryContext(factOnly(makeFact({ key: 'cfg', value: 'file does not exist' }))),
+      hasMeaningfulDiscoveryContext(
+        factOnly(makeFact({ key: 'cfg', value: 'file does not exist' })),
+      ),
     ).toBe(false);
   });
 
@@ -378,7 +396,9 @@ describe('getDiscoveryIdentifiedSummary (branch coverage)', () => {
     );
     expect(trimmed?.cliAccess).toBe('docker exec -it web /bin/sh');
 
-    const blank = getDiscoveryIdentifiedSummary(makeDiscovery({ service_name: 'X', cli_access: '   ' }));
+    const blank = getDiscoveryIdentifiedSummary(
+      makeDiscovery({ service_name: 'X', cli_access: '   ' }),
+    );
     expect(blank?.cliAccess).toBeUndefined();
   });
 
@@ -396,7 +416,9 @@ describe('getDiscoveryIdentifiedSummary (branch coverage)', () => {
     );
     expect(present?.suggestedUrlDiagnostic).toBe('no host candidate');
 
-    const empty = getDiscoveryIdentifiedSummary(makeDiscovery({ service_name: 'X', suggested_url_diagnostic: '' }));
+    const empty = getDiscoveryIdentifiedSummary(
+      makeDiscovery({ service_name: 'X', suggested_url_diagnostic: '' }),
+    );
     expect(empty?.suggestedUrlDiagnostic).toBeUndefined();
   });
 

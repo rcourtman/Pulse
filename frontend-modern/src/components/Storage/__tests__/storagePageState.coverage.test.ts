@@ -85,19 +85,13 @@ describe('storagePageState coverage', () => {
   });
 
   describe('normalizeStorageSortKey', () => {
-    it.each([
-      'priority',
-      'name',
-      'state',
-      'usage',
-      'type',
-      'host',
-      'protection',
-      'growth',
-    ])('accepts canonical sort key %s (trimmed, lowercased)', (key) => {
-      expect(normalizeStorageSortKey(key)).toBe(key);
-      expect(normalizeStorageSortKey(` ${key.toUpperCase()} `)).toBe(key);
-    });
+    it.each(['priority', 'name', 'state', 'usage', 'type', 'host', 'protection', 'growth'])(
+      'accepts canonical sort key %s (trimmed, lowercased)',
+      (key) => {
+        expect(normalizeStorageSortKey(key)).toBe(key);
+        expect(normalizeStorageSortKey(` ${key.toUpperCase()} `)).toBe(key);
+      },
+    );
 
     it('falls back to "priority" for empty / whitespace input', () => {
       expect(normalizeStorageSortKey('')).toBe('priority');
@@ -154,9 +148,9 @@ describe('storagePageState coverage', () => {
     });
 
     it('counts diskRoleFilter when not at default', () => {
-      expect(
-        countActiveStorageFilters({ ...baseInactiveState, diskRoleFilter: 'nvme-disk' }),
-      ).toBe(1);
+      expect(countActiveStorageFilters({ ...baseInactiveState, diskRoleFilter: 'nvme-disk' })).toBe(
+        1,
+      );
     });
 
     it('counts diskGroupFilter when not at default', () => {
@@ -215,15 +209,15 @@ describe('storagePageState coverage', () => {
     });
 
     it('returns true when diskRoleFilter differs from default', () => {
-      expect(
-        hasActiveStorageFilters({ ...baseInactiveState, diskRoleFilter: 'nvme-disk' }),
-      ).toBe(true);
+      expect(hasActiveStorageFilters({ ...baseInactiveState, diskRoleFilter: 'nvme-disk' })).toBe(
+        true,
+      );
     });
 
     it('returns true when diskGroupFilter differs from default', () => {
-      expect(
-        hasActiveStorageFilters({ ...baseInactiveState, diskGroupFilter: 'data-pool' }),
-      ).toBe(true);
+      expect(hasActiveStorageFilters({ ...baseInactiveState, diskGroupFilter: 'data-pool' })).toBe(
+        true,
+      );
     });
   });
 

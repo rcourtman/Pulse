@@ -9,10 +9,7 @@ import {
 } from './selectionCardGroupModel';
 import { useSelectionCardGroupState } from './useSelectionCardGroupState';
 
-export type {
-  SelectionCardGroupProps,
-  SelectionCardOption,
-} from './selectionCardGroupModel';
+export type { SelectionCardGroupProps, SelectionCardOption } from './selectionCardGroupModel';
 
 export function SelectionCardGroup<T extends string | number>(props: SelectionCardGroupProps<T>) {
   const selectionCardGroup = useSelectionCardGroupState(props);

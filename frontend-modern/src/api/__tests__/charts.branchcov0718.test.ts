@@ -38,17 +38,7 @@ import {
 } from '@/api/charts';
 import { apiFetchJSON } from '@/utils/apiClient';
 
-const ALL_TIME_RANGES: TimeRange[] = [
-  '5m',
-  '15m',
-  '30m',
-  '1h',
-  '4h',
-  '12h',
-  '24h',
-  '7d',
-  '30d',
-];
+const ALL_TIME_RANGES: TimeRange[] = ['5m', '15m', '30m', '1h', '4h', '12h', '24h', '7d', '30d'];
 
 describe('ChartsAPI.getInfrastructureCharts — branch coverage', () => {
   const apiFetchJSONMock = vi.mocked(apiFetchJSON);
@@ -78,16 +68,18 @@ describe('ChartsAPI.getInfrastructureCharts — branch coverage', () => {
     });
   });
 
-  it.each(ALL_TIME_RANGES)('forwards TimeRange="%s" verbatim into the range query param', async (range) => {
-    apiFetchJSONMock.mockResolvedValueOnce({} as never);
+  it.each(ALL_TIME_RANGES)(
+    'forwards TimeRange="%s" verbatim into the range query param',
+    async (range) => {
+      apiFetchJSONMock.mockResolvedValueOnce({} as never);
 
-    await ChartsAPI.getInfrastructureCharts(range);
+      await ChartsAPI.getInfrastructureCharts(range);
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith(
-      `/api/charts/infrastructure?range=${range}`,
-      { signal: undefined },
-    );
-  });
+      expect(apiFetchJSONMock).toHaveBeenCalledWith(`/api/charts/infrastructure?range=${range}`, {
+        signal: undefined,
+      });
+    },
+  );
 
   it('forwards an AbortSignal through to apiFetchJSON', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({} as never);
@@ -159,10 +151,9 @@ describe('ChartsAPI.getInfrastructureCharts — branch coverage', () => {
 
     await ChartsAPI.getInfrastructureCharts('4h', controller.signal, { nodeId: 'pve1' });
 
-    expect(apiFetchJSONMock).toHaveBeenCalledWith(
-      '/api/charts/infrastructure?range=4h&node=pve1',
-      { signal: controller.signal },
-    );
+    expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/charts/infrastructure?range=4h&node=pve1', {
+      signal: controller.signal,
+    });
   });
 
   it('returns the parsed InfrastructureChartsResponse payload verbatim from apiFetchJSON', async () => {
@@ -225,10 +216,9 @@ describe('ChartsAPI.getStorageSummaryTrend — branch coverage', () => {
 
       await ChartsAPI.getStorageSummaryTrend(range);
 
-      expect(apiFetchJSONMock).toHaveBeenCalledWith(
-        `/api/charts/storage-summary?range=${range}`,
-        { signal: undefined },
-      );
+      expect(apiFetchJSONMock).toHaveBeenCalledWith(`/api/charts/storage-summary?range=${range}`, {
+        signal: undefined,
+      });
     },
   );
 

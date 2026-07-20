@@ -9,9 +9,7 @@ describe('FormTextarea', () => {
   });
 
   it('owns the label relationship for native textareas', () => {
-    render(() => (
-      <FormTextarea label="Notes" value="Initial notes" data-testid="notes-field" />
-    ));
+    render(() => <FormTextarea label="Notes" value="Initial notes" data-testid="notes-field" />);
 
     const textarea = screen.getByLabelText('Notes');
     expect(textarea).toBe(screen.getByTestId('notes-field'));

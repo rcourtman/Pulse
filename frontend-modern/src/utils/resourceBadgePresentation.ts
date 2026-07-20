@@ -463,8 +463,7 @@ const getAvailabilitySystemIdentityBadge = (
 ): ResourceBadge | null => {
   const availability = (asRecord(platformData?.availability) ||
     asRecord(getResourceRecord(resource).availability)) as
-    | { address?: string; protocol?: string; port?: number }
-    | undefined;
+    { address?: string; protocol?: string; port?: number } | undefined;
   const isAvailabilityEndpoint =
     resource.type === 'network-endpoint' ||
     Boolean(availability) ||
@@ -632,8 +631,7 @@ export function getInfrastructureSystemIdentityBadges(resource: Resource): Resou
   }
 
   const platformData = getPlatformDataRecord(resource) as
-    | (Record<string, unknown> & { sources?: string[] })
-    | undefined;
+    (Record<string, unknown> & { sources?: string[] }) | undefined;
   const explicitSources = Array.isArray(resource.sources) ? resource.sources : [];
   const rawSources =
     explicitSources.length > 0

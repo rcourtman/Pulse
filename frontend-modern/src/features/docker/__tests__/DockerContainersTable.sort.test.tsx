@@ -7,8 +7,7 @@ import type { Resource } from '@/types/resource';
 import { DockerContainersTable } from '../DockerContainersTable';
 
 vi.mock('@/api/monitoring', () => ({
-  MonitoringAPI: {
-  },
+  MonitoringAPI: {},
 }));
 
 vi.mock('@/stores/notifications', () => ({
@@ -34,7 +33,10 @@ vi.mock('@/stores/systemSettings', () => ({
 
 vi.mock('@/components/shared/responsive', () => ({
   ResponsiveMetricCell: (props: { type: string; resourceId?: string }) => (
-    <div data-testid={`responsive-${props.type}-metric`} data-resource-id={props.resourceId ?? ''} />
+    <div
+      data-testid={`responsive-${props.type}-metric`}
+      data-resource-id={props.resourceId ?? ''}
+    />
   ),
 }));
 
@@ -88,15 +90,17 @@ const renderTable = () =>
     <Router>
       <Route
         path="/"
-        component={(() => (
-          <DockerContainersTable
-            resources={FIXTURE}
-            emptyIcon={<span />}
-            emptyTitle="No containers"
-            emptyDescription="No containers"
-            showToolbar={false}
-          />
-        )) as () => JSX.Element}
+        component={
+          (() => (
+            <DockerContainersTable
+              resources={FIXTURE}
+              emptyIcon={<span />}
+              emptyTitle="No containers"
+              emptyDescription="No containers"
+              showToolbar={false}
+            />
+          )) as () => JSX.Element
+        }
       />
     </Router>
   ));

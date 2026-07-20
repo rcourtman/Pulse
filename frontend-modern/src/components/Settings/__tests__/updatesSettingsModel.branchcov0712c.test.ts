@@ -12,12 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { buildUpdateInstallGuide } from '../updatesSettingsModel';
-import type {
-  DockerUpdateCommands,
-  UpdateInfo,
-  UpdatePlan,
-  VersionInfo,
-} from '@/api/updates';
+import type { DockerUpdateCommands, UpdateInfo, UpdatePlan, VersionInfo } from '@/api/updates';
 
 // ---- Fixtures ---------------------------------------------------------------
 // Mirror the shapes used by the sibling branchcov0712 file so the two stay
@@ -45,9 +40,7 @@ const makeUpdatePlan = (overrides: Partial<UpdatePlanPick> = {}): UpdatePlanPick
 
 const digest = 'sha256:' + 'ab'.repeat(32);
 const pinnedRef = `registry.pulserelay.pro/pulse/pulse-pro@${digest}`;
-const makeDockerUpdate = (
-  overrides: Partial<DockerUpdateCommands> = {},
-): DockerUpdateCommands => ({
+const makeDockerUpdate = (overrides: Partial<DockerUpdateCommands> = {}): DockerUpdateCommands => ({
   version: 'v6.0.5',
   image: 'registry.pulserelay.pro/pulse/pulse-pro',
   imageDigest: digest,
@@ -103,7 +96,9 @@ describe('buildUpdateInstallGuide — optional-chain short-circuit on nullish up
     expect(guide?.introText).toBe('Follow these steps to update:');
     expect(guide?.steps).toHaveLength(1);
     expect(guide?.steps[0]?.id).toBe('docker-pro-unavailable');
-    expect(guide?.steps[0]?.note).toContain('license server did not provide Docker update commands');
+    expect(guide?.steps[0]?.note).toContain(
+      'license server did not provide Docker update commands',
+    );
   });
 });
 
@@ -222,10 +217,7 @@ describe('buildUpdateInstallGuide — headerSummary interpolation for nullish up
       false,
     );
     expect(guide?.headerSummary).toBe('Version undefined is ready to install');
-    expect(guide?.steps.map((s) => s.id)).toStrictEqual([
-      'development-pull',
-      'development-build',
-    ]);
+    expect(guide?.steps.map((s) => s.id)).toStrictEqual(['development-pull', 'development-build']);
   });
 });
 
@@ -304,7 +296,8 @@ describe('buildUpdateInstallGuide — buildProDockerUpdateSteps loginCommand fal
   });
 
   it('includes the login note with the exact interpolated command when loginCommand is a non-empty custom string', () => {
-    const customLogin = 'echo hunter2 | docker login registry.example.invalid -u ops --password-stdin';
+    const customLogin =
+      'echo hunter2 | docker login registry.example.invalid -u ops --password-stdin';
     const dockerUpdate = makeDockerUpdate({ loginCommand: customLogin });
     const guide = buildUpdateInstallGuide(
       makeVersionInfo({ deploymentType: 'docker', isDocker: true }),

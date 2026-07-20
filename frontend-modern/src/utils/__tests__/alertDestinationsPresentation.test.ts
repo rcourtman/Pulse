@@ -92,26 +92,14 @@ describe('alertDestinationsPresentation', () => {
     expect(getAlertDestinationsAppriseValidationError('missingServerUrl')).toBe(
       ALERT_DESTINATIONS_APPRISE_MISSING_SERVER_URL_ERROR,
     );
-    expect(ALERT_DESTINATIONS_EMAIL_TEST_SUCCESS).toBe(
-      'Test email sent. Check your inbox.',
-    );
+    expect(ALERT_DESTINATIONS_EMAIL_TEST_SUCCESS).toBe('Test email sent. Check your inbox.');
     expect(ALERT_DESTINATIONS_EMAIL_TEST_FAILURE).toBe('Unable to send the test email.');
-    expect(getAlertDestinationsEmailTestSuccess()).toBe(
-      'Test email sent. Check your inbox.',
-    );
+    expect(getAlertDestinationsEmailTestSuccess()).toBe('Test email sent. Check your inbox.');
     expect(getAlertDestinationsEmailTestFailure()).toBe('Unable to send the test email.');
-    expect(ALERT_DESTINATIONS_APPRISE_TEST_SUCCESS).toBe(
-      'Test Apprise notification sent.',
-    );
-    expect(ALERT_DESTINATIONS_APPRISE_TEST_FAILURE).toBe(
-      'Unable to send the test notification.',
-    );
-    expect(getAlertDestinationsAppriseTestSuccess()).toBe(
-      'Test Apprise notification sent.',
-    );
-    expect(getAlertDestinationsAppriseTestFailure()).toBe(
-      'Unable to send the test notification.',
-    );
+    expect(ALERT_DESTINATIONS_APPRISE_TEST_SUCCESS).toBe('Test Apprise notification sent.');
+    expect(ALERT_DESTINATIONS_APPRISE_TEST_FAILURE).toBe('Unable to send the test notification.');
+    expect(getAlertDestinationsAppriseTestSuccess()).toBe('Test Apprise notification sent.');
+    expect(getAlertDestinationsAppriseTestFailure()).toBe('Unable to send the test notification.');
   });
 
   it('returns canonical mobile push destination copy', () => {

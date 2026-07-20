@@ -10,10 +10,7 @@ afterEach(() => {
   cleanup();
 });
 
-function QueryProbe(props: {
-  cacheNamespace: string;
-  fetcher: (key: string) => Promise<string>;
-}) {
+function QueryProbe(props: { cacheNamespace: string; fetcher: (key: string) => Promise<string> }) {
   const state = createNonSuspendingQuery<string, string>({
     source: () => 'stable-key',
     cacheKey: (key) => `${props.cacheNamespace}:${key}`,

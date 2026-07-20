@@ -1,9 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type {
-  ChartStats,
-  InfrastructureChartsResponse,
-  TimeRange,
-} from '@/api/charts';
+import type { ChartStats, InfrastructureChartsResponse, TimeRange } from '@/api/charts';
 import { setOrgID } from '@/utils/apiClient';
 import {
   __resetInfrastructureSummaryFetchesForTests,
@@ -31,11 +27,8 @@ vi.mock('@/api/charts', async () => {
 
 const DEFAULT_METRICS_KEY = 'cpu,memory,disk,diskread,diskwrite,netin,netout';
 
-const cacheKeyForRange = (
-  range: TimeRange,
-  orgScope = 'default',
-  metrics = DEFAULT_METRICS_KEY,
-) => `pulse.infrastructureSummaryCharts.${encodeURIComponent(orgScope)}::${range}::${metrics}`;
+const cacheKeyForRange = (range: TimeRange, orgScope = 'default', metrics = DEFAULT_METRICS_KEY) =>
+  `pulse.infrastructureSummaryCharts.${encodeURIComponent(orgScope)}::${range}::${metrics}`;
 
 interface MetricPoint {
   timestamp: number;
@@ -209,10 +202,7 @@ describe('readInfrastructureSummaryCache invalidation', () => {
   });
 
   it('returns null oldestDataTimestamp when the stored value is not a finite number', () => {
-    storePayload(
-      '1h',
-      buildPayload({ oldestDataTimestamp: 'not-a-number', charts: undefined }),
-    );
+    storePayload('1h', buildPayload({ oldestDataTimestamp: 'not-a-number', charts: undefined }));
     const cached = readInfrastructureSummaryCache('1h');
     expect(cached).not.toBeNull();
     expect(cached?.oldestDataTimestamp).toBeNull();
@@ -220,10 +210,7 @@ describe('readInfrastructureSummaryCache invalidation', () => {
 
   it('returns the numeric oldestDataTimestamp on the happy path', () => {
     const ts = now() - 5_000;
-    storePayload(
-      '1h',
-      buildPayload({ oldestDataTimestamp: ts, charts: undefined }),
-    );
+    storePayload('1h', buildPayload({ oldestDataTimestamp: ts, charts: undefined }));
     expect(readInfrastructureSummaryCache('1h')?.oldestDataTimestamp).toBe(ts);
   });
 
@@ -240,11 +227,9 @@ describe('persistInfrastructureSummaryCache write-failure path', () => {
   });
 
   it('swallows a localStorage.setItem failure without throwing', () => {
-    const spy = vi
-      .spyOn(Storage.prototype, 'setItem')
-      .mockImplementation(() => {
-        throw new Error('QuotaExceededError');
-      });
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
     try {
       expect(() =>
         persistInfrastructureSummaryCache(
@@ -292,19 +277,13 @@ describe('toCachedChartData / trimPoints coverage via persist', () => {
     // result shorter than max, so the final `result.length > max ? slice : result`
     // ternary takes its `result` arm rather than re-slicing.
     const series = makeSeries(361, now() - 361 * 30_000);
-    persistInfrastructureSummaryCache(
-      '1h',
-      new Map([['node-1', { cpu: series }]]),
-      null,
-    );
+    persistInfrastructureSummaryCache('1h', new Map([['node-1', { cpu: series }]]), null);
     const cached = readInfrastructureSummaryCache('1h')?.map.get('node-1');
     expect(cached?.cpu).toBeDefined();
     // Stride of 2 over 361 points keeps the newest point and yields 181 samples.
     const cachedCpu = cached?.cpu ?? [];
     expect(cachedCpu.length).toBe(181);
-    expect(cachedCpu[cachedCpu.length - 1]?.timestamp).toBe(
-      series[series.length - 1]?.timestamp,
-    );
+    expect(cachedCpu[cachedCpu.length - 1]?.timestamp).toBe(series[series.length - 1]?.timestamp);
   });
 });
 

@@ -58,9 +58,7 @@ export const ActionReviewDialog: Component<{
   // Low-risk capabilities (rollback-supported, routine) collapse the decision
   // to one confirmation: a single click records the approval and dispatches
   // execution. Both lifecycle records are still written server-side.
-  const singleConfirmation = createMemo(
-    () => audit()?.capabilityAutoAuthorization === 'low_risk',
-  );
+  const singleConfirmation = createMemo(() => audit()?.capabilityAutoAuthorization === 'low_risk');
   const canExecute = () =>
     !readOnly() &&
     reviewedPlanHash() &&
@@ -254,11 +252,7 @@ export const ActionReviewDialog: Component<{
                     </Button>
                   }
                 >
-                  <Button
-                    variant="primary"
-                    isLoading={busy()}
-                    onClick={() => void approveAndRun()}
-                  >
+                  <Button variant="primary" isLoading={busy()} onClick={() => void approveAndRun()}>
                     Approve and run
                   </Button>
                 </Show>

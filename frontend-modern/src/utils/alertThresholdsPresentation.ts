@@ -2,16 +2,18 @@ import { getInfrastructureSettingsLocationLabel } from '@/utils/infrastructureSe
 
 export const PBS_THRESHOLDS_EMPTY_STATE = 'No PBS servers configured.';
 export const GUEST_THRESHOLDS_EMPTY_STATE = 'No VMs or containers found.';
-export const NODE_THRESHOLDS_FILTER_EMPTY_STATE = 'No virtualization hosts match the current filters.';
+export const NODE_THRESHOLDS_FILTER_EMPTY_STATE =
+  'No virtualization hosts match the current filters.';
 export const PBS_THRESHOLDS_FILTER_EMPTY_STATE = 'No PBS servers match the current filters.';
-export const GUEST_THRESHOLDS_FILTER_EMPTY_STATE = 'No VMs or containers match the current filters.';
+export const GUEST_THRESHOLDS_FILTER_EMPTY_STATE =
+  'No VMs or containers match the current filters.';
 export const GUEST_FILTERING_EMPTY_STATE = 'Configure VM and container filtering rules.';
 export const BACKUP_THRESHOLDS_EMPTY_STATE = 'Configure recovery alert thresholds.';
 export const SNAPSHOT_THRESHOLDS_EMPTY_STATE = 'Configure snapshot age thresholds.';
 export const STORAGE_THRESHOLDS_EMPTY_STATE = 'No storage devices found.';
-export const STORAGE_THRESHOLDS_FILTER_EMPTY_STATE = 'No storage devices match the current filters.';
-export const PMG_THRESHOLDS_EMPTY_STATE =
-  `No mail gateways configured yet. Add a Proxmox Mail Gateway connection in ${getInfrastructureSettingsLocationLabel()} to manage thresholds.`;
+export const STORAGE_THRESHOLDS_FILTER_EMPTY_STATE =
+  'No storage devices match the current filters.';
+export const PMG_THRESHOLDS_EMPTY_STATE = `No mail gateways configured yet. Add a Proxmox Mail Gateway connection in ${getInfrastructureSettingsLocationLabel()} to manage thresholds.`;
 export const PMG_THRESHOLDS_FILTER_EMPTY_STATE = 'No mail gateways match the current filters.';
 export const AGENT_THRESHOLDS_FILTER_EMPTY_STATE = 'No machines match the current filters.';
 export const AGENT_DISKS_EMPTY_STATE =

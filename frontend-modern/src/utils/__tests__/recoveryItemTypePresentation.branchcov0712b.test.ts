@@ -9,8 +9,9 @@ import { getRecoveryItemTypePresentation } from '@/utils/recoveryItemTypePresent
 // cannot reference outer consts (it is hoisted), so the sentinel literal is
 // duplicated below in FORCE_NULL_KEY.
 vi.mock('@/utils/resourceTypePresentation', async () => {
-  const actual =
-    await vi.importActual<typeof import('@/utils/resourceTypePresentation')>('@/utils/resourceTypePresentation');
+  const actual = await vi.importActual<typeof import('@/utils/resourceTypePresentation')>(
+    '@/utils/resourceTypePresentation',
+  );
   return {
     ...actual,
     getResourceTypePresentation: (
@@ -37,8 +38,7 @@ const DEFAULT_TABLE_BADGE_CLASSES = `${TABLE_BADGE_BASE_CLASSES} ${DEFAULT_BADGE
 // Workload tones mirrored from workloadTypePresentation's PRESENTATION_MAP; the
 // vm / system-container / app-container arms thread these through verbatim.
 const VM_TONE = 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
-const SYSTEM_CONTAINER_TONE =
-  'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
+const SYSTEM_CONTAINER_TONE = 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300';
 const APP_CONTAINER_TONE = 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300';
 
 describe('getRecoveryItemTypePresentation — branch coverage (branchcov2)', () => {

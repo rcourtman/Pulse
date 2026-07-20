@@ -105,7 +105,9 @@ describe('responseUtils pure coercion and guards', () => {
       expect(apiResponseStatus({ status: null })).toBeNull();
       expect(apiResponseStatus(null)).toBeNull();
       expect(apiResponseStatus(undefined)).toBeNull();
-      expect(apiResponseStatus(200 as unknown as Parameters<typeof apiResponseStatus>[0])).toBeNull();
+      expect(
+        apiResponseStatus(200 as unknown as Parameters<typeof apiResponseStatus>[0]),
+      ).toBeNull();
     });
   });
 

@@ -138,7 +138,9 @@ describe('OrganizationOverviewPanel', () => {
 
     renderPanel();
 
-    expect(screen.getByText('Organization settings are not available on this server.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Organization settings are not available on this server.'),
+    ).toBeInTheDocument();
     expect(orgGetMock).not.toHaveBeenCalled();
     expect(listMembersMock).not.toHaveBeenCalled();
   });

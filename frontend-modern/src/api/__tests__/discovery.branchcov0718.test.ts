@@ -97,9 +97,7 @@ describe('discovery api branch coverage', () => {
       const result = await getDiscoveryProgress('vm', 'node-1', '100');
 
       expect(apiFetchMock).toHaveBeenCalledTimes(1);
-      expect(apiFetchMock).toHaveBeenCalledWith(
-        '/api/discovery/vm/node-1/100/progress',
-      );
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/vm/node-1/100/progress');
       expect(result).toMatchObject({
         resource_id: '100',
         status: 'running',
@@ -122,11 +120,7 @@ describe('discovery api branch coverage', () => {
     it('encodes slashes in the target and resource id segments', async () => {
       apiFetchMock.mockResolvedValueOnce(okJson(progressFixture()));
 
-      await getDiscoveryProgress(
-        'vm/root' as never,
-        'node/1' as never,
-        'id/with/slash' as never,
-      );
+      await getDiscoveryProgress('vm/root' as never, 'node/1' as never, 'id/with/slash' as never);
 
       expect(apiFetchMock).toHaveBeenCalledWith(
         '/api/discovery/vm%2Froot/node%2F1/id%2Fwith%2Fslash/progress',
@@ -140,9 +134,7 @@ describe('discovery api branch coverage', () => {
         }),
       );
 
-      await expect(getDiscoveryProgress('vm', 'node-1', '100')).rejects.toThrow(
-        'scanner offline',
-      );
+      await expect(getDiscoveryProgress('vm', 'node-1', '100')).rejects.toThrow('scanner offline');
     });
 
     it('throws a parse error when progress body is empty', async () => {
@@ -233,9 +225,7 @@ describe('discovery api branch coverage', () => {
 
       await listDiscoveriesByAgent('agent/with slash');
 
-      expect(apiFetchMock).toHaveBeenCalledWith(
-        '/api/discovery/agent/agent%2Fwith%20slash',
-      );
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/agent/agent%2Fwith%20slash');
     });
 
     it('returns the parsed agent discovery list', async () => {
@@ -274,9 +264,7 @@ describe('discovery api branch coverage', () => {
         }),
       );
 
-      await expect(listDiscoveriesByAgent('ghost')).rejects.toThrow(
-        'agent not connected',
-      );
+      await expect(listDiscoveriesByAgent('ghost')).rejects.toThrow('agent not connected');
     });
   });
 
@@ -308,14 +296,11 @@ describe('discovery api branch coverage', () => {
 
       await updateDiscoveryNotes('agent', 'host-1', 'host-1', notes);
 
-      expect(apiFetchMock).toHaveBeenCalledWith(
-        '/api/discovery/agent/host-1/host-1/notes',
-        {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_notes: 'just text' }),
-        },
-      );
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/agent/host-1/host-1/notes', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_notes: 'just text' }),
+      });
     });
 
     it('maps pod -> k8s for the notes subresource', async () => {
@@ -359,10 +344,9 @@ describe('discovery api branch coverage', () => {
 
       await deleteDiscovery('pod', 'cluster-a', 'default/api');
 
-      expect(apiFetchMock).toHaveBeenCalledWith(
-        '/api/discovery/k8s/cluster-a/default%2Fapi',
-        { method: 'DELETE' },
-      );
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/discovery/k8s/cluster-a/default%2Fapi', {
+        method: 'DELETE',
+      });
     });
 
     it('throws the backend error message on non-ok delete response', async () => {
@@ -370,9 +354,7 @@ describe('discovery api branch coverage', () => {
         new Response(JSON.stringify({ error: 'discovery in use' }), { status: 409 }),
       );
 
-      await expect(deleteDiscovery('vm', 'node-1', '100')).rejects.toThrow(
-        'discovery in use',
-      );
+      await expect(deleteDiscovery('vm', 'node-1', '100')).rejects.toThrow('discovery in use');
     });
 
     it('falls back to the default message when the error body is empty', async () => {
@@ -513,10 +495,7 @@ describe('discovery api branch coverage', () => {
 
       expect(result?.id).toBe('agent:host-1:agent-X');
       // resolveDiscoveryAgentId picks target_id ('host-1') because agent_id is absent
-      expect(apiFetchMock).toHaveBeenNthCalledWith(
-        2,
-        '/api/discovery/agent/host-1/agent-X',
-      );
+      expect(apiFetchMock).toHaveBeenNthCalledWith(2, '/api/discovery/agent/host-1/agent-X');
     });
 
     it('matches a summary through resolveDiscoveryAgentId when target_id equals the request', async () => {
@@ -680,10 +659,7 @@ describe('discovery api branch coverage', () => {
       const result = await getDiscovery('agent', 'rid-9', 'rid-9');
 
       expect(result?.id).toBe('agent:rid-9:rid-9');
-      expect(apiFetchMock).toHaveBeenNthCalledWith(
-        2,
-        '/api/discovery/agent/rid-9/rid-9',
-      );
+      expect(apiFetchMock).toHaveBeenNthCalledWith(2, '/api/discovery/agent/rid-9/rid-9');
     });
   });
 });

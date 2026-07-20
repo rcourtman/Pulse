@@ -116,8 +116,7 @@ describe('stripAssistantOutputArtifacts', () => {
 
   it('drops held compacted prose when no tool leak follows before stream end', () => {
     const state = createAssistantOutputArtifactStreamState();
-    const content =
-      "Thisisbadmodelspacingbutitistheactualanswerbecauseitneverturnsintoatoolcall.";
+    const content = 'Thisisbadmodelspacingbutitistheactualanswerbecauseitneverturnsintoatoolcall.';
 
     expect(appendVisibleTextBeforeAssistantOutputArtifacts(state, content)).toEqual({
       text: '',
@@ -172,7 +171,9 @@ describe('stripAssistantOutputArtifacts', () => {
       text: '',
       stripped: false,
     });
-    expect(appendVisibleTextBeforeAssistantOutputArtifacts(state, ' about the result this way.')).toEqual({
+    expect(
+      appendVisibleTextBeforeAssistantOutputArtifacts(state, ' about the result this way.'),
+    ).toEqual({
       text: 'Think about the result this way.',
       stripped: false,
     });

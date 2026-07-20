@@ -104,8 +104,7 @@ export function useSavedViews(key: string): UseSavedViewsResult {
   const saveCurrent = (name: string): SavedView | null => {
     const trimmed = name.trim();
     if (trimmed === '') return null;
-    const query =
-      typeof window !== 'undefined' ? window.location.search.replace(/^\?/, '') : '';
+    const query = typeof window !== 'undefined' ? window.location.search.replace(/^\?/, '') : '';
     const view: SavedView = {
       id: generateId(),
       name: trimmed,
@@ -135,9 +134,7 @@ export function useSavedViews(key: string): UseSavedViewsResult {
   };
 
   const clearDefault = (): void => {
-    const next = views().map((view) =>
-      view.isDefault ? { ...view, isDefault: false } : view,
-    );
+    const next = views().map((view) => (view.isDefault ? { ...view, isDefault: false } : view));
     setViews(next);
     writeStored(key, next);
   };

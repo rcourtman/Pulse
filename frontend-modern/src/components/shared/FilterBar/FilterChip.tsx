@@ -11,18 +11,13 @@ import {
 import XIcon from 'lucide-solid/icons/x';
 import CheckIcon from 'lucide-solid/icons/check';
 import SearchIcon from 'lucide-solid/icons/search';
-import {
-  clearFilter,
-  formatFilterChipValue,
-  type FilterDef,
-} from './filterCatalog';
+import { clearFilter, formatFilterChipValue, type FilterDef } from './filterCatalog';
 
 interface FilterChipProps {
   filter: FilterDef;
 }
 
-const matchesQuery = (label: string, query: string): boolean =>
-  label.toLowerCase().includes(query);
+const matchesQuery = (label: string, query: string): boolean => label.toLowerCase().includes(query);
 
 export const FilterChip: Component<FilterChipProps> = (props) => {
   const [open, setOpen] = createSignal(false);
@@ -113,9 +108,7 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
     on(open, (isOpen) => {
       if (!isOpen) return;
       const options = filteredOptions();
-      const selectedIndex = options.findIndex(
-        (option) => option.value === props.filter.value(),
-      );
+      const selectedIndex = options.findIndex((option) => option.value === props.filter.value());
       if (selectedIndex >= 0) setActiveIndex(selectedIndex);
     }),
   );
@@ -168,9 +161,7 @@ export const FilterChip: Component<FilterChipProps> = (props) => {
           <div class="max-h-64 overflow-y-auto py-1">
             <Show
               when={filteredOptions().length > 0}
-              fallback={
-                <div class="px-3 py-2 text-xs text-muted">No values match.</div>
-              }
+              fallback={<div class="px-3 py-2 text-xs text-muted">No values match.</div>}
             >
               <For each={filteredOptions()}>
                 {(option, index) => {

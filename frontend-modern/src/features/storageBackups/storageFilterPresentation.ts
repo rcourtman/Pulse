@@ -1,6 +1,5 @@
-export const getNextStorageSortDirection = (
-  direction: 'asc' | 'desc',
-): 'asc' | 'desc' => (direction === 'asc' ? 'desc' : 'asc');
+export const getNextStorageSortDirection = (direction: 'asc' | 'desc'): 'asc' | 'desc' =>
+  direction === 'asc' ? 'desc' : 'asc';
 
 export const getStorageSortDirectionTitle = (direction: 'asc' | 'desc'): string =>
   `Sort ${direction === 'asc' ? 'descending' : 'ascending'}`;

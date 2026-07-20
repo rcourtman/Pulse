@@ -24,7 +24,11 @@ type Sections = ReturnType<typeof buildVMwareDetailSections>;
 const findSection = (sections: Sections, label: string) =>
   sections.find((section) => section.label === label);
 
-const findRow = (sections: Sections, sectionLabel: string, rowLabel: string): DetailRow | undefined =>
+const findRow = (
+  sections: Sections,
+  sectionLabel: string,
+  rowLabel: string,
+): DetailRow | undefined =>
   findSection(sections, sectionLabel)?.rows.find((row) => row.label === rowLabel);
 
 const vmSections = (vmware?: Partial<ResourceVMwareMeta>): Sections =>
@@ -50,28 +54,28 @@ const toolsRow = (vmware: Partial<ResourceVMwareMeta>, label: string): DetailRow
 const summary = (vmware?: Partial<ResourceVMwareMeta>): string | null =>
   buildVMwareDetailsSummary('vm', (vmware ?? {}) as ResourceVMwareMeta);
 
-const summaryWithTools = (tools: Partial<ResourceVMwareTools>): string | null =>
-  summary({ tools });
+const summaryWithTools = (tools: Partial<ResourceVMwareTools>): string | null => summary({ tools });
 
 const summaryWithHardware = (hardware: Partial<ResourceVMwareHardware>): string | null =>
   summary({ hardware });
 
 describe('formatVirtualDiskAddress (via Virtual disks section)', () => {
   it('formats a SATA bus:unit address', () => {
-    expect(diskRow({ type: 'SATA', sataBus: 1, sataUnit: 2, capacityBytes: 10_737_418_240 })?.value).toBe(
-      'SATA 1:2 · 10 GB',
-    );
+    expect(
+      diskRow({ type: 'SATA', sataBus: 1, sataUnit: 2, capacityBytes: 10_737_418_240 })?.value,
+    ).toBe('SATA 1:2 · 10 GB');
   });
 
   it('formats an NVMe bus:unit address', () => {
-    expect(diskRow({ type: 'NVME', nvmeBus: 0, nvmeUnit: 3, capacityBytes: 10_737_418_240 })?.value).toBe(
-      'NVMe 0:3 · 10 GB',
-    );
+    expect(
+      diskRow({ type: 'NVME', nvmeBus: 0, nvmeUnit: 3, capacityBytes: 10_737_418_240 })?.value,
+    ).toBe('NVMe 0:3 · 10 GB');
   });
 
   it('formats an IDE primary master address', () => {
     expect(
-      diskRow({ type: 'IDE', idePrimary: true, ideMaster: true, capacityBytes: 10_737_418_240 })?.value,
+      diskRow({ type: 'IDE', idePrimary: true, ideMaster: true, capacityBytes: 10_737_418_240 })
+        ?.value,
     ).toBe('IDE primary master · 10 GB');
   });
 
@@ -87,7 +91,9 @@ describe('formatVirtualDiskAddress (via Virtual disks section)', () => {
   });
 
   it('falls back to the uppercased type for an unrecognized controller', () => {
-    expect(diskRow({ type: 'custom', capacityBytes: 10_737_418_240 })?.value).toBe('CUSTOM · 10 GB');
+    expect(diskRow({ type: 'custom', capacityBytes: 10_737_418_240 })?.value).toBe(
+      'CUSTOM · 10 GB',
+    );
   });
 });
 
@@ -118,9 +124,7 @@ describe('buildVMwareDetailsSummary', () => {
   it('counts the snapshot tree when snapshotCount is not a number', () => {
     expect(
       buildVMwareDetailsSummary('vm', {
-        snapshotTree: [
-          { snapshot: 's-1', children: [{ snapshot: 's-2' }, { snapshot: 's-3' }] },
-        ],
+        snapshotTree: [{ snapshot: 's-1', children: [{ snapshot: 's-2' }, { snapshot: 's-3' }] }],
       }),
     ).toBe('Read-only vCenter context · 3 snapshots');
   });
@@ -159,15 +163,15 @@ describe('buildVMwareDetailsSummary', () => {
   });
 
   it('includes alarm and task counts', () => {
-    expect(
-      buildVMwareDetailsSummary('vm', { activeAlarmCount: 2, recentTaskCount: 5 }),
-    ).toBe('Read-only vCenter context · 2 alarms · 5 tasks');
+    expect(buildVMwareDetailsSummary('vm', { activeAlarmCount: 2, recentTaskCount: 5 })).toBe(
+      'Read-only vCenter context · 2 alarms · 5 tasks',
+    );
   });
 
   it('omits hardware and tools parts for a non-vm resource type', () => {
-    expect(
-      buildVMwareDetailsSummary('datastore', { hardware: { version: 'VMX_19' } }),
-    ).toBe('Read-only vCenter context');
+    expect(buildVMwareDetailsSummary('datastore', { hardware: { version: 'VMX_19' } })).toBe(
+      'Read-only vCenter context',
+    );
   });
 });
 
@@ -297,11 +301,13 @@ describe('hardwareRows (via Virtual hardware section)', () => {
   });
 
   it('surfaces instant clone frozen as a warning row', () => {
-    expect(hardwareRow({ hardware: { instantCloneFrozen: true } }, 'Instant clone frozen')).toEqual({
-      label: 'Instant clone frozen',
-      value: 'Yes',
-      tone: 'warning',
-    });
+    expect(hardwareRow({ hardware: { instantCloneFrozen: true } }, 'Instant clone frozen')).toEqual(
+      {
+        label: 'Instant clone frozen',
+        value: 'Yes',
+        tone: 'warning',
+      },
+    );
   });
 
   it('surfaces enter setup mode as a warning row', () => {
@@ -313,7 +319,9 @@ describe('hardwareRows (via Virtual hardware section)', () => {
   });
 
   it('surfaces an upgrade error message as a warning row', () => {
-    expect(hardwareRow({ hardware: { upgradeErrorMessage: 'timed out' } }, 'Upgrade error')).toEqual({
+    expect(
+      hardwareRow({ hardware: { upgradeErrorMessage: 'timed out' } }, 'Upgrade error'),
+    ).toEqual({
       label: 'Upgrade error',
       value: 'timed out',
       tone: 'warning',
@@ -512,7 +520,9 @@ describe('formatSnapshotDate (via Snapshot tree rows)', () => {
   });
 
   it('returns the raw string for an unparseable date', () => {
-    expect(snapshotRows([{ snapshot: 's-1', createdAt: 'not-a-date' }])[0]?.value).toBe('not-a-date');
+    expect(snapshotRows([{ snapshot: 's-1', createdAt: 'not-a-date' }])[0]?.value).toBe(
+      'not-a-date',
+    );
   });
 
   it('formats a valid ISO timestamp in UTC', () => {
@@ -586,8 +596,7 @@ describe('flattenSnapshotRows (via Snapshot tree section)', () => {
           state: 'poweredOn',
           children: [{ name: 'child', state: 'poweredOn' }],
         },
-      ])
-        .map((row) => row.label),
+      ]).map((row) => row.label),
     ).toEqual(['root', '- child']);
   });
 

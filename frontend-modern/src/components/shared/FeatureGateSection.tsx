@@ -1,8 +1,5 @@
 import { Show, type Component, type JSX } from 'solid-js';
-import {
-  UpgradeButtonLink,
-  type UpgradeButtonTone,
-} from '@/components/shared/UpgradeLink';
+import { UpgradeButtonLink, type UpgradeButtonTone } from '@/components/shared/UpgradeLink';
 import { UPGRADE_ACTION_LABEL } from '@/utils/upgradePresentation';
 import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 
@@ -48,10 +45,7 @@ export const FeatureGateSection: Component<FeatureGateSectionProps> = (props) =>
     </div>
     <Show when={props.showUpgradePrompts}>
       <div class="flex flex-col sm:flex-row items-center gap-2">
-        <UpgradeButtonLink
-          destination={props.upgradeDestination}
-          tone={props.upgradeButtonTone}
-        >
+        <UpgradeButtonLink destination={props.upgradeDestination} tone={props.upgradeButtonTone}>
           {props.upgradeLabel ?? UPGRADE_ACTION_LABEL}
         </UpgradeButtonLink>
       </div>

@@ -12,14 +12,9 @@ export function TlsVerificationWarningBanner(props: TlsVerificationWarningBanner
   const [local, rest] = splitProps(props, ['subject', 'remediation', 'class']);
 
   return (
-    <div
-      role="alert"
-      class={`${bannerClass} ${local.class ?? ''}`.trim()}
-      {...rest}
-    >
-      <span class="font-medium">TLS verification disabled.</span>{' '}
-      Pulse will accept untrusted certificates for {local.subject}. Use this only for
-      controlled lab environments.{' '}
+    <div role="alert" class={`${bannerClass} ${local.class ?? ''}`.trim()} {...rest}>
+      <span class="font-medium">TLS verification disabled.</span> Pulse will accept untrusted
+      certificates for {local.subject}. Use this only for controlled lab environments.{' '}
       {local.remediation ?? 'Install a trusted certificate before using this in production.'}
     </div>
   );

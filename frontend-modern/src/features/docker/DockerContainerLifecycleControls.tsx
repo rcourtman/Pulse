@@ -44,9 +44,12 @@ const newRequestId = (): string =>
 
 const iconForAction = (action: DockerContainerLifecycleAction): Component<{ class?: string }> => {
   switch (action) {
-    case 'start': return PlayIcon;
-    case 'stop': return SquareIcon;
-    case 'restart': return RotateCwIcon;
+    case 'start':
+      return PlayIcon;
+    case 'stop':
+      return SquareIcon;
+    case 'restart':
+      return RotateCwIcon;
   }
 };
 
@@ -55,8 +58,12 @@ const surfaceLabel = (surface?: DockerContainerLifecycleSurface): string =>
 const requestedByForSurface = (surface?: DockerContainerLifecycleSurface): string =>
   surface === 'resource-detail' ? 'ui:resource-detail' : 'ui:docker-page';
 
-export const DockerContainerLifecycleControls: Component<DockerContainerLifecycleControlsProps> = (props) => {
-  const [planningAction, setPlanningAction] = createSignal<DockerContainerLifecycleAction | null>(null);
+export const DockerContainerLifecycleControls: Component<DockerContainerLifecycleControlsProps> = (
+  props,
+) => {
+  const [planningAction, setPlanningAction] = createSignal<DockerContainerLifecycleAction | null>(
+    null,
+  );
   const [reviewAction, setReviewAction] = createSignal<DockerContainerLifecycleAction | null>(null);
   const [reviewDetail, setReviewDetail] = createSignal<ActionDetailResponse | null>(null);
   const [lastError, setLastError] = createSignal('');
@@ -82,7 +89,10 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
       setReviewAction(action);
       setReviewDetail(await ResourceActionsAPI.getAction(plan.actionId));
     } catch (error) {
-      const message = error instanceof Error && error.message.trim() ? error.message.trim() : 'Action review could not be prepared.';
+      const message =
+        error instanceof Error && error.message.trim()
+          ? error.message.trim()
+          : 'Action review could not be prepared.';
       setLastError(message);
       notificationStore.error(message);
     } finally {
@@ -100,14 +110,40 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
   };
 
   return (
-    <div class={`inline-flex items-center justify-end gap-1 ${props.class ?? ''}`.trim()} data-prevent-toggle data-docker-container-actions-surface={props.surface ?? 'docker-page'}>
+    <div
+      class={`inline-flex items-center justify-end gap-1 ${props.class ?? ''}`.trim()}
+      data-prevent-toggle
+      data-docker-container-actions-surface={props.surface ?? 'docker-page'}
+    >
       <For each={DOCKER_CONTAINER_LIFECYCLE_ACTIONS}>
         {(spec) => {
-          const disabled = () => Boolean(getDockerContainerLifecycleDisabledReason(props.resource, spec.action)) || (planningAction() !== null && planningAction() !== spec.action);
+          const disabled = () =>
+            Boolean(getDockerContainerLifecycleDisabledReason(props.resource, spec.action)) ||
+            (planningAction() !== null && planningAction() !== spec.action);
           const Icon = iconForAction(spec.action);
           return (
-            <button type="button" class={`${buttonBaseClass} ${planningAction() === spec.action ? runningButtonClass : disabled() ? disabledButtonClass : enabledButtonClass}`} disabled={disabled()} title={titleForAction(spec.action, spec.label)} aria-label={titleForAction(spec.action, spec.label)} data-docker-container-action={spec.action} onMouseDown={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); void prepareLifecycleReview(spec.action); }}>
-              <Switch><Match when={planningAction() === spec.action}><Loader2Icon class="h-3.5 w-3.5 animate-spin" aria-hidden="true" /></Match><Match when={true}><Icon class="h-3.5 w-3.5" aria-hidden="true" /></Match></Switch>
+            <button
+              type="button"
+              class={`${buttonBaseClass} ${planningAction() === spec.action ? runningButtonClass : disabled() ? disabledButtonClass : enabledButtonClass}`}
+              disabled={disabled()}
+              title={titleForAction(spec.action, spec.label)}
+              aria-label={titleForAction(spec.action, spec.label)}
+              data-docker-container-action={spec.action}
+              onMouseDown={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                void prepareLifecycleReview(spec.action);
+              }}
+            >
+              <Switch>
+                <Match when={planningAction() === spec.action}>
+                  <Loader2Icon class="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                </Match>
+                <Match when={true}>
+                  <Icon class="h-3.5 w-3.5" aria-hidden="true" />
+                </Match>
+              </Switch>
             </button>
           );
         }}
@@ -118,11 +154,21 @@ export const DockerContainerLifecycleControls: Component<DockerContainerLifecycl
         onChanged={async (detail) => {
           setReviewDetail(detail);
           const action = reviewAction();
-          if (!action || !['completed', 'failed', 'rejected', 'expired'].includes(detail.audit.state)) return;
+          if (
+            !action ||
+            !['completed', 'failed', 'rejected', 'expired'].includes(detail.audit.state)
+          )
+            return;
           try {
-            await props.onActionSettled?.({ action, actionId: detail.audit.id, resource: props.resource });
+            await props.onActionSettled?.({
+              action,
+              actionId: detail.audit.id,
+              resource: props.resource,
+            });
           } catch {
-            notificationStore.warning('Action recorded. Refresh container inventory to see the latest state.');
+            notificationStore.warning(
+              'Action recorded. Refresh container inventory to see the latest state.',
+            );
           }
         }}
       />

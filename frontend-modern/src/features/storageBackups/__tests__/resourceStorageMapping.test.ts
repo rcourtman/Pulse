@@ -38,7 +38,9 @@ describe('resourceStorageMapping', () => {
       },
     });
 
-    expect(readResourceStorageMeta(resource, resource.platformData as Record<string, unknown>)).toEqual({
+    expect(
+      readResourceStorageMeta(resource, resource.platformData as Record<string, unknown>),
+    ).toEqual({
       type: 'rbd',
       platform: 'proxmox-pve',
       topology: 'pool',
@@ -51,13 +53,9 @@ describe('resourceStorageMapping', () => {
   });
 
   it('resolves canonical storage content from direct, contentTypes, or platform fallback', () => {
-    expect(
-      resolveResourceStorageContent(
-        { content: 'backup' },
-        { content: 'ignored' },
-        '',
-      ),
-    ).toBe('backup');
+    expect(resolveResourceStorageContent({ content: 'backup' }, { content: 'ignored' }, '')).toBe(
+      'backup',
+    );
     expect(
       resolveResourceStorageContent(
         { contentTypes: ['images', 'rootdir'] },

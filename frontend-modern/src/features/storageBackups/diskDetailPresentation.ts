@@ -49,7 +49,8 @@ export type DiskDetailLiveChartConfig = {
 };
 
 export type DiskDetailHistoryChartConfig = {
-  metric: 'smart_temp' | 'smart_reallocated_sectors' | 'smart_percentage_used' | 'smart_available_spare';
+  metric:
+    'smart_temp' | 'smart_reallocated_sectors' | 'smart_percentage_used' | 'smart_available_spare';
   label: string;
   unit: string;
   color: string;

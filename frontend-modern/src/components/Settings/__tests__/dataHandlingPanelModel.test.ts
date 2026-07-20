@@ -67,4 +67,3 @@ describe('dataHandlingPanelModel', () => {
     expect(model.redactionItems).toEqual([]);
   });
 });
-

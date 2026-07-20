@@ -18,9 +18,7 @@ export function useHelpIconState(props: HelpIconProps) {
   const helpContent = createMemo(() => resolveHelpContent(props));
   const size = createMemo(() => getHelpIconSize(props.size));
   const maxWidth = createMemo(() => getHelpPopoverMaxWidth(props.maxWidth));
-  const preferredPosition = createMemo(() =>
-    getHelpPopoverPreferredPosition(props.position),
-  );
+  const preferredPosition = createMemo(() => getHelpPopoverPreferredPosition(props.position));
 
   createEffect(() => {
     if (!isOpen() || !buttonRef()) return;

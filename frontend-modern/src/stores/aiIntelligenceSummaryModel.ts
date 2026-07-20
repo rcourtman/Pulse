@@ -1,7 +1,4 @@
-import type {
-  IntelligencePolicyPostureSummary,
-  IntelligenceSummary,
-} from '@/types/aiIntelligence';
+import type { IntelligencePolicyPostureSummary, IntelligenceSummary } from '@/types/aiIntelligence';
 import type {
   ResourceRedactionHint,
   ResourceRoutingScope,

@@ -47,7 +47,8 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
         type: 'dockerHost' as const,
         resourceType: 'Container Runtime',
         node: getPreferredResourceHostname(host),
-        instance: (platformData(host)?.platform as string) || (platformData(host)?.osName as string) || '',
+        instance:
+          (platformData(host)?.platform as string) || (platformData(host)?.osName as string) || '',
         status: host.status,
         hasOverride: disableConnectivity,
         disableConnectivity,

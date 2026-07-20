@@ -5,9 +5,8 @@ const DEFAULT_SESSION_CAPABILITIES: SecurityStatusSessionCapabilities = {
   demoMode: false,
 };
 
-const [sessionCapabilities, setSessionCapabilities] = createSignal<SecurityStatusSessionCapabilities>(
-  { ...DEFAULT_SESSION_CAPABILITIES },
-);
+const [sessionCapabilities, setSessionCapabilities] =
+  createSignal<SecurityStatusSessionCapabilities>({ ...DEFAULT_SESSION_CAPABILITIES });
 const [sessionCapabilitiesResolved, setSessionCapabilitiesResolved] = createSignal(false);
 
 function normalizeSessionCapabilities(

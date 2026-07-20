@@ -61,10 +61,7 @@ const workloadsStatusModeStorageKey = (scope: string | undefined): string => {
   return trimmedScope ? `workloadsStatusMode:${trimmedScope}` : 'workloadsStatusMode';
 };
 
-const saveWorkloadsStatusMode = (
-  scope: string | undefined,
-  value: WorkloadsStatusMode,
-): void => {
+const saveWorkloadsStatusMode = (scope: string | undefined, value: WorkloadsStatusMode): void => {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(workloadsStatusModeStorageKey(scope), value);
@@ -98,8 +95,7 @@ export function useWorkloadsControlsState(options: WorkloadsControlsStateOptions
     navigate(`${location.pathname}${query ? `?${query}` : ''}`, { replace: true });
   };
 
-  const search: Accessor<string> = () =>
-    new URLSearchParams(location.search).get('q') ?? '';
+  const search: Accessor<string> = () => new URLSearchParams(location.search).get('q') ?? '';
   const setSearch = (value: string): void => {
     updateSearchParam((params) => {
       if (value === '') {

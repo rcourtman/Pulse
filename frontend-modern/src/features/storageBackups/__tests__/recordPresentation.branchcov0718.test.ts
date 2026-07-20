@@ -60,10 +60,7 @@ describe('getStorageRecordNodeHints branch coverage', () => {
         parentName: { deep: true },
       },
     });
-    expect(getStorageRecordNodeHints(record)).toEqual([
-      'truenas01',
-      'truenas01/pool/tank',
-    ]);
+    expect(getStorageRecordNodeHints(record)).toEqual(['truenas01', 'truenas01/pool/tank']);
   });
 
   it('returns an empty array when every candidate hint trims to empty', () => {

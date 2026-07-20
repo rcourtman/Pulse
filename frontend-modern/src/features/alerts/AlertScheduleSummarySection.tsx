@@ -13,12 +13,7 @@ import {
   getAlertConfigSummarySuppressing,
 } from '@/utils/alertConfigPresentation';
 
-import type {
-  CooldownConfig,
-  EscalationConfig,
-  GroupingConfig,
-  QuietHoursConfig,
-} from './types';
+import type { CooldownConfig, EscalationConfig, GroupingConfig, QuietHoursConfig } from './types';
 
 interface QuietSuppressOption {
   key: keyof QuietHoursConfig['suppress'];

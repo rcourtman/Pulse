@@ -57,7 +57,9 @@ describe('HistoryChart', () => {
     expect(historyChartSource).toContain('HistoryChartHeader');
     expect(historyChartSource).toContain('HistoryChartOverlay');
     expect(historyChartSource).toContain('HistoryChartTooltip');
-    expect(historyChartOverlaySource).toContain("import { LoadingSpinner } from './LoadingSpinner'");
+    expect(historyChartOverlaySource).toContain(
+      "import { LoadingSpinner } from './LoadingSpinner'",
+    );
     expect(historyChartOverlaySource).toContain(
       '<LoadingSpinner size="xl" tone="info" label="Loading history" />',
     );

@@ -133,12 +133,14 @@ describe('isSMARTOnlyDiskWithoutTemperature (via collectOutdatedSensorSetupNodes
     const node = legacyNode({ id: 'n-sas', proxmox: { node: 'pve' } });
     const result = collectOutdatedSensorSetupNodes(
       [node],
-      [disk({
-        id: 'd-sas',
-        parentId: 'n-sas',
-        diskType: '  SAS  ',
-        temperature: 0,
-      })],
+      [
+        disk({
+          id: 'd-sas',
+          parentId: 'n-sas',
+          diskType: '  SAS  ',
+          temperature: 0,
+        }),
+      ],
     );
     expect(result).toStrictEqual([{ id: 'n-sas', name: 'pve' }]);
   });

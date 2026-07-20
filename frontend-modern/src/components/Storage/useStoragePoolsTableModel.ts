@@ -26,7 +26,10 @@ export const useStoragePoolsTableModel = (options: UseStoragePoolsTableModelOpti
     ),
   );
 
-  const buildRowModel = (_recordId: string, record: Parameters<typeof buildStoragePoolsTableRowModel>[0]) =>
+  const buildRowModel = (
+    _recordId: string,
+    record: Parameters<typeof buildStoragePoolsTableRowModel>[0],
+  ) =>
     buildStoragePoolsTableRowModel(record, {
       expandedPoolId: options.expandedPoolId(),
       highlightedRecordId: options.highlightedRecordId(),

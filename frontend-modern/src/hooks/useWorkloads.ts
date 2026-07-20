@@ -487,8 +487,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     // — there's no analogous "OS version" carve-out). Falling back here
     // lights up the OS column for both platforms without changing what
     // already-populated agent-driven rows render.
-    osName:
-      resource.agent?.osName ?? resource.proxmox?.osName ?? resource.vmware?.guestOsFamily,
+    osName: resource.agent?.osName ?? resource.proxmox?.osName ?? resource.vmware?.guestOsFamily,
     osVersion: resource.agent?.osVersion ?? resource.proxmox?.osVersion,
     agentVersion: resource.agent?.agentVersion,
     networkInterfaces: mapNetworkInterfaces(resource.agent?.networkInterfaces),

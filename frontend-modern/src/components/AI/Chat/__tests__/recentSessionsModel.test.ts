@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatSession } from '@/api/aiChat';
-import {
-  QUICK_RESUME_SESSION_LIMIT,
-  selectQuickResumeSessions,
-} from '../recentSessionsModel';
+import { QUICK_RESUME_SESSION_LIMIT, selectQuickResumeSessions } from '../recentSessionsModel';
 
 const session = (overrides: Partial<ChatSession> & { id: string }): ChatSession => ({
   title: overrides.id,
@@ -16,7 +13,12 @@ const session = (overrides: Partial<ChatSession> & { id: string }): ChatSession 
 describe('selectQuickResumeSessions', () => {
   it('excludes Pulse-owned background sessions from the quick-resume list', () => {
     const sessions = [
-      session({ id: 'patrol-main', title: '# Deterministic Triage Results Scanned 70', system: true, message_count: 200 }),
+      session({
+        id: 'patrol-main',
+        title: '# Deterministic Triage Results Scanned 70',
+        system: true,
+        message_count: 200,
+      }),
       session({ id: 'user-chat-1' }),
     ];
 

@@ -42,7 +42,9 @@ describe('session capabilities store', () => {
   });
 
   it('default-fills capabilities when sessionCapabilities is null', () => {
-    const next = syncSessionCapabilities({ sessionCapabilities: null } as unknown as Parameters<typeof syncSessionCapabilities>[0]);
+    const next = syncSessionCapabilities({ sessionCapabilities: null } as unknown as Parameters<
+      typeof syncSessionCapabilities
+    >[0]);
 
     expect(next).toEqual({ demoMode: false });
   });

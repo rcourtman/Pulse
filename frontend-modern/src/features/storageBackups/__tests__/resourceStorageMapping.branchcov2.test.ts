@@ -34,10 +34,9 @@ const FALLBACK_PLATFORM_STORAGE = { type: 'fallback-marker' } as const;
 // sentinel in platformData.storage lets us detect when normalizeStorageMeta
 // returned null (fallthrough) vs. returned the normalized direct meta.
 const normalizeOf = (input: unknown): ResourceStorageMeta | undefined =>
-  readResourceStorageMeta(
-    { ...makeResource(), storage: input } as unknown as Resource,
-    { storage: FALLBACK_PLATFORM_STORAGE },
-  );
+  readResourceStorageMeta({ ...makeResource(), storage: input } as unknown as Resource, {
+    storage: FALLBACK_PLATFORM_STORAGE,
+  });
 
 // ===========================================================================
 // normalizeStorageMeta  (module-private — exercised via readResourceStorageMeta)
@@ -63,10 +62,9 @@ describe('normalizeStorageMeta (via readResourceStorageMeta)', () => {
     // resolves to `null || undefined` → undefined (the `nestedMeta || undefined`
     // arm of readResourceStorageMeta, exercised through normalizeStorageMeta).
     expect(
-      readResourceStorageMeta(
-        { ...makeResource(), storage: null } as unknown as Resource,
-        { storage: 'not-an-object-either' },
-      ),
+      readResourceStorageMeta({ ...makeResource(), storage: null } as unknown as Resource, {
+        storage: 'not-an-object-either',
+      }),
     ).toBeUndefined();
   });
 
@@ -257,9 +255,9 @@ describe('isCanonicalDatastoreStorageResource', () => {
     // storageMeta.platform path
     expect(isCanonicalDatastoreStorageResource('vmfs', { platform: 'vmware-vsphere' })).toBe(true);
     // value.length === 0 → false even with vmware platform
-    expect(
-      isCanonicalDatastoreStorageResource('', undefined, { platform: 'vmware-vsphere' }),
-    ).toBe(false);
+    expect(isCanonicalDatastoreStorageResource('', undefined, { platform: 'vmware-vsphere' })).toBe(
+      false,
+    );
     expect(isCanonicalDatastoreStorageResource('', { platform: 'vmware-vsphere' })).toBe(false);
   });
 
@@ -274,9 +272,9 @@ describe('isCanonicalDatastoreStorageResource', () => {
       ),
     ).toBe(false);
     // context.platform undefined → fallback to storageMeta.platform.
-    expect(
-      isCanonicalDatastoreStorageResource('vmfs', { platform: 'vmware-vsphere' }, {}),
-    ).toBe(true);
+    expect(isCanonicalDatastoreStorageResource('vmfs', { platform: 'vmware-vsphere' }, {})).toBe(
+      true,
+    );
   });
 
   // ---- Branch: fall-through → false ------------------------------------
@@ -303,7 +301,9 @@ describe('getStorageCategoryFromType', () => {
     // value.includes('pbs')
     expect(getStorageCategoryFromType('pbs')).toBe('backup-repository');
     // context.resourceType === 'pbs'
-    expect(getStorageCategoryFromType('mystery', { resourceType: 'pbs' })).toBe('backup-repository');
+    expect(getStorageCategoryFromType('mystery', { resourceType: 'pbs' })).toBe(
+      'backup-repository',
+    );
     // context.platform includes 'pbs'
     expect(getStorageCategoryFromType('mystery', { platform: 'proxmox-pbs' })).toBe(
       'backup-repository',
@@ -375,13 +375,9 @@ describe('getStorageCapabilitiesForResource', () => {
       'namespaces',
     ]);
     // Same caps via context signal rather than the type substring.
-    expect(getStorageCapabilitiesForResource('mystery', undefined, { resourceType: 'pbs' })).toEqual([
-      'capacity',
-      'health',
-      'backup-repository',
-      'deduplication',
-      'namespaces',
-    ]);
+    expect(
+      getStorageCapabilitiesForResource('mystery', undefined, { resourceType: 'pbs' }),
+    ).toEqual(['capacity', 'health', 'backup-repository', 'deduplication', 'namespaces']);
   });
 
   // ---- Branch: `storageMeta?.isZfs || value.includes('zfs')` ------------

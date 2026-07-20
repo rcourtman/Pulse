@@ -75,9 +75,7 @@ vi.mock('../settingsFeatureGates', async (importActual) => {
       hasFeature: Parameters<typeof actual.isTabLocked>[1],
       runtimeCapabilitiesLoaded: Parameters<typeof actual.isTabLocked>[2],
     ): boolean =>
-      tab === LOCKED_TAB
-        ? true
-        : actual.isTabLocked(tab, hasFeature, runtimeCapabilitiesLoaded),
+      tab === LOCKED_TAB ? true : actual.isTabLocked(tab, hasFeature, runtimeCapabilitiesLoaded),
   };
 });
 
@@ -164,7 +162,10 @@ describe('shouldBlockSettingsRouteItem - hideWhenCommercialHidden unresolved arm
     // system-billing carries only hideWhenCommercialHidden, so an unresolved
     // policy engages this gate before any feature/capability gate is consulted.
     expect(
-      shouldBlockSettingsRouteItem('system-billing', createContext({ presentationPolicyResolved: false })),
+      shouldBlockSettingsRouteItem(
+        'system-billing',
+        createContext({ presentationPolicyResolved: false }),
+      ),
     ).toBe(true);
   });
 });
