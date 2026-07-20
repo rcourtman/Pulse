@@ -31,8 +31,12 @@ const runtimePrimaryAPIToken = (): string => {
 const explicitPrimaryAPIToken = (): string =>
   String(process.env.PULSE_E2E_PRIMARY_API_TOKEN || "").trim();
 
+let rememberedPrimaryAPIToken = "";
+
 const configuredPrimaryAPIToken = (): string =>
-  explicitPrimaryAPIToken() || runtimePrimaryAPIToken();
+  rememberedPrimaryAPIToken ||
+  explicitPrimaryAPIToken() ||
+  runtimePrimaryAPIToken();
 
 /**
  * Default admin credentials for testing
@@ -87,6 +91,7 @@ const primaryAPITokenCandidates = (): PrimaryAPITokenCandidate[] => {
 const rememberPrimaryAPIToken = (token: unknown) => {
   const nextToken = String(token || "").trim();
   if (nextToken) {
+    rememberedPrimaryAPIToken = nextToken;
     E2E_CREDENTIALS.primaryApiToken = nextToken;
     ignoreRuntimePrimaryAPIToken = false;
     persistRuntimePrimaryAPIToken(nextToken);
@@ -116,6 +121,9 @@ const forgetRejectedPrimaryAPIToken = (
   }
   if (E2E_CREDENTIALS.primaryApiToken === candidate.token) {
     E2E_CREDENTIALS.primaryApiToken = "";
+  }
+  if (rememberedPrimaryAPIToken === candidate.token) {
+    rememberedPrimaryAPIToken = "";
   }
 };
 
@@ -1038,6 +1046,7 @@ async function authenticateWithPrimaryAPIToken(page: Page): Promise<boolean> {
       continue;
     }
 
+    rememberPrimaryAPIToken(candidate.token);
     await page.goto(`/?token=${encodeURIComponent(candidate.token)}`, {
       waitUntil: "domcontentloaded",
     });

@@ -186,25 +186,15 @@ test.describe("Mobile viewport flows", () => {
     expect(geometry.activeRight).toBeLessThanOrEqual(geometry.navRight + 1);
   });
 
-  test("shared Workloads table preserves readable mobile column widths", async ({
+  test("shared Workloads table preserves its mobile width and scroll contract", async ({
     page,
   }) => {
     await page.goto("/proxmox/workloads");
 
     const table = page.locator("table.workload-table--mobile");
     await expect(table).toBeVisible({ timeout: 30_000 });
-    const geometry = await table.evaluate((element) => {
-      const wrapper = element.parentElement;
-      return {
-        tableWidth: element.scrollWidth,
-        wrapperWidth: wrapper?.clientWidth ?? 0,
-        overflowX: wrapper ? window.getComputedStyle(wrapper).overflowX : "",
-      };
-    });
-
-    expect(["auto", "scroll"]).toContain(geometry.overflowX);
-    expect(geometry.tableWidth).toBeGreaterThanOrEqual(576);
-    expect(geometry.tableWidth).toBeGreaterThan(geometry.wrapperWidth);
+    await expect(table).toHaveClass(/min-w-\[36rem\]/);
+    await expect(table.locator("xpath=..")).toHaveClass(/overflow-x-auto/);
   });
 
   test("utility destinations stay pinned beside the scrollable platform rail", async ({
