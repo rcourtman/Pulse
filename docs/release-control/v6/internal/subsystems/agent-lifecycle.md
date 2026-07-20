@@ -338,6 +338,19 @@ update, profile rollout, command reachability, or fleet-control authority.
     restart or OS reboot persistence, and complete uninstall cleanup through
     the reusable lifecycle harness under `scripts/installtests/`.
 26. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+    `--state-dir` is a whole-lifecycle ownership boundary, not only a runtime
+    flag. The resolved directory owns the protected bootstrap token,
+    enrollment runtime token, server-acknowledged `agent-id`, buffered and
+    command-receipt state, `connection.env`, and the saved offline installer.
+    Generated service definitions must carry that same directory and its token
+    file through install, process restart, server restart, update,
+    re-enrollment, and uninstall. Explicit state wins over discovered service
+    state, which wins over platform defaults; a custom instance must never
+    borrow token or identity files from the default instance. A changed
+    bootstrap token may clear the old enrollment runtime token to express
+    re-enrollment, while an unchanged token and tokenless update must preserve
+    it. Default platform paths remain valid migration inputs for installations
+    created before this contract.
     Legacy update recovery is cross-platform lifecycle continuity. Linux may
     read procfs or a systemd unit, while FreeBSD and pfSense must recover the
     same URL, token, feature, identity, and trust arguments from the live

@@ -284,6 +284,7 @@ export const buildProjectedOverrides = ({
   const alertResourceIdCandidates = (resource: Resource): string[] =>
     uniqueIds(
       resource.id,
+      ...(resource.canonicalIdentity?.supersededIds ?? []),
       resource.metricsTarget?.resourceId,
       resource.discoveryTarget?.resourceId,
       resource.platformId,

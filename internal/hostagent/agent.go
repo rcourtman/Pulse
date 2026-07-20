@@ -29,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rs/zerolog"
 	gohost "github.com/shirou/gopsutil/v4/host"
 )
@@ -913,6 +914,10 @@ func (a *Agent) persistReportQueue(queue *utils.Queue[agentshost.Report], fileNa
 		a.logger.Warn().Err(err).Str("dir", a.stateDir).Msg("Failed to create state dir for buffer persistence")
 		return
 	}
+	if err := os.Chmod(a.stateDir, 0700); err != nil {
+		a.logger.Warn().Err(err).Str("dir", a.stateDir).Msg("Failed to enforce state dir permissions for buffer persistence")
+		return
+	}
 
 	path := filepath.Join(a.stateDir, fileName)
 	tmpPath := path + ".tmp"
@@ -996,6 +1001,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	// Collect S.M.A.R.T. disk data (best effort - don't fail if unavailable)
 	smartData := a.collectSMARTData(collectCtx, runtimeConfig.diskExclude)
 	if len(smartData) > 0 {
+		annotateSMARTWithDiskIO(smartData, snapshot.DiskIO)
 		sensorData.SMART = smartData
 	}
 
@@ -1208,6 +1214,10 @@ func (a *Agent) persistAgentID(agentID string) {
 	}
 	if err := a.collector.MkdirAll(a.stateDir, 0700); err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to create state directory for agent-id")
+		return
+	}
+	if err := a.collector.Chmod(a.stateDir, 0700); err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to enforce state directory permissions for agent-id")
 		return
 	}
 	agentIDPath := filepath.Join(a.stateDir, "agent-id")
@@ -1924,10 +1934,13 @@ func (a *Agent) collectSMARTData(ctx context.Context, diskExclude []string) []ag
 			Serial:      disk.Serial,
 			WWN:         disk.WWN,
 			Type:        disk.Type,
+			Controller:  disk.Controller,
+			Target:      disk.Target,
 			SizeBytes:   disk.SizeBytes,
 			Temperature: disk.Temperature,
 			Health:      disk.Health,
 			Standby:     disk.Standby,
+			Collection:  diskinventory.CloneStatus(disk.Collection),
 		}
 		if disk.Attributes != nil {
 			entry.Attributes = &agentshost.SMARTAttributes{
@@ -1947,9 +1960,20 @@ func (a *Agent) collectSMARTData(ctx context.Context, diskExclude []string) []ag
 	}
 
 	if pools, err := ZFSDiskPoolMap(ctx); err != nil {
+		for index := range result {
+			ensureAgentDiskCollection(&result[index]).Pool = diskinventory.Unavailable(
+				"zpool",
+				"ZFS pool membership could not be collected",
+			)
+		}
 		a.logger.Debug().Err(err).Msg("Failed to collect ZFS pool membership for SMART annotation")
-	} else if len(pools) > 0 {
-		annotateSMARTWithZFSPools(result, pools)
+	} else {
+		if len(pools) > 0 {
+			annotateSMARTWithZFSPools(result, pools)
+		}
+		for index := range result {
+			ensureAgentDiskCollection(&result[index]).Pool = diskinventory.Available("zpool")
+		}
 	}
 
 	a.logger.Debug().
@@ -1957,6 +1981,69 @@ func (a *Agent) collectSMARTData(ctx context.Context, diskExclude []string) []ag
 		Msg("Collected S.M.A.R.T. disk data")
 
 	return result
+}
+
+func ensureAgentDiskCollection(disk *agentshost.DiskSMART) *diskinventory.CollectionStatus {
+	if disk.Collection == nil {
+		disk.Collection = &diskinventory.CollectionStatus{}
+	}
+	return disk.Collection
+}
+
+// annotateSMARTWithDiskIO binds cumulative kernel counters to a SMART
+// inventory entry only when the block-device association is unambiguous.
+// Controller-member targets share one logical kernel device, so assigning that
+// aggregate counter to any member would fabricate per-disk I/O.
+func annotateSMARTWithDiskIO(smart []agentshost.DiskSMART, diskIO []agentshost.DiskIO) {
+	if len(smart) == 0 {
+		return
+	}
+
+	ioByDevice := make(map[string]agentshost.DiskIO, len(diskIO))
+	for _, entry := range diskIO {
+		device := diskinventory.DeviceToken(entry.Device)
+		if device != "" {
+			ioByDevice[strings.ToLower(device)] = entry
+		}
+	}
+	smartCountByDevice := make(map[string]int, len(smart))
+	for _, disk := range smart {
+		device := strings.ToLower(diskinventory.DeviceToken(disk.Device))
+		if device != "" {
+			smartCountByDevice[device]++
+		}
+	}
+
+	for index := range smart {
+		disk := &smart[index]
+		collection := ensureAgentDiskCollection(disk)
+		device := strings.ToLower(diskinventory.DeviceToken(disk.Device))
+		if isMultiplexedDeviceType(disk.Target) || (device != "" && smartCountByDevice[device] > 1) {
+			collection.IO = diskinventory.Unsupported(
+				"kernel_diskstats",
+				"controller target does not expose member-level I/O counters",
+			)
+			continue
+		}
+		ioEntry, ok := ioByDevice[device]
+		if !ok {
+			if len(diskIO) == 0 {
+				collection.IO = diskinventory.Unavailable(
+					"kernel_diskstats",
+					"disk I/O counters could not be collected",
+				)
+			} else {
+				collection.IO = diskinventory.Missing(
+					"kernel_diskstats",
+					"disk was present but its I/O counters were not reported",
+				)
+			}
+			continue
+		}
+		ioCopy := ioEntry
+		disk.IO = &ioCopy
+		collection.IO = diskinventory.Available("kernel_diskstats")
+	}
 }
 
 // runProxmoxSetup performs one-time Proxmox API token setup and node registration.

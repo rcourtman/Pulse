@@ -1266,6 +1266,28 @@ The Proxmox polling runtime in `internal/monitoring/monitor_pve.go` must
 evaluate disk alerts only after that merged disk view exists, so
 controller-backed disks do not lose health and endurance coverage between
 collection and alerting.
+Wide SAS inventories use the same trust boundary. The host collector must
+fan out per-disk SMART reads with bounded concurrency so a single report
+deadline cannot truncate a controller-sized suffix of the inventory, and it
+must preserve the Linux controller plus HCTL (or controller-member target)
+alongside each reading. When Proxmox exposes a SAS address as `serial` while
+smartctl exposes the drive serial, the smartctl serial is the canonical
+hardware identity; exact device-path correlation is permitted only inside an
+already-linked host/node parent and must fail closed when topology is
+ambiguous. Direct SATA, SAS, and NVMe device fallback IDs retain their legacy
+shape, while multiple controller members behind one block path add their
+controller target to the fallback identity. Per-member I/O must never inherit
+an aggregate controller counter.
+
+Disk identity, temperature, I/O, controller association, and pool membership
+also carry typed collection state from `pkg/diskinventory`: `available`,
+transiently `unavailable`, provider/controller `unsupported`, or unexpectedly
+`missing`. Normalization may retain the last known value when the current
+observation is not available, but it must preserve the current state and
+reason so API and UI consumers do not present retained evidence as freshly
+collected. Unified-resource physical-disk round trips must retain named
+`StorageGroup` membership rather than degrading it to the generic `Used`
+filesystem label.
 That same host-agent temperature boundary must prefer a recent linked host-agent
 payload over legacy SSH collection once the agent provides any usable CPU, NVMe,
 GPU, or SMART temperature reading. `internal/monitoring/monitor_polling_node_helpers.go`

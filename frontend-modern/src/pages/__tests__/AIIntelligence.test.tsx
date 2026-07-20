@@ -865,8 +865,11 @@ describe('AIIntelligence entitlement gating', () => {
 
   it('surfaces backend readiness rejection when a stale manual run request reaches the server', async () => {
     triggerPatrolRunMock.mockRejectedValue(
-      new Error(
-        'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
+      Object.assign(
+        new Error(
+          'The selected Patrol model is a reasoning-only model family that commonly does not emit tool calls.',
+        ),
+        { code: 'patrol_readiness_not_ready', status: 409 },
       ),
     );
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 // Metric helpers (nil-safe).
@@ -2049,6 +2050,20 @@ func (v PhysicalDiskView) DiskType() string {
 	return v.r.PhysicalDisk.DiskType
 }
 
+func (v PhysicalDiskView) Controller() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.PhysicalDisk.Controller)
+}
+
+func (v PhysicalDiskView) Target() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.PhysicalDisk.Target)
+}
+
 func (v PhysicalDiskView) SizeBytes() int64 {
 	if v.r == nil || v.r.PhysicalDisk == nil {
 		return 0
@@ -2113,11 +2128,32 @@ func (v PhysicalDiskView) Used() string {
 	return v.r.PhysicalDisk.Used
 }
 
+func (v PhysicalDiskView) StorageGroup() string {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return ""
+	}
+	return strings.TrimSpace(v.r.PhysicalDisk.StorageGroup)
+}
+
 func (v PhysicalDiskView) SMART() *SMARTMeta {
 	if v.r == nil || v.r.PhysicalDisk == nil || v.r.PhysicalDisk.SMART == nil {
 		return nil
 	}
 	return cloneSMARTMeta(v.r.PhysicalDisk.SMART)
+}
+
+func (v PhysicalDiskView) IO() *PhysicalDiskIOMeta {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return nil
+	}
+	return clonePhysicalDiskIOMeta(v.r.PhysicalDisk.IO)
+}
+
+func (v PhysicalDiskView) Collection() *diskinventory.CollectionStatus {
+	if v.r == nil || v.r.PhysicalDisk == nil {
+		return nil
+	}
+	return diskinventory.CloneStatus(v.r.PhysicalDisk.Collection)
 }
 
 func (v PhysicalDiskView) MetricResourceID() string {

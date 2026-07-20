@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 func cloneResourcePtr(in *Resource) *Resource {
@@ -23,6 +24,7 @@ func cloneResource(in *Resource) Resource {
 	out.DiscoveryTarget = cloneDiscoveryTarget(in.DiscoveryTarget)
 	out.DiscoveryReadiness = cloneResourceDiscoveryReadiness(in.DiscoveryReadiness)
 	out.MetricsTarget = cloneMetricsTarget(in.MetricsTarget)
+	out.SupersededCanonicalIDs = cloneStringSlice(in.SupersededCanonicalIDs)
 	out.PlatformScopes = cloneStringSlice(in.PlatformScopes)
 	out.Sources = cloneDataSourceSlice(in.Sources)
 	out.SourceStatus = cloneSourceStatusMap(in.SourceStatus)
@@ -554,8 +556,18 @@ func clonePhysicalDiskMeta(in *PhysicalDiskMeta) *PhysicalDiskMeta {
 	}
 	out := *in
 	out.TemperatureAggregate = cloneTemperatureAggregateMeta(in.TemperatureAggregate)
+	out.IO = clonePhysicalDiskIOMeta(in.IO)
+	out.Collection = diskinventory.CloneStatus(in.Collection)
 	out.SMART = cloneSMARTMeta(in.SMART)
 	out.Risk = clonePhysicalDiskRisk(in.Risk)
+	return &out
+}
+
+func clonePhysicalDiskIOMeta(in *PhysicalDiskIOMeta) *PhysicalDiskIOMeta {
+	if in == nil {
+		return nil
+	}
+	out := *in
 	return &out
 }
 

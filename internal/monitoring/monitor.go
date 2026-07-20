@@ -29,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
@@ -390,7 +391,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 			for _, temp := range smartTemps {
 				if temp.WWN != "" && strings.EqualFold(temp.WWN, updated[i].WWN) {
 					if temp.Temperature > 0 && !temp.StandbySkipped {
-						updated[i].Temperature = temp.Temperature
+						setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
 						log.Debug().
 							Str("disk", updated[i].DevPath).
 							Str("wwn", updated[i].WWN).
@@ -407,7 +408,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 			for _, temp := range smartTemps {
 				if temp.Serial != "" && strings.EqualFold(temp.Serial, updated[i].Serial) {
 					if temp.Temperature > 0 && !temp.StandbySkipped {
-						updated[i].Temperature = temp.Temperature
+						setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
 						log.Debug().
 							Str("disk", updated[i].DevPath).
 							Str("serial", updated[i].Serial).
@@ -426,7 +427,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 				normalizedTempDev := normalizeSMARTDeviceIdentifier(temp.Device)
 				if normalizedTempDev != "" && normalizedTempDev == normalizedDevPath {
 					if temp.Temperature > 0 && !temp.StandbySkipped {
-						updated[i].Temperature = temp.Temperature
+						setPhysicalDiskTemperature(&updated[i], temp.Temperature, "proxmox_node_smart")
 						log.Debug().
 							Str("disk", updated[i].DevPath).
 							Int("temp", temp.Temperature).
@@ -466,7 +467,7 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 				continue
 			}
 
-			updated[diskIdx].Temperature = int(math.Round(tempVal))
+			setPhysicalDiskTemperature(&updated[diskIdx], int(math.Round(tempVal)), "proxmox_node_nvme")
 			log.Debug().
 				Str("disk", updated[diskIdx].DevPath).
 				Int("temp", updated[diskIdx].Temperature).
@@ -475,6 +476,17 @@ func mergeNVMeTempsIntoDisks(disks []models.PhysicalDisk, nodes []models.Node) [
 	}
 
 	return updated
+}
+
+func setPhysicalDiskTemperature(disk *models.PhysicalDisk, temperature int, source string) {
+	if disk == nil || temperature <= 0 {
+		return
+	}
+	disk.Temperature = temperature
+	if disk.Collection == nil {
+		disk.Collection = &diskinventory.CollectionStatus{}
+	}
+	disk.Collection.Temperature = diskinventory.Available(source)
 }
 
 // mergeHostAgentSMARTIntoDisks merges SMART temperature data from linked host agents
@@ -522,7 +534,7 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			continue
 		}
 
-		// Find matching SMART entry by WWN, serial, or device path
+		// Find matching SMART entry by WWN, serial, or topology-scoped device path.
 		var matched *models.HostDiskSMART
 
 		// Try to match by WWN (most reliable)
@@ -550,28 +562,37 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 			normalizedDevPath := normalizeSMARTDeviceIdentifier(updated[i].DevPath)
 			for j := range smartData {
 				normalizedDiskDev := normalizeSMARTDeviceIdentifier(smartData[j].Device)
-				if normalizedDiskDev != "" && normalizedDiskDev == normalizedDevPath {
+				if normalizedDiskDev != "" &&
+					normalizedDiskDev == normalizedDevPath &&
+					diskTopologyCompatible(updated[i].Controller, updated[i].Target, smartData[j].Controller, smartData[j].Target) {
 					matched = &smartData[j]
 					break
 				}
 			}
 		}
 
-		if matched == nil || matched.Standby {
+		if matched == nil {
 			continue
 		}
 
 		if strings.TrimSpace(updated[i].Model) == "" && strings.TrimSpace(matched.Model) != "" {
 			updated[i].Model = strings.TrimSpace(matched.Model)
 		}
-		if strings.TrimSpace(updated[i].Serial) == "" && strings.TrimSpace(matched.Serial) != "" {
+		if strings.TrimSpace(matched.Serial) != "" &&
+			(strings.TrimSpace(updated[i].Serial) == "" || shouldPromoteHostAgentSerial(updated[i], *matched)) {
 			updated[i].Serial = strings.TrimSpace(matched.Serial)
 		}
 		if strings.TrimSpace(updated[i].WWN) == "" && strings.TrimSpace(matched.WWN) != "" {
 			updated[i].WWN = strings.TrimSpace(matched.WWN)
 		}
-		if strings.TrimSpace(updated[i].Type) == "" && strings.TrimSpace(matched.Type) != "" {
+		if shouldPromoteHostAgentDiskType(updated[i].Type, matched.Type) {
 			updated[i].Type = strings.TrimSpace(matched.Type)
+		}
+		if strings.TrimSpace(updated[i].Controller) == "" && strings.TrimSpace(matched.Controller) != "" {
+			updated[i].Controller = strings.TrimSpace(matched.Controller)
+		}
+		if strings.TrimSpace(updated[i].Target) == "" && strings.TrimSpace(matched.Target) != "" {
+			updated[i].Target = strings.TrimSpace(matched.Target)
 		}
 		if updated[i].Size <= 0 && matched.SizeBytes > 0 {
 			updated[i].Size = matched.SizeBytes
@@ -581,7 +602,7 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 		}
 
 		// Merge temperature if not already set
-		if updated[i].Temperature == 0 && matched.Temperature > 0 {
+		if !matched.Standby && updated[i].Temperature == 0 && matched.Temperature > 0 {
 			updated[i].Temperature = matched.Temperature
 			log.Debug().
 				Str("device", updated[i].DevPath).
@@ -598,6 +619,11 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 				}
 			}
 		}
+		if matched.IO != nil {
+			ioCopy := *matched.IO
+			updated[i].IO = &ioCopy
+		}
+		updated[i].Collection = diskinventory.MergeStatus(updated[i].Collection, matched.Collection)
 
 		if (strings.TrimSpace(updated[i].Health) == "" || strings.EqualFold(updated[i].Health, "unknown")) && strings.TrimSpace(matched.Health) != "" {
 			updated[i].Health = matched.Health
@@ -605,6 +631,61 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 	}
 
 	return updated
+}
+
+func diskTopologyCompatible(leftController, leftTarget, rightController, rightTarget string) bool {
+	leftController = strings.TrimSpace(leftController)
+	leftTarget = strings.TrimSpace(leftTarget)
+	rightController = strings.TrimSpace(rightController)
+	rightTarget = strings.TrimSpace(rightTarget)
+	if leftController != "" && rightController != "" && !strings.EqualFold(leftController, rightController) {
+		return false
+	}
+	if leftTarget != "" && rightTarget != "" && !strings.EqualFold(leftTarget, rightTarget) {
+		return false
+	}
+	return true
+}
+
+func shouldPromoteHostAgentSerial(disk models.PhysicalDisk, smart models.HostDiskSMART) bool {
+	if smart.Collection != nil &&
+		strings.EqualFold(strings.TrimSpace(smart.Type), "sas") &&
+		smart.Collection.Serial.State == diskinventory.FieldAvailable &&
+		strings.HasPrefix(strings.ToLower(strings.TrimSpace(smart.Collection.Serial.Source)), "smartctl") {
+		return true
+	}
+	// Older agents did not carry collection provenance. Proxmox commonly puts
+	// a 64-bit SAS address in its serial field; a non-address smartctl serial is
+	// the actual drive identity and must replace that transport address.
+	return strings.EqualFold(strings.TrimSpace(disk.Type), "sas") &&
+		strings.EqualFold(strings.TrimSpace(smart.Type), "sas") &&
+		looksLikeSASAddress(disk.Serial) &&
+		!looksLikeSASAddress(smart.Serial)
+}
+
+func looksLikeSASAddress(value string) bool {
+	value = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(value)), "0x")
+	if len(value) != 16 {
+		return false
+	}
+	for _, char := range value {
+		if (char < '0' || char > '9') && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func shouldPromoteHostAgentDiskType(existing, incoming string) bool {
+	incoming = strings.ToLower(strings.TrimSpace(incoming))
+	if incoming == "" {
+		return false
+	}
+	existing = strings.ToLower(strings.TrimSpace(existing))
+	if existing == "" || existing == "unknown" || existing == "scsi" {
+		return true
+	}
+	return false
 }
 
 func deriveWearoutFromSMARTAttributes(attrs *models.SMARTAttributes) int {
@@ -636,14 +717,35 @@ func physicalDiskFromReadStateView(view *unifiedresources.PhysicalDiskView) mode
 		Serial:          view.Serial(),
 		WWN:             view.WWN(),
 		Type:            view.DiskType(),
+		Controller:      view.Controller(),
+		Target:          view.Target(),
 		Size:            view.SizeBytes(),
 		Health:          view.Health(),
 		Wearout:         view.Wearout(),
 		Temperature:     view.Temperature(),
 		RPM:             view.RPM(),
 		Used:            view.Used(),
+		StorageGroup:    view.StorageGroup(),
 		SmartAttributes: smartAttributesFromUnifiedMeta(view.SMART()),
+		IO:              physicalDiskIOFromUnifiedMeta(view.IO()),
+		Collection:      diskinventory.CloneStatus(view.Collection()),
 		LastChecked:     view.LastSeen(),
+	}
+}
+
+func physicalDiskIOFromUnifiedMeta(in *unifiedresources.PhysicalDiskIOMeta) *models.DiskIO {
+	if in == nil {
+		return nil
+	}
+	return &models.DiskIO{
+		Device:     in.Device,
+		ReadBytes:  in.ReadBytes,
+		WriteBytes: in.WriteBytes,
+		ReadOps:    in.ReadOps,
+		WriteOps:   in.WriteOps,
+		ReadTime:   in.ReadTimeMs,
+		WriteTime:  in.WriteTimeMs,
+		IOTime:     in.IOTimeMs,
 	}
 }
 
@@ -3443,11 +3545,15 @@ func hostSensorsFromReadStateView(sensors *unifiedresources.HostSensorMeta) mode
 				Serial:      smart.Serial,
 				WWN:         smart.WWN,
 				Type:        smart.Type,
+				Controller:  smart.Controller,
+				Target:      smart.Target,
 				SizeBytes:   smart.SizeBytes,
 				Temperature: smart.Temperature,
 				Health:      smart.Health,
 				Standby:     smart.Standby,
 				Pool:        smart.Pool,
+				IO:          physicalDiskIOFromUnifiedMeta(smart.IO),
+				Collection:  diskinventory.CloneStatus(smart.Collection),
 				Attributes:  smartAttributesCopy(smart.Attributes),
 			})
 		}

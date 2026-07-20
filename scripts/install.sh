@@ -94,11 +94,14 @@ KUBECONFIG_PATH=""  # Path to kubeconfig file for Kubernetes monitoring
 KUBE_INCLUDE_ALL_PODS="false"
 KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
 DISK_EXCLUDES=()  # Array for multiple --disk-exclude values
-STATE_DIR="/var/lib/pulse-agent"  # Persistent state directory (overridden per platform)
+DEFAULT_STATE_DIR="/var/lib/pulse-agent"
+STATE_DIR="$DEFAULT_STATE_DIR"  # Persistent state directory (overridden per platform)
+STATE_DIR_SOURCE="default"      # default, explicit, recovered, or platform
 CURL_CA_BUNDLE="" # Path to CA bundle for curl and agent TLS (sets SSL_CERT_FILE)
 NON_INTERACTIVE="false"
 TOKEN_FILE_PATH=""       # Path to file containing the token
 RUNTIME_TOKEN_FILE=""    # Secure token file passed to the installed service
+RUNTIME_TOKEN_CHANGED="false"
 OUTPUT_FORMAT="text"     # "text" (default) or "json"
 PREFLIGHT_ONLY="false"
 INSTALL_SIGNATURE_NAMESPACE="pulse-install"
@@ -146,6 +149,33 @@ log_error() {
     else
         printf "[ERROR] %s\n" "$1"
     fi
+}
+
+# Feed the API token to curl through a private config file. Passing a header
+# value with -H would expose the token in the transient curl process argv.
+curl_with_pulse_token() {
+    local config_file=""
+    local curl_rc=0
+
+    if [[ -z "$PULSE_TOKEN" ]]; then
+        curl "$@"
+        return $?
+    fi
+    case "$PULSE_TOKEN" in
+        *$'\r'*|*$'\n'*) return 2 ;;
+    esac
+
+    config_file=$(mktemp)
+    TMP_FILES+=("$config_file")
+    chmod 600 "$config_file"
+    printf 'header = "X-API-Token: %s"\n' "$PULSE_TOKEN" > "$config_file"
+    if curl --config "$config_file" "$@"; then
+        curl_rc=0
+    else
+        curl_rc=$?
+    fi
+    rm -f "$config_file"
+    return "$curl_rc"
 }
 url_encode() {
     local input="$1"
@@ -385,11 +415,10 @@ verify_agent_server_registration() {
         return 1
     fi
 
-    if [[ -n "$PULSE_TOKEN" ]]; then lookup_args+=(-H "X-API-Token: ${PULSE_TOKEN}"); fi
     if [[ "$INSECURE" == "true" ]]; then lookup_args+=(-k); fi
     if [[ -n "$CURL_CA_BUNDLE" ]]; then lookup_args+=(--cacert "$CURL_CA_BUNDLE"); fi
 
-    lookup_out=$(curl "${lookup_args[@]}" "${PULSE_URL}/api/agents/agent/lookup?hostname=$(url_encode "$lookup_hostname")" 2>/dev/null || true)
+    lookup_out=$(curl_with_pulse_token "${lookup_args[@]}" "${PULSE_URL}/api/agents/agent/lookup?hostname=$(url_encode "$lookup_hostname")" 2>/dev/null || true)
     lookup_status="${lookup_out##*$'\n'}"
     lookup_body="${lookup_out%$'\n'*}"
 
@@ -1055,6 +1084,42 @@ portable_sed_in_place() {
     sed -i '' "$expr" "$target" 2>/dev/null || sed -i "$expr" "$target" 2>/dev/null || true
 }
 
+select_platform_state_dir() {
+    local platform_default="$1"
+
+    if [[ "${STATE_DIR_SOURCE:-default}" == "default" ]]; then
+        STATE_DIR="$platform_default"
+        STATE_DIR_SOURCE="platform"
+    fi
+}
+
+discover_state_dir_from_saved_installer() {
+    local script_path="${1:-$0}"
+    local script_dir=""
+
+    if [[ "${STATE_DIR_SOURCE:-default}" != "default" || ! -f "$script_path" ]]; then
+        return 1
+    fi
+    script_dir=$(cd "$(dirname "$script_path")" 2>/dev/null && pwd -P) || return 1
+    if [[ -f "$script_dir/connection.env" ]]; then
+        STATE_DIR="$script_dir"
+        STATE_DIR_SOURCE="recovered"
+        return 0
+    fi
+    return 1
+}
+
+remove_agent_state_dir() {
+    local state_dir="${1:-$STATE_DIR}"
+
+    if [[ -z "$state_dir" || "$state_dir" != /* || "$state_dir" == "/" ||
+          "$state_dir" == *$'\r'* || "$state_dir" == *$'\n'* ]]; then
+        log_warn "Refusing to remove invalid agent state directory: ${state_dir:-<empty>}"
+        return 1
+    fi
+    rm -rf -- "$state_dir"
+}
+
 detect_qnap_data_volume() {
     local qnap_vol=""
     local candidate=""
@@ -1081,11 +1146,14 @@ detect_qnap_data_volume() {
 find_qnap_state_dir() {
     local candidate=""
 
-    if [[ -n "$STATE_DIR" ]] && [[ "$STATE_DIR" != "/var/lib/pulse-agent" ]]; then
-        if [[ -d "$STATE_DIR" ]] || [[ -f "$STATE_DIR/connection.env" ]] || [[ -f "$STATE_DIR/agent-id" ]]; then
-            printf '%s\n' "$STATE_DIR"
-            return 0
-        fi
+    if [[ -n "$STATE_DIR" && "${STATE_DIR_SOURCE:-default}" != "default" ]]; then
+        printf '%s\n' "$STATE_DIR"
+        return 0
+    fi
+    if [[ -n "$STATE_DIR" ]] && [[ "$STATE_DIR" != "/var/lib/pulse-agent" ]] && \
+       { [[ -d "$STATE_DIR" ]] || [[ -f "$STATE_DIR/connection.env" ]] || [[ -f "$STATE_DIR/agent-id" ]]; }; then
+        printf '%s\n' "$STATE_DIR"
+        return 0
     fi
 
     candidate=$(detect_qnap_data_volume || true)
@@ -1533,28 +1601,50 @@ build_plist_program_arguments() {
 ensure_runtime_token_file() {
     local state_dir="${1:-$STATE_DIR}"
     local token_file="${state_dir}/token"
+    local previous_token=""
+    local old_umask=""
+    local token_tmp=""
 
     RUNTIME_TOKEN_FILE=""
+    RUNTIME_TOKEN_CHANGED="false"
     if [[ -z "$PULSE_TOKEN" ]]; then
         rm -f "$token_file" 2>/dev/null || true
         log_info "No API token provided; installer will configure token-optional agent runtime."
         return 0
     fi
 
-    mkdir -p "$state_dir"
-    local old_umask=""
     old_umask=$(umask)
     umask 077
-    if ! printf '%s' "$PULSE_TOKEN" > "$token_file"; then
+    mkdir -p "$state_dir"
+    chmod 700 "$state_dir"
+    if [[ -f "$token_file" && ! -L "$token_file" ]]; then
+        previous_token=$(cat "$token_file" 2>/dev/null || true)
+    fi
+    if [[ "$previous_token" != "$PULSE_TOKEN" ]]; then
+        RUNTIME_TOKEN_CHANGED="true"
+    fi
+    token_tmp=$(mktemp "${state_dir}/.token.XXXXXX")
+    TMP_FILES+=("$token_tmp")
+    if ! printf '%s' "$PULSE_TOKEN" > "$token_tmp"; then
         umask "$old_umask"
         fail "Failed to write runtime token file: $token_file" "$EXIT_GENERAL"
     fi
-    umask "$old_umask"
-    chmod 600 "$token_file"
+    chmod 600 "$token_tmp"
     if [[ "$(id -u 2>/dev/null || echo 1)" == "0" ]]; then
-        chown root:root "$token_file" 2>/dev/null || true
+        chown root:root "$token_tmp" 2>/dev/null || true
     fi
+    if ! mv -f "$token_tmp" "$token_file"; then
+        umask "$old_umask"
+        fail "Failed to install runtime token file: $token_file" "$EXIT_GENERAL"
+    fi
+    umask "$old_umask"
     RUNTIME_TOKEN_FILE="$token_file"
+    # A changed bootstrap token is explicit re-enrollment intent. Preserve the
+    # runtime token across ordinary restarts and tokenless updates, but do not
+    # let a stale runtime token shadow fresh enrollment credentials.
+    if [[ "${ENROLL:-false}" == "true" && "$RUNTIME_TOKEN_CHANGED" == "true" ]]; then
+        rm -f "${state_dir}/runtime.token" 2>/dev/null || true
+    fi
     log_info "Token stored securely at $token_file (mode 600)"
 }
 
@@ -1609,7 +1699,11 @@ recover_token_from_default_agent_token_file() {
 
     # v5.1.x Linux services could omit --token and --token-file because the
     # Go agent read this default file itself.
-    for token_path in "${STATE_DIR%/}/token" "/var/lib/pulse-agent/token" "$TRUENAS_STATE_DIR/token"; do
+    local token_paths=("${STATE_DIR%/}/token")
+    if [[ "${STATE_DIR_SOURCE:-default}" == "default" ]]; then
+        token_paths+=("${DEFAULT_STATE_DIR:-/var/lib/pulse-agent}/token" "$TRUENAS_STATE_DIR/token")
+    fi
+    for token_path in "${token_paths[@]}"; do
         [[ -n "$token_path" && -f "$token_path" ]] || continue
         recovered_token=$(cat "$token_path" 2>/dev/null || true)
         if [[ -n "$recovered_token" ]]; then
@@ -1623,6 +1717,15 @@ recover_token_from_default_agent_token_file() {
 
 recover_connection_state() {
     local file="$1"
+    local saved_state_dir=""
+
+    saved_state_dir=$(read_connection_state_value "$file" "PULSE_STATE_DIR")
+    if [[ -n "$saved_state_dir" && "$saved_state_dir" == /* && "$saved_state_dir" != "/" &&
+          "$saved_state_dir" != *$'\r'* && "$saved_state_dir" != *$'\n'* &&
+          "${STATE_DIR_SOURCE:-default}" == "default" ]]; then
+        STATE_DIR="$saved_state_dir"
+        STATE_DIR_SOURCE="recovered"
+    fi
 
     if [[ -z "$PULSE_URL" ]]; then
         PULSE_URL=$(read_connection_state_value "$file" "PULSE_URL")
@@ -1734,7 +1837,12 @@ apply_recovered_agent_arg_value() {
             RECOVERED_AGENT_ARG_STATE="true"
             ;;
         state-dir)
-            if [[ -n "$value" && "$STATE_DIR" == "/var/lib/pulse-agent" ]]; then STATE_DIR="$value"; fi
+            if [[ -n "$value" && "$value" == /* && "$value" != "/" &&
+                  "$value" != *$'\r'* && "$value" != *$'\n'* &&
+                  "${STATE_DIR_SOURCE:-default}" == "default" ]]; then
+                STATE_DIR="$value"
+                STATE_DIR_SOURCE="recovered"
+            fi
             RECOVERED_AGENT_ARG_STATE="true"
             ;;
         kubeconfig)
@@ -1890,6 +1998,16 @@ recover_connection_state_from_env_stream() {
                 value="${env_line#*=}"
                 if [[ -z "$PULSE_TOKEN" && -n "$value" && -f "$value" ]]; then
                     PULSE_TOKEN=$(cat "$value")
+                fi
+                RECOVERED_AGENT_ENV_STATE="true"
+                ;;
+            PULSE_STATE_DIR=*)
+                value="${env_line#*=}"
+                if [[ -n "$value" && "$value" == /* && "$value" != "/" &&
+                      "$value" != *$'\r'* && "$value" != *$'\n'* &&
+                      "${STATE_DIR_SOURCE:-default}" == "default" ]]; then
+                    STATE_DIR="$value"
+                    STATE_DIR_SOURCE="recovered"
                 fi
                 RECOVERED_AGENT_ENV_STATE="true"
                 ;;
@@ -2109,6 +2227,36 @@ recover_connection_state_from_systemd_unit() {
     return 1
 }
 
+launchd_agent_arg_stream() {
+    local plist_path="${1:-/Library/LaunchDaemons/com.pulse.agent.plist}"
+
+    [[ -f "$plist_path" ]] || return 1
+    awk '
+        /<key>ProgramArguments<\/key>/ { in_program_args = 1; next }
+        in_program_args && /<\/array>/ { exit }
+        in_program_args && /<string>/ {
+            value = $0
+            sub(/^.*<string>/, "", value)
+            sub(/<\/string>.*$/, "", value)
+            gsub(/&amp;/, "\\&", value)
+            gsub(/&lt;/, "<", value)
+            gsub(/&gt;/, ">", value)
+            gsub(/&quot;/, "\"", value)
+            gsub(/&apos;/, "\047", value)
+            print value
+        }
+    ' "$plist_path"
+}
+
+recover_connection_state_from_launchd_plist() {
+    local plist_path="${1:-/Library/LaunchDaemons/com.pulse.agent.plist}"
+
+    if recover_connection_state_from_arg_stream < <(launchd_agent_arg_stream "$plist_path"); then
+        return 0
+    fi
+    return 1
+}
+
 recover_connection_state_from_service_scripts() {
     local candidate=""
     local line=""
@@ -2176,6 +2324,10 @@ recover_connection_state_from_existing_agent() {
         log_info "Recovered connection details from the existing Pulse Agent service."
         return 0
     fi
+    if recover_connection_state_from_launchd_plist; then
+        log_info "Recovered connection details from the existing Pulse Agent launchd service."
+        return 0
+    fi
     if recover_connection_state_from_service_scripts; then
         log_info "Recovered connection details from the existing Pulse Agent service script."
         return 0
@@ -2187,18 +2339,24 @@ recover_connection_state_from_existing_agent() {
 find_connection_state_file() {
     local conn_env=""
     local qnap_state_dir=""
+    local conn_paths=("${STATE_DIR%/}/connection.env")
 
-    for conn_env in /var/lib/pulse-agent/connection.env /boot/config/plugins/pulse-agent/connection.env "$TRUENAS_STATE_DIR/connection.env"; do
+    if [[ "${STATE_DIR_SOURCE:-default}" == "default" ]]; then
+        conn_paths+=("${DEFAULT_STATE_DIR:-/var/lib/pulse-agent}/connection.env" /boot/config/plugins/pulse-agent/connection.env "$TRUENAS_STATE_DIR/connection.env")
+    fi
+    for conn_env in "${conn_paths[@]}"; do
         if [[ -f "$conn_env" ]]; then
             printf '%s\n' "$conn_env"
             return 0
         fi
     done
 
-    qnap_state_dir=$(find_qnap_state_dir || true)
-    if [[ -n "$qnap_state_dir" ]] && [[ -f "$qnap_state_dir/connection.env" ]]; then
-        printf '%s\n' "$qnap_state_dir/connection.env"
-        return 0
+    if [[ "${STATE_DIR_SOURCE:-default}" == "default" ]]; then
+        qnap_state_dir=$(find_qnap_state_dir || true)
+        if [[ -n "$qnap_state_dir" ]] && [[ -f "$qnap_state_dir/connection.env" ]]; then
+            printf '%s\n' "$qnap_state_dir/connection.env"
+            return 0
+        fi
     fi
 
     return 1
@@ -2207,11 +2365,17 @@ find_connection_state_file() {
 recover_agent_id_from_state_file() {
     local aid_path=""
     local qnap_state_dir=""
-    local aid_paths=(/var/lib/pulse-agent/agent-id /boot/config/plugins/pulse-agent/agent-id "$TRUENAS_STATE_DIR/agent-id")
+    local aid_paths=("${STATE_DIR%/}/agent-id")
 
-    qnap_state_dir=$(find_qnap_state_dir || true)
-    if [[ -n "$qnap_state_dir" ]]; then
-        aid_paths+=("$qnap_state_dir/agent-id")
+    if [[ "${STATE_DIR_SOURCE:-default}" == "default" ]]; then
+        aid_paths+=("${DEFAULT_STATE_DIR:-/var/lib/pulse-agent}/agent-id" /boot/config/plugins/pulse-agent/agent-id "$TRUENAS_STATE_DIR/agent-id")
+    fi
+
+    if [[ "${STATE_DIR_SOURCE:-default}" == "default" ]]; then
+        qnap_state_dir=$(find_qnap_state_dir || true)
+        if [[ -n "$qnap_state_dir" ]]; then
+            aid_paths+=("$qnap_state_dir/agent-id")
+        fi
     fi
 
     for aid_path in "${aid_paths[@]}"; do
@@ -2228,22 +2392,31 @@ recover_agent_id_from_state_file() {
 save_connection_info() {
     local state_dir="$1"
     local conn_env="${state_dir}/connection.env"
+    local conn_tmp=""
+    local old_umask=""
+    old_umask=$(umask)
+    umask 077
     mkdir -p "$state_dir"
+    chmod 700 "$state_dir"
     # Save connection details so uninstall can deregister without --url/--token.
     # Single-quote values to prevent shell interpretation on read-back.
     # Legacy connection files may contain PULSE_TOKEN, but new installs persist
     # only the protected token file path.
-    : > "$conn_env"
-    write_connection_state_value "$conn_env" "PULSE_URL" "$PULSE_URL"
-    write_connection_state_value "$conn_env" "PULSE_TOKEN_FILE" "$RUNTIME_TOKEN_FILE"
-    write_connection_state_value "$conn_env" "PULSE_AGENT_ID" "$AGENT_ID"
-    write_connection_state_value "$conn_env" "PULSE_HOSTNAME" "$HOSTNAME_OVERRIDE"
+    conn_tmp=$(mktemp "${state_dir}/.connection.env.XXXXXX")
+    TMP_FILES+=("$conn_tmp")
+    write_connection_state_value "$conn_tmp" "PULSE_STATE_DIR" "$state_dir"
+    write_connection_state_value "$conn_tmp" "PULSE_URL" "$PULSE_URL"
+    write_connection_state_value "$conn_tmp" "PULSE_TOKEN_FILE" "$RUNTIME_TOKEN_FILE"
+    write_connection_state_value "$conn_tmp" "PULSE_AGENT_ID" "$AGENT_ID"
+    write_connection_state_value "$conn_tmp" "PULSE_HOSTNAME" "$HOSTNAME_OVERRIDE"
     if [[ "$INSECURE" == "true" ]]; then
-        write_connection_state_value "$conn_env" "PULSE_INSECURE_SKIP_VERIFY" "true"
+        write_connection_state_value "$conn_tmp" "PULSE_INSECURE_SKIP_VERIFY" "true"
     fi
-    write_connection_state_value "$conn_env" "PULSE_SERVER_FINGERPRINT" "$SERVER_FINGERPRINT"
-    write_connection_state_value "$conn_env" "PULSE_CACERT" "$CURL_CA_BUNDLE"
-    chmod 600 "$conn_env"
+    write_connection_state_value "$conn_tmp" "PULSE_SERVER_FINGERPRINT" "$SERVER_FINGERPRINT"
+    write_connection_state_value "$conn_tmp" "PULSE_CACERT" "$CURL_CA_BUNDLE"
+    chmod 600 "$conn_tmp"
+    mv -f "$conn_tmp" "$conn_env"
+    umask "$old_umask"
     # Save a copy of this install script for offline uninstall.
     # When run via "curl | bash", $0 is /dev/stdin — not a usable file.
     # Try local copy first, then download a fresh copy from the server.
@@ -2304,7 +2477,7 @@ while [[ $# -gt 0 ]]; do
         --uninstall) UNINSTALL="true"; shift ;;
         --agent-id) AGENT_ID="$2"; shift 2 ;;
         --hostname) HOSTNAME_OVERRIDE="$2"; shift 2 ;;
-        --state-dir) STATE_DIR="$2"; shift 2 ;;
+        --state-dir) STATE_DIR="$2"; STATE_DIR_SOURCE="explicit"; shift 2 ;;
         --kube-include-all-pods) KUBE_INCLUDE_ALL_PODS="true"; shift ;;
         --kube-include-all-deployments) KUBE_INCLUDE_ALL_DEPLOYMENTS="true"; shift ;;
         --disk-exclude) DISK_EXCLUDES+=("$2"); shift 2 ;;
@@ -2316,6 +2489,13 @@ while [[ $# -gt 0 ]]; do
         *) fail "Unknown argument: $1" ;;
     esac
 done
+
+discover_state_dir_from_saved_installer "$0" || true
+
+if [[ -z "$STATE_DIR" || "$STATE_DIR" != /* || "$STATE_DIR" == "/" ||
+      "$STATE_DIR" == *$'\r'* || "$STATE_DIR" == *$'\n'* ]]; then
+    fail "--state-dir must be an absolute, non-root path." "$EXIT_MISSING_ARGS"
+fi
 
 if [[ -n "$OBSERVERS_FILE" ]]; then
     if [[ "$OBSERVERS_FILE" != /* ]]; then
@@ -2358,33 +2538,48 @@ if [[ -n "$PULSE_URL" ]]; then
     PULSE_URL="${PULSE_URL%/}"
 fi
 
-# --- Update State Recovery ---
-# Update commands are intentionally tokenless for already-installed agents. The
-# installer reuses the canonical saved connection state instead of asking the
-# operator to mint a new install token for a host Pulse already knows about.
-if [[ "$UPDATE_ONLY" == "true" ]]; then
+# --- Installed Lifecycle State Recovery ---
+# An explicit state directory is authoritative. Without one, inspect the active
+# process/service first so a custom installation wins over stale default-path
+# artifacts, then merge its canonical connection.env and agent-id state.
+if [[ "$UPDATE_ONLY" == "true" || "$UNINSTALL" == "true" ]]; then
+    if [[ "$STATE_DIR_SOURCE" != "explicit" ]]; then
+        recover_connection_state_from_existing_agent || true
+    fi
+
+    local lifecycle_conn_env=""
+    lifecycle_conn_env=$(find_connection_state_file || true)
+    if [[ -n "$lifecycle_conn_env" ]]; then
+        log_info "Recovering connection details from ${lifecycle_conn_env}..."
+        recover_connection_state "$lifecycle_conn_env"
+    fi
+
     if update_connection_state_incomplete; then
-        local update_conn_env=""
-        update_conn_env=$(find_connection_state_file || true)
-        if [[ -n "$update_conn_env" ]]; then
-            log_info "Recovering connection details from ${update_conn_env}..."
-            recover_connection_state "$update_conn_env"
-        fi
-        if update_connection_state_incomplete; then
-            recover_connection_state_from_existing_agent || true
-        fi
-        if [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]; then
-            :
-        elif [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" ]]; then
-            fail "No existing Pulse Agent connection state found. Use the install command instead." "$EXIT_MISSING_ARGS"
-        fi
-        if [[ -z "$AGENT_ID" ]]; then
-            AGENT_ID=$(recover_agent_id_from_state_file || true)
-            if [[ -n "$AGENT_ID" ]]; then
-                log_info "Recovered agent ID from persisted agent-id state."
-            fi
+        recover_connection_state_from_existing_agent || true
+    fi
+
+    if [[ -z "$AGENT_ID" ]]; then
+        AGENT_ID=$(recover_agent_id_from_state_file || true)
+        if [[ -n "$AGENT_ID" ]]; then
+            log_info "Recovered agent ID from persisted agent-id state."
         fi
     fi
+
+    if [[ "$UPDATE_ONLY" == "true" && ( -z "$PULSE_URL" || -z "$PULSE_TOKEN" ) ]]; then
+        fail "No existing Pulse Agent connection state found. Use the install command instead." "$EXIT_MISSING_ARGS"
+    fi
+fi
+
+if [[ -z "$STATE_DIR" || "$STATE_DIR" != /* || "$STATE_DIR" == "/" ||
+      "$STATE_DIR" == *$'\r'* || "$STATE_DIR" == *$'\n'* ]]; then
+    fail "Recovered Pulse Agent state directory is invalid." "$EXIT_MISSING_ARGS"
+fi
+
+if [[ "$STATE_DIR_SOURCE" == "explicit" || "$STATE_DIR_SOURCE" == "recovered" ]]; then
+    TRUENAS_STATE_DIR="$STATE_DIR"
+    TRUENAS_LOG_DIR="$TRUENAS_STATE_DIR/logs"
+    TRUENAS_BOOTSTRAP_SCRIPT="$TRUENAS_STATE_DIR/bootstrap-pulse-agent.sh"
+    TRUENAS_ENV_FILE="$TRUENAS_STATE_DIR/pulse-agent.env"
 fi
 
 if [[ -n "$PULSE_URL" ]]; then
@@ -2553,18 +2748,6 @@ if [[ "$UNINSTALL" == "true" ]]; then
     log_info "Uninstalling ${AGENT_NAME} and cleaning up legacy agents..."
     local qnap_state_dir=""
 
-    # Recover connection details from the canonical installer-owned state artifact
-    # if command line input is only partial. Read keys explicitly instead of
-    # sourcing the file so uninstall cannot execute persisted shell content.
-    if [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" || -z "$AGENT_ID" || -z "$HOSTNAME_OVERRIDE" || -z "$CURL_CA_BUNDLE" || "$INSECURE" != "true" ]]; then
-        local conn_env=""
-        conn_env=$(find_connection_state_file || true)
-        if [[ -n "$conn_env" ]]; then
-            log_info "Recovering connection details from ${conn_env}..."
-            recover_connection_state "$conn_env"
-        fi
-    fi
-
     # Try to notify the Pulse server about uninstallation if we have connection details
     # This ensures the agent record is removed and any linked PVE nodes are updated immediately.
     if [[ -n "$PULSE_URL" ]]; then
@@ -2572,7 +2755,10 @@ if [[ "$UNINSTALL" == "true" ]]; then
         # Priority: agent-id file (canonical) > hostname API lookup (fallback)
         if [[ -z "$AGENT_ID" ]]; then
             local aid_path=""
-            local aid_paths=(/var/lib/pulse-agent/agent-id /boot/config/plugins/pulse-agent/agent-id "$TRUENAS_STATE_DIR/agent-id")
+            local aid_paths=("${STATE_DIR%/}/agent-id")
+            if [[ "$STATE_DIR_SOURCE" == "default" ]]; then
+                aid_paths+=("$DEFAULT_STATE_DIR/agent-id" /boot/config/plugins/pulse-agent/agent-id "$TRUENAS_STATE_DIR/agent-id")
+            fi
             qnap_state_dir=$(find_qnap_state_dir || true)
             if [[ -n "$qnap_state_dir" ]]; then
                 aid_paths+=("$qnap_state_dir/agent-id")
@@ -2596,11 +2782,10 @@ if [[ "$UNINSTALL" == "true" ]]; then
             fi
             if [[ -n "$LOOKUP_HOSTNAME" ]]; then
                 LOOKUP_ARGS=(-fsSL --connect-timeout 5)
-                if [[ -n "$PULSE_TOKEN" ]]; then LOOKUP_ARGS+=(-H "X-API-Token: ${PULSE_TOKEN}"); fi
                 if [[ "$INSECURE" == "true" ]]; then LOOKUP_ARGS+=(-k); fi
                 if [[ -n "$CURL_CA_BUNDLE" ]]; then LOOKUP_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
                 LOOKUP_HOSTNAME_ESCAPED=$(url_encode "$LOOKUP_HOSTNAME")
-                LOOKUP_RESP=$(curl "${LOOKUP_ARGS[@]}" "${PULSE_URL}/api/agents/agent/lookup?hostname=${LOOKUP_HOSTNAME_ESCAPED}" 2>/dev/null || true)
+                LOOKUP_RESP=$(curl_with_pulse_token "${LOOKUP_ARGS[@]}" "${PULSE_URL}/api/agents/agent/lookup?hostname=${LOOKUP_HOSTNAME_ESCAPED}" 2>/dev/null || true)
                 if [[ -n "$LOOKUP_RESP" ]]; then
                     # Extract .agent.id from JSON (portable, no jq dependency)
                     AGENT_ID=$(echo "$LOOKUP_RESP" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"id"[[:space:]]*:[[:space:]]*"//; s/"$//' || true)
@@ -2614,12 +2799,11 @@ if [[ "$UNINSTALL" == "true" ]]; then
         if [[ -n "$AGENT_ID" ]]; then
             log_info "Notifying Pulse server to unregister agent ID: ${AGENT_ID}..."
             CURL_ARGS=(-fsSL --connect-timeout 5 -X POST -H "Content-Type: application/json")
-            if [[ -n "$PULSE_TOKEN" ]]; then CURL_ARGS+=(-H "X-API-Token: ${PULSE_TOKEN}"); fi
             if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
             if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
             # Send unregistration request (ignore errors as we are uninstalling anyway)
-            curl "${CURL_ARGS[@]}" -d "{\"agentId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/agent/uninstall" >/dev/null 2>&1 || true
+            curl_with_pulse_token "${CURL_ARGS[@]}" -d "{\"agentId\": \"${AGENT_ID}\"}" "${PULSE_URL}/api/agents/agent/uninstall" >/dev/null 2>&1 || true
         fi
     fi
 
@@ -2640,7 +2824,7 @@ if [[ "$UNINSTALL" == "true" ]]; then
     # Remove legacy binaries
 
     # Remove agent state directory (contains agent ID, proxmox registration state, etc.)
-    rm -rf /var/lib/pulse-agent
+    remove_agent_state_dir "$STATE_DIR"
 
     # Remove log files
     rm -f /var/log/pulse-agent.log
@@ -3171,12 +3355,12 @@ if [[ -f /etc/unraid-version ]]; then
 
     # Unraid's /boot is FAT32 (no execute permission), so we store the binary there
     # for persistence but copy it to RAM disk (/usr/local/bin) for execution
-    UNRAID_STORAGE_DIR="/boot/config/plugins/pulse-agent"
+    select_platform_state_dir "/boot/config/plugins/pulse-agent"
+    UNRAID_STORAGE_DIR="$STATE_DIR"
     UNRAID_STORED_BINARY="${UNRAID_STORAGE_DIR}/${BINARY_NAME}"
     RUNTIME_BINARY="${INSTALL_DIR}/${BINARY_NAME}"
     GO_SCRIPT="/boot/config/go"
 
-    STATE_DIR="$UNRAID_STORAGE_DIR"
     mkdir -p "$UNRAID_STORAGE_DIR"
 
     # Copy binary to persistent storage (for survival across reboots)
@@ -3285,7 +3469,7 @@ if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
         fail "Could not find a writable QNAP data volume. Is a storage volume configured?"
     fi
 
-    STATE_DIR="${QNAP_VOL}/.pulse-agent"
+    select_platform_state_dir "${QNAP_VOL}/.pulse-agent"
     QNAP_STORED_BINARY="${STATE_DIR}/${BINARY_NAME}"
     RUNTIME_BINARY="${INSTALL_DIR}/${BINARY_NAME}"
     WRAPPER_SCRIPT="${STATE_DIR}/start-pulse-agent.sh"
@@ -3351,7 +3535,11 @@ fi
 # Note: /data may have exec=off on some TrueNAS systems. We try multiple runtime locations.
 if [[ "$TRUENAS" == true ]]; then
     log_info "Configuring TrueNAS SCALE/CORE installation..."
-    STATE_DIR="$TRUENAS_STATE_DIR"
+    select_platform_state_dir "$TRUENAS_STATE_DIR"
+    TRUENAS_STATE_DIR="$STATE_DIR"
+    TRUENAS_LOG_DIR="$TRUENAS_STATE_DIR/logs"
+    TRUENAS_BOOTSTRAP_SCRIPT="$TRUENAS_STATE_DIR/bootstrap-pulse-agent.sh"
+    TRUENAS_ENV_FILE="$TRUENAS_STATE_DIR/pulse-agent.env"
 
     # Stop any existing agent before we modify binaries
     # The runtime binary may be in /root/bin or /var/tmp, not just INSTALL_DIR
@@ -3454,6 +3642,7 @@ if [[ "$TRUENAS" == true ]]; then
     # Store environment/config for reference
     cat > "$TRUENAS_ENV_FILE" <<EOF
 # Pulse Agent configuration (for reference)
+PULSE_STATE_DIR=${STATE_DIR}
 PULSE_URL=${PULSE_URL}
 PULSE_TOKEN_FILE=${RUNTIME_TOKEN_FILE}
 PULSE_INTERVAL=${INTERVAL}

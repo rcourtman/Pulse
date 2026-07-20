@@ -3,6 +3,7 @@ package truenas
 import (
 	"context"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -681,6 +682,46 @@ func newConnectionProvider(t *testing.T, fixtures FixtureSnapshot, connectionID 
 	return provider
 }
 
+func TestConnectionBackedSystemCanonicalIDSurvivesReconnectWithChangedReportedIdentity(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	const connectionID = "conn-stable"
+	first := DefaultFixtures()
+	first.System.Hostname = "truenas-before-reconnect"
+	first.System.MachineID = "serial-before-reconnect"
+	second := DefaultFixtures()
+	second.System.Hostname = "truenas-after-reconnect"
+	second.System.MachineID = "serial-after-reconnect"
+
+	canonicalIDs := make([]string, 0, 2)
+	for _, fixtures := range []FixtureSnapshot{first, second} {
+		registry := unifiedresources.NewRegistry(unifiedresources.NewMemoryStore())
+		registry.IngestRecords(
+			unifiedresources.SourceTrueNAS,
+			newConnectionProvider(t, fixtures, connectionID).Records(),
+		)
+		systemID := unifiedresources.SourceSpecificID(
+			unifiedresources.ResourceTypeAgent,
+			unifiedresources.SourceTrueNAS,
+			"system:"+connectionID,
+		)
+		system := mustResourceByID(t, registry.List(), systemID)
+		canonicalIDs = append(canonicalIDs, system.ID)
+	}
+
+	if canonicalIDs[0] != canonicalIDs[1] {
+		t.Fatalf(
+			"connection-backed canonical ID drifted across reconnect/refetch: before=%s after=%s",
+			canonicalIDs[0],
+			canonicalIDs[1],
+		)
+	}
+}
+
 func TestRegistryIngestRecordsKeepsSameHostnameSystemsDistinct(t *testing.T) {
 	previous := IsFeatureEnabled()
 	SetFeatureEnabled(true)
@@ -799,6 +840,22 @@ func TestIngestRecordsSucceedLegacyHostnameScopedCanonicalIDs(t *testing.T) {
 	system := mustResourceByID(t, registry.List(), newSystemID)
 	if system.Agent == nil || system.Agent.AgentID != "conn-a" {
 		t.Fatalf("expected connection-scoped system record, got %+v", system.Agent)
+	}
+	if system.Canonical == nil || !slices.Contains(system.Canonical.Aliases, legacySystemID) {
+		t.Fatalf(
+			"expected connection-backed system %s to expose superseded override identity %s, got %+v",
+			newSystemID,
+			legacySystemID,
+			system.Canonical,
+		)
+	}
+	if !slices.Contains(system.Canonical.SupersededIDs, legacySystemID) {
+		t.Fatalf(
+			"expected connection-backed system %s to publish explicit superseded identity %s, got %+v",
+			newSystemID,
+			legacySystemID,
+			system.Canonical.SupersededIDs,
+		)
 	}
 
 	for oldID, newID := range map[string]string{legacySystemID: newSystemID, legacyPoolID: newPoolID} {

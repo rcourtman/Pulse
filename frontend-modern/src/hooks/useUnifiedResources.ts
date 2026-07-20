@@ -469,6 +469,7 @@ type APIResource = {
     platformId?: string;
     primaryId?: string;
     aliases?: string[];
+    supersededIds?: string[];
   };
   policy?: {
     sensitivity?: string;

@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/operationreceipt"
 	"github.com/rcourtman/pulse-go-rewrite/internal/platformsupport"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 func resourceFromProxmoxNode(node models.Node, linkedHost *models.Host) (Resource, ResourceIdentity) {
@@ -267,11 +268,15 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 					Serial:      s.Serial,
 					WWN:         s.WWN,
 					Type:        s.Type,
+					Controller:  s.Controller,
+					Target:      s.Target,
 					SizeBytes:   s.SizeBytes,
 					Temperature: s.Temperature,
 					Health:      s.Health,
 					Standby:     s.Standby,
 					Pool:        s.Pool,
+					IO:          physicalDiskIOToMeta(s.IO),
+					Collection:  diskinventory.CloneStatus(s.Collection),
 					Attributes:  cloneSMARTAttributes(s.Attributes),
 				}
 			}
@@ -839,6 +844,8 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 			Serial:       serial,
 			WWN:          strings.TrimSpace(disk.WWN),
 			DiskType:     diskType,
+			Controller:   strings.TrimSpace(disk.Controller),
+			Target:       strings.TrimSpace(disk.Target),
 			SizeBytes:    sizeBytes,
 			Health:       health,
 			Wearout:      -1,
@@ -851,6 +858,8 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 			ReadCount:    unraidDiskCounter(unraidDisk, "read"),
 			WriteCount:   unraidDiskCounter(unraidDisk, "write"),
 			ErrorCount:   unraidDiskCounter(unraidDisk, "error"),
+			IO:           physicalDiskIOToMeta(disk.IO),
+			Collection:   diskinventory.CloneStatus(disk.Collection),
 			SMART:        convertSMARTAttributes(disk.Attributes),
 			Risk:         physicalDiskRiskFromAssessment(assessment),
 		},
@@ -2005,6 +2014,8 @@ func resourceFromPhysicalDisk(disk models.PhysicalDisk) (Resource, ResourceIdent
 		Serial:       disk.Serial,
 		WWN:          disk.WWN,
 		DiskType:     disk.Type,
+		Controller:   disk.Controller,
+		Target:       disk.Target,
 		SizeBytes:    disk.Size,
 		Health:       disk.Health,
 		Wearout:      disk.Wearout,
@@ -2012,6 +2023,8 @@ func resourceFromPhysicalDisk(disk models.PhysicalDisk) (Resource, ResourceIdent
 		RPM:          disk.RPM,
 		Used:         disk.Used,
 		StorageGroup: disk.StorageGroup,
+		IO:           physicalDiskIOToMeta(disk.IO),
+		Collection:   diskinventory.CloneStatus(disk.Collection),
 		Risk:         physicalDiskRiskFromAssessment(assessment),
 	}
 
@@ -2045,6 +2058,22 @@ func resourceFromPhysicalDisk(disk models.PhysicalDisk) (Resource, ResourceIdent
 	}
 
 	return resource, identity
+}
+
+func physicalDiskIOToMeta(in *models.DiskIO) *PhysicalDiskIOMeta {
+	if in == nil {
+		return nil
+	}
+	return &PhysicalDiskIOMeta{
+		Device:      strings.TrimSpace(in.Device),
+		ReadBytes:   in.ReadBytes,
+		WriteBytes:  in.WriteBytes,
+		ReadOps:     in.ReadOps,
+		WriteOps:    in.WriteOps,
+		ReadTimeMs:  in.ReadTime,
+		WriteTimeMs: in.WriteTime,
+		IOTimeMs:    in.IOTime,
+	}
 }
 
 func convertSMARTAttributes(attrs *models.SMARTAttributes) *SMARTMeta {

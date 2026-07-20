@@ -4,14 +4,22 @@ import { guestOverrideIdCandidates, guestOverrideStorageId } from '../guestOverr
 import type { Resource as TableResource } from './tableTypes';
 import type { Override } from './types';
 
-const exactOverrideIdentity = (resource?: Pick<TableResource, 'id'>) => ({
-  candidateIds: resource?.id ? [resource.id] : [],
-  storageId: resource?.id ?? '',
+type OverrideIdentityResource = Pick<
+  TableResource,
+  'id' | 'type' | 'vmid' | 'node' | 'instance' | 'overrideIdCandidates' | 'overrideStorageId'
+>;
+
+const exactOverrideIdentity = (resource?: OverrideIdentityResource) => ({
+  candidateIds:
+    resource?.overrideIdCandidates && resource.overrideIdCandidates.length > 0
+      ? resource.overrideIdCandidates
+      : resource?.id
+        ? [resource.id]
+        : [],
+  storageId: resource?.overrideStorageId || resource?.id || '',
 });
 
-export const getOverridePersistenceIdentity = (
-  resource?: Pick<TableResource, 'id' | 'type' | 'vmid' | 'node' | 'instance'>,
-) => {
+export const getOverridePersistenceIdentity = (resource?: OverrideIdentityResource) => {
   if (!resource || resource.type !== 'guest') {
     return exactOverrideIdentity(resource);
   }
@@ -25,7 +33,7 @@ export const getOverridePersistenceIdentity = (
 
 export const findOverrideForResource = (
   overrides: Override[],
-  resource?: Pick<TableResource, 'id' | 'type' | 'vmid' | 'node' | 'instance'>,
+  resource?: OverrideIdentityResource,
 ): Override | undefined => {
   const { candidateIds } = getOverridePersistenceIdentity(resource);
   return overrides.find((override) => candidateIds.includes(override.id));
@@ -33,7 +41,7 @@ export const findOverrideForResource = (
 
 export const findRawOverrideConfigForResource = (
   rawOverridesConfig: Record<string, RawOverrideConfig>,
-  resource?: Pick<TableResource, 'id' | 'type' | 'vmid' | 'node' | 'instance'>,
+  resource?: OverrideIdentityResource,
 ): RawOverrideConfig | undefined => {
   const { candidateIds } = getOverridePersistenceIdentity(resource);
   return candidateIds
@@ -43,7 +51,7 @@ export const findRawOverrideConfigForResource = (
 
 export const stripOverrideCandidates = (
   overrides: Override[],
-  resource?: Pick<TableResource, 'id' | 'type' | 'vmid' | 'node' | 'instance'>,
+  resource?: OverrideIdentityResource,
 ): Override[] => {
   const { candidateIds } = getOverridePersistenceIdentity(resource);
   if (candidateIds.length === 0) {
@@ -54,7 +62,7 @@ export const stripOverrideCandidates = (
 
 export const stripRawOverrideCandidates = (
   rawOverridesConfig: Record<string, RawOverrideConfig>,
-  resource?: Pick<TableResource, 'id' | 'type' | 'vmid' | 'node' | 'instance'>,
+  resource?: OverrideIdentityResource,
 ): Record<string, RawOverrideConfig> => {
   const nextRawConfig = { ...rawOverridesConfig };
   const { candidateIds } = getOverridePersistenceIdentity(resource);

@@ -1,4 +1,8 @@
-import type { Resource } from '@/types/resource';
+import type {
+  PhysicalDiskCollectionStatus,
+  PhysicalDiskFieldStatus,
+  Resource,
+} from '@/types/resource';
 import {
   getSourcePlatformLabel,
   getSourcePlatformPresentation,
@@ -54,9 +58,12 @@ export interface PhysicalDiskPresentationData {
   writeCount?: number;
   errorCount?: number;
   type: string;
+  controller?: string;
+  target?: string;
   temperature: number;
   rpm: number;
   used: string;
+  collection?: PhysicalDiskCollectionStatus;
   smartAttributes?: {
     powerOnHours?: number;
     powerCycles?: number;
@@ -296,6 +303,8 @@ export function extractPhysicalDiskPresentationData(
     serial: pd.serial || '',
     wwn: pd.wwn || '',
     type: pd.diskType || '',
+    controller: pd.controller,
+    target: pd.target,
     size: pd.sizeBytes || 0,
     health: pd.health || 'UNKNOWN',
     wearout: pd.wearout ?? -1,
@@ -309,6 +318,7 @@ export function extractPhysicalDiskPresentationData(
     readCount: pd.readCount,
     writeCount: pd.writeCount,
     errorCount: pd.errorCount,
+    collection: pd.collection,
     riskLevel: pd.risk?.level,
     riskReasons,
     smartAttributes: pd.smart
@@ -326,6 +336,36 @@ export function extractPhysicalDiskPresentationData(
         }
       : undefined,
   };
+}
+
+export function getPhysicalDiskFieldStatusMessage(
+  label: string,
+  status: PhysicalDiskFieldStatus | null | undefined,
+): string {
+  if (!status || status.state === 'available') return '';
+  const reason = status.reason?.trim();
+  switch (status.state) {
+    case 'unsupported':
+      return `${label} is unsupported${reason ? `: ${reason}` : '.'}`;
+    case 'unavailable':
+      return `${label} is temporarily unavailable${reason ? `: ${reason}` : '.'}`;
+    case 'missing':
+      return `${label} is unexpectedly missing${reason ? `: ${reason}` : '.'}`;
+    default:
+      return '';
+  }
+}
+
+export function getPhysicalDiskCollectionMessages(disk: PhysicalDiskPresentationData): string[] {
+  const collection = disk.collection;
+  if (!collection) return [];
+  return [
+    getPhysicalDiskFieldStatusMessage('Serial number', collection.serial),
+    getPhysicalDiskFieldStatusMessage('Temperature', collection.temperature),
+    getPhysicalDiskFieldStatusMessage('Disk I/O', collection.io),
+    getPhysicalDiskFieldStatusMessage('Controller association', collection.controller),
+    getPhysicalDiskFieldStatusMessage('Pool membership', collection.pool),
+  ].filter((message): message is string => message.length > 0);
 }
 
 export function buildPhysicalDiskPresentationDataMap(

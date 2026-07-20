@@ -2678,13 +2678,23 @@ func hostDiskIOMetricResourceID(host models.Host, io models.DiskIO, proxmoxDisks
 		return ""
 	}
 
+	smartMetricID := ""
 	for _, disk := range host.Sensors.SMART {
 		if disk.Standby {
 			continue
 		}
 		if strings.EqualFold(normalizeHostDiskDevice(disk.Device), device) {
-			return unifiedresources.HostSMARTDiskSourceID(host, disk)
+			candidate := unifiedresources.HostSMARTDiskSourceID(host, disk)
+			if smartMetricID != "" && smartMetricID != candidate {
+				// Multiple controller members share this kernel block path.
+				// The counter belongs to the aggregate device, not any member.
+				return ""
+			}
+			smartMetricID = candidate
 		}
+	}
+	if smartMetricID != "" {
+		return smartMetricID
 	}
 
 	for _, pd := range proxmoxDisks {

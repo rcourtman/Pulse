@@ -35,6 +35,7 @@ type AlertPlatformResourceType =
 const resourceAlertIdCandidates = (resource: Resource): string[] =>
   uniqueIds(
     resource.id,
+    ...(resource.canonicalIdentity?.supersededIds ?? []),
     resource.metricsTarget?.resourceId,
     resource.discoveryTarget?.resourceId,
     resource.platformId,
@@ -113,7 +114,9 @@ const toTableResource = ({
   const note = typeof override?.note === 'string' ? override.note : undefined;
 
   return {
-    id: override?.id || candidates[0] || resource.id,
+    id: resourceAlertActionId(resource),
+    overrideIdCandidates: candidates,
+    overrideStorageId: resource.id,
     name: getAlertResourceDisplayLabel(resource),
     displayName: getAlertResourceDisplayLabel(resource),
     rawName: resource.name,

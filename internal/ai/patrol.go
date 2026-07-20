@@ -88,22 +88,24 @@ const (
 )
 
 type PatrolStatus struct {
-	RuntimeState     PatrolRuntimeState `json:"runtime_state"`
-	Running          bool               `json:"running"`
-	Enabled          bool               `json:"enabled"`
-	LastPatrolAt     *time.Time         `json:"last_patrol_at,omitempty"`   // Last completed full patrol
-	LastActivityAt   *time.Time         `json:"last_activity_at,omitempty"` // Last completed Patrol activity of any kind
-	TriggerStatus    *TriggerStatus     `json:"trigger_status,omitempty"`
-	NextPatrolAt     *time.Time         `json:"next_patrol_at,omitempty"`
-	LastDuration     time.Duration      `json:"last_duration_ms"`
-	ResourcesChecked int                `json:"resources_checked"`
-	FindingsCount    int                `json:"findings_count"`
-	ErrorCount       int                `json:"error_count"`
-	Healthy          bool               `json:"healthy"`
-	IntervalMs       int64              `json:"interval_ms"` // Patrol interval in milliseconds
-	BlockedReason    string             `json:"blocked_reason,omitempty"`
-	BlockedCause     PatrolFailureCause `json:"blocked_cause,omitempty"`
-	BlockedAt        *time.Time         `json:"blocked_at,omitempty"`
+	RuntimeState        PatrolRuntimeState `json:"runtime_state"`
+	Running             bool               `json:"running"`
+	CurrentRunID        string             `json:"current_run_id,omitempty"`
+	CurrentRunStartedAt *time.Time         `json:"current_run_started_at,omitempty"`
+	Enabled             bool               `json:"enabled"`
+	LastPatrolAt        *time.Time         `json:"last_patrol_at,omitempty"`   // Last completed full patrol
+	LastActivityAt      *time.Time         `json:"last_activity_at,omitempty"` // Last completed Patrol activity of any kind
+	TriggerStatus       *TriggerStatus     `json:"trigger_status,omitempty"`
+	NextPatrolAt        *time.Time         `json:"next_patrol_at,omitempty"`
+	LastDuration        time.Duration      `json:"last_duration_ms"`
+	ResourcesChecked    int                `json:"resources_checked"`
+	FindingsCount       int                `json:"findings_count"`
+	ErrorCount          int                `json:"error_count"`
+	Healthy             bool               `json:"healthy"`
+	IntervalMs          int64              `json:"interval_ms"` // Patrol interval in milliseconds
+	BlockedReason       string             `json:"blocked_reason,omitempty"`
+	BlockedCause        PatrolFailureCause `json:"blocked_cause,omitempty"`
+	BlockedAt           *time.Time         `json:"blocked_at,omitempty"`
 }
 
 // PatrolFindingAssessment is the model's explicit evidence-grounded verdict
@@ -549,6 +551,7 @@ type PatrolService struct {
 	// Runtime state
 	running           bool
 	runInProgress     bool
+	currentRunID      string
 	runStartedAt      time.Time
 	stopCh            chan struct{}
 	configChanged     chan struct{} // Signal when config changes to reset ticker

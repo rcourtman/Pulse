@@ -4958,23 +4958,25 @@ func (h *AISettingsHandler) HandleOAuthDisconnect(w http.ResponseWriter, r *http
 
 // PatrolStatusResponse is the response for GET /api/ai/patrol/status
 type PatrolStatusResponse struct {
-	RuntimeState     ai.PatrolRuntimeState `json:"runtime_state"`
-	Running          bool                  `json:"running"`
-	Enabled          bool                  `json:"enabled"`
-	LastPatrolAt     *time.Time            `json:"last_patrol_at,omitempty"`
-	LastActivityAt   *time.Time            `json:"last_activity_at,omitempty"`
-	TriggerStatus    *ai.TriggerStatus     `json:"trigger_status,omitempty"`
-	NextPatrolAt     *time.Time            `json:"next_patrol_at,omitempty"`
-	LastDurationMs   int64                 `json:"last_duration_ms"`
-	ResourcesChecked int                   `json:"resources_checked"`
-	FindingsCount    int                   `json:"findings_count"`
-	ErrorCount       int                   `json:"error_count"`
-	Healthy          bool                  `json:"healthy"`
-	IntervalMs       int64                 `json:"interval_ms"` // Patrol interval in milliseconds
-	FixedCount       int                   `json:"fixed_count"` // Number of issues remediated by Patrol
-	BlockedReason    string                `json:"blocked_reason,omitempty"`
-	BlockedCause     string                `json:"blocked_cause,omitempty"`
-	BlockedAt        *time.Time            `json:"blocked_at,omitempty"`
+	RuntimeState        ai.PatrolRuntimeState `json:"runtime_state"`
+	Running             bool                  `json:"running"`
+	CurrentRunID        string                `json:"current_run_id,omitempty"`
+	CurrentRunStartedAt *time.Time            `json:"current_run_started_at,omitempty"`
+	Enabled             bool                  `json:"enabled"`
+	LastPatrolAt        *time.Time            `json:"last_patrol_at,omitempty"`
+	LastActivityAt      *time.Time            `json:"last_activity_at,omitempty"`
+	TriggerStatus       *ai.TriggerStatus     `json:"trigger_status,omitempty"`
+	NextPatrolAt        *time.Time            `json:"next_patrol_at,omitempty"`
+	LastDurationMs      int64                 `json:"last_duration_ms"`
+	ResourcesChecked    int                   `json:"resources_checked"`
+	FindingsCount       int                   `json:"findings_count"`
+	ErrorCount          int                   `json:"error_count"`
+	Healthy             bool                  `json:"healthy"`
+	IntervalMs          int64                 `json:"interval_ms"` // Patrol interval in milliseconds
+	FixedCount          int                   `json:"fixed_count"` // Number of issues remediated by Patrol
+	BlockedReason       string                `json:"blocked_reason,omitempty"`
+	BlockedCause        string                `json:"blocked_cause,omitempty"`
+	BlockedAt           *time.Time            `json:"blocked_at,omitempty"`
 	// License status for Pro feature gating
 	LicenseRequired bool   `json:"license_required"` // True if Pro license needed for full features
 	LicenseStatus   string `json:"license_status"`   // "active", "expired", "grace_period", "none"
@@ -5356,26 +5358,28 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 	}
 
 	response := PatrolStatusResponse{
-		RuntimeState:     status.RuntimeState,
-		Running:          status.Running,
-		Enabled:          status.Enabled,
-		LastPatrolAt:     status.LastPatrolAt,
-		LastActivityAt:   status.LastActivityAt,
-		TriggerStatus:    status.TriggerStatus,
-		NextPatrolAt:     status.NextPatrolAt,
-		LastDurationMs:   status.LastDuration.Milliseconds(),
-		ResourcesChecked: status.ResourcesChecked,
-		FindingsCount:    status.FindingsCount,
-		ErrorCount:       status.ErrorCount,
-		Healthy:          status.Healthy,
-		IntervalMs:       status.IntervalMs,
-		FixedCount:       fixedCount,
-		BlockedReason:    status.BlockedReason,
-		BlockedCause:     patrolFailureCauseResponse(status.BlockedCause),
-		BlockedAt:        status.BlockedAt,
-		LicenseRequired:  !hasAutoFixFeature,
-		LicenseStatus:    licenseStatus,
-		Readiness:        ptrToPatrolReadiness(h.buildPatrolReadiness(r.Context(), aiService, true)),
+		RuntimeState:        status.RuntimeState,
+		Running:             status.Running,
+		CurrentRunID:        status.CurrentRunID,
+		CurrentRunStartedAt: status.CurrentRunStartedAt,
+		Enabled:             status.Enabled,
+		LastPatrolAt:        status.LastPatrolAt,
+		LastActivityAt:      status.LastActivityAt,
+		TriggerStatus:       status.TriggerStatus,
+		NextPatrolAt:        status.NextPatrolAt,
+		LastDurationMs:      status.LastDuration.Milliseconds(),
+		ResourcesChecked:    status.ResourcesChecked,
+		FindingsCount:       status.FindingsCount,
+		ErrorCount:          status.ErrorCount,
+		Healthy:             status.Healthy,
+		IntervalMs:          status.IntervalMs,
+		FixedCount:          fixedCount,
+		BlockedReason:       status.BlockedReason,
+		BlockedCause:        patrolFailureCauseResponse(status.BlockedCause),
+		BlockedAt:           status.BlockedAt,
+		LicenseRequired:     !hasAutoFixFeature,
+		LicenseStatus:       licenseStatus,
+		Readiness:           ptrToPatrolReadiness(h.buildPatrolReadiness(r.Context(), aiService, true)),
 	}
 	if !hasAutoFixFeature {
 		response.UpgradeURL = upgradeURLForFeatureFromLicensing(featureAIAutoFixValue)
@@ -5819,6 +5823,12 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	if !patrol.GetStatus().Enabled {
+		writeErrorResponse(w, http.StatusConflict, "patrol_disabled",
+			"Patrol is disabled. Enable Patrol before starting a manual run.", nil)
+		return
+	}
+
 	// Cadence cap: Community tier is limited to 1 patrol run per hour.
 	// Patrol itself is free (ai_patrol), but higher cadence is gated behind Pro/Cloud.
 	if !aiService.HasLicenseFeature(featureAIAutoFixValue) {
@@ -5832,12 +5842,27 @@ func (h *AISettingsHandler) HandleForcePatrol(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	// Trigger patrol asynchronously
-	patrol.ForcePatrol(r.Context())
+	// Atomically reserve the execution slot before acknowledging the request.
+	// This makes backend acceptance independently observable from both provider
+	// progress events and the timing of the execution goroutine.
+	acceptance, accepted := patrol.ForcePatrol(r.Context())
+	if !accepted {
+		status := patrol.GetStatus()
+		details := map[string]string{}
+		if status.CurrentRunID != "" {
+			details["current_run_id"] = status.CurrentRunID
+		}
+		writeErrorResponse(w, http.StatusConflict, "patrol_already_running",
+			"Patrol is already running.", details)
+		return
+	}
 
 	response := map[string]interface{}{
-		"success": true,
-		"message": "Triggered patrol run",
+		"success":    true,
+		"accepted":   true,
+		"message":    "Triggered patrol run",
+		"run_id":     acceptance.RunID,
+		"started_at": acceptance.StartedAt,
 	}
 
 	if err := utils.WriteJSONResponse(w, response); err != nil {

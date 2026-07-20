@@ -54,7 +54,7 @@ func TestInstallSHPersistsAndVerifiesServerFingerprint(t *testing.T) {
 		`verify_pinned_server_certificate() {`,
 		`openssl s_client -connect "$target" -servername "$host"`,
 		`EXEC_ARG_ITEMS+=(--server-fingerprint "$SERVER_FINGERPRINT")`,
-		`write_connection_state_value "$conn_env" "PULSE_SERVER_FINGERPRINT" "$SERVER_FINGERPRINT"`,
+		`write_connection_state_value "$conn_tmp" "PULSE_SERVER_FINGERPRINT" "$SERVER_FINGERPRINT"`,
 		`SERVER_FINGERPRINT=$(read_connection_state_value "$file" "PULSE_SERVER_FINGERPRINT")`,
 		`if [[ "$OS" == "linux" || "$OS" == "freebsd" ]]; then`,
 	}
@@ -373,6 +373,8 @@ func TestBuildPlistProgramArgumentsUsesSharedExecArgs(t *testing.T) {
 		`<string>--health-addr</string>`,
 		`<string>--hostname</string>`,
 		`<string>Richard's Mac &amp; Mini</string>`,
+		`<string>--state-dir</string>`,
+		`<string>/var/lib/pulse-agent</string>`,
 		`<string>--disk-exclude</string>`,
 		`<string>Time Machine</string>`,
 	}
@@ -655,12 +657,13 @@ func TestInstallSHPersistsIdentityInConnectionEnv(t *testing.T) {
 		`read_connection_state_value() {`,
 		`recover_connection_state() {`,
 		`find_connection_state_file() {`,
-		`write_connection_state_value "$conn_env" "PULSE_TOKEN_FILE" "$RUNTIME_TOKEN_FILE"`,
-		`write_connection_state_value "$conn_env" "PULSE_AGENT_ID" "$AGENT_ID"`,
-		`write_connection_state_value "$conn_env" "PULSE_HOSTNAME" "$HOSTNAME_OVERRIDE"`,
-		`write_connection_state_value "$conn_env" "PULSE_INSECURE_SKIP_VERIFY" "true"`,
-		`write_connection_state_value "$conn_env" "PULSE_CACERT" "$CURL_CA_BUNDLE"`,
-		`recover_connection_state "$conn_env"`,
+		`write_connection_state_value "$conn_tmp" "PULSE_STATE_DIR" "$state_dir"`,
+		`write_connection_state_value "$conn_tmp" "PULSE_TOKEN_FILE" "$RUNTIME_TOKEN_FILE"`,
+		`write_connection_state_value "$conn_tmp" "PULSE_AGENT_ID" "$AGENT_ID"`,
+		`write_connection_state_value "$conn_tmp" "PULSE_HOSTNAME" "$HOSTNAME_OVERRIDE"`,
+		`write_connection_state_value "$conn_tmp" "PULSE_INSECURE_SKIP_VERIFY" "true"`,
+		`write_connection_state_value "$conn_tmp" "PULSE_CACERT" "$CURL_CA_BUNDLE"`,
+		`recover_connection_state "$lifecycle_conn_env"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -677,9 +680,10 @@ func TestInstallSHRecoversSavedStateForPartialUninstallContext(t *testing.T) {
 
 	script := string(content)
 	needles := []string{
-		`if [[ -z "$PULSE_URL" || -z "$PULSE_TOKEN" || -z "$AGENT_ID" || -z "$HOSTNAME_OVERRIDE" || -z "$CURL_CA_BUNDLE" || "$INSECURE" != "true" ]]; then`,
-		`# Recover connection details from the canonical installer-owned state artifact`,
-		`conn_env=$(find_connection_state_file || true)`,
+		`if [[ "$UPDATE_ONLY" == "true" || "$UNINSTALL" == "true" ]]; then`,
+		`# An explicit state directory is authoritative.`,
+		`lifecycle_conn_env=$(find_connection_state_file || true)`,
+		`recover_connection_state "$lifecycle_conn_env"`,
 	}
 	for _, needle := range needles {
 		if !strings.Contains(script, needle) {
@@ -699,12 +703,13 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		`--update            Update an existing agent using saved connection state`,
 		`UPDATE_ONLY="false"`,
 		`--update) UPDATE_ONLY="true"; shift ;;`,
-		`if [[ "$UPDATE_ONLY" == "true" ]]; then`,
-		`update_conn_env=$(find_connection_state_file || true)`,
-		`recover_connection_state "$update_conn_env"`,
+		`if [[ "$UPDATE_ONLY" == "true" || "$UNINSTALL" == "true" ]]; then`,
+		`lifecycle_conn_env=$(find_connection_state_file || true)`,
+		`recover_connection_state "$lifecycle_conn_env"`,
 		`recover_connection_state_from_existing_agent() {`,
 		`recover_connection_state_from_running_agent`,
 		`recover_connection_state_from_systemd_unit`,
+		`recover_connection_state_from_launchd_plist`,
 		`recover_connection_state_from_service_scripts`,
 		`running_agent_arg_stream() {`,
 		`running_agent_env_stream() {`,
@@ -720,7 +725,7 @@ func TestInstallSHSupportsSavedStateUpdateMode(t *testing.T) {
 		`[[ "$RECOVERED_AGENT_ENV_STATE" == "true" ]] && recovered_connection_state_ready`,
 		`if update_connection_state_incomplete; then`,
 		`recover_connection_state_from_existing_agent || true`,
-		`if [[ -n "$PULSE_URL" && -n "$PULSE_TOKEN" ]]; then`,
+		`if [[ "$UPDATE_ONLY" == "true" && ( -z "$PULSE_URL" || -z "$PULSE_TOKEN" ) ]]; then`,
 		`recover_agent_id_from_state_file() {`,
 		`AGENT_ID=$(recover_agent_id_from_state_file || true)`,
 		`No existing Pulse Agent connection state found. Use the install command instead.`,
@@ -1430,7 +1435,7 @@ func TestInstallSHUsesCanonicalQNAPBootstrapRenderer(t *testing.T) {
 		`remove_qnap_autorun_block() {`,
 		`write_qnap_wrapper_script() {`,
 		`append_qnap_autorun_block() {`,
-		`STATE_DIR="${QNAP_VOL}/.pulse-agent"`,
+		`select_platform_state_dir "${QNAP_VOL}/.pulse-agent"`,
 		`write_qnap_wrapper_script "$WRAPPER_SCRIPT" "$RUNTIME_BINARY" "$QNAP_STORED_BINARY"`,
 		`append_qnap_autorun_block "$AUTORUN_PATH" "$WRAPPER_SCRIPT" "$STATE_DIR"`,
 		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f /var/log/${AGENT_NAME}.log"`,
@@ -2225,6 +2230,501 @@ func TestStateDirFlagIsAcceptedByInstallerParser(t *testing.T) {
 	}
 	if !strings.Contains(got, "PULSE_URL=https://pulse.example.com") {
 		t.Fatalf("PULSE_URL not parsed correctly:\n%s", got)
+	}
+}
+
+func TestInstallSHCustomStateDirOwnsTokenAndEnrollmentContinuity(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "custom-state")
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	tokenPath := filepath.Join(stateDir, "token")
+	runtimePath := filepath.Join(stateDir, "runtime.token")
+	if err := os.WriteFile(tokenPath, []byte("aaa111"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(runtimePath, []byte("runtime-one"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	ensureToken := extractInstallShellFunction(t, "ensure_runtime_token_file")
+	run := func(token string) string {
+		t.Helper()
+		script := `
+			set -euo pipefail
+			PULSE_TOKEN="` + token + `"
+			STATE_DIR="` + stateDir + `"
+			ENROLL="true"
+			RUNTIME_TOKEN_FILE=""
+			RUNTIME_TOKEN_CHANGED="false"
+			log_info() { :; }
+` + ensureToken + `
+			ensure_runtime_token_file "$STATE_DIR"
+			printf 'changed=%s runtime=%s token_file=%s\n' \
+				"$RUNTIME_TOKEN_CHANGED" "$([[ -f "$STATE_DIR/runtime.token" ]] && echo present || echo missing)" "$RUNTIME_TOKEN_FILE"
+		`
+		out, err := exec.Command("bash", "-c", script).CombinedOutput()
+		if err != nil {
+			t.Fatalf("bash: %v\n%s", err, out)
+		}
+		return string(out)
+	}
+
+	if got := run("aaa111"); !strings.Contains(got, "changed=false runtime=present") {
+		t.Fatalf("unchanged bootstrap token did not preserve enrollment runtime state:\n%s", got)
+	}
+	if got := run("bbb222"); !strings.Contains(got, "changed=true runtime=missing") {
+		t.Fatalf("changed bootstrap token did not force re-enrollment:\n%s", got)
+	}
+
+	for path, want := range map[string]os.FileMode{
+		stateDir:  0700,
+		tokenPath: 0600,
+	} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Fatalf("%s mode = %o, want %o", path, got, want)
+		}
+	}
+}
+
+func TestInstallSHExplicitCustomStateNeverFallsBackToDefaultInstance(t *testing.T) {
+	root := t.TempDir()
+	customState := filepath.Join(root, "custom")
+	defaultState := filepath.Join(root, "default")
+	for _, dir := range []string{customState, defaultState} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	customConn := filepath.Join(customState, "connection.env")
+	if err := os.WriteFile(customConn, []byte("PULSE_URL='https://custom.example'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(defaultState, "connection.env"), []byte("PULSE_URL='https://default.example'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(defaultState, "agent-id"), []byte("default-agent"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	script := `
+		set -euo pipefail
+		STATE_DIR="` + customState + `"
+		STATE_DIR_SOURCE="explicit"
+		DEFAULT_STATE_DIR="` + defaultState + `"
+		TRUENAS_STATE_DIR="` + filepath.Join(root, "truenas") + `"
+` + extractInstallShellFunction(t, "find_connection_state_file") + `
+` + extractInstallShellFunction(t, "recover_agent_id_from_state_file") + `
+		printf 'connection=%s\n' "$(find_connection_state_file)"
+		rm -f "$STATE_DIR/connection.env"
+		printf 'fallback_connection=%s\n' "$(find_connection_state_file || true)"
+		printf 'fallback_agent=%s\n' "$(recover_agent_id_from_state_file || true)"
+	`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	if !strings.Contains(got, "connection="+customConn) {
+		t.Fatalf("custom connection state was not preferred:\n%s", got)
+	}
+	if !strings.Contains(got, "fallback_connection=\n") || !strings.Contains(got, "fallback_agent=\n") {
+		t.Fatalf("explicit custom state borrowed default instance state:\n%s", got)
+	}
+}
+
+func TestInstallSHSavedInstallerDiscoversItsCustomStateDir(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "saved custom state")
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	installerPath := filepath.Join(stateDir, "install.sh")
+	if err := os.WriteFile(installerPath, []byte("#!/usr/bin/env bash\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stateDir, "connection.env"), []byte("PULSE_URL='https://pulse.example'\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	script := `
+		set -euo pipefail
+		STATE_DIR="/var/lib/pulse-agent"
+		STATE_DIR_SOURCE="default"
+` + extractInstallShellFunction(t, "discover_state_dir_from_saved_installer") + `
+		discover_state_dir_from_saved_installer "` + installerPath + `"
+		printf 'state=%s source=%s\n' "$STATE_DIR" "$STATE_DIR_SOURCE"
+	`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	resolvedStateDir, err := filepath.EvalSymlinks(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, "state="+resolvedStateDir) || !strings.Contains(got, "source=recovered") {
+		t.Fatalf("saved installer did not discover adjacent custom state:\n%s", got)
+	}
+}
+
+func TestInstallSHDiscoversCustomStateDirFromGeneratedSystemdUnit(t *testing.T) {
+	for _, commandsEnabled := range []bool{false, true} {
+		t.Run(map[bool]string{false: "commands_disabled", true: "commands_enabled"}[commandsEnabled], func(t *testing.T) {
+			root := t.TempDir()
+			customState := filepath.Join(root, "custom state")
+			defaultState := filepath.Join(root, "default")
+			if err := os.MkdirAll(customState, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(defaultState, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(customState, "token"), []byte("custom123"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(defaultState, "token"), []byte("default999"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			commandArg := ""
+			if commandsEnabled {
+				commandArg = " --enable-commands"
+			}
+			unitPath := filepath.Join(root, "pulse-agent.service")
+			unit := `[Service]
+ExecStart=/usr/local/bin/pulse-agent --url https://custom.example --token-file ` +
+				strings.ReplaceAll(filepath.Join(customState, "token"), " ", `\ `) +
+				` --state-dir ` + strings.ReplaceAll(customState, " ", `\ `) + commandArg + "\n"
+			if err := os.WriteFile(unitPath, []byte(unit), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			script := `
+				set -euo pipefail
+				AGENT_NAME="pulse-agent"
+				PULSE_URL=""
+				PULSE_TOKEN=""
+				INTERVAL="30s"
+				INTERVAL_EXPLICIT="false"
+				ENABLE_HOST="true"
+				HOST_EXPLICIT="false"
+				ENABLE_DOCKER=""
+				DOCKER_EXPLICIT="false"
+				ENABLE_KUBERNETES=""
+				KUBERNETES_EXPLICIT="false"
+				KUBECONFIG_PATH=""
+				ENABLE_PROXMOX=""
+				PROXMOX_EXPLICIT="false"
+				PROXMOX_TYPE=""
+				INSECURE="false"
+				ENABLE_COMMANDS="false"
+				ENROLL="false"
+				HEALTH_ADDR=""
+				HEALTH_ADDR_SET="false"
+				AGENT_ID=""
+				HOSTNAME_OVERRIDE=""
+				STATE_DIR="` + defaultState + `"
+				STATE_DIR_SOURCE="default"
+				DEFAULT_STATE_DIR="` + defaultState + `"
+				TRUENAS_STATE_DIR="` + filepath.Join(root, "truenas") + `"
+				CURL_CA_BUNDLE=""
+				SERVER_FINGERPRINT=""
+				OBSERVERS_FILE=""
+				KUBE_INCLUDE_ALL_PODS="false"
+				KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+				DISK_EXCLUDES=()
+				log_warn() { :; }
+				systemctl() { printf '%s\n' "` + unitPath + `"; }
+` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
+` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
+` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_env_stream") + `
+` + extractInstallShellFunction(t, "split_recovered_shell_words") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_systemd_unit") + `
+` + extractInstallShellFunction(t, "remove_agent_state_dir") + `
+				recover_connection_state_from_systemd_unit
+				printf 'state=%s source=%s url=%s token=%s commands=%s\n' \
+					"$STATE_DIR" "$STATE_DIR_SOURCE" "$PULSE_URL" "$PULSE_TOKEN" "$ENABLE_COMMANDS"
+				remove_agent_state_dir "$STATE_DIR"
+			`
+			out, err := exec.Command("bash", "-c", script).CombinedOutput()
+			if err != nil {
+				t.Fatalf("bash: %v\n%s", err, out)
+			}
+			got := string(out)
+			for _, want := range []string{
+				"state=" + customState,
+				"source=recovered",
+				"url=https://custom.example",
+				"token=custom123",
+				"commands=" + map[bool]string{false: "false", true: "true"}[commandsEnabled],
+			} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("systemd discovery missing %q:\n%s", want, got)
+				}
+			}
+			if strings.Contains(got, "default999") {
+				t.Fatalf("systemd discovery borrowed default token:\n%s", got)
+			}
+			if _, err := os.Stat(customState); !os.IsNotExist(err) {
+				t.Fatalf("uninstall did not remove discovered custom state: %v", err)
+			}
+			if _, err := os.Stat(defaultState); err != nil {
+				t.Fatalf("uninstall removed the default instance instead of discovered custom state: %v", err)
+			}
+		})
+	}
+}
+
+func TestInstallSHDiscoversCustomStateDirFromGeneratedLaunchdPlist(t *testing.T) {
+	root := t.TempDir()
+	customState := filepath.Join(root, "custom & state")
+	if err := os.MkdirAll(customState, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(customState, "token"), []byte("launch123"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	plistPath := filepath.Join(root, "com.pulse.agent.plist")
+	escapedState := strings.ReplaceAll(customState, "&", "&amp;")
+	plist := `<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+<key>ProgramArguments</key>
+<array>
+<string>/usr/local/bin/pulse-agent</string>
+<string>--url</string>
+<string>https://launch.example</string>
+<string>--token-file</string>
+<string>` + escapedState + `/token</string>
+<string>--state-dir</string>
+<string>` + escapedState + `</string>
+<string>--enable-commands</string>
+</array>
+</dict></plist>`
+	if err := os.WriteFile(plistPath, []byte(plist), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	script := `
+		set -euo pipefail
+		PULSE_URL=""
+		PULSE_TOKEN=""
+		INTERVAL="30s"
+		INTERVAL_EXPLICIT="false"
+		ENABLE_HOST="true"
+		HOST_EXPLICIT="false"
+		ENABLE_DOCKER=""
+		DOCKER_EXPLICIT="false"
+		ENABLE_KUBERNETES=""
+		KUBERNETES_EXPLICIT="false"
+		KUBECONFIG_PATH=""
+		ENABLE_PROXMOX=""
+		PROXMOX_EXPLICIT="false"
+		PROXMOX_TYPE=""
+		INSECURE="false"
+		ENABLE_COMMANDS="false"
+		ENROLL="false"
+		HEALTH_ADDR=""
+		HEALTH_ADDR_SET="false"
+		AGENT_ID=""
+		HOSTNAME_OVERRIDE=""
+		STATE_DIR="/var/lib/pulse-agent"
+		STATE_DIR_SOURCE="default"
+		DEFAULT_STATE_DIR="/var/lib/pulse-agent"
+		TRUENAS_STATE_DIR="/data/pulse-agent"
+		CURL_CA_BUNDLE=""
+		SERVER_FINGERPRINT=""
+		OBSERVERS_FILE=""
+		KUBE_INCLUDE_ALL_PODS="false"
+		KUBE_INCLUDE_ALL_DEPLOYMENTS="false"
+		DISK_EXCLUDES=()
+` + extractInstallShellFunction(t, "strip_recovered_arg_quotes") + `
+` + extractInstallShellFunction(t, "normalize_recovered_agent_arg_key") + `
+` + extractInstallShellFunction(t, "apply_recovered_agent_arg_value") + `
+` + extractInstallShellFunction(t, "recovered_connection_state_ready") + `
+` + extractInstallShellFunction(t, "recover_token_from_default_agent_token_file") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_arg_stream") + `
+` + extractInstallShellFunction(t, "launchd_agent_arg_stream") + `
+` + extractInstallShellFunction(t, "recover_connection_state_from_launchd_plist") + `
+		recover_connection_state_from_launchd_plist "` + plistPath + `"
+		printf 'state=%s url=%s token=%s commands=%s\n' "$STATE_DIR" "$PULSE_URL" "$PULSE_TOKEN" "$ENABLE_COMMANDS"
+	`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	for _, want := range []string{
+		"state=" + customState,
+		"url=https://launch.example",
+		"token=launch123",
+		"commands=true",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("launchd discovery missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestInstallSHConnectionEnvPersistsCanonicalStateDirWithoutTokenValue(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "state")
+	script := `
+		set -euo pipefail
+		STATE_DIR="` + stateDir + `"
+		PULSE_URL="https://pulse.example.com"
+		PULSE_TOKEN="deadbeef"
+		RUNTIME_TOKEN_FILE="$STATE_DIR/token"
+		AGENT_ID="agent-custom"
+		HOSTNAME_OVERRIDE="host-custom"
+		INSECURE="false"
+		SERVER_FINGERPRINT=""
+		CURL_CA_BUNDLE=""
+		SAVED_INSTALL_SCRIPT=""
+` + extractInstallShellFunction(t, "write_connection_state_value") + `
+` + extractInstallShellFunction(t, "save_connection_info") + `
+		curl() { return 1; }
+		save_connection_info "$STATE_DIR"
+		cat "$STATE_DIR/connection.env"
+	`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	got := string(out)
+	if !strings.Contains(got, "PULSE_STATE_DIR='"+stateDir+"'") ||
+		!strings.Contains(got, "PULSE_TOKEN_FILE='"+filepath.Join(stateDir, "token")+"'") {
+		t.Fatalf("connection.env did not persist canonical state paths:\n%s", got)
+	}
+	if strings.Contains(got, "PULSE_TOKEN='") || strings.Contains(got, "deadbeef") {
+		t.Fatalf("connection.env leaked the token value:\n%s", got)
+	}
+	info, err := os.Stat(filepath.Join(stateDir, "connection.env"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotMode := info.Mode().Perm(); gotMode != 0600 {
+		t.Fatalf("connection.env mode = %o, want 600", gotMode)
+	}
+}
+
+func TestInstallSHStateWritesReplaceSymlinksAtomically(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "state")
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	victimToken := filepath.Join(t.TempDir(), "victim-token")
+	victimConnection := filepath.Join(t.TempDir(), "victim-connection")
+	if err := os.WriteFile(victimToken, []byte("victim-token-content"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(victimConnection, []byte("victim-connection-content"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victimToken, filepath.Join(stateDir, "token")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victimConnection, filepath.Join(stateDir, "connection.env")); err != nil {
+		t.Fatal(err)
+	}
+
+	script := `
+		set -euo pipefail
+		STATE_DIR="` + stateDir + `"
+		PULSE_URL="https://pulse.example.com"
+		IFS= read -r PULSE_TOKEN
+		RUNTIME_TOKEN_FILE=""
+		RUNTIME_TOKEN_CHANGED="false"
+		ENROLL="false"
+		AGENT_ID="agent-one"
+		HOSTNAME_OVERRIDE="host-one"
+		INSECURE="false"
+		SERVER_FINGERPRINT=""
+		CURL_CA_BUNDLE=""
+		SAVED_INSTALL_SCRIPT=""
+		NON_INTERACTIVE="true"
+		TMP_FILES=()
+		log_info() { :; }
+		curl() { return 1; }
+` + extractInstallShellFunction(t, "write_connection_state_value") + `
+` + extractInstallShellFunction(t, "ensure_runtime_token_file") + `
+` + extractInstallShellFunction(t, "save_connection_info") + `
+		ensure_runtime_token_file "$STATE_DIR"
+		save_connection_info "$STATE_DIR"
+	`
+	cmd := exec.Command("bash", "-c", script)
+	cmd.Stdin = strings.NewReader("new-token-content\n")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	for path, want := range map[string]string{
+		victimToken:      "victim-token-content",
+		victimConnection: "victim-connection-content",
+	} {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != want {
+			t.Fatalf("state write followed symlink and modified %s: %q", path, got)
+		}
+	}
+	for _, path := range []string{filepath.Join(stateDir, "token"), filepath.Join(stateDir, "connection.env")} {
+		info, err := os.Lstat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			t.Fatalf("%s remained a symlink after atomic replacement", path)
+		}
+	}
+}
+
+func TestInstallSHCurlTokenTransportKeepsSecretOutOfArgv(t *testing.T) {
+	recordDir := t.TempDir()
+	argsPath := filepath.Join(recordDir, "args")
+	configPath := filepath.Join(recordDir, "config")
+	script := `
+		set -euo pipefail
+		PULSE_TOKEN="feedface"
+		curl() {
+			printf '%s\n' "$@" > "` + argsPath + `"
+			while [[ $# -gt 0 ]]; do
+				if [[ "$1" == "--config" ]]; then
+					cp "$2" "` + configPath + `"
+					shift 2
+					continue
+				fi
+				shift
+			done
+		}
+` + extractInstallShellFunction(t, "curl_with_pulse_token") + `
+		curl_with_pulse_token -sS https://pulse.example.com/api/agents/agent/lookup
+	`
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	args, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(args), "feedface") || strings.Contains(string(args), "X-API-Token") {
+		t.Fatalf("curl argv leaked token material:\n%s", args)
+	}
+	config, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(config), "X-API-Token: feedface") {
+		t.Fatalf("private curl config did not carry auth header:\n%s", config)
 	}
 }
 
@@ -3783,6 +4283,7 @@ func TestSetupAutoUpdatesPreservesRCChannelWhenUpdatingExistingConfig(t *testing
 // actionable error instead of leaving a silent 401 loop behind (issue #1515).
 func TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken(t *testing.T) {
 	urlEncode := extractInstallShellFunction(t, "url_encode")
+	curlWithPulseToken := extractInstallShellFunction(t, "curl_with_pulse_token")
 	verifyFn := extractInstallShellFunction(t, "verify_agent_server_registration")
 
 	cases := []struct {
@@ -3816,6 +4317,7 @@ func TestInstallSHVerifyAgentServerRegistrationDetectsRejectedToken(t *testing.T
 				HOSTNAME_OVERRIDE="omv"
 				INSECURE="false"
 				CURL_CA_BUNDLE=""
+` + curlWithPulseToken + `
 ` + urlEncode + `
 ` + verifyFn + `
 				verify_agent_server_registration

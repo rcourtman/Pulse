@@ -77,4 +77,35 @@ describe('useDiskDetailModel', () => {
 
     expect(result.historyResourceId()).toBe('disk:truenas-main:sda');
   });
+
+  it('disables live I/O only when the collector explicitly reports it unavailable', () => {
+    const [disk] = createSignal(
+      buildDisk({
+        physicalDisk: {
+          devPath: '/dev/sda',
+          model: 'SAS archive disk',
+          serial: 'ZR5TESTA0001',
+          diskType: 'sas',
+          temperature: 30,
+          collection: {
+            serial: { state: 'available', source: 'smartctl' },
+            temperature: { state: 'available', source: 'smartctl' },
+            io: {
+              state: 'unsupported',
+              source: 'controller',
+              reason: 'per-member counters unavailable',
+            },
+            controller: { state: 'available', source: 'linux-sysfs' },
+            pool: { state: 'available', source: 'zpool-status' },
+          },
+        },
+      } as Partial<Resource>),
+    );
+    const { result } = renderHook(() => useDiskDetailModel({ disk }));
+
+    expect(result.liveIOAvailable()).toBe(false);
+    expect(result.collectionMessages()).toEqual([
+      'Disk I/O is unsupported: per-member counters unavailable',
+    ]);
+  });
 });

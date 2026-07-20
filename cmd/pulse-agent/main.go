@@ -167,6 +167,13 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		return nil
 	}
 
+	if err := secureAgentStateDir(cfg.StateDir); err != nil {
+		logger.Warn().
+			Err(err).
+			Str("path", cfg.StateDir).
+			Msg("Failed to enforce owner-only agent state directory permissions")
+	}
+
 	// 2b. Compute Agent ID if missing (needed for remote config)
 	// We replicate the logic from hostagent.New to ensure we get the same ID
 	lookupHostname := strings.TrimSpace(cfg.HostnameOverride)
@@ -585,6 +592,20 @@ func configureAgentLogger(cfg Config) (zerolog.Logger, func(), error) {
 			_ = closer.Close()
 		}
 	}, nil
+}
+
+func secureAgentStateDir(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil
+	}
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		return fmt.Errorf("create state directory: %w", err)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
+		return fmt.Errorf("chmod state directory: %w", err)
+	}
+	return nil
 }
 
 // readAgentIDFile reads a persisted agent identifier from the given path.
@@ -1062,8 +1083,19 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	// URL; the startup warning is emitted once the logger exists in run().
 	securityutil.SetOperatorPlaintextHTTPConsent(*allowPlaintextHTTPFlag)
 
-	// Resolve token with priority: --token > --token-file > env > default file
-	token := resolveToken(*tokenFlag, *tokenFileFlag, envToken)
+	// Resolve the state directory before any implicit token or identity path.
+	// A custom instance must never borrow the default instance's credentials.
+	stateDir := strings.TrimSpace(*stateDirFlag)
+	if stateDir == "" {
+		stateDir = defaultAgentStateDir()
+	}
+	agentIDFile := strings.TrimSpace(*agentIDFileFlag)
+	if agentIDFile == "" {
+		agentIDFile = filepath.Join(stateDir, "agent-id")
+	}
+
+	// Resolve token with priority: --token > --token-file > env > state-dir file.
+	token := resolveToken(*tokenFlag, *tokenFileFlag, envToken, stateDir)
 	observers, err := agenttarget.LoadObservers(strings.TrimSpace(*observersFileFlag), pulseURL)
 	if err != nil {
 		return Config{}, fmt.Errorf("load observer destinations: %w", err)
@@ -1071,11 +1103,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 
 	// When --enroll is set and a runtime token already exists from a previous
 	// enrollment, use it instead of the bootstrap token embedded in the service
-	// config. This ensures the agent survives restarts after enrollment.
-	stateDir := strings.TrimSpace(*stateDirFlag)
-	if stateDir == "" {
-		stateDir = defaultAgentStateDir()
-	}
+	// config. This ensures the agent survives process and server restarts.
 	if *enrollFlag {
 		runtimeTokenPath := filepath.Join(stateDir, "runtime.token")
 		if content, err := os.ReadFile(runtimeTokenPath); err == nil {
@@ -1141,7 +1169,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		Interval:                  interval,
 		HostnameOverride:          strings.TrimSpace(*hostnameFlag),
 		AgentID:                   strings.TrimSpace(*agentIDFlag),
-		AgentIDFile:               strings.TrimSpace(*agentIDFileFlag),
+		AgentIDFile:               agentIDFile,
 		Tags:                      tags,
 		InsecureSkipVerify:        *insecureFlag,
 		AllowPlaintextHTTP:        *allowPlaintextHTTPFlag,
@@ -1294,11 +1322,11 @@ func resolveEnableCommands(enableFlag, disableFlag bool, envEnable, envDisable s
 // 1. --token flag (direct value)
 // 2. --token-file flag (read from file)
 // 3. PULSE_TOKEN environment variable
-// 4. Default token file under the platform state directory
+// 4. Token file under the resolved state directory
 //
 // Reading from a file is more secure than CLI args as tokens won't appear in `ps` output.
-func resolveToken(tokenFlag, tokenFileFlag, envToken string) string {
-	return resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, os.ReadFile)
+func resolveToken(tokenFlag, tokenFileFlag, envToken, stateDir string) string {
+	return resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir, os.ReadFile)
 }
 
 // defaultAgentStateDir mirrors where each platform's installer keeps agent
@@ -1318,7 +1346,7 @@ func defaultTokenFilePath() string {
 	return filepath.Join(defaultAgentStateDir(), "token")
 }
 
-func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken string, readFile func(string) ([]byte, error)) string {
+func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken, stateDir string, readFile func(string) ([]byte, error)) string {
 	// 1. Direct token from --token flag
 	if t := strings.TrimSpace(tokenFlag); t != "" {
 		return t
@@ -1338,9 +1366,13 @@ func resolveTokenInternal(tokenFlag, tokenFileFlag, envToken string, readFile fu
 		return t
 	}
 
-	// 4. Default token file (most secure method for service installs)
-	defaultTokenFile := defaultTokenFilePath()
-	if content, err := readFile(defaultTokenFile); err == nil {
+	// 4. Token file in the resolved state directory. When stateDir is custom,
+	// do not fall through to the default instance's token.
+	tokenFile := filepath.Join(strings.TrimSpace(stateDir), "token")
+	if strings.TrimSpace(stateDir) == "" {
+		tokenFile = defaultTokenFilePath()
+	}
+	if content, err := readFile(tokenFile); err == nil {
 		if t := strings.TrimSpace(string(content)); t != "" {
 			return t
 		}

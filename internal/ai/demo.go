@@ -51,14 +51,23 @@ func isDemoFindingID(id string) bool {
 // yet (mock disabled again, another run in flight, or mock state not
 // generated yet).
 func (p *PatrolService) runDemoPatrolCycle(trigger TriggerReason) bool {
+	return p.runDemoPatrolCycleWithStart(trigger, nil)
+}
+
+func (p *PatrolService) runDemoPatrolCycleWithStart(trigger TriggerReason, acceptedStart *patrolRunStart) bool {
 	if p == nil || p.findings == nil || p.runHistoryStore == nil {
 		return false
 	}
 	if !IsDemoMode() {
 		return false
 	}
-	if !p.tryStartRun("full") {
-		return false
+	runStart := acceptedStart
+	if runStart == nil {
+		var accepted bool
+		runStart, accepted = p.beginRun("full")
+		if !accepted {
+			return false
+		}
 	}
 	defer p.endRun()
 
@@ -114,6 +123,12 @@ func (p *PatrolService) runDemoPatrolCycle(trigger TriggerReason) bool {
 		// retry or the next scheduled cycle will populate the surface once
 		// state exists.
 		log.Debug().Msg("demo patrol: no mock state available yet, skipping cycle")
+		if acceptedStart != nil {
+			p.recordAcceptedRunFailure(runStart, trigger,
+				"Patrol demo state unavailable",
+				"Pulse accepted the run, but demo infrastructure state was not available.")
+			return true
+		}
 		return false
 	}
 
@@ -181,10 +196,17 @@ func (p *PatrolService) runDemoPatrolCycle(trigger TriggerReason) bool {
 	// Presentational duration and token counts: deterministic, scaled to the
 	// size of the mock fleet so the history reads like a real analysis pass.
 	duration := time.Duration(35+resourceCount%40) * time.Second
+	runID := fmt.Sprintf("demo-run-%d", now.UnixNano())
+	startedAt := now.Add(-duration)
+	if acceptedStart != nil {
+		runID = runStart.id
+		startedAt = runStart.startedAt
+		duration = now.Sub(startedAt)
+	}
 	record := PatrolRunRecord{
-		ID:                fmt.Sprintf("demo-run-%d", now.UnixNano()),
+		ID:                runID,
 		Source:            PatrolRunSourceDemo,
-		StartedAt:         now.Add(-duration),
+		StartedAt:         startedAt,
 		CompletedAt:       now,
 		Duration:          duration,
 		DurationMs:        duration.Milliseconds(),

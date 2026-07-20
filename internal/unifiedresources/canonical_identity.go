@@ -19,11 +19,12 @@ func RefreshCanonicalIdentity(resource *Resource) {
 	}
 
 	resource.Canonical = &CanonicalIdentity{
-		DisplayName: displayName,
-		Hostname:    hostname,
-		PlatformID:  platformID,
-		PrimaryID:   primaryID,
-		Aliases:     aliases,
+		DisplayName:   displayName,
+		Hostname:      hostname,
+		PlatformID:    platformID,
+		PrimaryID:     primaryID,
+		Aliases:       aliases,
+		SupersededIDs: uniqueTrimmed(resource.SupersededCanonicalIDs...),
 	}
 }
 
@@ -79,7 +80,8 @@ func canonicalProxmoxNodePrimaryID(resource Resource) string {
 }
 
 func canonicalAliases(resource Resource, primaryID, platformID, hostname string) []string {
-	values := []string{
+	values := append([]string{}, resource.SupersededCanonicalIDs...)
+	values = append(values,
 		primaryID,
 		targetResourceID(resource.MetricsTarget),
 		targetAgentID(resource.DiscoveryTarget),
@@ -99,7 +101,7 @@ func canonicalAliases(resource Resource, primaryID, platformID, hostname string)
 		hostname,
 		strings.TrimSpace(resource.Identity.MachineID),
 		strings.TrimSpace(resource.ID),
-	}
+	)
 
 	return uniqueTrimmed(values...)
 }

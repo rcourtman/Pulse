@@ -3,6 +3,8 @@ package models
 import (
 	"reflect"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 func cloneBoolPtr(src *bool) *bool {
@@ -237,6 +239,11 @@ func cloneHostDiskSMART(src []HostDiskSMART) []HostDiskSMART {
 	for i, disk := range src {
 		diskCopy := disk
 		diskCopy.Attributes = cloneSMARTAttributes(disk.Attributes)
+		diskCopy.Collection = diskinventory.CloneStatus(disk.Collection)
+		if disk.IO != nil {
+			ioCopy := *disk.IO
+			diskCopy.IO = &ioCopy
+		}
 		dest[i] = diskCopy
 	}
 	return dest
@@ -1102,6 +1109,11 @@ func cloneCephClusters(src []CephCluster) []CephCluster {
 func clonePhysicalDisk(src PhysicalDisk) PhysicalDisk {
 	dest := src
 	dest.SmartAttributes = cloneSMARTAttributes(src.SmartAttributes)
+	dest.Collection = diskinventory.CloneStatus(src.Collection)
+	if src.IO != nil {
+		ioCopy := *src.IO
+		dest.IO = &ioCopy
+	}
 	return dest
 }
 

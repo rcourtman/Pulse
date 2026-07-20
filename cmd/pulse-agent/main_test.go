@@ -793,9 +793,13 @@ func TestResolveEnableCommands(t *testing.T) {
 }
 
 func TestResolveToken(t *testing.T) {
+	customStateDir := filepath.Join(string(filepath.Separator), "custom", "pulse-agent")
 	fakeReadFile := func(path string) ([]byte, error) {
 		if path == defaultTokenFilePath() {
 			return []byte("default-token"), nil
+		}
+		if path == filepath.Join(customStateDir, "token") {
+			return []byte("custom-token"), nil
 		}
 		if path == "valid-file" {
 			return []byte("file-token"), nil
@@ -808,12 +812,14 @@ func TestResolveToken(t *testing.T) {
 		tokenFlag     string
 		tokenFileFlag string
 		envToken      string
+		stateDir      string
 		expected      string
 	}{
-		{"flag priority", "flag-token", "valid-file", "env-token", "flag-token"},
-		{"file priority", "", "valid-file", "env-token", "file-token"},
-		{"env priority", "", "", "env-token", "env-token"},
-		{"default file priority", "", "", "", "default-token"},
+		{"flag priority", "flag-token", "valid-file", "env-token", customStateDir, "flag-token"},
+		{"file priority", "", "valid-file", "env-token", customStateDir, "file-token"},
+		{"env priority", "", "", "env-token", customStateDir, "env-token"},
+		{"default file priority", "", "", "", defaultAgentStateDir(), "default-token"},
+		{"custom state file priority", "", "", "", customStateDir, "custom-token"},
 	}
 
 	// Update the test cases to avoid the default file if we want to test empty
@@ -826,7 +832,7 @@ func TestResolveToken(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := resolveTokenInternal(tc.tokenFlag, tc.tokenFileFlag, tc.envToken, fakeReadFile)
+			got := resolveTokenInternal(tc.tokenFlag, tc.tokenFileFlag, tc.envToken, tc.stateDir, fakeReadFile)
 			if got != tc.expected {
 				t.Fatalf("%s: expected %q, got %q", tc.name, tc.expected, got)
 			}
@@ -834,9 +840,16 @@ func TestResolveToken(t *testing.T) {
 	}
 
 	t.Run("truly empty", func(t *testing.T) {
-		got := resolveTokenInternal("", "", "", fakeReadFileNoDefault)
+		got := resolveTokenInternal("", "", "", customStateDir, fakeReadFileNoDefault)
 		if got != "" {
 			t.Fatalf("expected empty, got %q", got)
+		}
+	})
+
+	t.Run("custom state never borrows default token", func(t *testing.T) {
+		got := resolveTokenInternal("", "", "", filepath.Join(string(filepath.Separator), "missing-custom"), fakeReadFile)
+		if got != "" {
+			t.Fatalf("custom state unexpectedly borrowed default token %q", got)
 		}
 	})
 }
@@ -923,6 +936,9 @@ func TestLoadConfig(t *testing.T) {
 		if cfg.StateDir != defaultAgentStateDir() {
 			t.Errorf("expected platform state directory %q, got %q", defaultAgentStateDir(), cfg.StateDir)
 		}
+		if cfg.AgentIDFile != filepath.Join(defaultAgentStateDir(), "agent-id") {
+			t.Errorf("expected default agent ID file under state directory, got %q", cfg.AgentIDFile)
+		}
 	})
 
 	t.Run("env overrides", func(t *testing.T) {
@@ -994,6 +1010,61 @@ func TestLoadConfig(t *testing.T) {
 		}
 		if cfg.StateDir != "/custom/pulse-state" {
 			t.Errorf("expected explicit state directory, got %q", cfg.StateDir)
+		}
+		if cfg.AgentIDFile != "/custom/pulse-state/agent-id" {
+			t.Errorf("expected agent ID file under explicit state directory, got %q", cfg.AgentIDFile)
+		}
+	})
+
+	t.Run("custom state directory supplies implicit token", func(t *testing.T) {
+		stateDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(stateDir, "token"), []byte("custom-state-token\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := loadConfig([]string{
+			"-url", "http://pulse.example.com",
+			"-state-dir", stateDir,
+		}, func(s string) string { return "" })
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.APIToken != "custom-state-token" {
+			t.Fatalf("expected implicit custom-state token, got %q", cfg.APIToken)
+		}
+	})
+
+	t.Run("custom enrollment restart prefers persisted runtime token", func(t *testing.T) {
+		stateDir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(stateDir, "token"), []byte("bootstrap-token"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(stateDir, "runtime.token"), []byte("runtime-token"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := loadConfig([]string{
+			"-url", "http://pulse.example.com",
+			"-state-dir", stateDir,
+			"-enroll",
+		}, func(s string) string { return "" })
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.APIToken != "runtime-token" {
+			t.Fatalf("expected persisted runtime token after restart, got %q", cfg.APIToken)
+		}
+	})
+
+	t.Run("explicit agent ID file overrides state-derived path", func(t *testing.T) {
+		cfg, err := loadConfig([]string{
+			"-token", "test-token",
+			"-state-dir", "/custom/pulse-state",
+			"-agent-id-file", "/identity/agent-id",
+		}, func(s string) string { return "" })
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.AgentIDFile != "/identity/agent-id" {
+			t.Errorf("expected explicit agent ID file, got %q", cfg.AgentIDFile)
 		}
 	})
 
@@ -2185,6 +2256,23 @@ func TestAgentIDFilePersistence(t *testing.T) {
 			t.Errorf("expected file not to be created, got err=%v", err)
 		}
 	})
+}
+
+func TestSecureAgentStateDir(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "state")
+	if err := os.MkdirAll(stateDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := secureAgentStateDir(stateDir); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(stateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); runtime.GOOS != "windows" && got != 0700 {
+		t.Fatalf("state directory mode = %o, want 700", got)
+	}
 }
 
 type stubTypedContainerUpdater struct {

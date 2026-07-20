@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
 )
 
 // PreferredPhysicalDiskMetricID returns the canonical history key used for
@@ -22,11 +23,14 @@ func PreferredPhysicalDiskMetricID(serial, wwn, fallback string) string {
 
 func HostSMARTDiskSourceID(host models.Host, disk models.HostDiskSMART) string {
 	device := normalizePhysicalDiskDeviceToken(disk.Device)
-	fallback := ""
-	if device != "" {
-		fallback = fmt.Sprintf("%s:%s", strings.TrimSpace(host.ID), device)
-	}
-	return PreferredPhysicalDiskMetricID(disk.Serial, disk.WWN, fallback)
+	return diskinventory.PreferredID(
+		disk.Serial,
+		disk.WWN,
+		strings.TrimSpace(host.ID),
+		device,
+		disk.Controller,
+		disk.Target,
+	)
 }
 
 func HostUnraidDiskSourceID(host models.Host, disk models.HostUnraidDisk) string {
@@ -41,6 +45,9 @@ func HostUnraidDiskSourceID(host models.Host, disk models.HostUnraidDisk) string
 }
 
 func PhysicalDiskMetricID(disk models.PhysicalDisk) string {
+	if strings.TrimSpace(disk.Serial) != "" || strings.TrimSpace(disk.WWN) != "" {
+		return PreferredPhysicalDiskMetricID(disk.Serial, disk.WWN, "")
+	}
 	fallback := strings.TrimSpace(disk.ID)
 	if fallback == "" && strings.TrimSpace(disk.DevPath) != "" {
 		fallback = fmt.Sprintf(
@@ -50,20 +57,42 @@ func PhysicalDiskMetricID(disk models.PhysicalDisk) string {
 			strings.ReplaceAll(strings.TrimSpace(disk.DevPath), "/", "-"),
 		)
 	}
-	return PreferredPhysicalDiskMetricID(disk.Serial, disk.WWN, fallback)
+	if diskinventory.IsControllerMemberTarget(disk.Target) {
+		return diskinventory.PreferredID(
+			"",
+			"",
+			fallback,
+			disk.DevPath,
+			disk.Controller,
+			disk.Target,
+		)
+	}
+	return strings.TrimSpace(fallback)
 }
 
 func PhysicalDiskMetaMetricID(disk *PhysicalDiskMeta, fallback string) string {
 	if disk == nil {
 		return strings.TrimSpace(fallback)
 	}
+	if serial := strings.TrimSpace(disk.Serial); serial != "" {
+		return serial
+	}
+	if wwn := strings.TrimSpace(disk.WWN); wwn != "" {
+		return wwn
+	}
+	if diskinventory.IsControllerMemberTarget(disk.Target) && strings.TrimSpace(fallback) != "" {
+		return diskinventory.PreferredID(
+			"",
+			"",
+			strings.TrimSpace(fallback),
+			disk.DevPath,
+			disk.Controller,
+			disk.Target,
+		)
+	}
 	return PreferredPhysicalDiskMetricID(disk.Serial, disk.WWN, fallback)
 }
 
 func normalizePhysicalDiskDeviceToken(device string) string {
-	device = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(device), "/dev/"))
-	if fields := strings.Fields(device); len(fields) > 0 {
-		device = fields[0]
-	}
-	return strings.TrimSpace(device)
+	return diskinventory.DeviceToken(device)
 }

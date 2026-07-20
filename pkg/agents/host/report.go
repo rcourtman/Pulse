@@ -1,6 +1,10 @@
 package host
 
-import "time"
+import (
+	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/diskinventory"
+)
 
 // Report represents the payload sent by the host module of pulse-agent.
 type Report struct {
@@ -227,17 +231,21 @@ const (
 
 // DiskSMART represents S.M.A.R.T. data for a single disk.
 type DiskSMART struct {
-	Device      string           `json:"device"`              // Block device name (e.g., sda, nvme0n1)
-	Model       string           `json:"model,omitempty"`     // Disk model
-	Serial      string           `json:"serial,omitempty"`    // Serial number
-	WWN         string           `json:"wwn,omitempty"`       // World Wide Name
-	Type        string           `json:"type,omitempty"`      // Transport type: sata, sas, nvme
-	SizeBytes   int64            `json:"sizeBytes,omitempty"` // Capacity in bytes (0 when unknown)
-	Temperature int              `json:"temperature"`         // Temperature in Celsius
-	Health      string           `json:"health,omitempty"`    // PASSED, FAILED, UNKNOWN
-	Standby     bool             `json:"standby,omitempty"`   // True if disk was in standby
-	Pool        string           `json:"pool,omitempty"`      // ZFS pool this disk belongs to (empty if not a ZFS member)
-	Attributes  *SMARTAttributes `json:"attributes,omitempty"`
+	Device      string                          `json:"device"`               // Block device name (e.g., sda, nvme0n1)
+	Model       string                          `json:"model,omitempty"`      // Disk model
+	Serial      string                          `json:"serial,omitempty"`     // Serial number
+	WWN         string                          `json:"wwn,omitempty"`        // World Wide Name
+	Type        string                          `json:"type,omitempty"`       // Transport type: sata, sas, nvme
+	Controller  string                          `json:"controller,omitempty"` // Stable controller association when the OS reports one
+	Target      string                          `json:"target,omitempty"`     // Controller target/HCTL or smartctl member target
+	SizeBytes   int64                           `json:"sizeBytes,omitempty"`  // Capacity in bytes (0 when unknown)
+	Temperature int                             `json:"temperature"`          // Temperature in Celsius
+	Health      string                          `json:"health,omitempty"`     // PASSED, FAILED, UNKNOWN
+	Standby     bool                            `json:"standby,omitempty"`    // True if disk was in standby
+	Pool        string                          `json:"pool,omitempty"`       // ZFS pool this disk belongs to (empty if not a ZFS member)
+	IO          *DiskIO                         `json:"io,omitempty"`         // Cumulative kernel counters when attributable to this disk
+	Collection  *diskinventory.CollectionStatus `json:"collection,omitempty"`
+	Attributes  *SMARTAttributes                `json:"attributes,omitempty"`
 }
 
 // SMARTAttributes holds normalized SMART attributes for both SATA and NVMe disks.

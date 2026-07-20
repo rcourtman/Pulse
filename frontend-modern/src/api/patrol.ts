@@ -276,6 +276,8 @@ export interface FindingsTrustSummary {
 export interface PatrolStatus {
   runtime_state: PatrolRuntimeState;
   running: boolean;
+  current_run_id?: string;
+  current_run_started_at?: string;
   enabled: boolean;
   last_patrol_at?: string;
   last_activity_at?: string;
@@ -837,9 +839,13 @@ export interface PatrolRunScope {
  * Patrol behaviour). Pass a scope to run a manual Targeted check scoped to
  * specific resources — e.g. a single alert's resource.
  */
-export async function triggerPatrolRun(
-  scope?: PatrolRunScope,
-): Promise<{ success: boolean; message: string }> {
+export async function triggerPatrolRun(scope?: PatrolRunScope): Promise<{
+  success: boolean;
+  accepted?: boolean;
+  message: string;
+  run_id?: string;
+  started_at?: string;
+}> {
   const hasScope =
     !!scope && ((scope.resource_ids?.length ?? 0) > 0 || (scope.resource_types?.length ?? 0) > 0);
   return apiFetchJSON('/api/ai/patrol/run', {
