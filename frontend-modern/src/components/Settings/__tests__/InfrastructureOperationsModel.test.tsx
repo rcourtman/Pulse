@@ -414,10 +414,14 @@ describe('infrastructure operations model', () => {
     expect(agentUpgradeSource).toContain(
       '| bash -s -- --update --url ${shellQuoteArg(url)} --non-interactive',
     );
-    expect(operationsStateSource).toContain('getAgentConnectionUpgradeCommandRequiresToken');
-    expect(operationsStateSource).toContain(
-      "getConnectionUpgradePlatform(connection) === 'windows' && installState.requiresToken()",
+    const requiresTokenEnd = operationsStateSource.indexOf('return {', agentUpgradeEnd);
+    expect(requiresTokenEnd).toBeGreaterThan(agentUpgradeEnd);
+    const requiresTokenSource = operationsStateSource.slice(agentUpgradeEnd, requiresTokenEnd);
+    expect(requiresTokenSource).toContain(
+      'platformOverride ?? getConnectionUpgradePlatform(connection)',
     );
+    expect(requiresTokenSource).toContain("=== 'windows'");
+    expect(requiresTokenSource).toContain('installState.requiresToken()');
     expect(unixUpgradeSource).not.toContain('command += ` --token ${shellQuoteArg(token)}`;');
     expect(unixUpgradeSource).not.toContain('--agent-id');
     expect(unixUpgradeSource).not.toContain('--hostname');
